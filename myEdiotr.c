@@ -19,7 +19,7 @@ int main(int argc,char *argv[]){
     curs_set(1);    //set cursr
     keypad(stdscr, TRUE);   //enable cursr keys
 
-	getmaxyx(stdscr, h, w);     // set window size
+    getmaxyx(stdscr, h, w);     // set window size
 
 	start_color();      // color settings 
 	init_pair(1, COLOR_WHITE, COLOR_BLACK);     // set color. 1 is white and black
