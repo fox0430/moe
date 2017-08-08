@@ -2,9 +2,10 @@
 #include<stdio.h>
 #include<string.h>
 
-const int LineMax=999;
+const int LineMax = 999;
+const int KEY_ESC = 27;
 
-int main(int argc,char *argv[]){
+int main(int argc, char *argv[]){
 
     if (argc < 2){
         printf("Please text file");
@@ -28,14 +29,13 @@ int main(int argc,char *argv[]){
 
     start_color();      // color settings 
     init_pair(1, COLOR_WHITE, COLOR_BLACK);     // set color. 1 is white and black
-    init_pair(1, COLOR_WHITE, COLOR_BLACK);     // set color. 2 is green and black
     init_pair(2, COLOR_GREEN, COLOR_BLACK);
     bkgd(COLOR_PAIR(1));    // set default color
 
 
     fp = fopen( fname, "r" );   // file open
     if( fp == NULL ){
-        printf( "%s can not file oprn \n", fname );
+        printf( "%s can not file open \n", fname );
     return -1;
     }
 
@@ -59,7 +59,7 @@ int main(int argc,char *argv[]){
 
         key = getch();
 
-        if (key == 27) break;
+        if (key == KEY_ESC) break;
         if (key == KEY_BACKSPACE) {
             delch();
             move(x--, y);
