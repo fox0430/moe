@@ -6,7 +6,6 @@
 
 const int KEY_ESC = 27;
 
-/*
 int openFile(FILE **fp, char* filename){
 
     if(fopen(filename, "r+") == NULL){   // file open
@@ -15,7 +14,6 @@ int openFile(FILE **fp, char* filename){
     }
     *fp = fopen(filename,"r+");
 }
-*/
 
 char** readFile(char *filename){
 
@@ -25,17 +23,12 @@ char** readFile(char *filename){
     readLine = malloc(sizeof(char *)*30);
     readLine[i] = malloc(sizeof(char)*50);
 
-    fp = fopen( filename, "r" );   // file open
-    if( fp == NULL ){
-
-        printf( "%s can not file open \n", filename );
-        return NULL;
-    }
+    openFile(&fp, filename);    // open file
 
     bkgd(COLOR_PAIR(2));
     printw("1: ");
 
-    while (( ch = fgetc(fp)) != EOF ) {     // display char
+    while ((ch = fgetc(fp)) != EOF) {     // display char
 
         refresh();
 
@@ -97,60 +90,14 @@ int main(int argc, char *argv[]){
     init_pair(2, COLOR_GREEN, COLOR_BLACK);
     bkgd(COLOR_PAIR(1));    // set default color
 
-//    openFile(&fp, filename); // open file read only
-
     erase();	// screen display 
 
     readLine = readFile(filename);
 
-/*
-    fp = fopen( fname, "r" );   // file open
-    if( fp == NULL ){
-
-        printf( "%s can not file open \n", fname );
-        return -1;
-    }
-*/
     move(0, 0);     // set default cursr point
 
     bkgd(COLOR_PAIR(2));    // color set
 
-/*    
-    printw("1: ");
-    
-    while (( ch = fgetc(fp)) != EOF ) {     // display char
-
-        refresh();
-
-        if (ch == '\n'){
-            i++;
-            j = 0;
-            bkgd(COLOR_PAIR(2));    // color set
-            printw("\n%d: ",i+1);
-            readLine = (char**)realloc(readLine, i*sizeof(char*));
-        }else{
-          	if(j == 0){
-                readLine[i] = (char*)malloc(1);
-                if (readLine[i] == NULL){
-                    printf("Failed to do malloc in LINE%d. \n",i);
-                    return -1;
-                }
-            }else{
-              char* tmp = (char*)realloc(readLine[i], (j+1)*sizeof(char));
-              if(tmp == NULL){
-                printf( "Failed to reallocate ew memory space in LINE%d. \n",i+1);
-                return -1;
-                }
-                readLine[i] = tmp;
-            }
-            readLine[i][j] = ch;
-            bkgd(COLOR_PAIR(1));
-            printw("%c",readLine[i][j]);
-            ++j;
-            }
-        }
-        fclose(fp);
-*/
     move(0, 0);
 
     while (1) {     // input keys
@@ -173,14 +120,6 @@ int main(int argc, char *argv[]){
             case KEY_RIGHT: x++; break;
 		}
 	}
-
-/*    
-    for (int k=0; k<c; k++){
-        free(readLine[k]);
-    }
-
-    free(readLine);
-*/
 
     endwin();	// exit control 
 
