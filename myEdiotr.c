@@ -54,18 +54,18 @@ char** readFile(char *filename){
         refresh();
 
         if (ch == '\n'){        // create arry
-		    i++;
-		    j = 0;
-    	    bkgd(COLOR_PAIR(2));
-    	    printw("\n%d: ",i+1);
+            i++;
+            j = 0;
+            bkgd(COLOR_PAIR(2));
+            printw("\n%d: ",i+1);
             readLine = (char**)realloc(readLine, (i+1)*sizeof(char*));
             countChar = (int*)realloc(countChar, (i)*sizeof(int*));
-    	}else{
-   	        if(j == 0){
+        }else{
+            if(j == 0){
                 readLine[i] = (char*)malloc(1);
                     if(readLine[i] == NULL){
-            	        printf("Failed to do malloc in LINE%d. \n",i);
-            	        return NULL;
+                        printf("Failed to do malloc in LINE%d. \n",i);
+                        return NULL;
             }
         }else{
                 
@@ -193,8 +193,8 @@ int main(int argc, char *argv[]){
                 bkgd(COLOR_PAIR(1));
                 insch(key);     // input key and move char
                 charInsert(x, y, readLine, key);    // insert...
-		}
-	}
+        }
+    }
 
     endwin();	// exit control 
 
