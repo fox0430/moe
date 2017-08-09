@@ -93,14 +93,15 @@ char** readFile(char *filename){
 /////////////////////////////////
 
 void charInsert(int x, int y, char **readLine, int key){    /* insert keys. DO NOT COMPLITE. copy extra char... */        
+
         int i = y;  // low
         int j = 0;
         int jTmp = x-3;
         int c = 0;
-        debg = jTmp;
+        debg = y;
 
         char* tmp = (char*)realloc(readLine[i], (countChar[i]+1)*sizeof(char));
-        for (j = countChar[i]-jTmp+2; j > jTmp-1; j--){    // doubtful...
+        for (j = countChar[i]-jTmp; j > jTmp-1; j--){    // doubtful...
             tmp[j+1] = tmp[j];
         }
         readLine[j] = tmp;
@@ -166,19 +167,28 @@ int main(int argc, char *argv[]){
 
         switch (key) {
 
-            case KEY_UP:y--; break;
+            case KEY_UP:   
+                if (y == 0) break;
+                if (countChar[y-1]+3 <= x) break;
+                y--; break; 
 
             case KEY_DOWN:
                 if (y == LINEMAX) break;
+                if (countChar[y+1]+3 <= x) break; 
                 y++;
                 break;
+
             case KEY_LEFT:
                 if (x == 3){
                     break;
                 }
                 x--;
                 break;
+
             case KEY_RIGHT:
+                if (countChar[y]+2 == x){
+                    break;
+                }
                 x++;
                 break;
             default:
@@ -191,8 +201,12 @@ int main(int argc, char *argv[]){
 
     endwin();	// exit control 
 
+    printf("%s\n", readLine[0]);
     printf("%s\n", readLine[1]);
+    printf("%s\n", readLine[2]);
+    printf("%d\n", countChar[0]);
     printf("%d\n", countChar[1]);
+    printf("%d\n", countChar[2]);
     printf("%d\n", debg);
 
     return 0;
