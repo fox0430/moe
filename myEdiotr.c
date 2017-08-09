@@ -5,6 +5,7 @@
 #include<malloc.h>
 
 const int KEY_ESC = 27;
+int LINEMAX = 0;
 
 int openFile(FILE **fp, char* filename){
 
@@ -37,7 +38,6 @@ char** readFile(char *filename){
 		    j = 0;
     	    bkgd(COLOR_PAIR(2));
     	    printw("\n%d: ",i+1);
-    		//readLine = (char**)realloc(readLine, i*sizeof(char*));
             readLine = (char**)realloc(readLine, (i+1)*sizeof(char*));
     	}else{
    	        if(j == 0){
@@ -52,7 +52,8 @@ char** readFile(char *filename){
                         printf( "Failed to do realloc in LINE%d. \n",i+1);
                         return NULL;
                     }
-                readLine[i] = tmp;
+            readLine[i] = tmp;
+            LINEMAX = i;
             }
             readLine[i][j] = ch;
             bkgd(COLOR_PAIR(1));
@@ -61,6 +62,24 @@ char** readFile(char *filename){
         }
     }
     return readLine;
+}
+
+//////////////////////////////////
+/////////////CAUTION!//////////////
+/////////////////////////////////
+void charInsert(int x, int y, char **readLine, int key){    /* insert keys. DO NOT COMPLITE. copy extra char... */        
+        int i = y;  // low
+        int j = x;  // char
+        int jTmp = j;
+        int c = 0;
+
+        char* tmp = (char*)realloc(readLine[i], ((sizeof(readLine[i])+1))*sizeof(char));    // doubtful...
+        for (j; j<(sizeof(readLine[j]))+1;j++){
+            tmp[j+1] = tmp[j];
+        }
+        readLine[j] = tmp;
+        readLine[i][jTmp] = key;
+        LINEMAX = j;
 }
 
 int main(int argc, char *argv[]){
@@ -98,30 +117,53 @@ int main(int argc, char *argv[]){
 
     bkgd(COLOR_PAIR(2));    // color set
 
-    move(0, 0);
+    x = 3, y = 0;
+    move(x, y);
 
     while (1) {     // input keys
 
         move(y, x);
         refresh();
-
+        noecho();
         key = getch();
 
-        if (key == KEY_ESC) break;
+        if (key == KEY_ESC){
+            break;
+        }
+
         if (key == KEY_BACKSPACE) {
             delch();
             move(x--, y);
         }
 
         switch (key) {
-            case KEY_UP: y--; break;
-            case KEY_DOWN: y++; break;
-            case KEY_LEFT: x--; break;
-            case KEY_RIGHT: x++; break;
+
+            case KEY_UP:y--; break;
+
+            case KEY_DOWN:
+                if (y == LINEMAX) break;
+                y++;
+                break;
+            case KEY_LEFT:
+                if (x == 3){
+                    break;
+                }
+                x--;
+                break;
+            case KEY_RIGHT:
+                x++;
+                break;
+            default:
+                echo();
+                bkgd(COLOR_PAIR(1));
+                insch(key);
+                charInsert(x, y, readLine, key);
 		}
 	}
 
     endwin();	// exit control 
+
+    printf("%s\n",readLine[0]);
 
     return 0;
 }
