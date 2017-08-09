@@ -4,8 +4,24 @@
 #include<ncurses.h>
 #include<malloc.h>
 
-const int KEY_ESC = 27;
+#define KEY_ESC 27
+#define MAX_FILE_NAME 255
+
 int LINEMAX = 0;
+
+void createBackUp(char* filename){      // I am not confident of this program... :(
+
+    if ((sizeof(filename)+12) > MAX_FILE_NAME){
+        return;     // can not create backup file
+        }
+
+    char cmd[MAX_FILE_NAME] = {'c', 'p', ' ',};
+    strcat(cmd, filename);
+    strcat(cmd, " ");
+    strcat(cmd, filename);
+    strcat(cmd, ".backup");
+    system(cmd);
+}
 
 int openFile(FILE **fp, char* filename){
 
@@ -13,12 +29,13 @@ int openFile(FILE **fp, char* filename){
         printf( "%s can not file open \n", filename);
         return -1;
     }
+
     *fp = fopen(filename,"r+");
 }
 
 char** readFile(char *filename){
 
-    FILE *fp;
+    FILE *fp, *fo;
     int i = 0, j = 0, ch;
     char **readLine;
     readLine = malloc(sizeof(char *)*30);
@@ -67,6 +84,7 @@ char** readFile(char *filename){
 //////////////////////////////////
 /////////////CAUTION!//////////////
 /////////////////////////////////
+
 void charInsert(int x, int y, char **readLine, int key){    /* insert keys. DO NOT COMPLITE. copy extra char... */        
         int i = y;  // low
         int j = x;  // char
@@ -95,6 +113,8 @@ int main(int argc, char *argv[]){
     int h, w, i, j = 0, key, ch, displayLineNumber = 0;
     int x = 0, y = 0;
     char **readLine;
+
+    createBackUp(filename);     //create backup file
 
     ESCDELAY = 25;      // delete esc key time lag
     
