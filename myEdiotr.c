@@ -7,7 +7,9 @@
 #define KEY_ESC 27
 #define MAX_FILE_NAME 255
 
+int *countChar;
 int LINEMAX = 0;
+int debg = 0;
 
 void createBackUp(char* filename){      // I am not confident of this program... :(
 
@@ -38,6 +40,7 @@ char** readFile(char *filename){
     FILE *fp, *fo;
     int i = 0, j = 0, ch;
     char **readLine;
+    countChar = malloc(sizeof(int *)*30);
     readLine = malloc(sizeof(char *)*30);
     readLine[i] = malloc(sizeof(char)*50);
 
@@ -56,26 +59,30 @@ char** readFile(char *filename){
     	    bkgd(COLOR_PAIR(2));
     	    printw("\n%d: ",i+1);
             readLine = (char**)realloc(readLine, (i+1)*sizeof(char*));
+            countChar = (int*)realloc(countChar, (i)*sizeof(int*));
     	}else{
    	        if(j == 0){
                 readLine[i] = (char*)malloc(1);
                     if(readLine[i] == NULL){
             	        printf("Failed to do malloc in LINE%d. \n",i);
             	        return NULL;
-                    }
-           }else{
-                char* tmp = (char*)realloc(readLine[i], (j+1)*sizeof(char));
-                    if(tmp == NULL){
-                        printf( "Failed to do realloc in LINE%d. \n",i+1);
-                        return NULL;
-                    }
-            readLine[i] = tmp;
-            LINEMAX = i;
             }
-            readLine[i][j] = ch;
-            bkgd(COLOR_PAIR(1));
-            printw("%c",readLine[i][j]);
-            ++j;
+        }else{
+                
+            char* tmp = (char*)realloc(readLine[i], (j+1)*sizeof(char));
+                if(tmp == NULL){
+                     printf( "Failed to do realloc in LINE%d. \n",i+1);
+                     return NULL;
+                }
+        readLine[i] = tmp;
+        LINEMAX = i;
+        }
+
+        readLine[i][j] = ch;
+        bkgd(COLOR_PAIR(1));
+        printw("%c",readLine[i][j]);
+        ++j;
+        countChar[i] = j;
         }
     }
     return readLine;
@@ -87,12 +94,13 @@ char** readFile(char *filename){
 
 void charInsert(int x, int y, char **readLine, int key){    /* insert keys. DO NOT COMPLITE. copy extra char... */        
         int i = y;  // low
-        int j = x;  // char
-        int jTmp = j;
+        int j = 0;
+        int jTmp = x-3;
         int c = 0;
+        debg = jTmp;
 
-        char* tmp = (char*)realloc(readLine[i], ((sizeof(readLine[i])+1))*sizeof(char));    // doubtful...
-        for (j; j<(sizeof(readLine[j]))+1;j++){
+        char* tmp = (char*)realloc(readLine[i], (countChar[i]+1)*sizeof(char));
+        for (j = countChar[i]-jTmp+2; j > jTmp-1; j--){    // doubtful...
             tmp[j+1] = tmp[j];
         }
         readLine[j] = tmp;
@@ -110,7 +118,7 @@ int main(int argc, char *argv[]){
     FILE *fp;
     char filename[strlen(argv[1])+1];
     strcpy(filename,argv[1]);
-    int h, w, i, j = 0, key, ch, displayLineNumber = 0;
+    int h, w, key, ch, displayLineNumber = 0;
     int x = 0, y = 0;
     char **readLine;
 
@@ -183,7 +191,9 @@ int main(int argc, char *argv[]){
 
     endwin();	// exit control 
 
-    printf("%s\n",readLine[0]);
+    printf("%s\n", readLine[1]);
+    printf("%d\n", countChar[1]);
+    printf("%d\n", debg);
 
     return 0;
 }
