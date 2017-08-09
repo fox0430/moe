@@ -16,9 +16,9 @@ int main(int argc, char *argv[]){
     FILE *fp;
     char fname[strlen(argv[1])+1];
     strcpy(fname,argv[1]);
-    int h, w, i, key, ch, flag;
+    int h, w, i, key, ch, displayLineNumber;
     int x, y = 0;
-//    char *readLine = malloc(sizeof(char) *1 * 1); 
+    char *readLine = malloc(sizeof(char) *1 * 1); 
     
     ESCDELAY = 25;      // delete esc time lag
     
@@ -44,23 +44,24 @@ int main(int argc, char *argv[]){
     erase();	// screen display 
     move(0, 0);     // set default cursr point
 
-    i = 1;
+    i = 1;  // line number
     while (( ch = fgetc(fp)) != EOF ) {     // display char
 
         refresh();
-        if (flag == 1 || i == 1){
+
+        if (displayLineNumber == true || i == 1){   //display line number
 
             bkgd(COLOR_PAIR(2));    // color set
             printw("%d: ",i);
-            flag = 0;
+            displayLineNumber = 0;
             i++;
         }
 
-        bkgd(COLOR_PAIR(1));    // color set
+        bkgd(COLOR_PAIR(1));
         printw("%c",ch);
 
         if (ch == '\n'){
-            flag = 1;
+            displayLineNumber = true;
         }
     }
 
