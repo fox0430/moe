@@ -53,7 +53,7 @@ int main(int argc, char *argv[]){
 
             bkgd(COLOR_PAIR(2));    // color set
             printw("%d: ",i);
-            displayLineNumber = 0;
+            displayLineNumber = false;
             i++;
         }
 
