@@ -53,7 +53,7 @@ char** readFile(char *filename){
 
         refresh();
 
-        if (ch == '\n'){
+        if (ch == '\n'){        // create arry
 		    i++;
 		    j = 0;
     	    bkgd(COLOR_PAIR(2));
@@ -81,6 +81,7 @@ char** readFile(char *filename){
         readLine[i][j] = ch;
         bkgd(COLOR_PAIR(1));
         printw("%c",readLine[i][j]);
+
         ++j;
         countChar[i] = j;
         }
@@ -101,12 +102,11 @@ void charInsert(int x, int y, char **readLine, int key){    /* insert keys. DO N
         debg = y;
 
         char* tmp = (char*)realloc(readLine[i], (countChar[i]+1)*sizeof(char));
-        for (j = countChar[i]-jTmp; j > jTmp-1; j--){    // doubtful...
+        for (j = countChar[i]-jTmp; j > jTmp-1; j--){       // doubtful...
             tmp[j+1] = tmp[j];
         }
         readLine[j] = tmp;
         readLine[i][jTmp] = key;
-        LINEMAX = j;
 }
 
 int main(int argc, char *argv[]){
@@ -167,9 +167,9 @@ int main(int argc, char *argv[]){
 
         switch (key) {
 
-            case KEY_UP:   
+            case KEY_UP:    // cursor control 
                 if (y == 0) break;
-                if (countChar[y-1]+3 <= x) break;
+                if (countChar[y-1]+3 <= x) break;   // 3 is low number space
                 y--; break; 
 
             case KEY_DOWN:
@@ -179,28 +179,26 @@ int main(int argc, char *argv[]){
                 break;
 
             case KEY_LEFT:
-                if (x == 3){
-                    break;
-                }
+                if (x == 3) break;
                 x--;
                 break;
 
             case KEY_RIGHT:
-                if (countChar[y]+2 == x){
-                    break;
-                }
+                if (countChar[y]+2 == x) break;
                 x++;
                 break;
+
             default:
                 echo();
                 bkgd(COLOR_PAIR(1));
-                insch(key);
-                charInsert(x, y, readLine, key);
+                insch(key);     // input key and move char
+                charInsert(x, y, readLine, key);    // insert...
 		}
 	}
 
     endwin();	// exit control 
 
+// debug
     printf("%s\n", readLine[0]);
     printf("%s\n", readLine[1]);
     printf("%s\n", readLine[2]);
