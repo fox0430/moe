@@ -16,11 +16,11 @@ int main(int argc, char *argv[]){
     FILE *fp;
     char fname[strlen(argv[1])+1];
     strcpy(fname,argv[1]);
-    int h, w, i, key, ch, displayLineNumber;
+    int h, w, i, j, key, ch, displayLineNumber;
     int x, y = 0;
     char *readLine = malloc(sizeof(char) *1 * 1); 
     
-    ESCDELAY = 25;      // delete esc time lag
+    ESCDELAY = 25;      // delete esc key time lag
     
     initscr();      // start terminal contorl 
     curs_set(1);    //set cursr
@@ -59,6 +59,9 @@ int main(int argc, char *argv[]){
 
         bkgd(COLOR_PAIR(1));
         printw("%c",ch);
+        j++;
+//        char readLine = malloc(sizeof(char *)*i);
+//        readLine[i][j] = ch;
 
         if (ch == '\n'){
             displayLineNumber = true;
