@@ -1,6 +1,7 @@
-#include <ncurses.h>
 #include<stdio.h>
 #include<string.h>
+#include<stdlib.h>
+#include<ncurses.h>
 
 const int LineMax = 999;
 const int KEY_ESC = 27;
@@ -15,9 +16,9 @@ int main(int argc, char *argv[]){
     FILE *fp;
     char fname[strlen(argv[1])+1];
     strcpy(fname,argv[1]);
-    int c, h, w, i, key;
+    int h, w, i, key, ch, flag;
     int x, y = 0;
-    char readline[LineMax][256]; 
+//    char *readLine = malloc(sizeof(char) *1 * 1); 
     
     ESCDELAY = 25;      // delete esc time lag
     
@@ -35,19 +36,32 @@ int main(int argc, char *argv[]){
 
     fp = fopen( fname, "r" );   // file open
     if( fp == NULL ){
+
         printf( "%s can not file open \n", fname );
-    return -1;
+        return -1;
     }
 
     erase();	// screen display 
     move(0, 0);     // set default cursr point
 
-    for(i=0; i<LineMax && fgets( readline[i] , sizeof(readline[i]) , fp ) != NULL;i++){
-        bkgd(COLOR_PAIR(2));    // color set
-        printw("%d: ", i);
-        bkgd(COLOR_PAIR(1));    // color set
-        printw( "%s", readline[i] );
+    i = 1;
+    while (( ch = fgetc(fp)) != EOF ) {     // display char
+
         refresh();
+        if (flag == 1 || i == 1){
+
+            bkgd(COLOR_PAIR(2));    // color set
+            printw("%d: ",i);
+            flag = 0;
+            i++;
+        }
+
+        bkgd(COLOR_PAIR(1));    // color set
+        printw("%c",ch);
+
+        if (ch == '\n'){
+            flag = 1;
+        }
     }
 
     move(0, 0);
