@@ -33,6 +33,7 @@ int openFile(FILE **fp, char* filename){
     }
 
     *fp = fopen(filename,"r+");
+    return 1;
 }
 
 char** readFile(char *filename){
@@ -74,16 +75,16 @@ char** readFile(char *filename){
                      printf( "Failed to do realloc in LINE%d. \n",i+1);
                      return NULL;
                 }
-        readLine[i] = tmp;
-        LINEMAX = i;
-        }
+                readLine[i] = tmp;
+                LINEMAX = i;
+            }
 
-        readLine[i][j] = ch;
-        bkgd(COLOR_PAIR(1));
-        printw("%c",readLine[i][j]);
+            readLine[i][j] = ch;
+            bkgd(COLOR_PAIR(1));
+            printw("%c",readLine[i][j]);
 
-        ++j;
-        countChar[i] = j;
+            ++j;
+            countChar[i] = j;
         }
     }
     return readLine;
@@ -93,20 +94,19 @@ char** readFile(char *filename){
 /////////////CAUTION!//////////////
 /////////////////////////////////
 
-void charInsert(int x, int y, char **readLine, int key){    /* insert keys. DO NOT COMPLITE. copy extra char... */        
 
-        int i = y;  // low
-        int j = 0;
-        int jTmp = x-3;
-        int c = 0;
-        debg = y;
-
-        char* tmp = (char*)realloc(readLine[i], (countChar[i]+1)*sizeof(char));
-        for (j = countChar[i]-jTmp; j > jTmp-1; j--){       // doubtful...
-            tmp[j+1] = tmp[j];
+// insert keys to (x,y).If it failed,return -1.
+int insertChar(int x, int y, char **readLine, char key){
+        ++countChar[y];
+        char* tmp = (char*)realloc(readLine[y], countChar[y]*sizeof(char));
+        if(tmp == NULL){
+            printf("Failed to inseertChar.row=%d,column=%d\n.",y,x);
+            return -1;
         }
-        readLine[j] = tmp;
-        readLine[i][jTmp] = key;
+        for(int j = countChar[y]-1; j>=x+1; --j) tmp[j]=tmp[j-1];
+        tmp[x-1]=key;
+        readLine[y]=tmp;
+        return 1;
 }
 
 int main(int argc, char *argv[]){
@@ -192,7 +192,9 @@ int main(int argc, char *argv[]){
                 echo();
                 bkgd(COLOR_PAIR(1));
                 insch(key);     // input key and move char
-                charInsert(x, y, readLine, key);    // insert...
+                if(insertChar(x,y,readLine,key) == -1){
+                    return -1;
+                }
         }
     }
 
