@@ -30,8 +30,8 @@ char* openFile(char* filename){
 	FILE *fp;
 	int size, i = 0;
 
-  if(fopen(filename, "r") == NULL){   // file open
-   	printf("%s Cannot allocate memory \n", filename);
+	if(fopen(filename, "r") == NULL){   // file open
+		printf("%s Cannot allocate memory \n", filename);
 		exit(0);
   }
 
@@ -47,11 +47,11 @@ char* openFile(char* filename){
 
 	while ((*(str+i) = fgetc(fp)) != EOF) {
 		i++;
-  }
+	}
 
 	fclose(fp);
-
-  return str;
+	
+	return str;
 
 }
 
@@ -138,20 +138,20 @@ void startCurses(){
 	int h, w;
 	initscr();      // start terminal contorl 
 	curs_set(1);    //set cursr
- 	keypad(stdscr, TRUE);   //enable cursr keys
+	keypad(stdscr, TRUE);   //enable cursr keys
 
-  getmaxyx(stdscr, h, w);     // set window size
+	getmaxyx(stdscr, h, w);     // set window size
 
 	start_color();      // color settings 
- 	init_pair(1, COLOR_WHITE, COLOR_BLACK);     // set color char is white and back is black
+	init_pair(1, COLOR_WHITE, COLOR_BLACK);     // set color char is white and back is black
 	init_pair(2, COLOR_GREEN, COLOR_BLACK);
-  bkgd(COLOR_PAIR(1));    // set default color
+	bkgd(COLOR_PAIR(1));    // set default color
 
-  erase();	// screen display 
+	erase();	// screen display 
 
-  ESCDELAY = 25;      // delete esc key time lag
+	ESCDELAY = 25;      // delete esc key time lag
 
-  move(0, 0);     // set default cursr point
+	move(0, 0);     // set default cursr point
 
 }
 
@@ -159,13 +159,13 @@ int main(int argc, char *argv[]){
 
 	char *str;
 
- 	if (argc < 2){
+	if (argc < 2){
 		printf("Please text file");
 		return -1;
   }
 
 	str = openFile(argv[1]);
- 	createBackUp(argv[1]);     //create backup file	
+	createBackUp(argv[1]);     //create backup file	
 
 	startCurses();
 
@@ -173,8 +173,8 @@ int main(int argc, char *argv[]){
 
 	insertKeys();
 
-  endwin();	// exit curses 
+	endwin();	// exit curses 
 
-  return 0;
+	return 0;
 
 }
