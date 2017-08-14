@@ -7,6 +7,11 @@
 #define KEY_ESC 27
 #define MAX_FILE_NAME 255
 
+typedef struct string{
+	char *str;
+	int lineMax;
+} string;
+
 
 void createBackUp(char* filename){      // I am not confident of this program... :(
 
@@ -31,7 +36,7 @@ char* openFile(char* filename){
 	int size, i = 0;
 
 	if(fopen(filename, "r") == NULL){   // file open
-		printf("%s Cannot allocate memory \n", filename);
+		printf("%s Cannot file open... \n", filename);
 		exit(0);
   }
 
@@ -84,7 +89,21 @@ int printChar(char *str){
 
 }
 
-int insertKeys(){
+
+void insertChar(char *str){
+
+	char *tmp;
+
+	if ((tmp = (char*)realloc(str, (sizeof(char)+strlen(str)))) == NULL){
+		printf("cannot allocate memory...\n");
+		exit(0);
+	}else{
+		str = tmp;
+	}
+	
+}
+
+int insertKeys(char *str){
 
 	int key, y = 0, x = 2;
 
@@ -104,6 +123,7 @@ int insertKeys(){
 		switch(key){
 
 			case KEY_UP:
+				if (y == 0) break;
 				y--;
 				break;
 
@@ -116,6 +136,7 @@ int insertKeys(){
 				break;
 
 			case KEY_LEFT:
+				if (x == 2) break;
 				x--;
 				break;
 
@@ -128,6 +149,7 @@ int insertKeys(){
 				echo();			// display keys
 				bkgd(COLOR_PAIR(1));
 				insch(key);
+				insertChar(str);
 		
 		}
 	}
@@ -171,7 +193,7 @@ int main(int argc, char *argv[]){
 
 	printChar(str);
 
-	insertKeys();
+	insertKeys(str);
 
 	endwin();	// exit curses 
 
