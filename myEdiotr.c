@@ -1,3 +1,7 @@
+/*
+	I do not know windows. You should use UNIX like operaing system.
+*/
+
 #include<stdio.h>
 #include<string.h>
 #include<stdlib.h>
@@ -10,6 +14,7 @@
 typedef struct string{
 	char *str;
 	int lineMax;
+	int *numOfChar;
 } string;
 
 
