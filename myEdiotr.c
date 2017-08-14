@@ -10,6 +10,7 @@
 
 #define KEY_ESC 27
 #define MAX_FILE_NAME 255
+int const LINE_NUM_SPACE = 2;
 
 typedef struct string{
 	char *str;
@@ -39,11 +40,14 @@ char* openFile(char* filename){
 
 	FILE *fp;
 	int size, i = 0;
+	char *str;
 
 	if(fopen(filename, "r") == NULL){   // file open
 		printf("%s Cannot file open... \n", filename);
 		exit(0);
-  }
+  }else{
+		createBackUp(filename);
+	}
 
 	fp = fopen(filename, "r");
 
@@ -53,7 +57,10 @@ char* openFile(char* filename){
 	size = ftell(fp);
 	fseek(fp, 0, SEEK_SET);
 
-	char *str = malloc(size);
+	if ((str = malloc(size)) == NULL){
+		printf("cannot allocate memory... \n");
+		exit(0);
+	}
 
 	while ((*(str+i) = fgetc(fp)) != EOF) {
 		i++;
@@ -110,7 +117,7 @@ void insertChar(char *str){
 
 int insertKeys(char *str){
 
-	int key, y = 0, x = 2;
+	int key, y = 0, x = LINE_NUM_SPACE;
 
 	move(x, y);
 
@@ -141,7 +148,7 @@ int insertKeys(char *str){
 				break;
 
 			case KEY_LEFT:
-				if (x == 2) break;
+				if (x == LINE_NUM_SPACE) break;
 				x--;
 				break;
 
@@ -192,7 +199,6 @@ int main(int argc, char *argv[]){
   }
 
 	str = openFile(argv[1]);
-	createBackUp(argv[1]);     //create backup file	
 
 	startCurses();
 
