@@ -12,14 +12,14 @@
 #define MAX_FILE_NAME 255
 const int LINE_NUM_SPACE = 2;
 
-typedef struct string{
-	char *ch;
-	int lineMax;
-	int *numOfChar;
-} string;
+typedef struct _textInfo{
+	char *str;						
+	int lineMax;				// max line number
+	int *numOfchar;			// all char
+} txt;
 
 
-void createBackUp(char* filename){      // I am not confident of this program... :(
+void createBackUp(char *filename){      // I am not confident of this program... :(
 
   if ((sizeof(filename)+12) > MAX_FILE_NAME){
       return;     // can not create backup file
@@ -40,7 +40,7 @@ char* openFile(char* filename){
 
 	FILE *fp;
 	int size, i = 0;
-	char *ch = NULL;
+	char *str = NULL;
 
 	if(fopen(filename, "r") == NULL){   // file open
 		printf("%s Cannot file open... \n", filename);
@@ -51,39 +51,39 @@ char* openFile(char* filename){
 
 	fp = fopen(filename, "r");
 
-// check file size
+// streck file size
 
 	fseek(fp, 0, SEEK_END);	
 	size = ftell(fp);
 	fseek(fp, 0, SEEK_SET);
 
-	if ((ch = malloc(size)) == NULL){
+	if ((str = malloc(size)) == NULL){
 		printf("cannot allocate memory... \n");
 		exit(0);
 	}
 
-	while ((*(ch+i) = fgetc(fp)) != EOF) {
+	while ((*(str+i) = fgetc(fp)) != EOF) {
 		i++;
 	}
 
 	fclose(fp);
 	
-	return ch;
+	return str;
 
 }
 
-int printChar(char *ch){
+int printChar(char *str){
 	
 	int lineNum = 1, i = 0;
 
 	bkgd(COLOR_PAIR(2));
 	printw("%d:", i+1);
 
-	while (*(ch+i+1) != EOF){
+	while (*(str+i+1) != EOF){
 
 		refresh();
 
-		if (*(ch+i-1) == '\n'){
+		if (*(str+i-1) == '\n'){
 
 			bkgd(COLOR_PAIR(2));
 			lineNum++;
@@ -92,7 +92,7 @@ int printChar(char *ch){
 		}
 
 		bkgd(COLOR_PAIR(1));
-		printw("%c", *(ch+i));
+		printw("%c", *(str+i));		// display char
 		i++;
 
 	}
@@ -102,28 +102,30 @@ int printChar(char *ch){
 }
 
 
-void insertChar(char *ch, int key, int y, int x){
+void insertChar(char *str, int key, int y, int x){
 
 	char *tmp = NULL;
 	int i = 0, c = 0;
 
-	if ((tmp = (char*)realloc(ch, (sizeof(char)+strlen(ch)))) == NULL){
+	if ((tmp = (char*)realloc(str, (sizeof(char)+strlen(str)))) == NULL){
 		printf("cannot allocate memory...\n");
 		exit(0);
 	}else{
-		ch = tmp;
+		str = tmp;
 	}
 
-	while(i != y){
-		if (*(ch+c) == '\n'){
+	while(i != y){		// search insert position
+		if (*(str+c) == '\n'){
 			i++;
 		}
 		c++;
 	}
 
+
+
 }
 
-int insertKeys(char *ch){
+int insertKeys(char *str){
 
 	int key, y = 0, x = LINE_NUM_SPACE;
 
@@ -169,7 +171,7 @@ int insertKeys(char *ch){
 				echo();			// display keys
 				bkgd(COLOR_PAIR(1));
 				insch(key);
-				insertChar(ch, key, y, x);
+				insertChar(str, key, y, x);
 		
 		}
 	}
@@ -185,7 +187,7 @@ void startCurses(){
 	getmaxyx(stdscr, h, w);     // set window size
 
 	start_color();      // color settings 
-	init_pair(1, COLOR_WHITE, COLOR_BLACK);     // set color char is white and back is black
+	init_pair(1, COLOR_WHITE, COLOR_BLACK);     // set color strar is white and back is black
 	init_pair(2, COLOR_GREEN, COLOR_BLACK);
 	bkgd(COLOR_PAIR(1));    // set default color
 
@@ -199,20 +201,20 @@ void startCurses(){
 
 int main(int argc, char *argv[]){
 
-	char *ch = NULL;
+	txt content = {NULL, 0, 0};
 
 	if (argc < 2){
 		printf("Please text file");
 		return -1;
   }
 
-	ch = openFile(argv[1]);
+	content.str = openFile(argv[1]);
 
 	startCurses();
 
-	printChar(ch);
+	printChar(content.str);
 
-	insertKeys(ch);
+	insertKeys(content.str);
 
 	endwin();	// exit curses 
 
