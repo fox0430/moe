@@ -185,6 +185,7 @@ void startCurses(){
 	keypad(stdscr, TRUE);   //enable cursr keys
 
 	getmaxyx(stdscr, h, w);     // set window size
+	scrollok(stdscr, TRUE);			// enable scroll
 
 	start_color();      // color settings 
 	init_pair(1, COLOR_WHITE, COLOR_BLACK);     // set color strar is white and back is black
