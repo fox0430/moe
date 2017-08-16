@@ -12,7 +12,7 @@
 #define MAX_FILE_NAME 255
 const int LINE_NUM_SPACE = 2;
 
-typedef struct _textInfo{
+typedef struct textInfo_t {
 	char *str;						
 	int lineMax;				// max line number
 	int *numOfchar;			// all char
