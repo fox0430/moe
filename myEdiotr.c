@@ -10,10 +10,10 @@
 
 #define KEY_ESC 27
 #define MAX_FILE_NAME 255
-int const LINE_NUM_SPACE = 2;
+const int LINE_NUM_SPACE = 2;
 
 typedef struct string{
-	char *str;
+	char *ch;
 	int lineMax;
 	int *numOfChar;
 } string;
@@ -40,7 +40,7 @@ char* openFile(char* filename){
 
 	FILE *fp;
 	int size, i = 0;
-	char *str;
+	char *ch = NULL;
 
 	if(fopen(filename, "r") == NULL){   // file open
 		printf("%s Cannot file open... \n", filename);
@@ -57,33 +57,33 @@ char* openFile(char* filename){
 	size = ftell(fp);
 	fseek(fp, 0, SEEK_SET);
 
-	if ((str = malloc(size)) == NULL){
+	if ((ch = malloc(size)) == NULL){
 		printf("cannot allocate memory... \n");
 		exit(0);
 	}
 
-	while ((*(str+i) = fgetc(fp)) != EOF) {
+	while ((*(ch+i) = fgetc(fp)) != EOF) {
 		i++;
 	}
 
 	fclose(fp);
 	
-	return str;
+	return ch;
 
 }
 
-int printChar(char *str){
+int printChar(char *ch){
 	
 	int lineNum = 1, i = 0;
 
 	bkgd(COLOR_PAIR(2));
 	printw("%d:", i+1);
 
-	while (*(str+i+1) != EOF){
+	while (*(ch+i+1) != EOF){
 
 		refresh();
 
-		if (*(str+i-1) == '\n'){
+		if (*(ch+i-1) == '\n'){
 
 			bkgd(COLOR_PAIR(2));
 			lineNum++;
@@ -92,7 +92,7 @@ int printChar(char *str){
 		}
 
 		bkgd(COLOR_PAIR(1));
-		printw("%c", *(str+i));
+		printw("%c", *(ch+i));
 		i++;
 
 	}
@@ -102,20 +102,28 @@ int printChar(char *str){
 }
 
 
-void insertChar(char *str){
+void insertChar(char *ch, int key, int y, int x){
 
-	char *tmp;
+	char *tmp = NULL;
+	int i = 0, c = 0;
 
-	if ((tmp = (char*)realloc(str, (sizeof(char)+strlen(str)))) == NULL){
+	if ((tmp = (char*)realloc(ch, (sizeof(char)+strlen(ch)))) == NULL){
 		printf("cannot allocate memory...\n");
 		exit(0);
 	}else{
-		str = tmp;
+		ch = tmp;
 	}
-	
+
+	while(i != y){
+		if (*(ch+c) == '\n'){
+			i++;
+		}
+		c++;
+	}
+
 }
 
-int insertKeys(char *str){
+int insertKeys(char *ch){
 
 	int key, y = 0, x = LINE_NUM_SPACE;
 
@@ -161,7 +169,7 @@ int insertKeys(char *str){
 				echo();			// display keys
 				bkgd(COLOR_PAIR(1));
 				insch(key);
-				insertChar(str);
+				insertChar(ch, key, y, x);
 		
 		}
 	}
@@ -191,20 +199,20 @@ void startCurses(){
 
 int main(int argc, char *argv[]){
 
-	char *str;
+	char *ch = NULL;
 
 	if (argc < 2){
 		printf("Please text file");
 		return -1;
   }
 
-	str = openFile(argv[1]);
+	ch = openFile(argv[1]);
 
 	startCurses();
 
-	printChar(str);
+	printChar(ch);
 
-	insertKeys(str);
+	insertKeys(ch);
 
 	endwin();	// exit curses 
 
