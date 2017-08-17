@@ -222,8 +222,6 @@ int main(int argc, char *argv[]){
 
 	txt content = {NULL, 0, 0};
 
-//	char *str = NULL;
-
 	if (argc < 2){
 		printf("Please text file");
 		return -1;
