@@ -14,8 +14,8 @@ const int LINE_NUM_SPACE = 2;
 
 
 typedef struct textInfo_t {
-	char *str;						
-	int lineMax;				// max line number
+	char *str;
+	int numOfLine;			// max line number
 	int numOfchar;			// number of all char
 } txt;
 
@@ -37,7 +37,7 @@ void createBackUp(char *filename){      // I am not confident of this program...
 
 }
 
-txt openFile(char* filename, txt content){
+txt* openFile(char* filename){
 
 	FILE *fp;
 	int size, i = 0;
@@ -53,17 +53,20 @@ txt openFile(char* filename, txt content){
 
 // check file size
 
+	txt *content = malloc(sizeof(txt));
+
 	fseek(fp, 0, SEEK_END);	
 	size = ftell(fp);
 	fseek(fp, 0, SEEK_SET);
 
-	if ((content.str = malloc(size)) == NULL){
+	if ((content->str = malloc(size)) == NULL){
 		printf("cannot allocate memory... \n");
 		exit(0);
 	}
 
-	while ((*(content.str+i) = fgetc(fp)) != EOF) {
-		content.numOfchar++;		
+	while ((*(content->str+i) = fgetc(fp)) != EOF) {
+		if(content->str[i] == '\n') ++content->numOfLine;
+		content->numOfchar++;
 		i++;
 	}
 
@@ -73,7 +76,7 @@ txt openFile(char* filename, txt content){
 
 }
 
-int printChar(char *str){
+int printStr(char *str){
 	
 	int lineNum = 1, i = 0;
 
@@ -89,7 +92,6 @@ int printChar(char *str){
 			bkgd(COLOR_PAIR(2));
 			lineNum++;
 			printw("%d:", lineNum);			// display line number
-
 		}
 
 		bkgd(COLOR_PAIR(1));
@@ -102,22 +104,24 @@ int printChar(char *str){
 
 }
 
-
-txt insertChar(txt content, int key, int y, int x){
-
-	char *tmp = NULL;
-	int i = 0, c = 0;
-
-	if ((tmp = (char*)realloc(content.str, (sizeof(char)+strlen(content.str)))) == NULL){
-		printf("cannot allocate memory...\n");
-		exit(0);
-	}else{
-		content.str = tmp;
+void printTxt(txt* content){
+	int lineNum = 0;
+	bkgd(COLOR_PAIR(2));
+	printw("1:");
+	for(int i = 0; i<content->numOfchar; ++i){
+		printw("%c",content->str[i]);
+		if(content->str[i] == '\n'){
+			++lineNum;
+			printw("%d:", lineNum+1);
+		}
 	}
+}
 
-// search insert position
+//seek specified position
+int seekTxt(txt* content, int y, int x){
+	int i = 0,c = 0;
 	while(i != y){
-		if (*(content.str+c) == '\n'){
+		if (*(content->str+c) == '\n'){
 			i++;
 		}
 		c++;
@@ -126,19 +130,49 @@ txt insertChar(txt content, int key, int y, int x){
 	for(i=0; i<(x-LINE_NUM_SPACE); i++){
 		c++;
 	}
+	return c;
+}
 
-// insert char
-	for(i=content.numOfchar; i>=(c-1); i--){
-		*(content.str+(i+1)) = *(content.str+i);
+txt* insertChar(txt* content, int key, int y, int x){
+
+	char *tmp = NULL;
+	int i = 0, c = seekTxt(content,y,x);
+
+	if ((tmp = (char*)realloc(content->str, sizeof(char)*(strlen(content->str)+1))) == NULL){
+		printf("cannot allocate memory...\n");
+		exit(0);
+	}else{
+		content->str = tmp;
 	}
-	*(content.str+(c)) = key;
 
-	content.numOfchar++;
+	// insert char
+	for(i=content->numOfchar; i>=(c-1); i--){
+		*(content->str+(i+1)) = *(content->str+i);
+	}
+	*(content->str+(c)) = key;
+
+	content->numOfchar++;
 
 	return content;
 }
 
-txt insertKeys(txt content){
+txt* eraseChar(txt* content, int y, int x){
+	int erasedCharIndex = seekTxt(content, y, x);
+	//shift
+	for(int i = erasedCharIndex; i+1<content->numOfchar; ++i) content->str[i] = content->str[i+1];
+
+	char *tmp=NULL;
+	if((tmp = (char*)realloc(content->str,sizeof(char)*(strlen(content->str)-1))) == NULL){
+		printf("cannot allocate memory...\n");
+		exit(0);
+	}else{
+		content->str = tmp;
+	}
+
+	return content;
+}
+
+txt* insertKeys(txt* content){
 
 	int key, y = 0, x = LINE_NUM_SPACE;
 
@@ -163,6 +197,7 @@ txt insertKeys(txt content){
 				break;
 
 			case KEY_DOWN:
+				if(y == content->numOfLine) break;
 				y++;
 				break;
 
@@ -176,15 +211,18 @@ txt insertKeys(txt content){
 				break;
 
 			case KEY_BACKSPACE:
+				if(x == LINE_NUM_SPACE) break;
+				--x;
+				move(y, x);
 				delch();
-				move(y, x--);
+				eraseChar(content, y, x);
 				break;
 
 			default:
 				echo();			// display keys
 				bkgd(COLOR_PAIR(1));
 				insch(key);
-				content = insertChar(content, key, y, x);
+				insertChar(content, key, y, x);
 		
 		}
 	}
@@ -217,28 +255,26 @@ void startCurses(){
 
 int main(int argc, char *argv[]){
 
-	txt content = {NULL, 0, 0};
-
 	if (argc < 2){
 		printf("Please text file");
 		return -1;
-  }
+	}
 
-	content = openFile(argv[1], content);
+	txt* content = openFile(argv[1]);
 
 	startCurses();
 
-	printChar(content.str);
+	printTxt(content);
 
-	content = insertKeys(content);
+	insertKeys(content);
 
 	endwin();	// exit curses 
 
 // debug
 
 	int i = 0;
-	while(*(content.str+i) != EOF){
-		printf("%c", *(content.str+i));
+	while(*(content->str+i) != EOF){
+		printf("%c", *(content->str+i));
 		i++;
 	}
 
