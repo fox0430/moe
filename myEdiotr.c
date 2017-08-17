@@ -16,7 +16,7 @@ const int LINE_NUM_SPACE = 2;
 typedef struct textInfo_t {
 	char *str;						
 	int lineMax;				// max line number
-	int *numOfchar;			// all char
+	int numOfchar;			// number of all char
 } txt;
 
 
@@ -54,7 +54,7 @@ char* openFile(char* filename){
 
 	fp = fopen(filename, "r");
 
-// streck file size
+// check file size
 
 	fseek(fp, 0, SEEK_END);	
 	size = ftell(fp);
@@ -129,12 +129,10 @@ char *insertChar(char *str, int key, int y, int x){
 	for(i=0; i<(x-LINE_NUM_SPACE); i++){
 		c++;
 	}
-// search complete
-
 
 // insert char
 	for(i=numOfchar; i>=(c-1); i--){
-		*(str+i+1) = *(str+i);
+		*(str+(i+1)) = *(str+i);
 	}
 	*(str+(c)) = key;
 
