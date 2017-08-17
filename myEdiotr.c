@@ -12,12 +12,15 @@
 #define MAX_FILE_NAME 255
 const int LINE_NUM_SPACE = 2;
 
+
 typedef struct textInfo_t {
 	char *str;						
 	int lineMax;				// max line number
 	int *numOfchar;			// all char
 } txt;
 
+
+int numOfchar = 0; // for now
 
 void createBackUp(char *filename){      // I am not confident of this program... :(
 
@@ -63,6 +66,7 @@ char* openFile(char* filename){
 	}
 
 	while ((*(str+i) = fgetc(fp)) != EOF) {
+		numOfchar++;		
 		i++;
 	}
 
@@ -102,7 +106,7 @@ int printChar(char *str){
 }
 
 
-void insertChar(char *str, int key, int y, int x){
+char *insertChar(char *str, int key, int y, int x){
 
 	char *tmp = NULL;
 	int i = 0, c = 0;
@@ -114,18 +118,30 @@ void insertChar(char *str, int key, int y, int x){
 		str = tmp;
 	}
 
-	while(i != y){		// search insert position
+// search insert position
+	while(i != y){
 		if (*(str+c) == '\n'){
 			i++;
 		}
 		c++;
 	}
 
+	for(i=0; i<(x-LINE_NUM_SPACE); i++){
+		c++;
+	}
+// search complete
 
 
+// insert char
+	for(i=numOfchar; i>=(c-1); i--){
+		*(str+i+1) = *(str+i);
+	}
+	*(str+(c)) = key;
+
+	return str;
 }
 
-int insertKeys(char *str){
+char *insertKeys(char *str){
 
 	int key, y = 0, x = LINE_NUM_SPACE;
 
@@ -138,10 +154,10 @@ int insertKeys(char *str){
 		noecho();			// no display keys;
 		key = getch();		// get keys
 
-		if (key == KEY_ESC){
+		if(key == KEY_ESC){
 			break;
 		}
-
+		
 		switch(key){
 
 			case KEY_UP:
@@ -171,10 +187,12 @@ int insertKeys(char *str){
 				echo();			// display keys
 				bkgd(COLOR_PAIR(1));
 				insch(key);
-				insertChar(str, key, y, x);
+				str = insertChar(str, key, y, x);
 		
 		}
 	}
+
+	return str;
 }
 
 void startCurses(){
@@ -204,6 +222,8 @@ int main(int argc, char *argv[]){
 
 	txt content = {NULL, 0, 0};
 
+//	char *str = NULL;
+
 	if (argc < 2){
 		printf("Please text file");
 		return -1;
@@ -215,9 +235,17 @@ int main(int argc, char *argv[]){
 
 	printChar(content.str);
 
-	insertKeys(content.str);
+	content.str = insertKeys(content.str);
 
 	endwin();	// exit curses 
+
+// debug
+
+	int i = 0;
+	while(*(content.str+i) != EOF){
+		printf("%c", *(content.str+i));
+		i++;
+	}
 
 	return 0;
 
