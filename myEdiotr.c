@@ -138,6 +138,8 @@ char *insertChar(char *str, int key, int y, int x){
 	}
 	*(str+(c)) = key;
 
+	numOfchar++;
+
 	return str;
 }
 
