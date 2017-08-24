@@ -165,6 +165,8 @@ void gapBufferTest(){
     assert(gapBufferAt(gb,4)==0);
 
     assert(gapBufferReserve(gb,4)==-1);
+
+    printf("gapBuffer test succeeded.\n");
 }
 
 int main(){

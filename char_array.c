@@ -8,7 +8,7 @@ typedef struct charArray{
     int capacity,head;
 }charArray;
 
-int charArrayInit(charArray* array,int size,int init_value){
+int charArrayInit(charArray* array,int size,char init_value){
     int size_=1; //realloc()の回数を少なくするためにあえて2以上にしてもいいかも
     while(size_<size) size_*=2;
 
@@ -72,11 +72,11 @@ void charArrayTest(){
     
     assert(array.capacity==8);
     assert(array.head==5);
-    assert(array.elements=="aaaaa");
+    assert(strcmp(array.elements,"aaaaa")==0);
 
     for(int i=0; i<5; ++i) array.elements[i]='a'+i;
 
-    assert(array.elements=="abcde");
+    assert(strcmp(array.elements,"abcde")==0);
 
     charArrayPush(&array,'F');
     charArrayPush(&array,'G');
@@ -85,7 +85,7 @@ void charArrayTest(){
 
     assert(array.capacity==16);
     assert(array.head==9);
-    assert(array.elements=="abcdeFGHI");
+    assert(strcmp(array.elements,"abcdeFGHI")==0);
 
     charArrayPop(&array);
     charArrayPop(&array);
@@ -95,7 +95,7 @@ void charArrayTest(){
 
     assert(array.capacity==8);
     assert(array.head==4);
-    assert(array.elements=="abcd");
+    assert(strcmp(array.elements,"abcd")==0);
 
     charArrayPop(&array);
     charArrayPop(&array);
@@ -104,7 +104,10 @@ void charArrayTest(){
 
     assert(charArrayIsEmpty(&array));
     assert(array.capacity==1);
+
+    printf("charArray test succeeded.\n");
 }
 
 int main(){
+    charArrayTest();
 }
