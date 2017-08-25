@@ -60,14 +60,14 @@ int gapBufferMakeGap(gapBuffer* gb,int gapBegin){
 
 //insertedPositionの直前に要素を挿入する.末尾に追加したい場合はinsertedPositionにバッファの要素数を渡す.
 //ex.空のバッファに要素を追加する場合はinsertedPositionに0を渡す.
-int gapBufferInsert(gapBuffer* gb,TYPE1 element,int insertedPosition){
-    if(0>insertedPosition || insertedPosition>gb->size){
+int gapBufferInsert(gapBuffer* gb,int position,TYPE1 element){
+    if(position<0 || gb->size<position){
         printf("Invalid position.\n");
         return -1;
     }
 
     if(gb->size==gb->capacity) gapBufferReserve(gb,gb->capacity*2);
-    if(gb->gapBegin!=insertedPosition) gapBufferMakeGap(gb,insertedPosition);
+    if(gb->gapBegin!=position) gapBufferMakeGap(gb,position);
     gb->buffer[gb->gapBegin]=element;
     ++gb->gapBegin;
     ++gb->size;
@@ -76,7 +76,7 @@ int gapBufferInsert(gapBuffer* gb,TYPE1 element,int insertedPosition){
 
 //[begin,end)の要素を削除する
 int gapBufferErase(gapBuffer* gb,int begin,int end){
-    if(begin>end || 0<begin || gb->size<end){
+    if(begin>end || begin<0 || gb->size<end){
         printf("Invalid interval.\n");
         return -1;
     }
@@ -96,8 +96,8 @@ int gapBufferErase(gapBuffer* gb,int begin,int end){
         gb->gapEnd=end_;
     }
 
-    if(gb->size*4<=gb->capacity) gapBufferReserve(gb,gb->capacity/2);
-    --gb->size;
+    gb->size-=end-begin;
+    while(gb->size>0 && gb->size*4<=gb->capacity) if(gapBufferReserve(gb,gb->capacity/2)==-1) return -1;
     return 1;
 }
 
@@ -117,28 +117,31 @@ bool gapBufferIsEmpty(gapBuffer* gb){
 
 void gapBufferTest(){
     gapBuffer* gb=(gapBuffer*)malloc(sizeof(gapBuffer));
-    gapBufferInit(gb);
+    assert(gapBufferInit(gb)==1);
     
-    gapBufferInsert(gb,0,0);
+    assert(gapBufferInsert(gb,0,0)==1);
     assert(gapBufferAt(gb,0)==0);
-    for(int i=1; i<8; ++i) gapBufferInsert(gb,i,i);
+    for(int i=1; i<8; ++i) assert(gapBufferInsert(gb,i,i)==1);
     for(int i=0; i<8; ++i) assert(gapBufferAt(gb,i)==i);
 
-    gapBufferErase(gb,0,5);
+    assert(gapBufferErase(gb,0,5)==1);
+    assert(gapBufferErase(gb,1,0)==-1);
     for(int i=0; i<3; ++i) assert(gapBufferAt(gb,i)==i+5);
     
-    gapBufferErase(gb,0,2);
+    assert(gapBufferErase(gb,0,2)==1);
     assert(gapBufferAt(gb,0)==7);
     
     gapBufferErase(gb,0,1);
 
     assert(gapBufferIsEmpty(gb));
+    assert(gapBufferErase(gb,0,1)==-1);
 
-    gapBufferInsert(gb,0,0);
-    gapBufferInsert(gb,1,0);
-    gapBufferInsert(gb,2,0); //2   1   0
-    gapBufferInsert(gb,3,2); //2   1 3 0
-    gapBufferInsert(gb,4,1); //2 4 1 3 0
+    assert(gapBufferInsert(gb,0,0)==1);
+    assert(gapBufferInsert(gb,0,1)==1);
+    assert(gapBufferInsert(gb,0,2)==1); //2   1   0
+    assert(gapBufferInsert(gb,2,3)==1); //2   1 3 0
+    assert(gapBufferInsert(gb,1,4)==1); //2 4 1 3 0
+    assert(gapBufferInsert(gb,6,0)==-1);
 
     assert(gapBufferAt(gb,0)==2);
     assert(gapBufferAt(gb,1)==4);

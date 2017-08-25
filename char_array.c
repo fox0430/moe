@@ -79,29 +79,29 @@ void charArrayTest(){
 
     assert(strcmp(array->elements,"abcde")==0);
 
-    charArrayPush(array,'F');
-    charArrayPush(array,'G');
-    charArrayPush(array,'H');
-    charArrayPush(array,'I');
+    assert(charArrayPush(array,'F')==1);
+    assert(charArrayPush(array,'G')==1);
+    assert(charArrayPush(array,'H')==1);
+    assert(charArrayPush(array,'I')==1);
 
     assert(array->capacity==16);
     assert(array->head==9);
     assert(strcmp(array->elements,"abcdeFGHI")==0);
 
-    charArrayPop(array);
-    charArrayPop(array);
-    charArrayPop(array);
-    charArrayPop(array);
-    charArrayPop(array);
+    assert(charArrayPop(array)==1);
+    assert(charArrayPop(array)==1);
+    assert(charArrayPop(array)==1);
+    assert(charArrayPop(array)==1);
+    assert(charArrayPop(array)==1);
 
     assert(array->capacity==8);
     assert(array->head==4);
     assert(strcmp(array->elements,"abcd")==0);
 
-    charArrayPop(array);
-    charArrayPop(array);
-    charArrayPop(array);
-    charArrayPop(array);
+    assert(charArrayPop(array)==1);
+    assert(charArrayPop(array)==1);
+    assert(charArrayPop(array)==1);
+    assert(charArrayPop(array)==1);
 
     assert(charArrayIsEmpty(array));
     assert(array->capacity==1);
