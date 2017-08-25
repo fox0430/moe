@@ -8,22 +8,22 @@
 
 typedef struct gapBuffer{
     TYPE1* buffer;
-    int capacity,              //bufferの長さ
+    int size,            //意味のあるデータが実際に格納されているサイズ
+        capacity,        //確保したメモリ量
         gapBegin,gapEnd; //半開区間[gap_begin,gap_end)を隙間とする
 }gapBuffer; //実際にはtxt?
 
 int gapBufferInit(gapBuffer* gb){
-    gb->buffer=NULL;
-    gb->capacity=0;
+    gb->buffer=(TYPE1*)malloc(sizeof(TYPE1));
+    gb->size=0;
+    gb->capacity=1;
     gb->gapBegin=0;
-    gb->gapEnd=0;
+    gb->gapEnd=1;
     return 1;
 }
 
-//現在の実装ではもしリサイズ後のサイズが現在の要素数よりも少ない場合はreturn -1をするようになっている.
-//はみ出した部分についてはクリップするように実装を変更しても良いかもしれない.
 int gapBufferReserve(gapBuffer* gb,int capacity){
-    if(capacity<gb->capacity-(gb->gapEnd-gb->gapBegin)){
+    if(capacity<gb->size || capacity<=0){
         printf("New buffer capacity is too small.\n");
         return -1;
     }
@@ -34,12 +34,7 @@ int gapBufferReserve(gapBuffer* gb,int capacity){
     }
 
     gb->buffer=newBuffer;
-    memmove(gb->buffer+(capacity-(gb->capacity-gb->gapEnd)),gb->buffer+(gb->capacity-(gb->capacity-gb->gapEnd)),(gb->capacity-gb->gapEnd));
-    /*
-    for(int i=0; i<gb->capacity-gb->gapEnd; ++i){
-        gb->buffer[capacity-1-i]=gb->buffer[gb->capacity-1-i];
-    }
-    */
+    memmove(gb->buffer+(capacity-(gb->capacity-gb->gapEnd)),gb->buffer+(gb->capacity-(gb->capacity-gb->gapEnd)),sizeof(TYPE1)*(gb->capacity-gb->gapEnd));
     gb->gapEnd=capacity-(gb->capacity-gb->gapEnd);
     gb->capacity=capacity;
     return 1;
@@ -53,16 +48,10 @@ int gapBufferMakeGap(gapBuffer* gb,int gapBegin){
     }
 
     if(gapBegin<gb->gapBegin){
-        //memmoveに書き直す
-        for(int i=0; i<gb->gapBegin-gapBegin; ++i){
-            gb->buffer[gb->gapEnd-1-i]=gb->buffer[gb->gapBegin-1-i];
-        }
+        memmove(gb->buffer+(gb->gapEnd-gb->gapBegin+gapBegin),gb->buffer+gapBegin,sizeof(TYPE1)*(gb->gapBegin-gapBegin));
     }else{
-        //memmoveに書き直す
         int gapEnd=gapBegin+(gb->gapEnd-gb->gapBegin);
-        for(int i=0; i<gapEnd-gb->gapEnd; ++i){
-            gb->buffer[gb->gapBegin+i]=gb->buffer[gb->gapEnd+i];
-        }
+        memmove(gb->buffer+gb->gapBegin,gb->buffer+gb->gapEnd,sizeof(TYPE1)*(gapEnd-gb->gapEnd));
     }
     gb->gapEnd=gapBegin+(gb->gapEnd-gb->gapBegin);
     gb->gapBegin=gapBegin;
@@ -72,28 +61,22 @@ int gapBufferMakeGap(gapBuffer* gb,int gapBegin){
 //insertedPositionの直前に要素を挿入する.末尾に追加したい場合はinsertedPositionにバッファの要素数を渡す.
 //ex.空のバッファに要素を追加する場合はinsertedPositionに0を渡す.
 int gapBufferInsert(gapBuffer* gb,TYPE1 element,int insertedPosition){
-    if(0>insertedPosition || insertedPosition>gb->capacity-(gb->gapEnd-gb->gapBegin)){
+    if(0>insertedPosition || insertedPosition>gb->size){
         printf("Invalid position.\n");
         return -1;
     }
 
-    if(gb->gapEnd-gb->gapBegin==0){
-        if(gb->buffer==NULL){
-            gb->buffer=(TYPE1*)malloc(sizeof(TYPE1));
-            gb->capacity=1;
-            gb->gapBegin=0;
-            gb->gapEnd=1;
-        }else gapBufferReserve(gb,gb->capacity*2);
-    }
+    if(gb->size==gb->capacity) gapBufferReserve(gb,gb->capacity*2);
     if(gb->gapBegin!=insertedPosition) gapBufferMakeGap(gb,insertedPosition);
     gb->buffer[gb->gapBegin]=element;
     ++gb->gapBegin;
+    ++gb->size;
     return 1;
 }
 
 //[begin,end)の要素を削除する
 int gapBufferErase(gapBuffer* gb,int begin,int end){
-    if(begin>end || 0<begin || gb->capacity-(gb->gapEnd-gb->gapBegin)<end){
+    if(begin>end || 0<begin || gb->size<end){
         printf("Invalid interval.\n");
         return -1;
     }
@@ -108,19 +91,18 @@ int gapBufferErase(gapBuffer* gb,int begin,int end){
         gapBufferMakeGap(gb,end_);
         gb->gapBegin=begin_;
     }else{
-        memmove(gb->buffer+gb->gapBegin,gb->buffer+gb->gapEnd,begin_-gb->gapEnd);
+        memmove(gb->buffer+gb->gapBegin,gb->buffer+gb->gapEnd,sizeof(TYPE1)*(begin_-gb->gapEnd));
         gb->gapBegin=gb->gapBegin+begin_-gb->gapEnd;
         gb->gapEnd=end_;
     }
 
-    if((gb->capacity-(gb->gapEnd-gb->gapBegin))*4<=gb->capacity){
-        gapBufferReserve(gb,gb->capacity/2);
-    }
+    if(gb->size*4<=gb->capacity) gapBufferReserve(gb,gb->capacity/2);
+    --gb->size;
     return 1;
 }
 
 TYPE1 gapBufferAt(gapBuffer* gb,int index){
-    if(index<0 || gb->capacity-(gb->gapEnd-gb->gapBegin)<=index){
+    if(index<0 || gb->size<=index){
         printf("Invalid index.\n");
         return -1;
     }
