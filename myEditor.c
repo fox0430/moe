@@ -24,25 +24,24 @@ typedef struct gapBuffer{
 
 void startCurses(){
 
-	int h, w;
-	initscr();      // start terminal contorl
-	curs_set(1);    //set cursr
-	keypad(stdscr, TRUE);   //enable cursr keys
+  int h, w;
+  initscr();      // start terminal contorl
+  curs_set(1);    //set cursr
+  keypad(stdscr, TRUE);   //enable cursr keys
 
-	getmaxyx(stdscr, h, w);     // set window size
-	scrollok(stdscr, TRUE);			// enable scroll
+  getmaxyx(stdscr, h, w);     // set window size
+  scrollok(stdscr, TRUE);			// enable scroll
 
-	start_color();      // color settings
-	init_pair(1, COLOR_WHITE, COLOR_BLACK);     // set color strar is white and back is black
-	init_pair(2, COLOR_GREEN, COLOR_BLACK);
-	bkgd(COLOR_PAIR(1));    // set default color
+  start_color();      // color settings
+  init_pair(1, COLOR_WHITE, COLOR_BLACK);     // set color strar is white and back is black
+  init_pair(2, COLOR_GREEN, COLOR_BLACK);
+  bkgd(COLOR_PAIR(1));    // set default color
 
-	erase();	// screen display
+  erase();	// screen display
 
-	ESCDELAY = 25;      // delete esc key time lag
+  ESCDELAY = 25;      // delete esc key time lag
 
-	move(0, 0);     // set default cursr point
-
+  move(0, 0);     // set default cursr point
 }
 
 int charArrayInit(charArray* array){
