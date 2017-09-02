@@ -217,11 +217,11 @@ bool gapBufferIsEmpty(gapBuffer* gb){
   return gb->capacity == gb->gapEnd - gb->gapBegin;
 }
 
-void EditChar(gapBuffer* gb){
+void EditChar(gapBuffer* gb, int lineNum){
   
   int key,
       y = 0,
-      x = 0;
+      x = 2;
 
   while(1){
 
@@ -240,6 +240,7 @@ void EditChar(gapBuffer* gb){
         break;
 
       case KEY_DOWN:
+        if(lineNum <= y) break;
         y++;
         break;
 
@@ -248,6 +249,7 @@ void EditChar(gapBuffer* gb){
         break;
 
       case KEY_LEFT:
+        if(x <= 2) break;
         x--;
         break;
 
@@ -267,7 +269,7 @@ void EditChar(gapBuffer* gb){
 int openFile(char* filename){
 
   char ch;
-  int lineNum=0;
+  int lineNum = 0;
 
   FILE *fp = fopen(filename, "r");
   if(fp == NULL){
@@ -275,20 +277,20 @@ int openFile(char* filename){
 		exit(0);
   }
 
-  gapBuffer* gb     = (gapBuffer*)malloc(sizeof(gapBuffer));
+  gapBuffer* gb = (gapBuffer*)malloc(sizeof(gapBuffer));
   gapBufferInit(gb);
   {
-    charArray* ca=(charArray*)malloc(sizeof(charArray));
+    charArray* ca = (charArray*)malloc(sizeof(charArray));
     charArrayInit(ca);
-    gapBufferInsert(gb,ca,0);
+    gapBufferInsert(gb, ca, 0);
   }
 
-  while((ch=fgetc(fp))!=EOF){
+  while((ch = fgetc(fp)) != EOF){
     if(ch=='\n'){
       ++lineNum;
       charArray* ca = (charArray*)malloc(sizeof(charArray));
       charArrayInit(ca);
-      gapBufferInsert(gb,ca, lineNum);
+      gapBufferInsert(gb, ca, lineNum);
     }else charArrayPush(gapBufferAt(gb, lineNum), ch);
   }
   fclose(fp);
@@ -297,9 +299,14 @@ int openFile(char* filename){
 
   bkgd(COLOR_PAIR(1));
   
-  for(int i=0; i<lineNum; ++i) printw("%s\n", gapBufferAt(gb, i)->elements);
+  for(int i=0; i<lineNum; ++i) {
+    bkgd(COLOR_PAIR(2));
+    printw("%d:", i+1); // line number  !! Rewrite
+    bkgd(COLOR_PAIR(1));
+    printw("%s\n", gapBufferAt(gb, i)->elements);
+  }
 
-  EditChar(gb);
+  EditChar(gb, lineNum);
 
 	return 0;
 }
