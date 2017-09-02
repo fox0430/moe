@@ -249,7 +249,7 @@ void EditChar(gapBuffer* gb, int lineNum){
         break;
 
       case KEY_LEFT:
-        if(x <= 2) break;
+        if(x <= 2) break;   // Rewrite
         x--;
         break;
 
