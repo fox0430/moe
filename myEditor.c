@@ -26,15 +26,15 @@ void startCurses(){
 
   int h, w;
   initscr();      // start terminal contorl
-  curs_set(1);    //set cursr
-  keypad(stdscr, TRUE);   //enable cursr keys
+  curs_set(1);    // set cursr
+  keypad(stdscr, TRUE);   // enable cursr keys
 
   getmaxyx(stdscr, h, w);     // set window size
   scrollok(stdscr, TRUE);			// enable scroll
 
   start_color();      // color settings
   init_pair(1, COLOR_WHITE, COLOR_BLACK);     // set color strar is white and back is black
-  init_pair(2, COLOR_GREEN, COLOR_BLACK);
+  init_pair(2, COLOR_GREEN, COLOR_BLACK);     // set color strar is green and back is black
   bkgd(COLOR_PAIR(1));    // set default color
 
   erase();	// screen display
@@ -217,11 +217,11 @@ bool gapBufferIsEmpty(gapBuffer* gb){
   return gb->capacity == gb->gapEnd - gb->gapBegin;
 }
 
-void EditChar(gapBuffer* gb, int lineNum){
+void EditChar(gapBuffer* gb, int lineNum, int lineNumDigits){
   
   int key,
       y = 0,
-      x = 2;
+      x = lineNumDigits;
 
   while(1){
 
@@ -249,7 +249,7 @@ void EditChar(gapBuffer* gb, int lineNum){
         break;
 
       case KEY_LEFT:
-        if(x <= 2) break;   // Rewrite
+        if(x <= lineNumDigits) break;
         x--;
         break;
 
@@ -266,10 +266,25 @@ void EditChar(gapBuffer* gb, int lineNum){
   }
 }
 
+void printLineNumber(int lineNumDigits, int lineNum){
+
+
+  for(int i=0; i<lineNumDigits; i++) printw(" ");
+
+  bkgd(COLOR_PAIR(2));
+  printw("%d:", lineNum +1);
+}
+
 int openFile(char* filename){
 
-  char ch;
-  int lineNum = 0;
+  char  ch,
+        lineNumStr[10],
+        iChar[10]; 
+
+  int   lineNum = 0,
+        lineNumDigits = 0,
+        lineNumDigitsMax = 1,
+        iDigits = 1;
 
   FILE *fp = fopen(filename, "r");
   if(fp == NULL){
@@ -298,15 +313,25 @@ int openFile(char* filename){
   startCurses();  
 
   bkgd(COLOR_PAIR(1));
-  
-  for(int i=0; i<lineNum; ++i) {
-    bkgd(COLOR_PAIR(2));
-    printw("%d:", i+1); // line number  !! Rewrite
+ 
+  sprintf(lineNumStr, "%d", lineNum);
+  lineNumDigits = strlen(lineNumStr);
+  lineNumDigitsMax = lineNumDigits + 2;
+
+  for(int i=0; i<lineNum; i++) {
+    
+    sprintf(iChar, "%d", i+1);
+    if(strlen(iChar) > iDigits) {
+      lineNumDigits--;
+      iDigits++;
+    }
+    printLineNumber(lineNumDigits, i);
+
     bkgd(COLOR_PAIR(1));
     printw("%s\n", gapBufferAt(gb, i)->elements);
   }
 
-  EditChar(gb, lineNum);
+  EditChar(gb, lineNum, lineNumDigitsMax);
 
 	return 0;
 }
