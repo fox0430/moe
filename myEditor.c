@@ -236,11 +236,12 @@ void EditChar(gapBuffer* gb, int lineNum, int lineNumDigits){
 
     switch(key){
       case KEY_UP:
+        if(y < 1) break;
         y--;
         break;
 
       case KEY_DOWN:
-        if(lineNum <= y) break;
+        if(y >= lineNum) break;
         y++;
         break;
 
