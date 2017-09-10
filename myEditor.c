@@ -11,7 +11,8 @@
 typedef struct charArray{
   char* elements;
   int capacity,
-      head;
+      head,
+      numOfChar;
 } charArray;
 
 
@@ -37,9 +38,9 @@ void startCurses(){
   init_pair(2, COLOR_GREEN, COLOR_BLACK);     // set color strar is green and back is black
   bkgd(COLOR_PAIR(1));    // set default color
 
-  erase();	// screen display
+  erase();  	// screen display
 
-  ESCDELAY = 25;      // delete esc key time lag
+  ESCDELAY = 25;    // delete esc key time lag
 
   move(0, 0);     // set default cursr point
 }
@@ -53,8 +54,9 @@ int charArrayInit(charArray* array){
       return -1;
   }
 
-  array->elements[size]='\0';
-  array->head=0;
+  array->elements[size] = '\0';
+  array->head = 0;
+  array->numOfChar = 0;
   return 1;
 }
 
@@ -72,6 +74,20 @@ int charArrayPush(charArray* array, int element){
   array->elements[array->head] = element;
   array->elements[array->head +1] = '\0';
   ++array->head;
+  return 1;
+}
+
+int charArrayInsert(charArray* array, int element, int position){
+  if(array->capacity == array->head){
+    char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity *2+1));
+    if(newElements == NULL){
+      printf("cannot reallocate memory.");
+      return -1;
+      }
+    array->elements = newElements;
+    array->capacity *= 2;
+    }
+
   return 1;
 }
 
@@ -263,12 +279,12 @@ void EditChar(gapBuffer* gb, int lineNum, int lineNumDigits){
       default:    // !! Not actually insart
         echo();
         insch(key);
+        charArrayInsert(gapBufferAt(gb, lineNum), key, x);
     }
   }
 }
 
 void printLineNumber(int lineNumDigits, int lineNum){
-
 
   for(int i=0; i<lineNumDigits; i++) printw(" ");
 
@@ -313,8 +329,6 @@ int openFile(char* filename){
 
   startCurses();  
 
-  bkgd(COLOR_PAIR(1));
- 
   sprintf(lineNumStr, "%d", lineNum);
   lineNumDigits = strlen(lineNumStr);
   lineNumDigitsMax = lineNumDigits + 2;
@@ -337,7 +351,12 @@ int openFile(char* filename){
 	return 0;
 }
 
-int main(int argc,char* argv[]){
+int main(int argc, char* argv[]){
+
+  if(argc < 2){
+    printf("cannot file open...\n");
+    return -1;
+  }
 
   openFile(argv[1]);
   endwin();
