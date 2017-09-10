@@ -72,6 +72,7 @@ int charArrayPush(charArray* array, int element){
     }
 
   array->elements[array->head] = element;
+  array->numOfChar++;
   array->elements[array->head +1] = '\0';
   ++array->head;
   return 1;
@@ -258,10 +259,12 @@ void EditChar(gapBuffer* gb, int lineNum, int lineNumDigits){
 
       case KEY_DOWN:
         if(y >= lineNum) break;
+        else if(x > gapBufferAt(gb, y+1)->numOfChar + lineNumDigits - 1) break;
         y++;
         break;
 
       case KEY_RIGHT:
+        if(x >= gapBufferAt(gb, y)->numOfChar + lineNumDigits - 1) break;
         x++;
         break;
 
