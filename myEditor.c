@@ -46,38 +46,47 @@ void startCurses(){
 }
 
 int charArrayInit(charArray* array){
-  int size=1;
+  const int size=1; //realloc()の回数を少なくするためにあえて2以上にしてもいいかも
 
   array->elements=(char*)malloc(sizeof(char)*(size+1));
   if(array->elements == NULL){
-      printf("cannot allocate memory.");
+      printf("Cannot allocate memory.");
       return -1;
   }
 
-  array->elements[size] = '\0';
-  array->head = 0;
-  array->numOfChar = 0;
+  array->elements[0]='\0';
+  array->capacity=size;
+  array->head=0;
   return 1;
 }
 
-int charArrayPush(charArray* array, int element){
-  if(array->capacity == array->head){
-    char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity *2+1));
-    if(newElements == NULL){
-      printf("cannot reallocate memory.");
+int charArrayReserve(charArray* array,int capacity){
+  if(array->head>capacity || capacity<=0){
+      printf("New buffer capacity is too small.\n");
       return -1;
-      }
-    array->elements = newElements;
-    array->capacity *= 2;
-    }
+  }
 
-  array->elements[array->head] = element;
+  char* newElements=(char*)realloc(array->elements,sizeof(char)*(capacity+1));
+  if(newElements==NULL){
+      printf("Cannot reallocate new memory.\n");
+      return -1;
+  }
+
+  array->elements=newElements;
+  array->capacity=capacity;
+  return 1;
+}
+
+int charArrayPush(charArray* array,char element){
+  if(array->capacity==array->head && charArrayReserve(array,array->capacity*2)==-1) return -1;
+  array->elements[array->head]=element;
   array->numOfChar++;
-  array->elements[array->head +1] = '\0';
+  array->elements[array->head+1]='\0';
   ++array->head;
   return 1;
 }
 
+/*
 int charArrayInsert(charArray* array, int element, int position){
   if(array->capacity == array->head){
     char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity *2+1));
@@ -91,7 +100,7 @@ int charArrayInsert(charArray* array, int element, int position){
 
   return 1;
 }
-
+*/
 int charArrayPop(charArray* array){
   if(array->head == 0){
     printf("cannot pop from an empty array.");
@@ -253,7 +262,8 @@ void EditChar(gapBuffer* gb, int lineNum, int lineNumDigits){
 
     switch(key){
       case KEY_UP:
-        if(y < 1) break;
+        if(x > gapBufferAt(gb, y-1)->numOfChar + lineNumDigits - 1) break;
+        else if(y < 1) break;
         y--;
         break;
 
@@ -282,7 +292,7 @@ void EditChar(gapBuffer* gb, int lineNum, int lineNumDigits){
       default:    // !! Not actually insart
         echo();
         insch(key);
-        charArrayInsert(gapBufferAt(gb, lineNum), key, x);
+//        charArrayInsert(gapBufferAt(gb, lineNum), key, x);
     }
   }
 }
