@@ -121,14 +121,14 @@ int charArrayPop(charArray* array){
   return 1;
 }
 
-/*
-int charArrayDel(charArray* array){
+// !! NOT COMPLETE !!
+int charArrayDel(charArray* array, int position){
   if(array->head == 0){
     printf("cannot pop from an empty array.");
     return -1;
   }
   --array->head;
-  memmove(array->elements, array->elements + position, array->head - position);
+  memmove(array->elements + position - 1, array->elements + position, array->numOfChar - position);
 
   if(array->head*4 <= array->capacity){
     char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity /2+1));
@@ -141,7 +141,6 @@ int charArrayDel(charArray* array){
   }
   return 1;
 }
-*/
 
 bool charArrayIsEmpty(charArray* array){
   return array->head == 0;
@@ -268,19 +267,20 @@ void EditChar(gapBuffer* gb, int lineNum, int lineNumDigits){
 
     switch(key){
       case KEY_UP:
-        if(x > gapBufferAt(gb, y-1)->numOfChar + lineNumDigits - 1) break;
-        else if(y < 1) break;
+        if(y < 1) break;
+        else if(x > gapBufferAt(gb, y-1)->numOfChar + lineNumDigits) break;
         y--;
         break;
 
       case KEY_DOWN:
         if(y >= lineNum) break;
-        else if(x > gapBufferAt(gb, y+1)->numOfChar + lineNumDigits - 1) break;
+        else if(x > gapBufferAt(gb, y+1)->numOfChar + lineNumDigits) break;
+        else if(x >= gapBufferAt(gb, y)->numOfChar + lineNumDigits -1 ) {y++; x = lineNumDigits; move(y, x); break;}
         y++;
         break;
 
       case KEY_RIGHT:
-        if(x >= gapBufferAt(gb, y)->numOfChar + lineNumDigits - 1) break;
+        if(x >= gapBufferAt(gb, y)->numOfChar + lineNumDigits) break;
         x++;
         break;
 
@@ -290,6 +290,8 @@ void EditChar(gapBuffer* gb, int lineNum, int lineNumDigits){
         break;
 
       case KEY_BACKSPACE:   // !! Not actually deleted
+        if(x <= lineNumDigits) break;
+        charArrayDel(gapBufferAt(gb, y), x - lineNumDigits);
         x--;
         move(y, x);
         delch();
@@ -298,7 +300,7 @@ void EditChar(gapBuffer* gb, int lineNum, int lineNumDigits){
       default:
         echo();
         insch(key);
-        charArrayInsert(gapBufferAt(gb, y), key, x);
+        charArrayInsert(gapBufferAt(gb, y), key, x - lineNumDigits);
     }
   }
 }
