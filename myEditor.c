@@ -15,12 +15,13 @@ typedef struct charArray{
       numOfChar;
 } charArray;
 
-
 typedef struct gapBuffer{
   struct charArray** buffer;
-  int capacity,   // Buffer lengs
-      gapBegin,gapEnd; //半開区間[gap_begin,gap_end)を隙間とする
-} gapBuffer;
+  int size,            //意味のあるデータが実際に格納されているサイズ
+      capacity,        //確保したメモリ量
+      gapBegin,
+      gapEnd; //半開区間[gap_begin,gap_end)を隙間とする
+}gapBuffer;
 
 
 void startCurses(){
@@ -46,61 +47,58 @@ void startCurses(){
 }
 
 int charArrayInit(charArray* array){
-  const int size=1; //realloc()の回数を少なくするためにあえて2以上にしてもいいかも
+  const int size = 1; //realloc()の回数を少なくするためにあえて2以上にしてもいいかも
 
-  array->elements=(char*)malloc(sizeof(char)*(size+1));
+  array->elements = (char*)malloc(sizeof(char)*(size +1));
   if(array->elements == NULL){
       printf("Cannot allocate memory.");
       return -1;
   }
 
-  array->elements[0]='\0';
-  array->capacity=size;
-  array->head=0;
+  array->elements[0] = '\0';
+  array->capacity = size;
+  array->head = 0;
   return 1;
 }
 
-int charArrayReserve(charArray* array,int capacity){
-  if(array->head>capacity || capacity<=0){
+int charArrayReserve(charArray* array, int capacity){
+  if(array->head>capacity || capacity <= 0){
       printf("New buffer capacity is too small.\n");
       return -1;
   }
 
-  char* newElements=(char*)realloc(array->elements,sizeof(char)*(capacity+1));
+  char* newElements = (char*)realloc(array->elements, sizeof(char)*(capacity +1));
   if(newElements==NULL){
       printf("Cannot reallocate new memory.\n");
       return -1;
   }
 
-  array->elements=newElements;
-  array->capacity=capacity;
+  array->elements = newElements;
+  array->capacity = capacity;
   return 1;
 }
 
-int charArrayPush(charArray* array,char element){
-  if(array->capacity==array->head && charArrayReserve(array,array->capacity*2)==-1) return -1;
-  array->elements[array->head]=element;
+int charArrayPush(charArray* array, char element){
+  if(array->capacity == array->head && charArrayReserve(array, array->capacity *2) ==- 1) return -1;
+  array->elements[array->head] = element;
   array->numOfChar++;
-  array->elements[array->head+1]='\0';
+  array->elements[array->head+1] = '\0';
   ++array->head;
   return 1;
 }
 
-/*
-int charArrayInsert(charArray* array, int element, int position){
-  if(array->capacity == array->head){
-    char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity *2+1));
-    if(newElements == NULL){
-      printf("cannot reallocate memory.");
-      return -1;
-      }
-    array->elements = newElements;
-    array->capacity *= 2;
-    }
+int charArrayInsert(charArray* array, char element, int position){
+  if(array->capacity == array->head && charArrayReserve(array, array->capacity *2) == -1) return -1;
 
+  memmove(array->elements + position, array->elements, array->head - position);
+  printf("memmove succee");
+  array->elements[position] = element;
+  array->numOfChar++;
+  array->elements[array->head+1] = '\0';
+  ++array->head;
   return 1;
 }
-*/
+
 int charArrayPop(charArray* array){
   if(array->head == 0){
     printf("cannot pop from an empty array.");
@@ -121,59 +119,71 @@ int charArrayPop(charArray* array){
   return 1;
 }
 
+/*
+int charArrayDel(charArray* array){
+  if(array->head == 0){
+    printf("cannot pop from an empty array.");
+    return -1;
+  }
+  --array->head;
+  array->elements[array->head] = '\0';
+
+  if(array->head*4 <= array->capacity){
+    char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity /2+1));
+      if(newElements == NULL){
+        printf("cannot reallocate memory.");
+        return -1;
+        }
+     array->elements = newElements;
+     array->capacity /= 2;
+    }
+  return 1;
+}
+*/
+
 bool charArrayIsEmpty(charArray* array){
   return array->head == 0;
 }
 
 int gapBufferInit(gapBuffer* gb){
-  gb->buffer = NULL;
-  gb->capacity = 0;
+  gb->buffer = (charArray**)malloc(sizeof(charArray*));
+  gb->size = 0;
+  gb->capacity = 1;
   gb->gapBegin = 0;
-  gb->gapEnd = 0;
+  gb->gapEnd = 1;
   return 1;
 }
 
 int gapBufferReserve(gapBuffer* gb, int capacity){
-  if(capacity < gb->capacity - (gb->gapEnd - gb->gapBegin)){
+  if(capacity < gb->size || capacity <= 0){
     printf("New buffer capacity is too small.\n");
     return -1;
   }
-  charArray** newBuffer=(charArray**)realloc(gb->buffer,sizeof(charArray*)*capacity);
-  if(newBuffer==NULL){
+  charArray** newBuffer = (charArray**)realloc(gb->buffer, sizeof(charArray*)*capacity);
+  if(newBuffer == NULL){
     printf("Cannot reallocate new memory.\n");
     return -1;
   }
 
-  gb->buffer=newBuffer;
-  memmove(gb->buffer+(capacity-(gb->capacity-gb->gapEnd)),gb->buffer+(gb->capacity-(gb->capacity-gb->gapEnd)),(gb->capacity-gb->gapEnd));
-  /*
-  for(int i=0; i<gb->capacity-gb->gapEnd; ++i){
-      gb->buffer[capacity-1-i]=gb->buffer[gb->capacity-1-i];
-  }
-  */
+  gb->buffer = newBuffer;
+  memmove(gb->buffer + (capacity - (gb->capacity - gb->gapEnd)), gb->buffer + (gb->capacity - (gb->capacity - gb->gapEnd)),sizeof(charArray*)*(gb->capacity - gb->gapEnd));
   gb->gapEnd = capacity - (gb->capacity - gb->gapEnd);
   gb->capacity = capacity;
   return 1;
 }
 
 // Create a gap starting with gapBegin
-int gapBufferMakeGap(gapBuffer* gb, int gapBegin){
-  if(gapBegin < 0 || gb->capacity - gapBegin<gb->gapEnd-gb->gapBegin){
+int gapBufferMakeGap(gapBuffer* gb,int gapBegin){
+  if(gapBegin < 0 || gb->capacity-gapBegin < gb->gapEnd-gb->gapBegin){
     printf("Invalid position.\n");
     return -1;
   }
 
-  if(gapBegin<gb->gapBegin){
-    // Rewrite memmove
-    for(int i=0; i<gb->gapBegin-gapBegin; ++i){
-      gb->buffer[gb->gapEnd-1-i]=gb->buffer[gb->gapBegin-1-i];
-    }
+  if(gapBegin < gb->gapBegin){
+    memmove(gb->buffer + (gb->gapEnd-gb->gapBegin+gapBegin), gb->buffer + gapBegin, sizeof(charArray*)*(gb->gapBegin-gapBegin));
   }else{
-    // Rewrite memmove
-    int gapEnd = gapBegin + (gb->gapEnd - gb->gapBegin);
-    for(int i=0; i<gapEnd-gb->gapEnd; ++i){
-    gb->buffer[gb->gapBegin + i] = gb->buffer[gb->gapEnd+i];
-    }
+    int gapEnd = gapBegin + (gb->gapEnd-gb->gapBegin);
+    memmove(gb->buffer+gb->gapBegin, gb->buffer+gb->gapEnd, sizeof(charArray*)*(gapEnd-gb->gapEnd));
   }
   gb->gapEnd = gapBegin + (gb->gapEnd-gb->gapBegin);
   gb->gapBegin = gapBegin;
@@ -182,35 +192,29 @@ int gapBufferMakeGap(gapBuffer* gb, int gapBegin){
 
 //insertedPositionの直前に要素を挿入する.末尾に追加したい場合はinsertedPositionにバッファの要素数を渡す.
 //ex.空のバッファに要素を追加する場合はinsertedPositionに0を渡す.
-int gapBufferInsert(gapBuffer* gb, charArray* element, int insertedPosition){
-  if(0 > insertedPosition || insertedPosition>gb->capacity - (gb->gapEnd - gb->gapBegin)){
+int gapBufferInsert(gapBuffer* gb, charArray* element, int position){
+  if(position < 0 || gb->size < position){
     printf("Invalid position.\n");
     return -1;
   }
 
-  if(gb->gapEnd - gb->gapBegin == 0){
-    if(gb->buffer == NULL){
-      gb->buffer = (charArray**)malloc(sizeof(charArray*));
-      gb->capacity = 1;
-      gb->gapBegin = 0;
-      gb->gapEnd = 1;
-    }else gapBufferReserve(gb, gb->capacity *2);
-  }
-  if(gb->gapBegin != insertedPosition) gapBufferMakeGap(gb, insertedPosition);
+  if(gb->size == gb->capacity) gapBufferReserve(gb, gb->capacity*2);
+  if(gb->gapBegin != position) gapBufferMakeGap(gb, position);
   gb->buffer[gb->gapBegin] = element;
   ++gb->gapBegin;
+  ++gb->size;
   return 1;
 }
 
 // Deleted [begin,end] elements
 int gapBufferDel(gapBuffer* gb, int begin, int end){
-  if(begin > end || 0 < begin || gb->capacity - (gb->gapEnd - gb->gapBegin) < end){
+  if(begin > end || begin < 0 || gb->size < end){
     printf("Invalid interval.\n");
     return -1;
   }
 
   int begin_ = gb->gapBegin > begin ? begin : gb->gapEnd + (begin - gb->gapBegin),
-    end_ = gb->gapBegin>end ? end : gb->gapEnd + (end - gb->gapBegin);
+    end_ = gb->gapBegin > end ? end : gb->gapEnd + (end - gb->gapBegin);
 
   if(begin_ <= gb->gapBegin && gb->gapEnd <= end_){
     gb->gapBegin = begin_;
@@ -219,24 +223,23 @@ int gapBufferDel(gapBuffer* gb, int begin, int end){
     gapBufferMakeGap(gb, end_);
     gb->gapBegin = begin_;
   }else{
-    memmove(gb->buffer + gb->gapBegin, gb->buffer + gb->gapEnd, begin_ - gb->gapEnd);
+    memmove(gb->buffer + gb->gapBegin, gb->buffer + gb->gapEnd, sizeof(charArray*)*(begin_ - gb->gapEnd));
     gb->gapBegin = gb->gapBegin + begin_ - gb->gapEnd;
     gb->gapEnd = end_;
   }
 
-  if((gb->capacity - (gb->gapEnd - gb->gapBegin)) *4 <= gb->capacity){
-    gapBufferReserve(gb, gb->capacity /2);
-  }
+  gb->size -= end - begin;
+  while(gb->size > 0 && gb->size *4 <= gb->capacity) if(gapBufferReserve(gb, gb->capacity /2) == -1) return -1;
   return 1;
 }
 
 charArray* gapBufferAt(gapBuffer* gb, int index){
-  if(index < 0 || gb->capacity - (gb->gapEnd-gb->gapBegin) <= index){
+  if(index < 0 || gb->size <= index){
     printf("Invalid index.\n");
     exit(0);
   }
   if(index < gb->gapBegin) return gb->buffer[index];
-  return gb->buffer[gb->gapEnd + (index-gb->gapBegin)];
+  return gb->buffer[gb->gapEnd+(index - gb->gapBegin)];
 }
 
 bool gapBufferIsEmpty(gapBuffer* gb){
@@ -289,10 +292,10 @@ void EditChar(gapBuffer* gb, int lineNum, int lineNumDigits){
         delch();
         break;
 
-      default:    // !! Not actually insart
+      default:
         echo();
         insch(key);
-//        charArrayInsert(gapBufferAt(gb, lineNum), key, x);
+        charArrayInsert(gapBufferAt(gb, y), key, x);
     }
   }
 }
