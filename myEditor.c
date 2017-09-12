@@ -117,7 +117,7 @@ int charArrayPop(charArray* array){
         }
      array->elements = newElements;
      array->capacity /= 2;
-    }
+  }
   return 1;
 }
 
@@ -128,7 +128,7 @@ int charArrayDel(charArray* array){
     return -1;
   }
   --array->head;
-  array->elements[array->head] = '\0';
+  memmove(array->elements, array->elements + position, array->head - position);
 
   if(array->head*4 <= array->capacity){
     char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity /2+1));
@@ -138,7 +138,7 @@ int charArrayDel(charArray* array){
         }
      array->elements = newElements;
      array->capacity /= 2;
-    }
+  }
   return 1;
 }
 */
