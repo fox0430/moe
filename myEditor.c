@@ -17,16 +17,18 @@ typedef struct charArray{
 
 typedef struct gapBuffer{
   struct charArray** buffer;
-  int size,            //意味のあるデータが実際に格納されているサイズ
-      capacity,        //確保したメモリ量
+  int size,       //意味のあるデータが実際に格納されているサイズ
+      capacity,   //Amount of secured memory
       gapBegin,
-      gapEnd; //半開区間[gap_begin,gap_end)を隙間とする
+      gapEnd;     //半開区間[gap_begin,gap_end)を隙間とする
 }gapBuffer;
 
 
 void startCurses(){
 
-  int h, w;
+  int h,
+      w;
+
   initscr();      // start terminal contorl
   curs_set(1);    // set cursr
   keypad(stdscr, TRUE);   // enable cursr keys
@@ -47,7 +49,7 @@ void startCurses(){
 }
 
 int charArrayInit(charArray* array){
-  const int size = 1; //realloc()の回数を少なくするためにあえて2以上にしてもいいかも
+  const int size = 1;
 
   array->elements = (char*)malloc(sizeof(char)*(size +1));
   if(array->elements == NULL){
@@ -62,13 +64,13 @@ int charArrayInit(charArray* array){
 }
 
 int charArrayReserve(charArray* array, int capacity){
-  if(array->head>capacity || capacity <= 0){
+  if(array->head > capacity || capacity <= 0){
       printf("New buffer capacity is too small.\n");
       return -1;
   }
 
   char* newElements = (char*)realloc(array->elements, sizeof(char)*(capacity +1));
-  if(newElements==NULL){
+  if(newElements == NULL){
       printf("Cannot reallocate new memory.\n");
       return -1;
   }
@@ -166,7 +168,8 @@ int gapBufferReserve(gapBuffer* gb, int capacity){
   }
 
   gb->buffer = newBuffer;
-  memmove(gb->buffer + (capacity - (gb->capacity - gb->gapEnd)), gb->buffer + (gb->capacity - (gb->capacity - gb->gapEnd)),sizeof(charArray*)*(gb->capacity - gb->gapEnd));
+  memmove(gb->buffer + (capacity - (gb->capacity - gb->gapEnd)),
+    gb->buffer + (gb->capacity - (gb->capacity - gb->gapEnd)),sizeof(charArray*)*(gb->capacity - gb->gapEnd));
   gb->gapEnd = capacity - (gb->capacity - gb->gapEnd);
   gb->capacity = capacity;
   return 1;
@@ -364,7 +367,7 @@ int openFile(char* filename){
 
   EditChar(gb, lineNum, lineNumDigitsMax);
 
-	return 0;
+  return 0;
 }
 
 int main(int argc, char* argv[]){
