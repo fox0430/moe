@@ -93,7 +93,6 @@ int charArrayInsert(charArray* array, char element, int position){
   if(array->capacity == array->head && charArrayReserve(array, array->capacity *2) == -1) return -1;
 
   memmove(array->elements + position, array->elements, array->head - position);
-  printf("memmove succee");
   array->elements[position] = element;
   array->numOfChar++;
   array->elements[array->head+1] = '\0';
@@ -129,6 +128,7 @@ int charArrayDel(charArray* array, int position){
   }
   --array->head;
   memmove(array->elements + position - 1, array->elements + position, array->numOfChar - position);
+  --array->numOfChar;
 
   if(array->head*4 <= array->capacity){
     char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity /2+1));
@@ -248,11 +248,11 @@ bool gapBufferIsEmpty(gapBuffer* gb){
   return gb->capacity == gb->gapEnd - gb->gapBegin;
 }
 
-void EditChar(gapBuffer* gb, int lineNum, int lineNumDigits){
+void EditChar(gapBuffer* gb, int lineNum){
   
   int key,
       y = 0,
-      x = lineNumDigits;
+      x = 0;
 
   while(1){
 
@@ -268,49 +268,47 @@ void EditChar(gapBuffer* gb, int lineNum, int lineNumDigits){
     switch(key){
       case KEY_UP:
         if(y < 1) break;
-        else if(x > gapBufferAt(gb, y-1)->numOfChar + lineNumDigits) break;
+        else if(x > gapBufferAt(gb, y-1)->numOfChar) break;
         y--;
         break;
 
       case KEY_DOWN:
         if(y >= lineNum) break;
-        else if(x > gapBufferAt(gb, y+1)->numOfChar + lineNumDigits) break;
-        else if(x >= gapBufferAt(gb, y)->numOfChar + lineNumDigits -1 ) {y++; x = lineNumDigits; move(y, x); break;}
+        else if(x >= gapBufferAt(gb, y+1)->numOfChar) { y++; x = gapBufferAt(gb, y)->numOfChar; break;}
+        else if(y >= gb->size) break;
         y++;
         break;
 
       case KEY_RIGHT:
-        if(x >= gapBufferAt(gb, y)->numOfChar + lineNumDigits) break;
+        if(x >= gapBufferAt(gb, y)->numOfChar) break;
         x++;
         break;
 
       case KEY_LEFT:
-        if(x <= lineNumDigits) break;
+        if(x <= 0) break;
         x--;
         break;
 
-      case KEY_BACKSPACE:   // !! Not actually deleted
-        if(x <= lineNumDigits) break;
-        charArrayDel(gapBufferAt(gb, y), x - lineNumDigits);
+      case KEY_BACKSPACE:
+        if(x <= 0) break;
+        charArrayDel(gapBufferAt(gb, y), x);
         x--;
         move(y, x);
         delch();
+        if(gapBufferAt(gb, y)->numOfChar == 0){
+          gapBufferDel(gb, y, y+1);
+          deleteln();
+          y -= 1;
+          x = gapBufferAt(gb, y)->numOfChar;
+        }
         break;
 
       default:
         echo();
         insch(key);
-        charArrayInsert(gapBufferAt(gb, y), key, x - lineNumDigits);
+        charArrayInsert(gapBufferAt(gb, y), key, x);
     }
   }
-}
-
-void printLineNumber(int lineNumDigits, int lineNum){
-
-  for(int i=0; i<lineNumDigits; i++) printw(" ");
-
-  bkgd(COLOR_PAIR(2));
-  printw("%d:", lineNum +1);
 }
 
 int openFile(char* filename){
@@ -319,10 +317,7 @@ int openFile(char* filename){
         lineNumStr[10],
         iChar[10]; 
 
-  int   lineNum = 0,
-        lineNumDigits = 0,
-        lineNumDigitsMax = 1,
-        iDigits = 1;
+  int   lineNum = 0;
 
   FILE *fp = fopen(filename, "r");
   if(fp == NULL){
@@ -350,24 +345,13 @@ int openFile(char* filename){
 
   startCurses();  
 
-  sprintf(lineNumStr, "%d", lineNum);
-  lineNumDigits = strlen(lineNumStr);
-  lineNumDigitsMax = lineNumDigits + 2;
-
   for(int i=0; i<lineNum; i++) {
     
-    sprintf(iChar, "%d", i+1);
-    if(strlen(iChar) > iDigits) {
-      lineNumDigits--;
-      iDigits++;
-    }
-    printLineNumber(lineNumDigits, i);
-
     bkgd(COLOR_PAIR(1));
     printw("%s\n", gapBufferAt(gb, i)->elements);
   }
 
-  EditChar(gb, lineNum, lineNumDigitsMax);
+  EditChar(gb, lineNum);
 
   return 0;
 }
