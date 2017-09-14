@@ -288,15 +288,22 @@ void EditChar(gapBuffer* gb, int lineNum){
     switch(key){
       case KEY_UP:
         if(y < 1) break;
-        else if(x > gapBufferAt(gb, y-1)->numOfChar) break;
+        else if(x == gapBufferAt(gb, y)->numOfChar || x > gapBufferAt(gb, y-1)->numOfChar){
+          y--;
+          x = gapBufferAt(gb,y)->numOfChar;
+          break;
+        }
         y--;
         break;
 
       case KEY_DOWN:
-        if(y >= lineNum) break;
-        else if(x >= gapBufferAt(gb, y+1)->numOfChar) { y++; x = gapBufferAt(gb, y)->numOfChar; break;}
-        else if(y >= gb->size) break;
-        y++;
+        if(y >= lineNum -1) break;
+        else if(x == gapBufferAt(gb, y)->numOfChar || x >= gapBufferAt(gb, y+1)->numOfChar) {
+          y++;
+          x = gapBufferAt(gb, y)->numOfChar;
+          break;
+        }
+          y++;
         break;
 
       case KEY_RIGHT:
@@ -317,6 +324,7 @@ void EditChar(gapBuffer* gb, int lineNum){
         delch();
         if(gapBufferAt(gb, y)->numOfChar == 0){
           gapBufferDel(gb, y, y+1);
+          lineNum--;
           deleteln();
           if(y > 0) y -= 1;
           x = gapBufferAt(gb, y)->numOfChar;
@@ -325,8 +333,9 @@ void EditChar(gapBuffer* gb, int lineNum){
 
       default:
         echo();
-        insch(key);
         charArrayInsert(gapBufferAt(gb, y), key, x);
+        insch(key);
+        x++;
     }
   }
 }
