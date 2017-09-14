@@ -92,7 +92,7 @@ int charArrayPush(charArray* array, char element){
 int charArrayInsert(charArray* array, char element, int position){
   if(array->capacity == array->head && charArrayReserve(array, array->capacity *2) == -1) return -1;
 
-  memmove(array->elements + position, array->elements, array->head - position);
+  memmove(array->elements + position, array->elements, array->head - position +1);
   array->elements[position] = element;
   array->numOfChar++;
   array->elements[array->head+1] = '\0';
@@ -260,6 +260,7 @@ int readFile(gapBuffer* gb){
   
   for(int i=0; i < gb->size; i++){
     fputs(gapBufferAt(gb, i)->elements, fp);
+    if(i != gb->size -1 ) fputc('\n', fp);
   }
 
   fclose(fp);
@@ -297,7 +298,7 @@ void EditChar(gapBuffer* gb, int lineNum){
         break;
 
       case KEY_DOWN:
-        if(y >= lineNum -1) break;
+        if(y >= gb->size - 2) break;
         else if(x == gapBufferAt(gb, y)->numOfChar || x >= gapBufferAt(gb, y+1)->numOfChar) {
           y++;
           x = gapBufferAt(gb, y)->numOfChar;
@@ -324,7 +325,6 @@ void EditChar(gapBuffer* gb, int lineNum){
         delch();
         if(gapBufferAt(gb, y)->numOfChar == 0){
           gapBufferDel(gb, y, y+1);
-          lineNum--;
           deleteln();
           if(y > 0) y -= 1;
           x = gapBufferAt(gb, y)->numOfChar;
@@ -342,9 +342,7 @@ void EditChar(gapBuffer* gb, int lineNum){
 
 int openFile(char* filename){
 
-  char  ch,
-        lineNumStr[10],
-        iChar[10]; 
+  char  ch;
 
   int   lineNum = 0;
 
@@ -374,7 +372,7 @@ int openFile(char* filename){
 
   startCurses();  
 
-  for(int i=0; i<lineNum; i++) {
+  for(int i=0; i < gb->size; i++) {
     
     bkgd(COLOR_PAIR(1));
     printw("%s\n", gapBufferAt(gb, i)->elements);
