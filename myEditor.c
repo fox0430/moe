@@ -248,6 +248,25 @@ bool gapBufferIsEmpty(gapBuffer* gb){
   return gb->capacity == gb->gapEnd - gb->gapBegin;
 }
 
+int readFile(gapBuffer* gb){
+  
+  FILE *fp;
+  char *filename = "test_new.txt";
+
+   if ((fp = fopen(filename, "w")) == NULL) {
+    printf("%s Cannot file open... \n", filename);
+        return -1;
+    }
+  
+  for(int i=0; i < gb->size; i++){
+    fputs(gapBufferAt(gb, i)->elements, fp);
+  }
+
+  fclose(fp);
+
+  return 0;
+}
+
 void EditChar(gapBuffer* gb, int lineNum){
   
   int key,
@@ -262,6 +281,7 @@ void EditChar(gapBuffer* gb, int lineNum){
     key = getch();
 
     if(key == KEY_ESC) {
+      readFile(gb);
       break;
     }
 
@@ -298,7 +318,7 @@ void EditChar(gapBuffer* gb, int lineNum){
         if(gapBufferAt(gb, y)->numOfChar == 0){
           gapBufferDel(gb, y, y+1);
           deleteln();
-          y -= 1;
+          if(y > 0) y -= 1;
           x = gapBufferAt(gb, y)->numOfChar;
         }
         break;
