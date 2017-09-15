@@ -126,9 +126,10 @@ int charArrayDel(charArray* array, int position){
     printf("cannot pop from an empty array.");
     return -1;
   }
-  --array->head;
+//  --array->head;
   memmove(array->elements + position - 1, array->elements + position, array->numOfChar - position);
   --array->numOfChar;
+  charArrayPop(array);
 
   if(array->head*4 <= array->capacity){
     char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity /2+1));
