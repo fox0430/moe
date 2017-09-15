@@ -92,7 +92,7 @@ int charArrayPush(charArray* array, char element){
 int charArrayInsert(charArray* array, char element, int position){
   if(array->capacity == array->head && charArrayReserve(array, array->capacity *2) == -1) return -1;
 
-  memmove(array->elements + position, array->elements, array->head - position +1);
+  memmove(array->elements + position, array->elements + position -1, array->head - position +1);
   array->elements[position] = element;
   array->numOfChar++;
   array->elements[array->head+1] = '\0';
@@ -255,7 +255,7 @@ int readFile(gapBuffer* gb){
 
    if ((fp = fopen(filename, "w")) == NULL) {
     printf("%s Cannot file open... \n", filename);
-        return -1;
+      return -1;
     }
   
   for(int i=0; i < gb->size; i++){
