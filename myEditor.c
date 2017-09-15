@@ -63,6 +63,10 @@ int charArrayInit(charArray* array){
   return 1;
 }
 
+void exitCurses(){
+ endwin(); 
+}
+
 int charArrayReserve(charArray* array, int capacity){
   if(array->head > capacity || capacity <= 0){
       printf("New buffer capacity is too small.\n");
@@ -120,13 +124,12 @@ int charArrayPop(charArray* array){
   return 1;
 }
 
-// !! NOT COMPLETE !!
 int charArrayDel(charArray* array, int position){
   if(array->head == 0){
     printf("cannot pop from an empty array.");
     return -1;
   }
-//  --array->head;
+
   memmove(array->elements + position - 1, array->elements + position, array->numOfChar - position);
   --array->numOfChar;
   charArrayPop(array);
@@ -217,7 +220,7 @@ int gapBufferDel(gapBuffer* gb, int begin, int end){
   }
 
   int begin_ = gb->gapBegin > begin ? begin : gb->gapEnd + (begin - gb->gapBegin),
-    end_ = gb->gapBegin > end ? end : gb->gapEnd + (end - gb->gapBegin);
+      end_ = gb->gapBegin > end ? end : gb->gapEnd + (end - gb->gapBegin);
 
   if(begin_ <= gb->gapBegin && gb->gapEnd <= end_){
     gb->gapBegin = begin_;
@@ -249,7 +252,7 @@ bool gapBufferIsEmpty(gapBuffer* gb){
   return gb->capacity == gb->gapEnd - gb->gapBegin;
 }
 
-int readFile(gapBuffer* gb){
+int writeFile(gapBuffer* gb){
   
   FILE *fp;
   char *filename = "test_new.txt";
@@ -283,7 +286,8 @@ void EditChar(gapBuffer* gb, int lineNum){
     key = getch();
 
     if(key == KEY_ESC) {
-      readFile(gb);
+      writeFile(gb);
+      exitCurses();
       break;
     }
 
@@ -341,6 +345,13 @@ void EditChar(gapBuffer* gb, int lineNum){
   }
 }
 
+void printStr(gapBuffer* gb){
+  for(int i=0; i < gb->size; i++) {
+    bkgd(COLOR_PAIR(1));
+    printw("%s\n", gapBufferAt(gb, i)->elements);
+  }
+}
+
 int openFile(char* filename){
 
   char  ch;
@@ -373,11 +384,7 @@ int openFile(char* filename){
 
   startCurses();  
 
-  for(int i=0; i < gb->size; i++) {
-    
-    bkgd(COLOR_PAIR(1));
-    printw("%s\n", gapBufferAt(gb, i)->elements);
-  }
+  printStr(gb);
 
   EditChar(gb, lineNum);
 
@@ -392,7 +399,6 @@ int main(int argc, char* argv[]){
   }
 
   openFile(argv[1]);
-  endwin();
 
   return 0;
 }
