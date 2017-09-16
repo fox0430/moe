@@ -39,7 +39,6 @@ void startCurses(){
   start_color();      // color settings
   init_pair(1, COLOR_WHITE, COLOR_BLACK);     // set color strar is white and back is black
   init_pair(2, COLOR_GREEN, COLOR_BLACK);     // set color strar is green and back is black
-  bkgd(COLOR_PAIR(1));    // set default color
 
   erase();  	// screen display
 
@@ -272,11 +271,35 @@ int writeFile(gapBuffer* gb){
   return 0;
 }
 
-void EditChar(gapBuffer* gb, int lineNum){
+int countLineDigit(int lineNum){
+  int lineDigit = 0;
+  while(lineNum > 0){
+    lineNum /= 10;
+    lineDigit++;
+  }
+  return lineDigit;
+}
+
+void PrintLineNum(int lineDigit, int position){
+  int lineDigitSpace = lineDigit - countLineDigit(position + 1);
+  for(int i=0; i<lineDigitSpace; i++) printw(" ");
+  bkgd(COLOR_PAIR(2));
+  printw("%d:", position + 1); 
+}
+
+void printStr(gapBuffer* gb, int lineDigit, int position){
+  for(int i = position; i < gb->size; i++) {
+    PrintLineNum(lineDigit, i);
+    bkgd(COLOR_PAIR(1));
+    printw("%s\n", gapBufferAt(gb, i)->elements);
+  }
+}
+
+void EditChar(gapBuffer* gb, int lineDigit, int lineNum){
   
   int key,
       y = 0,
-      x = 0;
+      x = lineDigit + 1;
 
   while(1){
 
@@ -294,9 +317,9 @@ void EditChar(gapBuffer* gb, int lineNum){
     switch(key){
       case KEY_UP:
         if(y < 1) break;
-        else if(x == gapBufferAt(gb, y)->numOfChar || x > gapBufferAt(gb, y-1)->numOfChar){
+        else if(x == gapBufferAt(gb, y)->numOfChar + lineDigit || x > gapBufferAt(gb, y-1)->numOfChar + lineDigit){
           y--;
-          x = gapBufferAt(gb,y)->numOfChar;
+          x = gapBufferAt(gb,y)->numOfChar + lineDigit;
           break;
         }
         y--;
@@ -304,51 +327,46 @@ void EditChar(gapBuffer* gb, int lineNum){
 
       case KEY_DOWN:
         if(y >= gb->size - 2) break;
-        else if(x == gapBufferAt(gb, y)->numOfChar || x >= gapBufferAt(gb, y+1)->numOfChar) {
+        else if(x == gapBufferAt(gb, y)->numOfChar + lineDigit || x >= gapBufferAt(gb, y+1)->numOfChar + lineDigit) {
           y++;
-          x = gapBufferAt(gb, y)->numOfChar;
+          x = gapBufferAt(gb, y)->numOfChar + lineDigit;
           break;
         }
           y++;
         break;
 
       case KEY_RIGHT:
-        if(x >= gapBufferAt(gb, y)->numOfChar) break;
+        if(x >= gapBufferAt(gb, y)->numOfChar + lineDigit + 1) break;
         x++;
         break;
 
       case KEY_LEFT:
-        if(x <= 0) break;
+        if(x <= lineDigit + 1) break;
         x--;
         break;
 
       case KEY_BACKSPACE:
-        if(x <= 0) break;
-        charArrayDel(gapBufferAt(gb, y), x);
+        if(x <= lineDigit + 1) break;
+        charArrayDel(gapBufferAt(gb, y), (x - lineDigit - 1));
         x--;
         move(y, x);
         delch();
-        if(gapBufferAt(gb, y)->numOfChar == 0){
+        if(gapBufferAt(gb, y)->numOfChar == lineDigit - 2){
           gapBufferDel(gb, y, y+1);
           deleteln();
+          move(y, 0);
+          printStr(gb, lineDigit, y);
           if(y > 0) y -= 1;
-          x = gapBufferAt(gb, y)->numOfChar;
+          x = gapBufferAt(gb, y)->numOfChar + lineDigit ;
         }
         break;
 
       default:
         echo();
-        charArrayInsert(gapBufferAt(gb, y), key, x);
+        charArrayInsert(gapBufferAt(gb, y), key, x - lineDigit - 1);
         insch(key);
         x++;
     }
-  }
-}
-
-void printStr(gapBuffer* gb){
-  for(int i=0; i < gb->size; i++) {
-    bkgd(COLOR_PAIR(1));
-    printw("%s\n", gapBufferAt(gb, i)->elements);
   }
 }
 
@@ -356,7 +374,8 @@ int openFile(char* filename){
 
   char  ch;
 
-  int   lineNum = 0;
+  int   lineNum = 0,
+        lineDigit = 0;
 
   FILE *fp = fopen(filename, "r");
   if(fp == NULL){
@@ -382,11 +401,13 @@ int openFile(char* filename){
   }
   fclose(fp);
 
-  startCurses();  
+  startCurses(); 
 
-  printStr(gb);
+  lineDigit = countLineDigit(lineNum);
 
-  EditChar(gb, lineNum);
+  printStr(gb, lineDigit, 0);
+
+  EditChar(gb, lineDigit, lineNum);
 
   return 0;
 }
