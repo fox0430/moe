@@ -9,6 +9,7 @@
 
 #define KEY_ESC 27
 
+
 typedef struct charArray{
   char* elements;
   int capacity,
@@ -344,10 +345,12 @@ void nomalMode(gapBuffer* gb, int lineDigit, int lineNum){
 
 void EditChar(gapBuffer* gb, int lineDigit, int lineNum){
 
+/*
   mvprintw(LINES-1, 0, "mode:");
   bkgd(COLOR_PAIR(3));
   mvprintw(LINES-1, 5, "Insert");
   bkgd(COLOR_PAIR(1));
+*/
 
   int key,
       y = 0,
