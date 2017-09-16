@@ -6,6 +6,7 @@
 #include<string.h>
 #include<ncurses.h>
 
+
 #define KEY_ESC 27
 
 typedef struct charArray{
@@ -39,6 +40,7 @@ void startCurses(){
   start_color();      // color settings
   init_pair(1, COLOR_WHITE, COLOR_BLACK);     // set color strar is white and back is black
   init_pair(2, COLOR_GREEN, COLOR_BLACK);     // set color strar is green and back is black
+  init_pair(3, COLOR_CYAN, COLOR_BLACK);     // set color strar is green and back is black
 
   erase();  	// screen display
 
@@ -48,6 +50,7 @@ void startCurses(){
 }
 
 int charArrayInit(charArray* array){
+
   const int size = 1;
 
   array->elements = (char*)malloc(sizeof(char)*(size +1));
@@ -67,6 +70,7 @@ void exitCurses(){
 }
 
 int charArrayReserve(charArray* array, int capacity){
+
   if(array->head > capacity || capacity <= 0){
       printf("New buffer capacity is too small.\n");
       return -1;
@@ -84,6 +88,7 @@ int charArrayReserve(charArray* array, int capacity){
 }
 
 int charArrayPush(charArray* array, char element){
+
   if(array->capacity == array->head && charArrayReserve(array, array->capacity *2) ==- 1) return -1;
   array->elements[array->head] = element;
   array->numOfChar++;
@@ -93,6 +98,7 @@ int charArrayPush(charArray* array, char element){
 }
 
 int charArrayInsert(charArray* array, char element, int position){
+
   if(array->capacity == array->head && charArrayReserve(array, array->capacity *2) == -1) return -1;
 
   memmove(array->elements + position, array->elements + position -1, array->head - position +1);
@@ -104,6 +110,7 @@ int charArrayInsert(charArray* array, char element, int position){
 }
 
 int charArrayPop(charArray* array){
+
   if(array->head == 0){
     printf("cannot pop from an empty array.");
     return -1;
@@ -124,6 +131,7 @@ int charArrayPop(charArray* array){
 }
 
 int charArrayDel(charArray* array, int position){
+
   if(array->head == 0){
     printf("cannot pop from an empty array.");
     return -1;
@@ -150,6 +158,7 @@ bool charArrayIsEmpty(charArray* array){
 }
 
 int gapBufferInit(gapBuffer* gb){
+
   gb->buffer = (charArray**)malloc(sizeof(charArray*));
   gb->size = 0;
   gb->capacity = 1;
@@ -159,6 +168,7 @@ int gapBufferInit(gapBuffer* gb){
 }
 
 int gapBufferReserve(gapBuffer* gb, int capacity){
+
   if(capacity < gb->size || capacity <= 0){
     printf("New buffer capacity is too small.\n");
     return -1;
@@ -179,6 +189,7 @@ int gapBufferReserve(gapBuffer* gb, int capacity){
 
 // Create a gap starting with gapBegin
 int gapBufferMakeGap(gapBuffer* gb,int gapBegin){
+
   if(gapBegin < 0 || gb->capacity-gapBegin < gb->gapEnd-gb->gapBegin){
     printf("Invalid position.\n");
     return -1;
@@ -198,6 +209,7 @@ int gapBufferMakeGap(gapBuffer* gb,int gapBegin){
 //insertedPositionの直前に要素を挿入する.末尾に追加したい場合はinsertedPositionにバッファの要素数を渡す.
 //ex.空のバッファに要素を追加する場合はinsertedPositionに0を渡す.
 int gapBufferInsert(gapBuffer* gb, charArray* element, int position){
+
   if(position < 0 || gb->size < position){
     printf("Invalid position.\n");
     return -1;
@@ -213,6 +225,7 @@ int gapBufferInsert(gapBuffer* gb, charArray* element, int position){
 
 // Deleted [begin,end] elements
 int gapBufferDel(gapBuffer* gb, int begin, int end){
+
   if(begin > end || begin < 0 || gb->size < end){
     printf("Invalid interval.\n");
     return -1;
@@ -239,6 +252,7 @@ int gapBufferDel(gapBuffer* gb, int begin, int end){
 }
 
 charArray* gapBufferAt(gapBuffer* gb, int index){
+
   if(index < 0 || gb->size <= index){
     printf("Invalid index.\n");
     exit(0);
@@ -272,6 +286,7 @@ int writeFile(gapBuffer* gb){
 }
 
 int countLineDigit(int lineNum){
+
   int lineDigit = 0;
   while(lineNum > 0){
     lineNum /= 10;
@@ -281,6 +296,7 @@ int countLineDigit(int lineNum){
 }
 
 void PrintLineNum(int lineDigit, int position){
+
   int lineDigitSpace = lineDigit - countLineDigit(position + 1);
   for(int i=0; i<lineDigitSpace; i++) printw(" ");
   bkgd(COLOR_PAIR(2));
@@ -288,15 +304,51 @@ void PrintLineNum(int lineDigit, int position){
 }
 
 void printStr(gapBuffer* gb, int lineDigit, int position){
-  for(int i = position; i < gb->size; i++) {
+
+  for(int i = position; i < gb->size - 1; i++) {
     PrintLineNum(lineDigit, i);
     bkgd(COLOR_PAIR(1));
     printw("%s\n", gapBufferAt(gb, i)->elements);
   }
 }
 
+/*
+void nomalMode(gapBuffer* gb, int lineDigit, int lineNum){
+
+  int key,
+    y = 0;
+    x = 0;
+    
+  while(1){
+    move(y, x);
+    refresh();
+    noecho();
+    key = getch();
+
+    switch(key){
+    
+      case 'k':
+        if(y < 1) break;
+        else if(x == gapBufferAt(gb, y)->numOfChar + lineDigit || x > gapBufferAt(gb, y-1)->numOfChar + lineDigit){
+          y--;
+          x = gapBufferAt(gb,y)->numOfChar + lineDigit;
+          break;
+        }
+        y--;
+        break;
+        
+    }
+  }
+}
+*/
+
 void EditChar(gapBuffer* gb, int lineDigit, int lineNum){
-  
+
+  mvprintw(LINES-1, 0, "mode:");
+  bkgd(COLOR_PAIR(3));
+  mvprintw(LINES-1, 5, "Insert");
+  bkgd(COLOR_PAIR(1));
+
   int key,
       y = 0,
       x = lineDigit + 1;
@@ -315,6 +367,7 @@ void EditChar(gapBuffer* gb, int lineDigit, int lineNum){
     }
 
     switch(key){
+
       case KEY_UP:
         if(y < 1) break;
         else if(x == gapBufferAt(gb, y)->numOfChar + lineDigit || x > gapBufferAt(gb, y-1)->numOfChar + lineDigit){
@@ -341,7 +394,7 @@ void EditChar(gapBuffer* gb, int lineDigit, int lineNum){
         break;
 
       case KEY_LEFT:
-        if(x <= lineDigit + 1) break;
+        if(x == lineDigit + 1) break;
         x--;
         break;
 
@@ -351,7 +404,7 @@ void EditChar(gapBuffer* gb, int lineDigit, int lineNum){
         x--;
         move(y, x);
         delch();
-        if(gapBufferAt(gb, y)->numOfChar == lineDigit - 2){
+        if(gapBufferAt(gb, y)->numOfChar == 0){
           gapBufferDel(gb, y, y+1);
           deleteln();
           move(y, 0);
@@ -360,7 +413,10 @@ void EditChar(gapBuffer* gb, int lineDigit, int lineNum){
           x = gapBufferAt(gb, y)->numOfChar + lineDigit ;
         }
         break;
-
+/*
+      case KEY_ENTAR:
+      break;
+*/
       default:
         echo();
         charArrayInsert(gapBufferAt(gb, y), key, x - lineDigit - 1);
