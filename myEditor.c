@@ -36,7 +36,6 @@ void startCurses(){
   keypad(stdscr, TRUE);   // enable cursr keys
 
   getmaxyx(stdscr, h, w);     // set window size
-  scrollok(stdscr, TRUE);			// enable scroll
 
   start_color();      // color settings
   init_pair(1, COLOR_WHITE, COLOR_BLACK);     // set color strar is white and back is black
@@ -307,6 +306,7 @@ void PrintLineNum(int lineDigit, int position){
 void printStr(gapBuffer* gb, int lineDigit, int position){
 
   for(int i = position; i < gb->size - 1; i++) {
+    if(i >= LINES) break;
     PrintLineNum(lineDigit, i);
     bkgd(COLOR_PAIR(1));
     printw("%s\n", gapBufferAt(gb, i)->elements);
@@ -314,11 +314,20 @@ void printStr(gapBuffer* gb, int lineDigit, int position){
 }
 
 /*
+void printMode(){
+  mvprintw(LINES-1, 0, "mode:");
+  bkgd(COLOR_PAIR(3));
+  mvprintw(LINES-1, 5, "Insert");
+  bkgd(COLOR_PAIR(1));
+}
+*/
+
+/*
 void nomalMode(gapBuffer* gb, int lineDigit, int lineNum){
 
   int key,
     y = 0;
-    x = 0;
+    x = lineDigit + 1;
     
   while(1){
     move(y, x);
@@ -337,20 +346,39 @@ void nomalMode(gapBuffer* gb, int lineDigit, int lineNum){
         }
         y--;
         break;
-        
+
+      case 'j':
+        if(y >= gb->size - 2) break;
+        else if(x == gapBufferAt(gb, y)->numOfChar + lineDigit || x >= gapBufferAt(gb, y+1)->numOfChar + lineDigit) {
+          y++;
+          x = gapBufferAt(gb, y)->numOfChar + lineDigit;
+          break;
+        }
+          y++;
+        break;
+
+      case 'h':
+        if(x >= gapBufferAt(gb, y)->numOfChar + lineDigit + 1) break;
+        x++;
+        break;
+
+      case 'l':
+        if(x == lineDigit + 1) break;
+        x--;
+        break;
+      
+      case 'i':
+        insertMode(gb, lineDigit, lineNum);
+        break;
+      
+      default:
+        break;
     }
   }
 }
 */
 
 void EditChar(gapBuffer* gb, int lineDigit, int lineNum){
-
-/*
-  mvprintw(LINES-1, 0, "mode:");
-  bkgd(COLOR_PAIR(3));
-  mvprintw(LINES-1, 5, "Insert");
-  bkgd(COLOR_PAIR(1));
-*/
 
   int key,
       y = 0,
@@ -368,7 +396,11 @@ void EditChar(gapBuffer* gb, int lineDigit, int lineNum){
       exitCurses();
       break;
     }
-
+/*
+    if(key == KEY_ESC) {
+      nomalMode(gb, lineDigit, lineNum);
+    }
+*/
     switch(key){
 
       case KEY_UP:
@@ -418,7 +450,7 @@ void EditChar(gapBuffer* gb, int lineDigit, int lineNum){
         break;
 /*
       case KEY_ENTAR:
-      break;
+        break;
 */
       default:
         echo();
@@ -465,6 +497,8 @@ int openFile(char* filename){
   lineDigit = countLineDigit(lineNum);
 
   printStr(gb, lineDigit, 0);
+
+  scrollok(stdscr, TRUE);			// enable scroll
 
   EditChar(gb, lineDigit, lineNum);
 
