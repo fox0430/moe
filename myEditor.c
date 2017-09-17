@@ -25,6 +25,11 @@ typedef struct gapBuffer{
       gapEnd;     //半開区間[gap_begin,gap_end)を隙間とする
 }gapBuffer;
 
+typedef struct editorStat{
+  int mode,
+      lineDigitSpace;
+}editorStat;
+
 
 void startCurses(){
 
@@ -39,14 +44,25 @@ void startCurses(){
 
   start_color();      // color settings
   init_pair(1, COLOR_WHITE, COLOR_BLACK);     // set color strar is white and back is black
-  init_pair(2, COLOR_GREEN, COLOR_BLACK);     // set color strar is green and back is black
-  init_pair(3, COLOR_CYAN, COLOR_BLACK);     // set color strar is green and back is black
+  init_pair(2, COLOR_GREEN, COLOR_BLACK);
+  init_pair(3, COLOR_CYAN, COLOR_BLACK);
 
   erase();  	// screen display
 
   ESCDELAY = 25;    // delete esc key time lag
 
-  move(0, 0);     // set default cursr point
+  move(0, 0);     // set cursr point
+}
+
+void exitCurses(){
+ endwin(); 
+}
+
+void editorStatInit(){
+  
+  editorStat* stat;
+  stat->mode = 0;
+  stat->lineDigitSpace = 0;
 }
 
 int charArrayInit(charArray* array){
@@ -63,10 +79,6 @@ int charArrayInit(charArray* array){
   array->capacity = size;
   array->head = 0;
   return 1;
-}
-
-void exitCurses(){
- endwin(); 
 }
 
 int charArrayReserve(charArray* array, int capacity){
