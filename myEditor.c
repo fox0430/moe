@@ -378,7 +378,7 @@ void nomalMode(gapBuffer* gb, int lineDigit, int lineNum){
 }
 */
 
-void EditChar(gapBuffer* gb, int lineDigit, int lineNum){
+void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
 
   int key,
       y = 0,
@@ -524,7 +524,7 @@ int openFile(char* filename){
 
   scrollok(stdscr, TRUE);			// enable scroll
 
-  EditChar(gb, lineDigit, lineNum);
+  insertMode(gb, lineDigit, lineNum);
 
   return 0;
 }
