@@ -442,16 +442,40 @@ void EditChar(gapBuffer* gb, int lineDigit, int lineNum){
         if(gapBufferAt(gb, y)->numOfChar == 0){
           gapBufferDel(gb, y, y+1);
           deleteln();
+          lineNum--;
           move(y, 0);
           printStr(gb, lineDigit, y);
           if(y > 0) y -= 1;
           x = gapBufferAt(gb, y)->numOfChar + lineDigit ;
         }
         break;
-/*
-      case KEY_ENTAR:
-        break;
-*/
+
+      case 10:    // 10 is Enter key
+
+        insertln();
+        lineNum++;
+
+        if(x == lineDigit + 1){
+
+          {
+            charArray* ca = (charArray*)malloc(sizeof(charArray));
+            charArrayInit(ca);
+            gapBufferInsert(gb, ca, y);
+            charArrayPush(gapBufferAt(gb, y), '\0');
+          }
+          move(y, 0);
+          printStr(gb, lineDigit, y);
+          break;
+        }/*else{
+          {
+            charArray* ca = (charArray*)malloc(sizeof(charArray));
+            charArrayInit(ca);
+            gapBufferInsert(gb, ca, y);
+            charArrayPush(gapBufferAt(gb, y), '\0');
+          }
+        }
+*/        
+
       default:
         echo();
         charArrayInsert(gapBufferAt(gb, y), key, x - lineDigit - 1);
