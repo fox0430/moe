@@ -451,7 +451,7 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
         break;
 
       case 10:    // 10 is Enter key
-
+      
         insertln();
         lineNum++;
 
@@ -466,15 +466,23 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
           move(y, 0);
           printStr(gb, lineDigit, y);
           break;
-        }/*else{
+        }else{
           {
             charArray* ca = (charArray*)malloc(sizeof(charArray));
             charArrayInit(ca);
-            gapBufferInsert(gb, ca, y);
-            charArrayPush(gapBufferAt(gb, y), '\0');
+            gapBufferInsert(gb, ca, y+1);
+            charArrayPush(gapBufferAt(gb, y+1), '\0');
+            memmove(gapBufferAt(gb, y+1)->elements, gapBufferAt(gb, y)->elements + (x - lineDigit -1), gapBufferAt(gb, y)->numOfChar - (x - lineDigit -1));
+            for(int i=0; i < gapBufferAt(gb, y)->numOfChar - (x - lineDigit - 3); i++){
+              charArrayPop(gapBufferAt(gb, y));
+              gapBufferAt(gb, y)->numOfChar--;
+              gapBufferAt(gb, y+1)->numOfChar++;
+            }
           }
+          move(y, 0);
+          printStr(gb, lineDigit, y);
+          break;
         }
-*/        
 
       default:
         echo();
