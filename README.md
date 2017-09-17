@@ -4,8 +4,6 @@ Aiming features
 
   ・vim like key binds (not completely)
   
-  ・funny animation
-  
   ・simple syntax highlight
   
   ・auto-complete
