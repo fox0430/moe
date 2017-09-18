@@ -26,8 +26,7 @@ typedef struct gapBuffer{
 }gapBuffer;
 
 typedef struct editorStat{
-  int mode,
-      lineDigitSpace;
+  int mode;
 }editorStat;
 
 
@@ -62,7 +61,6 @@ void editorStatInit(){
   
   editorStat* stat;
   stat->mode = 0;
-  stat->lineDigitSpace = 0;
 }
 
 int charArrayInit(charArray* array){
@@ -484,15 +482,29 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
             charArrayInit(ca);
             gapBufferInsert(gb, ca, y+1);
             charArrayPush(gapBufferAt(gb, y+1), '\0');
+            int tmp = gapBufferAt(gb, y)->numOfChar;
+            for(int i = 0; i < tmp - (x - lineDigit -1); i++){
+              charArrayInsert(gapBufferAt(gb, y+1), gapBufferAt(gb, y)->elements[i + x - lineDigit -1], i);
+              gapBufferAt(gb, y)->numOfChar--;
+            }
+            for(int i=0; i < tmp - (x - lineDigit -1); i++) charArrayPop(gapBufferAt(gb, y));
+            gapBufferAt(gb, y+1)->numOfChar--;
+          }
+/*
+            // Rewrite
             memmove(gapBufferAt(gb, y+1)->elements, gapBufferAt(gb, y)->elements + (x - lineDigit -1), gapBufferAt(gb, y)->numOfChar - (x - lineDigit -1));
             for(int i=0; i < gapBufferAt(gb, y)->numOfChar - (x - lineDigit - 3); i++){
               charArrayPop(gapBufferAt(gb, y));
               gapBufferAt(gb, y)->numOfChar--;
               gapBufferAt(gb, y+1)->numOfChar++;
             }
+            gapBufferAt(gb, y+1)->numOfChar--;
           }
+*/
           move(y, 0);
           printStr(gb, lineDigit, y);
+          x = lineDigit + 1;
+          y++;
           break;
         }
 
