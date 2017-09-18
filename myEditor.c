@@ -308,7 +308,7 @@ int countLineDigit(int lineNum){
 void PrintLineNum(int lineDigit, int position){
 
   int lineDigitSpace = lineDigit - countLineDigit(position + 1);
-  for(int i=0; i<lineDigitSpace; i++) printw(" ");
+  for(int i=0; i<lineDigitSpace; i++) mvprintw(position, i, " ");
   bkgd(COLOR_PAIR(2));
   printw("%d:", position + 1); 
 }
@@ -426,6 +426,10 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
 
       case KEY_DOWN:
         if(y >= gb->size - 2) break;
+        if(y >= LINES -1){
+          wscrl(stdscr, 1);
+          printStr(gb, lineDigit, y);
+        }
         else if(x == gapBufferAt(gb, y)->numOfChar + lineDigit || x >= gapBufferAt(gb, y+1)->numOfChar + lineDigit) {
           y++;
           x = gapBufferAt(gb, y)->numOfChar + lineDigit;
