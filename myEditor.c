@@ -391,8 +391,9 @@ void nomalMode(gapBuffer* gb, int lineDigit, int lineNum){
 void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
 
   int key,
+      lineDigitSpace = lineDigit + 1,
       y = 0,
-      x = lineDigit + 1;
+      x = lineDigitSpace;
 
   while(1){
 
@@ -434,7 +435,7 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
         break;
 
       case KEY_RIGHT:
-        if(x >= gapBufferAt(gb, y)->numOfChar + lineDigit + 1) break;
+        if(x >= gapBufferAt(gb, y)->numOfChar + lineDigitSpace) break;
         x++;
         break;
 
@@ -444,12 +445,12 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
         break;
 
       case KEY_BACKSPACE:
-        if(x <= lineDigit + 1) break;
-        charArrayDel(gapBufferAt(gb, y), (x - lineDigit - 1));
+//        if(x < lineDigitSpace + 1) break;
+        charArrayDel(gapBufferAt(gb, y), (x - lineDigitSpace));
         x--;
         move(y, x);
         delch();
-        if(gapBufferAt(gb, y)->numOfChar == 0){
+        if(x == lineDigitSpace - 1){
           gapBufferDel(gb, y, y+1);
           deleteln();
           lineNum--;
@@ -465,13 +466,14 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
         insertln();
         lineNum++;
 
-        if(x == lineDigit + 1){
+        if(x == lineDigitSpace){
 
           {
             charArray* ca = (charArray*)malloc(sizeof(charArray));
             charArrayInit(ca);
             gapBufferInsert(gb, ca, y);
             charArrayPush(gapBufferAt(gb, y), '\0');
+            gapBufferAt(gb, y)->numOfChar++;
           }
           gapBufferAt(gb, y)->numOfChar--;
           move(y, 0);
@@ -485,23 +487,23 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
             gapBufferInsert(gb, ca, y+1);
             charArrayPush(gapBufferAt(gb, y+1), '\0');
             int tmp = gapBufferAt(gb, y)->numOfChar;
-            for(int i = 0; i < tmp - (x - lineDigit -1); i++){
-              charArrayInsert(gapBufferAt(gb, y+1), gapBufferAt(gb, y)->elements[i + x - lineDigit -1], i);
+            for(int i = 0; i < tmp - (x - lineDigitSpace); i++){
+              charArrayInsert(gapBufferAt(gb, y+1), gapBufferAt(gb, y)->elements[i + x - lineDigitSpace], i);
               gapBufferAt(gb, y)->numOfChar--;
             }
-            for(int i=0; i < tmp - (x - lineDigit -1); i++) charArrayPop(gapBufferAt(gb, y));
+            for(int i=0; i < tmp - (x - lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, y));
             gapBufferAt(gb, y+1)->numOfChar--;
           }
           move(y, 0);
           printStr(gb, lineDigit, y);
-          x = lineDigit + 1;
+          x = lineDigitSpace;
           y++;
           break;
         }
 
       default:
         echo();
-        charArrayInsert(gapBufferAt(gb, y), key, x - lineDigit - 1);
+        charArrayInsert(gapBufferAt(gb, y), key, x - lineDigitSpace);
         insch(key);
         x++;
     }
