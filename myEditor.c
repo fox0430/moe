@@ -305,7 +305,7 @@ int countLineDigit(int lineNum){
   return lineDigit;
 }
 
-void PrintLineNum(int lineDigit, int position){
+void printLineNum(int lineDigit, int position){
 
   int lineDigitSpace = lineDigit - countLineDigit(position + 1);
   for(int i=0; i<lineDigitSpace; i++) mvprintw(position, i, " ");
@@ -317,7 +317,7 @@ void printStr(gapBuffer* gb, int lineDigit, int position){
 
   for(int i = position; i < gb->size - 1; i++) {
     if(i >= LINES) break;
-    PrintLineNum(lineDigit, i);
+    printLineNum(lineDigit, i);
     bkgd(COLOR_PAIR(1));
     printw("%s\n", gapBufferAt(gb, i)->elements);
   }
@@ -437,9 +437,12 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
       case KEY_DOWN:
         if(y >= gb->size - 2) break;
         if(y >= LINES -1){
-          wscrl(stdscr, 1);
-          printStr(gb, lineDigit, line);
           line++;
+          wscrl(stdscr, 1);
+          move(LINES-1, 0);
+          printLineNum(lineDigit, line);
+          bkgd(COLOR_PAIR(1));
+          printw("%s", gapBufferAt(gb, line)->elements);
           break;
         }else if(COLS - lineDigitSpace - 1 <= gapBufferAt(gb, line+1)->numOfChar){
           y += 2;
