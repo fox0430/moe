@@ -305,22 +305,19 @@ int countLineDigit(int lineNum){
   return lineDigit;
 }
 
-void printLineNum(int lineDigit, int position){
+void printLineNum(int lineDigit, int position, int y){
 
   int lineDigitSpace = lineDigit - countLineDigit(position + 1);
-  for(int i=0; i<lineDigitSpace; i++) mvprintw(position, i, " ");
+  for(int i=0; i<lineDigitSpace; i++) mvprintw(y, i, " ");
   bkgd(COLOR_PAIR(2));
   printw("%d:", position + 1); 
 }
 
-void printStr(gapBuffer* gb, int lineDigit, int position){
+void printStr(gapBuffer* gb, int lineDigit, int position, int y){
 
-  for(int i = position; i < gb->size - 1; i++) {
-    if(i >= LINES) break;
-    printLineNum(lineDigit, i);
-    bkgd(COLOR_PAIR(1));
-    printw("%s\n", gapBufferAt(gb, i)->elements);
-  }
+  printLineNum(lineDigit, position, y);
+  bkgd(COLOR_PAIR(1));
+  printw("%s\n", gapBufferAt(gb, position)->elements);
 }
 
 /*
@@ -423,8 +420,7 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
           y -= 2;
           line--;
           break;
-        }
-        else if(x == gapBufferAt(gb, line)->numOfChar + lineDigit || x > gapBufferAt(gb, line - 1)->numOfChar + lineDigit){
+        }else if(x == gapBufferAt(gb, line)->numOfChar + lineDigit || x > gapBufferAt(gb, line - 1)->numOfChar + lineDigit){
           y--;
           line--;
           x = gapBufferAt(gb, line)->numOfChar + lineDigit;
@@ -438,9 +434,9 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
         if(y >= gb->size - 2) break;
         if(y >= LINES -1){
           line++;
-          wscrl(stdscr, 1);
+          wscrl(stdscr, 1);   // scroll
           move(LINES-1, 0);
-          printLineNum(lineDigit, line);
+          printLineNum(lineDigit, line, LINES -1);
           bkgd(COLOR_PAIR(1));
           printw("%s", gapBufferAt(gb, line)->elements);
           break;
@@ -479,7 +475,7 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
           deleteln();
           lineNum--;
           move(y, 0);
-          printStr(gb, lineDigit, line);
+          printStr(gb, lineDigit, line, y);
           line--;
           if(y > 0) y -= 1;
           x = gapBufferAt(gb, line)->numOfChar + lineDigit ;
@@ -499,7 +495,7 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
           }
           gapBufferAt(gb, line)->numOfChar--;
           move(y, 0);
-          printStr(gb, lineDigit, line);
+          printStr(gb, lineDigit, line, y);
           break;
         }else{
           {
@@ -516,7 +512,7 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
             gapBufferAt(gb, line+1)->numOfChar--;
           }
           move(y, 0);
-          printStr(gb, lineDigit, line);
+          printStr(gb, lineDigit, line, y);
           x = lineDigitSpace;
           y++;
           line++;
@@ -566,7 +562,10 @@ int openFile(char* filename){
 
   lineDigit = countLineDigit(lineNum);
 
-  printStr(gb, lineDigit, 0);
+  for(int i=0; i < lineNum; i++){
+    if(i == LINES) break;
+    printStr(gb, lineDigit, i, i);
+  }
 
   scrollok(stdscr, TRUE);			// enable scroll
 
