@@ -23,11 +23,11 @@ typedef struct gapBuffer{
       capacity,   //Amount of secured memory
       gapBegin,
       gapEnd;     //半開区間[gap_begin,gap_end)を隙間とする
-}gapBuffer;
+} gapBuffer;
 
 typedef struct editorStat{
   int mode;
-}editorStat;
+} editorStat;
 
 
 void startCurses(){
@@ -415,8 +415,15 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
     switch(key){
 
       case KEY_UP:
-        if(y < 1) break;
-        else if(COLS - lineDigitSpace - 1 <= gapBufferAt(gb, line-1)->numOfChar){
+        if(y < 1 && line == 0) break;
+        else if(y < 1){
+          line--;
+          wscrl(stdscr, -1);
+          printLineNum(lineDigit, line, 0);
+          bkgd(COLOR_PAIR(1));
+          printw("%s", gapBufferAt(gb, line)->elements);
+          break;
+        }else if(COLS - lineDigitSpace - 1 <= gapBufferAt(gb, line-1)->numOfChar){
           y -= 2;
           line--;
           break;
