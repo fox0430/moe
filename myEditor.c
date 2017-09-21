@@ -305,19 +305,19 @@ int countLineDigit(int lineNum){
   return lineDigit;
 }
 
-void printLineNum(int lineDigit, int position, int y){
+void printLineNum(int lineDigit, int line, int y){
 
-  int lineDigitSpace = lineDigit - countLineDigit(position + 1);
+  int lineDigitSpace = lineDigit - countLineDigit(line + 1);
   for(int i=0; i<lineDigitSpace; i++) mvprintw(y, i, " ");
   bkgd(COLOR_PAIR(2));
-  printw("%d:", position + 1); 
+  printw("%d:", line + 1); 
 }
 
-void printStr(gapBuffer* gb, int lineDigit, int position, int y){
+void printStr(gapBuffer* gb, int lineDigit, int line, int y){
 
-  printLineNum(lineDigit, position, y);
+  printLineNum(lineDigit, line, y);
   bkgd(COLOR_PAIR(1));
-  printw("%s\n", gapBufferAt(gb, position)->elements);
+  printw("%s", gapBufferAt(gb, line)->elements);
 }
 
 /*
@@ -419,9 +419,7 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
         else if(y < 1){
           line--;
           wscrl(stdscr, -1);    // scroll
-          printLineNum(lineDigit, line, 0);
-          bkgd(COLOR_PAIR(1));
-          printw("%s", gapBufferAt(gb, line)->elements);
+          printStr(gb, lineDigit, line, y);
           x = gapBufferAt(gb, line)->numOfChar + lineDigitSpace - 1;
           break;
         }else if(COLS - lineDigitSpace - 1 <= gapBufferAt(gb, line-1)->numOfChar){
@@ -444,9 +442,7 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
           line++;
           wscrl(stdscr, 1);
           move(LINES-1, 0);
-          printLineNum(lineDigit, line, LINES -1);
-          bkgd(COLOR_PAIR(1));
-          printw("%s", gapBufferAt(gb, line)->elements);
+          printStr(gb, lineDigit, line, y);
           x = gapBufferAt(gb, line)->numOfChar + lineDigitSpace - 1;
           break;
         }else if(COLS - lineDigitSpace - 1 <= gapBufferAt(gb, line+1)->numOfChar){
