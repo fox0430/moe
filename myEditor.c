@@ -418,10 +418,11 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
         if(y < 1 && line == 0) break;
         else if(y < 1){
           line--;
-          wscrl(stdscr, -1);
+          wscrl(stdscr, -1);    // scroll
           printLineNum(lineDigit, line, 0);
           bkgd(COLOR_PAIR(1));
           printw("%s", gapBufferAt(gb, line)->elements);
+          x = gapBufferAt(gb, line)->numOfChar + lineDigitSpace - 1;
           break;
         }else if(COLS - lineDigitSpace - 1 <= gapBufferAt(gb, line-1)->numOfChar){
           y -= 2;
@@ -441,11 +442,12 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
         if(y >= gb->size - 2) break;
         if(y >= LINES -1){
           line++;
-          wscrl(stdscr, 1);   // scroll
+          wscrl(stdscr, 1);
           move(LINES-1, 0);
           printLineNum(lineDigit, line, LINES -1);
           bkgd(COLOR_PAIR(1));
           printw("%s", gapBufferAt(gb, line)->elements);
+          x = gapBufferAt(gb, line)->numOfChar + lineDigitSpace - 1;
           break;
         }else if(COLS - lineDigitSpace - 1 <= gapBufferAt(gb, line+1)->numOfChar){
           y += 2;
