@@ -675,6 +675,7 @@ int openFile(char* filename){
   for(int i=0; i < lineNum; i++){
     if(i == LINES) break;
     printStr(gb, lineDigit, i, i);
+    printw("\n");
   }
 
   scrollok(stdscr, TRUE);			// enable scroll
