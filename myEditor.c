@@ -605,7 +605,12 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
           }
           gapBufferAt(gb, line)->numOfChar--;
           move(y, 0);
-          printStr(gb, lineDigit, line, y);
+          // Rewrite
+          for(int i=line; i<gb->size-1; i++){
+            if(i == LINES-1) break;
+            printStr(gb, lineDigit, i, i);
+            printw("\n");
+          }
           break;
         }else{
           {
@@ -685,7 +690,6 @@ int openFile(char* filename){
   return 0;
 }
 
-// does not work...
 int newFile(){
 
   int lineDigit = 1,
@@ -710,7 +714,7 @@ int newFile(){
 int main(int argc, char* argv[]){
 
   if(argc < 2){
-    newFile();    // does not work...
+    newFile();
   }
 
   openFile(argv[1]);
