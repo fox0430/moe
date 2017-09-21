@@ -10,6 +10,7 @@
 #define KEY_ESC 27
 
 
+//Vector
 typedef struct charArray{
   char* elements;
   int capacity,
@@ -52,6 +53,7 @@ int countLineDigit(int lineNum);
 void printLineNum(int lineDigit, int line, int y);
 void printStr(gapBuffer* gb, int lineDigit, int line, int y);
 void insertMode(gapBuffer* gb, int lineDigit, int lineNum);
+int newFile();
 int openFile(char* filename);
 
 
@@ -682,11 +684,32 @@ int openFile(char* filename){
   return 0;
 }
 
+// does not work...
+int newFile(){
+
+  int lineDigit = 1,
+      lineNum = 1;
+
+  gapBuffer* gb = (gapBuffer*)malloc(sizeof(gapBuffer));
+  gapBufferInit(gb);
+  {
+    charArray* ca = (charArray*)malloc(sizeof(charArray));
+    charArrayInit(ca);
+    gapBufferInsert(gb, ca, 0);
+  }
+
+  startCurses(); 
+  printStr(gb, lineDigit, 0, 0);
+  scrollok(stdscr, TRUE);			// enable scroll
+  insertMode(gb, lineDigit, lineNum);
+
+  return 0;
+}
+
 int main(int argc, char* argv[]){
 
   if(argc < 2){
-    printf("cannot file open...\n");
-    return -1;
+    newFile();    // does not work...
   }
 
   openFile(argv[1]);
