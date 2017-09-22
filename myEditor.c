@@ -585,7 +585,6 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
           gapBufferDel(gb, line, line+1);
           deleteln();
           lineNum--;
-          move(y, 0);
           printStr(gb, lineDigit, line, y);
           line--;
           if(y > 0) y -= 1;
@@ -605,8 +604,7 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
             gapBufferAt(gb, line)->numOfChar++;
           }
           gapBufferAt(gb, line)->numOfChar--;
-          // Rewrite
-          for(int i=line; i<gb->size-1; i++){
+          for(int i=line; i < gb->size-1; i++){
             if(i == LINES-1) break;
             printStr(gb, lineDigit, i, i);
             printw("\n");
@@ -636,10 +634,9 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
               gapBufferAt(gb, line)->numOfChar--;
             }
             for(int i=0; i < tmp - (x - lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, line));
-            gapBufferAt(gb, line+1)->numOfChar--;
           }
           x = lineDigitSpace;
-          for(int i=line; i<gb->size-1; i++){
+          for(int i=line; i < gb->size-1; i++){
             if(i == LINES-1) break;
             printStr(gb, lineDigit, i, i);
             printw("\n");
