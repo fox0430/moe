@@ -334,6 +334,7 @@ int countLineDigit(int lineNum){
 void printLineNum(int lineDigit, int line, int y){
 
   int lineDigitSpace = lineDigit - countLineDigit(line + 1);
+  move(y, 0);
   for(int i=0; i<lineDigitSpace; i++) mvprintw(y, i, " ");
   bkgd(COLOR_PAIR(2));
   printw("%d:", line + 1); 
@@ -604,7 +605,6 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
             gapBufferAt(gb, line)->numOfChar++;
           }
           gapBufferAt(gb, line)->numOfChar--;
-          move(y, 0);
           // Rewrite
           for(int i=line; i<gb->size-1; i++){
             if(i == LINES-1) break;
@@ -638,7 +638,6 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
             for(int i=0; i < tmp - (x - lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, line));
             gapBufferAt(gb, line+1)->numOfChar--;
           }
-          move(y, 0);
           x = lineDigitSpace;
           for(int i=line; i<gb->size-1; i++){
             if(i == LINES-1) break;
@@ -647,6 +646,16 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
           }
           line++;
           y++;
+          // Up lineDigit
+          if(countLineDigit(lineNum) > countLineDigit(lineNum - 1)){
+            lineDigit = countLineDigit(lineNum);
+            clear();
+            for(int i=0; i<gb->size-1; i++){
+              if(i == LINES-1) break;
+              printStr(gb, lineDigit, i, i);
+              printw("\n");
+            }
+          }
           break;
         }
 
