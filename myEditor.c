@@ -611,6 +611,18 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
             printStr(gb, lineDigit, i, i);
             printw("\n");
           }
+          line++;
+          y++;
+          // Up lineDigit
+          if(countLineDigit(lineNum) > countLineDigit(lineNum - 1)){
+            lineDigit = countLineDigit(lineNum);
+            clear();
+            for(int i=0; i<gb->size-1; i++){
+              if(i == LINES-1) break;
+              printStr(gb, lineDigit, i, i);
+              printw("\n");
+            }
+          }
           break;
         }else{
           {
@@ -637,6 +649,7 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
           y++;
           break;
         }
+
       default:
         echo();
         charArrayInsert(gapBufferAt(gb, line), key, x - lineDigitSpace);
