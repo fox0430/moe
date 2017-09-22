@@ -5,12 +5,13 @@
 #include<assert.h>
 #include<malloc.h>
 #include<ncurses.h>
+//#include<locale.h>
 
 
 #define KEY_ESC 27
 
 
-//Vector
+// Vector
 typedef struct charArray{
   char* elements;
   int capacity,
@@ -20,10 +21,10 @@ typedef struct charArray{
 
 typedef struct gapBuffer{
   struct charArray** buffer;
-  int size,       //意味のあるデータが実際に格納されているサイズ
-      capacity,   //Amount of secured memory
+  int size,       // 意味のあるデータが実際に格納されているサイズ
+      capacity,   // Amount of secured memory
       gapBegin,
-      gapEnd;     //半開区間[gap_begin,gap_end)を隙間とする
+      gapEnd;     // 半開区間[gap_begin,gap_end)を隙間とする
 } gapBuffer;
 
 typedef struct editorStat{
@@ -79,6 +80,8 @@ void startCurses(){
   init_pair(3, COLOR_CYAN, COLOR_BLACK);
 
   erase();  	// screen display
+
+//  setlocale(LC_ALL, "");
 
   ESCDELAY = 25;    // delete esc key time lag
 
@@ -445,10 +448,10 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
         
       case KEY_BACKSPACE:
         if(x == lineDigitSpace && gapBufferAt(gb, line)->numOfChar != 0) break;
-          charArrayDel(gapBufferAt(gb, line), (x - lineDigitSpace));
-          x--;
-          move(y, x);
-          delch();
+        charArrayDel(gapBufferAt(gb, line), (x - lineDigitSpace));
+        x--;
+        move(y, x);
+        delch();
         if(x <= lineDigitSpace && gapBufferAt(gb, line)->numOfChar == 0){
           gapBufferDel(gb, line, line+1);
           deleteln();
@@ -465,8 +468,24 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
         break;
 
       case 10:    // 10 is Enter key
-        insertln();
         lineNum++;
+        if(y == LINES - 1){
+          line++;
+          if(x == lineDigitSpace){
+            {
+              charArray* ca = (charArray*)malloc(sizeof(charArray));
+              charArrayInit(ca);
+              gapBufferInsert(gb, ca, line);
+              charArrayPush(gapBufferAt(gb, line), '\0');
+            }
+          wscrl(stdscr, 1);
+          printStr(gb, lineDigit, line, LINES -1);
+          x = gapBufferAt(gb, line)->numOfChar + lineDigitSpace - 1;
+          }
+          break;
+        }
+
+        insertln();
         if(x == lineDigitSpace){
           {
             charArray* ca = (charArray*)malloc(sizeof(charArray));
