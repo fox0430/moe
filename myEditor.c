@@ -627,10 +627,14 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
             gapBufferAt(gb, line+1)->numOfChar--;
           }
           move(y, 0);
-          printStr(gb, lineDigit, line, y);
           x = lineDigitSpace;
-          y++;
+          for(int i=line; i<gb->size-1; i++){
+            if(i == LINES-1) break;
+            printStr(gb, lineDigit, i, i);
+            printw("\n");
+          }
           line++;
+          y++;
           break;
         }
       default:
