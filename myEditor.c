@@ -135,6 +135,7 @@ int charArrayInit(charArray* array){
   array->elements[0] = '\0';
   array->capacity = size;
   array->head = 0;
+  array->numOfChar = 0;
   return 1;
 }
 
@@ -186,6 +187,8 @@ int charArrayPop(charArray* array){
   }
   --array->head;
   array->elements[array->head] = '\0';
+
+  --array->numOfChar;
 
   if(array->head*4 <= array->capacity){
     char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity /2+1));
@@ -409,8 +412,9 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
     switch(key){
 
       case KEY_UP:
-        if(y < 1 && line == 0) break;
-        else if(y < 1){
+        if(line == 0) break;
+        
+        if(y == 0){
           line--;
           wscrl(stdscr, -1);    // scroll
           printStr(gb, lineDigit, line, y);
@@ -420,18 +424,17 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
           y -= 2;
           line--;
           break;
-        }else if(x == gapBufferAt(gb, line)->numOfChar + lineDigit || x > gapBufferAt(gb, line - 1)->numOfChar + lineDigit){
-          y--;
-          line--;
-          x = gapBufferAt(gb, line)->numOfChar + lineDigitSpace;
-          break;
         }
+
         y--;
         line--;
+        if(x > lineDigit + gapBufferAt(gb, line)->numOfChar + 1) x = lineDigit + gapBufferAt(gb, line)->numOfChar + 1;
+        
         break;
 
       case KEY_DOWN:
-        if(y >= gb->size - 2) break;
+        if(line + 1 == gb->size) break;
+        
         if(y >= LINES -1){
           line++;
           wscrl(stdscr, 1);
@@ -443,16 +446,14 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
           y += 2;
           line++;
           break;
-        }else if(x == gapBufferAt(gb, line)->numOfChar + lineDigit || x >= gapBufferAt(gb, line + 1)->numOfChar + lineDigit){
-          y++;
-          line++;
-          x = gapBufferAt(gb, line)->numOfChar + lineDigitSpace;
-          break;
         }
+
         y++;
         line++;
+        if(x > lineDigit + gapBufferAt(gb, line)->numOfChar + 1) x = lineDigit + gapBufferAt(gb, line)->numOfChar + 1;
+        
         break;
-
+        
       case KEY_RIGHT:
         if(x >= gapBufferAt(gb, line)->numOfChar + lineDigitSpace) break;
         x++;
@@ -591,12 +592,6 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
 }
 
 int openFile(char* filename){
-
-  char  ch;
-
-  int   lineNum = 0,
-        lineDigit = 3;
-
   FILE *fp = fopen(filename, "r");
   if(fp == NULL){
 		printf("%s Cannot file open... \n", filename);
@@ -605,25 +600,29 @@ int openFile(char* filename){
 
   gapBuffer* gb = (gapBuffer*)malloc(sizeof(gapBuffer));
   gapBufferInit(gb);
+  
   {
     charArray* ca = (charArray*)malloc(sizeof(charArray));
     charArrayInit(ca);
     gapBufferInsert(gb, ca, 0);
   }
 
+  int currentLine = 0;
+  char ch;
   while((ch = fgetc(fp)) != EOF){
     if(ch=='\n'){
-      ++lineNum;
+      ++currentLine;
       charArray* ca = (charArray*)malloc(sizeof(charArray));
       charArrayInit(ca);
-      gapBufferInsert(gb, ca, lineNum);
-    }else charArrayPush(gapBufferAt(gb, lineNum), ch);
+      gapBufferInsert(gb, ca, currentLine);
+    }else charArrayPush(gapBufferAt(gb, currentLine), ch);
   }
   fclose(fp);
 
   startCurses(); 
 
-  for(int i=0; i < lineNum; i++){
+  const int lineDigit = 3, numOfLines = currentLine + 1;
+  for(int i=0; i < numOfLines; i++){
     if(i == LINES) break;
     printStr(gb, lineDigit, i, i);
     printw("\n");
@@ -631,7 +630,7 @@ int openFile(char* filename){
 
   scrollok(stdscr, TRUE);			// enable scroll
 
-  insertMode(gb, lineDigit, lineNum);
+  insertMode(gb, lineDigit, numOfLines);
 
   return 0;
 }
