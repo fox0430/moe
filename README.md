@@ -2,9 +2,9 @@ This project goal is funny animation editor and study C.
 
 Aiming features
 
+  ・Vector and GapBuffer
+
   ・vim like key binds (not completely)
-  
-  ・funny animation
   
   ・simple syntax highlight
   
