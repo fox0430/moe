@@ -9,6 +9,7 @@
 
 
 #define KEY_ESC 27
+//#define WIN_NUM 2
 
 
 // Vector
@@ -27,6 +28,7 @@ typedef struct gapBuffer{
       gapEnd;     // 半開区間[gap_begin,gap_end)を隙間とする
 } gapBuffer;
 
+/*
 typedef struct editorStat{
   int   mode,
         lineDigit,
@@ -36,6 +38,7 @@ typedef struct editorStat{
         line;
   char* filename[256];
 } editorStat;
+*/
 
 
 // Function prototype
@@ -84,6 +87,20 @@ void startCurses(){
 //  setlocale(LC_ALL, "");
 
   ESCDELAY = 25;    // delete esc key time lag
+
+/*
+  WINDOW *windows[WIN_NUM];
+  if(signal(SIGINT, signal_handler) == SIG_ERR ||
+    signal(SIGQUIT, signal_handler) == SIG_ERR){
+      fprintf(stderr, "signal failure\n");
+      exit(EXIT_FAILURE);
+  }
+
+  if(initscr() == NULL){
+    fprintf(stderr, "initscr failure\n");
+    exit(EXIT_FAILURE);
+  }
+*/
 
   move(0, 0);     // set cursr point
 }
@@ -481,6 +498,23 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
           wscrl(stdscr, 1);
           printStr(gb, lineDigit, line, LINES -1);
           x = gapBufferAt(gb, line)->numOfChar + lineDigitSpace - 1;
+          }else{
+            {
+              charArray* ca = (charArray*)malloc(sizeof(charArray));
+              charArrayInit(ca);
+              gapBufferInsert(gb, ca, line+1);
+              charArrayPush(gapBufferAt(gb, line+1), '\0');
+              int tmp = gapBufferAt(gb, line)->numOfChar;
+              for(int i = 0; i < tmp - (x - lineDigitSpace); i++){
+                charArrayInsert(gapBufferAt(gb, line+1), gapBufferAt(gb, line)->elements[i + x - lineDigitSpace], i);
+                gapBufferAt(gb, line)->numOfChar--;
+              }
+            for(int i=0; i < tmp - (x - lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, line));
+            }
+            // does not work...
+            wscrl(stdscr, 1);
+            printStr(gb, lineDigit, line, LINES -1);
+            x = gapBufferAt(gb, line)->numOfChar + lineDigitSpace - 1;
           }
           break;
         }
@@ -561,7 +595,7 @@ int openFile(char* filename){
   char  ch;
 
   int   lineNum = 0,
-        lineDigit = 0;
+        lineDigit = 3;
 
   FILE *fp = fopen(filename, "r");
   if(fp == NULL){
@@ -588,8 +622,6 @@ int openFile(char* filename){
   fclose(fp);
 
   startCurses(); 
-
-  lineDigit = countLineDigit(lineNum);
 
   for(int i=0; i < lineNum; i++){
     if(i == LINES) break;
