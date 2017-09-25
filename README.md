@@ -6,6 +6,8 @@ Aiming features
 
   ・vim like key binds (not completely)
   
+  ・UTF-8
+
   ・simple syntax highlight
   
   ・auto-complete
