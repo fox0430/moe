@@ -193,7 +193,7 @@ int charArrayPop(charArray* array){
   --array->numOfChar;
 
   if(array->head*4 <= array->capacity){
-    char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity /2+1));
+    char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity / 2 + 1));
       if(newElements == NULL){
         printf("cannot reallocate memory.");
         return -1;
@@ -211,12 +211,11 @@ int charArrayDel(charArray* array, int position){
     return -1;
   }
 
-  memmove(array->elements + position - 1, array->elements + position, array->numOfChar - position);
-  --array->numOfChar;
+  memmove(array->elements + position, array->elements + position + 1, sizeof(char) * (array->head - (position + 1)));
   charArrayPop(array);
 
   if(array->head*4 <= array->capacity){
-    char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity /2+1));
+    char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity / 2 + 1));
       if(newElements == NULL){
         printf("cannot reallocate memory.");
         return -1;
@@ -469,7 +468,7 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
         
       case KEY_BACKSPACE:
         if(x == lineDigitSpace && gapBufferAt(gb, line)->numOfChar != 0) break;
-        charArrayDel(gapBufferAt(gb, line), (x - lineDigitSpace - 1));
+        charArrayDel(gapBufferAt(gb, line), (x - lineDigitSpace));
         x--;
         move(y, x);
         delch();
