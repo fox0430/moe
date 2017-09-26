@@ -469,7 +469,7 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
         
       case KEY_BACKSPACE:
         if(x == lineDigitSpace && gapBufferAt(gb, line)->numOfChar != 0) break;
-        charArrayDel(gapBufferAt(gb, line), (x - lineDigitSpace));
+        charArrayDel(gapBufferAt(gb, line), (x - lineDigitSpace - 1));
         x--;
         move(y, x);
         delch();
