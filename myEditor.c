@@ -593,10 +593,6 @@ void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
 
 int openFile(char* filename){
 
-  int   currentLine = 0,
-        lineDigit = 3;
-  char  ch;
-
   FILE *fp = fopen(filename, "r");
   if(fp == NULL){
 		printf("%s Cannot file open... \n", filename);
@@ -612,6 +608,8 @@ int openFile(char* filename){
     gapBufferInsert(gb, ca, 0);
   }
 
+  int   currentLine = 0;
+  char  ch;
   while((ch = fgetc(fp)) != EOF){
     if(ch=='\n'){
       ++currentLine;
@@ -624,9 +622,11 @@ int openFile(char* filename){
 
   startCurses();
 
+  int lineDigit = 3;    // 3 is default line digit space
+
   if(lineDigit < countLineDigit(currentLine + 1)) lineDigit = countLineDigit(currentLine + 1);
 
-  const int  numOfLines = currentLine + 1;
+  const int numOfLines = currentLine + 1;
   for(int i=0; i < numOfLines; i++){
     if(i == LINES) break;
     printStr(gb, lineDigit, i, i);
