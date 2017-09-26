@@ -29,6 +29,7 @@ typedef struct gapBuffer{
           gapEnd;     // 半開区間[gap_begin,gap_end)を隙間とする
 } gapBuffer;
 
+/*
 typedef struct editorStat{
   char filename[256];
   int   mode,
@@ -38,6 +39,7 @@ typedef struct editorStat{
         y,
         line;
 } editorStat;
+*/
 
 
 // Function prototype
@@ -109,6 +111,7 @@ void exitCurses(){
  endwin(); 
 }
 
+/*
 void editorStatInit(editorStat* stat){
 
   stat->mode = 1;
@@ -118,7 +121,8 @@ void editorStatInit(editorStat* stat){
   stat->y = 0;
   stat->x = 0;
   strcpy(stat->filename, "text_new.txt");
-  }
+}
+*/
 
 int charArrayInit(charArray* array){
 
@@ -631,7 +635,7 @@ int openFile(char* filename){
   if(lineDigit < countLineDigit(currentLine + 1)) lineDigit = countLineDigit(currentLine + 1);
 
   const int numOfLines = currentLine + 1;
-  for(int i=0; i < numOfLines; i++){
+  for(int i=0; i < numOfLines - 1; i++){
     if(i == LINES) break;
     printStr(gb, lineDigit, i, i);
     printw("\n");
