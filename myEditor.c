@@ -14,31 +14,30 @@
 
 // Vector
 typedef struct charArray{
-  char* elements;
+  char*   elements;
   int capacity,
       head,
       numOfChar;
 } charArray;
 
+// Gapbuffer
 typedef struct gapBuffer{
-  struct charArray** buffer;
-  int size,       // 意味のあるデータが実際に格納されているサイズ
-      capacity,   // Amount of secured memory
-      gapBegin,
-      gapEnd;     // 半開区間[gap_begin,gap_end)を隙間とする
+  struct  charArray** buffer;
+  int     size,       // 意味のあるデータが実際に格納されているサイズ
+          capacity,   // Amount of secured memory
+          gapBegin,
+          gapEnd;     // 半開区間[gap_begin,gap_end)を隙間とする
 } gapBuffer;
 
-/*
 typedef struct editorStat{
+  char filename[256];
   int   mode,
         lineDigit,
         lineDigitSpace,
         x,
         y,
         line;
-  char* filename[256];
 } editorStat;
-*/
 
 
 // Function prototype
@@ -61,6 +60,7 @@ int writeFile(gapBuffer* gb);
 int countLineDigit(int lineNum);
 void printLineNum(int lineDigit, int line, int y);
 void printStr(gapBuffer* gb, int lineDigit, int line, int y);
+//void insertMode(gapBuffer* gb, int lineDigit, int lineNum, editorStat* stat);
 void insertMode(gapBuffer* gb, int lineDigit, int lineNum);
 int newFile();
 int openFile(char* filename);
@@ -109,18 +109,16 @@ void exitCurses(){
  endwin(); 
 }
 
-/*
-void editorStatInit(){
+void editorStatInit(editorStat* stat){
 
-  mode = 1;
-  lineDigit = 1;
-  lineDigitSpace = 2;
-  x = 0;
-  y = 0;
-  line = 0;
-  filename = "text_new.txt"";
-}
-*/
+  stat->mode = 1;
+  stat->line = 0;
+  stat->lineDigit = 3;
+  stat->lineDigitSpace = stat->lineDigit + 1;
+  stat->y = 0;
+  stat->x = 0;
+  strcpy(stat->filename, "text_new.txt");
+  }
 
 int charArrayInit(charArray* array){
 
@@ -383,6 +381,7 @@ void printStr(gapBuffer* gb, int lineDigit, int line, int y){
   printw("%s", gapBufferAt(gb, line)->elements);
 }
 
+//void insertMode(gapBuffer* gb, int lineDigit, int lineNum, editorStat* stat){
 void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
 
   int key,
@@ -622,6 +621,11 @@ int openFile(char* filename){
 
   startCurses();
 
+/*
+  editorStat* stat = (editorStat*)malloc(sizeof(editorStat));
+  editorStatInit(stat);
+*/
+
   int lineDigit = 3;    // 3 is default line digit space
 
   if(lineDigit < countLineDigit(currentLine + 1)) lineDigit = countLineDigit(currentLine + 1);
@@ -635,15 +639,13 @@ int openFile(char* filename){
 
   scrollok(stdscr, TRUE);			// enable scroll
 
+//  insertMode(gb, lineDigit, numOfLines, stat);
   insertMode(gb, lineDigit, numOfLines);
 
   return 0;
 }
 
 int newFile(){
-
-  int lineDigit = 1,
-      lineNum = 1;
 
   gapBuffer* gb = (gapBuffer*)malloc(sizeof(gapBuffer));
   gapBufferInit(gb);
@@ -653,9 +655,18 @@ int newFile(){
     gapBufferInsert(gb, ca, 0);
   }
 
+/*
+  editorStat* stat = (editorStat*)malloc(sizeof(editorStat));
+  editorStatInit(stat);
+*/
+
+  int lineDigit = 1,
+      lineNum = 1;
+
   startCurses(); 
   printStr(gb, lineDigit, 0, 0);
   scrollok(stdscr, TRUE);			// enable scroll
+//  insertMode(gb, lineDigit, lineNum, stat);
   insertMode(gb, lineDigit, lineNum);
 
   return 0;
