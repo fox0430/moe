@@ -206,8 +206,8 @@ int charArrayPop(charArray* array){
 
 int charArrayDel(charArray* array, int position){
 
-  if(array->head == 0){
-    printf("cannot pop from an empty array.");
+  if(position < 0 || array->head <= position){
+    printf("delete position is out of range.");
     return -1;
   }
 
