@@ -193,7 +193,7 @@ int charArrayPop(charArray* array){
   --array->numOfChar;
 
   if(array->head*4 <= array->capacity){
-    char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity /2+1));
+    char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity / 2 + 1));
       if(newElements == NULL){
         printf("cannot reallocate memory.");
         return -1;
@@ -206,17 +206,16 @@ int charArrayPop(charArray* array){
 
 int charArrayDel(charArray* array, int position){
 
-  if(array->head == 0){
-    printf("cannot pop from an empty array.");
+  if(position < 0 || array->head <= position){
+    printf("delete position is out of range.");
     return -1;
   }
 
-  memmove(array->elements + position - 1, array->elements + position, array->numOfChar - position);
-  --array->numOfChar;
+  memmove(array->elements + position, array->elements + position + 1, sizeof(char) * (array->head - (position + 1)));
   charArrayPop(array);
 
   if(array->head*4 <= array->capacity){
-    char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity /2+1));
+    char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity / 2 + 1));
       if(newElements == NULL){
         printf("cannot reallocate memory.");
         return -1;
