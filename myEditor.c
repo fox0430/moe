@@ -14,10 +14,10 @@
 
 // Vector
 typedef struct charArray{
-  char*   elements;
-  int capacity,
-      head,
-      numOfChar;
+  char* elements;
+  int   capacity,
+        head,
+        numOfChar;
 } charArray;
 
 // Gapbuffer
@@ -113,7 +113,7 @@ void editorStatInit(editorStat* stat){
 
   stat->mode = 1;
   stat->line = 0;
-  stat->lineDigit = 3;
+  stat->lineDigit = 3;    // 3 is default line digit
   stat->lineDigitSpace = stat->lineDigit + 1;
   stat->y = 0;
   stat->x = 0;
