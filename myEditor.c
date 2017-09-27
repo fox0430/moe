@@ -36,7 +36,7 @@ typedef struct editorStat{
         lineDigitSpace,
         x,
         y,
-        line,
+        currentLine,
         numOfLines;
 } editorStat;
 
@@ -112,7 +112,7 @@ void exitCurses(){
 void editorStatInit(editorStat* stat){
 
 //  stat->mode = 1;
-  stat->line = 0;
+  stat->currentLine = 0;
   stat->numOfLines = 0;
   stat->lineDigit = 3;    // 3 is default line digit
   stat->lineDigitSpace = stat->lineDigit + 1;
@@ -383,11 +383,11 @@ void printStr(gapBuffer* gb, int lineDigit, int line, int y){
 
 void insertMode(gapBuffer* gb, editorStat* stat){
 
-  int key,
-      line  = 0;    // gapBuffer position
+  int key;
 
   stat->y     = 0;
-  stat->x     = stat->lineDigitSpace;
+  stat->x           = stat->lineDigitSpace;
+  stat->currentLine = 0;
 
   while(1){
 
@@ -410,110 +410,110 @@ void insertMode(gapBuffer* gb, editorStat* stat){
     switch(key){
 
       case KEY_UP:
-        if(line == 0) break;
+        if(stat->currentLine == 0) break;
         
         if(stat->y == 0){
-          line--;
+          stat->currentLine--;
           wscrl(stdscr, -1);    // scroll
-          printStr(gb, stat->lineDigit,  line, stat->y);
-          stat->x = gapBufferAt(gb, line)->numOfChar + stat->lineDigitSpace - 1;
+          printStr(gb, stat->lineDigit,  stat->currentLine, stat->y);
+          stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
           break;
-        }else if(COLS - stat->lineDigitSpace - 1 <= gapBufferAt(gb, line-1)->numOfChar){
+        }else if(COLS - stat->lineDigitSpace - 1 <= gapBufferAt(gb, stat->currentLine - 1)->numOfChar){
           stat->y -= 2;
-          line--;
+          stat->currentLine--;
           break;
         }
 
-        stat->y -= 1;
-        line--;
-        if(stat->x > stat->lineDigit + gapBufferAt(gb, line)->numOfChar + 1) stat->x = stat->lineDigit + gapBufferAt(gb, line)->numOfChar + 1;
+        stat->y--;
+        stat->currentLine--;
+        if(stat->x > stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1) stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
         
         break;
 
       case KEY_DOWN:
-        if(line + 1 == gb->size) break;
+        if(stat->currentLine + 1 == gb->size) break;
         
         if(stat->y >= LINES -1){
-          line++;
+          stat->currentLine++;
           wscrl(stdscr, 1);
           move(LINES-1, 0);
-          printStr(gb, stat->lineDigit, line, stat->y);
-          stat->x = gapBufferAt(gb, line)->numOfChar + stat->lineDigitSpace- 1;
+          printStr(gb, stat->lineDigit, stat->currentLine, stat->y);
+          stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace- 1;
           break;
-        }else if(COLS - stat->lineDigitSpace - 1 <= gapBufferAt(gb, line+1)->numOfChar){
+        }else if(COLS - stat->lineDigitSpace - 1 <= gapBufferAt(gb, stat->currentLine + 1)->numOfChar){
           stat->y += 2;
-          line++;
+          stat->currentLine++;
           break;
         }
 
         stat->y++;
-        line++;
-        if(stat->x > stat->lineDigitSpace + gapBufferAt(gb, line)->numOfChar) stat->x = stat->lineDigit + gapBufferAt(gb, line)->numOfChar + 1;
+        stat->currentLine++;
+        if(stat->x > stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar) stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
         
         break;
         
       case KEY_RIGHT:
-        if(stat->x >= gapBufferAt(gb, line)->numOfChar + stat->lineDigitSpace) break;
-        stat->x += 1;
+        if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace) break;
+        stat->x++;
         break;
 
       case KEY_LEFT:
         if(stat->x == stat->lineDigit + 1) break;
-        stat->x -= 1;
+        stat->x--;
         break;
         
       case KEY_BACKSPACE:
-        if(stat->x == stat->lineDigitSpace && gapBufferAt(gb, line)->numOfChar != 0) break;
-        charArrayDel(gapBufferAt(gb, line), (stat->x - stat->lineDigitSpace));
-        stat->x -= 1;
+        if(stat->x == stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine)->numOfChar != 0) break;
+        charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
+        stat->x--;
         move(stat->y, stat->x);
         delch();
-        if(stat->x < stat->lineDigitSpace && gapBufferAt(gb, line)->numOfChar == 0){
-          gapBufferDel(gb, line, line+1);
+        if(stat->x < stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine)->numOfChar == 0){
+          gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
           deleteln();
-          stat->numOfLines -= 1;
-          for(int i=line; i < gb->size-1; i++){
+          stat->numOfLines--;
+          for(int i=stat->currentLine; i < gb->size-1; i++){
             if(i == LINES-1) break;
             printStr(gb, stat->lineDigit, i, i);
             printw("\n");
           }
-          line--;
-          if(stat->y > 0) stat->y -= 1;
-          stat->x = gapBufferAt(gb, line)->numOfChar + stat->lineDigitSpace ;
+          stat->currentLine--;
+          if(stat->y > 0) stat->y--;
+          stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace ;
         }
         break;
 
       case 10:    // 10 is Enter key
-        stat->numOfLines += 1;
+        stat->numOfLines++;
         if(stat->y == LINES - 1){
-          line++;
+          stat->currentLine++;
           if(stat->x == stat->lineDigitSpace){
             {
               charArray* ca = (charArray*)malloc(sizeof(charArray));
               charArrayInit(ca);
-              gapBufferInsert(gb, ca, line);
-              charArrayPush(gapBufferAt(gb, line), '\0');
+              gapBufferInsert(gb, ca, stat->currentLine);
+              charArrayPush(gapBufferAt(gb, stat->currentLine), '\0');
             }
           wscrl(stdscr, 1);
-          printStr(gb, stat->lineDigit, line, LINES -1);
-          stat->x = gapBufferAt(gb, line)->numOfChar + stat->lineDigitSpace - 1;
+          printStr(gb, stat->lineDigit, stat->currentLine, LINES -1);
+          stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
           }else{
             {
               charArray* ca = (charArray*)malloc(sizeof(charArray));
               charArrayInit(ca);
-              gapBufferInsert(gb, ca, line+1);
-              charArrayPush(gapBufferAt(gb, line+1), '\0');
-              int tmp = gapBufferAt(gb, line)->numOfChar;
+              gapBufferInsert(gb, ca, stat->currentLine + 1);
+              charArrayPush(gapBufferAt(gb, stat->currentLine + 1), '\0');
+              int tmp = gapBufferAt(gb, stat->currentLine)->numOfChar;
               for(int i = 0; i < tmp - (stat->x - stat->lineDigitSpace); i++){
-                charArrayInsert(gapBufferAt(gb, line+1), gapBufferAt(gb, line)->elements[i + stat->x - stat->lineDigitSpace], i);
-                gapBufferAt(gb, line)->numOfChar--;
+                charArrayInsert(gapBufferAt(gb, stat->currentLine + 1), gapBufferAt(gb, stat->currentLine)->elements[i + stat->x - stat->lineDigitSpace], i);
+                gapBufferAt(gb, stat->currentLine)->numOfChar--;
               }
-            for(int i=0; i < tmp - (stat->x - stat->lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, line));
+            for(int i=0; i < tmp - (stat->x - stat->lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, stat->currentLine));
             }
             // does not work...
             wscrl(stdscr, 1);
-            printStr(gb, stat->lineDigit, line, LINES -1);
-            stat->x = gapBufferAt(gb, line)->numOfChar + stat->lineDigitSpace - 1;
+            printStr(gb, stat->lineDigit, stat->currentLine, LINES -1);
+            stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
           }
           break;
         }
@@ -523,18 +523,18 @@ void insertMode(gapBuffer* gb, editorStat* stat){
           {
             charArray* ca = (charArray*)malloc(sizeof(charArray));
             charArrayInit(ca);
-            gapBufferInsert(gb, ca, line);
-            charArrayPush(gapBufferAt(gb, line), '\0');
-            gapBufferAt(gb, line)->numOfChar++;
+            gapBufferInsert(gb, ca, stat->currentLine);
+            charArrayPush(gapBufferAt(gb, stat->currentLine), '\0');
+            gapBufferAt(gb, stat->currentLine)->numOfChar++;
           }
-          gapBufferAt(gb, line)->numOfChar--;
-          for(int i=line; i < gb->size-1; i++){
+          gapBufferAt(gb, stat->currentLine)->numOfChar--;
+          for(int i=stat->currentLine; i < gb->size-1; i++){
             if(i == LINES-1) break;
             printStr(gb, stat->lineDigit, i, i);
             printw("\n");
           }
-          line++;
-          stat->y += 1;
+          stat->currentLine++;
+          stat->y++;
           // Up lineDigit
           if(countLineDigit(stat->numOfLines) > countLineDigit(stat->numOfLines - 1)){
             stat->lineDigit = countLineDigit(stat->numOfLines);
@@ -550,23 +550,23 @@ void insertMode(gapBuffer* gb, editorStat* stat){
           {
             charArray* ca = (charArray*)malloc(sizeof(charArray));
             charArrayInit(ca);
-            gapBufferInsert(gb, ca, line+1);
-            charArrayPush(gapBufferAt(gb, line+1), '\0');
-            int tmp = gapBufferAt(gb, line)->numOfChar;
+            gapBufferInsert(gb, ca, stat->currentLine + 1);
+            charArrayPush(gapBufferAt(gb, stat->currentLine + 1), '\0');
+            int tmp = gapBufferAt(gb, stat->currentLine)->numOfChar;
             for(int i = 0; i < tmp - (stat->x - stat->lineDigitSpace); i++){
-              charArrayInsert(gapBufferAt(gb, line+1), gapBufferAt(gb, line)->elements[i + stat->x - stat->lineDigitSpace], i);
-              gapBufferAt(gb, line)->numOfChar--;
+              charArrayInsert(gapBufferAt(gb, stat->currentLine + 1), gapBufferAt(gb, stat->currentLine)->elements[i + stat->x - stat->lineDigitSpace], i);
+              gapBufferAt(gb, stat->currentLine)->numOfChar--;
             }
-            for(int i=0; i < tmp - (stat->x - stat->lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, line));
+            for(int i=0; i < tmp - (stat->x - stat->lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, stat->currentLine));
           }
           stat->x = stat->lineDigitSpace;
-          for(int i=line; i < gb->size-1; i++){
+          for(int i=stat->currentLine; i < gb->size-1; i++){
             if(i == LINES-1) break;
             printStr(gb, stat->lineDigit, i, i);
             printw("\n");
           }
-          line++;
-          stat->y += 1;
+          stat->currentLine++;
+          stat->y++;
           // Up lineDigit
           if(countLineDigit(stat->numOfLines) > countLineDigit(stat->numOfLines - 1)){
             stat->lineDigit = countLineDigit(stat->numOfLines);
@@ -582,9 +582,9 @@ void insertMode(gapBuffer* gb, editorStat* stat){
 
       default:
         echo();
-        charArrayInsert(gapBufferAt(gb, line), key, stat->x - stat->lineDigitSpace);
+        charArrayInsert(gapBufferAt(gb, stat->currentLine), key, stat->x - stat->lineDigitSpace);
         insch(key);
-        stat->x += 1;
+        stat->x++;
     }
   }
 }
@@ -606,26 +606,25 @@ int openFile(char* filename){
     gapBufferInsert(gb, ca, 0);
   }
 
-  int   currentLine = 0;
+  editorStat* stat = (editorStat*)malloc(sizeof(editorStat));
+  editorStatInit(stat);
+
   char  ch;
   while((ch = fgetc(fp)) != EOF){
     if(ch=='\n'){
-      ++currentLine;
+      stat->currentLine += 1;
       charArray* ca = (charArray*)malloc(sizeof(charArray));
       charArrayInit(ca);
-      gapBufferInsert(gb, ca, currentLine);
-    }else charArrayPush(gapBufferAt(gb, currentLine), ch);
+      gapBufferInsert(gb, ca, stat->currentLine);
+    }else charArrayPush(gapBufferAt(gb, stat->currentLine), ch);
   }
   fclose(fp);
 
   startCurses();
 
-  editorStat* stat = (editorStat*)malloc(sizeof(editorStat));
-  editorStatInit(stat);
+  if(stat->lineDigit < countLineDigit(stat->currentLine + 1)) stat->lineDigit = countLineDigit(stat->currentLine + 1);
 
-  if(stat->lineDigit < countLineDigit(currentLine + 1)) stat->lineDigit = countLineDigit(currentLine + 1);
-
-  stat->numOfLines = currentLine + 1;
+  stat->numOfLines = stat->currentLine + 1;
   for(int i=0; i < stat->numOfLines - 1; i++){
     if(i == LINES) break;
     printStr(gb, stat->lineDigit, i, i);
