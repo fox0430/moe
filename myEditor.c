@@ -394,7 +394,6 @@ void insertMode(gapBuffer* gb, editorStat* stat){
     refresh();
     noecho();
     key = getch();
-    mvprintw(10, 0, "%d", gapBufferAt(gb, line)->numOfChar);
 
     if(key == KEY_ESC){
       writeFile(gb);
