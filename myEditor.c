@@ -340,7 +340,7 @@ int writeFile(gapBuffer* gb){
   FILE *fp;
   char *filename = "test_new.txt";
 
-   if ((fp = fopen(filename, "w")) == NULL) {
+  if ((fp = fopen(filename, "w")) == NULL) {
     printf("%s Cannot file open... \n", filename);
       return -1;
     }
@@ -355,38 +355,38 @@ int writeFile(gapBuffer* gb){
   return 0;
 }
 
-int countLineDigit(int lineNum){
+int countLineDigit(int numOfLines){
 
   int lineDigit = 0;
-  while(lineNum > 0){
-    lineNum /= 10;
+  while(numOfLines > 0){
+    numOfLines /= 10;
     lineDigit++;
   }
   return lineDigit;
 }
 
-void printLineNum(int lineDigit, int line, int y){
+void printLineNum(int lineDigit, int currentLine, int y){
 
-  int lineDigitSpace = lineDigit - countLineDigit(line + 1);
+  int lineDigitSpace = lineDigit - countLineDigit(currentLine + 1);
   move(y, 0);
   for(int i=0; i<lineDigitSpace; i++) mvprintw(y, i, " ");
   bkgd(COLOR_PAIR(2));
-  printw("%d:", line + 1); 
+  printw("%d:", currentLine + 1); 
 }
 
-void printStr(gapBuffer* gb, int lineDigit, int line, int y){
+void printStr(gapBuffer* gb, int lineDigit, int currentLine, int y){
 
-  printLineNum(lineDigit, line, y);
+  printLineNum(lineDigit, currentLine, y);
   bkgd(COLOR_PAIR(1));
-  printw("%s", gapBufferAt(gb, line)->elements);
+  printw("%s", gapBufferAt(gb, currentLine)->elements);
 }
 
 void insertMode(gapBuffer* gb, editorStat* stat){
 
   int key;
 
-  stat->y     = 0;
-  stat->x           = stat->lineDigitSpace;
+  stat->y = 0;
+  stat->x = stat->lineDigitSpace;
   stat->currentLine = 0;
 
   while(1){
