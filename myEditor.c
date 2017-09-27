@@ -111,7 +111,7 @@ void exitCurses(){
 
 void editorStatInit(editorStat* stat){
 
-  stat->mode = 1;
+//  stat->mode = 1;
   stat->line = 0;
   stat->numOfLines = 0;
   stat->lineDigit = 3;    // 3 is default line digit
@@ -127,7 +127,7 @@ int charArrayInit(charArray* array){
 
   array->elements = (char*)malloc(sizeof(char)*(size +1));
   if(array->elements == NULL){
-      printf("Cannot allocate memory.");
+      printf("Vector: cannot allocate memory.");
       return -1;
   }
 
@@ -141,13 +141,13 @@ int charArrayInit(charArray* array){
 int charArrayReserve(charArray* array, int capacity){
 
   if(array->head > capacity || capacity <= 0){
-      printf("New buffer capacity is too small.\n");
+      printf("Vector: New buffer capacity is too small.\n");
       return -1;
   }
 
   char* newElements = (char*)realloc(array->elements, sizeof(char)*(capacity +1));
   if(newElements == NULL){
-      printf("Cannot reallocate new memory.\n");
+      printf("Vector: cannot reallocate new memory.\n");
       return -1;
   }
 
@@ -181,7 +181,7 @@ int charArrayInsert(charArray* array, char element, int position){
 int charArrayPop(charArray* array){
 
   if(array->head == 0){
-    printf("cannot pop from an empty array.");
+    printf("Vector: cannot pop from an empty array.");
     return -1;
   }
   --array->head;
@@ -192,7 +192,7 @@ int charArrayPop(charArray* array){
   if(array->head*4 <= array->capacity){
     char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity /2+1));
       if(newElements == NULL){
-        printf("cannot reallocate memory.");
+        printf("Vector: cannot reallocate memory.");
         return -1;
         }
      array->elements = newElements;
@@ -204,18 +204,17 @@ int charArrayPop(charArray* array){
 int charArrayDel(charArray* array, int position){
 
   if(array->head == 0){
-    printf("cannot pop from an empty array.");
+    printf("Vector: cannot pop from an empty array.");
     return -1;
   }
 
   memmove(array->elements + position - 1, array->elements + position, array->numOfChar - position);
-  --array->numOfChar;
   charArrayPop(array);
 
   if(array->head*4 <= array->capacity){
     char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity /2+1));
       if(newElements == NULL){
-        printf("cannot reallocate memory.");
+        printf("Vector: cannot reallocate memory.");
         return -1;
         }
      array->elements = newElements;
@@ -241,12 +240,12 @@ int gapBufferInit(gapBuffer* gb){
 int gapBufferReserve(gapBuffer* gb, int capacity){
 
   if(capacity < gb->size || capacity <= 0){
-    printf("New buffer capacity is too small.\n");
+    printf("Gapbuffer: New buffer capacity is too small.\n");
     return -1;
   }
   charArray** newBuffer = (charArray**)realloc(gb->buffer, sizeof(charArray*)*capacity);
   if(newBuffer == NULL){
-    printf("Cannot reallocate new memory.\n");
+    printf("Gapbuffer: Cannot reallocate new memory.\n");
     return -1;
   }
 
@@ -262,7 +261,7 @@ int gapBufferReserve(gapBuffer* gb, int capacity){
 int gapBufferMakeGap(gapBuffer* gb,int gapBegin){
 
   if(gapBegin < 0 || gb->capacity-gapBegin < gb->gapEnd-gb->gapBegin){
-    printf("Invalid position.\n");
+    printf("Gapbuffer: Invalid position.\n");
     return -1;
   }
 
@@ -282,7 +281,7 @@ int gapBufferMakeGap(gapBuffer* gb,int gapBegin){
 int gapBufferInsert(gapBuffer* gb, charArray* element, int position){
 
   if(position < 0 || gb->size < position){
-    printf("Invalid position.\n");
+    printf("Gapbuffer: Invalid position.\n");
     return -1;
   }
 
@@ -298,7 +297,7 @@ int gapBufferInsert(gapBuffer* gb, charArray* element, int position){
 int gapBufferDel(gapBuffer* gb, int begin, int end){
 
   if(begin > end || begin < 0 || gb->size < end){
-    printf("Invalid interval.\n");
+    printf("Gapbuffer: Invalid interval.\n");
     return -1;
   }
 
@@ -325,7 +324,7 @@ int gapBufferDel(gapBuffer* gb, int begin, int end){
 charArray* gapBufferAt(gapBuffer* gb, int index){
 
   if(index < 0 || gb->size <= index){
-    printf("Invalid index.\n");
+    printf("Gapbuffer: Invalid index.\n");
     exit(0);
   }
   if(index < gb->gapBegin) return gb->buffer[index];
@@ -395,6 +394,7 @@ void insertMode(gapBuffer* gb, editorStat* stat){
     refresh();
     noecho();
     key = getch();
+    mvprintw(10, 0, "%d", gapBufferAt(gb, line)->numOfChar);
 
     if(key == KEY_ESC){
       writeFile(gb);
@@ -468,7 +468,7 @@ void insertMode(gapBuffer* gb, editorStat* stat){
         x--;
         move(y, x);
         delch();
-        if(x == stat->lineDigitSpace && gapBufferAt(gb, line)->numOfChar == 0){
+        if(x < stat->lineDigitSpace && gapBufferAt(gb, line)->numOfChar == 0){
           gapBufferDel(gb, line, line+1);
           deleteln();
           stat->numOfLines -= 1;
