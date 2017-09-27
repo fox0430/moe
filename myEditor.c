@@ -36,7 +36,8 @@ typedef struct editorStat{
         lineDigitSpace,
         x,
         y,
-        line;
+        line,
+        numOfLines;
 } editorStat;
 
 
@@ -60,8 +61,7 @@ int writeFile(gapBuffer* gb);
 int countLineDigit(int lineNum);
 void printLineNum(int lineDigit, int line, int y);
 void printStr(gapBuffer* gb, int lineDigit, int line, int y);
-void insertMode(gapBuffer* gb, int lineNum, editorStat* stat);
-//void insertMode(gapBuffer* gb, int lineDigit, int lineNum);
+void insertMode(gapBuffer* gb, editorStat* stat);
 int newFile();
 int openFile(char* filename);
 
@@ -113,6 +113,7 @@ void editorStatInit(editorStat* stat){
 
   stat->mode = 1;
   stat->line = 0;
+  stat->numOfLines = 0;
   stat->lineDigit = 3;    // 3 is default line digit
   stat->lineDigitSpace = stat->lineDigit + 1;
   stat->y = 0;
@@ -381,8 +382,7 @@ void printStr(gapBuffer* gb, int lineDigit, int line, int y){
   printw("%s", gapBufferAt(gb, line)->elements);
 }
 
-void insertMode(gapBuffer* gb, int lineNum, editorStat* stat){
-//void insertMode(gapBuffer* gb, int lineDigit, int lineNum){
+void insertMode(gapBuffer* gb, editorStat* stat){
 
   int key,
       y     = 0,
@@ -471,7 +471,7 @@ void insertMode(gapBuffer* gb, int lineNum, editorStat* stat){
         if(x == stat->lineDigitSpace && gapBufferAt(gb, line)->numOfChar == 0){
           gapBufferDel(gb, line, line+1);
           deleteln();
-          lineNum--;
+          stat->numOfLines -= 1;
           for(int i=line; i < gb->size-1; i++){
             if(i == LINES-1) break;
             printStr(gb, stat->lineDigit, i, i);
@@ -484,7 +484,7 @@ void insertMode(gapBuffer* gb, int lineNum, editorStat* stat){
         break;
 
       case 10:    // 10 is Enter key
-        lineNum++;
+        stat->numOfLines += 1;
         if(y == LINES - 1){
           line++;
           if(x == stat->lineDigitSpace){
@@ -536,8 +536,8 @@ void insertMode(gapBuffer* gb, int lineNum, editorStat* stat){
           line++;
           y++;
           // Up lineDigit
-          if(countLineDigit(lineNum) > countLineDigit(lineNum - 1)){
-            stat->lineDigit = countLineDigit(lineNum);
+          if(countLineDigit(stat->numOfLines) > countLineDigit(stat->numOfLines - 1)){
+            stat->lineDigit = countLineDigit(stat->numOfLines);
             clear();
             for(int i=0; i<gb->size-1; i++){
               if(i == LINES-1) break;
@@ -568,8 +568,8 @@ void insertMode(gapBuffer* gb, int lineNum, editorStat* stat){
           line++;
           y++;
           // Up lineDigit
-          if(countLineDigit(lineNum) > countLineDigit(lineNum - 1)){
-            stat->lineDigit = countLineDigit(lineNum);
+          if(countLineDigit(stat->numOfLines) > countLineDigit(stat->numOfLines - 1)){
+            stat->lineDigit = countLineDigit(stat->numOfLines);
             clear();
             for(int i=0; i<gb->size-1; i++){
               if(i == LINES-1) break;
@@ -625,15 +625,15 @@ int openFile(char* filename){
 
   if(stat->lineDigit < countLineDigit(currentLine + 1)) stat->lineDigit = countLineDigit(currentLine + 1);
 
-  const int numOfLines = currentLine + 1;
-  for(int i=0; i < numOfLines - 1; i++){
+  stat->numOfLines = currentLine + 1;
+  for(int i=0; i < stat->numOfLines - 1; i++){
     if(i == LINES) break;
     printStr(gb, stat->lineDigit, i, i);
     printw("\n");
   }
 
   scrollok(stdscr, TRUE);			// enable scroll
-  insertMode(gb, numOfLines, stat);
+  insertMode(gb, stat);
 
   return 0;
 }
@@ -651,12 +651,11 @@ int newFile(){
   editorStat* stat = (editorStat*)malloc(sizeof(editorStat));
   editorStatInit(stat);
 
-  int lineNum = 1;
 
   startCurses(); 
   printStr(gb, stat->lineDigit, 0, 0);
   scrollok(stdscr, TRUE);			// enable scroll
-  insertMode(gb, lineNum, stat);
+  insertMode(gb, stat);
 
   return 0;
 }
