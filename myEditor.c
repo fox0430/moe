@@ -463,6 +463,7 @@ void insertMode(gapBuffer* gb, editorStat* stat){
         break;
         
       case KEY_BACKSPACE:
+        // Rewrite
         if(stat->x == stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine)->numOfChar != 0) break;
         charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
         stat->x--;
@@ -625,7 +626,7 @@ int openFile(char* filename){
   if(stat->lineDigit < countLineDigit(stat->currentLine + 1)) stat->lineDigit = countLineDigit(stat->currentLine + 1);
 
   stat->numOfLines = stat->currentLine + 1;
-  for(int i=0; i < stat->numOfLines - 1; i++){
+  for(int i=0; i < stat->numOfLines; i++){
     if(i == LINES) break;
     printStr(gb, stat->lineDigit, i, i);
     printw("\n");
