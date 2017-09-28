@@ -4,15 +4,17 @@ Aiming features
 
   ・Vector and GapBuffer
 
-  ・vim like key binds (not completely)
+  ・Vim like key binds (not completely)
   
   ・UTF-8
 
-  ・simple syntax highlight
+  ・Simple syntax highlight
   
-  ・auto-complete
+  ・Auto-complete
+
+  ・Syntax check
   
-  ・funny animation...
+  ・Funny animation...
 
 
 Move anime character inside editor!
