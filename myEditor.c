@@ -513,10 +513,14 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
         }
         for(int i=0; i < tmp - (stat->x - stat->lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, stat->currentLine));
       }
-    // does not work...
+      // does not work...
       wscrl(stdscr, 1);
-      printStr(gb, stat->lineDigit, stat->currentLine, LINES -1);
+      move(LINES - 2, stat->x);
+      deleteln();
+      printStr(gb, stat->lineDigit, stat->currentLine, LINES -2);
+      printStr(gb, stat->lineDigit, stat->currentLine + 1, LINES -1);
       stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
+      stat->currentLine++;
     }
     return 0;
   }
