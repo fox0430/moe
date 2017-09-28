@@ -513,7 +513,6 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
         }
         for(int i=0; i < tmp - (stat->x - stat->lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, stat->currentLine));
       }
-      // does not work...
       wscrl(stdscr, 1);
       move(LINES - 2, stat->x);
       deleteln();
