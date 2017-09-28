@@ -451,6 +451,7 @@ int keyBackSpace(gapBuffer* gb, editorStat* stat){
   move(stat->y, stat->x);
   delch();
   if(stat->x < stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine)->numOfChar > 0){
+    int tmpNumOfChar = gapBufferAt(gb, stat->currentLine - 1)->numOfChar;
     for(int i=0; i<gapBufferAt(gb, stat->currentLine)->numOfChar; i++) {
       charArrayPush(gapBufferAt(gb, stat->currentLine - 1), gapBufferAt(gb, stat->currentLine)->elements[i]);
     }
@@ -462,6 +463,9 @@ int keyBackSpace(gapBuffer* gb, editorStat* stat){
       if(i == LINES - 1) return 0;
       printStr(gb, stat->lineDigit, i, i);
     }
+    stat->y--;
+    stat->x = stat->lineDigitSpace + tmpNumOfChar;
+    stat->currentLine--;
     return 0;
   }
 
@@ -594,7 +598,6 @@ void insertMode(gapBuffer* gb, editorStat* stat){
     refresh();
     noecho();
     key = getch();
-    mvprintw(10, 0, "%d", gapBufferAt(gb, stat->currentLine)->numOfChar);
 
     if(key == KEY_ESC){
       writeFile(gb);
