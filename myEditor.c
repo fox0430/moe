@@ -404,7 +404,8 @@ int keyUp(gapBuffer* gb, editorStat* stat){
 
   stat->y--;
   stat->currentLine--;
-  if(stat->x > stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1) stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
+  if(stat->x > stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1)
+    stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
   return 0;
 }
 
@@ -425,8 +426,8 @@ int keyDown(gapBuffer* gb, editorStat* stat){
   }
   stat->y++;
   stat->currentLine++;
-  if(stat->x > stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar) stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
-        
+  if(stat->x > stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar)
+    stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
   return 0;
 }
 
@@ -449,7 +450,6 @@ int keyBackSpace(gapBuffer* gb, editorStat* stat){
   stat->x--;
   move(stat->y, stat->x);
   delch();
-  // does not work...
   if(stat->x < stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine)->numOfChar > 0){
     for(int i=0; i<gapBufferAt(gb, stat->currentLine)->numOfChar; i++) {
       charArrayPush(gapBufferAt(gb, stat->currentLine - 1), gapBufferAt(gb, stat->currentLine)->elements[i]);
@@ -458,9 +458,7 @@ int keyBackSpace(gapBuffer* gb, editorStat* stat){
     stat->numOfLines--;
     deleteln();
     move(stat->y - 1, stat->x);
-    deleteln();
-    insertln(); 
-    for(int i=stat->y; i<stat->numOfLines; i++){
+    for(int i=stat->y - 1; i<stat->numOfLines; i++){
       if(i == LINES - 1) return 0;
       printStr(gb, stat->lineDigit, i, i);
     }
@@ -481,6 +479,7 @@ int keyBackSpace(gapBuffer* gb, editorStat* stat){
     if(stat->y > 0) stat->y--;
     stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace ;
   }
+  return 0;
 }
 
 int keyEnter(gapBuffer* gb, editorStat* stat){
@@ -595,6 +594,7 @@ void insertMode(gapBuffer* gb, editorStat* stat){
     refresh();
     noecho();
     key = getch();
+    mvprintw(10, 0, "%d", gapBufferAt(gb, stat->currentLine)->numOfChar);
 
     if(key == KEY_ESC){
       writeFile(gb);
