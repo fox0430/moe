@@ -60,7 +60,7 @@ bool gapBufferIsEmpty(gapBuffer* gb);
 int writeFile(gapBuffer* gb);
 int countLineDigit(int lineNum);
 void printLineNum(int lineDigit, int line, int y);
-void printStr(gapBuffer* gb, int lineDigit, int line, int y);
+void printLine(gapBuffer* gb, int lineDigit, int line, int y);
 int keyUp(gapBuffer* gb, editorStat* stat);
 int keyDown(gapBuffer* gb, editorStat* stat);
 int keyRight(gapBuffer* gb, editorStat* stat);
@@ -380,11 +380,11 @@ void printLineNum(int lineDigit, int currentLine, int y){
   printw("%d:", currentLine + 1); 
 }
 
-void printStr(gapBuffer* gb, int lineDigit, int currentLine, int y){
+void printLine(gapBuffer* gb, int lineDigit, int currentLine, int y){
 
   printLineNum(lineDigit, currentLine, y);
   bkgd(COLOR_PAIR(1));
-  printw("%s", gapBufferAt(gb, currentLine)->elements);
+  mvprintw(y, lineDigit + 1, "%s", gapBufferAt(gb, currentLine)->elements);
 }
 
 int keyUp(gapBuffer* gb, editorStat* stat){
@@ -393,7 +393,7 @@ int keyUp(gapBuffer* gb, editorStat* stat){
   if(stat->y == 0){
     stat->currentLine--;
     wscrl(stdscr, -1);    // scroll
-    printStr(gb, stat->lineDigit,  stat->currentLine, stat->y);
+    printLine(gb, stat->lineDigit,  stat->currentLine, stat->y);
     stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
     return 0;
   }else if(COLS - stat->lineDigitSpace - 1 <= gapBufferAt(gb, stat->currentLine - 1)->numOfChar){
@@ -416,7 +416,7 @@ int keyDown(gapBuffer* gb, editorStat* stat){
     stat->currentLine++;
     wscrl(stdscr, 1);
     move(LINES-1, 0);
-    printStr(gb, stat->lineDigit, stat->currentLine, stat->y);
+    printLine(gb, stat->lineDigit, stat->currentLine, stat->y);
     stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace- 1;
     return 0;
   }else if(COLS - stat->lineDigitSpace - 1 <= gapBufferAt(gb, stat->currentLine + 1)->numOfChar){
@@ -461,7 +461,7 @@ int keyBackSpace(gapBuffer* gb, editorStat* stat){
     move(stat->y - 1, stat->x);
     for(int i=stat->y - 1; i<stat->numOfLines; i++){
       if(i == LINES - 1) return 0;
-      printStr(gb, stat->lineDigit, i, i);
+      printLine(gb, stat->lineDigit, i, i);
     }
     stat->y--;
     stat->x = stat->lineDigitSpace + tmpNumOfChar;
@@ -476,7 +476,7 @@ int keyBackSpace(gapBuffer* gb, editorStat* stat){
     stat->numOfLines--;
     for(int i=stat->currentLine; i < gb->size-1; i++){
       if(i == LINES-1) return 0;
-        printStr(gb, stat->lineDigit, i, i);
+        printLine(gb, stat->lineDigit, i, i);
         printw("\n");
       }
     stat->currentLine--;
@@ -498,7 +498,7 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
         charArrayPush(gapBufferAt(gb, stat->currentLine), '\0');
       }
       wscrl(stdscr, 1);
-      printStr(gb, stat->lineDigit, stat->currentLine, LINES -1);
+      printLine(gb, stat->lineDigit, stat->currentLine, LINES -1);
       stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
     }else{
       {
@@ -516,8 +516,8 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
       wscrl(stdscr, 1);
       move(LINES - 2, stat->x);
       deleteln();
-      printStr(gb, stat->lineDigit, stat->currentLine, LINES -2);
-      printStr(gb, stat->lineDigit, stat->currentLine + 1, LINES -1);
+      printLine(gb, stat->lineDigit, stat->currentLine, LINES - 2);
+      printLine(gb, stat->lineDigit, stat->currentLine + 1, LINES - 1);
       stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
       stat->currentLine++;
     }
@@ -534,9 +534,9 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
       gapBufferAt(gb, stat->currentLine)->numOfChar++;
     }
     gapBufferAt(gb, stat->currentLine)->numOfChar--;
-    for(int i=stat->currentLine; i < gb->size-1; i++){
-      if(i == LINES-1) break;
-        printStr(gb, stat->lineDigit, i, i);
+    for(int i=stat->currentLine; i < gb->size - 1; i++){
+      if(i == LINES - 1) break;
+        printLine(gb, stat->lineDigit, i, i);
         printw("\n");
     }
     stat->currentLine++;
@@ -547,7 +547,7 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
       clear();
       for(int i=0; i<gb->size-1; i++){
         if(i == LINES-1) break;
-          printStr(gb, stat->lineDigit, i, i);
+          printLine(gb, stat->lineDigit, i, i);
           printw("\n");
       }
     }
@@ -568,7 +568,7 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
     stat->x = stat->lineDigitSpace;
     for(int i=stat->currentLine; i < gb->size-1; i++){
       if(i == LINES-1) break;
-        printStr(gb, stat->lineDigit, i, i);
+        printLine(gb, stat->lineDigit, i, i);
         printw("\n");
     }
     stat->currentLine++;
@@ -579,7 +579,7 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
       clear();
       for(int i=0; i<gb->size-1; i++){
         if(i == LINES-1) break;
-          printStr(gb, stat->lineDigit, i, i);
+          printLine(gb, stat->lineDigit, i, i);
           printw("\n");
       }
     }
@@ -686,7 +686,7 @@ int openFile(char* filename){
   stat->numOfLines = stat->currentLine + 1;
   for(int i=0; i < stat->numOfLines; i++){
     if(i == LINES) break;
-    printStr(gb, stat->lineDigit, i, i);
+    printLine(gb, stat->lineDigit, i, i);
     printw("\n");
   }
 
@@ -711,7 +711,7 @@ int newFile(){
 
 
   startCurses(); 
-  printStr(gb, stat->lineDigit, 0, 0);
+  printLine(gb, stat->lineDigit, 0, 0);
   scrollok(stdscr, TRUE);			// enable scroll
   insertMode(gb, stat);
 
