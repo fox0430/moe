@@ -463,12 +463,27 @@ void insertMode(gapBuffer* gb, editorStat* stat){
         break;
         
       case KEY_BACKSPACE:
-        // Rewrite
-        if(stat->x == stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine)->numOfChar != 0) break;
-        charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
+        if(stat->y == 0 && stat->x == stat->lineDigitSpace) break;
         stat->x--;
         move(stat->y, stat->x);
         delch();
+        // does not work...
+        if(stat->x < stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine)->numOfChar > 0) {
+          for(int i=0; i<gapBufferAt(gb, stat->currentLine)->numOfChar; i++) {
+            charArrayPush(gapBufferAt(gb, stat->currentLine - 1), gapBufferAt(gb, stat->currentLine)->elements[i]);
+          }
+          gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
+          stat->numOfLines--;
+          deleteln();
+          move(stat->y - 1, stat->x);
+          deleteln();
+          insertln(); 
+          for(int i=stat->y; i<stat->numOfLines; i++) {
+            if(i == LINES - 1) break;
+            printStr(gb, stat->lineDigit, i, i);
+          }
+        }
+        charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
         if(stat->x < stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine)->numOfChar == 0){
           gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
           deleteln();
