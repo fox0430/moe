@@ -214,7 +214,7 @@ int charArrayDel(charArray* array, int position){
     return -1;
   }
 
-  memmove(array->elements + position - 1, array->elements + position, array->numOfChar - position);
+  memmove(array->elements + position, array->elements + position + 1, array->head - position - 1);
   charArrayPop(array);
 
   if(array->head*4 <= array->capacity){
