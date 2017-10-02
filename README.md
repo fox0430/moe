@@ -1,3 +1,7 @@
+Aim for the strongest design...
+
+moe is Command line editor.
+
 This project goal is funny animation editor and study C.
 
 Aiming features
@@ -15,6 +19,3 @@ Aiming features
   ・Syntax check
   
   ・Funny animation...
-
-
-Move anime character inside editor!
