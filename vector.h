@@ -4,7 +4,7 @@
 #include<stdbool.h>
 
 // Vector
-#ifndef VECTOR_INCLUDE_GUARD
+#ifndef MOE_VECTOR_INCLUDE_H
 typedef struct charArray{
   char* elements;
   int   capacity,
@@ -12,7 +12,7 @@ typedef struct charArray{
         numOfChar;
 } charArray;
 
-#define VECTOR_INCLUDE_GUARD
+#define MOE_VECTOR_INCLUDE_H
 #endif
 
 // Function prototype
