@@ -5,7 +5,7 @@
 #include<malloc.h>
 #include"vector.h"
 
-#ifndef GAP_BUFFER_INCLUDE_GUARD
+#ifndef MOE_GAP_BUFFER_H
 typedef struct gapBuffer{
   struct  charArray** buffer;
   int     size,       // 意味のあるデータが実際に格納されているサイズ
@@ -14,7 +14,7 @@ typedef struct gapBuffer{
           gapEnd;     // 半開区間[gap_begin,gap_end)を隙間とする
 } gapBuffer;
 
-#define GAP_BUFFER_INCLUDE_GUARD
+#define MOE_GAP_BUFFER_H
 #endif
 
 // Function prototype
