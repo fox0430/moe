@@ -1,10 +1,10 @@
-#include"gapbuffer.h"
 #include<stdio.h>
 #include<string.h>
 #include<stdlib.h>
 #include<stdbool.h>
 #include<malloc.h>
 #include<ncurses.h>
+#include"gapbuffer.h"
 //#include<locale.h>
 
 #define KEY_ESC 27
@@ -23,7 +23,7 @@ typedef struct editorStat{
 // Function prototype
 void startCurses();
 void exitCurses();
-int writeFile(gapBuffer* gb);
+int writeFile(gapBuffer* gb, editorStat *stat);
 int countLineDigit(int lineNum);
 void printLineNum(int lineDigit, int line, int y);
 void printLine(gapBuffer* gb, int lineDigit, int line, int y);
