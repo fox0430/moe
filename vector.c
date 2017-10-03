@@ -19,7 +19,7 @@ int charArrayInit(charArray* array){
 
 int charArrayReserve(charArray* array, int capacity){
 
-  if(array->head > capacity || capacity <= 0){
+  if(array->head > capacity || capacity < 0){
       printf("Vector: New buffer capacity is too small.\n");
       return -1;
   }
