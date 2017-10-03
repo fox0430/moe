@@ -67,7 +67,7 @@ int writeFile(gapBuffer* gb, editorStat *stat){
   
   for(int i=0; i < gb->size; i++){
     fputs(gapBufferAt(gb, i)->elements, fp);
-    if(i != gb->size -1 ) fputc('\n', fp);
+    if(i != gb->size) fputc('\n', fp);
   }
 
   fclose(fp);
@@ -188,7 +188,7 @@ int keyBackSpace(gapBuffer* gb, editorStat* stat){
     gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
     deleteln();
     stat->numOfLines--;
-    for(int i=stat->currentLine; i < gb->size-1; i++){
+    for(int i=stat->currentLine; i < gb->size; i++){
       if(i == LINES-1) return 0;
         printLine(gb, stat->lineDigit, i, i);
         printw("\n");
@@ -248,7 +248,7 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
       gapBufferAt(gb, stat->currentLine)->numOfChar++;
     }
     gapBufferAt(gb, stat->currentLine)->numOfChar--;
-    for(int i=stat->currentLine; i < gb->size - 1; i++){
+    for(int i=stat->currentLine; i < gb->size; i++){
       if(i == LINES - 1) break;
         printLine(gb, stat->lineDigit, i, i);
         printw("\n");
@@ -259,7 +259,7 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
     if(countLineDigit(stat->numOfLines) > countLineDigit(stat->numOfLines - 1)){
       stat->lineDigit = countLineDigit(stat->numOfLines);
       clear();
-      for(int i=0; i<gb->size-1; i++){
+      for(int i=0; i<gb->size; i++){
         if(i == LINES-1) break;
           printLine(gb, stat->lineDigit, i, i);
           printw("\n");
@@ -280,7 +280,7 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
       for(int i=0; i < tmp - (stat->x - stat->lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, stat->currentLine));
     }
     stat->x = stat->lineDigitSpace;
-    for(int i=stat->currentLine; i < gb->size-1; i++){
+    for(int i=stat->currentLine; i < gb->size; i++){
       if(i == LINES-1) break;
         printLine(gb, stat->lineDigit, i, i);
         printw("\n");
@@ -291,7 +291,7 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
     if(countLineDigit(stat->numOfLines) > countLineDigit(stat->numOfLines - 1)){
       stat->lineDigit = countLineDigit(stat->numOfLines);
       clear();
-      for(int i=0; i<gb->size-1; i++){
+      for(int i=0; i<gb->size; i++){
         if(i == LINES-1) break;
           printLine(gb, stat->lineDigit, i, i);
           printw("\n");
