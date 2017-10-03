@@ -52,16 +52,16 @@ void editorStatInit(editorStat* stat){
   stat->lineDigitSpace = stat->lineDigit + 1;
   stat->y = 0;
   stat->x = 0;
-  strcpy(stat->filename, "text_new.txt");
+  strcpy(stat->filename, "test_new.txt");
 }
 
-int writeFile(gapBuffer* gb){
+int writeFile(gapBuffer* gb, editorStat *stat){
   
   FILE *fp;
-  char *filename = "test_new.txt";
+//  char *filename = "test_new.txt";
 
-  if ((fp = fopen(filename, "w")) == NULL) {
-    printf("%s Cannot file open... \n", filename);
+  if ((fp = fopen(stat->filename, "w")) == NULL) {
+    printf("%s Cannot file open... \n", stat->filename);
       return -1;
     }
   
@@ -317,7 +317,7 @@ void insertMode(gapBuffer* gb, editorStat* stat){
     key = getch();
 
     if(key == KEY_ESC){
-      writeFile(gb);
+      writeFile(gb, stat);
       exitCurses();
       break;
     } 
