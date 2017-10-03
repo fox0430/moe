@@ -4,13 +4,15 @@
 #include<stdbool.h>
 
 // Vector
-#ifndef VECTOR
+#ifndef VECTOR_INCLUDE_GUARD
 typedef struct charArray{
   char* elements;
   int   capacity,
         head,
         numOfChar;
 } charArray;
+
+#define VECTOR_INCLUDE_GUARD
 #endif
 
 // Function prototype
