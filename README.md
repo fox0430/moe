@@ -6,7 +6,7 @@ This project goal is funny animation editor and study C.
 
 Aiming features
 
-  ・Vector and GapBuffer
+   ✔Vector and GapBuffer
 
   ・Vim like key binds (not completely)
   
