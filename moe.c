@@ -27,8 +27,6 @@ void startCurses(){
 //  setlocale(LC_ALL, "");
 
   ESCDELAY = 25;    // delete esc key time lag
-
-  move(0, 0);     // set cursr point
 }
 
 void signal_handler(int SIG){
@@ -89,6 +87,7 @@ void printLineNum(WINDOW **win, int lineDigit, int currentLine, int y){
   for(int i=0; i<lineDigitSpace; i++) mvwprintw(win[0], y, i, " ");
   wbkgd(win[0], COLOR_PAIR(2));
   wprintw(win[0], "%d:", currentLine + 1); 
+  wrefresh(win[0]);
 }
 
 void printLine(WINDOW **win, gapBuffer* gb, int lineDigit, int currentLine, int y){
@@ -309,11 +308,9 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
   while(1){
 
-//    mvwprintw(win[1], 0, 0, "%s", "Hello");
-    wrefresh(win[0]);
     move(stat->y, stat->x);
     noecho();
-    key = getch();
+    key = wgetch(win[0]);
 
     if(key == KEY_ESC){
       writeFile(gb, stat);
@@ -321,11 +318,6 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
       break;
     } 
 /*
-    if(key == KEY_ESC) {
-      nomalMode(gb, lineDigit, lineNum);
-    }
-*/
-
     switch(key){
 
       case KEY_UP:
@@ -358,6 +350,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
         insch(key);
         stat->x++;
     }
+    */
   }
 }
 
@@ -411,7 +404,7 @@ int openFile(char* filename){
 
   stat->numOfLines = stat->currentLine + 1;
   for(int i=0; i < stat->numOfLines; i++){
-    if(i == LINES) break;
+    if(i == LINES - 1) break;
     printLine(win, gb, stat->lineDigit, i, i);
     wprintw(win[0], "\n");
   }
