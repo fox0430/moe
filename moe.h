@@ -3,6 +3,7 @@
 #include<stdlib.h>
 #include<stdbool.h>
 #include<malloc.h>
+#include<signal.h>
 #include<ncurses.h>
 #include"gapbuffer.h"
 //#include<locale.h>
@@ -22,17 +23,18 @@ typedef struct editorStat{
 
 // Function prototype
 void startCurses();
+void signal_handler(int SIG);
 void exitCurses();
 int writeFile(gapBuffer* gb, editorStat *stat);
 int countLineDigit(int lineNum);
-void printLineNum(int lineDigit, int line, int y);
-void printLine(gapBuffer* gb, int lineDigit, int line, int y);
-int keyUp(gapBuffer* gb, editorStat* stat);
-int keyDown(gapBuffer* gb, editorStat* stat);
+void printLineNum(WINDOW **win, int lineDigit, int line, int y);
+void printLine(WINDOW **win, gapBuffer* gb, int lineDigit, int line, int y);
+int keyUp(WINDOW **win, gapBuffer* gb, editorStat* stat);
+int keyDown(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int keyRight(gapBuffer* gb, editorStat* stat);
 int keyLeft(gapBuffer* gb, editorStat* stat);
-int keyBackSpace(gapBuffer* gb, editorStat* stat);
-int keyEnter(gapBuffer* gb, editorStat* stat);
-void insertMode(gapBuffer* gb, editorStat* stat);
+int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat);
+int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat);
+void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int newFile();
 int openFile(char* filename);
