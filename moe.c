@@ -126,7 +126,7 @@ int keyDown(WINDOW **win, gapBuffer* gb, editorStat* stat){
   if(stat->y >= LINES -1){
     stat->currentLine++;
     wscrl(stdscr, 1);
-    move(LINES-1, 0);
+    wmove(win[0], LINES-1, 0);
     printLine(win, gb, stat->lineDigit, stat->currentLine, stat->y);
     stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace- 1;
     return 0;
@@ -159,7 +159,7 @@ int keyLeft(gapBuffer* gb, editorStat* stat){
 int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat){
   if(stat->y == 0 && stat->x == stat->lineDigitSpace) return 0;
   stat->x--;
-  move(stat->y, stat->x);
+  wmove(win[0], stat->y, stat->x);
   delch();
   if(stat->x < stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine)->numOfChar > 0){    // delete line
     int tmpNumOfChar = gapBufferAt(gb, stat->currentLine - 1)->numOfChar;
@@ -169,7 +169,7 @@ int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat){
     gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
     stat->numOfLines--;
     deleteln();
-    move(stat->y - 1, stat->x);
+    wmove(win[0], stat->y - 1, stat->x);
     for(int i=stat->y - 1; i<stat->numOfLines; i++){
       if(i == LINES - 1) return 0;
       printLine(win, gb, stat->lineDigit, i, i);
@@ -225,7 +225,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
         for(int i=0; i < tmp - (stat->x - stat->lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, stat->currentLine));
       }
       wscrl(stdscr, 1);
-      move(LINES - 2, stat->x);
+      wmove(win[0], LINES - 2, stat->x);
       deleteln();
       printLine(win, gb, stat->lineDigit, stat->currentLine, LINES - 2);
       printLine(win, gb, stat->lineDigit, stat->currentLine + 1, LINES - 1);
@@ -308,7 +308,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
   while(1){
 
-    move(stat->y, stat->x);
+    wmove(win[0], stat->y, stat->x);
     noecho();
     key = wgetch(win[0]);
 
@@ -317,7 +317,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
       exitCurses();
       break;
     } 
-/*
+
     switch(key){
 
       case KEY_UP:
@@ -347,10 +347,9 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
       default:
         echo();
         charArrayInsert(gapBufferAt(gb, stat->currentLine), key, stat->x - stat->lineDigitSpace);
-        insch(key);
+        winsch(win[0], key);
         stat->x++;
     }
-    */
   }
 }
 
