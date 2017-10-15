@@ -93,7 +93,7 @@ void printLineNum(WINDOW **win, int lineDigit, int currentLine, int y){
 void printLine(WINDOW **win, gapBuffer* gb, int lineDigit, int currentLine, int y){
 
   printLineNum(win, lineDigit, currentLine, y);
-  wbkgd(win[0], COLOR_PAIR(3));
+  wbkgd(win[0], COLOR_PAIR(1));
   mvwprintw(win[0], y, lineDigit + 1, "%s", gapBufferAt(gb, currentLine)->elements);
   wrefresh(win[0]);
 }
