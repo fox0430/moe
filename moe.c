@@ -1,6 +1,6 @@
 #include"moe.h"
 
-void winInit(WINDOW **win){
+void **winInit(WINDOW **win){
 
  win[0] = newwin(LINES-2, COLS, 0, 0);
  win[1] = newwin(1, COLS, LINES-1, 0);
@@ -85,12 +85,10 @@ int countLineDigit(int numOfLines){
 void printLineNum(WINDOW **win, int lineDigit, int currentLine, int y){
 
   int lineDigitSpace = lineDigit - countLineDigit(currentLine + 1);
-  move(y, 0);
+  wmove(win[0], y, 0);
   for(int i=0; i<lineDigitSpace; i++) mvwprintw(win[0], y, i, " ");
   wbkgd(win[0], COLOR_PAIR(2));
   wprintw(win[0], "%d:", currentLine + 1); 
-  touchwin(win[0]);
-  wrefresh(win[0]);
 }
 
 void printLine(WINDOW **win, gapBuffer* gb, int lineDigit, int currentLine, int y){
@@ -98,7 +96,6 @@ void printLine(WINDOW **win, gapBuffer* gb, int lineDigit, int currentLine, int 
   printLineNum(win, lineDigit, currentLine, y);
   wbkgd(win[0], COLOR_PAIR(3));
   mvwprintw(win[0], y, lineDigit + 1, "%s", gapBufferAt(gb, currentLine)->elements);
-  touchwin(win[0]);
   wrefresh(win[0]);
 }
 
@@ -192,7 +189,7 @@ int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat){
     for(int i=stat->currentLine; i < gb->size; i++){
       if(i == LINES-1) return 0;
         printLine(win, gb, stat->lineDigit, i, i);
-        printw("\n");
+        wprintw(win[0], "\n");
       }
     stat->currentLine--;
     if(stat->y > 0) stat->y--;
@@ -252,7 +249,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
     for(int i=stat->currentLine; i < gb->size; i++){
       if(i == LINES - 1) break;
         printLine(win, gb, stat->lineDigit, i, i);
-        printw("\n");
+        wprintw(win[0], "\n");
     }
     stat->currentLine++;
     stat->y++;
@@ -263,7 +260,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
       for(int i=0; i<gb->size; i++){
         if(i == LINES-1) break;
           printLine(win, gb, stat->lineDigit, i, i);
-          printw("\n");
+          wprintw(win[0], "\n");
       }
     }
     return 0;
@@ -284,7 +281,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
     for(int i=stat->currentLine; i < gb->size; i++){
       if(i == LINES-1) break;
         printLine(win, gb, stat->lineDigit, i, i);
-        printw("\n");
+        wprintw(win[0], "\n");
     }
     stat->currentLine++;
     stat->y++;
@@ -295,7 +292,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
       for(int i=0; i<gb->size; i++){
         if(i == LINES-1) break;
           printLine(win, gb, stat->lineDigit, i, i);
-          printw("\n");
+          wprintw(win[0], "\n");
       }
     }
     return 0;
@@ -395,9 +392,19 @@ int openFile(char* filename){
   }
   fclose(fp);
 
-  startCurses();
-
   WINDOW **win = (WINDOW**)malloc(sizeof(WINDOW*)*2);
+  if(signal(SIGINT, signal_handler) == SIG_ERR ||
+     signal(SIGQUIT, signal_handler) == SIG_ERR){
+    fprintf(stderr, "signal failure\n");
+    exit(EXIT_FAILURE);
+  }
+
+  if(initscr() == NULL){
+    fprintf(stderr, "initscr failure\n");
+    exit(EXIT_FAILURE);
+  }
+
+  startCurses();
   winInit(win);
 
   if(stat->lineDigit < countLineDigit(stat->currentLine + 1)) stat->lineDigit = countLineDigit(stat->currentLine + 1);
