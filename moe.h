@@ -29,6 +29,7 @@ int writeFile(gapBuffer* gb, editorStat *stat);
 int countLineDigit(int lineNum);
 void printLineNum(WINDOW **win, int lineDigit, int line, int y);
 void printLine(WINDOW **win, gapBuffer* gb, int lineDigit, int line, int y);
+void printStatBar(WINDOW **win, editorStat *stat);
 int keyUp(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int keyDown(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int keyRight(gapBuffer* gb, editorStat* stat);

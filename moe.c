@@ -40,7 +40,7 @@ void exitCurses(){
 
 void editorStatInit(editorStat* stat){
 
-//  stat->mode = 1;
+  stat->mode = 1;
   stat->currentLine = 0;
   stat->numOfLines = 0;
   stat->lineDigit = 3;    // 3 is default line digit
@@ -96,6 +96,14 @@ void printLine(WINDOW **win, gapBuffer* gb, int lineDigit, int currentLine, int 
   wbkgd(win[0], COLOR_PAIR(1));
   mvwprintw(win[0], y, lineDigit + 1, "%s", gapBufferAt(gb, currentLine)->elements);
   wrefresh(win[0]);
+}
+
+void printStatBar(WINDOW **win, editorStat *stat){
+  if(stat->mode == 1){
+    wbkgd(win[1], COLOR_PAIR(3));
+    wprintw(win[1], "%s", "insert");
+  }
+  wrefresh(win[1]);
 }
 
 int keyUp(WINDOW **win, gapBuffer* gb, editorStat* stat){
@@ -305,6 +313,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
   stat->y = 0;
   stat->x = stat->lineDigitSpace;
   stat->currentLine = 0;
+  printStatBar(win, stat);
 
   while(1){
 
