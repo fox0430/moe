@@ -8,7 +8,7 @@ Aiming features
 
    ✔Vector and GapBuffer
 
-  ・Vim like key binds (not completely)
+   △Vim like key binds (not completely)
   
   ・UTF-8
 
