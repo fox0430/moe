@@ -21,6 +21,7 @@ void startCurses(){
   init_pair(1, COLOR_WHITE, COLOR_BLACK);     // set color char is white, bg is black
   init_pair(2, COLOR_GREEN, COLOR_BLACK);
   init_pair(3, COLOR_WHITE, COLOR_CYAN);
+  init_pair(4, COLOR_BLACK, COLOR_WHITE);
 
   erase();  	// screen display
 
@@ -41,14 +42,15 @@ void exitCurses(){
 
 void editorStatInit(editorStat* stat){
 
-  stat->mode = 0;
+  stat->mode = 0;   // 0 is normal mode
   stat->currentLine = 0;
   stat->numOfLines = 0;
   stat->lineDigit = 3;    // 3 is default line digit
   stat->lineDigitSpace = stat->lineDigit + 1;
   stat->y = 0;
   stat->x = 0;
-  strcpy(stat->filename, "test_new.txt");
+  strcpy(stat->filename, "test.txt");
+  strcpy(stat->newFilname, "test_new.txt");
 }
 
 int writeFile(gapBuffer* gb, editorStat *stat){
@@ -101,13 +103,16 @@ void printLine(WINDOW **win, gapBuffer* gb, int lineDigit, int currentLine, int 
 
 void printStatBar(WINDOW **win, editorStat *stat){
   wclear(win[1]);
+
+  wbkgd(win[1], COLOR_PAIR(4));
   if(stat->mode == 0){
-    wbkgd(win[1], COLOR_PAIR(3));
-    wprintw(win[1], "%s", "normal");
+    wprintw(win[1], " %s ", "normal");
   }else if(stat->mode == 1){
-    wbkgd(win[1], COLOR_PAIR(3));
-    wprintw(win[1], "%s", "insert");
+    wprintw(win[1], " %s ", "insert");
   }
+
+  wbkgd(win[1], COLOR_PAIR(3));
+  wprintw(win[1], "%s ", stat->filename);
   wrefresh(win[1]);
 }
 
@@ -321,12 +326,6 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
     noecho();
     key = wgetch(win[0]);
 
-    if(key == KEY_ESC){
-      writeFile(gb, stat);
-      exitCurses();
-      break;
-    }
-
     switch(key){
       case 'h':
         keyLeft(gb, stat);
@@ -344,6 +343,11 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       case 'i':
         insertMode(win, gb, stat);
         break;
+      case 'w':
+        writeFile(gb, stat);
+        break;
+      case 'q':
+        exitCurses();
     }
   }
 }
@@ -422,6 +426,7 @@ int openFile(char* filename){
 
   editorStat* stat = (editorStat*)malloc(sizeof(editorStat));
   editorStatInit(stat);
+  strcpy(stat->filename, filename);
 
   char  ch;
   while((ch = fgetc(fp)) != EOF){
