@@ -12,9 +12,9 @@ void startCurses(){
   int h,
       w;
 
-  initscr();      // start terminal contorl
+  initscr();    // start terminal contorl
+  cbreak();   // enable cbreak mode
   curs_set(1);    // set cursr
-  keypad(stdscr, TRUE);   // enable cursr keys
 
   getmaxyx(stdscr, h, w);     // set window size
 
@@ -104,10 +104,31 @@ void printLine(WINDOW **win, gapBuffer* gb, int lineDigit, int currentLine, int 
   wrefresh(win[0]);
 }
 
-/*
 void commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  wclear(win[2]);
+  wbkgd(win[0], COLOR_PAIR(1));
+  wprintw(win[2], "%s", ":");
+  wrefresh(win[2]);
+  nocbreak();
+  echo();
+
+  int key;
+  key = wgetch(win[2]);
+  noecho();
+  mvwprintw(win[2], 0, 10, "%d" ,key);
+  wrefresh(win[2]);
+
+  switch(key){
+    case 'w':
+      writeFile(win, gb, stat);
+      break;
+    case 'q':
+      exitCurses();
+      break;
+  }
+  cbreak();
+  normalMode(win, gb, stat);
 }
-*/
 
 void printStatBar(WINDOW **win, editorStat *stat){
   wclear(win[1]);
@@ -348,18 +369,16 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       case 'l':
         keyRight(gb, stat);
         break;
-      case 'x':
+      case 'x':   // will change like vim
         keyBackSpace(win, gb, stat);
         break;
 
       case 'i':
         insertMode(win, gb, stat);
         break;
-      case 'w':
-        writeFile(win, gb, stat);
+      case ':':
+        commandBar(win, gb, stat);
         break;
-      case 'q':
-        exitCurses();
     }
   }
 }
@@ -504,6 +523,7 @@ int newFile(){
   winInit(win);
 
   startCurses(); 
+  keypad(win[0], TRUE);   // enable cursr keys
   printLine(win, gb, stat->lineDigit, 0, 0);
   scrollok(stdscr, TRUE);			// enable scroll
   insertMode(win, gb, stat);
