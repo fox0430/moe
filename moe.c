@@ -381,6 +381,27 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       case ':':
         commandBar(win, gb, stat);
         break;
+
+      case KEY_ESC:   // get arrow keys but has problem...
+        wgetch(win[0]);   // skip the '['
+        switch(wgetch(win[0])){
+          case 'A':
+            keyUp(win, gb, stat);
+            break;
+          case 'B':
+            keyDown(win, gb, stat);
+            break;
+          case 'C':
+            keyRight(gb, stat);
+            break;
+          case 'D':
+            keyLeft(gb, stat);
+            break;
+          default:    // debug
+            wprintw(win[2], "%s", "ESC!");
+            wrefresh(win[2]);
+        }
+        
     }
   }
 }
