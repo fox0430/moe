@@ -127,7 +127,7 @@ void commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
   normalMode(win, gb, stat);
 }
 
-void printStatBar(WINDOW **win, editorStat *stat){
+void printStatBarInit(WINDOW **win, editorStat *stat){
   wclear(win[1]);
 
   wbkgd(win[1], COLOR_PAIR(4));
@@ -360,7 +360,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
 
   int key;
   stat->mode = 0;
-  printStatBar(win, stat);
+  printStatBarInit(win, stat);
 
   while(1){
     wmove(win[0], stat->y, stat->x);
@@ -383,6 +383,12 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
         break;
       case 'x':   // will change like vim
         keyBackSpace(win, gb, stat);
+        break;
+      case '0':
+        stat->x = stat->lineDigitSpace;
+        break;
+      case '$':
+        stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace;
         break;
       case 'a':
         wmove(win[0], stat->y, stat->x++);
@@ -411,11 +417,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
           case 'D':
             keyLeft(gb, stat);
             break;
-          default:    // debug
-            wprintw(win[2], "%s", "ESC!");
-            wrefresh(win[2]);
         }
-        
     }
   }
 }
@@ -424,7 +426,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
   int key;
   stat->mode = 1;
-  printStatBar(win, stat);
+  printStatBarInit(win, stat);
   wclear(win[2]);
   wrefresh(win[2]);
 
