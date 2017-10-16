@@ -2,8 +2,9 @@
 
 void **winInit(WINDOW **win){
 
- win[0] = newwin(LINES-2, COLS, 0, 0);
- win[1] = newwin(1, COLS, LINES-1, 0);
+ win[0] = newwin(LINES-3, COLS, 0, 0);    // main window
+ win[1] = newwin(1, COLS, LINES-2, 0);    // status bar
+ win[2] = newwin(1, COLS, LINES-1, 0);    // command bar
 }
 
 void startCurses(){
@@ -50,13 +51,11 @@ void editorStatInit(editorStat* stat){
   stat->y = 0;
   stat->x = 0;
   strcpy(stat->filename, "test.txt");
-  strcpy(stat->newFilname, "test_new.txt");
 }
 
 int writeFile(gapBuffer* gb, editorStat *stat){
   
   FILE *fp;
-//  char *filename = "test_new.txt";
 
   if ((fp = fopen(stat->filename, "w")) == NULL) {
     printf("%s Cannot file open... \n", stat->filename);
@@ -106,9 +105,9 @@ void printStatBar(WINDOW **win, editorStat *stat){
 
   wbkgd(win[1], COLOR_PAIR(4));
   if(stat->mode == 0){
-    wprintw(win[1], " %s ", "normal");
+    wprintw(win[1], "%s ", "normal");
   }else if(stat->mode == 1){
-    wprintw(win[1], " %s ", "insert");
+    wprintw(win[1], "%s ", "insert");
   }
 
   wbkgd(win[1], COLOR_PAIR(3));
@@ -345,6 +344,9 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
         break;
       case 'w':
         writeFile(gb, stat);
+        wbkgd(win[2], COLOR_PAIR(1));
+        mvwprintw(win[2], 0, 0, "%s", "saved...");
+        wrefresh(win[2]);
         break;
       case 'q':
         exitCurses();
@@ -357,6 +359,8 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
   int key;
   stat->mode = 1;
   printStatBar(win, stat);
+  wclear(win[2]);
+  wrefresh(win[2]);
 
   while(1){
 
@@ -439,7 +443,7 @@ int openFile(char* filename){
   }
   fclose(fp);
 
-  WINDOW **win = (WINDOW**)malloc(sizeof(WINDOW*)*2);
+  WINDOW **win = (WINDOW**)malloc(sizeof(WINDOW*)*3);
   if(signal(SIGINT, signal_handler) == SIG_ERR ||
      signal(SIGQUIT, signal_handler) == SIG_ERR){
     fprintf(stderr, "signal failure\n");
@@ -486,7 +490,7 @@ int newFile(){
   editorStat* stat = (editorStat*)malloc(sizeof(editorStat));
   editorStatInit(stat);
 
-  WINDOW **win = (WINDOW**)malloc(sizeof(WINDOW*)*2);
+  WINDOW **win = (WINDOW**)malloc(sizeof(WINDOW*)*3);
   winInit(win);
 
   startCurses(); 
