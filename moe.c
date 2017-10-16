@@ -36,11 +36,12 @@ void signal_handler(int SIG){
 
 void exitCurses(){
  endwin(); 
+ exit(1);
 }
 
 void editorStatInit(editorStat* stat){
 
-  stat->mode = 1;
+  stat->mode = 0;
   stat->currentLine = 0;
   stat->numOfLines = 0;
   stat->lineDigit = 3;    // 3 is default line digit
@@ -99,7 +100,11 @@ void printLine(WINDOW **win, gapBuffer* gb, int lineDigit, int currentLine, int 
 }
 
 void printStatBar(WINDOW **win, editorStat *stat){
-  if(stat->mode == 1){
+  wclear(win[1]);
+  if(stat->mode == 0){
+    wbkgd(win[1], COLOR_PAIR(3));
+    wprintw(win[1], "%s", "normal");
+  }else if(stat->mode == 1){
     wbkgd(win[1], COLOR_PAIR(3));
     wprintw(win[1], "%s", "insert");
   }
@@ -306,13 +311,47 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
   }
 }
 
+void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  int key;
+  stat->mode = 0;
+  printStatBar(win, stat);
+
+  while(1){
+    wmove(win[0], stat->y, stat->x);
+    noecho();
+    key = wgetch(win[0]);
+
+    if(key == KEY_ESC){
+      writeFile(gb, stat);
+      exitCurses();
+      break;
+    }
+
+    switch(key){
+      case 'h':
+        keyLeft(gb, stat);
+        break;
+      case 'j':
+       keyDown(win, gb, stat);
+       break;
+      case 'k':
+        keyUp(win, gb, stat);
+        break;
+      case 'l':
+        keyRight(gb, stat);
+        break;
+
+      case 'i':
+        insertMode(win, gb, stat);
+        break;
+    }
+  }
+}
+
 void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
   int key;
-
-  stat->y = 0;
-  stat->x = stat->lineDigitSpace;
-  stat->currentLine = 0;
+  stat->mode = 1;
   printStatBar(win, stat);
 
   while(1){
@@ -322,12 +361,14 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
     key = wgetch(win[0]);
 
     if(key == KEY_ESC){
-      writeFile(gb, stat);
-      exitCurses();
+      normalMode(win, gb, stat);
       break;
     } 
 
     switch(key){
+/*
+
+arrow keys does not work...
 
       case KEY_UP:
         keyUp(win, gb, stat);
@@ -344,7 +385,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
       case KEY_LEFT:
         keyLeft(gb, stat);
         break;
-        
+*/        
       case KEY_BACKSPACE:
         keyBackSpace(win, gb, stat);
         break;
@@ -418,7 +459,11 @@ int openFile(char* filename){
   }
 
   scrollok(stdscr, TRUE);			// enable scroll
-  insertMode(win, gb, stat);
+
+  stat->x = stat->lineDigitSpace;
+  stat->currentLine = 0;
+
+  normalMode(win, gb, stat);
 
   return 0;
 }

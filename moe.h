@@ -36,6 +36,7 @@ int keyRight(gapBuffer* gb, editorStat* stat);
 int keyLeft(gapBuffer* gb, editorStat* stat);
 int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat);
+void normalMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
 void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int newFile();
 int openFile(char* filename);
