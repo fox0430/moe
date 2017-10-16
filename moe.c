@@ -1,7 +1,6 @@
 #include"moe.h"
 
 void **winInit(WINDOW **win){
-
  win[0] = newwin(LINES-3, COLS, 0, 0);    // main window
  win[1] = newwin(1, COLS, LINES-2, 0);    // status bar
  win[2] = newwin(1, COLS, LINES-1, 0);    // command bar
@@ -115,8 +114,6 @@ void commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
   int key;
   key = wgetch(win[2]);
   noecho();
-  mvwprintw(win[2], 0, 10, "%d" ,key);
-  wrefresh(win[2]);
 
   switch(key){
     case 'w':
@@ -346,6 +343,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
 }
 
 void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
+
   int key;
   stat->mode = 0;
   printStatBar(win, stat);
@@ -361,7 +359,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
         keyLeft(gb, stat);
         break;
       case 'j':
-       keyDown(win, gb, stat);
+        keyDown(win, gb, stat);
        break;
       case 'k':
         keyUp(win, gb, stat);
@@ -371,6 +369,10 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
         break;
       case 'x':   // will change like vim
         keyBackSpace(win, gb, stat);
+        break;
+      case 'a':
+        wmove(win[0], stat->y, stat->x++);
+        insertMode(win, gb, stat);
         break;
 
       case 'i':
