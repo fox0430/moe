@@ -25,10 +25,11 @@ typedef struct editorStat{
 void startCurses();
 void signal_handler(int SIG);
 void exitCurses();
-int writeFile(gapBuffer* gb, editorStat *stat);
+int writeFile(WINDOW **win, gapBuffer* gb, editorStat *stat);
 int countLineDigit(int lineNum);
 void printLineNum(WINDOW **win, int lineDigit, int line, int y);
 void printLine(WINDOW **win, gapBuffer* gb, int lineDigit, int line, int y);
+void commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat);
 void printStatBar(WINDOW **win, editorStat *stat);
 int keyUp(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int keyDown(WINDOW **win, gapBuffer* gb, editorStat* stat);

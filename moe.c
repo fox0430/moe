@@ -53,7 +53,7 @@ void editorStatInit(editorStat* stat){
   strcpy(stat->filename, "test.txt");
 }
 
-int writeFile(gapBuffer* gb, editorStat *stat){
+int writeFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
   
   FILE *fp;
 
@@ -66,6 +66,10 @@ int writeFile(gapBuffer* gb, editorStat *stat){
     fputs(gapBufferAt(gb, i)->elements, fp);
     if(i != gb->size) fputc('\n', fp);
   }
+
+  wbkgd(win[2], COLOR_PAIR(1));
+  mvwprintw(win[2], 0, 0, "%s", "saved...");
+  wrefresh(win[2]);
 
   fclose(fp);
 
@@ -99,6 +103,11 @@ void printLine(WINDOW **win, gapBuffer* gb, int lineDigit, int currentLine, int 
   mvwprintw(win[0], y, lineDigit + 1, "%s", gapBufferAt(gb, currentLine)->elements);
   wrefresh(win[0]);
 }
+
+/*
+void commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
+}
+*/
 
 void printStatBar(WINDOW **win, editorStat *stat){
   wclear(win[1]);
@@ -177,7 +186,7 @@ int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat){
   if(stat->y == 0 && stat->x == stat->lineDigitSpace) return 0;
   stat->x--;
   wmove(win[0], stat->y, stat->x);
-  delch();
+  wdelch(win[0]);
   if(stat->x < stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine)->numOfChar > 0){    // delete line
     int tmpNumOfChar = gapBufferAt(gb, stat->currentLine - 1)->numOfChar;
     for(int i=0; i<gapBufferAt(gb, stat->currentLine)->numOfChar; i++) {
@@ -185,7 +194,7 @@ int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat){
     }
     gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
     stat->numOfLines--;
-    deleteln();
+    wdeleteln(win[0]);
     wmove(win[0], stat->y - 1, stat->x);
     for(int i=stat->y - 1; i<stat->numOfLines; i++){
       if(i == LINES - 1) return 0;
@@ -200,7 +209,7 @@ int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat){
   charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
   if(stat->x < stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine)->numOfChar == 0){
     gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
-    deleteln();
+    wdeleteln(win[0]);
     stat->numOfLines--;
     for(int i=stat->currentLine; i < gb->size; i++){
       if(i == LINES-1) return 0;
@@ -243,7 +252,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
       }
       wscrl(stdscr, 1);
       wmove(win[0], LINES - 2, stat->x);
-      deleteln();
+      wdeleteln(win[0]);
       printLine(win, gb, stat->lineDigit, stat->currentLine, LINES - 2);
       printLine(win, gb, stat->lineDigit, stat->currentLine + 1, LINES - 1);
       stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
@@ -252,7 +261,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
     return 0;
   }
 
-  insertln();
+  winsertln(win[0]);
   if(stat->x == stat->lineDigitSpace){
     {
       charArray* ca = (charArray*)malloc(sizeof(charArray));
@@ -272,7 +281,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
     // Up lineDigit
     if(countLineDigit(stat->numOfLines) > countLineDigit(stat->numOfLines - 1)){
       stat->lineDigit = countLineDigit(stat->numOfLines);
-      clear();
+      wclear(win[0]);
       for(int i=0; i<gb->size; i++){
         if(i == LINES-1) break;
           printLine(win, gb, stat->lineDigit, i, i);
@@ -304,7 +313,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
     // Up lineDigit
     if(countLineDigit(stat->numOfLines) > countLineDigit(stat->numOfLines - 1)){
       stat->lineDigit = countLineDigit(stat->numOfLines);
-      clear();
+      wclear(win[0]);
       for(int i=0; i<gb->size; i++){
         if(i == LINES-1) break;
           printLine(win, gb, stat->lineDigit, i, i);
@@ -322,6 +331,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
 
   while(1){
     wmove(win[0], stat->y, stat->x);
+    wrefresh(win[0]);
     noecho();
     key = wgetch(win[0]);
 
@@ -338,15 +348,15 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       case 'l':
         keyRight(gb, stat);
         break;
+      case 'x':
+        keyBackSpace(win, gb, stat);
+        break;
 
       case 'i':
         insertMode(win, gb, stat);
         break;
       case 'w':
-        writeFile(gb, stat);
-        wbkgd(win[2], COLOR_PAIR(1));
-        mvwprintw(win[2], 0, 0, "%s", "saved...");
-        wrefresh(win[2]);
+        writeFile(win, gb, stat);
         break;
       case 'q':
         exitCurses();
