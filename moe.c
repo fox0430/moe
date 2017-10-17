@@ -67,7 +67,6 @@ int writeFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
     if(i != gb->size) fputc('\n', fp);
   }
 
-  wbkgd(win[2], COLOR_PAIR(1));
   mvwprintw(win[2], 0, 0, "%s", "saved...");
   wrefresh(win[2]);
 
@@ -114,7 +113,6 @@ void printLine(WINDOW **win, gapBuffer* gb, int lineDigit, int currentLine, int 
 
 void commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
   werase(win[2]);
-  wbkgd(win[0], COLOR_PAIR(1));
   wprintw(win[2], "%s", ":");
   wrefresh(win[2]);
   nocbreak();
