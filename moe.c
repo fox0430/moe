@@ -354,6 +354,13 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
   }
 }
 
+int keyX(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  stat->x--;
+  wdelch(win[0]);
+  charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
+  return 0;
+}
+
 void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
 
   int key;
@@ -379,8 +386,8 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       case 'l':
         keyRight(gb, stat);
         break;
-      case 'x':   // will change like vim
-        keyBackSpace(win, gb, stat);
+      case 'x':
+        keyX(win, gb, stat);
         break;
       case '0':
         stat->x = stat->lineDigitSpace;
@@ -460,7 +467,7 @@ arrow keys does not work...
         keyLeft(gb, stat);
         break;
 */        
-      case KEY_BACKSPACE:   // back space key does not work...
+      case 127:   // 127 is backspace key
         keyBackSpace(win, gb, stat);
         break;
 
