@@ -95,17 +95,19 @@ void printLineNum(WINDOW **win, int lineDigit, int currentLine, int y){
   wprintw(win[0], "%d:", currentLine + 1); 
   wrefresh(win[0]);
 */
-  int lineDigitSpace = lineDigit - countLineDigit(currentLine + 1);
-  wmove(win[3], y ,0);
-  for(int i=0; i<lineDigitSpace; i++) mvwprintw(win[3], y,  i, " ");
-  wprintw(win[3], "%d:", currentLine + 1);
-  wrefresh(win[3]);
+
+  for(int i=0; i<LINES-2; i++){
+    int lineDigitSpace = lineDigit - countLineDigit(i + 1);
+    for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[3], i, j, " ");
+    wprintw(win[3], "%d:", i + 1);
+    wrefresh(win[3]);
+  }
 }
 
 void printLine(WINDOW **win, gapBuffer* gb, int lineDigit, int currentLine, int y){
   
   use_default_colors();
-  printLineNum(win, lineDigit, currentLine, y);
+//  printLineNum(win, lineDigit, currentLine, y);
   mvwprintw(win[0], y, lineDigit + 1, "%s", gapBufferAt(gb, currentLine)->elements);
   wrefresh(win[0]);
 }
@@ -364,6 +366,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
 
   int key;
   stat->mode = 0;
+  printLineNum(win, stat->lineDigit, stat->currentLine, stat->y);
   printStatBarInit(win, stat);
 
   while(1){
