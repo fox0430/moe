@@ -216,9 +216,7 @@ int keyLeft(gapBuffer* gb, editorStat* stat){
 
 int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat){
   if(stat->y == 0 && stat->x == stat->lineDigitSpace) return 0;
-  stat->x--;
-  wmove(win[0], stat->y, stat->x);
-  wdelch(win[0]);
+  mvwdelch(win[0], stat->y, --stat->x);
   if(stat->x < stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine)->numOfChar > 0){    // delete line
     int tmpNumOfChar = gapBufferAt(gb, stat->currentLine - 1)->numOfChar;
     for(int i=0; i<gapBufferAt(gb, stat->currentLine)->numOfChar; i++) {
@@ -462,7 +460,7 @@ arrow keys does not work...
         keyLeft(gb, stat);
         break;
 */        
-      case KEY_BACKSPACE:
+      case KEY_BACKSPACE:   // back space key does not work...
         keyBackSpace(win, gb, stat);
         break;
 
