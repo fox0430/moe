@@ -277,7 +277,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
       for(int i = 0; i < tmp - (stat->x - stat->lineDigitSpace); i++){
         charArrayInsert(gapBufferAt(gb, stat->currentLine + 1), gapBufferAt(gb, stat->currentLine)->elements[i + stat->x - stat->lineDigitSpace], i);
         gapBufferAt(gb, stat->currentLine)->numOfChar--;
-        for(int i=0; i < tmp - (stat->x - stat->lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, stat->currentLine - 1));
+        for(int i=0; i < tmp - (stat->x - stat->lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, stat->currentLine));
       }
       wscrl(win[0], 1);
       wmove(win[0], LINES - 2, stat->x);
@@ -324,8 +324,8 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
     for(int i = 0; i < tmp - (stat->x - stat->lineDigitSpace); i++){
       charArrayInsert(gapBufferAt(gb, stat->currentLine + 1), gapBufferAt(gb, stat->currentLine)->elements[i + stat->x - stat->lineDigitSpace], i);
       gapBufferAt(gb, stat->currentLine)->numOfChar--;
-      for(int i=0; i < tmp - (stat->x - stat->lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, stat->currentLine));
     }
+      for(int i=0; i < tmp - (stat->x - stat->lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, stat->currentLine));
     stat->x = stat->lineDigitSpace;
     for(int i=stat->currentLine; i < gb->size; i++){
       if(i == LINES - 3) break;
