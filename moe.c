@@ -1,5 +1,11 @@
 #include"moe.h"
 
+void debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  
+  wclear(win[2]);
+  wprintw(win[2], "currentLine: %d", stat->currentLine);
+}
+
 void **winInit(WINDOW **win){
  win[0] = newwin(LINES-2, COLS, 0, 0);    // main window
  win[1] = newwin(1, COLS, LINES-2, 0);    // status bar
@@ -19,10 +25,8 @@ void startCurses(){
   getmaxyx(stdscr, h, w);     // set window size
 
   start_color();      // color settings
-  init_pair(1, COLOR_WHITE, COLOR_BLACK);     // set color char is white, bg is black
-  init_pair(2, COLOR_GREEN, COLOR_BLACK);
-  init_pair(3, COLOR_WHITE, COLOR_CYAN);
-  init_pair(4, COLOR_BLACK, COLOR_WHITE);
+  init_pair(1, COLOR_WHITE, COLOR_CYAN);    // char is while, bg is CYAN
+  init_pair(2, COLOR_BLACK, COLOR_WHITE);
 
   erase();  	// screen display
 
@@ -129,14 +133,14 @@ void commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
 void printStatBarInit(WINDOW **win, editorStat *stat){
   wclear(win[1]);
 
-  wbkgd(win[1], COLOR_PAIR(4));
+  wbkgd(win[1], COLOR_PAIR(2));
   if(stat->mode == 0){
     wprintw(win[1], "%s ", "normal");
   }else if(stat->mode == 1){
     wprintw(win[1], "%s ", "insert");
   }
 
-  wbkgd(win[1], COLOR_PAIR(3));
+  wbkgd(win[1], COLOR_PAIR(1));
   wprintw(win[1], "%s ", stat->filename);
   printStatBar(win, stat);
 }
@@ -145,6 +149,13 @@ void printStatBar(WINDOW **win, editorStat *stat){
   mvwprintw(win[1], 0, COLS-7, "%d/%d ", stat->currentLine + 1, stat->numOfLines);
   mvwprintw(win[1], 0, COLS-3, " %d", stat->x - stat->lineDigitSpace + 1);
   wrefresh(win[1]);
+}
+
+int insNewLine(gapBuffer *gb, int position){
+    charArray* ca = (charArray*)malloc(sizeof(charArray));
+    charArrayInit(ca);
+    gapBufferInsert(gb, ca, position);
+    return 0;
 }
 
 int keyUp(WINDOW **win, gapBuffer* gb, editorStat* stat){
@@ -253,27 +264,19 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
   if(stat->y == LINES - 3){
     stat->currentLine++;
     if(stat->x == stat->lineDigitSpace){
-      {
-        charArray* ca = (charArray*)malloc(sizeof(charArray));
-        charArrayInit(ca);
-        gapBufferInsert(gb, ca, stat->currentLine);
-        charArrayPush(gapBufferAt(gb, stat->currentLine), '\0');
-      }
+      insNewLine(gb, stat->currentLine);
+      charArrayPush(gapBufferAt(gb, stat->currentLine), '\0');
       wscrl(win[0], 1);
       printLine(win, gb, stat->lineDigit, stat->currentLine, LINES -3);
       printLineNum(win, stat, stat->currentLine - stat->y);
       stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
     }else{
-      {
-        charArray* ca = (charArray*)malloc(sizeof(charArray));
-        charArrayInit(ca);
-        gapBufferInsert(gb, ca, stat->currentLine + 1);
-        charArrayPush(gapBufferAt(gb, stat->currentLine + 1), '\0');
-        int tmp = gapBufferAt(gb, stat->currentLine)->numOfChar;
-        for(int i = 0; i < tmp - (stat->x - stat->lineDigitSpace); i++){
-          charArrayInsert(gapBufferAt(gb, stat->currentLine + 1), gapBufferAt(gb, stat->currentLine)->elements[i + stat->x - stat->lineDigitSpace], i);
-          gapBufferAt(gb, stat->currentLine)->numOfChar--;
-        }
+      insNewLine(gb, stat->currentLine + 1);
+      charArrayPush(gapBufferAt(gb, stat->currentLine + 1), '\0');
+      int tmp = gapBufferAt(gb, stat->currentLine)->numOfChar;
+      for(int i = 0; i < tmp - (stat->x - stat->lineDigitSpace); i++){
+        charArrayInsert(gapBufferAt(gb, stat->currentLine + 1), gapBufferAt(gb, stat->currentLine)->elements[i + stat->x - stat->lineDigitSpace], i);
+        gapBufferAt(gb, stat->currentLine)->numOfChar--;
         for(int i=0; i < tmp - (stat->x - stat->lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, stat->currentLine));
       }
       wscrl(win[0], 1);
@@ -290,13 +293,9 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
   winsertln(win[0]);
   if(stat->x == stat->lineDigitSpace){
-    {
-      charArray* ca = (charArray*)malloc(sizeof(charArray));
-      charArrayInit(ca);
-      gapBufferInsert(gb, ca, stat->currentLine);
-      charArrayPush(gapBufferAt(gb, stat->currentLine), '\0');
-      gapBufferAt(gb, stat->currentLine)->numOfChar++;
-    }
+    insNewLine(gb, stat->currentLine);
+    charArrayPush(gapBufferAt(gb, stat->currentLine), '\0');
+    gapBufferAt(gb, stat->currentLine)->numOfChar++;
     gapBufferAt(gb, stat->currentLine)->numOfChar--;
     for(int i=stat->currentLine; i < gb->size; i++){
       if(i == LINES - 3) break;
@@ -318,16 +317,12 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
     printLineNum(win, stat, stat->currentLine - stat->y);
     return 0;
   }else{
-    {
-      charArray* ca = (charArray*)malloc(sizeof(charArray));
-      charArrayInit(ca);
-      gapBufferInsert(gb, ca, stat->currentLine + 1);
-      charArrayPush(gapBufferAt(gb, stat->currentLine + 1), '\0');
-      int tmp = gapBufferAt(gb, stat->currentLine)->numOfChar;
-      for(int i = 0; i < tmp - (stat->x - stat->lineDigitSpace); i++){
-        charArrayInsert(gapBufferAt(gb, stat->currentLine + 1), gapBufferAt(gb, stat->currentLine)->elements[i + stat->x - stat->lineDigitSpace], i);
-        gapBufferAt(gb, stat->currentLine)->numOfChar--;
-      }
+    insNewLine(gb, stat->currentLine + 1);
+    charArrayPush(gapBufferAt(gb, stat->currentLine + 1), '\0');
+    int tmp = gapBufferAt(gb, stat->currentLine)->numOfChar;
+    for(int i = 0; i < tmp - (stat->x - stat->lineDigitSpace); i++){
+      charArrayInsert(gapBufferAt(gb, stat->currentLine + 1), gapBufferAt(gb, stat->currentLine)->elements[i + stat->x - stat->lineDigitSpace], i);
+      gapBufferAt(gb, stat->currentLine)->numOfChar--;
       for(int i=0; i < tmp - (stat->x - stat->lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, stat->currentLine));
     }
     stat->x = stat->lineDigitSpace;
@@ -354,7 +349,6 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
 }
 
 int keyX(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->x--;
   wdelch(win[0]);
   charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
   return 0;
@@ -495,13 +489,7 @@ int openFile(char* filename){
 
   gapBuffer* gb = (gapBuffer*)malloc(sizeof(gapBuffer));
   gapBufferInit(gb);
-  
-  {
-    charArray* ca = (charArray*)malloc(sizeof(charArray));
-    charArrayInit(ca);
-    gapBufferInsert(gb, ca, 0);
-  }
-
+  insNewLine(gb, 0);
   editorStat* stat = (editorStat*)malloc(sizeof(editorStat));
   editorStatInit(stat);
   strcpy(stat->filename, filename);
@@ -556,11 +544,7 @@ int newFile(){
 
   gapBuffer* gb = (gapBuffer*)malloc(sizeof(gapBuffer));
   gapBufferInit(gb);
-  {
-    charArray* ca = (charArray*)malloc(sizeof(charArray));
-    charArrayInit(ca);
-    gapBufferInsert(gb, ca, 0);
-  }
+  insNewLine(gb, 0);
 
   editorStat* stat = (editorStat*)malloc(sizeof(editorStat));
   editorStatInit(stat);
