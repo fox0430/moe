@@ -1,5 +1,3 @@
-Aim for the strongest design...
-
 moe is Command line editor.
 
 This project goal is funny animation editor and study C.
