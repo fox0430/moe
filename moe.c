@@ -3,7 +3,9 @@
 void debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   
   wclear(win[2]);
-  wprintw(win[2], "currentLine: %d", stat->currentLine);
+  wprintw(win[2], "currentLine: %d ", stat->currentLine);
+  wprintw(win[2], "numOfLines: %d", stat->numOfLines);
+  wrefresh(win[2]);
 }
 
 void **winInit(WINDOW **win){
@@ -146,8 +148,8 @@ void printStatBarInit(WINDOW **win, editorStat *stat){
 }
 
 void printStatBar(WINDOW **win, editorStat *stat){
-  mvwprintw(win[1], 0, COLS-7, "%d/%d ", stat->currentLine + 1, stat->numOfLines);
-  mvwprintw(win[1], 0, COLS-3, " %d", stat->x - stat->lineDigitSpace + 1);
+  mvwprintw(win[1], 0, COLS-12, "%d/%d ", stat->currentLine + 1, stat->numOfLines);
+  mvwprintw(win[1], 0, COLS-4, " %d", stat->x - stat->lineDigitSpace + 1);
   wrefresh(win[1]);
 }
 
@@ -182,7 +184,7 @@ int keyUp(WINDOW **win, gapBuffer* gb, editorStat* stat){
 }
 
 int keyDown(WINDOW **win, gapBuffer* gb, editorStat* stat){
-  if(stat->currentLine + 1 == gb->size) return 0;
+  if(stat->currentLine + 1 == stat->numOfLines) return 0;
         
   if(stat->y == LINES - 3){
     stat->currentLine++;
@@ -206,14 +208,12 @@ int keyDown(WINDOW **win, gapBuffer* gb, editorStat* stat){
 }
 
 int keyRight(gapBuffer* gb, editorStat* stat){
-
   if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace) return 0;
   stat->x++;
   return 0;
 }
 
 int keyLeft(gapBuffer* gb, editorStat* stat){
-
   if(stat->x == stat->lineDigit + 1) return 0;
   stat->x--;
   return 0;
@@ -364,6 +364,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   while(1){
     wmove(win[0], stat->y, stat->x);
     printStatBar(win, stat); 
+//    debugMode(win, gb, stat);
     wrefresh(win[0]);
     noecho();
     key = wgetch(win[0]);
