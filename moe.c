@@ -85,18 +85,11 @@ int countLineDigit(int numOfLines){
   return lineDigit;
 }
 
-void printLineNum(WINDOW **win, int lineDigit, int currentLine, int startLine){
-/*
-  int lineDigitSpace = lineDigit - countLineDigit(currentLine + 1);
-  wmove(win[0], y, 0);
-  for(int i=0; i<lineDigitSpace; i++) mvwprintw(win[0], y,  i, " ");
-  wbkgd(win[0], COLOR_PAIR(2));
-  wprintw(win[0], "%d:", currentLine + 1); 
-  wrefresh(win[0]);
-*/
+void printLineNum(WINDOW **win, editorStat *stat, int startLine){
 
   for(int i=0; i<LINES-2; i++){
-    int lineDigitSpace = lineDigit - countLineDigit(i + 1);
+    if(i == stat->numOfLines) break;
+    int lineDigitSpace = stat->lineDigit - countLineDigit(i + 1);
     for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[3], i, j, " ");
     wprintw(win[3], "%d:", ++startLine);
     wrefresh(win[3]);
@@ -162,7 +155,7 @@ int keyUp(WINDOW **win, gapBuffer* gb, editorStat* stat){
     stat->currentLine--;
     wscrl(win[0], -1);    // scroll
     printLine(win, gb, stat->lineDigit,  stat->currentLine, stat->y);
-    printLineNum(win, stat->lineDigit, stat->currentLine, stat->currentLine);
+    printLineNum(win, stat, stat->currentLine);
     stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
     return 0;
   }else if(COLS - stat->lineDigitSpace - 1 <= gapBufferAt(gb, stat->currentLine - 1)->numOfChar){
@@ -186,7 +179,7 @@ int keyDown(WINDOW **win, gapBuffer* gb, editorStat* stat){
     wscrl(win[0], 1);
     wmove(win[0], LINES - 3, 0);
     printLine(win, gb, stat->lineDigit, stat->currentLine, LINES - 3);
-    printLineNum(win, stat->lineDigit, stat->currentLine, stat->currentLine - LINES + 3);
+    printLineNum(win, stat, stat->currentLine - LINES + 3);
     stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
 
     return 0;
@@ -286,7 +279,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
       wmove(win[0], LINES - 2, stat->x);
       wdeleteln(win[0]);
       printLine(win, gb, stat->lineDigit, stat->currentLine, LINES - 2);
-      printLineNum(win, stat->lineDigit, stat->currentLine + 1, stat->currentLine - LINES - 2);
+      printLineNum(win, stat, stat->currentLine - LINES - 2);
       stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
       stat->currentLine++;
     }
@@ -549,7 +542,7 @@ int openFile(char* filename){
   stat->x = stat->lineDigitSpace;
   stat->currentLine = 0;
 
-  printLineNum(win, stat->lineDigit, stat->currentLine, 0);
+  printLineNum(win, stat, 0);
   normalMode(win, gb, stat);
 
   return 0;
