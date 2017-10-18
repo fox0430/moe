@@ -261,6 +261,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
       }
       wscrl(win[0], 1);
       printLine(win, gb, stat->lineDigit, stat->currentLine, LINES -3);
+      printLineNum(win, stat, stat->currentLine - stat->y);
       stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
     }else{
       {
@@ -282,6 +283,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
       printLineNum(win, stat, stat->currentLine - LINES - 2);
       stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
       stat->currentLine++;
+      printLineNum(win, stat, stat->currentLine - stat->y);
     }
     return 0;
   }
@@ -313,6 +315,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
           wprintw(win[0], "\n");
       }
     }
+    printLineNum(win, stat, stat->currentLine - stat->y);
     return 0;
   }else{
     {
@@ -345,6 +348,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
           wprintw(win[0], "\n");
       }
     }
+    printLineNum(win, stat, stat->currentLine - stat->y);
     return 0;
   }
 }
