@@ -89,7 +89,7 @@ void printLineNum(WINDOW **win, editorStat *stat, int startLine){
 
   for(int i=0; i<LINES-2; i++){
     if(i == stat->numOfLines) break;
-    int lineDigitSpace = stat->lineDigit - countLineDigit(i + 1);
+    int lineDigitSpace = stat->lineDigit - countLineDigit(startLine + 1);
     for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[3], i, j, " ");
     wprintw(win[3], "%d:", ++startLine);
     wrefresh(win[3]);
@@ -99,7 +99,6 @@ void printLineNum(WINDOW **win, editorStat *stat, int startLine){
 void printLine(WINDOW **win, gapBuffer* gb, int lineDigit, int currentLine, int y){
   
   use_default_colors();
-//  printLineNum(win, lineDigit, currentLine, y);
   mvwprintw(win[0], y, lineDigit + 1, "%s", gapBufferAt(gb, currentLine)->elements);
   wrefresh(win[0]);
 }
@@ -143,7 +142,7 @@ void printStatBarInit(WINDOW **win, editorStat *stat){
 }
 
 void printStatBar(WINDOW **win, editorStat *stat){
-  mvwprintw(win[1], 0, COLS-7, "%d/%d |", stat->currentLine + 1, stat->numOfLines);
+  mvwprintw(win[1], 0, COLS-7, "%d/%d ", stat->currentLine + 1, stat->numOfLines);
   mvwprintw(win[1], 0, COLS-3, " %d", stat->x - stat->lineDigitSpace + 1);
   wrefresh(win[1]);
 }
@@ -222,12 +221,13 @@ int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat){
     wdeleteln(win[0]);
     wmove(win[0], stat->y - 1, stat->x);
     for(int i=stat->y - 1; i<stat->numOfLines; i++){
-      if(i == LINES - 3) return 0;
+      if(i == LINES - 3) break;
       printLine(win, gb, stat->lineDigit, i, i);
     }
     stat->y--;
     stat->x = stat->lineDigitSpace + tmpNumOfChar;
     stat->currentLine--;
+    printLineNum(win, stat, stat->currentLine - stat->y);
     return 0;
   }
 
