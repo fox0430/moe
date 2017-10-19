@@ -6,7 +6,8 @@ void debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   mvwprintw(win[3], 0, 0, "debug mode: ");
   wprintw(win[3], "currentLine: %d ", stat->currentLine);
   wprintw(win[3], "numOfLines: %d ", stat->numOfLines);
-  wprintw(win[3], "numOfChar: %d", gapBufferAt(gb, stat->currentLine)->numOfChar);
+  wprintw(win[3], "numOfChar: %d ", gapBufferAt(gb, stat->currentLine)->numOfChar);
+  wprintw(win[3], "start: %d", stat->currentLine - stat->y);
   wrefresh(win[3]);
 }
 
@@ -94,6 +95,7 @@ int countLineDigit(int numOfLines){
 }
 
 void printLineNum(WINDOW **win, editorStat *stat, int startLine){
+  use_default_colors();
   for(int i=0; i<LINES-2; i++){
     if(i == stat->numOfLines) break;
     int lineDigitSpace = stat->lineDigit - countLineDigit(startLine + 1);
@@ -104,7 +106,6 @@ void printLineNum(WINDOW **win, editorStat *stat, int startLine){
 }
 
 void printLine(WINDOW **win, gapBuffer* gb, int lineDigit, int currentLine, int y){
-  
   use_default_colors();
   mvwprintw(win[0], y, lineDigit + 1, "%s", gapBufferAt(gb, currentLine)->elements);
   wrefresh(win[0]);
@@ -344,6 +345,18 @@ int keyX(WINDOW **win, gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
+int keyO(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  insNewLine(gb, stat->currentLine + 1);
+  charArrayPush(gapBufferAt(gb, stat->currentLine), '\0');
+  stat->currentLine++;
+  stat->numOfLines++;
+  stat->x = stat->lineDigitSpace;
+  wmove(win[0], ++stat->y, stat->x);
+  winsertln(win[0]);
+  printLineNum(win, stat, stat->currentLine - stat->y);
+  return 0;
+  }
+
 void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
 
   int key;
@@ -353,8 +366,8 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   while(1){
     wmove(win[0], stat->y, stat->x);
     printStatBar(win, stat); 
-//    printLineNum(win, stat, stat->currentLine - stat->y);
-    debugMode(win, gb, stat);
+    printLineNum(win, stat, stat->currentLine - stat->y);
+//    debugMode(win, gb, stat);
     wrefresh(win[0]);
     noecho();
     key = wgetch(win[0]);
@@ -383,6 +396,10 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
         break;
       case 'a':
         wmove(win[0], stat->y, stat->x++);
+        insertMode(win, gb, stat);
+        break;
+      case 'o':
+        keyO(win, gb, stat);
         insertMode(win, gb, stat);
         break;
 
@@ -418,7 +435,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
   int key;
   stat->mode = 1;
   printStatBarInit(win, stat);
-//  printLineNum(win, stat, stat->currentLine - stat->y);
+  printLineNum(win, stat, stat->currentLine - stat->y);
   wclear(win[2]);
   wrefresh(win[2]);
 
