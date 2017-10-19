@@ -2,7 +2,8 @@
 
 void debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   
-  wclear(win[2]);
+  wdeleteln(win[2]);
+  mvwprintw(win[2], 0, 0, "debug mode: ");
   wprintw(win[2], "currentLine: %d ", stat->currentLine);
   wprintw(win[2], "numOfLines: %d ", stat->numOfLines);
   wprintw(win[2], "numOfChar: %d", gapBufferAt(gb, stat->currentLine)->numOfChar);
@@ -193,7 +194,7 @@ int keyDown(WINDOW **win, gapBuffer* gb, editorStat* stat){
     wmove(win[0], LINES - 3, 0);
     printLine(win, gb, stat->lineDigit, stat->currentLine, LINES - 3);
     printLineNum(win, stat, stat->currentLine - LINES + 3);
-    stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
+    stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace;
 
     return 0;
   }else if(COLS - stat->lineDigitSpace - 1 <= gapBufferAt(gb, stat->currentLine + 1)->numOfChar){
@@ -232,7 +233,7 @@ int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat){
     stat->numOfLines--;
     wdeleteln(win[0]);
     wmove(win[0], stat->y - 1, stat->x);
-    printLine(win, gb, stat->lineDigit, stat->currentLine, stat->y);
+    printLine(win, gb, stat->lineDigit, stat->currentLine - 1, stat->y);
     stat->y--;
     stat->x = stat->lineDigitSpace + tmpNumOfChar;
     stat->currentLine--;
