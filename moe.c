@@ -20,14 +20,9 @@ void **winInit(WINDOW **win){
 
 void startCurses(){
 
-  int h,
-      w;
-
   initscr();    // start terminal contorl
   cbreak();   // enable cbreak mode
   curs_set(1);    // set cursr
-
-  getmaxyx(stdscr, h, w);     // set window size
 
   start_color();      // color settings
   init_pair(1, COLOR_WHITE, COLOR_CYAN);    // char is while, bg is CYAN
@@ -85,7 +80,6 @@ int writeFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
 }
 
 int countLineDigit(int numOfLines){
-
   int lineDigit = 0;
   while(numOfLines > 0){
     numOfLines /= 10;
@@ -366,7 +360,6 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   while(1){
     wmove(win[0], stat->y, stat->x);
     printStatBar(win, stat); 
-    printLineNum(win, stat, stat->currentLine - stat->y);
 //    debugMode(win, gb, stat);
     wrefresh(win[0]);
     noecho();
@@ -435,9 +428,6 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
   int key;
   stat->mode = 1;
   printStatBarInit(win, stat);
-  printLineNum(win, stat, stat->currentLine - stat->y);
-  wclear(win[2]);
-  wrefresh(win[2]);
 
   while(1){
 
