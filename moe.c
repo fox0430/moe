@@ -230,13 +230,14 @@ int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat){
     wmove(win[0], --stat->y, stat->x);
     printLine(win, gb, stat->lineDigit, --stat->currentLine, stat->y);
     printLineNum(win, stat, stat->currentLine - stat->y);
+    wclear(win[1]);   // why...?
   }else if(stat->x < stat->lineDigitSpace  && gapBufferAt(gb, stat->currentLine)->numOfChar == 0){
     gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
     stat->numOfLines--;
     wdeleteln(win[0]);
     stat->x = stat->lineDigitSpace + gapBufferAt(gb, --stat->currentLine)->numOfChar;
     wmove(win[0], --stat->y, stat->x);
-    printLineNum(win, stat, stat->currentLine - stat->y);
+    printLineNum(win, stat, stat->currentLine - stat->y);   // doesn't works...
   }else{
    charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
   }
