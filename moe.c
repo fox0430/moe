@@ -1,21 +1,19 @@
 #include"moe.h"
 
 void debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  
-  wdeleteln(win[3]);
-  mvwprintw(win[3], 0, 0, "debug mode: ");
-  wprintw(win[3], "currentLine: %d ", stat->currentLine);
-  wprintw(win[3], "numOfLines: %d ", stat->numOfLines);
-  wprintw(win[3], "numOfChar: %d ", gapBufferAt(gb, stat->currentLine)->numOfChar);
-  wprintw(win[3], "start: %d", stat->currentLine - stat->y);
-  wrefresh(win[3]);
+  wdeleteln(win[2]);
+  mvwprintw(win[2], 0, 0, "debug mode: ");
+  wprintw(win[2], "currentLine: %d ", stat->currentLine);
+  wprintw(win[2], "numOfLines: %d ", stat->numOfLines);
+  wprintw(win[2], "numOfChar: %d ", gapBufferAt(gb, stat->currentLine)->numOfChar);
+  wprintw(win[2], "printStartLine: %d", stat->currentLine - stat->y);
+  wrefresh(win[2]);
 }
 
 void **winInit(WINDOW **win){
- win[0] = newwin(LINES-2, COLS, 0, 0);    // main window
- win[1] = newwin(LINES-2, 4, 0, 0);       // line number
- win[2] = newwin(1, COLS, LINES-2, 0);    // status bar
- win[3] = newwin(1, COLS, LINES-1, 0);    // command bar
+  win[0] = newwin(LINES-2, COLS, 0, 0);    // main window
+  win[1] = newwin(1, COLS, LINES-2, 0);    // status bar
+  win[2] = newwin(1, COLS, LINES-1, 0);    // command bar
 }
 
 void startCurses(){
@@ -88,32 +86,30 @@ int countLineDigit(int numOfLines){
   return lineDigit;
 }
 
-void printLineNum(WINDOW **win, editorStat *stat, int startLine){
+void printLineNum(WINDOW **win, editorStat *stat, int currentLine){
   use_default_colors();
-  for(int i=0; i<LINES-2; i++){
-    if(i == stat->numOfLines) break;
-    int lineDigitSpace = stat->lineDigit - countLineDigit(startLine + 1);
-    for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[1], i, j, " ");
-    wprintw(win[1], "%d:", ++startLine);
-  }
-  wrefresh(win[1]);
+  int lineDigitSpace = stat->lineDigit - countLineDigit(currentLine + 1);
+  for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], currentLine, j, " ");
+  wprintw(win[0], "%d:", currentLine + 1);
 }
 
-void printLine(WINDOW **win, gapBuffer* gb, int lineDigit, int currentLine, int y){
+void printLine(WINDOW **win, gapBuffer* gb, editorStat *stat, int currentLine, int y){
   use_default_colors();
-  mvwprintw(win[0], y, lineDigit + 1, "%s", gapBufferAt(gb, currentLine)->elements);
+  printLineNum(win, stat, currentLine);
+  mvwprintw(win[0], y, stat->lineDigit + 1, "%s", gapBufferAt(gb, currentLine)->elements);
   wrefresh(win[0]);
 }
 
 void commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  werase(win[3]);
-  wprintw(win[3], "%s", ":");
-  wrefresh(win[3]);
+  use_default_colors();
+  werase(win[2]);
+  wprintw(win[2], "%s", ":");
+  wrefresh(win[2]);
   nocbreak();
   echo();
 
   int key;
-  key = wgetch(win[3]);
+  key = wgetch(win[2]);
   noecho();
 
   switch(key){
@@ -129,24 +125,24 @@ void commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
 }
 
 void printStatBarInit(WINDOW **win, editorStat *stat){
-  wclear(win[2]);
+  wclear(win[1]);
 
   wbkgd(win[2], COLOR_PAIR(2));
   if(stat->mode == 0){
-    wprintw(win[2], "%s ", "normal");
+    wprintw(win[1], "%s ", "normal");
   }else if(stat->mode == 1){
-    wprintw(win[2], "%s ", "insert");
+    wprintw(win[1], "%s ", "insert");
   }
 
-  wbkgd(win[2], COLOR_PAIR(1));
-  wprintw(win[2], "%s ", stat->filename);
+  wbkgd(win[1], COLOR_PAIR(1));
+  wprintw(win[1], "%s ", stat->filename);
   printStatBar(win, stat);
 }
 
 void printStatBar(WINDOW **win, editorStat *stat){
-  mvwprintw(win[2], 0, COLS-12, "%d/%d ", stat->currentLine + 1, stat->numOfLines);
-  mvwprintw(win[2], 0, COLS-4, " %d", stat->x - stat->lineDigitSpace + 1);
-  wrefresh(win[2]);
+  mvwprintw(win[1], 0, COLS-12, "%d/%d ", stat->currentLine + 1, stat->numOfLines);
+  mvwprintw(win[1], 0, COLS-4, " %d", stat->x - stat->lineDigitSpace + 1);
+  wrefresh(win[1]);
 }
 
 int insNewLine(gapBuffer *gb, int position){
@@ -162,8 +158,7 @@ int keyUp(WINDOW **win, gapBuffer* gb, editorStat* stat){
   if(stat->y == 0){
     stat->currentLine--;
     wscrl(win[0], -1);    // scroll
-    printLine(win, gb, stat->lineDigit,  stat->currentLine, stat->y);
-    printLineNum(win, stat, stat->currentLine);
+    printLine(win, gb, stat,  stat->currentLine, stat->y);
     stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
     return 0;
   }else if(COLS - stat->lineDigitSpace - 1 <= gapBufferAt(gb, stat->currentLine - 1)->numOfChar){
@@ -186,8 +181,7 @@ int keyDown(WINDOW **win, gapBuffer* gb, editorStat* stat){
     stat->currentLine++;
     wscrl(win[0], 1);
     wmove(win[0], LINES - 3, 0);
-    printLine(win, gb, stat->lineDigit, stat->currentLine, LINES - 3);
-    printLineNum(win, stat, stat->currentLine - LINES + 3);
+    printLine(win, gb, stat, stat->currentLine, LINES - 3);
     stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace;
 
     return 0;
@@ -228,16 +222,22 @@ int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat){
     wdeleteln(win[0]);
     stat->x = stat->lineDigitSpace + tmpNumOfChar;
     wmove(win[0], --stat->y, stat->x);
-    printLine(win, gb, stat->lineDigit, --stat->currentLine, stat->y);
-    printLineNum(win, stat, stat->currentLine - stat->y);
-    wclear(win[1]);   // why...?
+    wclrtobot(win[0]);
+    for(int i=stat->currentLine - 1; i<stat->numOfLines; i++){
+      if(i == LINES - 2) break;
+      printLine(win, gb, stat, i, i);
+    }
   }else if(stat->x < stat->lineDigitSpace  && gapBufferAt(gb, stat->currentLine)->numOfChar == 0){
     gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
     stat->numOfLines--;
     wdeleteln(win[0]);
     stat->x = stat->lineDigitSpace + gapBufferAt(gb, --stat->currentLine)->numOfChar;
     wmove(win[0], --stat->y, stat->x);
-    printLineNum(win, stat, stat->currentLine - stat->y);   // doesn't works...
+    wclrtobot(win[0]);
+    for(int i=stat->currentLine; i<stat->numOfLines; i++){
+      if(i == LINES - 2) break;
+      printLine(win, gb, stat, i, i);
+    }
   }else{
    charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
   }
@@ -252,8 +252,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
       insNewLine(gb, stat->currentLine);
       charArrayPush(gapBufferAt(gb, stat->currentLine), '\0');
       wscrl(win[0], 1);
-      printLine(win, gb, stat->lineDigit, stat->currentLine, LINES -3);
-      printLineNum(win, stat, stat->currentLine - stat->y);
+      printLine(win, gb, stat, stat->currentLine, LINES -3);
       stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
     }else{
       insNewLine(gb, stat->currentLine + 1);
@@ -268,11 +267,10 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
       wmove(win[0], LINES - 2, stat->x);
       wdeleteln(win[0]);
       for(int i=0; i<LINES-2; i++){
-        printLine(win, gb, stat->lineDigit, stat->currentLine - stat->y + i, i);
+        printLine(win, gb, stat, stat->currentLine - stat->y + i, i);
       }
       stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
       stat->currentLine++;
-      printLineNum(win, stat, stat->currentLine - stat->y);
     }
     return 0;
   }
@@ -285,7 +283,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
     gapBufferAt(gb, stat->currentLine)->numOfChar--;
     for(int i=stat->currentLine; i < gb->size; i++){
       if(i == LINES - 3) break;
-        printLine(win, gb, stat->lineDigit, i, i);
+        printLine(win, gb, stat, i, i);
         wprintw(win[0], "\n");
     }
     stat->currentLine++;
@@ -296,11 +294,10 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
       wclear(win[0]);
       for(int i=0; i<gb->size; i++){
         if(i == LINES - 3) break;
-          printLine(win, gb, stat->lineDigit, i, i);
+          printLine(win, gb, stat, i, i);
           wprintw(win[0], "\n");
       }
     }
-    printLineNum(win, stat, stat->currentLine - stat->y);
     return 0;
   }else{
     insNewLine(gb, stat->currentLine + 1);
@@ -314,7 +311,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
     stat->x = stat->lineDigitSpace;
     for(int i=stat->currentLine; i < gb->size; i++){
       if(i == LINES - 3) break;
-        printLine(win, gb, stat->lineDigit, i, i);
+        printLine(win, gb, stat, i, i);
         wprintw(win[0], "\n");
     }
     stat->currentLine++;
@@ -325,11 +322,10 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
       wclear(win[0]);
       for(int i=0; i<gb->size; i++){
         if(i == LINES - 3) break;
-          printLine(win, gb, stat->lineDigit, i, i);
+          printLine(win, gb, stat, i, i);
           wprintw(win[0], "\n");
       }
     }
-    printLineNum(win, stat, stat->currentLine - stat->y);
     return 0;
   }
 }
@@ -348,9 +344,22 @@ int keyO(WINDOW **win, gapBuffer *gb, editorStat *stat){
   stat->x = stat->lineDigitSpace;
   wmove(win[0], ++stat->y, stat->x);
   winsertln(win[0]);
-  printLineNum(win, stat, stat->currentLine - stat->y);
   return 0;
+}
+
+int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  int key;
+  while(1){
+    key = wgetch(win[0]);
+    if(key == 'd'){
+      gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
+      stat->numOfLines--;
+      wdeleteln(win[0]);
+      break;
+    }else if(key == KEY_ESC) break;
   }
+  return 0;
+}
 
 void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
 
@@ -361,7 +370,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   while(1){
     wmove(win[0], stat->y, stat->x);
     printStatBar(win, stat); 
-//    debugMode(win, gb, stat);
+    debugMode(win, gb, stat);
     wrefresh(win[0]);
     noecho();
     key = wgetch(win[0]);
@@ -395,6 +404,9 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       case 'o':
         keyO(win, gb, stat);
         insertMode(win, gb, stat);
+        break;
+      case 'd':
+        keyD(win, gb, stat);
         break;
 
       case 'i':
@@ -526,7 +538,7 @@ int openFile(char* filename){
   stat->numOfLines = stat->currentLine + 1;
   for(int i=0; i < stat->numOfLines; i++){
     if(i == LINES - 2) break;
-    printLine(win, gb, stat->lineDigit, i, i);
+    printLine(win, gb, stat, i, i);
     wprintw(win[0], "\n");
   }
 
@@ -535,7 +547,6 @@ int openFile(char* filename){
   stat->x = stat->lineDigitSpace;
   stat->currentLine = 0;
 
-  printLineNum(win, stat, 0);
   normalMode(win, gb, stat);
 
   return 0;
@@ -555,7 +566,7 @@ int newFile(){
 
   startCurses(); 
   keypad(win[0], TRUE);   // enable cursr keys
-  printLine(win, gb, stat->lineDigit, 0, 0);
+  printLine(win, gb, stat, 0, 0);
   scrollok(stdscr, TRUE);			// enable scroll
   insertMode(win, gb, stat);
 
