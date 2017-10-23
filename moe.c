@@ -374,7 +374,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   while(1){
     wmove(win[0], stat->y, stat->x);
     printStatBar(win, stat); 
-//    debugMode(win, gb, stat);
+    debugMode(win, gb, stat);
     wrefresh(win[0]);
     noecho();
     key = wgetch(win[0]);
@@ -522,13 +522,12 @@ int openFile(char* filename){
   }
   fclose(fp);
 
-  WINDOW **win = (WINDOW**)malloc(sizeof(WINDOW*)*4);
+  WINDOW **win = (WINDOW**)malloc(sizeof(WINDOW*)*3);
   if(signal(SIGINT, signal_handler) == SIG_ERR ||
      signal(SIGQUIT, signal_handler) == SIG_ERR){
     fprintf(stderr, "signal failure\n");
     exit(EXIT_FAILURE);
   }
-
   if(initscr() == NULL){
     fprintf(stderr, "initscr failure\n");
     exit(EXIT_FAILURE);
@@ -565,14 +564,26 @@ int newFile(){
   editorStat* stat = (editorStat*)malloc(sizeof(editorStat));
   editorStatInit(stat);
 
-  WINDOW **win = (WINDOW**)malloc(sizeof(WINDOW*)*4);
+  WINDOW **win = (WINDOW**)malloc(sizeof(WINDOW*)*3);
+  if(signal(SIGINT, signal_handler) == SIG_ERR ||
+     signal(SIGQUIT, signal_handler) == SIG_ERR){
+    fprintf(stderr, "signal failure\n");
+    exit(EXIT_FAILURE);
+  }
+  if(initscr() == NULL){
+    fprintf(stderr, "initscr failure\n");
+    exit(EXIT_FAILURE);
+  }
+  startCurses();
   winInit(win);
 
-  startCurses(); 
-  keypad(win[0], TRUE);   // enable cursr keys
+  scrollok(win[0], TRUE);			// enable scroll
+
   printLine(win, gb, stat, 0, 0);
   scrollok(stdscr, TRUE);			// enable scroll
-  insertMode(win, gb, stat);
+  stat->x = stat->lineDigitSpace;
+  stat->numOfLines = 1;
+  normalMode(win, gb, stat);
 
   return 0;
 }
