@@ -1,7 +1,6 @@
 #include"moe.h"
 
 void debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  use_default_colors();
   werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
   wprintw(win[2], "currentLine: %d ", stat->currentLine);
@@ -23,6 +22,7 @@ void startCurses(){
   curs_set(1);    // set cursr
 
   start_color();      // color settings
+  use_default_colors();   // terminal default color
   init_pair(1, COLOR_WHITE, COLOR_CYAN);    // char is while, bg is CYAN
   init_pair(2, COLOR_BLACK, COLOR_WHITE);
 
@@ -94,7 +94,6 @@ void printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y){
 }
 
 void printLine(WINDOW **win, gapBuffer* gb, editorStat *stat, int currentLine, int y){
-  use_default_colors();
   printLineNum(win, stat, currentLine, y);
   mvwprintw(win[0], y, stat->lineDigit + 1, "%s", gapBufferAt(gb, currentLine)->elements);
   wrefresh(win[0]);
@@ -127,7 +126,7 @@ void commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
 void printStatBarInit(WINDOW **win, editorStat *stat){
   wclear(win[1]);
 
-  wbkgd(win[2], COLOR_PAIR(2));
+  wbkgd(win[1], COLOR_PAIR(2));
   if(stat->mode == 0){
     wprintw(win[1], "%s ", "normal");
   }else if(stat->mode == 1){
