@@ -352,6 +352,13 @@ int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat){
       gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
       stat->numOfLines--;
       wdeleteln(win[0]);
+      wmove(win[0], --stat->y, stat->x);
+      wclrtobot(win[0]);
+      for(int i=stat->currentLine - 1; i<stat->numOfLines; i++){
+        if(i == LINES - 2) break;
+        printLine(win, gb, stat, i, i);
+      }
+      wmove(win[0], ++stat->y, stat->x);
       break;
     }else if(key == KEY_ESC) break;
   }
