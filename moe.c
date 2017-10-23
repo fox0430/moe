@@ -1,12 +1,12 @@
 #include"moe.h"
 
 void debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  wdeleteln(win[2]);
+  use_default_colors();
+  werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
   wprintw(win[2], "currentLine: %d ", stat->currentLine);
   wprintw(win[2], "numOfLines: %d ", stat->numOfLines);
   wprintw(win[2], "numOfChar: %d ", gapBufferAt(gb, stat->currentLine)->numOfChar);
-  wprintw(win[2], "printStartLine: %d", stat->currentLine - stat->y);
   wrefresh(win[2]);
 }
 
@@ -48,6 +48,7 @@ void editorStatInit(editorStat* stat){
   stat->mode = 0;   // 0 is normal mode
   stat->currentLine = 0;
   stat->numOfLines = 0;
+  stat->numOfChange = 0;
   stat->lineDigit = 3;    // 3 is default line digit
   stat->lineDigitSpace = stat->lineDigit + 1;
   stat->y = 0;
@@ -86,22 +87,20 @@ int countLineDigit(int numOfLines){
   return lineDigit;
 }
 
-void printLineNum(WINDOW **win, editorStat *stat, int currentLine){
-  use_default_colors();
+void printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y){
   int lineDigitSpace = stat->lineDigit - countLineDigit(currentLine + 1);
-  for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], currentLine, j, " ");
+  for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
   wprintw(win[0], "%d:", currentLine + 1);
 }
 
 void printLine(WINDOW **win, gapBuffer* gb, editorStat *stat, int currentLine, int y){
   use_default_colors();
-  printLineNum(win, stat, currentLine);
+  printLineNum(win, stat, currentLine, y);
   mvwprintw(win[0], y, stat->lineDigit + 1, "%s", gapBufferAt(gb, currentLine)->elements);
   wrefresh(win[0]);
 }
 
 void commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  use_default_colors();
   werase(win[2]);
   wprintw(win[2], "%s", ":");
   wrefresh(win[2]);
@@ -122,6 +121,7 @@ void commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
   }
   cbreak();
   normalMode(win, gb, stat);
+  werase(win[2]);
 }
 
 void printStatBarInit(WINDOW **win, editorStat *stat){
@@ -176,14 +176,12 @@ int keyUp(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
 int keyDown(WINDOW **win, gapBuffer* gb, editorStat* stat){
   if(stat->currentLine + 1 == stat->numOfLines) return 0;
-        
   if(stat->y == LINES - 3){
     stat->currentLine++;
     wscrl(win[0], 1);
     wmove(win[0], LINES - 3, 0);
     printLine(win, gb, stat, stat->currentLine, LINES - 3);
     stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace;
-
     return 0;
   }else if(COLS - stat->lineDigitSpace - 1 <= gapBufferAt(gb, stat->currentLine + 1)->numOfChar){
     stat->y += 2;
@@ -370,7 +368,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   while(1){
     wmove(win[0], stat->y, stat->x);
     printStatBar(win, stat); 
-    debugMode(win, gb, stat);
+//    debugMode(win, gb, stat);
     wrefresh(win[0]);
     noecho();
     key = wgetch(win[0]);
