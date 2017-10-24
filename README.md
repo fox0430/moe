@@ -15,5 +15,7 @@ Aiming features
   ・Auto-complete
 
   ・Syntax check
+
+  ・git coordination
   
   ・Funny animation...
