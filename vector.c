@@ -39,7 +39,7 @@ int charArrayPush(charArray* array, char element){
 
   if(array->capacity == array->head && charArrayReserve(array, array->capacity *2) ==- 1) return -1;
   array->elements[array->head] = element;
-  array->numOfChar++;
+  if(element != '\0') array->numOfChar++;
   array->elements[array->head+1] = '\0';
   ++array->head;
   return 1;
@@ -51,7 +51,7 @@ int charArrayInsert(charArray* array, char element, int position){
 
   memmove(array->elements + position, array->elements + position -1, array->head - position +1);
   array->elements[position] = element;
-  array->numOfChar++;
+  if(element != '\0') array->numOfChar++;
   array->elements[array->head+1] = '\0';
   ++array->head;
   return 1;
