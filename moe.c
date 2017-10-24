@@ -6,6 +6,7 @@ void debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   wprintw(win[2], "currentLine: %d ", stat->currentLine);
   wprintw(win[2], "numOfLines: %d ", stat->numOfLines);
   wprintw(win[2], "numOfChar: %d ", gapBufferAt(gb, stat->currentLine)->numOfChar);
+  wprintw(win[2], "elements: %s", gapBufferAt(gb, stat->currentLine)->elements);
   wrefresh(win[2]);
 }
 
@@ -129,6 +130,7 @@ void commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
   nocbreak();
   echo();
 
+// rewrite
   int key;
   key = wgetch(win[2]);
   noecho();
@@ -406,7 +408,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   while(1){
     wmove(win[0], stat->y, stat->x);
     printStatBar(win, stat); 
-    debugMode(win, gb, stat);
+//    debugMode(win, gb, stat);
     wrefresh(win[0]);
     noecho();
     key = wgetch(win[0]);
@@ -482,7 +484,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
     wmove(win[0], stat->y, stat->x);
     printStatBar(win, stat);
-    debugMode(win, gb, stat);
+//    debugMode(win, gb, stat);
     noecho();
     key = wgetch(win[0]);
 
