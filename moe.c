@@ -26,10 +26,10 @@ void startCurses(){
   use_default_colors();   // terminal default color
   init_pair(1, COLOR_WHITE, COLOR_CYAN);    // char is while, bg is CYAN
   init_pair(2, COLOR_BLACK, COLOR_WHITE);    // char is while, bg is CYAN
-  init_pair(3, -1, -1);
+  init_pair(3, -1, -1);   // -1 is terminal default color
   init_pair(4, COLOR_RED, -1);
 
-  erase();  	// screen display
+  erase();
 
 //  setlocale(LC_ALL, "");
 
@@ -62,7 +62,7 @@ void editorStatInit(editorStat* stat){
 int writeFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
 
   char  str[] = "No name";
-if(strcmp(stat->filename, str) == 0){
+  if(strcmp(stat->filename, str) == 0){
     int   i = 0;
     char  ch, 
           filename[256];
@@ -352,15 +352,6 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
   }
 }
 
-int keyA(WINDOW **win, gapBuffer *gb, editorStat *stat){
-
-  if(stat->y >= stat->y - stat->lineDigitSpace){
-    charArrayInsert(gapBufferAt(gb, stat->currentLine), ' ', gapBufferAt(gb, stat->currentLine)->numOfChar);
-  }
-  wmove(win[0], stat->y, stat->x++);
-  return 0;
-}
-
 int keyX(WINDOW **win, gapBuffer *gb, editorStat *stat){
   wdelch(win[0]);
   charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
@@ -436,7 +427,9 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
         stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
         break;
       case 'a':
-        keyA(win, gb, stat);
+        if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace)
+          break;
+        wmove(win[0], stat->y, ++stat->x);
         insertMode(win, gb, stat);
         break;
       case 'o':
