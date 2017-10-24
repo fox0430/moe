@@ -16,7 +16,4 @@ Aiming features
 
   ・Syntax check
   
-   ・git coordination
-  
-  
   ・Funny animation...
