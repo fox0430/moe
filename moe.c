@@ -350,6 +350,15 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
   }
 }
 
+int keyA(WINDOW **win, gapBuffer *gb, editorStat *stat){
+
+  if(stat->y >= stat->y - stat->lineDigitSpace){
+    charArrayInsert(gapBufferAt(gb, stat->currentLine), ' ', gapBufferAt(gb, stat->currentLine)->numOfChar);
+  }
+  wmove(win[0], stat->y, stat->x++);
+  return 0;
+}
+
 int keyX(WINDOW **win, gapBuffer *gb, editorStat *stat){
   wdelch(win[0]);
   charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
@@ -397,7 +406,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   while(1){
     wmove(win[0], stat->y, stat->x);
     printStatBar(win, stat); 
-//    debugMode(win, gb, stat);
+    debugMode(win, gb, stat);
     wrefresh(win[0]);
     noecho();
     key = wgetch(win[0]);
@@ -425,7 +434,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
         stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
         break;
       case 'a':
-        wmove(win[0], stat->y, stat->x++);
+        keyA(win, gb, stat);
         insertMode(win, gb, stat);
         break;
       case 'o':
@@ -473,6 +482,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
     wmove(win[0], stat->y, stat->x);
     printStatBar(win, stat);
+    debugMode(win, gb, stat);
     noecho();
     key = wgetch(win[0]);
 
