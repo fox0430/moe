@@ -24,7 +24,9 @@ void startCurses(){
   start_color();      // color settings
   use_default_colors();   // terminal default color
   init_pair(1, COLOR_WHITE, COLOR_CYAN);    // char is while, bg is CYAN
-  init_pair(2, COLOR_BLACK, COLOR_WHITE);
+  init_pair(2, COLOR_BLACK, COLOR_WHITE);    // char is while, bg is CYAN
+  init_pair(3, -1, -1);
+  init_pair(4, COLOR_RED, -1);
 
   erase();  	// screen display
 
@@ -53,13 +55,34 @@ void editorStatInit(editorStat* stat){
   stat->lineDigitSpace = stat->lineDigit + 1;
   stat->y = 0;
   stat->x = 0;
-  strcpy(stat->filename, "test.txt");
+  strcpy(stat->filename, "No name");
 }
 
 int writeFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
+
+  char  str[] = "No name";
+if(strcmp(stat->filename, str) == 0){
+    int   i = 0;
+    char  ch, 
+          filename[256];
+    wbkgd(win[2], COLOR_PAIR(4));
+    werase(win[2]);
+    wprintw(win[2], "Please file name: ");
+    wrefresh(win[2]);
+    wbkgd(win[2], COLOR_PAIR(3));
+    echo();
+    wgetch(win[2]);   // skip enter 
+    while(1){
+      if((ch = wgetch(win[2])) == 10 || i > 255) break;
+      filename[i] = ch;
+      i++;
+    }
+    noecho();
+    strcpy(stat->filename, filename);
+    werase(win[2]);
+  }
   
   FILE *fp;
-
   if ((fp = fopen(stat->filename, "w")) == NULL) {
     printf("%s Cannot file open... \n", stat->filename);
       return -1;
@@ -374,7 +397,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   while(1){
     wmove(win[0], stat->y, stat->x);
     printStatBar(win, stat); 
-    debugMode(win, gb, stat);
+//    debugMode(win, gb, stat);
     wrefresh(win[0]);
     noecho();
     key = wgetch(win[0]);
