@@ -18,6 +18,7 @@ typedef struct editorStat{
         x,
         y,
         currentLine,
+        numOfChange,
         numOfLines;
 } editorStat;
 
@@ -27,8 +28,8 @@ void signal_handler(int SIG);
 void exitCurses();
 int writeFile(WINDOW **win, gapBuffer* gb, editorStat *stat);
 int countLineDigit(int lineNum);
-void printLineNum(WINDOW **win, editorStat *stat, int startLine);
-void printLine(WINDOW **win, gapBuffer* gb, int lineDigit, int line, int y);
+void printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y);
+void printLine(WINDOW **win, gapBuffer* gb, editorStat *stat, int line, int y);
 void commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat);
 void printStatBarInit(WINDOW **win, editorStat *stat);
 void printStatBar(WINDOW **win, editorStat *stat);
@@ -39,7 +40,10 @@ int keyRight(gapBuffer* gb, editorStat* stat);
 int keyLeft(gapBuffer* gb, editorStat* stat);
 int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat);
+int keyA(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int keyX(WINDOW **win, gapBuffer* gb, editorStat* stat);
+int keyO(WINDOW **win, gapBuffer* gb, editorStat* stat);
+int keyD(WINDOW **win, gapBuffer* gb, editorStat* stat);
 void normalMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
 void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int newFile();
