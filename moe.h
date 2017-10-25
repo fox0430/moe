@@ -24,6 +24,7 @@ typedef struct editorStat{
 } editorStat;
 
 // Function prototype
+void setCursesColor();
 void startCurses();
 void signal_handler(int SIG);
 void exitCurses();

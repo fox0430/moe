@@ -382,10 +382,27 @@ int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat){
         printLine(win, gb, stat, i, i);
       }
       wmove(win[0], ++stat->y, stat->x);
-      break;
-    }else if(key == KEY_ESC) break;
+      return 0;
+    }else if(key == KEY_ESC) return 0;
   }
-  return 0;
+}
+
+int keyG(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  int key;
+  while(1) {
+    key = wgetch(win[0]);
+    if(key == 'g'){
+      werase(win[0]);
+      for(int i=0; i < stat->numOfLines; i++){
+        if(i == LINES - 2) break;
+        printLine(win, gb, stat, i, i);
+      }
+      stat->y = 0;
+      stat->x = stat->lineDigitSpace;
+      stat->currentLine = 0;
+      return 0;
+    }else if(key == KEY_ESC) return 0;
+  }
 }
 
 void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
@@ -436,6 +453,9 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
         break;
       case 'd':
         keyD(win, gb, stat);
+        break;
+      case 'g':
+        keyG(win, gb, stat);
         break;
 
       case 'i':
@@ -568,7 +588,6 @@ int openFile(char* filename){
   for(int i=0; i < stat->numOfLines; i++){
     if(i == LINES - 2) break;
     printLine(win, gb, stat, i, i);
-    wprintw(win[0], "\n");
   }
 
   scrollok(win[0], TRUE);			// enable scroll
