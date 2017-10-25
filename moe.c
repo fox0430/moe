@@ -28,6 +28,7 @@ void startCurses(){
   init_pair(2, COLOR_BLACK, COLOR_WHITE);    // char is while, bg is CYAN
   init_pair(3, -1, -1);   // -1 is terminal default color
   init_pair(4, COLOR_RED, -1);
+  init_pair(5, COLOR_GREEN, COLOR_BLACK);
 
   erase();
 
@@ -47,16 +48,15 @@ void exitCurses(){
 }
 
 void editorStatInit(editorStat* stat){
-
-  stat->mode = 0;   // 0 is normal mode
-  stat->currentLine = 0;
-  stat->numOfLines = 0;
-  stat->numOfChange = 0;
-  stat->lineDigit = 3;    // 3 is default line digit
-  stat->lineDigitSpace = stat->lineDigit + 1;
   stat->y = 0;
   stat->x = 0;
+  stat->currentLine = 0;
+  stat->numOfLines = 0;
+  stat->lineDigit = 3;    // 3 is default line digit
+  stat->lineDigitSpace = stat->lineDigit + 1;
+  stat->mode = 0;   // 0 is normal mode
   strcpy(stat->filename, "No name");
+  stat->numOfChange = 0;
 }
 
 int writeFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
@@ -269,14 +269,17 @@ int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat){
 int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
   stat->numOfLines++;
   if(stat->y == LINES - 3){
-    stat->currentLine++;
     if(stat->x == stat->lineDigitSpace){
       insNewLine(gb, stat->currentLine);
       charArrayPush(gapBufferAt(gb, stat->currentLine), '\0');
       wscrl(win[0], 1);
-      printLine(win, gb, stat, stat->currentLine, LINES -3);
+      wmove(win[0], stat->y - 1, 0);
+      wclrtobot(win[0]);
+      printLine(win, gb, stat, stat->currentLine, LINES - 2);
+      printLine(win, gb, stat, ++stat->currentLine, LINES - 3);
       stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
     }else{
+      // does not work...
       insNewLine(gb, stat->currentLine + 1);
       charArrayPush(gapBufferAt(gb, stat->currentLine + 1), '\0');
       int tmp = gapBufferAt(gb, stat->currentLine)->numOfChar;

@@ -12,14 +12,14 @@
 
 typedef struct editorStat{
   char filename[256];
-  int   mode,
+  int   y,
+        x,
+        currentLine,
+        numOfLines,
         lineDigit,
         lineDigitSpace,
-        x,
-        y,
-        currentLine,
-        numOfChange,
-        numOfLines;
+        mode,
+        numOfChange;
 } editorStat;
 
 // Function prototype
