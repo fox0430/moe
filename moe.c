@@ -16,24 +16,29 @@ void **winInit(WINDOW **win){
   win[2] = newwin(1, COLS, LINES-1, 0);    // command bar
 }
 
-void startCurses(){
+void setCursesColor(){
+  start_color();      // color settings
 
+  init_color(BRIGHT_WHITE, 1000,1000,1000);
+  use_default_colors();   // terminal default color
+
+  init_pair(1, COLOR_BLACK , COLOR_GREEN);    // char is while, bg is GREEN
+  init_pair(2, COLOR_BLACK, 8);
+  init_pair(3, -1, -1);   // -1 is terminal default color
+  init_pair(4, COLOR_RED, -1);
+  init_pair(5, COLOR_GREEN, COLOR_BLACK);
+  init_pair(6, BRIGHT_WHITE, -1);
+}
+
+void startCurses(){
   initscr();    // start terminal contorl
   cbreak();   // enable cbreak mode
   curs_set(1);    // set cursr
 
-  start_color();      // color settings
-  use_default_colors();   // terminal default color
-  init_pair(1, COLOR_BLACK , COLOR_GREEN);    // char is while, bg is CYAN
-  init_pair(2, COLOR_BLACK, COLOR_WHITE);    // char is while, bg is CYAN
-  init_pair(3, -1, -1);   // -1 is terminal default color
-  init_pair(4, COLOR_RED, -1);
-  init_pair(5, COLOR_GREEN, COLOR_BLACK);
-
+  setCursesColor();
   erase();
 
 //  setlocale(LC_ALL, "");
-
   ESCDELAY = 25;    // delete esc key time lag
 }
 
@@ -112,13 +117,15 @@ int countLineDigit(int numOfLines){
 }
 
 void printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y){
+  wbkgd(win[0], COLOR_PAIR(3));
   int lineDigitSpace = stat->lineDigit - countLineDigit(currentLine + 1);
   for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
-  wprintw(win[0], "%d:", currentLine + 1);
+  wprintw(win[0], "%d", currentLine + 1);
 }
 
 void printLine(WINDOW **win, gapBuffer* gb, editorStat *stat, int currentLine, int y){
   printLineNum(win, stat, currentLine, y);
+  wbkgd(win[0], COLOR_PAIR(6));
   mvwprintw(win[0], y, stat->lineDigit + 1, "%s", gapBufferAt(gb, currentLine)->elements);
   wrefresh(win[0]);
 }
@@ -178,23 +185,17 @@ int insNewLine(gapBuffer *gb, int position){
 
 int keyUp(WINDOW **win, gapBuffer* gb, editorStat* stat){
   if(stat->currentLine == 0) return 0;
-        
   if(stat->y == 0){
     stat->currentLine--;
     wscrl(win[0], -1);    // scroll
     printLine(win, gb, stat,  stat->currentLine, stat->y);
     stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
-    return 0;
-  }else if(COLS - stat->lineDigitSpace - 1 <= gapBufferAt(gb, stat->currentLine - 1)->numOfChar){
-    stat->y -= 2;
+  }else{
+    stat->y--;
     stat->currentLine--;
-    return 0;
+    if(stat->x > stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1)
+      stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
   }
-
-  stat->y--;
-  stat->currentLine--;
-  if(stat->x > stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1)
-    stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
   return 0;
 }
 
@@ -206,16 +207,12 @@ int keyDown(WINDOW **win, gapBuffer* gb, editorStat* stat){
     wmove(win[0], LINES - 3, 0);
     printLine(win, gb, stat, stat->currentLine, LINES - 3);
     stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace;
-    return 0;
-  }else if(COLS - stat->lineDigitSpace - 1 <= gapBufferAt(gb, stat->currentLine + 1)->numOfChar){
-    stat->y += 2;
+  }else{
+    stat->y++;
     stat->currentLine++;
-    return 0;
+    if(stat->x > stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar)
+      stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
   }
-  stat->y++;
-  stat->currentLine++;
-  if(stat->x > stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar)
-    stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
   return 0;
 }
 

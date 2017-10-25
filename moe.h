@@ -9,6 +9,7 @@
 //#include<locale.h>
 
 #define KEY_ESC 27
+#define BRIGHT_WHITE 8
 
 typedef struct editorStat{
   char filename[256];
