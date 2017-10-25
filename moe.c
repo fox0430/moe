@@ -24,7 +24,7 @@ void startCurses(){
 
   start_color();      // color settings
   use_default_colors();   // terminal default color
-  init_pair(1, COLOR_WHITE, COLOR_CYAN);    // char is while, bg is CYAN
+  init_pair(1, COLOR_BLACK , COLOR_GREEN);    // char is while, bg is CYAN
   init_pair(2, COLOR_BLACK, COLOR_WHITE);    // char is while, bg is CYAN
   init_pair(3, -1, -1);   // -1 is terminal default color
   init_pair(4, COLOR_RED, -1);
@@ -286,16 +286,14 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
       for(int i = 0; i < tmp - (stat->x - stat->lineDigitSpace); i++){
         charArrayInsert(gapBufferAt(gb, stat->currentLine + 1), gapBufferAt(gb, stat->currentLine)->elements[i + stat->x - stat->lineDigitSpace], i);
         gapBufferAt(gb, stat->currentLine)->numOfChar--;
-        for(int i=0; i < tmp - (stat->x - stat->lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, stat->currentLine));
       }
+      for(int i=0; i < tmp - (stat->x - stat->lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, stat->currentLine));
       wscrl(win[0], 1);
-      wmove(win[0], LINES - 2, stat->x);
-      wdeleteln(win[0]);
-      for(int i=0; i<LINES-2; i++){
-        printLine(win, gb, stat, stat->currentLine - stat->y + i, i);
-      }
+      wmove(win[0], stat->y - 1, 0);
+      wclrtobot(win[0]);
+      printLine(win, gb, stat, stat->currentLine, LINES - 2);
+      printLine(win, gb, stat, ++stat->currentLine, LINES - 3);
       stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
-      stat->currentLine++;
     }
     return 0;
   }
