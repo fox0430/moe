@@ -16,7 +16,10 @@ void **winInit(WINDOW **win){
   win[2] = newwin(1, COLS, LINES-1, 0);    // command bar
 }
 
-void setCursesColor(){
+int setCursesColor(){
+  bool color_check = can_change_color();
+  if(color_check != TRUE) return 0;
+
   start_color();      // color settings
 
   init_color(BRIGHT_WHITE, 1000,1000,1000);
@@ -28,6 +31,7 @@ void setCursesColor(){
   init_pair(4, COLOR_RED, -1);
   init_pair(5, COLOR_GREEN, COLOR_BLACK);
   init_pair(6, BRIGHT_WHITE, -1);
+  return 0;
 }
 
 void startCurses(){
