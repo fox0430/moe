@@ -14,6 +14,9 @@ void **winInit(WINDOW **win){
   win[0] = newwin(LINES-2, COLS, 0, 0);    // main window
   win[1] = newwin(1, COLS, LINES-2, 0);    // status bar
   win[2] = newwin(1, COLS, LINES-1, 0);    // command bar
+  keypad(win[0], TRUE);
+  keypad(win[2], TRUE);
+  scrollok(win[0], TRUE);			// enable scroll
 }
 
 int setCursesColor(){
@@ -508,9 +511,6 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
     } 
 
     switch(key){
-/*
-
-arrow keys does not work...
 
       case KEY_UP:
         keyUp(win, gb, stat);
@@ -527,7 +527,7 @@ arrow keys does not work...
       case KEY_LEFT:
         keyLeft(gb, stat);
         break;
-*/        
+        
       case 127:   // 127 is backspace key
         keyBackSpace(win, gb, stat);
         break;
@@ -593,8 +593,6 @@ int openFile(char* filename){
     printLine(win, gb, stat, i, i);
   }
 
-  scrollok(win[0], TRUE);			// enable scroll
-
   stat->x = stat->lineDigitSpace;
   stat->currentLine = 0;
 
@@ -624,8 +622,6 @@ int newFile(){
   }
   startCurses();
   winInit(win);
-
-  scrollok(win[0], TRUE);			// enable scroll
 
   printLine(win, gb, stat, 0, 0);
   scrollok(stdscr, TRUE);			// enable scroll
