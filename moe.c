@@ -426,15 +426,19 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
     key = wgetch(win[0]);
 
     switch(key){
+      case KEY_LEFT:
       case 'h':
         keyLeft(gb, stat);
         break;
+      case KEY_DOWN:
       case 'j':
         keyDown(win, gb, stat);
        break;
+      case KEY_UP:
       case 'k':
         keyUp(win, gb, stat);
         break;
+      case KEY_RIGHT:
       case 'l':
         keyRight(gb, stat);
         break;
@@ -442,9 +446,11 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
         keyX(win, gb, stat);
         break;
       case '0':
+      case KEY_HOME:
         stat->x = stat->lineDigitSpace;
         break;
       case '$':
+      case KEY_END:
         stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
         break;
       case 'a':
@@ -470,23 +476,6 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       case ':':
         commandBar(win, gb, stat);
         break;
-
-      case KEY_ESC:   // get arrow keys but has problem...
-        wgetch(win[0]);   // skip the '['
-        switch(wgetch(win[0])){
-          case 'A':
-            keyUp(win, gb, stat);
-            break;
-          case 'B':
-            keyDown(win, gb, stat);
-            break;
-          case 'C':
-            keyRight(gb, stat);
-            break;
-          case 'D':
-            keyLeft(gb, stat);
-            break;
-        }
     }
   }
 }
@@ -515,17 +504,20 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
       case KEY_UP:
         keyUp(win, gb, stat);
         break;
-
       case KEY_DOWN:
         keyDown(win, gb, stat);
         break;
-        
       case KEY_RIGHT:
         keyRight(gb, stat);
         break;
-
       case KEY_LEFT:
         keyLeft(gb, stat);
+        break;
+      case KEY_HOME:
+        stat->x = stat->lineDigitSpace;
+        break;
+      case KEY_END:
+        stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
         break;
         
       case 127:   // 127 is backspace key
