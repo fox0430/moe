@@ -224,6 +224,7 @@ int keyDown(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
 int keyRight(gapBuffer* gb, editorStat* stat){
   if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace) return 0;
+  if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1 && stat->mode == 0) return 0;
   stat->x++;
   return 0;
 }
@@ -356,6 +357,13 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
 }
 
 int keyX(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1){
+    stat->currentLine++;
+    stat->y++;
+    stat->x = stat->lineDigitSpace;
+    keyBackSpace(win, gb, stat);
+    return 0;
+  } 
   wdelch(win[0]);
   charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
   return 0;
@@ -521,7 +529,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
         stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
         break;
         
-      case KEY_BACKSPACE:
+      case 127:   // 127 is backspace key
         keyBackSpace(win, gb, stat);
         break;
       case KEY_DC:
