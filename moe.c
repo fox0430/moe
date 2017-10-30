@@ -1,6 +1,7 @@
 #include"moe.h"
 
-void debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
+int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  if(stat->debugMode == 0 ) return 0;
   werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
   wprintw(win[2], "currentLine: %d ", stat->currentLine);
@@ -8,6 +9,7 @@ void debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   wprintw(win[2], "numOfChar: %d ", gapBufferAt(gb, stat->currentLine)->numOfChar);
   wprintw(win[2], "elements: %s", gapBufferAt(gb, stat->currentLine)->elements);
   wrefresh(win[2]);
+  return 0;
 }
 
 void **winInit(WINDOW **win){
@@ -69,6 +71,7 @@ void editorStatInit(editorStat* stat){
   stat->mode = 0;   // 0 is normal mode
   strcpy(stat->filename, "No name");
   stat->numOfChange = 0;
+  stat->debugMode = 1;    // 0 is debug mode off
 }
 
 int writeFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
@@ -381,23 +384,17 @@ int keyO(WINDOW **win, gapBuffer *gb, editorStat *stat){
 }
 
 int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  int key;
-  while(1){
-    key = wgetch(win[0]);
-    if(key == 'd'){
-      gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
-      stat->numOfLines--;
-      wdeleteln(win[0]);
-      wmove(win[0], --stat->y, stat->x);
-      wclrtobot(win[0]);
-      for(int i=stat->currentLine - 1; i<stat->numOfLines; i++){
-        if(i == LINES - 2) break;
-        printLine(win, gb, stat, i, i);
-      }
-      wmove(win[0], ++stat->y, stat->x);
-      return 0;
-    }else if(key == KEY_ESC) return 0;
+  gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
+  stat->numOfLines--;
+  wdeleteln(win[0]);
+  wmove(win[0], --stat->y, stat->x);
+  wclrtobot(win[0]);
+  for(int i=stat->currentLine - 1; i<stat->numOfLines; i++){
+  if(i == LINES - 2) break;
+    printLine(win, gb, stat, i, i);
   }
+  wmove(win[0], ++stat->y, stat->x);
+  return 0;
 }
 
 int keyG(WINDOW **win, gapBuffer *gb, editorStat *stat){
@@ -427,7 +424,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   while(1){
     wmove(win[0], stat->y, stat->x);
     printStatBar(win, stat); 
-//    debugMode(win, gb, stat);
+    debugMode(win, gb, stat);
     wrefresh(win[0]);
     noecho();
     key = wgetch(win[0]);
@@ -466,6 +463,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
         keyX(win, gb, stat);
         break;
       case 'd':
+        if(wgetch(win[0]) != 'd') break;
         keyD(win, gb, stat);
         break;
 
@@ -499,7 +497,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
     wmove(win[0], stat->y, stat->x);
     printStatBar(win, stat);
-//    debugMode(win, gb, stat);
+    debugMode(win, gb, stat);
     noecho();
     key = wgetch(win[0]);
 

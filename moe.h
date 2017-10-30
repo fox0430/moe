@@ -20,10 +20,12 @@ typedef struct editorStat{
         lineDigit,
         lineDigitSpace,
         mode,
-        numOfChange;
+        numOfChange,
+        debugMode;
 } editorStat;
 
 // Function prototype
+int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat);
 int setCursesColor();
 void startCurses();
 void signal_handler(int SIG);
