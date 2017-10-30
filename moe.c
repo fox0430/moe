@@ -73,8 +73,7 @@ void editorStatInit(editorStat* stat){
 
 int writeFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
 
-  char  str[] = "No name";
-  if(strcmp(stat->filename, str) == 0){
+  if(strcmp(stat->filename, "No name") == 0){
     int   i = 0;
     char  ch, 
           filename[256];
@@ -442,9 +441,6 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       case 'l':
         keyRight(gb, stat);
         break;
-      case 'x':
-        keyX(win, gb, stat);
-        break;
       case '0':
       case KEY_HOME:
         stat->x = stat->lineDigitSpace;
@@ -452,6 +448,21 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       case '$':
       case KEY_END:
         stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
+        break;
+      case 'g':
+        keyG(win, gb, stat);
+        break;
+
+      case KEY_DC:
+      case 'x':
+        keyX(win, gb, stat);
+        break;
+      case 'd':
+        keyD(win, gb, stat);
+        break;
+
+      case 'i':
+        insertMode(win, gb, stat);
         break;
       case 'a':
         if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace)
@@ -461,16 +472,6 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
         break;
       case 'o':
         keyO(win, gb, stat);
-        insertMode(win, gb, stat);
-        break;
-      case 'd':
-        keyD(win, gb, stat);
-        break;
-      case 'g':
-        keyG(win, gb, stat);
-        break;
-
-      case 'i':
         insertMode(win, gb, stat);
         break;
       case ':':
@@ -520,8 +521,11 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
         stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
         break;
         
-      case 127:   // 127 is backspace key
+      case KEY_BACKSPACE:
         keyBackSpace(win, gb, stat);
+        break;
+      case KEY_DC:
+        keyX(win, gb, stat);
         break;
 
       case 10:    // 10 is Enter key
