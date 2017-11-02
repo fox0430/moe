@@ -343,8 +343,11 @@ int keyDown(WINDOW **win, gapBuffer* gb, editorStat* stat){
   }else{
     stat->y++;
     stat->currentLine++;
-    if(stat->mode == NORMAL_MODE && stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar)
-      stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar;
+
+    if(stat->mode == NORMAL_MODE)
+      if (stat->x != stat->lineDigitSpace && stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar)
+        stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar;
+
     if(stat->x > stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar)
       stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
   }
@@ -404,6 +407,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
     if(stat->x == stat->lineDigitSpace){
       insNewLine(gb, stat, stat->currentLine);
       charArrayPush(gapBufferAt(gb, stat->currentLine), '\0');
+      stat->currentLine++;
       printLineAll(win, gb, stat);
       stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
     }else{
