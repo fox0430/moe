@@ -10,6 +10,10 @@
 
 #define KEY_ESC 27
 #define BRIGHT_WHITE 8
+#define ON 1
+#define OFF 0
+#define NORMAL_MODE 0
+#define INSERT_MODE 1
 
 typedef struct editorStat{
   char filename[256];
@@ -38,7 +42,7 @@ void printLineAll(WINDOW **win, gapBuffer* gb, editorStat *stat);
 int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat);
 void printStatBarInit(WINDOW **win, editorStat *stat);
 void printStatBar(WINDOW **win, editorStat *stat);
-int insNewLine(gapBuffer *gb, int position);
+int insNewLine(gapBuffer *gb, editorStat *stat, int position);
 int keyUp(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int keyDown(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int keyRight(gapBuffer* gb, editorStat* stat);

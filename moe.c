@@ -1,8 +1,8 @@
 #include"moe.h"
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->debugMode = 0;
-  if(stat->debugMode == 0 ) return 0;
+  stat->debugMode = ON;
+  if(stat->debugMode == OFF ) return 0;
   werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
   wprintw(win[2], "currentLine: %d ", stat->currentLine);
@@ -69,10 +69,10 @@ void editorStatInit(editorStat* stat){
   stat->numOfLines = 0;
   stat->lineDigit = 3;    // 3 is default line digit
   stat->lineDigitSpace = stat->lineDigit + 1;
-  stat->mode = 0;   // 0 is normal mode
+  stat->mode = NORMAL_MODE;
   strcpy(stat->filename, "No name");
   stat->numOfChange = 0;
-  stat->debugMode = 1;    // 0 is debug mode off
+  stat->debugMode = OFF;
 }
 
 int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
@@ -202,6 +202,7 @@ void printLine(WINDOW **win, gapBuffer* gb, editorStat *stat, int currentLine, i
 }
 
 void printLineAll(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  werase(win[0]);
   int currentLine = stat->currentLine - stat->y;
   for(int i=0; i<LINES-2; i++){
     if(i == stat->numOfLines) break;
@@ -292,9 +293,9 @@ void printStatBarInit(WINDOW **win, editorStat *stat){
   wclear(win[1]);
 
   wbkgd(win[1], COLOR_PAIR(2));
-  if(stat->mode == 0){
+  if(stat->mode == NORMAL_MODE){
     wprintw(win[1], "%s ", "normal");
-  }else if(stat->mode == 1){
+  }else if(stat->mode == INSERT_MODE){
     wprintw(win[1], "%s ", "insert");
   }
 
@@ -309,10 +310,11 @@ void printStatBar(WINDOW **win, editorStat *stat){
   wrefresh(win[1]);
 }
 
-int insNewLine(gapBuffer *gb, int position){
+int insNewLine(gapBuffer *gb, editorStat *stat, int position){
     charArray* ca = (charArray*)malloc(sizeof(charArray));
     charArrayInit(ca);
     gapBufferInsert(gb, ca, position);
+    stat->numOfLines++;
     return 0;
 }
 
@@ -351,7 +353,7 @@ int keyDown(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
 int keyRight(gapBuffer* gb, editorStat* stat){
   if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace) return 0;
-  if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1 && stat->mode == 0) return 0;
+  if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1 && stat->mode == NORMAL_MODE) return 0;
   stat->x++;
   return 0;
 }
@@ -398,17 +400,16 @@ int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat){
 }
 
 int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
-  stat->numOfLines++;
   if(stat->y == LINES - 3){
     if(stat->x == stat->lineDigitSpace){
-      insNewLine(gb, stat->currentLine);
+      insNewLine(gb, stat, stat->currentLine);
       charArrayPush(gapBufferAt(gb, stat->currentLine), '\0');
       wscrl(win[0], 1);
       printLineAll(win, gb, stat);
       stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
     }else{
       // does not work...
-      insNewLine(gb, stat->currentLine + 1);
+      insNewLine(gb, stat, stat->currentLine + 1);
       charArrayPush(gapBufferAt(gb, stat->currentLine + 1), '\0');
       int tmp = gapBufferAt(gb, stat->currentLine)->numOfChar;
       for(int i = 0; i < tmp - (stat->x - stat->lineDigitSpace); i++){
@@ -419,9 +420,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
       for(int i=0; i < tmp - (stat->x - stat->lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, stat->currentLine));
       wscrl(win[0], 1);
       wmove(win[0], stat->y - 1, 0);
-      wclrtobot(win[0]);
-      printLine(win, gb, stat, stat->currentLine, LINES - 2);
-      printLine(win, gb, stat, ++stat->currentLine, LINES - 3);
+      printLineAll(win, gb, stat);
       stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
     }
     return 0;
@@ -429,7 +428,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
   winsertln(win[0]);
   if(stat->x == stat->lineDigitSpace){    // beginning of line
-    insNewLine(gb, stat->currentLine);
+    insNewLine(gb, stat, stat->currentLine);
     charArrayPush(gapBufferAt(gb, stat->currentLine), '\0');
     printLineAll(win, gb, stat);
     stat->currentLine++;
@@ -438,14 +437,10 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
     if(countLineDigit(stat->numOfLines) > countLineDigit(stat->numOfLines - 1)){
       stat->lineDigit = countLineDigit(stat->numOfLines);
       wclear(win[0]);
-      for(int i=0; i<gb->size; i++){
-        if(i == LINES - 3) break;
-          printLine(win, gb, stat, i, i);
-          wprintw(win[0], "\n");
-      }
+      printLineAll(win, gb, stat);
     }
   }else{
-    insNewLine(gb, stat->currentLine + 1);
+    insNewLine(gb, stat, stat->currentLine + 1);
     charArrayPush(gapBufferAt(gb, stat->currentLine + 1), '\0');
     int tmp = gapBufferAt(gb, stat->currentLine)->numOfChar;
     for(int i = 0; i < tmp - (stat->x - stat->lineDigitSpace); i++){
@@ -454,21 +449,13 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
     }
     for(int i=0; i < tmp - (stat->x - stat->lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, stat->currentLine));
     stat->x = stat->lineDigitSpace;
-    for(int i=stat->currentLine; i < gb->size; i++){
-      if(i == LINES - 3) break;
-        printLine(win, gb, stat, i, i);
-    }
+    printLineAll(win, gb, stat);
     gapBufferAt(gb, stat->currentLine)->numOfChar = tmp - gapBufferAt(gb, ++stat->currentLine)->numOfChar;
     stat->y++;
     // Up lineDigit
     if(countLineDigit(stat->numOfLines) > countLineDigit(stat->numOfLines - 1)){
       stat->lineDigit = countLineDigit(stat->numOfLines);
-      wclear(win[0]);
-      for(int i=0; i<gb->size; i++){
-        if(i == LINES - 3) break;
-          printLine(win, gb, stat, i, i);
-          wprintw(win[0], "\n");
-      }
+      printLineAll(win, gb, stat);
     }
     return 0;
   }
@@ -488,10 +475,9 @@ int keyX(WINDOW **win, gapBuffer *gb, editorStat *stat){
 }
 
 int keyO(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  insNewLine(gb, stat->currentLine + 1);
+  insNewLine(gb, stat, stat->currentLine + 1);
   charArrayPush(gapBufferAt(gb, stat->currentLine), '\0');
   stat->currentLine++;
-  stat->numOfLines++;
   stat->x = stat->lineDigitSpace;
   wmove(win[0], ++stat->y, stat->x);
   winsertln(win[0]);
@@ -533,7 +519,7 @@ int keyG(WINDOW **win, gapBuffer *gb, editorStat *stat){
 void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
 
   int key;
-  stat->mode = 0;
+  stat->mode = NORMAL_MODE;
   printStatBarInit(win, stat);
 
   while(1){
@@ -605,7 +591,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
 void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
   int key;
-  stat->mode = 1;
+  stat->mode = INSERT_MODE;
   printStatBarInit(win, stat);
 
   while(1){
@@ -669,13 +655,14 @@ int openFile(char* filename){
 		exit(0);
   }
 
-  gapBuffer* gb = (gapBuffer*)malloc(sizeof(gapBuffer));
-  gapBufferInit(gb);
-  insNewLine(gb, 0);
   editorStat* stat = (editorStat*)malloc(sizeof(editorStat));
   editorStatInit(stat);
-  strcpy(stat->filename, filename);
 
+  gapBuffer* gb = (gapBuffer*)malloc(sizeof(gapBuffer));
+  gapBufferInit(gb);
+  insNewLine(gb, stat, 0);
+
+  strcpy(stat->filename, filename);
   char  ch;
   while((ch = fgetc(fp)) != EOF){
     if(ch=='\n'){
@@ -719,12 +706,12 @@ int openFile(char* filename){
 
 int newFile(){
 
-  gapBuffer* gb = (gapBuffer*)malloc(sizeof(gapBuffer));
-  gapBufferInit(gb);
-  insNewLine(gb, 0);
-
   editorStat* stat = (editorStat*)malloc(sizeof(editorStat));
   editorStatInit(stat);
+
+  gapBuffer* gb = (gapBuffer*)malloc(sizeof(gapBuffer));
+  gapBufferInit(gb);
+  insNewLine(gb, stat, 0);
 
   WINDOW **win = (WINDOW**)malloc(sizeof(WINDOW*)*3);
   if(signal(SIGINT, signal_handler) == SIG_ERR ||
