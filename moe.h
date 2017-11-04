@@ -9,7 +9,7 @@
 //#include<locale.h>
 
 #define KEY_ESC 27
-#define BRIGHT_WHITE 8
+#define BRIGHT_WHITE 231
 #define ON 1
 #define OFF 0
 #define NORMAL_MODE 0

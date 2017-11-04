@@ -13,7 +13,7 @@ int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
-void **winInit(WINDOW **win){
+void winInit(WINDOW **win){
   win[0] = newwin(LINES-2, COLS, 0, 0);    // main window
   win[1] = newwin(1, COLS, LINES-2, 0);    // status bar
   win[2] = newwin(1, COLS, LINES-1, 0);    // command bar
@@ -28,7 +28,6 @@ int setCursesColor(){
 
   start_color();      // color settings
 
-  init_color(BRIGHT_WHITE, 1000,1000,1000);
   use_default_colors();   // terminal default color
 
   init_pair(1, COLOR_BLACK , COLOR_GREEN);    // char is while, bg is GREEN
@@ -187,7 +186,7 @@ int countLineDigit(int numOfLines){
 }
 
 void printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y){
-  wbkgd(win[0], COLOR_PAIR(3));
+  wattron(win[0], COLOR_PAIR(3));
   int lineDigitSpace = stat->lineDigit - countLineDigit(currentLine + 1);
   for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
   wprintw(win[0], "%d", currentLine + 1);
