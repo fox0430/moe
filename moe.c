@@ -1,7 +1,7 @@
 #include"moe.h"
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->debugMode = ON;
+  stat->debugMode = OFF;
   if(stat->debugMode == OFF ) return 0;
   werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
@@ -196,12 +196,13 @@ void printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
     wattron(win[0], COLOR_PAIR(3));
     wprintw(win[0], "%d", stat->currentLine);
   }
-  if(stat->y < LINES-2 || stat->y < stat->numOfLines){
+  if(stat->y < LINES-3 || stat->y < stat->numOfLines){
     int lineDigitSpace = stat->lineDigit - countLineDigit(stat->currentLine + 2);
     for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], stat->y + 1, j, " ");
     wattron(win[0], COLOR_PAIR(3));
     wprintw(win[0], "%d", stat->currentLine + 2);
   }
+  wmove(win[0], stat->y, stat->x);
   wrefresh(win[0]);
 }
 
