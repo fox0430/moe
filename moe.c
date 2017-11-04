@@ -31,7 +31,7 @@ int setCursesColor(){
   use_default_colors();   // terminal default color
 
   init_pair(1, COLOR_BLACK , COLOR_GREEN);    // char is while, bg is GREEN
-  init_pair(2, COLOR_BLACK, 8);
+  init_pair(2, COLOR_BLACK, BRIGHT_WHITE);
   init_pair(3, -1, -1);   // -1 is terminal default color
   init_pair(4, COLOR_RED, -1);
   init_pair(5, COLOR_GREEN, COLOR_BLACK);
