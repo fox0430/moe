@@ -32,7 +32,7 @@ int setCursesColor(){
 
   init_pair(1, COLOR_BLACK , COLOR_GREEN);    // char is while, bg is GREEN
   init_pair(2, COLOR_BLACK, BRIGHT_WHITE);
-  init_pair(3, 245, -1);   // -1 is terminal default color
+  init_pair(3, GRAY, -1);   // -1 is terminal default color
   init_pair(4, COLOR_RED, -1);
   init_pair(5, COLOR_GREEN, COLOR_BLACK);
   init_pair(6, BRIGHT_WHITE, -1);
@@ -289,15 +289,16 @@ int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
 */
 
 void printStatBarInit(WINDOW **win, editorStat *stat){
-  wclear(win[1]);
-  wbkgd(win[1], COLOR_PAIR(2));
-  if(stat->mode == NORMAL_MODE){
-    wprintw(win[1], "%s ", "normal");
-  }else if(stat->mode == INSERT_MODE){
-    wprintw(win[1], "%s ", "insert");
-  }
+  werase(win[1]);
   wbkgd(win[1], COLOR_PAIR(1));
-  wprintw(win[1], "%s ", stat->filename);
+  wattron(win[1], COLOR_PAIR(2));
+  if(stat->mode == NORMAL_MODE){
+    wprintw(win[1], "%s ", " normal");
+  }else if(stat->mode == INSERT_MODE){
+    wprintw(win[1], "%s ", " insert");
+  }
+  wattron(win[1], COLOR_PAIR(1));
+  wprintw(win[1], " %s ", stat->filename);
   printStatBar(win, stat);
 }
 
