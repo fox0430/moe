@@ -32,10 +32,10 @@ int setCursesColor(){
 
   init_pair(1, COLOR_BLACK , COLOR_GREEN);    // char is while, bg is GREEN
   init_pair(2, COLOR_BLACK, BRIGHT_WHITE);
-  init_pair(3, GRAY, -1);   // -1 is terminal default color
-  init_pair(4, COLOR_RED, -1);
+  init_pair(3, GRAY, COLOR_DEFAULT);   // -1 is terminal default color
+  init_pair(4, COLOR_RED, COLOR_DEFAULT);
   init_pair(5, COLOR_GREEN, COLOR_BLACK);
-  init_pair(6, BRIGHT_WHITE, -1);
+  init_pair(6, BRIGHT_WHITE, COLOR_DEFAULT);
   return 0;
 }
 
@@ -183,6 +183,26 @@ int countLineDigit(int numOfLines){
     lineDigit++;
   }
   return lineDigit;
+}
+
+void printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  int lineDigitSpace = stat->lineDigit - countLineDigit(stat->currentLine + 1);
+  for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], stat->y, j, " ");
+  wattron(win[0], COLOR_PAIR(4));
+  wprintw(win[0], "%d", stat->currentLine + 1);
+  if(stat->currentLine > 0){
+    int lineDigitSpace = stat->lineDigit - countLineDigit(stat->currentLine);
+    for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], stat->y - 1, j, " ");
+    wattron(win[0], COLOR_PAIR(3));
+    wprintw(win[0], "%d", stat->currentLine);
+  }
+  if(stat->y < LINES-2 || stat->y < stat->numOfLines){
+    int lineDigitSpace = stat->lineDigit - countLineDigit(stat->currentLine + 2);
+    for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], stat->y + 1, j, " ");
+    wattron(win[0], COLOR_PAIR(3));
+    wprintw(win[0], "%d", stat->currentLine + 2);
+  }
+  wrefresh(win[0]);
 }
 
 void printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y){
@@ -520,8 +540,8 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   while(1){
     wmove(win[0], stat->y, stat->x);
     printStatBar(win, stat); 
+    printCurrentLine(win, gb, stat);
     debugMode(win, gb, stat);
-    wrefresh(win[0]);
     noecho();
     key = wgetch(win[0]);
 
@@ -593,6 +613,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
     wmove(win[0], stat->y, stat->x);
     printStatBar(win, stat);
+    printCurrentLine(win, gb, stat);
     debugMode(win, gb, stat);
     noecho();
     key = wgetch(win[0]);

@@ -9,6 +9,7 @@
 //#include<locale.h>
 
 #define KEY_ESC 27
+#define COLOR_DEFAULT -1
 #define BRIGHT_WHITE 231
 #define GRAY 245
 #define ON 1
@@ -37,6 +38,7 @@ void signal_handler(int SIG);
 void exitCurses();
 int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat);
 int countLineDigit(int lineNum);
+void printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat);
 void printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y);
 void printLine(WINDOW **win, gapBuffer* gb, editorStat *stat, int line, int y);
 void printLineAll(WINDOW **win, gapBuffer* gb, editorStat *stat);
