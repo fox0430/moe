@@ -80,11 +80,11 @@ int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
     int   i = 0;
     char  ch, 
           filename[256];
-    wbkgd(win[2], COLOR_PAIR(4));
+    wattron(win[2], COLOR_PAIR(4));
     werase(win[2]);
     wprintw(win[2], "Please file name: ");
     wrefresh(win[2]);
-    wbkgd(win[2], COLOR_PAIR(3));
+    wattron(win[2], COLOR_PAIR(3));
     echo();
     wgetch(win[2]);   // skip enter 
     while(1){
@@ -186,16 +186,16 @@ int countLineDigit(int numOfLines){
 }
 
 void printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y){
-  wattron(win[0], COLOR_PAIR(3));
   int lineDigitSpace = stat->lineDigit - countLineDigit(currentLine + 1);
   for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
+  wattron(win[0], COLOR_PAIR(3));
   wprintw(win[0], "%d", currentLine + 1);
 }
 
 // print single line
 void printLine(WINDOW **win, gapBuffer* gb, editorStat *stat, int currentLine, int y){
   printLineNum(win, stat, currentLine, y);
-  wbkgd(win[0], COLOR_PAIR(6));
+  wattron(win[0], COLOR_PAIR(6));
   mvwprintw(win[0], y, stat->lineDigit + 1, "%s", gapBufferAt(gb, currentLine)->elements);
   wrefresh(win[0]);
 }
