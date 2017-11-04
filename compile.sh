@@ -1,1 +1,1 @@
-gcc -o moe -lncurses -ltinfo vector.c gapbuffer.c moe.c
+gcc -o moe vector.c gapbuffer.c moe.c -lncurses -ltinfo 
