@@ -39,7 +39,7 @@ int charArrayPush(charArray* array, char element){
 
   if(array->capacity == array->head && charArrayReserve(array, array->capacity *2) ==- 1) return -1;
   array->elements[array->head] = element;
-  if(element != '\0') array->numOfChar++;
+  array->numOfChar++;
   array->elements[array->head+1] = '\0';
   ++array->head;
   return 1;
@@ -51,7 +51,7 @@ int charArrayInsert(charArray* array, char element, int position){
 
   memmove(array->elements + position, array->elements + position -1, array->head - position +1);
   array->elements[position] = element;
-  if(element != '\0') array->numOfChar++;
+  array->numOfChar++;
   array->elements[array->head+1] = '\0';
   ++array->head;
   return 1;
@@ -63,19 +63,20 @@ int charArrayPop(charArray* array){
     printf("Vector: cannot pop from an empty array.");
     return -1;
   }
+  
   --array->head;
   array->elements[array->head] = '\0';
 
   --array->numOfChar;
 
-  if(array->head*4 <= array->capacity){
-    char* newElements = (char*)realloc(array->elements, sizeof(char)*(array->capacity /2+1));
-      if(newElements == NULL){
+  if(array->head * 4 <= array->capacity){
+    char* newElements = (char*)realloc(array->elements, sizeof(char) * (array->capacity / 2 + 1));
+    if(newElements == NULL){
         printf("Vector: cannot reallocate memory.");
         return -1;
-        }
-     array->elements = newElements;
-     array->capacity /= 2;
+    }
+    array->elements = newElements;
+    array->capacity /= 2;
   }
   return 1;
 }
