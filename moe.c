@@ -190,18 +190,18 @@ void printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
   int lineDigitSpace = stat->lineDigit - countLineDigit(stat->currentLine + 1);
   for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], stat->y, j, " ");
   wattron(win[0], COLOR_PAIR(7));
-  wprintw(win[0], "%d", stat->currentLine + 1);
+  mvwprintw(win[0], stat->y, lineDigitSpace, "%d", stat->currentLine + 1);
   if(stat->currentLine > 0 && stat->y > 0){
     int lineDigitSpace = stat->lineDigit - countLineDigit(stat->currentLine);
     for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], stat->y - 1, j, " ");
     wattron(win[0], COLOR_PAIR(3));
-    wprintw(win[0], "%d", stat->currentLine);
+    mvwprintw(win[0], stat->y - 1, lineDigitSpace, "%d", stat->currentLine);
   }
   if(stat->y < LINES-3 && stat->y < stat->numOfLines){
     int lineDigitSpace = stat->lineDigit - countLineDigit(stat->currentLine + 2);
     for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], stat->y + 1, j, " ");
     wattron(win[0], COLOR_PAIR(3));
-    wprintw(win[0], "%d", stat->currentLine + 2);
+    mvwprintw(win[0], stat->y + 1, lineDigitSpace, "%d", stat->currentLine + 2);
   }
   wmove(win[0], stat->y, stat->x);
   wrefresh(win[0]);
