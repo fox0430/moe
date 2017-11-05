@@ -428,12 +428,13 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
   if(stat->y == LINES - 3){
     if(stat->x == stat->lineDigitSpace){
       insNewLine(gb, stat, stat->currentLine);
-      charArrayPush(gapBufferAt(gb, stat->currentLine), '\0');
+      //charArrayPush(gapBufferAt(gb, stat->currentLine), '\0');
       stat->currentLine++;
       printLineAll(win, gb, stat);
       stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
     }else{
       // does not work...
+      /*
       insNewLine(gb, stat, stat->currentLine + 1);
       charArrayPush(gapBufferAt(gb, stat->currentLine + 1), '\0');
       int tmp = gapBufferAt(gb, stat->currentLine)->numOfChar;
@@ -446,6 +447,23 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
       wmove(win[0], stat->y - 1, 0);
       printLineAll(win, gb, stat);
       stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
+      */
+      insNewLine(gb, stat, stat->currentLine + 1);
+      
+      charArray* leftLine = gapBufferAt(gb, stat->currentLine), *rightLine = gapBufferAt(gb, stat->currentLine + 1);
+      const int rightLineLength = leftLine->numOfChar - (stat->x - stat->lineDigitSpace);
+      for(int i = 0; i < rightLineLength; ++i){
+        char back = leftLine->elements[leftLine->head - 1];
+        charArrayPush(rightLine, back);
+        charArrayPop(leftLine);
+      }
+      
+      ++stat->currentLine;
+      ++stat->y;
+
+      printLineAll(win, gb, stat);
+
+      stat->x = stat->lineDigitSpace;
     }
     return 0;
   }
