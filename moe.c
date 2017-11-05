@@ -10,6 +10,7 @@ int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   wprintw(win[2], "numOfChar: %d ", gapBufferAt(gb, stat->currentLine)->numOfChar);
   wprintw(win[2], "elements: %s", gapBufferAt(gb, stat->currentLine)->elements);
   wrefresh(win[2]);
+  wmove(win[0], stat->y, stat->x);
   return 0;
 }
 
@@ -190,21 +191,22 @@ void printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
   int lineDigitSpace = stat->lineDigit - countLineDigit(stat->currentLine + 1);
   for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], stat->y, j, " ");
   wattron(win[0], COLOR_PAIR(7));
-  wprintw(win[0], "%d", stat->currentLine + 1);
+  mvwprintw(win[0], stat->y, lineDigitSpace, "%d", stat->currentLine + 1);
   if(stat->currentLine > 0 && stat->y > 0){
     int lineDigitSpace = stat->lineDigit - countLineDigit(stat->currentLine);
     for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], stat->y - 1, j, " ");
     wattron(win[0], COLOR_PAIR(3));
-    wprintw(win[0], "%d", stat->currentLine);
+    mvwprintw(win[0], stat->y - 1, lineDigitSpace, "%d", stat->currentLine);
   }
-  if(stat->y < LINES-3 && stat->y < stat->numOfLines){
+  if(stat->y < LINES-3 && stat->y < stat->numOfLines - 1){
     int lineDigitSpace = stat->lineDigit - countLineDigit(stat->currentLine + 2);
     for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], stat->y + 1, j, " ");
     wattron(win[0], COLOR_PAIR(3));
-    wprintw(win[0], "%d", stat->currentLine + 2);
+    mvwprintw(win[0], stat->y + 1, lineDigitSpace, "%d", stat->currentLine + 2);
   }
   wmove(win[0], stat->y, stat->x);
   wrefresh(win[0]);
+  wattron(win[0], COLOR_PAIR(6));
 }
 
 void printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y){
@@ -399,25 +401,17 @@ int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat){
     }
     gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
     stat->numOfLines--;
-    wdeleteln(win[0]);
     stat->x = stat->lineDigitSpace + tmpNumOfChar;
     wmove(win[0], --stat->y, stat->x);
-    wclrtobot(win[0]);
-    for(int i=stat->currentLine - 1; i<stat->numOfLines; i++){
-      if(i == LINES - 2) break;
-      printLine(win, gb, stat, i, i);
-    }
+    werase(win[0]);
+    printLineAll(win, gb, stat);
   }else if(stat->x < stat->lineDigitSpace  && gapBufferAt(gb, stat->currentLine)->numOfChar == 0){
     gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
     stat->numOfLines--;
-    wdeleteln(win[0]);
     stat->x = stat->lineDigitSpace + gapBufferAt(gb, --stat->currentLine)->numOfChar;
     wmove(win[0], --stat->y, stat->x);
-    wclrtobot(win[0]);
-    for(int i=stat->currentLine; i<stat->numOfLines; i++){
-      if(i == LINES - 2) break;
-      printLine(win, gb, stat, i, i);
-    }
+    werase(win[0]);
+    printLineAll(win, gb, stat);
   }else{
    charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
   }
@@ -498,7 +492,7 @@ int keyO(WINDOW **win, gapBuffer *gb, editorStat *stat){
 int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat){
   gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
   stat->numOfLines--;
-  wdeleteln(win[0]);
+  werase(win[0]);
   printLineAll(win, gb, stat);
   return 0;
 }
