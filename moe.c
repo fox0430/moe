@@ -36,6 +36,7 @@ int setCursesColor(){
   init_pair(4, COLOR_RED, COLOR_DEFAULT);
   init_pair(5, COLOR_GREEN, COLOR_BLACK);
   init_pair(6, BRIGHT_WHITE, COLOR_DEFAULT);
+  init_pair(7, BRIGHT_GREEN, COLOR_DEFAULT);
   return 0;
 }
 
@@ -188,7 +189,7 @@ int countLineDigit(int numOfLines){
 void printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
   int lineDigitSpace = stat->lineDigit - countLineDigit(stat->currentLine + 1);
   for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], stat->y, j, " ");
-  wattron(win[0], COLOR_PAIR(4));
+  wattron(win[0], COLOR_PAIR(7));
   wprintw(win[0], "%d", stat->currentLine + 1);
   if(stat->currentLine > 0 && stat->y > 0){
     int lineDigitSpace = stat->lineDigit - countLineDigit(stat->currentLine);
