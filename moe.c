@@ -213,7 +213,7 @@ void printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y){
   int lineDigitSpace = stat->lineDigit - countLineDigit(currentLine + 1);
   for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
   wattron(win[0], COLOR_PAIR(3));
-  wprintw(win[0], "%d", currentLine + 1);
+  mvwprintw(win[0], y, lineDigitSpace, "%d", currentLine + 1);
 }
 
 // print single line
