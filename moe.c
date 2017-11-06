@@ -1,7 +1,7 @@
 #include"moe.h"
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->debugMode = OFF;
+  stat->debugMode = ON;
   if(stat->debugMode == OFF ) return 0;
   werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
@@ -31,9 +31,9 @@ int setCursesColor(){
 
   use_default_colors();   // terminal default color
 
-  init_pair(1, COLOR_BLACK , COLOR_GREEN);    // char is while, bg is GREEN
+  init_pair(1, COLOR_BLACK , COLOR_GREEN);    // char is black, bg is green
   init_pair(2, COLOR_BLACK, BRIGHT_WHITE);
-  init_pair(3, GRAY, COLOR_DEFAULT);   // -1 is terminal default color
+  init_pair(3, GRAY, COLOR_DEFAULT);
   init_pair(4, COLOR_RED, COLOR_DEFAULT);
   init_pair(5, COLOR_GREEN, COLOR_BLACK);
   init_pair(6, BRIGHT_WHITE, COLOR_DEFAULT);
@@ -421,50 +421,34 @@ int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat){
 int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
   if(stat->y == LINES - 3){
     insNewLine(gb, stat, stat->currentLine + 1);
-    
+
     charArray* leftLine = gapBufferAt(gb, stat->currentLine), *rightLine = gapBufferAt(gb, stat->currentLine + 1);
     const int leftLineLength = stat->x - stat->lineDigitSpace, rightLineLength = leftLine->numOfChar - leftLineLength;
     for(int i = 0; i < rightLineLength; ++i) charArrayPush(rightLine, leftLine->elements[leftLineLength + i]);
     for(int i = 0; i < rightLineLength; ++i) charArrayPop(leftLine);
-    
+
     ++stat->currentLine;
-
     printLineAll(win, gb, stat);
-
     stat->x = stat->lineDigitSpace;
-    return 0;
-  }
-
-  winsertln(win[0]);
-  if(stat->x == stat->lineDigitSpace){    // beginning of line
+  }else if(stat->x == stat->lineDigitSpace){    // beginning of line
     insNewLine(gb, stat, stat->currentLine);
     printLineAll(win, gb, stat);
     stat->currentLine++;
     stat->y++;
-    // Up lineDigit
-    if(countLineDigit(stat->numOfLines) > countLineDigit(stat->numOfLines - 1)){
-      stat->lineDigit = countLineDigit(stat->numOfLines);
-      wclear(win[0]);
-      printLineAll(win, gb, stat);
-    }
   }else{
     insNewLine(gb, stat, stat->currentLine + 1);
-    int tmp = gapBufferAt(gb, stat->currentLine)->numOfChar;
-    for(int i = 0; i < tmp - (stat->x - stat->lineDigitSpace); i++){
-      charArrayInsert(gapBufferAt(gb, stat->currentLine + 1), gapBufferAt(gb, stat->currentLine)->elements[i + stat->x - stat->lineDigitSpace], i);
-    }
-    for(int i=0; i < tmp - (stat->x - stat->lineDigitSpace); i++) charArrayPop(gapBufferAt(gb, stat->currentLine));
-    stat->x = stat->lineDigitSpace;
-    printLineAll(win, gb, stat);
-    gapBufferAt(gb, stat->currentLine)->numOfChar = tmp - gapBufferAt(gb, ++stat->currentLine)->numOfChar;
+
+    charArray* leftLine = gapBufferAt(gb, stat->currentLine), *rightLine = gapBufferAt(gb, stat->currentLine + 1);
+    const int leftLineLength = stat->x - stat->lineDigitSpace, rightLineLength = leftLine->numOfChar - leftLineLength;
+    for(int i = 0; i < rightLineLength; ++i) charArrayPush(rightLine, leftLine->elements[leftLineLength + i]);
+    for(int i = 0; i < rightLineLength; ++i) charArrayPop(leftLine);
+
+    stat->currentLine++;
     stat->y++;
-    // Up lineDigit
-    if(countLineDigit(stat->numOfLines) > countLineDigit(stat->numOfLines - 1)){
-      stat->lineDigit = countLineDigit(stat->numOfLines);
-      printLineAll(win, gb, stat);
-    }
-    return 0;
+    stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar;
+    printLineAll(win, gb, stat);
   }
+  return 0;
 }
 
 int keyX(WINDOW **win, gapBuffer *gb, editorStat *stat){
