@@ -86,6 +86,7 @@ void editorStatInit(editorStat* stat){
   stat->lineDigit = 3;    // 3 is default line digit
   stat->lineDigitSpace = stat->lineDigit + 1;
   stat->mode = NORMAL_MODE;
+  stat->cmdLoop = 1;
   strcpy(stat->filename, "No name");
   stat->numOfChange = 0;
   stat->currentLine = false;
@@ -505,8 +506,8 @@ int keyO(gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
-int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat, int cmdLoop){
-  for(int i=0; i<cmdLoop; i++){
+int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  for(int i=0; i<stat->cmdLoop; i++){
     gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
     stat->numOfLines--;
     stat->numOfChange++;
@@ -542,8 +543,8 @@ int moveLastLine(gapBuffer *gb, editorStat *stat){
 
 void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
 
-  int key,
-      cmdLoop = 1;
+  int key;
+  stat->cmdLoop = 1;
   stat->mode = NORMAL_MODE;
   printStatBarInit(win, stat);
 
@@ -553,7 +554,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
     if(stat->isViewUpdated == true){
       printLineAll(win, gb, stat);
       stat->isViewUpdated = false;
-      cmdLoop = 1;
+      stat->cmdLoop = 1;
     }
     printCurrentLine(win, gb, stat);
     debugMode(win, gb, stat);
@@ -561,11 +562,11 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
     key = wgetch(win[0]);
 
     if(key > 48 && key < 58){
-      if(cmdLoop > 1){
-        cmdLoop *= 10;
-        cmdLoop += key - 48;
+      if(stat->cmdLoop > 1){
+        stat->cmdLoop *= 10;
+        stat->cmdLoop += key - 48;
       }else{
-        cmdLoop = key - 48;
+        stat->cmdLoop = key - 48;
       }
     }
 
@@ -609,8 +610,8 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
         break;
       case 'd':
         if(wgetch(win[0]) != 'd') break;
-        keyD(win, gb, stat, cmdLoop);
-        cmdLoop = 1;
+        keyD(win, gb, stat);
+        stat->cmdLoop = 1;
         break;
 
       case 'i':
@@ -634,7 +635,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
         winResizeEvent(win, gb, stat);
         break;
       case KEY_ESC:
-        cmdLoop = 1;
+        stat->cmdLoop = 1;
         break;
     }
   }

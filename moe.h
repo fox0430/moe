@@ -27,6 +27,7 @@ typedef struct editorStat{
         lineDigit,
         lineDigitSpace,
         mode,
+        cmdLoop,
         numOfChange,
         isViewUpdated,
         debugMode;
@@ -60,7 +61,7 @@ int keyBackSpace(gapBuffer* gb, editorStat* stat);
 int keyEnter(gapBuffer* gb, editorStat* stat);
 int keyX(gapBuffer* gb, editorStat* stat);
 int keyO(gapBuffer* gb, editorStat* stat);
-int keyD(WINDOW **win, gapBuffer* gb, editorStat* stat, int cmdLoop);
+int keyD(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int moveFirstLine(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int moveLastLine(gapBuffer* gb, editorStat* stat);
 void normalMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
