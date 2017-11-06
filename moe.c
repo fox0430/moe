@@ -23,6 +23,11 @@ void winInit(WINDOW **win){
   scrollok(win[0], TRUE);			// enable scroll
 }
 
+void winResizeMove(WINDOW *win, int lines, int columns, int y, int x){
+  wresize(win, lines, columns);
+  mvwin(win, y, x);
+}
+
 int setCursesColor(){
   bool color_check = can_change_color();
   if(color_check != TRUE) return 0;
@@ -63,15 +68,12 @@ void exitCurses(){
   exit(1);
 }
 
-void winResize(WINDOW **win, gapBuffer *gb, editorStat *stat){
+void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStat *stat){
   endwin(); 
   initscr();
-  wresize(win[0], LINES-2, COLS);
-  mvwin(win[0], 0, 0);
-  wresize(win[1], 1, COLS);
-  mvwin(win[1], LINES-2, 0);
-  wresize(win[2], 1, COLS);
-  mvwin(win[2], LINES-1, 0);
+  winResizeMove(win[0], LINES-2, COLS, 0, 0);
+  winResizeMove(win[1], 1, COLS, LINES-2, 0);
+  winResizeMove(win[2], 1, COLS, LINES-1, 0);
   printLineAll(win, gb, stat);
   printStatBarInit(win, stat);
 }
@@ -614,7 +616,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
         break;
       
       case KEY_RESIZE:
-        winResize(win, gb, stat);
+        winResizeEvent(win, gb, stat);
         break;
     }
   }
@@ -681,7 +683,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
         break;
 
       case KEY_RESIZE:
-        winResize(win, gb, stat);
+        winResizeEvent(win, gb, stat);
         break;
       
       default:

@@ -34,11 +34,13 @@ typedef struct editorStat{
 
 // Function prototype
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat);
+void winInit(WINDOW **win);
+void winResizeMove(WINDOW *win, int lines, int columns, int y, int x);
 int setCursesColor();
 void startCurses();
 void signal_handler(int SIG);
 void exitCurses();
-void winResize(WINDOW **win, gapBuffer *gb, editorStat *stat);
+void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStat *stat);
 int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat);
 int countLineDigit(int lineNum);
 void printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat);
