@@ -66,7 +66,12 @@ void exitCurses(){
 void winResize(WINDOW **win, gapBuffer *gb, editorStat *stat){
   endwin(); 
   initscr();
-  resize_term(0, 0);
+  wresize(win[0], LINES-2, COLS);
+  mvwin(win[0], 0, 0);
+  wresize(win[1], 1, COLS);
+  mvwin(win[1], LINES-2, 0);
+  wresize(win[2], 1, COLS);
+  mvwin(win[2], LINES-1, 0);
   printLineAll(win, gb, stat);
   printStatBarInit(win, stat);
 }
@@ -608,7 +613,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
         commandBar(win, gb, stat);
         break;
       
-      case KEY_RESIZE:   // 410 is window resize
+      case KEY_RESIZE:
         winResize(win, gb, stat);
         break;
     }
@@ -675,7 +680,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
         insertTab(gb, stat);
         break;
 
-      case KEY_RESIZE:   // 410 is window resize
+      case KEY_RESIZE:
         winResize(win, gb, stat);
         break;
       
