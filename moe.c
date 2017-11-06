@@ -1,7 +1,7 @@
 #include"moe.h"
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->debugMode = ON;
+  stat->debugMode = OFF;
   if(stat->debugMode == OFF ) return 0;
   werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
@@ -111,10 +111,11 @@ int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
     if(i != gb->size - 1) fputc('\n', fp);
   }
 
-  mvwprintw(win[2], 0, 0, "%s", "saved...");
+  mvwprintw(win[2], 0, 0, "saved..., %d times changed", stat->numOfChange);
   wrefresh(win[2]);
 
   fclose(fp);
+  stat->numOfChange = 0;
 
   return 0;
 }
@@ -347,6 +348,7 @@ int keyUp(WINDOW **win, gapBuffer* gb, editorStat* stat){
     stat->currentLine--;
     stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
     stat->isChanged = true;
+    stat->numOfChange++;
   }else{
     stat->y--;
     stat->currentLine--;
@@ -362,6 +364,7 @@ int keyDown(WINDOW **win, gapBuffer* gb, editorStat* stat){
     stat->currentLine++;
     stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace;
     stat->isChanged = true;
+    stat->numOfChange++;
   }else{
     stat->y++;
     stat->currentLine++;
@@ -412,6 +415,7 @@ int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat){
    charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
   }
   stat->isChanged = true;
+  stat->numOfChange++;
   return 0;
 }
 
@@ -444,6 +448,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
     stat->x = stat->lineDigitSpace;
   }
   stat->isChanged = true;
+  stat->numOfChange++;
   return 0;
 }
 
@@ -457,6 +462,7 @@ int keyX(WINDOW **win, gapBuffer *gb, editorStat *stat){
     charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
   }
   stat->isChanged = true;
+  stat->numOfChange++;
   return 0;
 }
 
@@ -466,6 +472,7 @@ int keyO(WINDOW **win, gapBuffer *gb, editorStat *stat){
   stat->x = stat->lineDigitSpace;
   stat->y++;
   stat->isChanged = true;
+  stat->numOfChange++;
   return 0;
 }
 
@@ -473,6 +480,7 @@ int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat){
   gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
   stat->numOfLines--;
   stat->isChanged = true;
+  stat->numOfChange++;
   return 0;
 }
 
@@ -640,6 +648,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
         for(int i=0; i<2; i++){
           charArrayInsert(gapBufferAt(gb, stat->currentLine), ' ', stat->x - stat->lineDigit);
           stat->x++;
+          stat->numOfChange++;
         }
         stat->isChanged = true;
         break;
@@ -647,6 +656,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
       default:
         charArrayInsert(gapBufferAt(gb, stat->currentLine), key, stat->x - stat->lineDigitSpace);
         stat->x++;
+        stat->numOfChange++;
         stat->isChanged = true;
     }
   }
