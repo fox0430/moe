@@ -368,7 +368,7 @@ int insertTab(gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
-int keyUp(WINDOW **win, gapBuffer* gb, editorStat* stat){
+int keyUp(gapBuffer* gb, editorStat* stat){
   if(stat->currentLine == 0) return 0;
   if(stat->y == 0){
     stat->currentLine--;
@@ -384,7 +384,7 @@ int keyUp(WINDOW **win, gapBuffer* gb, editorStat* stat){
   return 0;
 }
 
-int keyDown(WINDOW **win, gapBuffer* gb, editorStat* stat){
+int keyDown(gapBuffer* gb, editorStat* stat){
   if(stat->currentLine + 1 == stat->numOfLines) return 0;
   if(stat->y == LINES - 3){
     stat->currentLine++;
@@ -418,7 +418,7 @@ int keyLeft(gapBuffer* gb, editorStat* stat){
   return 0;
 }
 
-int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat){
+int keyBackSpace(gapBuffer* gb, editorStat* stat){
   if(stat->y == 0 && stat->x == stat->lineDigitSpace) return 0;
   stat->x--;
   if(stat->x < stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine)->numOfChar > 0){   // move char
@@ -449,7 +449,7 @@ int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat){
   return 0;
 }
 
-int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
+int keyEnter(gapBuffer* gb, editorStat* stat){
   if(stat->y == LINES - 3){
     insNewLine(gb, stat, stat->currentLine + 1);
 
@@ -462,7 +462,6 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
     stat->x = stat->lineDigitSpace;
   }else if(stat->x == stat->lineDigitSpace){    // beginning of line
     insNewLine(gb, stat, stat->currentLine);
-    printLineAll(win, gb, stat);
     stat->currentLine++;
     stat->y++;
   }else{
@@ -482,12 +481,12 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
   return 0;
 }
 
-int keyX(WINDOW **win, gapBuffer *gb, editorStat *stat){
+int keyX(gapBuffer *gb, editorStat *stat){
   if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1){
     stat->currentLine++;
     stat->y++;
     stat->x = stat->lineDigitSpace;
-    keyBackSpace(win, gb, stat);
+    keyBackSpace(gb, stat);
   }else{
     charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
   }
@@ -496,7 +495,7 @@ int keyX(WINDOW **win, gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
-int keyO(WINDOW **win, gapBuffer *gb, editorStat *stat){
+int keyO(gapBuffer *gb, editorStat *stat){
   insNewLine(gb, stat, stat->currentLine + 1);
   stat->currentLine++;
   stat->x = stat->lineDigitSpace;
@@ -506,11 +505,15 @@ int keyO(WINDOW **win, gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
-int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
-  stat->numOfLines--;
+int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat, int cmdLoop){
+  for(int i=0; i<cmdLoop; i++){
+    gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
+    stat->numOfLines--;
+    stat->numOfChange++;
+  }
   stat->isViewUpdated = true;
-  stat->numOfChange++;
+  werase(win[2]);
+  wprintw(win[2], "%d line deleted");
   return 0;
 }
 
@@ -529,7 +532,7 @@ int moveFirstLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
-int moveLastLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
+int moveLastLine(gapBuffer *gb, editorStat *stat){
   stat->y = LINES - 3;
   stat->currentLine = stat->numOfLines - 1;
   stat->x = stat->lineDigitSpace;
@@ -539,7 +542,8 @@ int moveLastLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
 
 void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
 
-  int key;
+  int key,
+      cmdLoop = 1;
   stat->mode = NORMAL_MODE;
   printStatBarInit(win, stat);
 
@@ -549,11 +553,21 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
     if(stat->isViewUpdated == true){
       printLineAll(win, gb, stat);
       stat->isViewUpdated = false;
+      cmdLoop = 1;
     }
     printCurrentLine(win, gb, stat);
     debugMode(win, gb, stat);
     noecho();
     key = wgetch(win[0]);
+
+    if(key > 48 && key < 58){
+      if(cmdLoop > 1){
+        cmdLoop *= 10;
+        cmdLoop += key - 48;
+      }else{
+        cmdLoop = key - 48;
+      }
+    }
 
     switch(key){
       case KEY_LEFT:
@@ -564,11 +578,11 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       case KEY_DOWN:
       case 10:    // 10 is Enter key
       case 'j':
-        keyDown(win, gb, stat);
+        keyDown(gb, stat);
        break;
       case KEY_UP:
       case 'k':
-        keyUp(win, gb, stat);
+        keyUp(gb, stat);
         break;
       case KEY_RIGHT:
       case 'l':
@@ -586,16 +600,17 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
         moveFirstLine(win, gb, stat);
         break;
       case 'G':
-        moveLastLine(win, gb, stat);
+        moveLastLine(gb, stat);
         break;
 
       case KEY_DC:
       case 'x':
-        keyX(win, gb, stat);
+        keyX(gb, stat);
         break;
       case 'd':
         if(wgetch(win[0]) != 'd') break;
-        keyD(win, gb, stat);
+        keyD(win, gb, stat, cmdLoop);
+        cmdLoop = 1;
         break;
 
       case 'i':
@@ -608,7 +623,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
         insertMode(win, gb, stat);
         break;
       case 'o':
-        keyO(win, gb, stat);
+        keyO(gb, stat);
         insertMode(win, gb, stat);
         break;
       case ':':
@@ -617,6 +632,9 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       
       case KEY_RESIZE:
         winResizeEvent(win, gb, stat);
+        break;
+      case KEY_ESC:
+        cmdLoop = 1;
         break;
     }
   }
@@ -641,18 +659,13 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
     noecho();
     key = wgetch(win[0]);
 
-    if(key == KEY_ESC){
-      normalMode(win, gb, stat);
-      break;
-    } 
-
     switch(key){
 
       case KEY_UP:
-        keyUp(win, gb, stat);
+        keyUp(gb, stat);
         break;
       case KEY_DOWN:
-        keyDown(win, gb, stat);
+        keyDown(gb, stat);
         break;
       case KEY_RIGHT:
         keyRight(gb, stat);
@@ -668,14 +681,14 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
         break;
         
       case 127:   // 127 is backspace key
-        keyBackSpace(win, gb, stat);
+        keyBackSpace(gb, stat);
         break;
       case KEY_DC:
-        keyX(win, gb, stat);
+        keyX(gb, stat);
         break;
 
       case 10:    // 10 is Enter key
-        keyEnter(win, gb, stat);
+        keyEnter(gb, stat);
         break;
 
       case 9:   // 9 is Tab key;
@@ -684,6 +697,9 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
       case KEY_RESIZE:
         winResizeEvent(win, gb, stat);
+        break;
+      case KEY_ESC:
+        normalMode(win, gb, stat);
         break;
       
       default:
