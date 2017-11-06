@@ -70,10 +70,10 @@ void winResize(WINDOW **win, gapBuffer *gb, editorStat *stat){
   mvwin(win[0], 0, 0);
   wresize(win[1], 1, COLS);
   mvwin(win[1], LINES-2, 0);
-  printLineAll(win, gb, stat);
-  printStatBarInit(win, stat);
   wresize(win[2], 1, COLS);
   mvwin(win[2], LINES-1, 0);
+  printLineAll(win, gb, stat);
+  printStatBarInit(win, stat);
 }
 
 void editorStatInit(editorStat* stat){
