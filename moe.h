@@ -28,7 +28,7 @@ typedef struct editorStat{
         lineDigitSpace,
         mode,
         numOfChange,
-        isChanged,
+        isViewUpdated,
         debugMode;
 } editorStat;
 
@@ -38,6 +38,7 @@ int setCursesColor();
 void startCurses();
 void signal_handler(int SIG);
 void exitCurses();
+void winResize(WINDOW **win, gapBuffer *gb, editorStat *stat);
 int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat);
 int countLineDigit(int lineNum);
 void printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat);
@@ -48,6 +49,7 @@ int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat);
 void printStatBarInit(WINDOW **win, editorStat *stat);
 void printStatBar(WINDOW **win, editorStat *stat);
 int insNewLine(gapBuffer *gb, editorStat *stat, int position);
+int insertTab(gapBuffer *gb, editorStat *stat);
 int keyUp(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int keyDown(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int keyRight(gapBuffer* gb, editorStat* stat);
@@ -58,8 +60,8 @@ int keyA(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int keyX(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int keyO(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int keyD(WINDOW **win, gapBuffer* gb, editorStat* stat);
-int moveTopLine(WINDOW **win, gapBuffer* gb, editorStat* stat);
-int moveBottomLine(WINDOW **win, gapBuffer* gb, editorStat* stat);
+int moveFirstLine(WINDOW **win, gapBuffer* gb, editorStat* stat);
+int moveLastLine(WINDOW **win, gapBuffer* gb, editorStat* stat);
 void normalMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
 void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int newFile();

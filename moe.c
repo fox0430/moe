@@ -59,8 +59,16 @@ void signal_handler(int SIG){
 }
 
 void exitCurses(){
- endwin(); 
- exit(1);
+  endwin(); 
+  exit(1);
+}
+
+void winResize(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  endwin(); 
+  initscr();
+  resize_term(0, 0);
+  printLineAll(win, gb, stat);
+  printStatBarInit(win, stat);
 }
 
 void editorStatInit(editorStat* stat){
@@ -342,12 +350,23 @@ int insNewLine(gapBuffer *gb, editorStat *stat, int position){
   return 0;
 }
 
+// Tab key is 2 space
+int insertTab(gapBuffer *gb, editorStat *stat){
+  for(int i=0; i<2; i++){
+    charArrayInsert(gapBufferAt(gb, stat->currentLine), ' ', stat->x - stat->lineDigit);
+    stat->x++;
+    }
+  stat->numOfChange++;
+  stat->isViewUpdated = true;
+  return 0;
+}
+
 int keyUp(WINDOW **win, gapBuffer* gb, editorStat* stat){
   if(stat->currentLine == 0) return 0;
   if(stat->y == 0){
     stat->currentLine--;
     stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
-    stat->isChanged = true;
+    stat->isViewUpdated = true;
     stat->numOfChange++;
   }else{
     stat->y--;
@@ -363,7 +382,7 @@ int keyDown(WINDOW **win, gapBuffer* gb, editorStat* stat){
   if(stat->y == LINES - 3){
     stat->currentLine++;
     stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace;
-    stat->isChanged = true;
+    stat->isViewUpdated = true;
     stat->numOfChange++;
   }else{
     stat->y++;
@@ -411,10 +430,14 @@ int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat){
     stat->x = stat->lineDigitSpace + gapBufferAt(gb, --stat->currentLine)->numOfChar;
     stat->y++;
     stat->currentLine--;
+  }else if(stat->x < stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine - 1)->numOfChar == 0){
+    gapBufferDel(gb, stat->currentLine - 1, stat->currentLine);
+    stat->numOfLines--;
+    stat->currentLine--;
   }else{
    charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
   }
-  stat->isChanged = true;
+  stat->isViewUpdated = true;
   stat->numOfChange++;
   return 0;
 }
@@ -447,7 +470,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
     stat->y++;
     stat->x = stat->lineDigitSpace;
   }
-  stat->isChanged = true;
+  stat->isViewUpdated = true;
   stat->numOfChange++;
   return 0;
 }
@@ -461,7 +484,7 @@ int keyX(WINDOW **win, gapBuffer *gb, editorStat *stat){
   }else{
     charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
   }
-  stat->isChanged = true;
+  stat->isViewUpdated = true;
   stat->numOfChange++;
   return 0;
 }
@@ -471,7 +494,7 @@ int keyO(WINDOW **win, gapBuffer *gb, editorStat *stat){
   stat->currentLine++;
   stat->x = stat->lineDigitSpace;
   stat->y++;
-  stat->isChanged = true;
+  stat->isViewUpdated = true;
   stat->numOfChange++;
   return 0;
 }
@@ -479,12 +502,12 @@ int keyO(WINDOW **win, gapBuffer *gb, editorStat *stat){
 int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat){
   gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
   stat->numOfLines--;
-  stat->isChanged = true;
+  stat->isViewUpdated = true;
   stat->numOfChange++;
   return 0;
 }
 
-int moveTopLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
+int moveFirstLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
   int key;
   while(1){
     key = wgetch(win[0]);
@@ -492,18 +515,18 @@ int moveTopLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
       stat->y = 0;
       stat->x = stat->lineDigitSpace;
       stat->currentLine = 0;
-      stat->isChanged = true;
+      stat->isViewUpdated = true;
       break;
     }else if(key == KEY_ESC)  break;;
   }
   return 0;
 }
 
-int moveBottomLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
+int moveLastLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
   stat->y = LINES - 3;
   stat->currentLine = stat->numOfLines - 1;
   stat->x = stat->lineDigitSpace;
-  stat->isChanged = true;
+  stat->isViewUpdated = true;
   return 0;
 }
 
@@ -516,9 +539,9 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   while(1){
     wmove(win[0], stat->y, stat->x);
     printStatBar(win, stat); 
-    if(stat->isChanged == true){
+    if(stat->isViewUpdated == true){
       printLineAll(win, gb, stat);
-      stat->isChanged = false;
+      stat->isViewUpdated = false;
     }
     printCurrentLine(win, gb, stat);
     debugMode(win, gb, stat);
@@ -553,10 +576,10 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
         stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
         break;
       case 'g':
-        moveTopLine(win, gb, stat);
+        moveFirstLine(win, gb, stat);
         break;
       case 'G':
-        moveBottomLine(win, gb, stat);
+        moveLastLine(win, gb, stat);
         break;
 
       case KEY_DC:
@@ -584,6 +607,10 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       case ':':
         commandBar(win, gb, stat);
         break;
+      
+      case KEY_RESIZE:   // 410 is window resize
+        winResize(win, gb, stat);
+        break;
     }
   }
 }
@@ -598,9 +625,9 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
     wmove(win[0], stat->y, stat->x);
     printStatBar(win, stat);
-    if(stat->isChanged == true){
+    if(stat->isViewUpdated == true){
       printLineAll(win, gb, stat);
-      stat->isChanged = false;
+      stat->isViewUpdated = false;
     }
     printCurrentLine(win, gb, stat);
     debugMode(win, gb, stat);
@@ -645,19 +672,18 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
         break;
 
       case 9:   // 9 is Tab key;
-        for(int i=0; i<2; i++){
-          charArrayInsert(gapBufferAt(gb, stat->currentLine), ' ', stat->x - stat->lineDigit);
-          stat->x++;
-          stat->numOfChange++;
-        }
-        stat->isChanged = true;
+        insertTab(gb, stat);
+        break;
+
+      case KEY_RESIZE:   // 410 is window resize
+        winResize(win, gb, stat);
         break;
       
       default:
         charArrayInsert(gapBufferAt(gb, stat->currentLine), key, stat->x - stat->lineDigitSpace);
         stat->x++;
         stat->numOfChange++;
-        stat->isChanged = true;
+        stat->isViewUpdated = true;
     }
   }
 }
@@ -700,7 +726,7 @@ int openFile(char* filename){
     exit(EXIT_FAILURE);
   }
 
-  startCurses();
+  startCurses(stat);
   winInit(win);
 
   if(stat->lineDigit < countLineDigit(stat->currentLine + 1)) stat->lineDigit = countLineDigit(stat->currentLine + 1);
@@ -738,7 +764,7 @@ int newFile(){
     fprintf(stderr, "initscr failure\n");
     exit(EXIT_FAILURE);
   }
-  startCurses();
+  startCurses(stat);
   winInit(win);
 
   printLine(win, gb, stat, 0, 0);
