@@ -402,14 +402,16 @@ int keyBackSpace(WINDOW **win, gapBuffer* gb, editorStat* stat){
     gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
     stat->numOfLines--;
     stat->x = stat->lineDigitSpace + tmpNumOfChar;
-    wmove(win[0], --stat->y, stat->x);
+    stat->y--;
+    stat->currentLine--;
     werase(win[0]);
     printLineAll(win, gb, stat);
   }else if(stat->x < stat->lineDigitSpace  && gapBufferAt(gb, stat->currentLine)->numOfChar == 0){
     gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
     stat->numOfLines--;
     stat->x = stat->lineDigitSpace + gapBufferAt(gb, --stat->currentLine)->numOfChar;
-    wmove(win[0], --stat->y, stat->x);
+    stat->y++;
+    stat->currentLine--;
     werase(win[0]);
     printLineAll(win, gb, stat);
   }else{
@@ -445,7 +447,7 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
     stat->currentLine++;
     stat->y++;
-    stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar;
+    stat->x = stat->lineDigitSpace;
     printLineAll(win, gb, stat);
   }
   return 0;
