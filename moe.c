@@ -624,6 +624,14 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
       case 10:    // 10 is Enter key
         keyEnter(win, gb, stat);
         break;
+
+      case 9:   // 9 is Tab key;
+        for(int i=0; i<2; i++){
+          charArrayInsert(gapBufferAt(gb, stat->currentLine), ' ', stat->x - stat->lineDigit);
+          winsch(win[0], key);
+          stat->x++;
+        }
+        break;
       
       default:
         charArrayInsert(gapBufferAt(gb, stat->currentLine), key, stat->x - stat->lineDigitSpace);
