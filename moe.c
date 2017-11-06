@@ -739,13 +739,10 @@ int openFile(char* filename){
   if(stat->lineDigit < countLineDigit(stat->currentLine + 1)) stat->lineDigit = countLineDigit(stat->currentLine + 1);
 
   stat->numOfLines = stat->currentLine + 1;
-  for(int i=0; i < stat->numOfLines; i++){
-    if(i == LINES - 2) break;
-    printLine(win, gb, stat, i, i);
-  }
-
   stat->x = stat->lineDigitSpace;
   stat->currentLine = 0;
+
+  printLineAll(win, gb, stat);
 
   normalMode(win, gb, stat);
 
@@ -774,10 +771,11 @@ int newFile(){
   startCurses(stat);
   winInit(win);
 
-  printLine(win, gb, stat, 0, 0);
-  scrollok(stdscr, TRUE);			// enable scroll
   stat->x = stat->lineDigitSpace;
   stat->numOfLines = 1;
+
+  printLineAll(win, gb, stat);
+
   normalMode(win, gb, stat);
 
   return 0;
