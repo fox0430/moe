@@ -28,6 +28,7 @@ typedef struct editorStat{
         lineDigitSpace,
         mode,
         numOfChange,
+        isChanged,
         debugMode;
 } editorStat;
 
