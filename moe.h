@@ -58,6 +58,8 @@ int keyA(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int keyX(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int keyO(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int keyD(WINDOW **win, gapBuffer* gb, editorStat* stat);
+int moveTopLine(WINDOW **win, gapBuffer* gb, editorStat* stat);
+int moveBottomLine(WINDOW **win, gapBuffer* gb, editorStat* stat);
 void normalMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
 void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int newFile();

@@ -360,7 +360,6 @@ int keyDown(WINDOW **win, gapBuffer* gb, editorStat* stat){
   if(stat->currentLine + 1 == stat->numOfLines) return 0;
   if(stat->y == LINES - 3){
     stat->currentLine++;
-    wmove(win[0], LINES - 3, 0);
     stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace;
     stat->isChanged = true;
   }else{
@@ -427,7 +426,6 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
     ++stat->currentLine;
     stat->x = stat->lineDigitSpace;
-    stat->isChanged = true;
   }else if(stat->x == stat->lineDigitSpace){    // beginning of line
     insNewLine(gb, stat, stat->currentLine);
     printLineAll(win, gb, stat);
@@ -444,8 +442,8 @@ int keyEnter(WINDOW **win, gapBuffer* gb, editorStat* stat){
     stat->currentLine++;
     stat->y++;
     stat->x = stat->lineDigitSpace;
-    stat->isChanged = true;
   }
+  stat->isChanged = true;
   return 0;
 }
 
@@ -455,10 +453,10 @@ int keyX(WINDOW **win, gapBuffer *gb, editorStat *stat){
     stat->y++;
     stat->x = stat->lineDigitSpace;
     keyBackSpace(win, gb, stat);
-    return 0;
-  } 
-  wdelch(win[0]);
-  charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
+  }else{
+    charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
+  }
+  stat->isChanged = true;
   return 0;
 }
 
@@ -478,18 +476,27 @@ int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
-int keyG(WINDOW **win, gapBuffer *gb, editorStat *stat){
+int moveTopLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
   int key;
-  while(1) {
+  while(1){
     key = wgetch(win[0]);
     if(key == 'g'){
       stat->y = 0;
       stat->x = stat->lineDigitSpace;
       stat->currentLine = 0;
       stat->isChanged = true;
-      return 0;
-    }else if(key == KEY_ESC) return 0;
+      break;
+    }else if(key == KEY_ESC)  break;;
   }
+  return 0;
+}
+
+int moveBottomLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  stat->y = LINES - 3;
+  stat->currentLine = stat->numOfLines - 1;
+  stat->x = stat->lineDigitSpace;
+  stat->isChanged = true;
+  return 0;
 }
 
 void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
@@ -538,7 +545,10 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
         stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
         break;
       case 'g':
-        keyG(win, gb, stat);
+        moveTopLine(win, gb, stat);
+        break;
+      case 'G':
+        moveBottomLine(win, gb, stat);
         break;
 
       case KEY_DC:
