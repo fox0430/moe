@@ -1,13 +1,14 @@
 #include"moe.h"
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->debugMode = OFF;
+  stat->debugMode = ON;
   if(stat->debugMode == OFF ) return 0;
   werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
   wprintw(win[2], "currentLine: %d ", stat->currentLine);
   wprintw(win[2], "numOfLines: %d ", stat->numOfLines);
   wprintw(win[2], "numOfChar: %d ", gapBufferAt(gb, stat->currentLine)->numOfChar);
+  wprintw(win[2], "cmdLoop: %d ", stat->cmdLoop);
   wprintw(win[2], "elements: %s", gapBufferAt(gb, stat->currentLine)->elements);
   wrefresh(win[2]);
   wmove(win[0], stat->y, stat->x);
@@ -75,7 +76,7 @@ void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStat *stat){
   winResizeMove(win[1], 1, COLS, LINES-2, 0);
   winResizeMove(win[2], 1, COLS, LINES-1, 0);
   printLineAll(win, gb, stat);
-  printStatBarInit(win, stat);
+  printStatBarInit(win, gb, stat);
 }
 
 void editorStatInit(editorStat* stat){
@@ -86,7 +87,7 @@ void editorStatInit(editorStat* stat){
   stat->lineDigit = 3;    // 3 is default line digit
   stat->lineDigitSpace = stat->lineDigit + 1;
   stat->mode = NORMAL_MODE;
-  stat->cmdLoop = 1;
+  stat->cmdLoop = 0;
   strcpy(stat->filename, "No name");
   stat->numOfChange = 0;
   stat->currentLine = false;
@@ -242,6 +243,27 @@ void printLineAll(WINDOW **win, gapBuffer *gb, editorStat *stat){
   }
 }
 
+void printStatBarInit(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  werase(win[1]);
+  wbkgd(win[1], COLOR_PAIR(1));
+  printStatBar(win, gb, stat);
+}
+
+void printStatBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  werase(win[1]);
+  wattron(win[1], COLOR_PAIR(2));
+  if(stat->mode == NORMAL_MODE){
+    wprintw(win[1], "%s ", " normal");
+  }else if(stat->mode == INSERT_MODE){
+    wprintw(win[1], "%s ", " insert");
+  }
+  wattron(win[1], COLOR_PAIR(1));
+  wprintw(win[1], " %s ", stat->filename);
+  mvwprintw(win[1], 0, COLS-13, "%d/%d ", stat->currentLine + 1, stat->numOfLines);
+  mvwprintw(win[1], 0, COLS-6, " %d/%d", stat->x - stat->lineDigitSpace + 1, gapBufferAt(gb, stat->currentLine)->numOfChar);
+  wrefresh(win[1]);
+}
+
 int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
   werase(win[2]);
   wprintw(win[2], "%s", ":");
@@ -319,26 +341,6 @@ int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
 }
 */
 
-void printStatBarInit(WINDOW **win, editorStat *stat){
-  werase(win[1]);
-  wbkgd(win[1], COLOR_PAIR(1));
-  wattron(win[1], COLOR_PAIR(2));
-  if(stat->mode == NORMAL_MODE){
-    wprintw(win[1], "%s ", " normal");
-  }else if(stat->mode == INSERT_MODE){
-    wprintw(win[1], "%s ", " insert");
-  }
-  wattron(win[1], COLOR_PAIR(1));
-  wprintw(win[1], " %s ", stat->filename);
-  printStatBar(win, stat);
-}
-
-void printStatBar(WINDOW **win, editorStat *stat){
-  mvwprintw(win[1], 0, COLS-12, "%d/%d ", stat->currentLine + 1, stat->numOfLines);
-  mvwprintw(win[1], 0, COLS-4, " %d", stat->x - stat->lineDigitSpace + 1);
-  wrefresh(win[1]);
-}
-
 int insNewLine(gapBuffer *gb, editorStat *stat, int position){
   charArray* ca = (charArray*)malloc(sizeof(charArray));
   charArrayInit(ca);
@@ -359,60 +361,52 @@ int insertTab(gapBuffer *gb, editorStat *stat){
 }
 
 int keyUp(gapBuffer* gb, editorStat* stat){
-  for(int i=0; i<stat->cmdLoop; i++){
-    if(stat->currentLine == 0) return 0;
-    if(stat->y == 0){
-      stat->currentLine--;
-      stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
-      stat->isViewUpdated = true;
-      stat->numOfChange++;
-    }else{
-      stat->y--;
-      stat->currentLine--;
-      if(stat->x > stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1)
-        stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
-    }
+  if(stat->currentLine == 0) return 0;
+  if(stat->y == 0){
+    stat->currentLine--;
+    stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
+    stat->isViewUpdated = true;
+    stat->numOfChange++;
+  }else{
+    stat->y--;
+    stat->currentLine--;
+    if(stat->x > stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1)
+      stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
   }
   return 0;
 }
 
 int keyDown(gapBuffer* gb, editorStat* stat){
-  for(int i=0; i<stat->cmdLoop; i++){
-    if(stat->currentLine + 1 == stat->numOfLines) return 0;
-    if(stat->y == LINES - 3){
-      stat->currentLine++;
-      stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace;
-      stat->isViewUpdated = true;
-      stat->numOfChange++;
-    }else{
-      stat->y++;
-      stat->currentLine++;
+  if(stat->currentLine + 1 == stat->numOfLines) return 0;
+  if(stat->y == LINES - 3){
+    stat->currentLine++;
+    stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace;
+    stat->isViewUpdated = true;
+    stat->numOfChange++;
+  }else{
+    stat->y++;
+    stat->currentLine++;
 
-      if(stat->mode == NORMAL_MODE)
-        if (stat->x != stat->lineDigitSpace && stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar)
-          stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar;
+    if(stat->mode == NORMAL_MODE)
+      if (stat->x != stat->lineDigitSpace && stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar)
+        stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar;
 
-      if(stat->x > stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar)
-        stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
-    }
+    if(stat->x > stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar)
+      stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
   }
   return 0;
 }
 
 int keyRight(gapBuffer* gb, editorStat* stat){
-  for(int i=0; i<stat->cmdLoop; i++){
-    if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace) return 0;
-    if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1 && stat->mode == NORMAL_MODE) return 0;
-    stat->x++;
-  }
+  if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace) return 0;
+  if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1 && stat->mode == NORMAL_MODE) return 0;
+  stat->x++;
   return 0;
 }
 
 int keyLeft(gapBuffer* gb, editorStat* stat){
-  for(int i=0; i<stat->cmdLoop; i++){
-    if(stat->x == stat->lineDigit + 1) return 0;
-    stat->x--;
-  }
+  if(stat->x == stat->lineDigit + 1) return 0;
+  stat->x--;
   return 0;
 }
 
@@ -480,18 +474,23 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
 }
 
 int keyX(gapBuffer *gb, editorStat *stat){
-  for(int i=0; i<stat->cmdLoop; i++){
-    if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1){
-      stat->currentLine++;
-      stat->y++;
-      stat->x = stat->lineDigitSpace;
-      keyBackSpace(gb, stat);
-    }else{
-      charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
-    }
-    stat->isViewUpdated = true;
-    stat->numOfChange++;
- }
+  if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1){
+    stat->currentLine++;
+    stat->y++;
+    stat->x = stat->lineDigitSpace;
+    keyBackSpace(gb, stat);
+  }else{
+    charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
+  }
+  stat->isViewUpdated = true;
+  stat->numOfChange++;
+  return 0;
+}
+
+int keyA(gapBuffer *gb, editorStat *stat){
+  if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace)
+    return 0;
+    stat->x++;
   return 0;
 }
 
@@ -506,16 +505,15 @@ int keyO(gapBuffer *gb, editorStat *stat){
 }
 
 int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  for(int i=0; i<stat->cmdLoop; i++){
-    gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
-    stat->numOfLines--;
-    stat->numOfChange++;
-  }
+  gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
+  stat->numOfLines--;
+  stat->numOfChange++;
   stat->isViewUpdated = true;
   werase(win[2]);
   wprintw(win[2], "%d line deleted");
   return 0;
 }
+
 
 int moveFirstLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
   int key;
@@ -540,103 +538,96 @@ int moveLastLine(gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
+void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
+  if(stat->cmdLoop == 0) stat->cmdLoop = 1;
+  switch(key){
+    case KEY_LEFT:
+    case 127:   // 127 is backspace key
+    case 'h':
+      for(int i=0; i<stat->cmdLoop; i++) keyLeft(gb, stat);
+      break;
+    case KEY_DOWN:
+    case 10:    // 10 is Enter key
+    case 'j':
+      for(int i=0; i<stat->cmdLoop; i++) keyDown(gb, stat);
+     break;
+    case KEY_UP:
+    case 'k':
+      for(int i=0; i<stat->cmdLoop; i++) keyUp(gb, stat);
+      break;
+    case KEY_RIGHT:
+    case 'l':
+      for(int i=0; i<stat->cmdLoop; i++) keyRight(gb, stat);
+      break;
+    case '0':
+    case KEY_HOME:
+      stat->x = stat->lineDigitSpace;
+      break;
+    case '$':
+    case KEY_END:
+      stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
+      break;
+    case 'g':
+      moveFirstLine(win, gb, stat);
+      break;
+    case 'G':
+      moveLastLine(gb, stat);
+      break;
+
+    case KEY_DC:
+    case 'x':
+      for(int i=0; i<stat->cmdLoop; i++) keyX(gb, stat);
+      break;
+    case 'd':
+      if(wgetch(win[0]) == 'd')
+        for(int i=0; i<stat->cmdLoop; i++) keyD(win, gb, stat);
+      break;
+
+    case 'i':
+      insertMode(win, gb, stat);
+      break;
+    case 'a':
+      keyA(gb, stat);
+      insertMode(win, gb, stat);
+      break;
+    case 'o':
+      for(int i=0; i<stat->cmdLoop; i++) keyO(gb, stat);
+      insertMode(win, gb, stat);
+      break;
+  }
+}
+
 void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
 
   int key;
-  stat->cmdLoop = 1;
+  stat->cmdLoop = 0;
   stat->mode = NORMAL_MODE;
-  printStatBarInit(win, stat);
+  noecho();
 
   while(1){
     wmove(win[0], stat->y, stat->x);
-    printStatBar(win, stat); 
+    printStatBar(win, gb, stat); 
     if(stat->isViewUpdated == true){
       printLineAll(win, gb, stat);
       stat->isViewUpdated = false;
-      stat->cmdLoop = 1;
+      stat->cmdLoop = 0;
     }
     printCurrentLine(win, gb, stat);
     debugMode(win, gb, stat);
-    noecho();
     key = wgetch(win[0]);
 
-    switch(key){
-      case KEY_LEFT:
-      case 127:   // 127 is backspace key
-      case 'h':
-        keyLeft(gb, stat);
-        stat->cmdLoop = 1;
-        break;
-      case KEY_DOWN:
-      case 10:    // 10 is Enter key
-      case 'j':
-        keyDown(gb, stat);
-        stat->cmdLoop = 1;
-       break;
-      case KEY_UP:
-      case 'k':
-        keyUp(gb, stat);
-        stat->cmdLoop = 1;
-        break;
-      case KEY_RIGHT:
-      case 'l':
-        keyRight(gb, stat);
-        stat->cmdLoop = 1;
-        break;
-      case '0':
-      case KEY_HOME:
-        stat->x = stat->lineDigitSpace;
-        break;
-      case '$':
-      case KEY_END:
-        stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
-        break;
-      case 'g':
-        moveFirstLine(win, gb, stat);
-        break;
-      case 'G':
-        moveLastLine(gb, stat);
-        break;
-
-      case KEY_DC:
-      case 'x':
-        keyX(gb, stat);
-        stat->cmdLoop = 1;
-        break;
-      case 'd':
-        if(wgetch(win[0]) != 'd') break;
-        keyD(win, gb, stat);
-        stat->cmdLoop = 1;
-        break;
-
-      case 'i':
-        insertMode(win, gb, stat);
-        break;
-      case 'a':
-        if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace)
-          break;
-        wmove(win[0], stat->y, ++stat->x);
-        insertMode(win, gb, stat);
-        break;
-      case 'o':
-        keyO(gb, stat);
-        insertMode(win, gb, stat);
-        break;
-      case ':':
-        commandBar(win, gb, stat);
-        break;
-      
-      case KEY_RESIZE:
-        winResizeEvent(win, gb, stat);
-        break;
-      case KEY_ESC:
-        stat->cmdLoop = 1;
-        break;
-
-      default:
-        if(key > 48 && key < 58){
-          stat->cmdLoop = key - 48;
-        }
+    if(key > 48 && key < 58){
+      if(stat->cmdLoop > 0){
+        stat->cmdLoop *= 10;
+        stat->cmdLoop += key - 48;
+      }else stat->cmdLoop = key - 48;
+    }
+    else if(key == KEY_ESC) stat->cmdLoop = 0;
+    else if(key == KEY_RESIZE) winResizeEvent(win, gb, stat);
+    else if(key == ':') commandBar(win, gb, stat);
+    else{
+      cmdNormal(win, gb, stat, key);
+      stat->cmdLoop = 0;
     }
   }
 }
@@ -645,19 +636,18 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
   int key;
   stat->mode = INSERT_MODE;
-  printStatBarInit(win, stat);
+  noecho();
 
   while(1){
 
     wmove(win[0], stat->y, stat->x);
-    printStatBar(win, stat);
+    printStatBar(win, gb, stat);
     if(stat->isViewUpdated == true){
       printLineAll(win, gb, stat);
       stat->isViewUpdated = false;
     }
     printCurrentLine(win, gb, stat);
     debugMode(win, gb, stat);
-    noecho();
     key = wgetch(win[0]);
 
     switch(key){
@@ -760,6 +750,7 @@ int openFile(char* filename){
   stat->currentLine = 0;
 
   printLineAll(win, gb, stat);
+  printStatBarInit(win, gb, stat);
 
   normalMode(win, gb, stat);
 
@@ -792,6 +783,7 @@ int newFile(){
   stat->numOfLines = 1;
 
   printLineAll(win, gb, stat);
+  printStatBarInit(win, gb, stat);
 
   normalMode(win, gb, stat);
 
