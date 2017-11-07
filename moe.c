@@ -616,11 +616,14 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
     debugMode(win, gb, stat);
     key = wgetch(win[0]);
 
-    if(key > 48 && key < 58){
+    if(key > 47 && key < 58){
       if(stat->cmdLoop > 0){
         stat->cmdLoop *= 10;
         stat->cmdLoop += key - 48;
-      }else stat->cmdLoop = key - 48;
+      }else{
+        if(key == '0') cmdNormal(win, gb, stat, key);
+        else stat->cmdLoop = key - 48;
+      }
     }
     else if(key == KEY_ESC) stat->cmdLoop = 0;
     else if(key == KEY_RESIZE) winResizeEvent(win, gb, stat);
