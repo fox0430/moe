@@ -19,7 +19,7 @@ void winInit(WINDOW **win){
   win[0] = newwin(LINES-2, COLS, 0, 0);    // main window
   win[1] = newwin(1, COLS, LINES-2, 0);    // status bar
   win[2] = newwin(1, COLS, LINES-1, 0);    // command bar
-  keypad(win[0], TRUE);
+  keypad(win[0], TRUE);   // enable function key
   keypad(win[2], TRUE);
   scrollok(win[0], TRUE);			// enable scroll
 }
@@ -413,17 +413,7 @@ int keyLeft(gapBuffer* gb, editorStat* stat){
 int keyBackSpace(gapBuffer* gb, editorStat* stat){
   if(stat->y == 0 && stat->x == stat->lineDigitSpace) return 0;
   stat->x--;
-  if(stat->x < stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine)->numOfChar > 0){
-    int tmpNumOfChar = gapBufferAt(gb, stat->currentLine - 1)->numOfChar;
-      for(int i=0; i<gapBufferAt(gb, stat->currentLine)->numOfChar; i++) {
-        charArrayPush(gapBufferAt(gb, stat->currentLine - 1), gapBufferAt(gb, stat->currentLine)->elements[i]);
-    }
-    gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
-    stat->numOfLines--;
-    stat->x = stat->lineDigitSpace + tmpNumOfChar;
-    stat->y--;
-    stat->currentLine--;
-  }else if(stat->x < stat->lineDigitSpace  && gapBufferAt(gb, stat->currentLine)->numOfChar == 0){
+  if(stat->x < stat->lineDigitSpace  && gapBufferAt(gb, stat->currentLine)->numOfChar == 0){
     gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
     stat->numOfLines--;
     stat->x = stat->lineDigitSpace + gapBufferAt(gb, --stat->currentLine)->numOfChar;
@@ -432,6 +422,16 @@ int keyBackSpace(gapBuffer* gb, editorStat* stat){
   }else if(stat->x < stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine - 1)->numOfChar == 0){
     gapBufferDel(gb, stat->currentLine - 1, stat->currentLine);
     stat->numOfLines--;
+    stat->currentLine--;
+  }else if(stat->x < stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine)->numOfChar > 0){
+    int tmpNumOfChar = gapBufferAt(gb, stat->currentLine - 1)->numOfChar;
+      for(int i=0; i<gapBufferAt(gb, stat->currentLine)->numOfChar; i++) {
+        charArrayPush(gapBufferAt(gb, stat->currentLine - 1), gapBufferAt(gb, stat->currentLine)->elements[i]);
+    }
+    gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
+    stat->numOfLines--;
+    stat->x = stat->lineDigitSpace + tmpNumOfChar;
+    stat->y--;
     stat->currentLine--;
   }else{
    charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
