@@ -206,22 +206,11 @@ int countLineDigit(int numOfLines){
 }
 
 void printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  printLineAll(win, gb, stat);
   int lineDigitSpace = stat->lineDigit - countLineDigit(stat->currentLine + 1);
   for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], stat->y, j, " ");
   wattron(win[0], COLOR_PAIR(7));
   mvwprintw(win[0], stat->y, lineDigitSpace, "%d", stat->currentLine + 1);
-  if(stat->currentLine > 0 && stat->y > 0){
-    int lineDigitSpace = stat->lineDigit - countLineDigit(stat->currentLine);
-    for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], stat->y - 1, j, " ");
-    wattron(win[0], COLOR_PAIR(3));
-    mvwprintw(win[0], stat->y - 1, lineDigitSpace, "%d", stat->currentLine);
-  }
-  if(stat->y < LINES-3 && stat->y < stat->numOfLines - 1){
-    int lineDigitSpace = stat->lineDigit - countLineDigit(stat->currentLine + 2);
-    for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], stat->y + 1, j, " ");
-    wattron(win[0], COLOR_PAIR(3));
-    mvwprintw(win[0], stat->y + 1, lineDigitSpace, "%d", stat->currentLine + 2);
-  }
   wmove(win[0], stat->y, stat->x);
   wrefresh(win[0]);
   wattron(win[0], COLOR_PAIR(6));
@@ -370,59 +359,67 @@ int insertTab(gapBuffer *gb, editorStat *stat){
 }
 
 int keyUp(gapBuffer* gb, editorStat* stat){
-  if(stat->currentLine == 0) return 0;
-  if(stat->y == 0){
-    stat->currentLine--;
-    stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
-    stat->isViewUpdated = true;
-    stat->numOfChange++;
-  }else{
-    stat->y--;
-    stat->currentLine--;
-    if(stat->x > stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1)
-      stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
+  for(int i=0; i<stat->cmdLoop; i++){
+    if(stat->currentLine == 0) return 0;
+    if(stat->y == 0){
+      stat->currentLine--;
+      stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
+      stat->isViewUpdated = true;
+      stat->numOfChange++;
+    }else{
+      stat->y--;
+      stat->currentLine--;
+      if(stat->x > stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1)
+        stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
+    }
   }
   return 0;
 }
 
 int keyDown(gapBuffer* gb, editorStat* stat){
-  if(stat->currentLine + 1 == stat->numOfLines) return 0;
-  if(stat->y == LINES - 3){
-    stat->currentLine++;
-    stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace;
-    stat->isViewUpdated = true;
-    stat->numOfChange++;
-  }else{
-    stat->y++;
-    stat->currentLine++;
+  for(int i=0; i<stat->cmdLoop; i++){
+    if(stat->currentLine + 1 == stat->numOfLines) return 0;
+    if(stat->y == LINES - 3){
+      stat->currentLine++;
+      stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace;
+      stat->isViewUpdated = true;
+      stat->numOfChange++;
+    }else{
+      stat->y++;
+      stat->currentLine++;
 
-    if(stat->mode == NORMAL_MODE)
-      if (stat->x != stat->lineDigitSpace && stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar)
-        stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar;
+      if(stat->mode == NORMAL_MODE)
+        if (stat->x != stat->lineDigitSpace && stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar)
+          stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar;
 
-    if(stat->x > stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar)
-      stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
+      if(stat->x > stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar)
+        stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
+    }
   }
   return 0;
 }
 
 int keyRight(gapBuffer* gb, editorStat* stat){
-  if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace) return 0;
-  if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1 && stat->mode == NORMAL_MODE) return 0;
-  stat->x++;
+  for(int i=0; i<stat->cmdLoop; i++){
+    if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace) return 0;
+    if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1 && stat->mode == NORMAL_MODE) return 0;
+    stat->x++;
+  }
   return 0;
 }
 
 int keyLeft(gapBuffer* gb, editorStat* stat){
-  if(stat->x == stat->lineDigit + 1) return 0;
-  stat->x--;
+  for(int i=0; i<stat->cmdLoop; i++){
+    if(stat->x == stat->lineDigit + 1) return 0;
+    stat->x--;
+  }
   return 0;
 }
 
 int keyBackSpace(gapBuffer* gb, editorStat* stat){
   if(stat->y == 0 && stat->x == stat->lineDigitSpace) return 0;
   stat->x--;
-  if(stat->x < stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine)->numOfChar > 0){   // move char
+  if(stat->x < stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine)->numOfChar > 0){
     int tmpNumOfChar = gapBufferAt(gb, stat->currentLine - 1)->numOfChar;
       for(int i=0; i<gapBufferAt(gb, stat->currentLine)->numOfChar; i++) {
         charArrayPush(gapBufferAt(gb, stat->currentLine - 1), gapBufferAt(gb, stat->currentLine)->elements[i]);
@@ -483,16 +480,18 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
 }
 
 int keyX(gapBuffer *gb, editorStat *stat){
-  if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1){
-    stat->currentLine++;
-    stat->y++;
-    stat->x = stat->lineDigitSpace;
-    keyBackSpace(gb, stat);
-  }else{
-    charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
-  }
-  stat->isViewUpdated = true;
-  stat->numOfChange++;
+  for(int i=0; i<stat->cmdLoop; i++){
+    if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1){
+      stat->currentLine++;
+      stat->y++;
+      stat->x = stat->lineDigitSpace;
+      keyBackSpace(gb, stat);
+    }else{
+      charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
+    }
+    stat->isViewUpdated = true;
+    stat->numOfChange++;
+ }
   return 0;
 }
 
@@ -561,33 +560,28 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
     noecho();
     key = wgetch(win[0]);
 
-    if(key > 48 && key < 58){
-      if(stat->cmdLoop > 1){
-        stat->cmdLoop *= 10;
-        stat->cmdLoop += key - 48;
-      }else{
-        stat->cmdLoop = key - 48;
-      }
-    }
-
     switch(key){
       case KEY_LEFT:
       case 127:   // 127 is backspace key
       case 'h':
         keyLeft(gb, stat);
+        stat->cmdLoop = 1;
         break;
       case KEY_DOWN:
       case 10:    // 10 is Enter key
       case 'j':
         keyDown(gb, stat);
+        stat->cmdLoop = 1;
        break;
       case KEY_UP:
       case 'k':
         keyUp(gb, stat);
+        stat->cmdLoop = 1;
         break;
       case KEY_RIGHT:
       case 'l':
         keyRight(gb, stat);
+        stat->cmdLoop = 1;
         break;
       case '0':
       case KEY_HOME:
@@ -607,6 +601,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       case KEY_DC:
       case 'x':
         keyX(gb, stat);
+        stat->cmdLoop = 1;
         break;
       case 'd':
         if(wgetch(win[0]) != 'd') break;
@@ -637,6 +632,11 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       case KEY_ESC:
         stat->cmdLoop = 1;
         break;
+
+      default:
+        if(key > 48 && key < 58){
+          stat->cmdLoop = key - 48;
+        }
     }
   }
 }
