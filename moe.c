@@ -507,6 +507,15 @@ int keyO(gapBuffer *gb, editorStat *stat){
 int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat){
   gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
   stat->numOfLines--;
+  if(gb->size == 0){
+    charArray* emptyLine = (charArray*)malloc(sizeof(charArray));
+    charArrayInit(emptyLine);
+    gapBufferInsert(gb, emptyLine, 0);
+  }else{
+    if(gb->size == stat->currentLine) --stat->currentLine;
+    stat->numOfLines--;
+  }
+
   stat->numOfChange++;
   stat->isViewUpdated = true;
   werase(win[2]);
