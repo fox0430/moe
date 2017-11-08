@@ -1,7 +1,7 @@
 #include"moe.h"
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->debugMode = ON;
+  stat->debugMode = OFF;
   if(stat->debugMode == OFF ) return 0;
   werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
@@ -566,9 +566,15 @@ int charInsert(gapBuffer *gb, editorStat *stat, int key){
   return 0;
 }
 
-int lineYank(gapBuffer *gb, editorStat *stat){
-  gapBufferInsert(stat->rgst.yankedLine, gapBufferAt(gb, stat->currentLine), stat->rgst.numOfYankedLines);
-  stat->rgst.numOfYankedLines++;
+int lineYank(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  if(wgetch(win[0]) == 'y'){
+    gapBufferInsert(stat->rgst.yankedLine, gapBufferAt(gb, stat->currentLine), stat->rgst.numOfYankedLines);
+    stat->rgst.numOfYankedLines++;
+    werase(win[2]);
+    wprintw(win[2], "%d line yanked", stat->cmdLoop);
+    wrefresh(win[2]);
+  }
+  return 0;
 }
 
 void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
@@ -615,6 +621,9 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       if(wgetch(win[0]) == 'd')
         for(int i=0; i<stat->cmdLoop; i++) keyD(win, gb, stat);
       break;
+    case 'y':
+      for(int i=0; i<stat->cmdLoop; i++) lineYank(win, gb, stat);
+      break;
 
     case 'i':
       insertMode(win, gb, stat);
@@ -638,7 +647,6 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   noecho();
 
   while(1){
-    wmove(win[0], stat->y, stat->x);
     printStatBar(win, gb, stat); 
     if(stat->isViewUpdated == true){
       printLineAll(win, gb, stat);
@@ -646,6 +654,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       stat->cmdLoop = 0;
     }
     debugMode(win, gb, stat);
+    wmove(win[0], stat->y, stat->x);
     key = wgetch(win[0]);
 
     if(key > 47 && key < 58){
@@ -675,13 +684,13 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
   while(1){
 
-    wmove(win[0], stat->y, stat->x);
     printStatBar(win, gb, stat);
     if(stat->isViewUpdated == true){
       printLineAll(win, gb, stat);
       stat->isViewUpdated = false;
     }
     debugMode(win, gb, stat);
+    wmove(win[0], stat->y, stat->x);
     key = wgetch(win[0]);
 
     switch(key){
