@@ -106,3 +106,14 @@ int charArrayDel(charArray* array, int position){
 bool charArrayIsEmpty(charArray* array){
   return array->head == 0;
 }
+
+int charArrayFree(charArray* array){
+  if(array->elements == NULL){
+    printf("Vector: cannot free null array.");
+    return -1;
+  }
+
+  free(array->elements);
+  
+  return 1;
+}

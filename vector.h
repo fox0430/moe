@@ -23,3 +23,4 @@ int charArrayInsert(charArray* array, char element, int position);
 int charArrayPop(charArray* array);
 int charArrayDel(charArray* array, int position);
 bool charArrayIsEmpty(charArray* array);
+int charArrayFree(charArray* array);

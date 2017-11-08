@@ -12,6 +12,10 @@ typedef struct gapBuffer{
           capacity,   // Amount of secured memory
           gapBegin,
           gapEnd;     // 半開区間[gap_begin,gap_end)を隙間とする
+  /*
+    ギャップには有効なポインタを格納しないようにする.
+    逆にギャップ以外の部分には有効なポインタのみ格納する.
+  */
 } gapBuffer;
 
 #define MOE_GAP_BUFFER_H
@@ -25,3 +29,4 @@ int gapBufferInsert(gapBuffer* gb, charArray* element, int position);
 int gapBufferDel(gapBuffer* gb, int begin, int end);
 charArray* gapBufferAt(gapBuffer* gb, int index);
 bool gapBufferIsEmpty(gapBuffer* gb);
+int gapBufferFree(gapBuffer* gb);
