@@ -29,6 +29,7 @@ int gapBufferReserve(gapBuffer* gb, int capacity){
   gb->gapBegin = gb->size;
   gb->gapEnd = capacity;
   gb->capacity = capacity;
+
   return 1;
 }
 
@@ -48,6 +49,7 @@ int gapBufferMakeGap(gapBuffer* gb,int gapBegin){
   }
   gb->gapEnd = gapBegin + (gb->gapEnd-gb->gapBegin);
   gb->gapBegin = gapBegin;
+
   return 1;
 }
 
@@ -68,7 +70,7 @@ int gapBufferInsert(gapBuffer* gb, charArray* element, int position){
   return 1;
 }
 
-// Deleted [begin,end] elements
+// Delete [begin,end] elements
 int gapBufferDel(gapBuffer* gb, int begin, int end){
 
   if(begin > end || begin < 0 || gb->size < end){
@@ -80,12 +82,31 @@ int gapBufferDel(gapBuffer* gb, int begin, int end){
       end_ = gb->gapBegin > end ? end : gb->gapEnd + (end - gb->gapBegin);
 
   if(begin_ <= gb->gapBegin && gb->gapEnd <= end_){
+    for(int i = begin_; i < gb->gapBegin; ++i){
+      if(charArrayFree(gb->buffer[i]) == -1) return -1;
+      free(gb->buffer[i]);
+    }
+    for(int i = gb->gapEnd; i < end_; ++i){
+      if(charArrayFree(gb->buffer[i]) == -1) return -1;
+      free(gb->buffer[i]);
+    }
+
     gb->gapBegin = begin_;
     gb->gapEnd = end_;
   }else if(end_ <= gb->gapBegin){
+    for(int i = begin_; i < end_; ++i){
+      if(charArrayFree(gb->buffer[i]) == -1) return -1;
+      free(gb->buffer[i]);
+    }
+
     gapBufferMakeGap(gb, end_);
     gb->gapBegin = begin_;
   }else{
+    for(int i = begin_; i < end_; ++i){
+      if(charArrayFree(gb->buffer[i]) == -1) return -1;
+      free(gb->buffer[i]);
+    }
+
     memmove(gb->buffer + gb->gapBegin, gb->buffer + gb->gapEnd, sizeof(charArray*)*(begin_ - gb->gapEnd));
     gb->gapBegin = gb->gapBegin + begin_ - gb->gapEnd;
     gb->gapEnd = end_;
@@ -108,4 +129,19 @@ charArray* gapBufferAt(gapBuffer* gb, int index){
 
 bool gapBufferIsEmpty(gapBuffer* gb){
   return gb->capacity == gb->gapEnd - gb->gapBegin;
+}
+
+int gapBufferFree(gapBuffer* gb){
+  for(int i = 0; i < gb->gapBegin; ++i){
+    if(charArrayFree(gb->buffer[i]) == -1) return -1;
+    free(gb->buffer[i]);
+  }
+  for(int i = gb->gapEnd; i < gb->capacity; ++i){
+    if(charArrayFree(gb->buffer[i]) == -1) return -1;
+    free(gb->buffer[i]);
+  }
+
+  free(gb->buffer);
+
+  return 1;
 }

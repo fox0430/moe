@@ -770,6 +770,8 @@ int openFile(char* filename){
 
   normalMode(win, gb, stat);
 
+  gapBufferFree(gb);
+
   return 0;
 }
 
@@ -802,6 +804,8 @@ int newFile(){
   printStatBarInit(win, gb, stat);
 
   normalMode(win, gb, stat);
+
+  gapBufferFree(gb);
 
   return 0;
 }
