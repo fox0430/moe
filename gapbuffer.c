@@ -16,7 +16,9 @@ int gapBufferReserve(gapBuffer* gb, int capacity){
     printf("Gapbuffer: New buffer capacity is too small.\n");
     return -1;
   }
+  
   gapBufferMakeGap(gb, gb->capacity - (gb->gapEnd - gb->gapBegin));
+
   charArray** newBuffer = (charArray**)realloc(gb->buffer, sizeof(charArray*)*capacity);
   if(newBuffer == NULL){
     printf("Gapbuffer: Cannot reallocate new memory.\n");
@@ -24,7 +26,8 @@ int gapBufferReserve(gapBuffer* gb, int capacity){
   }
 
   gb->buffer = newBuffer;
-  gb->gapEnd = capacity - (gb->capacity - gb->gapEnd);
+  gb->gapBegin = gb->size;
+  gb->gapEnd = capacity;
   gb->capacity = capacity;
   return 1;
 }
