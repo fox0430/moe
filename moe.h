@@ -18,7 +18,15 @@
 #define NORMAL_MODE 0
 #define INSERT_MODE 1
 
+typedef struct registers{
+  gapBuffer *yankedLine;
+  charArray *yankedStr;
+  int numOfYankedLines,
+      numOfYankedStr;
+} registers;
+
 typedef struct editorStat{
+  registers rgst;
   char filename[256];
   int   y,
         x,
@@ -42,6 +50,8 @@ void startCurses();
 void signal_handler(int SIG);
 void exitCurses();
 void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStat *stat);
+void editorStatInit(editorStat* stat);
+void registersInit(editorStat *stat);
 int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat);
 int countLineDigit(int lineNum);
 void printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat);
@@ -52,7 +62,9 @@ void printStatBarInit(WINDOW **win, gapBuffer *gb, editorStat *stat);
 void printStatBar(WINDOW **win, gapBuffer *gb, editorStat *stat);
 int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat);
 int insNewLine(gapBuffer *gb, editorStat *stat, int position);
+int insIndent(gapBuffer *gb, editorStat *stat);
 int insertTab(gapBuffer *gb, editorStat *stat);
+int lineYank(gapBuffer *gb, editorStat *stat);
 int keyUp(gapBuffer* gb, editorStat* stat);
 int keyDown(gapBuffer* gb, editorStat* stat);
 int keyRight(gapBuffer* gb, editorStat* stat);
@@ -65,6 +77,7 @@ int keyO(gapBuffer* gb, editorStat* stat);
 int keyD(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int moveFirstLine(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int moveLastLine(gapBuffer* gb, editorStat* stat);
+int charInsert(gapBuffer *gb, editorStat *stat, int key);
 void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key);
 void normalMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
 void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
