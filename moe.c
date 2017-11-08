@@ -568,12 +568,26 @@ int charInsert(gapBuffer *gb, editorStat *stat, int key){
 
 int lineYank(WINDOW **win, gapBuffer *gb, editorStat *stat){
   if(wgetch(win[0]) == 'y'){
-    gapBufferInsert(stat->rgst.yankedLine, gapBufferAt(gb, stat->currentLine), stat->rgst.numOfYankedLines);
-    stat->rgst.numOfYankedLines++;
+    stat->rgst.numOfYankedLines = 0;
+    int currentLine = stat->currentLine;
+    for(int i=0; i<stat->cmdLoop; i++){
+      gapBufferInsert(stat->rgst.yankedLine, gapBufferAt(gb, currentLine++), stat->rgst.numOfYankedLines++);
+    }
     werase(win[2]);
     wprintw(win[2], "%d line yanked", stat->cmdLoop);
     wrefresh(win[2]);
   }
+  return 0;
+}
+
+int linePaste(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  int currentLine = stat->currentLine;
+  for(int i=0; i<stat->rgst.numOfYankedLines; i++){
+    gapBufferInsert(gb, gapBufferAt(stat->rgst.yankedLine, i) , ++currentLine);
+    stat->numOfLines++;
+  }
+  stat->numOfChange++;
+  stat->isViewUpdated = true;
   return 0;
 }
 
@@ -622,7 +636,10 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
         for(int i=0; i<stat->cmdLoop; i++) keyD(win, gb, stat);
       break;
     case 'y':
-      for(int i=0; i<stat->cmdLoop; i++) lineYank(win, gb, stat);
+      lineYank(win, gb, stat);
+      break;
+    case 'p':
+      linePaste(win, gb, stat);
       break;
 
     case 'i':
