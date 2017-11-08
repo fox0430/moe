@@ -78,7 +78,7 @@ int moveFirstLine(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int moveLastLine(gapBuffer* gb, editorStat* stat);
 int charInsert(gapBuffer *gb, editorStat *stat, int key);
 int lineYank(WINDOW **win, gapBuffer *gb, editorStat *stat);
-int linePaste(WINDOW **win, gapBuffer *gb, editorStat *stat);
+int linePaste(gapBuffer *gb, editorStat *stat);
 void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key);
 void normalMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
 void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
