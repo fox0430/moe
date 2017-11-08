@@ -236,7 +236,7 @@ void printLineAll(WINDOW **win, gapBuffer *gb, editorStat *stat){
   werase(win[0]);
   int currentLine = stat->currentLine - stat->y;
   for(int i=0; i<LINES-2; i++){
-    if(i == stat->numOfLines) break;
+    if(currentLine == stat->numOfLines) break;
     printLineNum(win, stat, currentLine, i);
     printLine(win, gb, stat, currentLine, i);
     currentLine++;
@@ -506,14 +506,18 @@ int keyO(gapBuffer *gb, editorStat *stat){
 
 int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat){
   gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
-  stat->numOfLines--;
-  if(gb->size == 0){
+
+  if(stat->numOfLines == 1){
     charArray* emptyLine = (charArray*)malloc(sizeof(charArray));
     charArrayInit(emptyLine);
     gapBufferInsert(gb, emptyLine, 0);
   }else{
-    if(gb->size == stat->currentLine) --stat->currentLine;
     stat->numOfLines--;
+
+    if(stat->currentLine == stat->numOfLines){
+      --stat->currentLine;
+      if(stat->y > 0) --stat->y;
+    }
   }
 
   stat->numOfChange++;
