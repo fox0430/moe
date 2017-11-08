@@ -1,7 +1,7 @@
 #include"moe.h"
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->debugMode = OFF;
+  stat->debugMode = ON;
   if(stat->debugMode == OFF ) return 0;
   werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
@@ -263,10 +263,10 @@ void printStatBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
   werase(win[1]);
   wattron(win[1], COLOR_PAIR(2));
   if(stat->mode == NORMAL_MODE){
-    wprintw(win[1], "%s ", " normal");
+    wprintw(win[1], "%s ", " NORMAL");
   }else if(stat->mode == INSERT_MODE){
-    wprintw(win[1], "%s ", " insert");
-  }
+    wprintw(win[1], "%s ", " INSERT");
+  }else wprintw(win[1], "%s ", " VISUAL");
   wattron(win[1], COLOR_PAIR(1));
   wprintw(win[1], " %s ", stat->filename);
   mvwprintw(win[1], 0, COLS-13, "%d/%d ", stat->currentLine + 1, stat->numOfLines);
@@ -548,6 +548,18 @@ int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
+int charReplace(gapBuffer *gb, editorStat *stat, int key){
+  if(stat->cmdLoop > gapBufferAt(gb, stat->currentLine)->numOfChar - (stat->x - stat->lineDigitSpace))
+    stat->cmdLoop = gapBufferAt(gb, stat->currentLine)->numOfChar - (stat->x - stat->lineDigitSpace);
+  for(int i=0; i<stat->cmdLoop; i++){
+    charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace) + i);
+    charArrayInsert(gapBufferAt(gb, stat->currentLine), key, stat->x - stat->lineDigitSpace + i);
+  }
+  stat->numOfChange++;
+  stat->isViewUpdated = true;
+  return 0;
+}
+
 int moveFirstLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
   int key;
   while(1){
@@ -659,6 +671,10 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       linePaste(gb, stat);
       break;
 
+    case 'r':
+      key = wgetch(win[0]);
+      charReplace(gb, stat, key);
+      break;
     case 'i':
       insertMode(win, gb, stat);
       break;
@@ -674,7 +690,6 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
 }
 
 void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-
   int key;
   stat->cmdLoop = 0;
   stat->mode = NORMAL_MODE;
@@ -711,13 +726,11 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
 }
 
 void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
-
   int key;
   stat->mode = INSERT_MODE;
   noecho();
 
   while(1){
-
     printStatBar(win, gb, stat);
     if(stat->isViewUpdated == true){
       printLineAll(win, gb, stat);
@@ -728,7 +741,6 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
     key = wgetch(win[0]);
 
     switch(key){
-
       case KEY_UP:
         keyUp(gb, stat);
         break;
@@ -774,6 +786,12 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
         charInsert(gb, stat, key);
     }
   }
+}
+
+void visualMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  int key;
+  stat->mode = VISUAL_MODE;
+  noecho();
 }
 
 int openFile(char* filename){

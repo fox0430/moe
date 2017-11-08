@@ -17,6 +17,7 @@
 #define OFF 0
 #define NORMAL_MODE 0
 #define INSERT_MODE 1
+#define VISUAL_MODE 2
 
 typedef struct registers{
   gapBuffer *yankedLine;
@@ -74,6 +75,7 @@ int keyX(gapBuffer* gb, editorStat* stat);
 int keyA(gapBuffer *gb, editorStat *stat);
 int keyO(gapBuffer* gb, editorStat* stat);
 int keyD(WINDOW **win, gapBuffer* gb, editorStat* stat);
+int charReplace(gapBuffer *gb, editorStat *stat, int key);
 int moveFirstLine(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int moveLastLine(gapBuffer* gb, editorStat* stat);
 int charInsert(gapBuffer *gb, editorStat *stat, int key);
