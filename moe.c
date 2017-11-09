@@ -545,10 +545,8 @@ int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat){
 
 // does not works...
 int replaceChar(gapBuffer *gb, editorStat *stat, int key){
-  if(stat->cmdLoop > gapBufferAt(gb, stat->currentLine)->numOfChar - (stat->x - stat->lineDigitSpace))
-    stat->cmdLoop = gapBufferAt(gb, stat->currentLine)->numOfChar - (stat->x - stat->lineDigitSpace);
   for(int i=0; i<stat->cmdLoop; i++){
-    gapBufferAt(gb, stat->currentLine)->elements[i] = key;
+    gapBufferAt(gb, stat->currentLine)->elements[(stat->x - stat->lineDigitSpace) + i] = key;
   }
   stat->numOfChange++;
   stat->isViewUpdated = true;
@@ -789,8 +787,8 @@ void visualMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   int key,
       startLine = 0,
       startCol = 0,
-      coutLines = 0,
-      countCols = 0;
+      coutLines = stat->y,
+      countCols = stat->x - stat->lineDigitSpace;
   stat->mode = VISUAL_MODE;
   noecho();
   while(1){
@@ -801,26 +799,28 @@ void visualMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
     }
     debugMode(win, gb, stat);
     wmove(win[0], stat->y, stat->x);
-    startLine = stat->y;
-    startCol = stat->x;
     key = wgetch(win[0]);
 
     switch(key){
       case KEY_LEFT:
       case 'h':
         keyLeft(gb, stat);
+        countCols = stat->x - stat->lineDigitSpace;
         break;
       case KEY_DOWN:
       case 10:    // 10 is Enter key
       case 'j':
         keyDown(gb, stat);
+        coutLines++;
         break;
       case KEY_UP:
       case 'k':
         keyUp(gb, stat);
+        coutLines--;
         break;
       case KEY_RIGHT:
       case 'l':
+        countCols = stat->x - stat->lineDigitSpace;
         keyRight(gb, stat);
         break;
       case '0':
@@ -837,13 +837,19 @@ void visualMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       case 'G':
         moveLastLine(gb, stat);
         break;
+
+      case KEY_RESIZE:
+        winResizeEvent(win, gb, stat);
+        break;
+      case KEY_ESC:
+        normalMode(win, gb, stat);
+        break;
     }
   }
 }
 */
 
 int openFile(char* filename){
-
   FILE *fp = fopen(filename, "r");
   if(fp == NULL){
 		printf("%s Cannot file open... \n", filename);
