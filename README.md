@@ -1,8 +1,11 @@
-moe is Command line editor.
+moe
+===
+
+moe is Command line base editor.
 
 This project goal is funny animation editor and study C.
 
-Aiming features
+## Aiming features ##
 
    ✔Vector and GapBuffer
 
