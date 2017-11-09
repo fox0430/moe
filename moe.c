@@ -359,17 +359,6 @@ int insNewLine(gapBuffer *gb, editorStat *stat, int position){
   return 0;
 }
 
-int insIndent(gapBuffer *gb, editorStat *stat){
-  if(gapBufferAt(gb, stat->currentLine + 1)->elements[0] == ' '){
-    int count = 1;
-    while(gapBufferAt(gb, stat->currentLine)->elements[count] != ' '){
-      charArrayPush(gapBufferAt(gb, stat->currentLine + 1), ' ');
-      count++;
-    }
-  }
-  return 0;
-}
-
 // Tab key is 2 space
 int insertTab(gapBuffer *gb, editorStat *stat){
   for(int i=0; i<2; i++){
@@ -462,47 +451,49 @@ int keyBackSpace(gapBuffer* gb, editorStat* stat){
   return 0;
 }
 
+int insIndent(gapBuffer *gb, editorStat *stat){
+  if(gapBufferAt(gb, stat->currentLine)->elements[0] == ' '){
+    int i = 0;
+    for(i=0; i<gapBufferAt(gb, stat->currentLine)->numOfChar; i++){
+      if(gapBufferAt(gb, stat->currentLine)->elements[i] == ' ')
+        charArrayPush(gapBufferAt(gb, stat->currentLine + 1), ' ');
+      else break;
+    }
+   stat->x = stat->lineDigitSpace + i;
+  }
+  return 0;
+}
+
 int keyEnter(gapBuffer* gb, editorStat* stat){
-  if(stat->y == LINES - 3){
-    insNewLine(gb, stat, stat->currentLine + 1);
-
-    charArray* leftLine = gapBufferAt(gb, stat->currentLine), *rightLine = gapBufferAt(gb, stat->currentLine + 1);
-    const int leftLineLength = stat->x - stat->lineDigitSpace, rightLineLength = leftLine->numOfChar - leftLineLength;
-    for(int i = 0; i < rightLineLength; ++i) charArrayPush(rightLine, leftLine->elements[leftLineLength + i]);
-    for(int i = 0; i < rightLineLength; ++i) charArrayPop(leftLine);
-
-    ++stat->currentLine;
-    stat->x = stat->lineDigitSpace;
-  }else if(stat->x == stat->lineDigitSpace){    // beginning of line
+  if(stat->x == stat->lineDigitSpace){    // beginning of line
     insNewLine(gb, stat, stat->currentLine);
     stat->currentLine++;
-    stat->y++;
+    if(stat->y != LINES - 3) stat->y++;
   }else{
     insNewLine(gb, stat, stat->currentLine + 1);
 
     charArray* leftLine = gapBufferAt(gb, stat->currentLine), *rightLine = gapBufferAt(gb, stat->currentLine + 1);
     const int leftLineLength = stat->x - stat->lineDigitSpace, rightLineLength = leftLine->numOfChar - leftLineLength;
+    insIndent(gb, stat);
+
     for(int i = 0; i < rightLineLength; ++i) charArrayPush(rightLine, leftLine->elements[leftLineLength + i]);
     for(int i = 0; i < rightLineLength; ++i) charArrayPop(leftLine);
+    insIndent(gb, stat);
 
     stat->currentLine++;
-    stat->y++;
-    stat->x = stat->lineDigitSpace;
+    if(stat->y != LINES - 3) stat->y++;
   }
   stat->isViewUpdated = true;
   stat->numOfChange++;
   return 0;
 }
 
-int keyX(gapBuffer *gb, editorStat *stat){
-  if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1){
-    stat->currentLine++;
-    stat->y++;
-    stat->x = stat->lineDigitSpace;
-    keyBackSpace(gb, stat);
-  }else{
-    charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
-  }
+int keyO(gapBuffer *gb, editorStat *stat){
+  insNewLine(gb, stat, stat->currentLine + 1);
+  insIndent(gb, stat);    // does not works...
+  stat->currentLine++;
+  stat->x = stat->lineDigitSpace;
+  stat->y++;
   stat->isViewUpdated = true;
   stat->numOfChange++;
   return 0;
@@ -515,11 +506,15 @@ int keyA(gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
-int keyO(gapBuffer *gb, editorStat *stat){
-  insNewLine(gb, stat, stat->currentLine + 1);
-  stat->currentLine++;
-  stat->x = stat->lineDigitSpace;
-  stat->y++;
+int keyX(gapBuffer *gb, editorStat *stat){
+  if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1){
+    stat->currentLine++;
+    stat->y++;
+    stat->x = stat->lineDigitSpace;
+    keyBackSpace(gb, stat);
+  }else{
+    charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
+  }
   stat->isViewUpdated = true;
   stat->numOfChange++;
   return 0;
@@ -788,11 +783,67 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
   }
 }
 
+/*
 void visualMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  int key;
+  int key,
+      startLine = 0,
+      startCol = 0,
+      coutLines = 0,
+      countCols = 0;
   stat->mode = VISUAL_MODE;
   noecho();
+  while(1){
+    printStatBar(win, gb, stat);
+    if(stat->isViewUpdated == true){
+      printLineAll(win, gb, stat);
+      stat->isViewUpdated = false;
+    }
+    debugMode(win, gb, stat);
+    wmove(win[0], stat->y, stat->x);
+    startLine = stat->y;
+    startCol = stat->x;
+    key = wgetch(win[0]);
+
+    switch(key){
+      case KEY_LEFT:
+      case 'h':
+        keyLeft(gb, stat);
+        countCols--;
+        break;
+      case KEY_DOWN:
+      case 10:    // 10 is Enter key
+      case 'j':
+        keyDown(gb, stat);
+        coutLines++;
+        break;
+      case KEY_UP:
+      case 'k':
+        keyUp(gb, stat);
+        coutLines--;
+        break;
+      case KEY_RIGHT:
+      case 'l':
+        keyRight(gb, stat);
+        countCols++;
+        break;
+      case '0':
+      case KEY_HOME:
+        stat->x = stat->lineDigitSpace;
+        break;
+      case '$':
+      case KEY_END:
+        stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
+        break;
+      case 'g':
+        moveFirstLine(win, gb, stat);
+        break;
+      case 'G':
+        moveLastLine(gb, stat);
+        break;
+    }
+  }
 }
+*/
 
 int openFile(char* filename){
 
