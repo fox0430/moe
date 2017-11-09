@@ -1,7 +1,7 @@
 #include"moe.h"
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->debugMode = ON;
+  stat->debugMode = OFF;
   if(stat->debugMode == OFF ) return 0;
   werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
@@ -543,12 +543,12 @@ int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
-int charReplace(gapBuffer *gb, editorStat *stat, int key){
+// does not works...
+int replaceChar(gapBuffer *gb, editorStat *stat, int key){
   if(stat->cmdLoop > gapBufferAt(gb, stat->currentLine)->numOfChar - (stat->x - stat->lineDigitSpace))
     stat->cmdLoop = gapBufferAt(gb, stat->currentLine)->numOfChar - (stat->x - stat->lineDigitSpace);
   for(int i=0; i<stat->cmdLoop; i++){
-    charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace) + i);
-    charArrayInsert(gapBufferAt(gb, stat->currentLine), key, stat->x - stat->lineDigitSpace + i);
+    gapBufferAt(gb, stat->currentLine)->elements[i] = key;
   }
   stat->numOfChange++;
   stat->isViewUpdated = true;
@@ -654,10 +654,11 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       for(int i=0; i<stat->cmdLoop; i++) keyX(gb, stat);
       break;
     case 'd':
-      if(wgetch(win[0]) == 'd')
+      if(wgetch(win[0]) == 'd'){
         if(stat->cmdLoop > stat->numOfLines - stat->currentLine)
           stat->cmdLoop = stat->numOfLines - stat->currentLine;
         for(int i=0; i<stat->cmdLoop; i++) keyD(win, gb, stat);
+      }
       break;
     case 'y':
       lineYank(win, gb, stat);
@@ -668,7 +669,7 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
 
     case 'r':
       key = wgetch(win[0]);
-      charReplace(gb, stat, key);
+      replaceChar(gb, stat, key);
       break;
     case 'i':
       insertMode(win, gb, stat);
@@ -701,7 +702,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
     wmove(win[0], stat->y, stat->x);
     key = wgetch(win[0]);
 
-    if(key > 47 && key < 58){
+    if(key >= '0' && key <= '9'){
       if(stat->cmdLoop > 0){
         stat->cmdLoop *= 10;
         stat->cmdLoop += key - 48;
@@ -808,23 +809,19 @@ void visualMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       case KEY_LEFT:
       case 'h':
         keyLeft(gb, stat);
-        countCols--;
         break;
       case KEY_DOWN:
       case 10:    // 10 is Enter key
       case 'j':
         keyDown(gb, stat);
-        coutLines++;
         break;
       case KEY_UP:
       case 'k':
         keyUp(gb, stat);
-        coutLines--;
         break;
       case KEY_RIGHT:
       case 'l':
         keyRight(gb, stat);
-        countCols++;
         break;
       case '0':
       case KEY_HOME:
