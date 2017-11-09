@@ -649,7 +649,9 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
 
     case KEY_DC:
     case 'x':
-      for(int i=0; i<stat->cmdLoop; i++) keyX(gb, stat);
+      if(stat->cmdLoop > gapBufferAt(gb,stat->currentLine)->numOfChar - (stat->x - stat->lineDigitSpace))
+        stat->cmdLoop  = gapBufferAt(gb,stat->currentLine)->numOfChar - (stat->x - stat->lineDigitSpace);
+        for(int i=0; i<stat->cmdLoop; i++) keyX(gb, stat);
       break;
     case 'd':
       if(wgetch(win[0]) == 'd'){
