@@ -207,17 +207,21 @@ int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
 }
 */
 
-int countLineDigit(int numOfLines){
+int countLineDigit(editorStat *stat, int numOfLines){
   int lineDigit = 0;
   while(numOfLines > 0){
     numOfLines /= 10;
     lineDigit++;
   }
+  if(lineDigit > stat->lineDigit){
+    stat->lineDigitSpace = lineDigit;
+    stat->lineDigitSpace = lineDigit + 1;
+  }
   return lineDigit;
 }
 
 void printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  int lineDigitSpace = stat->lineDigit - countLineDigit(stat->currentLine + 1);
+  int lineDigitSpace = stat->lineDigit - countLineDigit(stat, stat->currentLine + 1);
   for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], stat->y, j, " ");
   wattron(win[0], COLOR_PAIR(7));
   mvwprintw(win[0], stat->y, lineDigitSpace, "%d", stat->currentLine + 1);
@@ -227,7 +231,7 @@ void printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
 }
 
 void printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y){
-  int lineDigitSpace = stat->lineDigit - countLineDigit(currentLine + 1);
+  int lineDigitSpace = stat->lineDigit - countLineDigit(stat, currentLine + 1);
   for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
   wattron(win[0], COLOR_PAIR(3));
   mvwprintw(win[0], y, lineDigitSpace, "%d", currentLine + 1);
@@ -291,6 +295,13 @@ int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
       break;
     case 'q':
       exitCurses();
+      break;
+    case 't':
+      def_prog_mode();           /* save current tty modes */
+      endwin();                  /* restore original tty modes */
+      system("sh");              /* run shell */
+      reset_prog_mode();
+      refresh();               /* restore save modes, repaint screen */
       break;
   }
   cbreak();
@@ -671,9 +682,6 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       key = wgetch(win[0]);
       replaceChar(gb, stat, key);
       break;
-    case 'i':
-      insertMode(win, gb, stat);
-      break;
     case 'a':
       keyA(gb, stat);
       insertMode(win, gb, stat);
@@ -682,6 +690,14 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       for(int i=0; i<stat->cmdLoop; i++) keyO(gb, stat);
       insertMode(win, gb, stat);
       break;
+    case 'i':
+      insertMode(win, gb, stat);
+      break;
+      /*
+    case 'v':
+      visualMode(win, gb, stat);
+      break;
+      */
   }
 }
 
@@ -787,18 +803,24 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
 /*
 void visualMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   int key,
-      startLine = 0,
-      startCol = 0,
-      coutLines = stat->y,
-      countCols = stat->x - stat->lineDigitSpace;
+      startLine = stat->y,
+      startCol = stat->x,
+      endLine = 0,
+      endCol = 0;
   stat->mode = VISUAL_MODE;
   noecho();
   while(1){
     printStatBar(win, gb, stat);
-    if(stat->isViewUpdated == true){
-      printLineAll(win, gb, stat);
-      stat->isViewUpdated = false;
-    }
+    printLineAll(win, gb, stat);
+    
+    // debug
+    werase(win[2]);
+    wprintw(win[2], "startLines:%d cols:%d endLine:%d col:%d", startLine, startCol, endLine, endCol);
+    wrefresh(win[2]);
+
+    wrefresh(win[0]);
+    wattron(win[0], COLOR_PAIR(6));
+
     debugMode(win, gb, stat);
     wmove(win[0], stat->y, stat->x);
     key = wgetch(win[0]);
@@ -807,23 +829,25 @@ void visualMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       case KEY_LEFT:
       case 'h':
         keyLeft(gb, stat);
-        countCols = stat->x - stat->lineDigitSpace;
+        endCol = stat->x;
         break;
       case KEY_DOWN:
       case 10:    // 10 is Enter key
       case 'j':
         keyDown(gb, stat);
-        coutLines++;
+        endLine++;
+        endCol = stat->x;
         break;
       case KEY_UP:
       case 'k':
         keyUp(gb, stat);
-        coutLines--;
+        endLine--;
+        endCol = stat->x;
         break;
       case KEY_RIGHT:
       case 'l':
-        countCols = stat->x - stat->lineDigitSpace;
         keyRight(gb, stat);
+        endCol = stat->x;
         break;
       case '0':
       case KEY_HOME:
@@ -844,6 +868,7 @@ void visualMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
         winResizeEvent(win, gb, stat);
         break;
       case KEY_ESC:
+        stat->isViewUpdated = true;
         normalMode(win, gb, stat);
         break;
     }
@@ -891,7 +916,8 @@ int openFile(char* filename){
   startCurses(stat);
   winInit(win);
 
-  if(stat->lineDigit < countLineDigit(stat->currentLine + 1)) stat->lineDigit = countLineDigit(stat->currentLine + 1);
+  if(stat->lineDigit < countLineDigit(stat, stat->currentLine + 1))
+    stat->lineDigit = countLineDigit(stat, stat->currentLine + 1);
 
   stat->numOfLines = stat->currentLine + 1;
   stat->x = stat->lineDigitSpace;
