@@ -84,6 +84,6 @@ int linePaste(gapBuffer *gb, editorStat *stat);
 void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key);
 void normalMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
 void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
-//void visualMode(WINDOW **win, gapBuffer *gb, editorStat *stat);
+void visualMode(WINDOW **win, gapBuffer *gb, editorStat *stat);
 int newFile();
 int openFile(char* filename);

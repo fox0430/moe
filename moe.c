@@ -693,11 +693,9 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
     case 'i':
       insertMode(win, gb, stat);
       break;
-      /*
     case 'v':
       visualMode(win, gb, stat);
       break;
-      */
   }
 }
 
@@ -800,54 +798,80 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
   }
 }
 
-/*
+// does not works...
 void visualMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   int key,
       startLine = stat->y,
       startCol = stat->x,
-      endLine = 0,
-      endCol = 0;
+      endLine = stat->y,
+      endCol = stat->x;
   stat->mode = VISUAL_MODE;
   noecho();
   while(1){
+    endLine = stat->y,
+    endCol = stat->x;
+    wmove(win[0], stat->y, stat->x);
     printStatBar(win, gb, stat);
     printLineAll(win, gb, stat);
+    debugMode(win, gb, stat);
     
-    // debug
+    /* debug
     werase(win[2]);
     wprintw(win[2], "startLines:%d cols:%d endLine:%d col:%d", startLine, startCol, endLine, endCol);
     wrefresh(win[2]);
+    */
 
+//  printMark
+    int startL,
+        endL,
+        startC,
+        endC;
+    if(endLine - startLine >= 0){
+      startL = startLine;
+      endL = endLine;
+    }else{
+      startL = endLine;
+      endL  = startLine;
+    }
+    if(endCol - startCol >= 0){
+      startC = startCol;
+      endC = endCol;
+    }else{
+      startC = endCol;
+      endC = startCol;
+    }
+
+    wattron(win[0], COLOR_PAIR(2));
+    for(int i=startL; i<=endL; i++){
+      for(int j=startC; j<=endC; j++){
+        if(i < endL)
+          mvwprintw(win[0], i, stat->lineDigitSpace, "%s", gapBufferAt(gb, i)->elements);
+        else
+          mvwprintw(win[0], i, j, "%c", gapBufferAt(gb, i)->elements[j - stat->lineDigitSpace]);
+      }
+    }
     wrefresh(win[0]);
     wattron(win[0], COLOR_PAIR(6));
 
-    debugMode(win, gb, stat);
-    wmove(win[0], stat->y, stat->x);
     key = wgetch(win[0]);
 
     switch(key){
       case KEY_LEFT:
       case 'h':
         keyLeft(gb, stat);
-        endCol = stat->x;
         break;
       case KEY_DOWN:
       case 10:    // 10 is Enter key
       case 'j':
         keyDown(gb, stat);
-        endLine++;
-        endCol = stat->x;
         break;
       case KEY_UP:
       case 'k':
         keyUp(gb, stat);
-        endLine--;
-        endCol = stat->x;
         break;
       case KEY_RIGHT:
       case 'l':
         keyRight(gb, stat);
-        endCol = stat->x;
         break;
       case '0':
       case KEY_HOME:
@@ -874,7 +898,6 @@ void visualMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
     }
   }
 }
-*/
 
 int openFile(char* filename){
   FILE *fp = fopen(filename, "r");
