@@ -1,7 +1,7 @@
 #include"moe.h"
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->debugMode = OFF;
+  stat->debugMode = ON;
   if(stat->debugMode == OFF ) return 0;
   werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
@@ -147,66 +147,6 @@ int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
   return 0;
 }
 
-/*
-int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
-
-  if(strcmp(stat->filename, "No name") == 0){
-    int   i = 0,
-          key;
-    charArray *filename = (charArray*)malloc(sizeof(charArray));
-    charArrayInit(filename);
-    werase(win[2]);
-    wprintw(win[2], "Please file name: ");
-    while(key != 10 || i > 254 || key == KEY_ESC){
-      wmove(win[2], 0, 18 + i);
-      wrefresh(win[2]);
-      key = wgetch(win[2]);
-      switch(key){
-        case KEY_ESC: return 0;
-        case 10: break;
-        case KEY_LEFT:
-          if(i == 0)  break;
-          i--;
-          break;
-        case KEY_RIGHT:
-          if(i == filename->numOfChar) break;
-          i++;
-          break;
-        case 127:
-          wdelch(win[2]);
-          charArrayDel(filename, i);
-          i--;
-          break;
-        default:
-          winsch(win[2], key);
-          charArrayInsert(filename, key, i);
-          i++;
-      }
-    }
-    strcpy(stat->filename, filename->elements);
-    werase(win[2]);
-  }
-  
-  FILE *fp;
-  if ((fp = fopen(stat->filename, "w")) == NULL) {
-    printf("%s Cannot file open... \n", stat->filename);
-      return -1;
-    }
-  
-  for(int i=0; i < gb->size; i++){
-    fputs(gapBufferAt(gb, i)->elements, fp);
-    if(i != gb->size - 1) fputc('\n', fp);
-  }
-
-  mvwprintw(win[2], 0, 0, "%s", "saved...");
-  wrefresh(win[2]);
-
-  fclose(fp);
-
-  return 0;
-}
-*/
-
 int countLineDigit(editorStat *stat, int numOfLines){
   int lineDigit = 0;
   while(numOfLines > 0){
@@ -214,7 +154,7 @@ int countLineDigit(editorStat *stat, int numOfLines){
     lineDigit++;
   }
   if(lineDigit > stat->lineDigit){
-    stat->lineDigitSpace = lineDigit;
+    stat->lineDigit = lineDigit;
     stat->lineDigitSpace = lineDigit + 1;
   }
   return lineDigit;
@@ -230,11 +170,12 @@ void printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
   wattron(win[0], COLOR_PAIR(6));
 }
 
-void printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y){
+int printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y){
   int lineDigitSpace = stat->lineDigit - countLineDigit(stat, currentLine + 1);
   for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
   wattron(win[0], COLOR_PAIR(3));
   mvwprintw(win[0], y, lineDigitSpace, "%d", currentLine + 1);
+  return 0;
 }
 
 // print single line
@@ -266,11 +207,10 @@ void printStatBarInit(WINDOW **win, gapBuffer *gb, editorStat *stat){
 void printStatBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
   werase(win[1]);
   wattron(win[1], COLOR_PAIR(2));
-  if(stat->mode == NORMAL_MODE){
+  if(stat->mode == NORMAL_MODE)
     wprintw(win[1], "%s ", " NORMAL");
-  }else if(stat->mode == INSERT_MODE){
+  else if(stat->mode == INSERT_MODE)
     wprintw(win[1], "%s ", " INSERT");
-  }else wprintw(win[1], "%s ", " VISUAL");
   wattron(win[1], COLOR_PAIR(1));
   wprintw(win[1], " %s ", stat->filename);
   mvwprintw(win[1], 0, COLS-13, "%d/%d ", stat->currentLine + 1, stat->numOfLines);
@@ -307,60 +247,6 @@ int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
   cbreak();
   return 0;
 }
-
-/*
-int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  werase(win[2]);
-  wprintw(win[2], "%s", ":");
-  charArray *cmd = (charArray*)malloc(sizeof(charArray));
-  charArrayInit(cmd);
-  int i = 0,
-      key = 0;
-  while(key != 10){
-    wmove(win[2], 0, i+1);
-    wrefresh(win[2]);
-    key = wgetch(win[2]);
-    switch(key){
-      case KEY_ESC: return 0;
-      case 10: break;
-      case KEY_LEFT:
-        if(i == 0)  break;
-        i--;
-        break;
-      case KEY_RIGHT:
-        if(i == cmd->numOfChar) break;
-        i++;
-        break;
-      case 127:
-        wdelch(win[2]);
-        charArrayDel(cmd, i);
-        i--;
-        break;
-      default:
-        winsch(win[2], key);
-        charArrayInsert(cmd, key, i);
-        i++;
-    }
-  }
-  for(i=0; i<cmd->numOfChar; i++){
-    switch(cmd->elements[i]){
-      case 'w':
-        saveFile(win, gb, stat);
-        break;
-      case 'q':
-        exitCurses();
-      default:
-        werase(win[2]);
-        wbkgd(win[2], COLOR_PAIR(4));
-        wprintw(win[2], "%s", "error: Not an editor cmd!");
-        wrefresh(win[2]);
-        wbkgd(win[2], COLOR_PAIR(3));
-        return 0;
-    }
-  }
-  return 0;
-}
-*/
 
 int insNewLine(gapBuffer *gb, editorStat *stat, int position){
   charArray* ca = (charArray*)malloc(sizeof(charArray));
@@ -693,9 +579,6 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
     case 'i':
       insertMode(win, gb, stat);
       break;
-    case 'v':
-      visualMode(win, gb, stat);
-      break;
   }
 }
 
@@ -794,107 +677,6 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
       
       default:
         charInsert(gb, stat, key);
-    }
-  }
-}
-
-// does not works...
-void visualMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  int key,
-      startLine = stat->y,
-      startCol = stat->x,
-      endLine = stat->y,
-      endCol = stat->x;
-  stat->mode = VISUAL_MODE;
-  noecho();
-  while(1){
-    endLine = stat->y,
-    endCol = stat->x;
-    wmove(win[0], stat->y, stat->x);
-    printStatBar(win, gb, stat);
-    printLineAll(win, gb, stat);
-    debugMode(win, gb, stat);
-    
-    /* debug
-    werase(win[2]);
-    wprintw(win[2], "startLines:%d cols:%d endLine:%d col:%d", startLine, startCol, endLine, endCol);
-    wrefresh(win[2]);
-    */
-
-//  printMark
-    int startL,
-        endL,
-        startC,
-        endC;
-    if(endLine - startLine >= 0){
-      startL = startLine;
-      endL = endLine;
-    }else{
-      startL = endLine;
-      endL  = startLine;
-    }
-    if(endCol - startCol >= 0){
-      startC = startCol;
-      endC = endCol;
-    }else{
-      startC = endCol;
-      endC = startCol;
-    }
-
-    wattron(win[0], COLOR_PAIR(2));
-    for(int i=startL; i<=endL; i++){
-      for(int j=startC; j<=endC; j++){
-        if(i < endL)
-          mvwprintw(win[0], i, stat->lineDigitSpace, "%s", gapBufferAt(gb, i)->elements);
-        else
-          mvwprintw(win[0], i, j, "%c", gapBufferAt(gb, i)->elements[j - stat->lineDigitSpace]);
-      }
-    }
-    wrefresh(win[0]);
-    wattron(win[0], COLOR_PAIR(6));
-
-    key = wgetch(win[0]);
-
-    switch(key){
-      case KEY_LEFT:
-      case 'h':
-        keyLeft(gb, stat);
-        break;
-      case KEY_DOWN:
-      case 10:    // 10 is Enter key
-      case 'j':
-        keyDown(gb, stat);
-        break;
-      case KEY_UP:
-      case 'k':
-        keyUp(gb, stat);
-        break;
-      case KEY_RIGHT:
-      case 'l':
-        keyRight(gb, stat);
-        break;
-      case '0':
-      case KEY_HOME:
-        stat->x = stat->lineDigitSpace;
-        break;
-      case '$':
-      case KEY_END:
-        stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
-        break;
-      case 'g':
-        moveFirstLine(win, gb, stat);
-        break;
-      case 'G':
-        moveLastLine(gb, stat);
-        break;
-
-      case KEY_RESIZE:
-        winResizeEvent(win, gb, stat);
-        break;
-      case KEY_ESC:
-        stat->isViewUpdated = true;
-        normalMode(win, gb, stat);
-        break;
     }
   }
 }

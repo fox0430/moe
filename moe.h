@@ -17,7 +17,6 @@
 #define OFF 0
 #define NORMAL_MODE 0
 #define INSERT_MODE 1
-#define VISUAL_MODE 2
 
 typedef struct registers{
   gapBuffer *yankedLine;
@@ -56,7 +55,7 @@ void registersInit(editorStat *stat);
 int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat);
 int countLineDigit(editorStat *stat, int lineNum);
 void printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat);
-void printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y);
+int printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y);
 void printLine(WINDOW **win, gapBuffer* gb, editorStat *stat, int currentLine, int y);
 void printLineAll(WINDOW **win, gapBuffer* gb, editorStat *stat);
 void printStatBarInit(WINDOW **win, gapBuffer *gb, editorStat *stat);
@@ -84,6 +83,5 @@ int linePaste(gapBuffer *gb, editorStat *stat);
 void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key);
 void normalMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
 void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
-void visualMode(WINDOW **win, gapBuffer *gb, editorStat *stat);
 int newFile();
 int openFile(char* filename);
