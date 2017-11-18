@@ -8,6 +8,7 @@ int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   wprintw(win[2], "currentLine: %d ", stat->currentLine);
   wprintw(win[2], "numOfLines: %d ", stat->numOfLines);
   wprintw(win[2], "numOfChar: %d ", gapBufferAt(gb, stat->currentLine)->numOfChar);
+  wprintw(win[2], "ture: %d ", stat->trueLine[stat->currentLine]);
   wprintw(win[2], "elements: %s", gapBufferAt(gb, stat->currentLine)->elements);
   wrefresh(win[2]);
   wmove(win[0], stat->y, stat->x);
@@ -91,7 +92,21 @@ void editorStatInit(editorStat* stat){
   stat->numOfChange = 0;
   stat->currentLine = false;
   stat->debugMode = OFF;
+  trueLineInit(stat);
   registersInit(stat);
+}
+
+int trueLineInit(editorStat *stat){
+  stat->adjustLineNum = 0;
+  stat->trueLineCapa = 1000;
+  stat->trueLine = (int*)malloc(sizeof(int)*stat->trueLineCapa);
+  if(stat->trueLine == NULL){
+      printf("main trueLine: cannot allocate memory...\n");
+      return -1;
+  }
+  for(int i=0; i<stat->trueLineCapa; i++)
+    stat->trueLine[i] = true;
+  return 0;
 }
 
 void registersInit(editorStat *stat){
@@ -102,6 +117,31 @@ void registersInit(editorStat *stat){
   charArrayInit(stat->rgst.yankedStr);
   stat->rgst.numOfYankedLines = 0;
   stat->rgst.numOfYankedStr = 0;
+}
+
+int returnLine(gapBuffer *gb, editorStat *stat){
+  if(stat->numOfLines > stat->trueLineCapa){
+    stat->trueLineCapa = stat->numOfLines * 2;
+    int *tmp = (int*)realloc(tmp, sizeof(stat->trueLineCapa));
+    if(tmp == NULL){
+      printf("main trueLine: cannot allocate memory...\n");
+      return -1;
+    }
+    stat->trueLine = tmp;
+  }
+
+  for(int i=0; i<stat->numOfLines; i++){
+    if(gapBufferAt(gb, i)->numOfChar > (COLS - stat->lineDigitSpace)){
+      insNewLine(gb, stat, i + 1);
+      charArray* leftLine = gapBufferAt(gb, i), *rightLine = gapBufferAt(gb, i + 1);
+      int leftLineLength = COLS - stat->lineDigitSpace, rightLineLength = leftLine->numOfChar - leftLineLength;
+      for(int j = 0; j < rightLineLength; ++j) charArrayPush(rightLine, leftLine->elements[leftLineLength + j]);
+      for(int j = 0; j < rightLineLength; ++j) charArrayPop(leftLine);
+      stat->trueLine[i + 1] = false;
+      stat->adjustLineNum++;
+    }
+  }
+  return 0;
 }
 
 int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
@@ -160,21 +200,34 @@ int countLineDigit(editorStat *stat, int numOfLines){
   return lineDigit;
 }
 
-void printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
+int printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
+  if(stat->trueLine[stat->currentLine] == false) return 0;
   int lineDigitSpace = stat->lineDigit - countLineDigit(stat, stat->currentLine + 1);
   for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], stat->y, j, " ");
   wattron(win[0], COLOR_PAIR(7));
-  mvwprintw(win[0], stat->y, lineDigitSpace, "%d", stat->currentLine + 1);
+  if(stat->currentLine == 0)
+    mvwprintw(win[0], stat->y, lineDigitSpace, "%d", stat->currentLine + 1);
+  else
+    mvwprintw(win[0], stat->y, lineDigitSpace, "%d", stat->currentLine + 1 - stat->adjustLineNum);
   wmove(win[0], stat->y, stat->x);
   wrefresh(win[0]);
   wattron(win[0], COLOR_PAIR(6));
+  return 0;
 }
 
 int printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y){
-  int lineDigitSpace = stat->lineDigit - countLineDigit(stat, currentLine + 1);
-  for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
-  wattron(win[0], COLOR_PAIR(3));
-  mvwprintw(win[0], y, lineDigitSpace, "%d", currentLine + 1);
+  if(stat->trueLine[currentLine] == false){
+    int lineDigitSpace = stat->lineDigit - countLineDigit(stat, currentLine + 1);
+    for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
+  }else{
+    int lineDigitSpace = stat->lineDigit - countLineDigit(stat, currentLine + 1);
+    for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
+    wattron(win[0], COLOR_PAIR(3));
+    if(currentLine == 0)
+      mvwprintw(win[0], y, lineDigitSpace, "%d", currentLine + 1);
+    else
+      mvwprintw(win[0], y, lineDigitSpace, "%d", currentLine + 1 - stat->adjustLineNum);
+  }
   return 0;
 }
 
@@ -727,6 +780,8 @@ int openFile(char* filename){
   stat->numOfLines = stat->currentLine + 1;
   stat->x = stat->lineDigitSpace;
   stat->currentLine = 0;
+
+  returnLine(gb, stat);
 
   printLineAll(win, gb, stat);
   printStatBarInit(win, gb, stat);

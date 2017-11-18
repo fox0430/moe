@@ -38,7 +38,11 @@ typedef struct editorStat{
         cmdLoop,
         numOfChange,
         isViewUpdated,
-        debugMode;
+        debugMode,
+        adjustLineNum,
+        trueLineCapa,
+        numOfTrueLines,
+        *trueLine;
 } editorStat;
 
 // Function prototype
@@ -51,10 +55,11 @@ void signal_handler(int SIG);
 void exitCurses();
 void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStat *stat);
 void editorStatInit(editorStat* stat);
+int trueLineInit(editorStat *stat);
 void registersInit(editorStat *stat);
 int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat);
 int countLineDigit(editorStat *stat, int lineNum);
-void printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat);
+int printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat);
 int printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y);
 void printLine(WINDOW **win, gapBuffer* gb, editorStat *stat, int currentLine, int y);
 void printLineAll(WINDOW **win, gapBuffer* gb, editorStat *stat);
