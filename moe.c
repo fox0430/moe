@@ -1,7 +1,7 @@
 #include"moe.h"
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->debugMode = OFF;
+  stat->debugMode = ON;
   if(stat->debugMode == OFF ) return 0;
   werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
@@ -97,7 +97,6 @@ void editorStatInit(editorStat* stat){
 }
 
 int trueLineInit(editorStat *stat){
-  stat->adjustLineNum = 0;
   stat->trueLineCapa = 1000;
   stat->trueLine = (int*)malloc(sizeof(int)*stat->trueLineCapa);
   if(stat->trueLine == NULL){
@@ -138,7 +137,6 @@ int returnLine(gapBuffer *gb, editorStat *stat){
       for(int j = 0; j < rightLineLength; ++j) charArrayPush(rightLine, leftLine->elements[leftLineLength + j]);
       for(int j = 0; j < rightLineLength; ++j) charArrayPop(leftLine);
       stat->trueLine[i + 1] = false;
-      stat->adjustLineNum++;
     }
   }
   return 0;
@@ -205,10 +203,7 @@ int printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
   int lineDigitSpace = stat->lineDigit - countLineDigit(stat, stat->currentLine + 1);
   for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], stat->y, j, " ");
   wattron(win[0], COLOR_PAIR(7));
-  if(stat->currentLine == 0)
-    mvwprintw(win[0], stat->y, lineDigitSpace, "%d", stat->currentLine + 1);
-  else
-    mvwprintw(win[0], stat->y, lineDigitSpace, "%d", stat->currentLine + 1 - stat->adjustLineNum);
+  mvwprintw(win[0], stat->y, lineDigitSpace, "%d", stat->currentLine + 1);
   wmove(win[0], stat->y, stat->x);
   wrefresh(win[0]);
   wattron(win[0], COLOR_PAIR(6));
@@ -223,10 +218,7 @@ int printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y){
     int lineDigitSpace = stat->lineDigit - countLineDigit(stat, currentLine + 1);
     for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
     wattron(win[0], COLOR_PAIR(3));
-    if(currentLine == 0)
-      mvwprintw(win[0], y, lineDigitSpace, "%d", currentLine + 1);
-    else
-      mvwprintw(win[0], y, lineDigitSpace, "%d", currentLine + 1 - stat->adjustLineNum);
+    mvwprintw(win[0], y, lineDigitSpace, "%d", currentLine + 1);
   }
   return 0;
 }
