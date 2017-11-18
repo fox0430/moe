@@ -39,6 +39,7 @@ typedef struct editorStat{
         numOfChange,
         isViewUpdated,
         debugMode,
+        adjustLineNum,
         trueLineCapa,
         *trueLine;
 } editorStat;

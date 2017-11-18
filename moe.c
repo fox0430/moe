@@ -97,6 +97,7 @@ void editorStatInit(editorStat* stat){
 }
 
 int trueLineInit(editorStat *stat){
+  stat->adjustLineNum = 0;
   stat->trueLineCapa = 1000;
   stat->trueLine = (int*)malloc(sizeof(int)*stat->trueLineCapa);
   if(stat->trueLine == NULL){
@@ -203,7 +204,7 @@ int printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
   int lineDigitSpace = stat->lineDigit - countLineDigit(stat, stat->currentLine + 1);
   for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], stat->y, j, " ");
   wattron(win[0], COLOR_PAIR(7));
-  mvwprintw(win[0], stat->y, lineDigitSpace, "%d", stat->currentLine + 1);
+  mvwprintw(win[0], stat->y, lineDigitSpace, "%d", stat->currentLine + 1 - stat->adjustLineNum);
   wmove(win[0], stat->y, stat->x);
   wrefresh(win[0]);
   wattron(win[0], COLOR_PAIR(6));
@@ -211,15 +212,11 @@ int printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
 }
 
 int printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y){
-  if(stat->trueLine[currentLine] == false){
-    int lineDigitSpace = stat->lineDigit - countLineDigit(stat, currentLine + 1);
-    for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
-  }else{
+  if(stat->trueLine[currentLine] == false) return 0;
     int lineDigitSpace = stat->lineDigit - countLineDigit(stat, currentLine + 1);
     for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
     wattron(win[0], COLOR_PAIR(3));
-    mvwprintw(win[0], y, lineDigitSpace, "%d", currentLine + 1);
-  }
+    mvwprintw(win[0], y, lineDigitSpace, "%d", currentLine + 1 - stat->adjustLineNum);
   return 0;
 }
 
@@ -233,14 +230,20 @@ void printLine(WINDOW **win, gapBuffer* gb, editorStat *stat, int currentLine, i
 
 void printLineAll(WINDOW **win, gapBuffer *gb, editorStat *stat){
   werase(win[0]);
-  int currentLine = stat->currentLine - stat->y;
-  for(int i=0; i<LINES-2; i++){
+  int startPrintLine = stat->currentLine - stat->y,
+      currentLine = 0;
+  stat->adjustLineNum = 0;
+  for(int i=0; i<startPrintLine + LINES-2; i++){
     if(currentLine == stat->numOfLines) break;
-    printLineNum(win, stat, currentLine, i);
-    printLine(win, gb, stat, currentLine, i);
+    if(stat->trueLine[i] == false) stat->adjustLineNum++;
+    if(i >= startPrintLine){
+      printLineNum(win, stat, currentLine, i - startPrintLine);
+      printLine(win, gb, stat, currentLine, i - startPrintLine);
+      if(currentLine == stat->currentLine) printCurrentLine(win, gb, stat);
+    }
     currentLine++;
   }
-  printCurrentLine(win, gb, stat);
+//  printCurrentLine(win, gb, stat);
 }
 
 void printStatBarInit(WINDOW **win, gapBuffer *gb, editorStat *stat){
