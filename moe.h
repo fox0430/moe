@@ -25,7 +25,13 @@ typedef struct registers{
       numOfYankedStr;
 } registers;
 
+typedef struct editorSetting{
+  int autoCloseParen,
+      autoIndent;
+} editorSetting;
+
 typedef struct editorStat{
+  editorSetting setting;
   registers rgst;
   char filename[256];
   int   y,
@@ -56,6 +62,7 @@ void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStat *stat);
 void editorStatInit(editorStat* stat);
 int trueLineInit(editorStat *stat);
 void registersInit(editorStat *stat);
+void editorSettingInit(editorStat *stat);
 int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat);
 int countLineDigit(editorStat *stat, int lineNum);
 int printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat);

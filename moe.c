@@ -1,7 +1,7 @@
 #include"moe.h"
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->debugMode = ON;
+  stat->debugMode = OFF;
   if(stat->debugMode == OFF ) return 0;
   werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
@@ -94,6 +94,7 @@ void editorStatInit(editorStat* stat){
   stat->debugMode = OFF;
   trueLineInit(stat);
   registersInit(stat);
+  editorSettingInit(stat);
 }
 
 int trueLineInit(editorStat *stat){
@@ -117,6 +118,11 @@ void registersInit(editorStat *stat){
   charArrayInit(stat->rgst.yankedStr);
   stat->rgst.numOfYankedLines = 0;
   stat->rgst.numOfYankedStr = 0;
+}
+
+void editorSettingInit(editorStat *stat){
+  stat->setting.autoCloseParen = ON;
+  stat->setting.autoIndent = ON;
 }
 
 int returnLine(gapBuffer *gb, editorStat *stat){
@@ -397,6 +403,7 @@ int keyBackSpace(gapBuffer* gb, editorStat* stat){
 }
 
 int insIndent(gapBuffer *gb, editorStat *stat){
+  if(stat->setting.autoIndent != ON) return 0;
   if(gapBufferAt(gb, stat->currentLine)->elements[0] == ' '){
     int i = 0;
     for(i=0; i<gapBufferAt(gb, stat->currentLine)->numOfChar; i++){
@@ -411,8 +418,15 @@ int insIndent(gapBuffer *gb, editorStat *stat){
 
 int keyEnter(gapBuffer* gb, editorStat* stat){
   if(stat->x == stat->lineDigitSpace){    // beginning of line
-    insNewLine(gb, stat, stat->currentLine);
-    stat->currentLine++;
+    if(stat->trueLine[stat->currentLine] == false){
+      insNewLine(gb, stat, stat->currentLine - 1);
+      stat->trueLine[stat->currentLine] = true;
+      stat->currentLine++;
+      stat->trueLine[stat->currentLine] = false;
+    }else{
+      insNewLine(gb, stat, stat->currentLine);
+      stat->currentLine++;
+    }
     if(stat->y != LINES - 3) stat->y++;
   }else{
     insNewLine(gb, stat, stat->currentLine + 1);
@@ -524,6 +538,16 @@ int moveLastLine(gapBuffer *gb, editorStat *stat){
 int charInsert(gapBuffer *gb, editorStat *stat, int key){
   charArrayInsert(gapBufferAt(gb, stat->currentLine), key, stat->x - stat->lineDigitSpace);
   stat->x++;
+
+  if(stat->setting.autoCloseParen == ON){
+    if(key == '(')
+      charArrayInsert(gapBufferAt(gb, stat->currentLine), ')', stat->x - stat->lineDigitSpace);
+    if(key == '{')
+      charArrayInsert(gapBufferAt(gb, stat->currentLine), '}', stat->x - stat->lineDigitSpace);
+    if(key == '"')
+      charArrayInsert(gapBufferAt(gb, stat->currentLine), '"', stat->x - stat->lineDigitSpace);
+  }
+
   stat->numOfChange++;
   stat->isViewUpdated = true;
   return 0;
@@ -736,10 +760,10 @@ int openFile(char* filename){
 		exit(0);
   }
 
-  editorStat* stat = (editorStat*)malloc(sizeof(editorStat));
+  editorStat *stat = (editorStat*)malloc(sizeof(editorStat));
   editorStatInit(stat);
 
-  gapBuffer* gb = (gapBuffer*)malloc(sizeof(gapBuffer));
+  gapBuffer *gb = (gapBuffer*)malloc(sizeof(gapBuffer));
   gapBufferInit(gb);
   insNewLine(gb, stat, 0);
 
@@ -790,10 +814,10 @@ int openFile(char* filename){
 
 int newFile(){
 
-  editorStat* stat = (editorStat*)malloc(sizeof(editorStat));
+  editorStat *stat = (editorStat*)malloc(sizeof(editorStat));
   editorStatInit(stat);
 
-  gapBuffer* gb = (gapBuffer*)malloc(sizeof(gapBuffer));
+  gapBuffer *gb = (gapBuffer*)malloc(sizeof(gapBuffer));
   gapBufferInit(gb);
   insNewLine(gb, stat, 0);
 
