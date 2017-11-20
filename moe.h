@@ -27,7 +27,8 @@ typedef struct registers{
 
 typedef struct editorSetting{
   int autoCloseParen,
-      autoIndent;
+      autoIndent,
+      tabStop;
 } editorSetting;
 
 typedef struct editorStat{

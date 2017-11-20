@@ -123,6 +123,7 @@ void registersInit(editorStat *stat){
 void editorSettingInit(editorStat *stat){
   stat->setting.autoCloseParen = ON;
   stat->setting.autoIndent = ON;
+  stat->setting.tabStop = 2;
 }
 
 int returnLine(gapBuffer *gb, editorStat *stat){
@@ -276,30 +277,21 @@ int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
   werase(win[2]);
   wprintw(win[2], "%s", ":");
   wrefresh(win[2]);
-  nocbreak();
   echo();
 
-  int key;
-  key = wgetch(win[2]);
+  char cmd[COLS - 1];
+  wgetnstr(win[2], cmd, COLS - 1);
   noecho();
 
-  switch(key){
-    case 'w':
+  for(int i=0; i<strlen(cmd); i++){
+    if(cmd[i] == 'w'){
       saveFile(win, gb, stat);
-      break;
-    case 'q':
+    }else if(cmd[i] == 'q'){
       exitCurses();
-      break;
-    case 't':
-      def_prog_mode();           /* save current tty modes */
-      endwin();                  /* restore original tty modes */
-      system("sh");              /* run shell */
-      reset_prog_mode();
-      refresh();               /* restore save modes, repaint screen */
-      break;
+    }
   }
-  cbreak();
-  return 0;
+
+ return 0;
 }
 
 int insNewLine(gapBuffer *gb, editorStat *stat, int position){
@@ -312,10 +304,10 @@ int insNewLine(gapBuffer *gb, editorStat *stat, int position){
 
 // Tab key is 2 space
 int insertTab(gapBuffer *gb, editorStat *stat){
-  for(int i=0; i<2; i++){
+  for(int i=0; i<stat->setting.tabStop; i++){
     charArrayInsert(gapBufferAt(gb, stat->currentLine), ' ', stat->x - stat->lineDigit);
     stat->x++;
-    }
+  }
   stat->numOfChange++;
   stat->isViewUpdated = true;
   return 0;
@@ -439,6 +431,7 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
     for(int i = 0; i < rightLineLength; ++i) charArrayPop(leftLine);
     insIndent(gb, stat);
 
+    if(stat->trueLine[stat->currentLine] == false) stat->trueLine[stat->currentLine + 1] = false;
     stat->currentLine++;
     if(stat->y != LINES - 3) stat->y++;
   }
@@ -448,11 +441,17 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
 }
 
 int keyO(gapBuffer *gb, editorStat *stat){
-  insNewLine(gb, stat, stat->currentLine + 1);
-  insIndent(gb, stat);    // does not works...
-  stat->currentLine++;
+  if(stat->trueLine[stat->currentLine + 1] == false){
+    insNewLine(gb, stat, stat->currentLine + 2);
+    stat->y += 2;
+    stat->currentLine += 2;
+  }else{
+    insNewLine(gb, stat, stat->currentLine + 1);
+    insIndent(gb, stat);    // does not works...
+    stat->y++;
+    stat->currentLine++;
+  }
   stat->x = stat->lineDigitSpace;
-  stat->y++;
   stat->isViewUpdated = true;
   stat->numOfChange++;
   return 0;
