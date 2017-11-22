@@ -420,12 +420,10 @@ int insIndent(gapBuffer *gb, editorStat *stat){
   if(stat->setting.autoIndent != ON) return 0;
   if(gapBufferAt(gb, stat->currentLine)->elements[0] == ' '){
     int i = 0;
-    for(i=0; i<gapBufferAt(gb, stat->currentLine)->numOfChar; i++){
-      if(gapBufferAt(gb, stat->currentLine)->elements[i] == ' ')
-        charArrayPush(gapBufferAt(gb, stat->currentLine + 1), ' ');
-      else break;
+    while(gapBufferAt(gb, stat->currentLine)->elements[i] == ' '){
+      charArrayPush(gapBufferAt(gb, stat->currentLine + 1), ' ');
+      i++;
     }
-   stat->x = stat->lineDigitSpace + i;
   }
   return 0;
 }
@@ -442,6 +440,7 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
       stat->currentLine++;
     }
     if(stat->y != LINES - 3) stat->y++;
+    stat->x = stat->lineDigitSpace;
   }else{
     insNewLine(gb, stat, stat->currentLine + 1);
 
@@ -451,13 +450,14 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
 
     for(int i = 0; i < rightLineLength; ++i) charArrayPush(rightLine, leftLine->elements[leftLineLength + i]);
     for(int i = 0; i < rightLineLength; ++i) charArrayPop(leftLine);
-    insIndent(gb, stat);
 
     if(stat->trueLine[stat->currentLine] == false) stat->trueLine[stat->currentLine + 1] = false;
     stat->currentLine++;
     if(stat->y != LINES - 3) stat->y++;
+    stat->x = stat->lineDigitSpace;
+    int i=0;
+    while(gapBufferAt(gb, stat->currentLine)->elements[i++] == ' ') stat->x++;
   }
-  stat->x = stat->lineDigitSpace;
   stat->isViewUpdated = true;
   stat->numOfChange++;
   return 0;
@@ -488,14 +488,7 @@ int keyA(gapBuffer *gb, editorStat *stat){
 }
 
 int keyX(gapBuffer *gb, editorStat *stat){
-  if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1){
-    stat->currentLine++;
-    stat->y++;
-    stat->x = stat->lineDigitSpace;
-    keyBackSpace(gb, stat);
-  }else{
-    charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
-  }
+  charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
   stat->isViewUpdated = true;
   stat->numOfChange++;
   return 0;
@@ -803,7 +796,6 @@ int openFile(char* filename){
   strcpy(stat->filename, filename);
   FILE *fp = fopen(stat->filename, "r");
   if(fp == NULL){
-
     stat->x = stat->lineDigitSpace;
     stat->numOfLines = 1;
   }else{
