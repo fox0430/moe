@@ -110,14 +110,24 @@ int trueLineInit(editorStat *stat){
   return 0;
 }
 
-void registersInit(editorStat *stat){
+int registersInit(editorStat *stat){
   stat->rgst.yankedLine = (gapBuffer*)malloc(sizeof(gapBuffer));
+  if(stat->rgst.yankedLine == NULL){
+    printf("main register: cannot allocated memory...\n");
+    return -1;
+  }
   gapBufferInit(stat->rgst.yankedLine);
   insNewLine(stat->rgst.yankedLine, stat, 0);
   stat->rgst.yankedStr = (charArray*)malloc(sizeof(charArray));
+  if(stat->rgst.yankedStr == NULL){
+    printf("main register: cannot allocated memory...\n");
+    return -1;
+  }
   charArrayInit(stat->rgst.yankedStr);
   stat->rgst.numOfYankedLines = 0;
   stat->rgst.numOfYankedStr = 0;
+
+  return 0;
 }
 
 void editorSettingInit(editorStat *stat){
@@ -311,6 +321,10 @@ int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
 
 int insNewLine(gapBuffer *gb, editorStat *stat, int position){
   charArray* ca = (charArray*)malloc(sizeof(charArray));
+  if(ca == NULL){
+    printf("main insert new line: cannot allocated memory...\n");
+    return -1;
+  }
   charArrayInit(ca);
   gapBufferInsert(gb, ca, position);
   stat->numOfLines++;
@@ -497,6 +511,10 @@ int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat){
 
   if(stat->numOfLines == 1){
     charArray* emptyLine = (charArray*)malloc(sizeof(charArray));
+    if(emptyLine == NULL){
+      printf("main: cannot allocated memory...\n");
+      return -1;
+    }
     charArrayInit(emptyLine);
     gapBufferInsert(gb, emptyLine, 0);
   }else{
@@ -771,9 +789,17 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
 int openFile(char* filename){
 
   editorStat *stat = (editorStat*)malloc(sizeof(editorStat));
+  if(stat == NULL){
+    printf("main: cannot allocated memory...\n");
+    return -1;
+  }
   editorStatInit(stat);
 
   gapBuffer *gb = (gapBuffer*)malloc(sizeof(gapBuffer));
+  if(gb == NULL){
+    printf("main: cannot allocated memory...\n");
+    return -1;
+  }
   gapBufferInit(gb);
   insNewLine(gb, stat, 0);
 
@@ -802,6 +828,10 @@ int openFile(char* filename){
       if(ch=='\n'){
         stat->currentLine += 1;
         charArray* ca = (charArray*)malloc(sizeof(charArray));
+        if(ca == NULL){
+          printf("main read file: cannot allocated memory...\n");
+          return -1;
+        }
         charArrayInit(ca);
         gapBufferInsert(gb, ca, stat->currentLine);
       }else charArrayPush(gapBufferAt(gb, stat->currentLine), ch);
@@ -830,9 +860,17 @@ int openFile(char* filename){
 int newFile(){
 
   editorStat *stat = (editorStat*)malloc(sizeof(editorStat));
+  if(stat == NULL){
+    printf("main: cannot allocated memory...\n");
+    return -1;
+  }
   editorStatInit(stat);
 
   gapBuffer *gb = (gapBuffer*)malloc(sizeof(gapBuffer));
+  if(gb == NULL){
+    printf("main: cannot allocated memory...\n");
+    return -1;
+  }
   gapBufferInit(gb);
   insNewLine(gb, stat, 0);
 

@@ -62,7 +62,7 @@ void exitCurses();
 void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStat *stat);
 void editorStatInit(editorStat* stat);
 int trueLineInit(editorStat *stat);
-void registersInit(editorStat *stat);
+int registersInit(editorStat *stat);
 void editorSettingInit(editorStat *stat);
 int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat);
 int countLineDigit(editorStat *stat, int lineNum);
