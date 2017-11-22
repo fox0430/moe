@@ -1,7 +1,7 @@
 #include"moe.h"
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->debugMode = ON;
+  stat->debugMode = OFF;
   if(stat->debugMode == OFF ) return 0;
   werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
@@ -207,11 +207,18 @@ int countLineDigit(editorStat *stat, int numOfLines){
 }
 
 int printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  if(stat->trueLine[stat->currentLine] == false) return 0;
+  int currentLine = stat->currentLine,
+      y = stat->y;
+  if(stat->trueLine[currentLine] == false){
+    while(stat->trueLine[currentLine] != true){
+      currentLine--;
+      y--;
+    }
+  }else currentLine = 0;
   int lineDigitSpace = stat->lineDigit - countLineDigit(stat, stat->currentLine + 1);
-  for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], stat->y, j, " ");
+  for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
   wattron(win[0], COLOR_PAIR(7));
-  mvwprintw(win[0], stat->y, lineDigitSpace, "%d", stat->currentLine + 1 - stat->adjustLineNum);
+  mvwprintw(win[0], y, lineDigitSpace, "%d", stat->currentLine - currentLine + 1 - stat->adjustLineNum);
   wmove(win[0], stat->y, stat->x);
   wrefresh(win[0]);
   wattron(win[0], COLOR_PAIR(6));
@@ -679,7 +686,6 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
 
   while(1){
     printStatBar(win, gb, stat); 
-    wmove(win[0], stat->y, stat->x);
     if(stat->isViewUpdated == true){
       printLineAll(win, gb, stat);
       stat->isViewUpdated = false;
@@ -715,7 +721,6 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
   while(1){
     printStatBar(win, gb, stat);
-    wmove(win[0], stat->y, stat->x);
     if(stat->isViewUpdated == true){
       printLineAll(win, gb, stat);
       stat->isViewUpdated = false;
