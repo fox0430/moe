@@ -162,7 +162,6 @@ int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
     wrefresh(win[2]);
     wattron(win[2], COLOR_PAIR(3));
     echo();
-    wgetch(win[2]);   // skip enter 
     while(1){
       if((ch = wgetch(win[2])) == 10 || i > 255) break;
       filename[i] = ch;
@@ -318,7 +317,6 @@ int insNewLine(gapBuffer *gb, editorStat *stat, int position){
   return 0;
 }
 
-// Tab key is 2 space
 int insertTab(gapBuffer *gb, editorStat *stat){
   for(int i=0; i<stat->setting.tabStop; i++){
     charArrayInsert(gapBufferAt(gb, stat->currentLine), ' ', stat->x - stat->lineDigit);
@@ -570,6 +568,8 @@ int charInsert(gapBuffer *gb, editorStat *stat, int key){
       charArrayInsert(gapBufferAt(gb, stat->currentLine), '}', stat->x - stat->lineDigitSpace);
     if(key == '"')
       charArrayInsert(gapBufferAt(gb, stat->currentLine), '"', stat->x - stat->lineDigitSpace);
+    if(key == '\'')
+      charArrayInsert(gapBufferAt(gb, stat->currentLine), '\'', stat->x - stat->lineDigitSpace);
   }
 
   stat->numOfChange++;
@@ -778,11 +778,6 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
 }
 
 int openFile(char* filename){
-  FILE *fp = fopen(filename, "r");
-  if(fp == NULL){
-		printf("%s Cannot file open... \n", filename);
-		exit(0);
-  }
 
   editorStat *stat = (editorStat*)malloc(sizeof(editorStat));
   editorStatInit(stat);
@@ -790,18 +785,6 @@ int openFile(char* filename){
   gapBuffer *gb = (gapBuffer*)malloc(sizeof(gapBuffer));
   gapBufferInit(gb);
   insNewLine(gb, stat, 0);
-
-  strcpy(stat->filename, filename);
-  char  ch;
-  while((ch = fgetc(fp)) != EOF){
-    if(ch=='\n'){
-      stat->currentLine += 1;
-      charArray* ca = (charArray*)malloc(sizeof(charArray));
-      charArrayInit(ca);
-      gapBufferInsert(gb, ca, stat->currentLine);
-    }else charArrayPush(gapBufferAt(gb, stat->currentLine), ch);
-  }
-  fclose(fp);
 
   WINDOW **win = (WINDOW**)malloc(sizeof(WINDOW*)*3);
   if(signal(SIGINT, signal_handler) == SIG_ERR ||
@@ -817,18 +800,36 @@ int openFile(char* filename){
   startCurses(stat);
   winInit(win);
 
-  if(stat->lineDigit < countLineDigit(stat, stat->currentLine + 1))
-    stat->lineDigit = countLineDigit(stat, stat->currentLine + 1);
+  strcpy(stat->filename, filename);
+  FILE *fp = fopen(stat->filename, "r");
+  if(fp == NULL){
 
-  stat->numOfLines = stat->currentLine + 1;
-  stat->x = stat->lineDigitSpace;
-  stat->currentLine = 0;
+    stat->x = stat->lineDigitSpace;
+    stat->numOfLines = 1;
+  }else{
+    char  ch;
+    while((ch = fgetc(fp)) != EOF){
+      if(ch=='\n'){
+        stat->currentLine += 1;
+        charArray* ca = (charArray*)malloc(sizeof(charArray));
+        charArrayInit(ca);
+        gapBufferInsert(gb, ca, stat->currentLine);
+      }else charArrayPush(gapBufferAt(gb, stat->currentLine), ch);
+    }
+    fclose(fp);
 
-  returnLine(gb, stat);
+    if(stat->lineDigit < countLineDigit(stat, stat->currentLine + 1))
+      stat->lineDigit = countLineDigit(stat, stat->currentLine + 1);
+
+    stat->numOfLines = stat->currentLine + 1;
+    stat->x = stat->lineDigitSpace;
+    stat->currentLine = 0;
+
+    returnLine(gb, stat);
+  }
 
   printLineAll(win, gb, stat);
   printStatBarInit(win, gb, stat);
-
   normalMode(win, gb, stat);
 
   gapBufferFree(gb);
