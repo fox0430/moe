@@ -1,7 +1,7 @@
 #include"moe.h"
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->debugMode = OFF;
+  stat->debugMode = ON;
   if(stat->debugMode == OFF ) return 0;
   werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
@@ -466,11 +466,13 @@ int keyO(gapBuffer *gb, editorStat *stat){
     stat->currentLine += 2;
   }else{
     insNewLine(gb, stat, stat->currentLine + 1);
-    insIndent(gb, stat);    // does not works...
+    insIndent(gb, stat);
     stat->y++;
     stat->currentLine++;
   }
   stat->x = stat->lineDigitSpace;
+  int i=0;
+  while(gapBufferAt(gb, stat->currentLine)->elements[i++] == ' ') stat->x++;
   stat->isViewUpdated = true;
   stat->numOfChange++;
   return 0;
