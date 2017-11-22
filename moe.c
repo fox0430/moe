@@ -318,12 +318,8 @@ int insNewLine(gapBuffer *gb, editorStat *stat, int position){
 }
 
 int insertTab(gapBuffer *gb, editorStat *stat){
-  for(int i=0; i<stat->setting.tabStop; i++){
-    charArrayInsert(gapBufferAt(gb, stat->currentLine), ' ', stat->x - stat->lineDigit);
-    stat->x++;
-  }
-  stat->numOfChange++;
-  stat->isViewUpdated = true;
+  for(int i=0; i<stat->setting.tabStop; i++)
+    charInsert(gb, stat, ' ');
   return 0;
 }
 
