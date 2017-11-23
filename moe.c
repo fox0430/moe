@@ -526,6 +526,7 @@ int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat){
     }
   }
 
+  stat->x = stat->lineDigitSpace;
   stat->numOfChange++;
   stat->isViewUpdated = true;
   werase(win[2]);
