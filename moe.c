@@ -534,8 +534,8 @@ int keyD(WINDOW **win, gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
-// does not works...
 int replaceChar(gapBuffer *gb, editorStat *stat, int key){
+  if((stat->x - stat->lineDigitSpace) + stat->cmdLoop > gapBufferAt(gb, stat->currentLine)->numOfChar) return 0;
   for(int i=0; i<stat->cmdLoop; i++){
     gapBufferAt(gb, stat->currentLine)->elements[(stat->x - stat->lineDigitSpace) + i] = key;
   }
