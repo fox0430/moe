@@ -49,6 +49,11 @@ int setCursesColor(){
 
 void startCurses(){
   initscr();    // start terminal contorl
+  if(initscr() == NULL){
+    fprintf(stderr, "initscr failure\n");
+    exit(EXIT_FAILURE);
+  }
+
   cbreak();   // enable cbreak mode
   curs_set(1);    // set cursr
 
@@ -787,38 +792,8 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
   }
 }
 
-int openFile(char* filename){
+int openFile(gapBuffer *gb, editorStat *stat){
 
-  editorStat *stat = (editorStat*)malloc(sizeof(editorStat));
-  if(stat == NULL){
-    printf("main: cannot allocated memory...\n");
-    return -1;
-  }
-  editorStatInit(stat);
-
-  gapBuffer *gb = (gapBuffer*)malloc(sizeof(gapBuffer));
-  if(gb == NULL){
-    printf("main: cannot allocated memory...\n");
-    return -1;
-  }
-  gapBufferInit(gb);
-  insNewLine(gb, stat, 0);
-
-  WINDOW **win = (WINDOW**)malloc(sizeof(WINDOW*)*3);
-  if(signal(SIGINT, signal_handler) == SIG_ERR ||
-     signal(SIGQUIT, signal_handler) == SIG_ERR){
-    fprintf(stderr, "signal failure\n");
-    exit(EXIT_FAILURE);
-  }
-  if(initscr() == NULL){
-    fprintf(stderr, "initscr failure\n");
-    exit(EXIT_FAILURE);
-  }
-
-  startCurses(stat);
-  winInit(win);
-
-  strcpy(stat->filename, filename);
   FILE *fp = fopen(stat->filename, "r");
   if(fp == NULL){
     stat->x = stat->lineDigitSpace;
@@ -849,16 +824,18 @@ int openFile(char* filename){
     returnLine(gb, stat);
   }
 
-  printLineAll(win, gb, stat);
-  printStatBarInit(win, gb, stat);
-  normalMode(win, gb, stat);
+  return 0;
+}
 
-  gapBufferFree(gb);
+int newFile(editorStat *stat){
+
+  stat->x = stat->lineDigitSpace;
+  stat->numOfLines = 1;
 
   return 0;
 }
 
-int newFile(){
+int main(int argc, char* argv[]){
 
   editorStat *stat = (editorStat*)malloc(sizeof(editorStat));
   if(stat == NULL){
@@ -866,6 +843,7 @@ int newFile(){
     return -1;
   }
   editorStatInit(stat);
+  strcpy(stat->filename, argv[1]);
 
   gapBuffer *gb = (gapBuffer*)malloc(sizeof(gapBuffer));
   if(gb == NULL){
@@ -881,33 +859,19 @@ int newFile(){
     fprintf(stderr, "signal failure\n");
     exit(EXIT_FAILURE);
   }
-  if(initscr() == NULL){
-    fprintf(stderr, "initscr failure\n");
-    exit(EXIT_FAILURE);
-  }
+
   startCurses(stat);
   winInit(win);
 
-  stat->x = stat->lineDigitSpace;
-  stat->numOfLines = 1;
+  if(argc < 2) newFile(stat);
+  else openFile(gb, stat);
 
-  printLineAll(win, gb, stat);
   printStatBarInit(win, gb, stat);
+  stat->isViewUpdated = true;
 
   normalMode(win, gb, stat);
 
   gapBufferFree(gb);
-
-  return 0;
-}
-
-int main(int argc, char* argv[]){
-
-  if(argc < 2){
-    newFile();
-  }
-
-  openFile(argv[1]);
 
   return 0;
 }
