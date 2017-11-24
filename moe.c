@@ -80,6 +80,7 @@ void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStat *stat){
   winResizeMove(win[0], LINES-2, COLS, 0, 0);
   winResizeMove(win[1], 1, COLS, LINES-2, 0);
   winResizeMove(win[2], 1, COLS, LINES-1, 0);
+  returnLine(gb, stat);
   printLineAll(win, gb, stat);
   printStatBarInit(win, gb, stat);
 }
@@ -154,7 +155,7 @@ int returnLine(gapBuffer *gb, editorStat *stat){
 
   for(int i=0; i<stat->numOfLines; i++){
     if(gapBufferAt(gb, i)->numOfChar > (COLS - stat->lineDigitSpace)){
-      insNewLine(gb, stat, i + 1);
+      if(stat->trueLine[i + 1] == true) insNewLine(gb, stat, i + 1);
       charArray* leftLine = gapBufferAt(gb, i), *rightLine = gapBufferAt(gb, i + 1);
       int leftLineLength = COLS - stat->lineDigitSpace, rightLineLength = leftLine->numOfChar - leftLineLength;
       for(int j = 0; j < rightLineLength; ++j) charArrayPush(rightLine, leftLine->elements[leftLineLength + j]);
@@ -319,6 +320,10 @@ int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
           wattroff(win[2], COLOR_PAIR(4));
         }
       }
+    }else if(cmd[0] == 'e'){
+      char filename[256];
+      for(int j=0; j<strlen(cmd - 2); j++) filename[j] = cmd[j + 2];
+      cmdE(gb, stat, filename);
     }
   }
   return 0;
@@ -619,6 +624,17 @@ int linePaste(gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
+int cmdE(gapBuffer *gb, editorStat *stat, char *filename){
+  gapBufferFree(gb);
+  editorStatInit(stat);
+  gapBufferInit(gb);
+  insNewLine(gb, stat, 0);
+  strcpy(stat->filename, filename);
+  openFile(gb, stat);
+  stat->isViewUpdated = true;
+  return 0;
+}
+
 void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
   if(stat->cmdLoop == 0) stat->cmdLoop = 1;
   switch(key){
@@ -828,10 +844,8 @@ int openFile(gapBuffer *gb, editorStat *stat){
 }
 
 int newFile(editorStat *stat){
-
   stat->x = stat->lineDigitSpace;
   stat->numOfLines = 1;
-
   return 0;
 }
 
@@ -843,7 +857,6 @@ int main(int argc, char* argv[]){
     return -1;
   }
   editorStatInit(stat);
-  strcpy(stat->filename, argv[1]);
 
   gapBuffer *gb = (gapBuffer*)malloc(sizeof(gapBuffer));
   if(gb == NULL){
@@ -856,15 +869,18 @@ int main(int argc, char* argv[]){
   WINDOW **win = (WINDOW**)malloc(sizeof(WINDOW*)*3);
   if(signal(SIGINT, signal_handler) == SIG_ERR ||
      signal(SIGQUIT, signal_handler) == SIG_ERR){
-    fprintf(stderr, "signal failure\n");
-    exit(EXIT_FAILURE);
+      fprintf(stderr, "signal failure\n");
+      exit(EXIT_FAILURE);
   }
 
   startCurses(stat);
   winInit(win);
 
   if(argc < 2) newFile(stat);
-  else openFile(gb, stat);
+  else{
+    strcpy(stat->filename, argv[1]);
+    openFile(gb, stat);
+  }
 
   printStatBarInit(win, gb, stat);
   stat->isViewUpdated = true;
