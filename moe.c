@@ -320,12 +320,22 @@ int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
           wattroff(win[2], COLOR_PAIR(4));
         }
       }
-    }else if(cmd[0] == 'e'){
+    }else if(cmd[0] == 'e'){  // File open
       char filename[256];
       strcpy(filename, cmd);
       for(int j=0; j<strlen(filename) - 2; j++) filename[j] = filename[j + 2];
       filename[strlen(filename) - 2] = '\0';
       cmdE(gb, stat, filename);
+    }else if(cmd[0] == '!'){    // Shell command execution
+      for(int j=0; j<strlen(cmd) - 2; j++) cmd[j] = cmd[j + 2];
+      cmd[strlen(cmd) - 2] = '\0';
+      def_prog_mode();    // Save the tty modes
+	    endwin();
+	    system(cmd);
+      system("read -p \"Press enter: \"");
+	    reset_prog_mode();    // Return to the previous tty mode
+      werase(win[2]);
+      wrefresh(win[2]);
     }
   }
   return 0;
