@@ -1,7 +1,7 @@
 #include"moe.h"
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->debugMode = ON;
+  stat->debugMode = OFF;
   if(stat->debugMode == OFF ) return 0;
   werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
@@ -322,7 +322,9 @@ int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
       }
     }else if(cmd[0] == 'e'){
       char filename[256];
-      for(int j=0; j<strlen(cmd - 2); j++) filename[j] = cmd[j + 2];
+      strcpy(filename, cmd);
+      for(int j=0; j<strlen(filename) - 2; j++) filename[j] = filename[j + 2];
+      filename[strlen(filename) - 2] = '\0';
       cmdE(gb, stat, filename);
     }
   }
@@ -625,11 +627,11 @@ int linePaste(gapBuffer *gb, editorStat *stat){
 }
 
 int cmdE(gapBuffer *gb, editorStat *stat, char *filename){
-  gapBufferFree(gb);
   editorStatInit(stat);
+  strcpy(stat->filename, filename);
+  gapBufferFree(gb);
   gapBufferInit(gb);
   insNewLine(gb, stat, 0);
-  strcpy(stat->filename, filename);
   openFile(gb, stat);
   stat->isViewUpdated = true;
   return 0;
