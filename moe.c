@@ -1,7 +1,7 @@
 #include"moe.h"
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->debugMode = OFF;
+  stat->debugMode = ON;
   if(stat->debugMode == OFF ) return 0;
   werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
@@ -294,6 +294,18 @@ void printStatBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
   wrefresh(win[1]);
 }
 
+int shellMode(char *cmd){
+  for(int j=0; j<strlen(cmd) - 2; j++) cmd[j] = cmd[j + 2];
+  cmd[strlen(cmd) - 2] = '\0';
+  def_prog_mode();    // Save the tty modes
+	endwin();
+	system(cmd);
+  system("read -p \"Press enter: \"");
+	reset_prog_mode();    // Return to the previous tty mode
+
+  return 0;
+}
+
 int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
   werase(win[2]);
   wprintw(win[2], "%s", ":");
@@ -327,13 +339,7 @@ int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
       filename[strlen(filename) - 2] = '\0';
       cmdE(gb, stat, filename);
     }else if(cmd[0] == '!'){    // Shell command execution
-      for(int j=0; j<strlen(cmd) - 2; j++) cmd[j] = cmd[j + 2];
-      cmd[strlen(cmd) - 2] = '\0';
-      def_prog_mode();    // Save the tty modes
-	    endwin();
-	    system(cmd);
-      system("read -p \"Press enter: \"");
-	    reset_prog_mode();    // Return to the previous tty mode
+      shellMode(cmd);
       werase(win[2]);
       wrefresh(win[2]);
     }

@@ -73,6 +73,7 @@ void printLine(WINDOW **win, gapBuffer* gb, editorStat *stat, int currentLine, i
 void printLineAll(WINDOW **win, gapBuffer* gb, editorStat *stat);
 void printStatBarInit(WINDOW **win, gapBuffer *gb, editorStat *stat);
 void printStatBar(WINDOW **win, gapBuffer *gb, editorStat *stat);
+int shellMode(char *cmd);
 int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat);
 int insNewLine(gapBuffer *gb, editorStat *stat, int position);
 int insertTab(gapBuffer *gb, editorStat *stat);
