@@ -1,7 +1,7 @@
 #include"moe.h"
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->debugMode = ON;
+  stat->debugMode = OFF;
   if(stat->debugMode == OFF ) return 0;
   werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
@@ -161,6 +161,18 @@ int returnLine(gapBuffer *gb, editorStat *stat){
       for(int j = 0; j < rightLineLength; ++j) charArrayPush(rightLine, leftLine->elements[leftLineLength + j]);
       for(int j = 0; j < rightLineLength; ++j) charArrayPop(leftLine);
       stat->trueLine[i + 1] = false;
+    }else if(stat->trueLine[i + 1] == false && gapBufferAt(gb, i)->numOfChar < (COLS - stat->lineDigitSpace)){
+      charArray *leftLine = gapBufferAt(gb, i), *rightLine = gapBufferAt(gb, i + 1);
+      int moveLength;
+      if((COLS - stat->lineDigitSpace) - leftLine->numOfChar > rightLine->numOfChar) moveLength = rightLine->numOfChar;
+      else moveLength = (COLS - stat->lineDigitSpace) - leftLine->numOfChar;
+      for(int j = 0; j < moveLength; ++j) charArrayPush(leftLine, rightLine->elements[j]);
+      for(int j = 0; j < moveLength; ++j) charArrayDel(rightLine, 0);
+      if(rightLine->numOfChar == 0){
+        gapBufferDel(gb, i + 1, i + 2);
+        stat->numOfLines--;
+        for(int k = i + 1; k < stat->numOfLines - 1; k++) stat->trueLine[k] = stat->trueLine[k + 1];
+      }
     }
   }
   return 0;
@@ -300,6 +312,7 @@ int shellMode(char *cmd){
   def_prog_mode();    // Save the tty modes
 	endwin();
 	system(cmd);
+  system("echo \n");
   system("read -p \"Press enter: \"");
 	reset_prog_mode();    // Return to the previous tty mode
 
