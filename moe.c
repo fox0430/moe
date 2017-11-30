@@ -1,7 +1,7 @@
 #include"moe.h"
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->debugMode = OFF;
+  stat->debugMode = ON;
   if(stat->debugMode == OFF ) return 0;
   werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
@@ -313,10 +313,25 @@ int shellMode(char *cmd){
   def_prog_mode();    // Save the tty modes
 	endwin();
 	system(cmd);
-  system("echo \n");
-  system("read -p \"Press enter: \"");
+  system("printf \"\nPress Enter\"");
+  system("read _");
 	reset_prog_mode();    // Return to the previous tty mode
 
+  return 0;
+}
+
+// has problem...
+int jampLine(editorStat *stat, int lineNum){
+  const int startPrintLine = stat->currentLine - stat->y;
+  if(lineNum >= startPrintLine || lineNum < (startPrintLine + COLS - 2)){
+    stat->y = lineNum - startPrintLine;
+    stat->currentLine = lineNum;
+  }else{
+    stat->y = 0;
+    stat->x = stat->lineDigitSpace;
+    stat->currentLine = lineNum;
+  }
+  stat->isViewUpdated = true;
   return 0;
 }
 
@@ -332,7 +347,13 @@ int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
   noecho();
 
   for(int i=0; i<strlen(cmd); i++){
-    if(cmd[i] == 'w'){
+    if(cmd[0] >= '0' && cmd[0] <= '9'){
+      int lineNum = atoi(cmd) - 1;
+      if(lineNum < 0) lineNum = 0;
+      else if(lineNum > stat->numOfLines) lineNum = stat->numOfLines;
+      jampLine(stat, lineNum);
+      break;
+    }else if(cmd[i] == 'w'){
       saveFile(win, gb, stat);
       saveFlag = true;
     }else if(cmd[i] == 'q'){
@@ -534,10 +555,20 @@ int keyO(gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
-int keyA(gapBuffer *gb, editorStat *stat){
+int appendAfterTheCursor(gapBuffer *gb, editorStat *stat){
   if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace)
     return 0;
     stat->x++;
+  return 0;
+}
+
+int appendEndOfLine(gapBuffer *gb, editorStat *stat){
+  stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace;
+  return 0;
+}
+
+int insBeginOfLine(gapBuffer *gb, editorStat *stat){
+  stat->x = stat->lineDigitSpace;
   return 0;
 }
 
@@ -728,7 +759,15 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       replaceChar(gb, stat, key);
       break;
     case 'a':
-      keyA(gb, stat);
+      appendAfterTheCursor(gb, stat);
+      insertMode(win, gb, stat);
+      break;
+    case 'A':
+      appendEndOfLine(gb, stat);
+      insertMode(win, gb, stat);
+      break;
+    case 'I':
+      insBeginOfLine(gb, stat);
       insertMode(win, gb, stat);
       break;
     case 'o':
