@@ -20,5 +20,7 @@ This project goal is funny animation editor and study C.
   ・Syntax check
 
   ・git coordination
+
+  ・scripting language
   
   ・Funny animation...
