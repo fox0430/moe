@@ -153,7 +153,9 @@ int returnLine(gapBuffer *gb, editorStat *stat){
     stat->trueLine = tmp;
   }
 
-  for(int i=0; i<stat->numOfLines; i++){
+  int i = stat->currentLine - stat->y;
+  int end = i + LINES - 2;
+  for(i; i<end; i++){
     if(gapBufferAt(gb, i)->numOfChar > (COLS - stat->lineDigitSpace)){
       if(i == stat->numOfLines - 1) insNewLine(gb, stat, i + 1);
       else if(stat->trueLine[i + 1] == true) insNewLine(gb, stat, i + 1);
