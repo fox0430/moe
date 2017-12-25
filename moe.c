@@ -8,7 +8,7 @@ int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   wprintw(win[2], "currentLine: %d ", stat->currentLine);
   wprintw(win[2], "numOfLines: %d ", stat->numOfLines);
   wprintw(win[2], "numOfChar: %d ", gapBufferAt(gb, stat->currentLine)->numOfChar);
-  wprintw(win[2], "ture: %d ", stat->trueLine[stat->currentLine]);
+  wprintw(win[2], "change: %d", stat->numOfChange);
   wprintw(win[2], "elements: %s", gapBufferAt(gb, stat->currentLine)->elements);
   wrefresh(win[2]);
   wmove(win[0], stat->y, stat->x);
@@ -408,7 +408,6 @@ int keyUp(gapBuffer* gb, editorStat* stat){
   if(stat->y == 0){
     stat->currentLine--;
     stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
-    stat->numOfChange++;
   }else{
     stat->y--;
     stat->currentLine--;
@@ -424,7 +423,6 @@ int keyDown(gapBuffer* gb, editorStat* stat){
   if(stat->y == LINES - 3){
     stat->currentLine++;
     stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace;
-    stat->numOfChange++;
   }else{
     stat->y++;
     stat->currentLine++;
