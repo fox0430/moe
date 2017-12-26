@@ -1,7 +1,7 @@
 #include"moe.h"
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->debugMode = OFF;
+  stat->debugMode = ON;
   if(stat->debugMode == OFF ) return 0;
   werase(win[2]);
   mvwprintw(win[2], 0, 0, "debug mode: ");
@@ -429,12 +429,13 @@ int keyDown(gapBuffer* gb, editorStat* stat){
     stat->y++;
     stat->currentLine++;
 
-    if(stat->mode == NORMAL_MODE)
-      if (stat->x != stat->lineDigitSpace && stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar)
+    if(stat->mode == NORMAL_MODE){
+      if (stat->x != stat->lineDigitSpace && stat->x > stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar)
         stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar;
-
-    if(stat->x > stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar)
-      stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
+    }else if(stat->mode == INSERT_MODE){
+      if(stat->x > stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar)
+        stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
+    }
   }
   stat->isViewUpdated = true;
   return 0;
