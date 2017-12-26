@@ -161,7 +161,7 @@ int returnLine(gapBuffer *gb, editorStat *stat){
       else if(stat->trueLine[i + 1] == true) insNewLine(gb, stat, i + 1);
       charArray* leftLine = gapBufferAt(gb, i), *rightLine = gapBufferAt(gb, i + 1);
       int leftLineLength = COLS - stat->lineDigitSpace, rightLineLength = leftLine->numOfChar - leftLineLength;
-      for(int j = 0; j < rightLineLength; ++j) charArrayPush(rightLine, leftLine->elements[leftLineLength + j]);
+      for(int j=0; j < rightLineLength; j++) charArrayInsert(rightLine, leftLine->elements[leftLineLength + j], j);
       for(int j = 0; j < rightLineLength; ++j) charArrayPop(leftLine);
       stat->trueLine[i + 1] = false;
     }else if(i != stat->numOfLines - 1 && gapBufferAt(gb, i)->numOfChar < (COLS - stat->lineDigitSpace)){
