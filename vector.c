@@ -117,3 +117,10 @@ int charArrayFree(charArray* array){
   
   return 1;
 }
+
+charArray* charArrayCopy(charArray* array){
+  charArray* copy = (charArray*)malloc(sizeof(charArray));
+  charArrayInit(copy);
+  for(int i = 0; i < array->numOfChar; ++i) charArrayPush(copy, array->elements[i]);
+  return copy;
+}
