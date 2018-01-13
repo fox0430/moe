@@ -171,14 +171,45 @@ void initEditorView(editorView* view, gapBuffer* buffer, int height, int width){
   }
 }
 
+void resizeEditorView(editorView* view, gapBuffer* buffer, int height, int width){
+  int lineNumber = view->originalLine[view->cursorY/2], start = 0;
+  for(int y = 0; y < view->height; ++y) charArrayFree(view->lines[y]);
+  view->lines = (charArray**)realloc(sizeof(charArray*)*height);
+  view->height = height;
+  view->width = width;
+  view->originalLine = (int*)realloc(sizeof(int)*height);
+  view->start = (int*)realloc(sizeof(int)*height);
+  view->length = (int*)realloc(sizeof(int)*height);
+  view->isUpdated = true;
+
+  for(int y = 0; y < height; ++y){
+    view->originalLine[y]= -1;
+    view->lines[y] = (charArray*)malloc(sizeof(charArray));
+    charArrayInit(view->lines[y]);
+  }
+
+  for(int y = 0; y < height; ++y){
+    if(start >= gapBufferAt(buffer, lineNumber)->numOfChar){
+      ++lineNumber;
+      start=0;
+      if(lineNumber == buffer->size) break;
+    }
+    view->originalLine[y] = lineNumber;
+    view->start[y] = start;
+    view->length[y] = width > gapBufferAt(buffer, lineNumber)->numOfChar - start ? gapBufferAt(buffer, lineNumber)->numOfChar - start : width;
+    start += width;
+    for(int x = 0; x < view->length[y]; ++x) charArrayPush(view->lines[y], gapBufferAt(buffer, lineNumber)->elements[x+view->start[y]]);
+  }
+  while(stat->currentLine > view->originalLine[view->height-1] || (stat->currentLine == view->originalLine[view->height-1] && view->length[view->height-1] > 0 && stat->positionInCurrentLine >= view->start[view->height-1]+view->length[view->height-1])) scrollDown(view, buffer);
+}
+
 void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStat *stat){
   endwin(); 
   initscr();
   winResizeMove(win[0], LINES-2, COLS, 0, 0);
   winResizeMove(win[1], 1, COLS, LINES-2, 0);
   winResizeMove(win[2], 1, COLS, LINES-1, 0);
-  returnLine(gb, stat);
-  stat->isViewUpdated = true;
+  resizeEditorView(&stat->view, gb, LINES-2, COLS-stat->lineDigitSpace);
   printStatBarInit(win, gb, stat);
 }
 
@@ -998,7 +1029,7 @@ int openFile(gapBuffer *gb, editorStat *stat){
     stat->currentLine = 0;
     stat->positionInCurrentLine = 0;
 
-    initEditorView(&stat->view, gb, LINES-3, COLS-stat->lineDigitSpace);
+    initEditorView(&stat->view, gb, LINES-stat->lineDigitSpace, COLS-stat->lineDigitSpace);
   }
 
   return 0;
