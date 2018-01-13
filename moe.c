@@ -139,7 +139,7 @@ void updateCursorPosition(editorStat* stat){
   }
 }
 
-void initEditorView(editorView* view, gapBuffer* buffer, int height, int width, int topLine, int startOfTopLine){
+void initEditorView(editorView* view, gapBuffer* buffer, int height, int width){
   view->cursorY = 0;
   view->cursorX = 0;
   view->height = height;
@@ -156,7 +156,7 @@ void initEditorView(editorView* view, gapBuffer* buffer, int height, int width, 
     charArrayInit(view->lines[y]);
   }
 
-  int lineNumber = topLine, start = startOfTopLine;
+  int lineNumber = 0, start = 0;
   for(int y = 0; y < height; ++y){
     if(start >= gapBufferAt(buffer, lineNumber)->numOfChar){
       ++lineNumber;
@@ -998,7 +998,7 @@ int openFile(gapBuffer *gb, editorStat *stat){
     stat->currentLine = 0;
     stat->positionInCurrentLine = 0;
 
-    initEditorView(&stat->view, gb, LINES-3, COLS-stat->lineDigitSpace, 0, 0);
+    initEditorView(&stat->view, gb, LINES-3, COLS-stat->lineDigitSpace);
   }
 
   return 0;
