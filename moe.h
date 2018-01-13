@@ -35,6 +35,7 @@ typedef struct editorView{
   int height, width, cursorY, cursorX;
   charArray** lines;
   int* originalLine, *start, *length;
+  bool isUpdated;
 } editorView;
 
 typedef struct editorStat{

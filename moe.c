@@ -1,3 +1,4 @@
+#include <math.h>
 #include"moe.h"
 
 
@@ -79,7 +80,9 @@ void exitCurses(){
 }
 
 void scrollDown(editorView* view, gapBuffer* buffer){
-  charArrayFree(view->lines[0]);
+  charArray* newLine = view->lines[0];
+  while(newLine->numOfChar > 0) charArrayPop(newLine);
+
   for(int y = 0; y < view->height-1; ++y){
     view->lines[y] = view->lines[y+1];
     view->originalLine[y] = view->originalLine[y+1];
@@ -93,24 +96,20 @@ void scrollDown(editorView* view, gapBuffer* buffer){
     view->start[height-1] = 0;
     view->length[height-1] = view->width > gapBufferAt(buffer, view->originalLine[height-1])->numOfChar ? gapBufferAt(buffer, view->originalLine[height-1])->numOfChar : view->width;
 
-    charArray* line = (charArray*)malloc(sizeof(charArray));
-    charArrayInit(line);
-    for(int x = 0; x < view->length[height-1]; ++x) charArrayPush(line, gapBufferAt(buffer, view->originalLine[height-1])->elements[x]);
-    view->lines[height-1] = line;
+    for(int x = 0; x < view->length[height-1]; ++x) charArrayPush(newLine, gapBufferAt(buffer, view->originalLine[height-1])->elements[x]);
   }else{
     view->originalLine[height-1] = view->originalLine[height-2];
     view->start[height-1] = view->start[height-2]+view->length[height-2];
     view->length[height-1] = view->width > gapBufferAt(buffer, view->originalLine[height-1])->numOfChar - view->start[height-1] ? gapBufferAt(buffer, view->originalLine[height-1])->numOfChar - view->start[height-1] : view->width;
     
-    charArray* line = (charArray*)malloc(sizeof(charArray));
-    charArrayInit(line);
-    for(int x = 0; x < view->length[height-1]; ++x) charArrayPush(line, gapBufferAt(buffer, view->originalLine[height-1])->elements[x+view->start[height-1]]);
+    for(int x = 0; x < view->length[height-1]; ++x) charArrayPush(newLine, gapBufferAt(buffer, view->originalLine[height-1])->elements[x+view->start[height-1]]);
   }
+  view->lines[height-1] = newLine;
 }
 
 void updateCursorPosition(editorStat* stat){
   editorView* view = &stat->view;
-  for(int y = 0; y < view->height; ++y) if(stat->currentLine == view->originalLine[y] && view->start[y] <= stat->positionInCurrentLine && stat->positionInCurrentLine < view->start[y]+view->length[y]){
+  for(int y = 0; y < view->height; ++y) if(stat->currentLine == view->originalLine[y] && (view->length[y] == 0 || (view->start[y] <= stat->positionInCurrentLine && stat->positionInCurrentLine < view->start[y]+view->length[y]))){
     view->cursorY = y;
     view->cursorX = stat->positionInCurrentLine-view->start[y];
     break;
@@ -126,6 +125,7 @@ void initEditorView(editorView* view, gapBuffer* buffer, int height, int width, 
   view->originalLine = (int*)malloc(sizeof(int)*height);
   view->start = (int*)malloc(sizeof(int)*height);
   view->length = (int*)malloc(sizeof(int)*height);
+  view->isUpdated = true;
 
   int lineNumber = topLine, start = startOfTopLine;
   for(int y = 0; y < height; ++y){
@@ -323,13 +323,13 @@ int printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
-int printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y){
-  stat->lineDigit = countDigit(currentLine + 1);
+int printLineNum(WINDOW **win, editorStat *stat, int line, int y){
+  stat->lineDigit = countDigit(line + 1);
   stat->lineDigitSpace = stat->lineDigit + 1;
   int lineDigitSpace = stat->lineDigitSpace;
   for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
-  wattron(win[0], COLOR_PAIR(3));
-  mvwprintw(win[0], y, 0, "%d", currentLine + 1);
+  wattron(win[0], COLOR_PAIR(line == stat->currentLine ? 7 : 3));
+  mvwprintw(win[0], y, 0, "%d", line + 1);
   return 0;
 }
 
@@ -463,16 +463,15 @@ int insertTab(gapBuffer *gb, editorStat *stat){
 
 int keyUp(gapBuffer* gb, editorStat* stat){
   if(stat->currentLine == 0) return 0;
-  if(stat->y == 0){
-    stat->currentLine--;
-    stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
-  }else{
-    stat->y--;
-    stat->currentLine--;
-    if(stat->x > stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1)
-      stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
-  }
-  stat->isViewUpdated = true;
+  
+  --stat->currentLine;
+  stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar > stat->positionInCurrentLine ? stat->positionInCurrentLine : gapBufferAt(gb, stat->currentLine)->numOfChar;
+
+  editorView* view = &stat->view;
+  //while(stat->currentLine < view->originalLine[0]) scrollUp(view, gb);
+
+  stat->view.isUpdated = true;
+ 
   return 0;
 }
 
@@ -483,9 +482,9 @@ int keyDown(gapBuffer* gb, editorStat* stat){
   stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar > stat->positionInCurrentLine ? stat->positionInCurrentLine : gapBufferAt(gb, stat->currentLine)->numOfChar;
 
   editorView* view = &stat->view;
-  while(stat->currentLine > view->originalLine[view->height-1] || stat->positionInCurrentLine >= view->start[view->height-1]+view->length[view->height-1]) scrollDown(view, gb);
+  while(stat->currentLine > view->originalLine[view->height-1] || (stat->currentLine == view->originalLine[view->height-1] && stat->positionInCurrentLine >= view->start[view->height-1]+view->length[view->height-1])) scrollDown(view, gb);
 
-  stat->isViewUpdated = true;
+  stat->view.isUpdated = true;
   return 0;
 }
 
@@ -836,11 +835,11 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
 
   while(1){
     printStatBar(win, gb, stat); 
-    if(stat->isViewUpdated == true){
+    if(stat->view.isUpdated == true){
       updateCursorPosition(stat);
       wmove(win[0], stat->view.cursorY, stat->lineDigitSpace+stat->view.cursorX);
       printAllLines(win, gb, stat);
-      stat->isViewUpdated = false;
+      stat->view.isUpdated = false;
       stat->cmdLoop = 0;
     }
     debugMode(win, gb, stat);
@@ -872,11 +871,11 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
   while(1){
     printStatBar(win, gb, stat);
-    if(stat->isViewUpdated == true){
+    if(stat->view.isUpdated == true){
       updateCursorPosition(stat);
       wmove(win[0], stat->view.cursorY, stat->lineDigitSpace+stat->view.cursorX);
       printAllLines(win, gb, stat);
-      stat->isViewUpdated = false;
+      stat->view.isUpdated = false;
     }
     debugMode(win, gb, stat);
     key = wgetch(win[0]);
@@ -959,7 +958,7 @@ int openFile(gapBuffer *gb, editorStat *stat){
     stat->currentLine = 0;
     stat->positionInCurrentLine = 0;
 
-    initEditorView(&stat->view, gb, LINES-3, COLS, 0, 0);
+    initEditorView(&stat->view, gb, LINES-3, COLS-stat->lineDigitSpace, 0, 0);
   }
 
   return 0;
