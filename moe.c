@@ -79,31 +79,54 @@ void exitCurses(){
   exit(1);
 }
 
+void scrollUp(editorView* view, gapBuffer* buffer){
+  int height = view->height;
+  charArray* newLine = view->lines[height-1];
+  while(newLine->numOfChar > 0) charArrayPop(newLine);
+
+  for(int y = height-1; y >= 1; ++y){
+    view->lines[y] = view->lines[y-1];
+    view->originalLine[y] = view->originaLines[y-1];
+    view->start[y] = view->start[y-1];
+    view->length[y] = view->length[y-1];
+  }
+
+  if(view->start[1] > 0){
+    view->originalLine[0] = view->originalLine[1];
+    view->start[0] = view->start[1]-view->width;
+    view->length[0] = view->width;
+  }else{
+    view->originalLine[0] = view->originaLine[1]-1;
+    view->start[0] = view->width*(gapBufferAt(buffer, view->originalLine[0])->numOfChar/view->width);
+    view->length[0] = gapBufferAt(buffer, view->originalLine[0])%view->width;
+  }
+
+  for(int x = 0; x < view->length[0]; ++x) charArrayPush(newLine, gapBufferAt(buffer, view->originalLine[0])->elements[x+view->start[0]]);
+  view->lines[0] = newLine;
+}
+
 void scrollDown(editorView* view, gapBuffer* buffer){
   charArray* newLine = view->lines[0];
   while(newLine->numOfChar > 0) charArrayPop(newLine);
 
-  for(int y = 0; y < view->height-1; ++y){
+  int height = view->height;
+  for(int y = 0; y < height-1; ++y){
     view->lines[y] = view->lines[y+1];
     view->originalLine[y] = view->originalLine[y+1];
     view->start[y] = view->start[y+1];
     view->length[y] = view->length[y+1];
   }
   
-  int height = view->height;
   if(view->start[height-2]+view->length[height-2] == gapBufferAt(buffer, view->originalLine[height-2])->numOfChar){
     view->originalLine[height-1] = view->originalLine[height-2]+1;
     view->start[height-1] = 0;
     view->length[height-1] = view->width > gapBufferAt(buffer, view->originalLine[height-1])->numOfChar ? gapBufferAt(buffer, view->originalLine[height-1])->numOfChar : view->width;
-
-    for(int x = 0; x < view->length[height-1]; ++x) charArrayPush(newLine, gapBufferAt(buffer, view->originalLine[height-1])->elements[x]);
   }else{
     view->originalLine[height-1] = view->originalLine[height-2];
     view->start[height-1] = view->start[height-2]+view->length[height-2];
     view->length[height-1] = view->width > gapBufferAt(buffer, view->originalLine[height-1])->numOfChar - view->start[height-1] ? gapBufferAt(buffer, view->originalLine[height-1])->numOfChar - view->start[height-1] : view->width;
-    
-    for(int x = 0; x < view->length[height-1]; ++x) charArrayPush(newLine, gapBufferAt(buffer, view->originalLine[height-1])->elements[x+view->start[height-1]]);
   }
+  for(int x = 0; x < view->length[height-1]; ++x) charArrayPush(newLine, gapBufferAt(buffer, view->originalLine[height-1])->elements[x+view->start[height-1]]);
   view->lines[height-1] = newLine;
 }
 
