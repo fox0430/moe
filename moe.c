@@ -1,5 +1,9 @@
 #include"moe.h"
 
+
+void printStatBarInit(WINDOW **win, gapBuffer *gb, editorStat *stat);
+void printStatBar(WINDOW **win, gapBuffer *gb, editorStat *stat);
+
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   stat->debugMode = ON;
   if(stat->debugMode == OFF ) return 0;
@@ -11,7 +15,7 @@ int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   wprintw(win[2], "change: %d", stat->numOfChange);
   wprintw(win[2], "elements: %s", gapBufferAt(gb, stat->currentLine)->elements);
   wrefresh(win[2]);
-  wmove(win[0], stat->y, stat->x);
+  wmove(win[0], stat->view.cursorY, stat->lineDigitSpace+stat->view.cursorX);
   return 0;
 }
 
@@ -74,6 +78,71 @@ void exitCurses(){
   exit(1);
 }
 
+void scrollDown(editorView* view, gapBuffer* buffer){
+  charArrayFree(view->lines[0]);
+  for(int y = 0; y < view->height-1; ++y){
+    view->lines[y] = view->lines[y+1];
+    view->originalLine[y] = view->originalLine[y+1];
+    view->start[y] = view->start[y+1];
+    view->length[y] = view->length[y+1];
+  }
+  
+  int height = view->height;
+  if(view->start[height-2]+view->length[height-2] == gapBufferAt(buffer, view->originalLine[height-2])->numOfChar){
+    view->originalLine[height-1] = view->originalLine[height-2]+1;
+    view->start[height-1] = 0;
+    view->length[height-1] = view->width > gapBufferAt(buffer, view->originalLine[height-1])->numOfChar ? gapBufferAt(buffer, view->originalLine[height-1])->numOfChar : view->width;
+
+    charArray* line = (charArray*)malloc(sizeof(charArray));
+    charArrayInit(line);
+    for(int x = 0; x < view->length[height-1]; ++x) charArrayPush(line, gapBufferAt(buffer, view->originalLine[height-1])->elements[x]);
+    view->lines[height-1] = line;
+  }else{
+    view->originalLine[height-1] = view->originalLine[height-2];
+    view->start[height-1] = view->start[height-2]+view->length[height-2];
+    view->length[height-1] = view->width > gapBufferAt(buffer, view->originalLine[height-1])->numOfChar - view->start[height-1] ? gapBufferAt(buffer, view->originalLine[height-1])->numOfChar - view->start[height-1] : view->width;
+    
+    charArray* line = (charArray*)malloc(sizeof(charArray));
+    charArrayInit(line);
+    for(int x = 0; x < view->length[height-1]; ++x) charArrayPush(line, gapBufferAt(buffer, view->originalLine[height-1])->elements[x+view->start[height-1]]);
+  }
+}
+
+void updateCursorPosition(editorStat* stat){
+  editorView* view = &stat->view;
+  for(int y = 0; y < view->height; ++y) if(stat->currentLine == view->originalLine[y] && view->start[y] <= stat->positionInCurrentLine && stat->positionInCurrentLine < view->start[y]+view->length[y]){
+    view->cursorY = y;
+    view->cursorX = stat->positionInCurrentLine-view->start[y];
+    break;
+  }
+}
+
+void initEditorView(editorView* view, gapBuffer* buffer, int height, int width, int topLine, int startOfTopLine){
+  view->cursorY = 0;
+  view->cursorX = 0;
+  view->height = height;
+  view->width = width;
+  view->lines = (charArray**)malloc(sizeof(charArray*)*height);
+  view->originalLine = (int*)malloc(sizeof(int)*height);
+  view->start = (int*)malloc(sizeof(int)*height);
+  view->length = (int*)malloc(sizeof(int)*height);
+
+  int lineNumber = topLine, start = startOfTopLine;
+  for(int y = 0; y < height; ++y){
+    if(start > gapBufferAt(buffer, lineNumber)->numOfChar){
+      ++lineNumber;
+      start=0;
+    }
+    view->originalLine[y] = lineNumber;
+    view->start[y] = start;
+    view->length[y] = width > gapBufferAt(buffer, lineNumber)->numOfChar - start ? gapBufferAt(buffer, lineNumber)->numOfChar - start : width;
+    start += width;
+    view->lines[y] = (charArray*)malloc(sizeof(charArray));
+    charArrayInit(view->lines[y]);
+    for(int x = 0; x < view->length[y]; ++x) charArrayPush(view->lines[y], gapBufferAt(buffer, lineNumber)->elements[x+view->start[y]]);
+  }
+}
+
 void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStat *stat){
   endwin(); 
   initscr();
@@ -81,7 +150,7 @@ void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStat *stat){
   winResizeMove(win[1], 1, COLS, LINES-2, 0);
   winResizeMove(win[2], 1, COLS, LINES-1, 0);
   returnLine(gb, stat);
-  printLineAll(win, gb, stat);
+  stat->isViewUpdated = true;
   printStatBarInit(win, gb, stat);
 }
 
@@ -226,17 +295,13 @@ int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
   return 0;
 }
 
-int countLineDigit(editorStat *stat, int numOfLines){
-  int lineDigit = 0;
-  while(numOfLines > 0){
-    numOfLines /= 10;
-    lineDigit++;
+int countDigit(int num){
+  int digit = 0;
+  while(num > 0){
+    ++digit;
+    num /= 10;
   }
-  if(lineDigit > stat->lineDigit){
-    stat->lineDigit = lineDigit;
-    stat->lineDigitSpace = lineDigit + 1;
-  }
-  return lineDigit;
+  return digit;
 }
 
 int printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
@@ -248,47 +313,38 @@ int printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
       y--;
     }
   }else currentLine = 0;
-  int lineDigitSpace = stat->lineDigit - countLineDigit(stat, stat->currentLine + 1);
+  int lineDigitSpace = stat->lineDigitSpace;
   for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
   wattron(win[0], COLOR_PAIR(7));
   mvwprintw(win[0], y, lineDigitSpace, "%d", stat->currentLine - currentLine + 1 - stat->adjustLineNum);
-  wmove(win[0], stat->y, stat->x);
+  wmove(win[0], stat->view.cursorY, stat->view.cursorX);
   wrefresh(win[0]);
   wattron(win[0], COLOR_PAIR(6));
   return 0;
 }
 
 int printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y){
-  if(stat->trueLine[currentLine] == false) return 0;
-    int lineDigitSpace = stat->lineDigit - countLineDigit(stat, currentLine + 1);
-    for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
-    wattron(win[0], COLOR_PAIR(3));
-    mvwprintw(win[0], y, lineDigitSpace, "%d", currentLine + 1 - stat->adjustLineNum);
+  stat->lineDigit = countDigit(currentLine + 1);
+  stat->lineDigitSpace = stat->lineDigit + 1;
+  int lineDigitSpace = stat->lineDigitSpace;
+  for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
+  wattron(win[0], COLOR_PAIR(3));
+  mvwprintw(win[0], y, 0, "%d", currentLine + 1);
   return 0;
 }
 
 // print single line
-void printLine(WINDOW **win, gapBuffer* gb, editorStat *stat, int currentLine, int y){
-  printLineNum(win, stat, currentLine, y);
+void printLine(WINDOW **win, editorStat* stat, charArray* line, int y){
   wattron(win[0], COLOR_PAIR(6));
-  mvwprintw(win[0], y, stat->lineDigit + 1, "%s", gapBufferAt(gb, currentLine)->elements);
+  mvwprintw(win[0], y, stat->lineDigit + 1, "%s", line->elements);
   wrefresh(win[0]);
 }
 
-void printLineAll(WINDOW **win, gapBuffer *gb, editorStat *stat){
+void printAllLines(WINDOW **win, gapBuffer *gb, editorStat *stat){
   werase(win[0]);
-  int startPrintLine = stat->currentLine - stat->y,
-      currentLine = 0;
-  stat->adjustLineNum = 0;
-  for(int i=0; i<startPrintLine + LINES-2; i++){
-    if(currentLine == stat->numOfLines) break;
-    if(stat->trueLine[i] == false) stat->adjustLineNum++;
-    if(i >= startPrintLine){
-      printLineNum(win, stat, currentLine, i - startPrintLine);
-      printLine(win, gb, stat, currentLine, i - startPrintLine);
-      if(currentLine == stat->currentLine) printCurrentLine(win, gb, stat);
-    }
-    currentLine++;
+  for(int y = 0; y < stat->view.height; ++y){
+    if(stat->view.start[y] == 0) printLineNum(win, stat, stat->view.originalLine[y], y);
+    printLine(win, stat, stat->view.lines[y], y); 
   }
 }
 
@@ -422,21 +478,13 @@ int keyUp(gapBuffer* gb, editorStat* stat){
 
 int keyDown(gapBuffer* gb, editorStat* stat){
   if(stat->currentLine + 1 == stat->numOfLines) return 0;
-  if(stat->y == LINES - 3){
-    stat->currentLine++;
-    stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace;
-  }else{
-    stat->y++;
-    stat->currentLine++;
+  
+  ++stat->currentLine;
+  stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar > stat->positionInCurrentLine ? stat->positionInCurrentLine : gapBufferAt(gb, stat->currentLine)->numOfChar;
 
-    if(stat->mode == NORMAL_MODE){
-      if (stat->x != stat->lineDigitSpace && stat->x > stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar)
-        stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar;
-    }else if(stat->mode == INSERT_MODE){
-      if(stat->x > stat->lineDigitSpace + gapBufferAt(gb, stat->currentLine)->numOfChar)
-        stat->x = stat->lineDigit + gapBufferAt(gb, stat->currentLine)->numOfChar + 1;
-    }
-  }
+  editorView* view = &stat->view;
+  while(stat->currentLine > view->originalLine[view->height-1] || stat->positionInCurrentLine >= view->start[view->height-1]+view->length[view->height-1]) scrollDown(view, gb);
+
   stat->isViewUpdated = true;
   return 0;
 }
@@ -789,11 +837,12 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   while(1){
     printStatBar(win, gb, stat); 
     if(stat->isViewUpdated == true){
-      printLineAll(win, gb, stat);
+      updateCursorPosition(stat);
+      wmove(win[0], stat->view.cursorY, stat->lineDigitSpace+stat->view.cursorX);
+      printAllLines(win, gb, stat);
       stat->isViewUpdated = false;
       stat->cmdLoop = 0;
     }
-    wmove(win[0], stat->y, stat->x);
     debugMode(win, gb, stat);
     key = wgetch(win[0]);
 
@@ -824,11 +873,12 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
   while(1){
     printStatBar(win, gb, stat);
     if(stat->isViewUpdated == true){
-      printLineAll(win, gb, stat);
+      updateCursorPosition(stat);
+      wmove(win[0], stat->view.cursorY, stat->lineDigitSpace+stat->view.cursorX);
+      printAllLines(win, gb, stat);
       stat->isViewUpdated = false;
     }
     debugMode(win, gb, stat);
-    wmove(win[0], stat->y, stat->x);
     key = wgetch(win[0]);
 
     switch(key){
@@ -901,14 +951,15 @@ int openFile(gapBuffer *gb, editorStat *stat){
     }
     fclose(fp);
 
-    if(stat->lineDigit < countLineDigit(stat, stat->currentLine + 1))
-      stat->lineDigit = countLineDigit(stat, stat->currentLine + 1);
+    stat->lineDigit = countDigit(stat->currentLine+1);
+    stat->lineDigitSpace = stat->lineDigit+1;
 
     stat->numOfLines = stat->currentLine + 1;
     stat->x = stat->lineDigitSpace;
     stat->currentLine = 0;
+    stat->positionInCurrentLine = 0;
 
-    returnLine(gb, stat);
+    initEditorView(&stat->view, gb, LINES-3, COLS, 0, 0);
   }
 
   return 0;

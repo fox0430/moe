@@ -31,13 +31,21 @@ typedef struct editorSetting{
       tabStop;
 } editorSetting;
 
+typedef struct editorView{
+  int height, width, cursorY, cursorX;
+  charArray** lines;
+  int* originalLine, *start, *length;
+} editorView;
+
 typedef struct editorStat{
   editorSetting setting;
   registers rgst;
+  editorView view;
   char filename[256];
   int   y,
         x,
         currentLine,
+        positionInCurrentLine,
         numOfLines,
         lineDigit,
         lineDigitSpace,
@@ -66,13 +74,6 @@ int trueLineInit(editorStat *stat);
 int registersInit(editorStat *stat);
 void editorSettingInit(editorStat *stat);
 int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat);
-int countLineDigit(editorStat *stat, int lineNum);
-int printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat);
-int printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y);
-void printLine(WINDOW **win, gapBuffer* gb, editorStat *stat, int currentLine, int y);
-void printLineAll(WINDOW **win, gapBuffer* gb, editorStat *stat);
-void printStatBarInit(WINDOW **win, gapBuffer *gb, editorStat *stat);
-void printStatBar(WINDOW **win, gapBuffer *gb, editorStat *stat);
 int shellMode(char *cmd);
 int jampLine(editorStat *stat, int lineNum);
 int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat);
