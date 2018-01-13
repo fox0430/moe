@@ -528,8 +528,11 @@ int keyRight(gapBuffer* gb, editorStat* stat){
 }
 
 int keyLeft(gapBuffer* gb, editorStat* stat){
-  if(stat->x == stat->lineDigit + 1) return 0;
-  stat->x--;
+  if(stat->positionInCurrentLine == 0) return 0;
+  --stat->positionInCurrentLine;
+  editorView* view = stat->view;
+  while(stat->currentLine == view.originalLine[0] && stat->positionInCurrentLine < view.start[0]) ScrollUp(view, gb);
+  view->isUpdated = true;
   return 0;
 }
 
