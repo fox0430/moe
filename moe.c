@@ -84,9 +84,9 @@ void scrollUp(editorView* view, gapBuffer* buffer){
   charArray* newLine = view->lines[height-1];
   while(newLine->numOfChar > 0) charArrayPop(newLine);
 
-  for(int y = height-1; y >= 1; ++y){
+  for(int y = height-1; y >= 1; --y){
     view->lines[y] = view->lines[y-1];
-    view->originalLine[y] = view->originaLines[y-1];
+    view->originalLine[y] = view->originalLine[y-1];
     view->start[y] = view->start[y-1];
     view->length[y] = view->length[y-1];
   }
@@ -96,9 +96,9 @@ void scrollUp(editorView* view, gapBuffer* buffer){
     view->start[0] = view->start[1]-view->width;
     view->length[0] = view->width;
   }else{
-    view->originalLine[0] = view->originaLine[1]-1;
+    view->originalLine[0] = view->originalLine[1]-1;
     view->start[0] = view->width*(gapBufferAt(buffer, view->originalLine[0])->numOfChar/view->width);
-    view->length[0] = gapBufferAt(buffer, view->originalLine[0])%view->width;
+    view->length[0] = gapBufferAt(buffer, view->originalLine[0])->numOfChar%view->width;
   }
 
   for(int x = 0; x < view->length[0]; ++x) charArrayPush(newLine, gapBufferAt(buffer, view->originalLine[0])->elements[x+view->start[0]]);
@@ -150,18 +150,23 @@ void initEditorView(editorView* view, gapBuffer* buffer, int height, int width, 
   view->length = (int*)malloc(sizeof(int)*height);
   view->isUpdated = true;
 
+  for(int y = 0; y < height; ++y){
+    view->originalLine[y] = -1;
+    view->lines[y] = (charArray*)malloc(sizeof(charArray));
+    charArrayInit(view->lines[y]);
+  }
+
   int lineNumber = topLine, start = startOfTopLine;
   for(int y = 0; y < height; ++y){
     if(start > gapBufferAt(buffer, lineNumber)->numOfChar){
       ++lineNumber;
       start=0;
+      if(lineNumber == buffer->size) break;
     }
     view->originalLine[y] = lineNumber;
     view->start[y] = start;
     view->length[y] = width > gapBufferAt(buffer, lineNumber)->numOfChar - start ? gapBufferAt(buffer, lineNumber)->numOfChar - start : width;
     start += width;
-    view->lines[y] = (charArray*)malloc(sizeof(charArray));
-    charArrayInit(view->lines[y]);
     for(int x = 0; x < view->length[y]; ++x) charArrayPush(view->lines[y], gapBufferAt(buffer, lineNumber)->elements[x+view->start[y]]);
   }
 }
@@ -366,6 +371,10 @@ void printLine(WINDOW **win, editorStat* stat, charArray* line, int y){
 void printAllLines(WINDOW **win, gapBuffer *gb, editorStat *stat){
   werase(win[0]);
   for(int y = 0; y < stat->view.height; ++y){
+    if(stat->view.originalLine[y] == -1){
+      for(int x = 0; x < COLS; ++x) mvwprintw(win[0], y, x, " ");
+      continue;
+    }
     if(stat->view.start[y] == 0) printLineNum(win, stat, stat->view.originalLine[y], y);
     printLine(win, stat, stat->view.lines[y], y); 
   }
@@ -491,7 +500,7 @@ int keyUp(gapBuffer* gb, editorStat* stat){
   stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar > stat->positionInCurrentLine ? stat->positionInCurrentLine : gapBufferAt(gb, stat->currentLine)->numOfChar;
 
   editorView* view = &stat->view;
-  //while(stat->currentLine < view->originalLine[0]) scrollUp(view, gb);
+  while(stat->currentLine < view->originalLine[0]) scrollUp(view, gb);
 
   stat->view.isUpdated = true;
  
@@ -499,13 +508,13 @@ int keyUp(gapBuffer* gb, editorStat* stat){
 }
 
 int keyDown(gapBuffer* gb, editorStat* stat){
-  if(stat->currentLine + 1 == stat->numOfLines) return 0;
+  if(stat->currentLine + 1 == gb->size) return 0;
   
   ++stat->currentLine;
   stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar > stat->positionInCurrentLine ? stat->positionInCurrentLine : gapBufferAt(gb, stat->currentLine)->numOfChar;
 
   editorView* view = &stat->view;
-  while(stat->currentLine > view->originalLine[view->height-1] || (stat->currentLine == view->originalLine[view->height-1] && stat->positionInCurrentLine >= view->start[view->height-1]+view->length[view->height-1])) scrollDown(view, gb);
+  while(stat->currentLine > view->originalLine[view->height-1] || (stat->currentLine == view->originalLine[view->height-1] && view->length[view->height-1] > 0 && stat->positionInCurrentLine >= view->start[view->height-1]+view->length[view->height-1])) scrollDown(view, gb);
 
   stat->view.isUpdated = true;
   return 0;
