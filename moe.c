@@ -171,15 +171,15 @@ void initEditorView(editorView* view, gapBuffer* buffer, int height, int width){
   }
 }
 
-void resizeEditorView(editorView* view, gapBuffer* buffer, int height, int width){
+void resizeEditorView(editorView* view, gapBuffer* buffer, int height, int width, editorStat* stat){
   int lineNumber = view->originalLine[view->cursorY/2], start = 0;
   for(int y = 0; y < view->height; ++y) charArrayFree(view->lines[y]);
-  view->lines = (charArray**)realloc(sizeof(charArray*)*height);
+  view->lines = (charArray**)realloc(view->lines, sizeof(charArray*)*height);
   view->height = height;
   view->width = width;
-  view->originalLine = (int*)realloc(sizeof(int)*height);
-  view->start = (int*)realloc(sizeof(int)*height);
-  view->length = (int*)realloc(sizeof(int)*height);
+  view->originalLine = (int*)realloc(view->originalLine, sizeof(int)*height);
+  view->start = (int*)realloc(view->start, sizeof(int)*height);
+  view->length = (int*)realloc(view->length, sizeof(int)*height);
   view->isUpdated = true;
 
   for(int y = 0; y < height; ++y){
@@ -209,7 +209,7 @@ void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStat *stat){
   winResizeMove(win[0], LINES-2, COLS, 0, 0);
   winResizeMove(win[1], 1, COLS, LINES-2, 0);
   winResizeMove(win[2], 1, COLS, LINES-1, 0);
-  resizeEditorView(&stat->view, gb, LINES-2, COLS-stat->lineDigitSpace);
+  resizeEditorView(&stat->view, gb, LINES-2, COLS-stat->lineDigitSpace-1, stat);
   printStatBarInit(win, gb, stat);
 }
 
@@ -1029,7 +1029,7 @@ int openFile(gapBuffer *gb, editorStat *stat){
     stat->currentLine = 0;
     stat->positionInCurrentLine = 0;
 
-    initEditorView(&stat->view, gb, LINES-stat->lineDigitSpace, COLS-stat->lineDigitSpace);
+    initEditorView(&stat->view, gb, LINES-2, COLS-stat->lineDigitSpace-1);
   }
 
   return 0;
