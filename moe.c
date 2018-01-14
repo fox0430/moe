@@ -1,4 +1,4 @@
-#include <math.h>
+#include <assert.h>
 #include"moe.h"
 
 
@@ -83,25 +83,31 @@ void scrollUp(editorView* view, gapBuffer* buffer){
   int height = view->height;
   charArray* newLine = view->lines[height-1];
   while(newLine->numOfChar > 0) charArrayPop(newLine);
-
+  
   for(int y = height-1; y >= 1; --y){
     view->lines[y] = view->lines[y-1];
     view->originalLine[y] = view->originalLine[y-1];
     view->start[y] = view->start[y-1];
     view->length[y] = view->length[y-1];
   }
-
   if(view->start[1] > 0){
     view->originalLine[0] = view->originalLine[1];
     view->start[0] = view->start[1]-view->width;
+    assert(view->start[0]>=0 && "view->start[0]>=0 :1 ");
+    assert(view->start[0]%view->width==0 && "view->start[0]%view->width==0 :1");
     view->length[0] = view->width;
   }else{
     view->originalLine[0] = view->originalLine[1]-1;
     view->start[0] = view->width*((gapBufferAt(buffer, view->originalLine[0])->numOfChar-1)/view->width);
+    assert(view->start[0]>=0 && "view->start[0]>=0 :2");
+    assert(view->start[0]%view->width==0 && "view->start[0]%view->width==0 :2");
     view->length[0] = gapBufferAt(buffer, view->originalLine[0])->numOfChar == 0 ? 0 : (gapBufferAt(buffer, view->originalLine[0])->numOfChar-1)%view->width+1;
   }
 
-  for(int x = 0; x < view->length[0]; ++x) charArrayPush(newLine, gapBufferAt(buffer, view->originalLine[0])->elements[x+view->start[0]]);
+  for(int x = 0; x < view->length[0]; ++x){
+    charArrayPush(newLine, gapBufferAt(buffer, view->originalLine[0])->elements[x+view->start[0]]);
+    assert(x+view->start[0]<gapBufferAt(buffer, view->originalLine[0])->numOfChar);
+  }
   view->lines[0] = newLine;
 }
 
@@ -124,6 +130,7 @@ void scrollDown(editorView* view, gapBuffer* buffer){
   }else{
     view->originalLine[height-1] = view->originalLine[height-2];
     view->start[height-1] = view->start[height-2]+view->length[height-2];
+    assert(view->length[height-2]==view->width);
     view->length[height-1] = view->width > gapBufferAt(buffer, view->originalLine[height-1])->numOfChar - view->start[height-1] ? gapBufferAt(buffer, view->originalLine[height-1])->numOfChar - view->start[height-1] : view->width;
   }
   for(int x = 0; x < view->length[height-1]; ++x) charArrayPush(newLine, gapBufferAt(buffer, view->originalLine[height-1])->elements[x+view->start[height-1]]);
@@ -158,16 +165,25 @@ void initEditorView(editorView* view, gapBuffer* buffer, int height, int width){
 
   int lineNumber = 0, start = 0;
   for(int y = 0; y < height; ++y){
-    if(start >= gapBufferAt(buffer, lineNumber)->numOfChar){
+    if(lineNumber >= buffer->size) break;
+    if(gapBufferAt(buffer, lineNumber)->numOfChar == 0){
+      view->originalLine[y] = lineNumber;
+      view->start[y] = 0;
+      view->length[y] = 0;
       ++lineNumber;
-      start=0;
-      if(lineNumber == buffer->size) break;
+      assert(start == 0);
+      continue;
     }
     view->originalLine[y] = lineNumber;
     view->start[y] = start;
     view->length[y] = width > gapBufferAt(buffer, lineNumber)->numOfChar - start ? gapBufferAt(buffer, lineNumber)->numOfChar - start : width;
-    start += width;
     for(int x = 0; x < view->length[y]; ++x) charArrayPush(view->lines[y], gapBufferAt(buffer, lineNumber)->elements[x+view->start[y]]);
+
+    start += width;
+    if(start >= gapBufferAt(buffer, lineNumber)->numOfChar){
+      ++lineNumber;
+      start = 0;
+    }
   }
 }
 
@@ -397,7 +413,7 @@ void printLine(WINDOW **win, editorStat* stat, charArray* line, int y){
 }
 
 void printAllLines(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  werase(win[0]);
+  wclear(win[0]);
   stat->lineDigit = countDigit(gb->size+1);
   stat->lineDigitSpace = stat->lineDigit+1;
   for(int y = 0; y < stat->view.height; ++y){
@@ -528,7 +544,7 @@ int keyUp(gapBuffer* gb, editorStat* stat){
   if(stat->currentLine == 0) return 0;
   
   --stat->currentLine;
-  stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar > stat->positionInCurrentLine ? stat->positionInCurrentLine : gapBufferAt(gb, stat->currentLine)->numOfChar-1;
+  stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar-1 >= stat->positionInCurrentLine ? stat->positionInCurrentLine : gapBufferAt(gb, stat->currentLine)->numOfChar-1;
   if(stat->positionInCurrentLine < 0) stat->positionInCurrentLine = 0;
 
   editorView* view = &stat->view;
@@ -543,7 +559,7 @@ int keyDown(gapBuffer* gb, editorStat* stat){
   if(stat->currentLine + 1 == gb->size) return 0;
   
   ++stat->currentLine;
-  stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar > stat->positionInCurrentLine ? stat->positionInCurrentLine : gapBufferAt(gb, stat->currentLine)->numOfChar-1;
+  stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar-1 >= stat->positionInCurrentLine ? stat->positionInCurrentLine : gapBufferAt(gb, stat->currentLine)->numOfChar-1;
   if(stat->positionInCurrentLine < 0) stat->positionInCurrentLine = 0;
 
   editorView* view = &stat->view;
