@@ -93,21 +93,14 @@ void scrollUp(editorView* view, gapBuffer* buffer){
   if(view->start[1] > 0){
     view->originalLine[0] = view->originalLine[1];
     view->start[0] = view->start[1]-view->width;
-    assert(view->start[0]>=0 && "view->start[0]>=0 :1 ");
-    assert(view->start[0]%view->width==0 && "view->start[0]%view->width==0 :1");
     view->length[0] = view->width;
   }else{
     view->originalLine[0] = view->originalLine[1]-1;
     view->start[0] = view->width*((gapBufferAt(buffer, view->originalLine[0])->numOfChar-1)/view->width);
-    assert(view->start[0]>=0 && "view->start[0]>=0 :2");
-    assert(view->start[0]%view->width==0 && "view->start[0]%view->width==0 :2");
     view->length[0] = gapBufferAt(buffer, view->originalLine[0])->numOfChar == 0 ? 0 : (gapBufferAt(buffer, view->originalLine[0])->numOfChar-1)%view->width+1;
   }
 
-  for(int x = 0; x < view->length[0]; ++x){
-    charArrayPush(newLine, gapBufferAt(buffer, view->originalLine[0])->elements[x+view->start[0]]);
-    assert(x+view->start[0]<gapBufferAt(buffer, view->originalLine[0])->numOfChar);
-  }
+  for(int x = 0; x < view->length[0]; ++x) charArrayPush(newLine, gapBufferAt(buffer, view->originalLine[0])->elements[x+view->start[0]]);
   view->lines[0] = newLine;
 }
 
@@ -130,7 +123,6 @@ void scrollDown(editorView* view, gapBuffer* buffer){
   }else{
     view->originalLine[height-1] = view->originalLine[height-2];
     view->start[height-1] = view->start[height-2]+view->length[height-2];
-    assert(view->length[height-2]==view->width);
     view->length[height-1] = view->width > gapBufferAt(buffer, view->originalLine[height-1])->numOfChar - view->start[height-1] ? gapBufferAt(buffer, view->originalLine[height-1])->numOfChar - view->start[height-1] : view->width;
   }
   for(int x = 0; x < view->length[height-1]; ++x) charArrayPush(newLine, gapBufferAt(buffer, view->originalLine[height-1])->elements[x+view->start[height-1]]);
@@ -171,7 +163,6 @@ void initEditorView(editorView* view, gapBuffer* buffer, int height, int width){
       view->start[y] = 0;
       view->length[y] = 0;
       ++lineNumber;
-      assert(start == 0);
       continue;
     }
     view->originalLine[y] = lineNumber;
