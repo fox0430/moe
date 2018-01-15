@@ -1,3 +1,6 @@
+#ifndef  MOE_MOE__H
+#define MOE_MOE_H
+
 #include<stdio.h>
 #include<string.h>
 #include<stdlib.h>
@@ -109,3 +112,5 @@ void normalMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
 void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int newFile(editorStat *stat);
 int openFile(gapBuffer *gb, editorStat *stat);
+
+#endif

@@ -1,3 +1,6 @@
+#ifndef MOE_GAP_BUFFER_H
+#define MOE_GAP_BUFFER_H
+
 #include<stdio.h>
 #include<string.h>
 #include<stdlib.h>
@@ -5,7 +8,6 @@
 #include<malloc.h>
 #include"vector.h"
 
-#ifndef MOE_GAP_BUFFER_H
 typedef struct gapBuffer{
   struct  charArray** buffer;
   int     size,       // 意味のあるデータが実際に格納されているサイズ
@@ -18,8 +20,6 @@ typedef struct gapBuffer{
   */
 } gapBuffer;
 
-#define MOE_GAP_BUFFER_H
-#endif
 
 // Function prototype
 int gapBufferInit(gapBuffer* gb);
@@ -30,3 +30,5 @@ int gapBufferDel(gapBuffer* gb, int begin, int end);
 charArray* gapBufferAt(gapBuffer* gb, int index);
 bool gapBufferIsEmpty(gapBuffer* gb);
 int gapBufferFree(gapBuffer* gb);
+
+#endif
