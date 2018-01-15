@@ -38,6 +38,11 @@ typedef struct editorView{
   bool isUpdated;
 } editorView;
 
+typedef struct cursor{
+  int y,x;
+  bool isUpdated;
+} cursor;
+
 typedef struct editorStat{
   editorSetting setting;
   registers rgst;
@@ -60,7 +65,6 @@ typedef struct editorStat{
         *trueLine;
 } editorStat;
 
-// Function prototype
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat);
 void winInit(WINDOW **win);
 void winResizeMove(WINDOW *win, int lines, int columns, int y, int x);
