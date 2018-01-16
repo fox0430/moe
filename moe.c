@@ -716,10 +716,10 @@ int delCurrentChar(gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
-int delLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
+int deleteLine(gapBuffer *gb, editorStat *stat){
   gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
 
-  if(stat->numOfLines == 1){
+  if(gb->size == 0){
     charArray* emptyLine = (charArray*)malloc(sizeof(charArray));
     if(emptyLine == NULL){
       printf("main: cannot allocated memory...\n");
@@ -727,20 +727,14 @@ int delLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
     }
     charArrayInit(emptyLine);
     gapBufferInsert(gb, emptyLine, 0);
-  }else{
-    stat->numOfLines--;
-
-    if(stat->currentLine == stat->numOfLines){
-      --stat->currentLine;
-      if(stat->y > 0) --stat->y;
-    }
+  }else if(stat->currentLine == gb->size){
+    --stat->currentLine;
   }
 
-  stat->x = stat->lineDigitSpace;
   stat->numOfChange++;
-  stat->isViewUpdated = true;
-  werase(win[2]);
-  wprintw(win[2], "%d line deleted");
+  seekCursor(stat, gb);
+  resizeEditorView(&stat->view, gb, stat->view.height, stat->view.width); 
+  stat->cursor.isUpdated = true;
   return 0;
 }
 
@@ -877,7 +871,7 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       if(wgetch(win[0]) == 'd'){
         if(stat->cmdLoop > stat->numOfLines - stat->currentLine)
           stat->cmdLoop = stat->numOfLines - stat->currentLine;
-        for(int i=0; i<stat->cmdLoop; i++) delLine(win, gb, stat);
+        for(int i=0; i<stat->cmdLoop; i++) deleteLine(gb, stat);
       }
       break;
     case 'y':
