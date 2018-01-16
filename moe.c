@@ -407,35 +407,35 @@ int printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
-int printLineNum(WINDOW **win, editorStat *stat, int line, int y){
+int printLineNum(WINDOW *textWindow, editorStat *stat, int line, int y){
   int lineDigitSpace = stat->lineDigitSpace;
-  for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
-  wattron(win[0], COLOR_PAIR(line == stat->currentLine ? 7 : 3));
-  mvwprintw(win[0], y, 0, "%d", line + 1);
+  for(int j=0; j<lineDigitSpace; j++) mvwprintw(textWindow, y, j, " ");
+  wattron(textWindow, COLOR_PAIR(line == stat->currentLine ? 7 : 3));
+  mvwprintw(textWindow, y, 0, "%d", line + 1);
   return 0;
 }
 
 // print single line
-void printLine(WINDOW **win, editorStat* stat, charArray* line, int y){
-  wattron(win[0], COLOR_PAIR(6));
-  mvwprintw(win[0], y, stat->lineDigitSpace, "%s", line->elements);
+void printLine(WINDOW *textWindow, editorStat* stat, charArray* line, int y){
+  wattron(textWindow, COLOR_PAIR(6));
+  mvwprintw(textWindow, y, stat->lineDigitSpace, "%s", line->elements);
 
 }
 
-void printAllLines(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  wclear(win[0]);
+void printAllLines(WINDOW *textWindow, gapBuffer *gb, editorStat *stat){
+  wclear(textWindow);
   stat->lineDigit = countDigit(gb->size+1);
   stat->lineDigitSpace = stat->lineDigit+1;
   for(int y = 0; y < stat->view.height; ++y){
     if(stat->view.originalLine[y] == -1){
-      for(int x = 0; x < COLS-1; ++x) mvwprintw(win[0], y, x, " ");
+      for(int x = 0; x < COLS-1; ++x) mvwprintw(textWindow, y, x, " ");
       continue;
     }
-    if(stat->view.start[y] == 0) printLineNum(win, stat, stat->view.originalLine[y], y);
-    printLine(win, stat, stat->view.lines[y], y); 
+    if(stat->view.start[y] == 0) printLineNum(textWindow, stat, stat->view.originalLine[y], y);
+    printLine(textWindow, stat, stat->view.lines[y], y); 
   }
-  wmove(win[0], stat->cursor.y, stat->lineDigitSpace+stat->cursor.x);
-  wrefresh(win[0]);
+  wmove(textWindow, stat->cursor.y, stat->lineDigitSpace+stat->cursor.x);
+  wrefresh(textWindow);
 }
 
 void printStatBarInit(WINDOW **win, gapBuffer *gb, editorStat *stat){
@@ -922,7 +922,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   while(1){
     printStatBar(win, gb, stat); 
     if(stat->view.isUpdated){
-      printAllLines(win, gb, stat);
+      printAllLines(win[0], gb, stat);
       stat->view.isUpdated = false;
       stat->cmdLoop = 0;
     }
@@ -962,7 +962,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
   while(1){
     printStatBar(win, gb, stat);
     if(stat->view.isUpdated){
-      printAllLines(win, gb, stat);
+      printAllLines(win[0], gb, stat);
       stat->view.isUpdated = false;
       stat->cmdLoop = 0;
     }
