@@ -35,21 +35,22 @@ typedef struct editorSetting{
 } editorSetting;
 
 typedef struct editorView{
-  int height, width, cursorY, cursorX;
+  int height, width;
   charArray** lines;
   int* originalLine, *start, *length;
   bool isUpdated;
 } editorView;
 
-typedef struct cursor{
+typedef struct cursorPosition{
   int y,x;
   bool isUpdated;
-} cursor;
+} cursorPosition;
 
 typedef struct editorStat{
   editorSetting setting;
   registers rgst;
   editorView view;
+  cursorPosition cursor;
   char filename[256];
   int   y,
         x,
@@ -87,10 +88,6 @@ int jampLine(editorStat *stat, int lineNum);
 int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat);
 int insNewLine(gapBuffer *gb, editorStat *stat, int position);
 int insertTab(gapBuffer *gb, editorStat *stat);
-int keyUp(gapBuffer* gb, editorStat* stat);
-int keyDown(gapBuffer* gb, editorStat* stat);
-int keyRight(gapBuffer* gb, editorStat* stat);
-int keyLeft(gapBuffer* gb, editorStat* stat);
 int keyBackSpace(gapBuffer* gb, editorStat* stat);
 int insIndent(gapBuffer *gb, editorStat *stat);
 int keyEnter(gapBuffer* gb, editorStat* stat);
