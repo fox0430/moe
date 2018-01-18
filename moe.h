@@ -17,6 +17,10 @@
 #define OFF 0
 #define NORMAL_MODE 0
 #define INSERT_MODE 1
+#define MAIN_WIN 0
+#define STATE_WIN 1
+#define CMD_WIN 2
+
 
 typedef struct registers{
   gapBuffer *yankedLine;

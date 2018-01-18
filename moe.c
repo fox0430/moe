@@ -3,25 +3,25 @@
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   stat->debugMode = ON;
   if(stat->debugMode == OFF ) return 0;
-  werase(win[2]);
-  mvwprintw(win[2], 0, 0, "debug mode: ");
-  wprintw(win[2], "currentLine: %d ", stat->currentLine);
-  wprintw(win[2], "numOfLines: %d ", stat->numOfLines);
-  wprintw(win[2], "numOfChar: %d ", gapBufferAt(gb, stat->currentLine)->numOfChar);
-  wprintw(win[2], "change: %d", stat->numOfChange);
-  wprintw(win[2], "elements: %s", gapBufferAt(gb, stat->currentLine)->elements);
-  wrefresh(win[2]);
-  wmove(win[0], stat->y, stat->x);
+  werase(win[CMD_WIN]);
+  mvwprintw(win[CMD_WIN], 0, 0, "debug mode: ");
+  wprintw(win[CMD_WIN], "currentLine: %d ", stat->currentLine);
+  wprintw(win[CMD_WIN], "numOfLines: %d ", stat->numOfLines);
+  wprintw(win[CMD_WIN], "numOfChar: %d ", gapBufferAt(gb, stat->currentLine)->numOfChar);
+  wprintw(win[CMD_WIN], "change: %d", stat->numOfChange);
+  wprintw(win[CMD_WIN], "elements: %s", gapBufferAt(gb, stat->currentLine)->elements);
+  wrefresh(win[CMD_WIN]);
+  wmove(win[MAIN_WIN], stat->y, stat->x);
   return 0;
 }
 
 void winInit(WINDOW **win){
-  win[0] = newwin(LINES-2, COLS, 0, 0);    // main window
-  win[1] = newwin(1, COLS, LINES-2, 0);    // status bar
-  win[2] = newwin(1, COLS, LINES-1, 0);    // command bar
-  keypad(win[0], TRUE);   // enable function key
-  keypad(win[2], TRUE);
-  scrollok(win[0], TRUE);			// enable scroll
+  win[MAIN_WIN] = newwin(LINES-2, COLS, 0, 0);    // main window
+  win[STATE_WIN] = newwin(1, COLS, LINES-2, 0);    // status bar
+  win[CMD_WIN] = newwin(1, COLS, LINES-1, 0);    // command bar
+  keypad(win[MAIN_WIN], TRUE);   // enable function key
+  keypad(win[STATE_WIN], TRUE);
+  scrollok(win[CMD_WIN], TRUE);			// enable scroll
 }
 
 void winResizeMove(WINDOW *win, int lines, int columns, int y, int x){
@@ -77,9 +77,9 @@ void exitCurses(){
 void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStat *stat){
   endwin(); 
   initscr();
-  winResizeMove(win[0], LINES-2, COLS, 0, 0);
-  winResizeMove(win[1], 1, COLS, LINES-2, 0);
-  winResizeMove(win[2], 1, COLS, LINES-1, 0);
+  winResizeMove(win[MAIN_WIN], LINES-2, COLS, 0, 0);
+  winResizeMove(win[STATE_WIN], 1, COLS, LINES-2, 0);
+  winResizeMove(win[CMD_WIN], 1, COLS, LINES-1, 0);
   returnLine(gb, stat);
   printLineAll(win, gb, stat);
   printStatBarInit(win, gb, stat);
@@ -189,20 +189,20 @@ int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
     int   i = 0;
     char  ch, 
           filename[256];
-    wattron(win[2], COLOR_PAIR(4));
-    werase(win[2]);
-    wprintw(win[2], "Please file name: ");
-    wrefresh(win[2]);
-    wattron(win[2], COLOR_PAIR(3));
+    wattron(win[CMD_WIN], COLOR_PAIR(4));
+    werase(win[CMD_WIN]);
+    wprintw(win[CMD_WIN], "Please file name: ");
+    wrefresh(win[CMD_WIN]);
+    wattron(win[CMD_WIN], COLOR_PAIR(3));
     echo();
     while(1){
-      if((ch = wgetch(win[2])) == 10 || i > 255) break;
+      if((ch = wgetch(win[CMD_WIN])) == 10 || i > 255) break;
       filename[i] = ch;
       i++;
     }
     noecho();
     strcpy(stat->filename, filename);
-    werase(win[2]);
+    werase(win[CMD_WIN]);
   }
   
   FILE *fp;
@@ -217,8 +217,8 @@ int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
     if(stat->trueLine[i + 1] != false) fputc('\n', fp);
   }
 
-  mvwprintw(win[2], 0, 0, "saved..., %d times changed", stat->numOfChange);
-  wrefresh(win[2]);
+  mvwprintw(win[CMD_WIN], 0, 0, "saved..., %d times changed", stat->numOfChange);
+  wrefresh(win[CMD_WIN]);
 
   fclose(fp);
   stat->numOfChange = 0;
@@ -249,34 +249,34 @@ int printCurrentLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
     }
   }else currentLine = 0;
   int lineDigitSpace = stat->lineDigit - countLineDigit(stat, stat->currentLine + 1);
-  for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
-  wattron(win[0], COLOR_PAIR(7));
-  mvwprintw(win[0], y, lineDigitSpace, "%d", stat->currentLine - currentLine + 1 - stat->adjustLineNum);
-  wmove(win[0], stat->y, stat->x);
-  wrefresh(win[0]);
-  wattron(win[0], COLOR_PAIR(6));
+  for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[MAIN_WIN], y, j, " ");
+  wattron(win[MAIN_WIN], COLOR_PAIR(7));
+  mvwprintw(win[MAIN_WIN], y, lineDigitSpace, "%d", stat->currentLine - currentLine + 1 - stat->adjustLineNum);
+  wmove(win[MAIN_WIN], stat->y, stat->x);
+  wrefresh(win[MAIN_WIN]);
+  wattron(win[MAIN_WIN], COLOR_PAIR(6));
   return 0;
 }
 
 int printLineNum(WINDOW **win, editorStat *stat, int currentLine, int y){
   if(stat->trueLine[currentLine] == false) return 0;
     int lineDigitSpace = stat->lineDigit - countLineDigit(stat, currentLine + 1);
-    for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[0], y, j, " ");
-    wattron(win[0], COLOR_PAIR(3));
-    mvwprintw(win[0], y, lineDigitSpace, "%d", currentLine + 1 - stat->adjustLineNum);
+    for(int j=0; j<lineDigitSpace; j++) mvwprintw(win[MAIN_WIN], y, j, " ");
+    wattron(win[MAIN_WIN], COLOR_PAIR(3));
+    mvwprintw(win[MAIN_WIN], y, lineDigitSpace, "%d", currentLine + 1 - stat->adjustLineNum);
   return 0;
 }
 
 // print single line
 void printLine(WINDOW **win, gapBuffer* gb, editorStat *stat, int currentLine, int y){
   printLineNum(win, stat, currentLine, y);
-  wattron(win[0], COLOR_PAIR(6));
-  mvwprintw(win[0], y, stat->lineDigit + 1, "%s", gapBufferAt(gb, currentLine)->elements);
-  wrefresh(win[0]);
+  wattron(win[MAIN_WIN], COLOR_PAIR(6));
+  mvwprintw(win[MAIN_WIN], y, stat->lineDigit + 1, "%s", gapBufferAt(gb, currentLine)->elements);
+  wrefresh(win[MAIN_WIN]);
 }
 
 void printLineAll(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  werase(win[0]);
+  werase(win[MAIN_WIN]);
   int startPrintLine = stat->currentLine - stat->y,
       currentLine = 0;
   stat->adjustLineNum = 0;
@@ -293,23 +293,23 @@ void printLineAll(WINDOW **win, gapBuffer *gb, editorStat *stat){
 }
 
 void printStatBarInit(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  werase(win[1]);
-  wbkgd(win[1], COLOR_PAIR(1));
+  werase(win[STATE_WIN]);
+  wbkgd(win[STATE_WIN], COLOR_PAIR(1));
   printStatBar(win, gb, stat);
 }
 
 void printStatBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  werase(win[1]);
-  wattron(win[1], COLOR_PAIR(2));
+  werase(win[STATE_WIN]);
+  wattron(win[STATE_WIN], COLOR_PAIR(2));
   if(stat->mode == NORMAL_MODE)
-    wprintw(win[1], "%s ", " NORMAL");
+    wprintw(win[STATE_WIN], "%s ", " NORMAL");
   else if(stat->mode == INSERT_MODE)
-    wprintw(win[1], "%s ", " INSERT");
-  wattron(win[1], COLOR_PAIR(1));
-  wprintw(win[1], " %s ", stat->filename);
-  mvwprintw(win[1], 0, COLS-13, "%d/%d ", stat->currentLine + 1, stat->numOfLines);
-  mvwprintw(win[1], 0, COLS-6, " %d/%d", stat->x - stat->lineDigitSpace + 1, gapBufferAt(gb, stat->currentLine)->numOfChar);
-  wrefresh(win[1]);
+    wprintw(win[STATE_WIN], "%s ", " INSERT");
+  wattron(win[STATE_WIN], COLOR_PAIR(1));
+  wprintw(win[STATE_WIN], " %s ", stat->filename);
+  mvwprintw(win[STATE_WIN], 0, COLS-13, "%d/%d ", stat->currentLine + 1, stat->numOfLines);
+  mvwprintw(win[STATE_WIN], 0, COLS-6, " %d/%d", stat->x - stat->lineDigitSpace + 1, gapBufferAt(gb, stat->currentLine)->numOfChar);
+  wrefresh(win[STATE_WIN]);
 }
 
 int shellMode(char *cmd){
@@ -341,14 +341,14 @@ int jampLine(editorStat *stat, int lineNum){
 }
 
 int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  werase(win[2]);
-  wprintw(win[2], "%s", ":");
-  wrefresh(win[2]);
+  werase(win[CMD_WIN]);
+  wprintw(win[CMD_WIN], "%s", ":");
+  wrefresh(win[CMD_WIN]);
   echo();
 
   char cmd[COLS - 1];
   int saveFlag = false;
-  wgetnstr(win[2], cmd, COLS - 1);
+  wgetnstr(win[CMD_WIN], cmd, COLS - 1);
   noecho();
 
   for(int i=0; i<strlen(cmd); i++){
@@ -365,11 +365,11 @@ int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
       if(cmd[i + 1] == '!' || stat->numOfChange == 0) exitCurses();
       else if(cmd[i + 1] != '!'){
         if(stat->numOfChange > 0 && saveFlag != true){
-          wattron(win[2], COLOR_PAIR(4));
-          werase(win[2]);
-          wprintw(win[2], "%s","Erorr: No write since last change");
-          wrefresh(win[2]);
-          wattroff(win[2], COLOR_PAIR(4));
+          wattron(win[CMD_WIN], COLOR_PAIR(4));
+          werase(win[CMD_WIN]);
+          wprintw(win[CMD_WIN], "%s","Erorr: No write since last change");
+          wrefresh(win[CMD_WIN]);
+          wattroff(win[CMD_WIN], COLOR_PAIR(4));
         }
       }
     }else if(cmd[0] == 'e'){  // File open
@@ -380,8 +380,8 @@ int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
       cmdE(gb, stat, filename);
     }else if(cmd[0] == '!'){    // Shell command execution
       shellMode(cmd);
-      werase(win[2]);
-      wrefresh(win[2]);
+      werase(win[CMD_WIN]);
+      wrefresh(win[CMD_WIN]);
     }
   }
   return 0;
@@ -606,8 +606,8 @@ int delLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
   stat->x = stat->lineDigitSpace;
   stat->numOfChange++;
   stat->isViewUpdated = true;
-  werase(win[2]);
-  wprintw(win[2], "%d line deleted");
+  werase(win[CMD_WIN]);
+  wprintw(win[CMD_WIN], "%d line deleted");
   return 0;
 }
 
@@ -624,7 +624,7 @@ int replaceChar(gapBuffer *gb, editorStat *stat, int key){
 int moveFirstLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
   int key;
   while(1){
-    key = wgetch(win[0]);
+    key = wgetch(win[MAIN_WIN]);
     if(key == 'g'){
       stat->y = 0;
       stat->x = stat->lineDigitSpace;
@@ -671,9 +671,9 @@ int lineYank(WINDOW **win, gapBuffer *gb, editorStat *stat){
     gapBufferInsert(stat->rgst.yankedLine, charArrayCopy(gapBufferAt(gb, line)), line - stat->currentLine);
   }
 
-  werase(win[2]);
-  wprintw(win[2], "%d line yanked", stat->rgst.numOfYankedLines);
-  wrefresh(win[2]);
+  werase(win[CMD_WIN]);
+  wprintw(win[CMD_WIN], "%d line yanked", stat->rgst.numOfYankedLines);
+  wrefresh(win[CMD_WIN]);
   return 0;
 }
 
@@ -741,21 +741,21 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
         for(int i=0; i<stat->cmdLoop; i++) delCurrentChar(gb, stat);
       break;
     case 'd':
-      if(wgetch(win[0]) == 'd'){
+      if(wgetch(win[MAIN_WIN]) == 'd'){
         if(stat->cmdLoop > stat->numOfLines - stat->currentLine)
           stat->cmdLoop = stat->numOfLines - stat->currentLine;
         for(int i=0; i<stat->cmdLoop; i++) delLine(win, gb, stat);
       }
       break;
     case 'y':
-      if(wgetch(win[0]) == 'y') lineYank(win, gb, stat);
+      if(wgetch(win[MAIN_WIN]) == 'y') lineYank(win, gb, stat);
       break;
     case 'p':
       linePaste(gb, stat);
       break;
 
     case 'r':
-      key = wgetch(win[0]);
+      key = wgetch(win[MAIN_WIN]);
       replaceChar(gb, stat, key);
       break;
     case 'a':
@@ -793,9 +793,9 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       stat->isViewUpdated = false;
       stat->cmdLoop = 0;
     }
-    wmove(win[0], stat->y, stat->x);
+    wmove(win[MAIN_WIN], stat->y, stat->x);
     debugMode(win, gb, stat);
-    key = wgetch(win[0]);
+    key = wgetch(win[MAIN_WIN]);
 
     if(key >= '0' && key <= '9'){
       if(stat->cmdLoop > 0){
@@ -828,8 +828,8 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
       stat->isViewUpdated = false;
     }
     debugMode(win, gb, stat);
-    wmove(win[0], stat->y, stat->x);
-    key = wgetch(win[0]);
+    wmove(win[MAIN_WIN], stat->y, stat->x);
+    key = wgetch(win[MAIN_WIN]);
 
     switch(key){
       case KEY_UP:
