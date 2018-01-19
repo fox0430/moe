@@ -437,6 +437,7 @@ void printStatBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
     wprintw(win[STATE_WIN], "%s ", " INSERT");
   wattron(win[STATE_WIN], COLOR_PAIR(1));
   wprintw(win[STATE_WIN], " %s ", stat->filename);
+  if(strcmp(stat->filename, "No name") == 0) wprintw(win[STATE_WIN], " [+]");
   mvwprintw(win[STATE_WIN], 0, COLS-13, "%d/%d ", stat->currentLine + 1, stat->numOfLines);
   mvwprintw(win[STATE_WIN], 0, COLS-6, " %d/%d", stat->x - stat->lineDigitSpace + 1, gapBufferAt(gb, stat->currentLine)->numOfChar);
   wrefresh(win[STATE_WIN]);
