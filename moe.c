@@ -679,8 +679,8 @@ int delCurrentChar(gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
-int deleteLine(gapBuffer *gb, editorStat *stat){
-  gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
+int deleteLine(gapBuffer *gb, editorStat *stat, int line){
+  gapBufferDel(gb, line, line + 1);
 
   if(gb->size == 0){
     charArray* emptyLine = (charArray*)malloc(sizeof(charArray));
@@ -690,9 +690,9 @@ int deleteLine(gapBuffer *gb, editorStat *stat){
     }
     charArrayInit(emptyLine);
     gapBufferInsert(gb, emptyLine, 0);
-  }else if(stat->currentLine == gb->size){
-    --stat->currentLine;
   }
+  if(line < stat->currentLine) --stat->currentLine;
+  if(stat->currentLine >= gb->size) stat->currentLine = gb->size-1;
 
   stat->numOfChange++;
   reloadEditorView(&stat->view, gb, stat->view.originalLine[0] > gb->size-1 ? gb->size-1 : stat->view.originalLine[0]);
@@ -833,7 +833,7 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       if(wgetch(win[MAIN_WIN]) == 'd'){
         if(stat->cmdLoop > stat->numOfLines - stat->currentLine)
           stat->cmdLoop = stat->numOfLines - stat->currentLine;
-        for(int i=0; i<stat->cmdLoop; i++) deleteLine(gb, stat);
+        for(int i=0; i<stat->cmdLoop; i++) deleteLine(gb, stat, stat->currentLine);
       }
       break;
     case 'y':
