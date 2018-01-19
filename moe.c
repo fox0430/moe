@@ -151,6 +151,37 @@ void seekCursor(editorStat* stat, gapBuffer* buffer){
   while((view->originalLine[view->height-1] != -1 && stat->currentLine > view->originalLine[view->height-1]) || (stat->currentLine == view->originalLine[view->height-1] && view->length[view->height-1] > 0 && stat->positionInCurrentLine >= view->start[view->height-1]+view->length[view->height-1])) scrollDown(view, buffer);
 }
 
+void reloadEditorView(editorView *view, gapBuffer* buffer, int topLine){
+  int height = view->height, width = view->width;  
+  for(int y = 0; y < height; ++y){
+    view->originalLine[y]= -1;
+    view->lines[y] = (charArray*)malloc(sizeof(charArray));
+    charArrayInit(view->lines[y]);
+  }
+
+  int lineNumber = topLine, start = 0;
+  for(int y = 0; y < height; ++y){
+    if(lineNumber >= buffer->size) break;
+    if(gapBufferAt(buffer, lineNumber)->numOfChar == 0){
+      view->originalLine[y] = lineNumber;
+      view->start[y] = 0;
+      view->length[y] = 0;
+      ++lineNumber;
+      continue;
+    }
+    view->originalLine[y] = lineNumber;
+    view->start[y] = start;
+    view->length[y] = width > gapBufferAt(buffer, lineNumber)->numOfChar - start ? gapBufferAt(buffer, lineNumber)->numOfChar - start : width;
+    for(int x = 0; x < view->length[y]; ++x) charArrayPush(view->lines[y], gapBufferAt(buffer, lineNumber)->elements[x+view->start[y]]);
+
+    start += width;
+    if(start >= gapBufferAt(buffer, lineNumber)->numOfChar){
+      ++lineNumber;
+      start = 0;
+    }
+  } 
+}
+
 void initEditorView(editorView* view, gapBuffer* buffer, int height, int width){
   view->height = height;
   view->width = width;
@@ -159,38 +190,11 @@ void initEditorView(editorView* view, gapBuffer* buffer, int height, int width){
   view->start = (int*)malloc(sizeof(int)*height);
   view->length = (int*)malloc(sizeof(int)*height);
   view->isUpdated = true;
-
-  for(int y = 0; y < height; ++y){
-    view->originalLine[y] = -1;
-    view->lines[y] = (charArray*)malloc(sizeof(charArray));
-    charArrayInit(view->lines[y]);
-  }
-
-  int lineNumber = 0, start = 0;
-  for(int y = 0; y < height; ++y){
-    if(lineNumber >= buffer->size) break;
-    if(gapBufferAt(buffer, lineNumber)->numOfChar == 0){
-      view->originalLine[y] = lineNumber;
-      view->start[y] = 0;
-      view->length[y] = 0;
-      ++lineNumber;
-      continue;
-    }
-    view->originalLine[y] = lineNumber;
-    view->start[y] = start;
-    view->length[y] = width > gapBufferAt(buffer, lineNumber)->numOfChar - start ? gapBufferAt(buffer, lineNumber)->numOfChar - start : width;
-    for(int x = 0; x < view->length[y]; ++x) charArrayPush(view->lines[y], gapBufferAt(buffer, lineNumber)->elements[x+view->start[y]]);
-
-    start += width;
-    if(start >= gapBufferAt(buffer, lineNumber)->numOfChar){
-      ++lineNumber;
-      start = 0;
-    }
-  }
+  reloadEditorView(view, buffer, 0);
 }
 
 void resizeEditorView(editorView* view, gapBuffer* buffer, int height, int width){
-  int lineNumber = view->originalLine[0], start = 0;
+  int topLine = view->originalLine[0], start = 0;
   for(int y = 0; y < view->height; ++y) charArrayFree(view->lines[y]);
   view->lines = (charArray**)realloc(view->lines, sizeof(charArray*)*height);
   view->height = height;
@@ -199,33 +203,7 @@ void resizeEditorView(editorView* view, gapBuffer* buffer, int height, int width
   view->start = (int*)realloc(view->start, sizeof(int)*height);
   view->length = (int*)realloc(view->length, sizeof(int)*height);
   view->isUpdated = true;
-
-  for(int y = 0; y < height; ++y){
-    view->originalLine[y]= -1;
-    view->lines[y] = (charArray*)malloc(sizeof(charArray));
-    charArrayInit(view->lines[y]);
-  }
-
-  for(int y = 0; y < height; ++y){
-    if(lineNumber >= buffer->size) break;
-    if(gapBufferAt(buffer, lineNumber)->numOfChar == 0){
-      view->originalLine[y] = lineNumber;
-      view->start[y] = 0;
-      view->length[y] = 0;
-      ++lineNumber;
-      continue;
-    }
-    view->originalLine[y] = lineNumber;
-    view->start[y] = start;
-    view->length[y] = width > gapBufferAt(buffer, lineNumber)->numOfChar - start ? gapBufferAt(buffer, lineNumber)->numOfChar - start : width;
-    for(int x = 0; x < view->length[y]; ++x) charArrayPush(view->lines[y], gapBufferAt(buffer, lineNumber)->elements[x+view->start[y]]);
-
-    start += width;
-    if(start >= gapBufferAt(buffer, lineNumber)->numOfChar){
-      ++lineNumber;
-      start = 0;
-    }
-  }
+  reloadEditorView(view, buffer, topLine);
 }
 
 void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStat *stat){
@@ -717,9 +695,8 @@ int deleteLine(gapBuffer *gb, editorStat *stat){
   }
 
   stat->numOfChange++;
+  reloadEditorView(&stat->view, gb, stat->view.originalLine[0] > gb->size-1 ? gb->size-1 : stat->view.originalLine[0]);
   seekCursor(stat, gb);
-  resizeEditorView(&stat->view, gb, stat->view.height, stat->view.width); 
-  stat->cursor.isUpdated = true;
   return 0;
 }
 
