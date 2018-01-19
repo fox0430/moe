@@ -96,7 +96,6 @@ void editorStatInit(editorStat* stat){
   stat->cmdLoop = 0;
   strcpy(stat->filename, "No name");
   stat->numOfChange = 0;
-  stat->newfile = OFF; 
   stat->currentLine = false;
   stat->debugMode = OFF;
   trueLineInit(stat);
@@ -217,7 +216,6 @@ int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
     if(i != gb->size - 1) break;;
     if(stat->trueLine[i + 1] != false) fputc('\n', fp);
   }
-  if(stat->newfile = ON) stat->newfile = OFF;
 
   mvwprintw(win[CMD_WIN], 0, 0, "saved..., %d times changed", stat->numOfChange);
   wrefresh(win[CMD_WIN]);
@@ -309,7 +307,7 @@ void printStatBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
     wprintw(win[STATE_WIN], "%s ", " INSERT");
   wattron(win[STATE_WIN], COLOR_PAIR(1));
   wprintw(win[STATE_WIN], " %s ", stat->filename);
-  if(stat->newfile == ON) wprintw(win[STATE_WIN], " [+]");
+  if(strcmp(stat->filename, "No name") == 0) wprintw(win[STATE_WIN], " [+]");
   mvwprintw(win[STATE_WIN], 0, COLS-13, "%d/%d ", stat->currentLine + 1, stat->numOfLines);
   mvwprintw(win[STATE_WIN], 0, COLS-6, " %d/%d", stat->x - stat->lineDigitSpace + 1, gapBufferAt(gb, stat->currentLine)->numOfChar);
   wrefresh(win[STATE_WIN]);
@@ -920,7 +918,6 @@ int openFile(gapBuffer *gb, editorStat *stat){
 int newFile(editorStat *stat){
   stat->x = stat->lineDigitSpace;
   stat->numOfLines = 1;
-  stat->newfile = ON;
   return 0;
 }
 

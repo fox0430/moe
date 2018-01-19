@@ -48,7 +48,6 @@ typedef struct editorStat{
         mode,
         cmdLoop,
         numOfChange,
-        newfile,
         isViewUpdated,
         debugMode,
         adjustLineNum,
