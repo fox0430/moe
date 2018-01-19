@@ -136,10 +136,22 @@ void scrollDown(editorView* view, gapBuffer* buffer){
 
 void updateCursorPosition(editorStat* stat){
   editorView* view = &stat->view;
-  for(int y = 0; y < view->height; ++y) if(stat->currentLine == view->originalLine[y] && (view->length[y] == 0 || (view->start[y] <= stat->positionInCurrentLine && stat->positionInCurrentLine < view->start[y]+view->length[y]))){
-    stat->cursor.y = y;
-    stat->cursor.x = stat->positionInCurrentLine-view->start[y];
-    break;
+  for(int y = 0; y < view->height; ++y){
+    if(stat->currentLine == view->originalLine[y]){
+      if(view->start[y] <= stat->positionInCurrentLine && stat->positionInCurrentLine < view->start[y]+view->length[y]){
+        stat->cursor.y = y;
+        stat->cursor.x = stat->positionInCurrentLine-view->start[y];
+        break;
+      }else if ((y == view->height-1 || view->originalLine[y] != view->originalLine[y+1]) && view->start[y]+view->length[y] == stat->positionInCurrentLine){
+        stat->cursor.y = y;
+        stat->cursor.x = stat->positionInCurrentLine-view->start[y];
+        if(stat->cursor.x == view->width){
+            ++stat->cursor.y;
+            stat->cursor.x = 0;
+        }
+        break;
+      }
+    }
   }
 }
 
@@ -194,7 +206,7 @@ void initEditorView(editorView* view, gapBuffer* buffer, int height, int width){
 }
 
 void resizeEditorView(editorView* view, gapBuffer* buffer, int height, int width){
-  int topLine = view->originalLine[0], start = 0;
+  int topLine = view->originalLine[0];
   for(int y = 0; y < view->height; ++y) charArrayFree(view->lines[y]);
   view->lines = (charArray**)realloc(view->lines, sizeof(charArray*)*height);
   view->height = height;
@@ -510,7 +522,7 @@ int insNewLine(gapBuffer *gb, editorStat *stat, int position){
 
 int insertTab(gapBuffer *gb, editorStat *stat){
   for(int i=0; i<stat->setting.tabStop; i++)
-    charInsert(gb, stat, ' ');
+    insertChar(gb, stat, ' ');
   return 0;
 }
 
@@ -733,9 +745,10 @@ int moveLastLine(gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
-int charInsert(gapBuffer *gb, editorStat *stat, int key){
-  charArrayInsert(gapBufferAt(gb, stat->currentLine), key, stat->x - stat->lineDigitSpace);
-  stat->x++;
+int insertChar(gapBuffer *gb, editorStat *stat, int key){
+  assert(stat->currentLine < gb->size);
+  charArrayInsert(gapBufferAt(gb, stat->currentLine), key, stat->positionInCurrentLine);
+  ++stat->positionInCurrentLine;
 
   if(stat->setting.autoCloseParen == ON){
     if(key == '(')
@@ -747,9 +760,11 @@ int charInsert(gapBuffer *gb, editorStat *stat, int key){
     if(key == '\'')
       charArrayInsert(gapBufferAt(gb, stat->currentLine), '\'', stat->x - stat->lineDigitSpace);
   }
-
+  
+  reloadEditorView(&stat->view, gb, stat->view.originalLine[0]);
+  seekCursor(stat, gb);
+  
   stat->numOfChange++;
-  stat->isViewUpdated = true;
   return 0;
 }
 
@@ -973,7 +988,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
         break;
       
       default:
-        charInsert(gb, stat, key);
+        insertChar(gb, stat, key);
     }
   }
 }
