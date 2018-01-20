@@ -456,18 +456,16 @@ int shellMode(char *cmd){
   return 0;
 }
 
-// has problem...
-int jampLine(editorStat *stat, int lineNum){
-  const int startPrintLine = stat->currentLine - stat->y;
-  if(lineNum >= startPrintLine || lineNum < (startPrintLine + COLS - 2)){
-    stat->y = lineNum - startPrintLine;
-    stat->currentLine = lineNum;
-  }else{
-    stat->y = 0;
-    stat->x = stat->lineDigitSpace;
-    stat->currentLine = lineNum;
+int jumpLine(editorStat* stat, gapBuffer* buffer, int destination){
+  editorView* view = &stat->view;
+  int currentLine = stat->currentLine;
+  stat->currentLine = destination;
+  stat->positionInCurrentLine = 0;
+  if(!(view->originalLine[0] <= destination && (view->originalLine[view->height-1] == -1 || destination <= view->originalLine[view->height-1]))){
+    int startOfPrintedLines = destination-(currentLine - view->originalLine[0]) >= 0 ?  destination-(currentLine - view->originalLine[0]) : 0;
+    reloadEditorView(view, buffer, startOfPrintedLines);
   }
-  stat->isViewUpdated = true;
+  seekCursor(stat, buffer);
   return 0;
 }
 
@@ -478,6 +476,7 @@ int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
   echo();
 
   char cmd[COLS - 1];
+  memset(cmd, 0, COLS-1);
   int saveFlag = false;
   wgetnstr(win[CMD_WIN], cmd, COLS - 1);
   noecho();
@@ -486,8 +485,8 @@ int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
     if(cmd[0] >= '0' && cmd[0] <= '9'){
       int lineNum = atoi(cmd) - 1;
       if(lineNum < 0) lineNum = 0;
-      else if(lineNum > stat->numOfLines) lineNum = stat->numOfLines;
-      jampLine(stat, lineNum);
+      else if(lineNum >= gb->size) lineNum = gb->size-1;
+      jumpLine(stat, gb,  lineNum);
       return 0;
     }else if(cmd[i] == 'w'){
       saveFile(win, gb, stat);
