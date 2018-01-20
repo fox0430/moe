@@ -56,21 +56,21 @@ typedef struct editorStat{
   editorView view;
   cursorPosition cursor;
   char filename[256];
-  int   y,
-        x,
+  int   y, // obsolete
+        x, // obsolete
         currentLine,
         positionInCurrentLine,
-        numOfLines,
+        numOfLines, // obsolete
         lineDigit,
         lineDigitSpace,
         mode,
         cmdLoop,
         numOfChange,
-        isViewUpdated,
+        isViewUpdated, // obsolete
         debugMode,
-        adjustLineNum,
-        trueLineCapa,
-        *trueLine;
+        adjustLineNum, // obsolete
+        trueLineCapa, // obsolete
+        *trueLine; // obsolete
 } editorStat;
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat);
@@ -82,13 +82,12 @@ void signal_handler(int SIG);
 void exitCurses();
 void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStat *stat);
 void editorStatInit(editorStat* stat);
-int returnLine(gapBuffer *gb, editorStat *stat);
-int trueLineInit(editorStat *stat);
+int returnLine(gapBuffer *gb, editorStat *stat); // obsolete
+int trueLineInit(editorStat *stat); // obsolete
 int registersInit(editorStat *stat);
 void editorSettingInit(editorStat *stat);
 int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat);
 int shellMode(char *cmd);
-int jampLine(editorStat *stat, int lineNum);
 int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat);
 int insNewLine(gapBuffer *gb, editorStat *stat, int position);
 int insertTab(gapBuffer *gb, editorStat *stat);
@@ -104,7 +103,6 @@ int keyD(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int charReplace(gapBuffer *gb, editorStat *stat, int key);
 int moveFirstLine(WINDOW **win, gapBuffer* gb, editorStat* stat);
 int moveLastLine(gapBuffer* gb, editorStat* stat);
-int charInsert(gapBuffer *gb, editorStat *stat, int key);
 int lineYank(WINDOW **win, gapBuffer *gb, editorStat *stat);
 int linePaste(gapBuffer *gb, editorStat *stat);
 int cmdE(gapBuffer *gb, editorStat *stat, char *filename);

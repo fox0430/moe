@@ -80,6 +80,7 @@ void exitCurses(){
   exit(1);
 }
 
+// メインウィンドウの表示を1ライン上にずらす
 void scrollUp(editorView* view, gapBuffer* buffer){
   view->isUpdated  = true;
 
@@ -107,6 +108,7 @@ void scrollUp(editorView* view, gapBuffer* buffer){
   view->lines[0] = newLine;
 }
 
+// メインウィンドウの表示を1ライン下にずらす
 void scrollDown(editorView* view, gapBuffer* buffer){
   view->isUpdated = true;
 
@@ -140,6 +142,7 @@ void scrollDown(editorView* view, gapBuffer* buffer){
   view->lines[height-1] = newLine;
 }
 
+// カーソルが表示位置を計算/更新する.この関数が呼ばれるとき現在のeditorView中にカーソルの正しい表示位置が含まれていることが期待される.
 void updateCursorPosition(editorStat* stat){
   editorView* view = &stat->view;
   for(int y = 0; y < view->height; ++y){
@@ -161,6 +164,7 @@ void updateCursorPosition(editorStat* stat){
   }
 }
 
+// カーソルがeditorView中に含まれるようになるまでscrollUp,scrollDownを利用してeditorViewの表示を移動させる.
 void seekCursor(editorStat* stat, gapBuffer* buffer){
   stat->view.isUpdated = stat->cursor.isUpdated = true;
   editorView* view = &stat->view;
@@ -173,6 +177,7 @@ void seekCursor(editorStat* stat, gapBuffer* buffer){
   }
 }
 
+// topLineがeditorViewの一番上のラインとして表示されるようにバッファからeditorViewに対してリロード処理を行う.editorView全体を更新するため計算コストはやや高め.バッファの内容とeditorViewの内容を同期させる時やeditorView全体が全く異なるような内容になるような処理をした後等に使用することが想定されている.
 void reloadEditorView(editorView *view, gapBuffer* buffer, int topLine){
   int height = view->height, width = view->width;  
   for(int y = 0; y < height; ++y){
@@ -204,6 +209,7 @@ void reloadEditorView(editorView *view, gapBuffer* buffer, int topLine){
   } 
 }
 
+// width/heightでeditorViewを初期化し,バッファの0行0文字目からロードする.widthは画面幅ではなくeditorViewの1ラインの文字数である(従って行番号分の長さは考慮しなくてよい).
 void initEditorView(editorView* view, gapBuffer* buffer, int height, int width){
   view->height = height;
   view->width = width;
@@ -215,6 +221,7 @@ void initEditorView(editorView* view, gapBuffer* buffer, int height, int width){
   reloadEditorView(view, buffer, 0);
 }
 
+// 指定されたwidth/heightでeditorViewを更新する.表示される部分はなるべくリサイズ前と同じになるようになっている.
 void resizeEditorView(editorView* view, gapBuffer* buffer, int height, int width){
   int topLine = view->originalLine[0];
   for(int y = 0; y < view->height; ++y) charArrayFree(view->lines[y]);
