@@ -122,9 +122,15 @@ void scrollDown(editorView* view, gapBuffer* buffer){
   }
   
   if(view->start[height-2]+view->length[height-2] == gapBufferAt(buffer, view->originalLine[height-2])->numOfChar){
-    view->originalLine[height-1] = view->originalLine[height-2]+1;
-    view->start[height-1] = 0;
-    view->length[height-1] = view->width > gapBufferAt(buffer, view->originalLine[height-1])->numOfChar ? gapBufferAt(buffer, view->originalLine[height-1])->numOfChar : view->width;
+    if(view->originalLine[height-2] == -1 || view->originalLine[height-2]+1 == buffer->size){
+      view->originalLine[height-1] = -1;
+      view->start[height-1] = 0;
+      view->length[height-1] = 0;
+    }else{
+      view->originalLine[height-1] = view->originalLine[height-2]+1;
+      view->start[height-1] = 0;
+      view->length[height-1] = view->width > gapBufferAt(buffer, view->originalLine[height-1])->numOfChar ? gapBufferAt(buffer, view->originalLine[height-1])->numOfChar : view->width;
+    }
   }else{
     view->originalLine[height-1] = view->originalLine[height-2];
     view->start[height-1] = view->start[height-2]+view->length[height-2];
@@ -158,9 +164,13 @@ void updateCursorPosition(editorStat* stat){
 void seekCursor(editorStat* stat, gapBuffer* buffer){
   stat->view.isUpdated = stat->cursor.isUpdated = true;
   editorView* view = &stat->view;
-  while(stat->currentLine < view->originalLine[0] || (stat->currentLine == view->originalLine[0] && view->length[0] > 0 && stat->positionInCurrentLine < view->start[0])) scrollUp(view, buffer);
+  while(stat->currentLine < view->originalLine[0] || (stat->currentLine == view->originalLine[0] && view->length[0] > 0 && stat->positionInCurrentLine < view->start[0])){
+    scrollUp(view, buffer);
+  }
  
-  while((view->originalLine[view->height-1] != -1 && stat->currentLine > view->originalLine[view->height-1]) || (stat->currentLine == view->originalLine[view->height-1] && view->length[view->height-1] > 0 && stat->positionInCurrentLine >= view->start[view->height-1]+view->length[view->height-1])) scrollDown(view, buffer);
+  while((view->originalLine[view->height-1] != -1 && stat->currentLine > view->originalLine[view->height-1]) || (stat->currentLine == view->originalLine[view->height-1] && stat->positionInCurrentLine >= view->start[view->height-1]+view->length[view->height-1])){
+    scrollDown(view, buffer);
+  }
 }
 
 void reloadEditorView(editorView *view, gapBuffer* buffer, int topLine){
@@ -530,7 +540,8 @@ int keyUp(gapBuffer* gb, editorStat* stat){
   if(stat->currentLine == 0) return 0;
  
   --stat->currentLine;
-  stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar-1 >= stat->positionInCurrentLine ? stat->positionInCurrentLine : gapBufferAt(gb, stat->currentLine)->numOfChar-1;
+  int maxPosition = gapBufferAt(gb, stat->currentLine)->numOfChar-1+(stat->mode == INSERT_MODE);
+  stat->positionInCurrentLine = maxPosition >= stat->positionInCurrentLine ? stat->positionInCurrentLine : maxPosition;
   if(stat->positionInCurrentLine < 0) stat->positionInCurrentLine = 0;
   seekCursor(stat, gb); 
   return 0;
@@ -540,14 +551,15 @@ int keyDown(gapBuffer* gb, editorStat* stat){
   if(stat->currentLine + 1 == gb->size) return 0;
 
   ++stat->currentLine;
-  stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar-1 >= stat->positionInCurrentLine ? stat->positionInCurrentLine : gapBufferAt(gb, stat->currentLine)->numOfChar-1;
+   int maxPosition = gapBufferAt(gb, stat->currentLine)->numOfChar-1+(stat->mode == INSERT_MODE);
+  stat->positionInCurrentLine = maxPosition >= stat->positionInCurrentLine ? stat->positionInCurrentLine : maxPosition;
   if(stat->positionInCurrentLine < 0) stat->positionInCurrentLine = 0;
   seekCursor(stat, gb);
   return 0;
 }
 
 int keyRight(gapBuffer* gb, editorStat* stat){
-  if(stat->positionInCurrentLine+1 >= gapBufferAt(gb, stat->currentLine)->numOfChar) return 0;
+  if(stat->positionInCurrentLine+1 >= gapBufferAt(gb, stat->currentLine)->numOfChar+(stat->mode == INSERT_MODE)) return 0;
 
   ++stat->positionInCurrentLine;
   seekCursor(stat, gb); 
