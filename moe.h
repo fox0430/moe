@@ -4,6 +4,7 @@
 #include "gapbuffer.h"
 #include "chararray.h"
 #include "view.h"
+#include "cursor.h"
 
 typedef struct registers{
   gapBuffer *yankedLine;
@@ -17,11 +18,6 @@ typedef struct editorSetting{
       autoIndent,
       tabStop;
 } editorSetting;
-
-typedef struct cursorPosition{
-  int y,x;
-  bool isUpdated;
-} cursorPosition;
 
 typedef struct editorStat{
   editorSetting setting;

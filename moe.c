@@ -107,28 +107,6 @@ void exitCurses(){
   exit(1);
 }
 
-// カーソルが表示位置を計算/更新する.この関数が呼ばれるとき現在のeditorView中にカーソルの正しい表示位置が含まれていることが期待される.
-void updateCursorPosition(editorStat* stat){
-  editorView* view = &stat->view;
-  for(int y = 0; y < view->height; ++y){
-    if(stat->currentLine == view->originalLine[y]){
-      if(view->start[y] <= stat->positionInCurrentLine && stat->positionInCurrentLine < view->start[y]+view->length[y]){
-        stat->cursor.y = y;
-        stat->cursor.x = stat->positionInCurrentLine-view->start[y];
-        break;
-      }else if ((y == view->height-1 || view->originalLine[y] != view->originalLine[y+1]) && view->start[y]+view->length[y] == stat->positionInCurrentLine){
-        stat->cursor.y = y;
-        stat->cursor.x = stat->positionInCurrentLine-view->start[y];
-        if(stat->cursor.x == view->width){
-            ++stat->cursor.y;
-            stat->cursor.x = 0;
-        }
-        break;
-      }
-    }
-  }
-}
-
 // カーソルがeditorView中に含まれるようになるまでscrollUp,scrollDownを利用してeditorViewの表示を移動させる.
 void seekCursor(editorStat* stat, gapBuffer* buffer){
   stat->view.isUpdated = stat->cursor.isUpdated = true;
@@ -819,7 +797,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       stat->cmdLoop = 0;
     }
     if(stat->cursor.isUpdated){
-      updateCursorPosition(stat);
+      updateCursorPosition(&stat->cursor, &stat->view, stat->currentLine, stat->positionInCurrentLine);
       wmove(win[MAIN_WIN], stat->cursor.y, stat->view.widthOfLineNum+stat->cursor.x);
       stat->cursor.isUpdated = false;
     }
@@ -860,7 +838,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
       stat->cmdLoop = 0;
     }
     if(stat->cursor.isUpdated){
-      updateCursorPosition(stat);
+      updateCursorPosition(&stat->cursor, &stat->view, stat->currentLine, stat->positionInCurrentLine);
       wmove(win[MAIN_WIN], stat->cursor.y, stat->view.widthOfLineNum+stat->cursor.x);
       stat->cursor.isUpdated = false;
     }
