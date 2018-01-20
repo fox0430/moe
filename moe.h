@@ -39,7 +39,7 @@ typedef struct editorSetting{
 } editorSetting;
 
 typedef struct editorView{
-  int height, width;
+  int height, width, widthOfLineNum;
   charArray** lines;
   int* originalLine, *start, *length;
   bool isUpdated;
@@ -61,8 +61,8 @@ typedef struct editorStat{
         currentLine,
         positionInCurrentLine,
         numOfLines, // obsolete
-        lineDigit,
-        lineDigitSpace,
+        lineDigit, // obsolete
+        lineDigitSpace, // obsolete
         mode,
         cmdLoop,
         numOfChange,
@@ -109,7 +109,5 @@ int cmdE(gapBuffer *gb, editorStat *stat, char *filename);
 void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key);
 void normalMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
 void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
-int newFile(editorStat *stat);
-int openFile(gapBuffer *gb, editorStat *stat);
 
 #endif
