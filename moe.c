@@ -395,7 +395,7 @@ int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
           filename[256];
     wattron(win[CMD_WIN], COLOR_PAIR(4));
     werase(win[CMD_WIN]);
-    wprintw(win[CMD_WIN], "Please file name: ");
+    wprintw(win[CMD_WIN], "Please input file name: ");
     wrefresh(win[CMD_WIN]);
     wattron(win[CMD_WIN], COLOR_PAIR(3));
     echo();
@@ -411,14 +411,12 @@ int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
   
   FILE *fp;
   if ((fp = fopen(stat->filename, "w")) == NULL) {
-    printf("%s Cannot file open... \n", stat->filename);
+    printf("%s Cannot open the file... \n", stat->filename);
       return -1;
     }
   
   for(int i=0; i < gb->size; i++){
-    fputs(gapBufferAt(gb, i)->elements, fp);
-    if(i != gb->size - 1) break;;
-    if(stat->trueLine[i + 1] != false) fputc('\n', fp);
+    fprintf(fp, "%s\n",gapBufferAt(gb, i)->elements);
   }
 
   mvwprintw(win[CMD_WIN], 0, 0, "saved..., %d times changed", stat->numOfChange);
