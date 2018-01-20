@@ -1,1 +1,1 @@
-gcc -o moe vector.c gapbuffer.c moe.c -lncurses -Wall 
+gcc -o moe chararray.c gapbuffer.c moe.c -lncurses -Wall 

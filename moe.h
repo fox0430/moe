@@ -1,15 +1,14 @@
 #ifndef  MOE_MOE__H
 #define MOE_MOE_H
 
-#include<stdio.h>
-#include<string.h>
-#include<stdlib.h>
-#include<stdbool.h>
-#include<malloc.h>
-#include<signal.h>
-#include<ncurses.h>
-#include"gapbuffer.h"
-//#include<locale.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <malloc.h>
+#include <signal.h>
+#include <ncurses.h>
+#include "gapbuffer.h"
 
 #define KEY_ESC 27
 #define COLOR_DEFAULT -1

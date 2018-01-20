@@ -1,12 +1,12 @@
 #ifndef MOE_GAP_BUFFER_H
 #define MOE_GAP_BUFFER_H
 
-#include<stdio.h>
-#include<string.h>
-#include<stdlib.h>
-#include<stdbool.h>
-#include<malloc.h>
-#include"vector.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <malloc.h>
+#include "chararray.h"
 
 typedef struct gapBuffer{
   struct  charArray** buffer;

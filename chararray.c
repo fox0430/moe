@@ -1,4 +1,4 @@
-#include"vector.h"
+#include "chararray.h"
 
 int charArrayInit(charArray* array){
 
