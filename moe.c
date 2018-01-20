@@ -222,6 +222,16 @@ void initEditorView(editorView* view, gapBuffer* buffer, int height, int width){
   reloadEditorView(view, buffer, 0);
 }
 
+void freeEditorView(editorView* view){
+  for(int y = 0; y < view->height; ++y){
+    charArrayFree(view->lines[y]);
+  }
+  free(view->lines);
+  free(view->originalLine);
+  free(view->start);
+  free(view->length);
+}
+
 // 指定されたwidth/heightでeditorViewを更新する.表示される部分はなるべくリサイズ前と同じになるようになっている.
 void resizeEditorView(editorView* view, gapBuffer* buffer, int height, int width){
   int topLine = view->originalLine[0];
@@ -234,6 +244,40 @@ void resizeEditorView(editorView* view, gapBuffer* buffer, int height, int width
   view->length = (int*)realloc(view->length, sizeof(int)*height);
   view->isUpdated = true;
   reloadEditorView(view, buffer, topLine);
+}
+
+int openFile(gapBuffer *gb, editorStat *stat){
+  FILE *fp = fopen(stat->filename, "r");
+  if(fp != NULL){
+    char  ch;
+    while((ch = fgetc(fp)) != EOF){
+      if(ch=='\n'){
+        stat->currentLine += 1;
+        charArray* ca = (charArray*)malloc(sizeof(charArray));
+        if(ca == NULL){
+          printf("main read file: cannot allocated memory...\n");
+          return -1;
+        }
+        charArrayInit(ca);
+        gapBufferInsert(gb, ca, stat->currentLine);
+      }else charArrayPush(gapBufferAt(gb, stat->currentLine), ch);
+    }
+    fclose(fp);
+
+  }
+  
+  stat->currentLine = stat->positionInCurrentLine = 0;
+  stat->cursor.isUpdated = true;
+  freeEditorView(&stat->view);
+  initEditorView(&stat->view, gb, LINES-2, COLS-(countDigit(gb->size+1)+1)-1);
+  return 0;
+}
+
+int newFile(gapBuffer *gb, editorStat *stat){
+  stat->currentLine = stat->positionInCurrentLine = 0;
+  stat->cursor.isUpdated = true;
+  initEditorView(&stat->view, gb, LINES-2, COLS-(countDigit(gb->size+1)+1)-1);
+  return 0;
 }
 
 void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStat *stat){
@@ -820,7 +864,6 @@ int cmdE(gapBuffer *gb, editorStat *stat, char *filename){
   gapBufferFree(gb);
   gapBufferInit(gb);
   insNewLine(gb, stat, 0);
-  stat->currentLine = stat->positionInCurrentLine = 0;
   openFile(gb, stat);
   return 0;
 }
@@ -1018,40 +1061,6 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
   }
 }
 
-int openFile(gapBuffer *gb, editorStat *stat){
-
-  FILE *fp = fopen(stat->filename, "r");
-  if(fp == NULL){
-    stat->currentLine = stat->positionInCurrentLine = 0;
-  }else{
-    char  ch;
-    while((ch = fgetc(fp)) != EOF){
-      if(ch=='\n'){
-        stat->currentLine += 1;
-        charArray* ca = (charArray*)malloc(sizeof(charArray));
-        if(ca == NULL){
-          printf("main read file: cannot allocated memory...\n");
-          return -1;
-        }
-        charArrayInit(ca);
-        gapBufferInsert(gb, ca, stat->currentLine);
-      }else charArrayPush(gapBufferAt(gb, stat->currentLine), ch);
-    }
-    fclose(fp);
-
-    stat->currentLine = stat->positionInCurrentLine = 0;
-  }
-  
-  initEditorView(&stat->view, gb, LINES-2, COLS-(countDigit(gb->size+1)+1)-1);
-  return 0;
-}
-
-int newFile(gapBuffer *gb, editorStat *stat){
-  stat->currentLine = stat->positionInCurrentLine = 0;
-  initEditorView(&stat->view, gb, LINES-2, COLS-(countDigit(gb->size+1)+1)-1);
-  return 0;
-}
-
 int main(int argc, char* argv[]){
 
   editorStat *stat = (editorStat*)malloc(sizeof(editorStat));
@@ -1090,6 +1099,6 @@ int main(int argc, char* argv[]){
   normalMode(win, gb, stat);
 
   gapBufferFree(gb);
-
+  
   return 0;
 }
