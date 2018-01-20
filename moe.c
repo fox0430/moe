@@ -1,9 +1,36 @@
 #include <assert.h>
-#include"moe.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <malloc.h>
+#include <signal.h>
+#include <ncurses.h>
+#include "moe.h"
+#include "mathutility.h"
 
+#define KEY_ESC 27
+#define COLOR_DEFAULT -1
+#define BRIGHT_WHITE 231
+#define BRIGHT_GREEN 85 
+#define GRAY 245
+#define ON 1
+#define OFF 0
+#define NORMAL_MODE 0
+#define INSERT_MODE 1
+#define MAIN_WIN 0
+#define STATE_WIN 1
+#define CMD_WIN 2
 
 void printStatBarInit(WINDOW **win, gapBuffer *gb, editorStat *stat);
 void printStatBar(WINDOW **win, gapBuffer *gb, editorStat *stat);
+int trueLineInit(editorStat *stat);
+int registersInit(editorStat *stat);
+void editorSettingInit(editorStat *stat);
+int insNewLine(gapBuffer *gb, editorStat *stat, int position);
+int cmdE(gapBuffer *gb, editorStat *stat, char *filename);
+int insertChar(gapBuffer *gb, editorStat *stat, int key);
+void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   stat->debugMode = ON;
@@ -80,68 +107,6 @@ void exitCurses(){
   exit(1);
 }
 
-// メインウィンドウの表示を1ライン上にずらす
-void scrollUp(editorView* view, gapBuffer* buffer){
-  view->isUpdated  = true;
-
-  int height = view->height;
-  charArray* newLine = view->lines[height-1];
-  while(newLine->numOfChar > 0) charArrayPop(newLine);
-  
-  for(int y = height-1; y >= 1; --y){
-    view->lines[y] = view->lines[y-1];
-    view->originalLine[y] = view->originalLine[y-1];
-    view->start[y] = view->start[y-1];
-    view->length[y] = view->length[y-1];
-  }
-  if(view->start[1] > 0){
-    view->originalLine[0] = view->originalLine[1];
-    view->start[0] = view->start[1]-view->width;
-    view->length[0] = view->width;
-  }else{
-    view->originalLine[0] = view->originalLine[1]-1;
-    view->start[0] = view->width*((gapBufferAt(buffer, view->originalLine[0])->numOfChar-1)/view->width);
-    view->length[0] = gapBufferAt(buffer, view->originalLine[0])->numOfChar == 0 ? 0 : (gapBufferAt(buffer, view->originalLine[0])->numOfChar-1)%view->width+1;
-  }
-
-  for(int x = 0; x < view->length[0]; ++x) charArrayPush(newLine, gapBufferAt(buffer, view->originalLine[0])->elements[x+view->start[0]]);
-  view->lines[0] = newLine;
-}
-
-// メインウィンドウの表示を1ライン下にずらす
-void scrollDown(editorView* view, gapBuffer* buffer){
-  view->isUpdated = true;
-
-  charArray* newLine = view->lines[0];
-  while(newLine->numOfChar > 0) charArrayPop(newLine);
-
-  int height = view->height;
-  for(int y = 0; y < height-1; ++y){
-    view->lines[y] = view->lines[y+1];
-    view->originalLine[y] = view->originalLine[y+1];
-    view->start[y] = view->start[y+1];
-    view->length[y] = view->length[y+1];
-  }
-  
-  if(view->start[height-2]+view->length[height-2] == gapBufferAt(buffer, view->originalLine[height-2])->numOfChar){
-    if(view->originalLine[height-2] == -1 || view->originalLine[height-2]+1 == buffer->size){
-      view->originalLine[height-1] = -1;
-      view->start[height-1] = 0;
-      view->length[height-1] = 0;
-    }else{
-      view->originalLine[height-1] = view->originalLine[height-2]+1;
-      view->start[height-1] = 0;
-      view->length[height-1] = view->width > gapBufferAt(buffer, view->originalLine[height-1])->numOfChar ? gapBufferAt(buffer, view->originalLine[height-1])->numOfChar : view->width;
-    }
-  }else{
-    view->originalLine[height-1] = view->originalLine[height-2];
-    view->start[height-1] = view->start[height-2]+view->length[height-2];
-    view->length[height-1] = view->width > gapBufferAt(buffer, view->originalLine[height-1])->numOfChar - view->start[height-1] ? gapBufferAt(buffer, view->originalLine[height-1])->numOfChar - view->start[height-1] : view->width;
-  }
-  for(int x = 0; x < view->length[height-1]; ++x) charArrayPush(newLine, gapBufferAt(buffer, view->originalLine[height-1])->elements[x+view->start[height-1]]);
-  view->lines[height-1] = newLine;
-}
-
 // カーソルが表示位置を計算/更新する.この関数が呼ばれるとき現在のeditorView中にカーソルの正しい表示位置が含まれていることが期待される.
 void updateCursorPosition(editorStat* stat){
   editorView* view = &stat->view;
@@ -175,75 +140,6 @@ void seekCursor(editorStat* stat, gapBuffer* buffer){
   while((view->originalLine[view->height-1] != -1 && stat->currentLine > view->originalLine[view->height-1]) || (stat->currentLine == view->originalLine[view->height-1] && stat->positionInCurrentLine >= view->start[view->height-1]+view->length[view->height-1])){
     scrollDown(view, buffer);
   }
-}
-
-// topLineがeditorViewの一番上のラインとして表示されるようにバッファからeditorViewに対してリロード処理を行う.editorView全体を更新するため計算コストはやや高め.バッファの内容とeditorViewの内容を同期させる時やeditorView全体が全く異なるような内容になるような処理をした後等に使用することが想定されている.
-void reloadEditorView(editorView *view, gapBuffer* buffer, int topLine){
-  int height = view->height, width = view->width;  
-  for(int y = 0; y < height; ++y){
-    view->originalLine[y]= -1;
-    view->lines[y] = (charArray*)malloc(sizeof(charArray));
-    charArrayInit(view->lines[y]);
-  }
-
-  int lineNumber = topLine, start = 0;
-  for(int y = 0; y < height; ++y){
-    if(lineNumber >= buffer->size) break;
-    if(gapBufferAt(buffer, lineNumber)->numOfChar == 0){
-      view->originalLine[y] = lineNumber;
-      view->start[y] = 0;
-      view->length[y] = 0;
-      ++lineNumber;
-      continue;
-    }
-    view->originalLine[y] = lineNumber;
-    view->start[y] = start;
-    view->length[y] = width > gapBufferAt(buffer, lineNumber)->numOfChar - start ? gapBufferAt(buffer, lineNumber)->numOfChar - start : width;
-    for(int x = 0; x < view->length[y]; ++x) charArrayPush(view->lines[y], gapBufferAt(buffer, lineNumber)->elements[x+view->start[y]]);
-
-    start += width;
-    if(start >= gapBufferAt(buffer, lineNumber)->numOfChar){
-      ++lineNumber;
-      start = 0;
-    }
-  } 
-}
-
-// width/heightでeditorViewを初期化し,バッファの0行0文字目からロードする.widthは画面幅ではなくeditorViewの1ラインの文字数である(従って行番号分の長さは考慮しなくてよい).
-void initEditorView(editorView* view, gapBuffer* buffer, int height, int width){
-  view->height = height;
-  view->width = width;
-  view->lines = (charArray**)malloc(sizeof(charArray*)*height);
-  view->originalLine = (int*)malloc(sizeof(int)*height);
-  view->start = (int*)malloc(sizeof(int)*height);
-  view->length = (int*)malloc(sizeof(int)*height);
-  view->widthOfLineNum = countDigit(buffer->size+1)+1;
-  view->isUpdated = true;
-  reloadEditorView(view, buffer, 0);
-}
-
-void freeEditorView(editorView* view){
-  for(int y = 0; y < view->height; ++y){
-    charArrayFree(view->lines[y]);
-  }
-  free(view->lines);
-  free(view->originalLine);
-  free(view->start);
-  free(view->length);
-}
-
-// 指定されたwidth/heightでeditorViewを更新する.表示される部分はなるべくリサイズ前と同じになるようになっている.
-void resizeEditorView(editorView* view, gapBuffer* buffer, int height, int width){
-  int topLine = view->originalLine[0];
-  for(int y = 0; y < view->height; ++y) charArrayFree(view->lines[y]);
-  view->lines = (charArray**)realloc(view->lines, sizeof(charArray*)*height);
-  view->height = height;
-  view->width = width;
-  view->originalLine = (int*)realloc(view->originalLine, sizeof(int)*height);
-  view->start = (int*)realloc(view->start, sizeof(int)*height);
-  view->length = (int*)realloc(view->length, sizeof(int)*height);
-  view->isUpdated = true;
-  reloadEditorView(view, buffer, topLine);
 }
 
 int openFile(gapBuffer *gb, editorStat *stat){
@@ -359,7 +255,7 @@ int returnLine(gapBuffer *gb, editorStat *stat){
 
   int i = stat->currentLine - stat->y;
   int end = i + LINES - 2;
-  for(i; i<end; i++){
+  for(int i = stat->currentLine - stat->y; i<end; i++){
     if(gapBufferAt(gb, i)->numOfChar > (COLS - stat->lineDigitSpace)){
       if(i == stat->numOfLines - 1) insNewLine(gb, stat, i + 1);
       else if(stat->trueLine[i + 1] == true) insNewLine(gb, stat, i + 1);
@@ -426,46 +322,6 @@ int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
   stat->numOfChange = 0;
 
   return 0;
-}
-
-int countDigit(int num){
-  int digit = 0;
-  while(num > 0){
-    ++digit;
-    num /= 10;
-  }
-  return digit;
-
-
-}
-
-int printLineNum(WINDOW *mainWindow, editorView* view, int line, int color,  int y){
-  int width = view->widthOfLineNum;
-  for(int j=0; j<width; j++) mvwprintw(mainWindow, y, j, " ");
-  wattron(mainWindow, COLOR_PAIR(color));
-  mvwprintw(mainWindow, y, 0, "%d", line + 1);
-  return 0;
-}
-
-// print single line
-void printLine(WINDOW *mainWindow, editorView* view, charArray* line, int y){
-  wattron(mainWindow, COLOR_PAIR(6));
-  mvwprintw(mainWindow, y, view->widthOfLineNum, "%s", line->elements);
-
-}
-
-void printAllLines(WINDOW *mainWindow, editorView* view, gapBuffer *gb, int currentLine){
-  wclear(mainWindow);
-  view->widthOfLineNum = countDigit(gb->size+1)+1;
-  for(int y = 0; y < view->height; ++y){
-    if(view->originalLine[y] == -1){
-      for(int x = 0; x < view->width; ++x) mvwprintw(mainWindow, y, x, " ");
-      continue;
-    }
-    if(view->start[y] == 0) printLineNum(mainWindow, view, view->originalLine[y], view->originalLine[y] == currentLine ? 7 : 3, y);
-    printLine(mainWindow, view, view->lines[y], y); 
-  }
-  wrefresh(mainWindow);
 }
 
 void printStatBarInit(WINDOW **win, gapBuffer *gb, editorStat *stat){
@@ -725,9 +581,8 @@ int openBlankLine(gapBuffer *gb, editorStat *stat){
 }
 
 int appendAfterTheCursor(gapBuffer *gb, editorStat *stat){
-  if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace)
-    return 0;
-    stat->x++;
+  if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace) return 0;
+  stat->x++;
   return 0;
 }
 
@@ -904,9 +759,10 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
 
     case KEY_DC:
     case 'x':
-      if(stat->cmdLoop > gapBufferAt(gb,stat->currentLine)->numOfChar - (stat->x - stat->lineDigitSpace))
+      if(stat->cmdLoop > gapBufferAt(gb,stat->currentLine)->numOfChar - (stat->x - stat->lineDigitSpace)){
         stat->cmdLoop  = gapBufferAt(gb,stat->currentLine)->numOfChar - (stat->x - stat->lineDigitSpace);
-        for(int i=0; i<stat->cmdLoop; i++) delCurrentChar(gb, stat);
+      }
+      for(int i=0; i<stat->cmdLoop; i++) delCurrentChar(gb, stat);
       break;
     case 'd':
       if(wgetch(win[MAIN_WIN]) == 'd'){
