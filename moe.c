@@ -39,7 +39,7 @@ int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   werase(win[CMD_WIN]);
   mvwprintw(win[CMD_WIN], 0, 0, "debug mode: ");
   wprintw(win[CMD_WIN], "currentLine: %d ", stat->currentLine);
-  wprintw(win[CMD_WIN], "numOfLines: %d ", stat->numOfLines);
+  wprintw(win[CMD_WIN], "numOfLines: %d ", gb->size);
   wprintw(win[CMD_WIN], "numOfChar: %d ", gapBufferAt(gb, stat->currentLine)->numOfChar);
   wprintw(win[CMD_WIN], "change: %d", stat->numOfChange);
   wprintw(win[CMD_WIN], "elements: %s", gapBufferAt(gb, stat->currentLine)->elements);
@@ -612,26 +612,30 @@ int replaceChar(gapBuffer *gb, editorStat *stat, int key){
   return 0;
 }
 
-int moveFirstLine(WINDOW **win, gapBuffer *gb, editorStat *stat){
+int moveFirstLine(WINDOW *win, gapBuffer *gb, editorStat *stat){
+  if(stat->currentLine == 0) return 0;
   int key;
   while(1){
-    key = wgetch(win[MAIN_WIN]);
+    key = wgetch(win);
     if(key == 'g'){
-      stat->y = 0;
-      stat->x = stat->lineDigitSpace;
       stat->currentLine = 0;
-      stat->isViewUpdated = true;
+      int maxPosition = gapBufferAt(gb, stat->currentLine)->numOfChar-1+(stat->mode == INSERT_MODE);
+      stat->positionInCurrentLine = maxPosition >= stat->positionInCurrentLine ? stat->positionInCurrentLine : maxPosition;
+      if(stat->positionInCurrentLine < 0) stat->positionInCurrentLine = 0;
+      seekCursor(stat, gb); 
       break;
-    }else if(key == KEY_ESC)  break;;
+    }else if(key == KEY_ESC) break;
   }
   return 0;
 }
 
 int moveLastLine(gapBuffer *gb, editorStat *stat){
-  stat->y = LINES - 3;
-  stat->currentLine = stat->numOfLines - 1;
-  stat->x = stat->lineDigitSpace;
-  stat->isViewUpdated = true;
+  if(stat->currentLine == gb->size - 1) return 0;
+  stat->currentLine = gb->size - 1;
+  int maxPosition = gapBufferAt(gb, stat->currentLine)->numOfChar-1+(stat->mode == INSERT_MODE);
+  stat->positionInCurrentLine = maxPosition >= stat->positionInCurrentLine ? stat->positionInCurrentLine : maxPosition;
+  if(stat->positionInCurrentLine < 0) stat->positionInCurrentLine = 0;
+  seekCursor(stat, gb); 
   return 0;
 }
 
@@ -729,7 +733,7 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
       break;
     case 'g':
-      moveFirstLine(win, gb, stat);
+      moveFirstLine(win[0], gb, stat);
       break;
     case 'G':
       moveLastLine(gb, stat);
