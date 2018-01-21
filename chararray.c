@@ -1,4 +1,4 @@
-#include"vector.h"
+#include "chararray.h"
 
 int charArrayInit(charArray* array){
 
@@ -69,7 +69,7 @@ int charArrayPop(charArray* array){
 
   --array->numOfChar;
 
-  if(array->head * 4 <= array->capacity){
+  if(array->capacity >=2 && array->head * 4 <= array->capacity){
     char* newElements = (char*)realloc(array->elements, sizeof(char) * (array->capacity / 2 + 1));
     if(newElements == NULL){
         printf("Vector: cannot reallocate memory.");
