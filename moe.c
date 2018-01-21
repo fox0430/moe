@@ -612,20 +612,13 @@ int replaceChar(gapBuffer *gb, editorStat *stat, int key){
   return 0;
 }
 
-int moveFirstLine(WINDOW *win, gapBuffer *gb, editorStat *stat){
+int moveFirstLine(gapBuffer *gb, editorStat *stat){
   if(stat->currentLine == 0) return 0;
-  int key;
-  while(1){
-    key = wgetch(win);
-    if(key == 'g'){
-      stat->currentLine = 0;
-      int maxPosition = gapBufferAt(gb, stat->currentLine)->numOfChar-1+(stat->mode == INSERT_MODE);
-      stat->positionInCurrentLine = maxPosition >= stat->positionInCurrentLine ? stat->positionInCurrentLine : maxPosition;
-      if(stat->positionInCurrentLine < 0) stat->positionInCurrentLine = 0;
-      seekCursor(stat, gb); 
-      break;
-    }else if(key == KEY_ESC) break;
-  }
+  stat->currentLine = 0;
+  int maxPosition = gapBufferAt(gb, stat->currentLine)->numOfChar-1+(stat->mode == INSERT_MODE);
+  stat->positionInCurrentLine = maxPosition >= stat->positionInCurrentLine ? stat->positionInCurrentLine : maxPosition;
+  if(stat->positionInCurrentLine < 0) stat->positionInCurrentLine = 0;
+  seekCursor(stat, gb); 
   return 0;
 }
 
@@ -733,7 +726,8 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
       break;
     case 'g':
-      moveFirstLine(win[0], gb, stat);
+      if(wgetch(win[MAIN_WIN]) == 'g') moveFirstLine(gb, stat);
+      else break;
       break;
     case 'G':
       moveLastLine(gb, stat);
