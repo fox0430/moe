@@ -17,5 +17,6 @@ int charArrayDel(charArray* array, int position);
 bool charArrayIsEmpty(charArray* array);
 int charArrayFree(charArray* array);
 charArray* charArrayCopy(charArray*);
+int charArrayCountRepeat(charArray* array, int start, char ch);
 
 #endif

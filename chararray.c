@@ -127,3 +127,9 @@ charArray* charArrayCopy(charArray* array){
   for(int i = 0; i < array->numOfChar; ++i) charArrayPush(copy, array->elements[i]);
   return copy;
 }
+
+int charArrayCountRepeat(charArray* array, int start, char ch){
+  if(start >= array->numOfChar) return 0;
+  for(int i = start; i < array->numOfChar; ++i) if(array->elements[i] != ch) return i;
+  return array->numOfChar;
+}

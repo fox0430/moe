@@ -392,7 +392,6 @@ int insNewLine(gapBuffer *gb, editorStat *stat, int position){
   }
   charArrayInit(ca);
   gapBufferInsert(gb, ca, position);
-  stat->numOfLines++;
   return 0;
 }
 
@@ -481,47 +480,31 @@ int keyBackSpace(gapBuffer* gb, editorStat* stat){
 
 int insIndent(gapBuffer *gb, editorStat *stat){
   if(stat->setting.autoIndent != ON) return 0;
-  if(gapBufferAt(gb, stat->currentLine)->elements[0] == ' '){
-    int i = 0;
-    while(gapBufferAt(gb, stat->currentLine)->elements[i] == ' '){
-      charArrayPush(gapBufferAt(gb, stat->currentLine + 1), ' ');
-      i++;
-    }
-  }
+  
+  int countSpace = charArrayCountRepeat(gapBufferAt(gb, stat->currentLine), 0, ' ');
+  if(countSpace > stat->positionInCurrentLine) countSpace = stat->positionInCurrentLine;
+  
+  for(int i = 0; i < countSpace; ++i) charArrayPush(gapBufferAt(gb, stat->currentLine+1), ' ');
   return 0;
 }
 
 int keyEnter(gapBuffer* gb, editorStat* stat){
-  if(stat->x == stat->lineDigitSpace){    // beginning of line
-    if(stat->trueLine[stat->currentLine] == false){
-      insNewLine(gb, stat, stat->currentLine - 1);
-      stat->trueLine[stat->currentLine] = true;
-      stat->currentLine++;
-      stat->trueLine[stat->currentLine] = false;
-    }else{
-      insNewLine(gb, stat, stat->currentLine);
-      stat->currentLine++;
-    }
-    if(stat->y != LINES - 3) stat->y++;
-    stat->x = stat->lineDigitSpace;
-  }else{
-    insNewLine(gb, stat, stat->currentLine + 1);
+  insNewLine(gb, stat, stat->currentLine+1);
+  insIndent(gb, stat);
+  
+  charArray* leftPart = gapBufferAt(gb, stat->currentLine), *rightPart = gapBufferAt(gb, stat->currentLine + 1);
+  int startOfCopy = charArrayCountRepeat(leftPart, 0, ' ');
+  if(startOfCopy < stat->positionInCurrentLine) startOfCopy = stat->positionInCurrentLine;
+  while(startOfCopy < leftPart->numOfChar && leftPart->elements[startOfCopy] == ' ') ++startOfCopy;
+  for(int i = startOfCopy; i < leftPart->numOfChar; ++i) charArrayPush(rightPart, leftPart->elements[i]);
 
-    charArray* leftLine = gapBufferAt(gb, stat->currentLine), *rightLine = gapBufferAt(gb, stat->currentLine + 1);
-    const int leftLineLength = stat->x - stat->lineDigitSpace, rightLineLength = leftLine->numOfChar - leftLineLength;
-    insIndent(gb, stat);
+  const int popedNum = leftPart->numOfChar-stat->positionInCurrentLine;
+  for(int i = 0; i < popedNum; ++i) charArrayPop(leftPart); 
 
-    for(int i = 0; i < rightLineLength; ++i) charArrayPush(rightLine, leftLine->elements[leftLineLength + i]);
-    for(int i = 0; i < rightLineLength; ++i) charArrayPop(leftLine);
-
-    if(stat->trueLine[stat->currentLine] == false) stat->trueLine[stat->currentLine + 1] = false;
-    stat->currentLine++;
-    if(stat->y != LINES - 3) stat->y++;
-    stat->x = stat->lineDigitSpace;
-    int i=0;
-    while(gapBufferAt(gb, stat->currentLine)->elements[i++] == ' ') stat->x++;
-  }
-  stat->isViewUpdated = true;
+  stat->currentLine++;
+  stat->positionInCurrentLine = charArrayCountRepeat(rightPart, 0, ' '); 
+  reloadEditorView(&stat->view, gb, stat->view.originalLine[0]);
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
   stat->numOfChange++;
   return 0;
 }
