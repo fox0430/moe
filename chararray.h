@@ -1,11 +1,6 @@
 #ifndef MOE_VECTOR_INCLUDE_H
 #define MOE_VECTOR_INCLUDE_H
 
-#include<stdio.h>
-#include<string.h>
-#include<stdlib.h>
-#include<stdbool.h>
-
 typedef struct charArray{
   char* elements;
   int   capacity,

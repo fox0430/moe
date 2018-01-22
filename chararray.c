@@ -1,7 +1,10 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdbool.h>
 #include "chararray.h"
 
 int charArrayInit(charArray* array){
-
   const int size = 1;
 
   array->elements = (char*)malloc(sizeof(char)*(size +1));

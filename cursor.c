@@ -1,5 +1,5 @@
 #include "cursor.h"
-
+#include "view.h"
 
 // カーソルが表示位置を計算/更新する.この関数が呼ばれるとき現在のeditorView中にカーソルの正しい表示位置が含まれていることが期待される.
 void updateCursorPosition(cursorPosition* cursor, editorView* view, int currentLine, int positionInCurrentLine){

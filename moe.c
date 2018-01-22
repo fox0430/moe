@@ -107,19 +107,6 @@ void exitCurses(){
   exit(1);
 }
 
-// カーソルがeditorView中に含まれるようになるまでscrollUp,scrollDownを利用してeditorViewの表示を移動させる.
-void seekCursor(editorStat* stat, gapBuffer* buffer){
-  stat->view.isUpdated = stat->cursor.isUpdated = true;
-  editorView* view = &stat->view;
-  while(stat->currentLine < view->originalLine[0] || (stat->currentLine == view->originalLine[0] && view->length[0] > 0 && stat->positionInCurrentLine < view->start[0])){
-    scrollUp(view, buffer);
-  }
- 
-  while((view->originalLine[view->height-1] != -1 && stat->currentLine > view->originalLine[view->height-1]) || (stat->currentLine == view->originalLine[view->height-1] && stat->positionInCurrentLine >= view->start[view->height-1]+view->length[view->height-1])){
-    scrollDown(view, buffer);
-  }
-}
-
 int openFile(gapBuffer *gb, editorStat *stat){
   FILE *fp = fopen(stat->filename, "r");
   if(fp != NULL){
@@ -143,14 +130,14 @@ int openFile(gapBuffer *gb, editorStat *stat){
   stat->currentLine = stat->positionInCurrentLine = 0;
   stat->cursor.isUpdated = true;
   freeEditorView(&stat->view);
-  initEditorView(&stat->view, gb, LINES-2, COLS-(countDigit(gb->size+1)+1)-1);
+  initEditorView(&stat->view, gb, &stat->cursor, LINES-2, COLS-(countDigit(gb->size+1)+1)-1);
   return 0;
 }
 
 int newFile(gapBuffer *gb, editorStat *stat){
   stat->currentLine = stat->positionInCurrentLine = 0;
   stat->cursor.isUpdated = true;
-  initEditorView(&stat->view, gb, LINES-2, COLS-(countDigit(gb->size+1)+1)-1);
+  initEditorView(&stat->view, gb, &stat->cursor, LINES-2, COLS-(countDigit(gb->size+1)+1)-1);
   return 0;
 }
 
@@ -161,7 +148,7 @@ void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStat *stat){
   winResizeMove(win[STATE_WIN], 1, COLS, LINES-2, 0);
   winResizeMove(win[CMD_WIN], 1, COLS, LINES-1, 0);
   resizeEditorView(&stat->view, gb, LINES-2, COLS-stat->view.widthOfLineNum-1);
-  seekCursor(stat, gb);
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
   printStatBarInit(win, gb, stat);
 }
 
@@ -345,7 +332,7 @@ int jumpLine(editorStat* stat, gapBuffer* buffer, int destination){
     int startOfPrintedLines = destination-(currentLine - view->originalLine[0]) >= 0 ?  destination-(currentLine - view->originalLine[0]) : 0;
     reloadEditorView(view, buffer, startOfPrintedLines);
   }
-  seekCursor(stat, buffer);
+  seekCursor(&stat->view, buffer, stat->currentLine, stat->positionInCurrentLine);
   return 0;
 }
 
@@ -422,7 +409,7 @@ int keyUp(gapBuffer* gb, editorStat* stat){
   int maxPosition = gapBufferAt(gb, stat->currentLine)->numOfChar-1+(stat->mode == INSERT_MODE);
   stat->positionInCurrentLine = maxPosition >= stat->positionInCurrentLine ? stat->positionInCurrentLine : maxPosition;
   if(stat->positionInCurrentLine < 0) stat->positionInCurrentLine = 0;
-  seekCursor(stat, gb); 
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
   return 0;
 }
 
@@ -433,7 +420,7 @@ int keyDown(gapBuffer* gb, editorStat* stat){
    int maxPosition = gapBufferAt(gb, stat->currentLine)->numOfChar-1+(stat->mode == INSERT_MODE);
   stat->positionInCurrentLine = maxPosition >= stat->positionInCurrentLine ? stat->positionInCurrentLine : maxPosition;
   if(stat->positionInCurrentLine < 0) stat->positionInCurrentLine = 0;
-  seekCursor(stat, gb);
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
   return 0;
 }
 
@@ -441,7 +428,7 @@ int keyRight(gapBuffer* gb, editorStat* stat){
   if(stat->positionInCurrentLine+1 >= gapBufferAt(gb, stat->currentLine)->numOfChar+(stat->mode == INSERT_MODE)) return 0;
 
   ++stat->positionInCurrentLine;
-  seekCursor(stat, gb); 
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
   return 0;
 }
 
@@ -449,7 +436,7 @@ int keyLeft(gapBuffer* gb, editorStat* stat){
   if(stat->positionInCurrentLine == 0) return 0;
   
   --stat->positionInCurrentLine;
-  seekCursor(stat, gb); 
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
   return 0;
 }
 
@@ -598,7 +585,7 @@ int deleteLine(gapBuffer *gb, editorStat *stat, int line){
 
   stat->numOfChange++;
   reloadEditorView(&stat->view, gb, stat->view.originalLine[0] > gb->size-1 ? gb->size-1 : stat->view.originalLine[0]);
-  seekCursor(stat, gb);
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
   return 0;
 }
 
@@ -618,7 +605,7 @@ int moveFirstLine(gapBuffer *gb, editorStat *stat){
   int maxPosition = gapBufferAt(gb, stat->currentLine)->numOfChar-1+(stat->mode == INSERT_MODE);
   stat->positionInCurrentLine = maxPosition >= stat->positionInCurrentLine ? stat->positionInCurrentLine : maxPosition;
   if(stat->positionInCurrentLine < 0) stat->positionInCurrentLine = 0;
-  seekCursor(stat, gb); 
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
   return 0;
 }
 
@@ -628,7 +615,7 @@ int moveLastLine(gapBuffer *gb, editorStat *stat){
   int maxPosition = gapBufferAt(gb, stat->currentLine)->numOfChar-1+(stat->mode == INSERT_MODE);
   stat->positionInCurrentLine = maxPosition >= stat->positionInCurrentLine ? stat->positionInCurrentLine : maxPosition;
   if(stat->positionInCurrentLine < 0) stat->positionInCurrentLine = 0;
-  seekCursor(stat, gb); 
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
   return 0;
 }
 
@@ -657,7 +644,7 @@ int insertChar(gapBuffer *gb, editorStat *stat, int key){
   }
   
   reloadEditorView(&stat->view, gb, stat->view.originalLine[0]);
-  seekCursor(stat, gb);
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
   
   stat->numOfChange++;
   return 0;

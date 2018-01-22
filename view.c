@@ -1,8 +1,12 @@
+#include <stdlib.h>
 #include "view.h"
+#include "gapbuffer.h"
+#include "chararray.h"
+#include "cursor.h"
 #include "mathutility.h"
 
 // width/heightでeditorViewを初期化し,バッファの0行0文字目からロードする.widthは画面幅ではなくeditorViewの1ラインの文字数である(従って行番号分の長さは考慮しなくてよい).
-void initEditorView(editorView* view, gapBuffer* buffer, int height, int width){
+void initEditorView(editorView* view, gapBuffer* buffer, cursorPosition* cursor, int height, int width){
   view->height = height;
   view->width = width;
   view->lines = (charArray**)malloc(sizeof(charArray*)*height);
@@ -11,6 +15,7 @@ void initEditorView(editorView* view, gapBuffer* buffer, int height, int width){
   view->length = (int*)malloc(sizeof(int)*height);
   view->widthOfLineNum = countDigit(buffer->size+1)+1;
   view->isUpdated = true;
+  view->isCursorUpdated = &cursor->isUpdated;
   reloadEditorView(view, buffer, 0);
 }
 
@@ -161,3 +166,14 @@ void printAllLines(WINDOW *mainWindow, editorView* view, gapBuffer *gb, int curr
   wrefresh(mainWindow);
 }
 
+// カーソルがeditorView中に含まれるようになるまでscrollUp,scrollDownを利用してeditorViewの表示を移動させる.
+void seekCursor(editorView* view, gapBuffer* buffer, int currentLine, int positionInCurrentLine){
+  view->isUpdated = *view->isCursorUpdated = true;
+  while(currentLine < view->originalLine[0] || (currentLine == view->originalLine[0] && view->length[0] > 0 && positionInCurrentLine < view->start[0])){
+    scrollUp(view, buffer);
+  }
+ 
+  while((view->originalLine[view->height-1] != -1 && currentLine > view->originalLine[view->height-1]) || (currentLine == view->originalLine[view->height-1] && positionInCurrentLine >= view->start[view->height-1]+view->length[view->height-1])){
+    scrollDown(view, buffer);
+  }
+}

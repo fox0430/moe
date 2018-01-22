@@ -2,7 +2,8 @@
 #define MOE_CURSOR_H
 
 #include <stdbool.h>
-#include "view.h"
+
+typedef struct editorView editorView;
 
 typedef struct cursorPosition{
   int y,x;
