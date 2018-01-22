@@ -479,8 +479,6 @@ int keyBackSpace(gapBuffer* gb, editorStat* stat){
 }
 
 int insIndent(gapBuffer *gb, editorStat *stat){
-  if(stat->setting.autoIndent != ON) return 0;
-  
   int countSpace = charArrayCountRepeat(gapBufferAt(gb, stat->currentLine), 0, ' ');
   if(countSpace > stat->positionInCurrentLine) countSpace = stat->positionInCurrentLine;
   
@@ -490,10 +488,10 @@ int insIndent(gapBuffer *gb, editorStat *stat){
 
 int keyEnter(gapBuffer* gb, editorStat* stat){
   insNewLine(gb, stat, stat->currentLine+1);
-  insIndent(gb, stat);
-  
   charArray* leftPart = gapBufferAt(gb, stat->currentLine), *rightPart = gapBufferAt(gb, stat->currentLine + 1);
   if(stat->setting.autoIndent == ON){
+    insIndent(gb, stat);
+    
     int startOfCopy = charArrayCountRepeat(leftPart, 0, ' ');
     if(startOfCopy < stat->positionInCurrentLine) startOfCopy = stat->positionInCurrentLine;
     startOfCopy += charArrayCountRepeat(leftPart, startOfCopy, ' ');
