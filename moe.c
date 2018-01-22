@@ -493,16 +493,25 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
   insIndent(gb, stat);
   
   charArray* leftPart = gapBufferAt(gb, stat->currentLine), *rightPart = gapBufferAt(gb, stat->currentLine + 1);
-  int startOfCopy = charArrayCountRepeat(leftPart, 0, ' ');
-  if(startOfCopy < stat->positionInCurrentLine) startOfCopy = stat->positionInCurrentLine;
-  while(startOfCopy < leftPart->numOfChar && leftPart->elements[startOfCopy] == ' ') ++startOfCopy;
-  for(int i = startOfCopy; i < leftPart->numOfChar; ++i) charArrayPush(rightPart, leftPart->elements[i]);
+  if(stat->setting.autoIndent == ON){
+    int startOfCopy = charArrayCountRepeat(leftPart, 0, ' ');
+    if(startOfCopy < stat->positionInCurrentLine) startOfCopy = stat->positionInCurrentLine;
+    startOfCopy += charArrayCountRepeat(leftPart, startOfCopy, ' ');
+    for(int i = startOfCopy; i < leftPart->numOfChar; ++i) charArrayPush(rightPart, leftPart->elements[i]);
+  
+    const int popedNum = leftPart->numOfChar-stat->positionInCurrentLine;
+    for(int i = 0; i < popedNum; ++i) charArrayPop(leftPart); 
+  
+    stat->currentLine++;
+    stat->positionInCurrentLine = charArrayCountRepeat(rightPart, 0, ' '); 
+  }else{
+    for(int i = stat->positionInCurrentLine; i < leftPart->numOfChar; ++i) charArrayPush(rightPart, leftPart->elements[i]);
+    for(int i = stat->positionInCurrentLine; i < leftPart->numOfChar; ++i) charArrayPop(leftPart);
 
-  const int popedNum = leftPart->numOfChar-stat->positionInCurrentLine;
-  for(int i = 0; i < popedNum; ++i) charArrayPop(leftPart); 
-
-  stat->currentLine++;
-  stat->positionInCurrentLine = charArrayCountRepeat(rightPart, 0, ' '); 
+    stat->currentLine++;
+    stat->positionInCurrentLine = 0;
+  }
+  
   reloadEditorView(&stat->view, gb, stat->view.originalLine[0]);
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
   stat->numOfChange++;

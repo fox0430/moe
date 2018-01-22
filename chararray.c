@@ -130,6 +130,6 @@ charArray* charArrayCopy(charArray* array){
 
 int charArrayCountRepeat(charArray* array, int start, char ch){
   if(start >= array->numOfChar) return 0;
-  for(int i = start; i < array->numOfChar; ++i) if(array->elements[i] != ch) return i;
+  for(int i = start; i < array->numOfChar; ++i) if(array->elements[i] != ch) return i-start;
   return array->numOfChar;
 }
