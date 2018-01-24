@@ -439,42 +439,24 @@ int keyLeft(gapBuffer* gb, editorStat* stat){
   return 0;
 }
 
-int keyBackSpace(gapBuffer* gb, editorStat* stat){
-  if(stat->y == 0 && stat->x == stat->lineDigitSpace) return 0;
-  stat->x--;
-  if(stat->x < stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine)->numOfChar == 0){
-    gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
-    stat->numOfLines--;
-    stat->x = stat->lineDigitSpace + gapBufferAt(gb, --stat->currentLine)->numOfChar;
-    stat->y--;
+int keyBackspace(gapBuffer* gb, editorStat* stat){
+  if(stat->currentLine == 0 && stat->positionInCurrentLine == 0) return 0;
 
-    if(stat->trueLine[stat->currentLine + 1] == false && stat->trueLine[stat->currentLine + 2] == true)
-      stat->trueLine[stat->currentLine + 1] = true;
-  }else if(stat->x < stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine - 1)->numOfChar == 0){
-    gapBufferDel(gb, stat->currentLine - 1, stat->currentLine);
-    stat->numOfLines--;
-    stat->currentLine--;
+  if(stat->positionInCurrentLine == 0){ // 行の先頭の場合
+    stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine-1)->numOfChar;
 
-    if(stat->trueLine[stat->currentLine + 1] == false && stat->trueLine[stat->currentLine + 2] == true)
-      stat->trueLine[stat->currentLine + 1] = true;
-  }else if(stat->x < stat->lineDigitSpace && gapBufferAt(gb, stat->currentLine)->numOfChar > 0){
-    int tmpNumOfChar = gapBufferAt(gb, stat->currentLine - 1)->numOfChar;
-      for(int i=0; i<gapBufferAt(gb, stat->currentLine)->numOfChar; i++) {
-        charArrayPush(gapBufferAt(gb, stat->currentLine - 1), gapBufferAt(gb, stat->currentLine)->elements[i]);
-    }
-    gapBufferDel(gb, stat->currentLine, stat->currentLine + 1);
-    stat->numOfLines--;
-    stat->x = stat->lineDigitSpace + tmpNumOfChar;
-    stat->y--;
-    stat->currentLine--;
-
-    if(stat->trueLine[stat->currentLine + 1] == false && stat->trueLine[stat->currentLine + 2] == true)
-      stat->trueLine[stat->currentLine + 1] = true;
-  }else{
-   charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
+    charArray* line = gapBufferAt(gb, stat->currentLine);
+    for(int i = 0; i < line->numOfChar; ++i) charArrayPush(gapBufferAt(gb, stat->currentLine-1), line->elements[i]);
+    gapBufferDel(gb, stat->currentLine, stat->currentLine+1);
+    --stat->currentLine;
+  }else{ // 行の途中の文字を削除する場合
+    charArrayDel(gapBufferAt(gb, stat->currentLine), stat->positionInCurrentLine-1);
+    --stat->positionInCurrentLine;
   }
-  stat->isViewUpdated = true;
-  stat->numOfChange++;
+
+  reloadEditorView(&stat->view, gb, stat->view.originalLine[0]);
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
+
   return 0;
 }
 
@@ -839,9 +821,10 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
       case KEY_END:
         stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
         break;
-        
-      case 127:   // 127 is backspace key
-        keyBackSpace(gb, stat);
+      case KEY_BACKSPACE:
+      case 8:
+      case 127:
+        keyBackspace(gb, stat);
         break;
       case KEY_DC:
         delCurrentChar(gb, stat);
