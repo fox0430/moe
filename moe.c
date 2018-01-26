@@ -844,7 +844,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
         winResizeEvent(win, gb, stat);
         break;
       case KEY_ESC:
-        normalMode(win, gb, stat);
+        return;
         break;
       
       default:
