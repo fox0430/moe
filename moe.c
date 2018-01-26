@@ -513,8 +513,8 @@ int openBlankLineBelow(gapBuffer *gb, editorStat *stat){
 }
 
 int appendAfterTheCursor(gapBuffer *gb, editorStat *stat){
-  if(stat->x >= gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace) return 0;
-  stat->x++;
+  ++stat->positionInCurrentLine;
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
   return 0;
 }
 
