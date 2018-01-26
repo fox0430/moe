@@ -768,6 +768,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
       if(stat->cmdLoop > 0){
         stat->cmdLoop *= 10;
         stat->cmdLoop += key - 48;
+        if(stat->cmdLoop > 100000) stat->cmdLoop = 100000;
       }else{
         if(key == '0') cmdNormal(win, gb, stat, key);
         else stat->cmdLoop = key - 48;
@@ -844,6 +845,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
         winResizeEvent(win, gb, stat);
         break;
       case KEY_ESC:
+        stat->mode = NORMAL_MODE;
         return;
         break;
       
