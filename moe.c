@@ -519,7 +519,8 @@ int appendAfterTheCursor(gapBuffer *gb, editorStat *stat){
 }
 
 int appendEndOfLine(gapBuffer *gb, editorStat *stat){
-  stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace;
+  stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar;
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
   return 0;
 }
 
