@@ -454,7 +454,7 @@ int keyBackspace(gapBuffer* gb, editorStat* stat){
     --stat->positionInCurrentLine;
   }
 
-  reloadEditorView(&stat->view, gb, stat->view.originalLine[0]);
+  reloadEditorView(&stat->view, gb, stat->view.originalLine[0] <= gb->size-1 ? stat->view.originalLine[0] : gb->size-1);
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
 
   return 0;
