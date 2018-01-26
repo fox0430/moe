@@ -557,13 +557,11 @@ int deleteLine(gapBuffer *gb, editorStat *stat, int line){
   return 0;
 }
 
-int replaceChar(gapBuffer *gb, editorStat *stat, int key){
-  if((stat->x - stat->lineDigitSpace) + stat->cmdLoop > gapBufferAt(gb, stat->currentLine)->numOfChar) return 0;
-  for(int i=0; i<stat->cmdLoop; i++){
-    gapBufferAt(gb, stat->currentLine)->elements[(stat->x - stat->lineDigitSpace) + i] = key;
-  }
+int replaceChar(gapBuffer *gb, editorStat* stat, char ch){
+  gapBufferAt(gb, stat->currentLine)->elements[stat->positionInCurrentLine] = ch;
+  reloadEditorView(&stat->view, gb, stat->view.originalLine[0]);
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
   stat->numOfChange++;
-  stat->isViewUpdated = true;
   return 0;
 }
 
@@ -710,8 +708,16 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       break;
 
     case 'r':
+      if(stat->cmdLoop > gapBufferAt(gb, stat->currentLine)->numOfChar-stat->positionInCurrentLine) break;
       key = wgetch(win[MAIN_WIN]);
-      replaceChar(gb, stat, key);
+      for(int i = 0; i < stat->cmdLoop; ++i){
+        if(i > 0){
+          ++stat->positionInCurrentLine;
+          seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
+        }
+        replaceChar(gb, stat, key);
+        
+      }
       break;
     case 'a':
       appendAfterTheCursor(gb, stat);
