@@ -498,21 +498,16 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
   return 0;
 }
 
-int openBlankLine(gapBuffer *gb, editorStat *stat){
-  if(stat->trueLine[stat->currentLine + 1] == false){
-    insNewLine(gb, stat, stat->currentLine + 2);
-    stat->y += 2;
-    stat->currentLine += 2;
-  }else{
-    insNewLine(gb, stat, stat->currentLine + 1);
-    insIndent(gb, stat);
-    stat->y++;
-    stat->currentLine++;
-  }
-  stat->x = stat->lineDigitSpace;
-  int i=0;
-  while(gapBufferAt(gb, stat->currentLine)->elements[i++] == ' ') stat->x++;
-  stat->isViewUpdated = true;
+int openBlankLineBelow(gapBuffer *gb, editorStat *stat){
+  charArray* blankLine = (charArray*)malloc(sizeof(charArray));
+  charArrayInit(blankLine);
+  gapBufferInsert(gb, blankLine, stat->currentLine+1);
+  insIndent(gb, stat);
+  ++stat->currentLine;
+  stat->positionInCurrentLine = charArrayCountRepeat(blankLine, 0, ' '); 
+  
+  reloadEditorView(&stat->view, gb, stat->view.originalLine[0]);
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
   stat->numOfChange++;
   return 0;
 }
@@ -730,7 +725,7 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       insertMode(win, gb, stat);
       break;
     case 'o':
-      for(int i=0; i<stat->cmdLoop; i++) openBlankLine(gb, stat);
+      for(int i=0; i<stat->cmdLoop; i++) openBlankLineBelow(gb, stat);
       insertMode(win, gb, stat);
       break;
     case 'i':
