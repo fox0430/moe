@@ -42,6 +42,8 @@ int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   wprintw(win[CMD_WIN], "numOfChar: %d ", gapBufferAt(gb, stat->currentLine)->numOfChar);
   wprintw(win[CMD_WIN], "change: %d", stat->numOfChange);
   wprintw(win[CMD_WIN], "elements: %s", gapBufferAt(gb, stat->currentLine)->elements);
+//  wprintw(win[CMD_WIN], "numOfYankedLines: %d", stat->rgst.numOfYankedLines);
+//  wprintw(win[CMD_WIN], "yanked elements: %s", gapBufferAt(stat->rgst.yankedLine, 0)->elements);
   wrefresh(win[CMD_WIN]);
   wmove(win[MAIN_WIN], returnY, returnX+stat->view.widthOfLineNum);
   return 0;
@@ -563,7 +565,7 @@ int insertChar(gapBuffer *gb, editorStat *stat, int key){
 }
 
 int lineYank(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->rgst.numOfYankedLines = stat->cmdLoop > stat->numOfLines - stat->currentLine ? stat->numOfLines - stat->currentLine : stat->cmdLoop;
+  stat->rgst.numOfYankedLines = stat->cmdLoop > gb->size - stat->currentLine ? gb->size - stat->currentLine : stat->cmdLoop;
   
   for(int line = stat->currentLine; line < stat->currentLine + stat->rgst.numOfYankedLines; line++){
     gapBufferInsert(stat->rgst.yankedLine, charArrayCopy(gapBufferAt(gb, line)), line - stat->currentLine);
@@ -576,12 +578,12 @@ int lineYank(WINDOW **win, gapBuffer *gb, editorStat *stat){
 }
 
 int linePaste(gapBuffer *gb, editorStat *stat){
-  for(int i=0; i<stat->rgst.numOfYankedLines; i++){
+  for(int i=0; i<stat->rgst.numOfYankedLines; i++)
     gapBufferInsert(gb, charArrayCopy(gapBufferAt(stat->rgst.yankedLine, i)) , ++stat->currentLine);
-    stat->numOfLines++;
-  }
+
+  reloadEditorView(&stat->view, gb, stat->view.originalLine[0] > gb->size-1 ? gb->size-1 : stat->view.originalLine[0]);
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
   stat->numOfChange++;
-  stat->isViewUpdated = true;
   return 0;
 }
 
