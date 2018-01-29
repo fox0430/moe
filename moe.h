@@ -25,21 +25,12 @@ typedef struct editorStat{
   editorView view;
   cursorPosition cursor;
   char filename[256];
-  int   y, // obsolete
-        x, // obsolete
-        currentLine,
+  int   currentLine,
         positionInCurrentLine,
-        numOfLines, // obsolete
-        lineDigit, // obsolete
-        lineDigitSpace, // obsolete
         mode,
         cmdLoop,
         numOfChange,
-        isViewUpdated, // obsolete
         debugMode,
-        adjustLineNum, // obsolete
-        trueLineCapa, // obsolete
-        *trueLine; // obsolete
 } editorStat;
 
 #endif

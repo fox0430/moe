@@ -154,10 +154,7 @@ void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStat *stat){
 }
 
 void editorStatInit(editorStat* stat){
-  stat->y = 0;
-  stat->x = 0;
   stat->currentLine = 0;
-  stat->numOfLines = 0;
   stat->mode = NORMAL_MODE;
   stat->cmdLoop = 0;
   strcpy(stat->filename, "No name");
