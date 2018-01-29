@@ -305,7 +305,7 @@ void printStatBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
   wattron(win[STATE_WIN], COLOR_PAIR(1));
   wprintw(win[STATE_WIN], " %s ", stat->filename);
   if(strcmp(stat->filename, "No name") == 0) wprintw(win[STATE_WIN], " [+]");
-  mvwprintw(win[STATE_WIN], 0, COLS-13, "%d/%d ", stat->currentLine + 1, stat->numOfLines);
+  mvwprintw(win[STATE_WIN], 0, COLS-13, "%d/%d ", stat->currentLine + 1, gb->size);
   mvwprintw(win[STATE_WIN], 0, COLS-6, " %d/%d", stat->x - stat->view.widthOfLineNum, gapBufferAt(gb, stat->currentLine)->numOfChar);
   wrefresh(win[STATE_WIN]);
 }
