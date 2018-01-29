@@ -30,7 +30,7 @@ typedef struct editorStat{
         mode,
         cmdLoop,
         numOfChange,
-        debugMode,
+        debugMode;
 } editorStat;
 
 #endif
