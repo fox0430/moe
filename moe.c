@@ -674,7 +674,8 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       break;
     case '0':
     case KEY_HOME:
-      stat->x = stat->lineDigitSpace;
+      stat->positionInCurrentLine = 0;
+      stat->cursor.isUpdated = true;
       break;
     case '$':
     case KEY_END:
