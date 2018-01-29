@@ -679,7 +679,7 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       break;
     case '$':
     case KEY_END:
-      stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
+      stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar - 1;
       stat->cursor.isUpdated = true;
       break;
     case 'g':
@@ -827,8 +827,8 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
         stat->cursor.isUpdated = true;
         break;
       case KEY_END:
-        stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
-        stat->cursor.isUpdated = true;
+        stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar;
+        stat->isViewUpdated = true;
         break;
       case KEY_BACKSPACE:
       case 8:
