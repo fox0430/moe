@@ -478,8 +478,9 @@ int insBeginOfLine(gapBuffer *gb, editorStat *stat){
 }
 
 int delCurrentChar(gapBuffer *gb, editorStat *stat){
-  charArrayDel(gapBufferAt(gb, stat->currentLine), (stat->x - stat->lineDigitSpace));
-  stat->isViewUpdated = true;
+  charArrayDel(gapBufferAt(gb, stat->currentLine), stat->positionInCurrentLine);
+  reloadEditorView(&stat->view, gb, stat->view.originalLine[0]);
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
   stat->numOfChange++;
   return 0;
 }
@@ -638,9 +639,8 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
 
     case KEY_DC:
     case 'x':
-      if(stat->cmdLoop > gapBufferAt(gb,stat->currentLine)->numOfChar - (stat->x - stat->lineDigitSpace)){
-        stat->cmdLoop  = gapBufferAt(gb,stat->currentLine)->numOfChar - (stat->x - stat->lineDigitSpace);
-      }
+      if(stat->cmdLoop > gapBufferAt(gb,stat->currentLine)->numOfChar - stat->positionInCurrentLine)
+        stat->cmdLoop  = gapBufferAt(gb,stat->currentLine)->numOfChar - stat->positionInCurrentLine;
       for(int i=0; i<stat->cmdLoop; i++) delCurrentChar(gb, stat);
       break;
     case 'd':
