@@ -207,47 +207,6 @@ void editorSettingInit(editorStat *stat){
   stat->setting.tabStop = 2;
 }
 
-int returnLine(gapBuffer *gb, editorStat *stat){
-  if(stat->numOfLines > stat->trueLineCapa){
-    stat->trueLineCapa = stat->numOfLines * 2;
-    int *tmp = (int*)realloc(tmp, sizeof(stat->trueLineCapa));
-    if(tmp == NULL){
-      printf("main trueLine: cannot allocate memory...\n");
-      return -1;
-    }
-    stat->trueLine = tmp;
-  }
-
-  int i = stat->currentLine - stat->y;
-  int end = i + LINES - 2;
-  for(int i = stat->currentLine - stat->y; i<end; i++){
-    if(gapBufferAt(gb, i)->numOfChar > (COLS - stat->lineDigitSpace)){
-      if(i == stat->numOfLines - 1) insNewLine(gb, stat, i + 1);
-      else if(stat->trueLine[i + 1] == true) insNewLine(gb, stat, i + 1);
-      charArray* leftLine = gapBufferAt(gb, i), *rightLine = gapBufferAt(gb, i + 1);
-      int leftLineLength = COLS - stat->lineDigitSpace, rightLineLength = leftLine->numOfChar - leftLineLength;
-      for(int j=0; j < rightLineLength; j++) charArrayInsert(rightLine, leftLine->elements[leftLineLength + j], j);
-      for(int j = 0; j < rightLineLength; ++j) charArrayPop(leftLine);
-      stat->trueLine[i + 1] = false;
-    }else if(i != stat->numOfLines - 1 && gapBufferAt(gb, i)->numOfChar < (COLS - stat->lineDigitSpace)){
-      if(stat->trueLine[i + 1] == false){
-        charArray *leftLine = gapBufferAt(gb, i), *rightLine = gapBufferAt(gb, i + 1);
-        int moveLength;
-        if((COLS - stat->lineDigitSpace) - leftLine->numOfChar > rightLine->numOfChar) moveLength = rightLine->numOfChar;
-        else moveLength = (COLS - stat->lineDigitSpace) - leftLine->numOfChar;
-        for(int j = 0; j < moveLength; ++j) charArrayPush(leftLine, rightLine->elements[j]);
-        for(int j = 0; j < moveLength; ++j) charArrayDel(rightLine, 0);
-        if(rightLine->numOfChar == 0){
-          gapBufferDel(gb, i + 1, i + 2);
-          stat->numOfLines--;
-          for(int k = i + 1; k < stat->numOfLines - 1; k++) stat->trueLine[k] = stat->trueLine[k + 1];
-        }
-      }
-    }
-  }
-  return 0;
-}
-
 int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
 
   if(strcmp(stat->filename, "No name") == 0){
@@ -828,7 +787,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
         break;
       case KEY_END:
         stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar;
-        stat->isViewUpdated = true;
+        stat->cursor.isUpdated = true;
         break;
       case KEY_BACKSPACE:
       case 8:
