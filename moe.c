@@ -525,7 +525,9 @@ int appendEndOfLine(gapBuffer *gb, editorStat *stat){
 }
 
 int insBeginOfLine(gapBuffer *gb, editorStat *stat){
-  stat->x = stat->lineDigitSpace;
+  stat->positionInCurrentLine = 0;
+  stat->cursor.isUpdated = true;
+  stat->numOfChange++;
   return 0;
 }
 
