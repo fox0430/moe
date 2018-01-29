@@ -679,7 +679,8 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       break;
     case '$':
     case KEY_END:
-      stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
+      stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
+      stat->cursor.isUpdated = true;
       break;
     case 'g':
       if(wgetch(win[MAIN_WIN]) == 'g') moveFirstLine(gb, stat);
@@ -822,10 +823,12 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
         keyLeft(gb, stat);
         break;
       case KEY_HOME:
-        stat->x = stat->lineDigitSpace;
+        stat->positionInCurrentLine = 0;
+        stat->cursor.isUpdated = true;
         break;
       case KEY_END:
-        stat->x = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
+        stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar + stat->lineDigitSpace - 1;
+        stat->cursor.isUpdated = true;
         break;
       case KEY_BACKSPACE:
       case 8:
