@@ -24,7 +24,6 @@
 
 void printStatBarInit(WINDOW **win, gapBuffer *gb, editorStat *stat);
 void printStatBar(WINDOW **win, gapBuffer *gb, editorStat *stat);
-int trueLineInit(editorStat *stat);
 int registersInit(editorStat *stat);
 void editorSettingInit(editorStat *stat);
 int insNewLine(gapBuffer *gb, editorStat *stat, int position);
@@ -163,22 +162,8 @@ void editorStatInit(editorStat* stat){
   stat->numOfChange = 0;
   stat->currentLine = false;
   stat->debugMode = OFF;
-  trueLineInit(stat);
   registersInit(stat);
   editorSettingInit(stat);
-}
-
-int trueLineInit(editorStat *stat){
-  stat->adjustLineNum = 0;
-  stat->trueLineCapa = 1000;
-  stat->trueLine = (int*)malloc(sizeof(int)*stat->trueLineCapa);
-  if(stat->trueLine == NULL){
-      printf("main trueLine: cannot allocate memory...\n");
-      return -1;
-  }
-  for(int i=0; i<stat->trueLineCapa; i++)
-    stat->trueLine[i] = true;
-  return 0;
 }
 
 int registersInit(editorStat *stat){
