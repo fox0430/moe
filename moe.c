@@ -531,29 +531,25 @@ int moveLastLine(gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
+int insertBracket(gapBuffer *gb, editorStat *stat, int ch){
+  if(ch == '('){
+    charArrayInsert(gapBufferAt(gb, stat->currentLine), ')', stat->positionInCurrentLine);
+  }else if(ch == '{'){
+    charArrayInsert(gapBufferAt(gb, stat->currentLine), '}', stat->positionInCurrentLine);
+  }else if(ch == '"'){
+    charArrayInsert(gapBufferAt(gb, stat->currentLine), '"', stat->positionInCurrentLine);
+  }else if(ch == '\''){
+    charArrayInsert(gapBufferAt(gb, stat->currentLine), '\'', stat->positionInCurrentLine);
+  }
+  return 0;
+}
+
 int insertChar(gapBuffer *gb, editorStat *stat, int key){
   assert(stat->currentLine < gb->size);
   charArrayInsert(gapBufferAt(gb, stat->currentLine), key, stat->positionInCurrentLine);
   ++stat->positionInCurrentLine;
 
-  if(stat->setting.autoCloseParen == ON){
-    if(key == '('){
-      charArrayInsert(gapBufferAt(gb, stat->currentLine), ')', stat->positionInCurrentLine);
-      ++stat->positionInCurrentLine;
-    }
-    if(key == '{'){
-      charArrayInsert(gapBufferAt(gb, stat->currentLine), '}', stat->positionInCurrentLine);
-      ++stat->positionInCurrentLine;
-    }
-    if(key == '"'){
-      charArrayInsert(gapBufferAt(gb, stat->currentLine), '"', stat->positionInCurrentLine);
-      ++stat->positionInCurrentLine;
-    }
-    if(key == '\''){
-      charArrayInsert(gapBufferAt(gb, stat->currentLine), '\'', stat->positionInCurrentLine);
-      ++stat->positionInCurrentLine;
-    }
-  }
+  if(stat->setting.autoCloseParen == ON) insertBracket(gb, stat, key);
   
   reloadEditorView(&stat->view, gb, stat->view.originalLine[0]);
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
