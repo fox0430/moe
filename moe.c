@@ -40,7 +40,7 @@ int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   wprintw(win[CMD_WIN], "currentLine: %d ", stat->currentLine);
   wprintw(win[CMD_WIN], "numOfLines: %d ", gb->size);
   wprintw(win[CMD_WIN], "numOfChar: %d ", gapBufferAt(gb, stat->currentLine)->numOfChar);
-  wprintw(win[CMD_WIN], "change: %d", stat->numOfChange);
+  wprintw(win[CMD_WIN], "change: %d ", stat->numOfChange);
   wprintw(win[CMD_WIN], "elements: %s", gapBufferAt(gb, stat->currentLine)->elements);
 //  wprintw(win[CMD_WIN], "numOfYankedLines: %d", stat->rgst.numOfYankedLines);
 //  wprintw(win[CMD_WIN], "yanked elements: %s", gapBufferAt(stat->rgst.yankedLine, 0)->elements);
@@ -648,12 +648,16 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       if(stat->cmdLoop > gapBufferAt(gb,stat->currentLine)->numOfChar - stat->positionInCurrentLine)
         stat->cmdLoop  = gapBufferAt(gb,stat->currentLine)->numOfChar - stat->positionInCurrentLine;
       for(int i=0; i<stat->cmdLoop; i++) delCurrentChar(gb, stat);
+      if(stat->positionInCurrentLine > gapBufferAt(gb, stat->currentLine)->numOfChar - 1)
+        stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar - 1;
       break;
     case 'd':
       if(wgetch(win[MAIN_WIN]) == 'd'){
         if(stat->cmdLoop > gb->size - stat->currentLine)
           stat->cmdLoop = gb->size - stat->currentLine;
         for(int i=0; i<stat->cmdLoop; i++) deleteLine(gb, stat, stat->currentLine);
+        if(stat->positionInCurrentLine > gapBufferAt(gb, stat->currentLine)->numOfChar - 1)
+          stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar - 1;
       }
       break;
     case 'y':
