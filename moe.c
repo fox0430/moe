@@ -279,6 +279,20 @@ int jumpLine(editorStat* stat, gapBuffer* buffer, int destination){
   return 0;
 }
 
+int pageUp(gapBuffer *buffer, editorStat *stat){
+  int destination = stat->currentLine - stat->view.height;
+  if(destination < 0) destination = 0;
+  jumpLine(stat, buffer, destination);
+  return 0;
+}
+
+int pageDown(gapBuffer *buffer, editorStat *stat){
+  int destination = stat->currentLine + stat->view.height;
+  if(destination > buffer->size - 1) destination = buffer->size - 1;
+  jumpLine(stat, buffer, destination);
+  return 0;
+}
+
 int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
   werase(win[CMD_WIN]);
   wprintw(win[CMD_WIN], "%s", ":");
@@ -624,6 +638,12 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
     case KEY_RIGHT:
     case 'l':
       for(int i=0; i<stat->cmdLoop; i++) keyRight(gb, stat);
+      break;
+    case KEY_PPAGE:   // Page Up key
+      pageUp(gb, stat);
+      break;
+    case  KEY_NPAGE:    // Page Down key
+      pageDown(gb, stat);
       break;
     case '0':
     case KEY_HOME:
