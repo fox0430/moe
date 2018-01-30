@@ -455,6 +455,19 @@ int openBlankLineBelow(gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
+int openBlankLineAbove(gapBuffer *gb, editorStat *stat){
+  charArray *blankLine = (charArray*)malloc(sizeof(charArray));
+  charArrayInit(blankLine);
+  gapBufferInsert(gb, blankLine, stat->currentLine);
+  insIndent(gb, stat);
+  stat->positionInCurrentLine = charArrayCountRepeat(blankLine, 0, ' '); 
+
+  reloadEditorView(&stat->view, gb, stat->view.originalLine[0]);
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
+  stat->numOfChange++;
+  return 0;
+}
+
 int appendAfterTheCursor(gapBuffer *gb, editorStat *stat){
   ++stat->positionInCurrentLine;
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
@@ -677,6 +690,10 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
     case 'o':
       for(int i=0; i<stat->cmdLoop; i++) openBlankLineBelow(gb, stat);
       insertMode(win, gb, stat);
+      break;
+    case 'O':
+      for(int i=0; i<stat->cmdLoop; i++) openBlankLineAbove(gb, stat);
+      insertMode(win,gb, stat);
       break;
     case 'i':
       insertMode(win, gb, stat);
