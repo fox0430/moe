@@ -1,15 +1,15 @@
 moe
 ===
 
-moe is Command line base editor.
+moe is a Command line based editor.
 
-This project goal is funny animation editor and study C.
+This project's goal is a funny animation editor and learning C.
 
 ## Aiming features ##
 
    ✔Vector and GapBuffer
 
-   △Vim like key binds (not completely)
+   △Vim like keybinds (not completely)
   
   ・porting to nim (https://github.com/fox0430/moe-for-nim)
 
