@@ -1,7 +1,7 @@
 moe
 ===
 
-moe is a Command line based editor.
+moe is a command line based editor.
 
 This project's goal is a funny animation editor and learning C.
 
