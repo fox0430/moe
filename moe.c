@@ -640,9 +640,11 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       for(int i=0; i<stat->cmdLoop; i++) keyRight(gb, stat);
       break;
     case KEY_PPAGE:   // Page Up key
+    case 2:   // <C-B>
       pageUp(gb, stat);
       break;
     case  KEY_NPAGE:    // Page Down key
+    case 6:   // <C-F>
       pageDown(gb, stat);
       break;
     case '0':
@@ -801,6 +803,14 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
         break;
       case KEY_LEFT:
         keyLeft(gb, stat);
+        break;
+      case KEY_PPAGE:   // Page Up key
+      case 2:   // <C-B>
+        pageUp(gb, stat);
+        break;
+      case  KEY_NPAGE:    // Page Down key
+      case 6:   // <C-F>
+        pageDown(gb, stat);
         break;
       case KEY_HOME:
         stat->positionInCurrentLine = 0;
