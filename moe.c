@@ -544,7 +544,7 @@ int moveLastLine(gapBuffer *gb, editorStat *stat){
   return 0;
 }
 
-int insertBracket(gapBuffer *gb, editorStat *stat, int ch){
+int insertParen(gapBuffer *gb, editorStat *stat, int ch){
   if(ch == '('){
     charArrayInsert(gapBufferAt(gb, stat->currentLine), ')', stat->positionInCurrentLine);
   }else if(ch == '{'){
@@ -562,7 +562,7 @@ int insertChar(gapBuffer *gb, editorStat *stat, int key){
   charArrayInsert(gapBufferAt(gb, stat->currentLine), key, stat->positionInCurrentLine);
   ++stat->positionInCurrentLine;
 
-  if(stat->setting.autoCloseParen == ON) insertBracket(gb, stat, key);
+  if(stat->setting.autoCloseParen == ON) insertParen(gb, stat, key);
   
   reloadEditorView(&stat->view, gb, stat->view.originalLine[0]);
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
