@@ -16,6 +16,8 @@ This project's goal is a funny animation editor and learning C.
   ・UTF-8
 
   ・Simple syntax highlight
+
+  ・Tterminal Multiplexer
   
   ・Auto-complete
 
