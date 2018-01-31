@@ -148,7 +148,7 @@ void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStat *stat){
   winResizeMove(win[MAIN_WIN], LINES-2, COLS, 0, 0);
   winResizeMove(win[STATE_WIN], 1, COLS, LINES-2, 0);
   winResizeMove(win[CMD_WIN], 1, COLS, LINES-1, 0);
-  resizeEditorView(&stat->view, gb, LINES-2, COLS-stat->view.widthOfLineNum-1);
+  resizeEditorView(&stat->view, gb, LINES-2, COLS-stat->view.widthOfLineNum-1, stat->view.widthOfLineNum);
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
   printStatBarInit(win, gb, stat);
 }
@@ -772,6 +772,8 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   while(1){
     printStatBar(win, gb, stat); 
     if(stat->view.isUpdated){
+      int widthOfLineNum = countDigit(gb->size+1)+1;
+      if(widthOfLineNum != stat->view.widthOfLineNum) resizeEditorView(&stat->view, gb, stat->view.height, stat->view.width+stat->view.widthOfLineNum-widthOfLineNum, widthOfLineNum);
       printAllLines(win[MAIN_WIN], &stat->view, gb, stat->currentLine);
       wmove(win[MAIN_WIN], stat->cursor.y, stat->view.widthOfLineNum+stat->cursor.x);
       stat->view.isUpdated = false;
@@ -814,6 +816,8 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
   while(1){
     printStatBar(win, gb, stat);
     if(stat->view.isUpdated){
+      int widthOfLineNum = countDigit(gb->size+1)+1;
+      if(widthOfLineNum != stat->view.widthOfLineNum) resizeEditorView(&stat->view, gb, stat->view.height, stat->view.width+stat->view.widthOfLineNum-widthOfLineNum, widthOfLineNum);
       printAllLines(win[MAIN_WIN], &stat->view, gb, stat->currentLine);
       wmove(win[MAIN_WIN], stat->cursor.y, stat->view.widthOfLineNum+stat->cursor.x);
       stat->view.isUpdated = false;

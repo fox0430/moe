@@ -52,12 +52,13 @@ void reloadEditorView(editorView *view, gapBuffer* buffer, int topLine){
 }
 
 // 指定されたwidth/heightでeditorViewを更新する.表示される部分はなるべくリサイズ前と同じになるようになっている.
-void resizeEditorView(editorView* view, gapBuffer* buffer, int height, int width){
+void resizeEditorView(editorView* view, gapBuffer* buffer, int height, int width, int widthOfLineNum){
   int topLine = view->originalLine[0];
   for(int y = 0; y < view->height; ++y) charArrayFree(view->lines[y]);
   view->lines = (charArray**)realloc(view->lines, sizeof(charArray*)*height);
   view->height = height;
   view->width = width;
+  view->widthOfLineNum = widthOfLineNum;
   view->originalLine = (int*)realloc(view->originalLine, sizeof(int)*height);
   view->start = (int*)realloc(view->start, sizeof(int)*height);
   view->length = (int*)realloc(view->length, sizeof(int)*height);
@@ -145,11 +146,9 @@ int printLineNum(WINDOW *mainWindow, editorView* view, int line, int color,  int
   return 0;
 }
 
-// print single line
 void printLine(WINDOW *mainWindow, editorView* view, charArray* line, int y){
   wattron(mainWindow, COLOR_PAIR(6));
   mvwprintw(mainWindow, y, view->widthOfLineNum, "%s", line->elements);
-
 }
 
 void printAllLines(WINDOW *mainWindow, editorView* view, gapBuffer *gb, int currentLine){

@@ -20,7 +20,7 @@ void initEditorView(editorView* view, gapBuffer* buffer, cursorPosition* cursor,
 // topLineがeditorViewの一番上のラインとして表示されるようにバッファからeditorViewに対してリロード処理を行う.editorView全体を更新するため計算コストはやや高め.バッファの内容とeditorViewの内容を同期させる時やeditorView全体が全く異なるような内容になるような処理をした後等に使用することが想定されている.
 void reloadEditorView(editorView *view, gapBuffer* buffer, int topLine);
 // 指定されたwidth/heightでeditorViewを更新する.表示される部分はなるべくリサイズ前と同じになるようになっている.
-void resizeEditorView(editorView* view, gapBuffer* buffer, int height, int width);
+void resizeEditorView(editorView* view, gapBuffer* buffer, int height, int width, int widthOfLineNum);
 void freeEditorView(editorView* view);
 // メインウィンドウの表示を1ライン上にずらす
 void scrollUp(editorView* view, gapBuffer* buffer);
