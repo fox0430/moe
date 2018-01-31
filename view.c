@@ -153,7 +153,7 @@ void printLine(WINDOW *mainWindow, editorView* view, charArray* line, int y){
 }
 
 void printAllLines(WINDOW *mainWindow, editorView* view, gapBuffer *gb, int currentLine){
-  wclear(mainWindow);
+  werase(mainWindow);
   view->widthOfLineNum = countDigit(gb->size+1)+1;
   for(int y = 0; y < view->height; ++y){
     if(view->originalLine[y] == -1){
