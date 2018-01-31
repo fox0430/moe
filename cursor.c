@@ -21,3 +21,8 @@ void updateCursorPosition(cursorPosition* cursor, editorView* view, int currentL
     }
   }
 }
+
+void updateCursor(cursorPosition* cursor, editorView* view, int currentLine, int positionInCurrentLine){
+  updateCursorPosition(cursor, view, currentLine, positionInCurrentLine);
+  cursor->isUpdated = false;
+}

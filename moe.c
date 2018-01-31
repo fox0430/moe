@@ -772,11 +772,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   while(1){
     printStatBar(win, gb, stat); 
     if(stat->view.isUpdated) updateView(&stat->view, win[MAIN_WIN], gb, stat->currentLine);
-    if(stat->cursor.isUpdated){
-      updateCursorPosition(&stat->cursor, &stat->view, stat->currentLine, stat->positionInCurrentLine);
-      wmove(win[MAIN_WIN], stat->cursor.y, stat->view.widthOfLineNum+stat->cursor.x);
-      stat->cursor.isUpdated = false;
-    }
+    if(stat->cursor.isUpdated) updateCursor(&stat->cursor, &stat->view, stat->currentLine, stat->positionInCurrentLine);
     
     wmove(win[MAIN_WIN], stat->cursor.y, stat->view.widthOfLineNum+stat->cursor.x);
     debugMode(win, gb, stat);
@@ -809,19 +805,10 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
 
   while(1){
     printStatBar(win, gb, stat);
-    if(stat->view.isUpdated){
-      int widthOfLineNum = countDigit(gb->size+1)+1;
-      if(widthOfLineNum != stat->view.widthOfLineNum) resizeEditorView(&stat->view, gb, stat->view.height, stat->view.width+stat->view.widthOfLineNum-widthOfLineNum, widthOfLineNum);
-      printAllLines(win[MAIN_WIN], &stat->view, gb, stat->currentLine);
-      wmove(win[MAIN_WIN], stat->cursor.y, stat->view.widthOfLineNum+stat->cursor.x);
-      stat->view.isUpdated = false;
-      stat->cmdLoop = 0;
-    }
-    if(stat->cursor.isUpdated){
-      updateCursorPosition(&stat->cursor, &stat->view, stat->currentLine, stat->positionInCurrentLine);
-      wmove(win[MAIN_WIN], stat->cursor.y, stat->view.widthOfLineNum+stat->cursor.x);
-      stat->cursor.isUpdated = false;
-    }
+    if(stat->view.isUpdated) updateView(&stat->view, win[MAIN_WIN], gb, stat->currentLine);
+    if(stat->cursor.isUpdated) updateCursor(&stat->cursor, &stat->view, stat->currentLine, stat->positionInCurrentLine);
+    
+    wmove(win[MAIN_WIN], stat->cursor.y, stat->view.widthOfLineNum+stat->cursor.x);
     debugMode(win, gb, stat);
     key = wgetch(win[MAIN_WIN]);
 
