@@ -165,6 +165,13 @@ void printAllLines(WINDOW *mainWindow, editorView* view, gapBuffer *gb, int curr
   wrefresh(mainWindow);
 }
 
+void updateView(editorView* view, WINDOW* mainWindow, gapBuffer* gb, int currentLine){
+  int widthOfLineNum = countDigit(gb->size+1)+1;
+  if(widthOfLineNum != view->widthOfLineNum) resizeEditorView(view, gb, view->height, view->width+view->widthOfLineNum-widthOfLineNum, widthOfLineNum);
+  printAllLines(mainWindow, view, gb, currentLine);
+  view->isUpdated = false;
+}
+
 // カーソルがeditorView中に含まれるようになるまでscrollUp,scrollDownを利用してeditorViewの表示を移動させる.
 void seekCursor(editorView* view, gapBuffer* buffer, int currentLine, int positionInCurrentLine){
   view->isUpdated = *view->isCursorUpdated = true;

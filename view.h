@@ -29,6 +29,7 @@ void scrollDown(editorView* view, gapBuffer* buffer);
 int printLineNum(WINDOW *mainWindow, editorView* view, int line, int color,  int y);
 void printLine(WINDOW *mainWindow, editorView* view, charArray* line, int y);
 void printAllLines(WINDOW *mainWindow, editorView* view, gapBuffer *gb, int currentLine);
+void updateView(editorView* view, WINDOW* mainWindow, gapBuffer* gb, int currentLine);
 void seekCursor(editorView* view, gapBuffer* buffer, int currentLine, int positionInCurrentLine);
 
 #endif
