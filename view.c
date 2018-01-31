@@ -141,7 +141,7 @@ int printLineNum(WINDOW *mainWindow, editorView* view, int line, int color,  int
   int width = view->widthOfLineNum;
   for(int j=0; j<width; j++) mvwprintw(mainWindow, y, j, " ");
   wattron(mainWindow, COLOR_PAIR(color));
-  mvwprintw(mainWindow, y, 0, "%d", line + 1);
+  mvwprintw(mainWindow, y, width-countDigit(line+1)-1, "%d", line + 1);
   return 0;
 }
 
