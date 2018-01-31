@@ -553,10 +553,13 @@ int deleteLine(gapBuffer *gb, editorStat *stat, int line){
   }
   if(line < stat->currentLine) --stat->currentLine;
   if(stat->currentLine >= gb->size) stat->currentLine = gb->size-1;
+  if(gapBufferAt(gb, stat->currentLine)->numOfChar == 0) stat->positionInCurrentLine = 0;
+  else if(stat->positionInCurrentLine > gapBufferAt(gb, stat->currentLine)->numOfChar - 1)  stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar - 1;
 
-  stat->numOfChange++;
   reloadEditorView(&stat->view, gb, stat->view.originalLine[0] > gb->size-1 ? gb->size-1 : stat->view.originalLine[0]);
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
+  
+  stat->numOfChange++;
   return 0;
 }
 
@@ -714,8 +717,6 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
         if(stat->cmdLoop > gb->size - stat->currentLine)
           stat->cmdLoop = gb->size - stat->currentLine;
         for(int i=0; i<stat->cmdLoop; i++) deleteLine(gb, stat, stat->currentLine);
-        if(stat->positionInCurrentLine > gapBufferAt(gb, stat->currentLine)->numOfChar - 1)
-          stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar - 1;
       }
       break;
     case 'y':
