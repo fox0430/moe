@@ -388,10 +388,40 @@ int keyRight(gapBuffer* gb, editorStat* stat){
   return 0;
 }
 
+int wordsForward(gapBuffer *gb, editorStat *stat){
+  charArray *currentLine = gapBufferAt(gb, stat->currentLine);
+
+  while(stat->positionInCurrentLine < currentLine->numOfChar - 1){
+    if((currentLine->elements[stat->positionInCurrentLine] >= 'a' && currentLine->elements[stat->positionInCurrentLine] <= 'z')
+        || (currentLine->elements[stat->positionInCurrentLine] >= 'A' && currentLine->elements[stat->positionInCurrentLine] <= 'Z'))
+          stat->positionInCurrentLine++;
+    else{
+      stat->positionInCurrentLine++;
+      break;
+    }
+  }
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
+  return 0;
+}
+
 int keyLeft(gapBuffer* gb, editorStat* stat){
   if(stat->positionInCurrentLine == 0) return 0;
   
   --stat->positionInCurrentLine;
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
+  return 0;
+}
+
+int wordsBackward(gapBuffer *gb, editorStat *stat){
+  charArray *currentLine = gapBufferAt(gb, stat->currentLine);
+
+  stat->positionInCurrentLine--;
+  while(stat->positionInCurrentLine > 0){
+    if((currentLine->elements[stat->positionInCurrentLine - 1] >= 'a' && currentLine->elements[stat->positionInCurrentLine - 1] <= 'z')
+      || (currentLine->elements[stat->positionInCurrentLine - 1] >= 'A' && currentLine->elements[stat->positionInCurrentLine - 1] <= 'Z'))
+        stat->positionInCurrentLine--;
+    else break;
+  }
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
   return 0;
 }
@@ -626,6 +656,9 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
     case 'h':
       for(int i=0; i<stat->cmdLoop; i++) keyLeft(gb, stat);
       break;
+    case 'b':
+      for(int i=0; i<stat->cmdLoop; i++) wordsBackward(gb, stat);
+      break;
     case KEY_DOWN:
     case 10:    // 10 is Enter key
     case 'j':
@@ -638,6 +671,9 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
     case KEY_RIGHT:
     case 'l':
       for(int i=0; i<stat->cmdLoop; i++) keyRight(gb, stat);
+      break;
+    case 'w':
+      for( int i=0; i<stat->cmdLoop; i++) wordsForward(gb, stat);
       break;
     case KEY_PPAGE:   // Page Up key
     case 2:   // <C-B>
