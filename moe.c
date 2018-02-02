@@ -391,14 +391,15 @@ int keyRight(gapBuffer* gb, editorStat* stat){
 int wordsForward(gapBuffer *gb, editorStat *stat){
   charArray *currentLine = gapBufferAt(gb, stat->currentLine);
 
+  if(stat->positionInCurrentLine < currentLine->numOfChar - 1) stat->positionInCurrentLine++;
   while(stat->positionInCurrentLine < currentLine->numOfChar - 1){
-    if((currentLine->elements[stat->positionInCurrentLine] >= 'a' && currentLine->elements[stat->positionInCurrentLine] <= 'z')
+    if(!(currentLine->elements[stat->positionInCurrentLine - 1] >= 'a' && currentLine->elements[stat->positionInCurrentLine - 1] <= 'z')
+        && !(currentLine->elements[stat->positionInCurrentLine - 1] >= 'A' && currentLine->elements[stat->positionInCurrentLine - 1] <= 'Z'))
+        break;
+    else if((currentLine->elements[stat->positionInCurrentLine] >= 'a' && currentLine->elements[stat->positionInCurrentLine] <= 'z')
         || (currentLine->elements[stat->positionInCurrentLine] >= 'A' && currentLine->elements[stat->positionInCurrentLine] <= 'Z'))
-          stat->positionInCurrentLine++;
-    else{
-      stat->positionInCurrentLine++;
-      break;
-    }
+        stat->positionInCurrentLine++;
+    else break;
   }
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
   return 0;
@@ -415,10 +416,13 @@ int keyLeft(gapBuffer* gb, editorStat* stat){
 int wordsBackward(gapBuffer *gb, editorStat *stat){
   charArray *currentLine = gapBufferAt(gb, stat->currentLine);
 
-  stat->positionInCurrentLine--;
+  if(stat->positionInCurrentLine > 0) stat->positionInCurrentLine--;
   while(stat->positionInCurrentLine > 0){
-    if((currentLine->elements[stat->positionInCurrentLine - 1] >= 'a' && currentLine->elements[stat->positionInCurrentLine - 1] <= 'z')
-      || (currentLine->elements[stat->positionInCurrentLine - 1] >= 'A' && currentLine->elements[stat->positionInCurrentLine - 1] <= 'Z'))
+    if(!(currentLine->elements[stat->positionInCurrentLine - 1] >= 'a' && currentLine->elements[stat->positionInCurrentLine - 1] <= 'z')
+        && !(currentLine->elements[stat->positionInCurrentLine - 1] >= 'A' && currentLine->elements[stat->positionInCurrentLine - 1] <= 'Z'))
+        break;
+    else if((currentLine->elements[stat->positionInCurrentLine] >= 'a' && currentLine->elements[stat->positionInCurrentLine] <= 'z')
+      || (currentLine->elements[stat->positionInCurrentLine] >= 'A' && currentLine->elements[stat->positionInCurrentLine] <= 'Z'))
         stat->positionInCurrentLine--;
     else break;
   }
