@@ -179,7 +179,7 @@ void seekCursor(editorView* view, gapBuffer* buffer, int currentLine, int positi
     scrollUp(view, buffer);
   }
  
-  while((view->originalLine[view->height-1] != -1 && currentLine > view->originalLine[view->height-1]) || (currentLine == view->originalLine[view->height-1] && positionInCurrentLine >= view->start[view->height-1]+view->length[view->height-1])){
+  while((view->originalLine[view->height-1] != -1 && currentLine > view->originalLine[view->height-1]) || (currentLine == view->originalLine[view->height-1] && view->length[view->height-1] > 0 && positionInCurrentLine >= view->start[view->height-1]+view->length[view->height-1])){
     scrollDown(view, buffer);
   }
 }
