@@ -873,8 +873,8 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
         winResizeEvent(win, gb, stat);
         break;
       case KEY_ESC:
-        if(gapBufferAt(gb, stat->currentLine)->numOfChar > 0 && stat->positionInCurrentLine >= gapBufferAt(gb, stat->currentLine)->numOfChar){
-          stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar-1;
+        if(stat->positionInCurrentLine > 0){
+          --stat->positionInCurrentLine;
           stat->cursor.isUpdated = true;
         }
         stat->expandedPosition = stat->positionInCurrentLine;
