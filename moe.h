@@ -27,6 +27,7 @@ typedef struct editorStat{
   char filename[256];
   int   currentLine,
         positionInCurrentLine,
+        expandedPosition,
         mode,
         cmdLoop,
         numOfChange,
