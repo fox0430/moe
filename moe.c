@@ -875,7 +875,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
       case KEY_ESC:
         if(stat->positionInCurrentLine > 0){
           --stat->positionInCurrentLine;
-          stat->cursor.isUpdated = true;
+          seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
         }
         stat->expandedPosition = stat->positionInCurrentLine;
         stat->mode = NORMAL_MODE;
