@@ -128,7 +128,7 @@ int openFile(gapBuffer *gb, editorStat *stat){
 
   }
   
-  stat->currentLine = stat->positionInCurrentLine = 0;
+  stat->currentLine = stat->positionInCurrentLine = stat->expandedPosition = 0;
   stat->cursor.isUpdated = true;
   freeEditorView(&stat->view);
   initEditorView(&stat->view, gb, &stat->cursor, LINES-2, COLS-(countDigit(gb->size+1)+1)-1);
@@ -155,11 +155,12 @@ void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStat *stat){
 
 void editorStatInit(editorStat* stat){
   stat->currentLine = 0;
+  stat->positionInCurrentLine = 0;
+  stat->expandedPosition = 0;
   stat->mode = NORMAL_MODE;
   stat->cmdLoop = 0;
   strcpy(stat->filename, "No name");
   stat->numOfChange = 0;
-  stat->currentLine = false;
   stat->debugMode = OFF;
   registersInit(stat);
   editorSettingInit(stat);
@@ -270,7 +271,7 @@ int jumpLine(editorStat* stat, gapBuffer* buffer, int destination){
   editorView* view = &stat->view;
   int currentLine = stat->currentLine;
   stat->currentLine = destination;
-  stat->positionInCurrentLine = 0;
+  stat->positionInCurrentLine = stat->expandedPosition = 0;
   if(!(view->originalLine[0] <= destination && (view->originalLine[view->height-1] == -1 || destination <= view->originalLine[view->height-1]))){
     int startOfPrintedLines = destination-(currentLine - view->originalLine[0]) >= 0 ?  destination-(currentLine - view->originalLine[0]) : 0;
     reloadEditorView(view, buffer, startOfPrintedLines);
@@ -363,7 +364,7 @@ int keyUp(gapBuffer* gb, editorStat* stat){
  
   --stat->currentLine;
   int maxPosition = gapBufferAt(gb, stat->currentLine)->numOfChar-1+(stat->mode == INSERT_MODE);
-  stat->positionInCurrentLine = maxPosition >= stat->positionInCurrentLine ? stat->positionInCurrentLine : maxPosition;
+  stat->positionInCurrentLine = maxPosition >= stat->expandedPosition ? stat->expandedPosition : maxPosition;
   if(stat->positionInCurrentLine < 0) stat->positionInCurrentLine = 0;
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
   return 0;
@@ -374,7 +375,7 @@ int keyDown(gapBuffer* gb, editorStat* stat){
 
   ++stat->currentLine;
    int maxPosition = gapBufferAt(gb, stat->currentLine)->numOfChar-1+(stat->mode == INSERT_MODE);
-  stat->positionInCurrentLine = maxPosition >= stat->positionInCurrentLine ? stat->positionInCurrentLine : maxPosition;
+  stat->positionInCurrentLine = maxPosition >= stat->expandedPosition ? stat->expandedPosition : maxPosition;
   if(stat->positionInCurrentLine < 0) stat->positionInCurrentLine = 0;
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
   return 0;
@@ -384,6 +385,7 @@ int keyRight(gapBuffer* gb, editorStat* stat){
   if(stat->positionInCurrentLine+1 >= gapBufferAt(gb, stat->currentLine)->numOfChar+(stat->mode == INSERT_MODE)) return 0;
 
   ++stat->positionInCurrentLine;
+  stat->expandedPosition = stat->positionInCurrentLine;
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
   return 0;
 }
@@ -401,6 +403,7 @@ int wordsForward(gapBuffer *gb, editorStat *stat){
         stat->positionInCurrentLine++;
     else break;
   }
+  stat->expandedPosition = stat->positionInCurrentLine;
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
   return 0;
 }
@@ -409,6 +412,7 @@ int keyLeft(gapBuffer* gb, editorStat* stat){
   if(stat->positionInCurrentLine == 0) return 0;
   
   --stat->positionInCurrentLine;
+  stat->expandedPosition = stat->positionInCurrentLine;
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
   return 0;
 }
@@ -426,6 +430,7 @@ int wordsBackward(gapBuffer *gb, editorStat *stat){
         stat->positionInCurrentLine--;
     else break;
   }
+  stat->expandedPosition = stat->positionInCurrentLine;
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
   return 0;
 }
@@ -536,7 +541,9 @@ int insBeginOfLine(gapBuffer *gb, editorStat *stat){
 }
 
 int delCurrentChar(gapBuffer *gb, editorStat *stat){
-  charArrayDel(gapBufferAt(gb, stat->currentLine), stat->positionInCurrentLine);
+  charArray* line = gapBufferAt(gb, stat->currentLine);
+  charArrayDel(line, stat->positionInCurrentLine);
+  if(line->numOfChar > 0 && stat->positionInCurrentLine == line->numOfChar) stat->positionInCurrentLine = stat->expandedPosition = line->numOfChar-1;
   reloadEditorView(&stat->view, gb, stat->view.originalLine[0]);
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
   stat->numOfChange++;
@@ -557,8 +564,8 @@ int deleteLine(gapBuffer *gb, editorStat *stat, int line){
   }
   if(line < stat->currentLine) --stat->currentLine;
   if(stat->currentLine >= gb->size) stat->currentLine = gb->size-1;
-  if(gapBufferAt(gb, stat->currentLine)->numOfChar == 0) stat->positionInCurrentLine = 0;
-  else if(stat->positionInCurrentLine > gapBufferAt(gb, stat->currentLine)->numOfChar - 1)  stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar - 1;
+
+  stat->positionInCurrentLine = stat->expandedPosition = 0;
 
   reloadEditorView(&stat->view, gb, stat->view.originalLine[0] > gb->size-1 ? gb->size-1 : stat->view.originalLine[0]);
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
@@ -579,7 +586,7 @@ int moveFirstLine(gapBuffer *gb, editorStat *stat){
   if(stat->currentLine == 0) return 0;
   stat->currentLine = 0;
   int maxPosition = gapBufferAt(gb, stat->currentLine)->numOfChar-1+(stat->mode == INSERT_MODE);
-  stat->positionInCurrentLine = maxPosition >= stat->positionInCurrentLine ? stat->positionInCurrentLine : maxPosition;
+  stat->positionInCurrentLine  = maxPosition >= stat->expandedPosition ? stat->expandedPosition : maxPosition;
   if(stat->positionInCurrentLine < 0) stat->positionInCurrentLine = 0;
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
   return 0;
@@ -589,7 +596,7 @@ int moveLastLine(gapBuffer *gb, editorStat *stat){
   if(stat->currentLine == gb->size - 1) return 0;
   stat->currentLine = gb->size - 1;
   int maxPosition = gapBufferAt(gb, stat->currentLine)->numOfChar-1+(stat->mode == INSERT_MODE);
-  stat->positionInCurrentLine = maxPosition >= stat->positionInCurrentLine ? stat->positionInCurrentLine : maxPosition;
+  stat->positionInCurrentLine = maxPosition >= stat->expandedPosition ? stat->expandedPosition : maxPosition;
   if(stat->positionInCurrentLine < 0) stat->positionInCurrentLine = 0;
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
   return 0;
@@ -713,8 +720,6 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       if(stat->cmdLoop > gapBufferAt(gb,stat->currentLine)->numOfChar - stat->positionInCurrentLine)
         stat->cmdLoop  = gapBufferAt(gb,stat->currentLine)->numOfChar - stat->positionInCurrentLine;
       for(int i=0; i<stat->cmdLoop; i++) delCurrentChar(gb, stat);
-      if(stat->positionInCurrentLine > gapBufferAt(gb, stat->currentLine)->numOfChar - 1)
-        stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar - 1;
       break;
     case 'd':
       if(wgetch(win[MAIN_WIN]) == 'd'){
@@ -736,6 +741,7 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       for(int i = 0; i < stat->cmdLoop; ++i){
         if(i > 0){
           ++stat->positionInCurrentLine;
+          stat->expandedPosition = stat->positionInCurrentLine;
           seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
         }
         replaceChar(gb, stat, key);
@@ -871,6 +877,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
           stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar-1;
           stat->cursor.isUpdated = true;
         }
+        stat->expandedPosition = stat->positionInCurrentLine;
         stat->mode = NORMAL_MODE;
         return;
         break;
