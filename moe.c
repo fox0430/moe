@@ -662,6 +662,18 @@ int cmdE(gapBuffer *gb, editorStat *stat, char *filename){
   return 0;
 }
 
+void moveToFirstOfLine(editorStat* stat, gapBuffer* buffer){
+  stat->positionInCurrentLine = stat->expandedPosition = 0;
+  seekCursor(&stat->view, buffer, stat->currentLine, stat->positionInCurrentLine);
+}
+
+void moveToLastOfLine(editorStat* stat, gapBuffer* buffer){
+  stat->positionInCurrentLine = gapBufferAt(buffer, stat->currentLine)->numOfChar - 1;
+  if(stat->positionInCurrentLine < 0) stat->positionInCurrentLine = 0;
+  stat->expandedPosition = stat->positionInCurrentLine;
+  seekCursor(&stat->view, buffer, stat->currentLine, stat->positionInCurrentLine);
+}
+
 void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
   if(stat->cmdLoop == 0) stat->cmdLoop = 1;
   switch(key){
@@ -699,13 +711,14 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       break;
     case '0':
     case KEY_HOME:
-      stat->positionInCurrentLine = 0;
-      stat->cursor.isUpdated = true;
+      moveToFirstOfLine(stat, gb);
       break;
     case '$':
     case KEY_END:
       stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar - 1;
-      stat->cursor.isUpdated = true;
+      if(stat->positionInCurrentLine < 0) stat->positionInCurrentLine = 0;
+      stat->expandedPosition = stat->positionInCurrentLine;
+      seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
       break;
     case 'g':
       if(wgetch(win[MAIN_WIN]) == 'g') moveFirstLine(gb, stat);
