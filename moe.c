@@ -396,13 +396,7 @@ int wordsForward(gapBuffer *gb, editorStat *stat){
 
   charArray *currentLine = gapBufferAt(gb, stat->currentLine);
   stat->positionInCurrentLine++;
-  if(stat->positionInCurrentLine >= currentLine->numOfChar){
-    stat->currentLine++;
-    stat->positionInCurrentLine = 0;
-    stat->expandedPosition = stat->positionInCurrentLine;
-    seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
-    return 0;
-  }
+
   while(stat->positionInCurrentLine <= currentLine->numOfChar - 1){
     if(stat->positionInCurrentLine >= currentLine->numOfChar - 1){
       stat->currentLine++;
