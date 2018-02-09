@@ -403,8 +403,12 @@ int wordsForward(gapBuffer *gb, editorStat *stat){
     seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
     return 0;
   }
-  while(stat->positionInCurrentLine < currentLine->numOfChar - 1){
-    if(isspace(currentLine->elements[stat->positionInCurrentLine]) != 0){
+  while(stat->positionInCurrentLine <= currentLine->numOfChar - 1){
+    if(stat->positionInCurrentLine >= currentLine->numOfChar - 1){
+      stat->currentLine++;
+      stat->positionInCurrentLine = 0;
+      break;
+    }else if(isspace(currentLine->elements[stat->positionInCurrentLine]) != 0){
       while(isspace(currentLine->elements[stat->positionInCurrentLine]) != 0)
         stat->positionInCurrentLine++;
       break;
@@ -433,17 +437,27 @@ int keyLeft(gapBuffer* gb, editorStat* stat){
 }
 
 int wordsBackward(gapBuffer *gb, editorStat *stat){
+  if(stat->currentLine == 0 && stat->positionInCurrentLine == 0) return 0;
   charArray *currentLine = gapBufferAt(gb, stat->currentLine);
+  stat->positionInCurrentLine--;
 
-  if(stat->positionInCurrentLine > 0) stat->positionInCurrentLine--;
-  while(stat->positionInCurrentLine > 0){
-    if(!(currentLine->elements[stat->positionInCurrentLine - 1] >= 'a' && currentLine->elements[stat->positionInCurrentLine - 1] <= 'z')
-        && !(currentLine->elements[stat->positionInCurrentLine - 1] >= 'A' && currentLine->elements[stat->positionInCurrentLine - 1] <= 'Z'))
-        break;
-    else if((currentLine->elements[stat->positionInCurrentLine] >= 'a' && currentLine->elements[stat->positionInCurrentLine] <= 'z')
-      || (currentLine->elements[stat->positionInCurrentLine] >= 'A' && currentLine->elements[stat->positionInCurrentLine] <= 'Z'))
+  while(stat->positionInCurrentLine >= -1){
+    if(stat->positionInCurrentLine < 0){    // move line
+      if(stat->currentLine > 0) stat->currentLine--;
+      stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar - 1;
+      break;
+    }else if(isspace(currentLine->elements[stat->positionInCurrentLine]) != 0){
+      while(isspace(currentLine->elements[stat->positionInCurrentLine]) != 0)
         stat->positionInCurrentLine--;
-    else break;
+    }else if(isspace(currentLine->elements[stat->positionInCurrentLine]) != 0
+             && currentLine->elements[stat->positionInCurrentLine] == currentLine->elements[stat->positionInCurrentLine - 1]){
+              while(currentLine->elements[stat->positionInCurrentLine] == currentLine->elements[stat->positionInCurrentLine - 1])
+                stat->positionInCurrentLine--;
+              break;
+    }else if(ispunct(currentLine->elements[stat->positionInCurrentLine]) != 0
+        || ispunct(currentLine->elements[stat->positionInCurrentLine - 1]) != 0)
+          break;
+    else stat->positionInCurrentLine--;
   }
   stat->expandedPosition = stat->positionInCurrentLine;
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
