@@ -738,10 +738,7 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       break;
     case '$':
     case KEY_END:
-      stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar - 1;
-      if(stat->positionInCurrentLine < 0) stat->positionInCurrentLine = 0;
-      stat->expandedPosition = stat->positionInCurrentLine;
-      seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
+      moveToLastOfLine(stat, gb);
       break;
     case 'g':
       if(wgetch(win[MAIN_WIN]) == 'g') moveFirstLine(gb, stat);
