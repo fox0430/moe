@@ -520,10 +520,12 @@ int keyEnter(gapBuffer* gb, editorStat* stat){
 int openBlankLineBelow(gapBuffer *gb, editorStat *stat){
   charArray* blankLine = (charArray*)malloc(sizeof(charArray));
   charArrayInit(blankLine);
+  int indent = charArrayCountRepeat(gapBufferAt(gb, stat->currentLine), 0, ' ');
+  for(int i=0; i<indent; ++i) charArrayPush(blankLine, ' ');
   gapBufferInsert(gb, blankLine, stat->currentLine+1);
-  insIndent(gb, stat);
+
   ++stat->currentLine;
-  stat->positionInCurrentLine = charArrayCountRepeat(blankLine, 0, ' '); 
+  stat->positionInCurrentLine = indent; 
   
   reloadEditorView(&stat->view, gb, stat->view.originalLine[0]);
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
@@ -534,9 +536,11 @@ int openBlankLineBelow(gapBuffer *gb, editorStat *stat){
 int openBlankLineAbove(gapBuffer *gb, editorStat *stat){
   charArray *blankLine = (charArray*)malloc(sizeof(charArray));
   charArrayInit(blankLine);
+  int indent = charArrayCountRepeat(gapBufferAt(gb, stat->currentLine), 0, ' ');
+  for(int i=0; i<indent; ++i) charArrayPush(blankLine, ' ');
   gapBufferInsert(gb, blankLine, stat->currentLine);
-  insIndent(gb, stat);
-  stat->positionInCurrentLine = charArrayCountRepeat(blankLine, 0, ' '); 
+
+  stat->positionInCurrentLine = indent; 
 
   reloadEditorView(&stat->view, gb, stat->view.originalLine[0]);
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
