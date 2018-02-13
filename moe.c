@@ -432,15 +432,17 @@ int keyLeft(gapBuffer* gb, editorStat* stat){
   return 0;
 }
 
-int wordsBackward(gapBuffer *gb, editorStat *stat){
+int moveToBackwardWord(gapBuffer *gb, editorStat *stat){
   if(stat->currentLine == 0 && stat->positionInCurrentLine == 0) return 0;
   charArray *currentLine = gapBufferAt(gb, stat->currentLine);
-  stat->positionInCurrentLine--;
-
-  while(stat->positionInCurrentLine >= -1){
-    if(stat->positionInCurrentLine < 0){    // move line
+  do {
+    stat->positionInCurrentLine--;
+    if(stat->positionInCurrentLine == 0) break;
+    else if(stat->positionInCurrentLine < 0){    // move line
       if(stat->currentLine > 0) stat->currentLine--;
-      stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar - 1;
+      currentLine = gapBufferAt(gb, stat->currentLine);
+      if(currentLine->numOfChar == 0) stat->positionInCurrentLine = 0;
+      else stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar - 1;
       break;
     }else if(isspace(currentLine->elements[stat->positionInCurrentLine]) != 0){
       while(isspace(currentLine->elements[stat->positionInCurrentLine]) != 0)
@@ -454,7 +456,8 @@ int wordsBackward(gapBuffer *gb, editorStat *stat){
         || ispunct(currentLine->elements[stat->positionInCurrentLine - 1]) != 0)
           break;
     else stat->positionInCurrentLine--;
-  }
+   }while(stat->positionInCurrentLine >= -1);
+
   stat->expandedPosition = stat->positionInCurrentLine;
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
   return 0;
@@ -712,7 +715,7 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStat *stat, int key){
       for(int i=0; i<stat->cmdLoop; i++) keyLeft(gb, stat);
       break;
     case 'b':
-      for(int i=0; i<stat->cmdLoop; i++) wordsBackward(gb, stat);
+      for(int i=0; i<stat->cmdLoop; i++) moveToBackwardWord(gb, stat);
       break;
     case KEY_DOWN:
     case 10:    // 10 is Enter key
