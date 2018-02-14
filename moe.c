@@ -42,6 +42,7 @@ int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
   wprintw(win[CMD_WIN], "numOfLines: %d ", gb->size);
   wprintw(win[CMD_WIN], "numOfChar: %d ", gapBufferAt(gb, stat->currentLine)->numOfChar);
   wprintw(win[CMD_WIN], "change: %d ", stat->numOfChange);
+  wprintw(win[CMD_WIN], "cursor: %d ", stat->positionInCurrentLine);
   wprintw(win[CMD_WIN], "elements: %s", gapBufferAt(gb, stat->currentLine)->elements);
 //  wprintw(win[CMD_WIN], "numOfYankedLines: %d", stat->rgst.numOfYankedLines);
 //  wprintw(win[CMD_WIN], "yanked elements: %s", gapBufferAt(stat->rgst.yankedLine, 0)->elements);
@@ -392,6 +393,36 @@ int keyRight(gapBuffer* gb, editorStat* stat){
 }
 
 int moveToForwardWord(gapBuffer *gb, editorStat *stat){
+  charArray *currentLine = gapBufferAt(gb, stat->currentLine);
+  int positionInCurrentLine = stat->positionInCurrentLine;
+
+  do{
+    positionInCurrentLine++;
+    if((stat->currentLine == gb->size - 1) && (positionInCurrentLine >= currentLine->numOfChar - 1)) return 0;
+    else if(positionInCurrentLine >= currentLine->numOfChar){
+      stat->currentLine++;
+      positionInCurrentLine = 0;
+      break;
+    }else if(isspace(currentLine->elements[positionInCurrentLine - 1]) != 0 && isspace(currentLine->elements[positionInCurrentLine]) == 0) break;
+    else if(ispunct(currentLine->elements[positionInCurrentLine - 1]) != 0 && ispunct(currentLine->elements[positionInCurrentLine]) == 0) break;
+    else if(ispunct(currentLine->elements[positionInCurrentLine]) != 0){
+      while(ispunct(currentLine->elements[positionInCurrentLine]) != 0 && ispunct(currentLine->elements[positionInCurrentLine + 1])!= 0) positionInCurrentLine++;
+      break;
+    } 
+    else if(isspace(currentLine->elements[positionInCurrentLine]) != 0){
+      while(isspace(currentLine->elements[positionInCurrentLine]) != 0)
+        positionInCurrentLine++;
+      break;
+    }
+  }while(positionInCurrentLine <= currentLine->numOfChar);
+
+  stat->expandedPosition = stat->positionInCurrentLine = positionInCurrentLine;
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
+  return 0;
+}
+
+/*
+int moveToForwardWord(gapBuffer *gb, editorStat *stat){
   if(stat->currentLine == gb->size - 1) return 0;
   charArray *currentLine = gapBufferAt(gb, stat->currentLine);
 
@@ -422,6 +453,7 @@ int moveToForwardWord(gapBuffer *gb, editorStat *stat){
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
   return 0;
 }
+*/
 
 int keyLeft(gapBuffer* gb, editorStat* stat){
   if(stat->positionInCurrentLine == 0) return 0;
