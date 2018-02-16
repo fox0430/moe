@@ -394,41 +394,26 @@ int keyRight(gapBuffer* gb, editorStat* stat){
 
 int moveToForwardWord(gapBuffer *gb, editorStat *stat){
   char startWith = gapBufferAt(gb, stat->currentLine)->numOfChar == 0 ? '\n' : gapBufferAt(gb, stat->currentLine)->elements[stat->positionInCurrentLine]; 
-  if(ispunct(startWith)){
-    while(true){
-      ++stat->positionInCurrentLine;
-      if(stat->positionInCurrentLine >= gapBufferAt(gb, stat->currentLine)->numOfChar){
-        ++stat->currentLine;
-        stat->positionInCurrentLine = 0;
-        break;
-      }
-      if(!ispunct(gapBufferAt(gb, stat->currentLine)->elements[stat->positionInCurrentLine])) break;
-    }
-  }else if(isalpha(startWith)){
-    while(true){
-      ++stat->positionInCurrentLine;
-      if(stat->positionInCurrentLine >= gapBufferAt(gb, stat->currentLine)->numOfChar){
-        ++stat->currentLine;
-        stat->positionInCurrentLine = 0;
-        break;
-      }
-      if(!isalpha(gapBufferAt(gb, stat->currentLine)->elements[stat->positionInCurrentLine])) break;
-    }
-  }else if(isdigit(startWith)){
-    while(true){
-      ++stat->positionInCurrentLine;
-      if(stat->positionInCurrentLine >= gapBufferAt(gb, stat->currentLine)->numOfChar){
-        ++stat->currentLine;
-        stat->positionInCurrentLine = 0;
-        break;
-      }
-      if(!isdigit(gapBufferAt(gb, stat->currentLine)->elements[stat->positionInCurrentLine])) break;
-    }
-  }else{
+  int (*isSkipped)(int) = NULL;
+  if(ispunct(startWith)) isSkipped = ispunct;
+  else if(isalpha(startWith)) isSkipped = isalpha;
+  else if(isdigit(startWith)) isSkipped = isdigit;
+
+  if(isSkipped == NULL){
     ++stat->positionInCurrentLine;
     if(stat->positionInCurrentLine >= gapBufferAt(gb, stat->currentLine)->numOfChar){
       ++stat->currentLine;
       stat->positionInCurrentLine = 0;
+    }
+  }else{
+    while(true){
+      ++stat->positionInCurrentLine;
+      if(stat->positionInCurrentLine >= gapBufferAt(gb, stat->currentLine)->numOfChar){
+        ++stat->currentLine;
+        stat->positionInCurrentLine = 0;
+        break;
+      }
+      if(!isSkipped(gapBufferAt(gb, stat->currentLine)->elements[stat->positionInCurrentLine])) break;
     }
   }
 
