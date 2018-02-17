@@ -1,4 +1,4 @@
-#ifndef  MOE_MOE__H
+#ifndef  MOE_MOE_H
 #define MOE_MOE_H
 
 #include "gapbuffer.h"
