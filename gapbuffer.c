@@ -151,3 +151,32 @@ int gapBufferFree(gapBuffer* gb){
 
   return 1;
 }
+
+void gapBufferForward(gapBuffer* buffer, int currentLine, int positionInCurrentLine, int* resLine, int* resPosition){
+  if(currentLine == buffer->size-1 && positionInCurrentLine >= gapBufferAt(buffer, buffer->size-1)->numOfChar-1) return;
+  ++positionInCurrentLine;
+  if(positionInCurrentLine >= gapBufferAt(buffer, currentLine)->numOfChar){
+    ++currentLine;
+    positionInCurrentLine = 0;
+  }
+  *resLine = currentLine;
+  *resPosition = positionInCurrentLine;
+}
+
+void gapBufferBackward(gapBuffer* buffer, int currentLine, int positionInCurrentLine, int* resLine, int* resPosition){
+  if(currentLine ==0 && positionInCurrentLine == 0) return;
+  --positionInCurrentLine;
+  if(positionInCurrentLine == -1){
+    --currentLine;
+    positionInCurrentLine = gapBufferAt(buffer, currentLine)->numOfChar ? gapBufferAt(buffer, currentLine)->numOfChar-1 : 0;
+  }
+  *resLine = currentLine;
+  *resPosition = positionInCurrentLine;
+}
+bool gapBufferIsFirst(int currentLine, int positionInCurrentLine){
+  return currentLine == 0 && positionInCurrentLine == 0;
+}
+
+bool gapBufferIsLast(gapBuffer* buffer, int currentLine, int positionInCurrentLine){
+  return currentLine == buffer->size-1 && positionInCurrentLine >= gapBufferAt(buffer, buffer->size-1)->numOfChar-1;
+}

@@ -392,68 +392,51 @@ int keyRight(gapBuffer* gb, editorStat* stat){
   return 0;
 }
 
-int moveToForwardWord(gapBuffer *gb, editorStat *stat){
-  charArray *currentLine = gapBufferAt(gb, stat->currentLine);
-  int positionInCurrentLine = stat->positionInCurrentLine;
 
-  do{
-    positionInCurrentLine++;
-    if((stat->currentLine == gb->size - 1) && (positionInCurrentLine >= currentLine->numOfChar - 1)) return 0;
-    else if(positionInCurrentLine >= currentLine->numOfChar){
-      stat->currentLine++;
-      positionInCurrentLine = 0;
-      break;
-    }else if(isspace(currentLine->elements[positionInCurrentLine - 1]) != 0 && isspace(currentLine->elements[positionInCurrentLine]) == 0) break;
-    else if(ispunct(currentLine->elements[positionInCurrentLine - 1]) != 0 && ispunct(currentLine->elements[positionInCurrentLine]) == 0) break;
-    else if(ispunct(currentLine->elements[positionInCurrentLine]) != 0){
-      while(ispunct(currentLine->elements[positionInCurrentLine]) != 0 && ispunct(currentLine->elements[positionInCurrentLine + 1])!= 0) positionInCurrentLine++;
-      break;
-    } 
-    else if(isspace(currentLine->elements[positionInCurrentLine]) != 0){
-      while(isspace(currentLine->elements[positionInCurrentLine]) != 0)
-        positionInCurrentLine++;
+
+int moveToForwardWord(gapBuffer *gb, editorStat *stat){
+  char startWith = gapBufferAt(gb, stat->currentLine)->numOfChar == 0 ? '\n' : gapBufferAt(gb, stat->currentLine)->elements[stat->positionInCurrentLine]; 
+  int (*isSkipped)(int) = NULL;
+  if(ispunct(startWith)) isSkipped = ispunct;
+  else if(isalpha(startWith)) isSkipped = isalpha;
+  else if(isdigit(startWith)) isSkipped = isdigit;
+
+  if(isSkipped == NULL){
+    gapBufferForward(gb, stat->currentLine, stat->positionInCurrentLine, &stat->currentLine, &stat->positionInCurrentLine);
+  }else{
+    while(true){
+      ++stat->positionInCurrentLine;
+      if(stat->positionInCurrentLine >= gapBufferAt(gb, stat->currentLine)->numOfChar){
+        ++stat->currentLine;
+        stat->positionInCurrentLine = 0;
+        break;
+      }
+      if(!isSkipped(gapBufferAt(gb, stat->currentLine)->elements[stat->positionInCurrentLine])) break;
+    }
+  }
+
+  while(true){
+    if(stat->currentLine >= gb->size){
+      stat->currentLine = gb->size-1;
+      stat->positionInCurrentLine = gapBufferAt(gb, gb->size-1)->numOfChar-1;
+      if(stat->positionInCurrentLine == -1) stat->positionInCurrentLine = 0;
       break;
     }
-  }while(positionInCurrentLine <= currentLine->numOfChar);
-
-  stat->expandedPosition = stat->positionInCurrentLine = positionInCurrentLine;
-  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
-  return 0;
-}
-
-/*
-int moveToForwardWord(gapBuffer *gb, editorStat *stat){
-  if(stat->currentLine == gb->size - 1) return 0;
-  charArray *currentLine = gapBufferAt(gb, stat->currentLine);
-
-  do{ 
-    stat->positionInCurrentLine++;
-    if(stat->positionInCurrentLine == currentLine->numOfChar - 1) break;
-    else if(stat->positionInCurrentLine >= currentLine->numOfChar){
-      stat->currentLine++;
-      currentLine = gapBufferAt(gb, stat->currentLine);
+    if(gapBufferAt(gb, stat->currentLine)->numOfChar == 0) break;
+    if(stat->positionInCurrentLine == gapBufferAt(gb, stat->currentLine)->numOfChar){
+      ++stat->currentLine;
       stat->positionInCurrentLine = 0;
-      break;
-    }else if(isspace(currentLine->elements[stat->positionInCurrentLine]) != 0){
-      while(isspace(currentLine->elements[stat->positionInCurrentLine]) != 0)
-        stat->positionInCurrentLine++;
-      break;
-    }else if(ispunct(currentLine->elements[stat->positionInCurrentLine]) != 0
-             && currentLine->elements[stat->positionInCurrentLine] == currentLine->elements[stat->positionInCurrentLine - 1]){
-              while(currentLine->elements[stat->positionInCurrentLine] == currentLine->elements[stat->positionInCurrentLine - 1])
-                stat->positionInCurrentLine++;
-              break;
-    }else if(ispunct(currentLine->elements[stat->positionInCurrentLine]) != 0
-        || ispunct(currentLine->elements[stat->positionInCurrentLine - 1]) != 0)
-          break;
-    else stat->positionInCurrentLine++;
-  }while(stat->positionInCurrentLine <= currentLine->numOfChar);
+      continue;
+    }
+    char curr = gapBufferAt(gb, stat->currentLine)->elements[stat->positionInCurrentLine];
+    if(ispunct(curr) || isalpha(curr) || isdigit(curr)) break;
+    ++stat->positionInCurrentLine;
+  }
 
   stat->expandedPosition = stat->positionInCurrentLine;
   seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
   return 0;
 }
-*/
 
 int keyLeft(gapBuffer* gb, editorStat* stat){
   if(stat->positionInCurrentLine == 0) return 0;
@@ -465,33 +448,34 @@ int keyLeft(gapBuffer* gb, editorStat* stat){
 }
 
 int moveToBackwardWord(gapBuffer *gb, editorStat *stat){
-  if(stat->currentLine == 0 && stat->positionInCurrentLine == 0) return 0;
-  charArray *currentLine = gapBufferAt(gb, stat->currentLine);
-  do {
-    stat->positionInCurrentLine--;
+  if(gapBufferIsFirst(stat->currentLine, stat->positionInCurrentLine)) return 0;
+
+  while(true){
+    gapBufferBackward(gb, stat->currentLine, stat->positionInCurrentLine, &stat->currentLine, &stat->positionInCurrentLine);
+    if(gapBufferAt(gb, stat->currentLine)->numOfChar == 0 || gapBufferIsFirst(stat->currentLine, stat->positionInCurrentLine)) break;
+
+    char curr = gapBufferAt(gb, stat->currentLine)->elements[stat->positionInCurrentLine];
+    if(isspace(curr)) continue;
+
     if(stat->positionInCurrentLine == 0) break;
-    else if(stat->positionInCurrentLine < 0){    // move line
-      if(stat->currentLine > 0) stat->currentLine--;
-      currentLine = gapBufferAt(gb, stat->currentLine);
-      if(currentLine->numOfChar == 0) stat->positionInCurrentLine = 0;
-      else stat->positionInCurrentLine = gapBufferAt(gb, stat->currentLine)->numOfChar - 1;
-      break;
-    }else if(isspace(currentLine->elements[stat->positionInCurrentLine]) != 0){
-      while(isspace(currentLine->elements[stat->positionInCurrentLine]) != 0)
-        stat->positionInCurrentLine--;
-    }else if(isspace(currentLine->elements[stat->positionInCurrentLine]) != 0
-             && currentLine->elements[stat->positionInCurrentLine] == currentLine->elements[stat->positionInCurrentLine - 1]){
-              while(currentLine->elements[stat->positionInCurrentLine] == currentLine->elements[stat->positionInCurrentLine - 1])
-                stat->positionInCurrentLine--;
-              break;
-    }else if(ispunct(currentLine->elements[stat->positionInCurrentLine]) != 0
-        || ispunct(currentLine->elements[stat->positionInCurrentLine - 1]) != 0)
-          break;
-    else stat->positionInCurrentLine--;
-   }while(stat->positionInCurrentLine >= -1);
+
+    int backLine, backPosition;
+    char back;
+    gapBufferBackward(gb, stat->currentLine, stat->positionInCurrentLine, &backLine, &backPosition);
+    back = gapBufferAt(gb, backLine)->elements[backPosition];
+
+    int currType = 0, backType = 0;
+    if(isalpha(curr)) currType |= 1;
+    else if(isdigit(curr)) currType |= 2;
+    else if(ispunct(curr)) currType |= 4;
+    if(isalpha(back)) backType |= 1;
+    else if(isdigit(back)) backType |= 2;
+    else if(ispunct(back)) backType |= 4;
+    if(currType != backType) break;
+  }
 
   stat->expandedPosition = stat->positionInCurrentLine;
-  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
+  seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine);
   return 0;
 }
 
@@ -1003,3 +987,4 @@ int main(int argc, char* argv[]){
   
   return 0;
 }
+
