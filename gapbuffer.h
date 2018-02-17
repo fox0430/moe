@@ -16,7 +16,6 @@ typedef struct gapBuffer{
 } gapBuffer;
 
 
-// Function prototype
 int gapBufferInit(gapBuffer* gb);
 int gapBufferReserve(gapBuffer* gb, int capacity);
 int gapBufferMakeGap(gapBuffer* gb,int gapBegin);
@@ -25,5 +24,9 @@ int gapBufferDel(gapBuffer* gb, int begin, int end);
 charArray* gapBufferAt(gapBuffer* gb, int index);
 bool gapBufferIsEmpty(gapBuffer* gb);
 int gapBufferFree(gapBuffer* gb);
+void gapBufferBackward(gapBuffer* buffer, int currentLine, int positionInCurrentLine, int* resLine, int* resPosition);
+void gapBufferForward(gapBuffer* buffer, int currentLine, int positionInCurrentLine, int* resLine, int* resPosition);
+bool gapBufferIsFirst(int currentLine, int positionInCurrentLine);
+bool gapBufferIsLast(gapBuffer* buffer, int currentLine, int positionInCurrentLine);
 
 #endif
