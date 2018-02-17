@@ -402,11 +402,7 @@ int moveToForwardWord(gapBuffer *gb, editorStat *stat){
   else if(isdigit(startWith)) isSkipped = isdigit;
 
   if(isSkipped == NULL){
-    ++stat->positionInCurrentLine;
-    if(stat->positionInCurrentLine >= gapBufferAt(gb, stat->currentLine)->numOfChar){
-      ++stat->currentLine;
-      stat->positionInCurrentLine = 0;
-    }
+    gapBufferForward(gb, stat->currentLine, stat->positionInCurrentLine, &stat->currentLine, &stat->positionInCurrentLine);
   }else{
     while(true){
       ++stat->positionInCurrentLine;
@@ -927,7 +923,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat){
         keyEnter(gb, stat);
         break;
 
-;     case 9:   // 9 is Tab key;
+      case 9:   // 9 is Tab key;
         insertTab(gb, stat);
         break;
 
@@ -991,3 +987,4 @@ int main(int argc, char* argv[]){
   
   return 0;
 }
+
