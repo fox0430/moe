@@ -1,7 +1,10 @@
-#include"vector.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include "chararray.h"
 
 int charArrayInit(charArray* array){
-
   const int size = 1;
 
   array->elements = (char*)malloc(sizeof(char)*(size +1));
@@ -69,7 +72,7 @@ int charArrayPop(charArray* array){
 
   --array->numOfChar;
 
-  if(array->head * 4 <= array->capacity){
+  if(array->capacity >=2 && array->head * 4 <= array->capacity){
     char* newElements = (char*)realloc(array->elements, sizeof(char) * (array->capacity / 2 + 1));
     if(newElements == NULL){
         printf("Vector: cannot reallocate memory.");
@@ -123,4 +126,10 @@ charArray* charArrayCopy(charArray* array){
   charArrayInit(copy);
   for(int i = 0; i < array->numOfChar; ++i) charArrayPush(copy, array->elements[i]);
   return copy;
+}
+
+int charArrayCountRepeat(charArray* array, int start, char ch){
+  if(start >= array->numOfChar) return 0;
+  for(int i = start; i < array->numOfChar; ++i) if(array->elements[i] != ch) return i-start;
+  return array->numOfChar;
 }

@@ -1,4 +1,10 @@
-#include"gapbuffer.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <malloc.h>
+#include "gapbuffer.h"
+#include "chararray.h"
 
 int gapBufferInit(gapBuffer* gb){
 
