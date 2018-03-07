@@ -33,8 +33,7 @@ int insertChar(gapBuffer *gb, editorStat *stat, int key);
 void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-  stat->debugMode = ON;
-  if(stat->debugMode == OFF ) return 0;
+#ifdef DEBUG
   int returnY = stat->cursor.y,returnX = stat->cursor.x;
   werase(win[CMD_WIN]);
   mvwprintw(win[CMD_WIN], 0, 0, "debug mode: ");
@@ -48,6 +47,7 @@ int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
 //  wprintw(win[CMD_WIN], "yanked elements: %s", gapBufferAt(stat->rgst.yankedLine, 0)->elements);
   wrefresh(win[CMD_WIN]);
   wmove(win[MAIN_WIN], returnY, returnX+stat->view.widthOfLineNum);
+#endif
   return 0;
 }
 
