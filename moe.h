@@ -19,7 +19,7 @@ typedef struct editorSetting{
       tabStop;
 } editorSetting;
 
-typedef struct editorStat{
+typedef struct editorStatus{
   editorSetting setting;
   registers rgst;
   editorView view;
@@ -32,6 +32,6 @@ typedef struct editorStat{
         cmdLoop,
         numOfChange,
         debugMode;
-} editorStat;
+} editorStatus;
 
 #endif
