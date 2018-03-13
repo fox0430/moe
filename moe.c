@@ -19,12 +19,13 @@
 #define OFF 0
 #define NORMAL_MODE 0
 #define INSERT_MODE 1
+#define FILER_MODE 2
 #define MAIN_WIN 0
 #define STATE_WIN 1
 #define CMD_WIN 2
 
 void printStatBarInit(WINDOW **win, gapBuffer *gb, editorStatus *status);
-void printStatBar(WINDOW **win, gapBuffer *gb, editorStatus *status);
+int printStatBar(WINDOW **win, gapBuffer *gb, editorStatus *status);
 int registersInit(editorStatus *status);
 void editorSettingInit(editorStatus *status);
 int insNewLine(gapBuffer *gb, editorStatus *status, int position);
@@ -32,7 +33,7 @@ int cmdE(gapBuffer *gb, editorStatus *status, char *filename);
 int insertChar(gapBuffer *gb, editorStatus *status, int key);
 void insertMode(WINDOW **win, gapBuffer* gb, editorStatus* status);
 
-int fileManageMode(WINDOW **win, char *path);
+int fileManageMode(WINDOW **win, editorStatus *status, char *path);
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStatus *status){
 #ifdef DEBUG
@@ -243,9 +244,14 @@ void printStatBarInit(WINDOW **win, gapBuffer *gb, editorStatus *status){
   printStatBar(win, gb, status);
 }
 
-void printStatBar(WINDOW **win, gapBuffer *gb, editorStatus *status){
+int printStatBar(WINDOW **win, gapBuffer *gb, editorStatus *status){
   werase(win[STATE_WIN]);
   wattron(win[STATE_WIN], COLOR_PAIR(2));
+  if(status->mode == FILER_MODE){
+    wprintw(win[STATE_WIN], "%s ", " FILER");
+    wattron(win[STATE_WIN], COLOR_PAIR(1));
+    return 0;
+  }
   if(status->mode == NORMAL_MODE)
     wprintw(win[STATE_WIN], "%s ", " NORMAL");
   else if(status->mode == INSERT_MODE)
@@ -256,6 +262,7 @@ void printStatBar(WINDOW **win, gapBuffer *gb, editorStatus *status){
   mvwprintw(win[STATE_WIN], 0, COLS-13, "%d/%d ", status->currentLine + 1, gb->size);
   mvwprintw(win[STATE_WIN], 0, COLS-6, " %d/%d", status->positionInCurrentLine, gapBufferAt(gb, status->currentLine)->numOfChar);
   wrefresh(win[STATE_WIN]);
+  return 0;
 }
 
 int shellMode(char *cmd){
@@ -342,7 +349,9 @@ int commandBar(WINDOW **win, gapBuffer *gb, editorStatus *status){
       werase(win[CMD_WIN]);
       wrefresh(win[CMD_WIN]);
     }else if(cmd[0] == 'd'){    // file manager
-      fileManageMode(win, ".");
+      status->mode = FILER_MODE;
+      printStatBar(win, gb, status);
+      fileManageMode(win, status, ".");
       wrefresh(win[MAIN_WIN]);
       wgetch(win[MAIN_WIN]);
       status->view.isUpdated = true;
