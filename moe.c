@@ -31,7 +31,8 @@ int insNewLine(gapBuffer *gb, editorStat *stat, int position);
 int cmdE(gapBuffer *gb, editorStat *stat, char *filename);
 int insertChar(gapBuffer *gb, editorStat *stat, int key);
 void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
-int checkDir(char *path);
+
+int fileManageMode(WINDOW **win, char *path);
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
 #ifdef DEBUG
@@ -341,11 +342,11 @@ int commandBar(WINDOW **win, gapBuffer *gb, editorStat *stat){
       werase(win[CMD_WIN]);
       wrefresh(win[CMD_WIN]);
     }else if(cmd[0] == 'd'){    // file manager
-      if(checkDir(".") == -1){
-        werase(win[CMD_WIN]);
-        wprintw(win[CMD_WIN], "not found...");
-        wrefresh(win[CMD_WIN]);
-       }else wgetch(win[MAIN_WIN]);
+      fileManageMode(win, ".");
+      wrefresh(win[MAIN_WIN]);
+      wgetch(win[MAIN_WIN]);
+      stat->view.isUpdated = true;
+      seekCursor(&stat->view, gb, stat->currentLine, stat->positionInCurrentLine); 
     }
   }
   return 0;

@@ -2,40 +2,31 @@
 #include<ncurses.h>
 #include<stdlib.h>
 #include<string.h>
+#include<sys/types.h>
 #include"moe.h"
 
-int getDirInfo(DIR *dir, struct dirent *dp, char *path);
+int printDirEntry(WINDOW *win, struct dirent **nameList, int num);
 
-int checkDir(char *path){
-  DIR *dir;
-  struct dirent *dp;
+int fileManageMode(WINDOW **win, char *path){
+  struct dirent **nameList;
 
-  if((dir = opendir(path)) == NULL) return -1;
-  else getDirInfo(dir , dp, path);
+  int num = scandir(path, &nameList, NULL, NULL);
+  if(num == -1){
+    wprintw(win[2], "not found...");
+    return -1;
+  }
+ 
+  printDirEntry(win[0], nameList, num);
 
+  free(nameList);
+  
   return 0;
 }
 
-int getDirInfo(DIR *dir, struct dirent *dp, char *path){
-
-  gapBuffer *fm = (gapBuffer*)malloc(sizeof(gapBuffer));
-  if(fm = NULL){
-    printf("file manager: cannot allocated memory.../n");
-    return -1;
-  }
-  gapBufferInit(fm);
-
-  int numDir = 0;
-  for(dp = readdir(dir); dp != NULL; dp = readdir(dir), numDir++)
-    ;
-  char dirName[numDir][256];
-
-  int i = 0;
-  for(dp = readdir(dir); i < numDir; dp = readdir(dir)){
-    strcpy(dirName[i], dp->d_name);
-  }
-
-  closedir(dir);
+int printDirEntry(WINDOW *win, struct dirent **nameList, int num){
+  werase(win);
+  for(int i=0; i<num; i++)
+    wprintw(win, " %s\n", nameList[i]->d_name);
 
   return 0;
- }
+}
