@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <ncurses.h>
 #include <ctype.h>
+#include <sys/stat.h>
 #include "moe.h"
 #include "mathutility.h"
 
@@ -29,7 +30,7 @@ int printStatBar(WINDOW **win, gapBuffer *gb, editorStatus *status);
 int registersInit(editorStatus *status);
 void editorSettingInit(editorStatus *status);
 int insNewLine(gapBuffer *gb, editorStatus *status, int position);
-int cmdE(gapBuffer *gb, editorStatus *status, char *filename);
+int cmdE(WINDOW **win, gapBuffer *gb, editorStatus *status, char *filename);
 int insertChar(gapBuffer *gb, editorStatus *status, int key);
 void insertMode(WINDOW **win, gapBuffer* gb, editorStatus* status);
 
@@ -130,7 +131,6 @@ int openFile(gapBuffer *gb, editorStatus *status){
       }else charArrayPush(gapBufferAt(gb, status->currentLine), ch);
     }
     fclose(fp);
-
   }
   
   status->currentLine = status->positionInCurrentLine = status->expandedPosition = 0;
@@ -338,24 +338,25 @@ int exMode(WINDOW **win, gapBuffer *gb, editorStatus *status){
           wattroff(win[CMD_WIN], COLOR_PAIR(4));
         }
       }
-    }else if(cmd[0] == 'e'){  // File open
+    }else if(cmd[0] == 'e'){  // open file or dir
       char filename[256];
-      strcpy(filename, cmd);
-      for(int j=0; j<strlen(filename) - 2; j++) filename[j] = filename[j + 2];
-      filename[strlen(filename) - 2] = '\0';
-      cmdE(gb, status, filename);
+
+      if(strlen(cmd) < 3){
+        werase(win[CMD_WIN]);
+        wattron(win[CMD_WIN], COLOR_PAIR(4));
+        wprintw(win[CMD_WIN], "%S", "Error: cannot open file or dir");
+        wrefresh(win[CMD_WIN]);
+        wattroff(win[CMD_WIN], COLOR_PAIR(4));
+      }else{
+        strcpy(filename, cmd);
+        for(int j=0; j<strlen(filename) - 2; j++) filename[j] = filename[j + 2];
+        filename[strlen(filename) - 2] = '\0';
+        cmdE(win, gb, status, filename);
+      }
     }else if(cmd[0] == '!'){    // Shell command execution
       shellMode(cmd);
       werase(win[CMD_WIN]);
       wrefresh(win[CMD_WIN]);
-    }else if(cmd[0] == 'd'){    // file manager
-      status->mode = FILER_MODE;
-      printStatBar(win, gb, status);
-      fileManageMode(win, status, ".");
-      wrefresh(win[MAIN_WIN]);
-      wgetch(win[MAIN_WIN]);
-      status->view.isUpdated = true;
-      seekCursor(&status->view, gb, status->currentLine, status->positionInCurrentLine); 
     }
   }
   return 0;
@@ -717,13 +718,24 @@ int linePaste(gapBuffer *gb, editorStatus *status){
   return 0;
 }
 
-int cmdE(gapBuffer *gb, editorStatus *status, char *filename){
-  editorStatusInit(status);
-  strcpy(status->filename, filename);
-  gapBufferFree(gb);
-  gapBufferInit(gb);
-  insNewLine(gb, status, 0);
-  openFile(gb, status);
+int cmdE(WINDOW **win, gapBuffer *gb, editorStatus *status, char *filename){
+  struct stat st;
+
+  stat(filename, &st);
+  if((st.st_mode & S_IFMT) == S_IFDIR){   // open file manager
+    status->mode = FILER_MODE;
+    printStatBar(win, gb, status);
+    fileManageMode(win, status, filename);
+    status->view.isUpdated = true;
+    seekCursor(&status->view, gb, status->currentLine, status->positionInCurrentLine);
+  }else{
+    editorStatusInit(status);
+    strcpy(status->filename, filename);
+    gapBufferFree(gb);
+    gapBufferInit(gb);
+    insNewLine(gb, status, 0);
+    openFile(gb, status);
+  }
   return 0;
 }
 

@@ -46,8 +46,6 @@ int fileManageMode(WINDOW **win, editorStatus *status, char *path){
         return 0;
     }
   }
-
-  return 0;
 }
 
 int printDirEntry(WINDOW *win, struct dirent **nameList, int num, int currentPosi){
@@ -58,6 +56,8 @@ int printDirEntry(WINDOW *win, struct dirent **nameList, int num, int currentPos
       wprintw(win, "%s\n", nameList[i]->d_name);
       wattrset(win, A_NORMAL);
     }else wprintw(win, "%s\n", nameList[i]->d_name);
+
+  wrefresh(win);
 
   return 0;
 }
