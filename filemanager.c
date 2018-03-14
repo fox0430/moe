@@ -1,11 +1,17 @@
 #include<dirent.h>
 #include<ncurses.h>
 #include<stdlib.h>
+#include<string.h>
 #include "moe.h"
 
 int printDirEntry(WINDOW *win, struct dirent **nameList, int num, int currentPosi);
+void editorStatusInit(editorStatus* status);
+int insNewLine(gapBuffer *gb, editorStatus *status, int position);
+int openFile(gapBuffer *gb, editorStatus *status);
+int judgeFileOrDir(char *filename);
+int exMode(WINDOW **win, gapBuffer *gb, editorStatus *status);
 
-int fileManageMode(WINDOW **win, editorStatus *status, char *path){
+int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path){
   curs_set(0);    // disable cursor;
   struct dirent **nameList;
 
@@ -40,10 +46,33 @@ int fileManageMode(WINDOW **win, editorStatus *status, char *path){
           isViewUpdate = true;
         }
         break;
-      default:
-        free(nameList);
-        curs_set(1);
-        return 0;
+      case 10:    // enter key
+        {
+          int result = judgeFileOrDir(nameList[currentPosi]->d_name);
+          if(result == 1){
+            free(nameList);
+            num = scandir(path, &nameList, NULL, alphasort);
+            if(num == -1){
+              wprintw(win[2], "File manager: error!");
+              return -1;
+            }
+            isViewUpdate = true;
+          }else{
+            editorStatusInit(status);
+            strcpy(status->filename, nameList[currentPosi]->d_name);
+            gapBufferFree(gb);
+            gapBufferInit(gb);
+            insNewLine(gb, status, 0);
+            openFile(gb, status);
+            free(nameList);
+            curs_set(1);
+            return 0;
+          }
+        }
+      case ':':
+       curs_set(1);
+       exMode(win, gb, status);
+       return 0;
     }
   }
 }

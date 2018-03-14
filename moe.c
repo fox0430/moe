@@ -29,12 +29,12 @@ void printStatBarInit(WINDOW **win, gapBuffer *gb, editorStatus *status);
 int printStatBar(WINDOW **win, gapBuffer *gb, editorStatus *status);
 int registersInit(editorStatus *status);
 void editorSettingInit(editorStatus *status);
-int insNewLine(gapBuffer *gb, editorStatus *status, int position);
 int cmdE(WINDOW **win, gapBuffer *gb, editorStatus *status, char *filename);
+int insNewLine(gapBuffer *gb, editorStatus *status, int position);
 int insertChar(gapBuffer *gb, editorStatus *status, int key);
 void insertMode(WINDOW **win, gapBuffer* gb, editorStatus* status);
 
-int fileManageMode(WINDOW **win, editorStatus *status, char *path);
+int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path);
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStatus *status){
 #ifdef DEBUG
@@ -112,6 +112,14 @@ void signal_handler(int SIG){
 void exitCurses(){
   endwin(); 
   exit(1);
+}
+
+int judgeFileOrDir(char *filename){
+  struct stat st;
+  stat(filename, &st);
+
+  if((st.st_mode & S_IFMT) == S_IFDIR) return 1;    // directory
+  else return 0;
 }
 
 int openFile(gapBuffer *gb, editorStatus *status){
@@ -250,6 +258,7 @@ int printStatBar(WINDOW **win, gapBuffer *gb, editorStatus *status){
   if(status->mode == FILER_MODE){
     wprintw(win[STATE_WIN], "%s ", " FILER");
     wattron(win[STATE_WIN], COLOR_PAIR(1));
+    wrefresh(win[STATE_WIN]);
     return 0;
   }
   if(status->mode == NORMAL_MODE)
@@ -352,6 +361,7 @@ int exMode(WINDOW **win, gapBuffer *gb, editorStatus *status){
         for(int j=0; j<strlen(filename) - 2; j++) filename[j] = filename[j + 2];
         filename[strlen(filename) - 2] = '\0';
         cmdE(win, gb, status, filename);
+        break;
       }
     }else if(cmd[0] == '!'){    // Shell command execution
       shellMode(cmd);
@@ -719,13 +729,12 @@ int linePaste(gapBuffer *gb, editorStatus *status){
 }
 
 int cmdE(WINDOW **win, gapBuffer *gb, editorStatus *status, char *filename){
-  struct stat st;
+  int result = judgeFileOrDir(filename);
 
-  stat(filename, &st);
-  if((st.st_mode & S_IFMT) == S_IFDIR){   // open file manager
+  if(result == 1){   // open file manager
     status->mode = FILER_MODE;
     printStatBar(win, gb, status);
-    fileManageMode(win, status, filename);
+    fileManageMode(win, gb, status, filename);
     status->view.isUpdated = true;
     seekCursor(&status->view, gb, status->currentLine, status->positionInCurrentLine);
   }else{
