@@ -33,7 +33,7 @@ int insertChar(gapBuffer *gb, editorStat *stat, int key);
 void insertMode(WINDOW **win, gapBuffer* gb, editorStat* stat);
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStat *stat){
-#ifdef DEBUG
+#ifdef MOEDEBUG
   int returnY = stat->cursor.y,returnX = stat->cursor.x;
   werase(win[CMD_WIN]);
   mvwprintw(win[CMD_WIN], 0, 0, "debug mode: ");
