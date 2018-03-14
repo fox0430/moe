@@ -305,7 +305,7 @@ int pageDown(gapBuffer *buffer, editorStatus *status){
   return 0;
 }
 
-int commandBar(WINDOW **win, gapBuffer *gb, editorStatus *status){
+int exMode(WINDOW **win, gapBuffer *gb, editorStatus *status){
   werase(win[CMD_WIN]);
   wprintw(win[CMD_WIN], "%s", ":");
   wrefresh(win[CMD_WIN]);
@@ -876,7 +876,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStatus *status){
     }
     else if(key == KEY_ESC) status->cmdLoop = 0;
     else if(key == KEY_RESIZE) winResizeEvent(win, gb, status);
-    else if(key == ':') commandBar(win, gb, status);
+    else if(key == ':') exMode(win, gb, status);
     else{
       cmdNormal(win, gb, status, key);
       status->cmdLoop = 0;
