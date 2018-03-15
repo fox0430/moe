@@ -8,6 +8,7 @@
 #include <ncurses.h>
 #include <ctype.h>
 #include <sys/stat.h>
+#include <limits.h>
 #include "moe.h"
 #include "mathutility.h"
 
@@ -210,7 +211,7 @@ int saveFile(WINDOW **win, gapBuffer* gb, editorStatus *status){
   if(strcmp(status->filename, "No name") == 0){
     int   i = 0;
     char  ch, 
-          filename[256];
+          filename[NAME_MAX];
     wattron(win[CMD_WIN], COLOR_PAIR(4));
     werase(win[CMD_WIN]);
     wprintw(win[CMD_WIN], "Please input file name: ");
@@ -218,7 +219,7 @@ int saveFile(WINDOW **win, gapBuffer* gb, editorStatus *status){
     wattron(win[CMD_WIN], COLOR_PAIR(3));
     echo();
     while(1){
-      if((ch = wgetch(win[CMD_WIN])) == 10 || i > 255) break;
+      if((ch = wgetch(win[CMD_WIN])) == 10 || i > NAME_MAX) break;
       filename[i] = ch;
       i++;
     }

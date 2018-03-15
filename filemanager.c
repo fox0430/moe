@@ -2,7 +2,9 @@
 #include<ncurses.h>
 #include<stdlib.h>
 #include<string.h>
-#include "moe.h"
+#include<unistd.h>
+#include<limits.h>
+#include"moe.h"
 
 int printDirEntry(WINDOW *win, struct dirent **nameList, int num, int currentPosi);
 void editorStatusInit(editorStatus* status);
@@ -15,17 +17,26 @@ int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path
   curs_set(0);    // disable cursor;
   struct dirent **nameList;
 
-  int num = scandir(path, &nameList, NULL, alphasort);
-  if(num == -1){
-    wprintw(win[2], "File manager: error!");
-    return -1;
-  }
+  char currentPath[PATH_MAX];
+  strcpy(currentPath, path);
 
   int isViewUpdate = true,
+      moveDir = true,
       currentPosi = 0,
+      num,
       key;
 
   while(1){
+    if(moveDir == true){
+      num = scandir(currentPath, &nameList, NULL, alphasort);
+      if(num == -1){
+        wprintw(win[2], "File manager: error!");
+        return -1;
+      }
+      currentPosi = 0;
+      moveDir = false;
+      isViewUpdate = true;
+    }
     if(isViewUpdate){
       printDirEntry(win[0], nameList, num, currentPosi);
       isViewUpdate = false;
@@ -47,28 +58,35 @@ int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path
         }
         break;
       case 10:    // enter key
-        {
-          int result = judgeFileOrDir(nameList[currentPosi]->d_name);
-          if(result == 1){
-            free(nameList);
-            num = scandir(path, &nameList, NULL, alphasort);
-            if(num == -1){
-              wprintw(win[2], "File manager: error!");
-              return -1;
-            }
-            isViewUpdate = true;
+          if(currentPosi == 0) break;
+          else if(currentPosi == 1){
+            chdir("../");
+            getcwd(currentPath, sizeof(path));
+            moveDir = true;
           }else{
-            editorStatusInit(status);
-            strcpy(status->filename, nameList[currentPosi]->d_name);
-            gapBufferFree(gb);
-            gapBufferInit(gb);
-            insNewLine(gb, status, 0);
-            openFile(gb, status);
-            free(nameList);
-            curs_set(1);
-            return 0;
+            int result = judgeFileOrDir(nameList[currentPosi]->d_name);
+            if(result == 1){
+              strcpy(currentPath, nameList[currentPosi]->d_name);
+              free(nameList);
+              moveDir = true;
+            }else{
+              editorStatusInit(status);
+              /*
+              char fullPath[PATH_MAX]
+              strcpy(fullPath, currentPath);
+              strcat(fullPath, nameList[currentPosi]->d_name);
+              */
+              strcpy(status->filename, nameList[currentPosi]->d_name);
+              gapBufferFree(gb);
+              gapBufferInit(gb);
+              insNewLine(gb, status, 0);
+              openFile(gb, status);
+              free(nameList);
+              curs_set(1);
+              return 0;
+            }
           }
-        }
+          break;
       case ':':
        curs_set(1);
        exMode(win, gb, status);
