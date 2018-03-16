@@ -1,6 +1,7 @@
 #ifndef  MOE_MOE_H
 #define MOE_MOE_H
 
+#include <limits.h>
 #include "gapbuffer.h"
 #include "chararray.h"
 #include "view.h"
@@ -24,7 +25,8 @@ typedef struct editorStatus{
   registers rgst;
   editorView view;
   cursorPosition cursor;
-  char filename[256];
+  char  filename[NAME_MAX],
+        currentDir[PATH_MAX];
   int   currentLine,
         positionInCurrentLine,
         expandedPosition,

@@ -9,6 +9,7 @@
 #include <ctype.h>
 #include <sys/stat.h>
 #include <limits.h>
+#include <unistd.h>
 #include "moe.h"
 #include "mathutility.h"
 
@@ -174,6 +175,7 @@ void editorStatusInit(editorStatus* status){
   status->mode = NORMAL_MODE;
   status->cmdLoop = 0;
   strcpy(status->filename, "No name");
+  getcwd(status->currentDir, PATH_MAX);
   status->numOfChange = 0;
   status->debugMode = OFF;
   registersInit(status);
@@ -349,7 +351,7 @@ int exMode(WINDOW **win, gapBuffer *gb, editorStatus *status){
         }
       }
     }else if(cmd[0] == 'e'){  // open file or dir
-      char filename[256];
+      char filename[NAME_MAX];
 
       if(strlen(cmd) < 3){
         werase(win[CMD_WIN]);
