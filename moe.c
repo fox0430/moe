@@ -1013,14 +1013,17 @@ int main(int argc, char* argv[]){
 
   startCurses(status);
   winInit(win);
+  printStatBarInit(win, gb, status);
 
   if(argc < 2) newFile(gb, status);
   else{
-    strcpy(status->filename, argv[1]);
-    openFile(gb, status);
+    if(judgeFileOrDir(argv[1]) == 1){
+      fileManageMode(win, gb, status, argv[1]);
+    }else{
+      strcpy(status->filename, argv[1]);
+      openFile(gb, status);
+    }
   }
-
-  printStatBarInit(win, gb, status);
 
   normalMode(win, gb, status);
 

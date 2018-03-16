@@ -58,29 +58,32 @@ int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path
         }
         break;
       case 10:    // enter key
-          if(currentPosi == 0) break;
-          else if(currentPosi == 1){
+          if(currentPosi == 0){
+            moveDir = true;
+          }else if(currentPosi == 1){
             chdir("../");
             getcwd(currentPath, sizeof(path));
             moveDir = true;
           }else{
             int result = judgeFileOrDir(nameList[currentPosi]->d_name);
             if(result == 1){
-              strcpy(currentPath, nameList[currentPosi]->d_name);
+              chdir(nameList[currentPosi]->d_name);
+              getcwd(currentPath, sizeof(path));
               free(nameList);
               moveDir = true;
             }else{
+              char fullPath[PATH_MAX];
               editorStatusInit(status);
-              /*
-              char fullPath[PATH_MAX]
+
               strcpy(fullPath, currentPath);
               strcat(fullPath, nameList[currentPosi]->d_name);
-              */
               strcpy(status->filename, nameList[currentPosi]->d_name);
+
               gapBufferFree(gb);
               gapBufferInit(gb);
               insNewLine(gb, status, 0);
               openFile(gb, status);
+
               free(nameList);
               curs_set(1);
               return 0;
