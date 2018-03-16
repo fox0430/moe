@@ -737,7 +737,9 @@ int cmdE(WINDOW **win, gapBuffer *gb, editorStatus *status, char *filename){
   if(result == 1){   // open file manager
     status->mode = FILER_MODE;
     printStatBar(win, gb, status);
+    noecho();
     fileManageMode(win, gb, status, filename);
+    noecho();
     status->view.isUpdated = true;
     seekCursor(&status->view, gb, status->currentLine, status->positionInCurrentLine);
   }else{
@@ -1018,7 +1020,9 @@ int main(int argc, char* argv[]){
   if(argc < 2) newFile(gb, status);
   else{
     if(judgeFileOrDir(argv[1]) == 1){
+      noecho();
       fileManageMode(win, gb, status, argv[1]);
+      echo();
     }else{
       strcpy(status->filename, argv[1]);
       openFile(gb, status);

@@ -100,12 +100,17 @@ int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path
 
 int printDirEntry(WINDOW *win, struct dirent **nameList, int num, int currentPosi){
   werase(win);
-  for(int i=0; i<num; i++)
-    if(i == currentPosi){
+  int start = currentPosi - win->_maxy;
+  if(start < 0) start = 0;
+  
+  for(int i=start, j = 0; i<num;  i++, j++){
+    if(j > win->_maxy) break;
+    else if(i == currentPosi){
       wattron(win, A_UNDERLINE);
       wprintw(win, "%s\n", nameList[i]->d_name);
       wattrset(win, A_NORMAL);
     }else wprintw(win, "%s\n", nameList[i]->d_name);
+  }
 
   wrefresh(win);
 
