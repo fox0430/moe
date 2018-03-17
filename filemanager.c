@@ -12,6 +12,7 @@
 #define CMD_WIN 2
 
 int printDirEntry(WINDOW *win, struct dirent **nameList, int num, int currentPosi);
+void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStatus *status);
 void editorStatusInit(editorStatus* status);
 int printStatBar(WINDOW *win, gapBuffer *gb, editorStatus *status);
 int insNewLine(gapBuffer *gb, editorStatus *status, int position);
@@ -65,7 +66,7 @@ int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path
           isViewUpdate = true;
         }
         break;
-      case 'D':
+      case 'D':   // delete file
         echo();
         werase(win[CMD_WIN]);
         wprintw(win[CMD_WIN], "delete %s? 'y' or 'n': ", nameList[currentPosi]->d_name);
@@ -114,6 +115,10 @@ int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path
             }
           }
           break;
+      case KEY_RESIZE:
+        winResizeEvent(win, gb, status);
+        isViewUpdate = true;
+        break;
       case ':':
        curs_set(1);
        exMode(win, gb, status);

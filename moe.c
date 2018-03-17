@@ -163,8 +163,10 @@ void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStatus *status){
   winResizeMove(win[MAIN_WIN], LINES-2, COLS, 0, 0);
   winResizeMove(win[STATE_WIN], 1, COLS, LINES-2, 0);
   winResizeMove(win[CMD_WIN], 1, COLS, LINES-1, 0);
-  resizeEditorView(&status->view, gb, LINES-2, COLS-status->view.widthOfLineNum-1, status->view.widthOfLineNum);
-  seekCursor(&status->view, gb, status->currentLine, status->positionInCurrentLine);
+  if(status->mode != FILER_MODE){
+    resizeEditorView(&status->view, gb, LINES-2, COLS-status->view.widthOfLineNum-1, status->view.widthOfLineNum);
+    seekCursor(&status->view, gb, status->currentLine, status->positionInCurrentLine);
+  }
   printStatBarInit(win[STATE_WIN], gb, status);
 }
 
