@@ -7,7 +7,9 @@
 #include"moe.h"
 
 #define FILER_MODE 2
+#define MAIN_WIN 0
 #define STATE_WIN 1
+#define CMD_WIN 2
 
 int printDirEntry(WINDOW *win, struct dirent **nameList, int num, int currentPosi);
 void editorStatusInit(editorStatus* status);
@@ -27,28 +29,28 @@ int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path
   strcpy(currentPath, path);
 
   int isViewUpdate = true,
-      moveDir = true,
+      refreshNameList = true,
       currentPosi = 0,
       num,
       key;
 
   while(1){
-    if(moveDir == true){
+    if(refreshNameList == true){
       num = scandir(currentPath, &nameList, NULL, alphasort);
       if(num == -1){
-        wprintw(win[2], "File manager: error!");
+        wprintw(win[CMD_WIN], "File manager: error!");
         return -1;
       }
       currentPosi = 0;
-      moveDir = false;
+      refreshNameList = false;
       isViewUpdate = true;
     }
     if(isViewUpdate){
-      printDirEntry(win[0], nameList, num, currentPosi);
+      printDirEntry(win[MAIN_WIN], nameList, num, currentPosi);
       isViewUpdate = false;
     }
 
-    key = wgetch(win[0]);
+    key = wgetch(win[MAIN_WIN]);
 
     switch(key){
       case 'k':
@@ -63,20 +65,36 @@ int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path
           isViewUpdate = true;
         }
         break;
+      case 'D':
+        echo();
+        werase(win[CMD_WIN]);
+        wprintw(win[CMD_WIN], "delete %s? 'y' or 'n': ", nameList[currentPosi]->d_name);
+        nocbreak();
+        if(wgetch(win[CMD_WIN]) == 'y'){
+          remove(nameList[currentPosi]->d_name);
+          werase(win[CMD_WIN]);
+          wprintw(win[CMD_WIN], "deleted %s", nameList[currentPosi]->d_name);
+          refreshNameList = true;
+        }else{
+          wgetch(win[CMD_WIN]);   // skip enter key
+        }
+        cbreak();
+        noecho();
+        break;
       case 10:    // enter key
           if(currentPosi == 0){
-            moveDir = true;
+            refreshNameList = true;
           }else if(currentPosi == 1){
             chdir("../");
             getcwd(currentPath, sizeof(path));
-            moveDir = true;
+            refreshNameList = true;
           }else{
             int result = judgeFileOrDir(nameList[currentPosi]->d_name);
             if(result == 1){
               chdir(nameList[currentPosi]->d_name);
               getcwd(currentPath, sizeof(path));
               free(nameList);
-              moveDir = true;
+              refreshNameList = true;
             }else{
               char fullPath[PATH_MAX];
               editorStatusInit(status);
