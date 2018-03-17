@@ -27,8 +27,8 @@
 #define STATE_WIN 1
 #define CMD_WIN 2
 
-void printStatBarInit(WINDOW **win, gapBuffer *gb, editorStatus *status);
-int printStatBar(WINDOW **win, gapBuffer *gb, editorStatus *status);
+void printStatBarInit(WINDOW *win, gapBuffer *gb, editorStatus *status);
+int printStatBar(WINDOW *win, gapBuffer *gb, editorStatus *status);
 int registersInit(editorStatus *status);
 void editorSettingInit(editorStatus *status);
 int cmdE(WINDOW **win, gapBuffer *gb, editorStatus *status, char *filename);
@@ -165,7 +165,7 @@ void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStatus *status){
   winResizeMove(win[CMD_WIN], 1, COLS, LINES-1, 0);
   resizeEditorView(&status->view, gb, LINES-2, COLS-status->view.widthOfLineNum-1, status->view.widthOfLineNum);
   seekCursor(&status->view, gb, status->currentLine, status->positionInCurrentLine);
-  printStatBarInit(win, gb, status);
+  printStatBarInit(win[STATE_WIN], gb, status);
 }
 
 void editorStatusInit(editorStatus* status){
@@ -249,31 +249,31 @@ int saveFile(WINDOW **win, gapBuffer* gb, editorStatus *status){
   return 0;
 }
 
-void printStatBarInit(WINDOW **win, gapBuffer *gb, editorStatus *status){
-  werase(win[STATE_WIN]);
-  wbkgd(win[STATE_WIN], COLOR_PAIR(1));
+void printStatBarInit(WINDOW *win, gapBuffer *gb, editorStatus *status){
+  werase(win);
+  wbkgd(win, COLOR_PAIR(1));
   printStatBar(win, gb, status);
 }
 
-int printStatBar(WINDOW **win, gapBuffer *gb, editorStatus *status){
-  werase(win[STATE_WIN]);
-  wattron(win[STATE_WIN], COLOR_PAIR(2));
+int printStatBar(WINDOW *win, gapBuffer *gb, editorStatus *status){
+  werase(win);
+  wattron(win, COLOR_PAIR(2));
   if(status->mode == FILER_MODE){
-    wprintw(win[STATE_WIN], "%s ", " FILER");
-    wattron(win[STATE_WIN], COLOR_PAIR(1));
-    wrefresh(win[STATE_WIN]);
+    wprintw(win, "%s ", " FILER");
+    wattron(win, COLOR_PAIR(1));
+    wrefresh(win);
     return 0;
   }
   if(status->mode == NORMAL_MODE)
-    wprintw(win[STATE_WIN], "%s ", " NORMAL");
+    wprintw(win, "%s ", " NORMAL");
   else if(status->mode == INSERT_MODE)
-    wprintw(win[STATE_WIN], "%s ", " INSERT");
-  wattron(win[STATE_WIN], COLOR_PAIR(1));
-  wprintw(win[STATE_WIN], " %s ", status->filename);
-  if(strcmp(status->filename, "No name") == 0) wprintw(win[STATE_WIN], " [+]");
-  mvwprintw(win[STATE_WIN], 0, COLS-13, "%d/%d ", status->currentLine + 1, gb->size);
-  mvwprintw(win[STATE_WIN], 0, COLS-6, " %d/%d", status->positionInCurrentLine, gapBufferAt(gb, status->currentLine)->numOfChar);
-  wrefresh(win[STATE_WIN]);
+    wprintw(win, "%s ", " INSERT");
+  wattron(win, COLOR_PAIR(1));
+  wprintw(win, " %s ", status->filename);
+  if(strcmp(status->filename, "No name") == 0) wprintw(win, " [+]");
+  mvwprintw(win, 0, COLS-13, "%d/%d ", status->currentLine + 1, gb->size);
+  mvwprintw(win, 0, COLS-6, " %d/%d", status->positionInCurrentLine, gapBufferAt(gb, status->currentLine)->numOfChar);
+  wrefresh(win);
   return 0;
 }
 
@@ -735,8 +735,6 @@ int cmdE(WINDOW **win, gapBuffer *gb, editorStatus *status, char *filename){
   int result = judgeFileOrDir(filename);
 
   if(result == 1){   // open file manager
-    status->mode = FILER_MODE;
-    printStatBar(win, gb, status);
     noecho();
     fileManageMode(win, gb, status, filename);
     noecho();
@@ -882,7 +880,7 @@ void normalMode(WINDOW **win, gapBuffer *gb, editorStatus *status){
   noecho();
 
   while(1){
-    printStatBar(win, gb, status); 
+    printStatBar(win[STATE_WIN], gb, status); 
     if(status->view.isUpdated) updateView(&status->view, win[MAIN_WIN], gb, status->currentLine);
     if(status->cursor.isUpdated) updateCursor(&status->cursor, &status->view, status->currentLine, status->positionInCurrentLine);
     
@@ -916,7 +914,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStatus* status){
   noecho();
 
   while(1){
-    printStatBar(win, gb, status);
+    printStatBar(win[STATE_WIN], gb, status);
     if(status->view.isUpdated) updateView(&status->view, win[MAIN_WIN], gb, status->currentLine);
     if(status->cursor.isUpdated) updateCursor(&status->cursor, &status->view, status->currentLine, status->positionInCurrentLine);
     
@@ -1015,7 +1013,7 @@ int main(int argc, char* argv[]){
 
   startCurses(status);
   winInit(win);
-  printStatBarInit(win, gb, status);
+  printStatBarInit(win[STATE_WIN], gb, status);
 
   if(argc < 2) newFile(gb, status);
   else{

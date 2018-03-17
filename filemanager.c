@@ -6,14 +6,20 @@
 #include<limits.h>
 #include"moe.h"
 
+#define FILER_MODE 2
+#define STATE_WIN 1
+
 int printDirEntry(WINDOW *win, struct dirent **nameList, int num, int currentPosi);
 void editorStatusInit(editorStatus* status);
+int printStatBar(WINDOW *win, gapBuffer *gb, editorStatus *status);
 int insNewLine(gapBuffer *gb, editorStatus *status, int position);
 int openFile(gapBuffer *gb, editorStatus *status);
 int judgeFileOrDir(char *filename);
 int exMode(WINDOW **win, gapBuffer *gb, editorStatus *status);
 
 int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path){
+  status->mode = FILER_MODE;
+  printStatBar(win[STATE_WIN], gb, status);
   curs_set(0);    // disable cursor;
   struct dirent **nameList;
 
