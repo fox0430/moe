@@ -17,7 +17,6 @@ void editorStatusInit(editorStatus* status);
 int printStatBar(WINDOW *win, gapBuffer *gb, editorStatus *status);
 int insNewLine(gapBuffer *gb, editorStatus *status, int position);
 int openFile(gapBuffer *gb, editorStatus *status);
-int judgeFileOrDir(char *filename);
 int exMode(WINDOW **win, gapBuffer *gb, editorStatus *status);
 
 int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path){
@@ -90,8 +89,7 @@ int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path
             getcwd(currentPath, sizeof(path));
             refreshNameList = true;
           }else{
-            int result = judgeFileOrDir(nameList[currentPosi]->d_name);
-            if(result == 1){
+            if(nameList[currentPosi]->d_type == 4){
               chdir(nameList[currentPosi]->d_name);
               getcwd(currentPath, sizeof(path));
               free(nameList);
@@ -127,14 +125,14 @@ int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path
   }
 }
 
-void printCurrentEntry(WINDOW *win, char *name){
+void printCurrentEntry(WINDOW *win, struct dirent *name){
   wattron(win, A_UNDERLINE);
-  if(judgeFileOrDir(name) == 1){
+  if(name->d_type == 4){
     wattron(win, COLOR_PAIR(8));
-    wprintw(win, "%s/\n", name);
+    wprintw(win, "%s/\n", name->d_name);
     wattron(win, COLOR_PAIR(6));
   }else
-    wprintw(win, "%s\n", name);
+    wprintw(win, "%s\n", name->d_name);
 
   wattrset(win, A_NORMAL);
 }
@@ -147,9 +145,9 @@ int printDirEntry(WINDOW *win, struct dirent **nameList, int num, int currentPos
   for(int i=start, j = 0; i<num;  i++, j++){
     if(j > win->_maxy) break;
     else if(i == currentPosi){
-      printCurrentEntry(win, nameList[i]->d_name);
+      printCurrentEntry(win, nameList[i]);
     }else{
-      if(judgeFileOrDir(nameList[i]->d_name) == 1){
+      if(nameList[i]->d_type == 4){
         wattron(win, COLOR_PAIR(8));
         wprintw(win, "%s/\n", nameList[i]->d_name);
         wattron(win, COLOR_PAIR(6));
