@@ -17,6 +17,7 @@
 #define COLOR_DEFAULT -1
 #define BRIGHT_WHITE 231
 #define BRIGHT_GREEN 85
+#define LIGHT_BLUE 14
 #define GRAY 245
 #define ON 1
 #define OFF 0
@@ -86,6 +87,7 @@ int setCursesColor(){
   init_pair(5, COLOR_GREEN, COLOR_BLACK);
   init_pair(6, BRIGHT_WHITE, COLOR_DEFAULT);
   init_pair(7, BRIGHT_GREEN, COLOR_DEFAULT);
+  init_pair(8, LIGHT_BLUE, COLOR_DEFAULT);
   return 0;
 }
 
