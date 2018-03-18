@@ -126,8 +126,8 @@ int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path
 }
 
 void printCurrentEntry(WINDOW *win, struct dirent *name){
-  wattron(win, A_UNDERLINE);
-  if(name->d_type == 4){
+  wattron(win, A_REVERSE);
+  if(name->d_type == DT_DIR){
     wattron(win, COLOR_PAIR(8));
     wprintw(win, "%s/\n", name->d_name);
     wattron(win, COLOR_PAIR(6));
@@ -147,7 +147,7 @@ int printDirEntry(WINDOW *win, struct dirent **nameList, int num, int currentPos
     else if(i == currentPosi){
       printCurrentEntry(win, nameList[i]);
     }else{
-      if(nameList[i]->d_type == 4){
+      if(nameList[i]->d_type == DT_DIR){
         wattron(win, COLOR_PAIR(8));
         wprintw(win, "%s/\n", nameList[i]->d_name);
         wattron(win, COLOR_PAIR(6));
