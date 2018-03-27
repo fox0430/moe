@@ -129,10 +129,26 @@ void printCurrentEntry(WINDOW *win, struct dirent *name){
   wattron(win, A_REVERSE);
   if(name->d_type == DT_DIR){
     wattron(win, COLOR_PAIR(8));
-    wprintw(win, "%s/\n", name->d_name);
+//    wprintw(win, "%s/\n", name->d_name);
+    for(int i=0; i<strlen(name->d_name); i++){
+      if(i + 1 >= win->_maxx){
+        wprintw(win, "~");
+        break;
+      }
+      wprintw(win, "%c", name->d_name[i]);
+    }
+    wprintw(win, "\n");
     wattron(win, COLOR_PAIR(6));
-  }else
-    wprintw(win, "%s\n", name->d_name);
+  }else{
+    for(int i=0; i<strlen(name->d_name); i++){
+      if(i + 1 >= win->_maxx){
+        wprintw(win, "~");
+        break;
+      }
+      wprintw(win, "%c", name->d_name[i]);
+    }
+    wprintw(win, "\n");
+  }
 
   wattrset(win, A_NORMAL);
 }
@@ -149,10 +165,27 @@ int printDirEntry(WINDOW *win, struct dirent **nameList, int num, int currentPos
     }else{
       if(nameList[i]->d_type == DT_DIR){
         wattron(win, COLOR_PAIR(8));
-        wprintw(win, "%s/\n", nameList[i]->d_name);
+//        wprintw(win, "%s/\n", nameList[i]->d_name);
+        for(int j=0; j<strlen(nameList[i]->d_name); j++){
+          if(j + 1>= win->_maxx){
+            wprintw(win, "~");
+            break;
+          }
+          wprintw(win, "%c", nameList[i]->d_name[j]);
+        }
+        wprintw(win, "\n");
         wattron(win, COLOR_PAIR(6));
-      }else
-        wprintw(win, "%s\n", nameList[i]->d_name);
+      }else{
+//        wprintw(win, "%s\n", nameList[i]->d_name);
+        for(int j=0; j<strlen(nameList[i]->d_name); j++){
+          if(j + 1>= win->_maxx){
+            wprintw(win, "~");
+            break;
+          }
+          wprintw(win, "%c", nameList[i]->d_name[j]);
+        }
+        wprintw(win, "\n");
+      }
     }
   }
 
