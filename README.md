@@ -11,7 +11,7 @@ This project's goal is a funny animation editor and learning C.
 
    △Vim like keybinds (not completely)
   
-  ・porting to nim (https://github.com/fox0430/moe-for-nim)
+  ・porting to nim
 
   ・UTF-8
 
