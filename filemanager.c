@@ -26,7 +26,9 @@ int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path
   struct dirent **nameList;
 
   char currentPath[PATH_MAX];
-  strcpy(currentPath, path);
+  chdir(path);
+  getcwd(currentPath, PATH_MAX);
+  
 
   int isViewUpdate = true,
       refreshNameList = true,
@@ -86,20 +88,16 @@ int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path
             refreshNameList = true;
           }else if(currentPosi == 1){
             chdir("../");
-            getcwd(currentPath, sizeof(path));
+            getcwd(currentPath, PATH_MAX);
             refreshNameList = true;
           }else{
             if(nameList[currentPosi]->d_type == 4){
               chdir(nameList[currentPosi]->d_name);
-              getcwd(currentPath, sizeof(path));
+              getcwd(currentPath, PATH_MAX);
               free(nameList);
               refreshNameList = true;
             }else{
-              char fullPath[PATH_MAX];
               editorStatusInit(status);
-
-              strcpy(fullPath, currentPath);
-              strcat(fullPath, nameList[currentPosi]->d_name);
               strcpy(status->filename, nameList[currentPosi]->d_name);
 
               gapBufferFree(gb);
@@ -129,7 +127,6 @@ void printCurrentEntry(WINDOW *win, struct dirent *name){
   wattron(win, A_REVERSE);
   if(name->d_type == DT_DIR){
     wattron(win, COLOR_PAIR(8));
-//    wprintw(win, "%s/\n", name->d_name);
     for(int i=0; i<strlen(name->d_name); i++){
       if(i + 1 >= win->_maxx){
         wprintw(win, "~");
@@ -159,13 +156,12 @@ int printDirEntry(WINDOW *win, struct dirent **nameList, int num, int currentPos
   if(start < 0) start = 0;
   
   for(int i=start, j = 0; i<num;  i++, j++){
-    if(j > win->_maxy) break;
+    if(j > win->_maxy || win->_maxx < 2) break;
     else if(i == currentPosi){
       printCurrentEntry(win, nameList[i]);
     }else{
       if(nameList[i]->d_type == DT_DIR){
         wattron(win, COLOR_PAIR(8));
-//        wprintw(win, "%s/\n", nameList[i]->d_name);
         for(int j=0; j<strlen(nameList[i]->d_name); j++){
           if(j + 1>= win->_maxx){
             wprintw(win, "~");
@@ -176,7 +172,6 @@ int printDirEntry(WINDOW *win, struct dirent **nameList, int num, int currentPos
         wprintw(win, "\n");
         wattron(win, COLOR_PAIR(6));
       }else{
-//        wprintw(win, "%s\n", nameList[i]->d_name);
         for(int j=0; j<strlen(nameList[i]->d_name); j++){
           if(j + 1>= win->_maxx){
             wprintw(win, "~");
