@@ -17,7 +17,7 @@ This project's goal is a funny animation editor and learning C.
 
   ・Simple syntax highlight
 
-  ・Tterminal Multiplexer
+  ・Terminal Multiplexer
   
   ・Auto-complete
 
