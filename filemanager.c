@@ -91,6 +91,10 @@ int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path
               free(nameList);
               refreshNameList = true;
             }else{
+              if(status->numOfChange > 0){
+                printNoWriteError(win[CMD_WIN]);
+                break;
+              }
               editorStatusInit(status);
               strcpy(status->filename, nameList[currentPosi]->d_name);
 

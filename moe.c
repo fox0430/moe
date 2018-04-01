@@ -343,11 +343,7 @@ int exMode(WINDOW **win, gapBuffer *gb, editorStatus *status){
       if(cmd[i + 1] == '!' || status->numOfChange == 0) exitCurses();
       else if(cmd[i + 1] != '!'){
         if(status->numOfChange > 0 && saveFlag != true){
-          wattron(win[CMD_WIN], COLOR_PAIR(4));
-          werase(win[CMD_WIN]);
-          wprintw(win[CMD_WIN], "%s","Erorr: No write since last change");
-          wrefresh(win[CMD_WIN]);
-          wattroff(win[CMD_WIN], COLOR_PAIR(4));
+          printNoWriteError(win[CMD_WIN]);
         }
       }
     }else if(cmd[0] == 'e'){  // open file or dir
@@ -373,6 +369,14 @@ int exMode(WINDOW **win, gapBuffer *gb, editorStatus *status){
     }
   }
   return 0;
+}
+
+void printNoWriteError(WINDOW* win){
+  wattron(win, COLOR_PAIR(4));
+  werase(win);
+  wprintw(win, "%s","Erorr: No write since last change");
+  wrefresh(win);
+  wattroff(win, COLOR_PAIR(4));
 }
 
 int insNewLine(gapBuffer *gb, editorStatus *status, int position){
@@ -741,6 +745,10 @@ int cmdE(WINDOW **win, gapBuffer *gb, editorStatus *status, char *filename){
     status->view.isUpdated = true;
     seekCursor(&status->view, gb, status->currentLine, status->positionInCurrentLine);
   }else{
+    if(status->numOfChange > 0){
+      printNoWriteError(win[CMD_WIN]);
+      return 0;
+    }
     editorStatusInit(status);
     strcpy(status->filename, filename);
     gapBufferFree(gb);
