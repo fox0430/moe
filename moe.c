@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include "moe.h"
 #include "mathutility.h"
+#include "filemanager.h"
 
 #define KEY_ESC 27
 #define COLOR_DEFAULT -1
@@ -28,16 +29,11 @@
 #define STATE_WIN 1
 #define CMD_WIN 2
 
-void printStatBarInit(WINDOW *win, gapBuffer *gb, editorStatus *status);
-int printStatBar(WINDOW *win, gapBuffer *gb, editorStatus *status);
 int registersInit(editorStatus *status);
-void editorSettingInit(editorStatus *status);
 int cmdE(WINDOW **win, gapBuffer *gb, editorStatus *status, char *filename);
-int insNewLine(gapBuffer *gb, editorStatus *status, int position);
 int insertChar(gapBuffer *gb, editorStatus *status, int key);
 void insertMode(WINDOW **win, gapBuffer* gb, editorStatus* status);
-
-int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path);
+void editorSettingInit(editorStatus *status);
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStatus *status){
 #ifdef DEBUG

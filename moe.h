@@ -36,4 +36,12 @@ typedef struct editorStatus{
         debugMode;
 } editorStatus;
 
+void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStatus *status);
+void editorStatusInit(editorStatus* status);
+int insNewLine(gapBuffer *gb, editorStatus *status, int position);
+int openFile(gapBuffer *gb, editorStatus *status);
+int exMode(WINDOW **win, gapBuffer *gb, editorStatus *status);
+void printStatBarInit(WINDOW *win, gapBuffer *gb, editorStatus *status);
+int printStatBar(WINDOW *win, gapBuffer *gb, editorStatus *status);
+
 #endif

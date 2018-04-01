@@ -4,7 +4,7 @@
 #include<string.h>
 #include<unistd.h>
 #include<limits.h>
-#include"moe.h"
+#include "filemanager.h"
 
 #define FILER_MODE 2
 #define MAIN_WIN 0
@@ -12,12 +12,6 @@
 #define CMD_WIN 2
 
 int printDirEntry(WINDOW *win, struct dirent **nameList, int num, int currentPosi);
-void winResizeEvent(WINDOW **win, gapBuffer *gb, editorStatus *status);
-void editorStatusInit(editorStatus* status);
-int printStatBar(WINDOW *win, gapBuffer *gb, editorStatus *status);
-int insNewLine(gapBuffer *gb, editorStatus *status, int position);
-int openFile(gapBuffer *gb, editorStatus *status);
-int exMode(WINDOW **win, gapBuffer *gb, editorStatus *status);
 
 int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path){
   status->mode = FILER_MODE;
@@ -91,7 +85,7 @@ int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path
             getcwd(currentPath, PATH_MAX);
             refreshNameList = true;
           }else{
-            if(nameList[currentPosi]->d_type == 4){
+            if(nameList[currentPosi]->d_type == DT_DIR){
               chdir(nameList[currentPosi]->d_name);
               getcwd(currentPath, PATH_MAX);
               free(nameList);
