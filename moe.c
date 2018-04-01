@@ -352,7 +352,7 @@ int exMode(WINDOW **win, gapBuffer *gb, editorStatus *status){
       if(strlen(cmd) < 3){
         werase(win[CMD_WIN]);
         wattron(win[CMD_WIN], COLOR_PAIR(4));
-        wprintw(win[CMD_WIN], "%S", "Error: cannot open file or dir");
+        wprintw(win[CMD_WIN], "%S", "Error: cannot open this file or dir");
         wrefresh(win[CMD_WIN]);
         wattroff(win[CMD_WIN], COLOR_PAIR(4));
       }else{
