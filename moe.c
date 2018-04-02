@@ -318,13 +318,11 @@ int parseCmdEString(char* cmd, char* path){
 
   // 正規表現のコンパイル
   if(regcomp(&preg, pattern, REG_EXTENDED|REG_NEWLINE) != 0){
-    assert(false);
     return -1;
   }
 
   // 正規表現による検索
   if(regexec(&preg, cmd, num, pmatch, 0) != 0) {
-    assert(false);
     return -1;
   }else{
     int begin, end;
