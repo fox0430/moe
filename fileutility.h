@@ -3,7 +3,8 @@
 
 #include <stdbool.h>
 
-int judgeFileOrDir(char *filename);
-bool existsFile(char *filename);
+int judgeFileOrDir(char *path);
+bool existsFile(char *path);
+void expandHomeDirectory(char* path, char* expanded);
 
 #endif

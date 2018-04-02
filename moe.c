@@ -9,6 +9,7 @@
 #include <ctype.h>
 #include <limits.h>
 #include <unistd.h>
+#include <regex.h>
 #include "moe.h"
 #include "mathutility.h"
 #include "filemanager.h"
@@ -309,6 +310,42 @@ int pageDown(gapBuffer *buffer, editorStatus *status){
   return 0;
 }
 
+int parseCmdEString(char* cmd, char* path){
+  regex_t preg;
+  const char* pattern = "^e(([[:blank:]]+)\"(.+)\"(.*))|(([[:blank:]]+)([^ ]+)(.*))$";
+  const size_t num = 8;
+  regmatch_t pmatch[num]; // 正規表現にマッチしたインデックスを格納する構造体の配列
+
+  // 正規表現のコンパイル
+  if(regcomp(&preg, pattern, REG_EXTENDED|REG_NEWLINE) != 0){
+    assert(false);
+    return -1;
+  }
+
+  // 正規表現による検索
+  if(regexec(&preg, cmd, num, pmatch, 0) != 0) {
+    assert(false);
+    return -1;
+  }else{
+    int begin, end;
+    if(pmatch[3].rm_so != -1){ // quoted
+      begin = pmatch[3].rm_so;
+      end = pmatch[3].rm_eo;
+    }else{ // not quoted
+      begin = pmatch[7].rm_so;
+      end = pmatch[7].rm_eo;
+    }
+    for(int i=begin; i<end; ++i){
+        path[i-begin]=cmd[i];
+    }
+    path[end-begin]='\0';
+  }
+  // オブジェクトのメモリ開放
+  regfree(&preg);
+
+  return 0;
+}
+
 int exMode(WINDOW **win, gapBuffer *gb, editorStatus *status){
   werase(win[CMD_WIN]);
   wprintw(win[CMD_WIN], "%s", ":");
@@ -339,8 +376,6 @@ int exMode(WINDOW **win, gapBuffer *gb, editorStatus *status){
         }
       }
     }else if(cmd[0] == 'e'){  // open file or dir
-      char filename[NAME_MAX];
-
       if(strlen(cmd) < 3){
         werase(win[CMD_WIN]);
         wattron(win[CMD_WIN], COLOR_PAIR(4));
@@ -348,9 +383,16 @@ int exMode(WINDOW **win, gapBuffer *gb, editorStatus *status){
         wrefresh(win[CMD_WIN]);
         wattroff(win[CMD_WIN], COLOR_PAIR(4));
       }else{
-        strcpy(filename, cmd);
-        for(int j=0; j<strlen(filename) - 2; j++) filename[j] = filename[j + 2];
-        filename[strlen(filename) - 2] = '\0';
+        char parsed[PATH_MAX];
+        if(parseCmdEString(cmd, parsed) == -1 || strlen(parsed) == 0) return 0; // failed to parse or empty input
+
+        char* filename;
+        if(parsed[0] == '~'){
+          char expanded[PATH_MAX];
+          expandHomeDirectory(parsed, expanded);
+          filename = expanded;
+        }else filename = parsed;
+
         cmdE(win, gb, status, filename);
         break;
       }

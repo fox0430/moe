@@ -25,7 +25,7 @@ typedef struct editorStatus{
   registers rgst;
   editorView view;
   cursorPosition cursor;
-  char  filename[NAME_MAX],
+  char  filename[PATH_MAX],
         currentDir[PATH_MAX];
   int   currentLine,
         positionInCurrentLine,
