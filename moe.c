@@ -223,7 +223,8 @@ int saveFile(WINDOW **win, gapBuffer* gb, editorStat *stat){
     }
   
   for(int i=0; i < gb->size; i++){
-    fprintf(fp, "%s\n",gapBufferAt(gb, i)->elements);
+    fprintf(fp, "%s",gapBufferAt(gb, i)->elements);
+    if(i+1 < gb->size) fprintf(fp, "\n");
   }
 
   mvwprintw(win[CMD_WIN], 0, 0, "saved..., %d times changed", stat->numOfChange);
