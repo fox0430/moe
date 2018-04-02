@@ -78,37 +78,29 @@ int fileManageMode(WINDOW **win, gapBuffer *gb, editorStatus *status, char *path
         noecho();
         break;
       case 10:    // enter key
-          if(currentPosi == 0){
-            refreshNameList = true;
-          }else if(currentPosi == 1){
-            chdir("../");
-            getcwd(currentPath, PATH_MAX);
-            refreshNameList = true;
-          }else{
-            if(nameList[currentPosi]->d_type == DT_DIR){
-              chdir(nameList[currentPosi]->d_name);
-              getcwd(currentPath, PATH_MAX);
-              free(nameList);
-              refreshNameList = true;
-            }else{
-              if(status->numOfChange > 0){
-                printNoWriteError(win[CMD_WIN]);
-                break;
-              }
-              editorStatusInit(status);
-              strcpy(status->filename, nameList[currentPosi]->d_name);
-
-              gapBufferFree(gb);
-              gapBufferInit(gb);
-              insNewLine(gb, status, 0);
-              openFile(gb, status);
-
-              free(nameList);
-              curs_set(1);
-              return 0;
-            }
+        if(nameList[currentPosi]->d_type == DT_DIR){
+          chdir(nameList[currentPosi]->d_name);
+          getcwd(currentPath, PATH_MAX);
+          free(nameList);
+          refreshNameList = true;
+        }else if(nameList[currentPosi]->d_type == DT_REG){
+          if(status->numOfChange > 0){
+            printNoWriteError(win[CMD_WIN]);
+            break;
           }
-          break;
+          editorStatusInit(status);
+          strcpy(status->filename, nameList[currentPosi]->d_name);
+
+          gapBufferFree(gb);
+          gapBufferInit(gb);
+          insNewLine(gb, status, 0);
+          openFile(gb, status);
+
+          free(nameList);
+          curs_set(1);
+          return 0;
+        }
+        break;
       case KEY_RESIZE:
         winResizeEvent(win, gb, status);
         isViewUpdate = true;
