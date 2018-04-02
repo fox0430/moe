@@ -7,12 +7,12 @@
 #include <signal.h>
 #include <ncurses.h>
 #include <ctype.h>
-#include <sys/stat.h>
 #include <limits.h>
 #include <unistd.h>
 #include "moe.h"
 #include "mathutility.h"
 #include "filemanager.h"
+#include "fileutility.h"
 
 #define KEY_ESC 27
 #define COLOR_DEFAULT -1
@@ -112,14 +112,6 @@ void signal_handler(int SIG){
 void exitCurses(){
   endwin(); 
   exit(1);
-}
-
-int judgeFileOrDir(char *filename){
-  struct stat st;
-  stat(filename, &st);
-
-  if((st.st_mode & S_IFMT) == S_IFDIR) return 1;    // directory
-  else return 0;
 }
 
 int openFile(gapBuffer *gb, editorStatus *status){
@@ -736,15 +728,15 @@ int linePaste(gapBuffer *gb, editorStatus *status){
 }
 
 int cmdE(WINDOW **win, gapBuffer *gb, editorStatus *status, char *filename){
-  int result = judgeFileOrDir(filename);
+  int fileOrDir = judgeFileOrDir(filename);
 
-  if(result == 1){   // open file manager
+  if(fileOrDir == 2){   // open file manager
     noecho();
     fileManageMode(win, gb, status, filename);
     noecho();
     status->view.isUpdated = true;
     seekCursor(&status->view, gb, status->currentLine, status->positionInCurrentLine);
-  }else{
+  }else if(!existsFile(filename) || fileOrDir == 1){ // regular file or new file
     if(status->numOfChange > 0){
       printNoWriteError(win[CMD_WIN]);
       return 0;
@@ -1025,7 +1017,7 @@ int main(int argc, char* argv[]){
 
   if(argc < 2) newFile(gb, status);
   else{
-    if(judgeFileOrDir(argv[1]) == 1){
+    if(judgeFileOrDir(argv[1]) == 2){
       noecho();
       fileManageMode(win, gb, status, argv[1]);
       echo();
