@@ -13,8 +13,8 @@ int judgeFileOrDir(char *filename){
 bool existsFile(char* path){
   struct stat st;
 
-  if (stat(path, &st) != 0){
-      return false;
+  if(stat(path, &st) != 0){
+    return false;
   }
 
   return S_ISREG(st.st_mode);
