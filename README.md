@@ -10,6 +10,8 @@ This project's goal is a funny animation editor and learning C.
    ✔Vector and GapBuffer
 
    △Vim like keybinds (not completely)
+
+   △File Manager Mode
   
   ・porting to nim
 
