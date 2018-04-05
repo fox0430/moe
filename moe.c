@@ -37,7 +37,7 @@ void insertMode(WINDOW **win, gapBuffer* gb, editorStatus* status);
 void editorSettingInit(editorStatus *status);
 
 int debugMode(WINDOW **win, gapBuffer *gb, editorStatus *status){
-#ifdef DEBUG
+#ifdef MOEDEBUG
   int returnY = status->cursor.y,returnX = status->cursor.x;
   werase(win[CMD_WIN]);
   mvwprintw(win[CMD_WIN], 0, 0, "debug mode: ");
@@ -230,7 +230,8 @@ int saveFile(WINDOW **win, gapBuffer* gb, editorStatus *status){
     }
   
   for(int i=0; i < gb->size; i++){
-    fprintf(fp, "%s\n",gapBufferAt(gb, i)->elements);
+    fprintf(fp, "%s",gapBufferAt(gb, i)->elements);
+    if(i+1 < gb->size) fprintf(fp, "\n");
   }
 
   mvwprintw(win[CMD_WIN], 0, 0, "saved..., %d times changed", status->numOfChange);
@@ -697,23 +698,13 @@ int replaceChar(gapBuffer *gb, editorStatus* status, char ch){
   return 0;
 }
 
-int moveFirstLine(gapBuffer *gb, editorStatus *status){
-  if(status->currentLine == 0) return 0;
-  status->currentLine = 0;
-  int maxPosition = gapBufferAt(gb, status->currentLine)->numOfChar-1+(status->mode == INSERT_MODE);
-  status->positionInCurrentLine  = maxPosition >= status->expandedPosition ? status->expandedPosition : maxPosition;
-  if(status->positionInCurrentLine < 0) status->positionInCurrentLine = 0;
-  seekCursor(&status->view, gb, status->currentLine, status->positionInCurrentLine); 
+int moveToFirstLine(gapBuffer *gb, editorStatus *status){
+  jumpLine(status, gb, 0);
   return 0;
 }
 
-int moveLastLine(gapBuffer *gb, editorStatus *status){
-  if(status->currentLine == gb->size - 1) return 0;
-  status->currentLine = gb->size - 1;
-  int maxPosition = gapBufferAt(gb, status->currentLine)->numOfChar-1+(status->mode == INSERT_MODE);
-  status->positionInCurrentLine = maxPosition >= status->expandedPosition ? status->expandedPosition : maxPosition;
-  if(status->positionInCurrentLine < 0) status->positionInCurrentLine = 0;
-  seekCursor(&status->view, gb, status->currentLine, status->positionInCurrentLine); 
+int moveToLastLine(gapBuffer *gb, editorStatus* status){
+  jumpLine(status, gb, gb->size-1);
   return 0;
 }
 
@@ -847,13 +838,11 @@ void cmdNormal(WINDOW **win, gapBuffer *gb, editorStatus *status, int key){
       moveToLastOfLine(status, gb);
       break;
     case 'g':
-      if(wgetch(win[MAIN_WIN]) == 'g') moveFirstLine(gb, status);
-      else break;
+      if(wgetch(win[MAIN_WIN]) == 'g') moveToFirstLine(gb, status);
       break;
     case 'G':
-      moveLastLine(gb, status);
+      moveToLastLine(gb, status);
       break;
-
     case KEY_DC:
     case 'x':
       if(status->cmdLoop > gapBufferAt(gb,status->currentLine)->numOfChar - status->positionInCurrentLine)

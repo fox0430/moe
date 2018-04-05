@@ -13,13 +13,13 @@ This project's goal is a funny animation editor and learning C.
 
    △File Manager Mode
   
-  ・porting to nim (https://github.com/fox0430/moe-for-nim)
+  ・porting to nim
 
   ・UTF-8
 
   ・Simple syntax highlight
 
-  ・Tterminal Multiplexer
+  ・Terminal Multiplexer
   
   ・Auto-complete
 
