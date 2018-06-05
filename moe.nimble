@@ -10,6 +10,3 @@ bin           = @["moe"]
 # Dependencies
 
 requires "nim >= 0.18.0"
-
-srcDir = "src"
-bin = @["moe"]
