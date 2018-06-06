@@ -4,8 +4,8 @@ type GapBuffer*[T] = object
   capacity: int # Amount of secured memory
   gapBegin, gapEnd: int # 半開区間[gapBegin,gapEnd)を隙間とする
 
-proc initGapBuffer*[T](): GapBuffer =
-  result.buffer = newSeq[T]()
+proc initGapBuffer*[T](): GapBuffer[T] =
+  result.buffer = newSeq[T](1)
   result.capacity = 1
   result.gapEnd = 1
 
@@ -47,8 +47,12 @@ proc insert*[T](gapBuffer: var GapBuffer, element: T, position: int) =
   inc(gapBuffer.gapBegin)
   inc(gapBuffer.size)
 
+proc add*[T](gapBuffer: var GapBuffer[T], val: T) =
+  gapBuffer.insert(val, gapBuffer.len)
+
+
 proc del*(gapBuffer: var GapBuffer, delBegin, delEnd: int) =
-  ## Delete [begin,end] elements
+  ## Delete [delBegin, delEnd) elements
   doAssert(0<=delBegin and delBegin <= delEnd and delEnd <= gapBuffer.size, "Gapbuffer: Invalid interval.")
 
   let
@@ -70,7 +74,7 @@ proc del*(gapBuffer: var GapBuffer, delBegin, delEnd: int) =
   gapBuffer.size -= delEnd - delBegin
   while gapBuffer.size > 0 and gapBuffer.size*4 <= gapBuffer.capacity: gapBuffer.reserve(gapBuffer.capacity div 2)
 
-proc `[]`*[T](gapBuffer: GapBuffer, index: int): T =
+proc `[]`*[T](gapBuffer: GapBuffer[T], index: int): T =
   doAssert(0<=index and index<gapBuffer.size, "Gapbuffer: Invalid index.")
 
   if index < gapBuffer.gapBegin: return gapBuffer.buffer[index]
@@ -84,26 +88,27 @@ proc `[]=`*[T](gapBuffer: var GapBuffer, index: int, val: T) =
 
 proc len*(gapBuffer: GapBuffer): int = gapBuffer.size
 
-proc empty*(gapBuffer: GapBuffer): int = return gapBuffer.len == 0
+proc empty*(gapBuffer: GapBuffer): bool = return gapBuffer.len == 0
 
 proc next*(gapBuffer: GapBuffer, line, column: int): (int, int) =
   result = (line, column)
   if line == gapBuffer.size-1 and column >= gapBuffer[gapBuffer.len-1].len-1: return result
 
-  inc(result.column)
-  if result.line >= gapBuffer[line].len:
-    inc(result.line)
-    result.column = 0
+  inc(result[1])
+  if result[1] >= gapBuffer[line].len:
+    inc(result[0])
+    result[1] = 0
 
 proc prev*(gapBuffer: GapBuffer, line, column: int): (int, int) =
   result = (line, column)
   if line == 0 and column == 0: return result
 
-  dec(result.column)
-  if result.column == -1:
-    dec(result.line)
-    result.column = max(gapBuffer[result.line].len-1, 0)
+  dec(result[1])
+  if result[1] == -1:
+    dec(result[0])
+    result[1] = max(gapBuffer[result[0]].len-1, 0)
 
 proc isFirst*(gapBuffer: GapBuffer, line, column: int): bool = line == 0 and column == 0
 
 proc isLast*(gapBuffer: GapBuffer, line, column: int): bool = line == gapBuffer.len-1 and column >= gapBuffer[gapBuffer.len-1].len-1
+

@@ -1,2 +1,4 @@
 src/nimcache
+tests/nimcache
+tests/tgapbuffer
 moe
