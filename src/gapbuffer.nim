@@ -2,7 +2,7 @@ type GapBuffer*[T] = object
   buffer: seq[T]
   size: int # 意味のあるデータが実際に格納されているサイズ
   capacity: int # Amount of secured memory
-  gapBegin, gapEnd: int # 半開区間[gap_begin,gap_end)を隙間とする
+  gapBegin, gapEnd: int # 半開区間[gapBegin,gapEnd)を隙間とする
 
 proc initGapBuffer*[T](): GapBuffer =
   result.buffer = newSeq[T]()
