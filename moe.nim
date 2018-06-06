@@ -1,4 +1,7 @@
-import ncurses, posix, system, os
+import ncurses
+import posix
+import system
+import os
 
 proc startCurses() =
   discard setLocale(LC_ALL, "")
@@ -12,5 +15,3 @@ proc exitCurses() =
   
 if isMainModule:
   startCurses()
-  if paramCount() = 0:
-  else:
