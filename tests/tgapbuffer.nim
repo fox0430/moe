@@ -44,3 +44,4 @@ doAssert(buffer.prev(0, 0) == (0, 0))
 
 buffer.delete(0, 5)
 doAssert(buffer.empty)
+doAssert(buffer.len == 0)
