@@ -63,15 +63,15 @@ proc startCurses() =
 proc exitCurses() =
   endwin()
 
-proc EditorSettingsInit(): EditorSettings = discard
+proc initEditorSettings(): EditorSettings = discard
 
-proc EditorStatusInit(): EditorStatus =
+proc initEditorStatus(): EditorStatus =
   result.filename = "No name"
   result.currentDir = getCurrentDir()
 
 if isMainModule:
-  var status = EditorStatusInit()
-  status.setting = EditorSettingsInit()
+  var status = initEditorStatus()
+  status.setting = initEditorSettings()
 
   echo status
   echo status.setting
