@@ -8,6 +8,7 @@ buffer.insert("0", 0)
 buffer.insert("1", 0)
 buffer.insert("2", 2)
 
+doAssert(buffer.len == 3)
 doAssert(buffer[0] == "1")
 doAssert(buffer[1] == "0")
 doAssert(buffer[2] == "2")
