@@ -68,10 +68,10 @@ proc initEditorSettings(): EditorSettings = discard
 proc initEditorStatus(): EditorStatus =
   result.filename = "No name"
   result.currentDir = getCurrentDir()
+  result.setting = initEditorSettings()
 
 if isMainModule:
   var status = initEditorStatus()
-  status.setting = initEditorSettings()
 
   echo status
   echo status.setting
