@@ -54,28 +54,16 @@ proc startCurses() =
 proc exitCurses() =
   endwin()
 
-proc EditorSettingsInit(): EditorSettings =
-  result.autoCloseParen = false
-  result.autoIndent = false
-  result.tabStop = 0
+proc EditorSettingsInit(): EditorSettings = discard
 
 proc EditorStatusInit(): EditorStatus =
   result.filename = "No name"
   result.currentDir = getCurrentDir()
-  result.currentLine = 0
-  result.positionInCurrentLine = 0
-  result.expandePosition = 0
-  result.mode = 0
-  result.cmdLoop = 0
-  result.filename = "No name"
-  result.numOfChange = 0
-  result.debugMode = 0
 
 if isMainModule:
-  var status = EditorStatus()
-  status.setting = EditorSettings()
-  status = EditorStatusInit()
+  var status = EditorStatusInit()
   status.setting = EditorSettingsInit()
+
   echo status
   echo status.setting
   if paramCount() == 0:
