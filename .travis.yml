@@ -10,7 +10,7 @@ before_install:
   - cd ..
   - bin/nim c koch
   - ./koch boot -d:release
-  - ./kock nimble
+  - ./koch nimble
   - cd ..
 before_script:
   - set -e
