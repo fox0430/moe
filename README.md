@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/fox0430/moe.svg?branch=port-to-nim)](https://travis-ci.org/fox0430/moe)
+
 moe
 ===
 
