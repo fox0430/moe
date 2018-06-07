@@ -2,6 +2,8 @@ import moepkg/gapbuffer
 
 var buffer = initGapBuffer[string]()
 
+doAssert(buffer.empty)
+
 buffer.insert("0", 0)
 buffer.insert("1", 0)
 buffer.insert("2", 2)
