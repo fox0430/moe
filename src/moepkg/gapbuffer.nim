@@ -51,7 +51,7 @@ proc add*[T](gapBuffer: var GapBuffer[T], val: T) =
   gapBuffer.insert(val, gapBuffer.len)
 
 
-proc del*(gapBuffer: var GapBuffer, delBegin, delEnd: int) =
+proc delete*(gapBuffer: var GapBuffer, delBegin, delEnd: int) =
   ## Delete [delBegin, delEnd) elements
   doAssert(0<=delBegin and delBegin <= delEnd and delEnd <= gapBuffer.size, "Gapbuffer: Invalid interval.")
 
