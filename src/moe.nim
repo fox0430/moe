@@ -3,7 +3,7 @@ import os
 import system
 import terminal
 import moepkg/ui
-import moepkg/editorview
+import moepkg/view
 import moepkg/gapbuffer
 
 type EditorSettings = object
