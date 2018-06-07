@@ -4,19 +4,19 @@ import os
 import system
 
 type Color = enum
-  default = -1,
-  black = 0,
-  red = 1,
-  green = 2,
-  yellow = 3,
-  blue = 4,
-  magenta = 5,
-  cyan = 6,
-  white = 7,
-  lightBlue = 14
+  default     = -1,
+  black       = 0,
+  red         = 1,
+  green       = 2,
+  yellow      = 3,
+  blue        = 4,
+  magenta     = 5,
+  cyan        = 6,
+  white       = 7,
+  lightBlue   = 14
   brightGreen = 85,
   brightWhite = 231,
-  gray = 245,
+  gray        = 245,
 
 type EditorSettings = object
   autoCloseParen: bool
@@ -28,7 +28,7 @@ type EditorStatus = object
   filename:               string
   currentDir:             string
   currentLine:            int
-  currentColumn:  int
+  currentColumn:          int
   expandePosition:        int
   mode:                   int
   cmdLoop:                int
