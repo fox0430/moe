@@ -2,7 +2,7 @@ import ncurses
 import posix
 import os
 import system
-import moepkg/view
+import moepkg/editorview
 
 type Color = enum
   default     = -1,
