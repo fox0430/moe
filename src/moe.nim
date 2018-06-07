@@ -3,11 +3,20 @@ import posix
 import os
 import system
 
-const COLOR_DEFAULT: int16 = -1   # default terminal color
-const BRIGHT_WHITE: int16 = 231
-const BRIGHT_GREEN: int16 = 85
-const GRAY: int16 = 245
-const LIGHT_BLUE: int16 = 14
+type Color = enum
+  default = -1,
+  black = 0,
+  red = 1,
+  green = 2,
+  yellow = 3,
+  blue = 4,
+  magenta = 5,
+  cyan = 6,
+  white = 7,
+  lightBlue = 14
+  brightGreen = 85,
+  brightWhite = 231,
+  gray = 245,
 
 type EditorSettings = object
   autoCloseParen: bool
@@ -19,7 +28,7 @@ type EditorStatus = object
   filename:               string
   currentDir:             string
   currentLine:            int
-  positionInCurrentLine:  int
+  currentColumn:  int
   expandePosition:        int
   mode:                   int
   cmdLoop:                int
@@ -30,14 +39,14 @@ proc setCursesColor() =
   start_color()   # enable color
   use_default_colors()    # set terminal default color
 
-  init_pair(1, COLOR_BLACK , COLOR_GREEN)   # char is black, bg is green
-  init_pair(2, COLOR_BLACK, BRIGHT_WHITE)
-  init_pair(3, GRAY, COLOR_DEFAULT)
-  init_pair(4, COLOR_RED, COLOR_DEFAULT)
-  init_pair(5, COLOR_GREEN, COLOR_BLACK)
-  init_pair(6, BRIGHT_WHITE, COLOR_DEFAULT)
-  init_pair(7, BRIGHT_GREEN, COLOR_DEFAULT)
-  init_pair(8, LIGHT_BLUE, COLOR_DEFAULT)
+  init_pair(1, ord(Color.black) , ord(Color.green))   # char is black, bg is green
+  init_pair(2, ord(Color.black), ord(Color.brightWhite))
+  init_pair(3, ord(Color.gray), ord(Color.default))
+  init_pair(4, ord(Color.red), ord(Color.default))
+  init_pair(5, ord(Color.green), ord(Color.black))
+  init_pair(6, ord(Color.brightWhite), ord(Color.default))
+  init_pair(7, ord(Color.brightGreen), ord(Color.default))
+  init_pair(8, ord(Color.lightBlue), ord(Color.default))
 
 proc startCurses() =
   discard setLocale(LC_ALL, "")   # enable UTF-8
