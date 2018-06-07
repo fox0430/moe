@@ -9,7 +9,13 @@ const BRIGHT_GREEN: int16 = 85
 const GRAY: int16 = 245
 const LIGHT_BLUE: int16 = 14
 
+type EditorSettings = object
+  autoCloseParen: bool
+  autoIndent:     bool 
+  tabStop:        int
+
 type EditorStatus = object
+  setting:                EditorSettings
   filename:               string
   currentDir:             string
   currentLine:            int
@@ -48,6 +54,11 @@ proc startCurses() =
 proc exitCurses() =
   endwin()
 
+proc EditorSettingsInit(): EditorSettings =
+  result.autoCloseParen = false
+  result.autoIndent = false
+  result.tabStop = 0
+
 proc EditorStatusInit(): EditorStatus =
   result.filename = "No name"
   result.currentDir = getCurrentDir()
@@ -62,8 +73,11 @@ proc EditorStatusInit(): EditorStatus =
 
 if isMainModule:
   var status = EditorStatus()
+  status.setting = EditorSettings()
   status = EditorStatusInit()
+  status.setting = EditorSettingsInit()
   echo status
+  echo status.setting
   if paramCount() == 0:
     quit()
   else:
