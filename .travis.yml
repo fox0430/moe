@@ -3,15 +3,18 @@ compiler:
   - gcc
 before_install:
   # Install nim
-  - git clone -b devel git://github.com/nim-lang/Nim.git --depth 1
-  - cd Nim
+  - git clone https://github.com/nim-lang/nim
+  - cd nim
   - git clone --depth 1 git://github.com/nim-lang/csources
   - cd csources && sh build.sh
   - cd ..
   - bin/nim c koch
   - ./koch boot -d:release
-  - export PATH=$PWD/bin:$PATH
+  - ./kock nimble
   - cd ..
+before_script:
+  - set -e
+  - export PATH=$(pwd)/nim/bin:$(pwd):$PATH
 script:
-  nimble test
-  nimble build
+  - nimble test
+  - nimble build
