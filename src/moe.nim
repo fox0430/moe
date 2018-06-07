@@ -48,19 +48,22 @@ proc startCurses() =
 proc exitCurses() =
   endwin()
 
-proc EditorStatusInit(status: var EditorStatus) =
-  status.currentLine = 0
-  status.positionInCurrentLine = 0
-  status.expandePosition = 0
-  status.mode = 0
-  status.cmdLoop = 0
-  status.filename = "No name"
-  status.numOfChange = 0
-  status.debugMode = 0
+proc EditorStatusInit(): EditorStatus =
+  result.filename = "No name"
+  result.currentDir = getCurrentDir()
+  result.currentLine = 0
+  result.positionInCurrentLine = 0
+  result.expandePosition = 0
+  result.mode = 0
+  result.cmdLoop = 0
+  result.filename = "No name"
+  result.numOfChange = 0
+  result.debugMode = 0
 
 if isMainModule:
   var status = EditorStatus()
-  EditorStatusInit(status)
+  status = EditorStatusInit()
+  echo status
   if paramCount() == 0:
     quit()
   else:
