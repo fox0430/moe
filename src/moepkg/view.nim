@@ -1,7 +1,7 @@
 import ncurses
 import terminal
 
-type EditorView = object
+type EditorView* = object
   widthOfLineNum: int
   height:         int
   width:          int
