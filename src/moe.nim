@@ -2,6 +2,7 @@ import ncurses
 import posix
 import os
 import system
+import moepkg/view
 
 type Color = enum
   default     = -1,
@@ -24,6 +25,7 @@ type EditorSettings = object
   tabStop:        int
 
 type EditorStatus = object
+  view:                   EditorView
   setting:                EditorSettings
   filename:               string
   currentDir:             string
