@@ -36,30 +36,30 @@ proc initEditorStatus(): EditorStatus =
   result.currentDir = getCurrentDir()
   result.setting = initEditorSettings()
 
-proc newFile(): EditorStatus = discard
-  #result.currentLine = 0
+proc newFile(): EditorStatus =
+  result.currentLine = 0
 
-proc openFile(filename: string, gb: var GapBuffer): GapBuffer =
+proc openFile(filename: string): GapBuffer[string] =
+  var result = initGapBuffer[string]()
   var fs = newFileStream(filename, fmRead)
   var line = ""
-  var i = 0
   if not isNil(fs):
     while fs.readLine(line):
-      gb.insert(line, i)
-      i = i + 1
+      result.add(line)
     fs.close()
-    return gb
+    return result
   
 if isMainModule:
   var status = initEditorStatus()
-  var gb = initGapBuffer[string]()
 
   startUi()
   exitUi()
 
   if paramCount() == 0:
+    var gb = initGapBuffer[string]()
+    status = newFile()
     quit()
   else:
     status.filename = os.commandLineParams()[0]
-    gb = openFile(status.filename, gb)
+    var gb = openFile(status.filename)
     quit()
