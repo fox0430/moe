@@ -90,6 +90,10 @@ proc len*(gapBuffer: GapBuffer): int = gapBuffer.size
 
 proc empty*(gapBuffer: GapBuffer): bool = return gapBuffer.len == 0
 
+proc `$`*(gapBuffer: GapBuffer): string =
+  result = ""
+  for i in 0..gapBuffer.len-1: result &= gapBuffer[i] & "\n"
+
 proc next*(gapBuffer: GapBuffer, line, column: int): (int, int) =
   result = (line, column)
   if line == gapBuffer.size-1 and column >= gapBuffer[gapBuffer.len-1].len-1: return result
