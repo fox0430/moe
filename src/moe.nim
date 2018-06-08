@@ -2,7 +2,7 @@ import os
 import moepkg/ui
 import moepkg/view
 import moepkg/gapbuffer
-import moepkg/filestream
+import moepkg/fileutils
 import moepkg/editorstatus
 
 when isMainModule:
