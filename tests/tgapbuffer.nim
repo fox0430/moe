@@ -12,6 +12,7 @@ doAssert(buffer.len == 3)
 doAssert(buffer[0] == "1")
 doAssert(buffer[1] == "0")
 doAssert(buffer[2] == "2")
+doAssert($buffer == "1\n0\n2\n")
 
 buffer[0] = "0"
 buffer[1] = "1"
