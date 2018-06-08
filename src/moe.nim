@@ -2,6 +2,7 @@ import posix
 import os
 import system
 import terminal
+import streams
 import moepkg/ui
 import moepkg/view
 import moepkg/gapbuffer
@@ -35,6 +36,20 @@ proc initEditorStatus(): EditorStatus =
   result.currentDir = getCurrentDir()
   result.setting = initEditorSettings()
 
+proc newFile(): EditorStatus = discard
+  #result.currentLine = 0
+
+proc openFile(filename: string, gb: var GapBuffer): GapBuffer =
+  var fs = newFileStream(filename, fmRead)
+  var line = ""
+  var i = 0
+  if not isNil(fs):
+    while fs.readLine(line):
+      gb.insert(line, i)
+      i = i + 1
+    fs.close()
+    return gb
+  
 if isMainModule:
   var status = initEditorStatus()
   var gb = initGapBuffer[string]()
@@ -46,4 +61,5 @@ if isMainModule:
     quit()
   else:
     status.filename = os.commandLineParams()[0]
+    gb = openFile(status.filename, gb)
     quit()
