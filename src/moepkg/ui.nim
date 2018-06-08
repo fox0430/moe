@@ -35,9 +35,7 @@ proc startUi*() =
   cbreak()    # enable cbreak mode
   curs_set(1) # set cursor
 
-  var color_check: bool = can_change_color()
-  if color_check != true:
-    setCursesColor()
+  if can_change_color(): setCursesColor()
 
   erase()
 

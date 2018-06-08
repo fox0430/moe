@@ -5,17 +5,17 @@ import moepkg/gapbuffer
 import moepkg/filestream
 import moepkg/editorstatus
 
-if isMainModule:
+when isMainModule:
   var status = initEditorStatus()
 
   startUi()
   exitUi()
 
   if paramCount() == 0:
-    var gb = initGapBuffer[string]()
+    var buffer = initGapBuffer[string]()
     status = newFile()
     quit()
   else:
     status.filename = os.commandLineParams()[0]
-    var gb = openFile(status.filename)
+    var buffer = openFile(status.filename)
     quit()
