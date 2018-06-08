@@ -5,7 +5,7 @@ moe
 
 moe is a command line based editor.
 
-This project's goal is a funny animation editor and learning C.
+This project's goal is a funny animation editor
 
 ## Aiming features ##
 
@@ -15,7 +15,7 @@ This project's goal is a funny animation editor and learning C.
 
    △File Manager Mode
   
-  ・porting to nim
+   △porting to nim(working)
 
   ・UTF-8
 
