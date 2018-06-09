@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/fox0430/moe.svg?branch=port-to-nim)](https://travis-ci.org/fox0430/moe)
+[![AUR](https://img.shields.io/aur/license/yaourt.svg)](https://github.com/fox0430/moe/blob/port-to-nim/README.md)
 
 moe
 ===
