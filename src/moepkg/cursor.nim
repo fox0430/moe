@@ -2,7 +2,7 @@ import editorview
 
 type CursorPosition* = object
   y*, x*: int
-  updated: bool
+  updated*: bool
 
 proc updatePosition(cursor: var CursorPosition, view: EditorView, line, column: int) =
   for y in 0..high(view.height):

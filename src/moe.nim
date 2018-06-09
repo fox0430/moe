@@ -10,11 +10,4 @@ when isMainModule:
   startUi()
   exitUi()
 
-  if paramCount() == 0:
-    var buffer = initGapBuffer[string]()
-    status = newFile()
-    quit()
-  else:
-    status.filename = os.commandLineParams()[0]
-    var buffer = openFile(status.filename)
-    quit()
+  if paramCount() > 0: status.buffer = openFile(os.commandLineParams()[0])

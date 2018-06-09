@@ -88,6 +88,8 @@ proc `[]=`*[T](gapBuffer: var GapBuffer, index: int, val: T) =
 
 proc len*(gapBuffer: GapBuffer): int = gapBuffer.size
 
+proc high*(gapBuffer: GapBuffer): int = gapBuffer.len-1
+
 proc empty*(gapBuffer: GapBuffer): bool = return gapBuffer.len == 0
 
 proc `$`*(gapBuffer: GapBuffer): string =
