@@ -1,6 +1,11 @@
 import view
 import terminal
 import os
+import gapbuffer
+
+type Registers* = object
+  yankedLine*:   GapBuffer[string]
+  yankedStr*:    string
 
 type EditorSettings = object
   autoCloseParen: bool
@@ -9,7 +14,7 @@ type EditorSettings = object
 
 type EditorStatus* = object
   view*:                   EditorView
-  setting:                EditorSettings
+  setting:                 EditorSettings
   filename*:               string
   currentDir*:             string
   termHeight*:             int
@@ -21,6 +26,10 @@ type EditorStatus* = object
   cmdLoop*:                int
   numOfChange*:            int
   debugMode*:              int
+
+proc registersInit(): Registers =
+  result.yankedLine = initGapBuffer[string]()
+  result.yankedStr  = "" 
 
 proc initEditorSettings(): EditorSettings = discard
 
