@@ -1,6 +1,6 @@
-import view
 import terminal
 import os
+import editorview
 
 type EditorSettings = object
   autoCloseParen: bool

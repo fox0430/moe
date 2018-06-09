@@ -1,6 +1,5 @@
 import os
 import moepkg/ui
-import moepkg/view
 import moepkg/gapbuffer
 import moepkg/fileutils
 import moepkg/editorstatus
