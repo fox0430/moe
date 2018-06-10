@@ -9,13 +9,18 @@ when isMainModule:
   var status = initEditorStatus()
 
   startUi()
-  exitUi()
+  
+  var win = initWindow(10, 10, 0, 0)
+  win.write(0, 0, "hoge", ColorPair.lightBlueDefault)
+  win.refresh
+
+  while true: discard
 
   if paramCount() == 0:
     var buffer = initGapBuffer[string]()
     status = newFile()
-    quit()
   else:
     status.filename = os.commandLineParams()[0]
     var buffer = openFile(status.filename)
-    quit()
+
+  exitUi()

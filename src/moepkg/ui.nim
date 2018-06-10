@@ -59,15 +59,15 @@ proc startUi*() =
 proc exitUi*() =
   endwin()
 
-proc initWindow*(top, left, height, width: int ): Window =
+proc initWindow*(height, width, top, left: int ): Window =
   result.top = top
   result.left = left
   result.height = height
   result.width = width
   result.cursesWindow = newwin(height, width, top, left)
 
-proc write*(win: Window, y, x: int, str: string, color: Color = Color.default) =
-  wattron(win.cursesWindow, cshort(ord(ColorPair.brightWhiteDefault)))
+proc write*(win: Window, y, x: int, str: string, color: ColorPair = ColorPair.brightWhiteDefault) =
+  wattron(win.cursesWindow, cshort(ord(color)))
   mvwprintw(win.cursesWindow, y, x, str)
   
 proc erase*(win: Window) =
@@ -75,3 +75,6 @@ proc erase*(win: Window) =
 
 proc refresh*(win: Window) =
   wrefresh(win.cursesWindow)
+
+proc resize*(win: Window, height, width: int) =
+  wresize(win.cursesWindow, height, width)
