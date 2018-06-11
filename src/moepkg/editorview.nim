@@ -21,7 +21,7 @@ proc initEditorView*(buffer: GapBuffer, height, width: int): EditorView =
 
   result.reloadEditorView(buffer, 0)
 
-proc reload*(view: var EditorView, buffer: GapBuffer, topLine: int) =
+proc reload*(view: var EditorView, buffer: GapBuffer[string], topLine: int) =
   ## topLineがEditorViewの一番上のラインとして表示されるようにバッファからEditorViewに対してリロードを行う.
   ## EditorView全体を更新するため計算コストはやや高め.バッファの内容とEditorViewの内容を同期させる時やEditorView全体が全く異なるような内容になるような処理をした後等に使用することが想定されている.
 
@@ -29,8 +29,6 @@ proc reload*(view: var EditorView, buffer: GapBuffer, topLine: int) =
     height = view.height
     width = view.width
 
-  # apply(view.originalLine, proc(x: var int) = x = -1)
-  # apply(view.lines, proc(s: var string ) = s = "")
   for x in view.originalLine.mitems: x = -1
   for s in view.lines.mitems: s = ""
 
@@ -70,7 +68,7 @@ proc resize*(view: var EditorView, buffer: GapBuffer[string], height, width, wid
   view.updated = true
   view.reload(buffer, topLine)
 
-proc scrollUp(view: var EditorView, buffer: GapBuffer) =
+proc scrollUp(view: var EditorView, buffer: GapBuffer[string]) =
   ## EditorView表示を1ライン上にずらす
 
   view.updated = true
@@ -82,17 +80,17 @@ proc scrollUp(view: var EditorView, buffer: GapBuffer) =
   view.length.popLast
 
   if view.start[1] > 0:
-    view.originalLine.addFirst(view.originaLine[1])
+    view.originalLine.addFirst(view.originalLine[1])
     view.start.addFirst(view.start[1]-view.width)
     view.length.addFirst(view.width)
   else:
-    view.orignalLine.addFirst(view.originalLine[1]-1)
+    view.originalLine.addFirst(view.originalLine[1]-1)
     view.start.addFirst(view.width*((buffer[view.originalLine[0]].len-1) div view.width))
-    view.length.addFirst(if buffer[view.originaLine[0]].len == 0: 0 else: (buffer[view.originalLine[0]].len-1) mod view.width +1)
+    view.length.addFirst(if buffer[view.originalLine[0]].len == 0: 0 else: ((buffer[view.originalLine[0]].len-1) mod view.width + 1))
 
   view.lines.addFirst(buffer[view.originalLine[0]][view.start[0]..view.start[0]+view.length[0]-1])
 
-proc scrollDown(view: var EditorView, buffer: GapBuffer) =
+proc scrollDown(view: var EditorView, buffer: GapBuffer[string]) =
   ## EditorViewの表示を1ライン下にずらす
 
   view.updated = true
@@ -118,7 +116,7 @@ proc scrollDown(view: var EditorView, buffer: GapBuffer) =
     view.length.addLast(min(view.width, buffer[view.originalLine[height-1]].len-view.start[height-1]))
 
 
-  view.addLast(buffer[view.originalLine[height-1]][view.start[height-1]..view.start[height-1]+view.length[height-1]-1])
+  view.lines.addLast(buffer[view.originalLine[height-1]][view.start[height-1]..view.start[height-1]+view.length[height-1]-1])
 
 proc writeLineNum(view: EditorView, win: Window, y, line: int, colorPair: ColorPair) =
   let width = view.widthOfLineNum
@@ -128,7 +126,7 @@ proc writeLineNum(view: EditorView, win: Window, y, line: int, colorPair: ColorP
 proc writeLine(view: EditorView, win: Window, y: int, str: string) =
   win.write(y, view.widthOfLineNum, str, ColorPair.brightWhiteDefault)
 
-proc writeAllLines(view: var EditorView, win: Window, buffer: GapBuffer, currentLine: int) =
+proc writeAllLines*(view: var EditorView, win: Window, buffer: GapBuffer[string], currentLine: int) =
   win.erase
   view.widthOfLineNum = buffer.len.intToStr.len+1
   for y in 0..view.height-1:
@@ -147,7 +145,7 @@ proc update*(view: var EditorView, win: Window, buffer: GapBuffer[string], curre
   view.updated = false
 
 
-proc seekCursor*(view: var EditorView, buffer: GapBuffer, currentLine, currentColumn: int) =
+proc seekCursor*(view: var EditorView, buffer: GapBuffer[string], currentLine, currentColumn: int) =
   view.updated = true
   while currentLine < view.originalLine[0] or (currentLine == view.originalLine[0] and view.length[0] > 0 and currentColumn < view.start[0]): view.scrollUp(buffer)
   while (view.originalLine[view.height-1] != -1 and currentLine > view.originalLine[view.height-1]) or (currentLine == view.originalLine[view.height-1] and view.length[view.height-1] > 0 and currentColumn >= view.start[view.height-1]+view.length[view.height-1]): view.scrollDown(buffer)
