@@ -7,6 +7,10 @@ proc openFile*(filename: string): GapBuffer[string] =
   while not fs.endOfFile: result.add(fs.readLine)
   fs.close()
 
+proc newFile*(): GapBuffer[string] =
+  result = initGapBuffer[string]()
+  result.add("")
+
 proc saveFile*(filename: string, buffer: GapBuffer[string]) =
   let fs = open("test", fmWrite)
   for line in 0..len(buffer) - 1:

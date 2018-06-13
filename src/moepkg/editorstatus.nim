@@ -1,7 +1,9 @@
-import terminal
-import os
-import gapbuffer
-import editorview
+import terminal, os
+import ncurses
+import gapbuffer, editorview, ui
+
+type Mode* = enum
+  normal, insert, filer
 
 type Registers* = object
   yankedLine*:   GapBuffer[string]
@@ -14,24 +16,40 @@ type EditorSettings = object
 
 type EditorStatus* = object
   buffer*: GapBuffer[string]
-  view:                   EditorView
-  settings:                EditorSettings
-  filename*:               string
-  currentDir:             string
-  currentLine:            int
-  currentColumn:          int
-  expandedColumn:        int
-  mode:                   int
-  cmdLoop:                int
-  numOfChange:            int
-  debugMode:              int
+  view: EditorView
+  registers: Registers
+  settings: EditorSettings
+  filename*: string
+  currentDir: string
+  currentLine*: int
+  currentColumn*: int
+  expandedColumn: int
+  mode* : Mode
+  cmdLoop*: int
+  numOfChange: int
+  debugMode: int
+  mainWindow*: Window
+  statusWindow*: Window
+  commandWindow*: Window
 
-proc registersInit(): Registers =
+proc initRegisters(): Registers =
   result.yankedLine = initGapBuffer[string]()
-  result.yankedStr  = "" 
+  result.yankedStr = "" 
 
 proc initEditorSettings(): EditorSettings = discard
 
 proc initEditorStatus*(): EditorStatus =
-  result.filename   = "No name"
+  result.buffer = initGapBuffer[string]()
+  result.filename = "No name"
   result.currentDir = getCurrentDir()
+  result.registers = initRegisters()
+  result.settings = initEditorSettings()
+  result.mode = Mode.normal
+
+  result.mainWindow = initWindow(terminalHeight()-2, terminalWidth(), 0, 0)
+  result.statusWindow = initWindow(1, terminalWidth(), terminalHeight()-2, 0)
+  result.commandWindow = initWindow(1, terminalWidth(), terminalHeight()-1, 0)
+
+  discard keypad(result.mainWindow.cursesWindow, true)
+  discard keypad(result.statusWindow.cursesWindow, true)
+  discard keypad(result.commandWindow.cursesWindow, true)

@@ -118,15 +118,15 @@ proc scrollDown(view: var EditorView, buffer: GapBuffer[string]) =
 
   view.lines.addLast(buffer[view.originalLine[height-1]][view.start[height-1]..view.start[height-1]+view.length[height-1]-1])
 
-proc writeLineNum(view: EditorView, win: Window, y, line: int, colorPair: ColorPair) =
+proc writeLineNum(view: EditorView, win: var Window, y, line: int, colorPair: ColorPair) =
   let width = view.widthOfLineNum
   win.write(y, 0, repeat(' ', width))
   win.write(y, width-(line+1).intToStr.len-1, (line+1).intToStr, colorPair)
 
-proc writeLine(view: EditorView, win: Window, y: int, str: string) =
+proc writeLine(view: EditorView, win: var Window, y: int, str: string) =
   win.write(y, view.widthOfLineNum, str, ColorPair.brightWhiteDefault)
 
-proc writeAllLines*(view: var EditorView, win: Window, buffer: GapBuffer[string], currentLine: int) =
+proc writeAllLines*(view: var EditorView, win: var Window, buffer: GapBuffer[string], currentLine: int) =
   win.erase
   view.widthOfLineNum = buffer.len.intToStr.len+1
   for y in 0..view.height-1:
@@ -137,7 +137,7 @@ proc writeAllLines*(view: var EditorView, win: Window, buffer: GapBuffer[string]
     view.writeLine(win, y, view.lines[y])
   win.refresh
 
-proc update*(view: var EditorView, win: Window, buffer: GapBuffer[string], currentLine: int) =
+proc update*(view: var EditorView, win: var Window, buffer: GapBuffer[string], currentLine: int) =
   if not view.updated: return
   let widthOfLineNum = buffer.len.intToStr.len+1
   if widthOfLineNum != view.widthOfLineNum: view.resize(buffer, view.height, view.width+view.widthOfLineNum-widthOfLineNum, widthOfLineNum)

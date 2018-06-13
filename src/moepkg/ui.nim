@@ -27,8 +27,9 @@ type ColorPair* = enum
   lightBlueDefault = 8
 
 type Window* = object
-  cursesWindow: ptr window
+  cursesWindow*: ptr window
   top, left, height, width: int
+  y*, x*: int
 
 proc setColorPair(colorPair: ColorPair, character, background: Color) =
   init_pair(cshort(ord(colorPair)), cshort(ord(character)), cshort(ord(background)))
@@ -66,12 +67,19 @@ proc initWindow*(height, width, top, left: int ): Window =
   result.width = width
   result.cursesWindow = newwin(height, width, top, left)
 
-proc write*(win: Window, y, x: int, str: string, color: ColorPair = ColorPair.brightWhiteDefault) =
+proc write*(win: var Window, y, x: int, str: string, color: ColorPair = ColorPair.brightWhiteDefault) =
   wattron(win.cursesWindow, cshort(ord(color)))
   mvwprintw(win.cursesWindow, y, x, str)
+
+proc append*(win: var Window, str: string, color: ColorPair = ColorPair.brightWhiteDefault) =
+  wattron(win.cursesWindow, cshort(ord(color)))
+  mvwprintw(win.cursesWindow, win.y, win.x, str)
+  win.x += str.len
   
-proc erase*(win: Window) =
+proc erase*(win: var Window) =
   werase(win.cursesWindow)
+  win.y = 0
+  win.x = 0
 
 proc refresh*(win: Window) =
   wrefresh(win.cursesWindow)
