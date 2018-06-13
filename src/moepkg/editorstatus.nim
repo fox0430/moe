@@ -1,6 +1,6 @@
 import terminal, os
 import ncurses
-import gapbuffer, editorview, ui
+import gapbuffer, editorview, ui, cursor
 
 type Mode* = enum
   normal, insert, filer
@@ -16,7 +16,8 @@ type EditorSettings = object
 
 type EditorStatus* = object
   buffer*: GapBuffer[string]
-  view: EditorView
+  view*: EditorView
+  cursor*: CursorPosition
   registers: Registers
   settings: EditorSettings
   filename*: string
@@ -39,7 +40,6 @@ proc initRegisters(): Registers =
 proc initEditorSettings(): EditorSettings = discard
 
 proc initEditorStatus*(): EditorStatus =
-  result.buffer = initGapBuffer[string]()
   result.filename = "No name"
   result.currentDir = getCurrentDir()
   result.registers = initRegisters()

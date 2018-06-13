@@ -1,5 +1,5 @@
 import ncurses
-import editorstatus, statusbar
+import editorstatus, statusbar, editorview, cursor
 
 const escKey = 27
 
@@ -11,6 +11,10 @@ proc normalMode*(status: var EditorStatus) =
 
   while true:
     writeStatusBar(status)
+
+    status.view.updated = true
+    status.view.update(status.mainWindow, status.buffer, status.currentLine)
+    status.cursor.update(status.view, status.currentLine, status.currentColumn)
 
     let key = getch()
     if key == escKey: break

@@ -1,25 +1,11 @@
-import deques, sequtils, strutils, gapbuffer, ui
+import deques, sequtils, strutils, math
+import gapbuffer, ui
 
 type EditorView* = object
-  height, width, widthOfLineNum: int
+  height*, width*, widthOfLineNum*: int
   lines: Deque[string]
-  originalLine, start, length: Deque[int]
-  updated: bool
-
-proc initEditorView*(buffer: GapBuffer, height, width: int): EditorView =
-  ## width/heightでEditorViewを初期化し,バッファの0行0文字目からロードする.widthは画面幅ではなくEditorViewの1ラインの文字数である(従って行番号分の長さは考慮しなくてよい).
-
-  result.height = height
-  result.width = width
-  result.widthOfLineNum = $(buffer.len)
-
-  result.lines = initDeque[string](height)
-
-  result.originalLine = initDeque[string](height)
-  result.start = initDeque[int](height)
-  result.length = initDeque[int](height)
-
-  result.reloadEditorView(buffer, 0)
+  originalLine*, start*, length*: Deque[int]
+  updated*: bool
 
 proc reload*(view: var EditorView, buffer: GapBuffer[string], topLine: int) =
   ## topLineがEditorViewの一番上のラインとして表示されるようにバッファからEditorViewに対してリロードを行う.
@@ -54,17 +40,44 @@ proc reload*(view: var EditorView, buffer: GapBuffer[string], topLine: int) =
       inc(lineNumber)
       start = 0
 
+proc initEditorView*(buffer: GapBuffer, height, width: int): EditorView =
+  ## width/heightでEditorViewを初期化し,バッファの0行0文字目からロードする.widthは画面幅ではなくEditorViewの1ラインの文字数である(従って行番号分の長さは考慮しなくてよい).
+
+  result.height = height
+  result.width = width
+  result.widthOfLineNum = buffer.len.intToStr.len+1
+
+  result.lines = initDeque[string]()
+  for i in 0..height-1: result.lines.addLast("")
+
+  result.originalLine = initDeque[int]()
+  for i in 0..height-1: result.originalLine.addLast(-1)
+  result.start = initDeque[int]()
+  for i in 0..height-1: result.start.addLast(-1)
+  result.length = initDeque[int]()
+  for i in 0..height-1: result.length.addLast(-1)
+
+  result.reload(buffer, 0)
+
 proc resize*(view: var EditorView, buffer: GapBuffer[string], height, width, widthOfLineNum: int) =
   ## 指定されたwidth/heightでEditorViewを更新する.表示される部分はなるべくリサイズ前と同じになるようになっている.
 
   let topline = view.originalLine[0]
-  view.lines = initDeque[string](height)
+
+  view.lines = initDeque[string]()
+  for i in 0..height-1: view.lines.addlast("")
+
   view.height = height
   view.width = width
   view.widthOfLineNum = widthOfLineNum
-  view.originalLine = initDeque[int](height)
-  view.start = initDeque[int](height)
-  view.length = initDeque[int](height)
+
+  view.originalLine = initDeque[int](nextPowerOfTwo(height))
+  for i in 0..height-1: view.originalLine.addlast(-1)
+  view.start = initDeque[int](nextPowerOfTwo(height))
+  for i in 0..height-1: view.start.addlast(-1)
+  view.length = initDeque[int](nextPowerOfTwo(height))
+  for i in 0..height-1: view.length.addlast(-1)
+
   view.updated = true
   view.reload(buffer, topLine)
 
