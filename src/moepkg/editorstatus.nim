@@ -1,7 +1,7 @@
-import view
 import terminal
 import os
 import gapbuffer
+import editorview
 
 type Registers* = object
   yankedLine*:   GapBuffer[string]
@@ -13,19 +13,18 @@ type EditorSettings = object
   tabStop:        int
 
 type EditorStatus* = object
-  view*:                   EditorView
-  setting:                 EditorSettings
+  buffer*: GapBuffer[string]
+  view:                   EditorView
+  settings:                EditorSettings
   filename*:               string
-  currentDir*:             string
-  termHeight*:             int
-  termWidth*:              int
-  currentLine*:            int
-  currentColumn*:          int
-  expandePosition*:        int
-  mode*:                   int
-  cmdLoop*:                int
-  numOfChange*:            int
-  debugMode*:              int
+  currentDir:             string
+  currentLine:            int
+  currentColumn:          int
+  expandedColumn:        int
+  mode:                   int
+  cmdLoop:                int
+  numOfChange:            int
+  debugMode:              int
 
 proc registersInit(): Registers =
   result.yankedLine = initGapBuffer[string]()
@@ -34,8 +33,5 @@ proc registersInit(): Registers =
 proc initEditorSettings(): EditorSettings = discard
 
 proc initEditorStatus*(): EditorStatus =
-  result.termHeight = terminalHeight()
-  result.termWidth  = terminalWidth()
   result.filename   = "No name"
   result.currentDir = getCurrentDir()
-  result.setting    = initEditorSettings()
