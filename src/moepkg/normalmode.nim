@@ -16,7 +16,6 @@ proc writeDebugInfo(status: var EditorStatus, str: string = "") =
 
   status.commandWindow.refresh
 
-
 proc keyLeft(status: var EditorStatus) = 
   if status.currentColumn == 0: return
 
@@ -31,8 +30,23 @@ proc keyRight(status: var EditorStatus) =
   status.expandedColumn = status.currentColumn
   status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
-proc keyUp(status: var EditorStatus) = discard
-proc keyDown(status: var EditorStatus) = discard
+proc keyUp(status: var EditorStatus) =
+  if status.currentLine == 0: return
+
+  dec(status.currentLine)
+  let maxColumn = status.buffer[status.currentLine].len-1+(if status.mode == Mode.insert: 1 else: 0)
+  status.currentColumn = min(status.expandedColumn, maxColumn)
+  if status.currentColumn < 0: status.currentColumn = 0
+  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
+
+proc keyDown(status: var EditorStatus) =
+  if status.currentLine+1 == status.buffer.len: return
+
+  inc(status.currentLine)
+  let maxColumn = status.buffer[status.currentLine].len-1+(if status.mode == Mode.insert: 1 else: 0)
+  status.currentColumn = min(status.expandedColumn, maxColumn)
+  if status.currentColumn < 0: status.currentColumn = 0
+  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
 proc normalCommand(status: var EditorStatus, key: char) =
   if status.cmdLoop == 0: status.cmdLoop = 1
