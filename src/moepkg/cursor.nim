@@ -3,7 +3,6 @@ import editorview
 
 type CursorPosition* = object
   y*, x*: int
-  updated*: bool
 
 proc updatePosition(cursor: var CursorPosition, view: EditorView, line, column: int) =
   for y in 0..view.height-1:
@@ -22,6 +21,4 @@ proc updatePosition(cursor: var CursorPosition, view: EditorView, line, column: 
   doAssert(false, "Failed to update cursorPosition")
 
 proc update*(cursor: var CursorPosition, view: EditorView, line, column: int) =
-  if not cursor.updated: return
   cursor.updatePosition(view, line, column)
-  cursor.updated = false

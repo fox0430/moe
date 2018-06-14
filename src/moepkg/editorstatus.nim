@@ -24,7 +24,7 @@ type EditorStatus* = object
   currentDir: string
   currentLine*: int
   currentColumn*: int
-  expandedColumn: int
+  expandedColumn*: int
   mode* : Mode
   cmdLoop*: int
   numOfChange: int
