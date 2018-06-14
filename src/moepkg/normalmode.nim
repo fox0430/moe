@@ -1,4 +1,4 @@
-import strutils, strformat
+import strutils, strformat, terminal
 import ncurses
 import editorstatus, statusbar, editorview, cursor, ui, gapbuffer
 
@@ -15,6 +15,25 @@ proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.append(fmt", {str}")
 
   status.commandWindow.refresh
+
+proc resizeWindow(win: Window, height, width, y, x: int) =
+  win.resize(height, width)
+  win.move(y, x)
+
+
+proc resizeEditor(status: var EditorStatus) =
+  endwin()
+  initscr()
+  resizeWindow(status.mainWindow, terminalHeight()-2, terminalWidth(), 0, 0)
+  resizeWindow(status.statusWindow, 1, terminalWidth(), terminalHeight()-2, 0)
+  resizeWindow(status.commandWindow, 1, terminalWidth(), terminalHeight()-1, 0)
+  
+  if status.mode != Mode.filer:
+    status.view.resize(status.buffer, terminalHeight()-2, terminalWidth()-status.view.widthOfLineNum-1, status.view.widthOfLineNum)
+    status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
+
+  writeStatusBar(status)
+  
 
 proc keyLeft(status: var EditorStatus) = 
   if status.currentColumn == 0: return
@@ -48,17 +67,17 @@ proc keyDown(status: var EditorStatus) =
   if status.currentColumn < 0: status.currentColumn = 0
   status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
-proc normalCommand(status: var EditorStatus, key: char) =
+proc normalCommand(status: var EditorStatus, key: int) =
   if status.cmdLoop == 0: status.cmdLoop = 1
   
   case key:
-  of 'h':
+  of ord('h'):
     for i in 0..status.cmdLoop-1: keyLeft(status)
-  of 'l':
+  of ord('l'):
     for i in 0..status.cmdLoop-1: keyRight(status)
-  of 'k':
+  of ord('k'):
     for i in 0..status.cmdLoop-1: keyUp(status)
-  of 'j':
+  of ord('j'):
     for i in 0..status.cmdLoop-1: keyDown(status)
   else:
     discard
@@ -79,21 +98,23 @@ proc normalMode*(status: var EditorStatus) =
     status.mainWindow.write(status.cursor.y, status.view.widthOfLineNum+status.cursor.x, "")
     status.mainWindow.refresh
 
-    let key = char(getch())
+    let key = getKey(status.mainWindow)
 
-    if ord(key) == escKey: break
-    elif ord(key) == resizeKey: discard
-      # winResizeEvent()
-    elif key == ':': discard
+    if key == escKey:
+      break
+    elif key == resizeKey:
+      resizeEditor(status)
+    elif key == ord(':'):
       # exMode()
-    elif isDigit(key):
-      if status.cmdLoop == 0 and key == '0':
+      discard
+    elif isDigit(char(key)):
+      if status.cmdLoop == 0 and key == ord('0'):
         normalCommand(status, key)
         discard
         continue
 
       status.cmdLoop *= 10
-      status.cmdLoop += ord(key)-ord('0')
+      status.cmdLoop += key-ord('0')
       status.cmdLoop = min(100000, status.cmdLoop)
       continue
     else:

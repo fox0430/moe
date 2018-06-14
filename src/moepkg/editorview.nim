@@ -71,11 +71,11 @@ proc resize*(view: var EditorView, buffer: GapBuffer[string], height, width, wid
   view.width = width
   view.widthOfLineNum = widthOfLineNum
 
-  view.originalLine = initDeque[int](nextPowerOfTwo(height))
+  view.originalLine = initDeque[int]()
   for i in 0..height-1: view.originalLine.addlast(-1)
-  view.start = initDeque[int](nextPowerOfTwo(height))
+  view.start = initDeque[int]()
   for i in 0..height-1: view.start.addlast(-1)
-  view.length = initDeque[int](nextPowerOfTwo(height))
+  view.length = initDeque[int]()
   for i in 0..height-1: view.length.addlast(-1)
 
   view.updated = true
@@ -92,12 +92,12 @@ proc scrollUp(view: var EditorView, buffer: GapBuffer[string]) =
   view.start.popLast
   view.length.popLast
 
-  if view.start[1] > 0:
-    view.originalLine.addFirst(view.originalLine[1])
-    view.start.addFirst(view.start[1]-view.width)
+  if view.start[0] > 0:
+    view.originalLine.addFirst(view.originalLine[0])
+    view.start.addFirst(view.start[0]-view.width)
     view.length.addFirst(view.width)
   else:
-    view.originalLine.addFirst(view.originalLine[1]-1)
+    view.originalLine.addFirst(view.originalLine[0]-1)
     view.start.addFirst(view.width*((buffer[view.originalLine[0]].len-1) div view.width))
     view.length.addFirst(if buffer[view.originalLine[0]].len == 0: 0 else: ((buffer[view.originalLine[0]].len-1) mod view.width + 1))
 

@@ -86,3 +86,8 @@ proc refresh*(win: Window) =
 
 proc resize*(win: Window, height, width: int) =
   wresize(win.cursesWindow, height, width)
+
+proc move*(win: Window, y, x: int) =
+  mvwin(win.cursesWindow, y, x)
+
+proc getKey*(win: Window): int = return wgetch(win.cursesWindow)
