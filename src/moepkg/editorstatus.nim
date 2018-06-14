@@ -27,7 +27,7 @@ type EditorStatus* = object
   expandedColumn*: int
   mode* : Mode
   cmdLoop*: int
-  numOfChange: int
+  countChange*: int
   debugMode: int
   mainWindow*: Window
   statusWindow*: Window

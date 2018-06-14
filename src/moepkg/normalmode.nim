@@ -1,4 +1,4 @@
-import strutils, strformat, terminal
+import strutils, strformat, terminal, deques
 import ncurses
 import editorstatus, statusbar, editorview, cursor, ui, gapbuffer
 
@@ -33,7 +33,6 @@ proc resizeEditor(status: var EditorStatus) =
     status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
   writeStatusBar(status)
-  
 
 proc keyLeft(status: var EditorStatus) = 
   if status.currentColumn == 0: return
@@ -67,6 +66,16 @@ proc keyDown(status: var EditorStatus) =
   if status.currentColumn < 0: status.currentColumn = 0
   status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
+proc deleteCurrentCharacter(status: var EditorStatus) =
+  status.buffer[status.currentLine].delete(status.currentColumn, status.currentColumn)
+  if status.buffer[status.currentLine].len > 0 and status.currentColumn == status.buffer[status.currentLine].len:
+    status.currentColumn = status.buffer[status.currentLine].len-1
+    status.expandedColumn = status.buffer[status.currentLine].len-1
+
+  status.view.reload(status.buffer, status.view.originalLine[0])
+  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
+  inc(status.countChange)
+
 proc normalCommand(status: var EditorStatus, key: int) =
   if status.cmdLoop == 0: status.cmdLoop = 1
   
@@ -79,6 +88,8 @@ proc normalCommand(status: var EditorStatus, key: int) =
     for i in 0..status.cmdLoop-1: keyUp(status)
   of ord('j'):
     for i in 0..status.cmdLoop-1: keyDown(status)
+  of ord('x'):
+    for i in 0..status.cmdLoop-1: deleteCurrentCharacter(status)
   else:
     discard
 

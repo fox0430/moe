@@ -80,6 +80,12 @@ proc `[]`*[T](gapBuffer: GapBuffer[T], index: int): T =
   if index < gapBuffer.gapBegin: return gapBuffer.buffer[index]
   return gapBuffer.buffer[gapBuffer.gapEnd+(index-gapBuffer.gapBegin)]
 
+proc `[]`*[T](gapBuffer: var GapBuffer[T], index: int): var T =
+  doAssert(0<=index and index<gapBuffer.size, "Gapbuffer: Invalid index.")
+
+  if index < gapBuffer.gapBegin: return gapBuffer.buffer[index]
+  return gapBuffer.buffer[gapBuffer.gapEnd+(index-gapBuffer.gapBegin)]
+
 proc `[]=`*[T](gapBuffer: var GapBuffer, index: int, val: T) =
   doAssert(0<=index and index<gapBuffer.size, "Gapbuffer: Invalid index.")
 
