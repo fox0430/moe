@@ -2,10 +2,6 @@ import strutils, strformat, terminal, deques
 import ncurses
 import editorstatus, statusbar, editorview, cursor, ui, gapbuffer
 
-const
-  escKey = 27
-  resizeKey = 410
-
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.erase
 
@@ -79,16 +75,15 @@ proc deleteCurrentCharacter(status: var EditorStatus) =
 proc normalCommand(status: var EditorStatus, key: int) =
   if status.cmdLoop == 0: status.cmdLoop = 1
   
-  case key:
-  of ord('h'):
+  if key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
     for i in 0..status.cmdLoop-1: keyLeft(status)
-  of ord('l'):
+  elif key == ord('l') or isRightKey(key):
     for i in 0..status.cmdLoop-1: keyRight(status)
-  of ord('k'):
+  elif key == ord('k') or isUpKey(key):
     for i in 0..status.cmdLoop-1: keyUp(status)
-  of ord('j'):
+  elif key == ord('j') or isDownKey(key) or isEnterKey(key):
     for i in 0..status.cmdLoop-1: keyDown(status)
-  of ord('x'):
+  elif key == ord('x') or isDcKey(key):
     for i in 0..status.cmdLoop-1: deleteCurrentCharacter(status)
   else:
     discard
@@ -111,14 +106,14 @@ proc normalMode*(status: var EditorStatus) =
 
     let key = getKey(status.mainWindow)
 
-    if key == escKey:
+    if isEscKey(key):
       break
-    elif key == resizeKey:
+    elif isResizekey(key):
       resizeEditor(status)
     elif key == ord(':'):
       # exMode()
       discard
-    elif isDigit(char(key)):
+    elif key in 0..255 and isDigit(chr(key)):
       if status.cmdLoop == 0 and key == ord('0'):
         normalCommand(status, key)
         discard

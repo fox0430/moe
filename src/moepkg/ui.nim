@@ -90,4 +90,27 @@ proc resize*(win: Window, height, width: int) =
 proc move*(win: Window, y, x: int) =
   mvwin(win.cursesWindow, y, x)
 
+
+let KEY_ESC = 27
+var KEY_RESIZE {.header: "<ncurses.h>", importc: "KEY_RESIZE".}: int
+var KEY_DOWN {.header: "<ncurses.h>", importc: "KEY_DOWN".}: int
+var KEY_UP {.header: "<ncurses.h>", importc: "KEY_UP".}: int
+var KEY_LEFT {.header: "<ncurses.h>", importc: "KEY_LEFT".}: int
+var KEY_RIGHT {.header: "<ncurses.h>", importc: "KEY_RIGHT".}: int
+var KEY_HOME {.header: "<ncurses.h>", importc: "KEY_HOME".}: int
+var KEY_BACKSPACE {.header: "<ncurses.h>", importc: "KEY_BACKSPACE".}: int
+var KEY_DC {.header: "<ncurses.h>", importc: "KEY_DC".}: int
+var KEY_ENTER {.header: "<ncurses.h>", importc: "KEY_ENTER".}: int
+
 proc getKey*(win: Window): int = return wgetch(win.cursesWindow)
+
+proc isEscKey*(key: int): bool = key == KEY_ESC
+proc isResizeKey*(key: int): bool = key == KEY_RESIZE
+proc isDownKey*(key: int): bool = key == KEY_DOWN
+proc isUpKey*(key: int): bool = key == KEY_UP
+proc isLeftKey*(key: int): bool = key == KEY_LEFT
+proc isRightKey*(key: int): bool = key == KEY_RIGHT
+proc isHomeKey*(key: int): bool = key == KEY_HOME
+proc isBackspaceKey*(key: int): bool = key == KEY_BACKSPACE
+proc isDcKey*(key: int): bool = key == KEY_DC
+proc isEnterKey*(key: int): bool = key == KEY_ENTER
