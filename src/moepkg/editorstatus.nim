@@ -3,7 +3,7 @@ import ncurses
 import gapbuffer, editorview, ui, cursor
 
 type Mode* = enum
-  normal, insert, filer
+  normal, insert, ex, filer, quit
 
 type Registers* = object
   yankedLine*:   GapBuffer[string]

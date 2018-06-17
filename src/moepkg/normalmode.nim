@@ -106,8 +106,6 @@ proc normalMode*(status: var EditorStatus) =
   status.cmdLoop = 0
   status.mode = Mode.normal
   
-  noecho()
-
   while true:
     writeStatusBar(status)
 
@@ -120,13 +118,11 @@ proc normalMode*(status: var EditorStatus) =
 
     let key = getKey(status.mainWindow)
 
-    if isEscKey(key):
-      break
-    elif isResizekey(key):
+    if isResizekey(key):
       resizeEditor(status)
     elif key == ord(':'):
-      # exMode()
-      discard
+      status.mode = Mode.ex
+      return
     elif key in 0..255 and isDigit(chr(key)):
       if status.cmdLoop == 0 and key == ord('0'):
         normalCommand(status, key)

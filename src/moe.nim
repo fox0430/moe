@@ -3,6 +3,7 @@ import moepkg/ui
 import moepkg/editorstatus
 import moepkg/fileutils
 import moepkg/normalmode
+import moepkg/exmode
 import moepkg/editorview
 import moepkg/gapbuffer
 
@@ -19,6 +20,15 @@ when isMainModule:
 
   status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
 
-  normalMode(status)
+  while true:
+    case status.mode:
+    of Mode.normal:
+      normalMode(status)
+    of Mode.ex:
+      exMode(status)
+    of Mode.quit:
+      break
+    else:
+      doAssert(false, "Invalid Mode")
 
   exitUi()

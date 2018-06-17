@@ -56,6 +56,7 @@ proc startUi*() =
   if can_change_color(): setCursesColor()
 
   erase()
+  noecho()
 
 proc exitUi*() =
   endwin()
@@ -90,7 +91,6 @@ proc resize*(win: Window, height, width: int) =
 proc move*(win: Window, y, x: int) =
   mvwin(win.cursesWindow, y, x)
 
-
 let KEY_ESC = 27
 var KEY_RESIZE {.header: "<ncurses.h>", importc: "KEY_RESIZE".}: int
 var KEY_DOWN {.header: "<ncurses.h>", importc: "KEY_DOWN".}: int
@@ -113,6 +113,6 @@ proc isLeftKey*(key: int): bool = key == KEY_LEFT
 proc isRightKey*(key: int): bool = key == KEY_RIGHT
 proc isHomeKey*(key: int): bool = key == KEY_HOME
 proc isEndKey*(key: int): bool = key == KEY_END
-proc isBackspaceKey*(key: int): bool = key == KEY_BACKSPACE
+proc isBackspaceKey*(key: int): bool = key == KEY_BACKSPACE or key == 8 or key == 127
 proc isDcKey*(key: int): bool = key == KEY_DC
-proc isEnterKey*(key: int): bool = key == KEY_ENTER
+proc isEnterKey*(key: int): bool = key == KEY_ENTER or key == ord('\n')
