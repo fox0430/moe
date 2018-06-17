@@ -98,6 +98,7 @@ var KEY_UP {.header: "<ncurses.h>", importc: "KEY_UP".}: int
 var KEY_LEFT {.header: "<ncurses.h>", importc: "KEY_LEFT".}: int
 var KEY_RIGHT {.header: "<ncurses.h>", importc: "KEY_RIGHT".}: int
 var KEY_HOME {.header: "<ncurses.h>", importc: "KEY_HOME".}: int
+var KEY_END {.header: "<ncurses.h>", importc: "KEY_END".}: int
 var KEY_BACKSPACE {.header: "<ncurses.h>", importc: "KEY_BACKSPACE".}: int
 var KEY_DC {.header: "<ncurses.h>", importc: "KEY_DC".}: int
 var KEY_ENTER {.header: "<ncurses.h>", importc: "KEY_ENTER".}: int
@@ -111,6 +112,7 @@ proc isUpKey*(key: int): bool = key == KEY_UP
 proc isLeftKey*(key: int): bool = key == KEY_LEFT
 proc isRightKey*(key: int): bool = key == KEY_RIGHT
 proc isHomeKey*(key: int): bool = key == KEY_HOME
+proc isEndKey*(key: int): bool = key == KEY_END
 proc isBackspaceKey*(key: int): bool = key == KEY_BACKSPACE
 proc isDcKey*(key: int): bool = key == KEY_DC
 proc isEnterKey*(key: int): bool = key == KEY_ENTER

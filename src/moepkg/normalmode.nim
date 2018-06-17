@@ -62,6 +62,16 @@ proc keyDown(status: var EditorStatus) =
   if status.currentColumn < 0: status.currentColumn = 0
   status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
+proc moveToFirstOfLine(status: var EditorStatus) =
+  status.currentColumn = 0
+  status.expandedColumn = status.currentColumn
+  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
+
+proc moveToLastOfLine(status: var EditorStatus) =
+  status.currentColumn = max(status.buffer[status.currentLine].len-1, 0)
+  status.expandedColumn = status.currentColumn
+  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
+
 proc deleteCurrentCharacter(status: var EditorStatus) =
   status.buffer[status.currentLine].delete(status.currentColumn, status.currentColumn)
   if status.buffer[status.currentLine].len > 0 and status.currentColumn == status.buffer[status.currentLine].len:
@@ -85,6 +95,10 @@ proc normalCommand(status: var EditorStatus, key: int) =
     for i in 0..status.cmdLoop-1: keyDown(status)
   elif key == ord('x') or isDcKey(key):
     for i in 0..status.cmdLoop-1: deleteCurrentCharacter(status)
+  elif key == ord('0') or isHomeKey(key):
+    moveToFirstOfLine(status)
+  elif key == ord('$') or isEndKey(key):
+    moveToLastOfLine(status)
   else:
     discard
 
