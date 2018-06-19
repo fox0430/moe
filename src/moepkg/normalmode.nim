@@ -98,6 +98,14 @@ proc moveToFirstLine(status: var EditorStatus) =
 proc moveToLastLine(status: var EditorStatus) =
   jumpLine(status, status.buffer.len-1)
 
+proc pageUp(status: var EditorStatus) =
+  let destination = max(status.currentLine - status.view.height, 0)
+  jumpLine(status, destination)
+
+proc pageDown(status: var EditorStatus) =
+  let destination = min(status.currentLine + status.view.height, status.buffer.len - 1)
+  jumpLine(status, destination)
+
 proc normalCommand(status: var EditorStatus, key: int) =
   if status.cmdLoop == 0: status.cmdLoop = 1
   
@@ -119,6 +127,10 @@ proc normalCommand(status: var EditorStatus, key: int) =
     if getKey(status.mainWindow) == ord('g'): moveToFirstLine(status)
   elif key == ord('G'):
     moveToLastLine(status)
+  elif isPageUpkey(key):
+    for i in 0..status.cmdLoop-1: pageUp(status)
+  elif isPageDownKey(key):
+    for i in 0..status.cmdLoop-1: pageDown(status)
   else:
     discard
 

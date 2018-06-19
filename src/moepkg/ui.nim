@@ -102,6 +102,8 @@ var KEY_END {.header: "<ncurses.h>", importc: "KEY_END".}: int
 var KEY_BACKSPACE {.header: "<ncurses.h>", importc: "KEY_BACKSPACE".}: int
 var KEY_DC {.header: "<ncurses.h>", importc: "KEY_DC".}: int
 var KEY_ENTER {.header: "<ncurses.h>", importc: "KEY_ENTER".}: int
+var KEY_PPAGE {.header: "<ncurses.h>", importc: "KEY_PPAGE".}: int
+var KEY_NPAGE {.header: "<ncurses.h>", importc: "KEY_NPAGE".}: int
 
 proc getKey*(win: Window): int = return wgetch(win.cursesWindow)
 
@@ -116,3 +118,5 @@ proc isEndKey*(key: int): bool = key == KEY_END
 proc isBackspaceKey*(key: int): bool = key == KEY_BACKSPACE or key == 8 or key == 127
 proc isDcKey*(key: int): bool = key == KEY_DC
 proc isEnterKey*(key: int): bool = key == KEY_ENTER or key == ord('\n')
+proc isPageUpKey*(key: int): bool = key == KEY_PPAGE or key == 2
+proc isPageDownkey*(key: int): bool = key == KEY_NPAGE or key == 6
