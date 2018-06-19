@@ -82,6 +82,22 @@ proc deleteCurrentCharacter(status: var EditorStatus) =
   status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
   inc(status.countChange)
 
+proc jumpLine(status: var EditorStatus, destination: int) =
+  let currentLine = status.currentLine
+  status.currentLine = destination
+  status.currentColumn = 0
+  status.expandedColumn = 0
+  if not (status.view.originalLine[0] <= destination and (status.view.originalLine[status.view.height - 1] == -1 or destination <= status.view.originalLine[status.view.height - 1])):
+    let startOfPrintedLines = max(destination - (currentLine - status.view.originalLine[0]), 0)
+    status.view.reload(status.buffer, startOfPrintedLines)
+  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
+
+proc moveToFirstLine(status: var EditorStatus) =
+  jumpLine(status, 0)
+
+proc moveToLastLine(status: var EditorStatus) =
+  jumpLine(status, status.buffer.len-1)
+
 proc normalCommand(status: var EditorStatus, key: int) =
   if status.cmdLoop == 0: status.cmdLoop = 1
   
@@ -99,6 +115,10 @@ proc normalCommand(status: var EditorStatus, key: int) =
     moveToFirstOfLine(status)
   elif key == ord('$') or isEndKey(key):
     moveToLastOfLine(status)
+  elif key == ord('g'):
+    if getKey(status.mainWindow) == ord('g'): moveToFirstLine(status)
+  elif key == ord('G'):
+    moveToLastLine(status)
   else:
     discard
 
