@@ -176,6 +176,21 @@ proc openBlankLineAbove(status: var EditorStatus) =
   status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
   inc(status.countChange)
 
+proc deleteLine(status: var EditorStatus, line: int) =
+  status.buffer.delete(line, line+1)
+
+  if status.buffer.len == 0: status.buffer.insert("", 0)
+
+  if line < status.currentLine: dec(status.currentLine)
+  if status.currentLine >= status.buffer.len: status.currentLine = status.buffer.high
+  
+  status.currentColumn = 0
+  status.expandedColumn = 0
+
+  status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
+  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
+  inc(status.countChange)
+
 proc normalCommand(status: var EditorStatus, key: int) =
   if status.cmdLoop == 0: status.cmdLoop = 1
   
@@ -209,6 +224,9 @@ proc normalCommand(status: var EditorStatus, key: int) =
     for i in 0 ..< status.cmdLoop: openBlankLineBelow(status)
   elif key == ord('O'):
     for i in 0 ..< status.cmdLoop: openBlankLineAbove(status)
+  elif key == ord('d'):
+    if getKey(status.mainWindow) == ord('d'):
+      for i in 0 ..< min(status.cmdLoop, status.buffer.len-status.currentLine): deleteLine(status, status.currentLine)
   else:
     discard
 
