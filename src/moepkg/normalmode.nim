@@ -168,6 +168,32 @@ proc moveToBackwardWord(status: var EditorStatus) =
   status.expandedColumn = status.currentColumn
   status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
+proc countRepeat(s: string, charSet: set[char], start: int): int =
+  for i in start .. s.high:
+    if not (s[i] in charSet): break
+    inc(result)
+
+proc openBlankLineBelow(status: var EditorStatus) =
+  let indent = repeat(' ', countRepeat(status.buffer[status.currentLine], Whitespace, 0))
+
+  status.buffer.insert(indent, status.currentLine+1)
+  inc(status.currentLine)
+  status.currentColumn = indent.len
+
+  status.view.reload(status.buffer, status.view.originalLine[0])
+  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
+  inc(status.countChange)
+
+proc openBlankLineAbove(status: var EditorStatus) =
+  let indent = repeat(' ', countRepeat(status.buffer[status.currentLine], Whitespace, 0))
+
+  status.buffer.insert(indent, status.currentLine)
+  status.currentColumn = indent.len
+
+  status.view.reload(status.buffer, status.view.originalLine[0])
+  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
+  inc(status.countChange)
+
 proc normalCommand(status: var EditorStatus, key: int) =
   if status.cmdLoop == 0: status.cmdLoop = 1
   
@@ -180,7 +206,7 @@ proc normalCommand(status: var EditorStatus, key: int) =
   elif key == ord('j') or isDownKey(key) or isEnterKey(key):
     for i in 0 ..< status.cmdLoop: keyDown(status)
   elif key == ord('x') or isDcKey(key):
-    for i in 0 ..< status.cmdLoop: deleteCurrentCharacter(status)
+    for i in 0 ..< min(status.cmdLoop, status.currentColumn): deleteCurrentCharacter(status)
   elif key == ord('0') or isHomeKey(key):
     moveToFirstOfLine(status)
   elif key == ord('$') or isEndKey(key):
@@ -197,6 +223,10 @@ proc normalCommand(status: var EditorStatus, key: int) =
     for i in 0 ..< status.cmdLoop: moveToForwardWord(status)
   elif key == ord('b'):
     for i in 0 ..< status.cmdLoop: moveToBackwardWord(status)
+  elif key == ord('o'):
+    for i in 0 ..< status.cmdLoop: openBlankLineBelow(status)
+  elif key == ord('O'):
+    for i in 0 ..< status.cmdLoop: openBlankLineAbove(status)
   else:
     discard
 
