@@ -67,6 +67,7 @@ proc initWindow*(height, width, top, left: int ): Window =
   result.height = height
   result.width = width
   result.cursesWindow = newwin(height, width, top, left)
+  discard keypad(result.cursesWindow, true)
 
 proc write*(win: var Window, y, x: int, str: string, color: ColorPair = ColorPair.brightWhiteDefault) =
   wattron(win.cursesWindow, cshort(ord(color)))

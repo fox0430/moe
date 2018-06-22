@@ -1,5 +1,4 @@
 import terminal, os, strformat
-import ncurses
 import gapbuffer, editorview, ui, cursor
 
 type Mode* = enum
@@ -49,10 +48,6 @@ proc initEditorStatus*(): EditorStatus =
   result.mainWindow = initWindow(terminalHeight()-2, terminalWidth(), 0, 0)
   result.statusWindow = initWindow(1, terminalWidth(), terminalHeight()-2, 0)
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight()-1, 0)
-
-  discard keypad(result.mainWindow.cursesWindow, true)
-  discard keypad(result.statusWindow.cursesWindow, true)
-  discard keypad(result.commandWindow.cursesWindow, true)
 
 proc writeStatusBar*(status: var EditorStatus) =
   status.statusWindow.erase
