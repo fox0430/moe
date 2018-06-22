@@ -106,19 +106,81 @@ proc pageDown(status: var EditorStatus) =
   let destination = min(status.currentLine + status.view.height, status.buffer.len - 1)
   jumpLine(status, destination)
 
+proc isPunct(c: char): bool = return c in {'!', '"', '#', '$', '%', '$', '\'', '(', ')', '*', '+', ',', '-', '.', '/', ':', ';', '<', '=', '>', '?', '@', '[', '\\', ']', '^', '_', '`', '{', '=', '}'}
+
+proc moveToForwardWord(status: var EditorStatus) =
+  let
+    startWith = if status.buffer[status.currentLine].len == 0: '\n' else: status.buffer[status.currentLine][status.currentColumn]
+    isSkipped = if isPunct(startWith): isPunct elif isAlphaAscii(startWith): isAlphaAscii elif isDigit(startWith): isDigit else: nil
+
+  if isSkipped == nil:
+    (status.currentLine, status.currentColumn) = status.buffer.next(status.currentLine, status.currentColumn)
+  else:
+    while true:
+      inc(status.currentColumn)
+      if status.currentColumn >= status.buffer[status.currentLine].len:
+        inc(status.currentLine)
+        status.currentColumn = 0
+        break
+      if not isSkipped(status.buffer[status.currentLine][status.currentColumn]): break
+
+  while true:
+    if status.currentLine >= status.buffer.len:
+      status.currentLine = status.buffer.len-1
+      status.currentColumn = status.buffer[status.buffer.high].high
+      if status.currentColumn == -1: status.currentColumn = 0
+      break
+
+    if status.buffer[status.currentLine].len == 0: break
+    if status.currentColumn == status.buffer[status.currentLine].len:
+      inc(status.currentLine)
+      status.currentColumn = 0
+      continue
+
+    let curr = status.buffer[status.currentLine][status.currentColumn]
+    if isPunct(curr) or isAlphaAscii(curr) or isDigit(curr): break
+    inc(status.currentColumn)
+
+  status.expandedColumn = status.currentColumn
+  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
+
+proc moveToBackwardWord(status: var EditorStatus) =
+  if status.buffer.isFirst(status.currentLine, status.currentColumn): return
+
+  while true:
+    (status.currentLine, status.currentColumn) = status.buffer.prev(status.currentLine, status.currentColumn)
+    if status.buffer[status.currentLine].len == 0 or status.buffer.isFirst(status.currentLine, status.currentColumn): break
+
+    let curr = status.buffer[status.currentLine][status.currentColumn]
+    if isSpaceAscii(curr): continue
+
+    if status.currentColumn == 0: break
+
+    let
+      (backLine, backColumn) = status.buffer.prev(status.currentLine, status.currentColumn)
+      back = status.buffer[backLine][backColumn]
+
+    let
+      currType = if isAlphaAscii(curr): 1 elif isDigit(curr): 2 elif isPunct(curr): 4 else: 0
+      backType = if isAlphaAscii(back): 1 elif isDigit(back): 2 elif isPunct(back): 4 else: 0
+    if currType != backType: break
+
+  status.expandedColumn = status.currentColumn
+  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
+
 proc normalCommand(status: var EditorStatus, key: int) =
   if status.cmdLoop == 0: status.cmdLoop = 1
   
   if key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
-    for i in 0..status.cmdLoop-1: keyLeft(status)
+    for i in 0 ..< status.cmdLoop: keyLeft(status)
   elif key == ord('l') or isRightKey(key):
-    for i in 0..status.cmdLoop-1: keyRight(status)
+    for i in 0 ..< status.cmdLoop: keyRight(status)
   elif key == ord('k') or isUpKey(key):
-    for i in 0..status.cmdLoop-1: keyUp(status)
+    for i in 0 ..< status.cmdLoop: keyUp(status)
   elif key == ord('j') or isDownKey(key) or isEnterKey(key):
-    for i in 0..status.cmdLoop-1: keyDown(status)
+    for i in 0 ..< status.cmdLoop: keyDown(status)
   elif key == ord('x') or isDcKey(key):
-    for i in 0..status.cmdLoop-1: deleteCurrentCharacter(status)
+    for i in 0 ..< status.cmdLoop: deleteCurrentCharacter(status)
   elif key == ord('0') or isHomeKey(key):
     moveToFirstOfLine(status)
   elif key == ord('$') or isEndKey(key):
@@ -128,9 +190,13 @@ proc normalCommand(status: var EditorStatus, key: int) =
   elif key == ord('G'):
     moveToLastLine(status)
   elif isPageUpkey(key):
-    for i in 0..status.cmdLoop-1: pageUp(status)
+    for i in 0 ..< status.cmdLoop: pageUp(status)
   elif isPageDownKey(key):
-    for i in 0..status.cmdLoop-1: pageDown(status)
+    for i in 0 ..< status.cmdLoop: pageDown(status)
+  elif key == ord('w'):
+    for i in 0 ..< status.cmdLoop: moveToForwardWord(status)
+  elif key == ord('b'):
+    for i in 0 ..< status.cmdLoop: moveToBackwardWord(status)
   else:
     discard
 
