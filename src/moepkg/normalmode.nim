@@ -1,5 +1,4 @@
 import strutils, strformat, terminal, deques
-import ncurses
 import editorstatus, editorview, cursor, ui, gapbuffer
 
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
