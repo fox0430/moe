@@ -1,6 +1,6 @@
 import strutils, strformat, terminal, deques
 import ncurses
-import editorstatus, statusbar, editorview, cursor, ui, gapbuffer
+import editorstatus, editorview, cursor, ui, gapbuffer
 
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.erase
@@ -11,24 +11,6 @@ proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.append(fmt", {str}")
 
   status.commandWindow.refresh
-
-proc resizeWindow(win: Window, height, width, y, x: int) =
-  win.resize(height, width)
-  win.move(y, x)
-
-
-proc resizeEditor(status: var EditorStatus) =
-  endwin()
-  initscr()
-  resizeWindow(status.mainWindow, terminalHeight()-2, terminalWidth(), 0, 0)
-  resizeWindow(status.statusWindow, 1, terminalWidth(), terminalHeight()-2, 0)
-  resizeWindow(status.commandWindow, 1, terminalWidth(), terminalHeight()-1, 0)
-  
-  if status.mode != Mode.filer:
-    status.view.resize(status.buffer, terminalHeight()-2, terminalWidth()-status.view.widthOfLineNum-1, status.view.widthOfLineNum)
-    status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
-
-  writeStatusBar(status)
 
 proc keyLeft(status: var EditorStatus) = 
   if status.currentColumn == 0: return
@@ -232,7 +214,7 @@ proc normalCommand(status: var EditorStatus, key: int) =
 
 proc normalMode*(status: var EditorStatus) =
   status.cmdLoop = 0
-  status.mode = Mode.normal
+  status.resize
   
   while true:
     writeStatusBar(status)
@@ -247,7 +229,7 @@ proc normalMode*(status: var EditorStatus) =
     let key = getKey(status.mainWindow)
 
     if isResizekey(key):
-      resizeEditor(status)
+      status.resize
     elif key == ord(':'):
       status.mode = Mode.ex
       return

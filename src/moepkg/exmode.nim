@@ -2,23 +2,24 @@ import strutils
 import editorstatus, ui
 
 proc getCommand(commandWindow: var Window): seq[string] =
- var command = ""
- while true:
-   commandWindow.erase
-   commandWindow.write(0, 0, ":"&command)
-   commandWindow.refresh
-
-   let key = commandWindow.getkey
-
-   if isEnterKey(key): break
-   if isBackspaceKey(key):
-     if command.len > 0: command.delete(command.high, command.high)
-     continue
-   if not key in 0..255: continue
-
-   command &= chr(key)
-
- return command.splitWhitespace
+  var command = ""
+  while true:
+    commandWindow.erase
+    commandWindow.write(0, 0, ":"&command)
+    commandWindow.refresh
+ 
+    let key = commandWindow.getkey
+    
+    if isResizeKey(key): continue
+    if isEnterKey(key): break
+    if isBackspaceKey(key):
+      if command.len > 0: command.delete(command.high, command.high)
+      continue
+    if not key in 0..255: continue
+ 
+    command &= chr(key)
+ 
+  return command.splitWhitespace
 
 proc exMode*(status: var EditorStatus) =
   let command = getCommand(status.commandWindow)

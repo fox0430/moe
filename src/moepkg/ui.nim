@@ -85,11 +85,15 @@ proc erase*(win: var Window) =
 proc refresh*(win: Window) =
   wrefresh(win.cursesWindow)
 
+proc move*(win: Window, y, x: int) =
+  mvwin(win.cursesWindow, y, x)
+
 proc resize*(win: Window, height, width: int) =
   wresize(win.cursesWindow, height, width)
 
-proc move*(win: Window, y, x: int) =
-  mvwin(win.cursesWindow, y, x)
+proc resize*(win: Window, height, width, y, x: int) =
+  win.resize(height, width)
+  win.move(y, x)
 
 let KEY_ESC = 27
 var KEY_RESIZE {.header: "<ncurses.h>", importc: "KEY_RESIZE".}: int
