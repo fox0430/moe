@@ -3,6 +3,7 @@ import moepkg/ui
 import moepkg/editorstatus
 import moepkg/fileutils
 import moepkg/normalmode
+import moepkg/insertmode
 import moepkg/exmode
 import moepkg/editorview
 import moepkg/gapbuffer
@@ -24,6 +25,8 @@ when isMainModule:
     case status.mode:
     of Mode.normal:
       normalMode(status)
+    of Mode.insert:
+      insertMode(status)
     of Mode.ex:
       exMode(status)
     of Mode.quit:

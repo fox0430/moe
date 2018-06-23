@@ -247,6 +247,8 @@ proc normalCommand(status: var EditorStatus, key: int) =
     if getkey(status.mainWindow) == ord('y'): yankLines(status, status.currentLine, min(status.currentLine+status.cmdLoop-1, status.buffer.high))
   elif key == ord('p'):
     pasterLines(status)
+  elif key == ord('i'):
+    status.mode = Mode.insert
   else:
     discard
 
@@ -254,10 +256,9 @@ proc normalMode*(status: var EditorStatus) =
   status.cmdLoop = 0
   status.resize
   
-  while true:
+  while status.mode == Mode.normal:
     writeStatusBar(status)
 
-    status.view.updated = true
     status.view.update(status.mainWindow, status.buffer, status.currentLine)
     status.cursor.update(status.view, status.currentLine, status.currentColumn)
 
@@ -270,7 +271,6 @@ proc normalMode*(status: var EditorStatus) =
       status.resize
     elif key == ord(':'):
       status.mode = Mode.ex
-      return
     elif key in 0..255 and isDigit(chr(key)):
       if status.cmdLoop == 0 and key == ord('0'):
         normalCommand(status, key)
