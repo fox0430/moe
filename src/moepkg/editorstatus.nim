@@ -5,7 +5,7 @@ type Mode* = enum
   normal, insert, ex, filer, quit
 
 type Registers* = object
-  yankedLine*:   GapBuffer[string]
+  yankedLines*:   seq[string]
   yankedStr*:    string
 
 type EditorSettings = object
@@ -17,7 +17,7 @@ type EditorStatus* = object
   buffer*: GapBuffer[string]
   view*: EditorView
   cursor*: CursorPosition
-  registers: Registers
+  registers*: Registers
   settings: EditorSettings
   filename*: string
   currentDir: string
@@ -33,7 +33,7 @@ type EditorStatus* = object
   commandWindow*: Window
 
 proc initRegisters(): Registers =
-  result.yankedLine = initGapBuffer[string]()
+  result.yankedLines = @[]
   result.yankedStr = "" 
 
 proc initEditorSettings(): EditorSettings = discard

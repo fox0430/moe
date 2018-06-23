@@ -190,6 +190,23 @@ proc deleteLine(status: var EditorStatus, line: int) =
   status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
   inc(status.countChange)
 
+proc yankLines(status: var EditorStatus, first, last: int) =
+  status.registers.yankedLines = @[]
+  for i in first .. last: status.registers.yankedLines.add(status.buffer[i])
+
+  status.commandWindow.erase
+  status.commandwindow.write(0, 0, fmt"{status.registers.yankedLines.len} line yanked")
+  status.commandWindow.refresh
+
+proc pasterLines(status: var EditorStatus) =
+  for line in status.registers.yankedLines:
+    inc(status.currentLine)
+    status.buffer.insert(line, status.currentLine)
+
+  status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
+  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
+  inc(status.countChange)
+
 proc normalCommand(status: var EditorStatus, key: int) =
   if status.cmdLoop == 0: status.cmdLoop = 1
   
@@ -226,6 +243,10 @@ proc normalCommand(status: var EditorStatus, key: int) =
   elif key == ord('d'):
     if getKey(status.mainWindow) == ord('d'):
       for i in 0 ..< min(status.cmdLoop, status.buffer.len-status.currentLine): deleteLine(status, status.currentLine)
+  elif key == ord('y'):
+    if getkey(status.mainWindow) == ord('y'): yankLines(status, status.currentLine, min(status.currentLine+status.cmdLoop-1, status.buffer.high))
+  elif key == ord('p'):
+    pasterLines(status)
   else:
     discard
 
