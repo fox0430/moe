@@ -72,6 +72,8 @@ proc initWindow*(height, width, top, left: int ): Window =
 proc write*(win: var Window, y, x: int, str: string, color: ColorPair = ColorPair.brightWhiteDefault) =
   wattron(win.cursesWindow, cshort(ord(color)))
   mvwprintw(win.cursesWindow, y, x, str)
+  win.y = y
+  win.x = str.len
 
 proc append*(win: var Window, str: string, color: ColorPair = ColorPair.brightWhiteDefault) =
   wattron(win.cursesWindow, cshort(ord(color)))
