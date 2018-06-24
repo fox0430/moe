@@ -11,6 +11,8 @@ proc reload*(view: var EditorView, buffer: GapBuffer[string], topLine: int) =
   ## topLineがEditorViewの一番上のラインとして表示されるようにバッファからEditorViewに対してリロードを行う.
   ## EditorView全体を更新するため計算コストはやや高め.バッファの内容とEditorViewの内容を同期させる時やEditorView全体が全く異なるような内容になるような処理をした後等に使用することが想定されている.
 
+  view.updated = true
+
   let
     height = view.height
     width = view.width
@@ -21,7 +23,7 @@ proc reload*(view: var EditorView, buffer: GapBuffer[string], topLine: int) =
   var
     lineNumber = topLine
     start = 0
-  for y in 0..height-1:
+  for y in 0 ..< height:
     if lineNumber >= buffer.len: break
     if buffer[lineNumber].len == 0:
       view.originalLine[y] = lineNumber
@@ -157,8 +159,6 @@ proc update*(view: var EditorView, win: var Window, buffer: GapBuffer[string], c
   view.writeAllLines(win, buffer, currentLine)
   view.updated = false
 
-
 proc seekCursor*(view: var EditorView, buffer: GapBuffer[string], currentLine, currentColumn: int) =
-  view.updated = true
   while currentLine < view.originalLine[0] or (currentLine == view.originalLine[0] and view.length[0] > 0 and currentColumn < view.start[0]): view.scrollUp(buffer)
   while (view.originalLine[view.height-1] != -1 and currentLine > view.originalLine[view.height-1]) or (currentLine == view.originalLine[view.height-1] and view.length[view.height-1] > 0 and currentColumn >= view.start[view.height-1]+view.length[view.height-1]): view.scrollDown(buffer)

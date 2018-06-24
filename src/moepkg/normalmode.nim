@@ -207,6 +207,12 @@ proc pasterLines(status: var EditorStatus) =
   status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
   inc(status.countChange)
 
+proc replaceCurrentChar(status: var EditorStatus, ch: int) =
+  status.buffer[status.currentLine][status.currentColumn] = char(ch)
+  status.view.reload(status.buffer, status.view.originalLine[0])
+  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
+  inc(status.countChange)
+
 proc normalCommand(status: var EditorStatus, key: int) =
   if status.cmdLoop == 0: status.cmdLoop = 1
   
@@ -247,6 +253,16 @@ proc normalCommand(status: var EditorStatus, key: int) =
     if getkey(status.mainWindow) == ord('y'): yankLines(status, status.currentLine, min(status.currentLine+status.cmdLoop-1, status.buffer.high))
   elif key == ord('p'):
     pasterLines(status)
+  elif key == ord('r'):
+    if status.cmdLoop > status.buffer[status.currentLine].len - status.currentColumn: return
+
+    let ch = getKey(status.mainWindow)
+    for i in 0 ..< status.cmdLoop:
+      if i > 0:
+        inc(status.currentColumn)
+        status.expandedColumn = status.currentColumn
+        status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
+      replaceCurrentChar(status, ch)
   elif key == ord('i'):
     status.mode = Mode.insert
   else:
