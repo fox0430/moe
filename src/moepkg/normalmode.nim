@@ -16,14 +16,12 @@ proc keyLeft(status: var EditorStatus) =
 
   dec(status.currentColumn)
   status.expandedColumn = status.currentColumn
-  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
 proc keyRight(status: var EditorStatus) =
   if status.currentColumn+1 >= status.buffer[status.currentLine].len + (if status.mode == Mode.insert: 1 else: 0): return
 
   inc(status.currentColumn)
   status.expandedColumn = status.currentColumn
-  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
 proc keyUp(status: var EditorStatus) =
   if status.currentLine == 0: return
@@ -32,7 +30,6 @@ proc keyUp(status: var EditorStatus) =
   let maxColumn = status.buffer[status.currentLine].len-1+(if status.mode == Mode.insert: 1 else: 0)
   status.currentColumn = min(status.expandedColumn, maxColumn)
   if status.currentColumn < 0: status.currentColumn = 0
-  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
 proc keyDown(status: var EditorStatus) =
   if status.currentLine+1 == status.buffer.len: return
@@ -41,17 +38,14 @@ proc keyDown(status: var EditorStatus) =
   let maxColumn = status.buffer[status.currentLine].len-1+(if status.mode == Mode.insert: 1 else: 0)
   status.currentColumn = min(status.expandedColumn, maxColumn)
   if status.currentColumn < 0: status.currentColumn = 0
-  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
 proc moveToFirstOfLine(status: var EditorStatus) =
   status.currentColumn = 0
   status.expandedColumn = status.currentColumn
-  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
 proc moveToLastOfLine(status: var EditorStatus) =
   status.currentColumn = max(status.buffer[status.currentLine].len-1, 0)
   status.expandedColumn = status.currentColumn
-  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
 proc deleteCurrentCharacter(status: var EditorStatus) =
   status.buffer[status.currentLine].delete(status.currentColumn, status.currentColumn)
@@ -60,7 +54,6 @@ proc deleteCurrentCharacter(status: var EditorStatus) =
     status.expandedColumn = status.buffer[status.currentLine].len-1
 
   status.view.reload(status.buffer, status.view.originalLine[0])
-  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
   inc(status.countChange)
 
 proc jumpLine(status: var EditorStatus, destination: int) =
@@ -71,7 +64,6 @@ proc jumpLine(status: var EditorStatus, destination: int) =
   if not (status.view.originalLine[0] <= destination and (status.view.originalLine[status.view.height - 1] == -1 or destination <= status.view.originalLine[status.view.height - 1])):
     let startOfPrintedLines = max(destination - (currentLine - status.view.originalLine[0]), 0)
     status.view.reload(status.buffer, startOfPrintedLines)
-  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
 proc moveToFirstLine(status: var EditorStatus) =
   jumpLine(status, 0)
@@ -123,7 +115,6 @@ proc moveToForwardWord(status: var EditorStatus) =
     inc(status.currentColumn)
 
   status.expandedColumn = status.currentColumn
-  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
 proc moveToBackwardWord(status: var EditorStatus) =
   if status.buffer.isFirst(status.currentLine, status.currentColumn): return
@@ -147,7 +138,6 @@ proc moveToBackwardWord(status: var EditorStatus) =
     if currType != backType: break
 
   status.expandedColumn = status.currentColumn
-  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
 proc countRepeat(s: string, charSet: set[char], start: int): int =
   for i in start .. s.high:
@@ -162,7 +152,6 @@ proc openBlankLineBelow(status: var EditorStatus) =
   status.currentColumn = indent.len
 
   status.view.reload(status.buffer, status.view.originalLine[0])
-  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
   inc(status.countChange)
 
 proc openBlankLineAbove(status: var EditorStatus) =
@@ -172,7 +161,6 @@ proc openBlankLineAbove(status: var EditorStatus) =
   status.currentColumn = indent.len
 
   status.view.reload(status.buffer, status.view.originalLine[0])
-  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
   inc(status.countChange)
 
 proc deleteLine(status: var EditorStatus, line: int) =
@@ -187,7 +175,6 @@ proc deleteLine(status: var EditorStatus, line: int) =
   status.expandedColumn = 0
 
   status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
-  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
   inc(status.countChange)
 
 proc yankLines(status: var EditorStatus, first, last: int) =
@@ -204,13 +191,11 @@ proc pasterLines(status: var EditorStatus) =
     status.buffer.insert(line, status.currentLine)
 
   status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
-  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
   inc(status.countChange)
 
-proc replaceCurrentChar(status: var EditorStatus, ch: int) =
-  status.buffer[status.currentLine][status.currentColumn] = char(ch)
+proc replaceCurrentCharacter(status: var EditorStatus, character: int) =
+  status.buffer[status.currentLine][status.currentColumn] = char(character)
   status.view.reload(status.buffer, status.view.originalLine[0])
-  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
   inc(status.countChange)
 
 proc normalCommand(status: var EditorStatus, key: int) =
@@ -225,7 +210,7 @@ proc normalCommand(status: var EditorStatus, key: int) =
   elif key == ord('j') or isDownKey(key) or isEnterKey(key):
     for i in 0 ..< status.cmdLoop: keyDown(status)
   elif key == ord('x') or isDcKey(key):
-    for i in 0 ..< min(status.cmdLoop, status.currentColumn): deleteCurrentCharacter(status)
+    for i in 0 ..< min(status.cmdLoop, status.buffer[status.currentLine].len - status.currentColumn): deleteCurrentCharacter(status)
   elif key == ord('0') or isHomeKey(key):
     moveToFirstOfLine(status)
   elif key == ord('$') or isEndKey(key):
@@ -261,8 +246,7 @@ proc normalCommand(status: var EditorStatus, key: int) =
       if i > 0:
         inc(status.currentColumn)
         status.expandedColumn = status.currentColumn
-        status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
-      replaceCurrentChar(status, ch)
+      replaceCurrentCharacter(status, ch)
   elif key == ord('i'):
     status.mode = Mode.insert
   else:
@@ -275,6 +259,7 @@ proc normalMode*(status: var EditorStatus) =
   while status.mode == Mode.normal:
     writeStatusBar(status)
 
+    status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
     status.view.update(status.mainWindow, status.buffer, status.currentLine)
     status.cursor.update(status.view, status.currentLine, status.currentColumn)
 

@@ -4,6 +4,7 @@ proc insertMode*(status: var EditorStatus) =
   while status.mode == Mode.insert:
     writeStatusBar(status)
     
+    status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
     status.view.update(status.mainWindow, status.buffer, status.currentLine)
     status.cursor.update(status.view, status.currentLine, status.currentColumn)
 
