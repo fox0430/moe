@@ -1,4 +1,14 @@
-import ui, editorstatus, editorview, cursor
+import deques
+import ui, editorstatus, editorview, cursor, gapbuffer, editorview
+
+proc insertCharacter(status: var EditorStatus, ch: int) =
+  status.buffer[status.currentLine].insert($char(ch), status.currentColumn)
+  inc(status.currentColumn)
+
+  # if status.settings.autoCloseParen: insertParen(status, key)
+
+  status.view.reload(status.buffer, status.view.originalLine[0])
+  inc(status.countChange)
 
 proc insertMode*(status: var EditorStatus) =
   while status.mode == Mode.insert:
@@ -17,3 +27,5 @@ proc insertMode*(status: var EditorStatus) =
       if status.currentColumn > 0: dec(status.currentColumn)
       status.expandedColumn = status.currentColumn
       status.mode = Mode.normal
+    else:
+      insertCharacter(status, key)
