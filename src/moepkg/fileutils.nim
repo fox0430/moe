@@ -12,7 +12,7 @@ proc newFile*(): GapBuffer[string] =
   result.add("")
 
 proc saveFile*(filename: string, buffer: GapBuffer[string]) =
-  let fs = open("test", fmWrite)
-  for line in 0..len(buffer) - 1:
-    fs.writeLine buffer[line]
+  let fs = open(filename, fmWrite)
+  for line in 0 .. buffer.high:
+    fs.writeLine(buffer[line])
   fs.close()

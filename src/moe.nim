@@ -13,9 +13,9 @@ when isMainModule:
   
   var status = initEditorStatus()
   if commandLineParams().len >= 1:
-    let filename = commandLineParams()[0]
-    status.buffer = openFile(filename)
-    status.filename = filename
+    status.filename = commandLineParams()[0]
+    if existsFile(status.filename): status.buffer = openFile(status.filename)
+    else: status.buffer = newFile()
   else:
     status.buffer = newFile()
 

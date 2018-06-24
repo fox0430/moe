@@ -56,7 +56,7 @@ proc deleteCurrentCharacter(status: var EditorStatus) =
   status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)
 
-proc jumpLine(status: var EditorStatus, destination: int) =
+proc jumpLine*(status: var EditorStatus, destination: int) =
   let currentLine = status.currentLine
   status.currentLine = destination
   status.currentColumn = 0
