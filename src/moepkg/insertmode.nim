@@ -14,4 +14,6 @@ proc insertMode*(status: var EditorStatus) =
     let key = getKey(status.mainWindow)
     
     if isEscKey(key):
+      if status.currentColumn > 0: dec(status.currentColumn)
+      status.expandedColumn = status.currentColumn
       status.mode = Mode.normal
