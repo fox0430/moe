@@ -46,7 +46,7 @@ proc initEditorStatus*(): EditorStatus =
   result.mode = Mode.normal
 
   result.mainWindow = initWindow(terminalHeight()-2, terminalWidth(), 0, 0)
-  result.statusWindow = initWindow(1, terminalWidth(), terminalHeight()-2, 0)
+  result.statusWindow = initWindow(1, terminalWidth(), terminalHeight()-2, 0, ui.ColorPair.blackGreen)
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight()-1, 0)
 
 proc writeStatusBar*(status: var EditorStatus) =
@@ -61,8 +61,8 @@ proc writeStatusBar*(status: var EditorStatus) =
   status.statusWindow.append(status.filename, ui.ColorPair.blackGreen)
   if status.filename == "No name":  status.statusWindow.append(" [+]", ui.ColorPair.blackGreen)
 
-  status.statusWindow.write(0, terminalWidth()-13, fmt"{status.currentLine+1}/{status.buffer.len}", ui.Colorpair.blackWhite)
-  status.statusWindow.write(0, terminalWidth()-6, fmt"{status.currentColumn}/{status.buffer[status.currentLine].len}", ui.ColorPair.blackWhite)
+  status.statusWindow.write(0, terminalWidth()-13, fmt"{status.currentLine+1}/{status.buffer.len}", ui.Colorpair.blackGreen)
+  status.statusWindow.write(0, terminalWidth()-6, fmt"{status.currentColumn}/{status.buffer[status.currentLine].len}", ui.ColorPair.blackGreen)
   status.statusWindow.refresh
 
 proc resize*(status: var EditorStatus) =

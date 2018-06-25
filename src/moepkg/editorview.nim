@@ -153,7 +153,7 @@ proc writeAllLines*(view: var EditorView, win: var Window, buffer: GapBuffer[str
   win.refresh
 
 proc update*(view: var EditorView, win: var Window, buffer: GapBuffer[string], currentLine: int) =
-  if not view.updated: return
+  # if not view.updated: return
   let widthOfLineNum = buffer.len.intToStr.len+1
   if widthOfLineNum != view.widthOfLineNum: view.resize(buffer, view.height, view.width+view.widthOfLineNum-widthOfLineNum, widthOfLineNum)
   view.writeAllLines(win, buffer, currentLine)
