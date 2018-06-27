@@ -54,6 +54,9 @@ proc keyEnter(status: var EditorStatus) =
   status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)
 
+proc insertTab(status: var EditorStatus) =
+  for i in 0 ..< status.settings.tabStop: insertCharacter(status, int(' '))
+
 proc insertMode*(status: var EditorStatus) =
   while status.mode == Mode.insert:
     writeStatusBar(status)
@@ -95,5 +98,7 @@ proc insertMode*(status: var EditorStatus) =
       keyBackspace(status)
     elif isEnterKey(key):
       keyEnter(status)
+    elif key == ord('\t'):
+      insertTab(status)
     else:
       insertCharacter(status, key)

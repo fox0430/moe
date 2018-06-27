@@ -38,6 +38,7 @@ proc initRegisters(): Registers =
 
 proc initEditorSettings(): EditorSettings =
   result.autoIndent = true
+  result.tabStop = 2
 
 proc initEditorStatus*(): EditorStatus =
   result.filename = "No name"
