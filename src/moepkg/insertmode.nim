@@ -5,6 +5,7 @@ proc insertCharacter(status: var EditorStatus, ch: int) =
   status.buffer[status.currentLine].insert($char(ch), status.currentColumn)
   inc(status.currentColumn)
 
+  # TODO: implement insertParen
   # if status.settings.autoCloseParen: insertParen(status, key)
 
   status.view.reload(status.buffer, status.view.originalLine[0])
@@ -23,6 +24,34 @@ proc keyBackspace(status: var EditorStatus) =
     status.buffer[status.currentLine].delete(status.currentColumn, status.currentColumn)
 
   status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
+  inc(status.countChange)
+
+proc insertIndent(status: var EditorStatus) =
+  let indent = min(countRepeat(status.buffer[status.currentLine], Whitespace, 0), status.currentColumn)
+  status.buffer[status.currentLine+1] &= repeat(' ', indent)
+
+proc keyEnter(status: var EditorStatus) =
+  status.buffer.insert("", status.currentLine+1)
+  if status.settings.autoIndent:
+    insertIndent(status)
+
+    var startOfCopy = max(countRepeat(status.buffer[status.currentLine], Whitespace, 0), status.currentColumn)
+    startOfCopy += countRepeat(status.buffer[status.currentLine], Whitespace, startOfCopy)
+
+    status.buffer[status.currentLine+1] &= status.buffer[status.currentLine][startOfCopy ..< status.buffer[status.currentLine].len]
+    status.buffer[status.currentLine].delete(status.buffer[status.currentLine].len-(status.buffer[status.currentLine].len-status.currentColumn), status.buffer[status.currentLine].high)
+
+    inc(status.currentLine)
+    status.currentColumn = countRepeat(status.buffer[status.currentLine], Whitespace, 0)
+  else:
+    status.buffer[status.currentLine+1] &= status.buffer[status.currentLine][status.currentColumn ..< status.buffer[status.currentLine].len]
+    status.buffer[status.currentLine].delete(status.currentColumn, status.buffer[status.currentLine].high)
+
+    inc(status.currentLine)
+    status.currentColumn = 0
+    status.expandedColumn = 0
+
+  status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)
 
 proc insertMode*(status: var EditorStatus) =
@@ -64,5 +93,7 @@ proc insertMode*(status: var EditorStatus) =
       deleteCurrentCharacter(status)
     elif isBackspaceKey(key):
       keyBackspace(status)
+    elif isEnterKey(key):
+      keyEnter(status)
     else:
       insertCharacter(status, key)

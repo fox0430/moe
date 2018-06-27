@@ -139,7 +139,7 @@ proc moveToBackwardWord(status: var EditorStatus) =
 
   status.expandedColumn = status.currentColumn
 
-proc countRepeat(s: string, charSet: set[char], start: int): int =
+proc countRepeat*(s: string, charSet: set[char], start: int): int =
   for i in start .. s.high:
     if not (s[i] in charSet): break
     inc(result)

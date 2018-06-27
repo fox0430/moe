@@ -9,16 +9,16 @@ type Registers* = object
   yankedStr*:    string
 
 type EditorSettings = object
-  autoCloseParen: bool
-  autoIndent:     bool 
-  tabStop:        int
+  autoCloseParen*: bool
+  autoIndent*:     bool 
+  tabStop*:        int
 
 type EditorStatus* = object
   buffer*: GapBuffer[string]
   view*: EditorView
   cursor*: CursorPosition
   registers*: Registers
-  settings: EditorSettings
+  settings*: EditorSettings
   filename*: string
   currentDir: string
   currentLine*: int
@@ -36,7 +36,8 @@ proc initRegisters(): Registers =
   result.yankedLines = @[]
   result.yankedStr = "" 
 
-proc initEditorSettings(): EditorSettings = discard
+proc initEditorSettings(): EditorSettings =
+  result.autoIndent = true
 
 proc initEditorStatus*(): EditorStatus =
   result.filename = "No name"
