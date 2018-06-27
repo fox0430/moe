@@ -138,8 +138,8 @@ proc writeLineNum(view: EditorView, win: var Window, y, line: int, colorPair: Co
   win.write(y, 0, repeat(' ', width))
   win.write(y, width-(line+1).intToStr.len-1, (line+1).intToStr, colorPair)
 
-proc writeLine(view: EditorView, win: var Window, y: int, str: string) =
-  win.write(y, view.widthOfLineNum, str, ColorPair.brightWhiteDefault)
+proc writeLine(view: EditorView, win: var Window, y: int, str: string, colorPair: ColorPair) =
+  win.write(y, view.widthOfLineNum, str, colorPair)
 
 proc writeAllLines*(view: var EditorView, win: var Window, buffer: GapBuffer[string], currentLine: int) =
   win.erase
@@ -149,7 +149,7 @@ proc writeAllLines*(view: var EditorView, win: var Window, buffer: GapBuffer[str
       win.write(y, 0, repeat(' ', view.width))
       continue
     if view.start[y] == 0: view.writeLineNum(win, y, view.originalLine[y], if view.originalLine[y]  == currentLine: ColorPair.brightGreenDefault else: ColorPair.grayDefault)
-    view.writeLine(win, y, view.lines[y])
+    view.writeLine(win, y, view.lines[y], if view.originalLine[y] == currentLine: ColorPair.lightBlueDefault else: brightWhiteDefault)
   win.refresh
 
 proc update*(view: var EditorView, win: var Window, buffer: GapBuffer[string], currentLine: int) =
