@@ -11,19 +11,19 @@ proc writeDebugInfo(status: var EditorStatus, str: string = "") =
 
   status.commandWindow.refresh
 
-proc keyLeft(status: var EditorStatus) = 
+proc keyLeft*(status: var EditorStatus) = 
   if status.currentColumn == 0: return
 
   dec(status.currentColumn)
   status.expandedColumn = status.currentColumn
 
-proc keyRight(status: var EditorStatus) =
+proc keyRight*(status: var EditorStatus) =
   if status.currentColumn+1 >= status.buffer[status.currentLine].len + (if status.mode == Mode.insert: 1 else: 0): return
 
   inc(status.currentColumn)
   status.expandedColumn = status.currentColumn
 
-proc keyUp(status: var EditorStatus) =
+proc keyUp*(status: var EditorStatus) =
   if status.currentLine == 0: return
 
   dec(status.currentLine)
@@ -31,7 +31,7 @@ proc keyUp(status: var EditorStatus) =
   status.currentColumn = min(status.expandedColumn, maxColumn)
   if status.currentColumn < 0: status.currentColumn = 0
 
-proc keyDown(status: var EditorStatus) =
+proc keyDown*(status: var EditorStatus) =
   if status.currentLine+1 == status.buffer.len: return
 
   inc(status.currentLine)
@@ -39,15 +39,15 @@ proc keyDown(status: var EditorStatus) =
   status.currentColumn = min(status.expandedColumn, maxColumn)
   if status.currentColumn < 0: status.currentColumn = 0
 
-proc moveToFirstOfLine(status: var EditorStatus) =
+proc moveToFirstOfLine*(status: var EditorStatus) =
   status.currentColumn = 0
   status.expandedColumn = status.currentColumn
 
-proc moveToLastOfLine(status: var EditorStatus) =
+proc moveToLastOfLine*(status: var EditorStatus) =
   status.currentColumn = max(status.buffer[status.currentLine].len-1, 0)
   status.expandedColumn = status.currentColumn
 
-proc deleteCurrentCharacter(status: var EditorStatus) =
+proc deleteCurrentCharacter*(status: var EditorStatus) =
   status.buffer[status.currentLine].delete(status.currentColumn, status.currentColumn)
   if status.buffer[status.currentLine].len > 0 and status.currentColumn == status.buffer[status.currentLine].len:
     status.currentColumn = status.buffer[status.currentLine].len-1
@@ -71,11 +71,11 @@ proc moveToFirstLine(status: var EditorStatus) =
 proc moveToLastLine(status: var EditorStatus) =
   jumpLine(status, status.buffer.len-1)
 
-proc pageUp(status: var EditorStatus) =
+proc pageUp*(status: var EditorStatus) =
   let destination = max(status.currentLine - status.view.height, 0)
   jumpLine(status, destination)
 
-proc pageDown(status: var EditorStatus) =
+proc pageDown*(status: var EditorStatus) =
   let destination = min(status.currentLine + status.view.height, status.buffer.len - 1)
   jumpLine(status, destination)
 
