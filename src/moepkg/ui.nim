@@ -4,6 +4,7 @@ import posix
 proc wattron*(win: ptr window, attrs: int64): int {.cdecl, discardable, importc: "wattron", dynlib: libncurses.}
 proc wattroff*(win: ptr window, attrs: int64): int {.cdecl, discardable, importc: "wattroff", dynlib: libncurses.}
 proc wbkgd*(win: ptr window, attrs: int64): int {.cdecl, discardable, importc: "wbkgd", dynlib: libncurses.}
+proc set_escdelay*(size: int): int {.cdecl, discardable, importc: "set_escdelay", dynlib: libncurses.}
 
 type Color* = enum
   default     = -1,
@@ -61,6 +62,7 @@ proc startUi*() =
 
   erase()
   noecho()
+  set_escdelay(25)
 
 proc exitUi*() =
   endwin()
