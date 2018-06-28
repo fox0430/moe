@@ -1,12 +1,26 @@
 import deques, strutils
 import ui, editorstatus, editorview, cursor, gapbuffer, editorview, normalmode
 
+proc insertCloseParen(status: var EditorStatus, ch: int) =
+  case ch
+  of ord('('):
+    status.buffer[status.currentLine].insert(")", status.currentColumn)
+  of ord('{'):
+    status.buffer[status.currentLine].insert("}", status.currentColumn)
+  of ord('"'):
+    status.buffer[status.currentLine].insert("\"", status.currentColumn)
+  of ord('\''):
+    status.buffer[status.currentLine].insert("'", status.currentColumn)
+  else:
+    doAssert(false, "Invalid parentheses")
+
+proc isOpenParen(ch: int): bool = ch == ord('(') or ch == ord('{') or ch == ord('"') or ch == ord('\'')
+
 proc insertCharacter(status: var EditorStatus, ch: int) =
   status.buffer[status.currentLine].insert($char(ch), status.currentColumn)
   inc(status.currentColumn)
 
-  # TODO: implement insertParen
-  # if status.settings.autoCloseParen: insertParen(status, key)
+  if status.settings.autoCloseParen and isOpenParen(ch): insertCloseParen(status, ch)
 
   status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)

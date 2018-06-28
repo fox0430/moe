@@ -185,7 +185,7 @@ proc yankLines(status: var EditorStatus, first, last: int) =
   status.commandwindow.write(0, 0, fmt"{status.registers.yankedLines.len} line yanked")
   status.commandWindow.refresh
 
-proc pasterLines(status: var EditorStatus) =
+proc pasteLines(status: var EditorStatus) =
   for line in status.registers.yankedLines:
     inc(status.currentLine)
     status.buffer.insert(line, status.currentLine)
@@ -239,7 +239,7 @@ proc normalCommand(status: var EditorStatus, key: int) =
   elif key == ord('y'):
     if getkey(status.mainWindow) == ord('y'): yankLines(status, status.currentLine, min(status.currentLine+status.cmdLoop-1, status.buffer.high))
   elif key == ord('p'):
-    pasterLines(status)
+    pasteLines(status)
   elif key == ord('r'):
     if status.cmdLoop > status.buffer[status.currentLine].len - status.currentColumn: return
 

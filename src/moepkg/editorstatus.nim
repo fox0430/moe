@@ -37,6 +37,7 @@ proc initRegisters(): Registers =
   result.yankedStr = "" 
 
 proc initEditorSettings(): EditorSettings =
+  result.autoCloseParen = true
   result.autoIndent = true
   result.tabStop = 2
 
