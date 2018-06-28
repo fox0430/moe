@@ -8,11 +8,12 @@ proc filerMode*(status: var EditorStatus) =
   var refreshDirList = true
   var dirList = newSeq[(PathComponent, string)]()
   var key: int
+  var currentDir = "./"
 
   while status.mode == Mode.filer:
     if refreshDirList == true:
       dirList = @[]
-      for list in walkDir(status.currentDir):
+      for list in walkDir(currentDir):
         dirList.add list
       refreshDirList = false
 
@@ -23,7 +24,3 @@ proc filerMode*(status: var EditorStatus) =
       status.mainWindow.refresh
       viewUpdate = false
       key = getKey(status.mainWindow)
-
-      status.mode = Mode.normal
-
-
