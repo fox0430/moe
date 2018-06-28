@@ -5,6 +5,7 @@ import moepkg/fileutils
 import moepkg/normalmode
 import moepkg/insertmode
 import moepkg/exmode
+import moepkg/filemanager
 import moepkg/editorview
 import moepkg/gapbuffer
 
@@ -15,6 +16,8 @@ when isMainModule:
   if commandLineParams().len >= 1:
     status.filename = commandLineParams()[0]
     if existsFile(status.filename): status.buffer = openFile(status.filename)
+    #elif getFileInfo(status.filename).kind == pcDir:
+    #  status.mode = filer
     else: status.buffer = newFile()
   else:
     status.buffer = newFile()
@@ -29,6 +32,8 @@ when isMainModule:
       insertMode(status)
     of Mode.ex:
       exMode(status)
+    of Mode.filer:
+      filerMode(status)
     of Mode.quit:
       break
     else:
