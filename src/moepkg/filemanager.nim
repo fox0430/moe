@@ -4,11 +4,13 @@ import editorstatus
 import ui
 
 proc filerMode*(status: var EditorStatus) =
+  setCursor(false)
   var viewUpdate = true
   var refreshDirList = true
   var dirList = newSeq[(PathComponent, string)]()
   var key: int
   var currentDir = "./"
+  var y = 0
 
   while status.mode == Mode.filer:
     if refreshDirList == true:
@@ -21,6 +23,10 @@ proc filerMode*(status: var EditorStatus) =
       writeStatusBar(status)
       for i in 0 ..< dirList.len:
         status.mainWindow.write(i, 0, dirList[i][1])
+      status.mainWindow.write(y, 0, dirList[y][1], brightGreenDefault)
       status.mainWindow.refresh
       viewUpdate = false
-      key = getKey(status.mainWindow)
+
+    key = getKey(status.mainWindow)
+    if key == ord(':'):
+      status.mode = Mode.ex
