@@ -52,16 +52,29 @@ proc setCursesColor() =
   setColorPair(ColorPair.brightGreenDefault, Color.brightGreen, Color.default)
   setColorPair(ColorPair.lightBlueDefault, Color.lightBlue, Color.default)
 
+
+proc setCursor*(cursor: bool) =
+  if cursor == true:
+    curs_set(1)   # enable cursor
+  elif cursor == false:
+    curs_set(0)   # disable cursor
+
+proc noEcho*(keyEcho: bool) =
+  if keyEcho == true:
+    echo()
+  elif keyEcho == false:
+    noecho()
+    
 proc startUi*() =
   discard setLocale(LC_ALL, "")   # enable UTF-8
   initscr()   # start terminal control
   cbreak()    # enable cbreak mode
-  curs_set(1) # set cursor
+  setCursor(true)
 
   if can_change_color(): setCursesColor()
 
   erase()
-  noecho()
+  noEcho(false)
   set_escdelay(25)
 
 proc exitUi*() =
