@@ -59,10 +59,10 @@ proc setCursor*(cursor: bool) =
   elif cursor == false:
     curs_set(0)   # disable cursor
 
-proc noEcho*(keyEcho: bool) =
-  if keyEcho == true:
+proc keyEcho*(keyecho: bool) =
+  if keyecho == true:
     echo()
-  elif keyEcho == false:
+  elif keyecho == false:
     noecho()
     
 proc startUi*() =
@@ -74,7 +74,7 @@ proc startUi*() =
   if can_change_color(): setCursesColor()
 
   erase()
-  noEcho(false)
+  keyEcho(false)
   set_escdelay(25)
 
 proc exitUi*() =
