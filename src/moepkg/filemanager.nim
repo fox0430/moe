@@ -8,7 +8,7 @@ proc filerMode*(status: var EditorStatus) =
   var viewUpdate = true
   var refreshDirList = true
   var dirList = newSeq[(PathComponent, string)]()
-  var key: int
+  var key: int 
   var currentDir = "./"
   var y = 0
 
@@ -30,3 +30,10 @@ proc filerMode*(status: var EditorStatus) =
     key = getKey(status.mainWindow)
     if key == ord(':'):
       status.mode = Mode.ex
+
+    if key == ord('j') and y < dirList.len - 1:
+      inc(y)
+      viewUpdate = true
+    elif key == ord('k') and 0 < y:
+      dec(y)
+      viewUpdate = true
