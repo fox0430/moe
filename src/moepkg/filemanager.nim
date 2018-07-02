@@ -3,6 +3,12 @@ import sequtils
 import editorstatus
 import ui
 
+proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
+  for i in 0 ..< dirList.len:
+    win.write(i, 0, dirList[i][1])
+  win.write(currentLine, 0, dirList[currentLine][1], brightGreenDefault)
+  win.refresh
+
 proc filerMode*(status: var EditorStatus) =
   setCursor(false)
   var viewUpdate = true
@@ -10,7 +16,7 @@ proc filerMode*(status: var EditorStatus) =
   var dirList = newSeq[(PathComponent, string)]()
   var key: int 
   var currentDir = "./"
-  var y = 0
+  var currentLine = 0
 
   while status.mode == Mode.filer:
     if refreshDirList == true:
@@ -21,19 +27,16 @@ proc filerMode*(status: var EditorStatus) =
 
     if viewUpdate == true:
       writeStatusBar(status)
-      for i in 0 ..< dirList.len:
-        status.mainWindow.write(i, 0, dirList[i][1])
-      status.mainWindow.write(y, 0, dirList[y][1], brightGreenDefault)
-      status.mainWindow.refresh
+      status.mainWindow.writeFillerView(dirList, currentLine)
       viewUpdate = false
 
     key = getKey(status.mainWindow)
     if key == ord(':'):
       status.mode = Mode.ex
 
-    if key == ord('j') and y < dirList.len - 1:
-      inc(y)
+    if key == ord('j') and currentLine < dirList.len - 1:
+      inc(currentLine)
       viewUpdate = true
-    elif key == ord('k') and 0 < y:
-      dec(y)
+    elif key == ord('k') and 0 < currentLine:
+      dec(currentLine)
       viewUpdate = true
