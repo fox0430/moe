@@ -1,7 +1,12 @@
 import os
 import sequtils
+import terminal
+import strutils
 import editorstatus
 import ui
+import fileutils
+import editorview
+import gapbuffer
 
 proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
   for i in 0 ..< dirList.len:
@@ -26,6 +31,7 @@ proc filerMode*(status: var EditorStatus) =
       refreshDirList = false
 
     if viewUpdate == true:
+      status.mainWindow.erase
       writeStatusBar(status)
       status.mainWindow.writeFillerView(dirList, currentLine)
       viewUpdate = false
@@ -40,3 +46,15 @@ proc filerMode*(status: var EditorStatus) =
     elif key == ord('k') and 0 < currentLine:
       dec(currentLine)
       viewUpdate = true
+    elif isEnterKey(key):
+      if dirList[currentLine][0] == pcFile:
+        status = initEditorStatus()
+        status.filename = dirList[currentLine][1]
+        status.buffer = openFile(status.filename)
+        status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
+      elif dirList[currentLine][0] == pcDir:
+        setCurrentDir(dirList[currentLine][1])
+        currentDir = getCurrentDir()
+        currentLine = 0
+        viewUpdate = true
+        refreshDirList = true
