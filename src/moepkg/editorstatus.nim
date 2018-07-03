@@ -20,6 +20,7 @@ type EditorStatus* = object
   registers*: Registers
   settings*: EditorSettings
   filename*: string
+  openDir: string
   currentDir: string
   currentLine*: int
   currentColumn*: int
