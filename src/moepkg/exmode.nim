@@ -48,8 +48,10 @@ proc exMode*(status: var EditorStatus) =
       setCurrentDir(command[1])
       status.mode = Mode.filer
     else:
-      writeNoWriteError(status.commandWindow)
-      status.mode = Mode.normal
+      status = initEditorStatus()
+      status.filename = command[1]
+      status.buffer = newFile()
+      status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
   elif command.len == 1 and command[0] == "w":
     saveFile(status.filename, status.buffer)
     status.countChange = 0
