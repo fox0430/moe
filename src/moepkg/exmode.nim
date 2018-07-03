@@ -1,5 +1,5 @@
-import strutils
-import editorstatus, ui, normalmode, gapbuffer, fileutils
+import sequtils, strutils, os, terminal
+import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview
 
 proc getCommand(commandWindow: var Window): seq[string] =
   var command = ""
@@ -35,6 +35,21 @@ proc exMode*(status: var EditorStatus) =
     if line >= status.buffer.len: line = status.buffer.high
     jumpLine(status, line)
     status.mode = Mode.normal
+  elif command.len == 2 and command[0] == "e":
+    if status.countChange != 0:
+      writeNoWriteError(status.commandWindow)
+      status.mode = Mode.normal
+    elif existsFile(command[1]):
+      status = initEditorStatus()
+      status.filename = command[1]
+      status.buffer = openFile(status.filename)
+      status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
+    elif existsDir(command[1]):
+      setCurrentDir(command[1])
+      status.mode = Mode.filer
+    else:
+      writeNoWriteError(status.commandWindow)
+      status.mode = Mode.normal
   elif command.len == 1 and command[0] == "w":
     saveFile(status.filename, status.buffer)
     status.countChange = 0
