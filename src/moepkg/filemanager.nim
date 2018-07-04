@@ -14,21 +14,26 @@ proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], cur
   win.write(currentLine, 0, dirList[currentLine][1], brightGreenDefault)
   win.refresh
 
+proc refreshDirList(): seq[(PathComponent, string)] =
+  result = newSeq[(PathComponent, string)]()
+  result = @[]
+  for list in walkDir("./"):
+    result.add list
+
 proc filerMode*(status: var EditorStatus) =
   setCursor(false)
   var viewUpdate = true
-  var refreshDirList = true
+  var updateDirList = true
   var dirList = newSeq[(PathComponent, string)]()
   var key: int 
   var currentDir = "./"
   var currentLine = 0
 
   while status.mode == Mode.filer:
-    if refreshDirList == true:
+    if updateDirList == true:
       dirList = @[]
-      for list in walkDir(currentDir):
-        dirList.add list
-      refreshDirList = false
+      dirList.add refreshDirList()
+      updateDirList = false
 
     if viewUpdate == true:
       status.mainWindow.erase
@@ -57,4 +62,4 @@ proc filerMode*(status: var EditorStatus) =
         currentDir = getCurrentDir()
         currentLine = 0
         viewUpdate = true
-        refreshDirList = true
+        updateDirList = true
