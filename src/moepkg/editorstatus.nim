@@ -49,6 +49,7 @@ proc initEditorStatus*(): EditorStatus =
   result.registers = initRegisters()
   result.settings = initEditorSettings()
   result.mode = Mode.normal
+  result.prevMode= Mode.normal
 
   result.mainWindow = initWindow(terminalHeight()-2, terminalWidth(), 0, 0)
   result.statusWindow = initWindow(1, terminalWidth(), terminalHeight()-2, 0, ui.ColorPair.blackGreen)

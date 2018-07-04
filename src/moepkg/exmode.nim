@@ -29,7 +29,7 @@ proc writeNoWriteError(commandWindow: var Window) =
 proc exMode*(status: var EditorStatus) =
   let command = getCommand(status.commandWindow)
 
-  if command.len == 1 and isDigit(command[0]):
+  if command.len == 1 and isDigit(command[0]) and status.mode == Mode.normal:
     var line = command[0].parseInt-1
     if line < 0: line = 0
     if line >= status.buffer.len: line = status.buffer.high
@@ -52,7 +52,7 @@ proc exMode*(status: var EditorStatus) =
       status.filename = command[1]
       status.buffer = newFile()
       status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
-  elif command.len == 1 and command[0] == "w":
+  elif command.len == 1 and command[0] == "w" and status.mode == Mode.normal:
     saveFile(status.filename, status.buffer)
     status.countChange = 0
     status.mode = Mode.normal
@@ -61,10 +61,13 @@ proc exMode*(status: var EditorStatus) =
     else:
       writeNoWriteError(status.commandWindow)
       status.mode = Mode.normal
-  elif command.len == 1 and command[0] == "wq":
+  elif command.len == 1 and command[0] == "wq" and status.mode == Mode.normal:
     saveFile(status.filename, status.buffer)
     status.mode = Mode.quit
   elif command.len == 1 and command[0] == "q!":
     status.mode = Mode.quit
   else:
-    status.mode = Mode.normal
+    if status.prevMode == Mode.filer:
+      status.mode = Mode.filer
+    else:
+      status.mode = Mode.normal

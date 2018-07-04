@@ -42,6 +42,7 @@ proc filerMode*(status: var EditorStatus) =
 
     key = getKey(status.mainWindow)
     if key == ord(':'):
+      status.prevMode = status.mode
       status.mode = Mode.ex
 
     if key == ord('j') and currentLine < dirList.len - 1:
