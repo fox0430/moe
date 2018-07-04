@@ -9,26 +9,35 @@ import editorview
 import gapbuffer
 
 proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
+  const topSpace = 2
+  const border = 20
+  win.write(0, 0, getCurrentDir())
+  for i in 0 .. border:
+    win.write(1, i, "-")
   for i in 0 ..< dirList.len:
-    win.write(i, 0, dirList[i][1])
-  win.write(currentLine, 0, dirList[currentLine][1], brightGreenDefault)
+    win.write(i + topSpace, 0, dirList[i][1])
+  win.write(currentLine + topSpace, 0, dirList[currentLine][1], brightGreenDefault)
   win.refresh
+
+proc refreshDirList(): seq[(PathComponent, string)] =
+  result = newSeq[(PathComponent, string)]()
+  result = @[(pcDir, "../")]
+  for list in walkDir("./"):
+    result.add list
 
 proc filerMode*(status: var EditorStatus) =
   setCursor(false)
   var viewUpdate = true
-  var refreshDirList = true
+  var updateDirList = true
   var dirList = newSeq[(PathComponent, string)]()
   var key: int 
-  var currentDir = "./"
   var currentLine = 0
 
   while status.mode == Mode.filer:
-    if refreshDirList == true:
+    if updateDirList == true:
       dirList = @[]
-      for list in walkDir(currentDir):
-        dirList.add list
-      refreshDirList = false
+      dirList.add refreshDirList()
+      updateDirList = false
 
     if viewUpdate == true:
       status.mainWindow.erase
@@ -52,9 +61,9 @@ proc filerMode*(status: var EditorStatus) =
         status.filename = dirList[currentLine][1]
         status.buffer = openFile(status.filename)
         status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
+        setCursor(true)
       elif dirList[currentLine][0] == pcDir:
         setCurrentDir(dirList[currentLine][1])
-        currentDir = getCurrentDir()
         currentLine = 0
         viewUpdate = true
-        refreshDirList = true
+        updateDirList = true
