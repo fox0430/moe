@@ -16,7 +16,7 @@ proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], cur
 
 proc refreshDirList(): seq[(PathComponent, string)] =
   result = newSeq[(PathComponent, string)]()
-  result = @[]
+  result = @[(pcDir, "../")]
   for list in walkDir("./"):
     result.add list
 
@@ -26,7 +26,6 @@ proc filerMode*(status: var EditorStatus) =
   var updateDirList = true
   var dirList = newSeq[(PathComponent, string)]()
   var key: int 
-  var currentDir = "./"
   var currentLine = 0
 
   while status.mode == Mode.filer:
@@ -59,7 +58,6 @@ proc filerMode*(status: var EditorStatus) =
         status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
       elif dirList[currentLine][0] == pcDir:
         setCurrentDir(dirList[currentLine][1])
-        currentDir = getCurrentDir()
         currentLine = 0
         viewUpdate = true
         updateDirList = true
