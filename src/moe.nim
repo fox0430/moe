@@ -16,7 +16,9 @@ when isMainModule:
   if commandLineParams().len >= 1:
     status.filename = commandLineParams()[0]
     if existsFile(status.filename): status.buffer = openFile(status.filename)
-    elif existsDir(status.filename): status.mode = filer
+    elif existsDir(status.filename):
+      setCurrentDir(status.filename)
+      status.mode = filer
     else: status.buffer = newFile()
   else:
     status.buffer = newFile()
