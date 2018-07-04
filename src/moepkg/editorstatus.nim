@@ -25,6 +25,7 @@ type EditorStatus* = object
   currentLine*: int
   currentColumn*: int
   expandedColumn*: int
+  prevMode* : Mode
   mode* : Mode
   cmdLoop*: int
   countChange*: int
@@ -48,6 +49,7 @@ proc initEditorStatus*(): EditorStatus =
   result.registers = initRegisters()
   result.settings = initEditorSettings()
   result.mode = Mode.normal
+  result.prevMode= Mode.normal
 
   result.mainWindow = initWindow(terminalHeight()-2, terminalWidth(), 0, 0)
   result.statusWindow = initWindow(1, terminalWidth(), terminalHeight()-2, 0, ui.ColorPair.blackGreen)
@@ -58,11 +60,14 @@ proc writeStatusBar*(status: var EditorStatus) =
 
   if status.mode == Mode.filer:
     status.statusWindow.write(0, 0, " FILER ", ui.ColorPair.blackWhite)
+    status.statusWindow.append(" ", ui.ColorPair.blackGreen)
+    status.statusWindow.append(getCurrentDir(), ui.ColorPair.blackGreen)
     status.statusWindow.refresh
     return
 
   status.statusWindow.write(0, 0,  if status.mode == Mode.normal: " NORMAL " else: " INSERT ", ui.ColorPair.blackWhite)
-  status.statusWindow.append(status.filename, ui.ColorPair.blackGreen)
+  status.statusWindow.append(" ", ui.ColorPair.blackGreen)
+  status.statusWindow.append(status.filename[2..status.filename.len], ui.ColorPair.blackGreen)
   if status.filename == "No name":  status.statusWindow.append(" [+]", ui.ColorPair.blackGreen)
 
   status.statusWindow.write(0, terminalWidth()-13, fmt"{status.currentLine+1}/{status.buffer.len}", ui.Colorpair.blackGreen)

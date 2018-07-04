@@ -9,14 +9,9 @@ import editorview
 import gapbuffer
 
 proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
-  const topSpace = 2
-  const border = 20
-  win.write(0, 0, getCurrentDir())
-  for i in 0 .. border:
-    win.write(1, i, "-")
   for i in 0 ..< dirList.len:
-    win.write(i + topSpace, 0, dirList[i][1])
-  win.write(currentLine + topSpace, 0, dirList[currentLine][1], brightGreenDefault)
+    win.write(i, 0, dirList[i][1])
+  win.write(currentLine, 0, dirList[currentLine][1], brightGreenDefault)
   win.refresh
 
 proc refreshDirList(): seq[(PathComponent, string)] =
@@ -47,6 +42,7 @@ proc filerMode*(status: var EditorStatus) =
 
     key = getKey(status.mainWindow)
     if key == ord(':'):
+      status.prevMode = status.mode
       status.mode = Mode.ex
 
     if key == ord('j') and currentLine < dirList.len - 1:
