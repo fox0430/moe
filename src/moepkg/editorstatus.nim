@@ -25,6 +25,7 @@ type EditorStatus* = object
   currentLine*: int
   currentColumn*: int
   expandedColumn*: int
+  prevMode* : Mode
   mode* : Mode
   cmdLoop*: int
   countChange*: int
