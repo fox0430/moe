@@ -7,6 +7,8 @@ proc insertCloseParen(status: var EditorStatus, ch: int) =
     status.buffer[status.currentLine].insert(")", status.currentColumn)
   of ord('{'):
     status.buffer[status.currentLine].insert("}", status.currentColumn)
+  of ord('['):
+    status.buffer[status.currentLine].insert("]", status.currentColumn)
   of ord('"'):
     status.buffer[status.currentLine].insert("\"", status.currentColumn)
   of ord('\''):
@@ -14,7 +16,7 @@ proc insertCloseParen(status: var EditorStatus, ch: int) =
   else:
     doAssert(false, "Invalid parentheses")
 
-proc isOpenParen(ch: int): bool = ch == ord('(') or ch == ord('{') or ch == ord('"') or ch == ord('\'')
+proc isOpenParen(ch: int): bool = ch == ord('(') or ch == ord('{') or ch == ord('[') or ch == ord('"') or ch == ord('\'')
 
 proc insertCharacter(status: var EditorStatus, ch: int) =
   status.buffer[status.currentLine].insert($char(ch), status.currentColumn)

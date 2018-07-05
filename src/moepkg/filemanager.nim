@@ -8,21 +8,34 @@ import fileutils
 import editorview
 import gapbuffer
 
-proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
-  for i in 0 ..< dirList.len:
-    win.write(i, 0, dirList[i][1])
-    if dirList[i][0] == pcDir and i != 0:
-      win.write(i, dirList[i][1].len, "/")
-  win.write(currentLine, 0, dirList[currentLine][1], brightGreenDefault)
-  if dirList[currentLine][0] == pcDir and currentLine != 0:
-    win.write(currentLine, dirList[currentLine][1].len, "/", brightGreenDefault)
-  win.refresh
-
 proc refreshDirList(): seq[(PathComponent, string)] =
   result = newSeq[(PathComponent, string)]()
   result = @[(pcDir, "../")]
   for list in walkDir("./"):
     result.add list
+
+proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
+  var ch = newStringOfCap(1)
+  for i in 0 ..< dirList.len:
+    for j in 0 ..< dirList[i][1].len:
+      if j > terminalWidth() - 2:
+        if i == currentLine:
+          win.write(i, j, "~", brightGreenDefault)
+        else:
+          win.write(i, j, "~")
+        break
+      else:
+        ch[0] = dirList[i][1][j]
+        if i == currentLine:
+          win.write(i, j, ch, brightGreenDefault)
+        else:
+          win.write(i, j, ch)
+        if j == dirList[i][1].len - 1 and i != 0 and dirList[i][0] == pcDir:
+          if i == currentLine:
+            win.write(i, j + 1, "/", brightGreenDefault)
+          else:
+            win.write(i, j + 1, "/")
+  win.refresh
 
 proc filerMode*(status: var EditorStatus) =
   setCursor(false)
@@ -48,11 +61,14 @@ proc filerMode*(status: var EditorStatus) =
     if key == ord(':'):
       status.prevMode = status.mode
       status.mode = Mode.ex
+    elif isResizekey(key):
+      status.resize
+      viewUpdate = true
 
-    if key == ord('j') and currentLine < dirList.len - 1:
+    elif key == ord('j') or isDownKey(key) and currentLine < dirList.len - 1:
       inc(currentLine)
       viewUpdate = true
-    elif key == ord('k') and 0 < currentLine:
+    elif key == ord('k') or isUpKey(key) and 0 < currentLine:
       dec(currentLine)
       viewUpdate = true
     elif isEnterKey(key):
