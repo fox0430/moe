@@ -11,7 +11,11 @@ import gapbuffer
 proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
   for i in 0 ..< dirList.len:
     win.write(i, 0, dirList[i][1])
+    if dirList[i][0] == pcDir and i != 0:
+      win.write(i, dirList[i][1].len, "/")
   win.write(currentLine, 0, dirList[currentLine][1], brightGreenDefault)
+  if dirList[currentLine][0] == pcDir and currentLine != 0:
+    win.write(currentLine, dirList[currentLine][1].len, "/", brightGreenDefault)
   win.refresh
 
 proc refreshDirList(): seq[(PathComponent, string)] =
