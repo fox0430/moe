@@ -65,10 +65,10 @@ proc filerMode*(status: var EditorStatus) =
       status.resize
       viewUpdate = true
 
-    elif key == ord('j') or isDownKey(key) and currentLine < dirList.len - 1:
+    elif (key == ord('j') or isDownKey(key)) and currentLine < dirList.len - 1:
       inc(currentLine)
       viewUpdate = true
-    elif key == ord('k') or isUpKey(key) and 0 < currentLine:
+    elif (key == ord('k') or isUpKey(key)) and 0 < currentLine:
       dec(currentLine)
       viewUpdate = true
     elif isEnterKey(key):
