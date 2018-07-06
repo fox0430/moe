@@ -269,7 +269,7 @@ proc normalCommand(status: var EditorStatus, key: int) =
     status.currentColumn = 0
     status.mode = Mode.insert
   elif key == ord('a'):
-    inc(status.currentColumn)
+    if status.buffer[status.currentLine].len > 0: inc(status.currentColumn)
     status.mode = Mode.insert
   elif key == ord('A'):
     status.currentColumn = status.buffer[status.currentLine].len
