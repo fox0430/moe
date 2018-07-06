@@ -11,7 +11,7 @@ proc writeDebugInfo(status: var EditorStatus, str: string = "") =
 
   status.commandWindow.refresh
 
-proc keyLeft*(status: var EditorStatus) = 
+proc keyLeft*(status: var EditorStatus) =
   if status.currentColumn == 0: return
 
   dec(status.currentColumn)
@@ -46,6 +46,16 @@ proc moveToFirstOfLine*(status: var EditorStatus) =
 proc moveToLastOfLine*(status: var EditorStatus) =
   status.currentColumn = max(status.buffer[status.currentLine].len-1, 0)
   status.expandedColumn = status.currentColumn
+
+proc moveToFirstOfPreviousLine(status: var EditorStatus) =
+  if status.currentLine == 0: return
+  keyUp(status)
+  moveToFirstOfLine(status)
+
+proc moveToFirstOfNextLine(status: var EditorStatus) =
+  if status.currentLine+1 == status.buffer.len: return
+  keyDown(status)
+  moveToFirstOfLine(status)
 
 proc deleteCurrentCharacter*(status: var EditorStatus) =
   status.buffer[status.currentLine].delete(status.currentColumn, status.currentColumn)
@@ -215,6 +225,10 @@ proc normalCommand(status: var EditorStatus, key: int) =
     moveToFirstOfLine(status)
   elif key == ord('$') or isEndKey(key):
     moveToLastOfLine(status)
+  elif key == ord('-'):
+    moveToFirstOfPreviousLine(status)
+  elif key == ord('+'):
+    moveToFirstOfNextLine(status)
   elif key == ord('g'):
     if getKey(status.mainWindow) == ord('g'): moveToFirstLine(status)
   elif key == ord('G'):
