@@ -52,7 +52,7 @@ proc exMode*(status: var EditorStatus) =
       status.filename = command[1]
       status.buffer = newFile()
       status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
-  elif command.len == 1 and command[0] == "w" and status.mode == Mode.normal:
+  elif command.len == 1 and command[0] == "w" and status.prevMode == Mode.normal:
     saveFile(status.filename, status.buffer)
     status.countChange = 0
     status.mode = Mode.normal
@@ -61,7 +61,7 @@ proc exMode*(status: var EditorStatus) =
     else:
       writeNoWriteError(status.commandWindow)
       status.mode = Mode.normal
-  elif command.len == 1 and command[0] == "wq" and status.mode == Mode.normal:
+  elif command.len == 1 and command[0] == "wq" and status.prevMode == Mode.normal:
     saveFile(status.filename, status.buffer)
     status.mode = Mode.quit
   elif command.len == 1 and command[0] == "q!":
