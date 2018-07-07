@@ -1,4 +1,5 @@
 src/nimcache
 tests/nimcache
 tests/tgapbuffer
+tests/tunicodeext
 moe
