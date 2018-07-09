@@ -20,6 +20,8 @@ proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], cur
     for j in 0 ..< dirList[i][1].len:
       if j > terminalWidth() - 2:
         if i == currentLine:
+          win.write(i, j, "~", brightWhiteGreen)
+        elif dirList[i][0] == pcDir:
           win.write(i, j, "~", brightGreenDefault)
         else:
           win.write(i, j, "~")
@@ -27,14 +29,16 @@ proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], cur
       else:
         ch[0] = dirList[i][1][j]
         if i == currentLine:
+          win.write(i, j, ch, brightWhiteGreen)
+        elif dirList[i][0] == pcDir:
           win.write(i, j, ch, brightGreenDefault)
         else:
           win.write(i, j, ch)
         if j == dirList[i][1].len - 1 and i != 0 and dirList[i][0] == pcDir:
           if i == currentLine:
-            win.write(i, j + 1, "/", brightGreenDefault)
+            win.write(i, j + 1, "/", brightWhiteGreen)
           else:
-            win.write(i, j + 1, "/")
+            win.write(i, j + 1, "/", brightGreenDefault)
   win.refresh
 
 proc filerMode*(status: var EditorStatus) =
