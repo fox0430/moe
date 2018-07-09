@@ -30,6 +30,7 @@ type ColorPair* = enum
   brightWhiteDefault = 6
   brightGreenDefault = 7
   lightBlueDefault = 8
+  brightWhiteGreen = 9
 
 type Window* = object
   cursesWindow*: ptr window
@@ -51,6 +52,7 @@ proc setCursesColor() =
   setColorPair(ColorPair.brightWhiteDefault, Color.brightWhite, Color.default)
   setColorPair(ColorPair.brightGreenDefault, Color.brightGreen, Color.default)
   setColorPair(ColorPair.lightBlueDefault, Color.lightBlue, Color.default)
+  setColorPair(ColorPair.brightWhiteGreen, Color.brightWhite, Color.green)
 
 
 proc setCursor*(cursor: bool) =
