@@ -29,7 +29,7 @@ proc writeNoWriteError(commandWindow: var Window) =
 proc exMode*(status: var EditorStatus) =
   let command = getCommand(status.commandWindow)
 
-  if command.len == 1 and isDigit(command[0]) and status.mode == Mode.normal:
+  if command.len == 1 and isDigit(command[0]) and status.prevMode == Mode.normal:
     var line = command[0].parseInt-1
     if line < 0: line = 0
     if line >= status.buffer.len: line = status.buffer.high
