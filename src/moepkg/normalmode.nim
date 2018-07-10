@@ -39,7 +39,7 @@ proc keyDown*(status: var EditorStatus) =
   status.currentColumn = min(status.expandedColumn, maxColumn)
   if status.currentColumn < 0: status.currentColumn = 0
 
-proc moveToFirstOfLineNonBlank(status: var EditorStatus) =
+proc moveToFirstNonBlankOfLine(status: var EditorStatus) =
   status.currentColumn = 0
   while status.buffer[status.currentLine][status.currentColumn] == ' ': inc(status.currentColumn)
   status.expandedColumn = status.currentColumn
@@ -258,7 +258,7 @@ proc normalCommand(status: var EditorStatus, key: int) =
   elif key == ord('x') or isDcKey(key):
     for i in 0 ..< min(status.cmdLoop, status.buffer[status.currentLine].len - status.currentColumn): deleteCurrentCharacter(status)
   elif key == ord('^'):
-    moveToFirstOfLineNonBlank(status)
+    moveToFirstNonBlankOfLine(status)
   elif key == ord('0') or isHomeKey(key):
     moveToFirstOfLine(status)
   elif key == ord('$') or isEndKey(key):
