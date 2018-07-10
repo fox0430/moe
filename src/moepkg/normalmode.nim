@@ -39,6 +39,11 @@ proc keyDown*(status: var EditorStatus) =
   status.currentColumn = min(status.expandedColumn, maxColumn)
   if status.currentColumn < 0: status.currentColumn = 0
 
+proc moveToFirstOfLineNonBlank(status: var EditorStatus) =
+  status.currentColumn = 0
+  while status.buffer[status.currentLine][status.currentColumn] == ' ': inc(status.currentColumn)
+  status.expandedColumn = status.currentColumn
+
 proc moveToFirstOfLine*(status: var EditorStatus) =
   status.currentColumn = 0
   status.expandedColumn = status.currentColumn
@@ -79,7 +84,10 @@ proc moveToFirstLine(status: var EditorStatus) =
   jumpLine(status, 0)
 
 proc moveToLastLine(status: var EditorStatus) =
-  jumpLine(status, status.buffer.len-1)
+  if status.cmdLoop > 1:
+    jumpLine(status, status.cmdLoop - 1)
+  else:
+    jumpLine(status, status.buffer.len-1)
 
 proc pageUp*(status: var EditorStatus) =
   let destination = max(status.currentLine - status.view.height, 0)
@@ -238,6 +246,8 @@ proc normalCommand(status: var EditorStatus, key: int) =
     for i in 0 ..< status.cmdLoop: keyDown(status)
   elif key == ord('x') or isDcKey(key):
     for i in 0 ..< min(status.cmdLoop, status.buffer[status.currentLine].len - status.currentColumn): deleteCurrentCharacter(status)
+  elif key == ord('^'):
+    moveToFirstOfLineNonBlank(status)
   elif key == ord('0') or isHomeKey(key):
     moveToFirstOfLine(status)
   elif key == ord('$') or isEndKey(key):
