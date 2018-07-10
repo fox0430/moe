@@ -208,6 +208,23 @@ proc replaceCurrentCharacter(status: var EditorStatus, character: int) =
   status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)
 
+proc addIndent(status: var EditorStatus) =
+  for i in 0 ..< status.settings.tabStop:
+    status.buffer[status.currentLine].insert(" ", 0)
+
+  status.view.reload(status.buffer, status.view.originalLine[0])
+  inc(status.countChange)
+
+proc deleteIndent(status: var EditorStatus) =
+  if status.buffer.len == 0: return
+
+  if status.buffer[status.currentLine][0] == ' ':
+    for i in 0 ..< status.settings.tabStop:
+      if status.buffer.len == 0 or status.buffer[status.currentLine][0] != ' ': break
+      status.buffer[status.currentLine].delete(0, 0)
+  status.view.reload(status.buffer, status.view.originalLine[0])
+  inc(status.countChange)
+
 proc normalCommand(status: var EditorStatus, key: int) =
   if status.cmdLoop == 0: status.cmdLoop = 1
   
@@ -254,6 +271,10 @@ proc normalCommand(status: var EditorStatus, key: int) =
     if getkey(status.mainWindow) == ord('y'): yankLines(status, status.currentLine, min(status.currentLine+status.cmdLoop-1, status.buffer.high))
   elif key == ord('p'):
     pasteLines(status)
+  elif key == ord('>'):
+    for i in 0 ..< status.cmdLoop: addIndent(status)
+  elif key == ord('<'):
+    for i in 0 ..< status.cmdLoop: deleteIndent(status)
   elif key == ord('r'):
     if status.cmdLoop > status.buffer[status.currentLine].len - status.currentColumn: return
 
