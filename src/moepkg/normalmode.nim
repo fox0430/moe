@@ -84,7 +84,10 @@ proc moveToFirstLine(status: var EditorStatus) =
   jumpLine(status, 0)
 
 proc moveToLastLine(status: var EditorStatus) =
-  jumpLine(status, status.buffer.len-1)
+  if status.cmdLoop > 1:
+    jumpLine(status, status.cmdLoop - 1)
+  else:
+    jumpLine(status, status.buffer.len-1)
 
 proc pageUp*(status: var EditorStatus) =
   let destination = max(status.currentLine - status.view.height, 0)
