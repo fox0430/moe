@@ -233,6 +233,17 @@ proc deleteIndent(status: var EditorStatus) =
   status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)
 
+proc joinLine(status: var EditorStatus) =
+  if status.currentLine == status.buffer.len - 1 or status.buffer[status.currentLine + 1].len < 1:
+    return
+
+  for i in 0 ..< status.buffer[status.currentLine + 1].len:
+    status.buffer[status.currentLine].insert($status.buffer[status.currentLine + 1][i], status.buffer[status.currentLine].len)
+  status.buffer.delete(status.currentLine + 1, status.currentLine + 2)
+
+  status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
+  inc(status.countChange)
+
 proc normalCommand(status: var EditorStatus, key: int) =
   if status.cmdLoop == 0: status.cmdLoop = 1
   
@@ -285,6 +296,8 @@ proc normalCommand(status: var EditorStatus, key: int) =
     for i in 0 ..< status.cmdLoop: addIndent(status)
   elif key == ord('<'):
     for i in 0 ..< status.cmdLoop: deleteIndent(status)
+  elif key == ord('J'):
+    joinLine(status)
   elif key == ord('r'):
     if status.cmdLoop > status.buffer[status.currentLine].len - status.currentColumn: return
 

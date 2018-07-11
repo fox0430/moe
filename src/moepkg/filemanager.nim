@@ -9,16 +9,6 @@ import editorview
 import gapbuffer
 
 proc deleteFile(status: var EditorStatus, dirList: seq[(PathComponent, string)], currentLine: int) =
-  #[
-  var key = newSeq[int]()
-  key = @[]
-  keyEcho(true)
-  while true:
-    key.add status.commandWindow.getkey
-    if isEnterKey(key[0]) or key.len > 1: break
-  keyEcho(false)
-    ]#
-
   var command = ""
   while true:
     status.commandWindow.erase
