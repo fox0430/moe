@@ -11,7 +11,12 @@ import exmode
 
 proc deleteFile(status: var EditorStatus, dirList: seq[(PathComponent, string)], currentLine: int) =
 
-  let command = getCommand(status.commandWindow, 2)
+  let command = getCommand(status.commandWindow, proc (window: var Window, command: string) =
+    window.erase
+    window.write(0, 0, "Delete file? 'y' or 'n': "&command)
+    window.refresh
+  )
+
 
   if (command[0] == "y" or command[0] == "yes") and command.len == 1:
     if dirList[currentLine][0] == pcDir:

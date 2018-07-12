@@ -1,22 +1,10 @@
 import sequtils, strutils, os, terminal
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview
 
-#[ may be rewite getCommand()...
-mode info
-1 .. normal exMode
-2 .. delete file command in filer mode
-]#
-proc getCommand*(commandWindow: var Window, mode: int): seq[string] =
+proc getCommand*(commandWindow: var Window, updateCommandWindow: proc (window: var Window, command: string)): seq[string] =
   var command = ""
   while true:
-    if mode == 1:
-      commandWindow.erase
-      commandWindow.write(0, 0, ":"&command)
-      commandWindow.refresh
-    elif mode == 2:
-      commandWindow.erase
-      commandWindow.write(0, 0, "Delete file? 'y' or 'n': "&command)
-      commandWindow.refresh
+    updateCommandWindow(commandWindow, command)
  
     let key = commandWindow.getkey
     
@@ -37,7 +25,11 @@ proc writeNoWriteError(commandWindow: var Window) =
   commandWindow.refresh
 
 proc exMode*(status: var EditorStatus) =
-  let command = getCommand(status.commandWindow, 1)
+  let command = getCommand(status.commandWindow, proc (window: var Window, command: string) =
+    window.erase
+    window.write(0, 0, ":"&command)
+    window.refresh
+  )
 
   if command.len == 1 and isDigit(command[0]) and status.prevMode == Mode.normal:
     var line = command[0].parseInt-1
