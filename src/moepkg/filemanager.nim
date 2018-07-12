@@ -7,25 +7,13 @@ import ui
 import fileutils
 import editorview
 import gapbuffer
+import exmode
 
 proc deleteFile(status: var EditorStatus, dirList: seq[(PathComponent, string)], currentLine: int) =
-  var command = ""
-  while true:
-    status.commandWindow.erase
-    status.commandWindow.write(0, 0, "Delete file? 'y ot 'n: "&command)
-    status.commandWindow.refresh
- 
-    let key = status.commandWindow.getkey
-    
-    if isResizeKey(key): continue
-    if isEnterKey(key): break
-    if isBackspaceKey(key):
-      if command.len > 0: command.delete(command.high, command.high)
-      continue
 
-    command &= chr(key)
+  let command = getCommand(status.commandWindow, 2)
 
-  if command[0] == 'y':
+  if (command[0] == "y" or command[0] == "yes") and command.len == 1:
     if dirList[currentLine][0] == pcDir:
       removeDir(dirList[currentLine][1])
     else:
