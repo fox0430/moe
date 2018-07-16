@@ -22,6 +22,14 @@ Auto close paren
 
 Simple auto indent  
 
+## How to Build
+```sh
+nimble build
+```
+
+## Usage
+https://github.com/fox0430/moe/wiki  
+
 ## Aiming features
 UTF-8 and other encording  
 
