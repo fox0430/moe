@@ -2,7 +2,7 @@
 
 version       = "0.0.21"
 author        = "fox0430/walkre"
-description   = a command lined based text editor"
+description   = "a command lined based text editor"
 license       = "GPLv3"
 srcDir        = "src"
 bin           = @["moe"]
