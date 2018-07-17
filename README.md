@@ -35,6 +35,8 @@ This project's goal is a funny animation editor.
 
 - Tab/Window split  
 
+- Macros
+
 - Terminal Multiplexer
 
 - Git support
