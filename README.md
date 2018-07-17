@@ -41,7 +41,7 @@ This project's goal is a funny animation editor.
 
 - Git support
 
-- Scripting language
+- Plugins
 
 - Funny animation...
 
