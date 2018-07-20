@@ -24,6 +24,73 @@ proc writeNoWriteError(commandWindow: var Window) =
   commandWindow.write(0, 0, "Error: No write since last change", ColorPair.redDefault)
   commandWindow.refresh
 
+proc isJumpCommand(status: EditorStatus, command: seq[string]): bool =
+  return command.len == 1 and isDigit(command[0]) and status.prevMode == Mode.normal
+
+proc isEditCommand(status: EditorStatus, command: seq[string]): bool =
+  return command.len == 2 and command[0] == "e"
+
+proc isWriteCommand(status: EditorStatus, command: seq[string]): bool =
+  return command.len in {1, 2} and command[0] == "w" and status.prevMode == Mode.normal
+
+proc isQuitCommand(status: EditorStatus, command: seq[string]): bool =
+  return command.len == 1 and command[0] == "q"
+
+proc isWriteAndQuitCommand(status: EditorStatus, command: seq[string]): bool =
+  return command.len == 1 and command[0] == "wq" and status.prevMode == Mode.normal
+
+proc isForceQuitCommand(status: EditorStatus, command: seq[string]): bool =
+  return command.len == 1 and command[0] == "q!"
+
+proc jumpCommand(status: var EditorStatus, line: int) =
+  jumpLine(status, line)
+  status.mode = Mode.normal
+
+proc editCommand(status: var EditorStatus, filename: string) =
+  if status.countChange != 0:
+    writeNoWriteError(status.commandWindow)
+    status.mode = Mode.normal
+    return
+  if existsFile(filename):
+    status = initEditorStatus()
+    status.filename = filename
+    status.buffer = openFile(status.filename)
+    status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
+  elif existsDir(filename):
+    setCurrentDir(filename)
+    status.mode = Mode.filer
+  else:
+    status = initEditorStatus()
+    status.filename = filename
+    status.buffer = newFile()
+    status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
+
+proc writeCommand(status: var EditorStatus, filename: string) =
+  if filename == nil:
+    status.commandWindow.erase
+    status.commandWindow.write(0, 0, "Error: No file name", ColorPair.redDefault)
+    status.commandWindow.refresh
+    status.mode = Mode.normal
+    return
+
+  status.filename = filename
+  saveFile(filename, status.buffer)
+  status.countChange = 0
+  status.mode = Mode.normal
+
+proc quitCommand(status: var EditorStatus) =
+  if status.countChange == 0: status.mode = Mode.quit
+  else:
+    writeNoWriteError(status.commandWindow)
+    status.mode = Mode.normal
+
+proc writeAndQuitCommand(status: var EditorStatus) =
+  saveFile(status.filename, status.buffer)
+  status.mode = Mode.quit
+
+proc forceQuitCommand(status: var EditorStatus) =
+  status.mode = Mode.quit
+
 proc exMode*(status: var EditorStatus) =
   let command = getCommand(status.commandWindow, proc (window: var Window, command: string) =
     window.erase
@@ -31,45 +98,20 @@ proc exMode*(status: var EditorStatus) =
     window.refresh
   )
 
-  if command.len == 1 and isDigit(command[0]) and status.prevMode == Mode.normal:
+  if isJumpCommand(status, command):
     var line = command[0].parseInt-1
     if line < 0: line = 0
     if line >= status.buffer.len: line = status.buffer.high
-    jumpLine(status, line)
-    status.mode = Mode.normal
-  elif command.len == 2 and command[0] == "e":
-    if status.countChange != 0:
-      writeNoWriteError(status.commandWindow)
-      status.mode = Mode.normal
-    elif existsFile(command[1]):
-      status = initEditorStatus()
-      status.filename = command[1]
-      status.buffer = openFile(status.filename)
-      status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
-    elif existsDir(command[1]):
-      setCurrentDir(command[1])
-      status.mode = Mode.filer
-    else:
-      status = initEditorStatus()
-      status.filename = command[1]
-      status.buffer = newFile()
-      status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
-  elif command.len == 1 and command[0] == "w" and status.prevMode == Mode.normal:
-    saveFile(status.filename, status.buffer)
-    status.countChange = 0
-    status.mode = Mode.normal
-  elif command.len == 1 and command[0] == "q":
-    if status.countChange == 0: status.mode = Mode.quit
-    else:
-      writeNoWriteError(status.commandWindow)
-      status.mode = Mode.normal
-  elif command.len == 1 and command[0] == "wq" and status.prevMode == Mode.normal:
-    saveFile(status.filename, status.buffer)
-    status.mode = Mode.quit
-  elif command.len == 1 and command[0] == "q!":
-    status.mode = Mode.quit
+    jumpCommand(status, line)
+  elif isEditCommand(status, command):
+    editCommand(status, command[1])
+  elif isWriteCommand(status, command):
+    writeCommand(status, if command.len < 2: status.filename else: command[1])
+  elif isQuitCommand(status, command):
+    quitCommand(status)
+  elif isWriteAndQuitCommand(status, command):
+    writeAndQuitCommand(status)
+  elif isForceQuitCommand(status, command):
+    forceQuitCommand(status)
   else:
-    if status.prevMode == Mode.filer:
-      status.mode = Mode.filer
-    else:
-      status.mode = Mode.normal
+    status.mode = status.prevMode

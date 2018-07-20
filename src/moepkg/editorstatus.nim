@@ -44,7 +44,7 @@ proc initEditorSettings(): EditorSettings =
   result.tabStop = 2
 
 proc initEditorStatus*(): EditorStatus =
-  result.filename = "No name"
+  result.filename = nil
   result.currentDir = getCurrentDir()
   result.registers = initRegisters()
   result.settings = initEditorSettings()
@@ -67,11 +67,11 @@ proc writeStatusBar*(status: var EditorStatus) =
 
   status.statusWindow.write(0, 0,  if status.mode == Mode.normal: " NORMAL " else: " INSERT ", ui.ColorPair.blackWhite)
   status.statusWindow.append(" ", ui.ColorPair.blackGreen)
-  if status.filename[0..1] == "./":
+  if status.filename != nil and status.filename[0..1] == "./":
     status.statusWindow.append(status.filename[2..status.filename.len], ui.ColorPair.blackGreen)
   else:
-    status.statusWindow.append(status.filename, ui.ColorPair.blackGreen)
-  if status.filename == "No name":  status.statusWindow.append(" [+]", ui.ColorPair.blackGreen)
+    status.statusWindow.append(if status.filename != nil: status.filename else: "No name", ui.ColorPair.blackGreen)
+  if status.countChange > 0:  status.statusWindow.append(" [+]", ui.ColorPair.blackGreen)
 
   status.statusWindow.write(0, terminalWidth()-13, fmt"{status.currentLine+1}/{status.buffer.len}", ui.Colorpair.blackGreen)
   status.statusWindow.write(0, terminalWidth()-6, fmt"{status.currentColumn}/{status.buffer[status.currentLine].len}", ui.ColorPair.blackGreen)
