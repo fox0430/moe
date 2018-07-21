@@ -45,9 +45,9 @@ This project's goal is a funny animation editor.
 
 - Funny animation...
 
-## How to build
+## How to install
 ```sh
-nimble build
+nimble install https://github.com/fox0430/moe
 ```
 
 ## Usage
