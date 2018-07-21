@@ -24,6 +24,11 @@ proc writeNoWriteError(commandWindow: var Window) =
   commandWindow.write(0, 0, "Error: No write since last change", ColorPair.redDefault)
   commandWindow.refresh
 
+proc writeSaveError(commandWindow: var Window) =
+  commandWindow.erase
+  commandWindow.write(0, 0, "Error: Failed to save the file", ColorPair.redDefault)
+  commandWindow.refresh
+
 proc isJumpCommand(status: EditorStatus, command: seq[string]): bool =
   return command.len == 1 and isDigit(command[0]) and status.prevMode == Mode.normal
 
@@ -73,9 +78,13 @@ proc writeCommand(status: var EditorStatus, filename: string) =
     status.mode = Mode.normal
     return
 
-  status.filename = filename
-  saveFile(filename, status.buffer)
-  status.countChange = 0
+  try:
+    saveFile(status.filename, status.buffer)
+    status.filename = filename
+    status.countChange = 0
+  except IOError:
+    writeSaveError(status.commandWindow)
+
   status.mode = Mode.normal
 
 proc quitCommand(status: var EditorStatus) =
@@ -85,8 +94,12 @@ proc quitCommand(status: var EditorStatus) =
     status.mode = Mode.normal
 
 proc writeAndQuitCommand(status: var EditorStatus) =
-  saveFile(status.filename, status.buffer)
-  status.mode = Mode.quit
+  try:
+    saveFile(status.filename, status.buffer)
+    status.mode = Mode.quit
+  except IOError:
+    writeSaveError(status.commandWindow)
+    status.mode = Mode.normal
 
 proc forceQuitCommand(status: var EditorStatus) =
   status.mode = Mode.quit
