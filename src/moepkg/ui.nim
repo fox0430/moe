@@ -54,6 +54,11 @@ proc setCursesColor() =
   setColorPair(ColorPair.lightBlueDefault, Color.lightBlue, Color.default)
   setColorPair(ColorPair.brightWhiteGreen, Color.brightWhite, Color.green)
 
+proc setProgMode*() =
+  reset_prog_mode()
+
+proc defProgMode*() =
+  def_prog_mode()
 
 proc setCursor*(cursor: bool) =
   if cursor == true:
