@@ -95,7 +95,7 @@ proc write*(win: var Window, y, x: int, str: string, color: ColorPair = ColorPai
   win.cursesWindow.wattron(int(ncurses.COLOR_PAIR(ord(color))))
   mvwprintw(win.cursesWindow, y, x, str)
   win.y = y
-  win.x = str.len
+  win.x = x+str.len
 
 proc append*(win: var Window, str: string, color: ColorPair = ColorPair.brightWhiteDefault) =
   win.cursesWindow.wattron(int(ncurses.COLOR_PAIR(ord(color))))

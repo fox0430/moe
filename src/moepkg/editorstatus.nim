@@ -73,8 +73,8 @@ proc writeStatusBar*(status: var EditorStatus) =
     status.statusWindow.append(if status.filename != nil: status.filename else: "No name", ui.ColorPair.blackGreen)
   if status.countChange > 0:  status.statusWindow.append(" [+]", ui.ColorPair.blackGreen)
 
-  status.statusWindow.write(0, terminalWidth()-13, fmt"{status.currentLine+1}/{status.buffer.len}", ui.Colorpair.blackGreen)
-  status.statusWindow.write(0, terminalWidth()-6, fmt"{status.currentColumn}/{status.buffer[status.currentLine].len}", ui.ColorPair.blackGreen)
+  status.statusWindow.write(0, terminalWidth()-20, fmt"{status.currentLine+1}/{status.buffer.len}", ui.Colorpair.blackGreen)
+  status.statusWindow.append(fmt" {status.currentColumn}/{status.buffer[status.currentLine].len}", ui.ColorPair.blackGreen)
   status.statusWindow.refresh
 
 proc resize*(status: var EditorStatus) =
