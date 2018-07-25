@@ -32,20 +32,23 @@ proc writeSaveError(commandWindow: var Window) =
 proc isJumpCommand(status: EditorStatus, command: seq[string]): bool =
   return command.len == 1 and isDigit(command[0]) and status.prevMode == Mode.normal
 
-proc isEditCommand(status: EditorStatus, command: seq[string]): bool =
+proc isEditCommand(command: seq[string]): bool =
   return command.len == 2 and command[0] == "e"
 
 proc isWriteCommand(status: EditorStatus, command: seq[string]): bool =
   return command.len in {1, 2} and command[0] == "w" and status.prevMode == Mode.normal
 
-proc isQuitCommand(status: EditorStatus, command: seq[string]): bool =
+proc isQuitCommand(command: seq[string]): bool =
   return command.len == 1 and command[0] == "q"
 
 proc isWriteAndQuitCommand(status: EditorStatus, command: seq[string]): bool =
   return command.len == 1 and command[0] == "wq" and status.prevMode == Mode.normal
 
-proc isForceQuitCommand(status: EditorStatus, command: seq[string]): bool =
+proc isForceQuitCommand(command: seq[string]): bool =
   return command.len == 1 and command[0] == "q!"
+
+proc isShellCommand(command: seq[string]): bool =
+  return command.len >= 1 and command[0][0] == '!'
 
 proc jumpCommand(status: var EditorStatus, line: int) =
   jumpLine(status, line)
@@ -104,6 +107,18 @@ proc writeAndQuitCommand(status: var EditorStatus) =
 proc forceQuitCommand(status: var EditorStatus) =
   status.mode = Mode.quit
 
+proc shellCommand(status: var EditorStatus, shellCommand: string) =
+  saveCurrentTerminalModes()
+  exitUi()
+
+  discard execShellCmd(shellCommand)
+  discard execShellCmd("printf \"\nPress Enter\"")
+  discard execShellCmd("read _")
+
+  restoreTerminalModes()
+  status.commandWindow.erase
+  status.commandWindow.refresh
+
 proc exMode*(status: var EditorStatus) =
   let command = getCommand(status.commandWindow, proc (window: var Window, command: string) =
     window.erase
@@ -116,15 +131,17 @@ proc exMode*(status: var EditorStatus) =
     if line < 0: line = 0
     if line >= status.buffer.len: line = status.buffer.high
     jumpCommand(status, line)
-  elif isEditCommand(status, command):
+  elif isEditCommand(command):
     editCommand(status, command[1])
   elif isWriteCommand(status, command):
     writeCommand(status, if command.len < 2: status.filename else: command[1])
-  elif isQuitCommand(status, command):
+  elif isQuitCommand(command):
     quitCommand(status)
   elif isWriteAndQuitCommand(status, command):
     writeAndQuitCommand(status)
-  elif isForceQuitCommand(status, command):
+  elif isForceQuitCommand(command):
     forceQuitCommand(status)
+  elif isShellCommand(command):
+    shellCommand(status, command.join(" ").substr(1))
   else:
     status.mode = status.prevMode

@@ -1,11 +1,6 @@
 import ncurses
 import posix
 
-proc wattron*(win: ptr window, attrs: int64): int {.cdecl, discardable, importc: "wattron", dynlib: libncurses.}
-proc wattroff*(win: ptr window, attrs: int64): int {.cdecl, discardable, importc: "wattroff", dynlib: libncurses.}
-proc wbkgd*(win: ptr window, attrs: int64): int {.cdecl, discardable, importc: "wbkgd", dynlib: libncurses.}
-proc set_escdelay*(size: int): int {.cdecl, discardable, importc: "set_escdelay", dynlib: libncurses.}
-
 type Color* = enum
   default     = -1,
   black       = 0,
@@ -54,10 +49,10 @@ proc setCursesColor() =
   setColorPair(ColorPair.lightBlueDefault, Color.lightBlue, Color.default)
   setColorPair(ColorPair.brightWhiteGreen, Color.brightWhite, Color.green)
 
-proc setProgMode*() =
+proc restoreTerminalModes*() =
   reset_prog_mode()
 
-proc defProgMode*() =
+proc saveCurrentTerminalModes*() =
   def_prog_mode()
 
 proc setCursor*(cursor: bool) =
@@ -97,16 +92,14 @@ proc initWindow*(height, width, top, left: int, color: ColorPair = ColorPair.bri
   discard wbkgd(result.cursesWindow, ncurses.COLOR_PAIR(color))
 
 proc write*(win: var Window, y, x: int, str: string, color: ColorPair = ColorPair.brightWhiteDefault) =
-  win.cursesWindow.wattron(ncurses.COLOR_PAIR(ord(color)))
+  win.cursesWindow.wattron(int(ncurses.COLOR_PAIR(ord(color))))
   mvwprintw(win.cursesWindow, y, x, str)
-  #win.cursesWindow.wattroff(ncurses.COLOR_PAIR(ord(color)))
   win.y = y
   win.x = str.len
 
 proc append*(win: var Window, str: string, color: ColorPair = ColorPair.brightWhiteDefault) =
-  win.cursesWindow.wattron(ncurses.COLOR_PAIR(ord(color)))
+  win.cursesWindow.wattron(int(ncurses.COLOR_PAIR(ord(color))))
   mvwprintw(win.cursesWindow, win.y, win.x, str)
-  #win.cursesWindow.wattroff(ncurses.COLOR_PAIR(ord(color)))
   win.x += str.len
   
 proc erase*(win: var Window) =
