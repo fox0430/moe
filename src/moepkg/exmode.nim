@@ -82,7 +82,7 @@ proc writeCommand(status: var EditorStatus, filename: string) =
     return
 
   try:
-    saveFile(status.filename, status.buffer)
+    saveFile(filename, status.buffer)
     status.filename = filename
     status.countChange = 0
   except IOError:
