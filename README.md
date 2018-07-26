@@ -25,7 +25,7 @@ This project's goal is a funny animation editor.
 ## Planned features
 - UTF-8 and other encodings support
 
-- Syntax highlinght  
+- Syntax highlighting  
 
 - Infinite undo/redo
 
@@ -45,7 +45,7 @@ This project's goal is a funny animation editor.
 
 - Funny animation...
 
-## How to install
+## Install
 ```sh
 nimble install https://github.com/fox0430/moe
 ```
