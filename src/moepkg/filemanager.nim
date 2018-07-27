@@ -7,6 +7,28 @@ import ui
 import fileutils
 import editorview
 import gapbuffer
+import exmode
+
+proc deleteFile(status: var EditorStatus, dirList: seq[(PathComponent, string)], currentLine: int) =
+
+  let command = getCommand(status.commandWindow, proc (window: var Window, command: string) =
+    window.erase
+    window.write(0, 0, "Delete file? 'y' or 'n': "&command)
+    window.refresh
+  )
+
+
+  if (command[0] == "y" or command[0] == "yes") and command.len == 1:
+    if dirList[currentLine][0] == pcDir:
+      removeDir(dirList[currentLine][1])
+    else:
+      removeFile(dirList[currentLine][1])
+  else:
+    return
+
+  status.commandWindow.erase
+  status.commandWindow.write(0, 0, "Deleted "&dirList[currentLine][1])
+  status.commandWindow.refresh
 
 proc refreshDirList(): seq[(PathComponent, string)] =
   result = newSeq[(PathComponent, string)]()
@@ -20,6 +42,8 @@ proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], cur
     for j in 0 ..< dirList[i][1].len:
       if j > terminalWidth() - 2:
         if i == currentLine:
+          win.write(i, j, "~", brightWhiteGreen)
+        elif dirList[i][0] == pcDir:
           win.write(i, j, "~", brightGreenDefault)
         else:
           win.write(i, j, "~")
@@ -27,29 +51,32 @@ proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], cur
       else:
         ch[0] = dirList[i][1][j]
         if i == currentLine:
+          win.write(i, j, ch, brightWhiteGreen)
+        elif dirList[i][0] == pcDir:
           win.write(i, j, ch, brightGreenDefault)
         else:
           win.write(i, j, ch)
         if j == dirList[i][1].len - 1 and i != 0 and dirList[i][0] == pcDir:
           if i == currentLine:
-            win.write(i, j + 1, "/", brightGreenDefault)
+            win.write(i, j + 1, "/", brightWhiteGreen)
           else:
-            win.write(i, j + 1, "/")
+            win.write(i, j + 1, "/", brightGreenDefault)
   win.refresh
 
 proc filerMode*(status: var EditorStatus) =
   setCursor(false)
   var viewUpdate = true
-  var updateDirList = true
+  var DirlistUpdate = true
   var dirList = newSeq[(PathComponent, string)]()
   var key: int 
   var currentLine = 0
 
   while status.mode == Mode.filer:
-    if updateDirList == true:
+    if DirlistUpdate == true:
       dirList = @[]
       dirList.add refreshDirList()
-      updateDirList = false
+      viewUpdate = true
+      DirlistUpdate = false
 
     if viewUpdate == true:
       status.mainWindow.erase
@@ -65,6 +92,10 @@ proc filerMode*(status: var EditorStatus) =
       status.resize
       viewUpdate = true
 
+    elif key == ord('D'):
+      deleteFile(status, dirList, currentLine)
+      DirlistUpdate = true
+      viewUpdate = true
     elif (key == ord('j') or isDownKey(key)) and currentLine < dirList.len - 1:
       inc(currentLine)
       viewUpdate = true
@@ -81,5 +112,4 @@ proc filerMode*(status: var EditorStatus) =
       elif dirList[currentLine][0] == pcDir:
         setCurrentDir(dirList[currentLine][1])
         currentLine = 0
-        viewUpdate = true
-        updateDirList = true
+        DirlistUpdate = true

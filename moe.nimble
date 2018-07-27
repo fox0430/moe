@@ -1,8 +1,8 @@
 # Package
 
-version       = "0.1.0"
+version       = "0.0.21"
 author        = "fox0430/walkre"
-description   = "A new text editor"
+description   = "a command lined based text editor"
 license       = "GPLv3"
 srcDir        = "src"
 bin           = @["moe"]

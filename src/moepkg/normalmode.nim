@@ -39,6 +39,11 @@ proc keyDown*(status: var EditorStatus) =
   status.currentColumn = min(status.expandedColumn, maxColumn)
   if status.currentColumn < 0: status.currentColumn = 0
 
+proc moveToFirstNonBlankOfLine(status: var EditorStatus) =
+  status.currentColumn = 0
+  while status.buffer[status.currentLine][status.currentColumn] == ' ': inc(status.currentColumn)
+  status.expandedColumn = status.currentColumn
+
 proc moveToFirstOfLine*(status: var EditorStatus) =
   status.currentColumn = 0
   status.expandedColumn = status.currentColumn
@@ -79,7 +84,10 @@ proc moveToFirstLine(status: var EditorStatus) =
   jumpLine(status, 0)
 
 proc moveToLastLine(status: var EditorStatus) =
-  jumpLine(status, status.buffer.len-1)
+  if status.cmdLoop > 1:
+    jumpLine(status, status.cmdLoop - 1)
+  else:
+    jumpLine(status, status.buffer.len-1)
 
 proc pageUp*(status: var EditorStatus) =
   let destination = max(status.currentLine - status.view.height, 0)
@@ -208,6 +216,34 @@ proc replaceCurrentCharacter(status: var EditorStatus, character: int) =
   status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)
 
+proc addIndent(status: var EditorStatus) =
+  for i in 0 ..< status.settings.tabStop:
+    status.buffer[status.currentLine].insert(" ", 0)
+
+  status.view.reload(status.buffer, status.view.originalLine[0])
+  inc(status.countChange)
+
+proc deleteIndent(status: var EditorStatus) =
+  if status.buffer.len == 0: return
+
+  if status.buffer[status.currentLine][0] == ' ':
+    for i in 0 ..< status.settings.tabStop:
+      if status.buffer.len == 0 or status.buffer[status.currentLine][0] != ' ': break
+      status.buffer[status.currentLine].delete(0, 0)
+  status.view.reload(status.buffer, status.view.originalLine[0])
+  inc(status.countChange)
+
+proc joinLine(status: var EditorStatus) =
+  if status.currentLine == status.buffer.len - 1 or status.buffer[status.currentLine + 1].len < 1:
+    return
+
+  for i in 0 ..< status.buffer[status.currentLine + 1].len:
+    status.buffer[status.currentLine].insert($status.buffer[status.currentLine + 1][i], status.buffer[status.currentLine].len)
+  status.buffer.delete(status.currentLine + 1, status.currentLine + 2)
+
+  status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
+  inc(status.countChange)
+
 proc normalCommand(status: var EditorStatus, key: int) =
   if status.cmdLoop == 0: status.cmdLoop = 1
   
@@ -221,6 +257,8 @@ proc normalCommand(status: var EditorStatus, key: int) =
     for i in 0 ..< status.cmdLoop: keyDown(status)
   elif key == ord('x') or isDcKey(key):
     for i in 0 ..< min(status.cmdLoop, status.buffer[status.currentLine].len - status.currentColumn): deleteCurrentCharacter(status)
+  elif key == ord('^'):
+    moveToFirstNonBlankOfLine(status)
   elif key == ord('0') or isHomeKey(key):
     moveToFirstOfLine(status)
   elif key == ord('$') or isEndKey(key):
@@ -254,6 +292,12 @@ proc normalCommand(status: var EditorStatus, key: int) =
     if getkey(status.mainWindow) == ord('y'): yankLines(status, status.currentLine, min(status.currentLine+status.cmdLoop-1, status.buffer.high))
   elif key == ord('p'):
     pasteLines(status)
+  elif key == ord('>'):
+    for i in 0 ..< status.cmdLoop: addIndent(status)
+  elif key == ord('<'):
+    for i in 0 ..< status.cmdLoop: deleteIndent(status)
+  elif key == ord('J'):
+    joinLine(status)
   elif key == ord('r'):
     if status.cmdLoop > status.buffer[status.currentLine].len - status.currentColumn: return
 
