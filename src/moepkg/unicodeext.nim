@@ -45,7 +45,7 @@ proc isPunct*(c: Rune): bool =
   return s.len == 1 and s[0] in {'!', '"', '#', '$', '%', '$', '\'', '(', ')', '*', '+', ',', '-', '.', '/', ':', ';', '<', '=', '>', '?', '@', '[', '\\', ']', '^', '_', '`', '{', '=', '}'}
 
 proc countRepeat*(runes: seq[Rune], charSet: set[char], start: int): int =
-  for c in runes:
-    let s = $c
+  for i in start ..< runes.len:
+    let s = $runes[i]
     if s.len > 1 or (not (s[0] in charSet)): break
     inc(result)
