@@ -75,7 +75,7 @@ proc delete*(gapBuffer: var GapBuffer, delBegin, delEnd: int) =
   while gapBuffer.size > 0 and gapBuffer.size*4 <= gapBuffer.capacity: gapBuffer.reserve(gapBuffer.capacity div 2)
 
 proc `[]`*[T](gapBuffer: GapBuffer[T], index: int): T =
-  doAssert(0<=index and index<gapBuffer.size, "Gapbuffer: Invalid index.")
+  doAssert(0<=index and index<gapBuffer.size, "Gapbuffer: Invalid index. index = "&($index)&", gapBuffer.size = "&($gapBuffer.size))
 
   if index < gapBuffer.gapBegin: return gapBuffer.buffer[index]
   return gapBuffer.buffer[gapBuffer.gapEnd+(index-gapBuffer.gapBegin)]

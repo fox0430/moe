@@ -142,12 +142,13 @@ proc scrollDown(view: var EditorView, buffer: GapBuffer[seq[Rune]]) =
     view.originalLine.addLast(view.originalLine[height-2])
     view.start.addLast(view.start[height-2]+view.length[height-2])
 
-  let line = view.originalLine[height-1]
   view.lines.addLast(ru"")
   view.length.addLast(0)
-  while view.start[height-1] + view.lines[height-1].len < buffer[line].len and view.lines[height-1].width+width(buffer[line][view.start[height-1]+view.lines[height-1].len]) <= view.width:
-    view.lines[height-1].add(buffer[line][view.start[height-1]+view.lines[height-1].len])
-    inc(view.length[height-1])
+  let line = view.originalLine[height-1]
+  if line != -1:
+    while view.start[height-1] + view.lines[height-1].len < buffer[line].len and view.lines[height-1].width+width(buffer[line][view.start[height-1]+view.lines[height-1].len]) <= view.width:
+      view.lines[height-1].add(buffer[line][view.start[height-1]+view.lines[height-1].len])
+      inc(view.length[height-1])
 
 proc writeLineNum(view: EditorView, win: var Window, y, line: int, colorPair: ColorPair) =
   let width = view.widthOfLineNum
