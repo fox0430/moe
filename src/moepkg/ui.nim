@@ -1,4 +1,4 @@
-import posix
+import posix, strformat
 import ncurses
 import unicodeext
 
@@ -146,12 +146,13 @@ proc getKey*(win: Window): Rune =
     len: int
   block getfirst:
     let key = wgetch(win.cursesWindow)
-    if (key and 0x0000FFFF) != key: return Rune(key)
+    if (key and 0x000000FF) != key: return Rune(key)
+    s.add(char(key))
     len = numberOfBytes(char(key))
   for i in 0 ..< len-1: s.add(char(wgetch(win.cursesWindow)))
   
   let runes = toRunes(s)
-  doAssert(runes.len == 1, "runes length shoud be 1.")
+  doAssert(runes.len == 1, fmt"runes length shoud be 1.")
   return runes[0]
 
 proc isEscKey*(key: Rune): bool = key == KEY_ESC

@@ -8,9 +8,7 @@ proc width*(runes: seq[Rune]): int =
 
 proc toRune*(c: char): Rune = ($c).toRunes[0]
 
-proc toRune*(x: int): Rune =
-  doAssert((x and 0x0000FFFF) == x, "Failed to convert int to char.")
-  char(x).toRune
+proc toRune*(x: int): Rune = Rune(x)
 
 proc `==`*(c: Rune, x: int): bool = c == toRune(x)
 proc `==`*(c: Rune, x: char): bool = c == toRune(x)

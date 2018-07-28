@@ -3,7 +3,7 @@ import gapbuffer, ui, unicodeext
 
 type EditorView* = object
   height*, width*, widthOfLineNum*: int
-  lines: Deque[seq[Rune]]
+  lines*: Deque[seq[Rune]]
   originalLine*, start*, length*: Deque[int]
   updated*: bool
 
@@ -19,6 +19,7 @@ proc reload*(view: var EditorView, buffer: GapBuffer[seq[Rune]], topLine: int) =
 
   for x in view.originalLine.mitems: x = -1
   for s in view.lines.mitems: s = u8""
+  for x in view.length.mitems: x = 0
 
   var
     lineNumber = topLine
@@ -38,7 +39,7 @@ proc reload*(view: var EditorView, buffer: GapBuffer[seq[Rune]], topLine: int) =
       view.lines[y].add(buffer[lineNumber][start + view.length[y]])
       inc(view.length[y])
 
-    start += width
+    start += view.length[y]
     if start >= buffer[lineNumber].len:
       inc(lineNumber)
       start = 0
@@ -123,7 +124,7 @@ proc scrollDown(view: var EditorView, buffer: GapBuffer[seq[Rune]]) =
   view.start.popFirst
   view.length.popFirst
 
-  if view.originalLine[height-2] == -1 or view.start[height-2]+view.length[height-2] == buffer[view.originalLine[height-2]].len:
+  if view.start[height-2]+view.length[height-2] == buffer[view.originalLine[height-2]].len:
     if view.originalLine[height-2] == -1 or view.originalLine[height-2]+1 == buffer.len:
       view.originalLine.addLast(-1)
       view.start.addLast(0)
@@ -134,12 +135,12 @@ proc scrollDown(view: var EditorView, buffer: GapBuffer[seq[Rune]]) =
     view.originalLine.addLast(view.originalLine[height-2])
     view.start.addLast(view.start[height-2]+view.length[height-2])
 
-  let line = view.originalLine[0]
-  view.lines.addFirst(u8"")
-  view.length.addFirst(0)
-  while view.start[0] + view.lines[0].len < buffer[line].len and view.lines[0].width+width(buffer[line][view.start[0]+view.lines[0].len]) <= view.width:
-    view.lines[0].add(buffer[line][view.start[0]+view.lines[0].len])
-    inc(view.length[0])
+  let line = view.originalLine[height-1]
+  view.lines.addLast(u8"")
+  view.length.addLast(0)
+  while view.start[height-1] + view.lines[height-1].len < buffer[line].len and view.lines[height-1].width+width(buffer[line][view.start[height-1]+view.lines[height-1].len]) <= view.width:
+    view.lines[height-1].add(buffer[line][view.start[height-1]+view.lines[height-1].len])
+    inc(view.length[height-1])
 
 proc writeLineNum(view: EditorView, win: var Window, y, line: int, colorPair: ColorPair) =
   let width = view.widthOfLineNum

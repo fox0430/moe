@@ -57,7 +57,10 @@ proc keyEnter(status: var EditorStatus) =
     startOfCopy += countRepeat(status.buffer[status.currentLine], Whitespace, startOfCopy)
 
     status.buffer[status.currentLine+1] &= status.buffer[status.currentLine][startOfCopy ..< status.buffer[status.currentLine].len]
-    status.buffer[status.currentLine].delete(status.buffer[status.currentLine].len-(status.buffer[status.currentLine].len-status.currentColumn), status.buffer[status.currentLine].high)
+    let
+      first = status.currentColumn
+      last = status.buffer[status.currentLine].high
+    if first <= last: status.buffer[status.currentLine].delete(first, last)
 
     inc(status.currentLine)
     status.currentColumn = countRepeat(status.buffer[status.currentLine], Whitespace, 0)
