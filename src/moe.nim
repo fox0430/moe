@@ -31,6 +31,7 @@ when isMainModule:
 
   status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
 
+  defer: exitUi()
   while true:
     case status.mode:
     of Mode.normal:
@@ -43,7 +44,3 @@ when isMainModule:
       filerMode(status)
     of Mode.quit:
       break
-    else:
-      doAssert(false, "Invalid Mode")
-
-  exitUi()
