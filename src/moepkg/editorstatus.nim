@@ -1,11 +1,11 @@
 import terminal, os, strformat
-import gapbuffer, editorview, ui, cursor
+import gapbuffer, editorview, ui, cursor, unicodeext
 
 type Mode* = enum
   normal, insert, ex, filer, quit
 
 type Registers* = object
-  yankedLines*:   seq[string]
+  yankedLines*:   seq[seq[Rune]]
   yankedStr*:    string
 
 type EditorSettings = object
@@ -14,14 +14,14 @@ type EditorSettings = object
   tabStop*:        int
 
 type EditorStatus* = object
-  buffer*: GapBuffer[string]
+  buffer*: GapBuffer[seq[Rune]]
   view*: EditorView
   cursor*: CursorPosition
   registers*: Registers
   settings*: EditorSettings
-  filename*: string
-  openDir: string
-  currentDir: string
+  filename*: seq[Rune]
+  openDir: seq[Rune]
+  currentDir: seq[Rune]
   currentLine*: int
   currentColumn*: int
   expandedColumn*: int
@@ -45,7 +45,7 @@ proc initEditorSettings(): EditorSettings =
 
 proc initEditorStatus*(): EditorStatus =
   result.filename = nil
-  result.currentDir = getCurrentDir()
+  result.currentDir = getCurrentDir().toRunes
   result.registers = initRegisters()
   result.settings = initEditorSettings()
   result.mode = Mode.normal
@@ -59,22 +59,22 @@ proc writeStatusBar*(status: var EditorStatus) =
   status.statusWindow.erase
 
   if status.mode == Mode.filer:
-    status.statusWindow.write(0, 0, " FILER ", ui.ColorPair.blackWhite)
-    status.statusWindow.append(" ", ui.ColorPair.blackGreen)
-    status.statusWindow.append(getCurrentDir(), ui.ColorPair.blackGreen)
+    status.statusWindow.write(0, 0, u8" FILER ", ui.ColorPair.blackWhite)
+    status.statusWindow.append(u8" ", ui.ColorPair.blackGreen)
+    status.statusWindow.append(getCurrentDir().toRunes, ui.ColorPair.blackGreen)
     status.statusWindow.refresh
     return
 
-  status.statusWindow.write(0, 0,  if status.mode == Mode.normal: " NORMAL " else: " INSERT ", ui.ColorPair.blackWhite)
-  status.statusWindow.append(" ", ui.ColorPair.blackGreen)
-  if status.filename != nil and status.filename[0..1] == "./":
+  status.statusWindow.write(0, 0,  if status.mode == Mode.normal: u8" NORMAL " else: u8" INSERT ", ui.ColorPair.blackWhite)
+  status.statusWindow.append(u8" ", ui.ColorPair.blackGreen)
+  if status.filename != nil and status.filename[0..1] == u8"./":
     status.statusWindow.append(status.filename[2..status.filename.len], ui.ColorPair.blackGreen)
   else:
-    status.statusWindow.append(if status.filename != nil: status.filename else: "No name", ui.ColorPair.blackGreen)
-  if status.countChange > 0:  status.statusWindow.append(" [+]", ui.ColorPair.blackGreen)
+    status.statusWindow.append(if status.filename != nil: status.filename else: u8"No name", ui.ColorPair.blackGreen)
+  if status.countChange > 0:  status.statusWindow.append(u8" [+]", ui.ColorPair.blackGreen)
 
-  status.statusWindow.write(0, terminalWidth()-20, fmt"{status.currentLine+1}/{status.buffer.len}", ui.Colorpair.blackGreen)
-  status.statusWindow.append(fmt" {status.currentColumn}/{status.buffer[status.currentLine].len}", ui.ColorPair.blackGreen)
+  status.statusWindow.write(0, terminalWidth()-20, toRunes(fmt"{status.currentLine+1}/{status.buffer.len}"), ui.Colorpair.blackGreen)
+  status.statusWindow.append(toRunes(fmt" {status.currentColumn}/{status.buffer[status.currentLine].len}"), ui.ColorPair.blackGreen)
   status.statusWindow.refresh
 
 proc resize*(status: var EditorStatus) =

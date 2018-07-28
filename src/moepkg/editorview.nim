@@ -43,15 +43,15 @@ proc reload*(view: var EditorView, buffer: GapBuffer[seq[Rune]], topLine: int) =
       inc(lineNumber)
       start = 0
 
-proc initEditorView*(buffer: GapBuffer, height, width: int): EditorView =
+proc initEditorView*(buffer: GapBuffer[seq[Rune]], height, width: int): EditorView =
   ## width/heightでEditorViewを初期化し,バッファの0行0文字目からロードする.widthは画面幅ではなくEditorViewの1ラインの文字数である(従って行番号分の長さは考慮しなくてよい).
 
   result.height = height
   result.width = width
   result.widthOfLineNum = buffer.len.intToStr.len+1
 
-  result.lines = initDeque[string]()
-  for i in 0..height-1: result.lines.addLast("")
+  result.lines = initDeque[seq[Rune]]()
+  for i in 0..height-1: result.lines.addLast(u8"")
 
   result.originalLine = initDeque[int]()
   for i in 0..height-1: result.originalLine.addLast(-1)
@@ -147,7 +147,7 @@ proc writeLineNum(view: EditorView, win: var Window, y, line: int, colorPair: Co
   win.write(y, width-(line+1).intToStr.len-1, (line+1).intToStr, colorPair)
 
 proc writeLine(view: EditorView, win: var Window, y: int, str: seq[Rune], colorPair: ColorPair) =
-  win.write(y, view.widthOfLineNum, $str, colorPair)
+  win.write(y, view.widthOfLineNum, str, colorPair)
 
 proc writeAllLines*(view: var EditorView, win: var Window, buffer: GapBuffer[seq[Rune]], currentLine: int) =
   win.erase

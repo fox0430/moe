@@ -1,17 +1,17 @@
 import editorstatus
-import gapbuffer
+import gapbuffer, unicodeext
 
-proc openFile*(filename: string): GapBuffer[string] =
-  result = initGapBuffer[string]()
-  let fs = open(filename)
-  while not fs.endOfFile: result.add(fs.readLine)
+proc openFile*(filename: seq[Rune]): GapBuffer[seq[Rune]] =
+  result = initGapBuffer[seq[Rune]]()
+  let fs = open($filename)
+  while not fs.endOfFile: result.add(fs.readLine.toRunes)
   fs.close()
 
-proc newFile*(): GapBuffer[string] =
-  result = initGapBuffer[string]()
-  result.add("")
+proc newFile*(): GapBuffer[seq[Rune]] =
+  result = initGapBuffer[seq[Rune]]()
+  result.add(u8"")
 
-proc saveFile*(filename: string, buffer: GapBuffer[string]) =
-  let fs = open(filename, fmWrite)
-  for line in 0 .. buffer.high: fs.writeLine(buffer[line])
+proc saveFile*(filename: seq[Rune], buffer: GapBuffer[seq[Rune]]) =
+  let fs = open($filename, fmWrite)
+  for line in 0 .. buffer.high: fs.writeLine($buffer[line])
   fs.close()

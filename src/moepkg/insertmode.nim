@@ -1,28 +1,30 @@
-import deques, strutils
-import ui, editorstatus, editorview, cursor, gapbuffer, editorview, normalmode
+import deques, strutils, strformat, sequtils
+import ui, editorstatus, editorview, cursor, gapbuffer, editorview, normalmode, unicodeext
 
-proc insertCloseParen(status: var EditorStatus, ch: int) =
-  case ch
-  of ord('('):
-    status.buffer[status.currentLine].insert(")", status.currentColumn)
-  of ord('{'):
-    status.buffer[status.currentLine].insert("}", status.currentColumn)
-  of ord('['):
-    status.buffer[status.currentLine].insert("]", status.currentColumn)
-  of ord('"'):
-    status.buffer[status.currentLine].insert("\"", status.currentColumn)
-  of ord('\''):
-    status.buffer[status.currentLine].insert("'", status.currentColumn)
+proc insertCloseParen(status: var EditorStatus, c: char) =
+  case c
+  of '(':
+    status.buffer[status.currentLine].insert(u8')', status.currentColumn)
+  of '{':
+    status.buffer[status.currentLine].insert(u8'}', status.currentColumn)
+  of '[':
+    status.buffer[status.currentLine].insert(u8']', status.currentColumn)
+  of '"':
+    status.buffer[status.currentLine].insert(u8('\"'), status.currentColumn)
+  of '\'':
+    status.buffer[status.currentLine].insert(u8'\'', status.currentColumn)
   else:
-    doAssert(false, "Invalid parentheses")
+    doAssert(false, fmt"Invalid parentheses: {c}")
 
-proc isOpenParen(ch: int): bool = ch == ord('(') or ch == ord('{') or ch == ord('[') or ch == ord('"') or ch == ord('\'')
+proc isOpenParen(ch: char): bool = ch in ['(', '{', '[', '\"', '\'']
 
-proc insertCharacter(status: var EditorStatus, ch: int) =
-  status.buffer[status.currentLine].insert($char(ch), status.currentColumn)
+proc insertCharacter(status: var EditorStatus, c: Rune) =
+  status.buffer[status.currentLine].insert(c, status.currentColumn)
   inc(status.currentColumn)
 
-  if status.settings.autoCloseParen and isOpenParen(ch): insertCloseParen(status, ch)
+  if status.settings.autoCloseParen and canConvertToChar(c):
+    let ch = c.toChar
+    if isOpenParen(ch): insertCloseParen(status, ch)
 
   status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)
@@ -37,17 +39,17 @@ proc keyBackspace(status: var EditorStatus) =
     dec(status.currentLine)
   else:
     dec(status.currentColumn)
-    status.buffer[status.currentLine].delete(status.currentColumn, status.currentColumn)
+    status.buffer[status.currentLine].delete(status.currentColumn)
 
   status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
   inc(status.countChange)
 
 proc insertIndent(status: var EditorStatus) =
   let indent = min(countRepeat(status.buffer[status.currentLine], Whitespace, 0), status.currentColumn)
-  status.buffer[status.currentLine+1] &= repeat(' ', indent)
+  status.buffer[status.currentLine+1] &= repeat(' ', indent).toRunes
 
 proc keyEnter(status: var EditorStatus) =
-  status.buffer.insert("", status.currentLine+1)
+  status.buffer.insert(u8"", status.currentLine+1)
   if status.settings.autoIndent:
     insertIndent(status)
 
@@ -71,7 +73,7 @@ proc keyEnter(status: var EditorStatus) =
   inc(status.countChange)
 
 proc insertTab(status: var EditorStatus) =
-  for i in 0 ..< status.settings.tabStop: insertCharacter(status, int(' '))
+  for i in 0 ..< status.settings.tabStop: insertCharacter(status, u8' ')
 
 proc insertMode*(status: var EditorStatus) =
   while status.mode == Mode.insert:

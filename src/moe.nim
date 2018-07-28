@@ -1,4 +1,4 @@
-import os, terminal, strutils, strformat
+import os, terminal, strutils, strformat, unicode
 import moepkg/ui
 import moepkg/editorstatus
 import moepkg/fileutils
@@ -14,16 +14,16 @@ when isMainModule:
 
   var status = initEditorStatus()
   if commandLineParams().len >= 1:
-    status.filename = commandLineParams()[0]
-    if existsFile(status.filename):
+    status.filename = commandLineParams()[0].toRunes
+    if existsFile($(status.filename)):
       try:
         status.buffer = openFile(status.filename)
       except IOError:
         echo(fmt"Failed to open: {status.filename}")
         exitUi()
         quit()
-    elif existsDir(status.filename):
-      setCurrentDir(status.filename)
+    elif existsDir($(status.filename)):
+      setCurrentDir($(status.filename))
       status.mode = filer
     else: status.buffer = newFile()
   else:
