@@ -31,7 +31,9 @@ when isMainModule:
 
   status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
 
-  defer: exitUi()
+  defer:
+    exitUi()
+    discard execShellCmd("printf '\\033[2 q'")
   while true:
     case status.mode:
     of Mode.normal:
@@ -44,3 +46,4 @@ when isMainModule:
       filerMode(status)
     of Mode.quit:
       break
+

@@ -1,4 +1,5 @@
 import deques, strutils
+from os import execShellCmd
 import ui, editorstatus, editorview, cursor, gapbuffer, editorview, normalmode
 
 proc insertCloseParen(status: var EditorStatus, ch: int) =
@@ -74,6 +75,7 @@ proc insertTab(status: var EditorStatus) =
   for i in 0 ..< status.settings.tabStop: insertCharacter(status, int(' '))
 
 proc insertMode*(status: var EditorStatus) =
+  discard execShellCmd("printf '\\033[6 q'")
   while status.mode == Mode.insert:
     writeStatusBar(status)
     
@@ -118,3 +120,4 @@ proc insertMode*(status: var EditorStatus) =
       insertTab(status)
     else:
       insertCharacter(status, key)
+  discard execShellCmd("printf '\\033[2 q'")
