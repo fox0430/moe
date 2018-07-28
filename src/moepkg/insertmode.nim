@@ -4,15 +4,15 @@ import ui, editorstatus, editorview, cursor, gapbuffer, editorview, normalmode, 
 proc insertCloseParen(status: var EditorStatus, c: char) =
   case c
   of '(':
-    status.buffer[status.currentLine].insert(u8')', status.currentColumn)
+    status.buffer[status.currentLine].insert(ru')', status.currentColumn)
   of '{':
-    status.buffer[status.currentLine].insert(u8'}', status.currentColumn)
+    status.buffer[status.currentLine].insert(ru'}', status.currentColumn)
   of '[':
-    status.buffer[status.currentLine].insert(u8']', status.currentColumn)
+    status.buffer[status.currentLine].insert(ru']', status.currentColumn)
   of '"':
-    status.buffer[status.currentLine].insert(u8('\"'), status.currentColumn)
+    status.buffer[status.currentLine].insert(ru('\"'), status.currentColumn)
   of '\'':
-    status.buffer[status.currentLine].insert(u8'\'', status.currentColumn)
+    status.buffer[status.currentLine].insert(ru'\'', status.currentColumn)
   else:
     doAssert(false, fmt"Invalid parentheses: {c}")
 
@@ -49,7 +49,7 @@ proc insertIndent(status: var EditorStatus) =
   status.buffer[status.currentLine+1] &= repeat(' ', indent).toRunes
 
 proc keyEnter(status: var EditorStatus) =
-  status.buffer.insert(u8"", status.currentLine+1)
+  status.buffer.insert(ru"", status.currentLine+1)
   if status.settings.autoIndent:
     insertIndent(status)
 
@@ -76,7 +76,7 @@ proc keyEnter(status: var EditorStatus) =
   inc(status.countChange)
 
 proc insertTab(status: var EditorStatus) =
-  for i in 0 ..< status.settings.tabStop: insertCharacter(status, u8' ')
+  for i in 0 ..< status.settings.tabStop: insertCharacter(status, ru' ')
 
 proc insertMode*(status: var EditorStatus) =
   while status.mode == Mode.insert:

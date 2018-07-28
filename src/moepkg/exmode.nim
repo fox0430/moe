@@ -2,7 +2,7 @@ import sequtils, strutils, os, terminal, strformat
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext
 
 proc getCommand*(commandWindow: var Window, updateCommandWindow: proc (window: var Window, command: seq[Rune])): seq[seq[Rune]] =
-  var command = u8""
+  var command = ru""
   while true:
     updateCommandWindow(commandWindow, command)
  
@@ -33,22 +33,22 @@ proc isJumpCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
   return command.len == 1 and isDigit(command[0]) and status.prevMode == Mode.normal
 
 proc isEditCommand(command: seq[seq[Rune]]): bool =
-  return command.len == 2 and command[0] == u8"e"
+  return command.len == 2 and command[0] == ru"e"
 
 proc isWriteCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
-  return command.len in {1, 2} and command[0] == u8"w" and status.prevMode == Mode.normal
+  return command.len in {1, 2} and command[0] == ru"w" and status.prevMode == Mode.normal
 
 proc isQuitCommand(command: seq[seq[Rune]]): bool =
-  return command.len == 1 and command[0] == u8"q"
+  return command.len == 1 and command[0] == ru"q"
 
 proc isWriteAndQuitCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
-  return command.len == 1 and command[0] == u8"wq" and status.prevMode == Mode.normal
+  return command.len == 1 and command[0] == ru"wq" and status.prevMode == Mode.normal
 
 proc isForceQuitCommand(command: seq[seq[Rune]]): bool =
-  return command.len == 1 and command[0] == u8"q!"
+  return command.len == 1 and command[0] == ru"q!"
 
 proc isShellCommand(command: seq[seq[Rune]]): bool =
-  return command.len >= 1 and command[0][0] == u8'!'
+  return command.len >= 1 and command[0][0] == ru'!'
 
 proc jumpCommand(status: var EditorStatus, line: int) =
   jumpLine(status, line)

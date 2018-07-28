@@ -13,9 +13,9 @@ proc toRune*(x: int): Rune = Rune(x)
 proc `==`*(c: Rune, x: int): bool = c == toRune(x)
 proc `==`*(c: Rune, x: char): bool = c == toRune(x)
 
-proc u8*(c: char): Rune = toRune(c)
+proc ru*(c: char): Rune = toRune(c)
 
-proc u8*(s: string): seq[Rune] = s.toRunes
+proc ru*(s: string): seq[Rune] = s.toRunes
 
 proc canConvertToChar*(c: Rune): bool =
   return ($c).len == 1

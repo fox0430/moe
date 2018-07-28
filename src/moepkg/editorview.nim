@@ -18,7 +18,7 @@ proc reload*(view: var EditorView, buffer: GapBuffer[seq[Rune]], topLine: int) =
     width = view.width
 
   for x in view.originalLine.mitems: x = -1
-  for s in view.lines.mitems: s = u8""
+  for s in view.lines.mitems: s = ru""
   for x in view.length.mitems: x = 0
 
   var
@@ -52,7 +52,7 @@ proc initEditorView*(buffer: GapBuffer[seq[Rune]], height, width: int): EditorVi
   result.widthOfLineNum = buffer.len.intToStr.len+1
 
   result.lines = initDeque[seq[Rune]]()
-  for i in 0..height-1: result.lines.addLast(u8"")
+  for i in 0..height-1: result.lines.addLast(ru"")
 
   result.originalLine = initDeque[int]()
   for i in 0..height-1: result.originalLine.addLast(-1)
@@ -69,7 +69,7 @@ proc resize*(view: var EditorView, buffer: GapBuffer[seq[Rune]], height, width, 
   let topline = view.originalLine[0]
 
   view.lines = initDeque[seq[Rune]]()
-  for i in 0..height-1: view.lines.addlast(u8"")
+  for i in 0..height-1: view.lines.addlast(ru"")
 
   view.height = height
   view.width = width
@@ -105,7 +105,7 @@ proc scrollUp(view: var EditorView, buffer: GapBuffer[seq[Rune]]) =
   let
     line = view.originalLine[0]
     last = view.start[0]
-  var str = u8""
+  var str = ru""
   while last - str.len > 0 and str.width + width(buffer[line][last-str.len]) <= view.width:
     str.add(buffer[line][last-str.len])
     dec(view.start[0])
@@ -136,7 +136,7 @@ proc scrollDown(view: var EditorView, buffer: GapBuffer[seq[Rune]]) =
     view.start.addLast(view.start[height-2]+view.length[height-2])
 
   let line = view.originalLine[height-1]
-  view.lines.addLast(u8"")
+  view.lines.addLast(ru"")
   view.length.addLast(0)
   while view.start[height-1] + view.lines[height-1].len < buffer[line].len and view.lines[height-1].width+width(buffer[line][view.start[height-1]+view.lines[height-1].len]) <= view.width:
     view.lines[height-1].add(buffer[line][view.start[height-1]+view.lines[height-1].len])

@@ -4,7 +4,7 @@ import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.erase
 
-  status.commandWindow.write(0, 0, u8"debuf info: ")
+  status.commandWindow.write(0, 0, ru"debuf info: ")
   status.commandWindow.append(fmt"currentLine: {status.currentLine}, currentColumn: {status.currentColumn}")
   status.commandWindow.append(fmt", cursor.y: {status.cursor.y}, cursor.x: {status.cursor.x}")
   status.commandWindow.append(fmt", {str}")
@@ -41,7 +41,7 @@ proc keyDown*(status: var EditorStatus) =
 
 proc moveToFirstNonBlankOfLine(status: var EditorStatus) =
   status.currentColumn = 0
-  while status.buffer[status.currentLine][status.currentColumn] == u8' ': inc(status.currentColumn)
+  while status.buffer[status.currentLine][status.currentColumn] == ru' ': inc(status.currentColumn)
   status.expandedColumn = status.currentColumn
 
 proc moveToFirstOfLine*(status: var EditorStatus) =
@@ -99,7 +99,7 @@ proc pageDown*(status: var EditorStatus) =
 
 proc moveToForwardWord(status: var EditorStatus) =
   let
-    startWith = if status.buffer[status.currentLine].len == 0: u8'\n' else: status.buffer[status.currentLine][status.currentColumn]
+    startWith = if status.buffer[status.currentLine].len == 0: ru'\n' else: status.buffer[status.currentLine][status.currentColumn]
     isSkipped = if unicodeext.isPunct(startWith): unicodeext.isPunct elif unicodeext.isAlpha(startWith): unicodeext.isAlpha elif unicodeext.isDigit(startWith): unicodeext.isDigit else: nil
 
   if isSkipped == nil:
@@ -156,7 +156,7 @@ proc moveToBackwardWord(status: var EditorStatus) =
   status.expandedColumn = status.currentColumn
 
 proc openBlankLineBelow(status: var EditorStatus) =
-  let indent = repeat(u8' ', countRepeat(status.buffer[status.currentLine], Whitespace, 0))
+  let indent = repeat(ru' ', countRepeat(status.buffer[status.currentLine], Whitespace, 0))
 
   status.buffer.insert(indent, status.currentLine+1)
   inc(status.currentLine)
@@ -166,7 +166,7 @@ proc openBlankLineBelow(status: var EditorStatus) =
   inc(status.countChange)
 
 proc openBlankLineAbove(status: var EditorStatus) =
-  let indent = repeat(u8' ', countRepeat(status.buffer[status.currentLine], Whitespace, 0))
+  let indent = repeat(ru' ', countRepeat(status.buffer[status.currentLine], Whitespace, 0))
 
   status.buffer.insert(indent, status.currentLine)
   status.currentColumn = indent.len
@@ -177,7 +177,7 @@ proc openBlankLineAbove(status: var EditorStatus) =
 proc deleteLine(status: var EditorStatus, line: int) =
   status.buffer.delete(line, line+1)
 
-  if status.buffer.len == 0: status.buffer.insert(u8"", 0)
+  if status.buffer.len == 0: status.buffer.insert(ru"", 0)
 
   if line < status.currentLine: dec(status.currentLine)
   if status.currentLine >= status.buffer.len: status.currentLine = status.buffer.high
@@ -210,7 +210,7 @@ proc replaceCurrentCharacter(status: var EditorStatus, character: Rune) =
   inc(status.countChange)
 
 proc addIndent(status: var EditorStatus) =
-  status.buffer[status.currentLine].insert(newSeqWith(status.settings.tabStop, u8' '))
+  status.buffer[status.currentLine].insert(newSeqWith(status.settings.tabStop, ru' '))
 
   status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)
@@ -218,9 +218,9 @@ proc addIndent(status: var EditorStatus) =
 proc deleteIndent(status: var EditorStatus) =
   if status.buffer.len == 0: return
 
-  if status.buffer[status.currentLine][0] == u8' ':
+  if status.buffer[status.currentLine][0] == ru' ':
     for i in 0 ..< status.settings.tabStop:
-      if status.buffer.len == 0 or status.buffer[status.currentLine][0] != u8' ': break
+      if status.buffer.len == 0 or status.buffer[status.currentLine][0] != ru' ': break
       status.buffer[status.currentLine].delete(0, 0)
   status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)

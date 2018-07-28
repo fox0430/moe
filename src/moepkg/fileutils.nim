@@ -9,7 +9,7 @@ proc openFile*(filename: seq[Rune]): GapBuffer[seq[Rune]] =
 
 proc newFile*(): GapBuffer[seq[Rune]] =
   result = initGapBuffer[seq[Rune]]()
-  result.add(u8"")
+  result.add(ru"")
 
 proc saveFile*(filename: seq[Rune], buffer: GapBuffer[seq[Rune]]) =
   let fs = open($filename, fmWrite)

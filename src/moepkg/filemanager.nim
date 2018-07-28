@@ -19,7 +19,7 @@ proc deleteFile(status: var EditorStatus, dirList: seq[(PathComponent, string)],
   )
 
 
-  if (command[0] == u8"y" or command[0] == u8"yes") and command.len == 1:
+  if (command[0] == ru"y" or command[0] == ru"yes") and command.len == 1:
     if dirList[currentLine][0] == pcDir:
       removeDir(dirList[currentLine][1])
     else:

@@ -59,19 +59,19 @@ proc writeStatusBar*(status: var EditorStatus) =
   status.statusWindow.erase
 
   if status.mode == Mode.filer:
-    status.statusWindow.write(0, 0, u8" FILER ", ui.ColorPair.blackWhite)
-    status.statusWindow.append(u8" ", ui.ColorPair.blackGreen)
+    status.statusWindow.write(0, 0, ru" FILER ", ui.ColorPair.blackWhite)
+    status.statusWindow.append(ru" ", ui.ColorPair.blackGreen)
     status.statusWindow.append(getCurrentDir().toRunes, ui.ColorPair.blackGreen)
     status.statusWindow.refresh
     return
 
-  status.statusWindow.write(0, 0,  if status.mode == Mode.normal: u8" NORMAL " else: u8" INSERT ", ui.ColorPair.blackWhite)
-  status.statusWindow.append(u8" ", ui.ColorPair.blackGreen)
-  if status.filename != nil and status.filename[0..1] == u8"./":
+  status.statusWindow.write(0, 0,  if status.mode == Mode.normal: ru" NORMAL " else: ru" INSERT ", ui.ColorPair.blackWhite)
+  status.statusWindow.append(ru" ", ui.ColorPair.blackGreen)
+  if status.filename != nil and status.filename[0..1] == ru"./":
     status.statusWindow.append(status.filename[2..status.filename.len], ui.ColorPair.blackGreen)
   else:
-    status.statusWindow.append(if status.filename != nil: status.filename else: u8"No name", ui.ColorPair.blackGreen)
-  if status.countChange > 0:  status.statusWindow.append(u8" [+]", ui.ColorPair.blackGreen)
+    status.statusWindow.append(if status.filename != nil: status.filename else: ru"No name", ui.ColorPair.blackGreen)
+  if status.countChange > 0:  status.statusWindow.append(ru" [+]", ui.ColorPair.blackGreen)
 
   status.statusWindow.write(0, terminalWidth()-20, toRunes(fmt"{status.currentLine+1}/{status.buffer.len}"), ui.Colorpair.blackGreen)
   status.statusWindow.append(toRunes(fmt" {status.currentColumn}/{status.buffer[status.currentLine].len}"), ui.ColorPair.blackGreen)
