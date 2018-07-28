@@ -1,7 +1,7 @@
 import unicode, strutils, sequtils
 export unicode
 
-proc width*(c: Rune): int = return if c.toUTF8.len == 1: 1 else: 2
+proc width*(c: Rune): int = return if int32(c) <= 127: 1 else: 2
 
 proc width*(runes: seq[Rune]): int =
   for c in runes: result += width(c)

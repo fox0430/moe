@@ -35,9 +35,14 @@ proc reload*(view: var EditorView, buffer: GapBuffer[seq[Rune]], topLine: int) =
 
     view.originalLine[y] = lineNumber
     view.start[y] = start
-    while start + view.length[y] < buffer[lineNumber].len and view.lines[y].width + width(buffer[lineNumber][start + view.length[y]]) <= width:
+    var
+      totalWidth = 0
+      nextWidth = if start+view.length[y] < buffer[lineNumber].len: width(buffer[lineNumber][start+view.length[y]]) else: 0
+    while start + view.length[y] < buffer[lineNumber].len and totalWidth+nextWidth <= width:
       view.lines[y].add(buffer[lineNumber][start + view.length[y]])
       inc(view.length[y])
+      totalWidth += nextWidth
+      nextWidth = if start+view.length[y] < buffer[lineNumber].len: width(buffer[lineNumber][start+view.length[y]]) else: 0
 
     start += view.length[y]
     if start >= buffer[lineNumber].len:
