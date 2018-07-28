@@ -1,4 +1,4 @@
-import os, terminal, strutils, strformat, unicode, nimprof
+import os, terminal, strutils, strformat, unicode
 import moepkg/ui
 import moepkg/editorstatus
 import moepkg/fileutils
