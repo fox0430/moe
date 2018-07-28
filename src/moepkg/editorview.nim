@@ -97,16 +97,16 @@ proc scrollUp(view: var EditorView, buffer: GapBuffer[seq[Rune]]) =
 
   if view.start[0] > 0:
     view.originalLine.addFirst(view.originalLine[0])
-    view.start.addFirst(view.start[0] - 1)
+    view.start.addFirst(view.start[0])
   else:
     view.originalLine.addFirst(view.originalLine[0]-1)
-    view.start.addFirst(max(buffer[view.originalLine[0]].len-1, 0))
+    view.start.addFirst(buffer[view.originalLine[0]].len)
 
   let
     line = view.originalLine[0]
-    last = view.start[0]
+    last = max(view.start[0]-1, 0)
   var str = ru""
-  while last - str.len > 0 and str.width + width(buffer[line][last-str.len]) <= view.width:
+  while 0 <= last - str.len and last-str.len <= buffer[line].high and str.width + width(buffer[line][last-str.len]) <= view.width:
     str.add(buffer[line][last-str.len])
     dec(view.start[0])
 
