@@ -112,10 +112,15 @@ proc scrollUp(view: var EditorView, buffer: GapBuffer[seq[Rune]]) =
   let
     line = view.originalLine[0]
     last = max(view.start[0]-1, 0)
-  var str = ru""
-  while 0 <= last - str.len and last-str.len <= buffer[line].high and str.width + width(buffer[line][last-str.len]) <= view.width:
+  var
+    str = ru""
+    totalWidth = 0
+    nextWidth = if 0 <= last - str.len and last-str.len <= buffer[line].high: width(buffer[line][last-str.len]) else: 0
+  while 0 <= last - str.len and last-str.len <= buffer[line].high and totalWidth+nextWidth <= view.width:
     str.add(buffer[line][last-str.len])
     dec(view.start[0])
+    totalWidth += nextWidth
+    nextWidth = if 0 <= last - str.len and last-str.len <= buffer[line].high: width(buffer[line][last-str.len]) else: 0
 
   view.length.addFirst(str.len)
   view.lines.addFirst(reversed(str))
@@ -146,9 +151,14 @@ proc scrollDown(view: var EditorView, buffer: GapBuffer[seq[Rune]]) =
   view.length.addLast(0)
   let line = view.originalLine[height-1]
   if line != -1:
-    while view.start[height-1] + view.lines[height-1].len < buffer[line].len and view.lines[height-1].width+width(buffer[line][view.start[height-1]+view.lines[height-1].len]) <= view.width:
+    var
+      totalWidth = 0
+      nextWidth = if view.start[height-1] + view.lines[height-1].len < buffer[line].len: width(buffer[line][view.start[height-1]+view.lines[height-1].len]) else: 0
+    while view.start[height-1] + view.lines[height-1].len < buffer[line].len and totalWidth+nextWidth <= view.width:
       view.lines[height-1].add(buffer[line][view.start[height-1]+view.lines[height-1].len])
       inc(view.length[height-1])
+      totalWidth += nextWidth
+      nextWidth = if view.start[height-1] + view.lines[height-1].len < buffer[line].len: width(buffer[line][view.start[height-1]+view.lines[height-1].len]) else: 0
 
 proc writeLineNum(view: EditorView, win: var Window, y, line: int, colorPair: ColorPair) =
   let width = view.widthOfLineNum
