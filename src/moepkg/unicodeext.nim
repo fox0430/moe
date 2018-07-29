@@ -6,7 +6,9 @@ proc width*(c: Rune): int = return if int32(c) <= 127: 1 else: 2
 proc width*(runes: seq[Rune]): int =
   for c in runes: result += width(c)
 
-proc toRune*(c: char): Rune = ($c).toRunes[0]
+proc toRune*(c: char): Rune =
+  doAssert(ord(c) <= 127)
+  ($c).toRunes[0]
 
 proc toRune*(x: int): Rune = Rune(x)
 
