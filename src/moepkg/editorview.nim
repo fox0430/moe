@@ -162,19 +162,16 @@ proc scrollDown(view: var EditorView, buffer: GapBuffer[seq[Rune]]) =
 
 proc writeLineNum(view: EditorView, win: var Window, y, line: int, colorPair: ColorPair) =
   let width = view.widthOfLineNum
-  win.write(y, 0, repeat(' ', width))
-  win.write(y, width-(line+1).intToStr.len-1, (line+1).intToStr, colorPair)
+  win.write(y, 0, align($(line+1), view.widthOfLineNum-1), colorPair, false)
 
 proc writeLine(view: EditorView, win: var Window, y: int, str: seq[Rune], colorPair: ColorPair) =
-  win.write(y, view.widthOfLineNum, str, colorPair)
+  win.write(y, view.widthOfLineNum, str, colorPair, false)
 
 proc writeAllLines*(view: var EditorView, win: var Window, buffer: GapBuffer[seq[Rune]], currentLine: int) =
   win.erase
   view.widthOfLineNum = buffer.len.intToStr.len+1
   for y in 0..view.height-1:
-    if view.originalLine[y] == -1:
-      win.write(y, 0, repeat(' ', view.width))
-      continue
+    if view.originalLine[y] == -1: break
     if view.start[y] == 0: view.writeLineNum(win, y, view.originalLine[y], if view.originalLine[y]  == currentLine: ColorPair.brightGreenDefault else: ColorPair.grayDefault)
     view.writeLine(win, y, view.lines[y], if view.originalLine[y] == currentLine: ColorPair.brightGreenDefault else: brightWhiteDefault)
   win.refresh

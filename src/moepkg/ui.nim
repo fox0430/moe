@@ -93,13 +93,14 @@ proc initWindow*(height, width, top, left: int, color: ColorPair = ColorPair.bri
   keypad(result.cursesWindow, true)
   discard wbkgd(result.cursesWindow, ncurses.COLOR_PAIR(color))
 
-proc write*(win: var Window, y, x: int, str: seq[Rune], color: ColorPair = ColorPair.brightWhiteDefault) =
+proc write*(win: var Window, y, x: int, str: seq[Rune], color: ColorPair = ColorPair.brightWhiteDefault, storeX: bool = true) =
   win.cursesWindow.wattron(int(ncurses.COLOR_PAIR(ord(color))))
   mvwprintw(win.cursesWindow, y, x, $str)
-  win.y = y
-  win.x = x+str.width
+  if storeX:
+    win.y = y
+    win.x = x+str.width
 
-proc write*(win: var Window, y, x: int, str: string, color: ColorPair = ColorPair.brightWhiteDefault) = write(win, y, x, str.toRunes, color)
+proc write*(win: var Window, y, x: int, str: string, color: ColorPair = ColorPair.brightWhiteDefault, storeX: bool = true) = write(win, y, x, str.toRunes, color, storeX)
 
 proc append*(win: var Window, str: seq[Rune], color: ColorPair = ColorPair.brightWhiteDefault) =
   win.cursesWindow.wattron(int(ncurses.COLOR_PAIR(ord(color))))
