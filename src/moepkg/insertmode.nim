@@ -86,7 +86,7 @@ proc insertMode*(status: var EditorStatus) =
     elif isEscKey(key):
       if status.currentColumn > 0: dec(status.currentColumn)
       status.expandedColumn = status.currentColumn
-      status.mode = Mode.normal
+      status.changeMode(Mode.normal)
     elif isLeftKey(key):
       keyLeft(status)
     elif isRightkey(key):

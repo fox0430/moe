@@ -102,3 +102,7 @@ proc update*(status: var EditorStatus) =
   status.mainWindow.write(status.cursor.y, status.view.widthOfLineNum+status.cursor.x, "")
   status.mainWindow.refresh
   setCursor(true)
+
+proc changeMode*(status: var EditorStatus, mode: Mode) =
+  status.prevMode = status.mode
+  status.mode = mode

@@ -52,12 +52,12 @@ proc isShellCommand(command: seq[string]): bool =
 
 proc jumpCommand(status: var EditorStatus, line: int) =
   jumpLine(status, line)
-  status.mode = Mode.normal
+  status.changeMode(Mode.normal)
 
 proc editCommand(status: var EditorStatus, filename: string) =
   if status.countChange != 0:
     writeNoWriteError(status.commandWindow)
-    status.mode = Mode.normal
+    status.changeMode(Mode.normal)
     return
   if existsFile(filename):
     status = initEditorStatus()
@@ -66,7 +66,7 @@ proc editCommand(status: var EditorStatus, filename: string) =
     status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
   elif existsDir(filename):
     setCurrentDir(filename)
-    status.mode = Mode.filer
+    status.changeMode(Mode.filer)
   else:
     status = initEditorStatus()
     status.filename = filename
@@ -78,7 +78,7 @@ proc writeCommand(status: var EditorStatus, filename: string) =
     status.commandWindow.erase
     status.commandWindow.write(0, 0, "Error: No file name", ColorPair.redDefault)
     status.commandWindow.refresh
-    status.mode = Mode.normal
+    status.changeMode(Mode.normal)
     return
 
   try:
@@ -88,24 +88,24 @@ proc writeCommand(status: var EditorStatus, filename: string) =
   except IOError:
     writeSaveError(status.commandWindow)
 
-  status.mode = Mode.normal
+  status.changeMode(Mode.normal)
 
 proc quitCommand(status: var EditorStatus) =
-  if status.countChange == 0: status.mode = Mode.quit
+  if status.countChange == 0: status.changeMode(Mode.quit)
   else:
     writeNoWriteError(status.commandWindow)
-    status.mode = Mode.normal
+    status.changeMode(Mode.normal)
 
 proc writeAndQuitCommand(status: var EditorStatus) =
   try:
     saveFile(status.filename, status.buffer)
-    status.mode = Mode.quit
+    status.changeMode(Mode.quit)
   except IOError:
     writeSaveError(status.commandWindow)
-    status.mode = Mode.normal
+    status.changeMode(Mode.normal)
 
 proc forceQuitCommand(status: var EditorStatus) =
-  status.mode = Mode.quit
+  status.changeMode(Mode.quit)
 
 proc shellCommand(status: var EditorStatus, shellCommand: string) =
   saveCurrentTerminalModes()
@@ -144,4 +144,4 @@ proc exMode*(status: var EditorStatus) =
   elif isShellCommand(command):
     shellCommand(status, command.join(" ").substr(1))
   else:
-    status.mode = status.prevMode
+    status.changeMode(status.prevMode)

@@ -281,10 +281,10 @@ proc normalCommand(status: var EditorStatus, key: int) =
     for i in 0 ..< status.cmdLoop: moveToBackwardWord(status)
   elif key == ord('o'):
     for i in 0 ..< status.cmdLoop: openBlankLineBelow(status)
-    status.mode = Mode.insert
+    status.changeMode(Mode.insert)
   elif key == ord('O'):
     for i in 0 ..< status.cmdLoop: openBlankLineAbove(status)
-    status.mode = Mode.insert
+    status.changeMode(Mode.insert)
   elif key == ord('d'):
     if getKey(status.mainWindow) == ord('d'):
       for i in 0 ..< min(status.cmdLoop, status.buffer.len-status.currentLine): deleteLine(status, status.currentLine)
@@ -308,16 +308,16 @@ proc normalCommand(status: var EditorStatus, key: int) =
         status.expandedColumn = status.currentColumn
       replaceCurrentCharacter(status, ch)
   elif key == ord('i'):
-    status.mode = Mode.insert
+    status.changeMode(Mode.insert)
   elif key == ord('I'):
     status.currentColumn = 0
-    status.mode = Mode.insert
+    status.changeMode(Mode.insert)
   elif key == ord('a'):
     if status.buffer[status.currentLine].len > 0: inc(status.currentColumn)
-    status.mode = Mode.insert
+    status.changeMode(Mode.insert)
   elif key == ord('A'):
     status.currentColumn = status.buffer[status.currentLine].len
-    status.mode = Mode.insert
+    status.changeMode(Mode.insert)
   else:
     discard
 
@@ -333,7 +333,7 @@ proc normalMode*(status: var EditorStatus) =
     if isResizekey(key):
       status.resize
     elif key == ord(':'):
-      status.mode = Mode.ex
+      status.changeMode(Mode.ex)
     elif key in 0..255 and isDigit(chr(key)):
       if status.cmdLoop == 0 and key == ord('0'):
         normalCommand(status, key)

@@ -86,8 +86,7 @@ proc filerMode*(status: var EditorStatus) =
 
     key = getKey(status.mainWindow)
     if key == ord(':'):
-      status.prevMode = status.mode
-      status.mode = Mode.ex
+      status.changeMode(Mode.ex)
     elif isResizekey(key):
       status.resize
       viewUpdate = true
@@ -113,3 +112,4 @@ proc filerMode*(status: var EditorStatus) =
         setCurrentDir(dirList[currentLine][1])
         currentLine = 0
         DirlistUpdate = true
+  setCursor(true)
