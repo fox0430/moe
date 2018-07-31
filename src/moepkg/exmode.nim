@@ -13,7 +13,7 @@ proc getCommand*(commandWindow: var Window, updateCommandWindow: proc (window: v
     if isBackspaceKey(key):
       if command.len > 0: command.delete(command.high, command.high)
       continue
-    if not canConvertToChar(key): continue
+    if validateUtf8(key.toUTF8) != -1: continue
  
     command &= key
  
