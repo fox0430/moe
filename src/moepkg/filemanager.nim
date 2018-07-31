@@ -38,7 +38,6 @@ proc refreshDirList(): seq[(PathComponent, string)] =
     result.add list
 
 proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
-  var ch = newStringOfCap(1)
   for i in 0 ..< dirList.len:
     for j in 0 ..< dirList[i][1].len:
       if j > terminalWidth() - 2:
@@ -50,7 +49,7 @@ proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], cur
           win.write(i, j, "~")
         break
       else:
-        ch[0] = dirList[i][1][j]
+        let ch = $dirList[i][1][j]
         if i == currentLine:
           win.write(i, j, ch, brightWhiteGreen)
         elif dirList[i][0] == pcDir:
@@ -85,9 +84,8 @@ proc filerMode*(status: var EditorStatus) =
       viewUpdate = false
 
     let key = getKey(status.mainWindow)
-    if key == ':':
-      status.prevMode = status.mode
-      status.mode = Mode.ex
+    if key == ord(':'):
+      status.changeMode(Mode.ex)
     elif isResizekey(key):
       status.resize
       viewUpdate = true
@@ -113,3 +111,4 @@ proc filerMode*(status: var EditorStatus) =
         setCurrentDir(dirList[currentLine][1])
         currentLine = 0
         DirlistUpdate = true
+  setCursor(true)

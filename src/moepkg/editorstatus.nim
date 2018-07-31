@@ -73,8 +73,10 @@ proc writeStatusBar*(status: var EditorStatus) =
     status.statusWindow.append(if status.filename != nil: status.filename else: ru"No name", ui.ColorPair.blackGreen)
   if status.countChange > 0:  status.statusWindow.append(ru" [+]", ui.ColorPair.blackGreen)
 
-  status.statusWindow.write(0, terminalWidth()-20, toRunes(fmt"{status.currentLine+1}/{status.buffer.len}"), ui.Colorpair.blackGreen)
-  status.statusWindow.append(toRunes(fmt" {status.currentColumn}/{status.buffer[status.currentLine].len}"), ui.ColorPair.blackGreen)
+  let
+    line = fmt"{status.currentLine+1}/{status.buffer.len}"
+    column = fmt"{status.currentColumn}/{status.buffer[status.currentLine].len}"
+  status.statusWindow.write(0, terminalWidth()-line.len-column.len-2, fmt"{line} {column}", ui.Colorpair.blackGreen)
   status.statusWindow.refresh
 
 proc resize*(status: var EditorStatus) =
@@ -88,3 +90,21 @@ proc resize*(status: var EditorStatus) =
 
   writeStatusBar(status)
 
+proc erase*(status: var EditorStatus) =
+  erase(status.mainWindow)
+  erase(status.statusWindow)
+  erase(status.commandWindow)
+
+proc update*(status: var EditorStatus) =
+  setCursor(false)
+  writeStatusBar(status)
+  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
+  status.view.update(status.mainWindow, status.buffer, status.currentLine)
+  status.cursor.update(status.view, status.currentLine, status.currentColumn)
+  status.mainWindow.write(status.cursor.y, status.view.widthOfLineNum+status.cursor.x, "")
+  status.mainWindow.refresh
+  setCursor(true)
+
+proc changeMode*(status: var EditorStatus, mode: Mode) =
+  status.prevMode = status.mode
+  status.mode = mode

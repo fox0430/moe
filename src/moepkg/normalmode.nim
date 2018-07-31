@@ -272,10 +272,10 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     for i in 0 ..< status.cmdLoop: moveToBackwardWord(status)
   elif key == ord('o'):
     for i in 0 ..< status.cmdLoop: openBlankLineBelow(status)
-    status.mode = Mode.insert
+    status.changeMode(Mode.insert)
   elif key == ord('O'):
     for i in 0 ..< status.cmdLoop: openBlankLineAbove(status)
-    status.mode = Mode.insert
+    status.changeMode(Mode.insert)
   elif key == ord('d'):
     if getKey(status.mainWindow) == ord('d'):
       for i in 0 ..< min(status.cmdLoop, status.buffer.len-status.currentLine): deleteLine(status, status.currentLine)
@@ -299,16 +299,16 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
         status.expandedColumn = status.currentColumn
       replaceCurrentCharacter(status, ch)
   elif key == ord('i'):
-    status.mode = Mode.insert
+    status.changeMode(Mode.insert)
   elif key == ord('I'):
     status.currentColumn = 0
-    status.mode = Mode.insert
+    status.changeMode(Mode.insert)
   elif key == ord('a'):
     if status.buffer[status.currentLine].len > 0: inc(status.currentColumn)
-    status.mode = Mode.insert
+    status.changeMode(Mode.insert)
   elif key == ord('A'):
     status.currentColumn = status.buffer[status.currentLine].len
-    status.mode = Mode.insert
+    status.changeMode(Mode.insert)
   else:
     discard
 
@@ -317,26 +317,18 @@ proc normalMode*(status: var EditorStatus) =
   status.resize
   
   while status.mode == Mode.normal:
-    writeStatusBar(status)
-
-    status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
-    status.view.update(status.mainWindow, status.buffer, status.currentLine)
-    status.cursor.update(status.view, status.currentLine, status.currentColumn)
-
-    status.mainWindow.write(status.cursor.y, status.view.widthOfLineNum+status.cursor.x, "")
-    status.mainWindow.refresh
+    status.update
 
     let key = getKey(status.mainWindow)
 
     if isResizekey(key):
       status.resize
     elif key == ord(':'):
-      status.mode = Mode.ex
+      status.changeMode(Mode.ex)
     elif isDigit(key):
       let num = ($key)[0]
       if status.cmdLoop == 0 and num == '0':
         normalCommand(status, key)
-        discard
         continue
 
       status.cmdLoop *= 10
