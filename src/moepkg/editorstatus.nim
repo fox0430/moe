@@ -88,3 +88,17 @@ proc resize*(status: var EditorStatus) =
 
   writeStatusBar(status)
 
+proc erase*(status: var EditorStatus) =
+  erase(status.mainWindow)
+  erase(status.statusWindow)
+  erase(status.commandWindow)
+
+proc update*(status: var EditorStatus) =
+  setCursor(false)
+  writeStatusBar(status)
+  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
+  status.view.update(status.mainWindow, status.buffer, status.currentLine)
+  status.cursor.update(status.view, status.currentLine, status.currentColumn)
+  status.mainWindow.write(status.cursor.y, status.view.widthOfLineNum+status.cursor.x, "")
+  status.mainWindow.refresh
+  setCursor(true)

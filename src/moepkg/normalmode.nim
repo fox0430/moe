@@ -326,14 +326,7 @@ proc normalMode*(status: var EditorStatus) =
   status.resize
   
   while status.mode == Mode.normal:
-    writeStatusBar(status)
-
-    status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
-    status.view.update(status.mainWindow, status.buffer, status.currentLine)
-    status.cursor.update(status.view, status.currentLine, status.currentColumn)
-
-    status.mainWindow.write(status.cursor.y, status.view.widthOfLineNum+status.cursor.x, "")
-    status.mainWindow.refresh
+    status.update
 
     let key = getKey(status.mainWindow)
 
