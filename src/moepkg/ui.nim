@@ -151,7 +151,7 @@ proc getKey*(win: Window): Rune =
     len: int
   block getfirst:
     let key = wgetch(win.cursesWindow)
-    if (key and 0x000000FF) != key: return Rune(key)
+    if not (key <= 0x7F or (0xC2 <= key and key <= 0xF0) or key == 0xF3): return Rune(key)
     s.add(char(key))
     len = numberOfBytes(char(key))
   for i in 0 ..< len-1: s.add(char(wgetch(win.cursesWindow)))
