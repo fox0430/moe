@@ -4,11 +4,6 @@ type GapBuffer*[T] = object
   capacity: int # Amount of secured memory
   gapBegin, gapEnd: int # 半開区間[gapBegin,gapEnd)を隙間とする
 
-proc initGapBuffer*[T](): GapBuffer[T] =
-  result.buffer = newSeq[T](1)
-  result.capacity = 1
-  result.gapEnd = 1
-
 proc gapLen(gapBuffer: GapBuffer): int = gapBuffer.gapEnd - gapBuffer.gapBegin
 
 proc makeGap(gapBuffer: var GapBuffer, gapBegin: int) =
@@ -50,6 +45,14 @@ proc insert*[T](gapBuffer: var GapBuffer, element: T, position: int) =
 proc add*[T](gapBuffer: var GapBuffer[T], val: T) =
   gapBuffer.insert(val, gapBuffer.len)
 
+proc initGapBuffer*[T](): GapBuffer[T] =
+  result.buffer = newSeq[T](1)
+  result.capacity = 1
+  result.gapEnd = 1
+
+proc initGapBuffer*[T](elements: seq[T]): GapBuffer[T] =
+  result = initGapBuffer[T]()
+  for e in elements: result.add(e)
 
 proc delete*(gapBuffer: var GapBuffer, delBegin, delEnd: int) =
   ## Delete [delBegin, delEnd) elements

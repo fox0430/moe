@@ -1,5 +1,4 @@
 src/nimcache
-tests/nimcache
-tests/tgapbuffer
-tests/tunicodeext
+tests/*
+!tests/*.nim
 moe
