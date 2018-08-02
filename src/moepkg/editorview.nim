@@ -92,6 +92,24 @@ proc resize*(view: var EditorView, buffer: GapBuffer[seq[Rune]], height, width, 
   view.updated = true
   view.reload(buffer, topLine)
 
+proc loadSpecifiedLineTail(lineNum, width: int, buffer: GapBuffer[seq[Rune]]): tuple[line: seq[Rune], originalLine, start, length: int] =
+  result.originalLine = lineNum
+  let line = buffer[lineNum]
+  var curr = 0
+  while curr < line.len:
+    result.line = newSeq[Rune]()
+    result.start = curr
+    result.length = 0
+    var
+      totalWidth = 0
+      nextWidth = line[curr].width
+    while curr < line.len and totalWidth+nextWidth <= width:
+      result.line.add(line[curr])
+      inc(result.length)
+      inc(curr)
+      totalWidth += nextWidth
+      nextWidth = if curr < line.len: line[curr].width else: 0
+
 proc scrollUp(view: var EditorView, buffer: GapBuffer[seq[Rune]]) =
   ## EditorView表示を1ライン上にずらす
 
@@ -105,25 +123,26 @@ proc scrollUp(view: var EditorView, buffer: GapBuffer[seq[Rune]]) =
   if view.start[0] > 0:
     view.originalLine.addFirst(view.originalLine[0])
     view.start.addFirst(view.start[0])
+    let
+      line = view.originalLine[0]
+      last = max(view.start[0]-1, 0)
+    var
+      str = ru""
+      totalWidth = 0
+      nextWidth = if 0 <= last - str.len and last-str.len <= buffer[line].high: width(buffer[line][last-str.len]) else: 0
+    while 0 <= last - str.len and last-str.len <= buffer[line].high and totalWidth+nextWidth <= view.width:
+      str.add(buffer[line][last-str.len])
+      dec(view.start[0])
+      totalWidth += nextWidth
+      nextWidth = if 0 <= last - str.len and last-str.len <= buffer[line].high: width(buffer[line][last-str.len]) else: 0
+    view.length.addFirst(str.len)
+    view.lines.addFirst(reversed(str))
   else:
-    view.originalLine.addFirst(view.originalLine[0]-1)
-    view.start.addFirst(buffer[view.originalLine[0]].len)
-
-  let
-    line = view.originalLine[0]
-    last = max(view.start[0]-1, 0)
-  var
-    str = ru""
-    totalWidth = 0
-    nextWidth = if 0 <= last - str.len and last-str.len <= buffer[line].high: width(buffer[line][last-str.len]) else: 0
-  while 0 <= last - str.len and last-str.len <= buffer[line].high and totalWidth+nextWidth <= view.width:
-    str.add(buffer[line][last-str.len])
-    dec(view.start[0])
-    totalWidth += nextWidth
-    nextWidth = if 0 <= last - str.len and last-str.len <= buffer[line].high: width(buffer[line][last-str.len]) else: 0
-
-  view.length.addFirst(str.len)
-  view.lines.addFirst(reversed(str))
+    let tmp = loadSpecifiedLineTail(view.originalLine[0]-1, view.width, buffer)
+    view.lines.addFirst(tmp.line)
+    view.originalLine.addFirst(tmp.originalLine)
+    view.start.addFirst(tmp.start)
+    view.length.addFirst(tmp.length)
 
 proc scrollDown(view: var EditorView, buffer: GapBuffer[seq[Rune]]) =
   ## EditorViewの表示を1ライン下にずらす
