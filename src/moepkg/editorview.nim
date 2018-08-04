@@ -7,6 +7,27 @@ type EditorView* = object
   originalLine*, start*, length*: Deque[int]
   updated*: bool
 
+type ViewLine = object
+  line: seq[Rune]
+  originalLine, start, length: int
+
+proc loadSingleViewLine(view: EditorView, buffer: GapBuffer[seq[Rune]], originalLine, start: int): ViewLine =
+  result.line = ru""
+  result.originalLine = originalLine
+  result.start = start
+  let bufferLine = buffer[originalLine]
+  template isRemaining: bool = start+result.length < bufferLine.len
+  template calcNextWidth: int =
+    if isRemaining(): unicodeext.width(bufferLine[start+result.length]) else: 0
+  var
+    totalWidth = 0
+    nextWidth = calcNextWidth()
+  while isRemaining() and totalWidth+nextWidth <= view.width:
+    result.line.add(bufferLine[start+result.length])
+    result.length.inc
+    totalWidth += nextWidth
+    nextWidth = calcNextWidth
+
 proc reload*(view: var EditorView, buffer: GapBuffer[seq[Rune]], topLine: int) =
   ## topLineがEditorViewの一番上のラインとして表示されるようにバッファからEditorViewに対してリロードを行う.
   ## EditorView全体を更新するため計算コストはやや高め.バッファの内容とEditorViewの内容を同期させる時やEditorView全体が全く異なるような内容になるような処理をした後等に使用することが想定されている.
@@ -33,21 +54,14 @@ proc reload*(view: var EditorView, buffer: GapBuffer[seq[Rune]], topLine: int) =
       inc(lineNumber)
       continue
 
-    view.originalLine[y] = lineNumber
-    view.start[y] = start
-
-    let line = buffer[lineNumber]
-    var
-      totalWidth = 0
-      nextWidth = if start+view.length[y] < line.len: width(line[start+view.length[y]]) else: 0
-    while start + view.length[y] < line.len and totalWidth+nextWidth <= width:
-      view.lines[y].add(line[start + view.length[y]])
-      inc(view.length[y])
-      totalWidth += nextWidth
-      nextWidth = if start+view.length[y] < line.len: width(line[start+view.length[y]]) else: 0
+    let singleLine = loadSingleViewLine(view, buffer, lineNumber, start)
+    view.lines[y] = singleLine.line
+    view.originalLine[y] = singleLine.originalLine
+    view.start[y] = singleLine.start
+    view.length[y] = singleLine.length
 
     start += view.length[y]
-    if start >= line.len:
+    if start >= buffer[lineNumber].len:
       inc(lineNumber)
       start = 0
 
@@ -92,24 +106,6 @@ proc resize*(view: var EditorView, buffer: GapBuffer[seq[Rune]], height, width, 
   view.updated = true
   view.reload(buffer, topLine)
 
-proc loadSpecifiedLineTail(lineNum, width: int, buffer: GapBuffer[seq[Rune]]): tuple[line: seq[Rune], originalLine, start, length: int] =
-  result.originalLine = lineNum
-  let line = buffer[lineNum]
-  var curr = 0
-  while curr < line.len:
-    result.line = newSeq[Rune]()
-    result.start = curr
-    result.length = 0
-    var
-      totalWidth = 0
-      nextWidth = line[curr].width
-    while curr < line.len and totalWidth+nextWidth <= width:
-      result.line.add(line[curr])
-      inc(result.length)
-      inc(curr)
-      totalWidth += nextWidth
-      nextWidth = if curr < line.len: line[curr].width else: 0
-
 proc scrollUp(view: var EditorView, buffer: GapBuffer[seq[Rune]]) =
   ## EditorView表示を1ライン上にずらす
 
@@ -120,29 +116,24 @@ proc scrollUp(view: var EditorView, buffer: GapBuffer[seq[Rune]]) =
   view.start.popLast
   view.length.popLast
 
+  var originalLine, last: int
   if view.start[0] > 0:
-    view.originalLine.addFirst(view.originalLine[0])
-    view.start.addFirst(view.start[0])
-    let
-      line = view.originalLine[0]
-      last = max(view.start[0]-1, 0)
-    var
-      str = ru""
-      totalWidth = 0
-      nextWidth = if 0 <= last - str.len and last-str.len <= buffer[line].high: width(buffer[line][last-str.len]) else: 0
-    while 0 <= last - str.len and last-str.len <= buffer[line].high and totalWidth+nextWidth <= view.width:
-      str.add(buffer[line][last-str.len])
-      dec(view.start[0])
-      totalWidth += nextWidth
-      nextWidth = if 0 <= last - str.len and last-str.len <= buffer[line].high: width(buffer[line][last-str.len]) else: 0
-    view.length.addFirst(str.len)
-    view.lines.addFirst(reversed(str))
+    originalLine = view.originalLine[0]
+    last = view.start[0]-1
   else:
-    let tmp = loadSpecifiedLineTail(view.originalLine[0]-1, view.width, buffer)
-    view.lines.addFirst(tmp.line)
-    view.originalLine.addFirst(tmp.originalLine)
-    view.start.addFirst(tmp.start)
-    view.length.addFirst(tmp.length)
+    originalLine = view.originalLine[0]-1
+    last = buffer[originalLine].high
+
+  var start = 0
+  while true:
+    let singleLine = loadSingleViewLine(view, buffer, originalLine, start)
+    start += singleLine.length
+    if start > last:
+      view.lines.addFirst(singleLine.line)
+      view.originalLine.addFirst(singleLine.originalLine)
+      view.start.addFirst(singleLine.start)
+      view.length.addFirst(singleLine.length)
+      break
 
 proc scrollDown(view: var EditorView, buffer: GapBuffer[seq[Rune]]) =
   ## EditorViewの表示を1ライン下にずらす
@@ -154,30 +145,26 @@ proc scrollDown(view: var EditorView, buffer: GapBuffer[seq[Rune]]) =
   view.originalLine.popFirst
   view.start.popFirst
   view.length.popFirst
-
+  
+  var originalLine, start: int
   if view.start[height-2]+view.length[height-2] == buffer[view.originalLine[height-2]].len:
-    if view.originalLine[height-2] == -1 or view.originalLine[height-2]+1 == buffer.len:
-      view.originalLine.addLast(-1)
-      view.start.addLast(0)
-    else:
-      view.originalLine.addLast(view.originalLine[height-2]+1)
-      view.start.addLast(0)
+    originalLine =  if view.originalLine[height-2] == -1 or view.originalLine[height-2]+1 == buffer.len: -1 else: view.originalLine[height-2]+1
+    start = 0
   else:
-    view.originalLine.addLast(view.originalLine[height-2])
-    view.start.addLast(view.start[height-2]+view.length[height-2])
-
-  view.lines.addLast(ru"")
-  view.length.addLast(0)
-  let line = view.originalLine[height-1]
-  if line != -1:
-    var
-      totalWidth = 0
-      nextWidth = if view.start[height-1] + view.lines[height-1].len < buffer[line].len: width(buffer[line][view.start[height-1]+view.lines[height-1].len]) else: 0
-    while view.start[height-1] + view.lines[height-1].len < buffer[line].len and totalWidth+nextWidth <= view.width:
-      view.lines[height-1].add(buffer[line][view.start[height-1]+view.lines[height-1].len])
-      inc(view.length[height-1])
-      totalWidth += nextWidth
-      nextWidth = if view.start[height-1] + view.lines[height-1].len < buffer[line].len: width(buffer[line][view.start[height-1]+view.lines[height-1].len]) else: 0
+    originalLine = view.originalLine[height-2]
+    start = view.start[height-2]+view.length[height-2]
+    
+  if originalLine == -1:
+    view.lines.addLast(ru"")
+    view.originalLine.addLast(-1)
+    view.start.addLast(0)
+    view.length.addLast(0)
+  else:
+    let singleLine = loadSingleViewLine(view, buffer, originalLine, start)
+    view.lines.addLast(singleLine.line)
+    view.originalLine.addLast(singleLine.originalLine)
+    view.start.addLast(singleLine.start)
+    view.length.addLast(singleLine.length)
 
 proc writeLineNum(view: EditorView, win: var Window, y, line: int, colorPair: ColorPair) =
   let width = view.widthOfLineNum

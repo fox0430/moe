@@ -3,12 +3,25 @@ import moepkg/editorview, moepkg/gapbuffer, moepkg/unicodeext
 
 test "initEditorView: 1":
   let
-    line0 = ru"abc"
-    line1 = ru"def"
-  var buffer = initGapBuffer[seq[Rune]](@[line0, line1])
-  let view = initEditorView(buffer, 2, 3)
-  check(view.lines[0] == line0)
-  check(view.lines[1] == line1)
+    lines = @[ru"abc", ru"def"]
+    buffer = initGapBuffer[seq[Rune]](lines)
+    view = initEditorView(buffer, 2, 3)
+  check(view.lines[0] == ru"abc")
+  check(view.lines[1] == ru"def")
+
+test "initEditorView: 2":
+  let
+    lines = @[ru"abcあd", ru"いうefgh", ru"ij"]
+    buffer = initGapBuffer[seq[Rune]](lines)
+    view = initEditorView(buffer, 8, 4)
+  check(view.lines[0] == ru"abc")
+  check(view.lines[1] == ru"あd")
+  check(view.lines[2] == ru"いう")
+  check(view.lines[3] == ru"efgh")
+  check(view.lines[4] == ru"ij")
+  check(view.originalLine[5] == -1)
+  check(view.originalLine[6] == -1)
+  check(view.originalLine[7] == -1)
 
 test "seekCursor: 1":
   let
