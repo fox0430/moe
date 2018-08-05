@@ -14,7 +14,7 @@ This project's goal is a funny animation editor.
 
 - Written in Nim  
 
-- Vim like keybinds  
+- Vim like keybinds and mode
 
 - Simple file manager
 
@@ -27,6 +27,8 @@ This project's goal is a funny animation editor.
 ## Planned features
 
 - Syntax highlighting  
+
+- Visual mode  
 
 - Infinite undo/redo
 
