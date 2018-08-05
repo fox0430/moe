@@ -1,5 +1,5 @@
 import deques
-import editorview
+import editorview, unicodeext
 
 type CursorPosition* = object
   y*, x*: int
@@ -9,11 +9,11 @@ proc updatePosition(cursor: var CursorPosition, view: EditorView, line, column: 
     if view.originalLine[y] != line: continue
     if view.start[y] <= column and column < view.start[y]+view.length[y]:
       cursor.y = y
-      cursor.x = column-view.start[y]
+      cursor.x = if view.start[y] == column: 0 else: width(view.lines[y][0 .. column-view.start[y]-1])
       return
     if (y == view.height-1 or view.originalLine[y] != view.originalLine[y+1]) and view.start[y]+view.length[y] == column:
       cursor.y = y
-      cursor.x = column-view.start[y]
+      cursor.x = if view.start[y] == column: 0 else: width(view.lines[y][0 .. column-view.start[y]-1])
       if cursor.x == view.width:
         inc(cursor.y)
         cursor.x = 0

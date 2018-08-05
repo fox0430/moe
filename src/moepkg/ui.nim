@@ -1,5 +1,7 @@
+import posix, strformat
 import ncurses
-import posix
+import unicodeext
+
 
 type Color* = enum
   default     = -1,
@@ -91,16 +93,25 @@ proc initWindow*(height, width, top, left: int, color: ColorPair = ColorPair.bri
   keypad(result.cursesWindow, true)
   discard wbkgd(result.cursesWindow, ncurses.COLOR_PAIR(color))
 
-proc write*(win: var Window, y, x: int, str: string, color: ColorPair = ColorPair.brightWhiteDefault) =
+proc write*(win: var Window, y, x: int, str: string, color: ColorPair = ColorPair.brightWhiteDefault, storeX: bool = true) =
   win.cursesWindow.wattron(int(ncurses.COLOR_PAIR(ord(color))))
   mvwprintw(win.cursesWindow, y, x, str)
-  win.y = y
-  win.x = x+str.len
+  if storeX:
+    win.y = y
+    win.x = x+str.toRunes.width
+
+proc write*(win: var Window, y, x: int, str: seq[Rune], color: ColorPair = ColorPair.brightWhiteDefault, storeX: bool = true) =
+  write(win, y, x, $str, color, false)
+  if storeX:
+    win.y = y
+    win.x = x+str.width
 
 proc append*(win: var Window, str: string, color: ColorPair = ColorPair.brightWhiteDefault) =
   win.cursesWindow.wattron(int(ncurses.COLOR_PAIR(ord(color))))
-  mvwprintw(win.cursesWindow, win.y, win.x, str)
-  win.x += str.len
+  mvwprintw(win.cursesWindow, win.y, win.x, $str)
+  win.x += str.toRunes.width
+
+proc append*(win: var Window, str: seq[Rune], color: ColorPair = ColorPair.brightWhiteDefault) = append(win, $str, color)
   
 proc erase*(win: var Window) =
   werase(win.cursesWindow)
@@ -134,18 +145,31 @@ var KEY_ENTER {.header: "<ncurses.h>", importc: "KEY_ENTER".}: int
 var KEY_PPAGE {.header: "<ncurses.h>", importc: "KEY_PPAGE".}: int
 var KEY_NPAGE {.header: "<ncurses.h>", importc: "KEY_NPAGE".}: int
 
-proc getKey*(win: Window): int = return wgetch(win.cursesWindow)
+proc getKey*(win: Window): Rune =
+  var
+    s = ""
+    len: int
+  block getfirst:
+    let key = wgetch(win.cursesWindow)
+    if not (key <= 0x7F or (0xC2 <= key and key <= 0xF0) or key == 0xF3): return Rune(key)
+    s.add(char(key))
+    len = numberOfBytes(char(key))
+  for i in 0 ..< len-1: s.add(char(wgetch(win.cursesWindow)))
+  
+  let runes = toRunes(s)
+  doAssert(runes.len == 1, fmt"runes length shoud be 1.")
+  return runes[0]
 
-proc isEscKey*(key: int): bool = key == KEY_ESC
-proc isResizeKey*(key: int): bool = key == KEY_RESIZE
-proc isDownKey*(key: int): bool = key == KEY_DOWN
-proc isUpKey*(key: int): bool = key == KEY_UP
-proc isLeftKey*(key: int): bool = key == KEY_LEFT
-proc isRightKey*(key: int): bool = key == KEY_RIGHT
-proc isHomeKey*(key: int): bool = key == KEY_HOME
-proc isEndKey*(key: int): bool = key == KEY_END
-proc isBackspaceKey*(key: int): bool = key == KEY_BACKSPACE or key == 8 or key == 127
-proc isDcKey*(key: int): bool = key == KEY_DC
-proc isEnterKey*(key: int): bool = key == KEY_ENTER or key == ord('\n')
-proc isPageUpKey*(key: int): bool = key == KEY_PPAGE or key == 2
-proc isPageDownkey*(key: int): bool = key == KEY_NPAGE or key == 6
+proc isEscKey*(key: Rune): bool = key == KEY_ESC
+proc isResizeKey*(key: Rune): bool = key == KEY_RESIZE
+proc isDownKey*(key: Rune): bool = key == KEY_DOWN
+proc isUpKey*(key: Rune): bool = key == KEY_UP
+proc isLeftKey*(key: Rune): bool = key == KEY_LEFT
+proc isRightKey*(key: Rune): bool = key == KEY_RIGHT
+proc isHomeKey*(key: Rune): bool = key == KEY_HOME
+proc isEndKey*(key: Rune): bool = key == KEY_END
+proc isBackspaceKey*(key: Rune): bool = key == KEY_BACKSPACE or key == 8 or key == 127
+proc isDcKey*(key: Rune): bool = key == KEY_DC
+proc isEnterKey*(key: Rune): bool = key == KEY_ENTER or key == ord('\n')
+proc isPageUpKey*(key: Rune): bool = key == KEY_PPAGE or key == 2
+proc isPageDownkey*(key: Rune): bool = key == KEY_NPAGE or key == 6

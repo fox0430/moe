@@ -1,10 +1,10 @@
-import strutils, strformat, terminal, deques
-import editorstatus, editorview, cursor, ui, gapbuffer
+import strutils, strformat, terminal, deques, sequtils
+import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext
 
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.erase
 
-  status.commandWindow.write(0, 0, "debuf info: ")
+  status.commandWindow.write(0, 0, ru"debuf info: ")
   status.commandWindow.append(fmt"currentLine: {status.currentLine}, currentColumn: {status.currentColumn}")
   status.commandWindow.append(fmt", cursor.y: {status.cursor.y}, cursor.x: {status.cursor.x}")
   status.commandWindow.append(fmt", {str}")
@@ -41,7 +41,7 @@ proc keyDown*(status: var EditorStatus) =
 
 proc moveToFirstNonBlankOfLine(status: var EditorStatus) =
   status.currentColumn = 0
-  while status.buffer[status.currentLine][status.currentColumn] == ' ': inc(status.currentColumn)
+  while status.buffer[status.currentLine][status.currentColumn] == ru' ': inc(status.currentColumn)
   status.expandedColumn = status.currentColumn
 
 proc moveToFirstOfLine*(status: var EditorStatus) =
@@ -63,7 +63,7 @@ proc moveToFirstOfNextLine(status: var EditorStatus) =
   moveToFirstOfLine(status)
 
 proc deleteCurrentCharacter*(status: var EditorStatus) =
-  status.buffer[status.currentLine].delete(status.currentColumn, status.currentColumn)
+  status.buffer[status.currentLine].delete(status.currentColumn)
   if status.buffer[status.currentLine].len > 0 and status.currentColumn == status.buffer[status.currentLine].len:
     status.currentColumn = status.buffer[status.currentLine].len-1
     status.expandedColumn = status.buffer[status.currentLine].len-1
@@ -97,12 +97,10 @@ proc pageDown*(status: var EditorStatus) =
   let destination = min(status.currentLine + status.view.height, status.buffer.len - 1)
   jumpLine(status, destination)
 
-proc isPunct(c: char): bool = return c in {'!', '"', '#', '$', '%', '$', '\'', '(', ')', '*', '+', ',', '-', '.', '/', ':', ';', '<', '=', '>', '?', '@', '[', '\\', ']', '^', '_', '`', '{', '=', '}'}
-
 proc moveToForwardWord(status: var EditorStatus) =
   let
-    startWith = if status.buffer[status.currentLine].len == 0: '\n' else: status.buffer[status.currentLine][status.currentColumn]
-    isSkipped = if isPunct(startWith): isPunct elif isAlphaAscii(startWith): isAlphaAscii elif isDigit(startWith): isDigit else: nil
+    startWith = if status.buffer[status.currentLine].len == 0: ru'\n' else: status.buffer[status.currentLine][status.currentColumn]
+    isSkipped = if unicodeext.isPunct(startWith): unicodeext.isPunct elif unicodeext.isAlpha(startWith): unicodeext.isAlpha elif unicodeext.isDigit(startWith): unicodeext.isDigit else: nil
 
   if isSkipped == nil:
     (status.currentLine, status.currentColumn) = status.buffer.next(status.currentLine, status.currentColumn)
@@ -129,7 +127,7 @@ proc moveToForwardWord(status: var EditorStatus) =
       continue
 
     let curr = status.buffer[status.currentLine][status.currentColumn]
-    if isPunct(curr) or isAlphaAscii(curr) or isDigit(curr): break
+    if isPunct(curr) or isAlpha(curr) or isDigit(curr): break
     inc(status.currentColumn)
 
   status.expandedColumn = status.currentColumn
@@ -142,7 +140,7 @@ proc moveToBackwardWord(status: var EditorStatus) =
     if status.buffer[status.currentLine].len == 0 or status.buffer.isFirst(status.currentLine, status.currentColumn): break
 
     let curr = status.buffer[status.currentLine][status.currentColumn]
-    if isSpaceAscii(curr): continue
+    if unicodeext.isSpace(curr): continue
 
     if status.currentColumn == 0: break
 
@@ -151,19 +149,14 @@ proc moveToBackwardWord(status: var EditorStatus) =
       back = status.buffer[backLine][backColumn]
 
     let
-      currType = if isAlphaAscii(curr): 1 elif isDigit(curr): 2 elif isPunct(curr): 4 else: 0
-      backType = if isAlphaAscii(back): 1 elif isDigit(back): 2 elif isPunct(back): 4 else: 0
+      currType = if isAlpha(curr): 1 elif isDigit(curr): 2 elif isPunct(curr): 3 else: 0
+      backType = if isAlpha(back): 1 elif isDigit(back): 2 elif isPunct(back): 3 else: 0
     if currType != backType: break
 
   status.expandedColumn = status.currentColumn
 
-proc countRepeat*(s: string, charSet: set[char], start: int): int =
-  for i in start .. s.high:
-    if not (s[i] in charSet): break
-    inc(result)
-
 proc openBlankLineBelow(status: var EditorStatus) =
-  let indent = repeat(' ', countRepeat(status.buffer[status.currentLine], Whitespace, 0))
+  let indent = repeat(ru' ', countRepeat(status.buffer[status.currentLine], Whitespace, 0))
 
   status.buffer.insert(indent, status.currentLine+1)
   inc(status.currentLine)
@@ -173,7 +166,7 @@ proc openBlankLineBelow(status: var EditorStatus) =
   inc(status.countChange)
 
 proc openBlankLineAbove(status: var EditorStatus) =
-  let indent = repeat(' ', countRepeat(status.buffer[status.currentLine], Whitespace, 0))
+  let indent = repeat(ru' ', countRepeat(status.buffer[status.currentLine], Whitespace, 0))
 
   status.buffer.insert(indent, status.currentLine)
   status.currentColumn = indent.len
@@ -184,7 +177,7 @@ proc openBlankLineAbove(status: var EditorStatus) =
 proc deleteLine(status: var EditorStatus, line: int) =
   status.buffer.delete(line, line+1)
 
-  if status.buffer.len == 0: status.buffer.insert("", 0)
+  if status.buffer.len == 0: status.buffer.insert(ru"", 0)
 
   if line < status.currentLine: dec(status.currentLine)
   if status.currentLine >= status.buffer.len: status.currentLine = status.buffer.high
@@ -211,14 +204,13 @@ proc pasteLines(status: var EditorStatus) =
   status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
   inc(status.countChange)
 
-proc replaceCurrentCharacter(status: var EditorStatus, character: int) =
-  status.buffer[status.currentLine][status.currentColumn] = char(character)
+proc replaceCurrentCharacter(status: var EditorStatus, character: Rune) =
+  status.buffer[status.currentLine][status.currentColumn] = character
   status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)
 
 proc addIndent(status: var EditorStatus) =
-  for i in 0 ..< status.settings.tabStop:
-    status.buffer[status.currentLine].insert(" ", 0)
+  status.buffer[status.currentLine].insert(newSeqWith(status.settings.tabStop, ru' '))
 
   status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)
@@ -226,9 +218,9 @@ proc addIndent(status: var EditorStatus) =
 proc deleteIndent(status: var EditorStatus) =
   if status.buffer.len == 0: return
 
-  if status.buffer[status.currentLine][0] == ' ':
+  if status.buffer[status.currentLine][0] == ru' ':
     for i in 0 ..< status.settings.tabStop:
-      if status.buffer.len == 0 or status.buffer[status.currentLine][0] != ' ': break
+      if status.buffer.len == 0 or status.buffer[status.currentLine][0] != ru' ': break
       status.buffer[status.currentLine].delete(0, 0)
   status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)
@@ -237,14 +229,13 @@ proc joinLine(status: var EditorStatus) =
   if status.currentLine == status.buffer.len - 1 or status.buffer[status.currentLine + 1].len < 1:
     return
 
-  for i in 0 ..< status.buffer[status.currentLine + 1].len:
-    status.buffer[status.currentLine].insert($status.buffer[status.currentLine + 1][i], status.buffer[status.currentLine].len)
+  status.buffer[status.currentLine].add(status.buffer[status.currentLine+1])
   status.buffer.delete(status.currentLine + 1, status.currentLine + 2)
 
   status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
   inc(status.countChange)
 
-proc normalCommand(status: var EditorStatus, key: int) =
+proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.cmdLoop == 0: status.cmdLoop = 1
   
   if key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
@@ -334,14 +325,14 @@ proc normalMode*(status: var EditorStatus) =
       status.resize
     elif key == ord(':'):
       status.changeMode(Mode.ex)
-    elif key in 0..255 and isDigit(chr(key)):
-      if status.cmdLoop == 0 and key == ord('0'):
+    elif isDigit(key):
+      let num = ($key)[0]
+      if status.cmdLoop == 0 and num == '0':
         normalCommand(status, key)
-        discard
         continue
 
       status.cmdLoop *= 10
-      status.cmdLoop += key-ord('0')
+      status.cmdLoop += ord(num)-ord('0')
       status.cmdLoop = min(100000, status.cmdLoop)
       continue
     else:
