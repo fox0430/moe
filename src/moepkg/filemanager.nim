@@ -1,6 +1,7 @@
 import os
 import sequtils
 import terminal
+import strformat
 import strutils
 import editorstatus
 import ui
@@ -8,17 +9,17 @@ import fileutils
 import editorview
 import gapbuffer
 import exmode
+import unicodeext
 
 proc deleteFile(status: var EditorStatus, dirList: seq[(PathComponent, string)], currentLine: int) =
-
-  let command = getCommand(status.commandWindow, proc (window: var Window, command: string) =
+  let command = getCommand(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
     window.erase
-    window.write(0, 0, "Delete file? 'y' or 'n': "&command)
+    window.write(0, 0, fmt"Delete file? 'y' or 'n': {$command}")
     window.refresh
   )
 
 
-  if (command[0] == "y" or command[0] == "yes") and command.len == 1:
+  if (command[0] == ru"y" or command[0] == ru"yes") and command.len == 1:
     if dirList[currentLine][0] == pcDir:
       removeDir(dirList[currentLine][1])
     else:
@@ -37,7 +38,6 @@ proc refreshDirList(): seq[(PathComponent, string)] =
     result.add list
 
 proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
-  var ch = newStringOfCap(1)
   for i in 0 ..< dirList.len:
     for j in 0 ..< dirList[i][1].len:
       if j > terminalWidth() - 2:
@@ -49,7 +49,7 @@ proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], cur
           win.write(i, j, "~")
         break
       else:
-        ch[0] = dirList[i][1][j]
+        let ch = $dirList[i][1][j]
         if i == currentLine:
           win.write(i, j, ch, brightWhiteGreen)
         elif dirList[i][0] == pcDir:
@@ -68,7 +68,6 @@ proc filerMode*(status: var EditorStatus) =
   var viewUpdate = true
   var DirlistUpdate = true
   var dirList = newSeq[(PathComponent, string)]()
-  var key: int 
   var currentLine = 0
 
   while status.mode == Mode.filer:
@@ -84,18 +83,18 @@ proc filerMode*(status: var EditorStatus) =
       status.mainWindow.writeFillerView(dirList, currentLine)
       viewUpdate = false
 
-    key = getKey(status.mainWindow)
+    let key = getKey(status.mainWindow)
     if key == ord(':'):
       status.changeMode(Mode.ex)
     elif isResizekey(key):
       status.resize
       viewUpdate = true
 
-    elif key == ord('D'):
+    elif key == 'D':
       deleteFile(status, dirList, currentLine)
       DirlistUpdate = true
       viewUpdate = true
-    elif (key == ord('j') or isDownKey(key)) and currentLine < dirList.len - 1:
+    elif (key == 'j' or isDownKey(key)) and currentLine < dirList.len - 1:
       inc(currentLine)
       viewUpdate = true
     elif (key == ord('k') or isUpKey(key)) and 0 < currentLine:
@@ -104,7 +103,7 @@ proc filerMode*(status: var EditorStatus) =
     elif isEnterKey(key):
       if dirList[currentLine][0] == pcFile:
         status = initEditorStatus()
-        status.filename = dirList[currentLine][1]
+        status.filename = dirList[currentLine][1].toRunes
         status.buffer = openFile(status.filename)
         status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
         setCursor(true)
