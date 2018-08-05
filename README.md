@@ -22,8 +22,9 @@ This project's goal is a funny animation editor.
 
 - Simple auto indent  
 
+- UTF-8 and other encodings support (Incomplete)
+
 ## Planned features
-- UTF-8 and other encodings support
 
 - Syntax highlighting  
 
