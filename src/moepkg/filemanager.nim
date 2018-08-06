@@ -37,30 +37,97 @@ proc refreshDirList(): seq[(PathComponent, string)] =
   for list in walkDir("./"):
     result.add list
 
+proc writeFileNameCurrentLine(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
+  for j in 2 ..< dirList[currentLine][1].len:
+    let ch = $dirList[currentLine][1][j]
+    win.write(currentLine, j - 2, ch, brightWhiteGreen)
+
+proc writeDirNameCurrentLine(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
+  if currentLine == 0:    # "../"
+    win.write(currentLine, 0, dirList[currentLine][1], brightWhiteGreen)
+  else:
+    for j in 2 ..< dirList[currentLine][1].len:
+      let ch = $dirList[currentLine][1][j]
+      win.write(currentLine, j - 2, ch, brightWhiteGreen)
+    win.write(currentLine, dirList[currentLine][1].len - 2, "/", brightWhiteGreen)
+
+proc writeFileNameHalfwayCurrentLine(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
+  for j in 2 ..< terminalWidth():
+    var ch = $dirList[currentLine][1][j]
+    win.write(currentLine, j - 2, ch, brightWhiteGreen)
+  win.write(currentLine, terminalWidth() - 2, "~", brightWhiteGreen)
+
+proc writeDirNameHalfwayCurrentLine(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
+  if currentLine== 0:    # "../"
+    for j in 0 ..< terminalWidth():
+      let ch = $dirList[currentLine][1][j]
+      win.write(currentLine, j, ch, brightWhiteGreen)
+    win.write(currentLine, terminalWidth() - 2, "/~", brightWhiteGreen)
+  else:
+    for j in 2 ..< terminalWidth():
+      let ch = $dirList[currentLine][1][j]
+      win.write(currentLine, j - 2, ch, brightWhiteGreen)
+    win.write(currentLine, terminalWidth() - 2, "/~", brightWhiteGreen)
+
+proc writeFileName(win: var Window, index: int, dirList: seq[(PathComponent, string)]) =
+  for j in 2 ..< dirList[index][1].len:
+    let ch = $dirList[index][1][j]
+    win.write(index, j - 2, ch)
+
+proc writeDirName(win: var Window, index: int, dirList: seq[(PathComponent, string)]) =
+  if index == 0:    # "../"
+    win.write(index, 0, dirList[index][1], brightGreenDefault)
+  else:
+    for j in 2 ..< dirList[index][1].len:
+      let ch = $dirList[index][1][j]
+      win.write(index, j - 2, ch, brightGreenDefault)
+    win.write(index, dirList[index][1].len - 2, "/", brightGreenDefault)
+
+proc writeFileNameHalfway(win: var Window, index: int, dirList: seq[(PathComponent, string)]) =
+  for j in 2 ..< terminalWidth():
+    var ch = $dirList[index][1][j]
+    win.write(index, j - 2, ch)
+  win.write(index, terminalWidth() - 2, "~")
+
+proc writeDirNameHalfway(win: var Window, index: int, dirList: seq[(PathComponent, string)]) =
+  if index == 0:    # "../"
+    for j in 0 ..< terminalWidth():
+      let ch = $dirList[index][1][j]
+      win.write(index, j, ch, brightGreenDefault)
+    win.write(index, terminalWidth() - 2, "/~", brightGreenDefault)
+  else:
+    for j in 2 ..< terminalWidth():
+      let ch = $dirList[index][1][j]
+      win.write(index, j - 2, ch, brightGreenDefault)
+    win.write(index, terminalWidth() - 2, "/~", brightGreenDefault)
+
 proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
+
   for i in 0 ..< dirList.len:
-    for j in 0 ..< dirList[i][1].len:
-      if j > terminalWidth() - 2:
-        if i == currentLine:
-          win.write(i, j, "~", brightWhiteGreen)
-        elif dirList[i][0] == pcDir:
-          win.write(i, j, "~", brightGreenDefault)
-        else:
-          win.write(i, j, "~")
-        break
-      else:
-        let ch = $dirList[i][1][j]
-        if i == currentLine:
-          win.write(i, j, ch, brightWhiteGreen)
-        elif dirList[i][0] == pcDir:
-          win.write(i, j, ch, brightGreenDefault)
-        else:
-          win.write(i, j, ch)
-        if j == dirList[i][1].len - 1 and i != 0 and dirList[i][0] == pcDir:
-          if i == currentLine:
-            win.write(i, j + 1, "/", brightWhiteGreen)
-          else:
-            win.write(i, j + 1, "/", brightGreenDefault)
+    let index = i
+    if dirList[i][1].len > terminalWidth():
+      if dirList[i][0] == pcFile:
+        writeFileNameHalfway(win, index, dirList)
+      elif dirList[i][0] == pcDir:
+        writeDirNameHalfway(win, index, dirList)
+    else:
+      if dirList[i][0] == pcFile:
+        writeFileName(win, index, dirList)
+      elif dirList[i][0] == pcDir:
+        writeDirName(win, index, dirList)
+
+  # write current line
+  if dirList[currentLine][1].len > terminalWidth():
+    if dirList[currentLine][0] == pcFile:
+      writeFileNameHalfwayCurrentLine(win, dirList, currentLine)
+    elif dirList[currentLine][0] == pcDir:
+      writeDirNameHalfwayCurrentLine(win, dirList, currentLine)
+  else:
+    if dirList[currentLine][0] == pcFile:
+      writeFileNameCurrentLine(win, dirList, currentLine)
+    elif dirList[currentLine][0] == pcDir:
+      writeDirNameCurrentLine(win, dirList, currentLine)
+    
   win.refresh
 
 proc filerMode*(status: var EditorStatus) =
