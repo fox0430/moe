@@ -38,68 +38,41 @@ proc refreshDirList(): seq[(PathComponent, string)] =
     result.add list
 
 proc writeFileNameCurrentLine(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
-  for j in 2 ..< dirList[currentLine][1].len:
-    let ch = $dirList[currentLine][1][j]
-    win.write(currentLine, j - 2, ch, brightWhiteGreen)
+  win.write(currentLine, 0, substr(dirList[currentLine][1], 2), brightWhiteGreen)
 
 proc writeDirNameCurrentLine(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
   if currentLine == 0:    # "../"
     win.write(currentLine, 0, dirList[currentLine][1], brightWhiteGreen)
   else:
-    for j in 2 ..< dirList[currentLine][1].len:
-      let ch = $dirList[currentLine][1][j]
-      win.write(currentLine, j - 2, ch, brightWhiteGreen)
-    win.write(currentLine, dirList[currentLine][1].len - 2, "/", brightWhiteGreen)
+    win.write(currentLine, 0, substr(dirList[currentLine][1], 2) & "/", brightWhiteGreen)
 
 proc writeFileNameHalfwayCurrentLine(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
-  for j in 2 ..< terminalWidth():
-    var ch = $dirList[currentLine][1][j]
-    win.write(currentLine, j - 2, ch, brightWhiteGreen)
-  win.write(currentLine, terminalWidth() - 2, "~", brightWhiteGreen)
+  win.write(currentLine, 0, substr(dirList[currentLine][1], 2, terminalWidth()), brightWhiteGreen)
 
 proc writeDirNameHalfwayCurrentLine(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
   if currentLine== 0:    # "../"
-    for j in 0 ..< terminalWidth():
-      let ch = $dirList[currentLine][1][j]
-      win.write(currentLine, j, ch, brightWhiteGreen)
-    win.write(currentLine, terminalWidth() - 2, "/~", brightWhiteGreen)
+    win.write(currentLine, 0, substr(dirList[currentLine][1], 2, terminalWidth()), brightWhiteGreen)
   else:
-    for j in 2 ..< terminalWidth():
-      let ch = $dirList[currentLine][1][j]
-      win.write(currentLine, j - 2, ch, brightWhiteGreen)
-    win.write(currentLine, terminalWidth() - 2, "/~", brightWhiteGreen)
+    win.write(currentLine, 0, substr(dirList[currentLine][1], 2, terminalWidth()) & "/~", brightWhiteGreen)
 
 proc writeFileName(win: var Window, index: int, dirList: seq[(PathComponent, string)]) =
-  for j in 2 ..< dirList[index][1].len:
-    let ch = $dirList[index][1][j]
-    win.write(index, j - 2, ch)
+  win.write(index, 0, substr(dirList[index][1], 2))
 
 proc writeDirName(win: var Window, index: int, dirList: seq[(PathComponent, string)]) =
   if index == 0:    # "../"
     win.write(index, 0, dirList[index][1], brightGreenDefault)
   else:
-    for j in 2 ..< dirList[index][1].len:
-      let ch = $dirList[index][1][j]
-      win.write(index, j - 2, ch, brightGreenDefault)
-    win.write(index, dirList[index][1].len - 2, "/", brightGreenDefault)
+    win.write(index, 0, substr(dirList[index][1], 2) & "/", brightGreenDefault)
 
 proc writeFileNameHalfway(win: var Window, index: int, dirList: seq[(PathComponent, string)]) =
-  for j in 2 ..< terminalWidth():
-    var ch = $dirList[index][1][j]
-    win.write(index, j - 2, ch)
-  win.write(index, terminalWidth() - 2, "~")
+  win.write(index, 0, substr(dirList[index][1], 2, terminalWidth() - 2) & "~")
 
 proc writeDirNameHalfway(win: var Window, index: int, dirList: seq[(PathComponent, string)]) =
   if index == 0:    # "../"
-    for j in 0 ..< terminalWidth():
-      let ch = $dirList[index][1][j]
-      win.write(index, j, ch, brightGreenDefault)
-    win.write(index, terminalWidth() - 2, "/~", brightGreenDefault)
+    win.write(index, 0, substr(dirList[index][1], 0, terminalWidth() - 2) & "~", brightGreenDefault)
   else:
-    for j in 2 ..< terminalWidth():
-      let ch = $dirList[index][1][j]
-      win.write(index, j - 2, ch, brightGreenDefault)
-    win.write(index, terminalWidth() - 2, "/~", brightGreenDefault)
+    win.write(index, 0, substr(dirList[index][1], 2, terminalWidth() - 2) & "/~", brightGreenDefault)
+    
 
 proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
 
