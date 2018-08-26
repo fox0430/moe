@@ -94,14 +94,14 @@ proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], cur
         writeFileNameHalfway(win, index, dirList)
       elif dirList[i][0] == pcDir:
         writeDirNameHalfway(win, index, dirList)
-      elif dirList[i][0] == pcLinkToDir:
+      elif dirList[i][0] == pcLinkToDir or dirList[i][0] == pcLinkToFile:
         writePcLinkToDirNameHalfway(win, index, dirList)
     else:
       if dirList[i][0] == pcFile:
         writeFileName(win, index, dirList)
       elif dirList[i][0] == pcDir:
         writeDirName(win, index, dirList)
-      elif dirList[i][0] == pcLinkToDir:
+      elif dirList[i][0] == pcLinkToDir or dirList[i][0] == pcLinkToFile:
         writePcLinkToDirName(win, index, dirList)
 
   # write current line
@@ -110,14 +110,14 @@ proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], cur
       writeFileNameHalfwayCurrentLine(win, dirList, currentLine)
     elif dirList[currentLine][0] == pcDir:
       writeDirNameHalfwayCurrentLine(win, dirList, currentLine)
-    elif dirList[currentLine][0] == pcLinkToDir:
+    elif dirList[currentLine][0] == pcLinkToDir or dirList[currentLine][0] == pcLinkToFile:
       writePcLinkToDirNameHalfwayCurrentLine(win, dirList, currentLine)
   else:
     if dirList[currentLine][0] == pcFile:
       writeFileNameCurrentLine(win, dirList, currentLine)
     elif dirList[currentLine][0] == pcDir:
       writeDirNameCurrentLine(win, dirList, currentLine)
-    elif dirList[currentLine][0] == pcLinkToDir:
+    elif dirList[currentLine][0] == pcLinkToDir or dirList[currentLine][0] == pcLinkToFile:
       writePcLinkToDirNameCurrentLine(win, dirList, currentLine)
     
   win.refresh
