@@ -170,4 +170,8 @@ proc filerMode*(status: var EditorStatus) =
         setCurrentDir(dirList[currentLine][1])
         currentLine = 0
         DirlistUpdate = true
+      elif dirList[currentLine][0] == pcLinkToDir:
+        setCurrentDir(expandsymLink(dirList[currentLine][1]))
+        currentLine = 0
+        DirlistUpdate = true
   setCursor(true)
