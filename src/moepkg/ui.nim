@@ -28,6 +28,8 @@ type ColorPair* = enum
   brightGreenDefault = 7
   lightBlueDefault = 8
   brightWhiteGreen = 9
+  cyanDefault = 10
+  whiteCyan = 11
 
 type Window* = object
   cursesWindow*: ptr window
@@ -50,6 +52,8 @@ proc setCursesColor() =
   setColorPair(ColorPair.brightGreenDefault, Color.brightGreen, Color.default)
   setColorPair(ColorPair.lightBlueDefault, Color.lightBlue, Color.default)
   setColorPair(ColorPair.brightWhiteGreen, Color.brightWhite, Color.green)
+  setColorPair(ColorPair.cyanDefault, Color.cyan, Color.default)
+  setColorPair(ColorPair.whiteCyan, Color.white, Color.cyan)
 
 proc restoreTerminalModes*() =
   reset_prog_mode()

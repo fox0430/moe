@@ -18,7 +18,6 @@ proc deleteFile(status: var EditorStatus, dirList: seq[(PathComponent, string)],
     window.refresh
   )
 
-
   if (command[0] == ru"y" or command[0] == ru"yes") and command.len == 1:
     if dirList[currentLine][0] == pcDir:
       removeDir(dirList[currentLine][1])
@@ -46,14 +45,20 @@ proc writeDirNameCurrentLine(win: var Window, dirList: seq[(PathComponent, strin
   else:
     win.write(currentLine, 0, substr(dirList[currentLine][1], 2) & "/", brightWhiteGreen)
 
+proc writePcLinkToDirNameCurrentLine(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
+  win.write(currentLine, 0, substr(dirList[currentLine][1], 2) & "@", whiteCyan)
+
 proc writeFileNameHalfwayCurrentLine(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
-  win.write(currentLine, 0, substr(dirList[currentLine][1], 2, terminalWidth()), brightWhiteGreen)
+  win.write(currentLine, 0, substr(dirList[currentLine][1], 2, terminalWidth() - 2), brightWhiteGreen)
 
 proc writeDirNameHalfwayCurrentLine(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
   if currentLine== 0:    # "../"
-    win.write(currentLine, 0, substr(dirList[currentLine][1], 2, terminalWidth()), brightWhiteGreen)
+    win.write(currentLine, 0, substr(dirList[currentLine][1], 2, terminalWidth() - 2), brightWhiteGreen)
   else:
-    win.write(currentLine, 0, substr(dirList[currentLine][1], 2, terminalWidth()) & "/~", brightWhiteGreen)
+    win.write(currentLine, 0, substr(dirList[currentLine][1], 2, terminalWidth() - 2) & "/~", brightWhiteGreen)
+
+proc writePcLinkToDirNameHalfwayCurrentLine(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
+  win.write(currentLine, 0, substr(dirList[currentLine][1], 2, terminalWidth() - 2) & "@~", whiteCyan)
 
 proc writeFileName(win: var Window, index: int, dirList: seq[(PathComponent, string)]) =
   win.write(index, 0, substr(dirList[index][1], 2))
@@ -64,6 +69,9 @@ proc writeDirName(win: var Window, index: int, dirList: seq[(PathComponent, stri
   else:
     win.write(index, 0, substr(dirList[index][1], 2) & "/", brightGreenDefault)
 
+proc writePcLinkToDirName(win: var Window, index: int, dirList: seq[(PathComponent, string)]) =
+  win.write(index, 0, substr(dirList[index][1], 2) & "@", cyanDefault)
+
 proc writeFileNameHalfway(win: var Window, index: int, dirList: seq[(PathComponent, string)]) =
   win.write(index, 0, substr(dirList[index][1], 2, terminalWidth() - 2) & "~")
 
@@ -72,7 +80,10 @@ proc writeDirNameHalfway(win: var Window, index: int, dirList: seq[(PathComponen
     win.write(index, 0, substr(dirList[index][1], 0, terminalWidth() - 2) & "~", brightGreenDefault)
   else:
     win.write(index, 0, substr(dirList[index][1], 2, terminalWidth() - 2) & "/~", brightGreenDefault)
-    
+
+proc writePcLinkToDirNameHalfway(win: var Window, index: int, dirList: seq[(PathComponent, string)]) =
+  win.write(index, 0, substr(dirList[index][1], 2, terminalWidth() - 2) & "@~", cyanDefault)
+
 
 proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], currentLine: int) =
 
@@ -83,11 +94,15 @@ proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], cur
         writeFileNameHalfway(win, index, dirList)
       elif dirList[i][0] == pcDir:
         writeDirNameHalfway(win, index, dirList)
+      elif dirList[i][0] == pcLinkToDir:
+        writePcLinkToDirNameHalfway(win, index, dirList)
     else:
       if dirList[i][0] == pcFile:
         writeFileName(win, index, dirList)
       elif dirList[i][0] == pcDir:
         writeDirName(win, index, dirList)
+      elif dirList[i][0] == pcLinkToDir:
+        writePcLinkToDirName(win, index, dirList)
 
   # write current line
   if dirList[currentLine][1].len > terminalWidth():
@@ -95,11 +110,15 @@ proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], cur
       writeFileNameHalfwayCurrentLine(win, dirList, currentLine)
     elif dirList[currentLine][0] == pcDir:
       writeDirNameHalfwayCurrentLine(win, dirList, currentLine)
+    elif dirList[currentLine][0] == pcLinkToDir:
+      writePcLinkToDirNameHalfwayCurrentLine(win, dirList, currentLine)
   else:
     if dirList[currentLine][0] == pcFile:
       writeFileNameCurrentLine(win, dirList, currentLine)
     elif dirList[currentLine][0] == pcDir:
       writeDirNameCurrentLine(win, dirList, currentLine)
+    elif dirList[currentLine][0] == pcLinkToDir:
+      writePcLinkToDirNameCurrentLine(win, dirList, currentLine)
     
   win.refresh
 
