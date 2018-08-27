@@ -174,4 +174,10 @@ proc filerMode*(status: var EditorStatus) =
         setCurrentDir(expandsymLink(dirList[currentLine][1]))
         currentLine = 0
         DirlistUpdate = true
+      elif dirList[currentLine][0] == pcLinkToFile:
+        status = initEditorStatus()
+        status.filename = toRunes(expandsymLink(dirList[currentLine][1]))
+        status.buffer = openFile(status.filename)
+        status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
+        setCursor(true)
   setCursor(true)
