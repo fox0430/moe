@@ -101,7 +101,7 @@ proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], cur
         writeFileName(win, index, startIndex, dirList)
       elif dirList[index + startIndex][0] == pcDir:
         writeDirName(win, index, startIndex, dirList)
-      elif dirList[index + startIndex][0] == pcLinkToDir or dirList[i][0] == pcLinkToFile:
+      elif dirList[index + startIndex][0] == pcLinkToDir or dirList[index + startIndex][0] == pcLinkToFile:
         writePcLinkToDirName(win, index, startIndex, dirList)
 
   # write current line
