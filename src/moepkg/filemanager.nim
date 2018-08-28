@@ -40,7 +40,7 @@ proc writeFileNameCurrentLine(win: var Window, dirList: seq[(PathComponent, stri
   win.write(currentLine, 0, substr(dirList[currentLine + startIndex][1], 2), brightWhiteGreen)
 
 proc writeDirNameCurrentLine(win: var Window, dirList: seq[(PathComponent, string)], currentLine, startIndex: int) =
-  if currentLine == 0:    # "../"
+  if currentLine == 0 and startIndex == 0:    # "../"
     win.write(currentLine, 0, dirList[currentLine][1], brightWhiteGreen)
   else:
     win.write(currentLine, 0, substr(dirList[currentLine + startIndex][1], 2) & "/", brightWhiteGreen)
@@ -160,8 +160,11 @@ proc filerMode*(status: var EditorStatus) =
       else:
         inc(currentLine)
       viewUpdate = true
-    elif (key == ord('k') or isUpKey(key)) and 0 < currentLine:
-      dec(currentLine)
+    elif (key == ord('k') or isUpKey(key)) and (0 < currentLine or 0 < startIndex):
+      if 0 < startIndex and currentLine == 0:
+        dec(startIndex)
+      else:
+        dec(currentLine)
       viewUpdate = true
     elif isEnterKey(key):
       if dirList[currentLine][0] == pcFile:
