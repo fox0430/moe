@@ -79,17 +79,17 @@ proc writeStatusBar*(status: var EditorStatus) =
   status.statusWindow.write(0, terminalWidth()-line.len-column.len-2, fmt"{line} {column}", ui.Colorpair.blackGreen)
   status.statusWindow.refresh
 
-proc resize*(status: var EditorStatus) =
+proc resize*(status: var EditorStatus, height, width: int) =
   let
-    height = max(terminalHeight(), 4)
-    width = max(terminalWidth(), status.view.widthOfLineNum+4)
+    adjustedHeight = max(height, 4)
+    adjustedWidth = max(width, status.view.widthOfLineNum+4)
  
-  resize(status.mainWindow, height-2, width, 0, 0)
-  resize(status.statusWindow, 1, width, height-2, 0)
-  resize(status.commandWindow, 1, width, height-1, 0)
+  resize(status.mainWindow, adjustedHeight-2, adjustedWidth, 0, 0)
+  resize(status.statusWindow, 1, adjustedWidth, adjustedHeight-2, 0)
+  resize(status.commandWindow, 1, adjustedWidth, adjustedHeight-1, 0)
   
   if status.mode != Mode.filer:
-    status.view.resize(status.buffer, height-2, width-status.view.widthOfLineNum-1, status.view.widthOfLineNum)
+    status.view.resize(status.buffer, adjustedHeight-2, adjustedWidth-status.view.widthOfLineNum-1, status.view.widthOfLineNum)
     status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
   writeStatusBar(status)

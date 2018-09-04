@@ -1,4 +1,4 @@
-import deques, strutils, strformat, sequtils
+import deques, strutils, strformat, sequtils, terminal
 from os import execShellCmd
 import ui, editorstatus, editorview, cursor, gapbuffer, editorview, normalmode, unicodeext
 
@@ -49,7 +49,7 @@ proc insertIndent(status: var EditorStatus) =
   let indent = min(countRepeat(status.buffer[status.currentLine], Whitespace, 0), status.currentColumn)
   status.buffer[status.currentLine+1] &= repeat(' ', indent).toRunes
 
-proc keyEnter(status: var EditorStatus) =
+proc keyEnter*(status: var EditorStatus) =
   status.buffer.insert(ru"", status.currentLine+1)
   if status.settings.autoIndent:
     insertIndent(status)
@@ -87,7 +87,7 @@ proc insertMode*(status: var EditorStatus) =
     let key = getKey(status.mainWindow)
 
     if isResizekey(key):
-      status.resize
+      status.resize(terminalHeight(), terminalWidth())
     elif isEscKey(key):
       if status.currentColumn > 0: dec(status.currentColumn)
       status.expandedColumn = status.currentColumn

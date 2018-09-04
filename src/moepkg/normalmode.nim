@@ -314,7 +314,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
 
 proc normalMode*(status: var EditorStatus) =
   status.cmdLoop = 0
-  status.resize
+  status.resize(terminalHeight(), terminalWidth())
   
   while status.mode == Mode.normal:
     status.update
@@ -322,7 +322,7 @@ proc normalMode*(status: var EditorStatus) =
     let key = getKey(status.mainWindow)
 
     if isResizekey(key):
-      status.resize
+      status.resize(terminalHeight(), terminalWidth())
     elif key == ord(':'):
       status.changeMode(Mode.ex)
     elif isDigit(key):

@@ -147,7 +147,7 @@ proc filerMode*(status: var EditorStatus) =
     if key == ord(':'):
       status.changeMode(Mode.ex)
     elif isResizekey(key):
-      status.resize
+      status.resize(terminalHeight(), terminalWidth())
       viewUpdate = true
 
     elif key == 'D':
