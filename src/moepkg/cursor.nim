@@ -1,4 +1,4 @@
-import deques
+import deques, strformat
 import editorview, unicodeext
 
 type CursorPosition* = object
@@ -18,7 +18,7 @@ proc updatePosition(cursor: var CursorPosition, view: EditorView, line, column: 
         inc(cursor.y)
         cursor.x = 0
       return
-  doAssert(false, "Failed to update cursorPosition")
+  doAssert(false, fmt"Failed to update cursorPosition: (y, x) = ({line}, {column}), originalLine = {view.originalLine}, start = {view.start}, length = {view.length}, lines = {view.lines}, height = {view.height}, width = {view.width}")
 
 proc update*(cursor: var CursorPosition, view: EditorView, line, column: int) =
   cursor.updatePosition(view, line, column)
