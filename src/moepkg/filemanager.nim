@@ -169,7 +169,7 @@ proc filerMode*(status: var EditorStatus) =
     elif isEnterKey(key):
       if dirList[currentLine][0] == pcFile:
         status = initEditorStatus()
-        status.filename = dirList[currentLine][1].toRunes
+        status.filename = substr(dirList[currentLine][1], 2).toRunes
         status.buffer = openFile(status.filename)
         status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
         setCursor(true)
