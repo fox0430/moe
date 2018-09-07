@@ -1,7 +1,11 @@
 import unicode, strutils, sequtils
+import unicodedb/widths
 export unicode
 
-proc width*(c: Rune): int = return if int32(c) <= 127: 1 else: 2
+proc width*(c: Rune): int =
+  case c.unicodeWidth
+  of UnicodeWidth.uwdtNarrow, UnicodeWidth.uwdtHalf, UnicodeWidth.uwdtAmbiguous, UnicodeWidth.uwdtNeutral: 1
+  else: 2
 
 proc width*(runes: seq[Rune]): int =
   for c in runes: result += width(c)
