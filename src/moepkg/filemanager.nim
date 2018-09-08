@@ -36,57 +36,55 @@ proc refreshDirList(): seq[(PathComponent, string)] =
   for list in walkDir("./"):
     result.add list
 
-proc writeFileNameCurrentLine(win: var Window, dirList: seq[(PathComponent, string)], currentLine, startIndex: int) =
-  win.write(currentLine, 0, substr(dirList[currentLine + startIndex][1], 2), brightWhiteGreen)
+proc writeFileNameCurrentLine(win: var Window, fileName: string , currentLine: int) =
+  win.write(currentLine, 0, substr(fileName, 2), brightWhiteGreen)
 
-proc writeDirNameCurrentLine(win: var Window, dirList: seq[(PathComponent, string)], currentLine, startIndex: int) =
-  if currentLine == 0 and startIndex == 0:    # "../"
-    win.write(currentLine, 0, dirList[currentLine][1], brightWhiteGreen)
+proc writeDirNameCurrentLine(win: var Window, fileName: string, currentLine: int) =
+  if fileName == "../":
+    win.write(currentLine, 0, fileName, brightWhiteGreen)
   else:
-    win.write(currentLine, 0, substr(dirList[currentLine + startIndex][1], 2) & "/", brightWhiteGreen)
+    win.write(currentLine, 0, substr(fileName, 2) & "/", brightWhiteGreen)
 
-proc writePcLinkToDirNameCurrentLine(win: var Window, dirList: seq[(PathComponent, string)], currentLine, startIndex: int) =
-  win.write(currentLine, 0, substr(dirList[currentLine + startIndex][1], 2) & "@ -> " & expandsymLink(dirList[currentLine + startIndex][1]), whiteCyan)
+proc writePcLinkToDirNameCurrentLine(win: var Window, fileName: string, currentLine: int) =
+  win.write(currentLine, 0, substr(fileName, 2) & "@ -> " & expandsymLink(fileName), whiteCyan)
 
-proc writeFileNameHalfwayCurrentLine(win: var Window, dirList: seq[(PathComponent, string)], currentLine, startIndex: int) =
-  win.write(currentLine, 0, substr(dirList[currentLine + startIndex][1], 2, terminalWidth() - 2), brightWhiteGreen)
+proc writeFileNameHalfwayCurrentLine(win: var Window, fileName: string, currentLine: int) =
+  win.write(currentLine, 0, substr(fileName, 2, terminalWidth() - 2), brightWhiteGreen)
 
-proc writeDirNameHalfwayCurrentLine(win: var Window, dirList: seq[(PathComponent, string)], currentLine, startIndex: int) =
+proc writeDirNameHalfwayCurrentLine(win: var Window, fileName: string, currentLine: int) =
   if currentLine== 0:    # "../"
-    win.write(currentLine, 0, substr(dirList[currentLine][1], 2, terminalWidth() - 2), brightWhiteGreen)
+    win.write(currentLine, 0, substr(fileName, 2, terminalWidth() - 2), brightWhiteGreen)
   else:
-    win.write(currentLine, 0, substr(dirList[currentLine + startIndex][1], 2, terminalWidth() - 2) & "/~", brightWhiteGreen)
+    win.write(currentLine, 0, substr(fileName, 2, terminalWidth() - 2) & "/~", brightWhiteGreen)
 
-proc writePcLinkToDirNameHalfwayCurrentLine(win: var Window, dirList: seq[(PathComponent, string)], currentLine, startIndex: int) =
-  #win.write(currentLine, 0, substr(dirList[currentLine + startIndex][1], 2, terminalWidth() - 2) & "@~", whiteCyan)
-  let buffer = substr(dirList[currentLine + startIndex][1], 2) & "@ -> " & expandsymLink(dirList[currentLine + startIndex][1])
-  win.write(currentLine, 0, substr(buffer, 0, terminalWidth() - 2) & "~", whiteCyan)
+proc writePcLinkToDirNameHalfwayCurrentLine(win: var Window, fileName: string, currentLine: int) =
+  let buffer = substr(fileName, 2) & "@ -> " & expandsymLink(fileName)
+  win.write(currentLine, 0, substr(buffer, 0, terminalWidth() - 4) & "~", whiteCyan)
 
-proc writeFileName(win: var Window, index, startIndex: int, dirList: seq[(PathComponent, string)]) =
-  win.write(index, 0, substr(dirList[index + startIndex][1], 2))
+proc writeFileName(win: var Window, currentLine: int, fileName: string) =
+  win.write(currentLine, 0, substr(fileName, 2))
 
-proc writeDirName(win: var Window, index, startIndex: int, dirList: seq[(PathComponent, string)]) =
-  if index == 0:    # "../"
-    win.write(index, 0, dirList[index][1], brightGreenDefault)
+proc writeDirName(win: var Window, currentLine: int, fileName: string) =
+  if fileName == "../":
+    win.write(currentLine, 0, fileName, brightGreenDefault)
   else:
-    win.write(index, 0, substr(dirList[index + startIndex][1], 2) & "/", brightGreenDefault)
+    win.write(currentLine, 0, substr(fileName, 2) & "/", brightGreenDefault)
 
-proc writePcLinkToDirName(win: var Window, index, startIndex: int, dirList: seq[(PathComponent, string)]) =
-  win.write(index, 0, substr(dirList[index + startIndex][1], 2) & "@ -> " & expandsymLink(dirList[index + startIndex][1]), cyanDefault)
+proc writePcLinkToDirName(win: var Window, currentLine: int, fileName: string) =
+  win.write(currentLine, 0, substr(fileName, 2) & "@ -> " & expandsymLink(fileName), cyanDefault)
 
-proc writeFileNameHalfway(win: var Window, index, startIndex: int, dirList: seq[(PathComponent, string)]) =
-  win.write(index, 0, substr(dirList[index + startIndex][1], 2, terminalWidth() - 2) & "~")
+proc writeFileNameHalfway(win: var Window, currentLine: int, fileName: string) =
+  win.write(currentLine, 0, substr(fileName, 2, terminalWidth() - 2) & "~")
 
-proc writeDirNameHalfway(win: var Window, index, startIndex: int, dirList: seq[(PathComponent, string)]) =
-  if index == 0:    # "../"
-    win.write(index, 0, substr(dirList[index][1], 0, terminalWidth() - 2) & "~", brightGreenDefault)
+proc writeDirNameHalfway(win: var Window, currentLine: int, fileName: string) =
+  if fileName == "../":
+    win.write(currentLine, 0, substr(fileName, 0, terminalWidth() - 2) & "~", brightGreenDefault)
   else:
-    win.write(index, 0, substr(dirList[index + startIndex][1], 2, terminalWidth() - 2) & "/~", brightGreenDefault)
+    win.write(currentLine, 0, substr(fileName, 2, terminalWidth() - 2) & "/~", brightGreenDefault)
 
-proc writePcLinkToDirNameHalfway(win: var Window, index, startIndex: int, dirList: seq[(PathComponent, string)]) =
-  let buffer = substr(dirList[index + startIndex][1], 2) & "@ -> " & expandsymLink(dirList[index + startIndex][1])
-  win.write(index, 0, substr(buffer, 0, terminalWidth() - 2) & "~", cyanDefault)
-  #win.write(index, 0, substr(dirList[index + startIndex][1], 2, terminalWidth() - 2) & "@~", cyanDefault)
+proc writePcLinkToDirNameHalfway(win: var Window, currentLine: int, fileName: string) =
+  let buffer = substr(fileName, 2) & "@ -> " & expandsymLink(fileName)
+  win.write(currentLine, 0, substr(buffer, 0, terminalWidth() - 4) & "~", cyanDefault)
 
 
 proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], currentLine, startIndex: int) =
@@ -97,49 +95,40 @@ proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], cur
     let fileName = dirList[index + startIndex][1]
 
     if fileKind == pcLinkToDir or fileKind == pcLinkToFile:
-      if (fileName.len + expandsymLink(fileName).len + 3) > terminalWidth():
-        writePcLinkToDirNameHalfway(win, index, startIndex, dirList)
+      if (fileName.len + expandsymLink(fileName).len + 4) > terminalWidth():
+        writePcLinkToDirNameHalfway(win, index, fileName)
       else:
-        writePcLinkToDirName(win, index, startIndex, dirList)
+        writePcLinkToDirName(win, index, fileName)
     elif fileName.len > terminalWidth():
       if fileKind == pcFile:
-        writeFileNameHalfway(win, index, startIndex, dirList)
+        writeFileNameHalfway(win, index, fileName)
       elif fileKind == pcDir:
-        writeDirNameHalfway(win, index, startIndex, dirList)
-      #elif fileKind == pcLinkToDir or dirList[i][0] == pcLinkToFile:
-        #writePcLinkToDirNameHalfway(win, index, startIndex, dirList)
+        writeDirNameHalfway(win, index, fileName)
     else:
       if fileKind == pcFile:
-        writeFileName(win, index, startIndex, dirList)
+        writeFileName(win, index, fileName)
       elif fileKind == pcDir:
-        writeDirName(win, index, startIndex, dirList)
-      #elif fileKind == pcLinkToDir or fileKind == pcLinkToFile:
-        #writePcLinkToDirName(win, index, startIndex, dirList)
+        writeDirName(win, index, filename)
 
   # write current line
-
   let fileKind = dirList[currentLine + startIndex][0]
   let fileName= dirList[currentLine + startIndex][1]
 
   if fileKind == pcLinkToDir or fileKind == pcLinkToFile:
-    if (fileName.len + expandsymLink(fileName).len + 3) > terminalWidth():
-      writePcLinkToDirNameHalfwayCurrentLine(win, dirList, currentLine, startIndex)
+    if (fileName.len + expandsymLink(fileName).len + 4) > terminalWidth():
+      writePcLinkToDirNameHalfwayCurrentLine(win, filename, currentLine)
     else:
-      writePcLinkToDirNameCurrentLine(win, dirList, currentLine, startIndex)
+      writePcLinkToDirNameCurrentLine(win, fileName, currentLine)
   elif fileName.len > terminalWidth():
     if fileKind == pcFile:
-      writeFileNameHalfwayCurrentLine(win, dirList, currentLine, startIndex)
+      writeFileNameHalfwayCurrentLine(win, fileName, currentLine)
     elif fileKind == pcDir:
-        writeDirNameHalfwayCurrentLine(win, dirList, currentLine, startIndex)
-    #elif fileKind == pcLinkToDir or fileKind == pcLinkToFile:
-      #writePcLinkToDirNameHalfwayCurrentLine(win, dirList, currentLine, startIndex)
+        writeDirNameHalfwayCurrentLine(win, fileName, currentLine)
   else:
     if fileKind == pcFile:
-      writeFileNameCurrentLine(win, dirList, currentLine, startIndex)
+      writeFileNameCurrentLine(win, fileName, currentLine)
     elif fileKind == pcDir:
-      writeDirNameCurrentLine(win, dirList, currentLine, startIndex)
-    #elif fileKind == pcLinkToDir or fileKind == pcLinkToFile:
-      #writePcLinkToDirNameCurrentLine(win, dirList, currentLine, startIndex)
+      writeDirNameCurrentLine(win, fileName, currentLine)
    
   win.refresh
 
