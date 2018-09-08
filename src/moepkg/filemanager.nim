@@ -31,7 +31,6 @@ proc deleteFile(status: var EditorStatus, dirList: seq[(PathComponent, string)],
   status.commandWindow.refresh
 
 proc refreshDirList(): seq[(PathComponent, string)] =
-  result = newSeq[(PathComponent, string)]()
   result = @[(pcDir, "../")]
   for list in walkDir("./"):
     result.add list
