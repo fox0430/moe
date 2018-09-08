@@ -74,7 +74,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
     status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
 
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
-  if filename == nil:
+  if filename.len == 0:
     status.commandWindow.erase
     status.commandWindow.write(0, 0, "Error: No file name", ColorPair.redDefault)
     status.commandWindow.refresh

@@ -10,5 +10,5 @@ bin           = @["moe"]
 # Dependencies
 
 requires "nim >= 0.18.0"
-requires "ncurses >= 0.1.0"
+requires "https://github.com/walkre-niboshi/nim-ncurses >= 0.1.0"
 requires "unicodedb >= 0.5.2"
