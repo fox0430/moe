@@ -130,13 +130,13 @@ proc filerMode*(status: var EditorStatus) =
   var startIndex = 0
 
   while status.mode == Mode.filer:
-    if DirlistUpdate == true:
+    if DirlistUpdate:
       dirList = @[]
       dirList.add refreshDirList()
       viewUpdate = true
       DirlistUpdate = false
 
-    if viewUpdate == true:
+    if viewUpdate:
       status.mainWindow.erase
       writeStatusBar(status)
       status.mainWindow.writeFillerView(dirList, currentLine, startIndex)
