@@ -7,7 +7,6 @@ before_install:
   # Install nim
   - git clone https://github.com/nim-lang/nim
   - cd nim
-  - git checkout 855956bf617f68ac0be3717329e9e1181e5dc0c6
   - git clone --depth 1 git://github.com/nim-lang/csources
   - cd csources && sh build.sh
   - cd ..
