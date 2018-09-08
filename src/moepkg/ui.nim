@@ -33,7 +33,7 @@ type ColorPair* = enum
 
 type Window* = object
   cursesWindow*: ptr window
-  top, left, height, width: int
+  top, left, height*, width*: int
   y*, x*: int
 
 proc setColorPair(colorPair: ColorPair, character, background: Color) =
