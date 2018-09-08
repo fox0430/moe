@@ -46,6 +46,9 @@ proc writeDirNameCurrentLine(win: var Window, fileName: string, currentLine: int
     win.write(currentLine, 0, substr(fileName, 2) & "/", brightWhiteGreen)
 
 proc writePcLinkToDirNameCurrentLine(win: var Window, fileName: string, currentLine: int) =
+  win.write(currentLine, 0, substr(fileName, 2) & "@ -> " & expandsymLink(fileName) & "/", whiteCyan)
+
+proc writePcLinkToFileNameCurrentLine(win: var Window, fileName: string, currentLine: int) =
   win.write(currentLine, 0, substr(fileName, 2) & "@ -> " & expandsymLink(fileName), whiteCyan)
 
 proc writeFileNameHalfwayCurrentLine(win: var Window, fileName: string, currentLine: int) =
@@ -58,6 +61,10 @@ proc writeDirNameHalfwayCurrentLine(win: var Window, fileName: string, currentLi
     win.write(currentLine, 0, substr(fileName, 2, terminalWidth() - 2) & "/~", brightWhiteGreen)
 
 proc writePcLinkToDirNameHalfwayCurrentLine(win: var Window, fileName: string, currentLine: int) =
+  let buffer = substr(fileName, 2) & "@ -> " & expandsymLink(fileName) & "/"
+  win.write(currentLine, 0, substr(buffer, 0, terminalWidth() - 4) & "~", whiteCyan)
+
+proc writePcLinkToFileNameHalfwayCurrentLine(win: var Window, fileName: string, currentLine: int) =
   let buffer = substr(fileName, 2) & "@ -> " & expandsymLink(fileName)
   win.write(currentLine, 0, substr(buffer, 0, terminalWidth() - 4) & "~", whiteCyan)
 
@@ -71,6 +78,9 @@ proc writeDirName(win: var Window, currentLine: int, fileName: string) =
     win.write(currentLine, 0, substr(fileName, 2) & "/", brightGreenDefault)
 
 proc writePcLinkToDirName(win: var Window, currentLine: int, fileName: string) =
+  win.write(currentLine, 0, substr(fileName, 2) & "@ -> " & expandsymLink(fileName) & "/", cyanDefault)
+
+proc writePcLinkToFileName(win: var Window, currentLine: int, fileName: string) =
   win.write(currentLine, 0, substr(fileName, 2) & "@ -> " & expandsymLink(fileName), cyanDefault)
 
 proc writeFileNameHalfway(win: var Window, currentLine: int, fileName: string) =
@@ -83,9 +93,12 @@ proc writeDirNameHalfway(win: var Window, currentLine: int, fileName: string) =
     win.write(currentLine, 0, substr(fileName, 2, terminalWidth() - 2) & "/~", brightGreenDefault)
 
 proc writePcLinkToDirNameHalfway(win: var Window, currentLine: int, fileName: string) =
-  let buffer = substr(fileName, 2) & "@ -> " & expandsymLink(fileName)
+  let buffer = substr(fileName, 2) & "@ -> " & expandsymLink(fileName) & "/"
   win.write(currentLine, 0, substr(buffer, 0, terminalWidth() - 4) & "~", cyanDefault)
 
+proc writePcLinkToFileNameHalfway(win: var Window, currentLine: int, fileName: string) =
+  let buffer = substr(fileName, 2) & "@ -> " & expandsymLink(fileName)
+  win.write(currentLine, 0, substr(buffer, 0, terminalWidth() - 4) & "~", cyanDefault)
 
 proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], currentLine, startIndex: int) =
 
@@ -94,11 +107,16 @@ proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], cur
     let fileKind = dirList[index + startIndex][0]
     let fileName = dirList[index + startIndex][1]
 
-    if fileKind == pcLinkToDir or fileKind == pcLinkToFile:
-      if (fileName.len + expandsymLink(fileName).len + 4) > terminalWidth():
+    if fileKind == pcLinkToDir:
+      if (fileName.len + expandsymLink(fileName).len + 5) > terminalWidth():
         writePcLinkToDirNameHalfway(win, index, fileName)
       else:
         writePcLinkToDirName(win, index, fileName)
+    elif fileKind == pcLinkToFile:
+      if (fileName.len + expandsymLink(fileName).len + 4) > terminalWidth():
+        writePcLinkToFileNameHalfway(win, index, fileName)
+      else:
+        writePcLinkToFileName(win, index, fileName)
     elif fileName.len > terminalWidth():
       if fileKind == pcFile:
         writeFileNameHalfway(win, index, fileName)
@@ -114,11 +132,16 @@ proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], cur
   let fileKind = dirList[currentLine + startIndex][0]
   let fileName= dirList[currentLine + startIndex][1]
 
-  if fileKind == pcLinkToDir or fileKind == pcLinkToFile:
-    if (fileName.len + expandsymLink(fileName).len + 4) > terminalWidth():
+  if fileKind == pcLinkToDir:
+    if (fileName.len + expandsymLink(fileName).len + 5) > terminalWidth():
       writePcLinkToDirNameHalfwayCurrentLine(win, filename, currentLine)
     else:
       writePcLinkToDirNameCurrentLine(win, fileName, currentLine)
+  elif fileKind == pcLinkToFile:
+    if (fileName.len + expandsymLink(fileName).len + 4) > terminalWidth():
+      writePcLinkToFileNameHalfwayCurrentLine(win, fileName, currentLine)
+    else:
+      writePcLinkToFileNameCurrentLine(win, fileName, currentLine)
   elif fileName.len > terminalWidth():
     if fileKind == pcFile:
       writeFileNameHalfwayCurrentLine(win, fileName, currentLine)
@@ -162,7 +185,7 @@ proc filerMode*(status: var EditorStatus) =
       status.resize(terminalHeight(), terminalWidth())
       viewUpdate = true
 
-    elif key == 'D':
+    elif key == ord('D'):
       deleteFile(status, dirList, currentLine)
       DirlistUpdate = true
       viewUpdate = true
