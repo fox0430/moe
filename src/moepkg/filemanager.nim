@@ -88,37 +88,44 @@ proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], cur
 
   for i in 0 ..< dirList.len - startIndex:
     let index = i
-    if dirList[index][1].len > terminalWidth():
-      if dirList[index][0] == pcFile:
+    let fileKind = dirList[index + startIndex][0]
+    let fileName = dirList[index + startIndex][1]
+
+    if filename.len > terminalWidth():
+      if fileKind == pcFile:
         writeFileNameHalfway(win, index, startIndex, dirList)
-      elif dirList[index][0] == pcDir:
+      elif fileKind == pcDir:
         writeDirNameHalfway(win, index, startIndex, dirList)
-      elif dirList[index][0] == pcLinkToDir or dirList[i][0] == pcLinkToFile:
+      elif fileKind == pcLinkToDir or dirList[i][0] == pcLinkToFile:
         writePcLinkToDirNameHalfway(win, index, startIndex, dirList)
     else:
-      if dirList[index + startIndex][0] == pcFile:
+      if fileKind == pcFile:
         writeFileName(win, index, startIndex, dirList)
-      elif dirList[index + startIndex][0] == pcDir:
+      elif fileKind == pcDir:
         writeDirName(win, index, startIndex, dirList)
-      elif dirList[index + startIndex][0] == pcLinkToDir or dirList[index + startIndex][0] == pcLinkToFile:
+      elif fileKind == pcLinkToDir or fileKind == pcLinkToFile:
         writePcLinkToDirName(win, index, startIndex, dirList)
 
   # write current line
-  if dirList[currentLine + startIndex][1].len > terminalWidth():
-    if dirList[currentLine + startIndex][0] == pcFile:
+
+  let fileKind = dirList[currentLine + startIndex][0]
+  let fileName= dirList[currentLine + startIndex][1]
+
+  if fileName.len > terminalWidth():
+    if fileKind == pcFile:
       writeFileNameHalfwayCurrentLine(win, dirList, currentLine, startIndex)
-    elif dirList[currentLine + startIndex][0] == pcDir:
-      writeDirNameHalfwayCurrentLine(win, dirList, currentLine, startIndex)
-    elif dirList[currentLine + startIndex][0] == pcLinkToDir or dirList[currentLine][0] == pcLinkToFile:
+    elif fileKind == pcDir:
+        writeDirNameHalfwayCurrentLine(win, dirList, currentLine, startIndex)
+    elif fileKind == pcLinkToDir or fileKind == pcLinkToFile:
       writePcLinkToDirNameHalfwayCurrentLine(win, dirList, currentLine, startIndex)
   else:
-    if dirList[currentLine + startIndex][0] == pcFile:
+    if fileKind == pcFile:
       writeFileNameCurrentLine(win, dirList, currentLine, startIndex)
-    elif dirList[currentLine + startIndex][0] == pcDir:
+    elif fileKind == pcDir:
       writeDirNameCurrentLine(win, dirList, currentLine, startIndex)
-    elif dirList[currentLine + startIndex][0] == pcLinkToDir or dirList[currentLine + startIndex][0] == pcLinkToFile:
+    elif fileKind == pcLinkToDir or fileKind == pcLinkToFile:
       writePcLinkToDirNameCurrentLine(win, dirList, currentLine, startIndex)
-    
+   
   win.refresh
 
 proc filerMode*(status: var EditorStatus) =
