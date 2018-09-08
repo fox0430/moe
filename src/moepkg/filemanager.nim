@@ -3,13 +3,14 @@ import sequtils
 import terminal
 import strformat
 import strutils
+import unicodeext
+
 import editorstatus
 import ui
 import fileutils
 import editorview
 import gapbuffer
 import exmode
-import unicodeext
 
 proc deleteFile(status: var EditorStatus, dirList: seq[(PathComponent, string)], currentLine: int) =
   let command = getCommand(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
@@ -91,7 +92,7 @@ proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], cur
     let fileKind = dirList[index + startIndex][0]
     let fileName = dirList[index + startIndex][1]
 
-    if filename.len > terminalWidth():
+    if fileName.len > terminalWidth():
       if fileKind == pcFile:
         writeFileNameHalfway(win, index, startIndex, dirList)
       elif fileKind == pcDir:
