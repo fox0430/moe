@@ -165,6 +165,10 @@ proc filerMode*(status: var EditorStatus) =
       else:
         dec(currentLine)
       viewUpdate = true
+    elif key  == ord('g'):
+      currentLine = 0
+      startIndex = 0
+      viewUpdate = true
     elif isEnterKey(key):
       if dirList[currentLine][0] == pcFile:
         status = initEditorStatus()
