@@ -104,19 +104,19 @@ proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], cur
         writePcLinkToDirName(win, index, startIndex, dirList)
 
   # write current line
-  if dirList[currentLine][1].len > terminalWidth():
-    if dirList[currentLine][0] == pcFile:
+  if dirList[currentLine + startIndex][1].len > terminalWidth():
+    if dirList[currentLine + startIndex][0] == pcFile:
       writeFileNameHalfwayCurrentLine(win, dirList, currentLine, startIndex)
-    elif dirList[currentLine][0] == pcDir:
+    elif dirList[currentLine + startIndex][0] == pcDir:
       writeDirNameHalfwayCurrentLine(win, dirList, currentLine, startIndex)
-    elif dirList[currentLine][0] == pcLinkToDir or dirList[currentLine][0] == pcLinkToFile:
+    elif dirList[currentLine + startIndex][0] == pcLinkToDir or dirList[currentLine][0] == pcLinkToFile:
       writePcLinkToDirNameHalfwayCurrentLine(win, dirList, currentLine, startIndex)
   else:
-    if dirList[currentLine][0] == pcFile:
+    if dirList[currentLine + startIndex][0] == pcFile:
       writeFileNameCurrentLine(win, dirList, currentLine, startIndex)
-    elif dirList[currentLine][0] == pcDir:
+    elif dirList[currentLine + startIndex][0] == pcDir:
       writeDirNameCurrentLine(win, dirList, currentLine, startIndex)
-    elif dirList[currentLine][0] == pcLinkToDir or dirList[currentLine][0] == pcLinkToFile:
+    elif dirList[currentLine + startIndex][0] == pcLinkToDir or dirList[currentLine + startIndex][0] == pcLinkToFile:
       writePcLinkToDirNameCurrentLine(win, dirList, currentLine, startIndex)
     
   win.refresh
@@ -131,6 +131,8 @@ proc filerMode*(status: var EditorStatus) =
 
   while status.mode == Mode.filer:
     if DirlistUpdate:
+      currentLine = 0
+      startIndex = 0
       dirList = @[]
       dirList.add refreshDirList()
       viewUpdate = true
@@ -177,23 +179,21 @@ proc filerMode*(status: var EditorStatus) =
         startIndex = dirList.len - status.mainWindow.height
       viewUpdate = true
     elif isEnterKey(key):
-      if dirList[currentLine][0] == pcFile:
+      if dirList[currentLine + startIndex][0] == pcFile:
         status = initEditorStatus()
-        status.filename = substr(dirList[currentLine][1], 2).toRunes
+        status.filename = substr(dirList[currentLine + startIndex][1], 2).toRunes
         status.buffer = openFile(status.filename)
         status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
         setCursor(true)
-      elif dirList[currentLine][0] == pcDir:
-        setCurrentDir(dirList[currentLine][1])
-        currentLine = 0
+      elif dirList[currentLine + startIndex][0] == pcDir:
+        setCurrentDir(dirList[currentLine + startIndex][1])
         DirlistUpdate = true
-      elif dirList[currentLine][0] == pcLinkToDir:
-        setCurrentDir(expandsymLink(dirList[currentLine][1]))
-        currentLine = 0
+      elif dirList[currentLine + startIndex][0] == pcLinkToDir:
+        setCurrentDir(expandsymLink(dirList[currentLine + startIndex][1]))
         DirlistUpdate = true
-      elif dirList[currentLine][0] == pcLinkToFile:
+      elif dirList[currentLine + startIndex][0] == pcLinkToFile:
         status = initEditorStatus()
-        status.filename = toRunes(expandsymLink(dirList[currentLine][1]))
+        status.filename = toRunes(expandsymLink(dirList[currentLine + startIndex][1]))
         status.buffer = openFile(status.filename)
         status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
         setCursor(true)
