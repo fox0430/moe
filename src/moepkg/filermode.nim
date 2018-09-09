@@ -245,11 +245,21 @@ proc filerMode*(status: var EditorStatus) =
         status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
         setCursor(true)
       elif dirList[currentLine + startIndex][0] == pcDir:
-        setCurrentDir(dirList[currentLine + startIndex][1])
-        DirlistUpdate = true
+        try:
+          setCurrentDir(dirList[currentLine + startIndex][1])
+          DirlistUpdate = true
+        except OSError:
+          status.commandWindow.erase
+          status.commandWindow.write(0, 0, "can not open: " & substr(dirList[currentLine + startIndex][1]))
+          status.commandWindow.refresh
       elif dirList[currentLine + startIndex][0] == pcLinkToDir:
-        setCurrentDir(expandsymLink(dirList[currentLine + startIndex][1]))
-        DirlistUpdate = true
+        try:
+          setCurrentDir(expandsymLink(dirList[currentLine + startIndex][1]))
+          DirlistUpdate = true
+        except OSError:
+          status.commandWindow.erase
+          status.commandWindow.write(0, 0, "can not open: " & substr(dirList[currentLine + startIndex][1]))
+          status.commandWindow.refresh
       elif dirList[currentLine + startIndex][0] == pcLinkToFile:
         status = initEditorStatus()
         status.filename = toRunes(expandsymLink(dirList[currentLine + startIndex][1]))

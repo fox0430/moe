@@ -23,8 +23,15 @@ when isMainModule:
         exitUi()
         quit()
     elif existsDir($(status.filename)):
-      setCurrentDir($(status.filename))
-      status.mode = filer
+      try:
+        setCurrentDir($(status.filename))
+        status.mode = filer
+      except OSError:
+        status.commandWindow.erase
+        status.commandWindow.write(0, 0, "can not open: ".toRunes & status.filename)
+        status.commandWindow.refresh
+        status.filename = "No name".toRunes
+        status.buffer = newFile()
     else: status.buffer = newFile()
   else:
     status.buffer = newFile()
