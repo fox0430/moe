@@ -32,3 +32,6 @@ doAssert(numberOfBytes("🀀"[0]) == 4)
 
 doAssert(ru"あいうえお   あいう".countRepeat(Whitespace, 5) == 3)
 doAssert(ru"    ".countRepeat(Whitespace, 1) == 3)
+
+doAssert(Rune(0x10FFFF).width == 1, "valid Rune")
+doAssert(Rune(0x110000).width == 1, "invalid Rune")
