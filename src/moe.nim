@@ -5,7 +5,7 @@ import moepkg/fileutils
 import moepkg/normalmode
 import moepkg/insertmode
 import moepkg/exmode
-import moepkg/filemanager
+import moepkg/filermode
 import moepkg/editorview
 import moepkg/gapbuffer
 
