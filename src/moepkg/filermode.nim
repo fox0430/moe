@@ -109,7 +109,7 @@ proc writeFileDitailView(win: var Window, fileName: string) =
                   "name        : " & $substr(fileName, 2),
                   "kind        : " & $fileInfo.kind,
                   "size        : " & $fileInfo.size & " bytes",
-                  "permissions : " & $fileInfo.permissions,
+                  "permissions : " & substr($fileInfo.permissions, 1, ($fileInfo.permissions).high - 1),
                   "last access : " & $fileInfo.lastAccessTime,
                   "last write  : " & $fileInfo.lastWriteTime,
                 ]
@@ -117,8 +117,13 @@ proc writeFileDitailView(win: var Window, fileName: string) =
   if fileInfo.kind == pcLinkToDir or fileInfo.kind == pcLinkToFile:
     buffer.insert("link        : " & expandsymLink(fileName), 3)
 
-  for currentLine in 0 .. min(buffer.high, terminalHeight()):
-    win.write(currentLine, 0,  substr(buffer[currentLine], 0, terminalWidth()), brightWhiteDefault)
+  if fileName == "../":
+    win.write(0, 0, substr( "name        : ../", 0, terminalWidth()), brightWhiteDefault)
+    for currentLine in 1 .. min(buffer.high, terminalHeight()):
+      win.write(currentLine, 0,  substr(buffer[currentLine], 0, terminalWidth()), brightWhiteDefault)
+  else:
+    for currentLine in 0 .. min(buffer.high, terminalHeight()):
+      win.write(currentLine, 0,  substr(buffer[currentLine], 0, terminalWidth()), brightWhiteDefault)
 
   discard getKey(win)
 
