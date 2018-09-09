@@ -4,6 +4,7 @@ import terminal
 import strformat
 import strutils
 import unicodeext
+import times
 
 import editorstatus
 import ui
@@ -100,6 +101,26 @@ proc writePcLinkToFileNameHalfway(win: var Window, currentLine: int, fileName: s
   let buffer = substr(fileName, 2) & "@ -> " & expandsymLink(fileName)
   win.write(currentLine, 0, substr(buffer, 0, terminalWidth() - 4) & "~", cyanDefault)
 
+proc writeFileDitailView(win: var Window, fileName: string) =
+  win.erase
+  let fileInfo = getFileInfo(fileName, false)
+  var y = 0
+  win.write(y, 0, substr("name        : " & fileName[2 .. fileName.len], 0, terminalWidth()), brightWhiteDefault)
+  inc(y)
+  win.write(y, 0, substr("kind        : " & $fileInfo.kind, 0, terminalWidth()), brightWhiteDefault)
+  inc(y)
+  if fileInfo.kind == pcLinkToDir or fileInfo.kind == pcLinkToFile:
+    win.write(y, 0, substr("link        : " & expandsymLink(fileName), 0, terminalWidth()), brightWhiteDefault)
+    inc(y)
+  win.write(y, 0, substr("size        : " & $fileInfo.size & " bytes", 0, terminalWidth()), brightWhiteDefault)
+  inc(y)
+  win.write(y, 0, substr("permission  : " & $fileInfo.permissions, 0, terminalWidth()), brightWhiteDefault)
+  inc(y)
+  win.write(y, 0, substr("last access : " & $fileInfo.lastAccessTime, 0, terminalWidth()), brightWhiteDefault)
+  inc(y)
+  win.write(y, 0, substr("last write  : " & $fileInfo.lastWriteTime, 0, terminalWidth()), brightWhiteDefault)
+  discard getKey(win)
+
 proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], currentLine, startIndex: int) =
 
   for i in 0 ..< dirList.len - startIndex:
@@ -188,6 +209,9 @@ proc filerMode*(status: var EditorStatus) =
     elif key == ord('D'):
       deleteFile(status, dirList, currentLine)
       DirlistUpdate = true
+      viewUpdate = true
+    elif key == ord('i'):
+      writeFileDitailView(status.mainWindow, dirList[currentLine + startIndex][1])
       viewUpdate = true
     elif (key == 'j' or isDownKey(key)) and currentLine + startIndex < dirList.len - 1:
       if currentLine == terminalHeight() - 3:
