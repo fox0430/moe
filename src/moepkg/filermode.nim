@@ -103,22 +103,23 @@ proc writePcLinkToFileNameHalfway(win: var Window, currentLine: int, fileName: s
 
 proc writeFileDitailView(win: var Window, fileName: string) =
   win.erase
+
   let fileInfo = getFileInfo(fileName, false)
-  var y = 0
-  win.write(y, 0, substr("name        : " & substr(fileName, 2) , 0, terminalWidth()), brightWhiteDefault)
-  inc(y)
-  win.write(y, 0, substr("kind        : " & $fileInfo.kind, 0, terminalWidth()), brightWhiteDefault)
-  inc(y)
+  var buffer = @[
+                  "name        : " & $substr(fileName, 2),
+                  "kind        : " & $fileInfo.kind,
+                  "size        : " & $fileInfo.size & " bytes",
+                  "permissions : " & $fileInfo.permissions,
+                  "last access : " & $fileInfo.lastAccessTime,
+                  "last write  : " & $fileInfo.lastWriteTime,
+                ]
+
   if fileInfo.kind == pcLinkToDir or fileInfo.kind == pcLinkToFile:
-    win.write(y, 0, substr("link        : " & expandsymLink(fileName), 0, terminalWidth()), brightWhiteDefault)
-    inc(y)
-  win.write(y, 0, substr("size        : " & $fileInfo.size & " bytes", 0, terminalWidth()), brightWhiteDefault)
-  inc(y)
-  win.write(y, 0, substr("permission  : " & $fileInfo.permissions, 0, terminalWidth()), brightWhiteDefault)
-  inc(y)
-  win.write(y, 0, substr("last access : " & $fileInfo.lastAccessTime, 0, terminalWidth()), brightWhiteDefault)
-  inc(y)
-  win.write(y, 0, substr("last write  : " & $fileInfo.lastWriteTime, 0, terminalWidth()), brightWhiteDefault)
+    buffer.insert("link        : " & expandsymLink(fileName), 3)
+
+  for currentLine in 0 .. min(buffer.high, terminalHeight()):
+    win.write(currentLine, 0,  substr(buffer[currentLine], 0, terminalWidth()), brightWhiteDefault)
+
   discard getKey(win)
 
 proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], currentLine, startIndex: int) =
