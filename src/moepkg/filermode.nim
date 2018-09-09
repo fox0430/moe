@@ -105,7 +105,7 @@ proc writeFileDitailView(win: var Window, fileName: string) =
   win.erase
   let fileInfo = getFileInfo(fileName, false)
   var y = 0
-  win.write(y, 0, substr("name        : " & fileName[2 .. fileName.len], 0, terminalWidth()), brightWhiteDefault)
+  win.write(y, 0, substr("name        : " & substr(fileName, 2) , 0, terminalWidth()), brightWhiteDefault)
   inc(y)
   win.write(y, 0, substr("kind        : " & $fileInfo.kind, 0, terminalWidth()), brightWhiteDefault)
   inc(y)
@@ -213,7 +213,7 @@ proc filerMode*(status: var EditorStatus) =
     elif key == ord('i'):
       writeFileDitailView(status.mainWindow, dirList[currentLine + startIndex][1])
       viewUpdate = true
-    elif (key == 'j' or isDownKey(key)) and currentLine + startIndex < dirList.len - 1:
+    elif (key == 'j' or isDownKey(key)) and currentLine + startIndex < dirList.high:
       if currentLine == terminalHeight() - 3:
         inc(startIndex)
       else:
@@ -231,7 +231,7 @@ proc filerMode*(status: var EditorStatus) =
       viewUpdate = true
     elif key == ord('G'):
       if dirList.len < status.mainWindow.height:
-        currentLine = dirList.len - 1
+        currentLine = dirList.high
       else:
         currentLine = status.mainWindow.height - 1
         startIndex = dirList.len - status.mainWindow.height
