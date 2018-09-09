@@ -4,8 +4,8 @@ import moepkg/editorstatus
 import moepkg/fileutils
 import moepkg/normalmode
 import moepkg/insertmode
-import moepkg/exmode
 import moepkg/filermode
+import moepkg/exmode
 import moepkg/editorview
 import moepkg/gapbuffer
 

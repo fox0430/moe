@@ -3,6 +3,7 @@ import unicodedb/widths
 export unicode
 
 proc width*(c: Rune): int =
+  if int(c) > 0x10FFFF: return 1
   case c.unicodeWidth
   of UnicodeWidth.uwdtNarrow, UnicodeWidth.uwdtHalf, UnicodeWidth.uwdtAmbiguous, UnicodeWidth.uwdtNeutral: 1
   else: 2
