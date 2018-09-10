@@ -27,10 +27,8 @@ when isMainModule:
         setCurrentDir($(status.filename))
         status.mode = filer
       except OSError:
-        status.commandWindow.erase
-        status.commandWindow.write(0, 0, "can not open: ".toRunes & status.filename)
-        status.commandWindow.refresh
-        status.filename = "No name".toRunes
+        writeFileOpenErrorMessage(status.commandWindow, status.filename)
+        status.filename = "".toRunes
         status.buffer = newFile()
     else: status.buffer = newFile()
   else:

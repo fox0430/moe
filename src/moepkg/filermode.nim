@@ -182,6 +182,11 @@ proc writeFillerView(win: var Window, dirList: seq[(PathComponent, string)], cur
    
   win.refresh
 
+proc writeFileOpenErrorMessage*(commandWindow: var Window, fileName: seq[Rune]) =
+  commandWindow.erase
+  commandWindow.write(0, 0, "can not open: ".toRunes & fileName)
+  commandWindow.refresh
+
 proc filerMode*(status: var EditorStatus) =
   setCursor(false)
   var viewUpdate = true
@@ -254,17 +259,13 @@ proc filerMode*(status: var EditorStatus) =
           setCurrentDir(dirList[currentLine + startIndex][1])
           DirlistUpdate = true
         except OSError:
-          status.commandWindow.erase
-          status.commandWindow.write(0, 0, "can not open: " & substr(dirList[currentLine + startIndex][1]))
-          status.commandWindow.refresh
+          writeFileOpenErrorMessage(status.commandWindow, (substr(dirList[currentLine][1])).toRunes)
       elif dirList[currentLine + startIndex][0] == pcLinkToDir:
         try:
           setCurrentDir(expandsymLink(dirList[currentLine + startIndex][1]))
           DirlistUpdate = true
         except OSError:
-          status.commandWindow.erase
-          status.commandWindow.write(0, 0, "can not open: " & substr(dirList[currentLine + startIndex][1]))
-          status.commandWindow.refresh
+          writeFileOpenErrorMessage(status.commandWindow, (substr(dirList[currentLine][1])).toRunes)
       elif dirList[currentLine + startIndex][0] == pcLinkToFile:
         status = initEditorStatus()
         status.filename = toRunes(expandsymLink(dirList[currentLine + startIndex][1]))
