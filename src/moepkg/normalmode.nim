@@ -77,7 +77,11 @@ proc jumpLine*(status: var EditorStatus, destination: int) =
   status.currentColumn = 0
   status.expandedColumn = 0
   if not (status.view.originalLine[0] <= destination and (status.view.originalLine[status.view.height - 1] == -1 or destination <= status.view.originalLine[status.view.height - 1])):
-    let startOfPrintedLines = max(destination - (currentLine - status.view.originalLine[0]), 0)
+    var startOfPrintedLines = 0
+    if destination > status.buffer.len - 1 - status.mainWindow.height - 1:
+      startOfPrintedLines = status.buffer.len - 1 - status.mainWindow.height - 1
+    else:
+      startOfPrintedLines = max(destination - (currentLine - status.view.originalLine[0]), 0)
     status.view.reload(status.buffer, startOfPrintedLines)
 
 proc moveToFirstLine(status: var EditorStatus) =
