@@ -104,15 +104,16 @@ proc writePcLinkToFileNameHalfway(mainWindow: var Window, currentLine: int, file
 proc writeFileDitailView(mainWindow: var Window, fileName: string) =
   mainWindow.erase
 
-  let fileInfo = getFileInfo(fileName, false)
+  let fileInfo = getFileInfo(fileName)
   var buffer = @[
                   "name        : " & $substr(fileName, 2),
                   "kind        : " & $fileInfo.kind,
-                  "size        : " & $fileInfo.size & " bytes",
                   "permissions : " & substr($fileInfo.permissions, 1, ($fileInfo.permissions).high - 1),
                   "last access : " & $fileInfo.lastAccessTime,
                   "last write  : " & $fileInfo.lastWriteTime,
                 ]
+  if fileInfo.kind == pcFile or fileInfo.kind == pcLinkToFile:
+    buffer.insert("size        : " & $fileInfo.size & " bytes", 2)
 
   if fileInfo.kind == pcLinkToDir or fileInfo.kind == pcLinkToFile:
     buffer.insert("link        : " & expandsymLink(fileName), 3)
