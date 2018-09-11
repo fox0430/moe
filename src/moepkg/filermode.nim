@@ -5,6 +5,7 @@ import strformat
 import strutils
 import unicodeext
 import times
+import algorithm
 
 import editorstatus
 import ui
@@ -13,7 +14,10 @@ import editorview
 import gapbuffer
 import exmode
 
-proc deleteFile(status: var EditorStatus, dirList: seq[(PathComponent, string)], currentLine: int) =
+type
+  List = tuple[kind: PathComponent, path: string]
+
+proc deleteFile(status: var EditorStatus, dirList: List, currentLine: int) =
   let command = getCommand(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
     window.erase
     window.write(0, 0, fmt"Delete file? 'y' or 'n': {$command}")
@@ -21,21 +25,22 @@ proc deleteFile(status: var EditorStatus, dirList: seq[(PathComponent, string)],
   )
 
   if (command[0] == ru"y" or command[0] == ru"yes") and command.len == 1:
-    if dirList[currentLine][0] == pcDir:
-      removeDir(dirList[currentLine][1])
+    if dirList.kind == pcDir:
+      removeDir(dirList.path)
     else:
-      removeFile(dirList[currentLine][1])
+      removeFile(dirList.path)
   else:
     return
 
   status.commandWindow.erase
-  status.commandWindow.write(0, 0, "Deleted "&dirList[currentLine][1])
+  status.commandWindow.write(0, 0, "Deleted "&dirList.path)
   status.commandWindow.refresh
 
-proc refreshDirList(): seq[(PathComponent, string)] =
-  result = @[(pcDir, "../")]
-  for list in walkDir("./"):
-    result.add list
+proc refreshDirList(): seq[List] =
+ result = @[(pcDir, "../")]
+ for list in walkDir("./"):
+  result.add list
+ return result.sortedByIt(it.path)
 
 proc writeFileNameCurrentLine(mainWindow: var Window, fileName: string , currentLine: int) =
   mainWindow.write(currentLine, 0, substr(fileName, 2), brightWhiteGreen)
@@ -227,7 +232,7 @@ proc filerMode*(status: var EditorStatus) =
       viewUpdate = true
 
     elif key == ord('D'):
-      deleteFile(status, dirList, currentLine)
+      deleteFile(status, dirList[currentLine], currentLine)
       DirlistUpdate = true
       viewUpdate = true
     elif key == ord('i'):
