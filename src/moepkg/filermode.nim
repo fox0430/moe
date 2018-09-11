@@ -17,6 +17,19 @@ import exmode
 type
   List = tuple[kind: PathComponent, path: string]
 
+proc searchFiles(status: var EditorStatus, dirList: seq[List]): seq[List] =
+  let command = getCommand(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
+    window.erase
+    window.write(0, 0, fmt"/{$command}")
+    window.refresh
+  )
+  let str = command[0].join("")
+
+  result = @[]
+  for index in 0 .. dirList.high:
+    if dirList[index].path.contains(str):
+      result.add dirList[index]
+
 proc deleteFile(status: var EditorStatus, dirList: List, currentLine: int) =
   let command = getCommand(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
     window.erase
@@ -205,7 +218,7 @@ proc filerMode*(status: var EditorStatus) =
   setCursor(false)
   var viewUpdate = true
   var DirlistUpdate = true
-  var dirList = newSeq[(PathComponent, string)]()
+  var dirList = newSeq[List]()
   var currentLine = 0
   var startIndex = 0
 
@@ -230,6 +243,11 @@ proc filerMode*(status: var EditorStatus) =
     elif isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
       viewUpdate = true
+    elif key == ord('/'):
+      dirList = searchFiles(status, dirList)
+      viewUpdate = true
+      if dirList.len < 1:
+        DirlistUpdate = true
 
     elif key == ord('D'):
       deleteFile(status, dirList[currentLine], currentLine)
