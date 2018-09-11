@@ -99,7 +99,13 @@ proc pageUp*(status: var EditorStatus) =
 
 proc pageDown*(status: var EditorStatus) =
   let destination = min(status.currentLine + status.view.height, status.buffer.len - 1)
-  jumpLine(status, destination)
+  let currentLine = status.currentLine
+  status.currentLine = destination
+  status.currentColumn = 0
+  status.expandedColumn = 0
+  if not (status.view.originalLine[0] <= destination and (status.view.originalLine[status.view.height - 1] == -1 or destination <= status.view.originalLine[status.view.height - 1])):
+    let startOfPrintedLines = max(destination - (currentLine - status.view.originalLine[0]), 0)
+    status.view.reload(status.buffer, startOfPrintedLines)
 
 proc moveToForwardWord(status: var EditorStatus) =
   let
