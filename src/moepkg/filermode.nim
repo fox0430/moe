@@ -37,10 +37,10 @@ proc deleteFile(status: var EditorStatus, dirList: List, currentLine: int) =
   status.commandWindow.refresh
 
 proc refreshDirList(): seq[List] =
- result = @[(pcDir, "../")]
- for list in walkDir("./"):
-  result.add list
- return result.sortedByIt(it.path)
+  result = @[(pcDir, "../")]
+  for list in walkDir("./"):
+    result.add list
+  return result.sortedByIt(it.path)
 
 proc writeFileNameCurrentLine(mainWindow: var Window, fileName: string , currentLine: int) =
   mainWindow.write(currentLine, 0, substr(fileName, 2), brightWhiteGreen)
