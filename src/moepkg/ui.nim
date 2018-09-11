@@ -55,6 +55,9 @@ proc setCursesColor() =
   setColorPair(ColorPair.cyanDefault, Color.cyan, Color.default)
   setColorPair(ColorPair.whiteCyan, Color.white, Color.cyan)
 
+proc disableControlC() =
+  setControlCHook(proc() {.noconv.} = discard)
+
 proc restoreTerminalModes*() =
   reset_prog_mode()
 
@@ -74,6 +77,7 @@ proc keyEcho*(keyecho: bool) =
     noecho()
     
 proc startUi*() =
+  disableControlC()
   discard setLocale(LC_ALL, "")   # enable UTF-8
   initscr()   # start terminal control
   cbreak()    # enable cbreak mode
