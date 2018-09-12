@@ -23,8 +23,12 @@ proc searchFiles(status: var EditorStatus, dirList: seq[PathInfo]): seq[PathInfo
     window.write(0, 0, fmt"/{$command}")
     window.refresh
   )
-  let str = command[0].join("")
+  if command.len == 0:
+    status.commandWindow.erase
+    status.commandWindow.refresh
+    return @[]
 
+  let str = command[0].join("")
   result = @[]
   for index in 0 .. dirList.high:
     if dirList[index].path.contains(str):
@@ -36,6 +40,10 @@ proc deleteFile(status: var EditorStatus, dirList: PathInfo, currentLine: int) =
     window.write(0, 0, fmt"Delete file? 'y' or 'n': {$command}")
     window.refresh
   )
+  if command.len == 0:
+    status.commandWindow.erase
+    status.commandWindow.refresh
+    return
 
   if (command[0] == ru"y" or command[0] == ru"yes") and command.len == 1:
     if dirList.kind == pcDir:
@@ -158,8 +166,8 @@ proc writeFillerView(mainWindow: var Window, dirList: seq[PathInfo], currentLine
 
   for i in 0 ..< dirList.len - startIndex:
     let index = i
-    let fileKind = dirList[index + startIndex][0]
-    let fileName = dirList[index + startIndex][1]
+    let fileKind = dirList[index + startIndex].kind
+    let fileName = dirList[index + startIndex].path
 
     if fileKind == pcLinkToDir:
       if (fileName.len + expandsymLink(fileName).len + 5) > terminalWidth():
@@ -183,8 +191,8 @@ proc writeFillerView(mainWindow: var Window, dirList: seq[PathInfo], currentLine
         writeDirName(mainWindow, index, filename)
 
   # write current line
-  let fileKind = dirList[currentLine + startIndex][0]
-  let fileName= dirList[currentLine + startIndex][1]
+  let fileKind = dirList[currentLine + startIndex].kind
+  let fileName= dirList[currentLine + startIndex].path
 
   if fileKind == pcLinkToDir:
     if (fileName.len + expandsymLink(fileName).len + 5) > terminalWidth():
@@ -245,6 +253,8 @@ proc filerMode*(status: var EditorStatus) =
       viewUpdate = true
     elif key == ord('/'):
       dirList = searchFiles(status, dirList)
+      currentLine = 0
+      startIndex = 0
       viewUpdate = true
       if dirList.len < 1:
         DirlistUpdate = true
