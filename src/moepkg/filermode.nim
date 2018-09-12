@@ -256,7 +256,13 @@ proc filerMode*(status: var EditorStatus) =
       currentLine = 0
       startIndex = 0
       viewUpdate = true
-      if dirList.len < 1:
+      if dirList.len == 0:
+        status.mainWindow.erase
+        status.mainWindow.write(0, 0, "not found")
+        status.mainWindow.refresh
+        discard getKey(status.commandWindow)
+        status.commandWindow.erase
+        status.commandWindow.refresh
         DirlistUpdate = true
 
     elif key == ord('D'):
