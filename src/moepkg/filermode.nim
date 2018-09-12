@@ -225,19 +225,20 @@ proc writeFileOpenErrorMessage*(commandWindow: var Window, fileName: seq[Rune]) 
 proc filerMode*(status: var EditorStatus) =
   setCursor(false)
   var viewUpdate = true
-  var DirlistUpdate = true
+  var dirlistUpdate = true
   var dirList = newSeq[PathInfo]()
   var currentLine = 0
   var startIndex = 0
+  var searchMode = false
 
   while status.mode == Mode.filer:
-    if DirlistUpdate:
+    if dirlistUpdate:
       currentLine = 0
       startIndex = 0
       dirList = @[]
       dirList.add refreshDirList()
       viewUpdate = true
-      DirlistUpdate = false
+      dirlistUpdate = false
 
     if viewUpdate:
       status.mainWindow.erase
@@ -252,6 +253,7 @@ proc filerMode*(status: var EditorStatus) =
       status.resize(terminalHeight(), terminalWidth())
       viewUpdate = true
     elif key == ord('/'):
+      searchMode = true
       dirList = searchFiles(status, dirList)
       currentLine = 0
       startIndex = 0
@@ -263,11 +265,15 @@ proc filerMode*(status: var EditorStatus) =
         discard getKey(status.commandWindow)
         status.commandWindow.erase
         status.commandWindow.refresh
-        DirlistUpdate = true
+        dirlistUpdate = true
+    elif isEscKey(key):
+      if searchMode == true:
+        dirlistUpdate = true
+        searchMode = false
 
     elif key == ord('D'):
       deleteFile(status, dirList[currentLine], currentLine)
-      DirlistUpdate = true
+      dirlistUpdate = true
       viewUpdate = true
     elif key == ord('i'):
       writeFileDitailView(status.mainWindow, dirList[currentLine + startIndex][1])
@@ -305,13 +311,13 @@ proc filerMode*(status: var EditorStatus) =
       elif dirList[currentLine + startIndex][0] == pcDir:
         try:
           setCurrentDir(dirList[currentLine + startIndex][1])
-          DirlistUpdate = true
+          dirlistUpdate = true
         except OSError:
           writeFileOpenErrorMessage(status.commandWindow, (substr(dirList[currentLine][1])).toRunes)
       elif dirList[currentLine + startIndex][0] == pcLinkToDir:
         try:
           setCurrentDir(expandsymLink(dirList[currentLine + startIndex][1]))
-          DirlistUpdate = true
+          dirlistUpdate = true
         except OSError:
           writeFileOpenErrorMessage(status.commandWindow, (substr(dirList[currentLine][1])).toRunes)
       elif dirList[currentLine + startIndex][0] == pcLinkToFile:
