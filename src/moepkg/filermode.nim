@@ -15,9 +15,9 @@ import gapbuffer
 import exmode
 
 type
-  List = tuple[kind: PathComponent, path: string]
+  PathInfo = tuple[kind: PathComponent, path: string]
 
-proc searchFiles(status: var EditorStatus, dirList: seq[List]): seq[List] =
+proc searchFiles(status: var EditorStatus, dirList: seq[PathInfo]): seq[PathInfo] =
   let command = getCommand(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
     window.erase
     window.write(0, 0, fmt"/{$command}")
@@ -30,7 +30,7 @@ proc searchFiles(status: var EditorStatus, dirList: seq[List]): seq[List] =
     if dirList[index].path.contains(str):
       result.add dirList[index]
 
-proc deleteFile(status: var EditorStatus, dirList: List, currentLine: int) =
+proc deleteFile(status: var EditorStatus, dirList: PathInfo, currentLine: int) =
   let command = getCommand(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
     window.erase
     window.write(0, 0, fmt"Delete file? 'y' or 'n': {$command}")
@@ -49,7 +49,7 @@ proc deleteFile(status: var EditorStatus, dirList: List, currentLine: int) =
   status.commandWindow.write(0, 0, "Deleted "&dirList.path)
   status.commandWindow.refresh
 
-proc refreshDirList(): seq[List] =
+proc refreshDirList(): seq[PathInfo] =
   result = @[(pcDir, "../")]
   for list in walkDir("./"):
     result.add list
@@ -154,7 +154,7 @@ proc writeFileDitailView(mainWindow: var Window, fileName: string) =
 
   discard getKey(mainWindow)
 
-proc writeFillerView(mainWindow: var Window, dirList: seq[(PathComponent, string)], currentLine, startIndex: int) =
+proc writeFillerView(mainWindow: var Window, dirList: seq[PathInfo], currentLine, startIndex: int) =
 
   for i in 0 ..< dirList.len - startIndex:
     let index = i
@@ -218,7 +218,7 @@ proc filerMode*(status: var EditorStatus) =
   setCursor(false)
   var viewUpdate = true
   var DirlistUpdate = true
-  var dirList = newSeq[List]()
+  var dirList = newSeq[PathInfo]()
   var currentLine = 0
   var startIndex = 0
 
