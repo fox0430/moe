@@ -1,5 +1,13 @@
 import editorstatus
 import gapbuffer, unicodeext
+import sequtils, ospaths
+
+proc pathNormaliz*(path: seq[Rune]): seq[Rune] =
+  if $path[0] == "~":
+    result = getHomeDir().toRunes
+    result.insert(path[1 .. path.high], result.len);
+  else:
+    return path
 
 proc openFile*(filename: seq[Rune]): GapBuffer[seq[Rune]] =
   result = initGapBuffer[seq[Rune]]()
