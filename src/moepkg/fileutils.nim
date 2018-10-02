@@ -2,10 +2,10 @@ import editorstatus
 import gapbuffer, unicodeext
 import sequtils, ospaths
 
-proc pathNormaliz*(path: seq[Rune]): seq[Rune] =
-  if $path[0] == "~":
+proc normalizePath*(path: seq[Rune]): seq[Rune] =
+  if path[0] == ru'~':
     result = getHomeDir().toRunes
-    result.insert(path[1 .. path.high], result.len);
+    result.add(path[1..path.high])
   else:
     return path
 

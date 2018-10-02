@@ -59,17 +59,17 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
     writeNoWriteError(status.commandWindow)
     status.changeMode(Mode.normal)
     return
-  if existsFile($(filename.pathNormaliz)):
+  if existsFile($filename):
     status = initEditorStatus()
-    status.filename = filename.pathNormaliz
+    status.filename = filename
     status.buffer = openFile(status.filename)
     status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
-  elif existsDir($(filename.pathNormaliz)):
-    setCurrentDir($(filename.pathNormaliz))
+  elif existsDir($filename):
+    setCurrentDir($filename)
     status.changeMode(Mode.filer)
   else:
     status = initEditorStatus()
-    status.filename = filename.pathNormaliz
+    status.filename = filename
     status.buffer = newFile()
     status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
 
@@ -132,7 +132,7 @@ proc exMode*(status: var EditorStatus) =
     if line >= status.buffer.len: line = status.buffer.high
     jumpCommand(status, line)
   elif isEditCommand(command):
-    editCommand(status, command[1])
+    editCommand(status, command[1].normalizePath)
   elif isWriteCommand(status, command):
     writeCommand(status, if command.len < 2: status.filename else: command[1])
   elif isQuitCommand(command):
