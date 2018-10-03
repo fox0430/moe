@@ -6,6 +6,8 @@ proc normalizePath*(path: seq[Rune]): seq[Rune] =
   if path[0] == ru'~':
     result = getHomeDir().toRunes
     result.add(path[1..path.high])
+  elif path[0 .. 1] == ru"./":
+    return path[2 .. path.high]
   else:
     return path
 
