@@ -82,7 +82,7 @@ proc writeFileNameHalfwayCurrentLine(mainWindow: var Window, fileName: string, c
   mainWindow.write(currentLine, 0, substr(fileName, 2, terminalWidth() - 2), brightWhiteGreen)
 
 proc writeDirNameHalfwayCurrentLine(mainWindow: var Window, fileName: string, currentLine: int) =
-  if currentLine== 0:    # "../"
+  if currentLine == 0:    # "../"
     mainWindow.write(currentLine, 0, substr(fileName, 2, terminalWidth() - 2), brightWhiteGreen)
   else:
     mainWindow.write(currentLine, 0, substr(fileName, 2, terminalWidth() - 2) & "/~", brightWhiteGreen)
