@@ -1,13 +1,13 @@
 import terminal, strutils, unittest
 import moepkg/editorstatus, moepkg/editorview, moepkg/gapbuffer, moepkg/unicodeext, moepkg/insertmode
 
-test "resize: 1":
+test "resize 1":
   var status = initEditorStatus()
   status.buffer = initGapBuffer(@[ru"a"])
   status.view = initEditorView(status.buffer, 1, 1)
   status.resize(0, 0)
 
-test "resize: 2":
+test "resize 2":
   var status = initEditorStatus()
   status.buffer = initGapBuffer(@[ru"a"])
   status.view = initEditorView(status.buffer, 20, 4)
