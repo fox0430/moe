@@ -134,7 +134,7 @@ proc exMode*(status: var EditorStatus) =
     if line >= status.buffer.len: line = status.buffer.high
     jumpCommand(status, line)
   elif isEditCommand(command):
-    editCommand(status, command[1])
+    editCommand(status, command[1].normalizePath)
   elif isWriteCommand(status, command):
     writeCommand(status, if command.len < 2: status.filename else: command[1])
   elif isQuitCommand(command):
