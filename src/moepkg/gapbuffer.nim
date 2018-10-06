@@ -103,7 +103,7 @@ proc empty*(gapBuffer: GapBuffer): bool = return gapBuffer.len == 0
 
 proc `$`*(gapBuffer: GapBuffer): string =
   result = ""
-  for i in 0 ..< gapBuffer.len: result &= gapBuffer[i] & "\n"
+  for i in 0 ..< gapBuffer.len: result &= $gapBuffer[i] & "\n"
 
 proc next*(gapBuffer: GapBuffer, line, column: int): (int, int) =
   result = (line, column)

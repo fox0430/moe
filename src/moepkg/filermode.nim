@@ -13,6 +13,7 @@ import fileutils
 import editorview
 import gapbuffer
 import exmode
+import independentutils
 
 type
   List = tuple[kind: PathComponent, path: string]
@@ -280,28 +281,30 @@ proc filerMode*(status: var EditorStatus) =
         startIndex = dirList.len - status.mainWindow.height
       viewUpdate = true
     elif isEnterKey(key):
-      if dirList[currentLine + startIndex][0] == pcFile:
+      let
+        kind = dirList[currentLine + startIndex][0]
+        path = dirList[currentLine + startIndex][1]
+      case kind
+      of pcFile, pcLinkToFile:
+        let
+          filename = (if kind == pcFile: substr(path, 2) else: expandsymLink(path)).toRunes
+          textAndEncoding = openFile(filename)
         status = initEditorStatus()
-        status.filename = substr(dirList[currentLine + startIndex][1], 2).toRunes
-        status.buffer = openFile(status.filename)
-        status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
+        status.filename = filename
+        status.buffer = textAndEncoding.text.toGapBuffer
+        status.settings.characterEncoding = textAndEncoding.encoding
+        status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-numberOfDigits(status.buffer.len)-2)
         setCursor(true)
-      elif dirList[currentLine + startIndex][0] == pcDir:
+      of pcDir:
         try:
           setCurrentDir(dirList[currentLine + startIndex][1])
           DirlistUpdate = true
         except OSError:
           writeFileOpenErrorMessage(status.commandWindow, (substr(dirList[currentLine][1])).toRunes)
-      elif dirList[currentLine + startIndex][0] == pcLinkToDir:
+      of pcLinkToDir:
         try:
           setCurrentDir(expandsymLink(dirList[currentLine + startIndex][1]))
           DirlistUpdate = true
         except OSError:
           writeFileOpenErrorMessage(status.commandWindow, (substr(dirList[currentLine][1])).toRunes)
-      elif dirList[currentLine + startIndex][0] == pcLinkToFile:
-        status = initEditorStatus()
-        status.filename = toRunes(expandsymLink(dirList[currentLine + startIndex][1]))
-        status.buffer = openFile(status.filename)
-        status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
-        setCursor(true)
   setCursor(true)

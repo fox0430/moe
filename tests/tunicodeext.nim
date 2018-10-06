@@ -197,17 +197,17 @@ A much larger collection of such pangrams is now available at
 test "detectCharacterEncoding: UTF-8 with BOM":
   check(("\xEF\xBB\xBF" & s).detectCharacterEncoding == CharacterEncoding.utf8)
 
-test "detectCharacterEncoding: UTF-16BE with BOM":
-  check(("\xFE\xFF" & s).detectCharacterEncoding == CharacterEncoding.utf16Be)
+test "detectCharacterEncoding: UTF-16 with BE BOM":
+  check(("\xFE\xFF" & s).detectCharacterEncoding == CharacterEncoding.utf16)
 
-test "detectCharacterEncoding: UTF-16LE with BOM":
-  check(("\xFF\xFE" & s).detectCharacterEncoding == CharacterEncoding.utf16Le)
+test "detectCharacterEncoding: UTF-16 with LE BOM":
+  check(("\xFF\xFE" & s).detectCharacterEncoding == CharacterEncoding.utf16)
 
-test "detectCharacterEncoding: UTF-32BE with BOM":
-  check(("\x00\x00\xFE\xFF" & s).detectCharacterEncoding == CharacterEncoding.utf32Be)
+test "detectCharacterEncoding: UTF-32 with BE BOM":
+  check(("\x00\x00\xFE\xFF" & s).detectCharacterEncoding == CharacterEncoding.utf32)
 
-test "detectCharacterEncoding: UTF-32LE with BOM":
-  check(("\xFF\xFE\x00\x00" & s).detectCharacterEncoding == CharacterEncoding.utf32Le)
+test "detectCharacterEncoding: UTF-32 with LE BOM":
+  check(("\xFF\xFE\x00\x00" & s).detectCharacterEncoding == CharacterEncoding.utf32)
 
 
 test "detectCharacterEncoding: UTF-8":

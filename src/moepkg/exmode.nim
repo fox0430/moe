@@ -1,5 +1,5 @@
 import sequtils, strutils, os, terminal, strformat
-import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext
+import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils
 
 proc getCommand*(commandWindow: var Window, updateCommandWindow: proc (window: var Window, command: seq[Rune])): seq[seq[Rune]] =
   var command = ru""
@@ -60,10 +60,12 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
     status.changeMode(Mode.normal)
     return
   if existsFile($filename):
+    let textAndEncoding = openFile(filename)
     status = initEditorStatus()
     status.filename = filename
-    status.buffer = openFile(status.filename)
-    status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
+    status.buffer = textAndEncoding.text.toGapBuffer
+    status.settings.characterEncoding = textAndEncoding.encoding
+    status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-numberOfDigits(status.buffer.len)-2)
   elif existsDir($filename):
     setCurrentDir($filename)
     status.changeMode(Mode.filer)
@@ -82,7 +84,7 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
     return
 
   try:
-    saveFile(filename, status.buffer)
+    saveFile(filename, status.buffer.toRunes, status.settings.characterEncoding)
     status.filename = filename
     status.countChange = 0
   except IOError:
@@ -98,7 +100,7 @@ proc quitCommand(status: var EditorStatus) =
 
 proc writeAndQuitCommand(status: var EditorStatus) =
   try:
-    saveFile(status.filename, status.buffer)
+    saveFile(status.filename, status.buffer.toRunes, status.settings.characterEncoding)
     status.changeMode(Mode.quit)
   except IOError:
     writeSaveError(status.commandWindow)

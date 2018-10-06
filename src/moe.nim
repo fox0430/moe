@@ -8,6 +8,8 @@ import moepkg/filermode
 import moepkg/exmode
 import moepkg/editorview
 import moepkg/gapbuffer
+import moepkg/independentutils
+import moepkg/unicodeext
 
 when isMainModule:
   startUi()
@@ -17,7 +19,9 @@ when isMainModule:
     status.filename = commandLineParams()[0].toRunes
     if existsFile($(status.filename)):
       try:
-        status.buffer = openFile(status.filename)
+        let textAndEncoding = openFile(status.filename)
+        status.buffer = textAndEncoding.text.toGapBuffer
+        status.settings.characterEncoding = textAndEncoding.encoding
       except IOError:
         echo(fmt"Failed to open: {status.filename}")
         exitUi()

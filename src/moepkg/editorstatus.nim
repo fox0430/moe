@@ -10,8 +10,9 @@ type Registers* = object
 
 type EditorSettings = object
   autoCloseParen*: bool
-  autoIndent*:     bool 
-  tabStop*:        int
+  autoIndent*: bool 
+  tabStop*: int
+  characterEncoding*: CharacterEncoding
 
 type EditorStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -48,7 +49,7 @@ proc initEditorStatus*(): EditorStatus =
   result.registers = initRegisters()
   result.settings = initEditorSettings()
   result.mode = Mode.normal
-  result.prevMode= Mode.normal
+  result.prevMode = Mode.normal
 
   result.mainWindow = initWindow(terminalHeight()-2, terminalWidth(), 0, 0)
   result.statusWindow = initWindow(1, terminalWidth(), terminalHeight()-2, 0, ui.ColorPair.blackGreen)
@@ -71,6 +72,8 @@ proc writeStatusBar*(status: var EditorStatus) =
   else:
     status.statusWindow.append(if status.filename.len > 0: status.filename else: ru"No name", ui.ColorPair.blackGreen)
   if status.countChange > 0:  status.statusWindow.append(ru" [+]", ui.ColorPair.blackGreen)
+
+  status.statusWindow.append($(status.settings.characterEncoding))
 
   let
     line = fmt"{status.currentLine+1}/{status.buffer.len}"

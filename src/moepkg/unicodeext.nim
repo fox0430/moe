@@ -1,9 +1,21 @@
 import unicode, strutils, sequtils
 import unicodedb/widths
+import gapbuffer
 export unicode
 
 type CharacterEncoding* = enum
-  utf8, utf16Be, utf16Le, utf32Be, utf32Le, unknown
+  utf8, utf16, utf16Be, utf16Le, utf32, utf32Be, utf32Le, unknown
+
+proc `$`*(encoding: CharacterEncoding): string =
+  case encoding
+  of CharacterEncoding.utf8: return "UTF-8"
+  of CharacterEncoding.utf16: return "UTF-16"
+  of CharacterEncoding.utf16Be: return "UTF-16BE"
+  of CharacterEncoding.utf16Le: return "UTF-16LE"
+  of CharacterEncoding.utf32: return "UTF-32"
+  of CharacterEncoding.utf32Be: return "UTF-32BE"
+  of CharacterEncoding.utf32Le: return "UTF-32LE"
+  of CharacterEncoding.unknown: return "UNKNOWN"
 
 proc validateUtf16Be(s: string): bool =
   if (s.len mod 2) != 0: return false
@@ -92,11 +104,10 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
 
   if s.len >= 4:
     # UTF-32のBOMチェック
-    if s[0..3] == "\x00\x00\xFE\xFF": return CharacterEncoding.utf32Be
-    if s[0..3] == "\xFF\xFE\x00\x00": return CharacterEncoding.utf32Le
+    if s[0..3] == "\x00\x00\xFE\xFF" or s[0..3] == "\xFF\xFE\x00\x00": return CharacterEncoding.utf32
+
     # UTF-16のBOMチェック
-    if s[0..1] == "\xFE\xFF": return CharacterEncoding.utf16Be
-    if s[0..1] == "\xFF\xFE": return CharacterEncoding.utf16Le
+    if s[0..1] == "\xFE\xFF" or s[0..1] == "\xFF\xFE": return CharacterEncoding.utf16
 
   if s.validateUtf8 == -1: return CharacterEncoding.utf8
 
@@ -169,3 +180,16 @@ proc countRepeat*(runes: seq[Rune], charSet: set[char], start: int): int =
     let s = $runes[i]
     if s.len > 1 or (not (s[0] in charSet)): break
     inc(result)
+
+proc split*(runes: seq[Rune], sep: Rune): seq[seq[Rune]] =
+  result.add(@[])
+  for c in runes:
+    if c == sep: result.add(@[])
+    else: result[result.high].add(c)
+
+proc toGapBuffer*(runes: seq[Rune]): GapBuffer[seq[Rune]] = runes.split(ru'\n').initGapBuffer
+
+proc toRunes*(buffer: GapBuffer[seq[Rune]]): seq[Rune] =
+  for i in 0 ..< buffer.len:
+    result.add(buffer[i])
+    result.add(ru'\n')
