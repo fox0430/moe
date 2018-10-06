@@ -75,6 +75,12 @@ proc validateUtf32Le(s: string): bool =
 
   return true
 
+proc count0000(s: string): int =
+  var i = 0
+  while i+1 < s.len:
+    if ord(s[i]) == 0x00 and ord(s[i+1]) == 0x00: inc(result)
+    i += 2
+
 proc detectCharacterEncoding*(s: string): CharacterEncoding =
   ## sの文字符号化形式を推測する
   ## 現時点ではUnicodeの符号化形式にしか対応してない
@@ -93,10 +99,19 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
     if s[0..1] == "\xFF\xFE": return CharacterEncoding.utf16Le
 
   if s.validateUtf8 == -1: return CharacterEncoding.utf8
-  if s.validateUtf16Be: return CharacterEncoding.utf16Be
-  if s.validateUtf16Le: return CharacterEncoding.utf16Le
-  if s.validateUtf32Be: return CharacterEncoding.utf32Be
-  if s.validateUtf32Le: return CharacterEncoding.utf32Le
+
+  var validEncodings: seq[CharacterEncoding]
+  if s.validateUtf16Be: validEncodings.add(CharacterEncoding.utf16Be)
+  if s.validateUtf16Le: validEncodings.add(CharacterEncoding.utf16Le)
+  if s.validateUtf32Be: validEncodings.add(CharacterEncoding.utf32Be)
+  if s.validateUtf32Le: validEncodings.add(CharacterEncoding.utf32Le)
+
+  if 5*count0000(s) >= 2*(s.len div 2):
+    # 0x000 が多すぎる場合にはUTF-16ではないとする
+    if validEncodings.contains(CharacterEncoding.utf16Be): validEncodings.delete(validEncodings.find(CharacterEncoding.utf16Be))
+    if validEncodings.contains(CharacterEncoding.utf16Le): validEncodings.delete(validEncodings.find(CharacterEncoding.utf16Le))
+
+  if validEncodings.len == 1: return validEncodings[0]
 
   return CharacterEncoding.unknown
 
