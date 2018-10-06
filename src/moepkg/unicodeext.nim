@@ -117,7 +117,8 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
   if s.validateUtf32Be: validEncodings.add(CharacterEncoding.utf32Be)
   if s.validateUtf32Le: validEncodings.add(CharacterEncoding.utf32Le)
 
-  if 5*count0000(s) >= 2*(s.len div 2):
+  let threshold = (s.len / 2) * (2 / 5)
+  if float(count0000(s)) >= threshold:
     # 0x000 が多すぎる場合にはUTF-16ではないとする
     if validEncodings.contains(CharacterEncoding.utf16Be): validEncodings.delete(validEncodings.find(CharacterEncoding.utf16Be))
     if validEncodings.contains(CharacterEncoding.utf16Le): validEncodings.delete(validEncodings.find(CharacterEncoding.utf16Le))

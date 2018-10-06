@@ -73,12 +73,12 @@ proc writeStatusBar*(status: var EditorStatus) =
     status.statusWindow.append(if status.filename.len > 0: status.filename else: ru"No name", ui.ColorPair.blackGreen)
   if status.countChange > 0:  status.statusWindow.append(ru" [+]", ui.ColorPair.blackGreen)
 
-  status.statusWindow.append($(status.settings.characterEncoding))
-
   let
     line = fmt"{status.currentLine+1}/{status.buffer.len}"
     column = fmt"{status.currentColumn}/{status.buffer[status.currentLine].len}"
-  status.statusWindow.write(0, terminalWidth()-line.len-column.len-2, fmt"{line} {column}", ui.Colorpair.blackGreen)
+    encoding = $status.settings.characterEncoding
+    info = fmt"{line} {column} {encoding} "
+  status.statusWindow.write(0, terminalWidth()-info.len, info, ui.Colorpair.blackGreen)
   status.statusWindow.refresh
 
 proc resize*(status: var EditorStatus, height, width: int) =
