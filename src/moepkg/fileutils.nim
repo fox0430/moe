@@ -1,6 +1,5 @@
-import editorstatus
-import gapbuffer, unicodeext
-import sequtils, ospaths
+import sequtils, ospaths, encodings
+import editorstatus, gapbuffer, unicodeext
 
 proc normalizePath*(path: seq[Rune]): seq[Rune] =
   if path[0] == ru'~':
@@ -11,17 +10,20 @@ proc normalizePath*(path: seq[Rune]): seq[Rune] =
   else:
     return path
 
-proc openFile*(filename: seq[Rune]): GapBuffer[seq[Rune]] =
-  result = initGapBuffer[seq[Rune]]()
-  let fs = open($filename)
-  while not fs.endOfFile: result.add(fs.readLine.toRunes)
-  fs.close()
+proc openFile*(filename: seq[Rune]): tuple[text: seq[Rune], encoding: CharacterEncoding] =
+  let
+    raw = readFile($filename)
+    encoding = detectCharacterEncoding(raw)
+    text =  if encoding == CharacterEncoding.unknown or encoding == CharacterEncoding.utf8:
+      # 符号化形式が不明な場合は諦めてUTF-8としてUTF-32に変換する
+      raw.toRunes
+    else:
+      convert(raw, "UTF-8", $encoding).toRunes
+  return (text, encoding)
 
 proc newFile*(): GapBuffer[seq[Rune]] =
   result = initGapBuffer[seq[Rune]]()
   result.add(ru"")
 
-proc saveFile*(filename: seq[Rune], buffer: GapBuffer[seq[Rune]]) =
-  let fs = open($filename, fmWrite)
-  for line in 0 .. buffer.high: fs.writeLine($buffer[line])
-  fs.close()
+proc saveFile*(filename: seq[Rune], runes: seq[Rune], encoding: CharacterEncoding) =
+  writeFile($filename, convert($runes, $(if encoding == CharacterEncoding.unknown: CharacterEncoding.utf8 else: encoding), "UTF-8"))

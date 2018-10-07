@@ -10,8 +10,9 @@ type Registers* = object
 
 type EditorSettings = object
   autoCloseParen*: bool
-  autoIndent*:     bool 
-  tabStop*:        int
+  autoIndent*: bool 
+  tabStop*: int
+  characterEncoding*: CharacterEncoding
 
 type EditorStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -48,7 +49,7 @@ proc initEditorStatus*(): EditorStatus =
   result.registers = initRegisters()
   result.settings = initEditorSettings()
   result.mode = Mode.normal
-  result.prevMode= Mode.normal
+  result.prevMode = Mode.normal
 
   result.mainWindow = initWindow(terminalHeight()-2, terminalWidth(), 0, 0)
   result.statusWindow = initWindow(1, terminalWidth(), terminalHeight()-2, 0, ui.ColorPair.blackGreen)
@@ -72,7 +73,9 @@ proc writeStatusBar*(status: var EditorStatus) =
   let
     line = fmt"{status.currentLine+1}/{status.buffer.len}"
     column = fmt"{status.currentColumn}/{status.buffer[status.currentLine].len}"
-  status.statusWindow.write(0, terminalWidth()-line.len-column.len-2, fmt"{line} {column}", ui.Colorpair.blackGreen)
+    encoding = $status.settings.characterEncoding
+    info = fmt"{line} {column} {encoding} "
+  status.statusWindow.write(0, terminalWidth()-info.len, info, ui.Colorpair.blackGreen)
   status.statusWindow.refresh
 
 proc resize*(status: var EditorStatus, height, width: int) =

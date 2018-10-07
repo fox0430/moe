@@ -1,7 +1,7 @@
 import unittest, deques
 import moepkg/editorview, moepkg/gapbuffer, moepkg/unicodeext
 
-test "initEditorView: 1":
+test "initEditorView 1":
   let
     lines = @[ru"abc", ru"def"]
     buffer = initGapBuffer[seq[Rune]](lines)
@@ -9,7 +9,7 @@ test "initEditorView: 1":
   check(view.lines[0] == ru"abc")
   check(view.lines[1] == ru"def")
 
-test "initEditorView: 2":
+test "initEditorView 2":
   let
     lines = @[ru"abcあd", ru"いうefgh", ru"ij"]
     buffer = initGapBuffer[seq[Rune]](lines)
@@ -23,7 +23,7 @@ test "initEditorView: 2":
   check(view.originalLine[6] == -1)
   check(view.originalLine[7] == -1)
 
-test "seekCursor: 1":
+test "seekCursor 1":
   let
     lines = @[ru"aaa", ru"bbbb", ru"ccccc", ru"ddd"]
     buffer = initGapBuffer[seq[RUne]](lines)
@@ -40,7 +40,7 @@ test "seekCursor: 1":
   check(view.lines[0] == ru"cc")
   check(view.lines[1] == ru"ddd")
 
-test "seekCursor: 2":
+test "seekCursor 2":
   let
     lines = @[ru"aaaaaaa", ru"bbbb", ru"ccc", ru"d"]
     buffer = initGapBuffer(lines)
