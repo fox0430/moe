@@ -314,13 +314,13 @@ proc filerMode*(status: var EditorStatus) =
           setCurrentDir(dirList[currentLine + startIndex][1])
           dirlistUpdate = true
         except OSError:
-          writeFileOpenErrorMessage(status.commandWindow, (substr(dirList[currentLine][1])).toRunes)
+          writeFileOpenErrorMessage(status.commandWindow, dirList[currentLine][1].toRunes)
       elif dirList[currentLine + startIndex][0] == pcLinkToDir:
         try:
           setCurrentDir(expandsymLink(dirList[currentLine + startIndex][1]))
           dirlistUpdate = true
         except OSError:
-          writeFileOpenErrorMessage(status.commandWindow, (substr(dirList[currentLine][1])).toRunes)
+          writeFileOpenErrorMessage(status.commandWindow, dirList[currentLine][1].toRunes)
       elif dirList[currentLine + startIndex][0] == pcLinkToFile:
         status = initEditorStatus()
         status.filename = toRunes(expandsymLink(dirList[currentLine + startIndex][1]))
