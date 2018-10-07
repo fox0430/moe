@@ -73,7 +73,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
     status = initEditorStatus()
     status.filename = filename
     status.buffer = newFile()
-    status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-status.buffer.len.intToStr.len-2)
+    status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-numberOfDigits(status.buffer.len)-2)
 
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   if filename.len == 0:

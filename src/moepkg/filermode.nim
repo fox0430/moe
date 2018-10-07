@@ -305,8 +305,8 @@ proc filerMode*(status: var EditorStatus) =
       viewUpdate = true
     elif isEnterKey(key):
       let
-        kind = dirList[currentLine + startIndex][0]
-        path = dirList[currentLine + startIndex][1]
+        kind = dirList[currentLine + startIndex].kind
+        path = dirList[currentLine + startIndex].path
       case kind
       of pcFile, pcLinkToFile:
         let
@@ -318,16 +318,11 @@ proc filerMode*(status: var EditorStatus) =
         status.settings.characterEncoding = textAndEncoding.encoding
         status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-numberOfDigits(status.buffer.len)-2)
         setCursor(true)
-      of pcDir:
+      of pcDir, pcLinkToDir:
+        let directoryName = if kind == pcDir: path else: expandSymlink(path)
         try:
-          setCurrentDir(dirList[currentLine + startIndex][1])
+          setCurrentDir(path)
           dirlistUpdate = true
         except OSError:
-          writeFileOpenErrorMessage(status.commandWindow, (substr(dirList[currentLine][1])).toRunes)
-      of pcLinkToDir:
-        try:
-          setCurrentDir(expandsymLink(dirList[currentLine + startIndex][1]))
-          dirlistUpdate = true
-        except OSError:
-          writeFileOpenErrorMessage(status.commandWindow, (substr(dirList[currentLine][1])).toRunes)
+          writeFileOpenErrorMessage(status.commandWindow, path.toRunes)
   setCursor(true)
