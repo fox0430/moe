@@ -1,5 +1,5 @@
-[![Build Status](https://travis-ci.org/fox0430/moe.svg?branch=port-to-nim)](https://travis-ci.org/fox0430/moe)
-[![AUR](https://img.shields.io/aur/license/yaourt.svg)](https://github.com/fox0430/moe/blob/port-to-nim/README.md)
+[![Build Status](https://travis-ci.org/fox0430/moe.svg?branch=master)](https://travis-ci.org/fox0430/moe)
+[![AUR](https://img.shields.io/aur/license/yaourt.svg)](https://github.com/fox0430/moe/blob/master/README.md)
 
 ## moe
 
@@ -10,9 +10,9 @@ This project's goal is a funny animation editor.
 ![moe-0](https://user-images.githubusercontent.com/15966436/42743686-90deb5f8-88b5-11e8-9e5e-ae8202f64a98.jpg)
 
 ## Features
-- Adopt GapBuffer  
-
 - Written in Nim  
+
+- Adopt GapBuffer  
 
 - Vim like keybinds and mode
 
