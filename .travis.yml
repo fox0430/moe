@@ -1,0 +1,22 @@
+language: c
+compiler:
+  - gcc
+before_install:
+  # Set up libncursesw
+  - sudo ln -sf /lib/x86_64-linux-gnu/libncursesw.so.5.9 /usr/lib/x86_64-linux-gnu/libncursesw.so
+  # Install nim
+  - git clone https://github.com/nim-lang/nim
+  - cd nim
+  - git clone --depth 1 git://github.com/nim-lang/csources
+  - cd csources && sh build.sh
+  - cd ..
+  - bin/nim c koch
+  - ./koch boot -d:release
+  - ./koch nimble
+  - cd ..
+before_script:
+  - set -e
+  - export PATH=$(pwd)/nim/bin:$(pwd):$PATH
+script:
+  - yes | nimble test --verbose
+  - nimble install --verbose

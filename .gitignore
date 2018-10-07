@@ -1,0 +1,4 @@
+src/nimcache
+tests/*
+!tests/*.nim
+moe
