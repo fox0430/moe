@@ -1,6 +1,9 @@
 import sequtils, strutils, os, terminal, strformat
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils
 
+type
+  SearchResult = tuple[line: int, column: int]
+
 proc getCommand*(commandWindow: var Window, updateCommandWindow: proc (window: var Window, command: seq[Rune])): seq[seq[Rune]] =
   var command = ru""
   while true:
@@ -9,7 +12,8 @@ proc getCommand*(commandWindow: var Window, updateCommandWindow: proc (window: v
     let key = commandWindow.getkey
     
     if isResizeKey(key): continue
-    if isEnterKey(key): break
+    if isEnterKey(key) or isEscKey(key): break
+    if isEscKey(key): return @["".toRunes]
     if isBackspaceKey(key):
       if command.len > 0: command.delete(command.high, command.high)
       continue
@@ -147,3 +151,58 @@ proc exMode*(status: var EditorStatus) =
     shellCommand(status, command.join(" ").substr(1))
   else:
     status.changeMode(status.prevMode)
+
+proc getKeyword*(commandWindow: var Window, updateCommandWindow: proc (window: var Window, command: seq[Rune])): seq[Rune] =
+  var command = ru""
+  while true:
+    updateCommandWindow(commandWindow, command)
+ 
+    let key = commandWindow.getkey
+    
+    if isResizeKey(key): continue
+    if isEnterKey(key): break
+    if isEscKey(key): return "".toRunes
+    if isBackspaceKey(key):
+      if command.len > 0: command.delete(command.high, command.high)
+      continue
+    if validateUtf8(key.toUTF8) != -1: continue
+ 
+    command &= key
+ 
+  return ($command).toRunes
+
+proc searchText(line: seq[Rune], keyword: seq[Rune]): int =
+  result = -1
+  exitUi()
+  for startPostion in 0 ..< (line.len - keyword.len):
+    let endPosition = startPostion + keyword.len
+    if line[startPostion ..< endPosition] == keyword:
+      return startPostion
+
+proc searchBuffer(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
+  result = (-1, -1)
+  for line in status.currentLine ..< status.buffer.len:
+    let position = searchText(status.buffer[line], keyword)
+    if position > -1:
+      return (line, position)
+
+proc smartSearch(status: var EditorStatus) =
+  let command = getKeyword(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
+    window.erase
+    window.write(0, 0, fmt"/{$command}")
+    window.refresh
+  )
+  if command.len == 0:
+    status.commandWindow.erase
+    status.commandWindow.refresh
+    return
+  let searchResult = searchBuffer(status, command)
+  if searchResult.line > -1:
+    jumpLine(status, searchResult.line)
+    for column in 0 ..< searchResult.column:
+      keyRight(status)
+
+proc searchMode*(status: var EditorStatus) =
+  smartSearch(status)
+  status.changeMode(status.prevMode)
+  

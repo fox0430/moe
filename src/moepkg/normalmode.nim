@@ -1,5 +1,5 @@
 import strutils, strformat, terminal, deques, sequtils
-import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext
+import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, search
 
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.erase
@@ -245,6 +245,7 @@ proc joinLine(status: var EditorStatus) =
   status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
   inc(status.countChange)
 
+
 proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.cmdLoop == 0: status.cmdLoop = 1
   
@@ -333,6 +334,8 @@ proc normalMode*(status: var EditorStatus) =
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
+    elif key == ord('/'):
+      status.changeMode(Mode.search)
     elif key == ord(':'):
       status.changeMode(Mode.ex)
     elif isDigit(key):

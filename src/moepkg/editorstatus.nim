@@ -2,7 +2,7 @@ import terminal, os, strformat
 import gapbuffer, editorview, ui, cursor, unicodeext
 
 type Mode* = enum
-  normal, insert, ex, filer, quit
+  normal, insert, ex, filer, search, quit
 
 type Registers* = object
   yankedLines*:   seq[seq[Rune]]
