@@ -25,7 +25,7 @@ proc getKeyword(commandWindow: var Window, updateCommandWindow: proc (window: va
 
 proc searchText(line: seq[Rune], keyword: seq[Rune]): int =
   result = -1
-  for startPostion in 0 ..< (line.len - keyword.len):
+  for startPostion in 0 .. (line.len - keyword.len):
     let endPosition = startPostion + keyword.len
     if line[startPostion ..< endPosition] == keyword:
       return startPostion
