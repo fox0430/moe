@@ -25,7 +25,6 @@ proc getKeyword(commandWindow: var Window, updateCommandWindow: proc (window: va
 
 proc searchText(line: seq[Rune], keyword: seq[Rune]): int =
   result = -1
-  exitUi()
   for startPostion in 0 ..< (line.len - keyword.len):
     let endPosition = startPostion + keyword.len
     if line[startPostion ..< endPosition] == keyword:
@@ -34,9 +33,14 @@ proc searchText(line: seq[Rune], keyword: seq[Rune]): int =
 proc searchBuffer(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
   result = (-1, -1)
   for line in status.currentLine ..< status.buffer.len:
-    let position = searchText(status.buffer[line], keyword)
-    if position > -1:
-      return (line, position)
+    if line == status.currentLine:
+      let position = searchText(status.buffer[line][status.currentColumn ..< status.buffer[line].len], keyword)
+      if position > -1:
+        return (line, position + status.currentColumn)
+    else:
+      let position = searchText(status.buffer[line], keyword)
+      if position > -1:
+        return (line, position)
 
 proc smartSearch(status: var EditorStatus) =
   let command = getKeyword(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
