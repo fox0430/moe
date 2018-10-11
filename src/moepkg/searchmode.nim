@@ -23,18 +23,18 @@ proc getKeyword(commandWindow: var Window, updateCommandWindow: proc (window: va
  
   return ($command).toRunes
 
-proc searchText(line: seq[Rune], keyword: seq[Rune]): int =
+proc searchLine(line: seq[Rune], keyword: seq[Rune]): int =
   result = -1
   for startPostion in 0 .. (line.len - keyword.len):
     let endPosition = startPostion + keyword.len
     if line[startPostion ..< endPosition] == keyword:
       return startPostion
 
-proc searchLine(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
+proc searchBuffer(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
   result = (-1, -1)
   for line in status.currentLine ..< status.buffer.len:
     let begin = if line == status.currentLine: status.currentColumn else: 0
-    let position = searchText(status.buffer[line][begin ..< status.buffer[line].len], keyword)
+    let position = searchLine(status.buffer[line][begin ..< status.buffer[line].len], keyword)
     if position > -1:
         return (line, begin + position)
 
@@ -48,7 +48,7 @@ proc searchFirstOccurrence(status: var EditorStatus) =
     status.commandWindow.erase
     status.commandWindow.refresh
     return
-  let searchResult = searchLine(status, command)
+  let searchResult = searchBuffer(status, command)
   if searchResult.line > -1:
     jumpLine(status, searchResult.line)
     for column in 0 ..< searchResult.column:
