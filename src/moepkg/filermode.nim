@@ -129,7 +129,7 @@ proc writePcLinkToFileNameHalfway(mainWindow: var Window, currentLine: int, file
   let buffer = fileName & "@ -> " & expandsymLink(fileName)
   mainWindow.write(currentLine, 0, substr(buffer, 0, terminalWidth() - 4) & "~", cyanDefault)
 
-proc writeFileDitailView(mainWindow: var Window, fileName: string) =
+proc writeFileDetailView(mainWindow: var Window, fileName: string) =
   mainWindow.erase
 
   let fileInfo = getFileInfo(fileName, false)
@@ -278,7 +278,7 @@ proc filerMode*(status: var EditorStatus) =
       dirlistUpdate = true
       viewUpdate = true
     elif key == ord('i'):
-      writeFileDitailView(status.mainWindow, dirList[currentLine + startIndex][1])
+      writeFileDetailView(status.mainWindow, dirList[currentLine + startIndex][1])
       viewUpdate = true
     elif (key == 'j' or isDownKey(key)) and currentLine + startIndex < dirList.high:
       if currentLine == terminalHeight() - 3:
