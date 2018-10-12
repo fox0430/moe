@@ -16,6 +16,7 @@ type EditorSettings = object
 
 type EditorStatus* = object
   buffer*: GapBuffer[seq[Rune]]
+  searchHistory*: seq[seq[Rune]]
   view*: EditorView
   cursor*: CursorPosition
   registers*: Registers
