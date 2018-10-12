@@ -43,11 +43,18 @@ proc searchLine(line: seq[Rune], keyword: seq[Rune]): int =
 
 proc searchBuffer(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
   result = (-1, -1)
-  for line in status.currentLine ..< status.buffer.len:
+  let startLine = status.currentLine
+  for line in startLine ..< status.buffer.len:
     let begin = if line == status.currentLine: status.currentColumn else: 0
     let position = searchLine(status.buffer[line][begin ..< status.buffer[line].len], keyword)
     if position > -1:
         return (line, begin + position)
+  for line in 0 ..< startLine:
+    let begin = if line == status.currentLine: status.currentColumn else: 0
+    let position = searchLine(status.buffer[line][begin ..< status.buffer[line].len], keyword)
+    if position > -1:
+        return (line, begin + position)
+    
 
 proc searchFirstOccurrence(status: var EditorStatus) =
   let keyword = getKeyword(status.commandWindow, status.searchHistory, proc (window: var Window, keyword: seq[Rune]) =
