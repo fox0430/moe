@@ -1,8 +1,13 @@
+
 import unicodeext, strformat, sequtils
-import ui, editorstatus, gapbuffer, normalmode
+import ui, editorstatus, gapbuffer
 
 type
-  SearchResult = tuple[line: int, column: int]
+  SearchResult* = tuple[line: int, column: int]
+
+proc searchBuffer*(status: var EditorStatus, keyword: seq[Rune]): SearchResult
+
+import normalmode
 
 proc getKeyword(commandWindow: var Window, history: seq[seq[Rune]], updateCommandWindow: proc (window: var Window, keyword: seq[Rune])): seq[Rune] =
   var keyword = ru""
