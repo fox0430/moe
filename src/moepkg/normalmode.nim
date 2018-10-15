@@ -261,6 +261,8 @@ proc searchNextOccurrence(status: var EditorStatus) =
     jumpLine(status, searchResult.line)
     for column in 0 ..< searchResult.column:
       keyRight(status)
+  elif searchResult.line == -1:
+    keyLeft(status)
 
 proc searchNextOccurrenceReversely(status: var EditorStatus) =
   if status.searchHistory.len < 1: return
@@ -273,6 +275,8 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) =
     jumpLine(status, searchResult.line)
     for column in 0 ..< searchResult.column:
       keyRight(status)
+  elif searchResult.line == -1:
+    keyRight(status)
 
 proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.cmdLoop == 0: status.cmdLoop = 1
