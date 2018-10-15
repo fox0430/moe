@@ -1,4 +1,4 @@
-import unicodeext, strformat, sequtils
+import unicodeext, strformat, sequtils, system
 import ui, editorstatus, gapbuffer
 
 type
@@ -66,16 +66,12 @@ proc searchLineReversely(line: seq[Rune], keyword: seq[Rune]): int =
 proc searchBufferReversely(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
   result = (-1, -1)
   let startLine = status.currentLine
-  for line in countdown(startLine, 0):
+  for i in 0 ..< status.buffer.len + 1:
+    var line = (startLine - i) mod status.buffer.len
+    if line < 0: line = status.buffer.len - i
     let
-      endPosition = if line == startLine: status.currentColumn else: status.buffer[line].len
+      endPosition = if line == startLine and i == 0: status.currentColumn else: status.buffer[line].len 
       position = searchLineReversely(status.buffer[line][0 ..< endPosition], keyword)
-    if position > -1:  return (line, position)
-
-  for line in countdown(status.buffer.len - 1, startLine):
-    let
-      begin = if line == startLine: status.currentColumn else: 0
-      position = searchLineReversely(status.buffer[line][begin ..< status.buffer[line].len], keyword)
     if position > -1:  return (line, position)
 
 proc searchFirstOccurrence(status: var EditorStatus) =
