@@ -262,6 +262,18 @@ proc searchNextOccurrence(status: var EditorStatus) =
     for column in 0 ..< searchResult.column:
       keyRight(status)
 
+proc searchNextOccurrenceReverse(status: var EditorStatus) =
+  if status.searchHistory.len < 1: return
+
+  let keyword = status.searchHistory[status.searchHistory.high]
+  
+  keyLeft(status)
+  let searchResult = searchBufferReverse(status, keyword)
+  if searchResult.line > -1:
+    jumpLine(status, searchResult.line)
+    for column in 0 ..< searchResult.column:
+      keyRight(status)
+
 proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.cmdLoop == 0: status.cmdLoop = 1
   
@@ -327,6 +339,8 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
       replaceCurrentCharacter(status, ch)
   elif key == ord('n'):
     searchNextOccurrence(status)
+  elif key == ord('N'):
+    searchNextOccurrenceReverse(status)
   elif key == ord('i'):
     status.changeMode(Mode.insert)
   elif key == ord('I'):
