@@ -5,7 +5,7 @@ type
   SearchResult* = tuple[line: int, column: int]
 
 proc searchBuffer*(status: var EditorStatus, keyword: seq[Rune]): SearchResult
-proc searchBufferReverse*(status: var EditorStatus, keyword: seq[Rune]): SearchResult
+proc searchBufferReversely*(status: var EditorStatus, keyword: seq[Rune]): SearchResult
 
 import normalmode
 
@@ -46,6 +46,13 @@ proc searchLine(line: seq[Rune], keyword: seq[Rune]): int =
     if line[startPostion ..< endPosition] == keyword:
       return startPostion
 
+proc searchLineReversely(line: seq[Rune], keyword: seq[Rune]): int =
+  result = -1
+  for startPostion in countdown((line.len - keyword.len), 0):
+    let endPosition = startPostion + keyword.len
+    if line[startPostion ..< endPosition] == keyword:
+      return startPostion
+
 proc searchBuffer(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
   result = (-1, -1)
   let startLine = status.currentLine
@@ -56,17 +63,19 @@ proc searchBuffer(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
       position = searchLine(status.buffer[line][begin ..< status.buffer[line].len], keyword)
     if position > -1:  return (line, begin + position)
 
-proc searchBufferReverse(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
+proc searchBufferReversely(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
   result = (-1, -1)
   let startLine = status.currentLine
   for line in countdown(startLine, 0):
     let
       endPosition = if line == startLine: status.currentColumn else: status.buffer[line].len
-      position = searchLine(status.buffer[line][0 ..< endPosition], keyword)
+      position = searchLineReversely(status.buffer[line][0 ..< endPosition], keyword)
     if position > -1:  return (line, position)
 
-  for line in countdown(status.buffer.len - 1, startLine + 1):
-    let position = searchLine(status.buffer[line], keyword)
+  for line in countdown(status.buffer.len - 1, startLine):
+    let
+      begin = if line == startLine: status.currentColumn else: 0
+      position = searchLineReversely(status.buffer[line][begin ..< status.buffer[line].len], keyword)
     if position > -1:  return (line, position)
 
 proc searchFirstOccurrence(status: var EditorStatus) =
