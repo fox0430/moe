@@ -168,7 +168,7 @@ proc scrollDown(view: var EditorView, buffer: GapBuffer[seq[Rune]]) =
 
 proc writeLineNum(view: EditorView, win: var Window, y, line: int, colorPair: ColorPair) =
   let width = view.widthOfLineNum
-  win.write(y, 0, align($(line+1), view.widthOfLineNum-1), colorPair, false)
+  win.write(y, 0, strutils.align($(line+1), view.widthOfLineNum-1), colorPair, false)
 
 proc writeLine(view: EditorView, win: var Window, y: int, str: seq[Rune], colorPair: ColorPair) =
   win.write(y, view.widthOfLineNum, str, colorPair, false)
