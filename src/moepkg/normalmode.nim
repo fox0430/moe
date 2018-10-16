@@ -1,6 +1,11 @@
 import strutils, strformat, terminal, deques, sequtils
 import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext
 
+proc jumpLine*(status: var EditorStatus, destination: int)
+proc keyRight*(status: var EditorStatus)
+
+import searchmode
+
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.erase
 
@@ -245,6 +250,34 @@ proc joinLine(status: var EditorStatus) =
   status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
   inc(status.countChange)
 
+proc searchNextOccurrence(status: var EditorStatus) =
+  if status.searchHistory.len < 1: return
+
+  let keyword = status.searchHistory[status.searchHistory.high]
+  
+  keyRight(status)
+  let searchResult = searchBuffer(status, keyword)
+  if searchResult.line > -1:
+    jumpLine(status, searchResult.line)
+    for column in 0 ..< searchResult.column:
+      keyRight(status)
+  elif searchResult.line == -1:
+    keyLeft(status)
+
+proc searchNextOccurrenceReversely(status: var EditorStatus) =
+  if status.searchHistory.len < 1: return
+
+  let keyword = status.searchHistory[status.searchHistory.high]
+  
+  keyLeft(status)
+  let searchResult = searchBufferReversely(status, keyword)
+  if searchResult.line > -1:
+    jumpLine(status, searchResult.line)
+    for column in 0 ..< searchResult.column:
+      keyRight(status)
+  elif searchResult.line == -1:
+    keyRight(status)
+
 proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.cmdLoop == 0: status.cmdLoop = 1
   
@@ -308,6 +341,10 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
         inc(status.currentColumn)
         status.expandedColumn = status.currentColumn
       replaceCurrentCharacter(status, ch)
+  elif key == ord('n'):
+    searchNextOccurrence(status)
+  elif key == ord('N'):
+    searchNextOccurrenceReversely(status)
   elif key == ord('i'):
     status.changeMode(Mode.insert)
   elif key == ord('I'):
@@ -333,6 +370,8 @@ proc normalMode*(status: var EditorStatus) =
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
+    elif key == ord('/'):
+      status.changeMode(Mode.search)
     elif key == ord(':'):
       status.changeMode(Mode.ex)
     elif isDigit(key):

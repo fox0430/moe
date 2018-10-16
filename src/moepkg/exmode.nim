@@ -9,7 +9,8 @@ proc getCommand*(commandWindow: var Window, updateCommandWindow: proc (window: v
     let key = commandWindow.getkey
     
     if isResizeKey(key): continue
-    if isEnterKey(key): break
+    if isEnterKey(key) or isEscKey(key): break
+    if isEscKey(key): return @["".toRunes]
     if isBackspaceKey(key):
       if command.len > 0: command.delete(command.high, command.high)
       continue

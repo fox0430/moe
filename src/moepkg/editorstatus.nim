@@ -2,7 +2,7 @@ import terminal, os, strformat
 import gapbuffer, editorview, ui, cursor, unicodeext
 
 type Mode* = enum
-  normal, insert, ex, filer, quit
+  normal, insert, ex, filer, search, quit
 
 type Registers* = object
   yankedLines*:   seq[seq[Rune]]
@@ -16,6 +16,7 @@ type EditorSettings = object
 
 type EditorStatus* = object
   buffer*: GapBuffer[seq[Rune]]
+  searchHistory*: seq[seq[Rune]]
   view*: EditorView
   cursor*: CursorPosition
   registers*: Registers
