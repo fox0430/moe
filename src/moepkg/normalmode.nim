@@ -171,7 +171,7 @@ proc moveToBackwardWord(status: var EditorStatus) =
   status.expandedColumn = status.currentColumn
 
 proc openBlankLineBelow(status: var EditorStatus) =
-  let indent = repeat(ru' ', countRepeat(status.buffer[status.currentLine], Whitespace, 0))
+  let indent = sequtils.repeat(ru' ', countRepeat(status.buffer[status.currentLine], Whitespace, 0))
 
   status.buffer.insert(indent, status.currentLine+1)
   inc(status.currentLine)
@@ -181,7 +181,7 @@ proc openBlankLineBelow(status: var EditorStatus) =
   inc(status.countChange)
 
 proc openBlankLineAbove(status: var EditorStatus) =
-  let indent = repeat(ru' ', countRepeat(status.buffer[status.currentLine], Whitespace, 0))
+  let indent = sequtils.repeat(ru' ', countRepeat(status.buffer[status.currentLine], Whitespace, 0))
 
   status.buffer.insert(indent, status.currentLine)
   status.currentColumn = indent.len

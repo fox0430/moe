@@ -18,7 +18,7 @@ proc getCommand*(commandWindow: var Window, updateCommandWindow: proc (window: v
  
     command &= key
  
-  return ($command).splitWhitespace.map(proc(s: string): seq[Rune] = toRunes(s))
+  return strutils.splitWhitespace($command).map(proc(s: string): seq[Rune] = toRunes(s))
 
 proc writeNoWriteError(commandWindow: var Window) =
   commandWindow.erase
