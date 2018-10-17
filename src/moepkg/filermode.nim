@@ -19,7 +19,7 @@ type
   PathInfo = tuple[kind: PathComponent, path: string]
 
 
-proc checkFilePermission(symlinkPath: string): string =
+proc tryExpandSymlink(symlinkPath: string): string =
   try:
     return expandSymlink(symlinkPath)
   except OSError:
@@ -69,7 +69,7 @@ proc refreshDirList(): seq[PathInfo] =
   result = @[(pcDir, "../")]
   for list in walkDir("./"):
     if list.kind == pcLinkToFile or list.kind == pcLinkToDir:
-      if checkFilePermission(list.path) != "": result.add list
+      if tryExpandSymlink(list.path) != "": result.add list
     else: result.add list
     result[result.high].path = $(result[result.high].path.toRunes.normalizePath)
   return result.sortedByIt(it.path)
