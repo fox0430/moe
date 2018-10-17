@@ -18,6 +18,13 @@ import independentutils
 type
   PathInfo = tuple[kind: PathComponent, path: string]
 
+
+proc tryExpandSymlink(symlinkPath: string): string =
+  try:
+    return expandSymlink(symlinkPath)
+  except OSError:
+    return ""
+
 proc searchFiles(status: var EditorStatus, dirList: seq[PathInfo]): seq[PathInfo] =
   let command = getCommand(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
     window.erase
@@ -61,7 +68,9 @@ proc deleteFile(status: var EditorStatus, dirList: PathInfo, currentLine: int) =
 proc refreshDirList(): seq[PathInfo] =
   result = @[(pcDir, "../")]
   for list in walkDir("./"):
-    result.add list
+    if list.kind == pcLinkToFile or list.kind == pcLinkToDir:
+      if tryExpandSymlink(list.path) != "": result.add list
+    else: result.add list
     result[result.high].path = $(result[result.high].path.toRunes.normalizePath)
   return result.sortedByIt(it.path)
 
