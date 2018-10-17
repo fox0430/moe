@@ -319,7 +319,7 @@ proc filerMode*(status: var EditorStatus) =
       case kind
       of pcFile, pcLinkToFile:
         let
-          filename = (if kind == pcFile: substr(path, 2) else: expandsymLink(path)).toRunes
+          filename = (if kind == pcFile: path else: expandsymLink(path)).toRunes
           textAndEncoding = openFile(filename)
         status = initEditorStatus()
         status.filename = filename
