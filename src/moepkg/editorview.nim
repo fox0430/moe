@@ -171,7 +171,7 @@ proc writeLineNum(view: EditorView, win: var Window, y, line: int, colorPair: Co
   win.write(y, 0, strutils.align($(line+1), view.widthOfLineNum-1), colorPair, false)
 
 proc writeLine(view: EditorView, win: var Window, y: int, str: seq[Rune], colorPair: ColorPair) =
-  win.write(y, view.widthOfLineNum, str, colorPair, false)
+  win.write(y, view.widthOfLineNum, ($str).replace("\t", repeat(' ', 4)), colorPair, false)
 
 proc writeAllLines*(view: var EditorView, win: var Window, buffer: GapBuffer[seq[Rune]], currentLine: int) =
   win.erase
