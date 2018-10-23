@@ -127,15 +127,6 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
 
   return CharacterEncoding.unknown
 
-proc width*(c: Rune): int =
-  if int(c) > 0x10FFFF: return 1
-  case c.unicodeWidth
-  of UnicodeWidth.uwdtNarrow, UnicodeWidth.uwdtHalf, UnicodeWidth.uwdtAmbiguous, UnicodeWidth.uwdtNeutral: 1
-  else: 2
-
-proc width*(runes: seq[Rune]): int =
-  for c in runes: result += width(c)
-
 proc toRune*(c: char): Rune =
   doAssert(ord(c) <= 127)
   ($c).toRunes[0]
@@ -155,6 +146,16 @@ proc canConvertToChar*(c: Rune): bool =
 proc toChar*(c: Rune): char =
   doAssert(canConvertToChar(c), "Failed to convert Rune to char")
   return ($c)[0]
+
+proc width*(c: Rune): int =
+  if int(c) > 0x10FFFF: return 1
+  if c == '\t': return 4
+  case c.unicodeWidth
+  of UnicodeWidth.uwdtNarrow, UnicodeWidth.uwdtHalf, UnicodeWidth.uwdtAmbiguous, UnicodeWidth.uwdtNeutral: 1
+  else: 2
+
+proc width*(runes: seq[Rune]): int =
+  for c in runes: result += width(c)
 
 proc numberOfBytes*(firstByte: char): int =
   if (int(firstByte) shr 7) == 0b0: return 1
