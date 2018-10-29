@@ -1,5 +1,5 @@
-import sequtils, strutils, os, terminal, strformat
-import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils
+import sequtils, strutils, os, terminal, strformat, deques
+import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode
 
 proc getCommand*(commandWindow: var Window, updateCommandWindow: proc (window: var Window, command: seq[Rune])): seq[seq[Rune]] =
   var command = ru""
@@ -50,6 +50,9 @@ proc isForceQuitCommand(command: seq[seq[Rune]]): bool =
 
 proc isShellCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1 and command[0][0] == ru'!'
+
+proc isReplaceCommand(command: seq[seq[Rune]]): bool =
+  return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
 
 proc jumpCommand(status: var EditorStatus, line: int) =
   jumpLine(status, line)
@@ -122,6 +125,44 @@ proc shellCommand(status: var EditorStatus, shellCommand: string) =
   status.commandWindow.erase
   status.commandWindow.refresh
 
+proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
+  exitUi()
+
+  var numOfSlash = 0
+  for i in 0 .. command.high:
+    if command[i] == '/': numOfSlash.inc
+  if numOfSlash == 0: return
+
+  var searchWord = ru""
+  var startReplaceWordIndex = 0
+  for i in 0 .. command.high:
+    if command[i] == '/':
+      startReplaceWordIndex = i + 1
+      break
+    searchWord.add(command[i])
+  if searchWord.len == 0: return
+
+  var replaceWord = ru""
+  for i in startReplaceWordIndex .. command.high:
+    if command[i] == '/':
+      break
+    replaceWord.add(command[i])
+
+  let currentLine = status.currentLine
+  status.currentLine = 0
+  let searchResult = searchBuffer(status, searchWord)
+  if searchResult.line > -1:
+    for i in 0 .. searchWord.high:
+      status.buffer[searchResult.line].delete(searchResult.column)
+    for i in 0 .. replaceWord.high:
+      status.buffer[searchResult.line].insert(replaceWord[i], searchResult.column + i)
+
+  status.currentLine = currentLine
+  status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
+  inc(status.countChange)
+
+  status.changeMode(status.prevMode)
+
 proc exMode*(status: var EditorStatus) =
   let command = getCommand(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
     window.erase
@@ -146,5 +187,7 @@ proc exMode*(status: var EditorStatus) =
     forceQuitCommand(status)
   elif isShellCommand(command):
     shellCommand(status, command.join(" ").substr(1))
+  elif isReplaceCommand(command):
+    replaceBuffer(status, command[0][3 .. command[0].high])
   else:
     status.changeMode(status.prevMode)
