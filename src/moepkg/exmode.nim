@@ -126,8 +126,6 @@ proc shellCommand(status: var EditorStatus, shellCommand: string) =
   status.commandWindow.refresh
 
 proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
-  exitUi()
-
   var numOfSlash = 0
   for i in 0 .. command.high:
     if command[i] == '/': numOfSlash.inc
@@ -148,19 +146,15 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
       break
     replaceWord.add(command[i])
 
-  let currentLine = status.currentLine
-  status.currentLine = 0
-  let searchResult = searchBuffer(status, searchWord)
-  if searchResult.line > -1:
-    for i in 0 .. searchWord.high:
-      status.buffer[searchResult.line].delete(searchResult.column)
-    for i in 0 .. replaceWord.high:
-      status.buffer[searchResult.line].insert(replaceWord[i], searchResult.column + i)
+  for i in 0 .. status.buffer.high:
+    let searchResult = searchBuffer(status, searchWord)
+    if searchResult.line > -1:
+      for i in 0 .. searchWord.high:
+        status.buffer[searchResult.line].delete(searchResult.column)
+      for i in 0 .. replaceWord.high:
+        status.buffer[searchResult.line].insert(replaceWord[i], searchResult.column + i)
 
-  status.currentLine = currentLine
-  status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
   inc(status.countChange)
-
   status.changeMode(status.prevMode)
 
 proc exMode*(status: var EditorStatus) =
