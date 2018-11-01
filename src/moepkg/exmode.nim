@@ -1,6 +1,34 @@
 import sequtils, strutils, os, terminal, strformat, deques
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode
 
+
+type
+  replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
+
+
+proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
+  var numOfSlash = 0
+  for i in 0 .. command.high:
+    if command[i] == '/': numOfSlash.inc
+  if numOfSlash == 0: return
+
+  var searchWord = ru""
+  var startReplaceWordIndex = 0
+  for i in 0 .. command.high:
+    if command[i] == '/':
+      startReplaceWordIndex = i + 1
+      break
+    searchWord.add(command[i])
+  if searchWord.len == 0: return
+
+  var replaceWord = ru""
+  for i in startReplaceWordIndex .. command.high:
+    if command[i] == '/':
+      break
+    replaceWord.add(command[i])
+  
+  return (searhWord: searchWord, replaceWord: replaceWord)
+
 proc getCommand*(commandWindow: var Window, updateCommandWindow: proc (window: var Window, command: seq[Rune])): seq[seq[Rune]] =
   var command = ru""
   while true:
@@ -126,33 +154,14 @@ proc shellCommand(status: var EditorStatus, shellCommand: string) =
   status.commandWindow.refresh
 
 proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
-  var numOfSlash = 0
-  for i in 0 .. command.high:
-    if command[i] == '/': numOfSlash.inc
-  if numOfSlash == 0: return
 
-  var searchWord = ru""
-  var startReplaceWordIndex = 0
-  for i in 0 .. command.high:
-    if command[i] == '/':
-      startReplaceWordIndex = i + 1
-      break
-    searchWord.add(command[i])
-  if searchWord.len == 0: return
-
-  var replaceWord = ru""
-  for i in startReplaceWordIndex .. command.high:
-    if command[i] == '/':
-      break
-    replaceWord.add(command[i])
+  let replaceInfo = parseReplaceCommand(command)
 
   for i in 0 .. status.buffer.high:
-    let searchResult = searchBuffer(status, searchWord)
+    let searchResult = searchBuffer(status, replaceInfo.searhWord)
     if searchResult.line > -1:
-      for i in 0 .. searchWord.high:
-        status.buffer[searchResult.line].delete(searchResult.column)
-      for i in 0 .. replaceWord.high:
-        status.buffer[searchResult.line].insert(replaceWord[i], searchResult.column + i)
+      status.buffer[searchResult.line].delete(searchResult.column, searchResult.column + replaceInfo.searhWord.high)
+      status.buffer[searchResult.line].insert(replaceInfo.replaceWord, searchResult.column)
 
   inc(status.countChange)
   status.changeMode(status.prevMode)
