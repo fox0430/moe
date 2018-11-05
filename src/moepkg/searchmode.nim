@@ -49,7 +49,7 @@ proc searchLine(line: seq[Rune], keyword: seq[Rune]): int =
 proc searchBuffer(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
   result = (-1, -1)
   let startLine = status.currentLine
-  for i in 0 ..< status.buffer.len + 1:
+  for i in 0 ..< status.buffer.len:
     let
       line = (startLine + i) mod status.buffer.len
       begin = if line == startLine and i == 0: status.currentColumn else: 0
