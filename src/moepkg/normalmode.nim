@@ -321,6 +321,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     status.changeMode(Mode.insert)
   elif key == ord('d'):
     if getKey(status.mainWindow) == ord('d'):
+      yankLines(status, status.currentLine, min(status.currentLine+status.cmdLoop-1, status.buffer.high))
       for i in 0 ..< min(status.cmdLoop, status.buffer.len-status.currentLine): deleteLine(status, status.currentLine)
   elif key == ord('y'):
     if getkey(status.mainWindow) == ord('y'): yankLines(status, status.currentLine, min(status.currentLine+status.cmdLoop-1, status.buffer.high))
