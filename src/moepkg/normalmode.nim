@@ -204,6 +204,7 @@ proc deleteLine(status: var EditorStatus, line: int) =
   inc(status.countChange)
 
 proc yankLines(status: var EditorStatus, first, last: int) =
+  status.registers.yankedStr = @[]
   status.registers.yankedLines = @[]
   for i in first .. last: status.registers.yankedLines.add(status.buffer[i])
 
@@ -218,6 +219,38 @@ proc pasteLines(status: var EditorStatus) =
 
   status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
   inc(status.countChange)
+
+proc yankString(status: var EditorStatus, length: int) =
+  status.registers.yankedLines = @[]
+  status.registers.yankedStr = @[]
+  for i in status.currentColumn ..< length:
+    status.registers.yankedStr.add(status.buffer[status.currentLine][i])
+
+  status.commandWindow.erase
+  status.commandwindow.write(0, 0, fmt"{status.registers.yankedStr.len} character yanked")
+  status.commandWindow.refresh
+
+proc pasteString(status: var EditorStatus) =
+  for i in status.registers.yankedStr:
+    status.buffer[status.currentLine].insert(status.registers.yankedStr, status.currentColumn)
+
+  status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
+  inc(status.countChange)
+
+proc pasteAfterCursor(status: var EditorStatus) =
+  if status.registers.yankedStr.len > 0:
+    status.currentColumn.inc
+    pasteString(status)
+  elif status.registers.yankedLines.len > 0:
+    pasteLines(status)
+
+proc pasteBeforeCursor(status: var EditorStatus) =
+  status.view.reload(status.buffer, status.view.originalLine[0])
+
+  if status.registers.yankedLines.len > 0:
+    pasteLines(status)
+  elif status.registers.yankedStr.len > 0:
+    pasteString(status)
 
 proc replaceCurrentCharacter(status: var EditorStatus, character: Rune) =
   status.buffer[status.currentLine][status.currentColumn] = character
@@ -290,6 +323,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('j') or isDownKey(key) or isEnterKey(key):
     for i in 0 ..< status.cmdLoop: keyDown(status)
   elif key == ord('x') or isDcKey(key):
+    yankString(status, min(status.cmdLoop, status.buffer[status.currentLine].len - status.currentColumn))
     for i in 0 ..< min(status.cmdLoop, status.buffer[status.currentLine].len - status.currentColumn): deleteCurrentCharacter(status)
   elif key == ord('^'):
     moveToFirstNonBlankOfLine(status)
@@ -326,7 +360,9 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('y'):
     if getkey(status.mainWindow) == ord('y'): yankLines(status, status.currentLine, min(status.currentLine+status.cmdLoop-1, status.buffer.high))
   elif key == ord('p'):
-    pasteLines(status)
+    pasteAfterCursor(status)
+  elif key == ord('P'):
+    pasteBeforeCursor(status)
   elif key == ord('>'):
     for i in 0 ..< status.cmdLoop: addIndent(status)
   elif key == ord('<'):
