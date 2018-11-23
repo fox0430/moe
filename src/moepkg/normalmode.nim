@@ -231,8 +231,8 @@ proc yankString(status: var EditorStatus, length: int) =
   status.commandWindow.refresh
 
 proc pasteString(status: var EditorStatus) =
-  for i in status.registers.yankedStr:
-    status.buffer[status.currentLine].insert(status.registers.yankedStr, status.currentColumn)
+  status.buffer[status.currentLine].insert(status.registers.yankedStr, status.currentColumn)
+  status.currentColumn += status.registers.yankedStr.high
 
   status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
   inc(status.countChange)
