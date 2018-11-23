@@ -213,9 +213,9 @@ proc yankLines(status: var EditorStatus, first, last: int) =
   status.commandWindow.refresh
 
 proc pasteLines(status: var EditorStatus) =
-  for line in status.registers.yankedLines:
-    inc(status.currentLine)
-    status.buffer.insert(line, status.currentLine)
+  for i in 0 ..< status.registers.yankedLines.len:
+    status.buffer.insert(status.registers.yankedLines[i], status.currentLine + i + 1)
+  status.currentLine.inc
 
   status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
   inc(status.countChange)
