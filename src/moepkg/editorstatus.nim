@@ -2,11 +2,11 @@ import terminal, os, strformat
 import gapbuffer, editorview, ui, cursor, unicodeext
 
 type Mode* = enum
-  normal, insert, ex, filer, quit
+  normal, insert, ex, filer, search, quit
 
 type Registers* = object
-  yankedLines*:   seq[seq[Rune]]
-  yankedStr*:    string
+  yankedLines*: seq[seq[Rune]]
+  yankedStr*: seq[Rune]
 
 type EditorSettings = object
   autoCloseParen*: bool
@@ -16,6 +16,7 @@ type EditorSettings = object
 
 type EditorStatus* = object
   buffer*: GapBuffer[seq[Rune]]
+  searchHistory*: seq[seq[Rune]]
   view*: EditorView
   cursor*: CursorPosition
   registers*: Registers
@@ -37,7 +38,7 @@ type EditorStatus* = object
 
 proc initRegisters(): Registers =
   result.yankedLines = @[]
-  result.yankedStr = "" 
+  result.yankedStr = @[]
 
 proc initEditorSettings(): EditorSettings =
   result.autoCloseParen = true

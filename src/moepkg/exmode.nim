@@ -1,5 +1,33 @@
-import sequtils, strutils, os, terminal, strformat
-import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils
+import sequtils, strutils, os, terminal, strformat, deques
+import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode
+
+
+type
+  replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
+
+
+proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
+  var numOfSlash = 0
+  for i in 0 .. command.high:
+    if command[i] == '/': numOfSlash.inc
+  if numOfSlash == 0: return
+
+  var searchWord = ru""
+  var startReplaceWordIndex = 0
+  for i in 0 .. command.high:
+    if command[i] == '/':
+      startReplaceWordIndex = i + 1
+      break
+    searchWord.add(command[i])
+  if searchWord.len == 0: return
+
+  var replaceWord = ru""
+  for i in startReplaceWordIndex .. command.high:
+    if command[i] == '/':
+      break
+    replaceWord.add(command[i])
+  
+  return (searhWord: searchWord, replaceWord: replaceWord)
 
 proc getCommand*(commandWindow: var Window, updateCommandWindow: proc (window: var Window, command: seq[Rune])): seq[seq[Rune]] =
   var command = ru""
@@ -9,7 +37,8 @@ proc getCommand*(commandWindow: var Window, updateCommandWindow: proc (window: v
     let key = commandWindow.getkey
     
     if isResizeKey(key): continue
-    if isEnterKey(key): break
+    if isEnterKey(key) or isEscKey(key): break
+    if isEscKey(key): return @["".toRunes]
     if isBackspaceKey(key):
       if command.len > 0: command.delete(command.high, command.high)
       continue
@@ -17,7 +46,7 @@ proc getCommand*(commandWindow: var Window, updateCommandWindow: proc (window: v
  
     command &= key
  
-  return ($command).splitWhitespace.map(proc(s: string): seq[Rune] = toRunes(s))
+  return strutils.splitWhitespace($command).map(proc(s: string): seq[Rune] = toRunes(s))
 
 proc writeNoWriteError(commandWindow: var Window) =
   commandWindow.erase
@@ -49,6 +78,9 @@ proc isForceQuitCommand(command: seq[seq[Rune]]): bool =
 
 proc isShellCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1 and command[0][0] == ru'!'
+
+proc isReplaceCommand(command: seq[seq[Rune]]): bool =
+  return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
 
 proc jumpCommand(status: var EditorStatus, line: int) =
   jumpLine(status, line)
@@ -121,6 +153,19 @@ proc shellCommand(status: var EditorStatus, shellCommand: string) =
   status.commandWindow.erase
   status.commandWindow.refresh
 
+proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
+
+  let replaceInfo = parseReplaceCommand(command)
+
+  for i in 0 .. status.buffer.high:
+    let searchResult = searchBuffer(status, replaceInfo.searhWord)
+    if searchResult.line > -1:
+      status.buffer[searchResult.line].delete(searchResult.column, searchResult.column + replaceInfo.searhWord.high)
+      status.buffer[searchResult.line].insert(replaceInfo.replaceWord, searchResult.column)
+
+  inc(status.countChange)
+  status.changeMode(status.prevMode)
+
 proc exMode*(status: var EditorStatus) =
   let command = getCommand(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
     window.erase
@@ -145,5 +190,7 @@ proc exMode*(status: var EditorStatus) =
     forceQuitCommand(status)
   elif isShellCommand(command):
     shellCommand(status, command.join(" ").substr(1))
+  elif isReplaceCommand(command):
+    replaceBuffer(status, command[0][3 .. command[0].high])
   else:
     status.changeMode(status.prevMode)

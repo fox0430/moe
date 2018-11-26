@@ -18,6 +18,13 @@ import independentutils
 type
   PathInfo = tuple[kind: PathComponent, path: string]
 
+
+proc tryExpandSymlink(symlinkPath: string): string =
+  try:
+    return expandSymlink(symlinkPath)
+  except OSError:
+    return ""
+
 proc searchFiles(status: var EditorStatus, dirList: seq[PathInfo]): seq[PathInfo] =
   let command = getCommand(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
     window.erase
@@ -61,7 +68,9 @@ proc deleteFile(status: var EditorStatus, dirList: PathInfo, currentLine: int) =
 proc refreshDirList(): seq[PathInfo] =
   result = @[(pcDir, "../")]
   for list in walkDir("./"):
-    result.add list
+    if list.kind == pcLinkToFile or list.kind == pcLinkToDir:
+      if tryExpandSymlink(list.path) != "": result.add list
+    else: result.add list
     result[result.high].path = $(result[result.high].path.toRunes.normalizePath)
   return result.sortedByIt(it.path)
 
@@ -129,7 +138,7 @@ proc writePcLinkToFileNameHalfway(mainWindow: var Window, currentLine: int, file
   let buffer = fileName & "@ -> " & expandsymLink(fileName)
   mainWindow.write(currentLine, 0, substr(buffer, 0, terminalWidth() - 4) & "~", cyanDefault)
 
-proc writeFileDitailView(mainWindow: var Window, fileName: string) =
+proc writeFileDetailView(mainWindow: var Window, fileName: string) =
   mainWindow.erase
 
   let fileInfo = getFileInfo(fileName, false)
@@ -278,7 +287,7 @@ proc filerMode*(status: var EditorStatus) =
       dirlistUpdate = true
       viewUpdate = true
     elif key == ord('i'):
-      writeFileDitailView(status.mainWindow, dirList[currentLine + startIndex][1])
+      writeFileDetailView(status.mainWindow, dirList[currentLine + startIndex][1])
       viewUpdate = true
     elif (key == 'j' or isDownKey(key)) and currentLine + startIndex < dirList.high:
       if currentLine == terminalHeight() - 3:
@@ -310,7 +319,7 @@ proc filerMode*(status: var EditorStatus) =
       case kind
       of pcFile, pcLinkToFile:
         let
-          filename = (if kind == pcFile: substr(path, 2) else: expandsymLink(path)).toRunes
+          filename = (if kind == pcFile: path else: expandsymLink(path)).toRunes
           textAndEncoding = openFile(filename)
         status = initEditorStatus()
         status.filename = filename

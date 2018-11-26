@@ -1,6 +1,11 @@
 import strutils, strformat, terminal, deques, sequtils
 import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext
 
+proc jumpLine*(status: var EditorStatus, destination: int)
+proc keyRight*(status: var EditorStatus)
+
+import searchmode
+
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.erase
 
@@ -166,7 +171,7 @@ proc moveToBackwardWord(status: var EditorStatus) =
   status.expandedColumn = status.currentColumn
 
 proc openBlankLineBelow(status: var EditorStatus) =
-  let indent = repeat(ru' ', countRepeat(status.buffer[status.currentLine], Whitespace, 0))
+  let indent = sequtils.repeat(ru' ', countRepeat(status.buffer[status.currentLine], Whitespace, 0))
 
   status.buffer.insert(indent, status.currentLine+1)
   inc(status.currentLine)
@@ -176,7 +181,7 @@ proc openBlankLineBelow(status: var EditorStatus) =
   inc(status.countChange)
 
 proc openBlankLineAbove(status: var EditorStatus) =
-  let indent = repeat(ru' ', countRepeat(status.buffer[status.currentLine], Whitespace, 0))
+  let indent = sequtils.repeat(ru' ', countRepeat(status.buffer[status.currentLine], Whitespace, 0))
 
   status.buffer.insert(indent, status.currentLine)
   status.currentColumn = indent.len
@@ -199,6 +204,7 @@ proc deleteLine(status: var EditorStatus, line: int) =
   inc(status.countChange)
 
 proc yankLines(status: var EditorStatus, first, last: int) =
+  status.registers.yankedStr = @[]
   status.registers.yankedLines = @[]
   for i in first .. last: status.registers.yankedLines.add(status.buffer[i])
 
@@ -207,12 +213,44 @@ proc yankLines(status: var EditorStatus, first, last: int) =
   status.commandWindow.refresh
 
 proc pasteLines(status: var EditorStatus) =
-  for line in status.registers.yankedLines:
-    inc(status.currentLine)
-    status.buffer.insert(line, status.currentLine)
+  for i in 0 ..< status.registers.yankedLines.len:
+    status.buffer.insert(status.registers.yankedLines[i], status.currentLine + i + 1)
+  status.currentLine.inc
 
   status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
   inc(status.countChange)
+
+proc yankString(status: var EditorStatus, length: int) =
+  status.registers.yankedLines = @[]
+  status.registers.yankedStr = @[]
+  for i in status.currentColumn ..< length:
+    status.registers.yankedStr.add(status.buffer[status.currentLine][i])
+
+  status.commandWindow.erase
+  status.commandwindow.write(0, 0, fmt"{status.registers.yankedStr.len} character yanked")
+  status.commandWindow.refresh
+
+proc pasteString(status: var EditorStatus) =
+  status.buffer[status.currentLine].insert(status.registers.yankedStr, status.currentColumn)
+  status.currentColumn += status.registers.yankedStr.high
+
+  status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
+  inc(status.countChange)
+
+proc pasteAfterCursor(status: var EditorStatus) =
+  if status.registers.yankedStr.len > 0:
+    status.currentColumn.inc
+    pasteString(status)
+  elif status.registers.yankedLines.len > 0:
+    pasteLines(status)
+
+proc pasteBeforeCursor(status: var EditorStatus) =
+  status.view.reload(status.buffer, status.view.originalLine[0])
+
+  if status.registers.yankedLines.len > 0:
+    pasteLines(status)
+  elif status.registers.yankedStr.len > 0:
+    pasteString(status)
 
 proc replaceCurrentCharacter(status: var EditorStatus, character: Rune) =
   status.buffer[status.currentLine][status.currentColumn] = character
@@ -245,6 +283,34 @@ proc joinLine(status: var EditorStatus) =
   status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
   inc(status.countChange)
 
+proc searchNextOccurrence(status: var EditorStatus) =
+  if status.searchHistory.len < 1: return
+
+  let keyword = status.searchHistory[status.searchHistory.high]
+  
+  keyRight(status)
+  let searchResult = searchBuffer(status, keyword)
+  if searchResult.line > -1:
+    jumpLine(status, searchResult.line)
+    for column in 0 ..< searchResult.column:
+      keyRight(status)
+  elif searchResult.line == -1:
+    keyLeft(status)
+
+proc searchNextOccurrenceReversely(status: var EditorStatus) =
+  if status.searchHistory.len < 1: return
+
+  let keyword = status.searchHistory[status.searchHistory.high]
+  
+  keyLeft(status)
+  let searchResult = searchBufferReversely(status, keyword)
+  if searchResult.line > -1:
+    jumpLine(status, searchResult.line)
+    for column in 0 ..< searchResult.column:
+      keyRight(status)
+  elif searchResult.line == -1:
+    keyRight(status)
+
 proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.cmdLoop == 0: status.cmdLoop = 1
   
@@ -257,6 +323,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('j') or isDownKey(key) or isEnterKey(key):
     for i in 0 ..< status.cmdLoop: keyDown(status)
   elif key == ord('x') or isDcKey(key):
+    yankString(status, min(status.cmdLoop, status.buffer[status.currentLine].len - status.currentColumn))
     for i in 0 ..< min(status.cmdLoop, status.buffer[status.currentLine].len - status.currentColumn): deleteCurrentCharacter(status)
   elif key == ord('^'):
     moveToFirstNonBlankOfLine(status)
@@ -288,11 +355,14 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     status.changeMode(Mode.insert)
   elif key == ord('d'):
     if getKey(status.mainWindow) == ord('d'):
+      yankLines(status, status.currentLine, min(status.currentLine+status.cmdLoop-1, status.buffer.high))
       for i in 0 ..< min(status.cmdLoop, status.buffer.len-status.currentLine): deleteLine(status, status.currentLine)
   elif key == ord('y'):
     if getkey(status.mainWindow) == ord('y'): yankLines(status, status.currentLine, min(status.currentLine+status.cmdLoop-1, status.buffer.high))
   elif key == ord('p'):
-    pasteLines(status)
+    pasteAfterCursor(status)
+  elif key == ord('P'):
+    pasteBeforeCursor(status)
   elif key == ord('>'):
     for i in 0 ..< status.cmdLoop: addIndent(status)
   elif key == ord('<'):
@@ -308,6 +378,10 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
         inc(status.currentColumn)
         status.expandedColumn = status.currentColumn
       replaceCurrentCharacter(status, ch)
+  elif key == ord('n'):
+    searchNextOccurrence(status)
+  elif key == ord('N'):
+    searchNextOccurrenceReversely(status)
   elif key == ord('i'):
     status.changeMode(Mode.insert)
   elif key == ord('I'):
@@ -333,6 +407,8 @@ proc normalMode*(status: var EditorStatus) =
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
+    elif key == ord('/'):
+      status.changeMode(Mode.search)
     elif key == ord(':'):
       status.changeMode(Mode.ex)
     elif isDigit(key):

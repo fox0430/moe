@@ -6,6 +6,7 @@ import moepkg/normalmode
 import moepkg/insertmode
 import moepkg/filermode
 import moepkg/exmode
+import moepkg/searchmode
 import moepkg/editorview
 import moepkg/gapbuffer
 import moepkg/independentutils
@@ -53,6 +54,8 @@ when isMainModule:
       exMode(status)
     of Mode.filer:
       filerMode(status)
+    of Mode.search:
+      searchMode(status)
     of Mode.quit:
       break
 

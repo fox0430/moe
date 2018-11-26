@@ -103,7 +103,7 @@ proc initWindow*(height, width, top, left: int, color: ColorPair = ColorPair.bri
 
 proc write*(win: var Window, y, x: int, str: string, color: ColorPair = ColorPair.brightWhiteDefault, storeX: bool = true) =
   win.cursesWindow.wattron(int(ncurses.COLOR_PAIR(ord(color))))
-  mvwprintw(win.cursesWindow, y, x, str)
+  mvwaddstr(win.cursesWindow, y, x, str)
   if storeX:
     win.y = y
     win.x = x+str.toRunes.width
@@ -116,7 +116,7 @@ proc write*(win: var Window, y, x: int, str: seq[Rune], color: ColorPair = Color
 
 proc append*(win: var Window, str: string, color: ColorPair = ColorPair.brightWhiteDefault) =
   win.cursesWindow.wattron(int(ncurses.COLOR_PAIR(ord(color))))
-  mvwprintw(win.cursesWindow, win.y, win.x, $str)
+  mvwaddstr(win.cursesWindow, win.y, win.x, $str)
   win.x += str.toRunes.width
 
 proc append*(win: var Window, str: seq[Rune], color: ColorPair = ColorPair.brightWhiteDefault) = append(win, $str, color)
