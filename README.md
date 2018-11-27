@@ -50,7 +50,7 @@ This project's goal is a funny animation editor.
 
 ## Install
 ```sh
-nimble install https://github.com/fox0430/moe
+nimble install moe
 ```
 
 ## Usage
