@@ -11,8 +11,11 @@ import moepkg/editorview
 import moepkg/gapbuffer
 import moepkg/independentutils
 import moepkg/unicodeext
+import moepkg/cmdoption
 
 when isMainModule:
+  parseCommandLineOption(commandLineParams())
+
   startUi()
 
   var status = initEditorStatus()
