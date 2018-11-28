@@ -13,7 +13,9 @@ proc parseCommandLineOption*(line: seq[string]): ComdParsedList  =
       of cmdArgument:
         result.filename = key
       of cmdShortOption, cmdLongOption:
-    case key:
-      of "v", "version":
-        echo "v0.0.35"
-        quit()
+        case key:
+          of "v", "version":
+            echo "v0.0.35"
+            quit()
+      of cmdEnd:
+        assert(false)
