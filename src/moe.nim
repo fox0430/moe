@@ -11,13 +11,16 @@ import moepkg/editorview
 import moepkg/gapbuffer
 import moepkg/independentutils
 import moepkg/unicodeext
+import moepkg/cmdoption
 
 when isMainModule:
+  let parsedList = parseCommandLineOption(commandLineParams())
+
   startUi()
 
   var status = initEditorStatus()
-  if commandLineParams().len >= 1:
-    status.filename = commandLineParams()[0].toRunes
+  if parsedList.filename != "":
+    status.filename = parsedList.filename.toRunes
     if existsFile($(status.filename)):
       try:
         let textAndEncoding = openFile(status.filename)
