@@ -1,20 +1,21 @@
 import parsetoml
 import editorstatus
 
-proc parseConfigFile*(settings: var EditorSettings): EditorSettings =
-
-  var config: TomlValueRef
+proc parseSettingsFile*(filename: string): EditorSettings =
+  result = initEditorSettings()
+  
+  var settings: TomlValueRef
   try:
-    config = parsetoml.parseFile("~/.moerc.toml")
+    settings = parsetoml.parseFile(filename)
   except IOError:
-    return settings
+    return
 
-  if config.contains("Standard"):
-    if config["Standard"].contains("tabStop"):
-      result.tabStop = config["Standard"]["tabStop"].getInt()
+  if settings.contains("Standard"):
+    if settings["Standard"].contains("tabStop"):
+      result.tabStop = settings["Standard"]["tabStop"].getInt()
 
-    if config["Standard"].contains("autoCloseParen"):
-      result.autoCloseParen = config["Standard"]["autoCloseParen"].getbool()
+    if settings["Standard"].contains("autoCloseParen"):
+      result.autoCloseParen = settings["Standard"]["autoCloseParen"].getbool()
 
-    if config["Standard"].contains("autoIndent"):
-      result.autoIndent = config["Standard"]["autoIndent"].getbool()
+    if settings["Standard"].contains("autoIndent"):
+      result.autoIndent = settings["Standard"]["autoIndent"].getbool()

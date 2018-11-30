@@ -14,13 +14,18 @@ import moepkg/unicodeext
 import moepkg/cmdoption
 import moepkg/settings
 
-when isMainModule:
+proc main() =
   let parsedList = parseCommandLineOption(commandLineParams())
+
+  defer:
+    exitUi()
+    discard execShellCmd("printf '\\033[2 q'")
 
   startUi()
 
   var status = initEditorStatus()
-  status.settings = parseConfigFile(status.settings)
+  status.settings = parseSettingsFile("~/.moerc.toml".expandTilde)
+  
   if parsedList.filename != "":
     status.filename = parsedList.filename.toRunes
     if existsFile($(status.filename)):
@@ -29,9 +34,8 @@ when isMainModule:
         status.buffer = textAndEncoding.text.toGapBuffer
         status.settings.characterEncoding = textAndEncoding.encoding
       except IOError:
-        echo(fmt"Failed to open: {status.filename}")
-        exitUi()
-        quit()
+        writeFileOpenErrorMessage(status.commandWindow, status.filename)
+        return
     elif existsDir($(status.filename)):
       try:
         setCurrentDir($(status.filename))
@@ -46,9 +50,6 @@ when isMainModule:
 
   status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-numberOfDigits(status.buffer.len)-2)
 
-  defer:
-    exitUi()
-    discard execShellCmd("printf '\\033[2 q'")
   while true:
     case status.mode:
     of Mode.normal:
@@ -64,3 +65,4 @@ when isMainModule:
     of Mode.quit:
       break
 
+when isMainModule: main()

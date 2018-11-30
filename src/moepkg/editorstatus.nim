@@ -12,7 +12,7 @@ type EditorSettings* = object
   autoCloseParen*: bool
   autoIndent*: bool 
   tabStop*: int
-  characterEncoding*: CharacterEncoding
+  characterEncoding*: CharacterEncoding # TODO: move to EditorStatus ...?
 
 type EditorStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -40,7 +40,7 @@ proc initRegisters(): Registers =
   result.yankedLines = @[]
   result.yankedStr = @[]
 
-proc initEditorSettings(): EditorSettings =
+proc initEditorSettings*(): EditorSettings =
   result.autoCloseParen = true
   result.autoIndent = true
   result.tabStop = 2
