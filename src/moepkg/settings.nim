@@ -1,11 +1,12 @@
 import parsetoml
+import os
 import editorstatus
 
 proc parseConfigFile*(settings: var EditorSettings): EditorSettings =
 
   var config: TomlValueRef
   try:
-    config = parsetoml.parseFile("~/.moerc.toml")
+    config = parsetoml.parseFile(getHomeDir() & ".moerc.toml")
   except IOError:
     return settings
 
