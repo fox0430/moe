@@ -24,8 +24,8 @@ proc main() =
   startUi()
 
   var status = initEditorStatus()
-  status.settings = parseSettingsFile("~/.moerc.toml".expandTilde)
-  
+  status.settings = parseSettingsFile(getConfigDir() / "moe" / "moerc.toml")
+
   if parsedList.filename != "":
     status.filename = parsedList.filename.toRunes
     if existsFile($(status.filename)):
