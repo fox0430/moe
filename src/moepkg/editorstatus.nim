@@ -8,7 +8,7 @@ type Registers* = object
   yankedLines*: seq[seq[Rune]]
   yankedStr*: seq[Rune]
 
-type EditorSettings = object
+type EditorSettings* = object
   autoCloseParen*: bool
   autoIndent*: bool 
   tabStop*: int

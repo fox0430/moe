@@ -12,6 +12,7 @@ import moepkg/gapbuffer
 import moepkg/independentutils
 import moepkg/unicodeext
 import moepkg/cmdoption
+import moepkg/settings
 
 when isMainModule:
   let parsedList = parseCommandLineOption(commandLineParams())
@@ -19,6 +20,7 @@ when isMainModule:
   startUi()
 
   var status = initEditorStatus()
+  status.settings = parseConfigFile(status.settings)
   if parsedList.filename != "":
     status.filename = parsedList.filename.toRunes
     if existsFile($(status.filename)):
