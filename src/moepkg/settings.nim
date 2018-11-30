@@ -6,7 +6,7 @@ proc parseConfigFile*(settings: var EditorSettings): EditorSettings =
 
   var config: TomlValueRef
   try:
-    config = parsetoml.parseFile(getHomeDir() & ".moerc.toml")
+    config = parsetoml.parseFile("~/.moerc.toml".expandTilde)
   except IOError:
     return settings
 
