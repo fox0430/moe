@@ -1,5 +1,5 @@
 import deques, sequtils, strutils, math, algorithm
-import gapbuffer, ui, unicodeext
+import gapbuffer, ui, unicodeext, highlight
 
 type EditorView* = object
   height*, width*, widthOfLineNum*: int
@@ -170,16 +170,18 @@ proc writeLineNum(view: EditorView, win: var Window, y, line: int, colorPair: Co
   let width = view.widthOfLineNum
   win.write(y, 0, strutils.align($(line+1), view.widthOfLineNum-1), colorPair, false)
 
-proc writeLine(view: EditorView, win: var Window, y: int, str: seq[Rune], colorPair: ColorPair) =
-  win.write(y, view.widthOfLineNum, ($str).replace("\t", repeat(' ', 4)), colorPair, false)
+proc writeLine(view: EditorView, win: var Window, y: int, str: seq[Rune], highlightColor: seq[Colorpair]) =
+  for i in 0 ..< str.len:
+    win.write(y, view.widthOfLineNum + i, ($str[i]).replace("\t", repeat(' ', 4)), highlightColor[i], false)
 
 proc writeAllLines*(view: var EditorView, win: var Window, buffer: GapBuffer[seq[Rune]], currentLine: int) =
   win.erase
   view.widthOfLineNum = buffer.len.intToStr.len+1
+  let highlightColor = setHighlightColor($buffer, "Nim")
   for y in 0..view.height-1:
     if view.originalLine[y] == -1: break
-    if view.start[y] == 0: view.writeLineNum(win, y, view.originalLine[y], if view.originalLine[y]  == currentLine: ColorPair.brightGreenDefault else: ColorPair.grayDefault)
-    view.writeLine(win, y, view.lines[y], if view.originalLine[y] == currentLine: ColorPair.brightGreenDefault else: brightWhiteDefault)
+    if view.start[y] == 0: view.writeLineNum(win, y, view.originalLine[y], if view.originalLine[y] == currentLine: ColorPair.brightGreenDefault else: ColorPair.grayDefault)
+    view.writeLine(win, y, view.lines[y], if view.originalLine[y] == currentLine: ColorPair.brightGreenDefault.repeat(buffer[y].len)  else: highlightColor[y])
   win.refresh
 
 proc update*(view: var EditorView, win: var Window, buffer: GapBuffer[seq[Rune]], currentLine: int) =

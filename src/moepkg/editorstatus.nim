@@ -56,6 +56,7 @@ proc initEditorStatus*(): EditorStatus =
   result.statusWindow = initWindow(1, terminalWidth(), terminalHeight()-2, 0, ui.ColorPair.blackGreen)
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight()-1, 0)
 
+
 proc writeStatusBar*(status: var EditorStatus) =
   status.statusWindow.erase
 
