@@ -73,7 +73,7 @@ proc writeStatusBar*(status: var EditorStatus) =
 
   let
     line = fmt"{status.currentLine+1}/{status.buffer.len}"
-    column = fmt"{status.currentColumn}/{status.buffer[status.currentLine].len}"
+    column = fmt"{status.currentColumn + 1}/{status.buffer[status.currentLine].len}"
     encoding = $status.settings.characterEncoding
     info = fmt"{line} {column} {encoding} "
   status.statusWindow.write(0, terminalWidth()-info.len, info, ui.Colorpair.blackGreen)
