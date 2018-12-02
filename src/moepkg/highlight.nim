@@ -2,13 +2,13 @@ import packages/docutils/highlite
 import strutils, unicode, sequtils
 import ui
 
-proc getHighlightColor(buffer, language: string): seq[seq[ColorPair]] =
+proc getHighlightColor*(buffer, language: string): seq[seq[ColorPair]] =
   let lang = getSourceLanguage(language)
   var token = GeneralTokenizer()
   token.initGeneralTokenizer(buffer)
   var color: seq[ColorPair] = @[]
   let defaultColor = brightWhiteDefault
-  
+ 
   while true:
     token.getNextToken(lang)
     let str = buffer[token.start ..< token.start + token.length]
@@ -16,14 +16,18 @@ proc getHighlightColor(buffer, language: string): seq[seq[ColorPair]] =
     case token.kind:
     of gtKeyword:
       color = concat(color, brightGreenDefault.repeat(str.len))
-    of gtEof:
-      break
+    of gtStringLit:
+      color = concat(color, magentaDefault.repeat(str.len))
+    of gtDecNumber:
+      color = concat(color, lightBlueDefault.repeat(str.len))
     of gtWhitespace:
       var numOfSpace = 0
       for i in 0 ..< str.len:
         if str[i] != '\n':
           numOfSpace.inc
       color = concat(color, defaultColor.repeat(numOfSpace))
+    of gtEof:
+      break
     else:
       color = concat(color, defaultColor.repeat(str.len))
 
@@ -40,6 +44,3 @@ proc getHighlightColor(buffer, language: string): seq[seq[ColorPair]] =
         line.add(color[all])
         all.inc
     result.add(line)
-
-proc setHighlightColor*(buffer, lang: string): seq[seq[Colorpair]] =
-  return getHighlightColor(buffer, lang)

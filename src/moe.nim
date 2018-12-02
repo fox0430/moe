@@ -48,7 +48,7 @@ proc main() =
   else:
     status.buffer = newFile()
 
-  status.highlightInfo = initHighlightInfo(status.buffer)
+  status.highlightInfo = setHighlightInfo(status.buffer)
   status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-numberOfDigits(status.buffer.len)-2)
     
   while true:

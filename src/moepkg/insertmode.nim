@@ -119,5 +119,5 @@ proc insertMode*(status: var EditorStatus) =
     else:
       insertCharacter(status, key)
     
-    status.highlightInfo = initHighlightInfo(status.buffer)
+    status.highlightInfo = setHighlightInfo(status.buffer)
   discard execShellCmd("printf '\\033[2 q'")
