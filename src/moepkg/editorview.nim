@@ -181,7 +181,7 @@ proc writeAllLines*(view: var EditorView, win: var Window, buffer: GapBuffer[seq
   for y in 0..view.height-1:
     if view.originalLine[y] == -1: break
     if view.start[y] == 0: view.writeLineNum(win, y, view.originalLine[y], if view.originalLine[y] == currentLine: ColorPair.brightGreenDefault else: ColorPair.grayDefault)
-    view.writeLine(win, y, view.lines[y], if view.originalLine[y] == currentLine: ColorPair.brightGreenDefault.repeat(buffer[y].len)  else: highlightColor[y])
+    view.writeLine(win, y, view.lines[y], if view.originalLine[y] == currentLine: ColorPair.brightGreenDefault.repeat(buffer[y].len)  elif view.lines.len < 2: brightWhiteDefault.repeat(view.lines[y].len) else: highlightColor[y])
   win.refresh
 
 proc update*(view: var EditorView, win: var Window, buffer: GapBuffer[seq[Rune]], currentLine: int) =

@@ -19,7 +19,11 @@ proc getHighlightColor(buffer, language: string): seq[seq[ColorPair]] =
     of gtEof:
       break
     of gtWhitespace:
-      color = concat(color, defaultColor.repeat(if str.len == str.countLines: str.len: else: str.len - 1))
+      var numOfSpace = 0
+      for i in 0 ..< str.len:
+        if str[i] != '\n':
+          numOfSpace.inc
+      color = concat(color, defaultColor.repeat(numOfSpace))
     else:
       color = concat(color, defaultColor.repeat(str.len))
 
@@ -27,32 +31,15 @@ proc getHighlightColor(buffer, language: string): seq[seq[ColorPair]] =
   for buffer in buffer.splitLines:
     splitBuffer.add(buffer)
 
-#[
+  result = @[]
   var all = 0
   for i in 0 ..< splitBuffer.len:
+    var line: seq[Colorpair] = @[]
     for j in 0 ..< splitBuffer[i].len:
-      stdout.write if color[all] == brightGreenDefault: "1" else: "0"
-      all.inc
-    if splitBuffer[i].len == 0:
-      stdout.write "0"
-      all.inc
-    echo ""
-    echo splitBuffer[i]
-  quit()
-]#
-
-  result = @[]
-  var
-    first = 0
-    last = 0
-  for i in 0 ..< splitBuffer.len:
-    if splitBuffer[i].len == 0:
-      last.inc
-      result.add(@[defaultColor])
-    else:
-      last = last + splitBuffer[i].high + 1
-      result.add(color[first .. last])
-    first = last
+      if splitBuffer[i].len != 0:
+        line.add(color[all])
+        all.inc
+    result.add(line)
 
 proc setHighlightColor*(buffer, lang: string): seq[seq[Colorpair]] =
   return getHighlightColor(buffer, lang)
