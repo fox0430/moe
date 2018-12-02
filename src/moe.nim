@@ -50,6 +50,7 @@ proc main() =
 
   status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-numberOfDigits(status.buffer.len)-2)
 
+    
   while true:
     case status.mode:
     of Mode.normal:
@@ -66,3 +67,4 @@ proc main() =
       break
 
 when isMainModule: main()
+
