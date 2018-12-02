@@ -399,8 +399,13 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
 proc normalMode*(status: var EditorStatus) =
   status.cmdLoop = 0
   status.resize(terminalHeight(), terminalWidth())
-  
+  var countChange = 0
+
   while status.mode == Mode.normal:
+    if status.countChange > countChange:
+      status.highlightInfo = initHighlightInfo(status.buffer)
+      countChange = status.countChange
+
     status.update
 
     let key = getKey(status.mainWindow)

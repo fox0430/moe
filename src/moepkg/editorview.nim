@@ -170,25 +170,25 @@ proc writeLineNum(view: EditorView, win: var Window, y, line: int, colorPair: Co
   let width = view.widthOfLineNum
   win.write(y, 0, strutils.align($(line+1), view.widthOfLineNum-1), colorPair, false)
 
-proc writeLine(view: EditorView, win: var Window, y: int, str: seq[Rune], highlightColor: seq[Colorpair]) =
+proc writeLine(view: EditorView, win: var Window, y: int, str: seq[Rune], highlightInfo: seq[Colorpair]) =
   for i in 0 ..< str.len:
-    win.write(y, view.widthOfLineNum + i, ($str[i]).replace("\t", repeat(' ', 4)), highlightColor[i], false)
+    win.write(y, view.widthOfLineNum + i, ($str[i]).replace("\t", repeat(' ', 4)), highlightInfo[i], false)
 
-proc writeAllLines*(view: var EditorView, win: var Window, buffer: GapBuffer[seq[Rune]], currentLine: int) =
+proc writeAllLines*(view: var EditorView, win: var Window, buffer: GapBuffer[seq[Rune]], highlightInfo: seq[seq[Colorpair]], currentLine: int) =
   win.erase
   view.widthOfLineNum = buffer.len.intToStr.len+1
-  let highlightColor = setHighlightColor($buffer, "Nim")
+  #let highlightColor = setHighlightColor($buffer, "Nim")
   for y in 0..view.height-1:
     if view.originalLine[y] == -1: break
     if view.start[y] == 0: view.writeLineNum(win, y, view.originalLine[y], if view.originalLine[y] == currentLine: ColorPair.brightGreenDefault else: ColorPair.grayDefault)
-    view.writeLine(win, y, view.lines[y], if view.originalLine[y] == currentLine: ColorPair.brightGreenDefault.repeat(buffer[y].len)  elif view.lines.len < 2: brightWhiteDefault.repeat(view.lines[y].len) else: highlightColor[y])
+    view.writeLine(win, y, view.lines[y], if view.originalLine[y] == currentLine: ColorPair.brightGreenDefault.repeat(buffer[y].len)  elif view.lines.len < 2: brightWhiteDefault.repeat(1) else: highlightInfo[y])
   win.refresh
 
-proc update*(view: var EditorView, win: var Window, buffer: GapBuffer[seq[Rune]], currentLine: int) =
+proc update*(view: var EditorView, win: var Window, buffer: GapBuffer[seq[Rune]], highlightInfo: seq[seq[Colorpair]], currentLine: int) =
   # if not view.updated: return
   let widthOfLineNum = buffer.len.intToStr.len+1
   if widthOfLineNum != view.widthOfLineNum: view.resize(buffer, view.height, view.width+view.widthOfLineNum-widthOfLineNum, widthOfLineNum)
-  view.writeAllLines(win, buffer, currentLine)
+  view.writeAllLines(win, buffer, highlightInfo, currentLine)
   view.updated = false
 
 proc seekCursor*(view: var EditorView, buffer: GapBuffer[seq[Rune]], currentLine, currentColumn: int) =

@@ -1,5 +1,5 @@
 import terminal, os, strformat
-import gapbuffer, editorview, ui, cursor, unicodeext
+import gapbuffer, editorview, ui, cursor, unicodeext, highlight
 
 type Mode* = enum
   normal, insert, ex, filer, search, quit
@@ -16,6 +16,7 @@ type EditorSettings* = object
 
 type EditorStatus* = object
   buffer*: GapBuffer[seq[Rune]]
+  highlightInfo*: seq[seq[Colorpair]]
   searchHistory*: seq[seq[Rune]]
   view*: EditorView
   cursor*: CursorPosition
@@ -56,6 +57,8 @@ proc initEditorStatus*(): EditorStatus =
   result.statusWindow = initWindow(1, terminalWidth(), terminalHeight()-2, 0, ui.ColorPair.blackGreen)
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight()-1, 0)
 
+proc initHighlightInfo*(buffer: GapBuffer[seq[Rune]]): seq[seq[Colorpair]] =
+  return setHighlightColor($buffer, "Nim")
 
 proc writeStatusBar*(status: var EditorStatus) =
   status.statusWindow.erase
@@ -104,7 +107,7 @@ proc update*(status: var EditorStatus) =
   setCursor(false)
   writeStatusBar(status)
   status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
-  status.view.update(status.mainWindow, status.buffer, status.currentLine)
+  status.view.update(status.mainWindow, status.buffer, status.highlightInfo, status.currentLine)
   status.cursor.update(status.view, status.currentLine, status.currentColumn)
   status.mainWindow.write(status.cursor.y, status.view.widthOfLineNum+status.cursor.x, "")
   status.mainWindow.refresh

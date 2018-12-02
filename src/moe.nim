@@ -48,8 +48,8 @@ proc main() =
   else:
     status.buffer = newFile()
 
+  status.highlightInfo = initHighlightInfo(status.buffer)
   status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-numberOfDigits(status.buffer.len)-2)
-
     
   while true:
     case status.mode:
@@ -67,4 +67,3 @@ proc main() =
       break
 
 when isMainModule: main()
-
