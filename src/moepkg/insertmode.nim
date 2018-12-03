@@ -118,6 +118,6 @@ proc insertMode*(status: var EditorStatus) =
       insertTab(status)
     else:
       insertCharacter(status, key)
-    
-    status.highlightInfo = setHighlightInfo(status.buffer)
+
+    status.highlightInfo = setHighlightInfo(status.buffer, status.language, status.settings.syntax)
   discard execShellCmd("printf '\\033[2 q'")

@@ -9,6 +9,7 @@ type Registers* = object
   yankedStr*: seq[Rune]
 
 type EditorSettings* = object
+  syntax*: bool
   autoCloseParen*: bool
   autoIndent*: bool 
   tabStop*: int
@@ -43,6 +44,7 @@ proc initRegisters(): Registers =
   result.yankedStr = @[]
 
 proc initEditorSettings*(): EditorSettings =
+  result.syntax = true
   result.autoCloseParen = true
   result.autoIndent = true
   result.tabStop = 2

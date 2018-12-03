@@ -179,7 +179,6 @@ proc writeLine(view: EditorView, win: var Window, y: int, str: seq[Rune], highli
 proc writeAllLines*(view: var EditorView, win: var Window, buffer: GapBuffer[seq[Rune]], highlightInfo: seq[seq[Colorpair]], currentLine: int) =
   win.erase
   view.widthOfLineNum = buffer.len.intToStr.len+1
-  #let highlightColor = setHighlightColor($buffer, "Nim")
   for y in 0..view.height-1:
     if view.originalLine[y] == -1: break
     if view.start[y] == 0: view.writeLineNum(win, y, view.originalLine[y], if view.originalLine[y] == currentLine: ColorPair.brightGreenDefault else: ColorPair.grayDefault)

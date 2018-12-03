@@ -2,6 +2,16 @@ import packages/docutils/highlite
 import strutils, unicode, sequtils, gapbuffer
 import ui
 
+proc getAllDefaultColor(buffer: string): seq[seq[Colorpair]] =
+  var color: seq[ColorPair] = @[]
+  let splitBuffer = buffer.splitLines
+
+  var first = 0
+  for i in 0 ..< splitBuffer.len:
+    let index = first + splitBuffer[i].high
+    result.add(brightWhiteDefault.repeat(splitBuffer[i].len))
+    first = first + splitBuffer[i].len
+
 proc getHighlightColor(buffer, language: string): seq[seq[ColorPair]] =
   let lang = getSourceLanguage(if language == "Plain": "None" else: language)
   var token = GeneralTokenizer()
@@ -38,19 +48,26 @@ proc getHighlightColor(buffer, language: string): seq[seq[ColorPair]] =
     result.add(color[first .. index])
     first = first + splitBuffer[i].len
 
-proc setHighlightInfo*(buffer: GapBuffer[seq[Rune]]): seq[seq[Colorpair]] =
-  return getHighlightColor($buffer, "Nim")
+proc setHighlightInfo*(buffer: GapBuffer[seq[Rune]], language: string, setting: bool): seq[seq[Colorpair]] =
+  if setting and language != "Plain":
+    return getHighlightColor($buffer, language)
+  else:
+    return getAllDefaultColor($buffer)
 
 proc initLanguage*(filename: string): string =
-  let fileExtension = filename.split(".")[1]
+  
+  let fileExtension = filename.split('.')
 
-  case fileExtension:
+  if fileExtension.len < 2:
+    return "Plain"
+
+  case fileExtension[1]:
   of "nim":
     result = "Nim"
   of "c":
-    result = "c"
+    result = "C"
   of "cpp":
-    result = "c++"
+    result = "C++"
   of "cs":
     result = "C#"
   of "java":
