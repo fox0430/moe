@@ -1,5 +1,5 @@
 import packages/docutils/highlite
-import strutils, unicode, sequtils
+import strutils, unicode, sequtils, gapbuffer
 import ui
 
 proc getHighlightColor*(buffer, language: string): seq[seq[ColorPair]] =
@@ -21,26 +21,21 @@ proc getHighlightColor*(buffer, language: string): seq[seq[ColorPair]] =
     of gtDecNumber:
       color = concat(color, lightBlueDefault.repeat(str.len))
     of gtWhitespace:
-      var numOfSpace = 0
-      for i in 0 ..< str.len:
-        if str[i] != '\n':
-          numOfSpace.inc
-      color = concat(color, defaultColor.repeat(numOfSpace))
+      let countSpace = str.len - str.count('\n')
+      color = concat(color, defaultColor.repeat(countSpace))
     of gtEof:
       break
     else:
       color = concat(color, defaultColor.repeat(str.len))
+  
+  let splitBuffer = buffer.splitLines
 
-  var splitBuffer: seq[string] = @[]
-  for buffer in buffer.splitLines:
-    splitBuffer.add(buffer)
-
-  result = @[]
-  var all = 0
+  var first = 0
   for i in 0 ..< splitBuffer.len:
-    var line: seq[Colorpair] = @[]
-    for j in 0 ..< splitBuffer[i].len:
-      if splitBuffer[i].len != 0:
-        line.add(color[all])
-        all.inc
-    result.add(line)
+    let index = first + splitBuffer[i].high
+    result.add(color[first .. index])
+    first = first + splitBuffer[i].len
+
+proc setHighlightInfo*(buffer: GapBuffer[seq[Rune]]): seq[seq[Colorpair]] =
+  return getHighlightColor($buffer, "Nim")
+

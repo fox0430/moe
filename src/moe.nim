@@ -13,6 +13,7 @@ import moepkg/independentutils
 import moepkg/unicodeext
 import moepkg/cmdoption
 import moepkg/settings
+import moepkg/highlight
 
 proc main() =
   let parsedList = parseCommandLineOption(commandLineParams())

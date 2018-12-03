@@ -1,5 +1,5 @@
 import strutils, strformat, terminal, deques, sequtils
-import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext
+import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight
 
 proc jumpLine*(status: var EditorStatus, destination: int)
 proc keyRight*(status: var EditorStatus)

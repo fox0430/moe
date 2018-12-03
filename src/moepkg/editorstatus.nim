@@ -57,9 +57,6 @@ proc initEditorStatus*(): EditorStatus =
   result.statusWindow = initWindow(1, terminalWidth(), terminalHeight()-2, 0, ui.ColorPair.blackGreen)
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight()-1, 0)
 
-proc setHighlightInfo*(buffer: GapBuffer[seq[Rune]]): seq[seq[Colorpair]] =
-  return getHighlightColor($buffer, "Nim")
-
 proc writeStatusBar*(status: var EditorStatus) =
   status.statusWindow.erase
 

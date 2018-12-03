@@ -1,6 +1,6 @@
 import deques, strutils, strformat, sequtils, terminal
 from os import execShellCmd
-import ui, editorstatus, editorview, cursor, gapbuffer, editorview, normalmode, unicodeext
+import ui, editorstatus, editorview, cursor, gapbuffer, editorview, normalmode, unicodeext, highlight
 
 proc insertCloseParen(status: var EditorStatus, c: char) =
   case c
