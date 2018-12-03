@@ -3,7 +3,7 @@ import strutils, unicode, sequtils, gapbuffer
 import ui
 
 proc getHighlightColor(buffer, language: string): seq[seq[ColorPair]] =
-  let lang = getSourceLanguage(if language == "Plan": "None" else: language)
+  let lang = getSourceLanguage(if language == "Plain": "None" else: language)
   var token = GeneralTokenizer()
   token.initGeneralTokenizer(buffer)
   var color: seq[ColorPair] = @[]
@@ -58,4 +58,4 @@ proc initLanguage*(filename: string): string =
   of "yaml":
     result = "Yaml"
   else:
-    result = "Plan"
+    result = "Plain"
