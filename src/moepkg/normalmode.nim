@@ -349,11 +349,11 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     for i in 0 ..< status.cmdLoop: moveToBackwardWord(status)
   elif key == ord('o'):
     for i in 0 ..< status.cmdLoop: openBlankLineBelow(status)
-    status.highlightInfo = setHighlightInfo(status.buffer, status.language, status.settings.syntax)
+    status.highlightInfo = initHighlightInfo(status.buffer, status.language, status.settings.syntax)
     status.changeMode(Mode.insert)
   elif key == ord('O'):
     for i in 0 ..< status.cmdLoop: openBlankLineAbove(status)
-    status.highlightInfo = setHighlightInfo(status.buffer, status.language, status.settings.syntax)
+    status.highlightInfo = initHighlightInfo(status.buffer, status.language, status.settings.syntax)
     status.changeMode(Mode.insert)
   elif key == ord('d'):
     if getKey(status.mainWindow) == ord('d'):
@@ -405,7 +405,7 @@ proc normalMode*(status: var EditorStatus) =
 
   while status.mode == Mode.normal:
     if status.countChange > countChange:
-      status.highlightInfo = setHighlightInfo(status.buffer, status.language, status.settings.syntax)
+      status.highlightInfo = initHighlightInfo(status.buffer, status.language, status.settings.syntax)
       countChange = status.countChange
 
     status.update

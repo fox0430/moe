@@ -1,6 +1,6 @@
 import packages/docutils/highlite
-import strutils, unicode, sequtils, gapbuffer
-import ui
+import strutils, unicode, sequtils, ospaths
+import ui, gapbuffer
 
 proc getAllDefaultColor(buffer: string): seq[seq[Colorpair]] =
   var color: seq[ColorPair] = @[]
@@ -48,7 +48,7 @@ proc getHighlightColor(buffer, language: string): seq[seq[ColorPair]] =
     result.add(color[first .. index])
     first = first + splitBuffer[i].len
 
-proc setHighlightInfo*(buffer: GapBuffer[seq[Rune]], language: string, setting: bool): seq[seq[Colorpair]] =
+proc initHighlightInfo*(buffer: GapBuffer[seq[Rune]], language: string, setting: bool): seq[seq[Colorpair]] =
   if setting and language != "Plain":
     return getHighlightColor($buffer, language)
   else:
@@ -56,23 +56,19 @@ proc setHighlightInfo*(buffer: GapBuffer[seq[Rune]], language: string, setting: 
 
 proc initLanguage*(filename: string): string =
   
-  let fileExtension = filename.split('.')
-
-  if fileExtension.len < 2:
-    return "Plain"
-
-  case fileExtension[1]:
-  of "nim":
+  let extention = filename.splitFile.ext
+  case extention:
+  of ".nim", ".nimble":
     result = "Nim"
-  of "c":
+  of ".c", ".h":
     result = "C"
-  of "cpp":
+  of ".cpp":
     result = "C++"
-  of "cs":
+  of ".cs":
     result = "C#"
-  of "java":
+  of ".java":
     result = "Java"
-  of "yaml":
+  of ".yaml":
     result = "Yaml"
   else:
     result = "Plain"
