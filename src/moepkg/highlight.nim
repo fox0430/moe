@@ -20,6 +20,8 @@ proc getHighlightColor*(buffer, language: string): seq[seq[ColorPair]] =
       color = concat(color, magentaDefault.repeat(str.len))
     of gtDecNumber:
       color = concat(color, lightBlueDefault.repeat(str.len))
+    of gtComment, gtLongComment:
+      color = concat(color, whiteDefault.repeat(str.len))
     of gtWhitespace:
       let countSpace = str.len - str.count('\n')
       color = concat(color, defaultColor.repeat(countSpace))
