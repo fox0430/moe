@@ -17,6 +17,7 @@ type EditorSettings* = object
 type EditorStatus* = object
   buffer*: GapBuffer[seq[Rune]]
   highlightInfo*: seq[seq[Colorpair]]
+  language*: string
   searchHistory*: seq[seq[Rune]]
   view*: EditorView
   cursor*: CursorPosition
@@ -76,7 +77,8 @@ proc writeStatusBar*(status: var EditorStatus) =
     line = fmt"{status.currentLine+1}/{status.buffer.len}"
     column = fmt"{status.currentColumn}/{status.buffer[status.currentLine].len}"
     encoding = $status.settings.characterEncoding
-    info = fmt"{line} {column} {encoding} "
+    language = status.language
+    info = fmt"{line} {column} {encoding} {language} "
   status.statusWindow.write(0, terminalWidth()-info.len, info, ui.Colorpair.blackGreen)
   status.statusWindow.refresh
 

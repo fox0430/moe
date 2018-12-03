@@ -2,8 +2,8 @@ import packages/docutils/highlite
 import strutils, unicode, sequtils, gapbuffer
 import ui
 
-proc getHighlightColor*(buffer, language: string): seq[seq[ColorPair]] =
-  let lang = getSourceLanguage(language)
+proc getHighlightColor(buffer, language: string): seq[seq[ColorPair]] =
+  let lang = getSourceLanguage(if language == "Plan": "None" else: language)
   var token = GeneralTokenizer()
   token.initGeneralTokenizer(buffer)
   var color: seq[ColorPair] = @[]
@@ -41,3 +41,21 @@ proc getHighlightColor*(buffer, language: string): seq[seq[ColorPair]] =
 proc setHighlightInfo*(buffer: GapBuffer[seq[Rune]]): seq[seq[Colorpair]] =
   return getHighlightColor($buffer, "Nim")
 
+proc initLanguage*(filename: string): string =
+  let fileExtension = filename.split(".")[1]
+
+  case fileExtension:
+  of "nim":
+    result = "Nim"
+  of "c":
+    result = "c"
+  of "cpp":
+    result = "c++"
+  of "cs":
+    result = "C#"
+  of "java":
+    result = "Java"
+  of "yaml":
+    result = "Yaml"
+  else:
+    result = "Plan"

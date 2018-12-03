@@ -29,6 +29,7 @@ proc main() =
 
   if parsedList.filename != "":
     status.filename = parsedList.filename.toRunes
+    status.language = initLanguage(parsedList.filename)
     if existsFile($(status.filename)):
       try:
         let textAndEncoding = openFile(status.filename)
