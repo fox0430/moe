@@ -31,7 +31,7 @@ proc getHighlightColor(buffer, language: string): seq[seq[ColorPair]] =
     of gtDecNumber:
       color = concat(color, lightBlueDefault.repeat(str.len))
     of gtComment, gtLongComment:
-      color = concat(color, whiteDefault.repeat(str.len))
+      color = concat(color, whiteDefault.repeat((str.toRunes).len))
     of gtWhitespace:
       let countSpace = str.len - str.count('\n')
       color = concat(color, defaultColor.repeat(countSpace))
@@ -44,9 +44,9 @@ proc getHighlightColor(buffer, language: string): seq[seq[ColorPair]] =
 
   var first = 0
   for i in 0 ..< splitBuffer.len:
-    let index = first + splitBuffer[i].high
+    let index = first + (splitBuffer[i].toRunes).high
     result.add(color[first .. index])
-    first = first + splitBuffer[i].len
+    first = first + (splitBuffer[i].toRunes).len
 
 proc initHighlightInfo*(buffer: GapBuffer[seq[Rune]], language: string, setting: bool): seq[seq[Colorpair]] =
   if setting and language != "Plain":

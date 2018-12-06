@@ -179,10 +179,19 @@ proc writeLine(view: EditorView, win: var Window, y: int, str: seq[Rune], highli
 proc writeAllLines*(view: var EditorView, win: var Window, buffer: GapBuffer[seq[Rune]], highlightInfo: seq[seq[Colorpair]], currentLine: int) =
   win.erase
   view.widthOfLineNum = buffer.len.intToStr.len+1
+  var colors: seq[Colorpair] = @[]
+  for i in 0 ..< view.originalLine.len:
+    if i > highlightInfo.high:
+      break
+    colors = concat(colors, highlightInfo[startLine(view) + i])
+
+  var all = 0
   for y in 0..view.height-1:
-    if view.originalLine[y] == -1: break
+    if view.originalLine[y] == -1 or y > colors.high: break
     if view.start[y] == 0: view.writeLineNum(win, y, view.originalLine[y], if view.originalLine[y] == currentLine: ColorPair.brightGreenDefault else: ColorPair.grayDefault)
-    view.writeLine(win, y, view.lines[y], if view.originalLine[y] == currentLine: ColorPair.brightGreenDefault.repeat(view.lines[y].len)  elif view.lines.len < 2: @[brightWhiteDefault] else: highlightInfo[startLine(view) + y])
+    let index = all + view.lines[y].high
+    view.writeLine(win, y, view.lines[y], if view.originalLine[y] == currentLine: ColorPair.brightGreenDefault.repeat(view.lines[y].len)  elif view.lines.len < 2: @[brightWhiteDefault] else: colors[all .. index])
+    all = all + view.lines[y].len
   win.refresh
 
 proc update*(view: var EditorView, win: var Window, buffer: GapBuffer[seq[Rune]], highlightInfo: seq[seq[Colorpair]], currentLine: int) =
