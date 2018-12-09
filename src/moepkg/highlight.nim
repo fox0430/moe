@@ -1,68 +1,118 @@
 import packages/docutils/highlite
-import strutils, unicode, sequtils, ospaths
-import ui, gapbuffer
+import strutils, sequtils, ospaths, strformat
+import unicodeext, ui
 
-proc getAllDefaultColor(buffer: string): seq[seq[Colorpair]] =
-  var color: seq[ColorPair] = @[]
-  let splitBuffer = buffer.splitLines
+type ColorSegment = object
+  firstRow*, firstColumn*, lastRow*, lastColumn*: int
+  color*: ColorPair
 
-  var first = 0
-  for i in 0 ..< splitBuffer.len:
-    let index = first + splitBuffer[i].high
-    result.add(brightWhiteDefault.repeat(splitBuffer[i].len))
-    first = first + splitBuffer[i].len
+type Highlight* = object
+  colorSegments: seq[ColorSegment]
 
-proc getHighlightColor(buffer, language: string): seq[seq[ColorPair]] =
-  let lang = getSourceLanguage(if language == "Plain": "None" else: language)
+proc initHighlight*(buffer, language: string): Highlight =
+  let
+    lang = getSourceLanguage(language)
+    # TODO: use settings file
+    defaultColor = brightWhiteDefault
+  var currentRow, currentColumn: int
+
+  if lang == SourceLanguage.langNone:
+    var
+      cs = ColorSegment(firstRow: 0, firstColumn: 0, lastRow: 0, lastColumn: 0, color: defaultColor)
+      empty = true
+    for r in runes(buffer):
+      if r == '\n':
+        if not empty: result.colorSegments.add(cs)
+        inc(currentRow)
+        currentColumn = 0
+        cs.firstRow = currentRow
+        cs.firstColumn = currentColumn
+        cs.lastRow = currentRow
+        cs.lastColumn = currentColumn
+        empty = true
+      else:
+        cs.lastColumn = currentColumn
+        inc(currentColumn)
+        empty = false
+    if not empty: result.colorSegments.add(cs)
+    return result
+
   var token = GeneralTokenizer()
   token.initGeneralTokenizer(buffer)
-  var color: seq[ColorPair] = @[]
-  let defaultColor = brightWhiteDefault
- 
+
   while true:
     token.getNextToken(lang)
-    let str = buffer[token.start ..< token.start + token.length]
 
-    case token.kind:
-    of gtKeyword:
-      color = concat(color, brightGreenDefault.repeat(str.len))
-    of gtStringLit:
-      color = concat(color, magentaDefault.repeat(str.len))
-    of gtDecNumber:
-      color = concat(color, lightBlueDefault.repeat(str.len))
-    of gtComment, gtLongComment:
-      color = concat(color, whiteDefault.repeat((str.toRunes).len))
-    of gtWhitespace:
-      let countSpace = str.len - str.count('\n')
-      color = concat(color, defaultColor.repeat(countSpace))
-    of gtEof:
-      break
-    else:
-      color = concat(color, defaultColor.repeat(str.len))
-  
-  let splitBuffer = buffer.splitLines
+    if token.kind == gtEof: break
 
-  var first = 0
-  for i in 0 ..< splitBuffer.len:
-    let index = first + (splitBuffer[i].toRunes).high
-    result.add(color[first .. index])
-    first = first + (splitBuffer[i].toRunes).len
+    let
+      first = token.start
+      last = first+token.length-1
+    if all(buffer[first .. last], proc (x: char): bool = x == '\n'):
+      currentRow += last - first + 1
+      currentColumn = 0
+      continue
+    
+    let color = case token.kind:
+        of gtKeyword: brightGreenDefault
+        of gtStringLit: magentaDefault
+        of gtDecNumber: lightBlueDefault
+        of gtComment, gtLongComment: whiteDefault
+        of gtWhitespace: defaultColor
+        else: defaultColor
+    var
+      cs = ColorSegment(firstRow: currentRow, firstColumn: currentColumn, lastRow: currentRow, lastColumn: currentColumn, color: color)
+      empty = true
 
-proc initHighlightInfo*(buffer: GapBuffer[seq[Rune]], language: string, setting: bool): seq[seq[Colorpair]] =
-  if setting and language != "Plain":
-    return getHighlightColor($buffer, language)
-  else:
-    return getAllDefaultColor($buffer)
+    for r in runes(buffer[first..last]):
+      if r == '\n':
+        if not empty: result.colorSegments.add(cs)
+        inc(currentRow)
+        currentColumn = 0
+        cs.firstRow = currentRow
+        cs.firstColumn = currentColumn
+        cs.lastRow = currentRow
+        cs.lastColumn = currentColumn
+        empty = true
+      else:
+        cs.lastColumn = currentColumn
+        inc(currentColumn)
+        empty = false
+    if not empty: result.colorSegments.add(cs)
 
-proc initLanguage*(filename: string): string =
-  
+proc `[]`*(highlight: Highlight, i: int): ColorSegment = highlight.colorSegments[i]
+
+proc `[]`*(highlight: Highlight, i: BackwardsIndex): ColorSegment = highlight.colorSegments[highlight.colorSegments.len - int(i)]
+
+proc len*(highlight: Highlight): int = highlight.colorSegments.len
+
+proc high*(highlight: Highlight): int = highlight.colorSegments.high
+
+proc index*(highlight: Highlight, row, column: int): int =
+  # calculate index of color segment (row, column) belonging
+
+  doAssert((row, column) >= (highlight[0].firstRow, highlight[0].firstColumn), fmt"row = {row}, column = {column}, highlight[0].firstRow = {highlight[0].firstRow}, hightlihgt[0].firstColumn = {highlight[0].firstColumn}")
+  doAssert((row, column) <= (highlight[^1].firstRow, highlight[^1].firstColumn), fmt"row = {row}, column = {column}, highlight[^1].firstRow = {highlight[^1].firstRow}, hightlihgt[^1].firstColumn = {highlight[^1].firstColumn}")
+
+  var
+    lb = 0
+    ub = highlight.len
+  while ub-lb > 1:
+    let mid = (lb+ub) div 2
+    if (row, column) >= (highlight[mid].firstRow, highlight[mid].firstColumn): lb = mid
+    else: ub = mid
+
+  return lb
+ 
+proc detectLanguage*(filename: string): string =
+  # TODO: use settings file
   let extention = filename.splitFile.ext
   case extention:
   of ".nim", ".nimble":
     result = "Nim"
   of ".c", ".h":
     result = "C"
-  of ".cpp":
+  of ".cpp", "hpp", "cc":
     result = "C++"
   of ".cs":
     result = "C#"

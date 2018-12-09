@@ -17,7 +17,7 @@ type EditorSettings* = object
 
 type EditorStatus* = object
   buffer*: GapBuffer[seq[Rune]]
-  highlightInfo*: seq[seq[Colorpair]]
+  highlight*: Highlight
   language*: string
   searchHistory*: seq[seq[Rune]]
   view*: EditorView
@@ -108,7 +108,7 @@ proc update*(status: var EditorStatus) =
   setCursor(false)
   writeStatusBar(status)
   status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
-  status.view.update(status.mainWindow, status.buffer, status.highlightInfo, status.currentLine)
+  status.view.update(status.mainWindow, status.buffer, status.highlight, status.currentLine)
   status.cursor.update(status.view, status.currentLine, status.currentColumn)
   status.mainWindow.write(status.cursor.y, status.view.widthOfLineNum+status.cursor.x, "")
   status.mainWindow.refresh

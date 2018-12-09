@@ -82,7 +82,7 @@ proc insertTab(status: var EditorStatus) =
 proc insertMode*(status: var EditorStatus) =
   discard execShellCmd("printf '\\033[6 q'")
   while status.mode == Mode.insert:
-    status.highlightInfo = initHighlightInfo(status.buffer, status.language, status.settings.syntax)
+    status.highlight = initHighlight($status.buffer, status.language)
     status.update
 
     let key = getKey(status.mainWindow)
