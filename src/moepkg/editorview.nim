@@ -38,8 +38,9 @@ proc reload*(view: var EditorView, buffer: GapBuffer[seq[Rune]], topLine: int) =
     height = view.height
     width = view.width
 
+  const empty = ru""
   for x in view.originalLine.mitems: x = -1
-  for s in view.lines.mitems: s = ru""
+  for s in view.lines.mitems: s = empty
   for x in view.length.mitems: x = 0
 
   var

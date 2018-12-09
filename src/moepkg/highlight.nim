@@ -1,5 +1,4 @@
-import packages/docutils/highlite
-import strutils, sequtils, ospaths, strformat
+import packages/docutils/highlite, strutils, sequtils, ospaths, strformat
 import unicodeext, ui
 
 type ColorSegment = object
@@ -9,19 +8,19 @@ type ColorSegment = object
 type Highlight* = object
   colorSegments: seq[ColorSegment]
 
-proc initHighlight*(buffer, language: string): Highlight =
-  let
-    lang = getSourceLanguage(language)
-    # TODO: use settings file
-    defaultColor = brightWhiteDefault
+proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
+  const newline = Rune('\n')
+
+  # TODO: use settings file
+  let defaultColor = brightWhiteDefault
   var currentRow, currentColumn: int
 
-  if lang == SourceLanguage.langNone:
+  if language == SourceLanguage.langNone:
     var
       cs = ColorSegment(firstRow: 0, firstColumn: 0, lastRow: 0, lastColumn: 0, color: defaultColor)
       empty = true
     for r in runes(buffer):
-      if r == '\n':
+      if r == newline:
         if not empty: result.colorSegments.add(cs)
         inc(currentRow)
         currentColumn = 0
@@ -41,7 +40,7 @@ proc initHighlight*(buffer, language: string): Highlight =
   token.initGeneralTokenizer(buffer)
 
   while true:
-    token.getNextToken(lang)
+    token.getNextToken(language)
 
     if token.kind == gtEof: break
 
@@ -65,7 +64,7 @@ proc initHighlight*(buffer, language: string): Highlight =
       empty = true
 
     for r in runes(buffer[first..last]):
-      if r == '\n':
+      if r == newline:
         if not empty: result.colorSegments.add(cs)
         inc(currentRow)
         currentColumn = 0
@@ -104,21 +103,21 @@ proc index*(highlight: Highlight, row, column: int): int =
 
   return lb
  
-proc detectLanguage*(filename: string): string =
+proc detectLanguage*(filename: string): SourceLanguage =
   # TODO: use settings file
   let extention = filename.splitFile.ext
   case extention:
   of ".nim", ".nimble":
-    result = "Nim"
+    return SourceLanguage.langNim
   of ".c", ".h":
-    result = "C"
+    return SourceLanguage.langC
   of ".cpp", "hpp", "cc":
-    result = "C++"
+    return SourceLanguage.langCpp
   of ".cs":
-    result = "C#"
+    return SourceLanguage.langCsharp
   of ".java":
-    result = "Java"
+    return SourceLanguage.langJava
   of ".yaml":
-    result = "Yaml"
+    return SourceLanguage.langYaml
   else:
-    result = "Plain"
+    return SourceLanguage.langNone

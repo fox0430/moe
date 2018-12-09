@@ -129,7 +129,7 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
 
 proc toRune*(c: char): Rune =
   doAssert(ord(c) <= 127)
-  ($c).toRunes[0]
+  Rune(c)
 
 proc toRune*(x: int): Rune = Rune(x)
 
@@ -148,8 +148,9 @@ proc toChar*(c: Rune): char =
   return ($c)[0]
 
 proc width*(c: Rune): int =
+  const tab = Rune('\t')
   if int(c) > 0x10FFFF: return 1
-  if c == '\t': return 4
+  if c == tab: return 4
   case c.unicodeWidth
   of UnicodeWidth.uwdtNarrow, UnicodeWidth.uwdtHalf, UnicodeWidth.uwdtAmbiguous, UnicodeWidth.uwdtNeutral: 1
   else: 2

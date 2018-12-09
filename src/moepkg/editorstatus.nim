@@ -1,4 +1,4 @@
-import terminal, os, strformat
+import packages/docutils/highlite, strutils, terminal, os, strformat
 import gapbuffer, editorview, ui, cursor, unicodeext, highlight
 
 type Mode* = enum
@@ -18,7 +18,7 @@ type EditorSettings* = object
 type EditorStatus* = object
   buffer*: GapBuffer[seq[Rune]]
   highlight*: Highlight
-  language*: string
+  language*: SourceLanguage
   searchHistory*: seq[seq[Rune]]
   view*: EditorView
   cursor*: CursorPosition
@@ -51,6 +51,7 @@ proc initEditorSettings*(): EditorSettings =
 
 proc initEditorStatus*(): EditorStatus =
   result.currentDir = getCurrentDir().toRunes
+  result.language = SourceLanguage.langNone
   result.registers = initRegisters()
   result.settings = initEditorSettings()
   result.mode = Mode.normal
@@ -79,7 +80,7 @@ proc writeStatusBar*(status: var EditorStatus) =
     line = fmt"{status.currentLine+1}/{status.buffer.len}"
     column = fmt"{status.currentColumn}/{status.buffer[status.currentLine].len}"
     encoding = $status.settings.characterEncoding
-    language = status.language
+    language = if status.language == SourceLanguage.langNone: "Plain" else: sourceLanguageToStr[status.language]
     info = fmt"{line} {column} {encoding} {language} "
   status.statusWindow.write(0, terminalWidth()-info.len, info, ui.Colorpair.blackGreen)
   status.statusWindow.refresh
