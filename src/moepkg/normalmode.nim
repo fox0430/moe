@@ -68,10 +68,16 @@ proc moveToFirstOfNextLine(status: var EditorStatus) =
   moveToFirstOfLine(status)
 
 proc deleteCurrentCharacter*(status: var EditorStatus) =
-  status.buffer[status.currentLine].delete(status.currentColumn)
-  if status.buffer[status.currentLine].len > 0 and status.currentColumn == status.buffer[status.currentLine].len:
-    status.currentColumn = status.buffer[status.currentLine].len-1
-    status.expandedColumn = status.buffer[status.currentLine].len-1
+  if status.currentLine >= status.buffer.high and status.currentColumn > status.buffer[status.currentLine].high: return 
+
+  if status.currentColumn == status.buffer[status.currentLine].len:
+    status.buffer[status.currentLine].insert(status.buffer[status.currentLine + 1], status.currentColumn)
+    status.buffer.delete(status.currentLine + 1, status.currentLine + 2)
+  else:
+    status.buffer[status.currentLine].delete(status.currentColumn)
+    if status.buffer[status.currentLine].len > 0 and status.currentColumn == status.buffer[status.currentLine].len and status.mode != Mode.insert:
+      status.currentColumn = status.buffer[status.currentLine].len-1
+      status.expandedColumn = status.buffer[status.currentLine].len-1
 
   status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)
