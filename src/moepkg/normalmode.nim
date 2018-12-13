@@ -75,11 +75,10 @@ proc deleteCurrentCharacter*(status: var EditorStatus) =
     status.buffer.delete(status.currentLine + 1, status.currentLine + 2)
   else:
     status.buffer[status.currentLine].delete(status.currentColumn)
-    if status.buffer[status.currentLine].len > 0 and status.currentColumn == status.buffer[status.currentLine].len:
+    if status.buffer[status.currentLine].len > 0 and status.currentColumn == status.buffer[status.currentLine].len and status.mode != Mode.insert:
       status.currentColumn = status.buffer[status.currentLine].len-1
       status.expandedColumn = status.buffer[status.currentLine].len-1
 
-  if status.mode == Mode.insert: status.currentColumn.inc
   status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)
 
