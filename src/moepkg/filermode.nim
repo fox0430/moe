@@ -56,7 +56,7 @@ proc searchFiles(status: var EditorStatus, dirList: seq[PathInfo]): seq[PathInfo
     if dirList[index].path.contains(str):
       result.add dirList[index]
 
-proc deleteFile(status: var EditorStatus, dirList: PathInfo, currentLine: int) =
+proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
   let command = getCommand(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
     window.erase
     window.write(0, 0, fmt"Delete file? 'y' or 'n': {$command}")
@@ -68,15 +68,15 @@ proc deleteFile(status: var EditorStatus, dirList: PathInfo, currentLine: int) =
     return
 
   if (command[0] == ru"y" or command[0] == ru"yes") and command.len == 1:
-    if dirList.kind == pcDir:
-      removeDir(dirList.path)
+    if filerStatus.dirList[filerStatus.currentLine].kind == pcDir:
+      removeDir(filerStatus.dirList[filerStatus.currentLine].path)
     else:
-      removeFile(dirList.path)
+      removeFile(filerStatus.dirList[filerStatus.currentLine].path)
   else:
     return
 
   status.commandWindow.erase
-  status.commandWindow.write(0, 0, "Deleted "&dirList.path)
+  status.commandWindow.write(0, 0, "Deleted "&filerStatus.dirList[filerStatus.currentLine].path)
   status.commandWindow.refresh
 
 proc refreshDirList(): seq[PathInfo] =
@@ -271,6 +271,75 @@ proc updateDirList(filerStatus: var FilerStatus): FilerStatus =
   filerStatus.dirlistUpdate = false
   return filerStatus
 
+proc keyDown(filerStatus: var FilerStatus) =
+  if filerStatus.currentLine == terminalHeight() - 3:
+    inc(filerStatus.startIndex)
+  else:
+    inc(filerStatus.currentLine)
+    filerStatus.viewUpdate = true
+
+proc keyUp(filerStatus: var FilerStatus) =
+  if 0 < filerStatus.startIndex and filerStatus.currentLine == 0:
+    dec(filerStatus.startIndex)
+  else:
+    dec(filerStatus.currentLine)
+    filerStatus.viewUpdate = true
+
+proc moveToTopOfList(filerStatus: var FilerStatus) =
+  filerStatus.currentLine = 0
+  filerStatus.startIndex = 0
+  filerStatus.viewUpdate = true
+
+proc moveToLastOfList(status: EditorStatus, filerStatus: var FilerStatus) =
+  if filerStatus.dirList.len < status.mainWindow.height:
+    filerStatus.currentLine = filerStatus.dirList.high
+  else:
+    filerStatus.currentLine = status.mainWindow.height - 1
+    filerStatus.startIndex = filerStatus.dirList.len - status.mainWindow.height
+  filerStatus.viewUpdate = true
+
+proc copyFile(filerStatus: var FilerStatus) =
+  filerStatus.register.copy = true
+  filerStatus.register.cut = false
+  filerStatus.register.filename = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
+  filerStatus.register.originPath = getCurrentDir() / filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
+
+proc pasteFile(filerStatus: var FilerStatus) =
+  # TODO: Error Handle
+  if filerStatus.register.copy:
+    copyFile(filerStatus.register.originPath, getCurrentDir() / filerStatus.register.filename)
+    filerStatus.dirlistUpdate = true
+    filerStatus.viewUpdate = true
+
+proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
+  let
+    kind = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].kind
+    path = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
+  case kind
+  of pcFile, pcLinkToFile:
+    let
+      filename = (if kind == pcFile: path else: expandsymLink(path)).toRunes
+      textAndEncoding = openFile(filename)
+    status = initEditorStatus()
+    status.filename = filename
+    status.buffer = textAndEncoding.text.toGapBuffer
+    status.settings.characterEncoding = textAndEncoding.encoding
+    status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-numberOfDigits(status.buffer.len)-2)
+    setCursor(true)
+  of pcDir, pcLinkToDir:
+    let directoryName = if kind == pcDir: path else: expandSymlink(path)
+    try:
+      setCurrentDir(path)
+      filerStatus.dirlistUpdate = true
+    except OSError:
+      writeFileOpenErrorMessage(status.commandWindow, path.toRunes)
+
+proc updateFilerView(status: var EditorStatus, filerStatus: var FilerStatus) =
+  status.mainWindow.erase
+  writeStatusBar(status)
+  status.mainWindow.writeFillerView(filerStatus.dirList, filerStatus.currentLine, filerStatus.startIndex)
+  filerStatus.viewUpdate = false
+
 proc filerMode*(status: var EditorStatus) =
   setCursor(false)
   var filerStatus = initFilerStatus()
@@ -280,10 +349,7 @@ proc filerMode*(status: var EditorStatus) =
       filerStatus = updateDirList(filerStatus)
 
     if filerStatus.viewUpdate:
-      status.mainWindow.erase
-      writeStatusBar(status)
-      status.mainWindow.writeFillerView(filerStatus.dirList, filerStatus.currentLine, filerStatus.startIndex)
-      filerStatus.viewUpdate = false
+      updateFilerView(status, filerStatus)
 
     let key = getKey(status.mainWindow)
     if key == ord(':'):
@@ -291,6 +357,7 @@ proc filerMode*(status: var EditorStatus) =
     elif isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
       filerStatus.viewUpdate = true
+
     elif key == ord('/'):
       filerStatus.searchMode = true
       filerStatus.dirList = searchFiles(status, filerStatus.dirList)
@@ -311,67 +378,22 @@ proc filerMode*(status: var EditorStatus) =
         filerStatus.searchMode = false
 
     elif key == ord('D'):
-      deleteFile(status, filerStatus.dirList[filerStatus.currentLine], filerStatus.currentLine)
-      filerStatus.dirlistUpdate = true
-      filerStatus.viewUpdate = true
+      deleteFile(status, filerStatus)
     elif key == ord('i'):
       writeFileDetailView(status.mainWindow, filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex][1])
       filerStatus.viewUpdate = true
     elif (key == 'j' or isDownKey(key)) and filerStatus.currentLine + filerStatus.startIndex < filerStatus.dirList.high:
-      if filerStatus.currentLine == terminalHeight() - 3:
-        inc(filerStatus.startIndex)
-      else:
-        inc(filerStatus.currentLine)
-      filerStatus.viewUpdate = true
+      keyDown(filerStatus)
     elif (key == ord('k') or isUpKey(key)) and (0 < filerStatus.currentLine or 0 < filerStatus.startIndex):
-      if 0 < filerStatus.startIndex and filerStatus.currentLine == 0:
-        dec(filerStatus.startIndex)
-      else:
-        dec(filerStatus.currentLine)
-      filerStatus.viewUpdate = true
+      keyUp(filerStatus)
     elif key == ord('g'):
-      filerStatus.currentLine = 0
-      filerStatus.startIndex = 0
-      filerStatus.viewUpdate = true
+      moveToTopOfList(filerStatus)
     elif key == ord('G'):
-      if filerStatus.dirList.len < status.mainWindow.height:
-        filerStatus.currentLine = filerStatus.dirList.high
-      else:
-        filerStatus.currentLine = status.mainWindow.height - 1
-        filerStatus.startIndex = filerStatus.dirList.len - status.mainWindow.height
-      filerStatus.viewUpdate = true
+      moveToLastOfList(status, filerStatus)
     elif key == ord('y'):
-      if getKey(status.mainWindow) == 'y':
-        filerStatus.register.copy = true
-        filerStatus.register.cut = false
-        filerStatus.register.filename = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
-        filerStatus.register.originPath = getCurrentDir() / filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
+      copyFile(filerStatus)
     elif key == ord('p'):
-      # TODO: Error Handle
-      if filerStatus.register.copy:
-        copyFile(filerStatus.register.originPath, getCurrentDir() / filerStatus.register.filename)
-        filerStatus.dirlistUpdate = true
-        filerStatus.viewUpdate = true
+      pasteFile(filerStatus)
     elif isEnterKey(key):
-      let
-        kind = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].kind
-        path = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
-      case kind
-      of pcFile, pcLinkToFile:
-        let
-          filename = (if kind == pcFile: path else: expandsymLink(path)).toRunes
-          textAndEncoding = openFile(filename)
-        status = initEditorStatus()
-        status.filename = filename
-        status.buffer = textAndEncoding.text.toGapBuffer
-        status.settings.characterEncoding = textAndEncoding.encoding
-        status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-numberOfDigits(status.buffer.len)-2)
-        setCursor(true)
-      of pcDir, pcLinkToDir:
-        let directoryName = if kind == pcDir: path else: expandSymlink(path)
-        try:
-          setCurrentDir(path)
-          filerStatus.dirlistUpdate = true
-        except OSError:
-          writeFileOpenErrorMessage(status.commandWindow, path.toRunes)
+      openFileOrDir(status, filerStatus)
   setCursor(true)
