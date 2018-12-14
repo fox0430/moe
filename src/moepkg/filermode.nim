@@ -18,6 +18,16 @@ import independentutils
 type
   PathInfo = tuple[kind: PathComponent, path: string]
 
+type FilerStatus = object
+  searchMode: bool
+  viewUpdate: bool
+  dirlistUpdate: bool
+  dirList: seq[PathInfo]
+  currentLine: int
+  startIndex: int
+  copy: bool
+  cut: bool
+  originPath: string
 
 proc tryExpandSymlink(symlinkPath: string): string =
   try:
@@ -233,89 +243,92 @@ proc writeFileOpenErrorMessage*(commandWindow: var Window, fileName: seq[Rune]) 
   commandWindow.write(0, 0, "can not open: ".toRunes & fileName)
   commandWindow.refresh
 
+proc initFilerStatus(): FilerStatus =
+  result.viewUpdate = true
+  result.dirlistUpdate = true
+  result.dirList = newSeq[PathInfo]()
+  result.currentLine = 0
+  result.startIndex = 0
+  result.searchMode = false
+
 proc filerMode*(status: var EditorStatus) =
   setCursor(false)
-  var viewUpdate = true
-  var dirlistUpdate = true
-  var dirList = newSeq[PathInfo]()
-  var currentLine = 0
-  var startIndex = 0
-  var searchMode = false
+  var filerStatus = initFilerStatus()
 
   while status.mode == Mode.filer:
-    if dirlistUpdate:
-      currentLine = 0
-      startIndex = 0
-      dirList = @[]
-      dirList.add refreshDirList()
-      viewUpdate = true
-      dirlistUpdate = false
+    if filerStatus.dirlistUpdate:
+      filerStatus.currentLine = 0
+      filerStatus.startIndex = 0
+      filerStatus.dirList = @[]
+      filerStatus.dirList.add refreshDirList()
+      filerStatus.viewUpdate = true
+      filerStatus.dirlistUpdate = false
 
-    if viewUpdate:
+    if filerStatus.viewUpdate:
       status.mainWindow.erase
       writeStatusBar(status)
-      status.mainWindow.writeFillerView(dirList, currentLine, startIndex)
-      viewUpdate = false
+      status.mainWindow.writeFillerView(filerStatus.dirList, filerStatus.currentLine, filerStatus.startIndex)
+      filerStatus.viewUpdate = false
 
     let key = getKey(status.mainWindow)
     if key == ord(':'):
       status.changeMode(Mode.ex)
     elif isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-      viewUpdate = true
+      filerStatus.viewUpdate = true
     elif key == ord('/'):
-      searchMode = true
-      dirList = searchFiles(status, dirList)
-      currentLine = 0
-      startIndex = 0
-      viewUpdate = true
-      if dirList.len == 0:
+      filerStatus.searchMode = true
+      filerStatus.dirList = searchFiles(status, filerStatus.dirList)
+      filerStatus.currentLine = 0
+      filerStatus.startIndex = 0
+      filerStatus.viewUpdate = true
+      if filerStatus.dirList.len == 0:
         status.mainWindow.erase
         status.mainWindow.write(0, 0, "not found")
         status.mainWindow.refresh
         discard getKey(status.commandWindow)
         status.commandWindow.erase
         status.commandWindow.refresh
-        dirlistUpdate = true
+        filerStatus.dirlistUpdate = true
     elif isEscKey(key):
-      if searchMode == true:
-        dirlistUpdate = true
-        searchMode = false
+      if filerStatus.searchMode == true:
+        filerStatus.dirlistUpdate = true
+        filerStatus.searchMode = false
 
     elif key == ord('D'):
-      deleteFile(status, dirList[currentLine], currentLine)
-      dirlistUpdate = true
-      viewUpdate = true
+      deleteFile(status, filerStatus.dirList[filerStatus.currentLine], filerStatus.currentLine)
+      filerStatus.dirlistUpdate = true
+      filerStatus.viewUpdate = true
     elif key == ord('i'):
-      writeFileDetailView(status.mainWindow, dirList[currentLine + startIndex][1])
-      viewUpdate = true
-    elif (key == 'j' or isDownKey(key)) and currentLine + startIndex < dirList.high:
-      if currentLine == terminalHeight() - 3:
-        inc(startIndex)
+      writeFileDetailView(status.mainWindow, filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex][1])
+      filerStatus.viewUpdate = true
+    elif (key == 'j' or isDownKey(key)) and filerStatus.currentLine + filerStatus.startIndex < filerStatus.dirList.high:
+      if filerStatus.currentLine == terminalHeight() - 3:
+        inc(filerStatus.startIndex)
       else:
-        inc(currentLine)
-      viewUpdate = true
-    elif (key == ord('k') or isUpKey(key)) and (0 < currentLine or 0 < startIndex):
-      if 0 < startIndex and currentLine == 0:
-        dec(startIndex)
+        inc(filerStatus.currentLine)
+      filerStatus.viewUpdate = true
+    elif (key == ord('k') or isUpKey(key)) and (0 < filerStatus.currentLine or 0 < filerStatus.startIndex):
+      if 0 < filerStatus.startIndex and filerStatus.currentLine == 0:
+        dec(filerStatus.startIndex)
       else:
-        dec(currentLine)
-      viewUpdate = true
+        dec(filerStatus.currentLine)
+      filerStatus.viewUpdate = true
     elif key == ord('g'):
-      currentLine = 0
-      startIndex = 0
-      viewUpdate = true
+      filerStatus.currentLine = 0
+      filerStatus.startIndex = 0
+      filerStatus.viewUpdate = true
     elif key == ord('G'):
-      if dirList.len < status.mainWindow.height:
-        currentLine = dirList.high
+      if filerStatus.dirList.len < status.mainWindow.height:
+        filerStatus.currentLine = filerStatus.dirList.high
       else:
-        currentLine = status.mainWindow.height - 1
-        startIndex = dirList.len - status.mainWindow.height
-      viewUpdate = true
+        filerStatus.currentLine = status.mainWindow.height - 1
+        filerStatus.startIndex = filerStatus.dirList.len - status.mainWindow.height
+      filerStatus.viewUpdate = true
     elif isEnterKey(key):
       let
-        kind = dirList[currentLine + startIndex].kind
-        path = dirList[currentLine + startIndex].path
+        kind = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].kind
+        path = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
       case kind
       of pcFile, pcLinkToFile:
         let
@@ -331,7 +344,7 @@ proc filerMode*(status: var EditorStatus) =
         let directoryName = if kind == pcDir: path else: expandSymlink(path)
         try:
           setCurrentDir(path)
-          dirlistUpdate = true
+          filerStatus.dirlistUpdate = true
         except OSError:
           writeFileOpenErrorMessage(status.commandWindow, path.toRunes)
   setCursor(true)
