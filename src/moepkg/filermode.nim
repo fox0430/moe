@@ -304,12 +304,21 @@ proc copyFile(filerStatus: var FilerStatus) =
   filerStatus.register.filename = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
   filerStatus.register.originPath = getCurrentDir() / filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
 
+proc cutFile(filerStatus: var FilerStatus) =
+  filerStatus.register.copy = false
+  filerStatus.register.cut = true
+  filerStatus.register.filename = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
+  filerStatus.register.originPath = getCurrentDir() / filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
+
 proc pasteFile(filerStatus: var FilerStatus) =
   # TODO: Error Handle
-  if filerStatus.register.copy:
-    copyFile(filerStatus.register.originPath, getCurrentDir() / filerStatus.register.filename)
-    filerStatus.dirlistUpdate = true
-    filerStatus.viewUpdate = true
+  copyFile(filerStatus.register.originPath, getCurrentDir() / filerStatus.register.filename)
+  filerStatus.dirlistUpdate = true
+  filerStatus.viewUpdate = true
+
+  if filerStatus.register.cut:
+    discard tryRemoveFile(filerStatus.register.originPath / filerStatus.register.filename)
+    filerStatus.register.cut = false
 
 proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   let
@@ -392,6 +401,8 @@ proc filerMode*(status: var EditorStatus) =
       moveToLastOfList(status, filerStatus)
     elif key == ord('y'):
       copyFile(filerStatus)
+    elif key == ord('C'):
+      cutFile(filerStatus)
     elif key == ord('p'):
       pasteFile(filerStatus)
     elif isEnterKey(key):
