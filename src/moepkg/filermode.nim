@@ -18,16 +18,20 @@ import independentutils
 type
   PathInfo = tuple[kind: PathComponent, path: string]
 
+type FileRegister = object
+  copy: bool
+  cut: bool
+  originPath: string
+  filename: string
+
 type FilerStatus = object
+  register: FileRegister
   searchMode: bool
   viewUpdate: bool
   dirlistUpdate: bool
   dirList: seq[PathInfo]
   currentLine: int
   startIndex: int
-  copy: bool
-  cut: bool
-  originPath: string
 
 proc tryExpandSymlink(symlinkPath: string): string =
   try:
@@ -243,7 +247,14 @@ proc writeFileOpenErrorMessage*(commandWindow: var Window, fileName: seq[Rune]) 
   commandWindow.write(0, 0, "can not open: ".toRunes & fileName)
   commandWindow.refresh
 
+proc initFileRegister(): FileRegister =
+  result.copy = false
+  result.cut= false
+  result.originPath = ""
+  result.filename = ""
+
 proc initFilerStatus(): FilerStatus =
+  result.register = initFileRegister()
   result.viewUpdate = true
   result.dirlistUpdate = true
   result.dirList = newSeq[PathInfo]()
@@ -251,18 +262,22 @@ proc initFilerStatus(): FilerStatus =
   result.startIndex = 0
   result.searchMode = false
 
+proc updateDirList(filerStatus: var FilerStatus): FilerStatus =
+  filerStatus.currentLine = 0
+  filerStatus.startIndex = 0
+  filerStatus.dirList = @[]
+  filerStatus.dirList.add refreshDirList()
+  filerStatus.viewUpdate = true
+  filerStatus.dirlistUpdate = false
+  return filerStatus
+
 proc filerMode*(status: var EditorStatus) =
   setCursor(false)
   var filerStatus = initFilerStatus()
 
   while status.mode == Mode.filer:
     if filerStatus.dirlistUpdate:
-      filerStatus.currentLine = 0
-      filerStatus.startIndex = 0
-      filerStatus.dirList = @[]
-      filerStatus.dirList.add refreshDirList()
-      filerStatus.viewUpdate = true
-      filerStatus.dirlistUpdate = false
+      filerStatus = updateDirList(filerStatus)
 
     if filerStatus.viewUpdate:
       status.mainWindow.erase
@@ -325,6 +340,18 @@ proc filerMode*(status: var EditorStatus) =
         filerStatus.currentLine = status.mainWindow.height - 1
         filerStatus.startIndex = filerStatus.dirList.len - status.mainWindow.height
       filerStatus.viewUpdate = true
+    elif key == ord('y'):
+      if getKey(status.mainWindow) == 'y':
+        filerStatus.register.copy = true
+        filerStatus.register.cut = false
+        filerStatus.register.filename = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
+        filerStatus.register.originPath = getCurrentDir() / filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
+    elif key == ord('p'):
+      # TODO: Error Handle
+      if filerStatus.register.copy:
+        copyFile(filerStatus.register.originPath, getCurrentDir() / filerStatus.register.filename)
+        filerStatus.dirlistUpdate = true
+        filerStatus.viewUpdate = true
     elif isEnterKey(key):
       let
         kind = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].kind
