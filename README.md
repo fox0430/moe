@@ -30,6 +30,8 @@ This project's goal is a funny animation editor.
 
 - Visual mode  
 
+- Multi-Buffer
+
 - Infinite undo/redo
 
 - Syntax checker  
@@ -43,6 +45,8 @@ This project's goal is a funny animation editor.
 - Terminal Multiplexer
 
 - Git support
+
+- Language Server Protocol
 
 - Plugins
 
