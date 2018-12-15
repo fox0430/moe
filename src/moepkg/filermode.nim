@@ -56,6 +56,21 @@ proc searchFiles(status: var EditorStatus, dirList: seq[PathInfo]): seq[PathInfo
     if dirList[index].path.contains(str):
       result.add dirList[index]
 
+proc writeRemoveFileError(commandWindow: var Window) =
+  commandWindow.erase
+  commandWindow.write(0, 0, "Error: can not remove file", ColorPair.redDefault)
+  commandWindow.refresh
+
+proc writeRemoveDirError(commandWindow: var Window) =
+  commandWindow.erase
+  commandWindow.write(0, 0, "Error: can not remove directory", ColorPair.redDefault)
+  commandWindow.refresh
+
+proc writeCopyFileError(commandWindow: var Window) =
+  commandWindow.erase
+  commandWindow.write(0, 0, "Error: can not copy file", ColorPair.redDefault)
+  commandWindow.refresh
+
 proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
   let command = getCommand(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
     window.erase
@@ -69,9 +84,15 @@ proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
 
   if (command[0] == ru"y" or command[0] == ru"yes") and command.len == 1:
     if filerStatus.dirList[filerStatus.currentLine].kind == pcDir:
-      removeDir(filerStatus.dirList[filerStatus.currentLine].path)
+      try:
+        removeDir(filerStatus.dirList[filerStatus.currentLine].path)
+      except OSError:
+        writeRemoveDirError(status.commandWindow)
+        return
     else:
-      removeFile(filerStatus.dirList[filerStatus.currentLine].path)
+      if tryRemoveFile(filerStatus.dirList[filerStatus.currentLine].path) == false:
+        writeRemoveFileError(status.commandWindow)
+        return
   else:
     return
 
@@ -310,16 +331,22 @@ proc cutFile(filerStatus: var FilerStatus) =
   filerStatus.register.filename = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
   filerStatus.register.originPath = getCurrentDir() / filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
 
-proc pasteFile(filerStatus: var FilerStatus) =
-  # TODO: Error Handle
-  copyFile(filerStatus.register.originPath, getCurrentDir() / filerStatus.register.filename)
-  filerStatus.dirlistUpdate = true
-  filerStatus.viewUpdate = true
+proc pasteFile(commandWindow: var Window, filerStatus: var FilerStatus) =
+  # TODO: write error mess
+  try:
+    copyFile(filerStatus.register.originPath, getCurrentDir() / filerStatus.register.filename)
+    filerStatus.dirlistUpdate = true
+    filerStatus.viewUpdate = true
+  except OSError:
+    writeCopyFileError(commandWindow)
+    return
 
   if filerStatus.register.cut:
-    discard tryRemoveFile(filerStatus.register.originPath / filerStatus.register.filename)
-    filerStatus.register.cut = false
-
+    if tryRemoveFile(filerStatus.register.originPath / filerStatus.register.filename):
+      filerStatus.register.cut = false
+    else:
+      writeRemoveFileError(commandWindow)
+      
 proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   let
     kind = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].kind
@@ -404,7 +431,7 @@ proc filerMode*(status: var EditorStatus) =
     elif key == ord('C'):
       cutFile(filerStatus)
     elif key == ord('p'):
-      pasteFile(filerStatus)
+      pasteFile(status.commandWindow, filerStatus)
     elif isEnterKey(key):
       openFileOrDir(status, filerStatus)
   setCursor(true)
