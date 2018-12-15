@@ -332,7 +332,6 @@ proc cutFile(filerStatus: var FilerStatus) =
   filerStatus.register.originPath = getCurrentDir() / filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
 
 proc pasteFile(commandWindow: var Window, filerStatus: var FilerStatus) =
-  # TODO: write error mess
   try:
     copyFile(filerStatus.register.originPath, getCurrentDir() / filerStatus.register.filename)
     filerStatus.dirlistUpdate = true
@@ -376,6 +375,21 @@ proc updateFilerView(status: var EditorStatus, filerStatus: var FilerStatus) =
   status.mainWindow.writeFillerView(filerStatus.dirList, filerStatus.currentLine, filerStatus.startIndex)
   filerStatus.viewUpdate = false
 
+proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
+  filerStatus.searchMode = true
+  filerStatus.dirList = searchFiles(status, filerStatus.dirList)
+  filerStatus.currentLine = 0
+  filerStatus.startIndex = 0
+  filerStatus.viewUpdate = true
+  if filerStatus.dirList.len == 0:
+    status.mainWindow.erase
+    status.mainWindow.write(0, 0, "not found")
+    status.mainWindow.refresh
+    discard getKey(status.commandWindow)
+    status.commandWindow.erase
+    status.commandWindow.refresh
+    filerStatus.dirlistUpdate = true
+
 proc filerMode*(status: var EditorStatus) =
   setCursor(false)
   var filerStatus = initFilerStatus()
@@ -388,6 +402,7 @@ proc filerMode*(status: var EditorStatus) =
       updateFilerView(status, filerStatus)
 
     let key = getKey(status.mainWindow)
+
     if key == ord(':'):
       status.changeMode(Mode.ex)
     elif isResizekey(key):
@@ -395,19 +410,8 @@ proc filerMode*(status: var EditorStatus) =
       filerStatus.viewUpdate = true
 
     elif key == ord('/'):
-      filerStatus.searchMode = true
-      filerStatus.dirList = searchFiles(status, filerStatus.dirList)
-      filerStatus.currentLine = 0
-      filerStatus.startIndex = 0
-      filerStatus.viewUpdate = true
-      if filerStatus.dirList.len == 0:
-        status.mainWindow.erase
-        status.mainWindow.write(0, 0, "not found")
-        status.mainWindow.refresh
-        discard getKey(status.commandWindow)
-        status.commandWindow.erase
-        status.commandWindow.refresh
-        filerStatus.dirlistUpdate = true
+      searchFileMode(status, filerStatus)
+
     elif isEscKey(key):
       if filerStatus.searchMode == true:
         filerStatus.dirlistUpdate = true
