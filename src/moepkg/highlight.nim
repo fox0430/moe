@@ -9,17 +9,16 @@ type Highlight* = object
   colorSegments: seq[ColorSegment]
 
 proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
-  const newline = Rune('\n')
-
   # TODO: use settings file
   let defaultColor = brightWhiteDefault
   var currentRow, currentColumn: int
 
-  if language == SourceLanguage.langNone:
+  template splitByNewline(str, c: typed) =
+    const newline = Rune('\n')
     var
-      cs = ColorSegment(firstRow: 0, firstColumn: 0, lastRow: 0, lastColumn: 0, color: defaultColor)
+      cs = ColorSegment(firstRow: currentRow, firstColumn: currentColumn, lastRow: currentRow, lastColumn: currentColumn, color: c)
       empty = true
-    for r in runes(buffer):
+    for r in runes(str):
       if r == newline:
         if not empty: result.colorSegments.add(cs)
         inc(currentRow)
@@ -34,6 +33,9 @@ proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
         inc(currentColumn)
         empty = false
     if not empty: result.colorSegments.add(cs)
+
+  if language == SourceLanguage.langNone:
+    splitByNewline(buffer, defaultColor)
     return result
 
   var token = GeneralTokenizer()
@@ -59,25 +61,7 @@ proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
         of gtComment, gtLongComment: whiteDefault
         of gtWhitespace: defaultColor
         else: defaultColor
-    var
-      cs = ColorSegment(firstRow: currentRow, firstColumn: currentColumn, lastRow: currentRow, lastColumn: currentColumn, color: color)
-      empty = true
-
-    for r in runes(buffer[first..last]):
-      if r == newline:
-        if not empty: result.colorSegments.add(cs)
-        inc(currentRow)
-        currentColumn = 0
-        cs.firstRow = currentRow
-        cs.firstColumn = currentColumn
-        cs.lastRow = currentRow
-        cs.lastColumn = currentColumn
-        empty = true
-      else:
-        cs.lastColumn = currentColumn
-        inc(currentColumn)
-        empty = false
-    if not empty: result.colorSegments.add(cs)
+    splitByNewline(buffer[first..last], color)
 
 proc `[]`*(highlight: Highlight, i: int): ColorSegment = highlight.colorSegments[i]
 
