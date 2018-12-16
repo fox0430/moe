@@ -30,6 +30,8 @@ type ColorPair* = enum
   brightWhiteGreen = 9
   cyanDefault = 10
   whiteCyan = 11
+  magentaDefault =12
+  whiteDefault = 13
 
 type Window* = object
   cursesWindow*: ptr window
@@ -54,6 +56,8 @@ proc setCursesColor() =
   setColorPair(ColorPair.brightWhiteGreen, Color.brightWhite, Color.green)
   setColorPair(ColorPair.cyanDefault, Color.cyan, Color.default)
   setColorPair(ColorPair.whiteCyan, Color.white, Color.cyan)
+  setColorPair(ColorPair.magentaDefault, Color.magenta, Color.default)
+  setColorPair(ColorPair.whiteDefault, Color.white, Color.default)
 
 proc disableControlC() =
   setControlCHook(proc() {.noconv.} = discard)

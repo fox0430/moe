@@ -13,6 +13,7 @@ import moepkg/independentutils
 import moepkg/unicodeext
 import moepkg/cmdoption
 import moepkg/settings
+import moepkg/highlight
 
 proc main() =
   let parsedList = parseCommandLineOption(commandLineParams())
@@ -28,6 +29,7 @@ proc main() =
 
   if parsedList.filename != "":
     status.filename = parsedList.filename.toRunes
+    status.language = detectLanguage(parsedList.filename)
     if existsFile($(status.filename)):
       try:
         let textAndEncoding = openFile(status.filename)
@@ -48,8 +50,9 @@ proc main() =
   else:
     status.buffer = newFile()
 
+  status.highlight = initHighlight($status.buffer, status.language)
   status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-numberOfDigits(status.buffer.len)-2)
-
+    
   while true:
     case status.mode:
     of Mode.normal:

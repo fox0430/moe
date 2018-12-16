@@ -1,6 +1,6 @@
 import deques, strutils, strformat, sequtils, terminal
 from os import execShellCmd
-import ui, editorstatus, editorview, cursor, gapbuffer, editorview, normalmode, unicodeext
+import ui, editorstatus, editorview, cursor, gapbuffer, editorview, normalmode, unicodeext, highlight
 
 proc insertCloseParen(status: var EditorStatus, c: char) =
   case c
@@ -82,6 +82,7 @@ proc insertTab(status: var EditorStatus) =
 proc insertMode*(status: var EditorStatus) =
   discard execShellCmd("printf '\\033[6 q'")
   while status.mode == Mode.insert:
+    status.highlight = initHighlight($status.buffer, status.language)
     status.update
 
     let key = getKey(status.mainWindow)
@@ -118,4 +119,5 @@ proc insertMode*(status: var EditorStatus) =
       insertTab(status)
     else:
       insertCharacter(status, key)
+
   discard execShellCmd("printf '\\033[2 q'")

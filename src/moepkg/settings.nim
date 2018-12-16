@@ -11,6 +11,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     return
 
   if settings.contains("Standard"):
+    if settings["Standard"].contains("syntax"):
+      result.syntax = settings["Standard"]["syntax"].getbool()
+
     if settings["Standard"].contains("tabStop"):
       result.tabStop = settings["Standard"]["tabStop"].getInt()
 

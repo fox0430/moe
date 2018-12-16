@@ -1,5 +1,5 @@
-import terminal, os, strformat
-import gapbuffer, editorview, ui, cursor, unicodeext
+import packages/docutils/highlite, strutils, terminal, os, strformat
+import gapbuffer, editorview, ui, cursor, unicodeext, highlight
 
 type Mode* = enum
   normal, insert, ex, filer, search, quit
@@ -9,6 +9,7 @@ type Registers* = object
   yankedStr*: seq[Rune]
 
 type EditorSettings* = object
+  syntax*: bool
   autoCloseParen*: bool
   autoIndent*: bool 
   tabStop*: int
@@ -16,6 +17,8 @@ type EditorSettings* = object
 
 type EditorStatus* = object
   buffer*: GapBuffer[seq[Rune]]
+  highlight*: Highlight
+  language*: SourceLanguage
   searchHistory*: seq[seq[Rune]]
   view*: EditorView
   cursor*: CursorPosition
@@ -41,12 +44,14 @@ proc initRegisters(): Registers =
   result.yankedStr = @[]
 
 proc initEditorSettings*(): EditorSettings =
+  result.syntax = true
   result.autoCloseParen = true
   result.autoIndent = true
   result.tabStop = 2
 
 proc initEditorStatus*(): EditorStatus =
   result.currentDir = getCurrentDir().toRunes
+  result.language = SourceLanguage.langNone
   result.registers = initRegisters()
   result.settings = initEditorSettings()
   result.mode = Mode.normal
@@ -75,7 +80,8 @@ proc writeStatusBar*(status: var EditorStatus) =
     line = fmt"{status.currentLine+1}/{status.buffer.len}"
     column = fmt"{status.currentColumn + 1}/{status.buffer[status.currentLine].len}"
     encoding = $status.settings.characterEncoding
-    info = fmt"{line} {column} {encoding} "
+    language = if status.language == SourceLanguage.langNone: "Plain" else: sourceLanguageToStr[status.language]
+    info = fmt"{line} {column} {encoding} {language} "
   status.statusWindow.write(0, terminalWidth()-info.len, info, ui.Colorpair.blackGreen)
   status.statusWindow.refresh
 
@@ -103,7 +109,7 @@ proc update*(status: var EditorStatus) =
   setCursor(false)
   writeStatusBar(status)
   status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
-  status.view.update(status.mainWindow, status.buffer, status.currentLine)
+  status.view.update(status.mainWindow, status.buffer, status.highlight, status.currentLine)
   status.cursor.update(status.view, status.currentLine, status.currentColumn)
   status.mainWindow.write(status.cursor.y, status.view.widthOfLineNum+status.cursor.x, "")
   status.mainWindow.refresh
