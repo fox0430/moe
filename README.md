@@ -14,7 +14,11 @@ This project's goal is a funny animation editor.
 
 - Adopt GapBuffer  
 
+- UTF-8 and other encodings support (Incomplete)
+
 - Vim like keybinds and mode
+
+- Syntax highlighting  
 
 - Simple file manager
 
@@ -22,11 +26,7 @@ This project's goal is a funny animation editor.
 
 - Simple auto indent  
 
-- UTF-8 and other encodings support (Incomplete)
-
 ## Planned features
-
-- Syntax highlighting  
 
 - Visual mode  
 
@@ -45,6 +45,8 @@ This project's goal is a funny animation editor.
 - Terminal Multiplexer
 
 - Git support
+
+- Select data structures
 
 - Language Server Protocol
 
