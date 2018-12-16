@@ -18,7 +18,7 @@ This project's goal is a funny animation editor.
 
 - Vim like keybinds and mode
 
-- Syntax highlighting  
+- Syntax highlighting (Nim, C, C++, C#, Java, Yaml)
 
 - Simple file manager
 
