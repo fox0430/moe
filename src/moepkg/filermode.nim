@@ -18,6 +18,10 @@ import independentutils
 type
   PathInfo = tuple[kind: PathComponent, path: string]
 
+type Sort = enum
+  name = 0
+  fileSize = 1
+
 type FileRegister = object
   copy: bool
   cut: bool
@@ -30,6 +34,7 @@ type FilerStatus = object
   viewUpdate: bool
   dirlistUpdate: bool
   dirList: seq[PathInfo]
+  sortBy: Sort
   currentLine: int
   startIndex: int
 
@@ -100,14 +105,17 @@ proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
   status.commandWindow.write(0, 0, "Deleted "&filerStatus.dirList[filerStatus.currentLine].path)
   status.commandWindow.refresh
 
-proc refreshDirList(): seq[PathInfo] =
+proc sortDirList(dirList: seq[PathInfo], sortBy: Sort): seq[PathInfo] =
+  return dirList.sortedByIt(it.path)
+
+proc refreshDirList(sortBy: Sort): seq[PathInfo] =
   result = @[(pcDir, "../")]
   for list in walkDir("./"):
     if list.kind == pcLinkToFile or list.kind == pcLinkToDir:
       if tryExpandSymlink(list.path) != "": result.add list
     else: result.add list
     result[result.high].path = $(result[result.high].path.toRunes.normalizePath)
-  return result.sortedByIt(it.path)
+  return sortDirList(result, sortBy)
 
 proc writeFileNameCurrentLine(mainWindow: var Window, fileName: string , currentLine: int) =
   mainWindow.write(currentLine, 0, fileName, brightWhiteGreen)
@@ -279,6 +287,7 @@ proc initFilerStatus(): FilerStatus =
   result.viewUpdate = true
   result.dirlistUpdate = true
   result.dirList = newSeq[PathInfo]()
+  result.sortBy = name
   result.currentLine = 0
   result.startIndex = 0
   result.searchMode = false
@@ -287,7 +296,7 @@ proc updateDirList(filerStatus: var FilerStatus): FilerStatus =
   filerStatus.currentLine = 0
   filerStatus.startIndex = 0
   filerStatus.dirList = @[]
-  filerStatus.dirList.add refreshDirList()
+  filerStatus.dirList.add refreshDirList(filerStatus.sortBy)
   filerStatus.viewUpdate = true
   filerStatus.dirlistUpdate = false
   return filerStatus
