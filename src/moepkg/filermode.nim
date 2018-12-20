@@ -106,7 +106,26 @@ proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
   status.commandWindow.refresh
 
 proc sortDirList(dirList: seq[PathInfo], sortBy: Sort): seq[PathInfo] =
-  return dirList.sortedByIt(it.path)
+  case sortBy:
+  of name:
+    return dirList.sortedByIt(it.path)
+  of fileSize:
+    # Need refactor
+    var fileInfo: seq[tuple[kind: PathComponent, path: string, size: int64]]
+    for i in 2 ..< dirList.len:
+      if dirList[i].kind == pcFile:
+        fileInfo.add((kind: dirList[i].kind, path: dirList[i].path, size: getFileSize(dirList[i].path)))
+
+    let sortedFileInfo = fileInfo.sortedByIt(it.size)
+    var sortedDirList: seq[PathInfo]
+    sortedDirList.add((kind: pcDir, path: "../"))
+
+    for i in countdown(fileInfo.high, 0):
+      sortedDirList.add((kind: sortedFileInfo[i].kind, path: sortedFileInfo[i].path))
+    for i in 0 ..< dirList.len:
+      if dirList[i].kind == pcDir and dirList[i].path != "../":
+        sortedDirList.add((kind: dirList[i].kind, path: dirList[i].path))
+    return sortedDirList
 
 proc refreshDirList(sortBy: Sort): seq[PathInfo] =
   result = @[(pcDir, "../")]
@@ -384,6 +403,13 @@ proc updateFilerView(status: var EditorStatus, filerStatus: var FilerStatus) =
   status.mainWindow.writeFillerView(filerStatus.dirList, filerStatus.currentLine, filerStatus.startIndex)
   filerStatus.viewUpdate = false
 
+proc changeSortBy(filerStatus: var FilerStatus) =
+  case filerStatus.sortBy:
+  of name: filerStatus.sortBy = fileSize
+  of fileSize: filerStatus.sortBy = name
+
+  filerStatus.dirlistUpdate = true
+
 proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
   filerStatus.searchMode = true
   filerStatus.dirList = searchFiles(status, filerStatus.dirList)
@@ -445,6 +471,8 @@ proc filerMode*(status: var EditorStatus) =
       cutFile(filerStatus)
     elif key == ord('p'):
       pasteFile(status.commandWindow, filerStatus)
+    elif key == ord('s'):
+      changeSortBy(filerStatus)
     elif isEnterKey(key):
       openFileOrDir(status, filerStatus)
   setCursor(true)
