@@ -16,7 +16,7 @@ import exmode
 import independentutils
 
 type
-  PathInfo = tuple[kind: PathComponent, path: string]
+  PathInfo = tuple[kind: PathComponent, path: string, size: int64]
 
 type Sort = enum
   name = 0
@@ -110,29 +110,22 @@ proc sortDirList(dirList: seq[PathInfo], sortBy: Sort): seq[PathInfo] =
   of name:
     return dirList.sortedByIt(it.path)
   of fileSize:
-    # Need refactor
-    var fileInfo: seq[tuple[kind: PathComponent, path: string, size: int64]]
-    for i in 2 ..< dirList.len:
-      if dirList[i].kind == pcFile:
-        fileInfo.add((kind: dirList[i].kind, path: dirList[i].path, size: getFileSize(dirList[i].path)))
-
-    let sortedFileInfo = fileInfo.sortedByIt(it.size)
-    var sortedDirList: seq[PathInfo]
-    sortedDirList.add((kind: pcDir, path: "../"))
-
-    for i in countdown(fileInfo.high, 0):
-      sortedDirList.add((kind: sortedFileInfo[i].kind, path: sortedFileInfo[i].path))
-    for i in 0 ..< dirList.len:
-      if dirList[i].kind == pcDir and dirList[i].path != "../":
-        sortedDirList.add((kind: dirList[i].kind, path: dirList[i].path))
-    return sortedDirList
+    result = @[(pcDir, "../", 0.int64)]
+    result.add dirList[1 .. dirList.high].sortedByIt(it.size).reversed
 
 proc refreshDirList(sortBy: Sort): seq[PathInfo] =
-  result = @[(pcDir, "../")]
+  result = @[(pcDir, "../", 0.int64)]
   for list in walkDir("./"):
     if list.kind == pcLinkToFile or list.kind == pcLinkToDir:
-      if tryExpandSymlink(list.path) != "": result.add list
-    else: result.add list
+      if tryExpandSymlink(list.path) != "":
+        result.add (list.kind, list.path, 0.int64)
+    else:
+      if list.kind == pcFile:
+        try:
+          result.add (list.kind, list.path, getFileSize(list.path))
+        except OSError, IOError:
+          discard
+      else:  result.add (list.kind, list.path, 0.int64)
     result[result.high].path = $(result[result.high].path.toRunes.normalizePath)
   return sortDirList(result, sortBy)
 
