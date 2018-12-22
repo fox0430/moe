@@ -387,6 +387,7 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
         status.settings.characterEncoding = textAndEncoding.encoding
       except IOError:
         writeFileOpenErrorMessage(status.commandWindow, status.filename)
+        status.buffer = newFile()
     else:
       status.buffer = newFile()
 
