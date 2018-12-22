@@ -16,11 +16,12 @@ import exmode
 import independentutils
 
 type
-  PathInfo = tuple[kind: PathComponent, path: string, size: int64]
+  PathInfo = tuple[kind: PathComponent, path: string, size: int64, lastWriteTime: times.Time]
 
 type Sort = enum
   name = 0
   fileSize = 1
+  time = 2
 
 type FileRegister = object
   copy: bool
@@ -110,22 +111,25 @@ proc sortDirList(dirList: seq[PathInfo], sortBy: Sort): seq[PathInfo] =
   of name:
     return dirList.sortedByIt(it.path)
   of fileSize:
-    result = @[(pcDir, "../", 0.int64)]
+    result = @[(pcDir, "../", 0.int64, getLastModificationTime(getCurrentDir()))]
     result.add dirList[1 .. dirList.high].sortedByIt(it.size).reversed
+  of time:
+    result = @[(pcDir, "../", 0.int64, getLastModificationTime(getCurrentDir()))]
+    result.add dirList[1 .. dirList.high].sortedByIt(it.lastWriteTime)
 
 proc refreshDirList(sortBy: Sort): seq[PathInfo] =
-  result = @[(pcDir, "../", 0.int64)]
+  result = @[(pcDir, "../", 0.int64, getLastModificationTime(getCurrentDir()))]
   for list in walkDir("./"):
     if list.kind == pcLinkToFile or list.kind == pcLinkToDir:
       if tryExpandSymlink(list.path) != "":
-        result.add (list.kind, list.path, 0.int64)
+        result.add (list.kind, list.path, 0.int64, getLastModificationTime(getCurrentDir()))
     else:
       if list.kind == pcFile:
         try:
-          result.add (list.kind, list.path, getFileSize(list.path))
+          result.add (list.kind, list.path, getFileSize(list.path), getLastModificationTime(list.path))
         except OSError, IOError:
           discard
-      else:  result.add (list.kind, list.path, 0.int64)
+      else:  result.add (list.kind, list.path, 0.int64, getLastModificationTime(list.path))
     result[result.high].path = $(result[result.high].path.toRunes.normalizePath)
   return sortDirList(result, sortBy)
 
@@ -406,7 +410,8 @@ proc updateFilerView(status: var EditorStatus, filerStatus: var FilerStatus) =
 proc changeSortBy(filerStatus: var FilerStatus) =
   case filerStatus.sortBy:
   of name: filerStatus.sortBy = fileSize
-  of fileSize: filerStatus.sortBy = name
+  of fileSize: filerStatus.sortBy = time
+  of time: filerStatus.sortBy = name
 
   filerStatus.dirlistUpdate = true
 
