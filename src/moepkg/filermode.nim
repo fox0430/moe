@@ -292,6 +292,11 @@ proc writeFileOpenErrorMessage*(commandWindow: var Window, fileName: seq[Rune]) 
   commandWindow.write(0, 0, "can not open: ".toRunes & fileName)
   commandWindow.refresh
 
+proc writeCreateDirErrorMessage*(commandWindow: var Window) =
+  commandWindow.erase
+  commandWindow.write(0, 0, "can not create direcotry")
+  commandWindow.refresh
+
 proc initFileRegister(): FileRegister =
   result.copy = false
   result.cut= false
@@ -370,6 +375,20 @@ proc pasteFile(commandWindow: var Window, filerStatus: var FilerStatus) =
       filerStatus.register.cut = false
     else:
       writeRemoveFileError(commandWindow)
+
+proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
+  let dirname = getCommand(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
+    window.erase
+    window.write(0, 0, fmt"New file name: {$command}")
+    window.refresh
+  )
+
+  try:
+    createDir($dirname[0])
+    filerStatus.dirlistUpdate = true
+  except OSError:
+    writeCreateDirErrorMessage(status.commandWindow)
+    return
       
 proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   let
@@ -479,6 +498,8 @@ proc filerMode*(status: var EditorStatus) =
       pasteFile(status.commandWindow, filerStatus)
     elif key == ord('s'):
       changeSortBy(filerStatus)
+    elif key == ord('N'):
+      createDir(status, filerStatus)
     elif isEnterKey(key):
       openFileOrDir(status, filerStatus)
   setCursor(true)
