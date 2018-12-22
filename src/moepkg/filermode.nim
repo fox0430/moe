@@ -373,15 +373,22 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
     path = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
   case kind
   of pcFile, pcLinkToFile:
-    let
-      filename = (if kind == pcFile: path else: expandsymLink(path)).toRunes
-      textAndEncoding = openFile(filename)
+    let filename = (if kind == pcFile: path else: expandsymLink(path)).toRunes
     status = initEditorStatus()
     status.filename = filename
-    status.buffer = textAndEncoding.text.toGapBuffer
-    status.settings.characterEncoding = textAndEncoding.encoding
+    if existsFile($status.filename):
+      try:
+        let textAndEncoding = openFile(status.filename)
+        status.buffer = textAndEncoding.text.toGapBuffer
+        status.settings.characterEncoding = textAndEncoding.encoding
+      except IOError:
+        writeFileOpenErrorMessage(status.commandWindow, status.filename)
+    else:
+      status.buffer = newFile()
+
     status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-numberOfDigits(status.buffer.len)-2)
     setCursor(true)
+
   of pcDir, pcLinkToDir:
     let directoryName = if kind == pcDir: path else: expandSymlink(path)
     try:
