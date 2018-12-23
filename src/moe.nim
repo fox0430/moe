@@ -51,7 +51,8 @@ proc main() =
     status.buffer = newFile()
 
   status.highlight = initHighlight($status.buffer, status.language)
-  status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-numberOfDigits(status.buffer.len)-2)
+  let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.buffer.len) - 2 else: 0
+  status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth() - numberOfDigitsLen)
     
   while true:
     case status.mode:

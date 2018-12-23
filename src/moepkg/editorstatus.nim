@@ -9,6 +9,7 @@ type Registers* = object
   yankedStr*: seq[Rune]
 
 type EditorSettings* = object
+  lineNumber*: bool
   syntax*: bool
   autoCloseParen*: bool
   autoIndent*: bool 
@@ -44,6 +45,7 @@ proc initRegisters(): Registers =
   result.yankedStr = @[]
 
 proc initEditorSettings*(): EditorSettings =
+  result.lineNumber = true
   result.syntax = true
   result.autoCloseParen = true
   result.autoIndent = true
@@ -109,7 +111,7 @@ proc update*(status: var EditorStatus) =
   setCursor(false)
   writeStatusBar(status)
   status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
-  status.view.update(status.mainWindow, status.buffer, status.highlight, status.currentLine)
+  status.view.update(status.mainWindow, status.settings.lineNumber, status.buffer, status.highlight, status.currentLine)
   status.cursor.update(status.view, status.currentLine, status.currentColumn)
   status.mainWindow.write(status.cursor.y, status.view.widthOfLineNum+status.cursor.x, "")
   status.mainWindow.refresh

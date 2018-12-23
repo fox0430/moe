@@ -176,9 +176,9 @@ proc write(view: EditorView, win: var Window, y, x: int, str: seq[Rune], color: 
   const tab = "    "
   win.write(y, x, ($str).replace("\t", tab), color, false)
 
-proc writeAllLines*(view: var EditorView, win: var Window, buffer: GapBuffer[seq[Rune]], highlight: Highlight, currentLine: int) =
+proc writeAllLines*(view: var EditorView, win: var Window, lineNumber: bool, buffer: GapBuffer[seq[Rune]], highlight: Highlight, currentLine: int) =
   win.erase
-  view.widthOfLineNum = buffer.len.numberOfDigits+1
+  view.widthOfLineNum = if lineNumber: buffer.len.numberOfDigits+1 else: 0
 
   let
     start = (view.originalLine[0], view.start[0])
@@ -188,7 +188,7 @@ proc writeAllLines*(view: var EditorView, win: var Window, buffer: GapBuffer[seq
     if view.originalLine[y] == -1: break
 
     let isCurrentLine = view.originalLine[y] == currentLine
-    if view.start[y] == 0:
+    if lineNumber and view.start[y] == 0:
       view.writeLineNum(win, y, view.originalLine[y], if isCurrentLine: ColorPair.brightGreenDefault else: ColorPair.grayDefault)
 
     var x = view.widthOfLineNum
@@ -212,10 +212,10 @@ proc writeAllLines*(view: var EditorView, win: var Window, buffer: GapBuffer[seq
 
   win.refresh
 
-proc update*(view: var EditorView, win: var Window, buffer: GapBuffer[seq[Rune]], highlight: Highlight, currentLine: int) =
+proc update*(view: var EditorView, win: var Window, lineNumber: bool, buffer: GapBuffer[seq[Rune]], highlight: Highlight, currentLine: int) =
   let widthOfLineNum = buffer.len.intToStr.len+1
   if widthOfLineNum != view.widthOfLineNum: view.resize(buffer, view.height, view.width+view.widthOfLineNum-widthOfLineNum, widthOfLineNum)
-  view.writeAllLines(win, buffer, highlight, currentLine)
+  view.writeAllLines(win, lineNumber, buffer, highlight, currentLine)
   view.updated = false
 
 proc seekCursor*(view: var EditorView, buffer: GapBuffer[seq[Rune]], currentLine, currentColumn: int) =
