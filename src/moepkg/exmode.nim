@@ -97,7 +97,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
     status.filename = filename
     status.buffer = textAndEncoding.text.toGapBuffer
     status.settings.characterEncoding = textAndEncoding.encoding
-    let useStatusBar = if status.settings.statusBar: 1 else: 0
+    let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     status.view = initEditorView(status.buffer, terminalHeight() - useStatusBar - 1, terminalWidth()-numberOfDigits(status.buffer.len)-2)
   elif existsDir($filename):
     setCurrentDir($filename)
@@ -106,7 +106,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
     status = initEditorStatus()
     status.filename = filename
     status.buffer = newFile()
-    let useStatusBar = if status.settings.statusBar: 1 else: 0
+    let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     status.view = initEditorView(status.buffer, terminalHeight() - useStatusBar - 1, terminalWidth()-numberOfDigits(status.buffer.len)-2)
 
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =

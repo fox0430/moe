@@ -8,9 +8,12 @@ type Registers* = object
   yankedLines*: seq[seq[Rune]]
   yankedStr*: seq[Rune]
 
+type StatusBarSettings* = object
+  useBar*: bool
+
 type EditorSettings* = object
+  statusBar*: StatusBarSettings
   lineNumber*: bool
-  statusBar*: bool
   syntax*: bool
   autoCloseParen*: bool
   autoIndent*: bool 
@@ -45,9 +48,12 @@ proc initRegisters(): Registers =
   result.yankedLines = @[]
   result.yankedStr = @[]
 
+proc initStatusBarSettings*(): StatusBarSettings =
+  result.useBar = true
+
 proc initEditorSettings*(): EditorSettings =
+  result.statusBar = initStatusBarSettings()
   result.lineNumber = true
-  result.statusBar = true
   result.syntax = true
   result.autoCloseParen = true
   result.autoIndent = true
@@ -61,9 +67,9 @@ proc initEditorStatus*(): EditorStatus =
   result.mode = Mode.normal
   result.prevMode = Mode.normal
 
-  let useStatusBar = if result.settings.statusBar: 1 else: 0
+  let useStatusBar = if result.settings.statusBar.useBar: 1 else: 0
   result.mainWindow = initWindow(terminalHeight()-1, terminalWidth(), 0, 0)
-  if result.settings.statusBar:
+  if result.settings.statusBar.useBar:
     result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0, ui.ColorPair.blackGreen)
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight()-1, 0)
 
@@ -95,17 +101,17 @@ proc resize*(status: var EditorStatus, height, width: int) =
   let
     adjustedHeight = max(height, 4)
     adjustedWidth = max(width, status.view.widthOfLineNum+4)
-    useStatusBar = if status.settings.statusBar: 1 else: 0
+    useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
 
   resize(status.mainWindow, adjustedHeight - useStatusBar - 1, adjustedWidth, 0, 0)
-  if status.settings.statusBar: resize(status.statusWindow, 1, adjustedWidth, adjustedHeight-2, 0)
+  if status.settings.statusBar.useBar: resize(status.statusWindow, 1, adjustedWidth, adjustedHeight-2, 0)
   resize(status.commandWindow, 1, adjustedWidth, adjustedHeight-1, 0)
   
   if status.mode != Mode.filer:
     status.view.resize(status.buffer, adjustedHeight - useStatusBar - 1, adjustedWidth-status.view.widthOfLineNum-1, status.view.widthOfLineNum)
     status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
-  if status.settings.statusBar: writeStatusBar(status)
+  if status.settings.statusBar.useBar: writeStatusBar(status)
 
 proc erase*(status: var EditorStatus) =
   erase(status.mainWindow)
@@ -114,7 +120,7 @@ proc erase*(status: var EditorStatus) =
 
 proc update*(status: var EditorStatus) =
   setCursor(false)
-  if status.settings.statusBar: writeStatusBar(status)
+  if status.settings.statusBar.useBar: writeStatusBar(status)
   status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
   status.view.update(status.mainWindow, status.settings.lineNumber, status.buffer, status.highlight, status.currentLine)
   status.cursor.update(status.view, status.currentLine, status.currentColumn)

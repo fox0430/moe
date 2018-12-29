@@ -15,7 +15,7 @@ proc parseSettingsFile*(filename: string): EditorSettings =
       result.lineNumber = settings["Standard"]["number"].getbool()
 
     if settings["Standard"].contains("statusBar"):
-      result.statusBar = settings["Standard"]["statusBar"].getbool()
+      result.statusBar.useBar = settings["Standard"]["statusBar"].getbool()
 
     if settings["Standard"].contains("syntax"):
       result.syntax = settings["Standard"]["syntax"].getbool()
