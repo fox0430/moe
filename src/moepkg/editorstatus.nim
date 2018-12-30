@@ -10,6 +10,14 @@ type Registers* = object
 
 type StatusBarSettings* = object
   useBar*: bool
+  mode*: bool
+  filename*: bool
+  chanedMark*: bool
+  line*: bool
+  column*: bool
+  characterEncoding*: bool
+  language*: bool
+  directory*: bool
 
 type EditorSettings* = object
   statusBar*: StatusBarSettings
@@ -50,6 +58,14 @@ proc initRegisters(): Registers =
 
 proc initStatusBarSettings*(): StatusBarSettings =
   result.useBar = true
+  result.mode = true
+  result.filename = true
+  result.chanedMark = true
+  result.line = true
+  result.column = true
+  result.characterEncoding = true
+  result.language = true
+  result.directory = true
 
 proc initEditorSettings*(): EditorSettings =
   result.statusBar = initStatusBarSettings()
@@ -77,21 +93,21 @@ proc writeStatusBar*(status: var EditorStatus) =
   status.statusWindow.erase
 
   if status.mode == Mode.filer:
-    status.statusWindow.write(0, 0, ru" FILER ", ui.ColorPair.blackWhite)
-    status.statusWindow.append(ru" ", ui.ColorPair.blackGreen)
+    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" FILER ", ui.ColorPair.blackWhite)
+    if status.settings.statusBar.directory: status.statusWindow.append(ru" ", ui.ColorPair.blackGreen)
     status.statusWindow.append(getCurrentDir().toRunes, ui.ColorPair.blackGreen)
     status.statusWindow.refresh
     return
 
-  status.statusWindow.write(0, 0,  if status.mode == Mode.normal: ru" NORMAL " else: ru" INSERT ", ui.ColorPair.blackWhite)
+  if status.settings.statusBar.mode: status.statusWindow.write(0, 0,  if status.mode == Mode.normal: ru" NORMAL " else: ru" INSERT ", ui.ColorPair.blackWhite)
   status.statusWindow.append(ru" ", ui.ColorPair.blackGreen)
-  status.statusWindow.append(if status.filename.len > 0: status.filename else: ru"No name", ui.ColorPair.blackGreen)
-  if status.countChange > 0:  status.statusWindow.append(ru" [+]", ui.ColorPair.blackGreen)
+  if status.settings.statusBar.filename: status.statusWindow.append(if status.filename.len > 0: status.filename else: ru"No name", ui.ColorPair.blackGreen)
+  if status.countChange > 0 and status.settings.statusBar.chanedMark: status.statusWindow.append(ru" [+]", ui.ColorPair.blackGreen)
 
   let
-    line = fmt"{status.currentLine+1}/{status.buffer.len}"
-    column = fmt"{status.currentColumn + 1}/{status.buffer[status.currentLine].len}"
-    encoding = $status.settings.characterEncoding
+    line = if status.settings.statusBar.line: fmt"{status.currentLine+1}/{status.buffer.len}" else: ""
+    column = if status.settings.statusBar.column: fmt"{status.currentColumn + 1}/{status.buffer[status.currentLine].len}" else: ""
+    encoding = if status.settings.statusBar.characterEncoding: $status.settings.characterEncoding else: ""
     language = if status.language == SourceLanguage.langNone: "Plain" else: sourceLanguageToStr[status.language]
     info = fmt"{line} {column} {encoding} {language} "
   status.statusWindow.write(0, terminalWidth()-info.len, info, ui.Colorpair.blackGreen)
