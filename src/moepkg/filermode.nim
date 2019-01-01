@@ -412,8 +412,11 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
     else:
       status.buffer = newFile()
 
+    let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.buffer.len) - 2 else: 0
+    let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     status.highlight = initHighlight($status.buffer, status.language)
-    status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-numberOfDigits(status.buffer.len)-2)
+    status.view = initEditorView(status.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+
     setCursor(true)
 
   of pcDir, pcLinkToDir:
