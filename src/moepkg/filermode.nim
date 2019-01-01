@@ -14,6 +14,7 @@ import editorview
 import gapbuffer
 import exmode
 import independentutils
+import highlight
 
 type
   PathInfo = tuple[kind: PathComponent, path: string, size: int64, lastWriteTime: times.Time]
@@ -399,6 +400,7 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
     let filename = (if kind == pcFile: path else: expandsymLink(path)).toRunes
     status = initEditorStatus()
     status.filename = filename
+    status.language = detectLanguage($filename)
     if existsFile($status.filename):
       try:
         let textAndEncoding = openFile(status.filename)
@@ -412,7 +414,9 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
 
     let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.buffer.len) - 2 else: 0
     let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+    status.highlight = initHighlight($status.buffer, status.language)
     status.view = initEditorView(status.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+
     setCursor(true)
 
   of pcDir, pcLinkToDir:
