@@ -33,6 +33,23 @@ type ColorPair* = enum
   magentaDefault =12
   whiteDefault = 13
 
+type rgbColor* = object
+  defaultText: int
+  currentLineBg: int
+  syntaxKeyword: int
+  syntaxString: int
+  syntaxDecNumber: int
+  syntaxComment: int
+  syntaxLongComment: int
+  statusBar: int
+  statusBarModeBg: int
+  statusBarModeText: int
+  statusBarFileName: int
+  statusBarCurrentLine: int
+  statusBarCurrentCloumn: int
+  statusBarEncoding: int
+  statusBarLang: int
+
 type Window* = object
   cursesWindow*: ptr window
   top, left, height*, width*: int
