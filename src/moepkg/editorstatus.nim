@@ -19,12 +19,16 @@ type StatusBarSettings* = object
   language*: bool
   directory*: bool
 
+type ColorSettings* = object
+  theme*: colorTheme
+  color*: editorColor
+
 type EditorSettings* = object
   statusBar*: StatusBarSettings
   lineNumber*: bool
   syntax*: bool
   autoCloseParen*: bool
-  autoIndent*: bool 
+  autoIndent*: bool
   tabStop*: int
   characterEncoding*: CharacterEncoding # TODO: move to EditorStatus ...?
 
