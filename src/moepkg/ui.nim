@@ -54,8 +54,8 @@ type editorColor* = object
   statusBarLang: int
 
 type colorTheme* = enum
-  dark* = 0,
-  light* = 1
+  dark = 0,
+  light = 1
 
 type Window* = object
   cursesWindow*: ptr window
