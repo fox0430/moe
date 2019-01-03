@@ -20,7 +20,7 @@ proc main() =
 
   defer:
     exitUi()
-    discard execShellCmd("printf '\\033[2 q'")
+    setBlockCursor()
 
   startUi()
 

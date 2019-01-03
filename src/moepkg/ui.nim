@@ -1,4 +1,5 @@
 import posix, strformat
+from os import execShellCmd
 import ncurses
 import unicodeext
 
@@ -58,6 +59,12 @@ proc setCursesColor() =
   setColorPair(ColorPair.whiteCyan, Color.white, Color.cyan)
   setColorPair(ColorPair.magentaDefault, Color.magenta, Color.default)
   setColorPair(ColorPair.whiteDefault, Color.white, Color.default)
+
+proc setIbeamCursor*() =
+  discard execShellCmd("printf '\\033[6 q'")
+
+proc setBlockCursor*() =
+  discard execShellCmd("printf '\\033[2 q'")
 
 proc disableControlC() =
   setControlCHook(proc() {.noconv.} = discard)

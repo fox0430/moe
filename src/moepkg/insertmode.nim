@@ -80,7 +80,7 @@ proc insertTab(status: var EditorStatus) =
   for i in 0 ..< status.settings.tabStop: insertCharacter(status, ru' ')
 
 proc insertMode*(status: var EditorStatus) =
-  discard execShellCmd("printf '\\033[6 q'")
+  setIbeamCursor()
   while status.mode == Mode.insert:
     status.highlight = initHighlight($status.buffer, status.language)
     status.update
