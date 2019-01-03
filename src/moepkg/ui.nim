@@ -4,6 +4,10 @@ import ncurses
 import unicodeext
 
 
+type CursorType* = enum
+  blockMode = 0
+  ibeamMode = 1
+
 type Color* = enum
   default     = -1,
   black       = 0,
@@ -65,6 +69,11 @@ proc setIbeamCursor*() =
 
 proc setBlockCursor*() =
   discard execShellCmd("printf '\\033[2 q'")
+
+proc changeCursorType*(cursorType: CursorType) =
+  case cursorType
+  of blockMode: setBlockCursor()
+  of ibeamMode: setIbeamCursor()
 
 proc disableControlC() =
   setControlCHook(proc() {.noconv.} = discard)

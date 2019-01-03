@@ -68,6 +68,7 @@ proc main() =
     of Mode.search:
       searchMode(status)
     of Mode.quit:
+      executeOnExit(status.settings)
       break
 
 when isMainModule: main()

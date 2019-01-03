@@ -80,7 +80,7 @@ proc insertTab(status: var EditorStatus) =
   for i in 0 ..< status.settings.tabStop: insertCharacter(status, ru' ')
 
 proc insertMode*(status: var EditorStatus) =
-  setIbeamCursor()
+  changeCursorType(status.settings.insertModeCursor)
   while status.mode == Mode.insert:
     status.highlight = initHighlight($status.buffer, status.language)
     status.update

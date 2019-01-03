@@ -1,5 +1,15 @@
 import parsetoml
-import editorstatus
+import editorstatus, ui
+
+proc getCursorType(cursorType, mode: string): CursorType =
+  case cursorType
+  of "block": return CursorType.blockMode
+  of "ibeam": return CursorType.ibeamMode
+  else:
+    case mode
+    of "default": return CursorType.blockMode
+    of "normal": return CursorType.blockMode
+    of "insert": return CursorType.ibeamMode
 
 proc parseSettingsFile*(filename: string): EditorSettings =
   result = initEditorSettings()
@@ -28,6 +38,15 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["Standard"].contains("autoIndent"):
       result.autoIndent = settings["Standard"]["autoIndent"].getbool()
+
+    if settings["Standard"].contains("defaultCursor"):
+      result.defaultCursor = getCursorType(settings["Standard"]["defaultCursor"].getStr(), "default")
+
+    if settings["Standard"].contains("normalModeCursor"):
+      result.normalModeCursor = getCursorType(settings["Standard"]["normalModeCursor"].getStr(), "normal")
+
+    if settings["Standard"].contains("insertModeCursor"):
+      result.insertModeCursor = getCursorType(settings["Standard"]["insertModeCursor"].getStr(), "insert")
 
   if settings.contains("StatusBar"):
     if settings["StatusBar"].contains("mode"):
