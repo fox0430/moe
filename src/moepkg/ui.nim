@@ -68,7 +68,7 @@ proc setIbeamCursor*() =
   discard execShellCmd("printf '\\033[6 q'")
 
 proc setBlockCursor*() =
-  discard execShellCmd("printf '\\033[2 q'")
+  discard execShellCmd("printf '\e[0 q'")
 
 proc changeCursorType*(cursorType: CursorType) =
   case cursorType
