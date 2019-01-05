@@ -20,7 +20,6 @@ proc main() =
 
   defer:
     exitUi()
-    setBlockCursor()
 
   startUi()
 
