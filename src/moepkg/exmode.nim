@@ -1,5 +1,5 @@
 import sequtils, strutils, os, terminal, strformat, deques
-import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode
+import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight
 
 
 type
