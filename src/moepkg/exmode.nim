@@ -98,6 +98,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
     status.buffer = textAndEncoding.text.toGapBuffer
     status.settings.characterEncoding = textAndEncoding.encoding
     let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+    status.highlight = initHighlight($status.buffer, status.language)
     status.view = initEditorView(status.buffer, terminalHeight() - useStatusBar - 1, terminalWidth()-numberOfDigits(status.buffer.len)-2)
   elif existsDir($filename):
     setCurrentDir($filename)
