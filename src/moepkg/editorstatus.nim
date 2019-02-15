@@ -27,6 +27,9 @@ type EditorSettings* = object
   autoIndent*: bool 
   tabStop*: int
   characterEncoding*: CharacterEncoding # TODO: move to EditorStatus ...?
+  defaultCursor*: CursorType
+  normalModeCursor*: CursorType
+  insertModeCursor*: CursorType
 
 type EditorStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -74,6 +77,9 @@ proc initEditorSettings*(): EditorSettings =
   result.autoCloseParen = true
   result.autoIndent = true
   result.tabStop = 2
+  result.defaultCursor = CursorType.blockMode   # Terminal default curosr shape
+  result.normalModeCursor = CursorType.blockMode
+  result.insertModeCursor = CursorType.ibeamMode
 
 proc initEditorStatus*(): EditorStatus =
   result.currentDir = getCurrentDir().toRunes
@@ -147,3 +153,6 @@ proc update*(status: var EditorStatus) =
 proc changeMode*(status: var EditorStatus, mode: Mode) =
   status.prevMode = status.mode
   status.mode = mode
+
+proc executeOnExit*(settings: EditorSettings) =
+  changeCursorType(settings.defaultCursor)

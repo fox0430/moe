@@ -409,6 +409,8 @@ proc normalMode*(status: var EditorStatus) =
   status.resize(terminalHeight(), terminalWidth())
   var countChange = 0
 
+  changeCursorType(status.settings.normalModeCursor)
+
   while status.mode == Mode.normal:
     if status.countChange > countChange:
       status.highlight = initHighlight($status.buffer, status.language)

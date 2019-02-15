@@ -1,7 +1,12 @@
 import posix, strformat
+from os import execShellCmd
 import ncurses
 import unicodeext
 
+
+type CursorType* = enum
+  blockMode = 0
+  ibeamMode = 1
 
 type Color* = enum
   default     = -1,
@@ -58,6 +63,17 @@ proc setCursesColor() =
   setColorPair(ColorPair.whiteCyan, Color.white, Color.cyan)
   setColorPair(ColorPair.magentaDefault, Color.magenta, Color.default)
   setColorPair(ColorPair.whiteDefault, Color.white, Color.default)
+
+proc setIbeamCursor*() =
+  discard execShellCmd("printf '\\033[6 q'")
+
+proc setBlockCursor*() =
+  discard execShellCmd("printf '\e[0 q'")
+
+proc changeCursorType*(cursorType: CursorType) =
+  case cursorType
+  of blockMode: setBlockCursor()
+  of ibeamMode: setIbeamCursor()
 
 proc disableControlC() =
   setControlCHook(proc() {.noconv.} = discard)
