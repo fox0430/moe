@@ -117,13 +117,13 @@ proc initWindow*(height, width, top, left: int, color: ColorPair = ColorPair.bri
   result.left = left
   result.height = height
   result.width = width
-  result.cursesWindow = newwin(height, width, top, left)
+  result.cursesWindow = newwin(cint(height), cint(width), cint(top), cint(left))
   keypad(result.cursesWindow, true)
   discard wbkgd(result.cursesWindow, ncurses.COLOR_PAIR(color))
 
 proc write*(win: var Window, y, x: int, str: string, color: ColorPair = ColorPair.brightWhiteDefault, storeX: bool = true) =
-  win.cursesWindow.wattron(int(ncurses.COLOR_PAIR(ord(color))))
-  mvwaddstr(win.cursesWindow, y, x, str)
+  win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
+  mvwaddstr(win.cursesWindow, cint(y), cint(x), str)
   if storeX:
     win.y = y
     win.x = x+str.toRunes.width
@@ -135,8 +135,8 @@ proc write*(win: var Window, y, x: int, str: seq[Rune], color: ColorPair = Color
     win.x = x+str.width
 
 proc append*(win: var Window, str: string, color: ColorPair = ColorPair.brightWhiteDefault) =
-  win.cursesWindow.wattron(int(ncurses.COLOR_PAIR(ord(color))))
-  mvwaddstr(win.cursesWindow, win.y, win.x, $str)
+  win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
+  mvwaddstr(win.cursesWindow, cint(win.y), cint(win.x), $str)
   win.x += str.toRunes.width
 
 proc append*(win: var Window, str: seq[Rune], color: ColorPair = ColorPair.brightWhiteDefault) = append(win, $str, color)
@@ -150,10 +150,10 @@ proc refresh*(win: Window) =
   wrefresh(win.cursesWindow)
 
 proc move*(win: Window, y, x: int) =
-  mvwin(win.cursesWindow, y, x)
+  mvwin(win.cursesWindow, cint(y), cint(x))
 
 proc resize*(win: Window, height, width: int) =
-  wresize(win.cursesWindow, height, width)
+  wresize(win.cursesWindow, cint(height), cint(width))
 
 proc resize*(win: Window, height, width, y, x: int) =
   win.resize(height, width)
