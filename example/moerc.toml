@@ -5,9 +5,9 @@ syntax = true
 tabStop = 2
 autoCloseParen = true
 autoIndent = true
-defaultCursor = "default"
-normalModeCursor = "normal"
-insertModeCursor = "insert"
+defaultCursor = "block"
+normalModeCursor = "block"
+insertModeCursor = "ibeam"
 
 [StatusBar]
 mode = true
