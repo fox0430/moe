@@ -50,22 +50,22 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
   if settings.contains("StatusBar"):
     if settings["StatusBar"].contains("mode"):
-        result.statusBar.mode= settings["useStatusBar"]["mode"].getbool()
+        result.statusBar.mode= settings["StatusBar"]["mode"].getbool()
 
     if settings["StatusBar"].contains("filename"):
-        result.statusBar.filename = settings["useStatusBar"]["chanedMark"].getbool()
+        result.statusBar.filename = settings["StatusBar"]["chanedMark"].getbool()
 
     if settings["StatusBar"].contains("line"):
-        result.statusBar.line = settings["useStatusBar"]["line"].getbool()
+        result.statusBar.line = settings["StatusBar"]["line"].getbool()
 
     if settings["StatusBar"].contains("column"):
-        result.statusBar.column = settings["useStatusBar"]["column"].getbool()
+        result.statusBar.column = settings["StatusBar"]["column"].getbool()
 
     if settings["StatusBar"].contains("encoding"):
-        result.statusBar.characterEncoding = settings["useStatusBar"]["encoding"].getbool()
+        result.statusBar.characterEncoding = settings["StatusBar"]["encoding"].getbool()
 
     if settings["StatusBar"].contains("language"):
-        result.statusBar.language = settings["useStatusBar"]["language"].getbool()
+        result.statusBar.language = settings["StatusBar"]["language"].getbool()
 
     if settings["StatusBar"].contains("directory"):
-        result.statusBar.language = settings["useStatusBar"]["directory"].getbool()
+        result.statusBar.language = settings["StatusBar"]["directory"].getbool()
