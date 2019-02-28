@@ -1,0 +1,19 @@
+[Standard]
+number = true 
+statusBar = true
+syntax = true
+tabStop = 2
+autoCloseParen = true
+autoIndent = true
+defaultCursor = "default"
+normalModeCursor = "normal"
+insertModeCursor = "insert"
+
+[StatusBar]
+mode = true
+chanedMark = true
+line = true
+column = true
+encoding = true
+language = true
+directory = true
