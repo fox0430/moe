@@ -11,22 +11,32 @@ import moepkg/editorview
 import moepkg/gapbuffer
 import moepkg/independentutils
 import moepkg/unicodeext
+import moepkg/cmdoption
+import moepkg/settings
+import moepkg/highlight
 
-when isMainModule:
+proc main() =
+  let parsedList = parseCommandLineOption(commandLineParams())
+
+  defer:
+    exitUi()
+
   startUi()
 
   var status = initEditorStatus()
-  if commandLineParams().len >= 1:
-    status.filename = commandLineParams()[0].toRunes
+  status.settings = parseSettingsFile(getConfigDir() / "moe" / "moerc.toml")
+
+  if parsedList.filename != "":
+    status.filename = parsedList.filename.toRunes
+    status.language = detectLanguage(parsedList.filename)
     if existsFile($(status.filename)):
       try:
         let textAndEncoding = openFile(status.filename)
         status.buffer = textAndEncoding.text.toGapBuffer
         status.settings.characterEncoding = textAndEncoding.encoding
       except IOError:
-        echo(fmt"Failed to open: {status.filename}")
-        exitUi()
-        quit()
+        writeFileOpenErrorMessage(status.commandWindow, status.filename)
+        return
     elif existsDir($(status.filename)):
       try:
         setCurrentDir($(status.filename))
@@ -39,11 +49,11 @@ when isMainModule:
   else:
     status.buffer = newFile()
 
-  status.view = initEditorView(status.buffer, terminalHeight()-2, terminalWidth()-numberOfDigits(status.buffer.len)-2)
-
-  defer:
-    exitUi()
-    discard execShellCmd("printf '\\033[2 q'")
+  status.highlight = initHighlight($status.buffer, status.language)
+  let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.buffer.len) - 2 else: 0
+  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+  status.view = initEditorView(status.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+    
   while true:
     case status.mode:
     of Mode.normal:
@@ -57,5 +67,7 @@ when isMainModule:
     of Mode.search:
       searchMode(status)
     of Mode.quit:
+      executeOnExit(status.settings)
       break
 
+when isMainModule: main()

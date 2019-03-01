@@ -1,5 +1,5 @@
 import strutils, strformat, terminal, deques, sequtils
-import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext
+import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight
 
 proc jumpLine*(status: var EditorStatus, destination: int)
 proc keyRight*(status: var EditorStatus)
@@ -68,10 +68,16 @@ proc moveToFirstOfNextLine(status: var EditorStatus) =
   moveToFirstOfLine(status)
 
 proc deleteCurrentCharacter*(status: var EditorStatus) =
-  status.buffer[status.currentLine].delete(status.currentColumn)
-  if status.buffer[status.currentLine].len > 0 and status.currentColumn == status.buffer[status.currentLine].len:
-    status.currentColumn = status.buffer[status.currentLine].len-1
-    status.expandedColumn = status.buffer[status.currentLine].len-1
+  if status.currentLine >= status.buffer.high and status.currentColumn > status.buffer[status.currentLine].high: return 
+
+  if status.currentColumn == status.buffer[status.currentLine].len:
+    status.buffer[status.currentLine].insert(status.buffer[status.currentLine + 1], status.currentColumn)
+    status.buffer.delete(status.currentLine + 1, status.currentLine + 2)
+  else:
+    status.buffer[status.currentLine].delete(status.currentColumn)
+    if status.buffer[status.currentLine].len > 0 and status.currentColumn == status.buffer[status.currentLine].len and status.mode != Mode.insert:
+      status.currentColumn = status.buffer[status.currentLine].len-1
+      status.expandedColumn = status.buffer[status.currentLine].len-1
 
   status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)
@@ -349,9 +355,11 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     for i in 0 ..< status.cmdLoop: moveToBackwardWord(status)
   elif key == ord('o'):
     for i in 0 ..< status.cmdLoop: openBlankLineBelow(status)
+    status.highlight = initHighlight($status.buffer, status.language)
     status.changeMode(Mode.insert)
   elif key == ord('O'):
     for i in 0 ..< status.cmdLoop: openBlankLineAbove(status)
+    status.highlight = initHighlight($status.buffer, status.language)
     status.changeMode(Mode.insert)
   elif key == ord('d'):
     if getKey(status.mainWindow) == ord('d'):
@@ -399,8 +407,15 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
 proc normalMode*(status: var EditorStatus) =
   status.cmdLoop = 0
   status.resize(terminalHeight(), terminalWidth())
-  
+  var countChange = 0
+
+  changeCursorType(status.settings.normalModeCursor)
+
   while status.mode == Mode.normal:
+    if status.countChange > countChange:
+      status.highlight = initHighlight($status.buffer, status.language)
+      countChange = status.countChange
+
     status.update
 
     let key = getKey(status.mainWindow)
