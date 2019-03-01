@@ -189,7 +189,7 @@ proc writeAllLines*(view: var EditorView, win: var Window, lineNumber: bool, buf
 
     let isCurrentLine = view.originalLine[y] == currentLine
     if lineNumber and view.start[y] == 0:
-      view.writeLineNum(win, y, view.originalLine[y], if isCurrentLine: ColorPair.brightGreenDefault else: ColorPair.grayDefault)
+      view.writeLineNum(win, y, view.originalLine[y], if isCurrentLine: ColorPair.pinkDefault else: ColorPair.grayDefault)
 
     var x = view.widthOfLineNum
     if view.length[y] == 0:
@@ -203,7 +203,7 @@ proc writeAllLines*(view: var EditorView, win: var Window, lineNumber: bool, buf
         last = min(highlight[i].lastColumn-view.start[y], view.lines[y].high)
       assert(0 <= first and last <= view.lines[y].high and first <= last, fmt"first = {first}, last = {last}, firstColumn = {highlight[i].firstColumn}, lastColumn = {highlight[i].lastColumn}, view.start[y] = {view.start[y]}, y = {y}, view.lines[y] = {view.lines[y]}, view.originalLine[y] = {view.originalLine[y]}")
       let str = view.lines[y][first .. last]
-      view.write(win, y, x, str, if isCurrentLine: ColorPair.brightGreenDefault else: highlight[i].color)
+      view.write(win, y, x, str, highlight[i].color)
       x += width(str)
       if last == highlight[i].lastColumn - view.start[y]:
         # consumed a whole segment

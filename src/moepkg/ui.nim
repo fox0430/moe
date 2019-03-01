@@ -18,8 +18,9 @@ type Color* = enum
   magenta     = 5,
   cyan        = 6,
   white       = 7,
-  lightBlue   = 14
+  lightBlue   = 14,
   brightGreen = 85,
+  pink        = 198,
   brightWhite = 231,
   gray        = 245,
 
@@ -37,6 +38,8 @@ type ColorPair* = enum
   whiteCyan = 11
   magentaDefault =12
   whiteDefault = 13
+  pinkDefault = 14
+  blackPink = 15
 
 type Window* = object
   cursesWindow*: ptr window
@@ -63,6 +66,8 @@ proc setCursesColor() =
   setColorPair(ColorPair.whiteCyan, Color.white, Color.cyan)
   setColorPair(ColorPair.magentaDefault, Color.magenta, Color.default)
   setColorPair(ColorPair.whiteDefault, Color.white, Color.default)
+  setColorPair(ColorPair.pinkDefault, Color.pink, Color.default)
+  setColorPair(ColorPair.blackPink, Color.black, Color.pink)
 
 proc setIbeamCursor*() =
   discard execShellCmd("printf '\\033[6 q'")

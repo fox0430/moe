@@ -92,7 +92,7 @@ proc initEditorStatus*(): EditorStatus =
   let useStatusBar = if result.settings.statusBar.useBar: 1 else: 0
   result.mainWindow = initWindow(terminalHeight()-1, terminalWidth(), 0, 0)
   if result.settings.statusBar.useBar:
-    result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0, ui.ColorPair.blackGreen)
+    result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0, ui.ColorPair.blackPink)
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight()-1, 0)
 
 proc writeStatusBar*(status: var EditorStatus) =
@@ -100,15 +100,15 @@ proc writeStatusBar*(status: var EditorStatus) =
 
   if status.mode == Mode.filer:
     if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" FILER ", ui.ColorPair.blackWhite)
-    if status.settings.statusBar.directory: status.statusWindow.append(ru" ", ui.ColorPair.blackGreen)
-    status.statusWindow.append(getCurrentDir().toRunes, ui.ColorPair.blackGreen)
+    if status.settings.statusBar.directory: status.statusWindow.append(ru" ", ui.ColorPair.blackPink)
+    status.statusWindow.append(getCurrentDir().toRunes, ui.ColorPair.blackPink)
     status.statusWindow.refresh
     return
 
   if status.settings.statusBar.mode: status.statusWindow.write(0, 0,  if status.mode == Mode.normal: ru" NORMAL " else: ru" INSERT ", ui.ColorPair.blackWhite)
-  status.statusWindow.append(ru" ", ui.ColorPair.blackGreen)
-  if status.settings.statusBar.filename: status.statusWindow.append(if status.filename.len > 0: status.filename else: ru"No name", ui.ColorPair.blackGreen)
-  if status.countChange > 0 and status.settings.statusBar.chanedMark: status.statusWindow.append(ru" [+]", ui.ColorPair.blackGreen)
+  status.statusWindow.append(ru" ", ui.ColorPair.blackPink)
+  if status.settings.statusBar.filename: status.statusWindow.append(if status.filename.len > 0: status.filename else: ru"No name", ui.ColorPair.blackPink)
+  if status.countChange > 0 and status.settings.statusBar.chanedMark: status.statusWindow.append(ru" [+]", ui.ColorPair.blackPink)
 
   let
     line = if status.settings.statusBar.line: fmt"{status.currentLine+1}/{status.buffer.len}" else: ""
@@ -116,7 +116,7 @@ proc writeStatusBar*(status: var EditorStatus) =
     encoding = if status.settings.statusBar.characterEncoding: $status.settings.characterEncoding else: ""
     language = if status.language == SourceLanguage.langNone: "Plain" else: sourceLanguageToStr[status.language]
     info = fmt"{line} {column} {encoding} {language} "
-  status.statusWindow.write(0, terminalWidth()-info.len, info, ui.Colorpair.blackGreen)
+  status.statusWindow.write(0, terminalWidth()-info.len, info, ui.Colorpair.blackPink)
   status.statusWindow.refresh
 
 proc resize*(status: var EditorStatus, height, width: int) =
