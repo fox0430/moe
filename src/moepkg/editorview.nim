@@ -189,7 +189,7 @@ proc writeAllLines*(view: var EditorView, win: var Window, lineNumber: bool, buf
 
     let isCurrentLine = view.originalLine[y] == currentLine
     if lineNumber and view.start[y] == 0:
-      view.writeLineNum(win, y, view.originalLine[y], if isCurrentLine: ColorPair.brightGreenDefault else: ColorPair.grayDefault)
+      view.writeLineNum(win, y, view.originalLine[y], if isCurrentLine: ColorPair.pinkDefault else: ColorPair.grayDefault)
 
     var x = view.widthOfLineNum
     if view.length[y] == 0:
