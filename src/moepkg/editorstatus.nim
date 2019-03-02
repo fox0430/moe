@@ -95,17 +95,7 @@ proc initEditorStatus*(): EditorStatus =
     result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0, ui.ColorPair.blackPink)
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight()-1, 0)
 
-proc writeStatusBar*(status: var EditorStatus) =
-  status.statusWindow.erase
-
-  if status.mode == Mode.filer:
-    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" FILER ", ui.ColorPair.blackWhite)
-    if status.settings.statusBar.directory: status.statusWindow.append(ru" ", ui.ColorPair.blackPink)
-    status.statusWindow.append(getCurrentDir().toRunes, ui.ColorPair.blackPink)
-    status.statusWindow.refresh
-    return
-
-  if status.settings.statusBar.mode: status.statusWindow.write(0, 0,  if status.mode == Mode.normal: ru" NORMAL " else: ru" INSERT ", ui.ColorPair.blackWhite)
+proc writeStatusBarNormalModeInfo(status: var EditorStatus) =
   status.statusWindow.append(ru" ", ui.ColorPair.blackPink)
   if status.settings.statusBar.filename: status.statusWindow.append(if status.filename.len > 0: status.filename else: ru"No name", ui.ColorPair.blackPink)
   if status.countChange > 0 and status.settings.statusBar.chanedMark: status.statusWindow.append(ru" [+]", ui.ColorPair.blackPink)
@@ -117,6 +107,28 @@ proc writeStatusBar*(status: var EditorStatus) =
     language = if status.language == SourceLanguage.langNone: "Plain" else: sourceLanguageToStr[status.language]
     info = fmt"{line} {column} {encoding} {language} "
   status.statusWindow.write(0, terminalWidth()-info.len, info, ui.Colorpair.blackPink)
+
+proc writeStatusBarFilerModeInfo(status: var EditorStatus) =
+  if status.settings.statusBar.directory: status.statusWindow.append(ru" ", ui.ColorPair.blackPink)
+  status.statusWindow.append(getCurrentDir().toRunes, ui.ColorPair.blackPink)
+
+proc writeStatusBar*(status: var EditorStatus) =
+  status.statusWindow.erase
+
+  if status.mode == Mode.ex:
+    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" EX ", ui.ColorPair.blackWhite)
+    if status.prevMode == Mode.filer:
+      writeStatusBarFilerModeInfo(status)
+    else:
+      writeStatusBarNormalModeInfo(status)
+  elif status.mode == Mode.filer:
+    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" FILER ", ui.ColorPair.blackWhite)
+    writeStatusBarFilerModeInfo(status)
+  else:
+    if status.settings.statusBar.mode:
+      status.statusWindow.write(0, 0,  if status.mode == Mode.normal: ru" NORMAL " else: ru" INSERT ", ui.ColorPair.blackWhite)
+    writeStatusBarNormalModeInfo(status)
+
   status.statusWindow.refresh
 
 proc resize*(status: var EditorStatus, height, width: int) =
