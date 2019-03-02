@@ -176,6 +176,42 @@ proc moveToBackwardWord(status: var EditorStatus) =
 
   status.expandedColumn = status.currentColumn
 
+proc moveToForwardEndOfWord(status: var EditorStatus) =
+  let
+    startWith = if status.buffer[status.currentLine].len == 0: ru'\n' else: status.buffer[status.currentLine][status.currentColumn]
+    isSkipped = if unicodeext.isPunct(startWith): unicodeext.isPunct elif unicodeext.isAlpha(startWith): unicodeext.isAlpha elif unicodeext.isDigit(startWith): unicodeext.isDigit else: nil
+
+  if isSkipped == nil:
+    (status.currentLine, status.currentColumn) = status.buffer.next(status.currentLine, status.currentColumn)
+  else:
+    while true:
+      inc(status.currentColumn)
+      if status.currentColumn == status.buffer[status.currentLine].len - 1: break
+      if status.currentColumn >= status.buffer[status.currentLine].len:
+        inc(status.currentLine)
+        status.currentColumn = 0
+        break
+      if not isSkipped(status.buffer[status.currentLine][status.currentColumn + 1]): break
+
+  while true:
+    if status.currentLine >= status.buffer.len:
+      status.currentLine = status.buffer.len - 1
+      status.currentColumn = status.buffer[status.buffer.high].high
+      if status.currentColumn == -1: status.currentColumn = 0
+      break
+
+    if status.buffer[status.currentLine].len == 0: break
+    if status.currentColumn == status.buffer[status.currentLine].len:
+      inc(status.currentLine)
+      status.currentColumn = 0
+      continue
+
+    let curr = status.buffer[status.currentLine][status.currentColumn]
+    if isPunct(curr) or isAlpha(curr) or isDigit(curr): break
+    inc(status.currentColumn)
+
+  status.expandedColumn = status.currentColumn
+
 proc openBlankLineBelow(status: var EditorStatus) =
   let indent = sequtils.repeat(ru' ', countRepeat(status.buffer[status.currentLine], Whitespace, 0))
 
@@ -353,6 +389,8 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     for i in 0 ..< status.cmdLoop: moveToForwardWord(status)
   elif key == ord('b'):
     for i in 0 ..< status.cmdLoop: moveToBackwardWord(status)
+  elif key == ord('e'):
+    for i in 0 ..< status.cmdLoop: moveToForwardEndOfWord(status)
   elif key == ord('o'):
     for i in 0 ..< status.cmdLoop: openBlankLineBelow(status)
     status.highlight = initHighlight($status.buffer, status.language)
