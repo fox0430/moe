@@ -201,7 +201,12 @@ proc writeAllLines*(view: var EditorView, win: var Window, lineNumber: bool, buf
       let
         first = max(highlight[i].firstColumn-view.start[y], 0)
         last = min(highlight[i].lastColumn-view.start[y], view.lines[y].high)
-      assert(0 <= first and last <= view.lines[y].high and first <= last, fmt"first = {first}, last = {last}, firstColumn = {highlight[i].firstColumn}, lastColumn = {highlight[i].lastColumn}, view.start[y] = {view.start[y]}, y = {y}, view.lines[y] = {view.lines[y]}, view.originalLine[y] = {view.originalLine[y]}")
+
+      if first > last: break
+      
+      assert(last <= view.lines[y].high, fmt"last = {last}, view.lines[y] = {view.lines[y]}")
+      assert(first <= last, fmt"first = {first}, last = {last}")
+      
       let str = view.lines[y][first .. last]
       view.write(win, y, x, str, highlight[i].color)
       x += width(str)
