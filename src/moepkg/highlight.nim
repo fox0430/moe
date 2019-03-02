@@ -1,12 +1,68 @@
 import packages/docutils/highlite, strutils, sequtils, ospaths, strformat
 import unicodeext, ui
 
-type ColorSegment = object
+type ColorSegment* = object
   firstRow*, firstColumn*, lastRow*, lastColumn*: int
   color*: ColorPair
 
 type Highlight* = object
   colorSegments: seq[ColorSegment]
+
+proc len*(highlight: Highlight): int = highlight.colorSegments.len
+
+proc high*(highlight: Highlight): int = highlight.colorSegments.high
+
+proc `[]`*(highlight: Highlight, i: int): ColorSegment = highlight.colorSegments[i]
+
+proc `[]`*(highlight: Highlight, i: BackwardsIndex): ColorSegment = highlight.colorSegments[highlight.colorSegments.len - int(i)]
+
+proc isIntersect(s, t: ColorSegment): bool = not ((t.lastRow, t.lastColumn) < (s.firstRow, s.firstColumn) or (s.lastRow, s.lastColumn) < (t.firstRow, t.firstColumn))
+
+proc contains(s, t: ColorSegment): bool = ((s.firstRow, s.firstColumn) <= (t.firstRow, t.firstColumn) and (t.lastRow, t.lastColumn) <= (s.lastRow, s.lastColumn))
+
+proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
+  type Position = tuple[row, column: int]
+
+  proc prev(pos: Position): Position =
+    if pos.column > 0: (pos.row, pos.column-1) else: (pos.row-1, high(int))
+  
+  proc next(pos: Position): Position =
+    (pos.row, pos.column+1)
+
+  if s.contains(t): return @[ColorSegment(firstRow: t.firstRow, firstColumn: t.firstColumn, lastRow: t.lastRow, lastColumn: t.lastColumn, color: s.color)]
+  
+  if t.contains(s):
+    if (t.firstRow, t.firstColumn) < (s.firstRow, s.firstColumn):
+      let last = prev((s.firstRow, s.firstColumn))
+      result.add(ColorSegment(firstRow: t.firstRow, firstColumn: t.firstColumn, lastRow: last.row, lastColumn: last.column, color: t.color))
+    
+    result.add(s)
+
+    if (s.lastRow, s.lastColumn) < (t.lastRow, t.lastColumn):
+      let first = next((s.lastRow, s.lastColumn))
+      result.add(ColorSegment(firstRow: first.row, firstColumn: first.column, lastRow: t.lastRow, lastColumn: t.lastColumn, color: t.color))
+    
+    return result
+  
+  if (s.firstRow, s.firstColumn) < (t.firstRow, t.firstColumn):
+    let first = next((s.lastRow, s.lastColumn))
+    result.add(s)
+    result.add(ColorSegment(firstRow: first.row, firstColumn: first.column, lastRow: t.lastRow, lastColumn: t.lastColumn, color: t.color))
+  else:
+    let last = prev((s.firstRow, s.firstColumn))
+    result.add(ColorSegment(firstRow: t.firstRow, firstColumn: t.firstColumn, lastRow: last.row, lastColumn: last.column, color: t.color))
+    result.add(s)
+
+proc overwrite*(highlight: Highlight, colorSegment: ColorSegment): Highlight =
+  ## Overwrite `highlight` with colorSegment
+
+  for i in 0 ..< highlight.colorSegments.len:
+    let cs = highlight.colorSegments[i]
+    if not colorSegment.isIntersect(cs):
+      result.colorSegments.add(cs)
+      continue
+    
+    result.colorSegments.add(colorSegment.overwrite(cs))
 
 proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
   # TODO: use settings file
@@ -62,17 +118,12 @@ proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
         of gtWhitespace: defaultColor
         else: defaultColor
     splitByNewline(buffer[first..last], color)
-
-proc `[]`*(highlight: Highlight, i: int): ColorSegment = highlight.colorSegments[i]
-
-proc `[]`*(highlight: Highlight, i: BackwardsIndex): ColorSegment = highlight.colorSegments[highlight.colorSegments.len - int(i)]
-
-proc len*(highlight: Highlight): int = highlight.colorSegments.len
-
-proc high*(highlight: Highlight): int = highlight.colorSegments.high
+  
+  for i in 0 ..< result.len:
+    result = result.overwrite(result.colorSegments[i])
 
 proc index*(highlight: Highlight, row, column: int): int =
-  # calculate index of color segment (row, column) belonging
+  ## calculate index of color segment (row, column) belonging
 
   doAssert((row, column) >= (highlight[0].firstRow, highlight[0].firstColumn), fmt"row = {row}, column = {column}, highlight[0].firstRow = {highlight[0].firstRow}, hightlihgt[0].firstColumn = {highlight[0].firstColumn}")
   doAssert((row, column) <= (highlight[^1].firstRow, highlight[^1].firstColumn), fmt"row = {row}, column = {column}, highlight[^1].firstRow = {highlight[^1].firstRow}, hightlihgt[^1].firstColumn = {highlight[^1].firstColumn}")
