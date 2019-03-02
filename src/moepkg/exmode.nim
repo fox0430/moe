@@ -175,6 +175,7 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
   status.changeMode(status.prevMode)
 
 proc exMode*(status: var EditorStatus) =
+  writeStatusBar(status)
   let command = getCommand(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
     window.erase
     window.write(0, 0, fmt":{$command}")
