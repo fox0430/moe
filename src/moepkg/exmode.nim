@@ -1,10 +1,8 @@
 import sequtils, strutils, os, terminal, strformat, deques
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight
 
-
 type
   replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
-
 
 proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   var numOfSlash = 0
@@ -29,6 +27,37 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   
   return (searhWord: searchWord, replaceWord: replaceWord)
 
+proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
+  for i in 0 .. r.high:
+    var string = $r[i]
+    string.removeSuffix(suffix)
+    if i == 0: result = @[string.toRunes]
+    else: result.add(string.toRunes)
+
+proc splitQout(s: string): seq[seq[Rune]]=
+  result = @[ru""]
+  var quotIn = false
+  var backSlash = false
+
+  for i in 0 .. s.high:
+    if s[i] == '\\':
+      backSlash = true
+    elif backSlash:
+      backSlash = false 
+      result[result.high].add(($s[i]).toRunes)
+    elif i > 0 and s[i - 1] == '\\':
+      result[result.high].add(($s[i]).toRunes)
+    elif not quotIn and s[i] == '"':
+      quotIn = true
+      result.add(ru"")
+    elif quotIn and s[i] == '"':
+      quotIn = false
+      if i != s.high:  result.add(ru"")
+    else:
+      result[result.high].add(($s[i]).toRunes)
+
+  return result.removeSuffix(" ")
+ 
 proc getCommand*(commandWindow: var Window, updateCommandWindow: proc (window: var Window, command: seq[Rune])): seq[seq[Rune]] =
   var command = ru""
   while true:
@@ -46,7 +75,10 @@ proc getCommand*(commandWindow: var Window, updateCommandWindow: proc (window: v
  
     command &= key
  
-  return strutils.splitWhitespace($command).map(proc(s: string): seq[Rune] = toRunes(s))
+  if ($command).contains('"'):
+    return splitQout($command)
+  else:
+    return strutils.splitWhitespace($command).map(proc(s: string): seq[Rune] = toRunes(s))
 
 proc writeNoWriteError(commandWindow: var Window) =
   commandWindow.erase
