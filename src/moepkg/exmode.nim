@@ -197,11 +197,25 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
 
   let replaceInfo = parseReplaceCommand(command)
 
-  for i in 0 .. status.buffer.high:
-    let searchResult = searchBuffer(status, replaceInfo.searhWord)
-    if searchResult.line > -1:
-      status.buffer[searchResult.line].delete(searchResult.column, searchResult.column + replaceInfo.searhWord.high)
-      status.buffer[searchResult.line].insert(replaceInfo.replaceWord, searchResult.column)
+  if replaceInfo.searhWord == ru"'\n'" and status.buffer.len > 1:
+    let
+      startLine = 0
+      endLine = status.buffer.high
+
+    for i in 0 .. status.buffer.high - 2:
+      exitUi()
+      echo status.buffer
+      echo ""
+      status.buffer[startLine].insert(replaceInfo.replaceWord, status.buffer[startLine].len)
+      for j in 0 .. status.buffer[startLine + 1].high:
+        status.buffer[startLine].insert(status.buffer[startLine + 1][j], status.buffer[startLine].len)
+      status.buffer.delete(startLine + 1, startLine + 2)
+  else:
+    for i in 0 .. status.buffer.high:
+      let searchResult = searchBuffer(status, replaceInfo.searhWord)
+      if searchResult.line > -1:
+        status.buffer[searchResult.line].delete(searchResult.column, searchResult.column + replaceInfo.searhWord.high)
+        status.buffer[searchResult.line].insert(replaceInfo.replaceWord, searchResult.column)
 
   inc(status.countChange)
   status.changeMode(status.prevMode)
