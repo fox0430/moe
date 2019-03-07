@@ -3,8 +3,13 @@ import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight
 
 proc jumpLine*(status: var EditorStatus, destination: int)
 proc keyRight*(status: var EditorStatus)
+proc keyLeft*(status: var EditorStatus)
+proc keyUp*(status: var EditorStatus)
+proc keyDown*(status: var EditorStatus)
+proc replaceCurrentCharacter*(status: var EditorStatus, character: Rune)
 
-import searchmode
+import searchmode, replacemode
+
 
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.erase
@@ -294,7 +299,7 @@ proc pasteBeforeCursor(status: var EditorStatus) =
   elif status.registers.yankedStr.len > 0:
     pasteString(status)
 
-proc replaceCurrentCharacter(status: var EditorStatus, character: Rune) =
+proc replaceCurrentCharacter*(status: var EditorStatus, character: Rune) =
   status.buffer[status.currentLine][status.currentColumn] = character
   status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)
@@ -428,6 +433,8 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     searchNextOccurrence(status)
   elif key == ord('N'):
     searchNextOccurrenceReversely(status)
+  elif key == ord('R'):
+    status.changeMode(Mode.replace)
   elif key == ord('i'):
     status.changeMode(Mode.insert)
   elif key == ord('I'):

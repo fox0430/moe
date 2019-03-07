@@ -4,6 +4,7 @@ import moepkg/editorstatus
 import moepkg/fileutils
 import moepkg/normalmode
 import moepkg/insertmode
+import moepkg/replacemode
 import moepkg/filermode
 import moepkg/exmode
 import moepkg/searchmode
@@ -60,6 +61,8 @@ proc main() =
       normalMode(status)
     of Mode.insert:
       insertMode(status)
+    of Mode.replace:
+      replaceMode(status)
     of Mode.ex:
       exMode(status)
     of Mode.filer:
