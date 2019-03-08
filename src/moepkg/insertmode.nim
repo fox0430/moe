@@ -81,8 +81,12 @@ proc insertTab(status: var EditorStatus) =
 
 proc insertMode*(status: var EditorStatus) =
   changeCursorType(status.settings.insertModeCursor)
+  var bufferChanged = false
+
   while status.mode == Mode.insert:
-    status.highlight = initHighlight($status.buffer, status.language)
+    if bufferChanged:
+      status.highlight = initHighlight($status.buffer, status.language)
+
     status.update
 
     let key = getKey(status.mainWindow)
@@ -111,13 +115,17 @@ proc insertMode*(status: var EditorStatus) =
       moveToLastOfLine(status)
     elif isDcKey(key):
       deleteCurrentCharacter(status)
+      bufferChanged = true
     elif isBackspaceKey(key):
       keyBackspace(status)
+      bufferChanged = true
     elif isEnterKey(key):
       keyEnter(status)
     elif key == ord('\t'):
       insertTab(status)
+      bufferChanged = true
     else:
       insertCharacter(status, key)
+      bufferChanged = true
 
   discard execShellCmd("printf '\\033[2 q'")
