@@ -164,6 +164,9 @@ proc resize*(win: Window, height, width, y, x: int) =
   win.resize(height, width)
   win.move(y, x)
 
+proc moveCursor*(win: Window, y, x: int) =
+  wmove(win.cursesWindow, cint(y), cint(x))
+
 let KEY_ESC = 27
 var KEY_RESIZE {.header: "<ncurses.h>", importc: "KEY_RESIZE".}: int
 var KEY_DOWN {.header: "<ncurses.h>", importc: "KEY_DOWN".}: int

@@ -3,6 +3,11 @@ import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeex
 
 type
   replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
+  ExModeViewStatus = tuple[buffer: seq[Rune], cursorX: int]
+
+proc initExModeViewStatus(): ExModeViewStatus =
+  result.buffer = ru""
+  result.cursorX = 1
 
 proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   var numOfSlash = 0
@@ -57,6 +62,12 @@ proc splitQout(s: string): seq[seq[Rune]]=
       result[result.high].add(($s[i]).toRunes)
 
   return result.removeSuffix(" ")
+
+proc splitCommand(command: string): seq[seq[Rune]] =
+  if (command).contains('"'):
+    return splitQout(command)
+  else:
+    return strutils.splitWhitespace(command).map(proc(s: string): seq[Rune] = toRunes(s))
  
 proc getCommand*(commandWindow: var Window, updateCommandWindow: proc (window: var Window, command: seq[Rune])): seq[seq[Rune]] =
   var command = ru""
@@ -79,6 +90,12 @@ proc getCommand*(commandWindow: var Window, updateCommandWindow: proc (window: v
     return splitQout($command)
   else:
     return strutils.splitWhitespace($command).map(proc(s: string): seq[Rune] = toRunes(s))
+
+proc writeExModeView(commandWindow: var Window, exStatus: var ExModeViewStatus) =
+  commandWindow.erase
+  commandWindow.write(0, 0, fmt":{exStatus.buffer}", ColorPair.brightWhiteDefault)
+  commandWindow.moveCursor(0, exStatus.cursorX)
+  commandWindow.refresh
 
 proc writeNoWriteError(commandWindow: var Window) =
   commandWindow.erase
@@ -220,13 +237,38 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
   inc(status.countChange)
   status.changeMode(status.prevMode)
 
+proc moveLeft(commandWindow: Window, exStatus: var ExModeViewStatus) =
+  if exStatus.cursorX > 1: dec(exStatus.cursorX)
+
+proc moveRight(exStatus: var ExModeViewStatus) =
+  if exStatus.cursorX < exStatus.buffer.len + 1: inc(exStatus.cursorX)
+
+proc deleteCommandBuffer(exStatus: var ExModeViewStatus) =
+  if exStatus.buffer.len > 0:
+    dec(exStatus.cursorX)
+    exStatus.buffer.delete(exStatus.cursorX - 1, exStatus.cursorX - 1)
+
+proc insertCommandBuffer(exStatus: var ExModeViewStatus, c: Rune) =
+  exStatus.buffer.insert(c, exStatus.cursorX - 1)
+  inc(exStatus.cursorX)
+
 proc exMode*(status: var EditorStatus) =
   writeStatusBar(status)
-  let command = getCommand(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
-    window.erase
-    window.write(0, 0, fmt":{$command}")
-    window.refresh
-  )
+  var exStatus = initExModeViewStatus()
+
+  while true:
+    writeExModeView(status.commandWindow, exStatus)
+
+    var key = getKey(status.commandWindow)
+
+    if isEnterKey(key) or isEscKey(key): break
+    elif isResizeKey(key): continue
+    elif isLeftKey(key): moveLeft(status.commandWindow, exStatus)
+    elif isRightkey(key): moveRight(exStatus)
+    elif isBackspaceKey(key): deleteCommandBuffer(exStatus)
+    else: insertCommandBuffer(exStatus, key)
+
+  let command = splitCommand($exStatus.buffer)
 
   if isJumpCommand(status, command):
     var line = ($command[0]).parseInt-1
