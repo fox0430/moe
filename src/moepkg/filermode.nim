@@ -47,11 +47,10 @@ proc tryExpandSymlink(symlinkPath: string): string =
     return ""
 
 proc searchFiles(status: var EditorStatus, dirList: seq[PathInfo]): seq[PathInfo] =
-  let command = getCommand(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
-    window.erase
-    window.write(0, 0, fmt"/{$command}")
-    window.refresh
-  )
+  setCursor(true)
+  let command = getCommand(status.commandWindow, "/")
+  setCursor(false)
+
   if command.len == 0:
     status.commandWindow.erase
     status.commandWindow.refresh
@@ -79,11 +78,10 @@ proc writeCopyFileError(commandWindow: var Window) =
   commandWindow.refresh
 
 proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
-  let command = getCommand(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
-    window.erase
-    window.write(0, 0, fmt"Delete file? 'y' or 'n': {$command}")
-    window.refresh
-  )
+  setCursor(true)
+  let command = getCommand(status.commandWindow, "Delete file? 'y' or 'n': ")
+  setCursor(false)
+
   if command.len == 0:
     status.commandWindow.erase
     status.commandWindow.refresh
@@ -378,11 +376,9 @@ proc pasteFile(commandWindow: var Window, filerStatus: var FilerStatus) =
       writeRemoveFileError(commandWindow)
 
 proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
-  let dirname = getCommand(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
-    window.erase
-    window.write(0, 0, fmt"New file name: {$command}")
-    window.refresh
-  )
+  setCursor(true)
+  let dirname = getCommand(status.commandWindow, "New file name: ")
+  setCursor(false)
 
   try:
     createDir($dirname[0])
@@ -390,7 +386,7 @@ proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   except OSError:
     writeCreateDirErrorMessage(status.commandWindow)
     return
-      
+   
 proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   let
     kind = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].kind
