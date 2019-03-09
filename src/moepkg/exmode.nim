@@ -3,10 +3,12 @@ import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeex
 
 type
   replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
-  ExModeViewStatus = tuple[buffer: seq[Rune], cursorX: int]
+  ExModeViewStatus = tuple[buffer: seq[Rune], prompt: string, cursorY, cursorX: int]
 
-proc initExModeViewStatus(): ExModeViewStatus =
+proc initExModeViewStatus(prompt: string): ExModeViewStatus =
   result.buffer = ru""
+  result.prompt = prompt
+  result.cursorY = 0
   result.cursorX = 1
 
 proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
@@ -69,9 +71,9 @@ proc splitCommand(command: string): seq[seq[Rune]] =
   else:
     return strutils.splitWhitespace(command).map(proc(s: string): seq[Rune] = toRunes(s))
  
-proc writeExModeView(commandWindow: var Window, exStatus: var ExModeViewStatus, prompt: string) =
+proc writeExModeView(commandWindow: var Window, exStatus: ExModeViewStatus) =
   commandWindow.erase
-  commandWindow.write(0, 0, fmt"{prompt}{exStatus.buffer}", ColorPair.brightWhiteDefault)
+  commandWindow.write(exStatus.cursorY, 0, fmt"{exStatus.prompt}{exStatus.buffer}", ColorPair.brightWhiteDefault)
   commandWindow.moveCursor(0, exStatus.cursorX)
   commandWindow.refresh
 
@@ -221,9 +223,17 @@ proc moveLeft(commandWindow: Window, exStatus: var ExModeViewStatus) =
 proc moveRight(exStatus: var ExModeViewStatus) =
   if exStatus.cursorX < exStatus.buffer.len + 1: inc(exStatus.cursorX)
 
+proc moveTop(exStatus: var ExModeViewStatus) = exStatus.cursorX = 1
+
+proc moveEnd(exStatus: var ExModeViewStatus) = exStatus.cursorX = exStatus.buffer.len
+
 proc deleteCommandBuffer(exStatus: var ExModeViewStatus) =
   if exStatus.buffer.len > 0:
     dec(exStatus.cursorX)
+    exStatus.buffer.delete(exStatus.cursorX - 1, exStatus.cursorX - 1)
+
+proc deleteCommandBufferCurrentPosition(exStatus: var ExModeViewStatus) =
+  if exStatus.buffer.len > 0 and exStatus.cursorX <= exStatus.buffer.len:
     exStatus.buffer.delete(exStatus.cursorX - 1, exStatus.cursorX - 1)
 
 proc insertCommandBuffer(exStatus: var ExModeViewStatus, c: Rune) =
@@ -254,9 +264,9 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     status.changeMode(status.prevMode)
 
 proc getCommand*(commandWindow: var Window, prompt: string): seq[seq[Rune]] =
-  var exStatus = initExModeViewStatus()
+  var exStatus = initExModeViewStatus(prompt)
   while true:
-    writeExModeView(commandWindow, exStatus, prompt)
+    writeExModeView(commandWindow, exStatus)
 
     var key = getKey(commandWindow)
 
@@ -264,7 +274,10 @@ proc getCommand*(commandWindow: var Window, prompt: string): seq[seq[Rune]] =
     elif isResizeKey(key): continue
     elif isLeftKey(key): moveLeft(commandWindow, exStatus)
     elif isRightkey(key): moveRight(exStatus)
+    elif isHomeKey(key): moveTop(exStatus)
+    elif isEndKey(key): moveEnd(exStatus)
     elif isBackspaceKey(key): deleteCommandBuffer(exStatus)
+    elif isDcKey(key): deleteCommandBufferCurrentPosition(exStatus)
     else: insertCommandBuffer(exStatus, key)
 
   return splitCommand($exStatus.buffer)
