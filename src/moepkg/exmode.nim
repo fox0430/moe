@@ -3,6 +3,13 @@ import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeex
 
 type
   replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
+  ExModeViewStatus = tuple[buffer: seq[Rune], prompt: string, cursorY, cursorX: int]
+
+proc initExModeViewStatus(prompt: string): ExModeViewStatus =
+  result.buffer = ru""
+  result.prompt = prompt
+  result.cursorY = 0
+  result.cursorX = 1
 
 proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   var numOfSlash = 0
@@ -57,28 +64,18 @@ proc splitQout(s: string): seq[seq[Rune]]=
       result[result.high].add(($s[i]).toRunes)
 
   return result.removeSuffix(" ")
- 
-proc getCommand*(commandWindow: var Window, updateCommandWindow: proc (window: var Window, command: seq[Rune])): seq[seq[Rune]] =
-  var command = ru""
-  while true:
-    updateCommandWindow(commandWindow, command)
- 
-    let key = commandWindow.getkey
-    
-    if isResizeKey(key): continue
-    if isEnterKey(key) or isEscKey(key): break
-    if isEscKey(key): return @["".toRunes]
-    if isBackspaceKey(key):
-      if command.len > 0: command.delete(command.high, command.high)
-      continue
-    if validateUtf8(key.toUTF8) != -1: continue
- 
-    command &= key
- 
-  if ($command).contains('"'):
-    return splitQout($command)
+
+proc splitCommand(command: string): seq[seq[Rune]] =
+  if (command).contains('"'):
+    return splitQout(command)
   else:
-    return strutils.splitWhitespace($command).map(proc(s: string): seq[Rune] = toRunes(s))
+    return strutils.splitWhitespace(command).map(proc(s: string): seq[Rune] = toRunes(s))
+ 
+proc writeExModeView(commandWindow: var Window, exStatus: ExModeViewStatus) =
+  commandWindow.erase
+  commandWindow.write(exStatus.cursorY, 0, fmt"{exStatus.prompt}{exStatus.buffer}", ColorPair.brightWhiteDefault)
+  commandWindow.moveCursor(0, exStatus.cursorX)
+  commandWindow.refresh
 
 proc writeNoWriteError(commandWindow: var Window) =
   commandWindow.erase
@@ -220,14 +217,30 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
   inc(status.countChange)
   status.changeMode(status.prevMode)
 
-proc exMode*(status: var EditorStatus) =
-  writeStatusBar(status)
-  let command = getCommand(status.commandWindow, proc (window: var Window, command: seq[Rune]) =
-    window.erase
-    window.write(0, 0, fmt":{$command}")
-    window.refresh
-  )
+proc moveLeft(commandWindow: Window, exStatus: var ExModeViewStatus) =
+  if exStatus.cursorX > 1: dec(exStatus.cursorX)
 
+proc moveRight(exStatus: var ExModeViewStatus) =
+  if exStatus.cursorX < exStatus.buffer.len + 1: inc(exStatus.cursorX)
+
+proc moveTop(exStatus: var ExModeViewStatus) = exStatus.cursorX = 1
+
+proc moveEnd(exStatus: var ExModeViewStatus) = exStatus.cursorX = exStatus.buffer.len
+
+proc deleteCommandBuffer(exStatus: var ExModeViewStatus) =
+  if exStatus.buffer.len > 0:
+    dec(exStatus.cursorX)
+    exStatus.buffer.delete(exStatus.cursorX - 1, exStatus.cursorX - 1)
+
+proc deleteCommandBufferCurrentPosition(exStatus: var ExModeViewStatus) =
+  if exStatus.buffer.len > 0 and exStatus.cursorX <= exStatus.buffer.len:
+    exStatus.buffer.delete(exStatus.cursorX - 1, exStatus.cursorX - 1)
+
+proc insertCommandBuffer(exStatus: var ExModeViewStatus, c: Rune) =
+  exStatus.buffer.insert(c, exStatus.cursorX - 1)
+  inc(exStatus.cursorX)
+
+proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
   if isJumpCommand(status, command):
     var line = ($command[0]).parseInt-1
     if line < 0: line = 0
@@ -249,3 +262,29 @@ proc exMode*(status: var EditorStatus) =
     replaceBuffer(status, command[0][3 .. command[0].high])
   else:
     status.changeMode(status.prevMode)
+
+proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
+  status.resize(terminalHeight(), terminalWidth())
+  var exStatus = initExModeViewStatus(prompt)
+  while true:
+    writeExModeView(status.commandWindow, exStatus)
+
+    var key = getKey(status.commandWindow)
+
+    if isEnterKey(key) or isEscKey(key): break
+    elif isResizeKey(key):
+      status.resize(terminalHeight(), terminalWidth())
+      status.update
+    elif isLeftKey(key): moveLeft(status.commandWindow, exStatus)
+    elif isRightkey(key): moveRight(exStatus)
+    elif isHomeKey(key): moveTop(exStatus)
+    elif isEndKey(key): moveEnd(exStatus)
+    elif isBackspaceKey(key): deleteCommandBuffer(exStatus)
+    elif isDcKey(key): deleteCommandBufferCurrentPosition(exStatus)
+    else: insertCommandBuffer(exStatus, key)
+
+  return splitCommand($exStatus.buffer)
+
+proc exMode*(status: var EditorStatus) =
+  let command = getCommand(status, ":")
+  exModeCommand(status, command)
