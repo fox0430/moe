@@ -263,16 +263,19 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
   else:
     status.changeMode(status.prevMode)
 
-proc getCommand*(commandWindow: var Window, prompt: string): seq[seq[Rune]] =
+proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
+  status.resize(terminalHeight(), terminalWidth())
   var exStatus = initExModeViewStatus(prompt)
   while true:
-    writeExModeView(commandWindow, exStatus)
+    writeExModeView(status.commandWindow, exStatus)
 
-    var key = getKey(commandWindow)
+    var key = getKey(status.commandWindow)
 
     if isEnterKey(key) or isEscKey(key): break
-    elif isResizeKey(key): continue
-    elif isLeftKey(key): moveLeft(commandWindow, exStatus)
+    elif isResizeKey(key):
+      status.resize(terminalHeight(), terminalWidth())
+      status.update
+    elif isLeftKey(key): moveLeft(status.commandWindow, exStatus)
     elif isRightkey(key): moveRight(exStatus)
     elif isHomeKey(key): moveTop(exStatus)
     elif isEndKey(key): moveEnd(exStatus)
@@ -283,6 +286,5 @@ proc getCommand*(commandWindow: var Window, prompt: string): seq[seq[Rune]] =
   return splitCommand($exStatus.buffer)
 
 proc exMode*(status: var EditorStatus) =
-  writeStatusBar(status)
-  let command = getCommand(status.commandWindow, ":")
+  let command = getCommand(status, ":")
   exModeCommand(status, command)

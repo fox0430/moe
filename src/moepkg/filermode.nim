@@ -48,7 +48,7 @@ proc tryExpandSymlink(symlinkPath: string): string =
 
 proc searchFiles(status: var EditorStatus, dirList: seq[PathInfo]): seq[PathInfo] =
   setCursor(true)
-  let command = getCommand(status.commandWindow, "/")
+  let command = getCommand(status, "/")
   setCursor(false)
 
   if command.len == 0:
@@ -79,7 +79,7 @@ proc writeCopyFileError(commandWindow: var Window) =
 
 proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
   setCursor(true)
-  let command = getCommand(status.commandWindow, "Delete file? 'y' or 'n': ")
+  let command = getCommand(status, "Delete file? 'y' or 'n': ")
   setCursor(false)
 
   if command.len == 0:
@@ -377,7 +377,7 @@ proc pasteFile(commandWindow: var Window, filerStatus: var FilerStatus) =
 
 proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   setCursor(true)
-  let dirname = getCommand(status.commandWindow, "New file name: ")
+  let dirname = getCommand(status, "New file name: ")
   setCursor(false)
 
   try:
