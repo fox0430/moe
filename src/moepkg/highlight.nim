@@ -30,6 +30,8 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
   proc next(pos: Position): Position =
     (pos.row, pos.column+1)
 
+  if not s.isIntersect(t): return @[s]
+
   if t.contains(s): return @[ColorSegment(firstRow: s.firstRow, firstColumn: s.firstColumn, lastRow: s.lastRow, lastColumn: s.lastColumn, color: t.color)]
   
   if s.contains(t):
@@ -47,22 +49,18 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
   
   if (t.firstRow, t.firstColumn) < (s.firstRow, s.firstColumn):
     let first = next((t.lastRow, t.lastColumn))
-    result.add(t)
+    result.add(ColorSegment(firstRow: s.firstRow, firstColumn: s.firstColumn, lastRow: t.lastRow, lastColumn: t.lastColumn, color: t.color))
     result.add(ColorSegment(firstRow: first.row, firstColumn: first.column, lastRow: s.lastRow, lastColumn: s.lastColumn, color: s.color))
   else:
     let last = prev((t.firstRow, t.firstColumn))
     result.add(ColorSegment(firstRow: s.firstRow, firstColumn: s.firstColumn, lastRow: last.row, lastColumn: last.column, color: s.color))
-    result.add(t)
+    result.add(ColorSegment(firstRow: t.firstRow, firstColumn: t.firstColumn, lastRow: s.lastRow, lastColumn: s.lastColumn, color: t.color))
 
 proc overwrite*(highlight: Highlight, colorSegment: ColorSegment): Highlight =
   ## Overwrite `highlight` with colorSegment
 
   for i in 0 ..< highlight.colorSegments.len:
     let cs = highlight.colorSegments[i]
-    if not colorSegment.isIntersect(cs):
-      result.colorSegments.add(cs)
-      continue
-    
     result.colorSegments.add(cs.overwrite(colorSegment))
 
 proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
