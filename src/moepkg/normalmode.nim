@@ -440,6 +440,8 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('I'):
     status.currentColumn = 0
     status.changeMode(Mode.insert)
+  elif key == ord('v'):
+    status.changeMode(Mode.visual)
   elif key == ord('a'):
     if status.buffer[status.currentLine].len > 0: inc(status.currentColumn)
     status.changeMode(Mode.insert)

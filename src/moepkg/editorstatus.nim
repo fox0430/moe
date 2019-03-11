@@ -2,7 +2,7 @@ import packages/docutils/highlite, strutils, terminal, os, strformat
 import gapbuffer, editorview, ui, cursor, unicodeext, highlight
 
 type Mode* = enum
-  normal, insert, replace, ex, filer, search, quit
+  normal, insert, visual, replace, ex, filer, search, quit
 
 type Registers* = object
   yankedLines*: seq[seq[Rune]]
@@ -128,6 +128,9 @@ proc writeStatusBar*(status: var EditorStatus) =
       writeStatusBarFilerModeInfo(status)
     else:
       writeStatusBarNormalModeInfo(status)
+  elif status.mode == Mode.visual:
+    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" VISUAL ", ui.ColorPair.blackWhite)
+    writeStatusBarNormalModeInfo(status)
   elif status.mode == Mode.replace:
     if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" REPLACE ", ui.ColorPair.blackWhite)
     writeStatusBarNormalModeInfo(status)
