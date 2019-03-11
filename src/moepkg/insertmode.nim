@@ -85,7 +85,7 @@ proc insertMode*(status: var EditorStatus) =
 
   while status.mode == Mode.insert:
     if bufferChanged:
-      status.highlight = initHighlight($status.buffer, status.language)
+      status.updateHighlight
 
     status.update
 
