@@ -141,7 +141,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
 
     let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.buffer.len) - 2 else: 0
     let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-    status.highlight = initHighlight($status.buffer, status.language)
+    status.updateHighlight
     status.view = initEditorView(status.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
 
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =

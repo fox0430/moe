@@ -21,6 +21,7 @@ proc isIntersect(s, t: ColorSegment): bool = not ((t.lastRow, t.lastColumn) < (s
 proc contains(s, t: ColorSegment): bool = ((s.firstRow, s.firstColumn) <= (t.firstRow, t.firstColumn) and (t.lastRow, t.lastColumn) <= (s.lastRow, s.lastColumn))
 
 proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
+  ## Overwrite `s` with t
   type Position = tuple[row, column: int]
 
   proc prev(pos: Position): Position =
@@ -29,29 +30,29 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
   proc next(pos: Position): Position =
     (pos.row, pos.column+1)
 
-  if s.contains(t): return @[ColorSegment(firstRow: t.firstRow, firstColumn: t.firstColumn, lastRow: t.lastRow, lastColumn: t.lastColumn, color: s.color)]
+  if t.contains(s): return @[ColorSegment(firstRow: s.firstRow, firstColumn: s.firstColumn, lastRow: s.lastRow, lastColumn: s.lastColumn, color: t.color)]
   
-  if t.contains(s):
-    if (t.firstRow, t.firstColumn) < (s.firstRow, s.firstColumn):
-      let last = prev((s.firstRow, s.firstColumn))
-      result.add(ColorSegment(firstRow: t.firstRow, firstColumn: t.firstColumn, lastRow: last.row, lastColumn: last.column, color: t.color))
+  if s.contains(t):
+    if (s.firstRow, s.firstColumn) < (t.firstRow, t.firstColumn):
+      let last = prev((t.firstRow, t.firstColumn))
+      result.add(ColorSegment(firstRow: s.firstRow, firstColumn: s.firstColumn, lastRow: last.row, lastColumn: last.column, color: s.color))
     
-    result.add(s)
+    result.add(t)
 
-    if (s.lastRow, s.lastColumn) < (t.lastRow, t.lastColumn):
-      let first = next((s.lastRow, s.lastColumn))
-      result.add(ColorSegment(firstRow: first.row, firstColumn: first.column, lastRow: t.lastRow, lastColumn: t.lastColumn, color: t.color))
+    if (t.lastRow, t.lastColumn) < (s.lastRow, s.lastColumn):
+      let first = next((t.lastRow, t.lastColumn))
+      result.add(ColorSegment(firstRow: first.row, firstColumn: first.column, lastRow: s.lastRow, lastColumn: s.lastColumn, color: s.color))
     
     return result
   
-  if (s.firstRow, s.firstColumn) < (t.firstRow, t.firstColumn):
-    let first = next((s.lastRow, s.lastColumn))
-    result.add(s)
-    result.add(ColorSegment(firstRow: first.row, firstColumn: first.column, lastRow: t.lastRow, lastColumn: t.lastColumn, color: t.color))
+  if (t.firstRow, t.firstColumn) < (s.firstRow, s.firstColumn):
+    let first = next((t.lastRow, t.lastColumn))
+    result.add(t)
+    result.add(ColorSegment(firstRow: first.row, firstColumn: first.column, lastRow: s.lastRow, lastColumn: s.lastColumn, color: s.color))
   else:
-    let last = prev((s.firstRow, s.firstColumn))
-    result.add(ColorSegment(firstRow: t.firstRow, firstColumn: t.firstColumn, lastRow: last.row, lastColumn: last.column, color: t.color))
-    result.add(s)
+    let last = prev((t.firstRow, t.firstColumn))
+    result.add(ColorSegment(firstRow: s.firstRow, firstColumn: s.firstColumn, lastRow: last.row, lastColumn: last.column, color: s.color))
+    result.add(t)
 
 proc overwrite*(highlight: Highlight, colorSegment: ColorSegment): Highlight =
   ## Overwrite `highlight` with colorSegment
@@ -62,7 +63,7 @@ proc overwrite*(highlight: Highlight, colorSegment: ColorSegment): Highlight =
       result.colorSegments.add(cs)
       continue
     
-    result.colorSegments.add(colorSegment.overwrite(cs))
+    result.colorSegments.add(cs.overwrite(colorSegment))
 
 proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
   # TODO: use settings file

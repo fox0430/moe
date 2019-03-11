@@ -95,6 +95,13 @@ proc initEditorStatus*(): EditorStatus =
     result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0, ui.ColorPair.blackPink)
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight()-1, 0)
 
+proc changeMode*(status: var EditorStatus, mode: Mode) =
+  status.prevMode = status.mode
+  status.mode = mode
+
+proc executeOnExit*(settings: EditorSettings) =
+  changeCursorType(settings.defaultCursor)
+
 proc writeStatusBarNormalModeInfo(status: var EditorStatus) =
   status.statusWindow.append(ru" ", ui.ColorPair.blackPink)
   if status.settings.statusBar.filename: status.statusWindow.append(if status.filename.len > 0: status.filename else: ru"No name", ui.ColorPair.blackPink)
@@ -165,9 +172,17 @@ proc update*(status: var EditorStatus) =
   status.mainWindow.refresh
   setCursor(true)
 
-proc changeMode*(status: var EditorStatus, mode: Mode) =
-  status.prevMode = status.mode
-  status.mode = mode
+proc updateHighlight*(status: var EditorStatus)
 
-proc executeOnExit*(settings: EditorSettings) =
-  changeCursorType(settings.defaultCursor)
+from searchmode import searchAllOccurrence
+
+proc updateHighlight*(status: var EditorStatus) =
+  status.highlight = initHighlight($status.buffer, status.language)
+
+  # highlight search results
+  if status.searchHistory.len > 0:
+    let keyword = status.searchHistory[^1]
+    let allOccurrence = searchAllOccurrence(status.buffer, keyword)
+    for pos in allOccurrence:
+      let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column+keyword.high, color: defaultMagenta)
+      status.highlight = status.highlight.overwrite(colorSegment)
