@@ -1,5 +1,5 @@
 import terminal
-import editorstatus, ui, normalmode, highlight, unicodeext
+import editorstatus, ui, gapbuffer, normalmode, highlight, unicodeext
 
 type SelectArea = object
   startLine: int
@@ -45,6 +45,37 @@ proc updateColorSegment(colorSegment: var ColorSegment, area: SelectArea) =
     colorSegment.firstColumn = area.endColumn
     colorSegment.lastColumn = area.startColumn
 
+proc swapSlectArea(area: var SelectArea) =
+  if area.startLine == area.endLine:
+    if area.endColumn < area.startColumn: swap(area.startColumn, area.endColumn)
+  elif area.endLine < area.startLine:
+    swap(area.startLine, area.endLine)
+    swap(area.startColumn, area.endColumn)
+
+proc yankBuffer(status: var EditorStatus, area: SelectArea) =
+  status.registers.yankedLines = @[]
+  status.registers.yankedStr = @[]
+
+  for i in area.startLine .. area.endLine:
+    if i == area.startLine and area.startColumn > 0:
+      status.registers.yankedLines.add(ru"")
+      for i in area.startColumn ..< status.buffer[area.startLine].len:
+        status.registers.yankedLines[status.registers.yankedLines.high].add(status.buffer[area.startLine][i])
+    elif i == area.endLine and area.endColumn < status.buffer[area.endLine].len:
+      status.registers.yankedLines.add(ru"")
+      for i in 0 ..< area.endColumn:
+        status.registers.yankedLines[status.registers.yankedLines.high].add(status.buffer[area.endLine][i])
+    else:
+      status.registers.yankedLines.add(status.buffer[i])
+ 
+proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
+  area.swapSlectArea
+
+  if key == ord('y') or isDcKey(key):
+    yankBuffer(status, area)
+  else:
+    discard
+
 proc visualMode*(status: var EditorStatus) =
   status.resize(terminalHeight(), terminalWidth())
 
@@ -76,3 +107,8 @@ proc visualMode*(status: var EditorStatus) =
       keyUp(status)
     elif key == ord('j') or isDownKey(key) or isEnterKey(key):
       keyDown(status)
+
+    else:
+      visualCommand(status, area, key)
+      status.updatehighlight
+      status.changeMode(Mode.normal)
