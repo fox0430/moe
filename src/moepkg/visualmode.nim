@@ -57,14 +57,17 @@ proc yankBuffer(status: var EditorStatus, area: SelectArea) =
   status.registers.yankedStr = @[]
 
   for i in area.startLine .. area.endLine:
+    if area.startLine == area.endLine:
+      for j in area.startColumn .. area.endColumn:
+        status.registers.yankedStr.add(status.buffer[area.startLine][j])
     if i == area.startLine and area.startColumn > 0:
       status.registers.yankedLines.add(ru"")
-      for i in area.startColumn ..< status.buffer[area.startLine].len:
-        status.registers.yankedLines[status.registers.yankedLines.high].add(status.buffer[area.startLine][i])
+      for j in area.startColumn ..< status.buffer[area.startLine].len:
+        status.registers.yankedLines[status.registers.yankedLines.high].add(status.buffer[area.startLine][j])
     elif i == area.endLine and area.endColumn < status.buffer[area.endLine].len:
       status.registers.yankedLines.add(ru"")
-      for i in 0 ..< area.endColumn:
-        status.registers.yankedLines[status.registers.yankedLines.high].add(status.buffer[area.endLine][i])
+      for j in 0 .. area.endColumn:
+        status.registers.yankedLines[status.registers.yankedLines.high].add(status.buffer[area.endLine][j])
     else:
       status.registers.yankedLines.add(status.buffer[i])
  
