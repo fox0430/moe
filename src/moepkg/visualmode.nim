@@ -132,6 +132,12 @@ proc visualMode*(status: var EditorStatus) =
       keyUp(status)
     elif key == ord('j') or isDownKey(key) or isEnterKey(key):
       keyDown(status)
+    elif key == ord('^'):
+      moveToFirstNonBlankOfLine(status)
+    elif key == ord('0') or isHomeKey(key):
+      moveToFirstOfLine(status)
+    elif key == ord('$') or isEndKey(key):
+      moveToLastOfLine(status)
     elif key == ord('w'):
       moveToForwardWord(status)
     elif key == ord('b'):

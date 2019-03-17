@@ -49,7 +49,7 @@ proc keyDown*(status: var EditorStatus) =
   status.currentColumn = min(status.expandedColumn, maxColumn)
   if status.currentColumn < 0: status.currentColumn = 0
 
-proc moveToFirstNonBlankOfLine(status: var EditorStatus) =
+proc moveToFirstNonBlankOfLine*(status: var EditorStatus) =
   status.currentColumn = 0
   while status.buffer[status.currentLine][status.currentColumn] == ru' ': inc(status.currentColumn)
   status.expandedColumn = status.currentColumn
