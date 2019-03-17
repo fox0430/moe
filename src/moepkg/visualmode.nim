@@ -1,4 +1,4 @@
-import terminal, deques
+import terminal
 import editorstatus, editorview, ui, gapbuffer, normalmode, highlight, unicodeext
 
 type SelectArea = object
@@ -132,6 +132,12 @@ proc visualMode*(status: var EditorStatus) =
       keyUp(status)
     elif key == ord('j') or isDownKey(key) or isEnterKey(key):
       keyDown(status)
+    elif key == ord('w'):
+      moveToForwardWord(status)
+    elif key == ord('b'):
+      moveToBackwardWord(status)
+    elif key == ord('e'):
+      moveToForwardEndOfWord(status)
 
     else:
       visualCommand(status, area, key)

@@ -123,7 +123,7 @@ proc pageDown*(status: var EditorStatus) =
     let startOfPrintedLines = max(destination - (currentLine - status.view.originalLine[0]), 0)
     status.view.reload(status.buffer, startOfPrintedLines)
 
-proc moveToForwardWord(status: var EditorStatus) =
+proc moveToForwardWord*(status: var EditorStatus) =
   let
     startWith = if status.buffer[status.currentLine].len == 0: ru'\n' else: status.buffer[status.currentLine][status.currentColumn]
     isSkipped = if unicodeext.isPunct(startWith): unicodeext.isPunct elif unicodeext.isAlpha(startWith): unicodeext.isAlpha elif unicodeext.isDigit(startWith): unicodeext.isDigit else: nil
@@ -158,7 +158,7 @@ proc moveToForwardWord(status: var EditorStatus) =
 
   status.expandedColumn = status.currentColumn
 
-proc moveToBackwardWord(status: var EditorStatus) =
+proc moveToBackwardWord*(status: var EditorStatus) =
   if status.buffer.isFirst(status.currentLine, status.currentColumn): return
 
   while true:
@@ -181,7 +181,7 @@ proc moveToBackwardWord(status: var EditorStatus) =
 
   status.expandedColumn = status.currentColumn
 
-proc moveToForwardEndOfWord(status: var EditorStatus) =
+proc moveToForwardEndOfWord*(status: var EditorStatus) =
   let
     startWith = if status.buffer[status.currentLine].len == 0: ru'\n' else: status.buffer[status.currentLine][status.currentColumn]
     isSkipped = if unicodeext.isPunct(startWith): unicodeext.isPunct elif unicodeext.isAlpha(startWith): unicodeext.isAlpha elif unicodeext.isDigit(startWith): unicodeext.isDigit else: nil
