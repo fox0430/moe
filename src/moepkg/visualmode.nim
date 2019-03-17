@@ -1,5 +1,5 @@
-import terminal
-import editorstatus, ui, gapbuffer, normalmode, highlight, unicodeext
+import terminal, deques
+import editorstatus, editorview, ui, gapbuffer, normalmode, highlight, unicodeext
 
 type SelectArea = object
   startLine: int
@@ -70,12 +70,34 @@ proc yankBuffer(status: var EditorStatus, area: SelectArea) =
         status.registers.yankedLines[status.registers.yankedLines.high].add(status.buffer[area.endLine][j])
     else:
       status.registers.yankedLines.add(status.buffer[i])
- 
+
+proc deleteBuffer(status: var EditorStatus, area: SelectArea) =
+  yankBuffer(status, area)
+
+  for i in area.startLine .. area.endLine:
+    if area.startLine == area.endLine:
+      for j in area.startColumn .. area.endColumn:
+        status.buffer[area.startLine].delete(area.startColumn)
+    elif i == area.startLine and area.startColumn > 0:
+      for j in area.startColumn .. status.buffer[area.startLine].high:
+        status.buffer[area.startLine].delete(area.startColumn)
+    elif i == area.endLine and area.endColumn < status.buffer[area.startLine].high:
+      for j in 0 .. area.endColumn:
+        status.buffer[area.startLine].delete(0)
+    else:
+      status.buffer.delete(area.startLine, area.startLine + 1)
+
+  inc(status.countChange)
+  status.currentColumn = area.startColumn
+  status.expandedColumn = area.startColumn
+
 proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSlectArea
 
   if key == ord('y') or isDcKey(key):
     yankBuffer(status, area)
+  elif key == ord('x'):
+    deleteBuffer(status, area)
   else:
     discard
 
