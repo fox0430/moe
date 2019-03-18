@@ -303,13 +303,13 @@ proc replaceCurrentCharacter*(status: var EditorStatus, character: Rune) =
   status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)
 
-proc addIndent(status: var EditorStatus) =
+proc addIndent*(status: var EditorStatus) =
   status.buffer[status.currentLine].insert(newSeqWith(status.settings.tabStop, ru' '))
 
   status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)
 
-proc deleteIndent(status: var EditorStatus) =
+proc deleteIndent*(status: var EditorStatus) =
   if status.buffer.len == 0: return
 
   if status.buffer[status.currentLine][0] == ru' ':

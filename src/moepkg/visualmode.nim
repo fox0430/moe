@@ -92,6 +92,18 @@ proc deleteBuffer(status: var EditorStatus, area: SelectArea) =
   status.currentColumn = area.startColumn
   status.expandedColumn = area.startColumn
 
+proc addIndent(status: var EditorStatus, area: SelectArea) =
+  status.currentLine = area.startLine
+  for i in area.startLine .. area.endLine:
+    addIndent(status)
+    inc(status.currentLine)
+
+proc deleteIndent(status: var EditorStatus, area: SelectArea) =
+  status.currentLine = area.startLine
+  for i in area.startLine .. area.endLine:
+    deleteIndent(status)
+    inc(status.currentLine)
+
 proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSlectArea
 
@@ -99,6 +111,10 @@ proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
     yankBuffer(status, area)
   elif key == ord('x'):
     deleteBuffer(status, area)
+  elif key == ord('>'):
+    addIndent(status, area)
+  elif key == ord('<'):
+    deleteIndent(status, area)
   else:
     discard
 
