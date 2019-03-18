@@ -88,6 +88,7 @@ proc deleteBuffer(status: var EditorStatus, area: SelectArea) =
       status.buffer.delete(area.startLine, area.startLine + 1)
 
   inc(status.countChange)
+  status.currentLine = area.startLine
   status.currentColumn = area.startColumn
   status.expandedColumn = area.startColumn
 
