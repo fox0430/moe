@@ -98,11 +98,15 @@ proc addIndent(status: var EditorStatus, area: SelectArea) =
     addIndent(status)
     inc(status.currentLine)
 
+  status.currentLine = area.startLine
+
 proc deleteIndent(status: var EditorStatus, area: SelectArea) =
   status.currentLine = area.startLine
   for i in area.startLine .. area.endLine:
     deleteIndent(status)
     inc(status.currentLine)
+
+  status.currentLine = area.startLine
 
 proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSlectArea
