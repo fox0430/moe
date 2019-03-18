@@ -149,6 +149,13 @@ proc visualMode*(status: var EditorStatus) =
       moveToLastLine(status)
     elif key == ord('g'):
       if getKey(status.mainWindow) == ord('g'): moveToFirstLine(status)
+    elif key == ord('i'):
+      status.currentLine = area.startLine
+      status.changeMode(Mode.insert)
+    elif key == ord('I'):
+      status.currentLine = area.startLine
+      status.currentColumn = 0
+      status.changeMode(Mode.insert)
 
     else:
       visualCommand(status, area, key)
