@@ -1,9 +1,15 @@
 import terminal
-import editorstatus, ui, normalmode
+import editorstatus, ui, normalmode, highlight
 
 proc replaceMode*(status: var EditorStatus) =
 
+  var bufferChanged = false
+
   while status.mode == Mode.replace:
+    if bufferChanged:
+      status.updateHighlight
+      bufferChanged = false
+
     status.update
 
     let key = getkey(status.mainWindow)
@@ -24,3 +30,4 @@ proc replaceMode*(status: var EditorStatus) =
     else:
       replaceCurrentCharacter(status, key)
       keyRight(status)
+      bufferChanged = true
