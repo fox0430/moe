@@ -145,6 +145,10 @@ proc visualMode*(status: var EditorStatus) =
       moveToBackwardWord(status)
     elif key == ord('e'):
       moveToForwardEndOfWord(status)
+    elif key == ord('G'):
+      moveToLastLine(status)
+    elif key == ord('g'):
+      if getKey(status.mainWindow) == ord('g'): moveToFirstLine(status)
 
     else:
       visualCommand(status, area, key)

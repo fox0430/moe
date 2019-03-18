@@ -100,10 +100,10 @@ proc jumpLine*(status: var EditorStatus, destination: int) =
       startOfPrintedLines = max(destination - (currentLine - status.view.originalLine[0]), 0)
     status.view.reload(status.buffer, startOfPrintedLines)
 
-proc moveToFirstLine(status: var EditorStatus) =
+proc moveToFirstLine*(status: var EditorStatus) =
   jumpLine(status, 0)
 
-proc moveToLastLine(status: var EditorStatus) =
+proc moveToLastLine*(status: var EditorStatus) =
   if status.cmdLoop > 1:
     jumpLine(status, status.cmdLoop - 1)
   else:
@@ -262,7 +262,6 @@ proc yankLines(status: var EditorStatus, first, last: int) =
 proc pasteLines(status: var EditorStatus) =
   for i in 0 ..< status.registers.yankedLines.len:
     status.buffer.insert(status.registers.yankedLines[i], status.currentLine + i + 1)
-  status.currentLine.inc
 
   status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
   inc(status.countChange)
