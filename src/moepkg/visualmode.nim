@@ -109,7 +109,7 @@ proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
 
   if key == ord('y') or isDcKey(key):
     yankBuffer(status, area)
-  elif key == ord('x'):
+  elif key == ord('x') or key == ord('d'):
     deleteBuffer(status, area)
   elif key == ord('>'):
     addIndent(status, area)
