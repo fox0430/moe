@@ -200,9 +200,6 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
       endLine = status.buffer.high
 
     for i in 0 .. status.buffer.high - 2:
-      exitUi()
-      echo status.buffer
-      echo ""
       status.buffer[startLine].insert(replaceInfo.replaceWord, status.buffer[startLine].len)
       for j in 0 .. status.buffer[startLine + 1].high:
         status.buffer[startLine].insert(status.buffer[startLine + 1][j], status.buffer[startLine].len)
