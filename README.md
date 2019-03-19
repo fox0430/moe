@@ -16,7 +16,9 @@ This project's goal is a funny animation editor.
 
 - UTF-8 and other encodings support (Incomplete)
 
-- Vim like keybinds and mode
+- Vim like mode (Normal, Insert, Visual, Replace, Ex, Filer)
+
+- Vim like keybinds
 
 - Syntax highlighting (Nim, C, C++, C#, Java, Yaml)
 
@@ -27,8 +29,6 @@ This project's goal is a funny animation editor.
 - Simple auto indent  
 
 ## Planned features
-
-- Visual mode  
 
 - Multi-Buffer
 
