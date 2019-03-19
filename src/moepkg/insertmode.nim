@@ -86,6 +86,7 @@ proc insertMode*(status: var EditorStatus) =
   while status.mode == Mode.insert:
     if bufferChanged:
       status.updateHighlight
+      bufferChanged = false
 
     status.update
 
