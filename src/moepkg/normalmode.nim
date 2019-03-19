@@ -49,7 +49,7 @@ proc keyDown*(status: var EditorStatus) =
   status.currentColumn = min(status.expandedColumn, maxColumn)
   if status.currentColumn < 0: status.currentColumn = 0
 
-proc moveToFirstNonBlankOfLine(status: var EditorStatus) =
+proc moveToFirstNonBlankOfLine*(status: var EditorStatus) =
   status.currentColumn = 0
   while status.buffer[status.currentLine][status.currentColumn] == ru' ': inc(status.currentColumn)
   status.expandedColumn = status.currentColumn
@@ -100,10 +100,10 @@ proc jumpLine*(status: var EditorStatus, destination: int) =
       startOfPrintedLines = max(destination - (currentLine - status.view.originalLine[0]), 0)
     status.view.reload(status.buffer, startOfPrintedLines)
 
-proc moveToFirstLine(status: var EditorStatus) =
+proc moveToFirstLine*(status: var EditorStatus) =
   jumpLine(status, 0)
 
-proc moveToLastLine(status: var EditorStatus) =
+proc moveToLastLine*(status: var EditorStatus) =
   if status.cmdLoop > 1:
     jumpLine(status, status.cmdLoop - 1)
   else:
@@ -123,7 +123,7 @@ proc pageDown*(status: var EditorStatus) =
     let startOfPrintedLines = max(destination - (currentLine - status.view.originalLine[0]), 0)
     status.view.reload(status.buffer, startOfPrintedLines)
 
-proc moveToForwardWord(status: var EditorStatus) =
+proc moveToForwardWord*(status: var EditorStatus) =
   let
     startWith = if status.buffer[status.currentLine].len == 0: ru'\n' else: status.buffer[status.currentLine][status.currentColumn]
     isSkipped = if unicodeext.isPunct(startWith): unicodeext.isPunct elif unicodeext.isAlpha(startWith): unicodeext.isAlpha elif unicodeext.isDigit(startWith): unicodeext.isDigit else: nil
@@ -158,7 +158,7 @@ proc moveToForwardWord(status: var EditorStatus) =
 
   status.expandedColumn = status.currentColumn
 
-proc moveToBackwardWord(status: var EditorStatus) =
+proc moveToBackwardWord*(status: var EditorStatus) =
   if status.buffer.isFirst(status.currentLine, status.currentColumn): return
 
   while true:
@@ -181,7 +181,7 @@ proc moveToBackwardWord(status: var EditorStatus) =
 
   status.expandedColumn = status.currentColumn
 
-proc moveToForwardEndOfWord(status: var EditorStatus) =
+proc moveToForwardEndOfWord*(status: var EditorStatus) =
   let
     startWith = if status.buffer[status.currentLine].len == 0: ru'\n' else: status.buffer[status.currentLine][status.currentColumn]
     isSkipped = if unicodeext.isPunct(startWith): unicodeext.isPunct elif unicodeext.isAlpha(startWith): unicodeext.isAlpha elif unicodeext.isDigit(startWith): unicodeext.isDigit else: nil
@@ -262,7 +262,6 @@ proc yankLines(status: var EditorStatus, first, last: int) =
 proc pasteLines(status: var EditorStatus) =
   for i in 0 ..< status.registers.yankedLines.len:
     status.buffer.insert(status.registers.yankedLines[i], status.currentLine + i + 1)
-  status.currentLine.inc
 
   status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
   inc(status.countChange)
@@ -304,13 +303,13 @@ proc replaceCurrentCharacter*(status: var EditorStatus, character: Rune) =
   status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)
 
-proc addIndent(status: var EditorStatus) =
+proc addIndent*(status: var EditorStatus) =
   status.buffer[status.currentLine].insert(newSeqWith(status.settings.tabStop, ru' '))
 
   status.view.reload(status.buffer, status.view.originalLine[0])
   inc(status.countChange)
 
-proc deleteIndent(status: var EditorStatus) =
+proc deleteIndent*(status: var EditorStatus) =
   if status.buffer.len == 0: return
 
   if status.buffer[status.currentLine][0] == ru' ':
@@ -440,6 +439,8 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('I'):
     status.currentColumn = 0
     status.changeMode(Mode.insert)
+  elif key == ord('v'):
+    status.changeMode(Mode.visual)
   elif key == ord('a'):
     if status.buffer[status.currentLine].len > 0: inc(status.currentColumn)
     status.changeMode(Mode.insert)
