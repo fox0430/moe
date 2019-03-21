@@ -3,7 +3,7 @@ import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeex
 
 type
   replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
-  ExModeViewStatus = tuple[buffer: seq[Rune], prompt: string, cursorY, cursorX: int]
+  ExModeViewStatus = tuple[buffer: seq[Rune], prompt: string, cursorY, cursorX, currentPosition, startPosition: int]
 
 proc initExModeViewStatus(prompt: string): ExModeViewStatus =
   result.buffer = ru""
@@ -72,8 +72,10 @@ proc splitCommand(command: string): seq[seq[Rune]] =
     return strutils.splitWhitespace(command).map(proc(s: string): seq[Rune] = toRunes(s))
  
 proc writeExModeView(commandWindow: var Window, exStatus: ExModeViewStatus) =
+  let buffer = ($exStatus.buffer).substr(exStatus.startPosition, exStatus.buffer.len)
+
   commandWindow.erase
-  commandWindow.write(exStatus.cursorY, 0, fmt"{exStatus.prompt}{exStatus.buffer}", ColorPair.brightWhiteDefault)
+  commandWindow.write(exStatus.cursorY, 0, fmt"{exStatus.prompt}{buffer}", ColorPair.brightWhiteDefault)
   commandWindow.moveCursor(0, exStatus.cursorX)
   commandWindow.refresh
 
@@ -200,9 +202,6 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
       endLine = status.buffer.high
 
     for i in 0 .. status.buffer.high - 2:
-      exitUi()
-      echo status.buffer
-      echo ""
       status.buffer[startLine].insert(replaceInfo.replaceWord, status.buffer[startLine].len)
       for j in 0 .. status.buffer[startLine + 1].high:
         status.buffer[startLine].insert(status.buffer[startLine + 1][j], status.buffer[startLine].len)
@@ -218,27 +217,47 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
   status.changeMode(status.prevMode)
 
 proc moveLeft(commandWindow: Window, exStatus: var ExModeViewStatus) =
-  if exStatus.cursorX > 1: dec(exStatus.cursorX)
+  if exStatus.currentPosition > 0:
+    dec(exStatus.currentPosition)
+    if exStatus.cursorX > exStatus.prompt.len: dec(exStatus.cursorX)
+    else: dec(exStatus.startPosition)
 
 proc moveRight(exStatus: var ExModeViewStatus) =
-  if exStatus.cursorX < exStatus.buffer.len + 1: inc(exStatus.cursorX)
+  if exStatus.currentPosition < exStatus.buffer.len:
+    inc(exStatus.currentPosition)
+    if exStatus.cursorX < terminalWidth() - 1: inc(exStatus.cursorX)
+    else: inc(exStatus.startPosition)
 
-proc moveTop(exStatus: var ExModeViewStatus) = exStatus.cursorX = 1
+proc moveTop(exStatus: var ExModeViewStatus) =
+  exStatus.cursorX = exStatus.prompt.len
+  exStatus.currentPosition = 0
+  exStatus.startPosition = 0
 
-proc moveEnd(exStatus: var ExModeViewStatus) = exStatus.cursorX = exStatus.buffer.len
+proc moveEnd(exStatus: var ExModeViewStatus) =
+  exStatus.currentPosition = exStatus.buffer.len - 1
+  if exStatus.buffer.len > terminalWidth():
+    exStatus.startPosition = exStatus.buffer.len - terminalWidth()
+    exStatus.cursorX = terminalWidth()
+  else:
+    exStatus.startPosition = 0
+    exStatus.cursorX = exStatus.prompt.len + exStatus.buffer.len - 1
 
 proc deleteCommandBuffer(exStatus: var ExModeViewStatus) =
   if exStatus.buffer.len > 0:
-    dec(exStatus.cursorX)
-    exStatus.buffer.delete(exStatus.cursorX - 1, exStatus.cursorX - 1)
+    if exStatus.buffer.len < terminalWidth(): dec(exStatus.cursorX)
+    exStatus.buffer.delete(exStatus.currentPosition - 1, exStatus.currentPosition - 1)
+    dec(exStatus.currentPosition)
 
 proc deleteCommandBufferCurrentPosition(exStatus: var ExModeViewStatus) =
-  if exStatus.buffer.len > 0 and exStatus.cursorX <= exStatus.buffer.len:
+  if exStatus.buffer.len > 0 and exStatus.currentPosition < exStatus.buffer.len:
     exStatus.buffer.delete(exStatus.cursorX - 1, exStatus.cursorX - 1)
+    if exStatus.currentPosition > exStatus.buffer.len: dec(exStatus.currentPosition)
 
 proc insertCommandBuffer(exStatus: var ExModeViewStatus, c: Rune) =
-  exStatus.buffer.insert(c, exStatus.cursorX - 1)
-  inc(exStatus.cursorX)
+  exStatus.buffer.insert(c, exStatus.currentPosition)
+  inc(exStatus.currentPosition)
+  if exStatus.cursorX < terminalWidth() - 1: inc(exStatus.cursorX)
+  else: inc(exStatus.startPosition)
 
 proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
   if isJumpCommand(status, command):
