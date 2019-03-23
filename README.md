@@ -7,7 +7,7 @@ moe is a Vim inspired command line based text editor.
 
 This project's goal is a funny animation editor.
 
-![moe-0](https://user-images.githubusercontent.com/15966436/53622086-03be0580-3c3c-11e9-8f28-469a6bc39602.png)
+![moe-0](https://user-images.githubusercontent.com/15966436/54860567-7a43b400-4d5f-11e9-9740-8ab60b806c49.png)
 
 ## Features
 
