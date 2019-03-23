@@ -74,7 +74,7 @@ proc yankBuffer(status: var EditorStatus, area: SelectArea) =
 proc deleteBuffer(status: var EditorStatus, area: SelectArea) =
   yankBuffer(status, area)
 
-  for i in area.startLine .. area.endLine:
+  for i in area.startLine ..< area.endLine:
     if area.startLine == area.endLine:
       for j in area.startColumn .. area.endColumn:
         status.buffer[area.startLine].delete(area.startColumn)
