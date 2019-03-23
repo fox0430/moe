@@ -122,6 +122,7 @@ proc insertMode*(status: var EditorStatus) =
       bufferChanged = true
     elif isEnterKey(key):
       keyEnter(status)
+      bufferChanged = true
     elif key == ord('\t'):
       insertTab(status)
       bufferChanged = true
