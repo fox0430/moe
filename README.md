@@ -10,6 +10,7 @@ This project's goal is a funny animation editor.
 ![moe-0](https://user-images.githubusercontent.com/15966436/53622086-03be0580-3c3c-11e9-8f28-469a6bc39602.png)
 
 ## Features
+
 - Written in Nim  
 
 - Adopt GapBuffer  
@@ -22,6 +23,8 @@ This project's goal is a funny animation editor.
 
 - Syntax highlighting (Nim, C, C++, C#, Java, Yaml)
 
+- Configuration file
+
 - Simple file manager
 
 - Auto close paren  
@@ -32,13 +35,15 @@ This project's goal is a funny animation editor.
 
 - Multi-Buffer
 
+- IDE like tab line
+
+- Window split  
+
 - Infinite undo/redo
 
 - Syntax checker  
 
 - Auto-complete
-
-- Tab/Window split  
 
 - Macros
 
