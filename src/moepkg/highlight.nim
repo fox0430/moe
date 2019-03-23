@@ -1,4 +1,4 @@
-import packages/docutils/highlite, strutils, sequtils, ospaths, strformat
+import packages/docutils/highlite, strutils, sequtils, ospaths, strformat, parseutils
 import unicodeext, ui
 
 type ColorSegment* = object
@@ -75,7 +75,8 @@ proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
       empty = true
     for r in runes(str):
       if r == newline:
-        if not empty: result.colorSegments.add(cs)
+        if empty: result.colorSegments.add(ColorSegment(firstRow: currentRow, firstColumn: 0, lastRow: currentRow, lastColumn: -1, color: defaultColor))
+        else: result.colorSegments.add(cs)
         inc(currentRow)
         currentColumn = 0
         cs.firstRow = currentRow
@@ -95,6 +96,11 @@ proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
 
   var token = GeneralTokenizer()
   token.initGeneralTokenizer(buffer)
+
+  # `highlite.initGeneralTokenizer' skips initial whitespace (including newline('0x0A')), so we parse it by ourselves.
+  var pad: string
+  if buffer.parseWhile(pad, {' ', '\x09'..'\x0D'}) > 0:
+    splitByNewline(pad, defaultColor)
 
   while true:
     token.getNextToken(language)
@@ -117,9 +123,6 @@ proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
         of gtWhitespace: defaultColor
         else: defaultColor
     splitByNewline(buffer[first..last], color)
-  
-  for i in 0 ..< result.len:
-    result = result.overwrite(result.colorSegments[i])
 
 proc index*(highlight: Highlight, row, column: int): int =
   ## calculate index of color segment (row, column) belonging
