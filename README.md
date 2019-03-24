@@ -7,18 +7,23 @@ moe is a Vim inspired command line based text editor.
 
 This project's goal is a funny animation editor.
 
-![moe-0](https://user-images.githubusercontent.com/15966436/53622086-03be0580-3c3c-11e9-8f28-469a6bc39602.png)
+![moe-0](https://user-images.githubusercontent.com/15966436/54875612-a6d1fb80-4e45-11e9-8f38-963559edb96e.png)
 
 ## Features
+
 - Written in Nim  
 
 - Adopt GapBuffer  
 
 - UTF-8 and other encodings support (Incomplete)
 
-- Vim like keybinds and mode
+- Vim like mode (Normal, Insert, Visual, Replace, Ex, Filer)
+
+- Vim like keybinds
 
 - Syntax highlighting (Nim, C, C++, C#, Java, Yaml)
+
+- Configuration file
 
 - Simple file manager
 
@@ -28,17 +33,17 @@ This project's goal is a funny animation editor.
 
 ## Planned features
 
-- Visual mode  
-
 - Multi-Buffer
+
+- IDE like tab line
+
+- Window split  
 
 - Infinite undo/redo
 
 - Syntax checker  
 
 - Auto-complete
-
-- Tab/Window split  
 
 - Macros
 

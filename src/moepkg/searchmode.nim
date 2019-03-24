@@ -1,5 +1,5 @@
 import unicodeext, strformat, sequtils, system
-import ui, editorstatus, gapbuffer
+import ui, editorstatus, gapbuffer, highlight
 
 type
   SearchResult* = tuple[line: int, column: int]
@@ -74,6 +74,15 @@ proc searchBufferReversely(status: var EditorStatus, keyword: seq[Rune]): Search
       position = searchLineReversely(status.buffer[line][0 ..< endPosition], keyword)
     if position > -1:  return (line, position)
 
+proc searchAllOccurrence*(buffer: GapBuffer[seq[Rune]], keyword: seq[Rune]): seq[SearchResult] =
+  for line in 0 ..< buffer.len:
+    var begin = 0
+    while begin < buffer[line].len:
+      let position = searchLine(buffer[line][begin ..< buffer[line].len], keyword)
+      if position == -1: break
+      result.add((line, begin + position))
+      begin += position + keyword.len
+
 proc searchFirstOccurrence(status: var EditorStatus) =
   let keyword = getKeyword(status.commandWindow, status.searchHistory, proc (window: var Window, keyword: seq[Rune]) =
     window.erase
@@ -86,6 +95,7 @@ proc searchFirstOccurrence(status: var EditorStatus) =
     return
 
   status.searchHistory.add(keyword)
+
   let searchResult = searchBuffer(status, keyword)
   if searchResult.line > -1:
     jumpLine(status, searchResult.line)
@@ -93,7 +103,6 @@ proc searchFirstOccurrence(status: var EditorStatus) =
       keyRight(status)
 
 proc searchMode*(status: var EditorStatus) =
-  if status.searchHistory.len == 0:
-    status.searchHistory = @[]
   searchFirstOccurrence(status)
+  status.updateHighlight
   status.changeMode(status.prevMode)

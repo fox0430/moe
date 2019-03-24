@@ -36,10 +36,11 @@ type ColorPair* = enum
   brightWhiteGreen = 9
   cyanDefault = 10
   whiteCyan = 11
-  magentaDefault =12
+  magentaDefault = 12
   whiteDefault = 13
   pinkDefault = 14
   blackPink = 15
+  defaultMagenta = 16
 
 type Window* = object
   cursesWindow*: ptr window
@@ -68,6 +69,7 @@ proc setCursesColor() =
   setColorPair(ColorPair.whiteDefault, Color.white, Color.default)
   setColorPair(ColorPair.pinkDefault, Color.pink, Color.default)
   setColorPair(ColorPair.blackPink, Color.black, Color.pink)
+  setColorPair(ColorPair.defaultMagenta, Color.default, Color.magenta)
 
 proc setIbeamCursor*() =
   discard execShellCmd("printf '\\033[6 q'")
@@ -163,6 +165,9 @@ proc resize*(win: Window, height, width: int) =
 proc resize*(win: Window, height, width, y, x: int) =
   win.resize(height, width)
   win.move(y, x)
+
+proc moveCursor*(win: Window, y, x: int) =
+  wmove(win.cursesWindow, cint(y), cint(x))
 
 let KEY_ESC = 27
 var KEY_RESIZE {.header: "<ncurses.h>", importc: "KEY_RESIZE".}: int
