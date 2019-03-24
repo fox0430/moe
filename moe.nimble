@@ -1,7 +1,7 @@
 # Package
 
 version       = "0.0.5"
-author        = "fox0430/walkre"
+author        = "fox0430"
 description   = "a command lined based text editor"
 license       = "GPLv3"
 srcDir        = "src"
