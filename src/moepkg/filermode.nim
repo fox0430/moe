@@ -12,9 +12,9 @@ import ui
 import fileutils
 import editorview
 import gapbuffer
-import exmode
 import independentutils
 import highlight
+import commandview
 
 type
   PathInfo = tuple[kind: PathComponent, path: string, size: int64, lastWriteTime: times.Time]
