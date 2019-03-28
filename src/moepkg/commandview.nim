@@ -109,6 +109,27 @@ proc insertCommandBuffer(exStatus: var ExModeViewStatus, c: Rune) =
   if exStatus.cursorX < terminalWidth() - 1: inc(exStatus.cursorX)
   else: inc(exStatus.startPosition)
 
+proc getKeyword*(status: var EditorStatus, prompt: string): seq[Rune] =
+  var exStatus = initExModeViewStatus(prompt)
+  while true:
+    writeExModeView(status.commandWindow, exStatus)
+
+    var key = getKey(status.commandWindow)
+
+    if isEnterKey(key) or isEscKey(key): break
+    elif isResizeKey(key):
+      status.resize(terminalHeight(), terminalWidth())
+      status.update
+    elif isLeftKey(key): moveLeft(status.commandWindow, exStatus)
+    elif isRightkey(key): moveRight(exStatus)
+    elif isHomeKey(key): moveTop(exStatus)
+    elif isEndKey(key): moveEnd(exStatus)
+    elif isBackspaceKey(key): deleteCommandBuffer(exStatus)
+    elif isDcKey(key): deleteCommandBufferCurrentPosition(exStatus)
+    else: insertCommandBuffer(exStatus, key)
+
+  return exStatus.buffer
+
 proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
   var exStatus = initExModeViewStatus(prompt)
   while true:
@@ -129,4 +150,3 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
     else: insertCommandBuffer(exStatus, key)
 
   return splitCommand($exStatus.buffer)
-
