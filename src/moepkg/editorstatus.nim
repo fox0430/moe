@@ -31,7 +31,23 @@ type EditorSettings* = object
   normalModeCursor*: CursorType
   insertModeCursor*: CursorType
 
+type BufferStatus* = object
+  buffer*: GapBuffer[seq[Rune]]
+  highlight*: Highlight
+  language*: SourceLanguage
+  view*: EditorView
+  cursor*: CursorPosition
+  filename*: seq[Rune]
+  openDir: seq[Rune]
+  currentLine*: int
+  currentColumn*: int
+  expandedColumn*: int
+  cmdLoop*: int
+  countChange*: int
+
 type EditorStatus* = object
+  bufStatus*: seq[BufferStatus]
+  currentBuffer*: int
   buffer*: GapBuffer[seq[Rune]]
   highlight*: Highlight
   language*: SourceLanguage
@@ -94,6 +110,34 @@ proc initEditorStatus*(): EditorStatus =
   if result.settings.statusBar.useBar:
     result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0, ui.ColorPair.blackPink)
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight()-1, 0)
+
+proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
+  if status.bufStatus.len > 1:
+    status.bufStatus[status.currentBuffer].buffer = status.buffer
+    status.bufStatus[status.currentBuffer].highlight = status.highlight
+    status.bufStatus[status.currentBuffer].language = status.language
+    status.bufStatus[status.currentBuffer].view = status. view
+    status.bufStatus[status.currentBuffer].cursor = status.cursor
+    status.bufStatus[status.currentBuffer].filename = status.filename
+    status.bufStatus[status.currentBuffer].openDir = status.openDir
+    status.bufStatus[status.currentBuffer].currentLine = status.currentLine
+    status.bufStatus[status.currentBuffer].currentColumn = status.currentColumn
+    status.bufStatus[status.currentBuffer].expandedColumn = status.expandedColumn
+    status.bufStatus[status.currentBuffer].cmdLoop = status.cmdLoop
+    status.bufStatus[status.currentBuffer].countChange = status.countChange
+
+  status.buffer = status.bufStatus[bufferIndex].buffer
+  status.highlight = status.bufStatus[bufferIndex].highlight
+  status.language = status.bufStatus[bufferIndex].language
+  status.view = status.bufStatus[bufferIndex].view
+  status.cursor = status.bufStatus[bufferIndex].cursor
+  status.filename = status.bufStatus[bufferIndex].filename
+  status.openDir = status.bufStatus[bufferIndex].openDir
+  status.currentLine = status.bufStatus[bufferIndex].currentLine
+  status.currentColumn = status.bufStatus[bufferIndex].currentColumn
+  status.expandedColumn = status.bufStatus[bufferIndex].expandedColumn
+  status.cmdLoop = status.bufStatus[bufferIndex].cmdLoop
+  status.countChange = status.bufStatus[bufferIndex].countChange
 
 proc changeMode*(status: var EditorStatus, mode: Mode) =
   status.prevMode = status.mode
