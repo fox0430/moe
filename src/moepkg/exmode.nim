@@ -26,6 +26,11 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
     replaceWord.add(command[i])
   
   return (searhWord: searchWord, replaceWord: replaceWord)
+proc isChangeFirstBufferCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"bfirst"
+
+proc isChangeLastBufferCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"blast"
 
 proc isOpneBufferByNumber(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"b" and isDigit(command[1])
@@ -60,13 +65,22 @@ proc isShellCommand(command: seq[seq[Rune]]): bool =
 proc isReplaceCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
 
-proc opneBufferByNumber(status: var EditorStatus, number: int) =
+proc changeFirstBufferCommand(status: var EditorStatus) =
+  changeCurrentBuffer(status, 0)
+  let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.buffer.len) - 2 else: 0
+  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+
+proc changeLastBufferCommand(status: var EditorStatus) =
+  changeCurrentBuffer(status, status.bufStatus.high)
+  let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.buffer.len) - 2 else: 0
+  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+
+proc opneBufferByNumberCommand(status: var EditorStatus, number: int) =
   if number < 0 or number > status.bufStatus.high: return
 
   changeCurrentBuffer(status, number)
   let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.buffer.len) - 2 else: 0
   let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-  status.changeMode(Mode.normal)
 
 proc changeNextBufferCommand(status: var EditorStatus) =
   if status.currentBuffer == status.bufStatus.high: return
@@ -214,7 +228,11 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
   elif isChangePreveBufferCommand(command):
     changePreveBufferCommand(status)
   elif isOpneBufferByNumber(command):
-    opneBufferByNumber(status, ($command[1]).parseInt)
+    opneBufferByNumberCommand(status, ($command[1]).parseInt)
+  elif isChangeFirstBufferCommand(command):
+    changeFirstBufferCommand(status)
+  elif isChangeLastBufferCommand(command):
+    changeLastBufferCommand(status)
   else:
     status.changeMode(status.prevMode)
 
