@@ -114,7 +114,7 @@ proc initEditorStatus*(): EditorStatus =
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight()-1, 0)
 
 proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
-  if status.bufStatus.len > 1:
+  if status.bufStatus.len > 1 and bufferIndex < status.bufStatus.high:
     status.bufStatus[status.currentBuffer].buffer = status.buffer
     status.bufStatus[status.currentBuffer].highlight = status.highlight
     status.bufStatus[status.currentBuffer].language = status.language
