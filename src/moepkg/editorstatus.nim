@@ -37,6 +37,7 @@ type BufferStatus* = object
   language*: SourceLanguage
   view*: EditorView
   cursor*: CursorPosition
+  isHighlight*: bool
   filename*: seq[Rune]
   openDir: seq[Rune]
   currentLine*: int
@@ -56,6 +57,7 @@ type EditorStatus* = object
   searchHistory*: seq[seq[Rune]]
   view*: EditorView
   cursor*: CursorPosition
+  isHighlight*: bool
   registers*: Registers
   settings*: EditorSettings
   filename*: seq[Rune]
@@ -106,6 +108,7 @@ proc initEditorStatus*(): EditorStatus =
   result.settings = initEditorSettings()
   result.mode = Mode.normal
   result.prevMode = Mode.normal
+  result.isHighlight = true
 
   let useStatusBar = if result.settings.statusBar.useBar: 1 else: 0
   result.mainWindow = initWindow(terminalHeight()-1, terminalWidth(), 0, 0)
@@ -231,10 +234,11 @@ proc updateHighlight*(status: var EditorStatus)
 from searchmode import searchAllOccurrence
 
 proc updateHighlight*(status: var EditorStatus) =
+
   status.highlight = initHighlight($status.buffer, status.language)
 
   # highlight search results
-  if status.searchHistory.len > 0:
+  if status.isHighlight and status.searchHistory.len > 0:
     let keyword = status.searchHistory[^1]
     let allOccurrence = searchAllOccurrence(status.buffer, keyword)
     for pos in allOccurrence:

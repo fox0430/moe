@@ -62,6 +62,7 @@ proc searchFirstOccurrence(status: var EditorStatus) =
     return
 
   status.searchHistory.add(keyword)
+  status.isHighlight = true
 
   let searchResult = searchBuffer(status, keyword)
   if searchResult.line > -1:
