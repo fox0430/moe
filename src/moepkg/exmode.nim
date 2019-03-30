@@ -27,6 +27,9 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   
   return (searhWord: searchWord, replaceWord: replaceWord)
 
+proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"noh"
+
 proc isDeleteCurrentBufferStatusCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"bd"
 
@@ -74,6 +77,10 @@ proc isShellCommand(command: seq[seq[Rune]]): bool =
 
 proc isReplaceCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
+
+proc turnOffHighlightingCommand(status: var EditorStatus) =
+  turnOffHighlighting(status)
+  status.changeMode(Mode.normal)
 
 proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
   if index < 0 and index > status.bufStatus.high: return 
@@ -271,6 +278,8 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     deleteBufferStatusCommand(status, ($command[1]).parseInt)
   elif isDeleteCurrentBufferStatusCommand(command):
     deleteBufferStatusCommand(status, status.currentBuffer)
+  elif isTurnOffHighlightingCommand(command):
+    turnOffHighlightingCommand(status)
   else:
     status.changeMode(status.prevMode)
 
