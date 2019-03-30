@@ -65,24 +65,26 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
     setCurrentDir($filename)
     status.changeMode(Mode.filer)
   else:
-    status = initEditorStatus()
-    status.filename = filename
-    status.language = detectLanguage($filename)
-    if existsFile($status.filename):
+    status.bufStatus.add(BufferStatus(filename: filename))
+    status.bufStatus[status.bufStatus.high].language = detectLanguage($filename)
+    if existsFile($filename):
       try:
-        let textAndEncoding = openFile(status.filename)
-        status.buffer = textAndEncoding.text.toGapBuffer
+        let textAndEncoding = openFile(filename)
+        status.bufStatus[status.bufStatus.high].buffer = textAndEncoding.text.toGapBuffer
         status.settings.characterEncoding = textAndEncoding.encoding
       except IOError:
         #writeFileOpenErrorMessage(status.commandWindow, status.filename)
-        status.buffer = newFile()
+        status.bufStatus[status.bufStatus.high].buffer = newFile()
     else:
-      status.buffer = newFile()
+      status.bufStatus[status.bufStatus.high].buffer = newFile()
+
+    changeCurrentBuffer(status, status.bufStatus.high)
 
     let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.buffer.len) - 2 else: 0
     let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     status.updateHighlight
     status.view = initEditorView(status.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+    status.changeMode(Mode.normal)
 
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   if filename.len == 0:
