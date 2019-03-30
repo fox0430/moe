@@ -1,5 +1,5 @@
 import sequtils, strutils, os, terminal, strformat, deques
-import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview
+import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview, mainview
 
 type
   replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
@@ -26,6 +26,10 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
     replaceWord.add(command[i])
   
   return (searhWord: searchWord, replaceWord: replaceWord)
+
+proc isBufferListCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"ls"
+
 proc isChangeFirstBufferCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"bfirst"
 
@@ -64,6 +68,11 @@ proc isShellCommand(command: seq[seq[Rune]]): bool =
 
 proc isReplaceCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
+
+proc bufferListCommand(status: var EditorStatus) =
+  bufferListView(status)
+  discard getKey(status.mainWindow)
+  status.changeMode(Mode.normal)
 
 proc changeFirstBufferCommand(status: var EditorStatus) =
   changeCurrentBuffer(status, 0)
@@ -233,6 +242,8 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     changeFirstBufferCommand(status)
   elif isChangeLastBufferCommand(command):
     changeLastBufferCommand(status)
+  elif isBufferListCommand(command):
+    bufferListCommand(status)
   else:
     status.changeMode(status.prevMode)
 
