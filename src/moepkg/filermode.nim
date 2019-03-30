@@ -394,19 +394,20 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   case kind
   of pcFile, pcLinkToFile:
     let filename = (if kind == pcFile: path else: expandsymLink(path)).toRunes
-    status = initEditorStatus()
-    status.filename = filename
-    status.language = detectLanguage($filename)
-    if existsFile($status.filename):
+    status.bufStatus.add(BufferStatus(filename: filename))
+    status.bufStatus[status.bufStatus.high].language = detectLanguage($filename)
+    if existsFile($filename):
       try:
-        let textAndEncoding = openFile(status.filename)
-        status.buffer = textAndEncoding.text.toGapBuffer
+        let textAndEncoding = openFile(filename)
+        status.bufStatus[status.bufStatus.high].buffer = textAndEncoding.text.toGapBuffer
         status.settings.characterEncoding = textAndEncoding.encoding
       except IOError:
         writeFileOpenErrorMessage(status.commandWindow, status.filename)
-        status.buffer = newFile()
+        status.bufStatus[status.bufStatus.high].buffer = newFile()
     else:
-      status.buffer = newFile()
+      status.bufStatus[status.bufStatus.high].buffer = newFile()
+
+    changeCurrentBuffer(status, status.bufStatus.high)
 
     let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.buffer.len) - 2 else: 0
     let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
