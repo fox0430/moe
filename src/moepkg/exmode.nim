@@ -27,6 +27,12 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   
   return (searhWord: searchWord, replaceWord: replaceWord)
 
+proc isChangeNextBufferCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"bnext"
+
+proc isChangePreveBufferCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"bprev"
+
 proc isJumpCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
   return command.len == 1 and isDigit(command[0]) and status.prevMode == Mode.normal
 
@@ -50,6 +56,22 @@ proc isShellCommand(command: seq[seq[Rune]]): bool =
 
 proc isReplaceCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
+
+proc changeNextBufferCommand(status: var EditorStatus) =
+  if status.currentBuffer == status.bufStatus.high: return
+
+  changeCurrentBuffer(status, status.currentBuffer + 1)
+  let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.buffer.len) - 2 else: 0
+  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+  status.changeMode(Mode.normal)
+
+proc changePreveBufferCommand(status: var EditorStatus) =
+  if status.currentBuffer < 1: return
+
+  changeCurrentBuffer(status, status.currentBuffer - 1)
+  let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.buffer.len) - 2 else: 0
+  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+  status.changeMode(Mode.normal)
 
 proc jumpCommand(status: var EditorStatus, line: int) =
   jumpLine(status, line)
@@ -176,6 +198,10 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     shellCommand(status, command.join(" ").substr(1))
   elif isReplaceCommand(command):
     replaceBuffer(status, command[0][3 .. command[0].high])
+  elif isChangeNextBufferCommand(command):
+    changeNextBufferCommand(status)
+  elif isChangePreveBufferCommand(command):
+    changePreveBufferCommand(status)
   else:
     status.changeMode(status.prevMode)
 
