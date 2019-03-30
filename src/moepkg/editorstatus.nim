@@ -44,6 +44,8 @@ type BufferStatus* = object
   expandedColumn*: int
   cmdLoop*: int
   countChange*: int
+  prevMode* : Mode
+  mode* : Mode
 
 type EditorStatus* = object
   bufStatus*: seq[BufferStatus]
@@ -125,6 +127,8 @@ proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
     status.bufStatus[status.currentBuffer].expandedColumn = status.expandedColumn
     status.bufStatus[status.currentBuffer].cmdLoop = status.cmdLoop
     status.bufStatus[status.currentBuffer].countChange = status.countChange
+    status.bufStatus[status.currentBuffer].mode = status.mode
+    status.bufStatus[status.currentBuffer].prevMode = status.mode
 
   status.buffer = status.bufStatus[bufferIndex].buffer
   status.highlight = status.bufStatus[bufferIndex].highlight
@@ -138,6 +142,9 @@ proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
   status.expandedColumn = status.bufStatus[bufferIndex].expandedColumn
   status.cmdLoop = status.bufStatus[bufferIndex].cmdLoop
   status.countChange = status.bufStatus[bufferIndex].countChange
+  status.mode = status.bufStatus[bufferIndex].mode
+  status.prevMode = status.bufStatus[bufferIndex].prevMode
+  status.currentBuffer = bufferIndex
 
 proc changeMode*(status: var EditorStatus, mode: Mode) =
   status.prevMode = status.mode
