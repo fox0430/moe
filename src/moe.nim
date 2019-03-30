@@ -26,13 +26,13 @@ proc main() =
   startUi()
 
   var status = initEditorStatus()
-  status.bufStatus.add(BufferStatus(filename: parsedList.filename.toRunes))
   status.settings = parseSettingsFile(getConfigDir() / "moe" / "moerc.toml")
 
   if parsedList.filename != "":
     let filename = parsedList.filename
-    status.bufStatus[0].language = detectLanguage(filename)
     if existsFile(filename):
+      status.bufStatus.add(BufferStatus(filename: parsedList.filename.toRunes))
+      status.bufStatus[0].language = detectLanguage(filename)
       try:
         let textAndEncoding = openFile(filename.toRunes)
         status.bufStatus[0].buffer = textAndEncoding.text.toGapBuffer
@@ -52,12 +52,12 @@ proc main() =
   else:
     status.bufStatus[0].buffer = newFile()
 
-  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
-  let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
-  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-  status.bufStatus[0].view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
-
-  changeCurrentBuffer(status, 0)
+  if status.mode != filer:
+    status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+    let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
+    let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+    status.bufStatus[0].view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+    changeCurrentBuffer(status, 0)
 
   while true:
     case status.mode:
