@@ -27,13 +27,13 @@ This project's goal is a funny animation editor.
 
 - Simple file manager
 
+- Multiple file buffers
+
 - Auto close paren  
 
 - Simple auto indent  
 
 ## Planned features
-
-- Multi-Buffer
 
 - IDE like tab line
 
