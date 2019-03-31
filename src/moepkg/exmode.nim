@@ -27,6 +27,9 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   
   return (searhWord: searchWord, replaceWord: replaceWord)
 
+proc isToggleStatusBarSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"statusbar"
+
 proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"noh"
 
@@ -77,6 +80,16 @@ proc isShellCommand(command: seq[seq[Rune]]): bool =
 
 proc isReplaceCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
+
+proc toggleStatusBarSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.statusBar.useBar = true
+  elif command == ru"off": status.settings.statusBar.useBar = false
+
+  let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
+  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+  status.view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+
+  status.changeMode(status.prevMode)
 
 proc turnOffHighlightingCommand(status: var EditorStatus) =
   turnOffHighlighting(status)
@@ -280,6 +293,8 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     deleteBufferStatusCommand(status, status.currentBuffer)
   elif isTurnOffHighlightingCommand(command):
     turnOffHighlightingCommand(status)
+  elif isToggleStatusBarSettingCommand(command):
+    toggleStatusBarSettingCommand(status, command[1])
   else:
     status.changeMode(status.prevMode)
 
