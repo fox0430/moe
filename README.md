@@ -66,3 +66,7 @@ nimble install moe
 
 ## Usage
 https://github.com/fox0430/moe/wiki  
+
+## License
+
+GNU General Public License version 3
