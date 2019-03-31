@@ -19,8 +19,13 @@ type StatusBarSettings* = object
   language*: bool
   directory*: bool
 
+type TabBarSettings* = object
+  useTab*: bool
+  color*: Colorpair
+
 type EditorSettings* = object
   statusBar*: StatusBarSettings
+  tbaBar*: TabBarSettings
   lineNumber*: bool
   syntax*: bool
   autoCloseParen*: bool
