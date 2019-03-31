@@ -27,6 +27,9 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   
   return (searhWord: searchWord, replaceWord: replaceWord)
 
+proc isToggleAutoIndentSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"autoindent"
+
 proc isToggleLineNumberSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"linenumber"
 
@@ -83,6 +86,16 @@ proc isShellCommand(command: seq[seq[Rune]]): bool =
 
 proc isReplaceCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
+
+proc toggleAutoIndentSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.autoIndent = true
+  elif command == ru"off": status.settings.autoIndent = false
+
+  let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
+  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+  status.view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+
+  status.changeMode(status.prevMode)
 
 proc toggleLineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru "on": status.settings.lineNumber = true
@@ -310,6 +323,8 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     toggleStatusBarSettingCommand(status, command[1])
   elif isToggleLineNumberSettingCommand(command):
     toggleLineNumberSettingCommand(status, command[1])
+  elif isToggleAutoIndentSettingCommand(command):
+    toggleAutoIndentSettingCommand(status, command[1])
   else:
     status.changeMode(status.prevMode)
 
