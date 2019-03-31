@@ -25,7 +25,7 @@ type TabBarSettings* = object
 
 type EditorSettings* = object
   statusBar*: StatusBarSettings
-  tbaBar*: TabBarSettings
+  tabBar*: TabBarSettings
   lineNumber*: bool
   syntax*: bool
   autoCloseParen*: bool
