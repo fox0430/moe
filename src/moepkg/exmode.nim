@@ -31,10 +31,10 @@ proc isAutoCloseParenSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"paren"
 
 proc isAutoIndentSettingCommand(command: seq[seq[Rune]]): bool =
-  return command.len == 2 and command[0] == ru"autoindent"
+  return command.len == 2 and command[0] == ru"indent"
 
 proc isLineNumberSettingCommand(command: seq[seq[Rune]]): bool =
-  return command.len == 2 and command[0] == ru"linenumber"
+  return command.len == 2 and command[0] == ru"linenum"
 
 proc isStatusBarSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"statusbar"
