@@ -27,6 +27,9 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   
   return (searhWord: searchWord, replaceWord: replaceWord)
 
+proc isSyntaxSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"syntax"
+
 proc isTabStopSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"tabstop" and isDigit(command[1])
 
@@ -92,6 +95,13 @@ proc isShellCommand(command: seq[seq[Rune]]): bool =
 
 proc isReplaceCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
+
+## DOES NOT WORKS ##
+proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.syntax = true
+  elif command == ru"off": status.settings.syntax = false
+
+  status.changeMode(status.prevMode)
 
 proc tabStopSettingCommand(status: var EditorStatus, command: int) =
   status.settings.tabStop = command
@@ -342,6 +352,8 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     autoCloseParenSettingCommand(status, command[1])
   elif isTabStopSettingCommand(command):
     tabStopSettingCommand(status, ($command[1]).parseInt)
+  elif isSyntaxSettingCommand(command):
+    syntaxSettingCommand(status, command[1])
   else:
     status.changeMode(status.prevMode)
 
