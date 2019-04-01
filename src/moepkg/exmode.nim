@@ -27,6 +27,9 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   
   return (searhWord: searchWord, replaceWord: replaceWord)
 
+proc isTabStopSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"tabstop" and isDigit(command[1])
+
 proc isAutoCloseParenSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"paren"
 
@@ -90,23 +93,20 @@ proc isShellCommand(command: seq[seq[Rune]]): bool =
 proc isReplaceCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
 
+proc tabStopSettingCommand(status: var EditorStatus, command: int) =
+  status.settings.tabStop = command
+
+  status.changeMode(status.prevMode)
+
 proc autoCloseParenSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.autoCloseParen = true
   elif command == ru"off": status.settings.autoCloseParen = false
-
-  let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
-  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-  status.view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
 
   status.changeMode(status.prevMode)
 
 proc autoIndentSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.autoIndent = true
   elif command == ru"off": status.settings.autoIndent = false
-
-  let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
-  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-  status.view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
 
   status.changeMode(status.prevMode)
 
@@ -340,6 +340,8 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     autoIndentSettingCommand(status, command[1])
   elif isAutoCloseParenSettingCommand(command):
     autoCloseParenSettingCommand(status, command[1])
+  elif isTabStopSettingCommand(command):
+    tabStopSettingCommand(status, ($command[1]).parseInt)
   else:
     status.changeMode(status.prevMode)
 
