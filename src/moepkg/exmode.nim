@@ -27,16 +27,16 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   
   return (searhWord: searchWord, replaceWord: replaceWord)
 
-proc isToggleAutoCloseParenSettingCommand(command: seq[seq[Rune]]): bool =
+proc isAutoCloseParenSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"paren"
 
-proc isToggleAutoIndentSettingCommand(command: seq[seq[Rune]]): bool =
+proc isAutoIndentSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"autoindent"
 
-proc isToggleLineNumberSettingCommand(command: seq[seq[Rune]]): bool =
+proc isLineNumberSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"linenumber"
 
-proc isToggleStatusBarSettingCommand(command: seq[seq[Rune]]): bool =
+proc isStatusBarSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"statusbar"
 
 proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool =
@@ -90,7 +90,7 @@ proc isShellCommand(command: seq[seq[Rune]]): bool =
 proc isReplaceCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
 
-proc toggleAutoCloseParenSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+proc autoCloseParenSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.autoCloseParen = true
   elif command == ru"off": status.settings.autoCloseParen = false
 
@@ -100,7 +100,7 @@ proc toggleAutoCloseParenSettingCommand(status: var EditorStatus, command: seq[R
 
   status.changeMode(status.prevMode)
 
-proc toggleAutoIndentSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+proc autoIndentSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.autoIndent = true
   elif command == ru"off": status.settings.autoIndent = false
 
@@ -110,7 +110,7 @@ proc toggleAutoIndentSettingCommand(status: var EditorStatus, command: seq[Rune]
 
   status.changeMode(status.prevMode)
 
-proc toggleLineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+proc lineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru "on": status.settings.lineNumber = true
   elif command == ru"off": status.settings.lineNumber = false
 
@@ -120,7 +120,7 @@ proc toggleLineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]
 
   status.changeMode(status.prevMode)
 
-proc toggleStatusBarSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+proc statusBarSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.statusBar.useBar = true
   elif command == ru"off": status.settings.statusBar.useBar = false
 
@@ -332,14 +332,14 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     deleteBufferStatusCommand(status, status.currentBuffer)
   elif isTurnOffHighlightingCommand(command):
     turnOffHighlightingCommand(status)
-  elif isToggleStatusBarSettingCommand(command):
-    toggleStatusBarSettingCommand(status, command[1])
-  elif isToggleLineNumberSettingCommand(command):
-    toggleLineNumberSettingCommand(status, command[1])
-  elif isToggleAutoIndentSettingCommand(command):
-    toggleAutoIndentSettingCommand(status, command[1])
-  elif isToggleAutoCloseParenSettingCommand(command):
-    toggleAutoCloseParenSettingCommand(status, command[1])
+  elif isStatusBarSettingCommand(command):
+    statusBarSettingCommand(status, command[1])
+  elif isLineNumberSettingCommand(command):
+    lineNumberSettingCommand(status, command[1])
+  elif isAutoIndentSettingCommand(command):
+    autoIndentSettingCommand(status, command[1])
+  elif isAutoCloseParenSettingCommand(command):
+    autoCloseParenSettingCommand(status, command[1])
   else:
     status.changeMode(status.prevMode)
 
