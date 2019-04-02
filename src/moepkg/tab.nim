@@ -6,7 +6,7 @@ proc calcTabWidth(numOfFile: int): int =
   result = int(ceil(width))
 
 proc writeTab(tabWin: var Window, start, tabWidth: int, filename: seq[Rune], color: Colorpair) =
-  let buffer = $filename & " ".repeat(tabWidth - filename.len)
+  let buffer = " " & $filename & " ".repeat(tabWidth - filename.len)
   tabWin.write(0, start, buffer, color)
 
 proc writeTabLine*(status: var EditorStatus) =
