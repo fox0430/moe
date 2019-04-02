@@ -27,6 +27,9 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   
   return (searhWord: searchWord, replaceWord: replaceWord)
 
+proc isTabLineSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"tab"
+
 proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"noh"
 
@@ -77,6 +80,13 @@ proc isShellCommand(command: seq[seq[Rune]]): bool =
 
 proc isReplaceCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
+
+proc tabLineSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.tabLine.useTab = true
+  elif command == ru"off": status.settings.tabLine.useTab = false
+
+  status.resize(terminalHeight(), terminalWidth())
+  status.changeMode(status.prevMode)
 
 proc turnOffHighlightingCommand(status: var EditorStatus) =
   turnOffHighlighting(status)
@@ -280,6 +290,8 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     deleteBufferStatusCommand(status, status.currentBuffer)
   elif isTurnOffHighlightingCommand(command):
     turnOffHighlightingCommand(status)
+  elif isTabLineSettingCommand(command):
+    tabLineSettingCommand(status, command[1])
   else:
     status.changeMode(status.prevMode)
 
