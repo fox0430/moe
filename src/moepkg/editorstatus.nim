@@ -218,13 +218,13 @@ proc writeStatusBar*(status: var EditorStatus) =
 proc resize*(status: var EditorStatus, height, width: int) =
   let
     adjustedHeight = max(height, 4)
-    adjustedWidth = max(width, status.view.widthOfLineNum+4)
+    adjustedWidth = max(width, status.view.widthOfLineNum + 4)
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-    useTab = if status.settings.tabLine.useTab: 1 else: 0
+    useTab = if status.mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
 
   resize(status.mainWindow, adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, useTab, 0)
   if status.settings.statusBar.useBar: resize(status.statusWindow, 1, adjustedWidth, adjustedHeight - 2, 0)
-  if status.settings.tabLine.useTab: resize(status.tabWindow, 1, terminalWidth(), 0, 0)
+  if status.mode != Mode.filer and  status.settings.tabLine.useTab: resize(status.tabWindow, 1, terminalWidth(), 0, 0)
   resize(status.commandWindow, 1, adjustedWidth, adjustedHeight - 1, 0)
   
   if status.mode != Mode.filer:
@@ -233,7 +233,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
 
   if status.settings.statusBar.useBar: writeStatusBar(status)
 
-  if status.settings.tabLine.useTab: writeTabLine(status)
+  if status.mode != Mode.filer and status.settings.tabLine.useTab: writeTabLine(status)
 
 proc erase*(status: var EditorStatus) =
   erase(status.mainWindow)
