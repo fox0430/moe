@@ -89,7 +89,7 @@ proc initRegisters(): Registers =
 proc initTabBarSettings*(): TabBarSettings =
   result.useTab = true
   result.color = brightWhiteDefault
-  result.currentTabColor = defaultMagenta
+  result.currentTabColor = blackPink
 
 proc initStatusBarSettings*(): StatusBarSettings =
   result.useBar = true
