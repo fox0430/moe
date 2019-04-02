@@ -224,7 +224,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
 
   resize(status.mainWindow, adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, useTab, 0)
   if status.settings.statusBar.useBar: resize(status.statusWindow, 1, adjustedWidth, adjustedHeight - 2, 0)
-  if status.settings.tabLine.useTab: resize(status.tabWindow, 1, adjustedWidth, 0, 0)
+  if status.settings.tabLine.useTab: resize(status.tabWindow, 1, terminalWidth(), 0, 0)
   resize(status.commandWindow, 1, adjustedWidth, adjustedHeight - 1, 0)
   
   if status.mode != Mode.filer:
