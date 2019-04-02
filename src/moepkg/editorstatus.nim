@@ -82,6 +82,8 @@ type EditorStatus* = object
   commandWindow*: Window
   tabWindow*: Window
 
+import tab
+
 proc initRegisters(): Registers =
   result.yankedLines = @[]
   result.yankedStr = @[]
@@ -113,8 +115,6 @@ proc initEditorSettings*(): EditorSettings =
   result.defaultCursor = CursorType.blockMode   # Terminal default curosr shape
   result.normalModeCursor = CursorType.blockMode
   result.insertModeCursor = CursorType.ibeamMode
-
-import tab
 
 proc initEditorStatus*(): EditorStatus =
   result.currentDir = getCurrentDir().toRunes
