@@ -5,8 +5,9 @@ proc calcTabWidth(numOfBuffer: int): int =
   let width = terminalWidth() / numOfBuffer
   result = int(ceil(width))
 
-proc writeTab(tabWin: var Window, start, tabWidth: int, title: seq[Rune], color: Colorpair) =
-  let buffer = if title.len < tabWidth: " " & $title & " ".repeat(tabWidth - title.len) else: " " & ($title).substr(0, tabWidth - 3) & "~"
+proc writeTab(tabWin: var Window, start, tabWidth: int, filename: seq[Rune], color: Colorpair) =
+  let title = if filename == ru"": "New file" else: $filename
+  let buffer = if filename.len < tabWidth: " " & title & " ".repeat(tabWidth - title.len) else: " " & (title).substr(0, tabWidth - 3) & "~"
   tabWin.write(0, start, buffer, color)
 
 proc writeTabLine*(status: var EditorStatus) =
