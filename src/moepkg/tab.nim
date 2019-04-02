@@ -1,12 +1,12 @@
 import terminal, math, strutils
 import ui, editorstatus, unicodeext
 
-proc calcTabWidth(numOfFile: int): int =
-  let width = terminalWidth() / numOfFile
+proc calcTabWidth(numOfBuffer: int): int =
+  let width = terminalWidth() / numOfBuffer
   result = int(ceil(width))
 
 proc writeTab(tabWin: var Window, start, tabWidth: int, filename: seq[Rune], color: Colorpair) =
-  let buffer = " " & $filename & " ".repeat(tabWidth - filename.len)
+  let buffer = if filename.len < tabWidth: " " & $filename & " ".repeat(tabWidth - filename.len) else: " " & ($filename).substr(0, tabWidth - 3) & "~"
   tabWin.write(0, start, buffer, color)
 
 proc writeTabLine*(status: var EditorStatus) =
