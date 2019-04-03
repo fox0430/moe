@@ -25,6 +25,8 @@ This project's goal is a funny animation editor.
 
 - Configuration file
 
+- IDE like tab line
+
 - Simple file manager
 
 - Multiple file buffers
@@ -34,8 +36,6 @@ This project's goal is a funny animation editor.
 - Simple auto indent  
 
 ## Planned features
-
-- IDE like tab line
 
 - Window split and tiling  
 
