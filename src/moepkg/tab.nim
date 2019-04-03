@@ -19,7 +19,7 @@ proc writeTabLine*(status: var EditorStatus) =
   status.tabWindow.erase
 
   for i in 0 .. status.bufStatus.high:
-    let color = if status.bufStatus[i].filename == status.filename: currentTabColor else: defaultColor
+    let color = if status.currentBuffer == i: currentTabColor else: defaultColor
     writeTab(status.tabWindow, i * tabWidth, tabWidth, status.bufStatus[i].filename, color)
 
   status.tabWindow.refresh
