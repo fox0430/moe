@@ -29,6 +29,24 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
 
 proc isTabLineSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"tab"
+  
+proc isSyntaxSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"syntax"
+
+proc isTabStopSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"tabstop" and isDigit(command[1])
+
+proc isAutoCloseParenSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"paren"
+
+proc isAutoIndentSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"indent"
+
+proc isLineNumberSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"linenum"
+
+proc isStatusBarSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"statusbar"
 
 proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"noh"
@@ -86,6 +104,49 @@ proc tabLineSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   elif command == ru"off": status.settings.tabLine.useTab = false
 
   status.resize(terminalHeight(), terminalWidth())
+
+## DOES NOT WORKS ##
+proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.syntax = true
+  elif command == ru"off": status.settings.syntax = false
+
+  status.changeMode(status.prevMode)
+
+proc tabStopSettingCommand(status: var EditorStatus, command: int) =
+  status.settings.tabStop = command
+
+  status.changeMode(status.prevMode)
+
+proc autoCloseParenSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.autoCloseParen = true
+  elif command == ru"off": status.settings.autoCloseParen = false
+
+  status.changeMode(status.prevMode)
+
+proc autoIndentSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.autoIndent = true
+  elif command == ru"off": status.settings.autoIndent = false
+
+  status.changeMode(status.prevMode)
+
+proc lineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru "on": status.settings.lineNumber = true
+  elif command == ru"off": status.settings.lineNumber = false
+
+  let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
+  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+  status.view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+
+  status.changeMode(status.prevMode)
+
+proc statusBarSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.statusBar.useBar = true
+  elif command == ru"off": status.settings.statusBar.useBar = false
+
+  let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
+  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+  status.view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+
   status.changeMode(status.prevMode)
 
 proc turnOffHighlightingCommand(status: var EditorStatus) =
@@ -292,6 +353,18 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     turnOffHighlightingCommand(status)
   elif isTabLineSettingCommand(command):
     tabLineSettingCommand(status, command[1])
+  elif isStatusBarSettingCommand(command):
+    statusBarSettingCommand(status, command[1])
+  elif isLineNumberSettingCommand(command):
+    lineNumberSettingCommand(status, command[1])
+  elif isAutoIndentSettingCommand(command):
+    autoIndentSettingCommand(status, command[1])
+  elif isAutoCloseParenSettingCommand(command):
+    autoCloseParenSettingCommand(status, command[1])
+  elif isTabStopSettingCommand(command):
+    tabStopSettingCommand(status, ($command[1]).parseInt)
+  elif isSyntaxSettingCommand(command):
+    syntaxSettingCommand(status, command[1])
   else:
     status.changeMode(status.prevMode)
 

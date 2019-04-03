@@ -37,7 +37,7 @@ This project's goal is a funny animation editor.
 
 - IDE like tab line
 
-- Window split  
+- Window split and tiling  
 
 - Infinite undo/redo
 
@@ -47,7 +47,7 @@ This project's goal is a funny animation editor.
 
 - Macros
 
-- Terminal Multiplexer
+- Terminal
 
 - Git support
 
@@ -60,9 +60,14 @@ This project's goal is a funny animation editor.
 - Funny animation...
 
 ## Install
+
 ```sh
 nimble install moe
 ```
 
 ## Usage
 https://github.com/fox0430/moe/wiki  
+
+## License
+
+GNU General Public License version 3
