@@ -1,6 +1,7 @@
 [Standard]
 number = true 
 statusBar = true
+tabLine = true
 syntax = true
 tabStop = 2
 autoCloseParen = true
