@@ -27,6 +27,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("statusBar"):
       result.statusBar.useBar = settings["Standard"]["statusBar"].getbool()
 
+    if settings["Standard"].contains("tabLine"):
+      result.tabLine.useTab= settings["Standard"]["tabLine"].getbool()
+
     if settings["Standard"].contains("syntax"):
       result.syntax = settings["Standard"]["syntax"].getbool()
 

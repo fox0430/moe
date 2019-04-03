@@ -19,8 +19,14 @@ type StatusBarSettings* = object
   language*: bool
   directory*: bool
 
+type TabBarSettings* = object
+  useTab*: bool
+  color*: Colorpair
+  currentTabColor*: Colorpair
+
 type EditorSettings* = object
   statusBar*: StatusBarSettings
+  tabLine*: TabBarSettings
   lineNumber*: bool
   syntax*: bool
   autoCloseParen*: bool
@@ -74,10 +80,18 @@ type EditorStatus* = object
   mainWindow*: Window
   statusWindow*: Window
   commandWindow*: Window
+  tabWindow*: Window
+
+import tab
 
 proc initRegisters(): Registers =
   result.yankedLines = @[]
   result.yankedStr = @[]
+
+proc initTabBarSettings*(): TabBarSettings =
+  result.useTab = true
+  result.color = brightWhiteDefault
+  result.currentTabColor = blackPink
 
 proc initStatusBarSettings*(): StatusBarSettings =
   result.useBar = true
@@ -92,6 +106,7 @@ proc initStatusBarSettings*(): StatusBarSettings =
 
 proc initEditorSettings*(): EditorSettings =
   result.statusBar = initStatusBarSettings()
+  result.tabLine = initTabBarSettings()
   result.lineNumber = true
   result.syntax = true
   result.autoCloseParen = true
@@ -111,10 +126,12 @@ proc initEditorStatus*(): EditorStatus =
   result.isHighlight = true
 
   let useStatusBar = if result.settings.statusBar.useBar: 1 else: 0
-  result.mainWindow = initWindow(terminalHeight()-1, terminalWidth(), 0, 0)
-  if result.settings.statusBar.useBar:
-    result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0, ui.ColorPair.blackPink)
-  result.commandWindow = initWindow(1, terminalWidth(), terminalHeight()-1, 0)
+  let useTab = if result.settings.tabLine.useTab: 1 else: 0
+
+  if result.settings.tabLine.useTab: result.tabWindow = initWindow(1, terminalWidth(), 0, 0)
+  result.mainWindow = initWindow(terminalHeight() - useTab - 1, terminalWidth(), useTab, 0)
+  if result.settings.statusBar.useBar: result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0, ui.ColorPair.blackPink)
+  result.commandWindow = initWindow(1, terminalWidth(), terminalHeight() - 1, 0)
 
 proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
   if status.bufStatus.len > 1 and bufferIndex < status.bufStatus.high:
@@ -201,18 +218,22 @@ proc writeStatusBar*(status: var EditorStatus) =
 proc resize*(status: var EditorStatus, height, width: int) =
   let
     adjustedHeight = max(height, 4)
-    adjustedWidth = max(width, status.view.widthOfLineNum+4)
+    adjustedWidth = max(width, status.view.widthOfLineNum + 4)
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+    useTab = if status.mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
 
-  resize(status.mainWindow, adjustedHeight - useStatusBar - 1, adjustedWidth, 0, 0)
-  if status.settings.statusBar.useBar: resize(status.statusWindow, 1, adjustedWidth, adjustedHeight-2, 0)
-  resize(status.commandWindow, 1, adjustedWidth, adjustedHeight-1, 0)
+  resize(status.mainWindow, adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, useTab, 0)
+  if status.settings.statusBar.useBar: resize(status.statusWindow, 1, adjustedWidth, adjustedHeight - 2, 0)
+  if status.mode != Mode.filer and  status.settings.tabLine.useTab: resize(status.tabWindow, 1, terminalWidth(), 0, 0)
+  resize(status.commandWindow, 1, adjustedWidth, adjustedHeight - 1, 0)
   
   if status.mode != Mode.filer:
     status.view.resize(status.buffer, adjustedHeight - useStatusBar - 1, adjustedWidth-status.view.widthOfLineNum-1, status.view.widthOfLineNum)
     status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
   if status.settings.statusBar.useBar: writeStatusBar(status)
+
+  if status.mode != Mode.filer and status.settings.tabLine.useTab: writeTabLine(status)
 
 proc erase*(status: var EditorStatus) =
   erase(status.mainWindow)
