@@ -225,13 +225,15 @@ proc resize*(status: var EditorStatus, height, width: int) =
   resize(status.mainWindow, adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, useTab, 0)
   if status.settings.statusBar.useBar: resize(status.statusWindow, 1, adjustedWidth, adjustedHeight - 2, 0)
   if status.mode != Mode.filer and  status.settings.tabLine.useTab: resize(status.tabWindow, 1, terminalWidth(), 0, 0)
-  resize(status.commandWindow, 1, adjustedWidth, adjustedHeight - 1, 0)
   
   if status.mode != Mode.filer:
-    status.view.resize(status.buffer, adjustedHeight - useStatusBar - 1, adjustedWidth-status.view.widthOfLineNum-1, status.view.widthOfLineNum)
+    status.view.resize(status.buffer, adjustedHeight - useStatusBar - 1, adjustedWidth-status.view.widthOfLineNum - 1, status.view.widthOfLineNum)
     status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
   if status.settings.statusBar.useBar: writeStatusBar(status)
+
+  resize(status.commandWindow, 1, adjustedWidth, adjustedHeight - 1, 0)
+  status.commandWindow.refresh
 
   if status.mode != Mode.filer and status.settings.tabLine.useTab: writeTabLine(status)
 
