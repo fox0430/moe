@@ -314,7 +314,9 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
   status.changeMode(status.prevMode)
 
 proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
-  if isJumpCommand(status, command):
+  if command[0].len == 0:
+    status.changeMode(status.prevMode)
+  elif isJumpCommand(status, command):
     var line = ($command[0]).parseInt-1
     if line < 0: line = 0
     if line >= status.buffer.len: line = status.buffer.high
