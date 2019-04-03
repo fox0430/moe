@@ -137,7 +137,8 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
 
     var key = getKey(status.commandWindow)
 
-    if isEnterKey(key) or isEscKey(key): break
+    if isEnterKey(key): break
+    elif isEscKey(key): return @[ru""]
     elif isResizeKey(key):
       status.resize(terminalHeight(), terminalWidth())
       status.update
