@@ -25,11 +25,11 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Configuration file
 
+- Multiple file buffers
+
 - IDE like tab line
 
 - Simple file manager
-
-- Multiple file buffers
 
 - Auto close paren  
 
@@ -38,6 +38,10 @@ This project's goal is a very customizable, high productivity, high performance 
 ## Planned features
 
 - Window split and tiling  
+
+- Configuration mode
+
+- Supports Regular expression and PEG
 
 - Infinite undo/redo
 
