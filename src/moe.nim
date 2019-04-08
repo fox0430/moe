@@ -1,4 +1,4 @@
-import os, terminal, strutils, strformat, unicode
+import os, terminal, strutils, strformat, unicode, packages/docutils/highlite
 import moepkg/ui
 import moepkg/editorstatus
 import moepkg/fileutils
@@ -53,7 +53,7 @@ proc main() =
     status.bufStatus[0].buffer = newFile()
 
   if status.mode != filer:
-    status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+    status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, if status.settings.syntax: status.bufStatus[0].language else: SourceLanguage.langNone)
     let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
     let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     status.bufStatus[0].view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)

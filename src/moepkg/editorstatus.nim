@@ -258,7 +258,7 @@ from searchmode import searchAllOccurrence
 
 proc updateHighlight*(status: var EditorStatus) =
 
-  status.highlight = initHighlight($status.buffer, status.language)
+  status.highlight = initHighlight($status.buffer, if status.settings.syntax: status.language else: SourceLanguage.langNone)
 
   # highlight search results
   if status.isHighlight and status.searchHistory.len > 0:

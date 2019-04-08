@@ -1,4 +1,4 @@
-import sequtils, strutils, os, terminal, strformat, deques
+import sequtils, strutils, os, terminal, strformat, deques, packages/docutils/highlite 
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview, mainview
 
 type
@@ -110,6 +110,9 @@ proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.syntax = true
   elif command == ru"off": status.settings.syntax = false
 
+  let sourceLang = if status.settings.syntax: status.language else: SourceLanguage.langNone
+  status.highlight = initHighlight($status.buffer, sourceLang)
+
   status.changeMode(status.prevMode)
 
 proc tabStopSettingCommand(status: var EditorStatus, command: int) =
@@ -161,7 +164,8 @@ proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
   if status.bufStatus.len == 0:
     status.bufStatus.add(BufferStatus(filename: ru""))
     status.bufStatus[0].buffer = newFile()
-    status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+    let sourceLang = if status.settings.syntax: status.bufStatus[0].language else: SourceLanguage.langNone
+    status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, sourceLang)
     let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
     let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     status.bufStatus[0].view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
@@ -236,7 +240,8 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
 
     let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[status.bufStatus.high].buffer.len) - 2 else: 0
     let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-    status.bufStatus[status.bufStatus.high].highlight = initHighlight($status.bufStatus[status.bufStatus.high].buffer, status.bufStatus[status.bufStatus.high].language)
+    let sourceLang = if status.settings.syntax: status.bufStatus[status.bufStatus.high].language else: SourceLanguage.langNone
+    status.bufStatus[status.bufStatus.high].highlight = initHighlight($status.bufStatus[status.bufStatus.high].buffer, sourceLang)
     status.updateHighlight
     status.bufStatus[status.bufStatus.high].view = initEditorView(status.bufStatus[status.bufStatus.high].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
 
