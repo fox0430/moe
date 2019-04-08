@@ -25,6 +25,8 @@ type TabBarSettings* = object
   currentTabColor*: Colorpair
 
 type EditorSettings* = object
+  editorColorTheme: ColorTheme
+  editorColor*: EditorColor
   statusBar*: StatusBarSettings
   tabLine*: TabBarSettings
   lineNumber*: bool
@@ -84,6 +86,16 @@ type EditorStatus* = object
 
 import tab
 
+proc initEditorColorTheme(): EditorColor =
+  result.editor = Colorpair.brightWhiteDefault
+  result.lineNum = Colorpair.whiteDefault
+  result.currentLineNum = Colorpair.pinkDefault
+  result.statusBar = Colorpair.blackPink
+  result.statusBarMode = Colorpair.blackWhite
+  result.tab = brightWhiteDefault
+  result.currentTab = blackPink
+  result.commandBar = Colorpair.brightWhiteDefault
+
 proc initRegisters(): Registers =
   result.yankedLines = @[]
   result.yankedStr = @[]
@@ -105,6 +117,7 @@ proc initStatusBarSettings*(): StatusBarSettings =
   result.directory = true
 
 proc initEditorSettings*(): EditorSettings =
+  result.editorColor = initEditorColorTheme()
   result.statusBar = initStatusBarSettings()
   result.tabLine = initTabBarSettings()
   result.lineNumber = true

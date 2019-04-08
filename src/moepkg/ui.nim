@@ -42,6 +42,20 @@ type ColorPair* = enum
   blackPink = 15
   defaultMagenta = 16
 
+type ColorTheme* = enum
+  dark = 1
+  light = 2
+
+type EditorColor* = object
+  editor*: ColorPair
+  lineNum*: ColorPair
+  currentLineNum*: ColorPair
+  statusBar*: ColorPair
+  statusBarMode*: ColorPair
+  tab*: ColorPair
+  currentTab*: ColorPair
+  commandBar*: ColorPair
+
 type Window* = object
   cursesWindow*: ptr window
   top, left, height*, width*: int
