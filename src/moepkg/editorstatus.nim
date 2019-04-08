@@ -87,6 +87,7 @@ type EditorStatus* = object
 import tab
 
 proc initEditorColorTheme(): EditorColor =
+  ## dark theme
   result.editor = Colorpair.brightWhiteDefault
   result.lineNum = Colorpair.whiteDefault
   result.currentLineNum = Colorpair.pinkDefault
@@ -95,6 +96,7 @@ proc initEditorColorTheme(): EditorColor =
   result.tab = brightWhiteDefault
   result.currentTab = blackPink
   result.commandBar = Colorpair.brightWhiteDefault
+  result.errorMessage = Colorpair.redDefault
 
 proc initRegisters(): Registers =
   result.yankedLines = @[]
@@ -143,7 +145,7 @@ proc initEditorStatus*(): EditorStatus =
 
   if result.settings.tabLine.useTab: result.tabWindow = initWindow(1, terminalWidth(), 0, 0)
   result.mainWindow = initWindow(terminalHeight() - useTab - 1, terminalWidth(), useTab, 0)
-  if result.settings.statusBar.useBar: result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0, ui.ColorPair.blackPink)
+  if result.settings.statusBar.useBar: result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0, result.settings.editorColor.statusBar)
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight() - 1, 0)
 
 proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
@@ -187,9 +189,10 @@ proc executeOnExit*(settings: EditorSettings) =
   changeCursorType(settings.defaultCursor)
 
 proc writeStatusBarNormalModeInfo(status: var EditorStatus) =
-  status.statusWindow.append(ru" ", ui.ColorPair.blackPink)
-  if status.settings.statusBar.filename: status.statusWindow.append(if status.filename.len > 0: status.filename else: ru"No name", ui.ColorPair.blackPink)
-  if status.countChange > 0 and status.settings.statusBar.chanedMark: status.statusWindow.append(ru" [+]", ui.ColorPair.blackPink)
+  let color = status.settings.editorColor.statusBar
+  status.statusWindow.append(ru" ", color)
+  if status.settings.statusBar.filename: status.statusWindow.append(if status.filename.len > 0: status.filename else: ru"No name", color)
+  if status.countChange > 0 and status.settings.statusBar.chanedMark: status.statusWindow.append(ru" [+]", color)
 
   let
     line = if status.settings.statusBar.line: fmt"{status.currentLine+1}/{status.buffer.len}" else: ""
@@ -197,33 +200,35 @@ proc writeStatusBarNormalModeInfo(status: var EditorStatus) =
     encoding = if status.settings.statusBar.characterEncoding: $status.settings.characterEncoding else: ""
     language = if status.language == SourceLanguage.langNone: "Plain" else: sourceLanguageToStr[status.language]
     info = fmt"{line} {column} {encoding} {language} "
-  status.statusWindow.write(0, terminalWidth()-info.len, info, ui.Colorpair.blackPink)
+  status.statusWindow.write(0, terminalWidth()-info.len, info, color)
 
 proc writeStatusBarFilerModeInfo(status: var EditorStatus) =
-  if status.settings.statusBar.directory: status.statusWindow.append(ru" ", ui.ColorPair.blackPink)
-  status.statusWindow.append(getCurrentDir().toRunes, ui.ColorPair.blackPink)
+  let color = status.settings.editorColor.statusBar
+  if status.settings.statusBar.directory: status.statusWindow.append(ru" ", color)
+  status.statusWindow.append(getCurrentDir().toRunes, color)
 
 proc writeStatusBar*(status: var EditorStatus) =
   status.statusWindow.erase
+  let color = status.settings.editorColor.statusBarMode
 
   if status.mode == Mode.ex:
-    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" EX ", ui.ColorPair.blackWhite)
+    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" EX ", color)
     if status.prevMode == Mode.filer:
       writeStatusBarFilerModeInfo(status)
     else:
       writeStatusBarNormalModeInfo(status)
   elif status.mode == Mode.visual:
-    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" VISUAL ", ui.ColorPair.blackWhite)
+    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" VISUAL ", color)
     writeStatusBarNormalModeInfo(status)
   elif status.mode == Mode.replace:
-    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" REPLACE ", ui.ColorPair.blackWhite)
+    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" REPLACE ", color)
     writeStatusBarNormalModeInfo(status)
   elif status.mode == Mode.filer:
-    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" FILER ", ui.ColorPair.blackWhite)
+    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" FILER ", color)
     writeStatusBarFilerModeInfo(status)
   else:
     if status.settings.statusBar.mode:
-      status.statusWindow.write(0, 0,  if status.mode == Mode.normal: ru" NORMAL " else: ru" INSERT ", ui.ColorPair.blackWhite)
+      status.statusWindow.write(0, 0,  if status.mode == Mode.normal: ru" NORMAL " else: ru" INSERT ", color)
     writeStatusBarNormalModeInfo(status)
 
   status.statusWindow.refresh

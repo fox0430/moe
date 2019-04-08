@@ -55,6 +55,7 @@ type EditorColor* = object
   tab*: ColorPair
   currentTab*: ColorPair
   commandBar*: ColorPair
+  errorMessage*: ColorPair
 
 type Window* = object
   cursesWindow*: ptr window
