@@ -15,7 +15,7 @@ proc parseCommandLineOption*(line: seq[string]): ComdParsedList  =
       of cmdShortOption, cmdLongOption:
         case key:
           of "v", "version":
-            echo "v0.0.4"
+            echo "v0.0.6"
             quit()
       of cmdEnd:
         assert(false)
