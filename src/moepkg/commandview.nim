@@ -4,14 +4,14 @@ import editorstatus, editorview, ui, unicodeext
 type
   ExModeViewStatus = tuple[buffer: seq[Rune], prompt: string, cursorY, cursorX, currentPosition, startPosition: int]
 
-proc writeNoWriteError*(commandWindow: var Window) =
+proc writeNoWriteError*(commandWindow: var Window, errorMessageColor: ColorPair) =
   commandWindow.erase
-  commandWindow.write(0, 0, "Error: No write since last change", ColorPair.redDefault)
+  commandWindow.write(0, 0, "Error: No write since last change", errorMessageColor)
   commandWindow.refresh
 
-proc writeSaveError*(commandWindow: var Window) =
+proc writeSaveError*(commandWindow: var Window, errorMessageColor: ColorPair) =
   commandWindow.erase
-  commandWindow.write(0, 0, "Error: Failed to save the file", ColorPair.redDefault)
+  commandWindow.write(0, 0, "Error: Failed to save the file", errorMessageColor)
   commandWindow.refresh
 
 proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
@@ -52,7 +52,7 @@ proc splitCommand(command: string): seq[seq[Rune]] =
   else:
     return strutils.splitWhitespace(command).map(proc(s: string): seq[Rune] = toRunes(s))
 
-proc writeExModeView(commandWindow: var Window, exStatus: ExModeViewStatus) =
+proc writeExModeView(commandWindow: var Window, exStatus: ExModeViewStatus, color: ColorPair) =
   let buffer = ($exStatus.buffer).substr(exStatus.startPosition, exStatus.buffer.len)
 
   commandWindow.erase
@@ -112,7 +112,7 @@ proc insertCommandBuffer(exStatus: var ExModeViewStatus, c: Rune) =
 proc getKeyword*(status: var EditorStatus, prompt: string): seq[Rune] =
   var exStatus = initExModeViewStatus(prompt)
   while true:
-    writeExModeView(status.commandWindow, exStatus)
+    writeExModeView(status.commandWindow, exStatus, status.settings.editorColor.commandBar)
 
     var key = getKey(status.commandWindow)
 
@@ -133,7 +133,7 @@ proc getKeyword*(status: var EditorStatus, prompt: string): seq[Rune] =
 proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
   var exStatus = initExModeViewStatus(prompt)
   while true:
-    writeExModeView(status.commandWindow, exStatus)
+    writeExModeView(status.commandWindow, exStatus, status.settings.editorColor.commandBar)
 
     var key = getKey(status.commandWindow)
 

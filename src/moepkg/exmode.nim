@@ -217,7 +217,7 @@ proc jumpCommand(status: var EditorStatus, line: int) =
 
 proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
   if status.countChange != 0:
-    writeNoWriteError(status.commandWindow)
+    writeNoWriteError(status.commandWindow, status.settings.editorColor.errorMessage)
     status.changeMode(Mode.normal)
     return
 
@@ -261,14 +261,14 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
     status.filename = filename
     status.countChange = 0
   except IOError:
-    writeSaveError(status.commandWindow)
+    writeSaveError(status.commandWindow, status.settings.editorColor.errorMessage)
 
   status.changeMode(Mode.normal)
 
 proc quitCommand(status: var EditorStatus) =
   if status.countChange == 0: status.changeMode(Mode.quit)
   else:
-    writeNoWriteError(status.commandWindow)
+    writeNoWriteError(status.commandWindow, status.settings.editorColor.errorMessage)
     status.changeMode(Mode.normal)
 
 proc writeAndQuitCommand(status: var EditorStatus) =
@@ -276,7 +276,7 @@ proc writeAndQuitCommand(status: var EditorStatus) =
     saveFile(status.filename, status.buffer.toRunes, status.settings.characterEncoding)
     status.changeMode(Mode.quit)
   except IOError:
-    writeSaveError(status.commandWindow)
+    writeSaveError(status.commandWindow, status.settings.editorColor.errorMessage)
     status.changeMode(Mode.normal)
 
 proc forceQuitCommand(status: var EditorStatus) =
