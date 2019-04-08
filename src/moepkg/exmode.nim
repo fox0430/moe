@@ -251,7 +251,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   if filename.len == 0:
     status.commandWindow.erase
-    status.commandWindow.write(0, 0, "Error: No file name", ColorPair.redDefault)
+    status.commandWindow.write(0, 0, "Error: No file name", status.settings.editorColor.errorMessage)
     status.commandWindow.refresh
     status.changeMode(Mode.normal)
     return
