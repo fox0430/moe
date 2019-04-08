@@ -62,17 +62,17 @@ proc searchFiles(status: var EditorStatus, dirList: seq[PathInfo]): seq[PathInfo
     if dirList[index].path.contains(str):
       result.add dirList[index]
 
-proc writeRemoveFileError(commandWindow: var Window) =
+proc writeRemoveFileError(commandWindow: var Window, color: ColorPair) =
   commandWindow.erase
   commandWindow.write(0, 0, "Error: can not remove file", ColorPair.redDefault)
   commandWindow.refresh
 
-proc writeRemoveDirError(commandWindow: var Window) =
+proc writeRemoveDirError(commandWindow: var Window, color: ColorPair) =
   commandWindow.erase
   commandWindow.write(0, 0, "Error: can not remove directory", ColorPair.redDefault)
   commandWindow.refresh
 
-proc writeCopyFileError(commandWindow: var Window) =
+proc writeCopyFileError(commandWindow: var Window, color: ColorPair) =
   commandWindow.erase
   commandWindow.write(0, 0, "Error: can not copy file", ColorPair.redDefault)
   commandWindow.refresh
@@ -81,6 +81,8 @@ proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
   setCursor(true)
   let command = getCommand(status, "Delete file? 'y' or 'n': ")
   setCursor(false)
+
+  let errorMessageColor = status.settings.editorColor.errorMessage
 
   if command.len == 0:
     status.commandWindow.erase
@@ -92,11 +94,11 @@ proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
       try:
         removeDir(filerStatus.dirList[filerStatus.currentLine].path)
       except OSError:
-        writeRemoveDirError(status.commandWindow)
+        writeRemoveDirError(status.commandWindow, errorMessageColor)
         return
     else:
       if tryRemoveFile(filerStatus.dirList[filerStatus.currentLine].path) == false:
-        writeRemoveFileError(status.commandWindow)
+        writeRemoveFileError(status.commandWindow, errorMessageColor)
         return
   else:
     return
@@ -360,20 +362,20 @@ proc cutFile(filerStatus: var FilerStatus) =
   filerStatus.register.filename = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
   filerStatus.register.originPath = getCurrentDir() / filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
 
-proc pasteFile(commandWindow: var Window, filerStatus: var FilerStatus) =
+proc pasteFile(commandWindow: var Window, filerStatus: var FilerStatus, errorMessageColor: ColorPair) =
   try:
     copyFile(filerStatus.register.originPath, getCurrentDir() / filerStatus.register.filename)
     filerStatus.dirlistUpdate = true
     filerStatus.viewUpdate = true
   except OSError:
-    writeCopyFileError(commandWindow)
+    writeCopyFileError(commandWindow, errorMessageColor)
     return
 
   if filerStatus.register.cut:
     if tryRemoveFile(filerStatus.register.originPath / filerStatus.register.filename):
       filerStatus.register.cut = false
     else:
-      writeRemoveFileError(commandWindow)
+      writeRemoveFileError(commandWindow, errorMessageColor)
 
 proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   setCursor(true)
@@ -498,7 +500,7 @@ proc filerMode*(status: var EditorStatus) =
     elif key == ord('C'):
       cutFile(filerStatus)
     elif key == ord('p'):
-      pasteFile(status.commandWindow, filerStatus)
+      pasteFile(status.commandWindow, filerStatus, status.settings.editorColor.errorMessage)
     elif key == ord('s'):
       changeSortBy(filerStatus)
     elif key == ord('N'):
