@@ -63,9 +63,8 @@ proc overwrite*(highlight: Highlight, colorSegment: ColorSegment): Highlight =
     let cs = highlight.colorSegments[i]
     result.colorSegments.add(cs.overwrite(colorSegment))
 
-proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
+proc initHighlight*(buffer: string, language: SourceLanguage, defaultColor: Colorpair): Highlight =
   # TODO: use settings file
-  let defaultColor = brightWhiteDefault
   var currentRow, currentColumn: int
 
   template splitByNewline(str, c: typed) =

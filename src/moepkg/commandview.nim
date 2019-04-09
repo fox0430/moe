@@ -56,7 +56,7 @@ proc writeExModeView(commandWindow: var Window, exStatus: ExModeViewStatus, colo
   let buffer = ($exStatus.buffer).substr(exStatus.startPosition, exStatus.buffer.len)
 
   commandWindow.erase
-  commandWindow.write(exStatus.cursorY, 0, fmt"{exStatus.prompt}{buffer}", ColorPair.brightWhiteDefault)
+  commandWindow.write(exStatus.cursorY, 0, fmt"{exStatus.prompt}{buffer}", color)
   commandWindow.moveCursor(0, exStatus.cursorX)
   commandWindow.refresh
 

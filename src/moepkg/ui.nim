@@ -41,6 +41,8 @@ type ColorPair* = enum
   pinkDefault = 14
   blackPink = 15
   defaultMagenta = 16
+  blackDefault = 17
+  cyanGray = 18
 
 type ColorTheme* = enum
   dark = 1
@@ -85,6 +87,8 @@ proc setCursesColor() =
   setColorPair(ColorPair.pinkDefault, Color.pink, Color.default)
   setColorPair(ColorPair.blackPink, Color.black, Color.pink)
   setColorPair(ColorPair.defaultMagenta, Color.default, Color.magenta)
+  setColorPair(ColorPair.blackDefault, Color.black, Color.default)
+  setColorPair(ColorPair.cyanGray, Color.cyan, Color.gray)
 
 proc setIbeamCursor*() =
   discard execShellCmd("printf '\\033[6 q'")

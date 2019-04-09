@@ -88,8 +88,8 @@ import tab
 
 proc initEditorColorTheme(): EditorColor =
   ## dark theme
-  result.editor = Colorpair.brightWhiteDefault
-  result.lineNum = Colorpair.brightWhiteDefault
+  result.editor = Colorpair.brightWhiteDefauLt
+  result.lineNum = Colorpair.grayDefault
   result.currentLineNum = Colorpair.pinkDefault
   result.statusBar = Colorpair.blackPink
   result.statusBarMode = Colorpair.blackWhite
@@ -119,6 +119,7 @@ proc initStatusBarSettings*(): StatusBarSettings =
   result.directory = true
 
 proc initEditorSettings*(): EditorSettings =
+  result.editorColorTheme = ColorTheme.light
   result.editorColor = initEditorColorTheme()
   result.statusBar = initStatusBarSettings()
   result.tabLine = initTabBarSettings()
@@ -184,6 +185,28 @@ proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
 proc changeMode*(status: var EditorStatus, mode: Mode) =
   status.prevMode = status.mode
   status.mode = mode
+
+proc changeTheme(status: var EditorStatus) =
+  if status.settings.editorColorTheme == ColorTheme.dark:
+    status.settings.editorColor.editor = Colorpair.brightWhiteDefauLt
+    status.settings.editorColor.lineNum = Colorpair.brightWhiteDefault
+    status.settings.editorColor.currentLineNum = Colorpair.pinkDefault
+    status.settings.editorColor.statusBar = Colorpair.blackPink
+    status.settings.editorColor.statusBarMode = Colorpair.blackWhite
+    status.settings.editorColor.tab = brightWhiteDefault
+    status.settings.editorColor.currentTab = blackPink
+    status.settings.editorColor.commandBar = Colorpair.brightWhiteDefault
+    status.settings.editorColor.errorMessage = Colorpair.redDefault
+  elif status.settings.editorColorTheme == ColorTheme.light:
+    status.settings.editorColor.editor = Colorpair.blackDefault
+    status.settings.editorColor.lineNum = Colorpair.grayDefault
+    status.settings.editorColor.currentLineNum = Colorpair.blackDefault
+    status.settings.editorColor.statusBar = Colorpair.cyanGray
+    status.settings.editorColor.statusBarMode = Colorpair.whiteCyan
+    status.settings.editorColor.tab = Colorpair.cyanGray
+    status.settings.editorColor.currentTab = Colorpair.whiteCyan
+    status.settings.editorColor.commandBar = Colorpair.blackDefault
+    status.settings.editorColor.errorMessage = Colorpair.redDefault
 
 proc executeOnExit*(settings: EditorSettings) =
   changeCursorType(settings.defaultCursor)
@@ -276,7 +299,7 @@ from searchmode import searchAllOccurrence
 
 proc updateHighlight*(status: var EditorStatus) =
 
-  status.highlight = initHighlight($status.buffer, if status.settings.syntax: status.language else: SourceLanguage.langNone)
+  status.highlight = initHighlight($status.buffer, if status.settings.syntax: status.language else: SourceLanguage.langNone, status.settings.editorColor.editor)
 
   # highlight search results
   if status.isHighlight and status.searchHistory.len > 0:

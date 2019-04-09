@@ -111,7 +111,7 @@ proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   elif command == ru"off": status.settings.syntax = false
 
   let sourceLang = if status.settings.syntax: status.language else: SourceLanguage.langNone
-  status.highlight = initHighlight($status.buffer, sourceLang)
+  status.highlight = initHighlight($status.buffer, sourceLang, status.settings.editorColor.editor)
 
   status.changeMode(status.prevMode)
 
@@ -165,7 +165,7 @@ proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
     status.bufStatus.add(BufferStatus(filename: ru""))
     status.bufStatus[0].buffer = newFile()
     let sourceLang = if status.settings.syntax: status.bufStatus[0].language else: SourceLanguage.langNone
-    status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, sourceLang)
+    status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, sourceLang, status.settings.editorColor.editor)
     let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
     let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     status.bufStatus[0].view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
@@ -241,7 +241,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
     let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[status.bufStatus.high].buffer.len) - 2 else: 0
     let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     let sourceLang = if status.settings.syntax: status.bufStatus[status.bufStatus.high].language else: SourceLanguage.langNone
-    status.bufStatus[status.bufStatus.high].highlight = initHighlight($status.bufStatus[status.bufStatus.high].buffer, sourceLang)
+    status.bufStatus[status.bufStatus.high].highlight = initHighlight($status.bufStatus[status.bufStatus.high].buffer, sourceLang, status.settings.editorColor.editor)
     status.updateHighlight
     status.bufStatus[status.bufStatus.high].view = initEditorView(status.bufStatus[status.bufStatus.high].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
 

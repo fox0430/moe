@@ -13,8 +13,8 @@ proc writeTab(tabWin: var Window, start, tabWidth: int, filename: seq[Rune], col
 proc writeTabLine*(status: var EditorStatus) =
   let
     tabWidth = calcTabWidth(status.bufStatus.len)
-    defaultColor = status.settings.tabLine.color
-    currentTabColor = status.settings.tabLine.currentTabColor
+    defaultColor = status.settings.editorColor.tab
+    currentTabColor = status.settings.editorColor.currentTab
 
   status.tabWindow.erase
 
