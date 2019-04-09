@@ -25,7 +25,7 @@ type TabBarSettings* = object
   currentTabColor*: Colorpair
 
 type EditorSettings* = object
-  editorColorTheme: ColorTheme
+  editorColorTheme*: ColorTheme
   editorColor*: EditorColor
   statusBar*: StatusBarSettings
   tabLine*: TabBarSettings
@@ -119,8 +119,7 @@ proc initStatusBarSettings*(): StatusBarSettings =
   result.directory = true
 
 proc initEditorSettings*(): EditorSettings =
-  result.editorColorTheme = ColorTheme.light
-  result.editorColor = initEditorColorTheme()
+  result.editorColorTheme = ColorTheme.dark
   result.statusBar = initStatusBarSettings()
   result.tabLine = initTabBarSettings()
   result.lineNumber = true
@@ -186,7 +185,7 @@ proc changeMode*(status: var EditorStatus, mode: Mode) =
   status.prevMode = status.mode
   status.mode = mode
 
-proc changeTheme(status: var EditorStatus) =
+proc changeTheme*(status: var EditorStatus) =
   if status.settings.editorColorTheme == ColorTheme.dark:
     status.settings.editorColor.editor = Colorpair.brightWhiteDefauLt
     status.settings.editorColor.lineNum = Colorpair.brightWhiteDefault

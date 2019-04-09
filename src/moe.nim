@@ -27,6 +27,7 @@ proc main() =
 
   var status = initEditorStatus()
   status.settings = parseSettingsFile(getConfigDir() / "moe" / "moerc.toml")
+  changeTheme(status)
 
   if parsedList.filename != "":
     let filename = parsedList.filename
