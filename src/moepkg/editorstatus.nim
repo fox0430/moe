@@ -89,7 +89,7 @@ import tab
 proc initEditorColorTheme(): EditorColor =
   ## dark theme
   result.editor = Colorpair.brightWhiteDefault
-  result.lineNum = Colorpair.whiteDefault
+  result.lineNum = Colorpair.brightWhiteDefault
   result.currentLineNum = Colorpair.pinkDefault
   result.statusBar = Colorpair.blackPink
   result.statusBarMode = Colorpair.blackWhite
@@ -264,7 +264,7 @@ proc update*(status: var EditorStatus) =
   setCursor(false)
   if status.settings.statusBar.useBar: writeStatusBar(status)
   status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
-  status.view.update(status.mainWindow, status.settings.lineNumber, status.buffer, status.highlight, status.currentLine)
+  status.view.update(status.mainWindow, status.settings.lineNumber, status.buffer, status.highlight, status.settings.editorColor, status.currentLine)
   status.cursor.update(status.view, status.currentLine, status.currentColumn)
   status.mainWindow.write(status.cursor.y, status.view.widthOfLineNum+status.cursor.x, "")
   status.mainWindow.refresh
