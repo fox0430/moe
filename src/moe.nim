@@ -47,10 +47,13 @@ proc main() =
         status.mode = filer
       except OSError:
         writeFileOpenErrorMessage(status.commandWindow, filename.toRunes)
-        status.bufStatus[0].filename = "".toRunes
+        status.bufStatus.add(BufferStatus(filename: "".toRunes))
         status.bufStatus[0].buffer = newFile()
-    else: status.bufStatus[0].buffer = newFile()
+    else:
+      status.bufStatus.add(BufferStatus(filename: "".toRunes))
+      status.bufStatus[0].buffer = newFile()
   else:
+    status.bufStatus.add(BufferStatus(filename: "".toRunes))
     status.bufStatus[0].buffer = newFile()
 
   if status.mode != filer:
