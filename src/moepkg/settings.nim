@@ -12,8 +12,9 @@ proc getCursorType(cursorType, mode: string): CursorType =
     of "insert": return CursorType.ibeamMode
 
 proc getTheme(theme: string): ColorTheme =
-  if theme == "light": return ColorTheme.light
-  else: return ColorTheme.dark
+  if theme == "dark": return ColorTheme.dark
+  elif theme == "light": return ColorTheme.light
+  else: return ColorTheme.vivid
 
 proc parseSettingsFile*(filename: string): EditorSettings =
   result = initEditorSettings()

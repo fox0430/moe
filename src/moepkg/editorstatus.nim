@@ -87,16 +87,17 @@ type EditorStatus* = object
 import tab
 
 proc initEditorColorTheme(): EditorColor =
-  ## dark theme
-  result.editor = Colorpair.brightWhiteDefauLt
-  result.lineNum = Colorpair.grayDefault
-  result.currentLineNum = Colorpair.cyanDefault
-  result.statusBar = Colorpair.brightWhiteBlue
-  result.statusBarMode = Colorpair.blackWhite
-  result.tab = Colorpair.brightWhiteDefault
-  result.currentTab = Colorpair.brightWhiteBlue
-  result.commandBar = Colorpair.brightWhiteDefault
-  result.errorMessage = Colorpair.redDefault
+ ## vivid theme
+ result.editor = Colorpair.brightWhiteDefauLt
+ result.lineNum = Colorpair.grayDefault
+ result.currentLineNum = Colorpair.pinkDefault
+ result.statusBar = Colorpair.blackPink
+ result.statusBarMode = Colorpair.blackWhite
+ result.tab = Colorpair.brightWhiteDefault
+ result.currentTab = Colorpair.blackPink
+ result.commandBar = Colorpair.brightWhiteDefault
+ result.errorMessage = Colorpair.redDefault
+
 
 proc initRegisters(): Registers =
   result.yankedLines = @[]
@@ -119,7 +120,7 @@ proc initStatusBarSettings*(): StatusBarSettings =
   result.directory = true
 
 proc initEditorSettings*(): EditorSettings =
-  result.editorColorTheme = ColorTheme.dark
+  result.editorColorTheme = ColorTheme.vivid
   result.statusBar = initStatusBarSettings()
   result.tabLine = initTabBarSettings()
   result.lineNumber = true
