@@ -1,5 +1,5 @@
 [Standard]
-theme = vivid
+theme = "vivid"
 number = true 
 statusBar = true
 tabLine = true
