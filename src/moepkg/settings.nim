@@ -11,6 +11,11 @@ proc getCursorType(cursorType, mode: string): CursorType =
     of "normal": return CursorType.blockMode
     of "insert": return CursorType.ibeamMode
 
+proc getTheme(theme: string): ColorTheme =
+  if theme == "dark": return ColorTheme.dark
+  elif theme == "light": return ColorTheme.light
+  else: return ColorTheme.vivid
+
 proc parseSettingsFile*(filename: string): EditorSettings =
   result = initEditorSettings()
   
@@ -21,11 +26,17 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     return
 
   if settings.contains("Standard"):
+    if settings["Standard"].contains("theme"):
+      result.editorColorTheme = getTheme(settings["Standard"]["theme"].getStr())
+
     if settings["Standard"].contains("number"):
       result.lineNumber = settings["Standard"]["number"].getbool()
 
     if settings["Standard"].contains("statusBar"):
       result.statusBar.useBar = settings["Standard"]["statusBar"].getbool()
+
+    if settings["Standard"].contains("tabLine"):
+      result.tabLine.useTab= settings["Standard"]["tabLine"].getbool()
 
     if settings["Standard"].contains("syntax"):
       result.syntax = settings["Standard"]["syntax"].getbool()

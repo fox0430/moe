@@ -1,15 +1,8 @@
-import sequtils, strutils, os, terminal, strformat, deques
-import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight
+import sequtils, strutils, os, terminal, strformat, deques, packages/docutils/highlite
+import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview, mainview
 
 type
   replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
-  ExModeViewStatus = tuple[buffer: seq[Rune], prompt: string, cursorY, cursorX, currentPosition, startPosition: int]
-
-proc initExModeViewStatus(prompt: string): ExModeViewStatus =
-  result.buffer = ru""
-  result.prompt = prompt
-  result.cursorY = 0
-  result.cursorX = 1
 
 proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   var numOfSlash = 0
@@ -34,60 +27,56 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   
   return (searhWord: searchWord, replaceWord: replaceWord)
 
-proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
-  for i in 0 .. r.high:
-    var string = $r[i]
-    string.removeSuffix(suffix)
-    if i == 0: result = @[string.toRunes]
-    else: result.add(string.toRunes)
+proc isChangeThemeSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru "theme"
 
-proc splitQout(s: string): seq[seq[Rune]]=
-  result = @[ru""]
-  var quotIn = false
-  var backSlash = false
+proc isTabLineSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"tab"
+  
+proc isSyntaxSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"syntax"
 
-  for i in 0 .. s.high:
-    if s[i] == '\\':
-      backSlash = true
-    elif backSlash:
-      backSlash = false 
-      result[result.high].add(($s[i]).toRunes)
-    elif i > 0 and s[i - 1] == '\\':
-      result[result.high].add(($s[i]).toRunes)
-    elif not quotIn and s[i] == '"':
-      quotIn = true
-      result.add(ru"")
-    elif quotIn and s[i] == '"':
-      quotIn = false
-      if i != s.high:  result.add(ru"")
-    else:
-      result[result.high].add(($s[i]).toRunes)
+proc isTabStopSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"tabstop" and isDigit(command[1])
 
-  return result.removeSuffix(" ")
+proc isAutoCloseParenSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"paren"
 
-proc splitCommand(command: string): seq[seq[Rune]] =
-  if (command).contains('"'):
-    return splitQout(command)
-  else:
-    return strutils.splitWhitespace(command).map(proc(s: string): seq[Rune] = toRunes(s))
- 
-proc writeExModeView(commandWindow: var Window, exStatus: ExModeViewStatus) =
-  let buffer = ($exStatus.buffer).substr(exStatus.startPosition, exStatus.buffer.len)
+proc isAutoIndentSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"indent"
 
-  commandWindow.erase
-  commandWindow.write(exStatus.cursorY, 0, fmt"{exStatus.prompt}{buffer}", ColorPair.brightWhiteDefault)
-  commandWindow.moveCursor(0, exStatus.cursorX)
-  commandWindow.refresh
+proc isLineNumberSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"linenum"
 
-proc writeNoWriteError(commandWindow: var Window) =
-  commandWindow.erase
-  commandWindow.write(0, 0, "Error: No write since last change", ColorPair.redDefault)
-  commandWindow.refresh
+proc isStatusBarSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"statusbar"
 
-proc writeSaveError(commandWindow: var Window) =
-  commandWindow.erase
-  commandWindow.write(0, 0, "Error: Failed to save the file", ColorPair.redDefault)
-  commandWindow.refresh
+proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"noh"
+
+proc isDeleteCurrentBufferStatusCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"bd"
+
+proc isDeleteBufferStatusCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"bd" and isDigit(command[1])
+
+proc isBufferListCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"ls"
+
+proc isChangeFirstBufferCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"bfirst"
+
+proc isChangeLastBufferCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"blast"
+
+proc isOpneBufferByNumber(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"b" and isDigit(command[1])
+
+proc isChangeNextBufferCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"bnext"
+
+proc isChangePreveBufferCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"bprev"
 
 proc isJumpCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
   return command.len == 1 and isDigit(command[0]) and status.prevMode == Mode.normal
@@ -113,13 +102,134 @@ proc isShellCommand(command: seq[seq[Rune]]): bool =
 proc isReplaceCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
 
+proc changeThemeSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"dark": status.settings.editorColorTheme = ColorTheme.dark
+  elif command == ru"light": status.settings.editorColorTheme = ColorTheme.light
+  elif command == ru"vivid": status.settings.editorColorTheme = ColorTheme.vivid
+
+  changeTheme(status)
+  status.resize(terminalHeight(), terminalWidth())
+  status.changeMode(status.prevMode)
+
+proc tabLineSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.tabLine.useTab = true
+  elif command == ru"off": status.settings.tabLine.useTab = false
+
+  status.resize(terminalHeight(), terminalWidth())
+
+## DOES NOT WORKS ##
+proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.syntax = true
+  elif command == ru"off": status.settings.syntax = false
+
+  let sourceLang = if status.settings.syntax: status.language else: SourceLanguage.langNone
+  status.highlight = initHighlight($status.buffer, sourceLang, status.settings.editorColor.editor)
+
+  status.changeMode(status.prevMode)
+
+proc tabStopSettingCommand(status: var EditorStatus, command: int) =
+  status.settings.tabStop = command
+
+  status.changeMode(status.prevMode)
+
+proc autoCloseParenSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.autoCloseParen = true
+  elif command == ru"off": status.settings.autoCloseParen = false
+
+  status.changeMode(status.prevMode)
+
+proc autoIndentSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.autoIndent = true
+  elif command == ru"off": status.settings.autoIndent = false
+
+  status.changeMode(status.prevMode)
+
+proc lineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru "on": status.settings.lineNumber = true
+  elif command == ru"off": status.settings.lineNumber = false
+
+  let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
+  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+  status.view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+
+  status.changeMode(status.prevMode)
+
+proc statusBarSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.statusBar.useBar = true
+  elif command == ru"off": status.settings.statusBar.useBar = false
+
+  let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
+  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+  status.view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+
+  status.changeMode(status.prevMode)
+
+proc turnOffHighlightingCommand(status: var EditorStatus) =
+  turnOffHighlighting(status)
+  status.changeMode(Mode.normal)
+
+proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
+  if index < 0 and index > status.bufStatus.high: return 
+
+  status.bufStatus.delete(index)
+
+  if status.bufStatus.len == 0:
+    status.bufStatus.add(BufferStatus(filename: ru""))
+    status.bufStatus[0].buffer = newFile()
+    let sourceLang = if status.settings.syntax: status.bufStatus[0].language else: SourceLanguage.langNone
+    status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, sourceLang, status.settings.editorColor.editor)
+    let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
+    let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+    status.bufStatus[0].view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+    changeCurrentBuffer(status, 0)
+  elif index == status.currentBuffer:
+    dec(status.currentBuffer)
+    if status.bufStatus.high < index:
+      changeCurrentBuffer(status, index - 1)
+    else: changeCurrentBuffer(status, index)
+  elif index < status.currentBuffer:
+    dec(status.currentBuffer)
+
+  status.changeMode(Mode.normal)
+
+proc bufferListCommand(status: var EditorStatus) =
+  bufferListView(status)
+  discard getKey(status.mainWindow)
+  status.changeMode(Mode.normal)
+
+proc changeFirstBufferCommand(status: var EditorStatus) =
+  changeCurrentBuffer(status, 0)
+  status.changeMode(Mode.normal)
+
+proc changeLastBufferCommand(status: var EditorStatus) =
+  changeCurrentBuffer(status, status.bufStatus.high)
+  status.changeMode(Mode.normal)
+
+proc opneBufferByNumberCommand(status: var EditorStatus, number: int) =
+  if number < 0 or number > status.bufStatus.high: return
+
+  changeCurrentBuffer(status, number)
+  status.changeMode(Mode.normal)
+
+proc changeNextBufferCommand(status: var EditorStatus) =
+  if status.currentBuffer == status.bufStatus.high: return
+
+  changeCurrentBuffer(status, status.currentBuffer + 1)
+  status.changeMode(Mode.normal)
+
+proc changePreveBufferCommand(status: var EditorStatus) =
+  if status.currentBuffer < 1: return
+
+  changeCurrentBuffer(status, status.currentBuffer - 1)
+  status.changeMode(Mode.normal)
+
 proc jumpCommand(status: var EditorStatus, line: int) =
   jumpLine(status, line)
   status.changeMode(Mode.normal)
 
 proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
   if status.countChange != 0:
-    writeNoWriteError(status.commandWindow)
+    writeNoWriteError(status.commandWindow, status.settings.editorColor.errorMessage)
     status.changeMode(Mode.normal)
     return
 
@@ -127,29 +237,33 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
     setCurrentDir($filename)
     status.changeMode(Mode.filer)
   else:
-    status = initEditorStatus()
-    status.filename = filename
-    status.language = detectLanguage($filename)
-    if existsFile($status.filename):
+    status.bufStatus.add(BufferStatus(filename: filename))
+    status.bufStatus[status.bufStatus.high].language = detectLanguage($filename)
+    if existsFile($filename):
       try:
-        let textAndEncoding = openFile(status.filename)
-        status.buffer = textAndEncoding.text.toGapBuffer
+        let textAndEncoding = openFile(filename)
+        status.bufStatus[status.bufStatus.high].buffer = textAndEncoding.text.toGapBuffer
         status.settings.characterEncoding = textAndEncoding.encoding
       except IOError:
         #writeFileOpenErrorMessage(status.commandWindow, status.filename)
-        status.buffer = newFile()
+        status.bufStatus[status.bufStatus.high].buffer = newFile()
     else:
-      status.buffer = newFile()
+      status.bufStatus[status.bufStatus.high].buffer = newFile()
 
-    let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.buffer.len) - 2 else: 0
+    let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[status.bufStatus.high].buffer.len) - 2 else: 0
     let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+    let sourceLang = if status.settings.syntax: status.bufStatus[status.bufStatus.high].language else: SourceLanguage.langNone
+    status.bufStatus[status.bufStatus.high].highlight = initHighlight($status.bufStatus[status.bufStatus.high].buffer, sourceLang, status.settings.editorColor.editor)
     status.updateHighlight
-    status.view = initEditorView(status.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+    status.bufStatus[status.bufStatus.high].view = initEditorView(status.bufStatus[status.bufStatus.high].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+
+    changeCurrentBuffer(status, status.bufStatus.high)
+    status.changeMode(Mode.normal)
 
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   if filename.len == 0:
     status.commandWindow.erase
-    status.commandWindow.write(0, 0, "Error: No file name", ColorPair.redDefault)
+    status.commandWindow.write(0, 0, "Error: No file name", status.settings.editorColor.errorMessage)
     status.commandWindow.refresh
     status.changeMode(Mode.normal)
     return
@@ -159,14 +273,14 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
     status.filename = filename
     status.countChange = 0
   except IOError:
-    writeSaveError(status.commandWindow)
+    writeSaveError(status.commandWindow, status.settings.editorColor.errorMessage)
 
   status.changeMode(Mode.normal)
 
 proc quitCommand(status: var EditorStatus) =
   if status.countChange == 0: status.changeMode(Mode.quit)
   else:
-    writeNoWriteError(status.commandWindow)
+    writeNoWriteError(status.commandWindow, status.settings.editorColor.errorMessage)
     status.changeMode(Mode.normal)
 
 proc writeAndQuitCommand(status: var EditorStatus) =
@@ -174,7 +288,7 @@ proc writeAndQuitCommand(status: var EditorStatus) =
     saveFile(status.filename, status.buffer.toRunes, status.settings.characterEncoding)
     status.changeMode(Mode.quit)
   except IOError:
-    writeSaveError(status.commandWindow)
+    writeSaveError(status.commandWindow, status.settings.editorColor.errorMessage)
     status.changeMode(Mode.normal)
 
 proc forceQuitCommand(status: var EditorStatus) =
@@ -216,51 +330,10 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
   inc(status.countChange)
   status.changeMode(status.prevMode)
 
-proc moveLeft(commandWindow: Window, exStatus: var ExModeViewStatus) =
-  if exStatus.currentPosition > 0:
-    dec(exStatus.currentPosition)
-    if exStatus.cursorX > exStatus.prompt.len: dec(exStatus.cursorX)
-    else: dec(exStatus.startPosition)
-
-proc moveRight(exStatus: var ExModeViewStatus) =
-  if exStatus.currentPosition < exStatus.buffer.len:
-    inc(exStatus.currentPosition)
-    if exStatus.cursorX < terminalWidth() - 1: inc(exStatus.cursorX)
-    else: inc(exStatus.startPosition)
-
-proc moveTop(exStatus: var ExModeViewStatus) =
-  exStatus.cursorX = exStatus.prompt.len
-  exStatus.currentPosition = 0
-  exStatus.startPosition = 0
-
-proc moveEnd(exStatus: var ExModeViewStatus) =
-  exStatus.currentPosition = exStatus.buffer.len - 1
-  if exStatus.buffer.len > terminalWidth():
-    exStatus.startPosition = exStatus.buffer.len - terminalWidth()
-    exStatus.cursorX = terminalWidth()
-  else:
-    exStatus.startPosition = 0
-    exStatus.cursorX = exStatus.prompt.len + exStatus.buffer.len - 1
-
-proc deleteCommandBuffer(exStatus: var ExModeViewStatus) =
-  if exStatus.buffer.len > 0:
-    if exStatus.buffer.len < terminalWidth(): dec(exStatus.cursorX)
-    exStatus.buffer.delete(exStatus.currentPosition - 1, exStatus.currentPosition - 1)
-    dec(exStatus.currentPosition)
-
-proc deleteCommandBufferCurrentPosition(exStatus: var ExModeViewStatus) =
-  if exStatus.buffer.len > 0 and exStatus.currentPosition < exStatus.buffer.len:
-    exStatus.buffer.delete(exStatus.cursorX - 1, exStatus.cursorX - 1)
-    if exStatus.currentPosition > exStatus.buffer.len: dec(exStatus.currentPosition)
-
-proc insertCommandBuffer(exStatus: var ExModeViewStatus, c: Rune) =
-  exStatus.buffer.insert(c, exStatus.currentPosition)
-  inc(exStatus.currentPosition)
-  if exStatus.cursorX < terminalWidth() - 1: inc(exStatus.cursorX)
-  else: inc(exStatus.startPosition)
-
 proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
-  if isJumpCommand(status, command):
+  if command[0].len == 0:
+    status.changeMode(status.prevMode)
+  elif isJumpCommand(status, command):
     var line = ($command[0]).parseInt-1
     if line < 0: line = 0
     if line >= status.buffer.len: line = status.buffer.high
@@ -279,30 +352,42 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     shellCommand(status, command.join(" ").substr(1))
   elif isReplaceCommand(command):
     replaceBuffer(status, command[0][3 .. command[0].high])
+  elif isChangeNextBufferCommand(command):
+    changeNextBufferCommand(status)
+  elif isChangePreveBufferCommand(command):
+    changePreveBufferCommand(status)
+  elif isOpneBufferByNumber(command):
+    opneBufferByNumberCommand(status, ($command[1]).parseInt)
+  elif isChangeFirstBufferCommand(command):
+    changeFirstBufferCommand(status)
+  elif isChangeLastBufferCommand(command):
+    changeLastBufferCommand(status)
+  elif isBufferListCommand(command):
+    bufferListCommand(status)
+  elif isDeleteBufferStatusCommand(command):
+    deleteBufferStatusCommand(status, ($command[1]).parseInt)
+  elif isDeleteCurrentBufferStatusCommand(command):
+    deleteBufferStatusCommand(status, status.currentBuffer)
+  elif isTurnOffHighlightingCommand(command):
+    turnOffHighlightingCommand(status)
+  elif isTabLineSettingCommand(command):
+    tabLineSettingCommand(status, command[1])
+  elif isStatusBarSettingCommand(command):
+    statusBarSettingCommand(status, command[1])
+  elif isLineNumberSettingCommand(command):
+    lineNumberSettingCommand(status, command[1])
+  elif isAutoIndentSettingCommand(command):
+    autoIndentSettingCommand(status, command[1])
+  elif isAutoCloseParenSettingCommand(command):
+    autoCloseParenSettingCommand(status, command[1])
+  elif isTabStopSettingCommand(command):
+    tabStopSettingCommand(status, ($command[1]).parseInt)
+  elif isSyntaxSettingCommand(command):
+    syntaxSettingCommand(status, command[1])
+  elif isChangeThemeSettingCommand(command):
+    changeThemeSettingCommand(status, command[1])
   else:
     status.changeMode(status.prevMode)
-
-proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
-  status.resize(terminalHeight(), terminalWidth())
-  var exStatus = initExModeViewStatus(prompt)
-  while true:
-    writeExModeView(status.commandWindow, exStatus)
-
-    var key = getKey(status.commandWindow)
-
-    if isEnterKey(key) or isEscKey(key): break
-    elif isResizeKey(key):
-      status.resize(terminalHeight(), terminalWidth())
-      status.update
-    elif isLeftKey(key): moveLeft(status.commandWindow, exStatus)
-    elif isRightkey(key): moveRight(exStatus)
-    elif isHomeKey(key): moveTop(exStatus)
-    elif isEndKey(key): moveEnd(exStatus)
-    elif isBackspaceKey(key): deleteCommandBuffer(exStatus)
-    elif isDcKey(key): deleteCommandBufferCurrentPosition(exStatus)
-    else: insertCommandBuffer(exStatus, key)
-
-  return splitCommand($exStatus.buffer)
 
 proc exMode*(status: var EditorStatus) =
   let command = getCommand(status, ":")

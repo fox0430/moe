@@ -1,5 +1,5 @@
 import unicodeext, strformat, sequtils, system
-import ui, editorstatus, gapbuffer, highlight
+import ui, editorstatus, gapbuffer, highlight, commandview
 
 type
   SearchResult* = tuple[line: int, column: int]
@@ -8,36 +8,6 @@ proc searchBuffer*(status: var EditorStatus, keyword: seq[Rune]): SearchResult
 proc searchBufferReversely*(status: var EditorStatus, keyword: seq[Rune]): SearchResult
 
 import normalmode
-
-proc getKeyword(commandWindow: var Window, history: seq[seq[Rune]], updateCommandWindow: proc (window: var Window, keyword: seq[Rune])): seq[Rune] =
-  var keyword = ru""
-  var historyIndex = history.len
-  while true:
-    updateCommandWindow(commandWindow, keyword)
- 
-    let key = commandWindow.getkey
-    
-    if isResizeKey(key): continue
-    if isEnterKey(key): break
-    if isEscKey(key): return "".toRunes
-    if isBackspaceKey(key):
-      if keyword.len > 0: keyword.delete(keyword.high, keyword.high)
-      continue
-    if validateUtf8(key.toUTF8) != -1: continue
-    if isUpKey(key):
-      if historyIndex > 0:
-        historyIndex.dec
-        keyword = history[historyIndex]
-      continue
-    if isDownKey(key):
-      if historyIndex < history.high:
-        historyIndex.inc
-        keyword = history[historyIndex]
-      continue
- 
-    keyword &= key
- 
-  return ($keyword).toRunes
 
 proc searchLine(line: seq[Rune], keyword: seq[Rune]): int =
   result = -1
@@ -84,17 +54,15 @@ proc searchAllOccurrence*(buffer: GapBuffer[seq[Rune]], keyword: seq[Rune]): seq
       begin += position + keyword.len
 
 proc searchFirstOccurrence(status: var EditorStatus) =
-  let keyword = getKeyword(status.commandWindow, status.searchHistory, proc (window: var Window, keyword: seq[Rune]) =
-    window.erase
-    window.write(0, 0, fmt"/{$keyword}")
-    window.refresh
-  )
+  let keyword = getKeyword(status, "/")
+
   if keyword.len == 0:
     status.commandWindow.erase
     status.commandWindow.refresh
     return
 
   status.searchHistory.add(keyword)
+  status.isHighlight = true
 
   let searchResult = searchBuffer(status, keyword)
   if searchResult.line > -1:

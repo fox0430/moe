@@ -357,6 +357,10 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) =
   elif searchResult.line == -1:
     keyRight(status)
 
+proc turnOffHighlighting*(status: var EditorStatus) =
+  status.isHighlight = false
+  status.updateHighlight
+
 proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.cmdLoop == 0: status.cmdLoop = 1
   
@@ -447,6 +451,9 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('A'):
     status.currentColumn = status.buffer[status.currentLine].len
     status.changeMode(Mode.insert)
+  elif isEscKey(key):
+    let key = getKey(status.mainWindow)
+    if isEscKey(key): turnOffHighlighting(status)
   else:
     discard
 

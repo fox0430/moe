@@ -4,10 +4,10 @@
 ## moe
 
 moe is a Vim inspired command line based text editor.
+ 
+This project's goal is a very customizable, high productivity, high performance and funny animation editor.
 
-This project's goal is a funny animation editor.
-
-![moe-0](https://user-images.githubusercontent.com/15966436/54875612-a6d1fb80-4e45-11e9-8f38-963559edb96e.png)
+![moe-0](https://user-images.githubusercontent.com/15966436/55457563-4735d600-5625-11e9-9b44-fef8f2e90a69.png)
 
 ## Features
 
@@ -25,6 +25,10 @@ This project's goal is a funny animation editor.
 
 - Configuration file
 
+- Multiple file buffers
+
+- IDE like tab line
+
 - Simple file manager
 
 - Auto close paren  
@@ -33,11 +37,11 @@ This project's goal is a funny animation editor.
 
 ## Planned features
 
-- Multi-Buffer
+- Window split and tiling  
 
-- IDE like tab line
+- Configuration mode
 
-- Window split  
+- Supports Regular expression and PEG
 
 - Infinite undo/redo
 
@@ -47,7 +51,7 @@ This project's goal is a funny animation editor.
 
 - Macros
 
-- Terminal Multiplexer
+- Terminal
 
 - Git support
 
@@ -60,9 +64,14 @@ This project's goal is a funny animation editor.
 - Funny animation...
 
 ## Install
+
 ```sh
 nimble install moe
 ```
 
 ## Usage
 https://github.com/fox0430/moe/wiki  
+
+## License
+
+GNU General Public License version 3
