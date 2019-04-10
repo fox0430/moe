@@ -1,4 +1,4 @@
-import sequtils, strutils, os, terminal, strformat, deques, packages/docutils/highlite 
+import sequtils, strutils, os, terminal, strformat, deques, packages/docutils/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview, mainview
 
 type
@@ -26,6 +26,9 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
     replaceWord.add(command[i])
   
   return (searhWord: searchWord, replaceWord: replaceWord)
+
+proc isChangeThemeSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru "theme"
 
 proc isTabLineSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"tab"
@@ -98,6 +101,14 @@ proc isShellCommand(command: seq[seq[Rune]]): bool =
 
 proc isReplaceCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
+
+proc changeThemeSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"dark": status.settings.editorColorTheme = ColorTheme.dark
+  elif command == ru"light": status.settings.editorColorTheme = ColorTheme.light
+
+  changeTheme(status)
+  status.resize(terminalHeight(), terminalWidth())
+  status.changeMode(status.prevMode)
 
 proc tabLineSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.tabLine.useTab = true
@@ -372,6 +383,8 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     tabStopSettingCommand(status, ($command[1]).parseInt)
   elif isSyntaxSettingCommand(command):
     syntaxSettingCommand(status, command[1])
+  elif isChangeThemeSettingCommand(command):
+    changeThemeSettingCommand(status, command[1])
   else:
     status.changeMode(status.prevMode)
 
