@@ -188,7 +188,7 @@ proc changeMode*(status: var EditorStatus, mode: Mode) =
 proc changeTheme*(status: var EditorStatus) =
   if status.settings.editorColorTheme == ColorTheme.dark:
     status.settings.editorColor.editor = Colorpair.brightWhiteDefauLt
-    status.settings.editorColor.lineNum = Colorpair.brightWhiteDefault
+    status.settings.editorColor.lineNum = Colorpair.grayDefault
     status.settings.editorColor.currentLineNum = Colorpair.pinkDefault
     status.settings.editorColor.statusBar = Colorpair.blackPink
     status.settings.editorColor.statusBarMode = Colorpair.blackWhite
@@ -216,18 +216,24 @@ proc writeStatusBarNormalModeInfo(status: var EditorStatus) =
   if status.settings.statusBar.filename: status.statusWindow.append(if status.filename.len > 0: status.filename else: ru"No name", color)
   if status.countChange > 0 and status.settings.statusBar.chanedMark: status.statusWindow.append(ru" [+]", color)
 
+  var modeNameLen = 0
+  if status.mode == Mode.ex: modeNameLen = 2
+  elif status.mode == Mode.normal or status.mode == Mode.insert or status.mode == Mode.visual or status.mode == Mode.replace: modeNameLen = 6
+  status.statusWindow.append(ru " ".repeat(terminalWidth() - modeNameLen), color)
+
   let
     line = if status.settings.statusBar.line: fmt"{status.currentLine+1}/{status.buffer.len}" else: ""
     column = if status.settings.statusBar.column: fmt"{status.currentColumn + 1}/{status.buffer[status.currentLine].len}" else: ""
     encoding = if status.settings.statusBar.characterEncoding: $status.settings.characterEncoding else: ""
     language = if status.language == SourceLanguage.langNone: "Plain" else: sourceLanguageToStr[status.language]
     info = fmt"{line} {column} {encoding} {language} "
-  status.statusWindow.write(0, terminalWidth()-info.len, info, color)
+  status.statusWindow.write(0, terminalWidth() - info.len, info, color)
 
 proc writeStatusBarFilerModeInfo(status: var EditorStatus) =
   let color = status.settings.editorColor.statusBar
   if status.settings.statusBar.directory: status.statusWindow.append(ru" ", color)
   status.statusWindow.append(getCurrentDir().toRunes, color)
+  status.statusWindow.append(ru " ".repeat(terminalWidth() - 5), color)
 
 proc writeStatusBar*(status: var EditorStatus) =
   status.statusWindow.erase
