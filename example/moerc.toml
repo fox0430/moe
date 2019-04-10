@@ -1,4 +1,5 @@
 [Standard]
+theme = dark
 number = true 
 statusBar = true
 tabLine = true
