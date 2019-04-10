@@ -27,6 +27,7 @@ proc main() =
 
   var status = initEditorStatus()
   status.settings = parseSettingsFile(getConfigDir() / "moe" / "moerc.toml")
+  changeTheme(status)
 
   if parsedList.filename != "":
     let filename = parsedList.filename
@@ -53,7 +54,7 @@ proc main() =
     status.bufStatus[0].buffer = newFile()
 
   if status.mode != filer:
-    status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, if status.settings.syntax: status.bufStatus[0].language else: SourceLanguage.langNone)
+    status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, if status.settings.syntax: status.bufStatus[0].language else: SourceLanguage.langNone, status.settings.editorColor.editor)
     let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
     let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     status.bufStatus[0].view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)

@@ -1,4 +1,4 @@
-import sequtils, strutils, os, terminal, strformat, deques, packages/docutils/highlite 
+import sequtils, strutils, os, terminal, strformat, deques, packages/docutils/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview, mainview
 
 type
@@ -26,6 +26,9 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
     replaceWord.add(command[i])
   
   return (searhWord: searchWord, replaceWord: replaceWord)
+
+proc isChangeThemeSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru "theme"
 
 proc isTabLineSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"tab"
@@ -99,6 +102,15 @@ proc isShellCommand(command: seq[seq[Rune]]): bool =
 proc isReplaceCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
 
+proc changeThemeSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"dark": status.settings.editorColorTheme = ColorTheme.dark
+  elif command == ru"light": status.settings.editorColorTheme = ColorTheme.light
+  elif command == ru"vivid": status.settings.editorColorTheme = ColorTheme.vivid
+
+  changeTheme(status)
+  status.resize(terminalHeight(), terminalWidth())
+  status.changeMode(status.prevMode)
+
 proc tabLineSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.tabLine.useTab = true
   elif command == ru"off": status.settings.tabLine.useTab = false
@@ -111,7 +123,7 @@ proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   elif command == ru"off": status.settings.syntax = false
 
   let sourceLang = if status.settings.syntax: status.language else: SourceLanguage.langNone
-  status.highlight = initHighlight($status.buffer, sourceLang)
+  status.highlight = initHighlight($status.buffer, sourceLang, status.settings.editorColor.editor)
 
   status.changeMode(status.prevMode)
 
@@ -165,7 +177,7 @@ proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
     status.bufStatus.add(BufferStatus(filename: ru""))
     status.bufStatus[0].buffer = newFile()
     let sourceLang = if status.settings.syntax: status.bufStatus[0].language else: SourceLanguage.langNone
-    status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, sourceLang)
+    status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, sourceLang, status.settings.editorColor.editor)
     let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
     let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     status.bufStatus[0].view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
@@ -217,7 +229,7 @@ proc jumpCommand(status: var EditorStatus, line: int) =
 
 proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
   if status.countChange != 0:
-    writeNoWriteError(status.commandWindow)
+    writeNoWriteError(status.commandWindow, status.settings.editorColor.errorMessage)
     status.changeMode(Mode.normal)
     return
 
@@ -241,7 +253,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
     let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[status.bufStatus.high].buffer.len) - 2 else: 0
     let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     let sourceLang = if status.settings.syntax: status.bufStatus[status.bufStatus.high].language else: SourceLanguage.langNone
-    status.bufStatus[status.bufStatus.high].highlight = initHighlight($status.bufStatus[status.bufStatus.high].buffer, sourceLang)
+    status.bufStatus[status.bufStatus.high].highlight = initHighlight($status.bufStatus[status.bufStatus.high].buffer, sourceLang, status.settings.editorColor.editor)
     status.updateHighlight
     status.bufStatus[status.bufStatus.high].view = initEditorView(status.bufStatus[status.bufStatus.high].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
 
@@ -251,7 +263,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   if filename.len == 0:
     status.commandWindow.erase
-    status.commandWindow.write(0, 0, "Error: No file name", ColorPair.redDefault)
+    status.commandWindow.write(0, 0, "Error: No file name", status.settings.editorColor.errorMessage)
     status.commandWindow.refresh
     status.changeMode(Mode.normal)
     return
@@ -261,14 +273,14 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
     status.filename = filename
     status.countChange = 0
   except IOError:
-    writeSaveError(status.commandWindow)
+    writeSaveError(status.commandWindow, status.settings.editorColor.errorMessage)
 
   status.changeMode(Mode.normal)
 
 proc quitCommand(status: var EditorStatus) =
   if status.countChange == 0: status.changeMode(Mode.quit)
   else:
-    writeNoWriteError(status.commandWindow)
+    writeNoWriteError(status.commandWindow, status.settings.editorColor.errorMessage)
     status.changeMode(Mode.normal)
 
 proc writeAndQuitCommand(status: var EditorStatus) =
@@ -276,7 +288,7 @@ proc writeAndQuitCommand(status: var EditorStatus) =
     saveFile(status.filename, status.buffer.toRunes, status.settings.characterEncoding)
     status.changeMode(Mode.quit)
   except IOError:
-    writeSaveError(status.commandWindow)
+    writeSaveError(status.commandWindow, status.settings.editorColor.errorMessage)
     status.changeMode(Mode.normal)
 
 proc forceQuitCommand(status: var EditorStatus) =
@@ -372,6 +384,8 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     tabStopSettingCommand(status, ($command[1]).parseInt)
   elif isSyntaxSettingCommand(command):
     syntaxSettingCommand(status, command[1])
+  elif isChangeThemeSettingCommand(command):
+    changeThemeSettingCommand(status, command[1])
   else:
     status.changeMode(status.prevMode)
 

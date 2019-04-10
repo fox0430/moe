@@ -25,6 +25,8 @@ type TabBarSettings* = object
   currentTabColor*: Colorpair
 
 type EditorSettings* = object
+  editorColorTheme*: ColorTheme
+  editorColor*: EditorColor
   statusBar*: StatusBarSettings
   tabLine*: TabBarSettings
   lineNumber*: bool
@@ -84,6 +86,19 @@ type EditorStatus* = object
 
 import tab
 
+proc initEditorColorTheme(): EditorColor =
+ ## vivid theme
+ result.editor = Colorpair.brightWhiteDefauLt
+ result.lineNum = Colorpair.grayDefault
+ result.currentLineNum = Colorpair.pinkDefault
+ result.statusBar = Colorpair.blackPink
+ result.statusBarMode = Colorpair.blackWhite
+ result.tab = Colorpair.brightWhiteDefault
+ result.currentTab = Colorpair.blackPink
+ result.commandBar = Colorpair.brightWhiteDefault
+ result.errorMessage = Colorpair.redDefault
+
+
 proc initRegisters(): Registers =
   result.yankedLines = @[]
   result.yankedStr = @[]
@@ -105,6 +120,7 @@ proc initStatusBarSettings*(): StatusBarSettings =
   result.directory = true
 
 proc initEditorSettings*(): EditorSettings =
+  result.editorColorTheme = ColorTheme.vivid
   result.statusBar = initStatusBarSettings()
   result.tabLine = initTabBarSettings()
   result.lineNumber = true
@@ -130,7 +146,7 @@ proc initEditorStatus*(): EditorStatus =
 
   if result.settings.tabLine.useTab: result.tabWindow = initWindow(1, terminalWidth(), 0, 0)
   result.mainWindow = initWindow(terminalHeight() - useTab - 1, terminalWidth(), useTab, 0)
-  if result.settings.statusBar.useBar: result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0, ui.ColorPair.blackPink)
+  if result.settings.statusBar.useBar: result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0, result.settings.editorColor.statusBar)
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight() - 1, 0)
 
 proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
@@ -170,13 +186,51 @@ proc changeMode*(status: var EditorStatus, mode: Mode) =
   status.prevMode = status.mode
   status.mode = mode
 
+proc changeTheme*(status: var EditorStatus) =
+  if status.settings.editorColorTheme == ColorTheme.dark:
+    status.settings.editorColor.editor = Colorpair.brightWhiteDefauLt
+    status.settings.editorColor.lineNum = Colorpair.grayDefault
+    status.settings.editorColor.currentLineNum = Colorpair.cyanDefault
+    status.settings.editorColor.statusBar = Colorpair.brightWhiteBlue
+    status.settings.editorColor.statusBarMode = Colorpair.blackWhite
+    status.settings.editorColor.tab = Colorpair.brightWhiteDefault
+    status.settings.editorColor.currentTab = Colorpair.brightWhiteBlue
+    status.settings.editorColor.commandBar = Colorpair.brightWhiteDefault
+    status.settings.editorColor.errorMessage = Colorpair.redDefault
+  elif status.settings.editorColorTheme == ColorTheme.light:
+    status.settings.editorColor.editor = Colorpair.blackDefault
+    status.settings.editorColor.lineNum = Colorpair.grayDefault
+    status.settings.editorColor.currentLineNum = Colorpair.blackDefault
+    status.settings.editorColor.statusBar = Colorpair.cyanGray
+    status.settings.editorColor.statusBarMode = Colorpair.whiteCyan
+    status.settings.editorColor.tab = Colorpair.cyanGray
+    status.settings.editorColor.currentTab = Colorpair.whiteCyan
+    status.settings.editorColor.commandBar = Colorpair.blackDefault
+    status.settings.editorColor.errorMessage = Colorpair.redDefault
+  elif status.settings.editorColorTheme == ColorTheme.vivid:
+    status.settings.editorColor.editor = Colorpair.brightWhiteDefauLt
+    status.settings.editorColor.lineNum = Colorpair.grayDefault
+    status.settings.editorColor.currentLineNum = Colorpair.pinkDefault
+    status.settings.editorColor.statusBar = Colorpair.blackPink
+    status.settings.editorColor.statusBarMode = Colorpair.blackWhite
+    status.settings.editorColor.tab = Colorpair.brightWhiteDefault
+    status.settings.editorColor.currentTab = Colorpair.blackPink
+    status.settings.editorColor.commandBar = Colorpair.brightWhiteDefault
+    status.settings.editorColor.errorMessage = Colorpair.redDefault
+
 proc executeOnExit*(settings: EditorSettings) =
   changeCursorType(settings.defaultCursor)
 
 proc writeStatusBarNormalModeInfo(status: var EditorStatus) =
-  status.statusWindow.append(ru" ", ui.ColorPair.blackPink)
-  if status.settings.statusBar.filename: status.statusWindow.append(if status.filename.len > 0: status.filename else: ru"No name", ui.ColorPair.blackPink)
-  if status.countChange > 0 and status.settings.statusBar.chanedMark: status.statusWindow.append(ru" [+]", ui.ColorPair.blackPink)
+  let color = status.settings.editorColor.statusBar
+  status.statusWindow.append(ru" ", color)
+  if status.settings.statusBar.filename: status.statusWindow.append(if status.filename.len > 0: status.filename else: ru"No name", color)
+  if status.countChange > 0 and status.settings.statusBar.chanedMark: status.statusWindow.append(ru" [+]", color)
+
+  var modeNameLen = 0
+  if status.mode == Mode.ex: modeNameLen = 2
+  elif status.mode == Mode.normal or status.mode == Mode.insert or status.mode == Mode.visual or status.mode == Mode.replace: modeNameLen = 6
+  status.statusWindow.append(ru " ".repeat(terminalWidth() - modeNameLen), color)
 
   let
     line = if status.settings.statusBar.line: fmt"{status.currentLine+1}/{status.buffer.len}" else: ""
@@ -184,33 +238,36 @@ proc writeStatusBarNormalModeInfo(status: var EditorStatus) =
     encoding = if status.settings.statusBar.characterEncoding: $status.settings.characterEncoding else: ""
     language = if status.language == SourceLanguage.langNone: "Plain" else: sourceLanguageToStr[status.language]
     info = fmt"{line} {column} {encoding} {language} "
-  status.statusWindow.write(0, terminalWidth()-info.len, info, ui.Colorpair.blackPink)
+  status.statusWindow.write(0, terminalWidth() - info.len, info, color)
 
 proc writeStatusBarFilerModeInfo(status: var EditorStatus) =
-  if status.settings.statusBar.directory: status.statusWindow.append(ru" ", ui.ColorPair.blackPink)
-  status.statusWindow.append(getCurrentDir().toRunes, ui.ColorPair.blackPink)
+  let color = status.settings.editorColor.statusBar
+  if status.settings.statusBar.directory: status.statusWindow.append(ru" ", color)
+  status.statusWindow.append(getCurrentDir().toRunes, color)
+  status.statusWindow.append(ru " ".repeat(terminalWidth() - 5), color)
 
 proc writeStatusBar*(status: var EditorStatus) =
   status.statusWindow.erase
+  let color = status.settings.editorColor.statusBarMode
 
   if status.mode == Mode.ex:
-    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" EX ", ui.ColorPair.blackWhite)
+    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" EX ", color)
     if status.prevMode == Mode.filer:
       writeStatusBarFilerModeInfo(status)
     else:
       writeStatusBarNormalModeInfo(status)
   elif status.mode == Mode.visual:
-    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" VISUAL ", ui.ColorPair.blackWhite)
+    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" VISUAL ", color)
     writeStatusBarNormalModeInfo(status)
   elif status.mode == Mode.replace:
-    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" REPLACE ", ui.ColorPair.blackWhite)
+    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" REPLACE ", color)
     writeStatusBarNormalModeInfo(status)
   elif status.mode == Mode.filer:
-    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" FILER ", ui.ColorPair.blackWhite)
+    if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" FILER ", color)
     writeStatusBarFilerModeInfo(status)
   else:
     if status.settings.statusBar.mode:
-      status.statusWindow.write(0, 0,  if status.mode == Mode.normal: ru" NORMAL " else: ru" INSERT ", ui.ColorPair.blackWhite)
+      status.statusWindow.write(0, 0,  if status.mode == Mode.normal: ru" NORMAL " else: ru" INSERT ", color)
     writeStatusBarNormalModeInfo(status)
 
   status.statusWindow.refresh
@@ -246,7 +303,7 @@ proc update*(status: var EditorStatus) =
   setCursor(false)
   if status.settings.statusBar.useBar: writeStatusBar(status)
   status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
-  status.view.update(status.mainWindow, status.settings.lineNumber, status.buffer, status.highlight, status.currentLine)
+  status.view.update(status.mainWindow, status.settings.lineNumber, status.buffer, status.highlight, status.settings.editorColor, status.currentLine)
   status.cursor.update(status.view, status.currentLine, status.currentColumn)
   status.mainWindow.write(status.cursor.y, status.view.widthOfLineNum+status.cursor.x, "")
   status.mainWindow.refresh
@@ -258,7 +315,7 @@ from searchmode import searchAllOccurrence
 
 proc updateHighlight*(status: var EditorStatus) =
 
-  status.highlight = initHighlight($status.buffer, if status.settings.syntax: status.language else: SourceLanguage.langNone)
+  status.highlight = initHighlight($status.buffer, if status.settings.syntax: status.language else: SourceLanguage.langNone, status.settings.editorColor.editor)
 
   # highlight search results
   if status.isHighlight and status.searchHistory.len > 0:
