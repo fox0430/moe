@@ -90,11 +90,11 @@ proc initEditorColorTheme(): EditorColor =
   ## dark theme
   result.editor = Colorpair.brightWhiteDefauLt
   result.lineNum = Colorpair.grayDefault
-  result.currentLineNum = Colorpair.pinkDefault
-  result.statusBar = Colorpair.blackPink
+  result.currentLineNum = Colorpair.cyanDefault
+  result.statusBar = Colorpair.brightWhiteBlue
   result.statusBarMode = Colorpair.blackWhite
-  result.tab = brightWhiteDefault
-  result.currentTab = blackPink
+  result.tab = Colorpair.brightWhiteDefault
+  result.currentTab = Colorpair.brightWhiteBlue
   result.commandBar = Colorpair.brightWhiteDefault
   result.errorMessage = Colorpair.redDefault
 
@@ -189,11 +189,11 @@ proc changeTheme*(status: var EditorStatus) =
   if status.settings.editorColorTheme == ColorTheme.dark:
     status.settings.editorColor.editor = Colorpair.brightWhiteDefauLt
     status.settings.editorColor.lineNum = Colorpair.grayDefault
-    status.settings.editorColor.currentLineNum = Colorpair.pinkDefault
-    status.settings.editorColor.statusBar = Colorpair.blackPink
+    status.settings.editorColor.currentLineNum = Colorpair.cyanDefault
+    status.settings.editorColor.statusBar = Colorpair.brightWhiteBlue
     status.settings.editorColor.statusBarMode = Colorpair.blackWhite
-    status.settings.editorColor.tab = brightWhiteDefault
-    status.settings.editorColor.currentTab = blackPink
+    status.settings.editorColor.tab = Colorpair.brightWhiteDefault
+    status.settings.editorColor.currentTab = Colorpair.brightWhiteBlue
     status.settings.editorColor.commandBar = Colorpair.brightWhiteDefault
     status.settings.editorColor.errorMessage = Colorpair.redDefault
   elif status.settings.editorColorTheme == ColorTheme.light:
@@ -205,6 +205,16 @@ proc changeTheme*(status: var EditorStatus) =
     status.settings.editorColor.tab = Colorpair.cyanGray
     status.settings.editorColor.currentTab = Colorpair.whiteCyan
     status.settings.editorColor.commandBar = Colorpair.blackDefault
+    status.settings.editorColor.errorMessage = Colorpair.redDefault
+  elif status.settings.editorColorTheme == ColorTheme.vivid:
+    status.settings.editorColor.editor = Colorpair.brightWhiteDefauLt
+    status.settings.editorColor.lineNum = Colorpair.grayDefault
+    status.settings.editorColor.currentLineNum = Colorpair.pinkDefault
+    status.settings.editorColor.statusBar = Colorpair.blackPink
+    status.settings.editorColor.statusBarMode = Colorpair.blackWhite
+    status.settings.editorColor.tab = Colorpair.brightWhiteDefault
+    status.settings.editorColor.currentTab = Colorpair.blackPink
+    status.settings.editorColor.commandBar = Colorpair.brightWhiteDefault
     status.settings.editorColor.errorMessage = Colorpair.redDefault
 
 proc executeOnExit*(settings: EditorSettings) =

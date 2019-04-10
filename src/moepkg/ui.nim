@@ -25,28 +25,31 @@ type Color* = enum
   gray        = 245,
 
 type ColorPair* = enum
-  blackGreen = 1
-  blackWhite = 2
-  grayDefault = 3
-  redDefault = 4
-  greenBlack  = 5
-  brightWhiteDefault = 6
-  brightGreenDefault = 7
-  lightBlueDefault = 8
-  brightWhiteGreen = 9
-  cyanDefault = 10
-  whiteCyan = 11
-  magentaDefault = 12
-  whiteDefault = 13
-  pinkDefault = 14
-  blackPink = 15
-  defaultMagenta = 16
-  blackDefault = 17
-  cyanGray = 18
+  blackGreen            = 1
+  blackWhite            = 2
+  grayDefault           = 3
+  redDefault            = 4
+  greenBlack            = 5
+  brightWhiteDefault    = 6
+  brightGreenDefault    = 7
+  lightBlueDefault      = 8
+  brightWhiteGreen      = 9
+  cyanDefault           = 10
+  whiteCyan             = 11
+  magentaDefault        = 12
+  whiteDefault          = 13
+  pinkDefault           = 14
+  blackPink             = 15
+  defaultMagenta        = 16
+  blackDefault          = 17
+  cyanGray              = 18
+  brightWhiteBlue       = 19
+  blueDefault           = 20
 
 type ColorTheme* = enum
-  dark = 1
-  light = 2
+  dark    = 1
+  light   = 2
+  vivid   = 3
 
 type EditorColor* = object
   editor*: ColorPair
@@ -89,6 +92,8 @@ proc setCursesColor() =
   setColorPair(ColorPair.defaultMagenta, Color.default, Color.magenta)
   setColorPair(ColorPair.blackDefault, Color.black, Color.default)
   setColorPair(ColorPair.cyanGray, Color.cyan, Color.gray)
+  setColorPair(ColorPair.brightWhiteBlue, Color.brightWhite, Color.blue)
+  setColorPair(ColorPair.blueDefault, Color.blue, Color.default)
 
 proc setIbeamCursor*() =
   discard execShellCmd("printf '\\033[6 q'")
