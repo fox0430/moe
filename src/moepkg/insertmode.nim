@@ -27,7 +27,7 @@ proc insertCharacter(status: var EditorStatus, c: Rune) =
     let ch = c.toChar
     if isOpenParen(ch): insertCloseParen(status, ch)
 
-  status.view.reload(status.buffer, status.view.originalLine[0])
+  status.view[status.currentMainWindow].reload(status.buffer, status.view[status.currentMainWindow].originalLine[0])
   inc(status.countChange)
 
 proc keyBackspace(status: var EditorStatus) =
@@ -42,7 +42,7 @@ proc keyBackspace(status: var EditorStatus) =
     dec(status.currentColumn)
     status.buffer[status.currentLine].delete(status.currentColumn)
 
-  status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
+  status.view[status.currentMainWindow].reload(status.buffer, min(status.view[status.currentMainWindow].originalLine[0], status.buffer.high))
   inc(status.countChange)
 
 proc insertIndent(status: var EditorStatus) =
@@ -73,7 +73,7 @@ proc keyEnter*(status: var EditorStatus) =
     status.currentColumn = 0
     status.expandedColumn = 0
 
-  status.view.reload(status.buffer, status.view.originalLine[0])
+  status.view[status.currentMainWindow].reload(status.buffer, status.view[status.currentMainWindow].originalLine[0])
   inc(status.countChange)
 
 proc insertTab(status: var EditorStatus) =
@@ -90,7 +90,7 @@ proc insertMode*(status: var EditorStatus) =
 
     status.update
 
-    let key = getKey(status.mainWindow)
+    let key = getKey(status.mainWindow[status.currentMainWindow])
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())

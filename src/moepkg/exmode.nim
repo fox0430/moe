@@ -150,7 +150,7 @@ proc lineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
 
   let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
   let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-  status.view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+  status.view[status.currentMainWindow] = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
 
   status.changeMode(status.prevMode)
 
@@ -160,7 +160,7 @@ proc statusBarSettingCommand(status: var EditorStatus, command: seq[Rune]) =
 
   let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
   let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-  status.view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+  status.view[status.currentMainWindow] = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
 
   status.changeMode(status.prevMode)
 
@@ -180,7 +180,7 @@ proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
     status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, sourceLang, status.settings.editorColor.editor)
     let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
     let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-    status.bufStatus[0].view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+    status.view[0] = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
     changeCurrentBuffer(status, 0)
   elif index == status.currentBuffer:
     dec(status.currentBuffer)
@@ -194,7 +194,7 @@ proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
 
 proc bufferListCommand(status: var EditorStatus) =
   bufferListView(status)
-  discard getKey(status.mainWindow)
+  discard getKey(status.mainWindow[status.currentMainWindow])
   status.changeMode(Mode.normal)
 
 proc changeFirstBufferCommand(status: var EditorStatus) =
@@ -255,7 +255,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
     let sourceLang = if status.settings.syntax: status.bufStatus[status.bufStatus.high].language else: SourceLanguage.langNone
     status.bufStatus[status.bufStatus.high].highlight = initHighlight($status.bufStatus[status.bufStatus.high].buffer, sourceLang, status.settings.editorColor.editor)
     status.updateHighlight
-    status.bufStatus[status.bufStatus.high].view = initEditorView(status.bufStatus[status.bufStatus.high].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+    status.view[status.bufStatus.high] = initEditorView(status.bufStatus[status.bufStatus.high].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
 
     changeCurrentBuffer(status, status.bufStatus.high)
     status.changeMode(Mode.normal)

@@ -12,7 +12,7 @@ proc replaceMode*(status: var EditorStatus) =
 
     status.update
 
-    let key = getkey(status.mainWindow)
+    let key = getkey(status.mainWindow[status.currentMainWindow])
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
     elif isEscKey(key):

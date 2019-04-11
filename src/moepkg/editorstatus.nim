@@ -43,7 +43,6 @@ type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
   highlight*: Highlight
   language*: SourceLanguage
-  view*: EditorView
   cursor*: CursorPosition
   isHighlight*: bool
   filename*: seq[Rune]
@@ -63,7 +62,7 @@ type EditorStatus* = object
   highlight*: Highlight
   language*: SourceLanguage
   searchHistory*: seq[seq[Rune]]
-  view*: EditorView
+  view*: seq[EditorView]
   cursor*: CursorPosition
   isHighlight*: bool
   registers*: Registers
@@ -79,7 +78,8 @@ type EditorStatus* = object
   cmdLoop*: int
   countChange*: int
   debugMode: int
-  mainWindow*: Window
+  currentMainWindow*: int
+  mainWindow*: seq[Window]
   statusWindow*: Window
   commandWindow*: Window
   tabWindow*: Window
@@ -145,7 +145,7 @@ proc initEditorStatus*(): EditorStatus =
   let useTab = if result.settings.tabLine.useTab: 1 else: 0
 
   if result.settings.tabLine.useTab: result.tabWindow = initWindow(1, terminalWidth(), 0, 0)
-  result.mainWindow = initWindow(terminalHeight() - useTab - 1, terminalWidth(), useTab, 0)
+  result.mainWindow.add(initWindow(terminalHeight() - useTab - 1, terminalWidth(), useTab, 0))
   if result.settings.statusBar.useBar: result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0, result.settings.editorColor.statusBar)
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight() - 1, 0)
 
@@ -154,7 +154,6 @@ proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
     status.bufStatus[status.currentBuffer].buffer = status.buffer
     status.bufStatus[status.currentBuffer].highlight = status.highlight
     status.bufStatus[status.currentBuffer].language = status.language
-    status.bufStatus[status.currentBuffer].view = status. view
     status.bufStatus[status.currentBuffer].cursor = status.cursor
     status.bufStatus[status.currentBuffer].filename = status.filename
     status.bufStatus[status.currentBuffer].openDir = status.openDir
@@ -169,7 +168,6 @@ proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
   status.buffer = status.bufStatus[bufferIndex].buffer
   status.highlight = status.bufStatus[bufferIndex].highlight
   status.language = status.bufStatus[bufferIndex].language
-  status.view = status.bufStatus[bufferIndex].view
   status.cursor = status.bufStatus[bufferIndex].cursor
   status.filename = status.bufStatus[bufferIndex].filename
   status.openDir = status.bufStatus[bufferIndex].openDir
@@ -275,17 +273,18 @@ proc writeStatusBar*(status: var EditorStatus) =
 proc resize*(status: var EditorStatus, height, width: int) =
   let
     adjustedHeight = max(height, 4)
-    adjustedWidth = max(width, status.view.widthOfLineNum + 4)
+    adjustedWidth = max(width, status.view[status.currentMainWindow].widthOfLineNum + 4)
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useTab = if status.mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
 
-  resize(status.mainWindow, adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, useTab, 0)
+  resize(status.mainWindow[status.currentMainWindow], adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, useTab, 0)
   if status.settings.statusBar.useBar: resize(status.statusWindow, 1, adjustedWidth, adjustedHeight - 2, 0)
   if status.mode != Mode.filer and  status.settings.tabLine.useTab: resize(status.tabWindow, 1, terminalWidth(), 0, 0)
   
   if status.mode != Mode.filer:
-    status.view.resize(status.buffer, adjustedHeight - useStatusBar - 1, adjustedWidth-status.view.widthOfLineNum - 1, status.view.widthOfLineNum)
-    status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
+    let widthOfLineNum  = status.view[status.currentMainWindow].widthOfLineNum
+    status.view[status.currentMainWindow].resize(status.buffer, adjustedHeight - useStatusBar - 1, adjustedWidth - widthOfLineNum - 1, widthOfLineNum)
+    status.view[status.currentMainWindow].seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
   if status.settings.statusBar.useBar: writeStatusBar(status)
 
@@ -295,18 +294,18 @@ proc resize*(status: var EditorStatus, height, width: int) =
   if status.mode != Mode.filer and status.settings.tabLine.useTab: writeTabLine(status)
 
 proc erase*(status: var EditorStatus) =
-  erase(status.mainWindow)
+  erase(status.mainWindow[status.currentMainWindow])
   erase(status.statusWindow)
   erase(status.commandWindow)
 
 proc update*(status: var EditorStatus) =
   setCursor(false)
   if status.settings.statusBar.useBar: writeStatusBar(status)
-  status.view.seekCursor(status.buffer, status.currentLine, status.currentColumn)
-  status.view.update(status.mainWindow, status.settings.lineNumber, status.buffer, status.highlight, status.settings.editorColor, status.currentLine)
-  status.cursor.update(status.view, status.currentLine, status.currentColumn)
-  status.mainWindow.write(status.cursor.y, status.view.widthOfLineNum+status.cursor.x, "")
-  status.mainWindow.refresh
+  status.view[status.currentMainWindow].seekCursor(status.buffer, status.currentLine, status.currentColumn)
+  status.view[status.currentMainWindow].update(status.mainWindow[status.currentMainWindow], status.settings.lineNumber, status.buffer, status.highlight, status.settings.editorColor, status.currentLine)
+  status.cursor.update(status.view[status.currentMainWindow], status.currentLine, status.currentColumn)
+  status.mainWindow[status.currentMainWindow].write(status.cursor.y, status.view[status.currentMainWindow].widthOfLineNum+status.cursor.x, "")
+  status.mainWindow[status.currentMainWindow].refresh
   setCursor(true)
 
 proc updateHighlight*(status: var EditorStatus)
