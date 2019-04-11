@@ -3,7 +3,7 @@
 
 ## moe
 
-**m** oe is an **o** ptimalan **e**ditor.  
+**m**oe is an **o**ptimal **e**ditor.  
 
 A command line based editor inspired by vi/vim written in Nim.  
  
