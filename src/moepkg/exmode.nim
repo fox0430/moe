@@ -255,7 +255,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
     let sourceLang = if status.settings.syntax: status.bufStatus[status.bufStatus.high].language else: SourceLanguage.langNone
     status.bufStatus[status.bufStatus.high].highlight = initHighlight($status.bufStatus[status.bufStatus.high].buffer, sourceLang, status.settings.editorColor.editor)
     status.updateHighlight
-    status.view[status.bufStatus.high] = initEditorView(status.bufStatus[status.bufStatus.high].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+    status.view.add(initEditorView(status.bufStatus[status.bufStatus.high].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen))
 
     changeCurrentBuffer(status, status.bufStatus.high)
     status.changeMode(Mode.normal)
