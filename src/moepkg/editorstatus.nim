@@ -279,7 +279,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
       useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
       useTab = if status.mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
 
-    resize(status.mainWindow[i], adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, useTab, 0)
+    resize(status.mainWindow[i], adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, useTab, int(terminalWidth() / status.mainWindow.len))
     if status.settings.statusBar.useBar: resize(status.statusWindow, 1, adjustedWidth, adjustedHeight - 2, 0)
     if status.mode != Mode.filer and  status.settings.tabLine.useTab: resize(status.tabWindow, 1, terminalWidth(), 0, 0)
     
@@ -332,5 +332,5 @@ proc splitWin*(status: var EditorStatus) =
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useTab = if status.mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
   status.view.add(initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen))
-  status.mainWindow.add(initWindow(int(terminalHeight() / status.mainWindow.len) - useTab - 1, terminalWidth(), useTab, 0))
+  status.mainWindow.add(initWindow(terminalHeight() - useTab - 1, int(terminalWidth() / status.mainWindow.len), useTab, int(terminalWidth() / status.mainWindow.len)))
 
