@@ -343,11 +343,11 @@ proc moveToTopOfList(filerStatus: var FilerStatus) =
   filerStatus.viewUpdate = true
 
 proc moveToLastOfList(status: EditorStatus, filerStatus: var FilerStatus) =
-  if filerStatus.dirList.len < status.mainWindow[status.currentMainWindow].height:
+  if filerStatus.dirList.len < status.mainWindow.height:
     filerStatus.currentLine = filerStatus.dirList.high
   else:
-    filerStatus.currentLine = status.mainWindow[status.currentMainWindow].height - 1
-    filerStatus.startIndex = filerStatus.dirList.len - status.mainWindow[status.currentMainWindow].height
+    filerStatus.currentLine = status.mainWindow.height - 1
+    filerStatus.startIndex = filerStatus.dirList.len - status.mainWindow.height
   filerStatus.viewUpdate = true
 
 proc copyFile(filerStatus: var FilerStatus) =
@@ -427,9 +427,9 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
       writeFileOpenErrorMessage(status.commandWindow, path.toRunes)
 
 proc updateFilerView(status: var EditorStatus, filerStatus: var FilerStatus) =
-  status.mainWindow[status.currentMainWindow].erase
+  status.mainWindow.erase
   status.resize(terminalHeight(), terminalWidth())
-  status.mainWindow[status.currentMainWindow].writeFillerView(filerStatus.dirList, filerStatus.currentLine, filerStatus.startIndex)
+  status.mainWindow.writeFillerView(filerStatus.dirList, filerStatus.currentLine, filerStatus.startIndex)
   filerStatus.viewUpdate = false
 
 proc changeSortBy(filerStatus: var FilerStatus) =
@@ -447,9 +447,9 @@ proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
   filerStatus.startIndex = 0
   filerStatus.viewUpdate = true
   if filerStatus.dirList.len == 0:
-    status.mainWindow[status.currentMainWindow].erase
-    status.mainWindow[status.currentMainWindow].write(0, 0, "not found")
-    status.mainWindow[status.currentMainWindow].refresh
+    status.mainWindow.erase
+    status.mainWindow.write(0, 0, "not found")
+    status.mainWindow.refresh
     discard getKey(status.commandWindow)
     status.commandWindow.erase
     status.commandWindow.refresh
@@ -466,7 +466,7 @@ proc filerMode*(status: var EditorStatus) =
     if filerStatus.viewUpdate:
       updateFilerView(status, filerStatus)
 
-    let key = getKey(status.mainWindow[status.currentMainWindow])
+    let key = getKey(status.mainWindow)
 
     if key == ord(':'):
       status.changeMode(Mode.ex)
@@ -485,7 +485,7 @@ proc filerMode*(status: var EditorStatus) =
     elif key == ord('D'):
       deleteFile(status, filerStatus)
     elif key == ord('i'):
-      writeFileDetailView(status.mainWindow[status.currentMainWindow], filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex][1])
+      writeFileDetailView(status.mainWindow, filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex][1])
       filerStatus.viewUpdate = true
     elif (key == 'j' or isDownKey(key)) and filerStatus.currentLine + filerStatus.startIndex < filerStatus.dirList.high:
       keyDown(filerStatus)

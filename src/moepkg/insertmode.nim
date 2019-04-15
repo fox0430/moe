@@ -90,7 +90,7 @@ proc insertMode*(status: var EditorStatus) =
 
     status.update
 
-    let key = getKey(status.mainWindow[status.currentMainWindow])
+    let key = getKey(status.mainWindow)
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())

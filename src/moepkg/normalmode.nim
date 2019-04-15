@@ -94,8 +94,8 @@ proc jumpLine*(status: var EditorStatus, destination: int) =
   status.expandedColumn = 0
   if not (status.view[status.currentMainWindow].originalLine[0] <= destination and (status.view[status.currentMainWindow].originalLine[status.view[status.currentMainWindow].height - 1] == -1 or destination <= status.view[status.currentMainWindow].originalLine[status.view[status.currentMainWindow].height - 1])):
     var startOfPrintedLines = 0
-    if destination > status.buffer.len - 1 - status.mainWindow[status.currentMainWindow].height - 1:
-      startOfPrintedLines = status.buffer.len - 1 - status.mainWindow[status.currentMainWindow].height - 1
+    if destination > status.buffer.len - 1 - status.mainWindow.height - 1:
+      startOfPrintedLines = status.buffer.len - 1 - status.mainWindow.height - 1
     else:
       startOfPrintedLines = max(destination - (currentLine - status.view[status.currentMainWindow].originalLine[0]), 0)
     status.view[status.currentMainWindow].reload(status.buffer, startOfPrintedLines)
@@ -386,7 +386,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('+'):
     moveToFirstOfNextLine(status)
   elif key == ord('g'):
-    if getKey(status.mainWindow[status.currentMainWindow]) == ord('g'): moveToFirstLine(status)
+    if getKey(status.mainWindow) == ord('g'): moveToFirstLine(status)
   elif key == ord('G'):
     moveToLastLine(status)
   elif isPageUpkey(key):
@@ -408,11 +408,11 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     status.updateHighlight
     status.changeMode(Mode.insert)
   elif key == ord('d'):
-    if getKey(status.mainWindow[status.currentMainWindow]) == ord('d'):
+    if getKey(status.mainWindow) == ord('d'):
       yankLines(status, status.currentLine, min(status.currentLine+status.cmdLoop-1, status.buffer.high))
       for i in 0 ..< min(status.cmdLoop, status.buffer.len-status.currentLine): deleteLine(status, status.currentLine)
   elif key == ord('y'):
-    if getkey(status.mainWindow[status.currentMainWindow]) == ord('y'): yankLines(status, status.currentLine, min(status.currentLine+status.cmdLoop-1, status.buffer.high))
+    if getkey(status.mainWindow) == ord('y'): yankLines(status, status.currentLine, min(status.currentLine+status.cmdLoop-1, status.buffer.high))
   elif key == ord('p'):
     pasteAfterCursor(status)
   elif key == ord('P'):
@@ -426,7 +426,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('r'):
     if status.cmdLoop > status.buffer[status.currentLine].len - status.currentColumn: return
 
-    let ch = getKey(status.mainWindow[status.currentMainWindow])
+    let ch = getKey(status.mainWindow)
     for i in 0 ..< status.cmdLoop:
       if i > 0:
         inc(status.currentColumn)
@@ -452,7 +452,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     status.currentColumn = status.buffer[status.currentLine].len
     status.changeMode(Mode.insert)
   elif isEscKey(key):
-    let key = getKey(status.mainWindow[status.currentMainWindow])
+    let key = getKey(status.mainWindow)
     if isEscKey(key): turnOffHighlighting(status)
   else:
     discard
@@ -471,7 +471,7 @@ proc normalMode*(status: var EditorStatus) =
 
     status.update
 
-    let key = getKey(status.mainWindow[status.currentMainWindow])
+    let key = getKey(status.mainWindow)
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())

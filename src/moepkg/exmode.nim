@@ -194,7 +194,7 @@ proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
 
 proc bufferListCommand(status: var EditorStatus) =
   bufferListView(status)
-  discard getKey(status.mainWindow[status.currentMainWindow])
+  discard getKey(status.mainWindow)
   status.changeMode(Mode.normal)
 
 proc changeFirstBufferCommand(status: var EditorStatus) =
@@ -386,6 +386,9 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     syntaxSettingCommand(status, command[1])
   elif isChangeThemeSettingCommand(command):
     changeThemeSettingCommand(status, command[1])
+  elif command[0] == ru"vs":
+   splitWin(status)
+   status.changeMode(Mode.normal)
   else:
     status.changeMode(status.prevMode)
 
