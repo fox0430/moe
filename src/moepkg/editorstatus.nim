@@ -271,27 +271,29 @@ proc writeStatusBar*(status: var EditorStatus) =
   status.statusWindow.refresh
 
 proc resize*(status: var EditorStatus, height, width: int) =
-  let
-    adjustedHeight = max(height, 4)
-    adjustedWidth = max(width, status.view[status.currentMainWindow].widthOfLineNum + 4)
-    useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-    useTab = if status.mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
 
-  resize(status.mainWindow[status.currentMainWindow], adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, useTab, 0)
-  if status.settings.statusBar.useBar: resize(status.statusWindow, 1, adjustedWidth, adjustedHeight - 2, 0)
-  if status.mode != Mode.filer and  status.settings.tabLine.useTab: resize(status.tabWindow, 1, terminalWidth(), 0, 0)
-  
-  if status.mode != Mode.filer:
-    let widthOfLineNum  = status.view[status.currentMainWindow].widthOfLineNum
-    status.view[status.currentMainWindow].resize(status.buffer, adjustedHeight - useStatusBar - 1, adjustedWidth - widthOfLineNum - 1, widthOfLineNum)
-    status.view[status.currentMainWindow].seekCursor(status.buffer, status.currentLine, status.currentColumn)
+  for i in 0 ..< status.view.len:
+    let
+      adjustedHeight = max(int(height / status.view.len), 4)
+      adjustedWidth = max(width, status.view[i].widthOfLineNum + 4)
+      useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+      useTab = if status.mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
 
-  if status.settings.statusBar.useBar: writeStatusBar(status)
+    resize(status.mainWindow[i], adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, useTab, 0)
+    if status.settings.statusBar.useBar: resize(status.statusWindow, 1, adjustedWidth, adjustedHeight - 2, 0)
+    if status.mode != Mode.filer and  status.settings.tabLine.useTab: resize(status.tabWindow, 1, terminalWidth(), 0, 0)
+    
+    if status.mode != Mode.filer:
+      let widthOfLineNum  = status.view[status.currentMainWindow].widthOfLineNum
+      status.view[i].resize(status.buffer, adjustedHeight - useStatusBar - 1, adjustedWidth - widthOfLineNum - 1, widthOfLineNum)
+      status.view[i].seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
-  resize(status.commandWindow, 1, adjustedWidth, adjustedHeight - 1, 0)
-  status.commandWindow.refresh
+    if status.settings.statusBar.useBar: writeStatusBar(status)
 
-  if status.mode != Mode.filer and status.settings.tabLine.useTab: writeTabLine(status)
+    resize(status.commandWindow, 1, adjustedWidth, adjustedHeight - 1, 0)
+    status.commandWindow.refresh
+
+    if status.mode != Mode.filer and status.settings.tabLine.useTab: writeTabLine(status)
 
 proc erase*(status: var EditorStatus) =
   erase(status.mainWindow[status.currentMainWindow])
