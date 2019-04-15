@@ -1,5 +1,5 @@
 import packages/docutils/highlite, strutils, terminal, os, strformat
-import gapbuffer, editorview, ui, cursor, unicodeext, highlight
+import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils
 
 type Mode* = enum
   normal, insert, visual, replace, ex, filer, search, quit
@@ -272,10 +272,10 @@ proc writeStatusBar*(status: var EditorStatus) =
 
 proc resize*(status: var EditorStatus, height, width: int) =
 
-  for i in 0 ..< status.view.len:
+  for i in 0 ..< status.mainWindow.len:
     let
-      adjustedHeight = max(int(height / status.view.len), 4)
-      adjustedWidth = max(width, status.view[i].widthOfLineNum + 4)
+      adjustedHeight = max(height, 4)
+      adjustedWidth = max(int(width / status.view.len), status.view[i].widthOfLineNum + 4)
       useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
       useTab = if status.mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
 
@@ -325,3 +325,12 @@ proc updateHighlight*(status: var EditorStatus) =
     for pos in allOccurrence:
       let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column+keyword.high, color: defaultMagenta)
       status.highlight = status.highlight.overwrite(colorSegment)
+
+proc splitWin*(status: var EditorStatus) =
+  let
+    numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
+    useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+    useTab = if status.mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
+  status.view.add(initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen))
+  status.mainWindow.add(initWindow(int(terminalHeight() / status.mainWindow.len) - useTab - 1, terminalWidth(), useTab, 0))
+

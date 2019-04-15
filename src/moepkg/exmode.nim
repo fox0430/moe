@@ -386,6 +386,9 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     syntaxSettingCommand(status, command[1])
   elif isChangeThemeSettingCommand(command):
     changeThemeSettingCommand(status, command[1])
+  elif command[0] == ru"vs":
+    splitWin(status)
+    status.changeMode(Mode.normal)
   else:
     status.changeMode(status.prevMode)
 
