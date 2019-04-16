@@ -216,6 +216,9 @@ proc changeTheme*(status: var EditorStatus) =
     status.settings.editorColor.commandBar = Colorpair.brightWhiteDefault
     status.settings.editorColor.errorMessage = Colorpair.redDefault
 
+proc changeCurrentWin*(status:var EditorStatus, index: int) =
+  if index < status.mainWindow.high and index > 0: status.currentMainWindow = index
+
 proc executeOnExit*(settings: EditorSettings) =
   changeCursorType(settings.defaultCursor)
 
@@ -228,6 +231,7 @@ proc writeStatusBarNormalModeInfo(status: var EditorStatus) =
   var modeNameLen = 0
   if status.mode == Mode.ex: modeNameLen = 2
   elif status.mode == Mode.normal or status.mode == Mode.insert or status.mode == Mode.visual or status.mode == Mode.replace: modeNameLen = 6
+  if terminalWidth() - modeNameLen < 0: return
   status.statusWindow.append(ru " ".repeat(terminalWidth() - modeNameLen), color)
 
   let
@@ -272,10 +276,16 @@ proc writeStatusBar*(status: var EditorStatus) =
 
 proc resize*(status: var EditorStatus, height, width: int) =
 
+  let totalViewWidth = (proc (views: seq[EditorView]): int =
+    result = 0
+    for i in 0 ..< views.len:
+      result = result + views[i].widthOfLineNum + 4
+  )
+
   for i in 0 ..< status.mainWindow.len:
     let
       adjustedHeight = max(height, 4)
-      adjustedWidth = max(int(width / status.view.len), status.view[i].widthOfLineNum + 4)
+      adjustedWidth = max(int(width / status.view.len), totalViewWidth(status.view))
       useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
       useTab = if status.mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
 
@@ -284,16 +294,16 @@ proc resize*(status: var EditorStatus, height, width: int) =
     if status.mode != Mode.filer and  status.settings.tabLine.useTab: resize(status.tabWindow, 1, terminalWidth(), 0, 0)
     
     if status.mode != Mode.filer:
-      let widthOfLineNum  = status.view[status.currentMainWindow].widthOfLineNum
+      let widthOfLineNum = status.view[status.currentMainWindow].widthOfLineNum
       status.view[i].resize(status.buffer, adjustedHeight - useStatusBar - 1, adjustedWidth - widthOfLineNum - 1, widthOfLineNum)
       status.view[i].seekCursor(status.buffer, status.currentLine, status.currentColumn)
 
     if status.settings.statusBar.useBar: writeStatusBar(status)
 
     resize(status.commandWindow, 1, adjustedWidth, adjustedHeight - 1, 0)
-    status.commandWindow.refresh
+  status.commandWindow.refresh
 
-    if status.mode != Mode.filer and status.settings.tabLine.useTab: writeTabLine(status)
+  if status.mode != Mode.filer and status.settings.tabLine.useTab: writeTabLine(status)
 
 proc erase*(status: var EditorStatus) =
   erase(status.mainWindow[status.currentMainWindow])
@@ -331,6 +341,6 @@ proc splitWin*(status: var EditorStatus) =
     numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useTab = if status.mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
-  status.view.add(initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen))
+  status.view.add(initEditorView(status.bufStatus[status.currentBuffer].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen))
   status.mainWindow.add(initWindow(terminalHeight() - useTab - 1, int(terminalWidth() / status.mainWindow.len), useTab, int(terminalWidth() / status.mainWindow.len)))
 
