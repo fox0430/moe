@@ -315,32 +315,23 @@ proc update*(status: var EditorStatus) =
 
   for i in 0 ..< status.mainWindow.len:
     if i == status.currentMainWindow:
-      status.view[status.currentMainWindow].seekCursor(status.buffer, status.currentLine, status.currentColumn)
-      status.view[status.currentMainWindow].update(status.mainWindow[status.currentMainWindow], status.settings.lineNumber, status.buffer, status.highlight, status.settings.editorColor, status.currentLine)
+      status.view[i].seekCursor(status.buffer, status.currentLine, status.currentColumn)
+      status.view[i].update(status.mainWindow[i], status.settings.lineNumber, status.buffer, status.highlight, status.settings.editorColor, status.currentLine)
       status.cursor.update(status.view[i], status.currentLine, status.currentColumn)
       status.mainWindow[i].write(status.cursor.y, status.view[i].widthOfLineNum + status.cursor.x, "")
-      status.mainWindow[i].refresh
     else:
       status.view[i].seekCursor(status.bufStatus[i].buffer, status.bufStatus[i].currentLine, status.bufStatus[i].currentColumn)
       status.view[i].update(status.mainWindow[i], status.settings.lineNumber, status.bufStatus[i].buffer, status.bufStatus[i].highlight, status.settings.editorColor, status.bufStatus[i].currentLine)
       status.cursor.update(status.view[i], status.bufStatus[i].currentLine, status.bufStatus[i].currentColumn)
       status.mainWindow[i].write(status.bufStatus[i].cursor.y, status.view[i].widthOfLineNum + status.bufStatus[i].cursor.x, "")
-      status.mainWindow[i].refresh
-  setCursor(true)
+    status.mainWindow[i].refresh
 
-proc update*(status: var EditorStatus, index: int) =
-  setCursor(false)
-  if status.settings.statusBar.useBar: writeStatusBar(status)
-  status.view[index].seekCursor(status.bufStatus[index].buffer, status.bufStatus[index].currentLine, status.bufStatus[index].currentColumn)
-  status.view[index].update(status.mainWindow[index], status.settings.lineNumber, status.bufStatus[index].buffer, status.bufStatus[index].highlight, status.settings.editorColor, status.bufStatus[index].currentLine)
-  status.cursor.update(status.view[index], status.bufStatus[index].currentLine, status.bufStatus[index].currentColumn)
-  status.mainWindow[index].write(status.bufStatus[index].cursor.y, status.view[index].widthOfLineNum + status.bufStatus[index].cursor.x, "")
-  status.mainWindow[index].refresh
   setCursor(true)
 
 proc clearWin*(status: var EditorStatus) =
   for i in 0 ..< status.mainWindow.len:
     status.mainWindow[i].erase
+    status.mainWindow[i].refresh
 
 proc updateHighlight*(status: var EditorStatus)
 

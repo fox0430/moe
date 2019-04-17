@@ -389,6 +389,12 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
   elif command[0] == ru"vs":
     splitWin(status)
     status.changeMode(Mode.normal)
+  elif command[0] == ru"k":
+    moveWin(status)
+    changeCurrentBuffer(status, status.currentMainWindow)
+    status.changeMode(Mode.normal)
+  elif command[0] == ru"c":
+    clearWin(status)
   else:
     status.changeMode(status.prevMode)
 
