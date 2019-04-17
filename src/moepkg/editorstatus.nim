@@ -1,6 +1,5 @@
 import packages/docutils/highlite, strutils, terminal, os, strformat
-import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils
-
+import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils
 type Mode* = enum
   normal, insert, visual, replace, ex, filer, search, quit
 
@@ -289,8 +288,8 @@ proc resize*(status: var EditorStatus, height, width: int) =
       useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
       useTab = if status.mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
 
-    resize(status.mainWindow[i], adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, useTab, int(terminalWidth() / status.mainWindow.len))
-    if status.settings.statusBar.useBar: resize(status.statusWindow, 1, adjustedWidth, adjustedHeight - 2, 0)
+    resize(status.mainWindow[i], adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, useTab, i * int(terminalWidth() / status.mainWindow.len))
+    if status.settings.statusBar.useBar: resize(status.statusWindow, 1, terminalWidth(), adjustedHeight - 2, 0)
     if status.mode != Mode.filer and  status.settings.tabLine.useTab: resize(status.tabWindow, 1, terminalWidth(), 0, 0)
     
     if status.mode != Mode.filer:
@@ -300,7 +299,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
 
     if status.settings.statusBar.useBar: writeStatusBar(status)
 
-    resize(status.commandWindow, 1, adjustedWidth, adjustedHeight - 1, 0)
+    resize(status.commandWindow, 1, terminalWidth(), adjustedHeight - 1, 0)
   status.commandWindow.refresh
 
   if status.mode != Mode.filer and status.settings.tabLine.useTab: writeTabLine(status)
@@ -313,12 +312,35 @@ proc erase*(status: var EditorStatus) =
 proc update*(status: var EditorStatus) =
   setCursor(false)
   if status.settings.statusBar.useBar: writeStatusBar(status)
-  status.view[status.currentMainWindow].seekCursor(status.buffer, status.currentLine, status.currentColumn)
-  status.view[status.currentMainWindow].update(status.mainWindow[status.currentMainWindow], status.settings.lineNumber, status.buffer, status.highlight, status.settings.editorColor, status.currentLine)
-  status.cursor.update(status.view[status.currentMainWindow], status.currentLine, status.currentColumn)
-  status.mainWindow[status.currentMainWindow].write(status.cursor.y, status.view[status.currentMainWindow].widthOfLineNum+status.cursor.x, "")
-  status.mainWindow[status.currentMainWindow].refresh
+
+  for i in 0 ..< status.mainWindow.len:
+    if i == status.currentMainWindow:
+      status.view[status.currentMainWindow].seekCursor(status.buffer, status.currentLine, status.currentColumn)
+      status.view[status.currentMainWindow].update(status.mainWindow[status.currentMainWindow], status.settings.lineNumber, status.buffer, status.highlight, status.settings.editorColor, status.currentLine)
+      status.cursor.update(status.view[i], status.currentLine, status.currentColumn)
+      status.mainWindow[i].write(status.cursor.y, status.view[i].widthOfLineNum + status.cursor.x, "")
+      status.mainWindow[i].refresh
+    else:
+      status.view[i].seekCursor(status.bufStatus[i].buffer, status.bufStatus[i].currentLine, status.bufStatus[i].currentColumn)
+      status.view[i].update(status.mainWindow[i], status.settings.lineNumber, status.bufStatus[i].buffer, status.bufStatus[i].highlight, status.settings.editorColor, status.bufStatus[i].currentLine)
+      status.cursor.update(status.view[i], status.bufStatus[i].currentLine, status.bufStatus[i].currentColumn)
+      status.mainWindow[i].write(status.bufStatus[i].cursor.y, status.view[i].widthOfLineNum + status.bufStatus[i].cursor.x, "")
+      status.mainWindow[i].refresh
   setCursor(true)
+
+proc update*(status: var EditorStatus, index: int) =
+  setCursor(false)
+  if status.settings.statusBar.useBar: writeStatusBar(status)
+  status.view[index].seekCursor(status.bufStatus[index].buffer, status.bufStatus[index].currentLine, status.bufStatus[index].currentColumn)
+  status.view[index].update(status.mainWindow[index], status.settings.lineNumber, status.bufStatus[index].buffer, status.bufStatus[index].highlight, status.settings.editorColor, status.bufStatus[index].currentLine)
+  status.cursor.update(status.view[index], status.bufStatus[index].currentLine, status.bufStatus[index].currentColumn)
+  status.mainWindow[index].write(status.bufStatus[index].cursor.y, status.view[index].widthOfLineNum + status.bufStatus[index].cursor.x, "")
+  status.mainWindow[index].refresh
+  setCursor(true)
+
+proc clearWin*(status: var EditorStatus) =
+  for i in 0 ..< status.mainWindow.len:
+    status.mainWindow[i].erase
 
 proc updateHighlight*(status: var EditorStatus)
 
@@ -336,11 +358,19 @@ proc updateHighlight*(status: var EditorStatus) =
       let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column+keyword.high, color: defaultMagenta)
       status.highlight = status.highlight.overwrite(colorSegment)
 
+proc moveWin*(status: var EditorStatus) = status.currentMainWindow = if status.currentMainWindow == 0: 1 else: 0
+
 proc splitWin*(status: var EditorStatus) =
   let
     numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useTab = if status.mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
-  status.view.add(initEditorView(status.bufStatus[status.currentBuffer].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen))
+
+  status.bufStatus.add(BufferStatus(filename: ru""))
+  status.bufStatus[status.bufStatus.high].language = detectLanguage("")
+  status.bufStatus[status.bufStatus.high].buffer = newFile()
+
+  status.view.add(initEditorView(status.bufStatus[status.bufStatus.high].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen))
   status.mainWindow.add(initWindow(terminalHeight() - useTab - 1, int(terminalWidth() / status.mainWindow.len), useTab, int(terminalWidth() / status.mainWindow.len)))
 
+  status.update
