@@ -318,14 +318,12 @@ proc update*(status: var EditorStatus) =
       status.view[i].seekCursor(status.buffer, status.currentLine, status.currentColumn)
       status.view[i].update(status.mainWindow[i], status.settings.lineNumber, status.buffer, status.highlight, status.settings.editorColor, status.currentLine)
       status.cursor.update(status.view[i], status.currentLine, status.currentColumn)
-      status.mainWindow[i].write(status.cursor.y, status.view[i].widthOfLineNum + status.cursor.x, "")
     else:
       status.view[i].seekCursor(status.bufStatus[i].buffer, status.bufStatus[i].currentLine, status.bufStatus[i].currentColumn)
       status.view[i].update(status.mainWindow[i], status.settings.lineNumber, status.bufStatus[i].buffer, status.bufStatus[i].highlight, status.settings.editorColor, status.bufStatus[i].currentLine)
-      status.cursor.update(status.view[i], status.bufStatus[i].currentLine, status.bufStatus[i].currentColumn)
-      status.mainWindow[i].write(status.bufStatus[i].cursor.y, status.view[i].widthOfLineNum + status.bufStatus[i].cursor.x, "")
     status.mainWindow[i].refresh
 
+  status.mainWindow[status.currentMainWindow].moveCursor(status.cursor.y, status.view[status.currentBuffer].widthOfLineNum + status.cursor.x)
   setCursor(true)
 
 proc clearWin*(status: var EditorStatus) =
@@ -349,7 +347,9 @@ proc updateHighlight*(status: var EditorStatus) =
       let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column+keyword.high, color: defaultMagenta)
       status.highlight = status.highlight.overwrite(colorSegment)
 
-proc moveWin*(status: var EditorStatus) = status.currentMainWindow = if status.currentMainWindow == 0: 1 else: 0
+proc moveWin*(status: var EditorStatus) =
+  status.currentMainWindow = if status.currentMainWindow == 0: 1 else: 0
+  changeCurrentBuffer(status, status.currentMainWindow)
 
 proc splitWin*(status: var EditorStatus) =
   let
