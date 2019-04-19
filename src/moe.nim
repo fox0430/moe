@@ -64,7 +64,7 @@ proc main() =
     changeCurrentBuffer(status, 0)
 
   while true:
-    case status.bufStatus[0].mode:
+    case status.bufStatus[status.currentBuffer].mode:
     of Mode.normal:
       normalMode(status)
     of Mode.insert:

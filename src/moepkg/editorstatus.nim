@@ -115,7 +115,7 @@ proc initEditorSettings*(): EditorSettings =
   result.normalModeCursor = CursorType.blockMode
   result.insertModeCursor = CursorType.ibeamMode
 
-proc initBufferStatus(): BufferStatus =
+proc initBufferStatus*(): BufferStatus =
   result.language = SourceLanguage.langNone
   result.isHighlight = true
   result.mode = Mode.normal
@@ -136,7 +136,9 @@ proc initEditorStatus*(): EditorStatus =
   if result.settings.statusBar.useBar: result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0, result.settings.editorColor.statusBar)
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight() - 1, 0)
 
-proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) = discard
+proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
+  if bufferIndex < 0 and status.bufStatus.high < bufferIndex: return
+  status.currentBuffer = bufferIndex
 
 proc changeMode*(status: var EditorStatus, mode: Mode) =
   status.bufStatus[status.currentBuffer].prevMode = status.bufStatus[status.currentBuffer].mode
@@ -307,8 +309,9 @@ proc splitWindow*(status: var EditorStatus) =
   status.update
 
 proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
-  if index < 0 and status.mainWindow.high < index: return
+  if index < 0 or status.mainWindow.high < index: return
   status.currentMainWindow = index
+  changeCurrentBuffer(status, status.displayBuffer[index])
 
 proc updateHighlight*(status: var EditorStatus)
 
