@@ -106,7 +106,7 @@ proc isReplaceCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
 
 proc splitWindowCommand(status: var EditorStatus) =
-  splitWin(status)
+  splitWindow(status)
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
 proc changeThemeSettingCommand(status: var EditorStatus, command: seq[Rune]) =

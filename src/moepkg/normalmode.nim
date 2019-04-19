@@ -28,7 +28,7 @@ proc keyLeft*(status: var EditorStatus) =
   status.bufStatus[status.currentBuffer].expandedColumn = status.bufStatus[status.currentBuffer].currentColumn
 
 proc keyRight*(status: var EditorStatus) =
-  if status.bufStatus[status.currentBuffer].currentColumn+1 >= status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentMainWindow].currentLine].len + (if status.bufStatus[status.currentBuffer].mode == Mode.insert: 1 else: 0): return
+  if status.bufStatus[status.currentBuffer].currentColumn+1 >= status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].len + (if status.bufStatus[status.currentBuffer].mode == Mode.insert: 1 else: 0): return
 
   inc(status.bufStatus[status.currentBuffer].currentColumn)
   status.bufStatus[status.currentBuffer].expandedColumn = status.bufStatus[status.currentBuffer].currentColumn
@@ -358,8 +358,12 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) =
     keyRight(status)
 
 proc turnOffHighlighting*(status: var EditorStatus) =
-  status.bufStatus[status.currentMainWindow].isHighlight = false
+  status.bufStatus[status.currentBuffer].isHighlight = false
   status.updateHighlight
+
+proc moveNextWindow(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow + 1)
+
+proc movePrevWindow(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow - 1)
 
 proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.bufStatus[status.currentBuffer].cmdLoop == 0: status.bufStatus[status.currentBuffer].cmdLoop = 1
@@ -451,6 +455,10 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('A'):
     status.bufStatus[status.currentBuffer].currentColumn = status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].len
     status.changeMode(Mode.insert)
+  elif key == ord('L'):
+    moveNextWindow(status)
+  elif key == ord('H'):
+    movePrevWindow(status)
   elif isEscKey(key):
     let key = getKey(status.mainWindow[status.currentMainWindow])
     if isEscKey(key): turnOffHighlighting(status)
