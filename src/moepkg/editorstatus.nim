@@ -279,10 +279,11 @@ proc update*(status: var EditorStatus) =
   if status.settings.statusBar.useBar: writeStatusBar(status)
 
   for i in 0 ..< status.mainWindow.len:
-    let bufIndex = status.displayBuffer[i]
-    if i == status.currentMainWindow:
-      status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
-    status.bufStatus[bufIndex].view.update(status.mainWindow[i], status.settings.lineNumber, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, status.settings.editorColor, status.bufStatus[bufIndex].currentLine)
+    let
+      bufIndex = status.displayBuffer[i]
+      isCurrentMainWin = if i == status.currentMainWindow: true else: false
+    if isCurrentMainWin: status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
+    status.bufStatus[bufIndex].view.update(status.mainWindow[i], status.settings.lineNumber, isCurrentMainWin, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, status.settings.editorColor, status.bufStatus[bufIndex].currentLine)
 
     if bufIndex == status.currentMainWindow: status.bufStatus[bufIndex].cursor.update(status.bufStatus[bufIndex].view, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
@@ -296,16 +297,19 @@ proc updateHighlight*(status: var EditorStatus)
 from searchmode import searchAllOccurrence
 
 proc updateHighlight*(status: var EditorStatus) =
+  let
+    currentBuf = status.currentBuffer
+    syntax = status.settings.syntax
 
-  status.bufStatus[status.currentBuffer].highlight = initHighlight($status.bufStatus[status.currentBuffer].buffer, if status.settings.syntax: status.bufStatus[status.currentBuffer].language else: SourceLanguage.langNone, status.settings.editorColor.editor)
+  status.bufStatus[currentBuf].highlight = initHighlight($status.bufStatus[currentBuf].buffer, if syntax: status.bufStatus[currentBuf].language else: SourceLanguage.langNone, status.settings.editorColor.editor)
 
   # highlight search results
   if status.bufStatus[status.currentMainWindow].isHighlight and status.searchHistory.len > 0:
     let keyword = status.searchHistory[^1]
-    let allOccurrence = searchAllOccurrence(status.bufStatus[status.currentBuffer].buffer, keyword)
+    let allOccurrence = searchAllOccurrence(status.bufStatus[currentBuf].buffer, keyword)
     for pos in allOccurrence:
       let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column+keyword.high, color: defaultMagenta)
-      status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
+      status.bufStatus[currentBuf].highlight = status.bufStatus[currentBuf].highlight.overwrite(colorSegment)
 
 proc moveWin*(status: var EditorStatus) =
   status.currentMainWindow = if status.currentMainWindow == 0: 1 else: 0

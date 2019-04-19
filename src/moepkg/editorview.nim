@@ -176,7 +176,7 @@ proc write(view: EditorView, win: var Window, y, x: int, str: seq[Rune], color: 
   const tab = "    "
   win.write(y, x, ($str).replace("\t", tab), color, false)
 
-proc writeAllLines*(view: var EditorView, win: var Window, lineNumber: bool, buffer: GapBuffer[seq[Rune]], highlight: Highlight, editorColor: EditorColor, currentLine: int) =
+proc writeAllLines*(view: var EditorView, win: var Window, lineNumber, currentWin: bool, buffer: GapBuffer[seq[Rune]], highlight: Highlight, editorColor: EditorColor, currentLine: int) =
   win.erase
   view.widthOfLineNum = if lineNumber: buffer.len.numberOfDigits+1 else: 0
 
@@ -189,7 +189,7 @@ proc writeAllLines*(view: var EditorView, win: var Window, lineNumber: bool, buf
 
     let isCurrentLine = view.originalLine[y] == currentLine
     if lineNumber and view.start[y] == 0:
-      view.writeLineNum(win, y, view.originalLine[y], if isCurrentLine: editorColor.currentLineNum else: editorColor.lineNum)
+      view.writeLineNum(win, y, view.originalLine[y], if isCurrentLine and currentWin: editorColor.currentLineNum else: editorColor.lineNum)
 
     var x = view.widthOfLineNum
     if view.length[y] == 0:
@@ -217,10 +217,10 @@ proc writeAllLines*(view: var EditorView, win: var Window, lineNumber: bool, buf
 
   win.refresh
 
-proc update*(view: var EditorView, win: var Window, lineNumber: bool, buffer: GapBuffer[seq[Rune]], highlight: Highlight, editorColor: EditorColor, currentLine: int) =
+proc update*(view: var EditorView, win: var Window, lineNumber, currentWin: bool, buffer: GapBuffer[seq[Rune]], highlight: Highlight, editorColor: EditorColor, currentLine: int) =
   let widthOfLineNum = buffer.len.intToStr.len+1
   if widthOfLineNum != view.widthOfLineNum: view.resize(buffer, view.height, view.width+view.widthOfLineNum-widthOfLineNum, widthOfLineNum)
-  view.writeAllLines(win, lineNumber, buffer, highlight, editorColor, currentLine)
+  view.writeAllLines(win, lineNumber, currentWin, buffer, highlight, editorColor, currentLine)
   view.updated = false
 
 proc seekCursor*(view: var EditorView, buffer: GapBuffer[seq[Rune]], currentLine, currentColumn: int) =
