@@ -84,7 +84,6 @@ proc initEditorColorTheme(): EditorColor =
  result.commandBar = Colorpair.brightWhiteDefault
  result.errorMessage = Colorpair.redDefault
 
-
 proc initRegisters(): Registers =
   result.yankedLines = @[]
   result.yankedStr = @[]
@@ -237,31 +236,35 @@ proc writeStatusBar*(status: var EditorStatus) =
 
 proc resize*(status: var EditorStatus, height, width: int) =
 
-  let totalViewWidth = (proc (bufStatus: seq[BufferStatus]): int =
+  let totalViewWidth = (proc (status: EditorStatus): int =
     result = 0
-    for i in 0 ..< bufStatus.len:
-      result = result + bufStatus[i].view.widthOfLineNum + 4
+    for i in 0 ..< status.mainWindow.len:
+      result = result + status.bufStatus[status.displayBuffer[i]].view.widthOfLineNum + 4
   )
+  let 
+    adjustedHeight = max(height, 4)
+    useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+    useTab = if status.bufStatus[status.currentBuffer].mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
+    adjustedWidth = max(int(width / status.mainWindow.len), totalViewWidth(status))
 
   for i in 0 ..< status.mainWindow.len:
     let
-      adjustedHeight = max(height, 4)
-      adjustedWidth = max(int(width / status.mainWindow.len), totalViewWidth(status.bufStatus))
-      useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-      useTab = if status.bufStatus[status.currentBuffer].mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
+      bufIndex = status.displayBuffer[i]
+      beginX = i * int(terminalWidth() / status.mainWindow.len)
 
-    resize(status.mainWindow[i], adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, useTab, i * int(terminalWidth() / status.mainWindow.len))
+    status.mainWindow[i].resize(adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, useTab, beginX)
+
     if status.settings.statusBar.useBar: resize(status.statusWindow, 1, terminalWidth(), adjustedHeight - 2, 0)
     if status.bufStatus[status.currentBuffer].mode != Mode.filer and  status.settings.tabLine.useTab: resize(status.tabWindow, 1, terminalWidth(), 0, 0)
     
     if status.bufStatus[status.currentBuffer].mode != Mode.filer:
-      let widthOfLineNum = status.bufStatus[i].view.widthOfLineNum
-      status.bufStatus[i].view.resize(status.bufStatus[i].buffer, adjustedHeight - useStatusBar - 1, adjustedWidth - widthOfLineNum - 1, widthOfLineNum)
-      status.bufStatus[i].view.seekCursor(status.bufStatus[i].buffer, status.bufStatus[i].currentLine, status.bufStatus[i].currentColumn)
+      let widthOfLineNum = status.bufStatus[bufIndex].view.widthOfLineNum
+      status.bufStatus[bufIndex].view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight - useStatusBar - 1, adjustedWidth - widthOfLineNum - 1, widthOfLineNum)
+      status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
     if status.settings.statusBar.useBar: writeStatusBar(status)
 
-    resize(status.commandWindow, 1, terminalWidth(), adjustedHeight - 1, 0)
+  resize(status.commandWindow, 1, terminalWidth(), adjustedHeight - 1, 0)
   status.commandWindow.refresh
 
   if status.bufStatus[status.currentBuffer].mode != Mode.filer and status.settings.tabLine.useTab: writeTabLine(status)
@@ -276,22 +279,17 @@ proc update*(status: var EditorStatus) =
   if status.settings.statusBar.useBar: writeStatusBar(status)
 
   for i in 0 ..< status.mainWindow.len:
+    let bufIndex = status.displayBuffer[i]
     if i == status.currentMainWindow:
-      status.bufStatus[i].view.seekCursor(status.bufStatus[i].buffer, status.bufStatus[i].currentLine, status.bufStatus[i].currentColumn)
-      status.bufStatus[i].view.update(status.mainWindow[i], status.settings.lineNumber, status.bufStatus[i].buffer, status.bufStatus[i].highlight, status.settings.editorColor, status.bufStatus[i].currentLine)
-      status.bufStatus[i].cursor.update(status.bufStatus[i].view, status.bufStatus[i].currentLine, status.bufStatus[i].currentColumn)
-    else:
-      status.bufStatus[i].view.seekCursor(status.bufStatus[i].buffer, status.bufStatus[i].currentLine, status.bufStatus[i].currentColumn)
-      status.bufStatus[i].view.update(status.mainWindow[i], status.settings.lineNumber, status.bufStatus[i].buffer, status.bufStatus[i].highlight, status.settings.editorColor, status.bufStatus[i].currentLine)
+      status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
+    status.bufStatus[bufIndex].view.update(status.mainWindow[i], status.settings.lineNumber, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, status.settings.editorColor, status.bufStatus[bufIndex].currentLine)
+
+    if bufIndex == status.currentMainWindow: status.bufStatus[bufIndex].cursor.update(status.bufStatus[bufIndex].view, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
+
     status.mainWindow[i].refresh
 
   status.mainWindow[status.currentMainWindow].moveCursor(status.bufStatus[status.currentBuffer].cursor.y, status.bufStatus[status.currentBuffer].view.widthOfLineNum + status.bufStatus[status.currentBuffer].cursor.x)
   setCursor(true)
-
-proc clearWin*(status: var EditorStatus) =
-  for i in 0 ..< status.mainWindow.len:
-    status.mainWindow[i].erase
-    status.mainWindow[i].refresh
 
 proc updateHighlight*(status: var EditorStatus)
 
@@ -319,11 +317,7 @@ proc splitWin*(status: var EditorStatus) =
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useTab = if status.bufStatus[status.currentBuffer].mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
 
-  status.bufStatus.add(BufferStatus(filename: ru""))
-  status.bufStatus[status.bufStatus.high].language = detectLanguage("")
-  status.bufStatus[status.bufStatus.high].buffer = newFile()
-
-  #status.view.add(initEditorView(status.bufStatus[status.bufStatus.high].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen))
+  status.displayBuffer.add(status.currentBuffer)
   status.mainWindow.add(initWindow(terminalHeight() - useTab - 1, int(terminalWidth() / status.mainWindow.len), useTab, int(terminalWidth() / status.mainWindow.len)))
 
   status.update
