@@ -18,12 +18,12 @@ proc searchLine(line: seq[Rune], keyword: seq[Rune]): int =
 
 proc searchBuffer(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
   result = (-1, -1)
-  let startLine = status.currentLine
-  for i in 0 ..< status.buffer.len:
+  let startLine = status.bufStatus[status.currentBuffer].currentLine
+  for i in 0 ..< status.bufStatus[status.currentBuffer].buffer.len:
     let
-      line = (startLine + i) mod status.buffer.len
-      begin = if line == startLine and i == 0: status.currentColumn else: 0
-      position = searchLine(status.buffer[line][begin ..< status.buffer[line].len], keyword)
+      line = (startLine + i) mod status.bufStatus[status.currentBuffer].buffer.len
+      begin = if line == startLine and i == 0: status.bufStatus[status.currentBuffer].currentColumn else: 0
+      position = searchLine(status.bufStatus[status.currentBuffer].buffer[line][begin ..< status.bufStatus[status.currentBuffer].buffer[line].len], keyword)
     if position > -1:  return (line, begin + position)
 
 proc searchLineReversely(line: seq[Rune], keyword: seq[Rune]): int =
@@ -35,13 +35,13 @@ proc searchLineReversely(line: seq[Rune], keyword: seq[Rune]): int =
 
 proc searchBufferReversely(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
   result = (-1, -1)
-  let startLine = status.currentLine
-  for i in 0 ..< status.buffer.len + 1:
-    var line = (startLine - i) mod status.buffer.len
-    if line < 0: line = status.buffer.len - i
+  let startLine = status.bufStatus[status.currentBuffer].currentLine
+  for i in 0 ..< status.bufStatus[status.currentBuffer].buffer.len + 1:
+    var line = (startLine - i) mod status.bufStatus[status.currentBuffer].buffer.len
+    if line < 0: line = status.bufStatus[status.currentBuffer].buffer.len - i
     let
-      endPosition = if line == startLine and i == 0: status.currentColumn else: status.buffer[line].len 
-      position = searchLineReversely(status.buffer[line][0 ..< endPosition], keyword)
+      endPosition = if line == startLine and i == 0: status.bufStatus[status.currentBuffer].currentColumn else: status.bufStatus[status.currentBuffer].buffer[line].len 
+      position = searchLineReversely(status.bufStatus[status.currentBuffer].buffer[line][0 ..< endPosition], keyword)
     if position > -1:  return (line, position)
 
 proc searchAllOccurrence*(buffer: GapBuffer[seq[Rune]], keyword: seq[Rune]): seq[SearchResult] =
@@ -62,7 +62,7 @@ proc searchFirstOccurrence(status: var EditorStatus) =
     return
 
   status.searchHistory.add(keyword)
-  status.isHighlight = true
+  status.bufStatus[status.currentMainWindow].isHighlight = true
 
   let searchResult = searchBuffer(status, keyword)
   if searchResult.line > -1:
@@ -73,4 +73,4 @@ proc searchFirstOccurrence(status: var EditorStatus) =
 proc searchMode*(status: var EditorStatus) =
   searchFirstOccurrence(status)
   status.updateHighlight
-  status.changeMode(status.prevMode)
+  status.changeMode(status.bufStatus[status.currentBuffer].prevMode)

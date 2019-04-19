@@ -5,7 +5,7 @@ proc replaceMode*(status: var EditorStatus) =
 
   var bufferChanged = false
 
-  while status.mode == Mode.replace:
+  while status.bufStatus[status.currentBuffer].mode == Mode.replace:
     if bufferChanged:
       status.updateHighlight
       bufferChanged = false

@@ -404,17 +404,17 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
         status.bufStatus[status.bufStatus.high].buffer = textAndEncoding.text.toGapBuffer
         status.settings.characterEncoding = textAndEncoding.encoding
       except IOError:
-        writeFileOpenErrorMessage(status.commandWindow, status.filename)
+        writeFileOpenErrorMessage(status.commandWindow, status.bufStatus[status.currentMainWindow].filename)
         status.bufStatus[status.bufStatus.high].buffer = newFile()
     else:
       status.bufStatus[status.bufStatus.high].buffer = newFile()
 
     changeCurrentBuffer(status, status.bufStatus.high)
 
-    let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.buffer.len) - 2 else: 0
+    let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[status.currentBuffer].buffer.len) - 2 else: 0
     let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     status.updateHighlight
-    status.view[status.currentMainWindow] = initEditorView(status.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+    status.bufStatus[status.currentBuffer].view = initEditorView(status.bufStatus[status.currentBuffer].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
 
     setCursor(true)
 
@@ -459,7 +459,7 @@ proc filerMode*(status: var EditorStatus) =
   setCursor(false)
   var filerStatus = initFilerStatus()
 
-  while status.mode == Mode.filer:
+  while status.bufStatus[status.currentBuffer].mode == Mode.filer:
     if filerStatus.dirlistUpdate:
       filerStatus = updateDirList(filerStatus)
 

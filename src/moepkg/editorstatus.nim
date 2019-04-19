@@ -41,6 +41,7 @@ type EditorSettings* = object
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
   highlight*: Highlight
+  view*: EditorView
   language*: SourceLanguage
   cursor*: CursorPosition
   isHighlight*: bool
@@ -49,34 +50,20 @@ type BufferStatus* = object
   currentLine*: int
   currentColumn*: int
   expandedColumn*: int
-  cmdLoop*: int
   countChange*: int
-  prevMode* : Mode
+  cmdLoop*: int
   mode* : Mode
+  prevMode* : Mode
 
 type EditorStatus* = object
   bufStatus*: seq[BufferStatus]
   currentBuffer*: int
-  buffer*: GapBuffer[seq[Rune]]
-  highlight*: Highlight
-  language*: SourceLanguage
   searchHistory*: seq[seq[Rune]]
-  view*: seq[EditorView]
-  cursor*: CursorPosition
-  isHighlight*: bool
   registers*: Registers
   settings*: EditorSettings
-  filename*: seq[Rune]
-  openDir: seq[Rune]
   currentDir: seq[Rune]
-  currentLine*: int
-  currentColumn*: int
-  expandedColumn*: int
-  prevMode* : Mode
-  mode* : Mode
-  cmdLoop*: int
-  countChange*: int
   debugMode: int
+  displayBuffer*: seq[int]
   currentMainWindow*: int
   mainWindow*: seq[Window]
   statusWindow*: Window
@@ -131,14 +118,17 @@ proc initEditorSettings*(): EditorSettings =
   result.normalModeCursor = CursorType.blockMode
   result.insertModeCursor = CursorType.ibeamMode
 
-proc initEditorStatus*(): EditorStatus =
-  result.currentDir = getCurrentDir().toRunes
+proc initBufferStatus*(): BufferStatus =
   result.language = SourceLanguage.langNone
-  result.registers = initRegisters()
-  result.settings = initEditorSettings()
+  result.isHighlight = true
   result.mode = Mode.normal
   result.prevMode = Mode.normal
-  result.isHighlight = true
+
+proc initEditorStatus*(): EditorStatus =
+  result.currentDir = getCurrentDir().toRunes
+  result.registers = initRegisters()
+  result.settings = initEditorSettings()
+  result.displayBuffer = @[0]
 
   let useStatusBar = if result.settings.statusBar.useBar: 1 else: 0
   let useTab = if result.settings.tabLine.useTab: 1 else: 0
@@ -148,40 +138,11 @@ proc initEditorStatus*(): EditorStatus =
   if result.settings.statusBar.useBar: result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0, result.settings.editorColor.statusBar)
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight() - 1, 0)
 
-proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
-  if status.bufStatus.len > 1 and bufferIndex < status.bufStatus.high:
-    status.bufStatus[status.currentBuffer].buffer = status.buffer
-    status.bufStatus[status.currentBuffer].highlight = status.highlight
-    status.bufStatus[status.currentBuffer].language = status.language
-    status.bufStatus[status.currentBuffer].cursor = status.cursor
-    status.bufStatus[status.currentBuffer].filename = status.filename
-    status.bufStatus[status.currentBuffer].openDir = status.openDir
-    status.bufStatus[status.currentBuffer].currentLine = status.currentLine
-    status.bufStatus[status.currentBuffer].currentColumn = status.currentColumn
-    status.bufStatus[status.currentBuffer].expandedColumn = status.expandedColumn
-    status.bufStatus[status.currentBuffer].cmdLoop = status.cmdLoop
-    status.bufStatus[status.currentBuffer].countChange = status.countChange
-    status.bufStatus[status.currentBuffer].mode = status.mode
-    status.bufStatus[status.currentBuffer].prevMode = status.mode
-
-  status.buffer = status.bufStatus[bufferIndex].buffer
-  status.highlight = status.bufStatus[bufferIndex].highlight
-  status.language = status.bufStatus[bufferIndex].language
-  status.cursor = status.bufStatus[bufferIndex].cursor
-  status.filename = status.bufStatus[bufferIndex].filename
-  status.openDir = status.bufStatus[bufferIndex].openDir
-  status.currentLine = status.bufStatus[bufferIndex].currentLine
-  status.currentColumn = status.bufStatus[bufferIndex].currentColumn
-  status.expandedColumn = status.bufStatus[bufferIndex].expandedColumn
-  status.cmdLoop = status.bufStatus[bufferIndex].cmdLoop
-  status.countChange = status.bufStatus[bufferIndex].countChange
-  status.mode = status.bufStatus[bufferIndex].mode
-  status.prevMode = status.bufStatus[bufferIndex].prevMode
-  status.currentBuffer = bufferIndex
+proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) = discard
 
 proc changeMode*(status: var EditorStatus, mode: Mode) =
-  status.prevMode = status.mode
-  status.mode = mode
+  status.bufStatus[status.currentBuffer].prevMode = status.bufStatus[status.currentBuffer].mode
+  status.bufStatus[status.currentBuffer].mode = mode
 
 proc changeTheme*(status: var EditorStatus) =
   if status.settings.editorColorTheme == ColorTheme.dark:
@@ -224,20 +185,20 @@ proc executeOnExit*(settings: EditorSettings) =
 proc writeStatusBarNormalModeInfo(status: var EditorStatus) =
   let color = status.settings.editorColor.statusBar
   status.statusWindow.append(ru" ", color)
-  if status.settings.statusBar.filename: status.statusWindow.append(if status.filename.len > 0: status.filename else: ru"No name", color)
-  if status.countChange > 0 and status.settings.statusBar.chanedMark: status.statusWindow.append(ru" [+]", color)
+  if status.settings.statusBar.filename: status.statusWindow.append(if status.bufStatus[status.currentMainWindow].filename.len > 0: status.bufStatus[status.currentMainWindow].filename else: ru"No name", color)
+  if status.bufStatus[status.currentBuffer].countChange > 0 and status.settings.statusBar.chanedMark: status.statusWindow.append(ru" [+]", color)
 
   var modeNameLen = 0
-  if status.mode == Mode.ex: modeNameLen = 2
-  elif status.mode == Mode.normal or status.mode == Mode.insert or status.mode == Mode.visual or status.mode == Mode.replace: modeNameLen = 6
+  if status.bufStatus[status.currentBuffer].mode == Mode.ex: modeNameLen = 2
+  elif status.bufStatus[status.currentBuffer].mode == Mode.normal or status.bufStatus[status.currentBuffer].mode == Mode.insert or status.bufStatus[status.currentBuffer].mode == Mode.visual or status.bufStatus[status.currentBuffer].mode == Mode.replace: modeNameLen = 6
   if terminalWidth() - modeNameLen < 0: return
   status.statusWindow.append(ru " ".repeat(terminalWidth() - modeNameLen), color)
 
   let
-    line = if status.settings.statusBar.line: fmt"{status.currentLine+1}/{status.buffer.len}" else: ""
-    column = if status.settings.statusBar.column: fmt"{status.currentColumn + 1}/{status.buffer[status.currentLine].len}" else: ""
+    line = if status.settings.statusBar.line: fmt"{status.bufStatus[status.currentBuffer].currentLine + 1}/{status.bufStatus[status.currentBuffer].buffer.len}" else: ""
+    column = if status.settings.statusBar.column: fmt"{status.bufStatus[status.currentBuffer].currentColumn + 1}/{status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].len}" else: ""
     encoding = if status.settings.statusBar.characterEncoding: $status.settings.characterEncoding else: ""
-    language = if status.language == SourceLanguage.langNone: "Plain" else: sourceLanguageToStr[status.language]
+    language = if status.bufStatus[status.currentBuffer].language == SourceLanguage.langNone: "Plain" else: sourceLanguageToStr[status.bufStatus[status.currentBuffer].language]
     info = fmt"{line} {column} {encoding} {language} "
   status.statusWindow.write(0, terminalWidth() - info.len, info, color)
 
@@ -251,58 +212,58 @@ proc writeStatusBar*(status: var EditorStatus) =
   status.statusWindow.erase
   let color = status.settings.editorColor.statusBarMode
 
-  if status.mode == Mode.ex:
+  if status.bufStatus[status.currentBuffer].mode == Mode.ex:
     if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" EX ", color)
-    if status.prevMode == Mode.filer:
+    if status.bufStatus[status.currentBuffer].prevMode == Mode.filer:
       writeStatusBarFilerModeInfo(status)
     else:
       writeStatusBarNormalModeInfo(status)
-  elif status.mode == Mode.visual:
+  elif status.bufStatus[status.currentBuffer].mode == Mode.visual:
     if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" VISUAL ", color)
     writeStatusBarNormalModeInfo(status)
-  elif status.mode == Mode.replace:
+  elif status.bufStatus[status.currentBuffer].mode == Mode.replace:
     if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" REPLACE ", color)
     writeStatusBarNormalModeInfo(status)
-  elif status.mode == Mode.filer:
+  elif status.bufStatus[status.currentBuffer].mode == Mode.filer:
     if status.settings.statusBar.mode: status.statusWindow.write(0, 0, ru" FILER ", color)
     writeStatusBarFilerModeInfo(status)
   else:
     if status.settings.statusBar.mode:
-      status.statusWindow.write(0, 0,  if status.mode == Mode.normal: ru" NORMAL " else: ru" INSERT ", color)
+      status.statusWindow.write(0, 0,  if status.bufStatus[status.currentBuffer].mode == Mode.normal: ru" NORMAL " else: ru" INSERT ", color)
     writeStatusBarNormalModeInfo(status)
 
   status.statusWindow.refresh
 
 proc resize*(status: var EditorStatus, height, width: int) =
 
-  let totalViewWidth = (proc (views: seq[EditorView]): int =
+  let totalViewWidth = (proc (bufStatus: seq[BufferStatus]): int =
     result = 0
-    for i in 0 ..< views.len:
-      result = result + views[i].widthOfLineNum + 4
+    for i in 0 ..< bufStatus.len:
+      result = result + bufStatus[i].view.widthOfLineNum + 4
   )
 
   for i in 0 ..< status.mainWindow.len:
     let
       adjustedHeight = max(height, 4)
-      adjustedWidth = max(int(width / status.view.len), totalViewWidth(status.view))
+      adjustedWidth = max(int(width / status.mainWindow.len), totalViewWidth(status.bufStatus))
       useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-      useTab = if status.mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
+      useTab = if status.bufStatus[status.currentBuffer].mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
 
     resize(status.mainWindow[i], adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, useTab, i * int(terminalWidth() / status.mainWindow.len))
     if status.settings.statusBar.useBar: resize(status.statusWindow, 1, terminalWidth(), adjustedHeight - 2, 0)
-    if status.mode != Mode.filer and  status.settings.tabLine.useTab: resize(status.tabWindow, 1, terminalWidth(), 0, 0)
+    if status.bufStatus[status.currentBuffer].mode != Mode.filer and  status.settings.tabLine.useTab: resize(status.tabWindow, 1, terminalWidth(), 0, 0)
     
-    if status.mode != Mode.filer:
-      let widthOfLineNum = status.view[status.currentMainWindow].widthOfLineNum
-      status.view[i].resize(status.buffer, adjustedHeight - useStatusBar - 1, adjustedWidth - widthOfLineNum - 1, widthOfLineNum)
-      status.view[i].seekCursor(status.buffer, status.currentLine, status.currentColumn)
+    if status.bufStatus[status.currentBuffer].mode != Mode.filer:
+      let widthOfLineNum = status.bufStatus[i].view.widthOfLineNum
+      status.bufStatus[i].view.resize(status.bufStatus[i].buffer, adjustedHeight - useStatusBar - 1, adjustedWidth - widthOfLineNum - 1, widthOfLineNum)
+      status.bufStatus[i].view.seekCursor(status.bufStatus[i].buffer, status.bufStatus[i].currentLine, status.bufStatus[i].currentColumn)
 
     if status.settings.statusBar.useBar: writeStatusBar(status)
 
     resize(status.commandWindow, 1, terminalWidth(), adjustedHeight - 1, 0)
   status.commandWindow.refresh
 
-  if status.mode != Mode.filer and status.settings.tabLine.useTab: writeTabLine(status)
+  if status.bufStatus[status.currentBuffer].mode != Mode.filer and status.settings.tabLine.useTab: writeTabLine(status)
 
 proc erase*(status: var EditorStatus) =
   erase(status.mainWindow[status.currentMainWindow])
@@ -315,15 +276,15 @@ proc update*(status: var EditorStatus) =
 
   for i in 0 ..< status.mainWindow.len:
     if i == status.currentMainWindow:
-      status.view[i].seekCursor(status.buffer, status.currentLine, status.currentColumn)
-      status.view[i].update(status.mainWindow[i], status.settings.lineNumber, status.buffer, status.highlight, status.settings.editorColor, status.currentLine)
-      status.cursor.update(status.view[i], status.currentLine, status.currentColumn)
+      status.bufStatus[i].view.seekCursor(status.bufStatus[i].buffer, status.bufStatus[i].currentLine, status.bufStatus[i].currentColumn)
+      status.bufStatus[i].view.update(status.mainWindow[i], status.settings.lineNumber, status.bufStatus[i].buffer, status.bufStatus[i].highlight, status.settings.editorColor, status.bufStatus[i].currentLine)
+      status.bufStatus[i].cursor.update(status.bufStatus[i].view, status.bufStatus[i].currentLine, status.bufStatus[i].currentColumn)
     else:
-      status.view[i].seekCursor(status.bufStatus[i].buffer, status.bufStatus[i].currentLine, status.bufStatus[i].currentColumn)
-      status.view[i].update(status.mainWindow[i], status.settings.lineNumber, status.bufStatus[i].buffer, status.bufStatus[i].highlight, status.settings.editorColor, status.bufStatus[i].currentLine)
+      status.bufStatus[i].view.seekCursor(status.bufStatus[i].buffer, status.bufStatus[i].currentLine, status.bufStatus[i].currentColumn)
+      status.bufStatus[i].view.update(status.mainWindow[i], status.settings.lineNumber, status.bufStatus[i].buffer, status.bufStatus[i].highlight, status.settings.editorColor, status.bufStatus[i].currentLine)
     status.mainWindow[i].refresh
 
-  status.mainWindow[status.currentMainWindow].moveCursor(status.cursor.y, status.view[status.currentBuffer].widthOfLineNum + status.cursor.x)
+  status.mainWindow[status.currentMainWindow].moveCursor(status.bufStatus[status.currentBuffer].cursor.y, status.bufStatus[status.currentBuffer].view.widthOfLineNum + status.bufStatus[status.currentBuffer].cursor.x)
   setCursor(true)
 
 proc clearWin*(status: var EditorStatus) =
@@ -337,15 +298,15 @@ from searchmode import searchAllOccurrence
 
 proc updateHighlight*(status: var EditorStatus) =
 
-  status.highlight = initHighlight($status.buffer, if status.settings.syntax: status.language else: SourceLanguage.langNone, status.settings.editorColor.editor)
+  status.bufStatus[status.currentBuffer].highlight = initHighlight($status.bufStatus[status.currentBuffer].buffer, if status.settings.syntax: status.bufStatus[status.currentBuffer].language else: SourceLanguage.langNone, status.settings.editorColor.editor)
 
   # highlight search results
-  if status.isHighlight and status.searchHistory.len > 0:
+  if status.bufStatus[status.currentMainWindow].isHighlight and status.searchHistory.len > 0:
     let keyword = status.searchHistory[^1]
-    let allOccurrence = searchAllOccurrence(status.buffer, keyword)
+    let allOccurrence = searchAllOccurrence(status.bufStatus[status.currentBuffer].buffer, keyword)
     for pos in allOccurrence:
       let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column+keyword.high, color: defaultMagenta)
-      status.highlight = status.highlight.overwrite(colorSegment)
+      status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
 
 proc moveWin*(status: var EditorStatus) =
   status.currentMainWindow = if status.currentMainWindow == 0: 1 else: 0
@@ -355,13 +316,13 @@ proc splitWin*(status: var EditorStatus) =
   let
     numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-    useTab = if status.mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
+    useTab = if status.bufStatus[status.currentBuffer].mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
 
   status.bufStatus.add(BufferStatus(filename: ru""))
   status.bufStatus[status.bufStatus.high].language = detectLanguage("")
   status.bufStatus[status.bufStatus.high].buffer = newFile()
 
-  status.view.add(initEditorView(status.bufStatus[status.bufStatus.high].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen))
+  #status.view.add(initEditorView(status.bufStatus[status.bufStatus.high].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen))
   status.mainWindow.add(initWindow(terminalHeight() - useTab - 1, int(terminalWidth() / status.mainWindow.len), useTab, int(terminalWidth() / status.mainWindow.len)))
 
   status.update
