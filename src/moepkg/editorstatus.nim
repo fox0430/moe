@@ -118,13 +118,14 @@ proc initEditorSettings*(): EditorSettings =
   result.normalModeCursor = CursorType.blockMode
   result.insertModeCursor = CursorType.ibeamMode
 
-proc initBufferStatus*(): BufferStatus =
+proc initBufferStatus(): BufferStatus =
   result.language = SourceLanguage.langNone
   result.isHighlight = true
   result.mode = Mode.normal
   result.prevMode = Mode.normal
 
 proc initEditorStatus*(): EditorStatus =
+  result.bufStatus = @[initBufferStatus()]
   result.currentDir = getCurrentDir().toRunes
   result.registers = initRegisters()
   result.settings = initEditorSettings()
