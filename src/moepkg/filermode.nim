@@ -396,7 +396,11 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   case kind
   of pcFile, pcLinkToFile:
     let filename = (if kind == pcFile: path else: expandsymLink(path)).toRunes
-    status.bufStatus.add(BufferStatus(filename: filename))
+    if status.bufStatus.len == 0 and status.bufStatus[0].buffer.len == 0 and status.bufStatus[0].buffer[0].len == 0:
+      status.bufStatus[0] = initBufferStatus()
+    else:
+      status.bufStatus.add(initBufferStatus())
+    status.bufStatus[status.bufStatus.high].filename = filename
     status.bufStatus[status.bufStatus.high].language = detectLanguage($filename)
     if existsFile($filename):
       try:
@@ -404,7 +408,7 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
         status.bufStatus[status.bufStatus.high].buffer = textAndEncoding.text.toGapBuffer
         status.settings.characterEncoding = textAndEncoding.encoding
       except IOError:
-        writeFileOpenErrorMessage(status.commandWindow, status.bufStatus[status.currentMainWindow].filename)
+        writeFileOpenErrorMessage(status.commandWindow, status.bufStatus[status.bufStatus.high].filename)
         status.bufStatus[status.bufStatus.high].buffer = newFile()
     else:
       status.bufStatus[status.bufStatus.high].buffer = newFile()
@@ -414,7 +418,8 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
     let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[status.currentBuffer].buffer.len) - 2 else: 0
     let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     status.updateHighlight
-    status.bufStatus[status.currentBuffer].view = initEditorView(status.bufStatus[status.currentBuffer].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+    status.bufStatus[status.bufStatus.high].view = initEditorView(status.bufStatus[status.bufStatus.high].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+    status.displayBuffer.add(status.bufStatus.high)
 
     setCursor(true)
 

@@ -126,7 +126,7 @@ proc initEditorStatus*(): EditorStatus =
   result.currentDir = getCurrentDir().toRunes
   result.registers = initRegisters()
   result.settings = initEditorSettings()
-  result.displayBuffer = @[0]
+  result.displayBuffer = @[]
 
   let useStatusBar = if result.settings.statusBar.useBar: 1 else: 0
   let useTab = if result.settings.tabLine.useTab: 1 else: 0
@@ -244,7 +244,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
 
   let totalViewWidth = (proc (status: EditorStatus): int =
     result = 0
-    for i in 0 ..< status.mainWindow.len: result = result + status.bufStatus[status.displayBuffer[i]].view.widthOfLineNum + 4
+    for i in 0 ..< status.displayBuffer.len: result = result + status.bufStatus[status.displayBuffer[i]].view.widthOfLineNum + 4
   )
   let 
     adjustedHeight = max(height, 4)
@@ -252,7 +252,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
     useTab = if status.bufStatus[status.currentBuffer].mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
     adjustedWidth = max(int(width / status.mainWindow.len), totalViewWidth(status))
 
-  for i in 0 ..< status.mainWindow.len:
+  for i in 0 ..< status.displayBuffer.len:
     let
       bufIndex = status.displayBuffer[i]
       beginX = i * int(terminalWidth() / status.mainWindow.len)
@@ -283,7 +283,7 @@ proc update*(status: var EditorStatus) =
   setCursor(false)
   if status.settings.statusBar.useBar: writeStatusBar(status)
 
-  for i in 0 ..< status.mainWindow.len:
+  for i in 0 ..< status.displayBuffer.len:
     let
       bufIndex = status.displayBuffer[i]
       isCurrentMainWin = if i == status.currentMainWindow: true else: false
