@@ -310,8 +310,10 @@ proc splitWindow*(status: var EditorStatus) =
 
 proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
   if index < 0 or status.mainWindow.high < index: return
+
   status.currentMainWindow = index
   changeCurrentBuffer(status, status.displayBuffer[index])
+  if status.bufStatus[status.currentBuffer].mode != Mode.filer and status.settings.tabLine.useTab: writeTabLine(status)
 
 proc updateHighlight*(status: var EditorStatus)
 

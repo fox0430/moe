@@ -245,6 +245,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
     status.changeMode(Mode.filer)
   else:
     status.bufStatus.add(initBufferStatus())
+    status.bufStatus[status.bufStatus.high].filename = filename
     status.bufStatus[status.bufStatus.high].language = detectLanguage($filename)
     if existsFile($filename):
       try:

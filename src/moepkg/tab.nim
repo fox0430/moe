@@ -12,14 +12,14 @@ proc writeTab(tabWin: var Window, start, tabWidth: int, filename: seq[Rune], col
 
 proc writeTabLine*(status: var EditorStatus) =
   let
-    tabWidth = calcTabWidth(status.bufStatus.len)
+    tabWidth = calcTabWidth(status.displayBuffer.len)
     defaultColor = status.settings.editorColor.tab
     currentTabColor = status.settings.editorColor.currentTab
 
   status.tabWindow.erase
 
-  for i in 0 .. status.bufStatus.high:
-    let color = if status.currentBuffer == i: currentTabColor else: defaultColor
-    writeTab(status.tabWindow, i * tabWidth, tabWidth, status.bufStatus[i].filename, color)
+  for i in 0 ..< status.displayBuffer.len:
+    let color = if status.currentMainWindow == i: currentTabColor else: defaultColor
+    status.tabWindow.writeTab(i * tabWidth, tabWidth, status.bufStatus[status.displayBuffer[i]].filename, color)
 
   status.tabWindow.refresh
