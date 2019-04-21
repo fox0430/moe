@@ -436,8 +436,8 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
 
 proc updateFilerView(status: var EditorStatus, filerStatus: var FilerStatus) =
   status.mainWindow[status.currentMainWindow].erase
-  status.resize(terminalHeight(), terminalWidth())
   status.mainWindow[status.currentMainWindow].writeFillerView(filerStatus.dirList, filerStatus.currentLine, filerStatus.startIndex)
+  status.resize(terminalHeight(), terminalWidth())
   filerStatus.viewUpdate = false
 
 proc changeSortBy(filerStatus: var FilerStatus) =
