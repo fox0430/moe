@@ -267,7 +267,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
       status.bufStatus[bufIndex].view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight - useStatusBar - 1, adjustedWidth - widthOfLineNum - 1, widthOfLineNum)
       status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
-    if status.settings.statusBar.useBar: writeStatusBar(status)
+  if status.settings.statusBar.useBar: writeStatusBar(status)
 
   resize(status.commandWindow, 1, terminalWidth(), adjustedHeight - 1, 0)
   status.commandWindow.refresh

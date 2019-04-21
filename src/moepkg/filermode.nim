@@ -396,10 +396,12 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   case kind
   of pcFile, pcLinkToFile:
     let filename = (if kind == pcFile: path else: expandsymLink(path)).toRunes
-    if status.bufStatus.len == 0 and status.bufStatus[0].buffer.len == 0 and status.bufStatus[0].buffer[0].len == 0:
-      status.bufStatus[0] = initBufferStatus()
+    if status.displayBuffer.len == 0:
+      status.bufStatus[0].filename = filename
+      status.displayBuffer.add(0)
     else:
       status.bufStatus.add(initBufferStatus())
+      status.displayBuffer[status.currentMainWindow] = status.bufStatus.high
     status.bufStatus[status.bufStatus.high].filename = filename
     status.bufStatus[status.bufStatus.high].language = detectLanguage($filename)
     if existsFile($filename):
@@ -415,11 +417,12 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
 
     changeCurrentBuffer(status, status.bufStatus.high)
 
-    let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[status.currentBuffer].buffer.len) - 2 else: 0
+    let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[status.bufStatus.high].buffer.len) - 2 else: 0
     let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     status.updateHighlight
     status.bufStatus[status.bufStatus.high].view = initEditorView(status.bufStatus[status.bufStatus.high].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
-    status.displayBuffer.add(status.bufStatus.high)
+
+    status.changeMode(Mode.normal)
 
     setCursor(true)
 

@@ -265,9 +265,9 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
     status.updateHighlight
     status.bufStatus[status.bufStatus.high].view = initEditorView(status.bufStatus[status.bufStatus.high].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
 
-  changeCurrentBuffer(status, status.bufStatus.high)
-  status.displayBuffer[status.currentMainWindow] = status.currentBuffer
-  status.changeMode(Mode.normal)
+    changeCurrentBuffer(status, status.bufStatus.high)
+    status.displayBuffer[status.currentMainWindow] = status.currentBuffer
+    status.changeMode(Mode.normal)
 
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   if filename.len == 0:
