@@ -32,39 +32,40 @@ proc main() =
   if parsedList.filename != "":
     let filename = parsedList.filename
     if existsFile(filename):
-      status.bufStatus.add(BufferStatus(filename: parsedList.filename.toRunes))
+      status.bufStatus[0].filename = parsedList.filename.toRunes
       status.bufStatus[0].language = detectLanguage(filename)
       try:
         let textAndEncoding = openFile(filename.toRunes)
         status.bufStatus[0].buffer = textAndEncoding.text.toGapBuffer
         status.settings.characterEncoding = textAndEncoding.encoding
       except IOError:
-        writeFileOpenErrorMessage(status.commandWindow, status.filename)
+        writeFileOpenErrorMessage(status.commandWindow, status.bufStatus[0].filename)
         return
     elif existsDir(filename):
       try:
         setCurrentDir(filename)
-        status.mode = filer
+        status.bufStatus[0].mode = filer
       except OSError:
         writeFileOpenErrorMessage(status.commandWindow, filename.toRunes)
         status.bufStatus.add(BufferStatus(filename: "".toRunes))
         status.bufStatus[0].buffer = newFile()
     else:
-      status.bufStatus.add(BufferStatus(filename: "".toRunes))
+      status.bufStatus[0].filename = "".toRunes
       status.bufStatus[0].buffer = newFile()
   else:
-    status.bufStatus.add(BufferStatus(filename: "".toRunes))
+    status.bufStatus[0].filename = "".toRunes
     status.bufStatus[0].buffer = newFile()
 
-  if status.mode != filer:
+  if status.bufStatus[0].mode != filer:
     status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, if status.settings.syntax: status.bufStatus[0].language else: SourceLanguage.langNone, status.settings.editorColor.editor)
     let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
     let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     status.bufStatus[0].view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+    status.displayBuffer.add(0)
     changeCurrentBuffer(status, 0)
 
   while true:
-    case status.mode:
+    case status.bufStatus[status.currentBuffer].mode:
     of Mode.normal:
       normalMode(status)
     of Mode.insert:
