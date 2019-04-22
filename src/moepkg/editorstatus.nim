@@ -242,21 +242,17 @@ proc writeStatusBar*(status: var EditorStatus) =
 import tab
 
 proc resize*(status: var EditorStatus, height, width: int) =
-
-  let totalViewWidth = (proc (status: EditorStatus): int =
-    result = 0
-    for i in 0 ..< status.displayBuffer.len: result = result + status.bufStatus[status.displayBuffer[i]].view.widthOfLineNum + 4
-  )
   let 
     adjustedHeight = max(height, 4)
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useTab = if status.bufStatus[status.currentBuffer].mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
-    adjustedWidth = max(int(width / status.mainWindow.len), totalViewWidth(status))
 
   for i in 0 ..< status.displayBuffer.len:
     let
       bufIndex = status.displayBuffer[i]
       beginX = i * int(terminalWidth() / status.mainWindow.len)
+      widthOfLineNum = status.bufStatus[bufIndex].view.widthOfLineNum
+      adjustedWidth = max(int(width / status.mainWindow.len), widthOfLineNum + 4)
 
     status.mainWindow[i].resize(adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, useTab, beginX)
 
@@ -264,7 +260,6 @@ proc resize*(status: var EditorStatus, height, width: int) =
     if status.bufStatus[status.currentBuffer].mode != Mode.filer and  status.settings.tabLine.useTab: resize(status.tabWindow, 1, terminalWidth(), 0, 0)
     
     if status.bufStatus[status.currentBuffer].mode != Mode.filer:
-      let widthOfLineNum = status.bufStatus[bufIndex].view.widthOfLineNum
       status.bufStatus[bufIndex].view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight - useStatusBar - 1, adjustedWidth - widthOfLineNum - 1, widthOfLineNum)
       status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
