@@ -29,6 +29,8 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Multiple file buffers
 
+- Split window
+
 - IDE like tab line
 
 - Simple file manager
@@ -39,7 +41,7 @@ This project's goal is a very customizable, high productivity, high performance 
 
 ## Planned features
 
-- Window split and tiling  
+- Tiling window
 
 - Configuration mode
 
