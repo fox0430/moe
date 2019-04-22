@@ -139,6 +139,7 @@ proc initEditorStatus*(): EditorStatus =
 proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
   if bufferIndex < 0 and status.bufStatus.high < bufferIndex: return
   status.currentBuffer = bufferIndex
+  status.displayBuffer[status.currentMainWindow] = status.currentBuffer
 
 proc changeMode*(status: var EditorStatus, mode: Mode) =
   status.bufStatus[status.currentBuffer].prevMode = status.bufStatus[status.currentBuffer].mode
