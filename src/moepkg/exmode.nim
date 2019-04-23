@@ -287,7 +287,11 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   status.changeMode(Mode.normal)
 
 proc quitCommand(status: var EditorStatus) =
-  if status.bufStatus[status.currentBuffer].countChange == 0: status.changeMode(Mode.quit)
+  if status.bufStatus[status.currentBuffer].countChange == 0:
+    closeWindow(status, status.currentMainWindow)
+    status.changeMode(Mode.normal)
+    if status.mainWindow.len == 0: status.changeMode(Mode.quit)
+    else: status.changeMode(Mode.normal)
   else:
     writeNoWriteError(status.commandWindow, status.settings.editorColor.errorMessage)
     status.changeMode(Mode.normal)

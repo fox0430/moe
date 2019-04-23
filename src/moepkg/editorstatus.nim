@@ -304,6 +304,14 @@ proc splitWindow*(status: var EditorStatus) =
 
   status.update
 
+proc closeWindow*(status: var EditorStatus, index: int) =
+  if index < 0 or index > status.displayBuffer.high or index > status.mainWindow.high: return
+
+  status.mainWindow.delete(index)
+  status.displayBuffer.delete(index)
+  status.currentMainWindow = if index > status.mainWindow.high: status.mainWindow.high else: index
+  status.currentBuffer = status.displayBuffer[status.currentMainWindow]
+
 proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
   if index < 0 or status.mainWindow.high < index: return
 
