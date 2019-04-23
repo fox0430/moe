@@ -305,7 +305,10 @@ proc writeAndQuitCommand(status: var EditorStatus) =
     status.changeMode(Mode.normal)
 
 proc forceQuitCommand(status: var EditorStatus) =
-  status.changeMode(Mode.quit)
+  closeWindow(status, status.currentMainWindow)
+  status.changeMode(Mode.normal)
+  if status.mainWindow.len == 0: status.changeMode(Mode.quit)
+  else: status.changeMode(Mode.normal)
 
 proc shellCommand(status: var EditorStatus, shellCommand: string) =
   saveCurrentTerminalModes()

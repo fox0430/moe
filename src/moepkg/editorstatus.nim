@@ -309,8 +309,9 @@ proc closeWindow*(status: var EditorStatus, index: int) =
 
   status.mainWindow.delete(index)
   status.displayBuffer.delete(index)
-  status.currentMainWindow = if index > status.mainWindow.high: status.mainWindow.high else: index
-  status.currentBuffer = status.displayBuffer[status.currentMainWindow]
+  if status.mainWindow.len > 0:
+    status.currentMainWindow = if index > status.mainWindow.high: status.mainWindow.high else: index
+    status.currentBuffer = status.displayBuffer[status.currentMainWindow]
 
 proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
   if index < 0 or status.mainWindow.high < index: return
