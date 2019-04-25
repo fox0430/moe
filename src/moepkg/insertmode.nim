@@ -3,24 +3,32 @@ from os import execShellCmd
 import ui, editorstatus, editorview, cursor, gapbuffer, editorview, normalmode, unicodeext, highlight
 
 proc insertCloseParen(status: var EditorStatus, c: char) =
+  let
+    currentLine = status.bufStatus[status.currentBuffer].currentLine
+    currentColumn = status.bufStatus[status.currentBuffer].currentColumn
+
   case c
   of '(':
-    status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].insert(ru')', status.bufStatus[status.currentBuffer].currentColumn)
+    status.bufStatus[status.currentBuffer].buffer[currentLine].insert(ru')', currentColumn)
   of '{':
-    status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].insert(ru'}', status.bufStatus[status.currentBuffer].currentColumn)
+    status.bufStatus[status.currentBuffer].buffer[currentLine].insert(ru'}', currentColumn)
   of '[':
-    status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].insert(ru']', status.bufStatus[status.currentBuffer].currentColumn)
+    status.bufStatus[status.currentBuffer].buffer[currentLine].insert(ru']', currentColumn)
   of '"':
-    status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].insert(ru('\"'), status.bufStatus[status.currentBuffer].currentColumn)
+    status.bufStatus[status.currentBuffer].buffer[currentLine].insert(ru('\"'), currentColumn)
   of '\'':
-    status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].insert(ru'\'', status.bufStatus[status.currentBuffer].currentColumn)
+    status.bufStatus[status.currentBuffer].buffer[currentLine].insert(ru'\'', currentColumn)
   else:
     doAssert(false, fmt"Invalid parentheses: {c}")
 
 proc isOpenParen(ch: char): bool = ch in ['(', '{', '[', '\"', '\'']
 
 proc insertCharacter(status: var EditorStatus, c: Rune) =
-  status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].insert(c, status.bufStatus[status.currentBuffer].currentColumn)
+  let
+    currentLine = status.bufStatus[status.currentBuffer].currentLine
+    currentColumn = status.bufStatus[status.currentBuffer].currentColumn
+
+  status.bufStatus[status.currentBuffer].buffer[currentLine].insert(c, currentColumn)
   inc(status.bufStatus[status.currentBuffer].currentColumn)
 
   if status.settings.autoCloseParen and canConvertToChar(c):
@@ -31,43 +39,51 @@ proc insertCharacter(status: var EditorStatus, c: Rune) =
   inc(status.bufStatus[status.currentBuffer].countChange)
 
 proc keyBackspace(status: var EditorStatus) =
+  let index = status.currentBuffer
   if status.bufStatus[status.currentBuffer].currentLine == 0 and status.bufStatus[status.currentBuffer].currentColumn == 0: return
 
-  if status.bufStatus[status.currentBuffer].currentColumn == 0:
-    status.bufStatus[status.currentBuffer].currentColumn = status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine-1].len
-    status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine-1] &= status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine]
-    status.bufStatus[status.currentBuffer].buffer.delete(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentLine+1)
-    dec(status.bufStatus[status.currentBuffer].currentLine)
+  if status.bufStatus[index].currentColumn == 0:
+    status.bufStatus[index].currentColumn = status.bufStatus[index].buffer[status.bufStatus[index].currentLine - 1].len
+    status.bufStatus[index].buffer[status.bufStatus[index].currentLine - 1] &= status.bufStatus[index].buffer[status.bufStatus[index].currentLine]
+    status.bufStatus[index].buffer.delete(status.bufStatus[index].currentLine, status.bufStatus[index].currentLine + 1)
+    dec(status.bufStatus[index].currentLine)
   else:
-    dec(status.bufStatus[status.currentBuffer].currentColumn)
-    status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].delete(status.bufStatus[status.currentBuffer].currentColumn)
+    dec(status.bufStatus[index].currentColumn)
+    status.bufStatus[index].buffer[status.bufStatus[index].currentLine].delete(status.bufStatus[index].currentColumn)
 
-  status.bufStatus[status.currentBuffer].view.reload(status.bufStatus[status.currentBuffer].buffer, min(status.bufStatus[status.currentBuffer].view.originalLine[0], status.bufStatus[status.currentBuffer].buffer.high))
-  inc(status.bufStatus[status.currentBuffer].countChange)
+  status.bufStatus[index].view.reload(status.bufStatus[index].buffer, min(status.bufStatus[index].view.originalLine[0], status.bufStatus[index].buffer.high))
+  inc(status.bufStatus[index].countChange)
 
 proc insertIndent(status: var EditorStatus) =
-  let indent = min(countRepeat(status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine], Whitespace, 0), status.bufStatus[status.currentBuffer].currentColumn)
-  status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine+1] &= repeat(' ', indent).toRunes
+  let
+    index = status.currentBuffer
+    indent = min(countRepeat(status.bufStatus[index].buffer[status.bufStatus[index].currentLine], Whitespace, 0), status.bufStatus[index].currentColumn)
+
+  status.bufStatus[index].buffer[status.bufStatus[index].currentLine+1] &= repeat(' ', indent).toRunes
 
 proc keyEnter*(status: var EditorStatus) =
-  status.bufStatus[status.currentBuffer].buffer.insert(ru"", status.bufStatus[status.currentBuffer].currentLine+1)
+  let
+    index = status.currentBuffer
+    currentLine = status.bufStatus[index].currentLine
+    currentColumn = status.bufStatus[index].currentColumn
+  status.bufStatus[index].buffer.insert(ru"", status.bufStatus[index].currentLine + 1)
   if status.settings.autoIndent:
     insertIndent(status)
 
-    var startOfCopy = max(countRepeat(status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine], Whitespace, 0), status.bufStatus[status.currentBuffer].currentColumn)
-    startOfCopy += countRepeat(status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine], Whitespace, startOfCopy)
+    var startOfCopy = max(countRepeat(status.bufStatus[index].buffer[status.bufStatus[index].currentLine], Whitespace, 0), currentColumn)
+    startOfCopy += countRepeat(status.bufStatus[index].buffer[status.bufStatus[index].currentLine], Whitespace, startOfCopy)
 
-    status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine + 1] &= status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine][startOfCopy ..< status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].len]
+    status.bufStatus[index].buffer[currentLine + 1] &= status.bufStatus[index].buffer[currentLine][startOfCopy ..< status.bufStatus[index].buffer[currentLine].len]
     let
-      first = status.bufStatus[status.currentBuffer].currentColumn
-      last = status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].high
-    if first <= last: status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].delete(first, last)
+      first = status.bufStatus[index].currentColumn
+      last = status.bufStatus[index].buffer[status.bufStatus[index].currentLine].high
+    if first <= last: status.bufStatus[index].buffer[status.bufStatus[index].currentLine].delete(first, last)
 
-    inc(status.bufStatus[status.currentBuffer].currentLine)
-    status.bufStatus[status.currentBuffer].currentColumn = countRepeat(status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine], Whitespace, 0)
+    inc(status.bufStatus[index].currentLine)
+    status.bufStatus[index].currentColumn = countRepeat(status.bufStatus[index].buffer[status.bufStatus[index].currentLine], Whitespace, 0)
   else:
-    status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine + 1] &= status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine][status.bufStatus[status.currentBuffer].currentColumn ..< status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].len]
-    status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].delete(status.bufStatus[status.currentBuffer].currentColumn, status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].high)
+    status.bufStatus[index].buffer[status.bufStatus[index].currentLine + 1] &= status.bufStatus[index].buffer[currentLine][currentColumn ..< status.bufStatus[index].buffer[currentLine].len]
+    status.bufStatus[index].buffer[status.bufStatus[index].currentLine].delete(status.bufStatus[index].currentColumn, status.bufStatus[index].buffer[status.bufStatus[index].currentLine].high)
 
     inc(status.bufStatus[status.currentBuffer].currentLine)
     status.bufStatus[status.currentBuffer].currentColumn = 0
