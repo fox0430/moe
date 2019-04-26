@@ -45,6 +45,7 @@ type BufferStatus* = object
   language*: SourceLanguage
   view*: EditorView
   cursor*: CursorPosition
+  mark*: CursorPosition
   isHighlight*: bool
   filename*: seq[Rune]
   openDir: seq[Rune]

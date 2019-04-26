@@ -362,6 +362,7 @@ proc turnOffHighlighting*(status: var EditorStatus) =
   status.updateHighlight
 
 proc normalCommand(status: var EditorStatus, key: Rune) =
+  let origCmd = status.cmdLoop
   if status.cmdLoop == 0: status.cmdLoop = 1
   
   if key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
@@ -375,6 +376,9 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('x') or isDcKey(key):
     yankString(status, min(status.cmdLoop, status.buffer[status.currentLine].len - status.currentColumn))
     for i in 0 ..< min(status.cmdLoop, status.buffer[status.currentLine].len - status.currentColumn): deleteCurrentCharacter(status)
+  elif key == ord('D'):
+    yankString(status, status.buffer[status.currentLine].len - status.currentColumn)
+    for i in 0 ..< status.buffer[status.currentLine].len - status.currentColumn: deleteCurrentCharacter(status)
   elif key == ord('^'):
     moveToFirstNonBlankOfLine(status)
   elif key == ord('0') or isHomeKey(key):
@@ -385,10 +389,20 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     moveToFirstOfPreviousLine(status)
   elif key == ord('+'):
     moveToFirstOfNextLine(status)
+  elif key == ord('m'):
+    status.bufStatus[status.currentBuffer].mark.x = status.currentColumn
+    status.bufStatus[status.currentBuffer].mark.y = status.currentLine
+  elif key == ord('\''):
+    status.currentLine = status.bufStatus[status.currentBuffer].mark.y
+    status.currentColumn = status.bufStatus[status.currentBuffer].mark.x
+    status.expandedColumn = status.currentColumn
   elif key == ord('g'):
     if getKey(status.mainWindow) == ord('g'): moveToFirstLine(status)
   elif key == ord('G'):
-    moveToLastLine(status)
+    if origCmd > 0:
+      jumpLine(status, origCmd - 1)
+    else:
+      moveToLastLine(status)
   elif isPageUpkey(key):
     for i in 0 ..< status.cmdLoop: pageUp(status)
   elif isPageDownKey(key):

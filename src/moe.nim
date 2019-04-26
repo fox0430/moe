@@ -50,7 +50,7 @@ proc main() =
         status.bufStatus.add(BufferStatus(filename: "".toRunes))
         status.bufStatus[0].buffer = newFile()
     else:
-      status.bufStatus.add(BufferStatus(filename: "".toRunes))
+      status.bufStatus.add(BufferStatus(filename: parsedList.filename.toRunes))
       status.bufStatus[0].buffer = newFile()
   else:
     status.bufStatus.add(BufferStatus(filename: "".toRunes))
