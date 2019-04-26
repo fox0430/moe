@@ -27,6 +27,15 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   
   return (searhWord: searchWord, replaceWord: replaceWord)
 
+proc isWriteAndQuitAllBufferCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"wqa"
+
+proc isForceAllBufferQuitCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"qa!"
+
+proc isAllBufferQuitCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"qa"
+
 proc isSplitWindowCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"vs"
 
@@ -310,6 +319,35 @@ proc forceQuitCommand(status: var EditorStatus) =
   if status.mainWindow.len == 0: status.changeMode(Mode.quit)
   else: status.changeMode(Mode.normal)
 
+proc allBufferQuitCommand(status: var EditorStatus) =
+  for i in 0 ..< status.bufStatus.len:
+    if status.bufStatus[i].countChange > 0:
+      writeNoWriteError(status.commandWindow, status.settings.editorColor.errorMessage)
+      status.changeMode(Mode.normal)
+      return
+
+  for i in 0 ..< status.mainWindow.len:
+    closeWindow(status, i)
+  status.changeMode(Mode.quit)
+
+proc forceAllBufferQuitCommand(status: var EditorStatus) =
+  for i in 0 ..< status.mainWindow.len:
+    closeWindow(status, i)
+  status.changeMode(Mode.quit)
+
+proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
+  for i in 0 ..< status.bufStatus.len:
+    try:
+      saveFile(status.bufStatus[i].filename, status.bufStatus[i].buffer.toRunes, status.settings.characterEncoding)
+    except IOError:
+      writeSaveError(status.commandWindow, status.settings.editorColor.errorMessage)
+      status.changeMode(Mode.normal)
+      return
+
+  for i in 0 ..< status.mainWindow.len:
+    closeWindow(status, i)
+  status.changeMode(Mode.quit)
+
 proc shellCommand(status: var EditorStatus, shellCommand: string) =
   saveCurrentTerminalModes()
   exitUi()
@@ -404,6 +442,12 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     changeThemeSettingCommand(status, command[1])
   elif isSplitWindowCommand(command):
     splitWindowCommand(status)
+  elif isAllBufferQuitCommand(command):
+    allBufferQuitCommand(status)
+  elif isForceAllBufferQuitCommand(command):
+    forceAllBufferQuitCommand(status)
+  elif isWriteAndQuitAllBufferCommand(command):
+    writeAndQuitAllBufferCommand(status)
   else:
     status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
