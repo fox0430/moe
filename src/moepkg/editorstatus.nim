@@ -299,8 +299,8 @@ proc splitWindow*(status: var EditorStatus) =
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useTab = if status.bufStatus[status.currentBuffer].mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
 
-  status.displayBuffer.add(status.currentBuffer)
-  status.mainWindow.add(initWindow(terminalHeight() - useTab - 1, int(terminalWidth() / status.mainWindow.len), useTab, int(terminalWidth() / status.mainWindow.len)))
+  status.displayBuffer.insert(status.currentBuffer, status.currentMainWindow)
+  status.mainWindow.insert(initWindow(terminalHeight() - useTab - 1, int(terminalWidth() / status.mainWindow.len), useTab, int(terminalWidth() / status.mainWindow.len)), status.currentMainWindow)
 
   status.update
 
