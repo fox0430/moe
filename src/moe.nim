@@ -50,10 +50,8 @@ proc main() =
         status.bufStatus.add(BufferStatus(filename: "".toRunes))
         status.bufStatus[0].buffer = newFile()
     else:
-      status.bufStatus[0].filename = "".toRunes
       status.bufStatus[0].buffer = newFile()
   else:
-    status.bufStatus[0].filename = "".toRunes
     status.bufStatus[0].buffer = newFile()
 
   if status.bufStatus[0].mode != filer:

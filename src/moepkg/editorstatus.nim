@@ -120,6 +120,7 @@ proc initBufferStatus*(): BufferStatus =
   result.isHighlight = true
   result.mode = Mode.normal
   result.prevMode = Mode.normal
+  result.filename = ru"new-file-name"
 
 proc initEditorStatus*(): EditorStatus =
   result.bufStatus = @[initBufferStatus()]
