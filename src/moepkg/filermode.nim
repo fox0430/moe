@@ -424,14 +424,14 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
     else:
       status.bufStatus[status.bufStatus.high].buffer = newFile()
 
+    status.changeMode(Mode.normal)
     changeCurrentBuffer(status, status.bufStatus.high)
+    status.displayBuffer[status.currentMainWindow] = status.currentBuffer
 
     let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[status.bufStatus.high].buffer.len) - 2 else: 0
     let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     status.updateHighlight
     status.bufStatus[status.bufStatus.high].view = initEditorView(status.bufStatus[status.bufStatus.high].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
-
-    status.changeMode(Mode.normal)
 
     setCursor(true)
 
