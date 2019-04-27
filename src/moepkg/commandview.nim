@@ -132,6 +132,8 @@ proc getKeyword*(status: var EditorStatus, prompt: string): seq[Rune] =
 
 proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
   var exStatus = initExModeViewStatus(prompt)
+  status.resize(terminalHeight(), terminalWidth())
+
   while true:
     writeExModeView(status.commandWindow, exStatus, status.settings.editorColor.commandBar)
 

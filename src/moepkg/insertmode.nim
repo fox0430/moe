@@ -3,78 +3,94 @@ from os import execShellCmd
 import ui, editorstatus, editorview, cursor, gapbuffer, editorview, normalmode, unicodeext, highlight
 
 proc insertCloseParen(status: var EditorStatus, c: char) =
+  let
+    currentLine = status.bufStatus[status.currentBuffer].currentLine
+    currentColumn = status.bufStatus[status.currentBuffer].currentColumn
+
   case c
   of '(':
-    status.buffer[status.currentLine].insert(ru')', status.currentColumn)
+    status.bufStatus[status.currentBuffer].buffer[currentLine].insert(ru')', currentColumn)
   of '{':
-    status.buffer[status.currentLine].insert(ru'}', status.currentColumn)
+    status.bufStatus[status.currentBuffer].buffer[currentLine].insert(ru'}', currentColumn)
   of '[':
-    status.buffer[status.currentLine].insert(ru']', status.currentColumn)
+    status.bufStatus[status.currentBuffer].buffer[currentLine].insert(ru']', currentColumn)
   of '"':
-    status.buffer[status.currentLine].insert(ru('\"'), status.currentColumn)
+    status.bufStatus[status.currentBuffer].buffer[currentLine].insert(ru('\"'), currentColumn)
   of '\'':
-    status.buffer[status.currentLine].insert(ru'\'', status.currentColumn)
+    status.bufStatus[status.currentBuffer].buffer[currentLine].insert(ru'\'', currentColumn)
   else:
     doAssert(false, fmt"Invalid parentheses: {c}")
 
 proc isOpenParen(ch: char): bool = ch in ['(', '{', '[', '\"', '\'']
 
 proc insertCharacter(status: var EditorStatus, c: Rune) =
-  status.buffer[status.currentLine].insert(c, status.currentColumn)
-  inc(status.currentColumn)
+  let
+    currentLine = status.bufStatus[status.currentBuffer].currentLine
+    currentColumn = status.bufStatus[status.currentBuffer].currentColumn
+
+  status.bufStatus[status.currentBuffer].buffer[currentLine].insert(c, currentColumn)
+  inc(status.bufStatus[status.currentBuffer].currentColumn)
 
   if status.settings.autoCloseParen and canConvertToChar(c):
     let ch = c.toChar
     if isOpenParen(ch): insertCloseParen(status, ch)
 
-  status.view.reload(status.buffer, status.view.originalLine[0])
-  inc(status.countChange)
+  status.bufStatus[status.currentBuffer].view.reload(status.bufStatus[status.currentBuffer].buffer, status.bufStatus[status.currentBuffer].view.originalLine[0])
+  inc(status.bufStatus[status.currentBuffer].countChange)
 
 proc keyBackspace(status: var EditorStatus) =
-  if status.currentLine == 0 and status.currentColumn == 0: return
+  let index = status.currentBuffer
+  if status.bufStatus[status.currentBuffer].currentLine == 0 and status.bufStatus[status.currentBuffer].currentColumn == 0: return
 
-  if status.currentColumn == 0:
-    status.currentColumn = status.buffer[status.currentLine-1].len
-    status.buffer[status.currentLine-1] &= status.buffer[status.currentLine]
-    status.buffer.delete(status.currentLine, status.currentLine+1)
-    dec(status.currentLine)
+  if status.bufStatus[index].currentColumn == 0:
+    status.bufStatus[index].currentColumn = status.bufStatus[index].buffer[status.bufStatus[index].currentLine - 1].len
+    status.bufStatus[index].buffer[status.bufStatus[index].currentLine - 1] &= status.bufStatus[index].buffer[status.bufStatus[index].currentLine]
+    status.bufStatus[index].buffer.delete(status.bufStatus[index].currentLine, status.bufStatus[index].currentLine + 1)
+    dec(status.bufStatus[index].currentLine)
   else:
-    dec(status.currentColumn)
-    status.buffer[status.currentLine].delete(status.currentColumn)
+    dec(status.bufStatus[index].currentColumn)
+    status.bufStatus[index].buffer[status.bufStatus[index].currentLine].delete(status.bufStatus[index].currentColumn)
 
-  status.view.reload(status.buffer, min(status.view.originalLine[0], status.buffer.high))
-  inc(status.countChange)
+  status.bufStatus[index].view.reload(status.bufStatus[index].buffer, min(status.bufStatus[index].view.originalLine[0], status.bufStatus[index].buffer.high))
+  inc(status.bufStatus[index].countChange)
 
 proc insertIndent(status: var EditorStatus) =
-  let indent = min(countRepeat(status.buffer[status.currentLine], Whitespace, 0), status.currentColumn)
-  status.buffer[status.currentLine+1] &= repeat(' ', indent).toRunes
+  let
+    index = status.currentBuffer
+    indent = min(countRepeat(status.bufStatus[index].buffer[status.bufStatus[index].currentLine], Whitespace, 0), status.bufStatus[index].currentColumn)
+
+  status.bufStatus[index].buffer[status.bufStatus[index].currentLine+1] &= repeat(' ', indent).toRunes
 
 proc keyEnter*(status: var EditorStatus) =
-  status.buffer.insert(ru"", status.currentLine+1)
+  let
+    index = status.currentBuffer
+    currentLine = status.bufStatus[index].currentLine
+    currentColumn = status.bufStatus[index].currentColumn
+  status.bufStatus[index].buffer.insert(ru"", status.bufStatus[index].currentLine + 1)
   if status.settings.autoIndent:
     insertIndent(status)
 
-    var startOfCopy = max(countRepeat(status.buffer[status.currentLine], Whitespace, 0), status.currentColumn)
-    startOfCopy += countRepeat(status.buffer[status.currentLine], Whitespace, startOfCopy)
+    var startOfCopy = max(countRepeat(status.bufStatus[index].buffer[status.bufStatus[index].currentLine], Whitespace, 0), currentColumn)
+    startOfCopy += countRepeat(status.bufStatus[index].buffer[status.bufStatus[index].currentLine], Whitespace, startOfCopy)
 
-    status.buffer[status.currentLine+1] &= status.buffer[status.currentLine][startOfCopy ..< status.buffer[status.currentLine].len]
+    status.bufStatus[index].buffer[currentLine + 1] &= status.bufStatus[index].buffer[currentLine][startOfCopy ..< status.bufStatus[index].buffer[currentLine].len]
     let
-      first = status.currentColumn
-      last = status.buffer[status.currentLine].high
-    if first <= last: status.buffer[status.currentLine].delete(first, last)
+      first = status.bufStatus[index].currentColumn
+      last = status.bufStatus[index].buffer[status.bufStatus[index].currentLine].high
+    if first <= last: status.bufStatus[index].buffer[status.bufStatus[index].currentLine].delete(first, last)
 
-    inc(status.currentLine)
-    status.currentColumn = countRepeat(status.buffer[status.currentLine], Whitespace, 0)
+    inc(status.bufStatus[index].currentLine)
+    status.bufStatus[index].currentColumn = countRepeat(status.bufStatus[index].buffer[status.bufStatus[index].currentLine], Whitespace, 0)
   else:
-    status.buffer[status.currentLine+1] &= status.buffer[status.currentLine][status.currentColumn ..< status.buffer[status.currentLine].len]
-    status.buffer[status.currentLine].delete(status.currentColumn, status.buffer[status.currentLine].high)
+    status.bufStatus[index].buffer[status.bufStatus[index].currentLine + 1] &= status.bufStatus[index].buffer[currentLine][currentColumn ..< status.bufStatus[index].buffer[currentLine].len]
+    status.bufStatus[index].buffer[status.bufStatus[index].currentLine].delete(status.bufStatus[index].currentColumn, status.bufStatus[index].buffer[status.bufStatus[index].currentLine].high)
 
-    inc(status.currentLine)
-    status.currentColumn = 0
-    status.expandedColumn = 0
+    inc(status.bufStatus[status.currentBuffer].currentLine)
+    status.bufStatus[status.currentBuffer].currentColumn = 0
+    status.bufStatus[status.currentBuffer].expandedColumn = 0
 
-  status.view.reload(status.buffer, status.view.originalLine[0])
-  inc(status.countChange)
+  status.bufStatus[status.currentBuffer].view.reload(status.bufStatus[status.currentBuffer].buffer, status.bufStatus[status.currentBuffer].view.originalLine[0])
+  inc(status.bufStatus[status.currentBuffer].countChange)
 
 proc insertTab(status: var EditorStatus) =
   for i in 0 ..< status.settings.tabStop: insertCharacter(status, ru' ')
@@ -83,20 +99,20 @@ proc insertMode*(status: var EditorStatus) =
   changeCursorType(status.settings.insertModeCursor)
   var bufferChanged = false
 
-  while status.mode == Mode.insert:
+  while status.bufStatus[status.currentBuffer].mode == Mode.insert:
     if bufferChanged:
       status.updateHighlight
       bufferChanged = false
 
     status.update
 
-    let key = getKey(status.mainWindow)
+    let key = getKey(status.mainWindow[status.currentMainWindow])
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
     elif isEscKey(key):
-      if status.currentColumn > 0: dec(status.currentColumn)
-      status.expandedColumn = status.currentColumn
+      if status.bufStatus[status.currentBuffer].currentColumn > 0: dec(status.bufStatus[status.currentBuffer].currentColumn)
+      status.bufStatus[status.currentBuffer].expandedColumn = status.bufStatus[status.currentBuffer].currentColumn
       status.changeMode(Mode.normal)
     elif isLeftKey(key):
       keyLeft(status)

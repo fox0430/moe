@@ -5,14 +5,14 @@ proc replaceMode*(status: var EditorStatus) =
 
   var bufferChanged = false
 
-  while status.mode == Mode.replace:
+  while status.bufStatus[status.currentBuffer].mode == Mode.replace:
     if bufferChanged:
       status.updateHighlight
       bufferChanged = false
 
     status.update
 
-    let key = getkey(status.mainWindow)
+    let key = getkey(status.mainWindow[status.currentMainWindow])
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
     elif isEscKey(key):

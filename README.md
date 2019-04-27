@@ -3,11 +3,13 @@
 
 ## moe
 
-moe is a Vim inspired command line based text editor.
+**m**oe is an **o**ptimal **e**ditor.  
+
+A command line based editor inspired by vi/vim written in Nim.  
  
 This project's goal is a very customizable, high productivity, high performance and funny animation editor.
 
-![moe-0](https://user-images.githubusercontent.com/15966436/55457563-4735d600-5625-11e9-9b44-fef8f2e90a69.png)
+![moe-0](https://user-images.githubusercontent.com/15966436/56851723-5fabbe80-694d-11e9-8f56-bd5d5da9461a.png)
 
 ## Features
 
@@ -27,6 +29,8 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Multiple file buffers
 
+- Split window
+
 - IDE like tab line
 
 - Simple file manager
@@ -37,13 +41,13 @@ This project's goal is a very customizable, high productivity, high performance 
 
 ## Planned features
 
-- Window split and tiling  
+- Infinite undo/redo
 
 - Configuration mode
 
 - Supports Regular expression and PEG
 
-- Infinite undo/redo
+- Tiling window
 
 - Syntax checker  
 
