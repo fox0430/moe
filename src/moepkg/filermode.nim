@@ -6,6 +6,7 @@ import strutils
 import unicodeext
 import times
 import algorithm
+import math
 
 import editorstatus
 import ui
@@ -135,68 +136,76 @@ proc refreshDirList(sortBy: Sort): seq[PathInfo] =
   return sortDirList(result, sortBy)
 
 proc writeFileNameCurrentLine(mainWindow: var Window, fileName: string , currentLine: int) =
-  mainWindow.write(currentLine, 0, fileName, brightWhiteGreen)
+  mainWindow.write(currentLine + 1, 0, fileName, brightWhiteGreen)
 
 proc writeDirNameCurrentLine(mainWindow: var Window, fileName: string, currentLine: int) =
   if fileName == "../":
-    mainWindow.write(currentLine, 0, fileName, brightWhiteGreen)
+    mainWindow.write(currentLine + 1, 0, fileName, brightWhiteGreen)
   else:
-    mainWindow.write(currentLine, 0, fileName & "/", brightWhiteGreen)
+    mainWindow.write(currentLine + 1, 0, fileName & "/", brightWhiteGreen)
 
 proc writePcLinkToDirNameCurrentLine(mainWindow: var Window, fileName: string, currentLine: int) =
-  mainWindow.write(currentLine, 0, fileName & "@ -> " & expandsymLink(fileName) & "/", whiteCyan)
+  mainWindow.write(currentLine + 1, 0, fileName & "@ -> " & expandsymLink(fileName) & "/", whiteCyan)
 
 proc writePcLinkToFileNameCurrentLine(mainWindow: var Window, fileName: string, currentLine: int) =
-  mainWindow.write(currentLine, 0, fileName & "@ -> " & expandsymLink(fileName), whiteCyan)
+  mainWindow.write(currentLine + 1, 0, fileName & "@ -> " & expandsymLink(fileName), whiteCyan)
 
 proc writeFileNameHalfwayCurrentLine(mainWindow: var Window, fileName: string, currentLine: int) =
-  mainWindow.write(currentLine, 0, substr(fileName, 0, terminalWidth() - 2), brightWhiteGreen)
+  mainWindow.write(currentLine + 1, 0, substr(fileName, 0, terminalWidth() - 2), brightWhiteGreen)
 
 proc writeDirNameHalfwayCurrentLine(mainWindow: var Window, fileName: string, currentLine: int) =
   if currentLine == 0:    # "../"
-    mainWindow.write(currentLine, 0, substr(fileName, 0, terminalWidth() - 2), brightWhiteGreen)
+    mainWindow.write(currentLine + 1, 0, substr(fileName, 0, terminalWidth() - 2), brightWhiteGreen)
   else:
-    mainWindow.write(currentLine, 0, substr(fileName, 0, terminalWidth() - 2) & "/~", brightWhiteGreen)
+    mainWindow.write(currentLine + 1, 0, substr(fileName, 0, terminalWidth() - 2) & "/~", brightWhiteGreen)
 
 proc writePcLinkToDirNameHalfwayCurrentLine(mainWindow: var Window, fileName: string, currentLine: int) =
   let buffer = fileName & "@ -> " & expandsymLink(fileName) & "/"
-  mainWindow.write(currentLine, 0, substr(buffer, 0, terminalWidth() - 4) & "~", whiteCyan)
+  mainWindow.write(currentLine + 1, 0, substr(buffer, 0, terminalWidth() - 4) & "~", whiteCyan)
 
 proc writePcLinkToFileNameHalfwayCurrentLine(mainWindow: var Window, fileName: string, currentLine: int) =
   let buffer = fileName & "@ -> " & expandsymLink(fileName)
-  mainWindow.write(currentLine, 0, substr(buffer, 0, terminalWidth() - 4) & "~", whiteCyan)
+  mainWindow.write(currentLine + 1, 0, substr(buffer, 0, terminalWidth() - 4) & "~", whiteCyan)
 
 proc writeFileName(mainWindow: var Window, currentLine: int, fileName: string) =
-  mainWindow.write(currentLine, 0, fileName)
+  mainWindow.write(currentLine + 1, 0, fileName)
 
 proc writeDirName(mainWindow: var Window, currentLine: int, fileName: string) =
   if fileName == "../":
-    mainWindow.write(currentLine, 0, fileName, brightGreenDefault)
+    mainWindow.write(currentLine + 1, 0, fileName, brightGreenDefault)
   else:
-    mainWindow.write(currentLine, 0, fileName & "/", brightGreenDefault)
+    mainWindow.write(currentLine + 1, 0, fileName & "/", brightGreenDefault)
 
 proc writePcLinkToDirName(mainWindow: var Window, currentLine: int, fileName: string) =
-  mainWindow.write(currentLine, 0, fileName & "@ -> " & expandsymLink(fileName) & "/", cyanDefault)
+  mainWindow.write(currentLine + 1, 0, fileName & "@ -> " & expandsymLink(fileName) & "/", cyanDefault)
 
 proc writePcLinkToFileName(mainWindow: var Window, currentLine: int, fileName: string) =
-  mainWindow.write(currentLine, 0, fileName & "@ -> " & expandsymLink(fileName), cyanDefault)
+  mainWindow.write(currentLine + 1, 0, fileName & "@ -> " & expandsymLink(fileName), cyanDefault)
 
 proc writeFileNameHalfway(mainWindow: var Window, currentLine: int, fileName: string) =
-  mainWindow.write(currentLine, 0, substr(fileName, 0, terminalWidth() - 2) & "~")
+  mainWindow.write(currentLine + 1, 0, substr(fileName, 0, terminalWidth() - 2) & "~")
 
 proc writeDirNameHalfway(mainWindow: var Window, currentLine: int, fileName: string) =
   if fileName == "../":
-    mainWindow.write(currentLine, 0, substr(fileName, 0, terminalWidth() - 2) & "~", brightGreenDefault)
+    mainWindow.write(currentLine + 1, 0, substr(fileName, 0, terminalWidth() - 2) & "~", brightGreenDefault)
   else:
-    mainWindow.write(currentLine, 0, substr(fileName, 0, terminalWidth() - 2) & "/~", brightGreenDefault)
+    mainWindow.write(currentLine + 1, 0, substr(fileName, 0, terminalWidth() - 2) & "/~", brightGreenDefault)
 
 proc writePcLinkToDirNameHalfway(mainWindow: var Window, currentLine: int, fileName: string) =
   let buffer = fileName & "@ -> " & expandsymLink(fileName) & "/"
-  mainWindow.write(currentLine, 0, substr(buffer, 0, terminalWidth() - 4) & "~", cyanDefault)
+  mainWindow.write(currentLine + 1, 0, substr(buffer, 0, terminalWidth() - 4) & "~", cyanDefault)
 
 proc writePcLinkToFileNameHalfway(mainWindow: var Window, currentLine: int, fileName: string) =
   let buffer = fileName & "@ -> " & expandsymLink(fileName)
-  mainWindow.write(currentLine, 0, substr(buffer, 0, terminalWidth() - 4) & "~", cyanDefault)
+  mainWindow.write(currentLine + 1, 0, substr(buffer, 0, terminalWidth() - 4) & "~", cyanDefault)
+
+proc writeTabLine(status: var EditorStatus) =
+  let
+    width = int(ceil(terminalWidth() / status.mainWindow.len))
+    dir = getCurrentDir()
+    title = if dir.len > width: dir.substr(0, width - 2) & "~" else: dir & " ".repeat(width - dir.len)
+  
+  status.mainWindow[status.currentMainWindow].write(0, 0, title, status.settings.editorColor.currentTab)
 
 proc writeFileDetailView(mainWindow: var Window, fileName: string) =
   mainWindow.erase
@@ -436,6 +445,7 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
 
 proc updateFilerView(status: var EditorStatus, filerStatus: var FilerStatus) =
   status.mainWindow[status.currentMainWindow].erase
+  writeTabLine(status)
   status.mainWindow[status.currentMainWindow].writeFillerView(filerStatus.dirList, filerStatus.currentLine, filerStatus.startIndex)
   status.resize(terminalHeight(), terminalWidth())
   filerStatus.viewUpdate = false
