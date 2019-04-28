@@ -43,6 +43,10 @@ test "countRepeat":
   check(ru"あいうえお   あいう".countRepeat(Whitespace, 5) == 3)
   check(ru"    ".countRepeat(Whitespace, 1) == 3)
 
+test "toRunes":
+  let runes: seq[Rune] = @[]
+  check(runes.toGapBuffer.toRunes == runes)
+
 let s = """Sentences that contain all letters commonly used in a language
 --------------------------------------------------------------
 
