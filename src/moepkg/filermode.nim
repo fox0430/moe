@@ -201,11 +201,11 @@ proc writePcLinkToFileNameHalfway(mainWindow: var Window, currentLine: int, file
 
 proc writeTabLine(status: var EditorStatus) =
   let
-    width = int(ceil(terminalWidth() / status.mainWindow.len))
+    width = int(ceil(terminalWidth() / status.mainWindowInfo.len))
     dir = getCurrentDir()
     title = if dir.len > width: dir.substr(0, width - 2) & "~" else: dir & " ".repeat(width - dir.len)
   
-  status.mainWindow[status.currentMainWindow].write(0, 0, title, status.settings.editorColor.currentTab)
+  status.mainWindowInfo[status.currentMainWindow].window.write(0, 0, title, status.settings.editorColor.currentTab)
 
 proc writeFileDetailView(mainWindow: var Window, fileName: string) =
   mainWindow.erase
@@ -352,11 +352,11 @@ proc moveToTopOfList(filerStatus: var FilerStatus) =
   filerStatus.viewUpdate = true
 
 proc moveToLastOfList(status: EditorStatus, filerStatus: var FilerStatus) =
-  if filerStatus.dirList.len < status.mainWindow[status.currentMainWindow].height:
+  if filerStatus.dirList.len < status.mainWindowInfo[status.currentMainWindow].window.height:
     filerStatus.currentLine = filerStatus.dirList.high
   else:
-    filerStatus.currentLine = status.mainWindow[status.currentMainWindow].height - 1
-    filerStatus.startIndex = filerStatus.dirList.len - status.mainWindow[status.currentMainWindow].height
+    filerStatus.currentLine = status.mainWindowInfo[status.currentMainWindow].window.height - 1
+    filerStatus.startIndex = filerStatus.dirList.len - status.mainWindowInfo[status.currentMainWindow].window.height
   filerStatus.viewUpdate = true
 
 proc copyFile(filerStatus: var FilerStatus) =
@@ -397,7 +397,7 @@ proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   except OSError:
     writeCreateDirErrorMessage(status.commandWindow)
     return
-   
+#[   
 proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   let
     kind = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].kind
@@ -405,9 +405,9 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   case kind
   of pcFile, pcLinkToFile:
     let filename = (if kind == pcFile: path else: expandsymLink(path)).toRunes
-    if status.displayBuffer.len == 0:
+    if status.mainWindowInfo.len == 0:
       status.bufStatus[0].filename = filename
-      status.displayBuffer.add(0)
+      status.mainWindowInfo.add(0)
     else:
       status.bufStatus.add(initBufferStatus())
       status.displayBuffer[status.currentMainWindow] = status.bufStatus.high
@@ -442,11 +442,11 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
       filerStatus.dirlistUpdate = true
     except OSError:
       writeFileOpenErrorMessage(status.commandWindow, path.toRunes)
-
+]#
 proc updateFilerView(status: var EditorStatus, filerStatus: var FilerStatus) =
-  status.mainWindow[status.currentMainWindow].erase
+  status.mainWindowInfo[status.currentMainWindow].window.erase
   writeTabLine(status)
-  status.mainWindow[status.currentMainWindow].writeFillerView(filerStatus.dirList, filerStatus.currentLine, filerStatus.startIndex)
+  status.mainWindowInfo[status.currentMainWindow].window.writeFillerView(filerStatus.dirList, filerStatus.currentLine, filerStatus.startIndex)
   status.resize(terminalHeight(), terminalWidth())
   filerStatus.viewUpdate = false
 
@@ -465,9 +465,9 @@ proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
   filerStatus.startIndex = 0
   filerStatus.viewUpdate = true
   if filerStatus.dirList.len == 0:
-    status.mainWindow[status.currentMainWindow].erase
-    status.mainWindow[status.currentMainWindow].write(0, 0, "not found")
-    status.mainWindow[status.currentMainWindow].refresh
+    status.mainWindowInfo[status.currentMainWindow].window.erase
+    status.mainWindowInfo[status.currentMainWindow].window.write(0, 0, "not found")
+    status.mainWindowInfo[status.currentMainWindow].window.refresh
     discard getKey(status.commandWindow)
     status.commandWindow.erase
     status.commandWindow.refresh
@@ -484,7 +484,7 @@ proc filerMode*(status: var EditorStatus) =
     if filerStatus.viewUpdate:
       updateFilerView(status, filerStatus)
 
-    let key = getKey(status.mainWindow[status.currentMainWindow])
+    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
 
     if key == ord(':'):
       status.changeMode(Mode.ex)
@@ -503,7 +503,7 @@ proc filerMode*(status: var EditorStatus) =
     elif key == ord('D'):
       deleteFile(status, filerStatus)
     elif key == ord('i'):
-      writeFileDetailView(status.mainWindow[status.currentMainWindow], filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex][1])
+      writeFileDetailView(status.mainWindowInfo[status.currentMainWindow].window, filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex][1])
       filerStatus.viewUpdate = true
     elif (key == 'j' or isDownKey(key)) and filerStatus.currentLine + filerStatus.startIndex < filerStatus.dirList.high:
       keyDown(filerStatus)
@@ -523,6 +523,8 @@ proc filerMode*(status: var EditorStatus) =
       changeSortBy(filerStatus)
     elif key == ord('N'):
       createDir(status, filerStatus)
+      #[
     elif isEnterKey(key):
       openFileOrDir(status, filerStatus)
+      ]#
   setCursor(true)

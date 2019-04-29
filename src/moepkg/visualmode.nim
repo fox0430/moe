@@ -140,7 +140,7 @@ proc visualMode*(status: var EditorStatus) =
     status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
     status.update
 
-    let key = getKey(status.mainWindow[status.currentMainWindow])
+    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
@@ -171,7 +171,7 @@ proc visualMode*(status: var EditorStatus) =
     elif key == ord('G'):
       moveToLastLine(status)
     elif key == ord('g'):
-      if getKey(status.mainWindow[status.currentMainWindow]) == ord('g'): moveToFirstLine(status)
+      if getKey(status.mainWindowInfo[status.currentMainWindow].window) == ord('g'): moveToFirstLine(status)
     elif key == ord('i'):
       status.bufStatus[status.currentBuffer].currentLine = area.startLine
       status.changeMode(Mode.insert)

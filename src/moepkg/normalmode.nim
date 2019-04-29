@@ -115,8 +115,8 @@ proc jumpLine*(status: var EditorStatus, destination: int) =
 
   if not (view.originalLine[0] <= destination and (view.originalLine[view.height - 1] == -1 or destination <= view.originalLine[view.height - 1])):
     var startOfPrintedLines = 0
-    if destination > status.bufStatus[status.currentBuffer].buffer.len - 1 - status.mainWindow[status.currentMainWindow].height - 1:
-      startOfPrintedLines = status.bufStatus[status.currentBuffer].buffer.len - 1 - status.mainWindow[status.currentMainWindow].height - 1
+    if destination > status.bufStatus[status.currentBuffer].buffer.len - 1 - status.mainWindowInfo[status.currentMainWindow].window.height - 1:
+      startOfPrintedLines = status.bufStatus[status.currentBuffer].buffer.len - 1 - status.mainWindowInfo[status.currentMainWindow].window.height - 1
     else:
       startOfPrintedLines = max(destination - (currentLine - status.bufStatus[status.currentBuffer].view.originalLine[0]), 0)
     status.bufStatus[status.currentBuffer].view.reload(status.bufStatus[status.currentBuffer].buffer, startOfPrintedLines)
@@ -404,9 +404,9 @@ proc turnOffHighlighting*(status: var EditorStatus) =
   status.bufStatus[status.currentBuffer].isHighlight = false
   status.updateHighlight
 
-proc moveNextWindow(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow + 1)
+#proc moveNextWindow(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow + 1)
 
-proc movePrevWindow(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow - 1)
+#proc movePrevWindow(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow - 1)
 
 proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.bufStatus[status.currentBuffer].cmdLoop == 0: status.bufStatus[status.currentBuffer].cmdLoop = 1
@@ -438,7 +438,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('+'):
     moveToFirstOfNextLine(status)
   elif key == ord('g'):
-    if getKey(status.mainWindow[status.currentMainWindow]) == ord('g'): moveToFirstLine(status)
+    if getKey(status.mainWindowInfo[status.currentMainWindow].window) == ord('g'): moveToFirstLine(status)
   elif key == ord('G'):
     moveToLastLine(status)
   elif isPageUpkey(key):
@@ -460,11 +460,11 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     status.updateHighlight
     status.changeMode(Mode.insert)
   elif key == ord('d'):
-    if getKey(status.mainWindow[status.currentMainWindow]) == ord('d'):
+    if getKey(status.mainWindowInfo[status.currentMainWindow].window) == ord('d'):
       yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
       for i in 0 ..< min(cmdLoop, status.bufStatus[currentBuf].buffer.len - status.bufStatus[currentBuf].currentLine):deleteLine(status, status.bufStatus[currentBuf].currentLine)
   elif key == ord('y'):
-    if getkey(status.mainWindow[status.currentMainWindow]) == ord('y'):
+    if getkey(status.mainWindowInfo[status.currentMainWindow].window) == ord('y'):
       yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
   elif key == ord('p'):
     pasteAfterCursor(status)
@@ -479,7 +479,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('r'):
     if cmdLoop > status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len - status.bufStatus[currentBuf].currentColumn: return
 
-    let ch = getKey(status.mainWindow[status.currentMainWindow])
+    let ch = getKey(status.mainWindowInfo[status.currentMainWindow].window)
     for i in 0 ..< cmdLoop:
       if i > 0:
         inc(status.bufStatus[status.currentBuffer].currentColumn)
@@ -504,12 +504,14 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('A'):
     status.bufStatus[currentBuf].currentColumn = status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len
     status.changeMode(Mode.insert)
+#[
   elif key == ord('L'):
     moveNextWindow(status)
   elif key == ord('H'):
     movePrevWindow(status)
+]#
   elif isEscKey(key):
-    let key = getKey(status.mainWindow[status.currentMainWindow])
+    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
     if isEscKey(key): turnOffHighlighting(status)
   else:
     discard
@@ -528,7 +530,7 @@ proc normalMode*(status: var EditorStatus) =
 
     status.update
 
-    let key = getKey(status.mainWindow[status.currentMainWindow])
+    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
