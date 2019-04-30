@@ -1,7 +1,7 @@
 import packages/docutils/highlite, strutils, terminal, os, strformat
 import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils
 type Mode* = enum
-  normal, insert, visual, replace, ex, filer, search, quit
+  normal, insert, visual, replace, ex, filer, search
 
 type Registers* = object
   yankedLines*: seq[seq[Rune]]
@@ -144,7 +144,7 @@ proc addNewBuffer*(status:var EditorStatus, filename: string) =
   status.bufStatus.add(BufferStatus(filename: filename.toRunes))
   let index = status.bufStatus.high
 
-  if filename == "":
+  if filename == "" or existsFile(filename) == false:
     status.bufStatus[index].buffer = newFile()
   else:
     status.bufStatus[index].language = detectLanguage(filename)
@@ -290,7 +290,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
 
     if status.settings.statusBar.useBar: resize(status.statusWindow, 1, terminalWidth(), adjustedHeight - 2, 0)
     if status.bufStatus[status.currentBuffer].mode != Mode.filer and  status.settings.tabLine.useTab: resize(status.tabWindow, 1, terminalWidth(), 0, 0)
-    
+
     let
       currentMode = status.bufStatus[status.currentBuffer].mode
       prevMode = status.bufStatus[status.currentBuffer].prevMode
@@ -338,7 +338,7 @@ proc splitWindow*(status: var EditorStatus) =
   status.update
 
 proc closeWindow*(status: var EditorStatus, index: int) =
-  if index < 0 or index > status.mainWindowInfo.high or index > status.mainWindowInfo.high: return
+  if index < 0 or index > status.mainWindowInfo.high: return
 
   status.mainWindowInfo.delete(index)
   if status.mainWindowInfo.len > 0:
@@ -351,6 +351,11 @@ proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
   status.currentMainWindow = index
   changeCurrentBuffer(status, status.mainWindowInfo[index].bufferIndex)
   if status.bufStatus[status.currentBuffer].mode != Mode.filer and status.settings.tabLine.useTab: writeTabLine(status)
+
+proc countReferencedWindow*(mainWins: seq[MainWindowInfo], bufferIndex: int): int =
+  result = 0
+  for i in 0 ..< mainWins.len:
+    if mainWins[i].bufferIndex == bufferIndex: result.inc
 
 proc updateHighlight*(status: var EditorStatus)
 from searchmode import searchAllOccurrence

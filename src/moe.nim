@@ -20,8 +20,7 @@ import moepkg/highlight
 proc main() =
   let parsedList = parseCommandLineOption(commandLineParams())
 
-  defer:
-    exitUi()
+  defer: exitUi()
 
   startUi()
 
@@ -30,8 +29,7 @@ proc main() =
   changeTheme(status)
 
   if existsDir(parsedList.filename):
-    try:
-      setCurrentDir(parsedList.filename)
+    try: setCurrentDir(parsedList.filename)
     except OSError:
       #writeFileOpenErrorMessage(status.commandWindow, filename.toRunes)
       addNewBuffer(status, "")
@@ -39,22 +37,16 @@ proc main() =
   else: addNewBuffer(status, parsedList.filename)
 
   while status.mainWindowInfo.len > 0:
+
     case status.bufStatus[status.currentBuffer].mode:
-    of Mode.normal:
-      normalMode(status)
-    of Mode.insert:
-      insertMode(status)
-    of Mode.visual:
-      visualMode(status)
-    of Mode.replace:
-      replaceMode(status)
-    of Mode.ex:
-      exMode(status)
-    of Mode.filer:
-      filerMode(status)
-    of Mode.search:
-      searchMode(status)
-    of Mode.quit:
-      executeOnExit(status.settings)
+    of Mode.normal: normalMode(status)
+    of Mode.insert: insertMode(status)
+    of Mode.visual: visualMode(status)
+    of Mode.replace: replaceMode(status)
+    of Mode.ex: exMode(status)
+    of Mode.filer: filerMode(status)
+    of Mode.search: searchMode(status)
+
+  executeOnExit(status.settings)
 
 when isMainModule: main()
