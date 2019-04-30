@@ -231,7 +231,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
     if existsDir($filename):
       try: setCurrentDir($filename)
       except OSError:
-        #writeFileOpenErrorMessage(status.commandWindow, filename.toRunes)
+        status.commandWindow.writeFileOpenErrorMessage($filename, status.settings.editorColor.errorMessage)
         addNewBuffer(status, "")
       status.bufStatus.add(BufferStatus(mode: Mode.filer))
     else: addNewBuffer(status, $filename)

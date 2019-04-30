@@ -282,16 +282,6 @@ proc writeFillerView(mainWindow: var Window, dirList: seq[PathInfo], currentLine
    
   mainWindow.refresh
 
-proc writeFileOpenErrorMessage*(commandWindow: var Window, fileName: seq[Rune]) =
-  commandWindow.erase
-  commandWindow.write(0, 0, "can not open: ".toRunes & fileName)
-  commandWindow.refresh
-
-proc writeCreateDirErrorMessage*(commandWindow: var Window) =
-  commandWindow.erase
-  commandWindow.write(0, 0, "can not create direcotry")
-  commandWindow.refresh
-
 proc initFileRegister(): FileRegister =
   result.copy = false
   result.cut= false
@@ -380,7 +370,7 @@ proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
     createDir($dirname[0])
     filerStatus.dirlistUpdate = true
   except OSError:
-    writeCreateDirErrorMessage(status.commandWindow)
+    writeCreateDirErrorMessage(status.commandWindow, status.settings.editorColor.errorMessage)
     return
    
 proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
@@ -397,7 +387,7 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
       setCurrentDir(path)
       filerStatus.dirlistUpdate = true
     except OSError:
-      writeFileOpenErrorMessage(status.commandWindow, path.toRunes)
+      status.commandWindow.writeFileOpenErrorMessage(path, status.settings.editorColor.errorMessage)
 
 proc updateFilerView(status: var EditorStatus, filerStatus: var FilerStatus) =
   status.mainWindowInfo[status.currentMainWindow].window.erase

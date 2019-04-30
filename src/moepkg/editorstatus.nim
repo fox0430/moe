@@ -1,5 +1,5 @@
 import packages/docutils/highlite, strutils, terminal, os, strformat
-import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils
+import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils, commandview
 type Mode* = enum
   normal, insert, visual, replace, ex, filer, search
 
@@ -153,7 +153,7 @@ proc addNewBuffer*(status:var EditorStatus, filename: string) =
       status.bufStatus[index].buffer = textAndEncoding.text.toGapBuffer
       status.settings.characterEncoding = textAndEncoding.encoding
     except IOError:
-      #writeFileOpenErrorMessage(status.commandWindow, status.bufStatus[0].filename)
+      status.commandWindow.writeFileOpenErrorMessage(filename, status.settings.editorColor.errorMessage)
       return
 
   let lang = if status.settings.syntax: status.bufStatus[index].language else: SourceLanguage.langNone
