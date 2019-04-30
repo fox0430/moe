@@ -19,5 +19,5 @@ test "resize 2":
   status.bufStatus[0].currentColumn = 1
   status.changeMode(Mode.insert)
   for i in 0 ..< 10:
-    keyEnter(status)
+    keyEnter(status.bufStatus[0], status.settings.autoCloseParen)
     status.update
