@@ -1,5 +1,6 @@
 import packages/docutils/highlite, strutils, terminal, os, strformat
-import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils, commandview
+import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils
+
 type Mode* = enum
   normal, insert, visual, replace, ex, filer, search
 
@@ -73,18 +74,6 @@ type EditorStatus* = object
   commandWindow*: Window
   tabWindow*: Window
 
-proc initEditorColorTheme(): EditorColor =
- ## vivid theme
- result.editor = Colorpair.brightWhiteDefauLt
- result.lineNum = Colorpair.grayDefault
- result.currentLineNum = Colorpair.pinkDefault
- result.statusBar = Colorpair.blackPink
- result.statusBarMode = Colorpair.blackWhite
- result.tab = Colorpair.brightWhiteDefault
- result.currentTab = Colorpair.blackPink
- result.commandBar = Colorpair.brightWhiteDefault
- result.errorMessage = Colorpair.redDefault
-
 proc initRegisters(): Registers =
   result.yankedLines = @[]
   result.yankedStr = @[]
@@ -139,32 +128,6 @@ proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
 proc changeMode*(status: var EditorStatus, mode: Mode) =
   status.bufStatus[status.currentBuffer].prevMode = status.bufStatus[status.currentBuffer].mode
   status.bufStatus[status.currentBuffer].mode = mode
-
-proc addNewBuffer*(status:var EditorStatus, filename: string) =
-  status.bufStatus.add(BufferStatus(filename: filename.toRunes))
-  let index = status.bufStatus.high
-
-  if filename == "" or existsFile(filename) == false:
-    status.bufStatus[index].buffer = newFile()
-  else:
-    status.bufStatus[index].language = detectLanguage(filename)
-    try:
-      let textAndEncoding = openFile(filename.toRunes)
-      status.bufStatus[index].buffer = textAndEncoding.text.toGapBuffer
-      status.settings.characterEncoding = textAndEncoding.encoding
-    except IOError:
-      status.commandWindow.writeFileOpenErrorMessage(filename, status.settings.editorColor.errorMessage)
-      return
-
-  let lang = if status.settings.syntax: status.bufStatus[index].language else: SourceLanguage.langNone
-  status.bufStatus[index].highlight = initHighlight($status.bufStatus[index].buffer, lang, status.settings.editorColor.editor)
-
-  let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[index].buffer.len) - 2 else: 0
-  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-  status.bufStatus[index].view = initEditorView(status.bufStatus[index].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
-
-  status.changeCurrentBuffer(index)
-  status.changeMode(Mode.normal)
 
 proc changeTheme*(status: var EditorStatus) =
   if status.settings.editorColorTheme == ColorTheme.dark:
@@ -356,6 +319,35 @@ proc countReferencedWindow*(mainWins: seq[MainWindowInfo], bufferIndex: int): in
   result = 0
   for i in 0 ..< mainWins.len:
     if mainWins[i].bufferIndex == bufferIndex: result.inc
+
+proc addNewBuffer*(status:var EditorStatus, filename: string)
+from commandview import writeFileOpenErrorMessage
+
+proc addNewBuffer*(status:var EditorStatus, filename: string) =
+  status.bufStatus.add(BufferStatus(filename: filename.toRunes))
+  let index = status.bufStatus.high
+
+  if filename == "" or existsFile(filename) == false:
+    status.bufStatus[index].buffer = newFile()
+  else:
+    status.bufStatus[index].language = detectLanguage(filename)
+    try:
+      let textAndEncoding = openFile(filename.toRunes)
+      status.bufStatus[index].buffer = textAndEncoding.text.toGapBuffer
+      status.settings.characterEncoding = textAndEncoding.encoding
+    except IOError:
+      status.commandWindow.writeFileOpenErrorMessage(filename, status.settings.editorColor.errorMessage)
+      return
+
+  let lang = if status.settings.syntax: status.bufStatus[index].language else: SourceLanguage.langNone
+  status.bufStatus[index].highlight = initHighlight($status.bufStatus[index].buffer, lang, status.settings.editorColor.editor)
+
+  let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[index].buffer.len) - 2 else: 0
+  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+  status.bufStatus[index].view = initEditorView(status.bufStatus[index].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+
+  status.changeCurrentBuffer(index)
+  status.changeMode(Mode.normal)
 
 proc updateHighlight*(status: var EditorStatus)
 from searchmode import searchAllOccurrence

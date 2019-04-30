@@ -28,7 +28,7 @@ proc main() =
   if existsDir(parsedList.filename):
     try: setCurrentDir(parsedList.filename)
     except OSError:
-      status.commandWindow.writeFileOpenErrorMessage(parsedList.filename.toRunes)
+      status.commandWindow.writeFileOpenErrorMessage(parsedList.filename, status.settings.editorColor.errorMessage)
       addNewBuffer(status, "")
     status.bufStatus.add(BufferStatus(mode: Mode.filer))
   else: addNewBuffer(status, parsedList.filename)
