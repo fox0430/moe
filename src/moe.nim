@@ -1,7 +1,7 @@
-import os, terminal, strutils, strformat, unicode, packages/docutils/highlite
+import os, terminal, strutils, strformat, unicode
+import packages/docutils/highlite
 import moepkg/ui
 import moepkg/editorstatus
-import moepkg/fileutils
 import moepkg/normalmode
 import moepkg/insertmode
 import moepkg/visualmode
@@ -10,12 +10,9 @@ import moepkg/filermode
 import moepkg/exmode
 import moepkg/searchmode
 import moepkg/editorview
-import moepkg/gapbuffer
-import moepkg/independentutils
-import moepkg/unicodeext
 import moepkg/cmdoption
 import moepkg/settings
-import moepkg/highlight
+import moepkg/commandview
 
 proc main() =
   let parsedList = parseCommandLineOption(commandLineParams())
@@ -31,7 +28,7 @@ proc main() =
   if existsDir(parsedList.filename):
     try: setCurrentDir(parsedList.filename)
     except OSError:
-      #writeFileOpenErrorMessage(status.commandWindow, filename.toRunes)
+      status.commandWindow.writeFileOpenErrorMessage(parsedList.filename.toRunes)
       addNewBuffer(status, "")
     status.bufStatus.add(BufferStatus(mode: Mode.filer))
   else: addNewBuffer(status, parsedList.filename)

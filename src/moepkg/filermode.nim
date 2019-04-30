@@ -63,21 +63,6 @@ proc searchFiles(status: var EditorStatus, dirList: seq[PathInfo]): seq[PathInfo
     if dirList[index].path.contains(str):
       result.add dirList[index]
 
-proc writeRemoveFileError(commandWindow: var Window, color: ColorPair) =
-  commandWindow.erase
-  commandWindow.write(0, 0, "Error: can not remove file", color)
-  commandWindow.refresh
-
-proc writeRemoveDirError(commandWindow: var Window, color: ColorPair) =
-  commandWindow.erase
-  commandWindow.write(0, 0, "Error: can not remove directory", color)
-  commandWindow.refresh
-
-proc writeCopyFileError(commandWindow: var Window, color: ColorPair) =
-  commandWindow.erase
-  commandWindow.write(0, 0, "Error: can not copy file", color)
-  commandWindow.refresh
-
 proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
   setCursor(true)
   let command = getCommand(status, "Delete file? 'y' or 'n': ")
