@@ -19,15 +19,15 @@ proc replaceMode*(status: var EditorStatus) =
       status.changeMode(Mode.normal)
 
     elif isRightKey(key):
-      keyRight(status)
+      keyRight(status.bufStatus[status.currentBuffer])
     elif isLeftKey(key) or isBackspaceKey(key):
-      keyLeft(status)
+      keyLeft(status.bufStatus[status.currentBuffer])
     elif isUpKey(key):
-      keyUp(status)
+      keyUp(status.bufStatus[status.currentBuffer])
     elif isDownKey(key) or isEnterKey(key):
-      keyDown(status)
+      keyDown(status.bufStatus[status.currentBuffer])
  
     else:
-      replaceCurrentCharacter(status, key)
-      keyRight(status)
+      replaceCurrentCharacter(status.bufStatus[status.currentBuffer], key)
+      keyRight(status.bufStatus[status.currentBuffer])
       bufferChanged = true

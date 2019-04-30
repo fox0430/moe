@@ -115,23 +115,23 @@ proc insertMode*(status: var EditorStatus) =
       status.bufStatus[status.currentBuffer].expandedColumn = status.bufStatus[status.currentBuffer].currentColumn
       status.changeMode(Mode.normal)
     elif isLeftKey(key):
-      keyLeft(status)
+      keyLeft(status.bufStatus[status.currentBuffer])
     elif isRightkey(key):
-      keyRight(status)
+      keyRight(status.bufStatus[status.currentBuffer])
     elif isUpKey(key):
-      keyUp(status)
+      keyUp(status.bufStatus[status.currentBuffer])
     elif isDownKey(key):
-      keyDown(status)
+      keyDown(status.bufStatus[status.currentBuffer])
     elif isPageUpKey(key):
       pageUp(status)
     elif isPageDownKey(key):
       pageDown(status)
     elif isHomeKey(key):
-      moveToFirstOfLine(status)
+      moveToFirstOfLine(status.bufStatus[status.currentBuffer])
     elif isEndKey(key):
-      moveToLastOfLine(status)
+      moveToLastOfLine(status.bufStatus[status.currentBuffer])
     elif isDcKey(key):
-      deleteCurrentCharacter(status)
+      deleteCurrentCharacter(status.bufStatus[status.currentBuffer])
       bufferChanged = true
     elif isBackspaceKey(key):
       keyBackspace(status)

@@ -98,7 +98,7 @@ proc deleteBuffer(status: var EditorStatus, area: SelectArea) =
 proc addIndent(status: var EditorStatus, area: SelectArea) =
   status.bufStatus[status.currentBuffer].currentLine = area.startLine
   for i in area.startLine .. area.endLine:
-    addIndent(status)
+    addIndent(status.bufStatus[status.currentBuffer], status.settings.tabStop)
     inc(status.bufStatus[status.currentBuffer].currentLine)
 
   status.bufStatus[status.currentBuffer].currentLine = area.startLine
@@ -106,7 +106,7 @@ proc addIndent(status: var EditorStatus, area: SelectArea) =
 proc deleteIndent(status: var EditorStatus, area: SelectArea) =
   status.bufStatus[status.currentBuffer].currentLine = area.startLine
   for i in area.startLine .. area.endLine:
-    deleteIndent(status)
+    deleteIndent(status.bufStatus[status.currentBuffer], status.settings.tabStop)
     inc(status.bufStatus[status.currentBuffer].currentLine)
 
   status.bufStatus[status.currentBuffer].currentLine = area.startLine
@@ -149,25 +149,25 @@ proc visualMode*(status: var EditorStatus) =
       status.changeMode(Mode.normal)
 
     elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
-      keyLeft(status)
+      keyLeft(status.bufStatus[status.currentBuffer])
     elif key == ord('l') or isRightKey(key):
-      keyRight(status)
+      keyRight(status.bufStatus[status.currentBuffer])
     elif key == ord('k') or isUpKey(key):
-      keyUp(status)
+      keyUp(status.bufStatus[status.currentBuffer])
     elif key == ord('j') or isDownKey(key) or isEnterKey(key):
-      keyDown(status)
+      keyDown(status.bufStatus[status.currentBuffer])
     elif key == ord('^'):
-      moveToFirstNonBlankOfLine(status)
+      moveToFirstNonBlankOfLine(status.bufStatus[status.currentBuffer])
     elif key == ord('0') or isHomeKey(key):
-      moveToFirstOfLine(status)
+      moveToFirstOfLine(status.bufStatus[status.currentBuffer])
     elif key == ord('$') or isEndKey(key):
-      moveToLastOfLine(status)
+      moveToLastOfLine(status.bufStatus[status.currentBuffer])
     elif key == ord('w'):
-      moveToForwardWord(status)
+      moveToForwardWord(status.bufStatus[status.currentBuffer])
     elif key == ord('b'):
-      moveToBackwardWord(status)
+      moveToBackwardWord(status.bufStatus[status.currentBuffer])
     elif key == ord('e'):
-      moveToForwardEndOfWord(status)
+      moveToForwardEndOfWord(status.bufStatus[status.currentBuffer])
     elif key == ord('G'):
       moveToLastLine(status)
     elif key == ord('g'):
