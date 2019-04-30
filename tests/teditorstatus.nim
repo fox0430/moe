@@ -3,6 +3,7 @@ import moepkg/highlight, moepkg/editorstatus, moepkg/editorview, moepkg/gapbuffe
 
 test "resize 1":
   var status = initEditorStatus()
+  addNewBuffer(status, "")
   status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
   status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language, status.settings.editorColor.editor)
   status.bufStatus[0].view = initEditorView(status.bufStatus[0].buffer, 1, 1)
@@ -10,6 +11,7 @@ test "resize 1":
 
 test "resize 2":
   var status = initEditorStatus()
+  addNewBuffer(status, "")
   status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
   status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language, status.settings.editorColor.editor)
   status.bufStatus[0].view= initEditorView(status.bufStatus[0].buffer, 20, 4)
