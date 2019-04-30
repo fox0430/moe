@@ -404,9 +404,9 @@ proc turnOffHighlighting*(status: var EditorStatus) =
   status.bufStatus[status.currentBuffer].isHighlight = false
   status.updateHighlight
 
-#proc moveNextWindow(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow + 1)
+proc moveNextWindow(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow + 1)
 
-#proc movePrevWindow(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow - 1)
+proc movePrevWindow(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow - 1)
 
 proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.bufStatus[status.currentBuffer].cmdLoop == 0: status.bufStatus[status.currentBuffer].cmdLoop = 1
@@ -441,9 +441,9 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     if getKey(status.mainWindowInfo[status.currentMainWindow].window) == ord('g'): moveToFirstLine(status)
   elif key == ord('G'):
     moveToLastLine(status)
-  elif isPageUpkey(key):
+  elif isPageUpkey(key) or isControlU(key):
     for i in 0 ..< cmdLoop: pageUp(status)
-  elif isPageDownKey(key):
+  elif isPageDownKey(key): ## Page down and Ctrl - F
     for i in 0 ..< cmdLoop: pageDown(status)
   elif key == ord('w'):
     for i in 0 ..< cmdLoop: moveToForwardWord(status)
@@ -504,12 +504,10 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('A'):
     status.bufStatus[currentBuf].currentColumn = status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len
     status.changeMode(Mode.insert)
-#[
-  elif key == ord('L'):
+  elif isControlL(key):
     moveNextWindow(status)
-  elif key == ord('H'):
+  elif isControlH(key):
     movePrevWindow(status)
-]#
   elif isEscKey(key):
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
     if isEscKey(key): turnOffHighlighting(status)

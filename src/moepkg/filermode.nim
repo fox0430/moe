@@ -397,44 +397,15 @@ proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   except OSError:
     writeCreateDirErrorMessage(status.commandWindow)
     return
-#[   
+   
 proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   let
     kind = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].kind
     path = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
   case kind
   of pcFile, pcLinkToFile:
-    let filename = (if kind == pcFile: path else: expandsymLink(path)).toRunes
-    if status.mainWindowInfo.len == 0:
-      status.bufStatus[0].filename = filename
-      status.mainWindowInfo.add(0)
-    else:
-      status.bufStatus.add(initBufferStatus())
-      status.displayBuffer[status.currentMainWindow] = status.bufStatus.high
-    status.bufStatus[status.bufStatus.high].filename = filename
-    status.bufStatus[status.bufStatus.high].language = detectLanguage($filename)
-    if existsFile($filename):
-      try:
-        let textAndEncoding = openFile(filename)
-        status.bufStatus[status.bufStatus.high].buffer = textAndEncoding.text.toGapBuffer
-        status.settings.characterEncoding = textAndEncoding.encoding
-      except IOError:
-        writeFileOpenErrorMessage(status.commandWindow, status.bufStatus[status.bufStatus.high].filename)
-        status.bufStatus[status.bufStatus.high].buffer = newFile()
-    else:
-      status.bufStatus[status.bufStatus.high].buffer = newFile()
-
-    status.changeMode(Mode.normal)
-    changeCurrentBuffer(status, status.bufStatus.high)
-    status.displayBuffer[status.currentMainWindow] = status.currentBuffer
-
-    let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[status.bufStatus.high].buffer.len) - 2 else: 0
-    let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-    status.updateHighlight
-    status.bufStatus[status.bufStatus.high].view = initEditorView(status.bufStatus[status.bufStatus.high].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
-
+    addNewBuffer(status, path)
     setCursor(true)
-
   of pcDir, pcLinkToDir:
     let directoryName = if kind == pcDir: path else: expandSymlink(path)
     try:
@@ -442,7 +413,7 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
       filerStatus.dirlistUpdate = true
     except OSError:
       writeFileOpenErrorMessage(status.commandWindow, path.toRunes)
-]#
+
 proc updateFilerView(status: var EditorStatus, filerStatus: var FilerStatus) =
   status.mainWindowInfo[status.currentMainWindow].window.erase
   writeTabLine(status)
@@ -523,8 +494,6 @@ proc filerMode*(status: var EditorStatus) =
       changeSortBy(filerStatus)
     elif key == ord('N'):
       createDir(status, filerStatus)
-      #[
     elif isEnterKey(key):
       openFileOrDir(status, filerStatus)
-      ]#
   setCursor(true)

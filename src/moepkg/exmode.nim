@@ -110,11 +110,11 @@ proc isShellCommand(command: seq[seq[Rune]]): bool =
 
 proc isReplaceCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
-#[
+
 proc splitWindowCommand(status: var EditorStatus) =
   splitWindow(status)
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
-]#
+
 proc changeThemeSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"dark": status.settings.editorColorTheme = ColorTheme.dark
   elif command == ru"light": status.settings.editorColorTheme = ColorTheme.light
@@ -238,7 +238,17 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
   if status.bufStatus[status.currentBuffer].countChange > 0:
     writeNoWriteError(status.commandWindow, status.settings.editorColor.errorMessage)
     status.changeMode(Mode.normal)
-  else: addNewBuffer(status, $filename)
+  else:
+    if existsDir($filename):
+      try:
+        setCurrentDir($filename)
+      except OSError:
+        #writeFileOpenErrorMessage(status.commandWindow, filename.toRunes)
+        addNewBuffer(status, "")
+      status.bufStatus.add(BufferStatus(mode: Mode.filer))
+    else: addNewBuffer(status, $filename)
+
+    changeCurrentBuffer(status, status.bufStatus.high)
 
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   if filename.len == 0:
@@ -404,9 +414,9 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     syntaxSettingCommand(status, command[1])
   elif isChangeThemeSettingCommand(command):
     changeThemeSettingCommand(status, command[1])
-  #[
   elif isSplitWindowCommand(command):
     splitWindowCommand(status)
+  #[
   elif isAllBufferQuitCommand(command):
     allBufferQuitCommand(status)
   elif isForceAllBufferQuitCommand(command):

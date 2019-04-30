@@ -326,19 +326,16 @@ proc update*(status: var EditorStatus) =
   status.mainWindowInfo[status.currentMainWindow].window.moveCursor(status.bufStatus[status.currentBuffer].cursor.y, status.bufStatus[status.currentBuffer].view.widthOfLineNum + status.bufStatus[status.currentBuffer].cursor.x)
   setCursor(true)
 
-#[
+
 proc splitWindow*(status: var EditorStatus) =
   let
     numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useTab = if status.bufStatus[status.currentBuffer].mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
 
-  status.mainWindowInfo.insert(status.currentBuffer, status.currentMainWindow)
-  status.mainWindow.insert(initWindow(terminalHeight() - useTab - 1, int(terminalWidth() / status.mainWindow.len), useTab, int(terminalWidth() / status.mainWindow.len)), status.currentMainWindow)
+  status.mainWindowInfo.insert(MainWindowInfo(window: initWindow(terminalHeight() - useTab - 1, int(terminalWidth() / status.mainWindowInfo.len), useTab, int(terminalWidth() / status.mainWindowInfo.len)), bufferIndex: status.currentBuffer))
 
   status.update
-
-]#
 
 proc closeWindow*(status: var EditorStatus, index: int) =
   if index < 0 or index > status.mainWindowInfo.high or index > status.mainWindowInfo.high: return
@@ -347,14 +344,13 @@ proc closeWindow*(status: var EditorStatus, index: int) =
   if status.mainWindowInfo.len > 0:
     status.currentMainWindow = if index > status.mainWindowInfo.high: status.mainWindowInfo.high else: index
     status.currentBuffer = status.mainWindowInfo[status.currentMainWindow].bufferIndex
-#[
+
 proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
-  if index < 0 or status.mainWindow.high < index: return
+  if index < 0 or status.mainWindowInfo.high < index: return
 
   status.currentMainWindow = index
-  changeCurrentBuffer(status, status.displayBuffer[index])
+  changeCurrentBuffer(status, status.mainWindowInfo[index].bufferIndex)
   if status.bufStatus[status.currentBuffer].mode != Mode.filer and status.settings.tabLine.useTab: writeTabLine(status)
-]#
 
 proc updateHighlight*(status: var EditorStatus)
 from searchmode import searchAllOccurrence
