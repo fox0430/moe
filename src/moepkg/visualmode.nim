@@ -95,35 +95,30 @@ proc deleteBuffer(status: var EditorStatus, area: SelectArea) =
   status.bufStatus[status.currentBuffer].currentColumn = area.startColumn
   status.bufStatus[status.currentBuffer].expandedColumn = area.startColumn
 
-proc addIndent(status: var EditorStatus, area: SelectArea) =
-  status.bufStatus[status.currentBuffer].currentLine = area.startLine
+proc addIndent(bufStatus: var BufferStatus, area: SelectArea, tabStop: int) =
+  bufStatus.currentLine = area.startLine
   for i in area.startLine .. area.endLine:
-    addIndent(status.bufStatus[status.currentBuffer], status.settings.tabStop)
-    inc(status.bufStatus[status.currentBuffer].currentLine)
+    addIndent(bufStatus, tabStop)
+    inc(bufStatus.currentLine)
 
-  status.bufStatus[status.currentBuffer].currentLine = area.startLine
+  bufStatus.currentLine = area.startLine
 
-proc deleteIndent(status: var EditorStatus, area: SelectArea) =
-  status.bufStatus[status.currentBuffer].currentLine = area.startLine
+proc deleteIndent(bufStatus: var BufferStatus, area: SelectArea, tabStop: int) =
+  bufStatus.currentLine = area.startLine
   for i in area.startLine .. area.endLine:
-    deleteIndent(status.bufStatus[status.currentBuffer], status.settings.tabStop)
-    inc(status.bufStatus[status.currentBuffer].currentLine)
+    deleteIndent(bufStatus, tabStop)
+    inc(bufStatus.currentLine)
 
-  status.bufStatus[status.currentBuffer].currentLine = area.startLine
+  bufStatus.currentLine = area.startLine
 
 proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSlectArea
 
-  if key == ord('y') or isDcKey(key):
-    yankBuffer(status, area)
-  elif key == ord('x') or key == ord('d'):
-    deleteBuffer(status, area)
-  elif key == ord('>'):
-    addIndent(status, area)
-  elif key == ord('<'):
-    deleteIndent(status, area)
-  else:
-    discard
+  if key == ord('y') or isDcKey(key): yankBuffer(status, area)
+  elif key == ord('x') or key == ord('d'): deleteBuffer(status, area)
+  elif key == ord('>'): addIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
+  elif key == ord('<'): deleteIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
+  else: discard
 
 proc visualMode*(status: var EditorStatus) =
   status.resize(terminalHeight(), terminalWidth())
