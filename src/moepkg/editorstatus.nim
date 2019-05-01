@@ -255,9 +255,9 @@ proc resize*(status: var EditorStatus, height, width: int) =
     if status.bufStatus[status.currentBuffer].mode != Mode.filer and  status.settings.tabLine.useTab: resize(status.tabWindow, 1, terminalWidth(), 0, 0)
 
     let
-      currentMode = status.bufStatus[status.currentBuffer].mode
-      prevMode = status.bufStatus[status.currentBuffer].prevMode
-    if status.bufStatus[status.currentBuffer].mode != Mode.filer and (currentMode != Mode.ex and prevMode != Mode.filer):
+      currentMode = status.bufStatus[bufIndex].mode
+      prevMode = status.bufStatus[bufIndex].prevMode
+    if currentMode != Mode.filer and (currentMode != Mode.ex and prevMode != Mode.filer):
       status.bufStatus[bufIndex].view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight - useStatusBar - 1, adjustedWidth - widthOfLineNum - 1, widthOfLineNum)
       status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
@@ -273,18 +273,19 @@ proc update*(status: var EditorStatus) =
   if status.settings.statusBar.useBar: writeStatusBar(status)
 
   for i in 0 ..< status.mainWindowInfo.len:
-    let
-      bufIndex = status.mainWindowInfo[i].bufferIndex
-      isCurrentMainWin = if i == status.currentMainWindow: true else: false
-      color = status.settings.editorColor
-      isLineNumber = status.settings.lineNumber
+    if status.bufStatus[status.mainWindowInfo[i].bufferIndex].mode != Mode.filer:
+      let
+        bufIndex = status.mainWindowInfo[i].bufferIndex
+        isCurrentMainWin = if i == status.currentMainWindow: true else: false
+        color = status.settings.editorColor
+        isLineNumber = status.settings.lineNumber
 
-    if isCurrentMainWin: status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
-    status.bufStatus[bufIndex].view.update(status.mainWindowInfo[i].window, isLineNumber, isCurrentMainWin, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, color, status.bufStatus[bufIndex].currentLine)
+      if isCurrentMainWin: status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
+      status.bufStatus[bufIndex].view.update(status.mainWindowInfo[i].window, isLineNumber, isCurrentMainWin, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, color, status.bufStatus[bufIndex].currentLine)
 
-    if isCurrentMainWin: status.bufStatus[bufIndex].cursor.update(status.bufStatus[bufIndex].view, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
+      if isCurrentMainWin: status.bufStatus[bufIndex].cursor.update(status.bufStatus[bufIndex].view, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
-    status.mainWindowInfo[i].window.refresh
+      status.mainWindowInfo[i].window.refresh
 
   status.mainWindowInfo[status.currentMainWindow].window.moveCursor(status.bufStatus[status.currentBuffer].cursor.y, status.bufStatus[status.currentBuffer].view.widthOfLineNum + status.bufStatus[status.currentBuffer].cursor.x)
   setCursor(true)

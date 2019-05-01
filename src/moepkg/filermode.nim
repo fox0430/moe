@@ -419,6 +419,10 @@ proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
     status.commandWindow.refresh
     filerStatus.dirlistUpdate = true
 
+proc moveNextWindow(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow + 1)
+
+proc movePrevWindow(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow - 1)
+
 proc filerMode*(status: var EditorStatus) =
   setCursor(false)
   var filerStatus = initFilerStatus()
@@ -469,6 +473,10 @@ proc filerMode*(status: var EditorStatus) =
       changeSortBy(filerStatus)
     elif key == ord('N'):
       createDir(status, filerStatus)
+    elif isControlH(key):
+      movePrevWindow(status)
+    elif isControlL(key):
+      moveNextWindow(status)
     elif isEnterKey(key):
       openFileOrDir(status, filerStatus)
   setCursor(true)

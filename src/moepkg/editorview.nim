@@ -11,7 +11,7 @@ type ViewLine = object
   line: seq[Rune]
   originalLine, start, length: int
 
-proc loadSingleViewLine(view: EditorView, buffer: GapBuffer[seq[Rune]], originalLine, start: int): ViewLine =
+proc loadSingleViewLine[T](view: EditorView, buffer: T, originalLine, start: int): ViewLine =
   result.line = ru""
   result.originalLine = originalLine
   result.start = start

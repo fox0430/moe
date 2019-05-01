@@ -392,8 +392,12 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   let
     cmdLoop = status.bufStatus[status.currentBuffer].cmdLoop
     currentBuf = status.currentBuffer
-  
-  if key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
+
+  if isControlL(key):
+    moveNextWindow(status)
+  elif isControlH(key):
+    movePrevWindow(status)
+  elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
     for i in 0 ..< cmdLoop: keyLeft(status.bufStatus[status.currentBuffer])
   elif key == ord('l') or isRightKey(key):
     for i in 0 ..< cmdLoop: keyRight(status.bufStatus[status.currentBuffer])
@@ -482,10 +486,6 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('A'):
     status.bufStatus[currentBuf].currentColumn = status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len
     status.changeMode(Mode.insert)
-  elif isControlL(key):
-    moveNextWindow(status)
-  elif isControlH(key):
-    movePrevWindow(status)
   elif isEscKey(key):
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
     if isEscKey(key): turnOffHighlighting(status)
