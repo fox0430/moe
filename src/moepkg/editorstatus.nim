@@ -256,9 +256,6 @@ proc resize*(status: var EditorStatus, height, width: int) =
     if status.settings.tabLine.useTab: resize(status.tabWindow, 1, terminalWidth(), 0, 0)
 
     status.bufStatus[bufIndex].view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight - useStatusBar - 1, adjustedWidth - widthOfLineNum - 1, widthOfLineNum)
-    let
-      currentMode = status.bufStatus[bufIndex].mode
-      prevMode = status.bufStatus[bufIndex].prevMode
     status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
   if status.settings.statusBar.useBar: writeStatusBar(status)
@@ -279,8 +276,6 @@ proc update*(status: var EditorStatus) =
       isCurrentMainWin = if i == status.currentMainWindow: true else: false
       color = status.settings.editorColor
       isLineNumber = status.settings.lineNumber
-      currentMode = status.bufStatus[bufIndex].mode
-      prevMode = status.bufStatus[bufIndex].prevMode
 
     status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
     status.bufStatus[bufIndex].view.update(status.mainWindowInfo[i].window, isLineNumber, isCurrentMainWin, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, color, status.bufStatus[bufIndex].currentLine)
