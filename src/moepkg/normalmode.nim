@@ -1,5 +1,5 @@
 import strutils, strformat, terminal, deques, sequtils
-import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight
+import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight, undoredostack
 
 proc jumpLine*(status: var EditorStatus, destination: int)
 proc keyRight*(status: var EditorStatus)
@@ -339,7 +339,15 @@ proc pasteBeforeCursor(status: var EditorStatus) =
     pasteString(status)
 
 proc replaceCurrentCharacter*(status: var EditorStatus, character: Rune) =
-  status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine][status.bufStatus[status.currentBuffer].currentColumn] = character
+  let index = status.currentBuffer
+
+  var oldLine, newLine: seq[Rune]
+  oldLine = status.bufStatus[index].buffer[status.bufStatus[index].currentLine]
+  status.bufStatus[index].buffer[status.bufStatus[index].currentLine][status.bufStatus[index].currentColumn] = character
+  newLine = status.bufStatus[index].buffer[status.bufStatus[index].currentLine]
+  
+  push[seq[Rune]](status.bufStatus[index].undoRedoStack, newAssignCommand[seq[Rune]](oldLine, newLine, status.bufStatus[index].currentLine))
+
   status.bufStatus[status.currentBuffer].view.reload(status.bufStatus[status.currentBuffer].buffer, status.bufStatus[status.currentBuffer].view.originalLine[0])
   inc(status.bufStatus[status.currentBuffer].countChange)
 
@@ -407,6 +415,18 @@ proc turnOffHighlighting*(status: var EditorStatus) =
 proc moveNextWindow(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow + 1)
 
 proc movePrevWindow(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow - 1)
+
+proc undo(status: var EditorStatus) =
+  let index = status.currentBuffer
+  if not status.bufStatus[index].undoRedoStack.canUndo: return
+  undo[seq[Rune], GapBuffer[seq[Rune]]](status.bufStatus[index].undoRedoStack, status.bufStatus[index].buffer)
+  status.bufStatus[index].view.reload(status.bufStatus[index].buffer, min(status.bufStatus[index].view.originalLine[0], status.bufStatus[index].buffer.high))
+
+proc redo(status: var EditorStatus) =
+  let index = status.currentBuffer
+  if not status.bufStatus[index].undoRedoStack.canRedo: return
+  redo[seq[Rune], GapBuffer[seq[Rune]]](status.bufStatus[index].undoRedoStack, status.bufStatus[index].buffer)
+  status.bufStatus[index].view.reload(status.bufStatus[index].buffer, min(status.bufStatus[index].view.originalLine[0], status.bufStatus[index].buffer.high))
 
 proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.bufStatus[status.currentBuffer].cmdLoop == 0: status.bufStatus[status.currentBuffer].cmdLoop = 1
@@ -508,6 +528,10 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     moveNextWindow(status)
   elif key == ord('H'):
     movePrevWindow(status)
+  elif key == ord('u'):
+    undo(status)
+  elif isControlR(key):
+    redo(status)
   elif isEscKey(key):
     let key = getKey(status.mainWindow[status.currentMainWindow])
     if isEscKey(key): turnOffHighlighting(status)

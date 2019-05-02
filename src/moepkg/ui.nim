@@ -235,3 +235,4 @@ proc isDcKey*(key: Rune): bool = key == KEY_DC
 proc isEnterKey*(key: Rune): bool = key == KEY_ENTER or key == ord('\n')
 proc isPageUpKey*(key: Rune): bool = key == KEY_PPAGE or key == 2
 proc isPageDownkey*(key: Rune): bool = key == KEY_NPAGE or key == 6
+proc isControlR*(key: Rune): bool = key == 18 # Ctrl-r

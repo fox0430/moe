@@ -56,6 +56,7 @@ proc initGapBuffer*[T](elements: seq[T]): GapBuffer[T] =
 
 proc delete*(gapBuffer: var GapBuffer, delBegin, delEnd: int) =
   ## Delete [delBegin, delEnd) elements
+  # TODO: change half open interval to closed interval
   doAssert(0<=delBegin and delBegin <= delEnd and delEnd <= gapBuffer.size, "Gapbuffer: Invalid interval.")
 
   let
@@ -77,6 +78,12 @@ proc delete*(gapBuffer: var GapBuffer, delBegin, delEnd: int) =
   gapBuffer.size -= delEnd - delBegin
   while gapBuffer.size > 0 and gapBuffer.size*4 <= gapBuffer.capacity: gapBuffer.reserve(gapBuffer.capacity div 2)
 
+proc assign*[T](gapBuffer: var GapBuffer, val: T, index: int) =
+  doAssert(0<=index and index<gapBuffer.size, "Gapbuffer: Invalid index.")
+
+  if index < gapBuffer.gapBegin: gapBuffer.buffer[index] = val
+  else: gapBuffer.buffer[gapBuffer.gapEnd+(index-gapBuffer.gapBegin)] = val
+
 proc `[]`*[T](gapBuffer: GapBuffer[T], index: int): T =
   doAssert(0<=index and index<gapBuffer.size, "Gapbuffer: Invalid index. index = "&($index)&", gapBuffer.size = "&($gapBuffer.size))
 
@@ -89,11 +96,7 @@ proc `[]`*[T](gapBuffer: var GapBuffer[T], index: int): var T =
   if index < gapBuffer.gapBegin: return gapBuffer.buffer[index]
   return gapBuffer.buffer[gapBuffer.gapEnd+(index-gapBuffer.gapBegin)]
 
-proc `[]=`*[T](gapBuffer: var GapBuffer, index: int, val: T) =
-  doAssert(0<=index and index<gapBuffer.size, "Gapbuffer: Invalid index.")
-
-  if index < gapBuffer.gapBegin: gapBuffer.buffer[index] = val
-  else: gapBuffer.buffer[gapBuffer.gapEnd+(index-gapBuffer.gapBegin)] = val
+proc `[]=`*[T](gapBuffer: var GapBuffer, index: int, val: T) = gapBuffer.assign(val, index)
 
 proc len*(gapBuffer: GapBuffer): int = gapBuffer.size
 

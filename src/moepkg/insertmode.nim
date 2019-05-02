@@ -1,6 +1,6 @@
 import deques, strutils, strformat, sequtils, terminal
 from os import execShellCmd
-import ui, editorstatus, editorview, cursor, gapbuffer, editorview, normalmode, unicodeext, highlight
+import ui, editorstatus, editorview, cursor, gapbuffer, editorview, normalmode, unicodeext, highlight, undoredostack
 
 proc insertCloseParen(status: var EditorStatus, c: char) =
   let
@@ -66,7 +66,9 @@ proc keyEnter*(status: var EditorStatus) =
     index = status.currentBuffer
     currentLine = status.bufStatus[index].currentLine
     currentColumn = status.bufStatus[index].currentColumn
+
   status.bufStatus[index].buffer.insert(ru"", status.bufStatus[index].currentLine + 1)
+
   if status.settings.autoIndent:
     insertIndent(status)
 

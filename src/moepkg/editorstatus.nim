@@ -1,5 +1,5 @@
 import packages/docutils/highlite, strutils, terminal, os, strformat
-import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils
+import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils, undoredostack
 type Mode* = enum
   normal, insert, visual, replace, ex, filer, search, quit
 
@@ -40,6 +40,7 @@ type EditorSettings* = object
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
+  undoRedoStack*: UndoRedoStack[seq[Rune]]
   highlight*: Highlight
   view*: EditorView
   language*: SourceLanguage
@@ -116,6 +117,7 @@ proc initEditorSettings*(): EditorSettings =
   result.insertModeCursor = CursorType.ibeamMode
 
 proc initBufferStatus*(): BufferStatus =
+  result.undoRedoStack = initUndoRedoStack[seq[Rune]]()
   result.language = SourceLanguage.langNone
   result.isHighlight = true
   result.mode = Mode.normal
