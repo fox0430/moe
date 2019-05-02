@@ -259,8 +259,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
     let
       currentMode = status.bufStatus[bufIndex].mode
       prevMode = status.bufStatus[bufIndex].prevMode
-    if currentMode != Mode.filer and (currentMode != Mode.ex and prevMode != Mode.filer):
-      status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
+    status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
   if status.settings.statusBar.useBar: writeStatusBar(status)
 
@@ -280,11 +279,13 @@ proc update*(status: var EditorStatus) =
       isCurrentMainWin = if i == status.currentMainWindow: true else: false
       color = status.settings.editorColor
       isLineNumber = status.settings.lineNumber
+      currentMode = status.bufStatus[bufIndex].mode
+      prevMode = status.bufStatus[bufIndex].prevMode
 
-    if isCurrentMainWin: status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
+    status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
     status.bufStatus[bufIndex].view.update(status.mainWindowInfo[i].window, isLineNumber, isCurrentMainWin, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, color, status.bufStatus[bufIndex].currentLine)
 
-    if isCurrentMainWin: status.bufStatus[bufIndex].cursor.update(status.bufStatus[bufIndex].view, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
+    status.bufStatus[bufIndex].cursor.update(status.bufStatus[bufIndex].view, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
     status.mainWindowInfo[i].window.refresh
 
@@ -296,7 +297,7 @@ proc splitWindow*(status: var EditorStatus) =
   let
     numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-    useTab = if status.bufStatus[status.currentBuffer].mode != Mode.filer and status.settings.tabLine.useTab: 1 else: 0
+    useTab = if status.settings.tabLine.useTab: 1 else: 0
 
   status.mainWindowInfo.insert(MainWindowInfo(window: initWindow(terminalHeight() - useTab - 1, int(terminalWidth() / status.mainWindowInfo.len), useTab, int(terminalWidth() / status.mainWindowInfo.len)), bufferIndex: status.currentBuffer))
 
@@ -315,7 +316,7 @@ proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
 
   status.currentMainWindow = index
   changeCurrentBuffer(status, status.mainWindowInfo[index].bufferIndex)
-  if status.bufStatus[status.currentBuffer].mode != Mode.filer and status.settings.tabLine.useTab: writeTabLine(status)
+  if status.settings.tabLine.useTab: writeTabLine(status)
 
 proc moveNextWindow*(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow + 1)
 
