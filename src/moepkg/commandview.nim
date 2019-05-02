@@ -24,11 +24,14 @@ proc writeRemoveDirError*(cmdWin: var Window, errorMessageColor: ColorPair) =
 proc writeCopyFileError*(cmdWin: var Window, errorMessageColor: ColorPair) =
   cmdWin.writeMessageOnCommandWindow("Error: can not copy file", errorMessageColor)
 
-proc writeFileOpenErrorMessage*(cmdWin: var Window, fileName: string, errorMessageColor: Colorpair) =
+proc writeFileOpenError*(cmdWin: var Window, fileName: string, errorMessageColor: Colorpair) =
   cmdWin.writeMessageOnCommandWindow("Error: can not open: " & fileName, errorMessageColor)
 
-proc writeCreateDirErrorMessage*(cmdWin: var Window, errorMessageColor: Colorpair) =
+proc writeCreateDirError*(cmdWin: var Window, errorMessageColor: Colorpair) =
   cmdWin.writeMessageOnCommandWindow("Error: : can not create direcotry", errorMessageColor)
+
+proc writeMessageDeletedFile*(cmdWin: var Window, filename: string, messageColor: Colorpair) =
+  cmdWin.writeMessageOnCommandWindow("Deleted: " & filename, messageColor)
 
 proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
   for i in 0 .. r.high:

@@ -7,6 +7,7 @@ import unicodeext
 import times
 import algorithm
 import math
+import packages/docutils/highlite
 
 import editorstatus
 import ui
@@ -16,6 +17,7 @@ import gapbuffer
 import independentutils
 import highlight
 import commandview
+import highlight
 
 type
   PathInfo = tuple[kind: PathComponent, path: string, size: int64, lastWriteTime: times.Time]
@@ -42,10 +44,8 @@ type FilerStatus = object
   startIndex: int
 
 proc tryExpandSymlink(symlinkPath: string): string =
-  try:
-    return expandSymlink(symlinkPath)
-  except OSError:
-    return ""
+  try: return expandSymlink(symlinkPath)
+  except OSError: return ""
 
 proc searchFiles(status: var EditorStatus, dirList: seq[PathInfo]): seq[PathInfo] =
   setCursor(true)
@@ -89,9 +89,7 @@ proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
   else:
     return
 
-  status.commandWindow.erase
-  status.commandWindow.write(0, 0, "Deleted "&filerStatus.dirList[filerStatus.currentLine].path)
-  status.commandWindow.refresh
+  status.commandWindow.writeMessageDeletedFile(filerStatus.dirList[filerStatus.currentLine].path, Colorpair.brightWhiteDefault)
 
 proc sortDirList(dirList: seq[PathInfo], sortBy: Sort): seq[PathInfo] =
   case sortBy:
@@ -119,78 +117,6 @@ proc refreshDirList(sortBy: Sort): seq[PathInfo] =
       else:  result.add (list.kind, list.path, 0.int64, getLastModificationTime(list.path))
     result[result.high].path = $(result[result.high].path.toRunes.normalizePath)
   return sortDirList(result, sortBy)
-
-proc writeFileNameCurrentLine(mainWindow: var Window, fileName: string , currentLine: int) =
-  mainWindow.write(currentLine + 1, 0, fileName, brightWhiteGreen)
-
-proc writeDirNameCurrentLine(mainWindow: var Window, fileName: string, currentLine: int) =
-  if fileName == "../":
-    mainWindow.write(currentLine + 1, 0, fileName, brightWhiteGreen)
-  else:
-    mainWindow.write(currentLine + 1, 0, fileName & "/", brightWhiteGreen)
-
-proc writePcLinkToDirNameCurrentLine(mainWindow: var Window, fileName: string, currentLine: int) =
-  mainWindow.write(currentLine + 1, 0, fileName & "@ -> " & expandsymLink(fileName) & "/", whiteCyan)
-
-proc writePcLinkToFileNameCurrentLine(mainWindow: var Window, fileName: string, currentLine: int) =
-  mainWindow.write(currentLine + 1, 0, fileName & "@ -> " & expandsymLink(fileName), whiteCyan)
-
-proc writeFileNameHalfwayCurrentLine(mainWindow: var Window, fileName: string, currentLine: int) =
-  mainWindow.write(currentLine + 1, 0, substr(fileName, 0, terminalWidth() - 2), brightWhiteGreen)
-
-proc writeDirNameHalfwayCurrentLine(mainWindow: var Window, fileName: string, currentLine: int) =
-  if currentLine == 0:    # "../"
-    mainWindow.write(currentLine + 1, 0, substr(fileName, 0, terminalWidth() - 2), brightWhiteGreen)
-  else:
-    mainWindow.write(currentLine + 1, 0, substr(fileName, 0, terminalWidth() - 2) & "/~", brightWhiteGreen)
-
-proc writePcLinkToDirNameHalfwayCurrentLine(mainWindow: var Window, fileName: string, currentLine: int) =
-  let buffer = fileName & "@ -> " & expandsymLink(fileName) & "/"
-  mainWindow.write(currentLine + 1, 0, substr(buffer, 0, terminalWidth() - 4) & "~", whiteCyan)
-
-proc writePcLinkToFileNameHalfwayCurrentLine(mainWindow: var Window, fileName: string, currentLine: int) =
-  let buffer = fileName & "@ -> " & expandsymLink(fileName)
-  mainWindow.write(currentLine + 1, 0, substr(buffer, 0, terminalWidth() - 4) & "~", whiteCyan)
-
-proc writeFileName(mainWindow: var Window, currentLine: int, fileName: string) =
-  mainWindow.write(currentLine + 1, 0, fileName)
-
-proc writeDirName(mainWindow: var Window, currentLine: int, fileName: string) =
-  if fileName == "../":
-    mainWindow.write(currentLine + 1, 0, fileName, brightGreenDefault)
-  else:
-    mainWindow.write(currentLine + 1, 0, fileName & "/", brightGreenDefault)
-
-proc writePcLinkToDirName(mainWindow: var Window, currentLine: int, fileName: string) =
-  mainWindow.write(currentLine + 1, 0, fileName & "@ -> " & expandsymLink(fileName) & "/", cyanDefault)
-
-proc writePcLinkToFileName(mainWindow: var Window, currentLine: int, fileName: string) =
-  mainWindow.write(currentLine + 1, 0, fileName & "@ -> " & expandsymLink(fileName), cyanDefault)
-
-proc writeFileNameHalfway(mainWindow: var Window, currentLine: int, fileName: string) =
-  mainWindow.write(currentLine + 1, 0, substr(fileName, 0, terminalWidth() - 2) & "~")
-
-proc writeDirNameHalfway(mainWindow: var Window, currentLine: int, fileName: string) =
-  if fileName == "../":
-    mainWindow.write(currentLine + 1, 0, substr(fileName, 0, terminalWidth() - 2) & "~", brightGreenDefault)
-  else:
-    mainWindow.write(currentLine + 1, 0, substr(fileName, 0, terminalWidth() - 2) & "/~", brightGreenDefault)
-
-proc writePcLinkToDirNameHalfway(mainWindow: var Window, currentLine: int, fileName: string) =
-  let buffer = fileName & "@ -> " & expandsymLink(fileName) & "/"
-  mainWindow.write(currentLine + 1, 0, substr(buffer, 0, terminalWidth() - 4) & "~", cyanDefault)
-
-proc writePcLinkToFileNameHalfway(mainWindow: var Window, currentLine: int, fileName: string) =
-  let buffer = fileName & "@ -> " & expandsymLink(fileName)
-  mainWindow.write(currentLine + 1, 0, substr(buffer, 0, terminalWidth() - 4) & "~", cyanDefault)
-
-proc writeTabLine(status: var EditorStatus) =
-  let
-    width = int(ceil(terminalWidth() / status.mainWindowInfo.len))
-    dir = getCurrentDir()
-    title = if dir.len > width: dir.substr(0, width - 2) & "~" else: dir & " ".repeat(width - dir.len)
-  
-  status.mainWindowInfo[status.currentMainWindow].window.write(0, 0, title, status.settings.editorColor.currentTab)
 
 proc writeFileDetailView(mainWindow: var Window, fileName: string) =
   mainWindow.erase
@@ -226,61 +152,6 @@ proc writeFileDetailView(mainWindow: var Window, fileName: string) =
       mainWindow.write(currentLine, 0,  substr(buffer[currentLine], 0, terminalWidth()), brightWhiteDefault)
 
   discard getKey(mainWindow)
-
-proc writeFillerView(mainWindow: var Window, dirList: seq[PathInfo], currentLine, startIndex: int) =
-
-  for i in 0 ..< dirList.len - startIndex:
-    let index = i
-    let fileKind = dirList[index + startIndex].kind
-    var fileName = dirList[index + startIndex].path
-
-    if fileKind == pcLinkToDir:
-      if (fileName.len + expandsymLink(fileName).len + 5) > terminalWidth():
-        writePcLinkToDirNameHalfway(mainWindow, index, fileName)
-      else:
-        writePcLinkToDirName(mainWindow, index, fileName)
-    elif fileKind == pcLinkToFile:
-      if (fileName.len + expandsymLink(fileName).len + 4) > terminalWidth():
-        writePcLinkToFileNameHalfway(mainWindow, index, fileName)
-      else:
-        writePcLinkToFileName(mainWindow, index, fileName)
-    elif fileName.len > terminalWidth():
-      if fileKind == pcFile:
-        writeFileNameHalfway(mainWindow, index, fileName)
-      elif fileKind == pcDir:
-        writeDirNameHalfway(mainWindow, index, fileName)
-    else:
-      if fileKind == pcFile:
-        writeFileName(mainWindow, index, fileName)
-      elif fileKind == pcDir:
-        writeDirName(mainWindow, index, filename)
-
-  # write current line
-  let fileKind = dirList[currentLine + startIndex].kind
-  let fileName= dirList[currentLine + startIndex].path
-
-  if fileKind == pcLinkToDir:
-    if (fileName.len + expandsymLink(fileName).len + 5) > terminalWidth():
-      writePcLinkToDirNameHalfwayCurrentLine(mainWindow, filename, currentLine)
-    else:
-      writePcLinkToDirNameCurrentLine(mainWindow, fileName, currentLine)
-  elif fileKind == pcLinkToFile:
-    if (fileName.len + expandsymLink(fileName).len + 4) > terminalWidth():
-      writePcLinkToFileNameHalfwayCurrentLine(mainWindow, fileName, currentLine)
-    else:
-      writePcLinkToFileNameCurrentLine(mainWindow, fileName, currentLine)
-  elif fileName.len > terminalWidth():
-    if fileKind == pcFile:
-      writeFileNameHalfwayCurrentLine(mainWindow, fileName, currentLine)
-    elif fileKind == pcDir:
-        writeDirNameHalfwayCurrentLine(mainWindow, fileName, currentLine)
-  else:
-    if fileKind == pcFile:
-      writeFileNameCurrentLine(mainWindow, fileName, currentLine)
-    elif fileKind == pcDir:
-      writeDirNameCurrentLine(mainWindow, fileName, currentLine)
-   
-  mainWindow.refresh
 
 proc initFileRegister(): FileRegister =
   result.copy = false
@@ -370,13 +241,14 @@ proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
     createDir($dirname[0])
     filerStatus.dirlistUpdate = true
   except OSError:
-    writeCreateDirErrorMessage(status.commandWindow, status.settings.editorColor.errorMessage)
+    writeCreateDirError(status.commandWindow, status.settings.editorColor.errorMessage)
     return
    
 proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   let
     kind = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].kind
     path = filerStatus.dirList[filerStatus.currentLine + filerStatus.startIndex].path
+
   case kind
   of pcFile, pcLinkToFile:
     addNewBuffer(status, path)
@@ -387,13 +259,40 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
       setCurrentDir(path)
       filerStatus.dirlistUpdate = true
     except OSError:
-      status.commandWindow.writeFileOpenErrorMessage(path, status.settings.editorColor.errorMessage)
+      status.commandWindow.writeFileOpenError(path, status.settings.editorColor.errorMessage)
+
+proc setDirListColor(kind: PathComponent, isCurrentLine: bool): ColorPair =
+  case kind
+  of pcFile:
+    if isCurrentLine: result = ColorPair.brightWhiteGreen
+    else: result = ColorPair.brightWhiteDefault
+  of pcDir:
+    if isCurrentLine: result = ColorPair.brightWhiteGreen
+    else: result = ColorPair.brightGreenDefault
+  of pcLinkToDir, pcLinkToFile:
+    if isCurrentLine: result = ColorPair.whiteCyan
+    else: result = ColorPair.cyanDefault
+
+proc initFilelistHighlight(dirList: seq[PathInfo], currentLine: int): Highlight =
+  for i in 0 ..< dirList.len:
+    let color = setDirListColor(dirList[i].kind, i == currentLine)
+    result.colorSegments.add(ColorSegment(firstRow: i, firstColumn: 0, lastRow: i, lastColumn: dirList[i].path.len, color: color))
+
+## TODO: Change to seq[seq[Rune]]
+proc fileNameToGapBuffer(bufStatus: var BufferStatus, settings: EditorSettings, filerStatus: FilerStatus) =
+  bufStatus.buffer = initGapBuffer[seq[Rune]]()
+
+  for i in 0 ..< filerStatus.dirList.len: bufStatus.buffer.add(filerStatus.dirList[i].path.toRunes)
+
+  let useStatusBar = if settings.statusBar.useBar: 1 else: 0
+  let numOfFile = filerStatus.dirList.len
+  bufStatus.highlight = initFilelistHighlight(filerStatus.dirList, filerStatus.currentLine)
+  bufStatus.view = initEditorView(bufStatus.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
 
 proc updateFilerView(status: var EditorStatus, filerStatus: var FilerStatus) =
-  status.mainWindowInfo[status.currentMainWindow].window.erase
-  writeTabLine(status)
-  status.mainWindowInfo[status.currentMainWindow].window.writeFillerView(filerStatus.dirList, filerStatus.currentLine, filerStatus.startIndex)
+  fileNameToGapBuffer(status.bufStatus[status.currentBuffer], status.settings, filerStatus)
   status.resize(terminalHeight(), terminalWidth())
+  status.update
   filerStatus.viewUpdate = false
 
 proc changeSortBy(filerStatus: var FilerStatus) =
@@ -418,10 +317,6 @@ proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
     status.commandWindow.erase
     status.commandWindow.refresh
     filerStatus.dirlistUpdate = true
-
-proc moveNextWindow(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow + 1)
-
-proc movePrevWindow(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow - 1)
 
 proc filerMode*(status: var EditorStatus) =
   setCursor(false)

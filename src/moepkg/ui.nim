@@ -116,16 +116,12 @@ proc saveCurrentTerminalModes*() =
   def_prog_mode()
 
 proc setCursor*(cursor: bool) =
-  if cursor == true:
-    curs_set(1)   # enable cursor
-  elif cursor == false:
-    curs_set(0)   # disable cursor
+  if cursor == true: curs_set(1)   # enable cursor
+  elif cursor == false: curs_set(0)   # disable cursor
 
 proc keyEcho*(keyecho: bool) =
-  if keyecho == true:
-    echo()
-  elif keyecho == false:
-    noecho()
+  if keyecho == true: echo()
+  elif keyecho == false: noecho()
     
 proc startUi*() =
   disableControlC()

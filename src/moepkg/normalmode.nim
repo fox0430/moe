@@ -382,10 +382,6 @@ proc turnOffHighlighting*(status: var EditorStatus) =
   status.bufStatus[status.currentBuffer].isHighlight = false
   status.updateHighlight
 
-proc moveNextWindow(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow + 1)
-
-proc movePrevWindow(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow - 1)
-
 proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.bufStatus[status.currentBuffer].cmdLoop == 0: status.bufStatus[status.currentBuffer].cmdLoop = 1
 
