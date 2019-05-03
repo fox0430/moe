@@ -226,7 +226,7 @@ proc jumpCommand(status: var EditorStatus, line: int) =
 proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
   status.changeMode(Mode.normal)
 
-  if status.bufStatus[status.currentBuffer].countChange > 0 and countReferencedWindow(status.mainWindowInfo, status.currentBuffer) == 0:
+  if status.bufStatus[status.currentBuffer].countChange > 0 or countReferencedWindow(status.mainWindowInfo, status.currentBuffer) == 0:
     writeNoWriteError(status.commandWindow, status.settings.editorColor.errorMessage)
   else:
     if existsDir($filename):
