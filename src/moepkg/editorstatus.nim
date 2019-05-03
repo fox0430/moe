@@ -112,8 +112,9 @@ proc initEditorStatus*(): EditorStatus =
   result.registers = initRegisters()
   result.settings = initEditorSettings()
 
-  let useStatusBar = if result.settings.statusBar.useBar: 1 else: 0
-  let useTab = if result.settings.tabLine.useTab: 1 else: 0
+  let
+    useStatusBar = if result.settings.statusBar.useBar: 1 else: 0
+    useTab = if result.settings.tabLine.useTab: 1 else: 0
 
   if result.settings.tabLine.useTab: result.tabWindow = initWindow(1, terminalWidth(), 0, 0)
   result.mainWindowInfo.add(MainWindowInfo(window: initWindow(terminalHeight() - useTab - 1, terminalWidth(), useTab, 0), bufferIndex: 0))
@@ -216,8 +217,9 @@ proc writeStatusBar*(status: var EditorStatus) =
   status.statusWindow.refresh
 
 proc writeTab(tabWin: var Window, start, tabWidth: int, filename: string, color: Colorpair) =
-  let title = if filename == "": "New file" else: filename
-  let buffer = if filename.len < tabWidth: " " & title & " ".repeat(tabWidth - title.len) else: " " & (title).substr(0, tabWidth - 3) & "~"
+  let
+    title = if filename == "": "New file" else: filename
+    buffer = if filename.len < tabWidth: " " & title & " ".repeat(tabWidth - title.len) else: " " & (title).substr(0, tabWidth - 3) & "~"
   tabWin.write(0, start, buffer, color)
 
 proc writeTabLine*(status: var EditorStatus) =
@@ -232,6 +234,7 @@ proc writeTabLine*(status: var EditorStatus) =
     let
       color = if status.currentMainWindow == i: currentTabColor else: defaultColor
       filename = if status.bufStatus[status.mainWindowInfo[i].bufferIndex].mode == Mode.filer: getCurrentDir() else: $status.bufStatus[status.mainWindowInfo[i].bufferIndex].filename
+
     status.tabWindow.writeTab(i * tabWidth, tabWidth, filename, color)
 
   status.tabWindow.refresh
@@ -286,7 +289,6 @@ proc update*(status: var EditorStatus) =
 
   status.mainWindowInfo[status.currentMainWindow].window.moveCursor(status.bufStatus[status.currentBuffer].cursor.y, status.bufStatus[status.currentBuffer].view.widthOfLineNum + status.bufStatus[status.currentBuffer].cursor.x)
   setCursor(true)
-
 
 proc splitWindow*(status: var EditorStatus) =
   let
@@ -363,8 +365,9 @@ proc updateHighlight*(status: var EditorStatus) =
 
   # highlight search results
   if status.bufStatus[status.currentBuffer].isHighlight and status.searchHistory.len > 0:
-    let keyword = status.searchHistory[^1]
-    let allOccurrence = searchAllOccurrence(status.bufStatus[currentBuf].buffer, keyword)
+    let
+      keyword = status.searchHistory[^1]
+      allOccurrence = searchAllOccurrence(status.bufStatus[currentBuf].buffer, keyword)
     for pos in allOccurrence:
       let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column+keyword.high, color: defaultMagenta)
       status.bufStatus[currentBuf].highlight = status.bufStatus[currentBuf].highlight.overwrite(colorSegment)
