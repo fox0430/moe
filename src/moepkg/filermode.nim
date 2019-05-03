@@ -184,19 +184,25 @@ proc setDirListColor(kind: PathComponent, isCurrentLine: bool): ColorPair =
     if isCurrentLine: result = ColorPair.whiteCyan
     else: result = ColorPair.cyanDefault
 
-proc initFilelistHighlight(dirList: seq[PathInfo], currentLine: int): Highlight =
+proc initFilelistHighlight[T](dirList: seq[PathInfo], buffer: T, currentLine: int): Highlight =
   for i in 0 ..< dirList.len:
     let color = setDirListColor(dirList[i].kind, i == currentLine)
-    result.colorSegments.add(ColorSegment(firstRow: i, firstColumn: 0, lastRow: i, lastColumn: dirList[i].path.len, color: color))
+    result.colorSegments.add(ColorSegment(firstRow: i, firstColumn: 0, lastRow: i, lastColumn: buffer[i].len, color: color))
 
 proc fileNameToGapBuffer(bufStatus: var BufferStatus, settings: EditorSettings, filerStatus: FilerStatus) =
   bufStatus.buffer = initGapBuffer[seq[Rune]]()
 
-  for i in 0 ..< filerStatus.dirList.len: bufStatus.buffer.add(filerStatus.dirList[i].path.toRunes)
+  for i in 0 ..< filerStatus.dirList.len:
+    let
+      filename = filerStatus.dirList[i].path
+      kind = filerStatus.dirList[i].kind
+    bufStatus.buffer.add(filename.toRunes)
+    if kind == pcLinkToFile: bufStatus.buffer[i].add(ru"@ -> " & expandsymLink(filename).toRunes)
+    if kind == pcLinkToDir: bufStatus.buffer[i].add(ru"@ -> " & expandsymLink(filename).toRunes & ru"/")
 
   let useStatusBar = if settings.statusBar.useBar: 1 else: 0
   let numOfFile = filerStatus.dirList.len
-  bufStatus.highlight = initFilelistHighlight(filerStatus.dirList, bufStatus.currentLine)
+  bufStatus.highlight = initFilelistHighlight(filerStatus.dirList, bufStatus.buffer, bufStatus.currentLine)
   bufStatus.view = initEditorView(bufStatus.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
 
 proc updateFilerView(status: var EditorStatus, filerStatus: var FilerStatus) =
@@ -210,19 +216,35 @@ proc initFileDeitalHighlight[T](buffer: T): Highlight =
     result.colorSegments.add(ColorSegment(firstRow: i, firstColumn: 0, lastRow: i, lastColumn: buffer[i].len, color: ColorPair.brightWhiteDefault))
 
 ## TODO: Add items
-proc writefileDetail(status: var Editorstatus, fileName: string) =
+proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string) =
   status.bufStatus[status.currentBuffer].buffer = initGapBuffer[seq[Rune]]()
 
   let fileInfo = getFileInfo(fileName, false)
-  status.bufStatus[status.currentBuffer].buffer.add(("name        : " & $substr(fileName, 2)).toRunes)
+  status.bufStatus[status.currentBuffer].buffer.add(ru"name        : " & fileName.toRunes)
+
+  if fileInfo.kind == pcFile: status.bufStatus[status.currentBuffer].buffer.add(ru"kind        : " & ru"File")
+  elif fileInfo.kind == pcDir: status.bufStatus[status.currentBuffer].buffer.add(ru"kind        : " & ru"Directory")
+  elif fileInfo.kind == pcLinkToFile: status.bufStatus[status.currentBuffer].buffer.add(ru"kind        : " & ru"Symbolic link to file")
+  elif fileInfo.kind == pcLinkToDir: status.bufStatus[status.currentBuffer].buffer.add(ru"kind        : " & ru"Symbolic link to directory")
+
   status.bufStatus[status.currentBuffer].buffer.add(("permissions : " & substr($fileInfo.permissions, 1, ($fileInfo.permissions).high - 1)).toRunes)
   status.bufStatus[status.currentBuffer].buffer.add(("last access : " & $fileInfo.lastAccessTime).toRunes)
   status.bufStatus[status.currentBuffer].buffer.add(("last write  : " & $fileInfo.lastWriteTime).toRunes)
 
   status.bufStatus[status.currentBuffer].highlight = initFileDeitalHighlight(status.bufStatus[status.currentBuffer].buffer)
 
+  let
+    useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+    tmpCurrentLine = status.bufStatus[status.currentBuffer].currentLine
+
+  status.bufStatus[status.currentBuffer].view = initEditorView(status.bufStatus[status.currentBuffer].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
+  status.bufStatus[status.currentBuffer].currentLine = 0
+
   status.update
+
+  setCursor(false)
   discard status.mainWindowInfo[status.currentMainWindow].window.getKey
+  status.bufStatus[status.currentBuffer].currentLine = tmpCurrentLine
 
 proc changeSortBy(filerStatus: var FilerStatus) =
   case filerStatus.sortBy:
@@ -250,7 +272,9 @@ proc filerMode*(status: var EditorStatus) =
   var filerStatus = initFilerStatus()
 
   while status.bufStatus[status.currentBuffer].mode == Mode.filer:
-    if filerStatus.dirlistUpdate: filerStatus = updateDirList(filerStatus)
+    if filerStatus.dirlistUpdate:
+      filerStatus = updateDirList(filerStatus)
+      status.bufStatus[status.currentBuffer].currentLine = 0
 
     if filerStatus.viewUpdate: updateFilerView(status, filerStatus)
 
@@ -272,7 +296,7 @@ proc filerMode*(status: var EditorStatus) =
     elif key == ord('D'):
       deleteFile(status, filerStatus)
     elif key == ord('i'):
-      writeFileDetail(status, filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine][1])
+      writeFileDetail(status, filerStatus.dirList.len, filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine][1])
       filerStatus.viewUpdate = true
     elif key == 'j' or isDownKey(key):
       keyDown(filerStatus, status.bufStatus[status.currentBuffer].currentLine)
