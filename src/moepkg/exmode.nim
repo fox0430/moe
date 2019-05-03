@@ -373,7 +373,7 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
       status.bufStatus[status.currentBuffer].buffer[startLine].insert(replaceInfo.replaceWord, status.bufStatus[status.currentBuffer].buffer[startLine].len)
       for j in 0 .. status.bufStatus[status.currentBuffer].buffer[startLine + 1].high:
         status.bufStatus[status.currentBuffer].buffer[startLine].insert(status.bufStatus[status.currentBuffer].buffer[startLine + 1][j], status.bufStatus[status.currentBuffer].buffer[startLine].len)
-      status.bufStatus[status.currentBuffer].buffer.delete(startLine + 1, startLine + 2)
+      status.bufStatus[status.currentBuffer].buffer.delete(startLine + 1, startLine + 1)
   else:
     for i in 0 .. status.bufStatus[status.currentBuffer].buffer.high:
       let searchResult = searchBuffer(status, replaceInfo.searhWord)

@@ -1,49 +1,79 @@
+import unittest
 import moepkg/gapbuffer
 
-var buffer = initGapBuffer[string]()
+test "empty":
+  let buffer = initGapBuffer[string]()
+  
+  check(buffer.empty)
 
-doAssert(buffer.empty)
+test "insert":
+  var buffer = initGapBuffer[string]()
+  buffer.insert("0", 0)
+  buffer.insert("1", 0)
+  buffer.insert("2", 2)
+  
+  check(buffer.len == 3)
+  check(buffer[0] == "1")
+  check(buffer[1] == "0")
+  check(buffer[2] == "2")
+  check($buffer == "1\n0\n2\n")
 
-buffer.insert("0", 0)
-buffer.insert("1", 0)
-buffer.insert("2", 2)
+test "delete(basic)":
+  var buffer = initGapBuffer[string]()
+  buffer.add("0")
+  buffer.add("1")
+  buffer.add("2")
+  buffer.add("3")
+  buffer.add("4")
+  buffer.add("5")
+  buffer.add("6")
+  buffer.add("7")
+  buffer.add("8")
+  buffer.add("99")
 
-doAssert(buffer.len == 3)
-doAssert(buffer[0] == "1")
-doAssert(buffer[1] == "0")
-doAssert(buffer[2] == "2")
-doAssert($buffer == "1\n0\n2\n")
+  buffer.delete(0, 1)
+  check(buffer.len == 8)
+  check(buffer[0] == "2")
 
-buffer[0] = "0"
-buffer[1] = "1"
-buffer[2] = "2"
-buffer.add("3")
-buffer.add("4")
-buffer.add("5")
-buffer.add("6")
-buffer.add("7")
-buffer.add("8")
-buffer.add("99")
+  buffer.delete(2, 4)
+  check(buffer.len == 5)
+  check(buffer[0] == "2")
+  check(buffer[1] == "3")
+  check(buffer[2] == "7")
+  check(buffer[3] == "8")
+  check(buffer[4] == "99")
 
-buffer.delete(0, 2)
-doAssert(buffer.len == 8)
-doAssert(buffer[0] == "2")
+test "delete(all)":
+  var buffer = initGapBuffer[string]()
+  buffer.add("1")
+  buffer.add("2")
+  buffer.add("3")
+  buffer.add("4")
+  buffer.add("5")
+  buffer.delete(0, 4)
+  
+  check(buffer.empty)
+  check(buffer.len == 0)
 
-buffer.delete(2, 5)
-doAssert(buffer.len == 5)
-doAssert(buffer[0] == "2")
-doAssert(buffer[1] == "3")
-doAssert(buffer[2] == "7")
-doAssert(buffer[3] == "8")
-doAssert(buffer[4] == "99")
+test "next":
+  var buffer = initGapBuffer[string]()
+  buffer.add("2")
+  buffer.add("3")
+  buffer.add("7")
+  buffer.add("8")
+  buffer.add("99")
 
-doAssert(buffer.next(3, 0) == (4, 0))
-doAssert(buffer.next(4, 0) == (4, 1))
-doAssert(buffer.next(4, 1) == (4, 1))
+  check(buffer.next(3, 0) == (4, 0))
+  check(buffer.next(4, 0) == (4, 1))
+  check(buffer.next(4, 1) == (4, 1))
 
-doAssert(buffer.prev(1, 0) == (0, 0))
-doAssert(buffer.prev(0, 0) == (0, 0))
+test "prev":
+  var buffer = initGapBuffer[string]()
+  buffer.add("2")
+  buffer.add("3")
+  buffer.add("7")
+  buffer.add("8")
+  buffer.add("99")
 
-buffer.delete(0, 5)
-doAssert(buffer.empty)
-doAssert(buffer.len == 0)
+  check(buffer.prev(1, 0) == (0, 0))
+  check(buffer.prev(0, 0) == (0, 0))

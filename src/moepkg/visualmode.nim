@@ -88,7 +88,7 @@ proc deleteBuffer(status: var EditorStatus, area: SelectArea) =
     elif status.bufStatus[status.currentBuffer].buffer.len == 1 and status.bufStatus[status.currentBuffer].buffer[0].len < 1:
       break
     else:
-      status.bufStatus[status.currentBuffer].buffer.delete(area.startLine, area.startLine + 1)
+      status.bufStatus[status.currentBuffer].buffer.delete(area.startLine, area.startLine)
 
   inc(status.bufStatus[status.currentBuffer].countChange)
   status.bufStatus[status.currentBuffer].currentLine = area.startLine

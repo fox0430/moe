@@ -54,9 +54,11 @@ proc initGapBuffer*[T](elements: seq[T]): GapBuffer[T] =
   result = initGapBuffer[T]()
   for e in elements: result.add(e)
 
-proc delete*(gapBuffer: var GapBuffer, delBegin, delEnd: int) =
-  ## Delete [delBegin, delEnd) elements
-  # TODO: change half open interval to closed interval
+proc delete*(gapBuffer: var GapBuffer, first, last: int) =
+  ## Delete [first, last] elements
+  let
+    delBegin = first
+    delEnd = last+1
   doAssert(0<=delBegin and delBegin <= delEnd and delEnd <= gapBuffer.size, "Gapbuffer: Invalid interval.")
 
   let

@@ -45,7 +45,7 @@ proc keyBackspace(status: var EditorStatus) =
   if status.bufStatus[index].currentColumn == 0:
     status.bufStatus[index].currentColumn = status.bufStatus[index].buffer[status.bufStatus[index].currentLine - 1].len
     status.bufStatus[index].buffer[status.bufStatus[index].currentLine - 1] &= status.bufStatus[index].buffer[status.bufStatus[index].currentLine]
-    status.bufStatus[index].buffer.delete(status.bufStatus[index].currentLine, status.bufStatus[index].currentLine + 1)
+    status.bufStatus[index].buffer.delete(status.bufStatus[index].currentLine, status.bufStatus[index].currentLine)
     dec(status.bufStatus[index].currentLine)
   else:
     dec(status.bufStatus[index].currentColumn)

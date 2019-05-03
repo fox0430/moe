@@ -55,7 +55,7 @@ proc doInsert[T, U](command: Command[T], buffer: var U) =
 
 proc doDelete[T, U](command: Command[T], buffer: var U) =
   doAssert(command.kind == CommandKind.delete)
-  buffer.delete(command.first, command.last+1)
+  buffer.delete(command.first, command.last)
 
 proc doAssign[T, U](command: Command[T], buffer: var U) =
   doAssert(command.kind == CommandKind.assign)

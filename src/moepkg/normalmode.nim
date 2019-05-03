@@ -95,7 +95,7 @@ proc deleteCurrentCharacter*(status: var EditorStatus) =
 
   if currentColumn == status.bufStatus[index].buffer[currentLine].len:
     status.bufStatus[index].buffer[currentLine].insert(status.bufStatus[index].buffer[currentLine + 1], currentColumn)
-    status.bufStatus[index].buffer.delete(currentLine + 1, currentLine + 2)
+    status.bufStatus[index].buffer.delete(currentLine + 1, currentLine + 1)
   else:
     status.bufStatus[index].buffer[currentLine].delete(currentColumn)
     if status.bufStatus[index].buffer[currentLine].len > 0 and currentColumn == status.bufStatus[index].buffer[currentLine].len and currentMode != Mode.insert:
@@ -273,7 +273,7 @@ proc openBlankLineAbove(status: var EditorStatus) =
   inc(status.bufStatus[status.currentBuffer].countChange)
 
 proc deleteLine(status: var EditorStatus, line: int) =
-  status.bufStatus[status.currentBuffer].buffer.delete(line, line + 1)
+  status.bufStatus[status.currentBuffer].buffer.delete(line, line)
 
   let index = status.currentBuffer
 
@@ -375,7 +375,7 @@ proc joinLine(status: var EditorStatus) =
     return
 
   status.bufStatus[index].buffer[status.bufStatus[index].currentLine].add(status.bufStatus[index].buffer[status.bufStatus[index].currentLine + 1])
-  status.bufStatus[index].buffer.delete(status.bufStatus[index].currentLine + 1, status.bufStatus[index].currentLine + 2)
+  status.bufStatus[index].buffer.delete(status.bufStatus[index].currentLine + 1, status.bufStatus[index].currentLine + 1)
 
   status.bufStatus[index].view.reload(status.bufStatus[index].buffer, min(status.bufStatus[index].view.originalLine[0], status.bufStatus[index].buffer.high))
   inc(status.bufStatus[index].countChange)
