@@ -4,15 +4,34 @@ import editorstatus, editorview, ui, unicodeext
 type
   ExModeViewStatus = tuple[buffer: seq[Rune], prompt: string, cursorY, cursorX, currentPosition, startPosition: int]
 
-proc writeNoWriteError*(commandWindow: var Window, errorMessageColor: ColorPair) =
-  commandWindow.erase
-  commandWindow.write(0, 0, "Error: No write since last change", errorMessageColor)
-  commandWindow.refresh
+proc writeMessageOnCommandWindow(cmdWin: var Window, message: string, color: ColorPair) =
+  cmdWin.erase
+  cmdWin.write(0, 0, message, color)
+  cmdWin.refresh
 
-proc writeSaveError*(commandWindow: var Window, errorMessageColor: ColorPair) =
-  commandWindow.erase
-  commandWindow.write(0, 0, "Error: Failed to save the file", errorMessageColor)
-  commandWindow.refresh
+proc writeNoWriteError*(cmdWin: var Window, errorMessageColor: ColorPair) =
+  cmdWin.writeMessageOnCommandWindow("Error: No write since last change", errorMessageColor)
+
+proc writeSaveError*(cmdWin: var Window, errorMessageColor: ColorPair) =
+  cmdWin.writeMessageOnCommandWindow("Error: Failed to save the file", errorMessageColor)
+
+proc writeRemoveFileError*(cmdWin: var Window, errorMessageColor: ColorPair) =
+  cmdWin.writeMessageOnCommandWindow("Error: can not remove file", errorMessageColor)
+
+proc writeRemoveDirError*(cmdWin: var Window, errorMessageColor: ColorPair) =
+  cmdWin.writeMessageOnCommandWindow("Error: can not remove directory", errorMessageColor)
+
+proc writeCopyFileError*(cmdWin: var Window, errorMessageColor: ColorPair) =
+  cmdWin.writeMessageOnCommandWindow("Error: can not copy file", errorMessageColor)
+
+proc writeFileOpenError*(cmdWin: var Window, fileName: string, errorMessageColor: Colorpair) =
+  cmdWin.writeMessageOnCommandWindow("Error: can not open: " & fileName, errorMessageColor)
+
+proc writeCreateDirError*(cmdWin: var Window, errorMessageColor: Colorpair) =
+  cmdWin.writeMessageOnCommandWindow("Error: : can not create direcotry", errorMessageColor)
+
+proc writeMessageDeletedFile*(cmdWin: var Window, filename: string, messageColor: Colorpair) =
+  cmdWin.writeMessageOnCommandWindow("Deleted: " & filename, messageColor)
 
 proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
   for i in 0 .. r.high:

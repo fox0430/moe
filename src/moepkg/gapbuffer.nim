@@ -8,7 +8,7 @@ proc gapLen(gapBuffer: GapBuffer): int = gapBuffer.gapEnd - gapBuffer.gapBegin
 
 proc makeGap(gapBuffer: var GapBuffer, gapBegin: int) =
   ## Create a gap starting with gapBegin
-  doAssert(0<= gapBegin and gapBuffer.capacity - gapBegin >= gapBuffer.gapLen, "Gapbuffer: Invalid position.")
+  doAssert(0 <= gapBegin and gapBuffer.capacity - gapBegin >= gapBuffer.gapLen, "Gapbuffer: Invalid position.")
 
   if gapBegin < gapBuffer.gapBegin:
     let len = gapBuffer.gapBegin-gapBegin

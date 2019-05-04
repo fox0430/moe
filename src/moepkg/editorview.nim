@@ -11,7 +11,7 @@ type ViewLine = object
   line: seq[Rune]
   originalLine, start, length: int
 
-proc loadSingleViewLine(view: EditorView, buffer: GapBuffer[seq[Rune]], originalLine, start: int): ViewLine =
+proc loadSingleViewLine[T](view: EditorView, buffer: T, originalLine, start: int): ViewLine =
   result.line = ru""
   result.originalLine = originalLine
   result.start = start
@@ -28,7 +28,7 @@ proc loadSingleViewLine(view: EditorView, buffer: GapBuffer[seq[Rune]], original
     totalWidth += nextWidth
     nextWidth = calcNextWidth
 
-proc reload*(view: var EditorView, buffer: GapBuffer[seq[Rune]], topLine: int) =
+proc reload*[T](view: var EditorView, buffer: T, topLine: int) =
   ## topLineがEditorViewの一番上のラインとして表示されるようにバッファからEditorViewに対してリロードを行う.
   ## EditorView全体を更新するため計算コストはやや高め.バッファの内容とEditorViewの内容を同期させる時やEditorView全体が全く異なるような内容になるような処理をした後等に使用することが想定されている.
 
@@ -66,7 +66,7 @@ proc reload*(view: var EditorView, buffer: GapBuffer[seq[Rune]], topLine: int) =
       inc(lineNumber)
       start = 0
 
-proc initEditorView*(buffer: GapBuffer[seq[Rune]], height, width: int): EditorView =
+proc initEditorView*[T](buffer: T, height, width: int): EditorView =
   ## width/heightでEditorViewを初期化し,バッファの0行0文字目からロードする.widthは画面幅ではなくEditorViewの1ラインの文字数である(従って行番号分の長さは考慮しなくてよい).
 
   result.height = height
@@ -85,7 +85,7 @@ proc initEditorView*(buffer: GapBuffer[seq[Rune]], height, width: int): EditorVi
 
   result.reload(buffer, 0)
 
-proc resize*(view: var EditorView, buffer: GapBuffer[seq[Rune]], height, width, widthOfLineNum: int) =
+proc resize*[T](view: var EditorView, buffer: T, height, width, widthOfLineNum: int) =
   ## 指定されたwidth/heightでEditorViewを更新する.表示される部分はなるべくリサイズ前と同じになるようになっている.
 
   let topline = view.originalLine[0]
@@ -107,7 +107,7 @@ proc resize*(view: var EditorView, buffer: GapBuffer[seq[Rune]], height, width, 
   view.updated = true
   view.reload(buffer, topLine)
 
-proc scrollUp(view: var EditorView, buffer: GapBuffer[seq[Rune]]) =
+proc scrollUp[T](view: var EditorView, buffer: T) =
   ## EditorView表示を1ライン上にずらす
 
   view.updated = true
@@ -136,7 +136,7 @@ proc scrollUp(view: var EditorView, buffer: GapBuffer[seq[Rune]]) =
       view.length.addFirst(singleLine.length)
       break
 
-proc scrollDown(view: var EditorView, buffer: GapBuffer[seq[Rune]]) =
+proc scrollDown[T](view: var EditorView, buffer: T) =
   ## EditorViewの表示を1ライン下にずらす
 
   view.updated = true
@@ -176,7 +176,7 @@ proc write(view: EditorView, win: var Window, y, x: int, str: seq[Rune], color: 
   const tab = "    "
   win.write(y, x, ($str).replace("\t", tab), color, false)
 
-proc writeAllLines*(view: var EditorView, win: var Window, lineNumber, currentWin: bool, buffer: GapBuffer[seq[Rune]], highlight: Highlight, editorColor: EditorColor, currentLine: int) =
+proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, currentWin: bool, buffer: T, highlight: Highlight, editorColor: EditorColor, currentLine: int) =
   win.erase
   view.widthOfLineNum = if lineNumber: buffer.len.numberOfDigits+1 else: 0
 
@@ -204,8 +204,13 @@ proc writeAllLines*(view: var EditorView, win: var Window, lineNumber, currentWi
 
       if first > last: break
       
-      assert(last <= view.lines[y].high, fmt"last = {last}, view.lines[y] = {view.lines[y]}")
-      assert(first <= last, fmt"first = {first}, last = {last}")
+      block:
+        let
+          firstStr = $first
+          lastStr = $last
+          lineStr = $view.lines[y]
+        assert(last <= view.lines[y].high, fmt"last = {lastStr}, view.lines[y] = {lineStr}")
+        assert(first <= last, fmt"first = {first}, last = {last}")
       
       let str = view.lines[y][first .. last]
       view.write(win, y, x, str, highlight[i].color)
@@ -217,12 +222,12 @@ proc writeAllLines*(view: var EditorView, win: var Window, lineNumber, currentWi
 
   win.refresh
 
-proc update*(view: var EditorView, win: var Window, lineNumber, currentWin: bool, buffer: GapBuffer[seq[Rune]], highlight: Highlight, editorColor: EditorColor, currentLine: int) =
+proc update*[T](view: var EditorView, win: var Window, lineNumber, currentWin: bool, buffer: T, highlight: Highlight, editorColor: EditorColor, currentLine: int) =
   let widthOfLineNum = buffer.len.intToStr.len+1
   if widthOfLineNum != view.widthOfLineNum: view.resize(buffer, view.height, view.width+view.widthOfLineNum-widthOfLineNum, widthOfLineNum)
   view.writeAllLines(win, lineNumber, currentWin, buffer, highlight, editorColor, currentLine)
   view.updated = false
 
-proc seekCursor*(view: var EditorView, buffer: GapBuffer[seq[Rune]], currentLine, currentColumn: int) =
+proc seekCursor*[T](view: var EditorView, buffer: T, currentLine, currentColumn: int) =
   while currentLine < view.originalLine[0] or (currentLine == view.originalLine[0] and view.length[0] > 0 and currentColumn < view.start[0]): view.scrollUp(buffer)
   while (view.originalLine[view.height-1] != -1 and currentLine > view.originalLine[view.height-1]) or (currentLine == view.originalLine[view.height-1] and view.length[view.height-1] > 0 and currentColumn >= view.start[view.height-1]+view.length[view.height-1]): view.scrollDown(buffer)
