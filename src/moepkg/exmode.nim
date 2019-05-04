@@ -258,7 +258,7 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   status.changeMode(Mode.normal)
 
 proc quitCommand(status: var EditorStatus) =
-  if status.bufStatus[status.currentBuffer].countChange == 0 and countReferencedWindow(status.mainWindowInfo, status.currentBuffer) == 0:
+  if status.bufStatus[status.currentBuffer].countChange == 0 or countReferencedWindow(status.mainWindowInfo, status.currentBuffer) > 1:
     closeWindow(status, status.currentMainWindow)
     status.changeMode(Mode.normal)
   else:
