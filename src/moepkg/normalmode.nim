@@ -1,5 +1,5 @@
 import strutils, strformat, terminal, deques, sequtils
-import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight
+import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight, fileutils, commandview
 
 proc jumpLine*(status: var EditorStatus, destination: int)
 proc keyRight*(bufStatus: var BufferStatus)
@@ -387,6 +387,17 @@ proc turnOffHighlighting*(status: var EditorStatus) =
   status.bufStatus[status.currentBuffer].isHighlight = false
   status.updateHighlight
 
+proc writeFileAndExit(status: var EditorStatus) =
+  if status.bufStatus[status.currentBuffer].filename.len == 0:
+    status.commandwindow.writeNoFileNameError(status.settings.editorColor.errorMessage)
+    status.changeMode(Mode.normal)
+  else:
+    try:
+      saveFile(status.bufStatus[status.currentBuffer].filename, status.bufStatus[status.currentBuffer].buffer.toRunes, status.settings.characterEncoding)
+      closeWindow(status, status.currentMainWindow)
+    except IOError:
+      writeSaveError(status.commandWindow, status.settings.editorColor.errorMessage)
+
 proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.bufStatus[status.currentBuffer].cmdLoop == 0: status.bufStatus[status.currentBuffer].cmdLoop = 1
 
@@ -487,6 +498,8 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('A'):
     status.bufStatus[currentBuf].currentColumn = status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len
     status.changeMode(Mode.insert)
+  elif key == ord('Z'):
+    if getKey(status.mainWindowInfo[status.currentMainWindow].window) == ord('Z'): writeFileAndExit(status)
   elif isEscKey(key):
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
     if isEscKey(key): turnOffHighlighting(status)
@@ -500,7 +513,7 @@ proc normalMode*(status: var EditorStatus) =
 
   changeCursorType(status.settings.normalModeCursor)
 
-  while status.bufStatus[status.currentBuffer].mode == Mode.normal:
+  while status.bufStatus[status.currentBuffer].mode == Mode.normal and status.mainWindowInfo.len > 0:
     if status.bufStatus[status.currentBuffer].countChange > countChange:
       status.updateHighlight
       countChange = status.bufStatus[status.currentBuffer].countChange

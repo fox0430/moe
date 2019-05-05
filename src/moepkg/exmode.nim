@@ -241,10 +241,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
 
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   if filename.len == 0:
-    # Need refactor
-    status.commandWindow.erase
-    status.commandWindow.write(0, 0, "Error: No file name", status.settings.editorColor.errorMessage)
-    status.commandWindow.refresh
+    status.commandwindow.writeNoFileNameError(status.settings.editorColor.errorMessage)
     status.changeMode(Mode.normal)
     return
 

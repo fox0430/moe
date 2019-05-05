@@ -33,6 +33,9 @@ proc writeCreateDirError*(cmdWin: var Window, errorMessageColor: Colorpair) =
 proc writeMessageDeletedFile*(cmdWin: var Window, filename: string, messageColor: Colorpair) =
   cmdWin.writeMessageOnCommandWindow("Deleted: " & filename, messageColor)
 
+proc writeNoFileNameError*(cmdWin: var Window, messageColor: Colorpair) =
+  cmdWin.writeMessageOnCommandWindow("Error: No file name" , messageColor)
+
 proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
   for i in 0 .. r.high:
     var string = $r[i]
