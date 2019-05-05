@@ -398,6 +398,9 @@ proc writeFileAndExit(status: var EditorStatus) =
     except IOError:
       writeSaveError(status.commandWindow, status.settings.editorColor.errorMessage)
 
+proc forceExit(status: var Editorstatus) =
+  closeWindow(status, status.currentMainWindow)
+
 proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.bufStatus[status.currentBuffer].cmdLoop == 0: status.bufStatus[status.currentBuffer].cmdLoop = 1
 
@@ -499,7 +502,9 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     status.bufStatus[currentBuf].currentColumn = status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len
     status.changeMode(Mode.insert)
   elif key == ord('Z'):
-    if getKey(status.mainWindowInfo[status.currentMainWindow].window) == ord('Z'): writeFileAndExit(status)
+    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    if  key == ord('Z'): writeFileAndExit(status)
+    elif key == ord('Q'): forceExit(status)
   elif isEscKey(key):
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
     if isEscKey(key): turnOffHighlighting(status)
