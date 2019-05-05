@@ -237,6 +237,10 @@ proc moveToForwardEndOfWord*(bufStatus: var BufferStatus) =
 
   bufStatus.expandedColumn = bufStatus.currentColumn
 
+proc moveCenterScreen(bufStatus: var BufferStatus) =
+  bufStatus.currentLine = int(bufStatus.view.originalLine[int(bufStatus.view.height / 2)])
+  if bufStatus.buffer[bufStatus.currentLine].high < bufStatus.currentColumn: bufStatus.currentColumn = bufStatus.buffer[bufStatus.currentLine].high
+
 proc openBlankLineBelow(bufStatus: var BufferStatus) =
   let indent = sequtils.repeat(ru' ', countRepeat(bufStatus.buffer[bufStatus.currentLine], Whitespace, 0))
 
@@ -275,6 +279,7 @@ proc yankLines(status: var EditorStatus, first, last: int) =
   status.registers.yankedLines = @[]
   for i in first .. last: status.registers.yankedLines.add(status.bufStatus[status.currentBuffer].buffer[i])
 
+  # TODO: Refator
   status.commandWindow.erase
   status.commandwindow.write(0, 0, fmt"{status.registers.yankedLines.len} line yanked")
   status.commandWindow.refresh
@@ -293,6 +298,7 @@ proc yankString(status: var EditorStatus, length: int) =
   for i in status.bufStatus[status.currentBuffer].currentColumn ..< length:
     status.registers.yankedStr.add(status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine][i])
 
+  # TODO: Refator
   status.commandWindow.erase
   status.commandwindow.write(0, 0, fmt"{status.registers.yankedStr.len} character yanked")
   status.commandWindow.refresh
@@ -398,8 +404,7 @@ proc writeFileAndExit(status: var EditorStatus) =
     except IOError:
       writeSaveError(status.commandWindow, status.settings.editorColor.errorMessage)
 
-proc forceExit(status: var Editorstatus) =
-  closeWindow(status, status.currentMainWindow)
+proc forceExit(status: var Editorstatus) = closeWindow(status, status.currentMainWindow)
 
 proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.bufStatus[status.currentBuffer].cmdLoop == 0: status.bufStatus[status.currentBuffer].cmdLoop = 1
@@ -448,6 +453,9 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     for i in 0 ..< cmdLoop: moveToBackwardWord(status.bufStatus[status.currentBuffer])
   elif key == ord('e'):
     for i in 0 ..< cmdLoop: moveToForwardEndOfWord(status.bufStatus[status.currentBuffer])
+  elif key == ord('z'):
+    let key = getkey(status.mainWindowInfo[status.currentMainWindow].window)
+    if key == ord('.'): moveCenterScreen(status.bufStatus[status.currentBuffer])
   elif key == ord('o'):
     for i in 0 ..< cmdLoop: openBlankLineBelow(status.bufStatus[status.currentBuffer])
     status.updateHighlight
