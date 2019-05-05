@@ -6,10 +6,9 @@ proc keyRight*(bufStatus: var BufferStatus)
 proc keyLeft*(bufStatus: var BufferStatus)
 proc keyUp*(bufStatus: var BufferStatus)
 proc keyDown*(bufStatus: var BufferStatus)
-proc replaceCurrentCharacter*(bufStatus: var BufferStatus, character: Rune)
+proc replaceCurrentCharacter*(bufStatus: var BufferStatus, autoIndent:bool, character: Rune)
 
 import searchmode, replacemode
-
 
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.erase
@@ -321,10 +320,16 @@ proc pasteBeforeCursor(status: var EditorStatus) =
   elif status.registers.yankedStr.len > 0:
     pasteString(status)
 
-proc replaceCurrentCharacter*(bufStatus: var BufferStatus, character: Rune) =
-  bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn] = character
-  bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
-  inc(bufStatus.countChange)
+from insertmode import keyEnter
+
+proc replaceCurrentCharacter*(bufStatus: var BufferStatus, autoIndent: bool, character: Rune) =
+  if isEnterKey(character):
+    deleteCurrentCharacter(bufStatus)
+    keyEnter(bufStatus, autoIndent)
+  else:
+    bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn] = character
+    bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
+    inc(bufStatus.countChange)
 
 proc addIndent*(bufStatus: var BufferStatus, tabStop: int) =
   bufStatus.buffer[bufStatus.currentLine].insert(newSeqWith(tabStop, ru' '))
@@ -462,7 +467,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
       if i > 0:
         inc(status.bufStatus[status.currentBuffer].currentColumn)
         status.bufStatus[status.currentBuffer].expandedColumn = status.bufStatus[status.currentBuffer].currentColumn
-      replaceCurrentCharacter(status.bufStatus[status.currentBuffer], ch)
+      replaceCurrentCharacter(status.bufStatus[status.currentBuffer], status.settings.autoIndent, ch)
   elif key == ord('n'):
     searchNextOccurrence(status)
   elif key == ord('N'):

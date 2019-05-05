@@ -28,6 +28,6 @@ proc replaceMode*(status: var EditorStatus) =
       keyDown(status.bufStatus[status.currentBuffer])
  
     else:
-      replaceCurrentCharacter(status.bufStatus[status.currentBuffer], key)
+      replaceCurrentCharacter(status.bufStatus[status.currentBuffer], status.settings.autoIndent, key)
       keyRight(status.bufStatus[status.currentBuffer])
       bufferChanged = true
