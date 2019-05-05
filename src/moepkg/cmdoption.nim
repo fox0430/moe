@@ -1,9 +1,6 @@
 import parseopt, unicode
 
-type
-  ComdParsedList* = tuple[
-    filename: string 
-  ]
+type ComdParsedList* = tuple[filename: string]
 
 proc parseCommandLineOption*(line: seq[string]): ComdParsedList  =
   result.filename = ""

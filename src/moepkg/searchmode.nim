@@ -68,7 +68,7 @@ proc searchFirstOccurrence(status: var EditorStatus) =
   if searchResult.line > -1:
     jumpLine(status, searchResult.line)
     for column in 0 ..< searchResult.column:
-      keyRight(status)
+      keyRight(status.bufStatus[status.currentBuffer])
 
 proc searchMode*(status: var EditorStatus) =
   searchFirstOccurrence(status)

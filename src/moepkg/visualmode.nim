@@ -95,35 +95,30 @@ proc deleteBuffer(status: var EditorStatus, area: SelectArea) =
   status.bufStatus[status.currentBuffer].currentColumn = area.startColumn
   status.bufStatus[status.currentBuffer].expandedColumn = area.startColumn
 
-proc addIndent(status: var EditorStatus, area: SelectArea) =
-  status.bufStatus[status.currentBuffer].currentLine = area.startLine
+proc addIndent(bufStatus: var BufferStatus, area: SelectArea, tabStop: int) =
+  bufStatus.currentLine = area.startLine
   for i in area.startLine .. area.endLine:
-    addIndent(status)
-    inc(status.bufStatus[status.currentBuffer].currentLine)
+    addIndent(bufStatus, tabStop)
+    inc(bufStatus.currentLine)
 
-  status.bufStatus[status.currentBuffer].currentLine = area.startLine
+  bufStatus.currentLine = area.startLine
 
-proc deleteIndent(status: var EditorStatus, area: SelectArea) =
-  status.bufStatus[status.currentBuffer].currentLine = area.startLine
+proc deleteIndent(bufStatus: var BufferStatus, area: SelectArea, tabStop: int) =
+  bufStatus.currentLine = area.startLine
   for i in area.startLine .. area.endLine:
-    deleteIndent(status)
-    inc(status.bufStatus[status.currentBuffer].currentLine)
+    deleteIndent(bufStatus, tabStop)
+    inc(bufStatus.currentLine)
 
-  status.bufStatus[status.currentBuffer].currentLine = area.startLine
+  bufStatus.currentLine = area.startLine
 
 proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSlectArea
 
-  if key == ord('y') or isDcKey(key):
-    yankBuffer(status, area)
-  elif key == ord('x') or key == ord('d'):
-    deleteBuffer(status, area)
-  elif key == ord('>'):
-    addIndent(status, area)
-  elif key == ord('<'):
-    deleteIndent(status, area)
-  else:
-    discard
+  if key == ord('y') or isDcKey(key): yankBuffer(status, area)
+  elif key == ord('x') or key == ord('d'): deleteBuffer(status, area)
+  elif key == ord('>'): addIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
+  elif key == ord('<'): deleteIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
+  else: discard
 
 proc visualMode*(status: var EditorStatus) =
   status.resize(terminalHeight(), terminalWidth())
@@ -140,7 +135,7 @@ proc visualMode*(status: var EditorStatus) =
     status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
     status.update
 
-    let key = getKey(status.mainWindow[status.currentMainWindow])
+    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
@@ -149,29 +144,29 @@ proc visualMode*(status: var EditorStatus) =
       status.changeMode(Mode.normal)
 
     elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
-      keyLeft(status)
+      keyLeft(status.bufStatus[status.currentBuffer])
     elif key == ord('l') or isRightKey(key):
-      keyRight(status)
+      keyRight(status.bufStatus[status.currentBuffer])
     elif key == ord('k') or isUpKey(key):
-      keyUp(status)
+      keyUp(status.bufStatus[status.currentBuffer])
     elif key == ord('j') or isDownKey(key) or isEnterKey(key):
-      keyDown(status)
+      keyDown(status.bufStatus[status.currentBuffer])
     elif key == ord('^'):
-      moveToFirstNonBlankOfLine(status)
+      moveToFirstNonBlankOfLine(status.bufStatus[status.currentBuffer])
     elif key == ord('0') or isHomeKey(key):
-      moveToFirstOfLine(status)
+      moveToFirstOfLine(status.bufStatus[status.currentBuffer])
     elif key == ord('$') or isEndKey(key):
-      moveToLastOfLine(status)
+      moveToLastOfLine(status.bufStatus[status.currentBuffer])
     elif key == ord('w'):
-      moveToForwardWord(status)
+      moveToForwardWord(status.bufStatus[status.currentBuffer])
     elif key == ord('b'):
-      moveToBackwardWord(status)
+      moveToBackwardWord(status.bufStatus[status.currentBuffer])
     elif key == ord('e'):
-      moveToForwardEndOfWord(status)
+      moveToForwardEndOfWord(status.bufStatus[status.currentBuffer])
     elif key == ord('G'):
       moveToLastLine(status)
     elif key == ord('g'):
-      if getKey(status.mainWindow[status.currentMainWindow]) == ord('g'): moveToFirstLine(status)
+      if getKey(status.mainWindowInfo[status.currentMainWindow].window) == ord('g'): moveToFirstLine(status)
     elif key == ord('i'):
       status.bufStatus[status.currentBuffer].currentLine = area.startLine
       status.changeMode(Mode.insert)

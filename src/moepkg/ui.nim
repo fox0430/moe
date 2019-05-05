@@ -116,16 +116,12 @@ proc saveCurrentTerminalModes*() =
   def_prog_mode()
 
 proc setCursor*(cursor: bool) =
-  if cursor == true:
-    curs_set(1)   # enable cursor
-  elif cursor == false:
-    curs_set(0)   # disable cursor
+  if cursor == true: curs_set(1)   # enable cursor
+  elif cursor == false: curs_set(0)   # disable cursor
 
 proc keyEcho*(keyecho: bool) =
-  if keyecho == true:
-    echo()
-  elif keyecho == false:
-    noecho()
+  if keyecho == true: echo()
+  elif keyecho == false: noecho()
     
 proc startUi*() =
   disableControlC()
@@ -236,3 +232,6 @@ proc isEnterKey*(key: Rune): bool = key == KEY_ENTER or key == ord('\n')
 proc isPageUpKey*(key: Rune): bool = key == KEY_PPAGE or key == 2
 proc isPageDownkey*(key: Rune): bool = key == KEY_NPAGE or key == 6
 proc isControlR*(key: Rune): bool = key == 18 # Ctrl-r
+proc isControlU*(key: Rune): bool = int(key) == 21
+proc isControlH*(key: Rune): bool = int(key) == 8
+proc isControlL*(key: Rune): bool = int(key) == 12
