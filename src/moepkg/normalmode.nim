@@ -1,4 +1,4 @@
-import strutils, strformat, terminal, deques, sequtils, math
+import strutils, strformat, terminal, deques, sequtils
 import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight, fileutils, commandview
 
 proc jumpLine*(status: var EditorStatus, destination: int)
