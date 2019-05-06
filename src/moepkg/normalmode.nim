@@ -245,6 +245,11 @@ proc moveCenterScreen(bufStatus: var BufferStatus) =
 
 proc scrollScreenTop(bufStatus: var BufferStatus) = bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[bufStatus.cursor.y])
 
+proc scrollScreenBottom(bufStatus: var BufferStatus) =
+  if bufStatus.currentLine > bufStatus.view.height:
+    let numOfTime = bufStatus.view.height - bufStatus.cursor.y - 2
+    for i in 0 ..< numOfTime: scrollUp(bufStatus.view, bufStatus.buffer)
+
 proc openBlankLineBelow(bufStatus: var BufferStatus) =
   let indent = sequtils.repeat(ru' ', countRepeat(bufStatus.buffer[bufStatus.currentLine], Whitespace, 0))
 
@@ -461,6 +466,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     let key = getkey(status.mainWindowInfo[status.currentMainWindow].window)
     if key == ord('.'): moveCenterScreen(status.bufStatus[status.currentBuffer])
     elif key == ord('t'): scrollScreenTop(status.bufStatus[status.currentBuffer])
+    elif key == ord('b'): scrollScreenBottom(status.bufStatus[status.currentBuffer])
   elif key == ord('o'):
     for i in 0 ..< cmdLoop: openBlankLineBelow(status.bufStatus[status.currentBuffer])
     status.updateHighlight
