@@ -1,5 +1,5 @@
 import strutils, strformat, terminal, deques, sequtils
-import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight
+import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight, fileutils, commandview
 
 proc jumpLine*(status: var EditorStatus, destination: int)
 proc keyRight*(bufStatus: var BufferStatus)
@@ -109,14 +109,11 @@ proc jumpLine*(status: var EditorStatus, destination: int) =
       startOfPrintedLines = max(destination - (currentLine - status.bufStatus[status.currentBuffer].view.originalLine[0]), 0)
     status.bufStatus[status.currentBuffer].view.reload(status.bufStatus[status.currentBuffer].buffer, startOfPrintedLines)
 
-proc moveToFirstLine*(status: var EditorStatus) =
-  jumpLine(status, 0)
+proc moveToFirstLine*(status: var EditorStatus) = jumpLine(status, 0)
 
 proc moveToLastLine*(status: var EditorStatus) =
-  if status.bufStatus[status.currentBuffer].cmdLoop > 1:
-    jumpLine(status, status.bufStatus[status.currentBuffer].cmdLoop - 1)
-  else:
-    jumpLine(status, status.bufStatus[status.currentBuffer].buffer.len-1)
+  if status.bufStatus[status.currentBuffer].cmdLoop > 1: jumpLine(status, status.bufStatus[status.currentBuffer].cmdLoop - 1)
+  else: jumpLine(status, status.bufStatus[status.currentBuffer].buffer.len - 1)
 
 proc pageUp*(status: var EditorStatus) =
   let destination = max(status.bufStatus[status.currentBuffer].currentLine - status.bufStatus[status.currentBuffer].view.height, 0)
@@ -237,6 +234,22 @@ proc moveToForwardEndOfWord*(bufStatus: var BufferStatus) =
 
   bufStatus.expandedColumn = bufStatus.currentColumn
 
+proc moveCenterScreen(bufStatus: var BufferStatus) =
+  if bufStatus.currentLine > int(bufStatus.view.height / 2):
+    if bufStatus.cursor.y > int(bufStatus.view.height / 2):
+      let startOfPrintedLines = bufStatus.cursor.y - int(bufStatus.view.height / 2)
+      bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[startOfPrintedLines])
+    else:
+      let numOfTime = int(bufStatus.view.height / 2) - bufStatus.cursor.y
+      for i in 0 ..< numOfTime: scrollUp(bufStatus.view, bufStatus.buffer)
+
+proc scrollScreenTop(bufStatus: var BufferStatus) = bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[bufStatus.cursor.y])
+
+proc scrollScreenBottom(bufStatus: var BufferStatus) =
+  if bufStatus.currentLine > bufStatus.view.height:
+    let numOfTime = bufStatus.view.height - bufStatus.cursor.y - 2
+    for i in 0 ..< numOfTime: scrollUp(bufStatus.view, bufStatus.buffer)
+
 proc openBlankLineBelow(bufStatus: var BufferStatus) =
   let indent = sequtils.repeat(ru' ', countRepeat(bufStatus.buffer[bufStatus.currentLine], Whitespace, 0))
 
@@ -275,6 +288,7 @@ proc yankLines(status: var EditorStatus, first, last: int) =
   status.registers.yankedLines = @[]
   for i in first .. last: status.registers.yankedLines.add(status.bufStatus[status.currentBuffer].buffer[i])
 
+  # TODO: Refator
   status.commandWindow.erase
   status.commandwindow.write(0, 0, fmt"{status.registers.yankedLines.len} line yanked")
   status.commandWindow.refresh
@@ -293,6 +307,7 @@ proc yankString(status: var EditorStatus, length: int) =
   for i in status.bufStatus[status.currentBuffer].currentColumn ..< length:
     status.registers.yankedStr.add(status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine][i])
 
+  # TODO: Refator
   status.commandWindow.erase
   status.commandwindow.write(0, 0, fmt"{status.registers.yankedStr.len} character yanked")
   status.commandWindow.refresh
@@ -387,6 +402,19 @@ proc turnOffHighlighting*(status: var EditorStatus) =
   status.bufStatus[status.currentBuffer].isHighlight = false
   status.updateHighlight
 
+proc writeFileAndExit(status: var EditorStatus) =
+  if status.bufStatus[status.currentBuffer].filename.len == 0:
+    status.commandwindow.writeNoFileNameError(status.settings.editorColor.errorMessage)
+    status.changeMode(Mode.normal)
+  else:
+    try:
+      saveFile(status.bufStatus[status.currentBuffer].filename, status.bufStatus[status.currentBuffer].buffer.toRunes, status.settings.characterEncoding)
+      closeWindow(status, status.currentMainWindow)
+    except IOError:
+      writeSaveError(status.commandWindow, status.settings.editorColor.errorMessage)
+
+proc forceExit(status: var Editorstatus) = closeWindow(status, status.currentMainWindow)
+
 proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.bufStatus[status.currentBuffer].cmdLoop == 0: status.bufStatus[status.currentBuffer].cmdLoop = 1
 
@@ -434,6 +462,11 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     for i in 0 ..< cmdLoop: moveToBackwardWord(status.bufStatus[status.currentBuffer])
   elif key == ord('e'):
     for i in 0 ..< cmdLoop: moveToForwardEndOfWord(status.bufStatus[status.currentBuffer])
+  elif key == ord('z'):
+    let key = getkey(status.mainWindowInfo[status.currentMainWindow].window)
+    if key == ord('.'): moveCenterScreen(status.bufStatus[status.currentBuffer])
+    elif key == ord('t'): scrollScreenTop(status.bufStatus[status.currentBuffer])
+    elif key == ord('b'): scrollScreenBottom(status.bufStatus[status.currentBuffer])
   elif key == ord('o'):
     for i in 0 ..< cmdLoop: openBlankLineBelow(status.bufStatus[status.currentBuffer])
     status.updateHighlight
@@ -487,6 +520,10 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('A'):
     status.bufStatus[currentBuf].currentColumn = status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len
     status.changeMode(Mode.insert)
+  elif key == ord('Z'):
+    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    if  key == ord('Z'): writeFileAndExit(status)
+    elif key == ord('Q'): forceExit(status)
   elif isEscKey(key):
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
     if isEscKey(key): turnOffHighlighting(status)
@@ -500,7 +537,7 @@ proc normalMode*(status: var EditorStatus) =
 
   changeCursorType(status.settings.normalModeCursor)
 
-  while status.bufStatus[status.currentBuffer].mode == Mode.normal:
+  while status.bufStatus[status.currentBuffer].mode == Mode.normal and status.mainWindowInfo.len > 0:
     if status.bufStatus[status.currentBuffer].countChange > countChange:
       status.updateHighlight
       countChange = status.bufStatus[status.currentBuffer].countChange
