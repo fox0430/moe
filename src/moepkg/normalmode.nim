@@ -109,14 +109,11 @@ proc jumpLine*(status: var EditorStatus, destination: int) =
       startOfPrintedLines = max(destination - (currentLine - status.bufStatus[status.currentBuffer].view.originalLine[0]), 0)
     status.bufStatus[status.currentBuffer].view.reload(status.bufStatus[status.currentBuffer].buffer, startOfPrintedLines)
 
-proc moveToFirstLine*(status: var EditorStatus) =
-  jumpLine(status, 0)
+proc moveToFirstLine*(status: var EditorStatus) = jumpLine(status, 0)
 
 proc moveToLastLine*(status: var EditorStatus) =
-  if status.bufStatus[status.currentBuffer].cmdLoop > 1:
-    jumpLine(status, status.bufStatus[status.currentBuffer].cmdLoop - 1)
-  else:
-    jumpLine(status, status.bufStatus[status.currentBuffer].buffer.len-1)
+  if status.bufStatus[status.currentBuffer].cmdLoop > 1: jumpLine(status, status.bufStatus[status.currentBuffer].cmdLoop - 1)
+  else: jumpLine(status, status.bufStatus[status.currentBuffer].buffer.len - 1)
 
 proc pageUp*(status: var EditorStatus) =
   let destination = max(status.bufStatus[status.currentBuffer].currentLine - status.bufStatus[status.currentBuffer].view.height, 0)
@@ -238,14 +235,15 @@ proc moveToForwardEndOfWord*(bufStatus: var BufferStatus) =
   bufStatus.expandedColumn = bufStatus.currentColumn
 
 proc moveCenterScreen(bufStatus: var BufferStatus) =
-  if bufStatus.cursor.y > int(bufStatus.view.height / 2):
-    let numOfTime = bufStatus.cursor.y - int(bufStatus.view.height / 2)
-    for i in 0 ..< numOfTime: scrollDown(bufStatus.view, bufStatus.buffer)
-  elif bufStatus.view.originalLine[0] > 0:
-    let numOfTime = int(bufStatus.view.height / 2) - bufStatus.cursor.y
-    for i in 0 ..< numOfTime:
-      if bufStatus.view.originalLine[0] == 0: break
-      scrollUp(bufStatus.view, bufStatus.buffer)
+  if bufStatus.currentLine > int(bufStatus.view.height / 2):
+    if bufStatus.cursor.y > int(bufStatus.view.height / 2):
+      let startOfPrintedLines = bufStatus.cursor.y - int(bufStatus.view.height / 2)
+      bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[startOfPrintedLines])
+    else:
+      let numOfTime = int(bufStatus.view.height / 2) - bufStatus.cursor.y
+      for i in 0 ..< numOfTime: scrollUp(bufStatus.view, bufStatus.buffer)
+
+proc scrollScreenTop(bufStatus: var BufferStatus) = bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[bufStatus.cursor.y])
 
 proc openBlankLineBelow(bufStatus: var BufferStatus) =
   let indent = sequtils.repeat(ru' ', countRepeat(bufStatus.buffer[bufStatus.currentLine], Whitespace, 0))
@@ -462,6 +460,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('z'):
     let key = getkey(status.mainWindowInfo[status.currentMainWindow].window)
     if key == ord('.'): moveCenterScreen(status.bufStatus[status.currentBuffer])
+    elif key == ord('t'): scrollScreenTop(status.bufStatus[status.currentBuffer])
   elif key == ord('o'):
     for i in 0 ..< cmdLoop: openBlankLineBelow(status.bufStatus[status.currentBuffer])
     status.updateHighlight
