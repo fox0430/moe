@@ -1,4 +1,4 @@
-import strutils, strformat, terminal, deques, sequtils
+import strutils, strformat, terminal, deques, sequtils, math
 import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight, fileutils, commandview
 
 proc jumpLine*(status: var EditorStatus, destination: int)
@@ -238,8 +238,14 @@ proc moveToForwardEndOfWord*(bufStatus: var BufferStatus) =
   bufStatus.expandedColumn = bufStatus.currentColumn
 
 proc moveCenterScreen(bufStatus: var BufferStatus) =
-  bufStatus.currentLine = int(bufStatus.view.originalLine[int(bufStatus.view.height / 2)])
-  if bufStatus.buffer[bufStatus.currentLine].high < bufStatus.currentColumn: bufStatus.currentColumn = bufStatus.buffer[bufStatus.currentLine].high
+  if bufStatus.cursor.y > int(bufStatus.view.height / 2):
+    let numOfTime = bufStatus.cursor.y - int(bufStatus.view.height / 2)
+    for i in 0 ..< numOfTime: scrollDown(bufStatus.view, bufStatus.buffer)
+  elif bufStatus.view.originalLine[0] > 0:
+    let numOfTime = int(bufStatus.view.height / 2) - bufStatus.cursor.y
+    for i in 0 ..< numOfTime:
+      if bufStatus.view.originalLine[0] == 0: break
+      scrollUp(bufStatus.view, bufStatus.buffer)
 
 proc openBlankLineBelow(bufStatus: var BufferStatus) =
   let indent = sequtils.repeat(ru' ', countRepeat(bufStatus.buffer[bufStatus.currentLine], Whitespace, 0))

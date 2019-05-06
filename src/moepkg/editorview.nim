@@ -107,7 +107,7 @@ proc resize*[T](view: var EditorView, buffer: T, height, width, widthOfLineNum: 
   view.updated = true
   view.reload(buffer, topLine)
 
-proc scrollUp[T](view: var EditorView, buffer: T) =
+proc scrollUp*[T](view: var EditorView, buffer: T) =
   ## EditorView表示を1ライン上にずらす
 
   view.updated = true
@@ -136,7 +136,7 @@ proc scrollUp[T](view: var EditorView, buffer: T) =
       view.length.addFirst(singleLine.length)
       break
 
-proc scrollDown[T](view: var EditorView, buffer: T) =
+proc scrollDown*[T](view: var EditorView, buffer: T) =
   ## EditorViewの表示を1ライン下にずらす
 
   view.updated = true
