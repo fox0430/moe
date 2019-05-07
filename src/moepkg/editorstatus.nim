@@ -233,8 +233,9 @@ proc writeTabLine*(status: var EditorStatus) =
   for i in 0 ..< status.mainWindowInfo.len:
     let
       color = if status.currentMainWindow == i: currentTabColor else: defaultColor
-      filename = if status.bufStatus[status.mainWindowInfo[i].bufferIndex].mode == Mode.filer: getCurrentDir() else: $status.bufStatus[status.mainWindowInfo[i].bufferIndex].filename
-
+      currentMode = status.bufStatus[status.mainWindowInfo[i].bufferIndex].mode
+      prevMode = status.bufStatus[status.mainWindowInfo[i].bufferIndex].prevMode
+      filename = if (currentMode == Mode.filer) or (prevMode == Mode.filer and currentMode == Mode.ex): getCurrentDir() else: $status.bufStatus[status.mainWindowInfo[i].bufferIndex].filename
     status.tabWindow.writeTab(i * tabWidth, tabWidth, filename, color)
 
   status.tabWindow.refresh
