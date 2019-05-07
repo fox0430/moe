@@ -26,6 +26,9 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   
   return (searhWord: searchWord, replaceWord: replaceWord)
 
+proc isListAllBufferCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"ls"
+
 proc isWriteAndQuitAllBufferCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"wqa"
 
@@ -311,6 +314,25 @@ proc shellCommand(status: var EditorStatus, shellCommand: string) =
   status.commandWindow.erase
   status.commandWindow.refresh
 
+proc listAllBufferCommand(status: var Editorstatus) =
+  status.addNewBuffer("")
+  status.changeCurrentBuffer(status.bufStatus.high)
+
+  for i in 0 ..< status.bufStatus.high: status.bufStatus[status.currentBuffer].buffer.insert(status.bufStatus[i].filename, i)
+
+  let
+    useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+    useTab = if status.settings.tabLine.useTab: 1 else: 0
+
+  status.bufStatus[status.currentBuffer].view = initEditorView(status.bufStatus[status.currentBuffer].buffer, terminalHeight() - useStatusBar - useTab - 1, terminalWidth())
+  status.bufStatus[status.currentBuffer].currentLine = 0
+
+  status.updateHighlight
+  status.update
+
+  discard getKey(status.mainWindowInfo[status.currentMainWindow].window)
+  status.deleteBufferStatusCommand(status.bufStatus.high)
+
 proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
 
   let replaceInfo = parseReplaceCommand(command)
@@ -397,6 +419,8 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     forceAllBufferQuitCommand(status)
   elif isWriteAndQuitAllBufferCommand(command):
     writeAndQuitAllBufferCommand(status)
+  elif isListAllBufferCommand(command):
+    listAllBufferCommand(status)
   else:
     status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
