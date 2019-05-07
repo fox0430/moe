@@ -224,7 +224,7 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, curren
 
 proc update*[T](view: var EditorView, win: var Window, lineNumber, currentWin: bool, buffer: T, highlight: Highlight, editorColor: EditorColor, currentLine: int) =
   let widthOfLineNum = buffer.len.intToStr.len+1
-  if widthOfLineNum != view.widthOfLineNum: view.resize(buffer, view.height, view.width+view.widthOfLineNum-widthOfLineNum, widthOfLineNum)
+  if lineNumber and widthOfLineNum != view.widthOfLineNum: view.resize(buffer, view.height, view.width+view.widthOfLineNum-widthOfLineNum, widthOfLineNum)
   view.writeAllLines(win, lineNumber, currentWin, buffer, highlight, editorColor, currentLine)
   view.updated = false
 
