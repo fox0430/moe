@@ -6,7 +6,7 @@ type ColorSegment* = object
   color*: ColorPair
 
 type Highlight* = object
-  colorSegments: seq[ColorSegment]
+  colorSegments*: seq[ColorSegment]
 
 proc len*(highlight: Highlight): int = highlight.colorSegments.len
 
