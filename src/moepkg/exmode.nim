@@ -328,9 +328,13 @@ proc listAllBufferCommand(status: var Editorstatus) =
   status.bufStatus[status.currentBuffer].currentLine = 0
 
   status.updateHighlight
-  status.update
 
-  discard getKey(status.mainWindowInfo[status.currentMainWindow].window)
+  while true:
+    status.update
+    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
+    else: break
+
   status.deleteBufferStatusCommand(status.bufStatus.high)
 
 proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
