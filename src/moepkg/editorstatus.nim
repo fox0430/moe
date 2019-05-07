@@ -242,7 +242,7 @@ proc writeTabLine*(status: var EditorStatus) =
 
 proc resize*(status: var EditorStatus, height, width: int) =
   setCursor(false)
-  let 
+  let
     adjustedHeight = max(height, 4)
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useTab = if status.settings.tabLine.useTab: 1 else: 0
@@ -259,7 +259,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
     if status.settings.statusBar.useBar: resize(status.statusWindow, 1, terminalWidth(), adjustedHeight - 2, 0)
     if status.settings.tabLine.useTab: resize(status.tabWindow, 1, terminalWidth(), 0, 0)
 
-    status.bufStatus[bufIndex].view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight - useStatusBar - 1, adjustedWidth - widthOfLineNum - 1, widthOfLineNum)
+    status.bufStatus[bufIndex].view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight - useStatusBar - useTab - 1, adjustedWidth - widthOfLineNum - 1, widthOfLineNum)
     status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
   if status.settings.statusBar.useBar: writeStatusBar(status)
@@ -347,9 +347,11 @@ proc addNewBuffer*(status:var EditorStatus, filename: string) =
   let lang = if status.settings.syntax: status.bufStatus[index].language else: SourceLanguage.langNone
   status.bufStatus[index].highlight = initHighlight($status.bufStatus[index].buffer, lang, status.settings.editorColor.editor)
 
-  let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[index].buffer.len) - 2 else: 0
-  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-  status.bufStatus[index].view = initEditorView(status.bufStatus[index].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+  let
+    numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[index].buffer.len) - 2 else: 0
+    useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+    useTab = if status.settings.tabLine.useTab: 1 else: 0
+  status.bufStatus[index].view = initEditorView(status.bufStatus[index].buffer, terminalHeight() - useStatusBar - useTab - 1, terminalWidth() - numberOfDigitsLen)
 
   status.changeCurrentBuffer(index)
   status.changeMode(Mode.normal)
