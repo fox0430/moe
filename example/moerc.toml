@@ -1,6 +1,7 @@
 [Standard]
 theme = "vivid"
 number = true 
+currentNumber = true 
 statusBar = true
 tabLine = true
 syntax = true
