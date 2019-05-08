@@ -32,6 +32,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("number"):
       result.lineNumber = settings["Standard"]["number"].getbool()
 
+    if settings["Standard"].contains("currentNumber"):
+      result.currentLineNumber = settings["Standard"]["currentNumber"].getbool()
+
     if settings["Standard"].contains("statusBar"):
       result.statusBar.useBar = settings["Standard"]["statusBar"].getbool()
 
