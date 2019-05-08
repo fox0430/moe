@@ -26,6 +26,9 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   
   return (searhWord: searchWord, replaceWord: replaceWord)
 
+proc isListAllBufferCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"ls"
+
 proc isWriteAndQuitAllBufferCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"wqa"
 
@@ -191,7 +194,8 @@ proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
     else: changeCurrentBuffer(status, index)
   elif index < status.currentBuffer: dec(status.currentBuffer)
 
-  status.changeMode(Mode.normal)
+  if status.bufStatus[status.currentBuffer].mode == Mode.ex: status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
+  else: status.changeMode(status.bufStatus[status.currentBuffer].mode)
 
 proc changeFirstBufferCommand(status: var EditorStatus) =
   changeCurrentBuffer(status, 0)
@@ -311,6 +315,45 @@ proc shellCommand(status: var EditorStatus, shellCommand: string) =
   status.commandWindow.erase
   status.commandWindow.refresh
 
+proc listAllBufferCommand(status: var Editorstatus) =
+  let swapCurrentBufferIndex = status.currentBuffer
+  status.addNewBuffer("")
+  status.changeCurrentBuffer(status.bufStatus.high)
+
+  status.bufStatus[status.currentBuffer].buffer.delete(0, 0)
+  for i in 0 ..< status.bufStatus.high:
+    var line = ru""
+    let
+      currentMode = status.bufStatus[i].mode
+      prevMode = status.bufStatus[i].prevMode
+    if currentMode == Mode.filer or (currentMode == Mode.ex and prevMode == Mode.filer): line = getCurrentDir().toRunes
+    else: line = status.bufStatus[i].filename & ru"  line " & ($status.bufStatus[i].buffer.len).toRunes
+
+    if i == 0: status.bufStatus[status.currentBuffer].buffer[0] = line
+    else:status.bufStatus[status.currentBuffer].buffer.insert(line, i)
+
+  let
+    useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+    useTab = if status.settings.tabLine.useTab: 1 else: 0
+    swapCurrentLineNumStting = status.settings.currentLineNumber
+  
+  status.settings.currentLineNumber= false
+  status.bufStatus[status.currentBuffer].view = initEditorView(status.bufStatus[status.currentBuffer].buffer, terminalHeight() - useStatusBar - useTab - 1, terminalWidth())
+  status.bufStatus[status.currentBuffer].currentLine = 0
+
+  status.updateHighlight
+
+  while true:
+    status.update
+    setCursor(false)
+    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
+    else: break
+
+  status.settings.currentLineNumber= swapCurrentLineNumStting
+  status.changeCurrentBuffer(swapCurrentBufferIndex)
+  status.deleteBufferStatusCommand(status.bufStatus.high)
+
 proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
 
   let replaceInfo = parseReplaceCommand(command)
@@ -397,6 +440,8 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     forceAllBufferQuitCommand(status)
   elif isWriteAndQuitAllBufferCommand(command):
     writeAndQuitAllBufferCommand(status)
+  elif isListAllBufferCommand(command):
+    listAllBufferCommand(status)
   else:
     status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
