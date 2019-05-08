@@ -322,7 +322,10 @@ proc listAllBufferCommand(status: var Editorstatus) =
 
   for i in 0 ..< status.bufStatus.high:
     var line = ($(i + 1)).toRunes & ru": "
-    if status.bufStatus[i].mode == Mode.filer: line = line & getCurrentDir().toRunes
+    let
+      currentMode = status.bufStatus[i].mode
+      prevMode = status.bufStatus[i].prevMode
+    if  currentMode == Mode.filer or (currentMode == Mode.ex and prevMode == Mode.filer): line = line & getCurrentDir().toRunes
     else: line = line & status.bufStatus[i].filename & ru"  line " & ($status.bufStatus[i].buffer.len).toRunes
     status.bufStatus[status.currentBuffer].buffer.insert(line, i)
 
