@@ -30,6 +30,7 @@ type EditorSettings* = object
   statusBar*: StatusBarSettings
   tabLine*: TabBarSettings
   lineNumber*: bool
+  currentLineNumber*: bool
   syntax*: bool
   autoCloseParen*: bool
   autoIndent*: bool 
@@ -99,6 +100,7 @@ proc initEditorSettings*(): EditorSettings =
   result.statusBar = initStatusBarSettings()
   result.tabLine = initTabBarSettings()
   result.lineNumber = true
+  result.currentLineNumber = true
   result.syntax = true
   result.autoCloseParen = true
   result.autoIndent = true
@@ -280,9 +282,10 @@ proc update*(status: var EditorStatus) =
       isCurrentMainWin = if i == status.currentMainWindow: true else: false
       color = status.settings.editorColor
       isLineNumber = status.settings.lineNumber
+      isCurrentLineNumber = status.settings.currentLineNumber
 
     status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
-    status.bufStatus[bufIndex].view.update(status.mainWindowInfo[i].window, isLineNumber, isCurrentMainWin, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, color, status.bufStatus[bufIndex].currentLine)
+    status.bufStatus[bufIndex].view.update(status.mainWindowInfo[i].window, isLineNumber, isCurrentLineNumber, isCurrentMainWin, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, color, status.bufStatus[bufIndex].currentLine)
 
     status.bufStatus[bufIndex].cursor.update(status.bufStatus[bufIndex].view, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
