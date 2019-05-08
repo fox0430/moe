@@ -194,7 +194,8 @@ proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
     else: changeCurrentBuffer(status, index)
   elif index < status.currentBuffer: dec(status.currentBuffer)
 
-  status.changeMode(Mode.normal)
+  if status.bufStatus[status.currentBuffer].mode == Mode.ex: status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
+  else: status.changeMode(status.bufStatus[status.currentBuffer].mode)
 
 proc changeFirstBufferCommand(status: var EditorStatus) =
   changeCurrentBuffer(status, 0)
@@ -315,10 +316,15 @@ proc shellCommand(status: var EditorStatus, shellCommand: string) =
   status.commandWindow.refresh
 
 proc listAllBufferCommand(status: var Editorstatus) =
+  let swapCurrentBufferIndex = status.currentBuffer
   status.addNewBuffer("")
   status.changeCurrentBuffer(status.bufStatus.high)
 
-  for i in 0 ..< status.bufStatus.high: status.bufStatus[status.currentBuffer].buffer.insert(status.bufStatus[i].filename, i)
+  for i in 0 ..< status.bufStatus.high:
+    var line = ($(i + 1)).toRunes & ru": "
+    if status.bufStatus[i].mode == Mode.filer: line = line & getCurrentDir().toRunes
+    else: line = line & status.bufStatus[i].filename & ru"  line " & ($status.bufStatus[i].buffer.len).toRunes
+    status.bufStatus[status.currentBuffer].buffer.insert(line, i)
 
   let
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
@@ -339,6 +345,7 @@ proc listAllBufferCommand(status: var Editorstatus) =
     else: break
 
   status.settings.lineNumber = swapLineNumStting
+  status.changeCurrentBuffer(swapCurrentBufferIndex)
   status.deleteBufferStatusCommand(status.bufStatus.high)
 
 proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
