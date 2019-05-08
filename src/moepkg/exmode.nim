@@ -320,21 +320,24 @@ proc listAllBufferCommand(status: var Editorstatus) =
   status.addNewBuffer("")
   status.changeCurrentBuffer(status.bufStatus.high)
 
+  status.bufStatus[status.currentBuffer].buffer.delete(0, 0)
   for i in 0 ..< status.bufStatus.high:
-    var line = ($(i + 1)).toRunes & ru": "
+    var line = ru""
     let
       currentMode = status.bufStatus[i].mode
       prevMode = status.bufStatus[i].prevMode
-    if  currentMode == Mode.filer or (currentMode == Mode.ex and prevMode == Mode.filer): line = line & getCurrentDir().toRunes
-    else: line = line & status.bufStatus[i].filename & ru"  line " & ($status.bufStatus[i].buffer.len).toRunes
-    status.bufStatus[status.currentBuffer].buffer.insert(line, i)
+    if currentMode == Mode.filer or (currentMode == Mode.ex and prevMode == Mode.filer): line = getCurrentDir().toRunes
+    else: line = status.bufStatus[i].filename & ru"  line " & ($status.bufStatus[i].buffer.len).toRunes
+
+    if i == 0: status.bufStatus[status.currentBuffer].buffer[0] = line
+    else:status.bufStatus[status.currentBuffer].buffer.insert(line, i)
 
   let
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useTab = if status.settings.tabLine.useTab: 1 else: 0
-    swapLineNumStting = status.settings.lineNumber
+    swapCurrentLineNumStting = status.settings.currentLineNumber
   
-  status.settings.lineNumber = false
+  status.settings.currentLineNumber= false
   status.bufStatus[status.currentBuffer].view = initEditorView(status.bufStatus[status.currentBuffer].buffer, terminalHeight() - useStatusBar - useTab - 1, terminalWidth())
   status.bufStatus[status.currentBuffer].currentLine = 0
 
@@ -347,7 +350,7 @@ proc listAllBufferCommand(status: var Editorstatus) =
     if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
     else: break
 
-  status.settings.lineNumber = swapLineNumStting
+  status.settings.currentLineNumber= swapCurrentLineNumStting
   status.changeCurrentBuffer(swapCurrentBufferIndex)
   status.deleteBufferStatusCommand(status.bufStatus.high)
 
