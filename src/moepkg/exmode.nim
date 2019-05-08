@@ -337,7 +337,7 @@ proc listAllBufferCommand(status: var Editorstatus) =
     useTab = if status.settings.tabLine.useTab: 1 else: 0
     swapCurrentLineNumStting = status.settings.currentLineNumber
   
-  status.settings.currentLineNumber= false
+  status.settings.currentLineNumber = false
   status.bufStatus[status.currentBuffer].view = initEditorView(status.bufStatus[status.currentBuffer].buffer, terminalHeight() - useStatusBar - useTab - 1, terminalWidth())
   status.bufStatus[status.currentBuffer].currentLine = 0
 
@@ -350,7 +350,7 @@ proc listAllBufferCommand(status: var Editorstatus) =
     if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
     else: break
 
-  status.settings.currentLineNumber= swapCurrentLineNumStting
+  status.settings.currentLineNumber = swapCurrentLineNumStting
   status.changeCurrentBuffer(swapCurrentBufferIndex)
   status.deleteBufferStatusCommand(status.bufStatus.high)
 
