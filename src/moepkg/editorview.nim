@@ -176,7 +176,7 @@ proc write(view: EditorView, win: var Window, y, x: int, str: seq[Rune], color: 
   const tab = "    "
   win.write(y, x, ($str).replace("\t", tab), color, false)
 
-proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, currentLineNumber, currentWin: bool, buffer: T, highlight: Highlight, editorColor: EditorColor, currentLine: int) =
+proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, currentLineNumber, cursorLine, currentWin: bool, buffer: T, highlight: Highlight, editorColor: EditorColor, currentLine: int) =
   win.erase
   view.widthOfLineNum = if lineNumber: buffer.len.numberOfDigits+1 else: 0
 
@@ -214,7 +214,11 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, curren
         assert(first <= last, fmt"first = {first}, last = {last}")
       
       let str = view.lines[y][first .. last]
-      view.write(win, y, x, str, highlight[i].color)
+      if isCurrentLine:
+        win.attron(Attributes.underline)
+        view.write(win, y, x, str, highlight[i].color)
+        win.attroff(Attributes.underline)
+      else: view.write(win, y, x, str, highlight[i].color)
       x += width(str)
       if last == highlight[i].lastColumn - view.start[y]:
         # consumed a whole segment
@@ -223,10 +227,10 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, curren
 
   win.refresh
 
-proc update*[T](view: var EditorView, win: var Window, lineNumber, currentLineNumber, currentWin: bool, buffer: T, highlight: Highlight, editorColor: EditorColor, currentLine: int) =
+proc update*[T](view: var EditorView, win: var Window, lineNumber, currentLineNumber, cursorLine, currentWin: bool, buffer: T, highlight: Highlight, editorColor: EditorColor, currentLine: int) =
   let widthOfLineNum = buffer.len.intToStr.len+1
   if lineNumber and widthOfLineNum != view.widthOfLineNum: view.resize(buffer, view.height, view.width+view.widthOfLineNum-widthOfLineNum, widthOfLineNum)
-  view.writeAllLines(win, lineNumber, currentLineNumber, currentWin, buffer, highlight, editorColor, currentLine)
+  view.writeAllLines(win, lineNumber, currentLineNumber, cursorLine, currentWin, buffer, highlight, editorColor, currentLine)
   view.updated = false
 
 proc seekCursor*[T](view: var EditorView, buffer: T, currentLine, currentColumn: int) =
