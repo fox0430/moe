@@ -47,6 +47,7 @@ type ColorPair* = enum
   blueDefault           = 20
 
 type ColorTheme* = enum
+  config  = 0
   dark    = 1
   light   = 2
   vivid   = 3
@@ -61,6 +62,53 @@ type EditorColor* = object
   currentTab*: ColorPair
   commandBar*: ColorPair
   errorMessage*: ColorPair
+
+var ColorThemeTable*: array[ColorTheme, EditorColor] = [
+  config: EditorColor(
+    editor: brightWhiteDefault,
+    lineNum: grayDefault,
+    currentLineNum: cyanDefault,
+    statusBar: brightWhiteBlue,
+    statusBarMode: blackWhite,
+    tab: brightWhiteDefault,
+    currentTab: brightWhiteBlue,
+    commandBar: brightWhiteDefault,
+    errorMessage: redDefault,
+  ),
+  dark: EditorColor(
+    editor: brightWhiteDefault,
+    lineNum: grayDefault,
+    currentLineNum: cyanDefault,
+    statusBar: brightWhiteBlue,
+    statusBarMode: blackWhite,
+    tab: brightWhiteDefault,
+    currentTab: brightWhiteBlue,
+    commandBar: brightWhiteDefault,
+    errorMessage: redDefault,
+  ),
+  light: EditorColor(
+    editor: blackDefault,
+    lineNum: grayDefault,
+    currentLineNum: blackDefault,
+    statusBar: cyanGray,
+    statusBarMode: whiteCyan,
+    tab: cyanGray,
+    currentTab: whiteCyan,
+    commandBar: blackDefault,
+    errorMessage: redDefault,
+  ),
+  vivid: EditorColor(
+    editor: brightWhiteDefault,
+    lineNum: grayDefault,
+    currentLineNum: pinkDefault,
+    statusBar: blackPink,
+    statusBarMode: blackWhite,
+    tab: brightWhiteDefault,
+    currentTab: blackPink,
+    commandBar: brightWhiteDefault,
+    errorMessage: redDefault,
+  ),
+]
 
 type Window* = object
   cursesWindow*: ptr window

@@ -1,5 +1,6 @@
 import parsetoml
 import editorstatus, ui
+from strutils import parseEnum
 
 proc getCursorType(cursorType, mode: string): CursorType =
   case cursorType
@@ -83,3 +84,41 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["StatusBar"].contains("directory"):
         result.statusBar.language = settings["StatusBar"]["directory"].getbool()
+
+  if settings.contains("Theme"):
+    if settings["Theme"].contains("baseTheme"):
+      let theme = parseEnum[ColorTheme](settings["Theme"]["baseTheme"].getStr())
+      ColorThemeTable[ColorTheme.config] = ColorThemeTable[theme]
+
+    template color(str: string): untyped =
+      parseEnum[ColorPair](settings["Theme"][str].getStr())
+
+    if settings["Theme"].contains("editor"):
+      ColorThemeTable[ColorTheme.config].editor = color("editor")
+
+    if settings["Theme"].contains("lineNum"):
+      ColorThemeTable[ColorTheme.config].lineNum = color("lineNum")
+
+    if settings["Theme"].contains("currentLineNum"):
+      ColorThemeTable[ColorTheme.config].currentLineNum = color("currentLineNum")
+
+    if settings["Theme"].contains("statusBar"):
+      ColorThemeTable[ColorTheme.config].statusBar = color("statusBar")
+
+    if settings["Theme"].contains("statusBarMode"):
+      ColorThemeTable[ColorTheme.config].statusBarMode = color("statusBarMode")
+
+    if settings["Theme"].contains("tab"):
+      ColorThemeTable[ColorTheme.config].tab = color("tab")
+
+    if settings["Theme"].contains("currentTab"):
+      ColorThemeTable[ColorTheme.config].currentTab = color("currentTab")
+
+    if settings["Theme"].contains("commandBar"):
+      ColorThemeTable[ColorTheme.config].commandBar = color("commandBar")
+
+    if settings["Theme"].contains("errorMessage"):
+      ColorThemeTable[ColorTheme.config].errorMessage = color("errorMessage")
+
+    result.editorColorTheme = ColorTheme.config
+    result.editorColor = ColorThemeTable[ColorTheme.config]
