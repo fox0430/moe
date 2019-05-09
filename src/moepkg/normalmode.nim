@@ -515,7 +515,10 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('v'):
     status.changeMode(Mode.visual)
   elif key == ord('a'):
-    if status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len > 0: inc(status.bufStatus[currentBuf].currentColumn)
+    let lineWidth = status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len
+    if lineWidth == 0: discard
+    elif lineWidth == status.bufStatus[currentBuf].currentColumn: discard
+    else: inc(status.bufStatus[currentBuf].currentColumn)
     status.changeMode(Mode.insert)
   elif key == ord('A'):
     status.bufStatus[currentBuf].currentColumn = status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len
