@@ -3,6 +3,18 @@ from os import execShellCmd
 import ncurses
 import unicodeext
 
+type Attributes* = enum
+  normal = A_NORMAL
+  standout = A_STANDOUT
+  underline = A_UNDERLINE
+  reverse = A_REVERSE
+  blink = A_BLINK
+  dim = A_DIM
+  bold = A_BOLD
+  altcharet = A_ALT_CHARSET
+  invis = A_INVIS
+  protect = A_PROTECT
+  #chartext = A_CHAR_TEXT
 
 type CursorType* = enum
   blockMode = 0
@@ -233,6 +245,10 @@ proc resize*(win: Window, height, width: int) =
 proc resize*(win: Window, height, width, y, x: int) =
   win.resize(height, width)
   win.move(y, x)
+
+proc attron*(win: var Window, attributes: Attributes) = win.cursesWindow.wattron(cint(attributes))
+
+proc attroff*(win: var Window, attributes: Attributes) = win.cursesWindow.wattroff(cint(attributes))
 
 proc moveCursor*(win: Window, y, x: int) =
   wmove(win.cursesWindow, cint(y), cint(x))

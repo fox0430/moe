@@ -31,6 +31,7 @@ type EditorSettings* = object
   tabLine*: TabBarSettings
   lineNumber*: bool
   currentLineNumber*: bool
+  cursorLine*: bool
   syntax*: bool
   autoCloseParen*: bool
   autoIndent*: bool 
@@ -254,9 +255,10 @@ proc update*(status: var EditorStatus) =
       color = status.settings.editorColor
       isLineNumber = status.settings.lineNumber
       isCurrentLineNumber = status.settings.currentLineNumber
+      isCursorLine = status.settings.cursorLine
 
     status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
-    status.bufStatus[bufIndex].view.update(status.mainWindowInfo[i].window, isLineNumber, isCurrentLineNumber, isCurrentMainWin, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, color, status.bufStatus[bufIndex].currentLine)
+    status.bufStatus[bufIndex].view.update(status.mainWindowInfo[i].window, isLineNumber, isCurrentLineNumber, isCursorLine, isCurrentMainWin, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, color, status.bufStatus[bufIndex].currentLine)
 
     status.bufStatus[bufIndex].cursor.update(status.bufStatus[bufIndex].view, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
