@@ -198,6 +198,7 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, curren
 
     while i < highlight.len and highlight[i].firstRow < view.originalLine[y]: inc(i)
     while i < highlight.len and highlight[i].firstRow == view.originalLine[y]:
+      if (highlight[i].firstRow, highlight[i].firstColumn) > (highlight[i].lastRow, highlight[i].lastColumn) : break # skip an empty segment
       let
         first = max(highlight[i].firstColumn-view.start[y], 0)
         last = min(highlight[i].lastColumn-view.start[y], view.lines[y].high)

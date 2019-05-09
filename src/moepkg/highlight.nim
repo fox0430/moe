@@ -74,7 +74,7 @@ proc initHighlight*(buffer: string, language: SourceLanguage, defaultColor: Colo
       empty = true
     for r in runes(str):
       if r == newline:
-        if empty: result.colorSegments.add(ColorSegment(firstRow: currentRow, firstColumn: 0, lastRow: currentRow, lastColumn: -1, color: defaultColor))
+        if empty: result.colorSegments.add(ColorSegment(firstRow: currentRow, firstColumn: currentColumn, lastRow: currentRow, lastColumn: currentColumn-1, color: defaultColor)) # push an empty segment
         else: result.colorSegments.add(cs)
         inc(currentRow)
         currentColumn = 0
