@@ -2,6 +2,7 @@
 theme = "vivid"
 number = true 
 currentNumber = true 
+cursorLine = false
 statusBar = true
 tabLine = true
 syntax = true
