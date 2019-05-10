@@ -1,5 +1,10 @@
 import terminal, os
-import gapbuffer, ui, editorstatus, normalmode, unicodeext
+import gapbuffer, ui, editorstatus, normalmode, unicodeext, highlight
+
+proc initFilelistHighlight[T](buffer: T, currentLine: int): Highlight =
+  for i in 0 ..< buffer.len:
+    let color = if i == currentLine: Colorpair.brightGreenDefault else: brightWhiteDefault
+    result.colorSegments.add(ColorSegment(firstRow: i, firstColumn: 0, lastRow: i, lastColumn: buffer[i].len, color: color))
 
 proc initBufferList(status: var Editorstatus) =
   status.bufStatus[status.currentBuffer].filename = ru"Buffer manager"
@@ -12,13 +17,26 @@ proc initBufferList(status: var Editorstatus) =
     if i == 0: status.bufStatus[status.currentBuffer].buffer[0] = line
     else: status.bufStatus[status.currentBuffer].buffer.add(line)
 
-  status.updateHighlight
+  #status.updateHighlight
+
+proc updateBufferManagerHighlight(status: var Editorstatus) =
+  status.bufStatus[status.currentBuffer].highlight = initFilelistHighlight(status.bufStatus[status.currentBuffer].buffer, status.bufStatus[status.currentBuffer].currentLine)
+
+proc openSelectedBuffer(status: var Editorstatus, isNewWindow: bool) =
+  if isNewWindow:
+    status.splitWindow
+    status.moveNextWindow
+    status.changeCurrentBuffer(status.bufStatus[status.currentBuffer].currentLine)
+  else:
+    status.changeCurrentBuffer(status.bufStatus[status.currentBuffer].currentLine)
+    status.bufStatus.delete(status.bufStatus.high)
 
 proc bufferManager*(status: var Editorstatus) =
   status.initBufferList
   status.resize(terminalHeight(), terminalWidth())
 
   while status.bufStatus[status.currentBuffer].mode == Mode.bufManager:
+    status.updateBufferManagerHighlight
     status.update
     setCursor(false)
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
@@ -31,7 +49,11 @@ proc bufferManager*(status: var Editorstatus) =
       movePrevWindow(status)
     elif key == ord(':'):
       status.changeMode(Mode.ex)
-    elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
+    elif key == ord('k') or isUpKey(key):
       keyUp(status.bufStatus[status.currentBuffer])
-    elif key == ord('j') or isDownKey(key) or isEnterKey(key):
+    elif key == ord('j') or isDownKey(key):
       keyDown(status.bufStatus[status.currentBuffer])
+    elif isEnterKey(key):
+      openSelectedBuffer(status, false)
+    elif key == ord('o'):
+      openSelectedBuffer(status, true)
