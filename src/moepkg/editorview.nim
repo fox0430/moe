@@ -214,7 +214,7 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, curren
         assert(first <= last, fmt"first = {first}, last = {last}")
       
       let str = view.lines[y][first .. last]
-      if isCurrentLine:
+      if isCurrentLine and cursorLine:
         win.attron(Attributes.underline)
         view.write(win, y, x, str, highlight[i].color)
         win.attroff(Attributes.underline)

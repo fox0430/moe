@@ -26,6 +26,9 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   
   return (searhWord: searchWord, replaceWord: replaceWord)
 
+proc isChangeCursorLineCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"cursorLine"
+
 proc isListAllBufferCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"ls"
 
@@ -112,6 +115,11 @@ proc isShellCommand(command: seq[seq[Rune]]): bool =
 
 proc isReplaceCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
+
+proc changeCursorLineCommand(status: var Editorstatus, command: seq[Rune]) =
+  if command == ru"on" : status.settings.cursorLine = true 
+  elif command == ru"off": status.settings.cursorLine = false
+  status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
 proc splitWindowCommand(status: var EditorStatus) =
   splitWindow(status)
@@ -433,6 +441,8 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     syntaxSettingCommand(status, command[1])
   elif isChangeThemeSettingCommand(command):
     changeThemeSettingCommand(status, command[1])
+  elif isChangeCursorLineCommand(command):
+    changeCursorLineCommand(status, command[1])
   elif isSplitWindowCommand(command):
     splitWindowCommand(status)
   elif isAllBufferQuitCommand(command):
