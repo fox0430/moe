@@ -46,6 +46,6 @@ proc main() =
     of Mode.search: searchMode(status)
     of Mode.bufManager: bufferManager(status)
 
-  executeOnExit(status.settings)
+  exitEditor(status.settings)
 
 when isMainModule: main()

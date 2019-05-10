@@ -139,8 +139,12 @@ proc changeTheme*(status: var EditorStatus) =
 proc changeCurrentWin*(status:var EditorStatus, index: int) =
   if index < status.mainWindowInfo.high and index > 0: status.currentMainWindow = index
 
-proc executeOnExit*(settings: EditorSettings) =
-  changeCursorType(settings.defaultCursor)
+proc executeOnExit(settings: EditorSettings) = changeCursorType(settings.defaultCursor)
+
+proc exitEditor*(settings: EditorSettings) =
+  executeOnExit(settings)
+  exitUi()
+  quit()
 
 proc writeStatusBarNormalModeInfo(status: var EditorStatus) =
   let
@@ -172,12 +176,16 @@ proc writeStatusBarFilerModeInfo(status: var EditorStatus) =
   status.statusWindow.append(getCurrentDir().toRunes, color)
   status.statusWindow.append(ru " ".repeat(terminalWidth() - 5), color)
 
+proc writeStatusBarBufferManagerMode(status: var EditorStatus) =
+  let color = status.settings.editorColor.statusBar
+  status.statusWindow.append(ru " ".repeat(terminalWidth() - 5), color)
+
 proc writeStatusBar*(status: var EditorStatus) =
   status.statusWindow.erase
   let
     color = status.settings.editorColor.statusBarMode
     mode = status.bufStatus[status.currentBuffer].mode
-    modeStr = if mode == Mode.ex: " EX " elif mode == Mode.visual: " VISUAL " elif mode == Mode.replace: " REPLACE " elif mode == Mode.filer: " FILER " elif mode == Mode.normal: " NORMAL " else: " INSERT "
+    modeStr = if mode == Mode.ex: " EX " elif mode == Mode.visual: " VISUAL " elif mode == Mode.replace: " REPLACE " elif mode == Mode.filer: " FILER " elif mode == Mode.normal: " NORMAL " elif mode == Mode.bufManager: " BUFFER " else: " INSERT "
 
   if status.settings.statusBar.mode: status.statusWindow.write(0, 0, modeStr, color)
 
@@ -186,6 +194,7 @@ proc writeStatusBar*(status: var EditorStatus) =
   elif mode == Mode.visual: writeStatusBarNormalModeInfo(status)
   elif mode == Mode.replace: writeStatusBarNormalModeInfo(status)
   elif mode == Mode.filer: writeStatusBarFilerModeInfo(status)
+  elif mode == Mode.bufManager: writeStatusBarBufferManagerMode(status)
   else: writeStatusBarNormalModeInfo(status)
 
   status.statusWindow.refresh
