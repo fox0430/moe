@@ -1,5 +1,5 @@
 [![Build Status](https://travis-ci.org/fox0430/moe.svg?branch=master)](https://travis-ci.org/fox0430/moe)
-[![AUR](https://img.shields.io/aur/license/yaourt.svg)](https://github.com/fox0430/moe/blob/master/README.md)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 ## moe
 
