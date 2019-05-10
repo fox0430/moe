@@ -10,12 +10,13 @@ proc setBufferList(status: var Editorstatus) =
   status.bufStatus[status.currentBuffer].filename = ru"Buffer manager"
   status.bufStatus[status.currentBuffer].buffer = initGapBuffer[seq[Rune]]()
 
-  for i in 0 ..< status.bufStatus.high:
-    let
-      currentMode = status.bufStatus[i].mode
-      prevMode = status.bufStatus[i].prevMode
-      line = if (currentMode == Mode.filer) or (prevMode == Mode.filer and currentMode == Mode.ex): getCurrentDir().toRunes else: status.bufStatus[i].filename
-    status.bufStatus[status.currentBuffer].buffer.add(line)
+  for i in 0 ..< status.bufStatus.len:
+    let currentMode = status.bufStatus[i].mode
+    if currentMode != Mode.bufManager:
+      let
+        prevMode = status.bufStatus[i].prevMode
+        line = if (currentMode == Mode.filer) or (prevMode == Mode.filer and currentMode == Mode.ex): getCurrentDir().toRunes else: status.bufStatus[i].filename
+      status.bufStatus[status.currentBuffer].buffer.add(line)
 
 proc updateBufferManagerHighlight(status: var Editorstatus) =
   let index = status.currentBuffer
@@ -31,7 +32,7 @@ proc deleteSelectedBuffer(status: var Editorstatus) =
     for i in 0 ..< status.mainWindowInfo.len:
       if status.mainWindowInfo[i].bufferIndex > deleteIndex: dec(status.mainWindowInfo[i].bufferIndex)
 
-    status.currentBuffer = status.bufStatus.high
+    if status.currentBuffer > deleteIndex: dec(status.currentBuffer)
     if status.bufStatus[status.currentBuffer].currentLine > 0: dec(status.bufStatus[status.currentBuffer].currentLine)
     status.currentMainWindow = status.mainWindowInfo.high
     status.setBufferList
