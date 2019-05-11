@@ -9,6 +9,7 @@ import moepkg/replacemode
 import moepkg/filermode
 import moepkg/exmode
 import moepkg/searchmode
+import moepkg/buffermanager
 import moepkg/editorview
 import moepkg/cmdoption
 import moepkg/settings
@@ -43,7 +44,8 @@ proc main() =
     of Mode.ex: exMode(status)
     of Mode.filer: filerMode(status)
     of Mode.search: searchMode(status)
+    of Mode.bufManager: bufferManager(status)
 
-  executeOnExit(status.settings)
+  exitEditor(status.settings)
 
 when isMainModule: main()

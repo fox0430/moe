@@ -2,7 +2,7 @@ import packages/docutils/highlite, strutils, terminal, os, strformat
 import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils
 
 type Mode* = enum
-  normal, insert, visual, replace, ex, filer, search
+  normal, insert, visual, replace, ex, filer, search, bufManager
 
 type Registers* = object
   yankedLines*: seq[seq[Rune]]
@@ -139,8 +139,12 @@ proc changeTheme*(status: var EditorStatus) =
 proc changeCurrentWin*(status:var EditorStatus, index: int) =
   if index < status.mainWindowInfo.high and index > 0: status.currentMainWindow = index
 
-proc executeOnExit*(settings: EditorSettings) =
-  changeCursorType(settings.defaultCursor)
+proc executeOnExit(settings: EditorSettings) = changeCursorType(settings.defaultCursor)
+
+proc exitEditor*(settings: EditorSettings) =
+  executeOnExit(settings)
+  exitUi()
+  quit()
 
 proc writeStatusBarNormalModeInfo(status: var EditorStatus) =
   let
@@ -172,12 +176,29 @@ proc writeStatusBarFilerModeInfo(status: var EditorStatus) =
   status.statusWindow.append(getCurrentDir().toRunes, color)
   status.statusWindow.append(ru " ".repeat(terminalWidth() - 5), color)
 
+proc writeStatusBarBufferManagerModeInfo(status: var EditorStatus) =
+  let
+    color = status.settings.editorColor.statusBar
+    info = fmt"{status.bufStatus[status.currentBuffer].currentLine + 1}/{status.bufStatus.len - 1}"
+  status.statusWindow.append(ru " ".repeat(terminalWidth() - " BUFFER ".len), color)
+  status.statusWindow.write(0, terminalWidth() - info.len - 1, info, color)
+
+proc setModeStr(mode: Mode): string =
+  case mode:
+  of Mode.insert: result = " INSERT "
+  of Mode.visual: result = " VISUAL "
+  of Mode.replace: result = " REPLACE "
+  of Mode.filer: result = " FILER "
+  of Mode.bufManager: result = " BUFFER "
+  of Mode.ex: result = " EX "
+  else: result = " NORMAL "
+
 proc writeStatusBar*(status: var EditorStatus) =
   status.statusWindow.erase
   let
     color = status.settings.editorColor.statusBarMode
     mode = status.bufStatus[status.currentBuffer].mode
-    modeStr = if mode == Mode.ex: " EX " elif mode == Mode.visual: " VISUAL " elif mode == Mode.replace: " REPLACE " elif mode == Mode.filer: " FILER " elif mode == Mode.normal: " NORMAL " else: " INSERT "
+    modeStr = setModeStr(status.bufStatus[status.currentBuffer].mode)
 
   if status.settings.statusBar.mode: status.statusWindow.write(0, 0, modeStr, color)
 
@@ -186,6 +207,7 @@ proc writeStatusBar*(status: var EditorStatus) =
   elif mode == Mode.visual: writeStatusBarNormalModeInfo(status)
   elif mode == Mode.replace: writeStatusBarNormalModeInfo(status)
   elif mode == Mode.filer: writeStatusBarFilerModeInfo(status)
+  elif mode == Mode.bufManager: writeStatusBarBufferManagerModeInfo(status)
   else: writeStatusBarNormalModeInfo(status)
 
   status.statusWindow.refresh
@@ -273,7 +295,7 @@ proc splitWindow*(status: var EditorStatus) =
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useTab = if status.settings.tabLine.useTab: 1 else: 0
 
-  status.mainWindowInfo.insert(MainWindowInfo(window: initWindow(terminalHeight() - useTab - 1, int(terminalWidth() / status.mainWindowInfo.len), useTab, int(terminalWidth() / status.mainWindowInfo.len)), bufferIndex: status.currentBuffer))
+  status.mainWindowInfo.insert(MainWindowInfo(window: initWindow(terminalHeight() - useTab - 1, int(terminalWidth() / status.mainWindowInfo.len), useTab, int(terminalWidth() / status.mainWindowInfo.len)), bufferIndex: status.currentBuffer), status.currentMainWindow)
 
   status.update
 

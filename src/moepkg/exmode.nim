@@ -26,6 +26,9 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   
   return (searhWord: searchWord, replaceWord: replaceWord)
 
+proc isOpenBufferManager(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"buf"
+
 proc isChangeCursorLineCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"cursorLine"
 
@@ -115,6 +118,14 @@ proc isShellCommand(command: seq[seq[Rune]]): bool =
 
 proc isReplaceCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
+
+proc openBufferManager(status: var Editorstatus) =
+  status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
+  status.splitWindow
+  status.moveNextWindow
+  status.addNewBuffer("")
+  status.changeCurrentBuffer(status.bufStatus.high)
+  status.changeMode(Mode.bufManager)
 
 proc changeCursorLineCommand(status: var Editorstatus, command: seq[Rune]) =
   if command == ru"on" : status.settings.cursorLine = true 
@@ -329,7 +340,6 @@ proc listAllBufferCommand(status: var Editorstatus) =
   status.addNewBuffer("")
   status.changeCurrentBuffer(status.bufStatus.high)
 
-  status.bufStatus[status.currentBuffer].buffer.delete(0, 0)
   for i in 0 ..< status.bufStatus.high:
     var line = ru""
     let
@@ -339,7 +349,7 @@ proc listAllBufferCommand(status: var Editorstatus) =
     else: line = status.bufStatus[i].filename & ru"  line " & ($status.bufStatus[i].buffer.len).toRunes
 
     if i == 0: status.bufStatus[status.currentBuffer].buffer[0] = line
-    else:status.bufStatus[status.currentBuffer].buffer.insert(line, i)
+    else: status.bufStatus[status.currentBuffer].buffer.insert(line, i)
 
   let
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
@@ -453,6 +463,8 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     writeAndQuitAllBufferCommand(status)
   elif isListAllBufferCommand(command):
     listAllBufferCommand(status)
+  elif isOpenBufferManager(command):
+    openBufferManager(status)
   else:
     status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
