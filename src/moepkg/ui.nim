@@ -279,29 +279,6 @@ type Color* = enum
   gray89              = 254
   gray93              = 255
 
-#TODO: delete
-type ColorPair* = enum
-  blackGreen            = 10
-  blackWhite            = 12
-  grayDefault           = 13
-  redDefault            = 14
-  greenBlack            = 15
-  brightWhiteDefault    = 16
-  brightGreenDefault    = 17
-  lightBlueDefault      = 18
-  brightWhiteGreen      = 19
-  cyanDefault           = 20
-  whiteCyan             = 21
-  magentaDefault        = 22
-  whiteDefault          = 23
-  pinkDefault           = 24
-  blackPink             = 25
-  defaultMagenta        = 26
-  blackDefault          = 27
-  cyanGray              = 28
-  brightWhiteBlue       = 29
-  blueDefault           = 30
-
 type ColorTheme* = enum
   config  = 0
   dark    = 1
@@ -309,7 +286,6 @@ type ColorTheme* = enum
   vivid   = 3
 
 type EditorColor* = object
-  editor*: Color
   editorBg*: Color
   lineNum*: Color
   lineNumBg*: Color
@@ -327,21 +303,41 @@ type EditorColor* = object
   commandBarBg*: Color
   errorMessage*: Color
   errorMessageBg*: Color
+  searchResult*: Color
+  searchResultBg*: Color
+  visualMode: Color
+  visualModeBg: Color
+  # color scheme
+  defaultChar*: Color
+  gtKeyword*: Color
+  gtStringLit*: Color
+  gtDecNumber*: Color
+  gtComment*: Color
+  gtLongComment*: Color
+  gtWhitespace*: Color
 
 type EditorColorPair* = enum
-  editor = 1
-  lineNum = 2
-  currentLineNum = 3
-  statusBar = 4
-  statusBarMode = 5
-  tab = 6
-  currentTab = 7
-  commandBar = 8
-  errorMessage = 9
+  lineNum = 1
+  currentLineNum = 2
+  statusBar = 3
+  statusBarMode = 4
+  tab = 5
+  currentTab = 6
+  commandBar = 7
+  errorMessage = 8
+  searchResult = 9
+  visualMode = 10
+  # color scheme
+  defaultChar = 11
+  keyword = 12
+  stringLit = 13
+  decNumber = 14
+  comment = 15
+  longComment = 16
+  whitespace = 17
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
-    editor: gray100,
     editorBg: default,
     lineNum: gray54,
     lineNumBg: default,
@@ -359,9 +355,20 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     commandBarBg: default,
     errorMessage: red,
     errorMessageBg: default,
+    searchResult: default,
+    searchResultBg: red,
+    visualMode: gray100,
+    visualModeBg: purple_1,
+    # color scheme
+    defaultChar: gray100,
+    gtKeyword: seaGreen1_2,
+    gtStringLit: purple_1,
+    gtDecNumber: aqua,
+    gtComment: white,
+    gtLongComment: white,
+    gtWhitespace: gray100
   ),
   dark: EditorColor(
-    editor: gray100,
     editorBg: default,
     lineNum: gray54,
     lineNumBg: default,
@@ -379,9 +386,20 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     commandBarBg: default,
     errorMessage: red,
     errorMessageBg: default,
+    searchResult: default,
+    searchResultBg: red,
+    visualMode: gray100,
+    visualModeBg: purple_1,
+    # color scheme
+    defaultChar: gray100,
+    gtKeyword: seaGreen1_2,
+    gtStringLit: purple_1,
+    gtDecNumber: aqua,
+    gtComment: white,
+    gtLongComment: white,
+    gtWhitespace: gray100
   ),
   light: EditorColor(
-    editor: black,
     editorBg: default,
     lineNum: gray54,
     lineNumBg: default,
@@ -399,9 +417,20 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     commandBarBg: default,
     errorMessage: red,
     errorMessageBg: default,
+    searchResult: default,
+    searchResultBg: red,
+    visualMode: black,
+    visualModeBg: purple_1,
+    # color scheme
+    defaultChar: black,
+    gtKeyword: seaGreen1_2,
+    gtStringLit: purple_1,
+    gtDecNumber: aqua,
+    gtComment: white,
+    gtLongComment: white,
+    gtWhitespace: gray100
   ),
   vivid: EditorColor(
-    editor: gray100,
     editorBg: default,
     lineNum: gray54,
     lineNumBg: default,
@@ -419,6 +448,18 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     commandBarBg: default,
     errorMessage: red,
     errorMessageBg: default,
+    searchResult: default,
+    searchResultBg: red,
+    visualMode: gray100,
+    visualModeBg: purple_1,
+    # color scheme
+    defaultChar: gray100,
+    gtKeyword: seaGreen1_2,
+    gtStringLit: purple_1,
+    gtDecNumber: aqua,
+    gtComment: white,
+    gtLongComment: white,
+    gtWhitespace: gray100
   ),
 ]
 
@@ -427,49 +468,30 @@ type Window* = object
   top, left, height*, width*: int
   y*, x*: int
 
-#TODO: delete
-proc setColorPair(colorPair: ColorPair, character, background: Color) =
-  init_pair(cshort(ord(colorPair)), cshort(ord(character)), cshort(ord(background)))
-
 proc setColorPair(colorPair: EditorColorPair, character, background: Color) =
   init_pair(cshort(ord(colorPair)), cshort(ord(character)), cshort(ord(background)))
 
-#TODO: delete
-proc setDefaultCursesColor() =
+proc setCursesColor*(editorColor: EditorColor) =
   start_color()   # enable color
   use_default_colors()    # set terminal default color
 
-  setColorPair(ColorPair.blackGreen, Color.black, Color.green)
-  setColorPair(ColorPair.blackWhite, Color.black, Color.white)
-  setColorPair(ColorPair.grayDefault, Color.gray54, Color.default)
-  setColorPair(ColorPair.redDefault, Color.red, Color.default)
-  setColorPair(ColorPair.greenBlack, Color.green, Color.black)
-  setColorPair(ColorPair.brightWhiteDefault, Color.gray100, Color.default)
-  setColorPair(ColorPair.brightGreenDefault, Color.seaGreen1_2, Color.default)
-  setColorPair(ColorPair.lightBlueDefault, Color.aqua, Color.default)
-  setColorPair(ColorPair.brightWhiteGreen, Color.gray100, Color.green)
-  setColorPair(ColorPair.cyanDefault, Color.teal, Color.default)
-  setColorPair(ColorPair.whiteCyan, Color.white, Color.teal)
-  setColorPair(ColorPair.magentaDefault, Color.purple_1, Color.default)
-  setColorPair(ColorPair.whiteDefault, Color.white, Color.default)
-  setColorPair(ColorPair.pinkDefault, Color.deepPink1_1, Color.default)
-  setColorPair(ColorPair.blackPink, Color.black, Color.deepPink1_1)
-  setColorPair(ColorPair.defaultMagenta, Color.default, Color.purple_1)
-  setColorPair(ColorPair.blackDefault, Color.black, Color.default)
-  setColorPair(ColorPair.cyanGray, Color.teal, Color.gray54)
-  setColorPair(ColorPair.brightWhiteBlue, Color.white, Color.blue)
-  setColorPair(ColorPair.blueDefault, Color.blue, Color.default)
-
-proc setConfigCursesColor*(colors: EditorColor) =
-  setColorPair(EditorColorPair.editor, colors.editor, colors.editorBg)
-  setColorPair(EditorColorPair.lineNum , colors.lineNum, colors.lineNumBg)
-  setColorPair(EditorColorPair.currentLineNum , colors.currentLineNum, colors.currentLineNumBg)
-  setColorPair(EditorColorPair.statusBar, colors.statusBar, colors.statusBarBg)
-  setColorPair(EditorColorPair.statusBarMode, colors.statusBarMode, colors.statusBarModeBg)
-  setColorPair(EditorColorPair.tab , colors.tab, colors.tabBg)
-  setColorPair(EditorColorPair.currentTab , colors.currentTab, colors.currentTabBg)
-  setColorPair(EditorColorPair.commandBar , colors.commandBar, colors.commandBarBg)
-  setColorPair(EditorColorPair.errorMessage , colors.errorMessage, colors.errorMessageBg)
+  setColorPair(EditorColorPair.lineNum , editorColor.lineNum, editorColor.lineNumBg)
+  setColorPair(EditorColorPair.currentLineNum, editorColor.currentLineNum, editorColor.currentLineNumBg)
+  setColorPair(EditorColorPair.statusBar, editorColor.statusBar, editorColor.statusBarBg)
+  setColorPair(EditorColorPair.statusBarMode, editorColor.statusBarMode, editorColor.statusBarModeBg)
+  setColorPair(EditorColorPair.tab , editorColor.tab, editorColor.tabBg)
+  setColorPair(EditorColorPair.currentTab , editorColor.currentTab, editorColor.currentTabBg)
+  setColorPair(EditorColorPair.commandBar , editorColor.commandBar, editorColor.commandBarBg)
+  setColorPair(EditorColorPair.errorMessage , editorColor.errorMessage, editorColor.errorMessageBg)
+  setColorPair(EditorColorPair.searchResult, editorColor.searchResult, editorColor.searchResultBg)
+  setColorPair(EditorColorPair.visualMode, editorColor.visualMode, editorColor.visualModeBg)
+  setColorPair(EditorColorPair.defaultChar, editorColor.defaultChar, Color.default)
+  setColorPair(EditorColorPair.keyword, editorColor.gtKeyword, Color.default)
+  setColorPair(EditorColorPair.stringLit, editorColor.gtStringLit, Color.default)
+  setColorPair(EditorColorPair.decNumber, editorColor.gtDecNumber, Color.default)
+  setColorPair(EditorColorPair.comment, editorColor.gtComment, Color.default)
+  setColorPair(EditorColorPair.longComment, editorColor.gtLongComment, Color.default)
+  setColorPair(EditorColorPair.whitespace, editorColor.gtWhitespace, Color.default)
 
 proc setIbeamCursor*() = discard execShellCmd("printf '\\033[6 q'")
 
@@ -501,7 +523,7 @@ proc startUi*() =
   cbreak()    # enable cbreak mode
   setCursor(true)
 
-  if can_change_color(): setDefaultCursesColor()
+  if can_change_color(): setCursesColor(ColorThemeTable[ColorTheme.vivid]) # default is vivid
 
   erase()
   keyEcho(false)
@@ -509,7 +531,7 @@ proc startUi*() =
 
 proc exitUi*() = endwin()
 
-proc initWindow*(height, width, top, left: int, color: ColorPair = ColorPair.brightWhiteDefault): Window =
+proc initWindow*(height, width, top, left: int, color: EditorColorPair = EditorColorPair.defaultChar): Window =
   result.top = top
   result.left = left
   result.height = height
@@ -518,40 +540,25 @@ proc initWindow*(height, width, top, left: int, color: ColorPair = ColorPair.bri
   keypad(result.cursesWindow, true)
   discard wbkgd(result.cursesWindow, ncurses.COLOR_PAIR(color))
 
-proc write*(win: var Window, y, x: int, str: string, color: EditorColorPair = EditorColorPair.editor, storeX: bool = true) =
+proc write*(win: var Window, y, x: int, str: string, color: EditorColorPair = EditorColorPair.defaultChar, storeX: bool = true) =
   win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
   mvwaddstr(win.cursesWindow, cint(y), cint(x), str)
   if storeX:
     win.y = y
     win.x = x+str.toRunes.width
 
-proc write*(win: var Window, y, x: int, str: seq[Rune], color: EditorColorPair = EditorColorPair.editor, storeX: bool = true) =
+proc write*(win: var Window, y, x: int, str: seq[Rune], color: EditorColorPair = EditorColorPair.defaultChar, storeX: bool = true) =
   write(win, y, x, $str, color, false)
   if storeX:
     win.y = y
     win.x = x+str.width
 
-#TODO: delete
-proc write*(win: var Window, y, x: int, str: string, color: Colorpair = Colorpair.brightWhiteDefault, storeX: bool = true) =
-  win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
-  mvwaddstr(win.cursesWindow, cint(y), cint(x), str)
-  if storeX:
-    win.y = y
-    win.x = x+str.toRunes.width
-
-#TODO: delete
-proc write*(win: var Window, y, x: int, str: seq[Rune], color: Colorpair = Colorpair.brightWhiteDefault, storeX: bool = true) =
-  write(win, y, x, $str, color, false)
-  if storeX:
-    win.y = y
-    win.x = x+str.width
-
-proc append*(win: var Window, str: string, color: EditorColorPair = EditorColorPair.editor) =
+proc append*(win: var Window, str: string, color: EditorColorPair = EditorColorPair.defaultChar) =
   win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
   mvwaddstr(win.cursesWindow, cint(win.y), cint(win.x), $str)
   win.x += str.toRunes.width
 
-proc append*(win: var Window, str: seq[Rune], color: EditorColorPair = EditorColorPair.editor) = append(win, $str, color)
+proc append*(win: var Window, str: seq[Rune], color: EditorColorPair = EditorColorPair.defaultChar) = append(win, $str, color)
   
 proc erase*(win: var Window) =
   werase(win.cursesWindow)

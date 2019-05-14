@@ -21,12 +21,9 @@ type StatusBarSettings* = object
 
 type TabBarSettings* = object
   useTab*: bool
-  color*: Colorpair
-  currentTabColor*: Colorpair
 
 type EditorSettings* = object
   editorColorTheme*: ColorTheme
-  #editorColorPair*: EditorColorPair
   statusBar*: StatusBarSettings
   tabLine*: TabBarSettings
   lineNumber*: bool
@@ -82,8 +79,6 @@ proc initRegisters(): Registers =
 
 proc initTabBarSettings*(): TabBarSettings =
   result.useTab = true
-  result.color = brightWhiteDefault
-  result.currentTabColor = blackPink
 
 proc initStatusBarSettings*(): StatusBarSettings =
   result.useBar = true
@@ -271,7 +266,7 @@ proc update*(status: var EditorStatus) =
     let
       bufIndex = status.mainWindowInfo[i].bufferIndex
       isCurrentMainWin = if i == status.currentMainWindow: true else: false
-      color = EditorColorPair.editor
+      color = EditorColorPair.defaultChar
       isLineNumber = status.settings.lineNumber
       isCurrentLineNumber = status.settings.currentLineNumber
       isCursorLine = status.settings.cursorLine
@@ -340,7 +335,7 @@ proc addNewBuffer*(status:var EditorStatus, filename: string) =
       return
 
   let lang = if status.settings.syntax: status.bufStatus[index].language else: SourceLanguage.langNone
-  status.bufStatus[index].highlight = initHighlight($status.bufStatus[index].buffer, lang, status.settings.editorColorTheme)
+  status.bufStatus[index].highlight = initHighlight($status.bufStatus[index].buffer, lang)
 
   let
     numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[index].buffer.len) - 2 else: 0
@@ -359,7 +354,7 @@ proc updateHighlight*(status: var EditorStatus) =
     currentBuf = status.currentBuffer
     syntax = status.settings.syntax
 
-  status.bufStatus[currentBuf].highlight = initHighlight($status.bufStatus[currentBuf].buffer, if syntax: status.bufStatus[currentBuf].language else: SourceLanguage.langNone, status.settings.editorColorTheme)
+  status.bufStatus[currentBuf].highlight = initHighlight($status.bufStatus[currentBuf].buffer, if syntax: status.bufStatus[currentBuf].language else: SourceLanguage.langNone)
 
   # highlight search results
   if status.bufStatus[status.currentBuffer].isHighlight and status.searchHistory.len > 0:
@@ -367,9 +362,9 @@ proc updateHighlight*(status: var EditorStatus) =
       keyword = status.searchHistory[^1]
       allOccurrence = searchAllOccurrence(status.bufStatus[currentBuf].buffer, keyword)
     for pos in allOccurrence:
-      let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column+keyword.high, color: defaultMagenta)
+      let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column+keyword.high, color: EditorColorPair.searchResult)
       status.bufStatus[currentBuf].highlight = status.bufStatus[currentBuf].highlight.overwrite(colorSegment)
 
 proc changeTheme*(status: var EditorStatus) =
-  setConfigCursesColor(ColorThemeTable[status.settings.editorColorTheme])
+  setCursesColor(ColorThemeTable[status.settings.editorColorTheme])
   if status.settings.editorColorTheme == ColorTheme.light: status.updateHighlight

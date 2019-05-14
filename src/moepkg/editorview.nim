@@ -176,11 +176,6 @@ proc write(view: EditorView, win: var Window, y, x: int, str: seq[Rune], color: 
   const tab = "    "
   win.write(y, x, ($str).replace("\t", tab), color, false)
 
-#TODO: delete
-proc write(view: EditorView, win: var Window, y, x: int, str: seq[Rune], color: Colorpair) =
-  const tab = "    "
-  win.write(y, x, ($str).replace("\t", tab), color, false)
-
 proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, currentLineNumber, cursorLine, currentWin: bool, buffer: T, highlight: Highlight, editorColor: EditorColorPair, currentLine: int) =
   win.erase
   view.widthOfLineNum = if lineNumber: buffer.len.numberOfDigits+1 else: 0
@@ -198,7 +193,7 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, curren
 
     var x = view.widthOfLineNum
     if view.length[y] == 0:
-      view.write(win, y, x, view.lines[y], EditorColorPair.editor)
+      view.write(win, y, x, view.lines[y], EditorColorPair.defaultChar)
       continue
 
     while i < highlight.len and highlight[i].firstRow < view.originalLine[y]: inc(i)

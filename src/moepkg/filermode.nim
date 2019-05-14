@@ -172,6 +172,7 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
       filerStatus.dirlistUpdate = true
     except OSError: status.commandWindow.writeFileOpenError(path, EditorColorPair.errorMessage)
 
+#[
 proc setDirListColor(kind: PathComponent, isCurrentLine: bool): ColorPair =
   case kind
   of pcFile:
@@ -183,6 +184,11 @@ proc setDirListColor(kind: PathComponent, isCurrentLine: bool): ColorPair =
   of pcLinkToDir, pcLinkToFile:
     if isCurrentLine: result = ColorPair.whiteCyan
     else: result = ColorPair.cyanDefault
+]#
+
+proc setDirListColor(kind: PathComponent, isCurrentLine: bool): EditorColorPair =
+  if isCurrentLine: result = EditorColorPair.currentLineNum
+  else: result = EditorColorPair.defaultChar
 
 proc initFilelistHighlight[T](dirList: seq[PathInfo], buffer: T, currentLine: int): Highlight =
   for i in 0 ..< dirList.len:
@@ -213,7 +219,7 @@ proc updateFilerView(status: var EditorStatus, filerStatus: var FilerStatus) =
 
 proc initFileDeitalHighlight[T](buffer: T): Highlight =
   for i in 0 ..< buffer.len:
-    result.colorSegments.add(ColorSegment(firstRow: i, firstColumn: 0, lastRow: i, lastColumn: buffer[i].len, color: ColorPair.brightWhiteDefault))
+    result.colorSegments.add(ColorSegment(firstRow: i, firstColumn: 0, lastRow: i, lastColumn: buffer[i].len, color: EditorColorPair.defaultChar))
 
 ## TODO: Add items
 proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string) =

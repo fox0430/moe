@@ -94,9 +94,6 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     template color(str: string): untyped =
       parseEnum[Color](settings["Theme"][str].getStr())
 
-    if settings["Theme"].contains("editor"):
-      ColorThemeTable[ColorTheme.config].editor = color("editor")
-
     if settings["Theme"].contains("editorBg"):
       ColorThemeTable[ColorTheme.config].editorBg = color("editorBg")
 
@@ -149,4 +146,3 @@ proc parseSettingsFile*(filename: string): EditorSettings =
       ColorThemeTable[ColorTheme.config].errorMessageBg = color("errorMessageBg")
 
     result.editorColorTheme = ColorTheme.config
-    #result.editorColor = ColorThemeTable[ColorTheme.config]
