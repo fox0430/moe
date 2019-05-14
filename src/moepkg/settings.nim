@@ -145,4 +145,25 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Theme"].contains("errorMessageBg"):
       ColorThemeTable[ColorTheme.config].errorMessageBg = color("errorMessageBg")
 
+    if settings["Theme"].contains("defaultCharactorColor"):
+      ColorThemeTable[ColorTheme.config].defaultChar = color("defaultCharactorColor")
+
+    if settings["Theme"].contains("gtKeywordColor"):
+      ColorThemeTable[ColorTheme.config].gtKeyword = color("gtKeywordColor")
+
+    if settings["Theme"].contains("gtStringLitColor"):
+      ColorThemeTable[ColorTheme.config].gtStringLit = color("gtStringLitColor")
+
+    if settings["Theme"].contains("gtDecNumberColor"):
+      ColorThemeTable[ColorTheme.config].gtDecNumber = color("gtDecNumberColor")
+
+    if settings["Theme"].contains("gtCommentColor"):
+      ColorThemeTable[ColorTheme.config].gtComment = color("gtCommentColor")
+
+    if settings["Theme"].contains("gtLongCommentColor"):
+      ColorThemeTable[ColorTheme.config].gtLongComment = color("gtLongCommentColor")
+
+    if settings["Theme"].contains("gtWhitespaceColor"):
+      ColorThemeTable[ColorTheme.config].gtLongComment = color("gtWhitespaceColor")
+
     result.editorColorTheme = ColorTheme.config
