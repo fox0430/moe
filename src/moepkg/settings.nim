@@ -21,10 +21,8 @@ proc parseSettingsFile*(filename: string): EditorSettings =
   result = initEditorSettings()
   
   var settings: TomlValueRef
-  try:
-    settings = parsetoml.parseFile(filename)
-  except IOError:
-    return
+  try: settings = parsetoml.parseFile(filename)
+  except IOError: return
 
   if settings.contains("Standard"):
     if settings["Standard"].contains("theme"):
@@ -92,37 +90,63 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Theme"].contains("baseTheme"):
       let theme = parseEnum[ColorTheme](settings["Theme"]["baseTheme"].getStr())
       ColorThemeTable[ColorTheme.config] = ColorThemeTable[theme]
-#[
+
     template color(str: string): untyped =
-      parseEnum[ColorPair](settings["Theme"][str].getStr())
+      parseEnum[Color](settings["Theme"][str].getStr())
 
     if settings["Theme"].contains("editor"):
       ColorThemeTable[ColorTheme.config].editor = color("editor")
 
+    if settings["Theme"].contains("editorBg"):
+      ColorThemeTable[ColorTheme.config].editorBg = color("editorBg")
+
     if settings["Theme"].contains("lineNum"):
       ColorThemeTable[ColorTheme.config].lineNum = color("lineNum")
+
+    if settings["Theme"].contains("lineNumBg"):
+      ColorThemeTable[ColorTheme.config].lineNumBg = color("lineNumBg")
 
     if settings["Theme"].contains("currentLineNum"):
       ColorThemeTable[ColorTheme.config].currentLineNum = color("currentLineNum")
 
+    if settings["Theme"].contains("currentLineNumBg"):
+      ColorThemeTable[ColorTheme.config].currentLineNumBg = color("currentLineNumBg")
+
     if settings["Theme"].contains("statusBar"):
       ColorThemeTable[ColorTheme.config].statusBar = color("statusBar")
+
+    if settings["Theme"].contains("statusBarBg"):
+      ColorThemeTable[ColorTheme.config].statusBarBg = color("statusBarBg")
 
     if settings["Theme"].contains("statusBarMode"):
       ColorThemeTable[ColorTheme.config].statusBarMode = color("statusBarMode")
 
+    if settings["Theme"].contains("statusBarModeBg"):
+      ColorThemeTable[ColorTheme.config].statusBarModeBg = color("statusBarModeBg")
+
     if settings["Theme"].contains("tab"):
       ColorThemeTable[ColorTheme.config].tab = color("tab")
+
+    if settings["Theme"].contains("tabBg"):
+      ColorThemeTable[ColorTheme.config].tabBg = color("tabBg")
 
     if settings["Theme"].contains("currentTab"):
       ColorThemeTable[ColorTheme.config].currentTab = color("currentTab")
 
+    if settings["Theme"].contains("currentTabBg"):
+      ColorThemeTable[ColorTheme.config].currentTabBg = color("currentTabBg")
+
     if settings["Theme"].contains("commandBar"):
       ColorThemeTable[ColorTheme.config].commandBar = color("commandBar")
+
+    if settings["Theme"].contains("commandBarBg"):
+      ColorThemeTable[ColorTheme.config].commandBarBg = color("commandBarBg")
 
     if settings["Theme"].contains("errorMessage"):
       ColorThemeTable[ColorTheme.config].errorMessage = color("errorMessage")
 
+    if settings["Theme"].contains("errorMessageBg"):
+      ColorThemeTable[ColorTheme.config].errorMessageBg = color("errorMessageBg")
+
     result.editorColorTheme = ColorTheme.config
-    result.editorColor = ColorThemeTable[ColorTheme.config]
-]#
+    #result.editorColor = ColorThemeTable[ColorTheme.config]
