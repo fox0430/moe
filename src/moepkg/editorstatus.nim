@@ -133,10 +133,6 @@ proc changeMode*(status: var EditorStatus, mode: Mode) =
   status.bufStatus[status.currentBuffer].prevMode = status.bufStatus[status.currentBuffer].mode
   status.bufStatus[status.currentBuffer].mode = mode
 
-proc changeTheme*(status: var EditorStatus) =
-  setConfigCursesColor(ColorThemeTable[status.settings.editorColorTheme])
-  #status.settings.editorColor = ColorThemeTable[status.settings.editorColorTheme]
-
 proc changeCurrentWin*(status:var EditorStatus, index: int) =
   if index < status.mainWindowInfo.high and index > 0: status.currentMainWindow = index
 
@@ -373,3 +369,7 @@ proc updateHighlight*(status: var EditorStatus) =
     for pos in allOccurrence:
       let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column+keyword.high, color: defaultMagenta)
       status.bufStatus[currentBuf].highlight = status.bufStatus[currentBuf].highlight.overwrite(colorSegment)
+
+proc changeTheme*(status: var EditorStatus) =
+  setConfigCursesColor(ColorThemeTable[status.settings.editorColorTheme])
+  if status.settings.editorColorTheme == ColorTheme.light: status.updateHighlight
