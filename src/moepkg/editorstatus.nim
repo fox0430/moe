@@ -26,7 +26,7 @@ type TabBarSettings* = object
 
 type EditorSettings* = object
   editorColorTheme*: ColorTheme
-  editorColor*: EditorColor
+  #editorColorPair*: EditorColorPair
   statusBar*: StatusBarSettings
   tabLine*: TabBarSettings
   lineNumber*: bool
@@ -121,7 +121,7 @@ proc initEditorStatus*(): EditorStatus =
 
   if result.settings.tabLine.useTab: result.tabWindow = initWindow(1, terminalWidth(), 0, 0)
   result.mainWindowInfo.add(MainWindowInfo(window: initWindow(terminalHeight() - useTab - 1, terminalWidth(), useTab, 0), bufferIndex: 0))
-  if result.settings.statusBar.useBar: result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0, result.settings.editorColor.statusBar)
+  if result.settings.statusBar.useBar: result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0)
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight() - 1, 0)
 
 proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
@@ -134,7 +134,8 @@ proc changeMode*(status: var EditorStatus, mode: Mode) =
   status.bufStatus[status.currentBuffer].mode = mode
 
 proc changeTheme*(status: var EditorStatus) =
-  status.settings.editorColor = ColorThemeTable[status.settings.editorColorTheme]
+  setConfigCursesColor(ColorThemeTable[status.settings.editorColorTheme])
+  #status.settings.editorColor = ColorThemeTable[status.settings.editorColorTheme]
 
 proc changeCurrentWin*(status:var EditorStatus, index: int) =
   if index < status.mainWindowInfo.high and index > 0: status.currentMainWindow = index
@@ -148,7 +149,7 @@ proc exitEditor*(settings: EditorSettings) =
 
 proc writeStatusBarNormalModeInfo(status: var EditorStatus) =
   let
-    color = status.settings.editorColor.statusBar
+    color = EditorColorPair.statusBar
     currentBuf = status.currentBuffer
     currentMode = status.bufStatus[currentBuf].mode
 
@@ -171,14 +172,14 @@ proc writeStatusBarNormalModeInfo(status: var EditorStatus) =
   status.statusWindow.write(0, terminalWidth() - info.len, info, color)
 
 proc writeStatusBarFilerModeInfo(status: var EditorStatus) =
-  let color = status.settings.editorColor.statusBar
+  let color = EditorColorPair.statusBar
   if status.settings.statusBar.directory: status.statusWindow.append(ru" ", color)
   status.statusWindow.append(getCurrentDir().toRunes, color)
   status.statusWindow.append(ru " ".repeat(terminalWidth() - 5), color)
 
 proc writeStatusBarBufferManagerModeInfo(status: var EditorStatus) =
   let
-    color = status.settings.editorColor.statusBar
+    color = EditorColorPair.statusBar
     info = fmt"{status.bufStatus[status.currentBuffer].currentLine + 1}/{status.bufStatus.len - 1}"
   status.statusWindow.append(ru " ".repeat(terminalWidth() - " BUFFER ".len), color)
   status.statusWindow.write(0, terminalWidth() - info.len - 1, info, color)
@@ -196,7 +197,7 @@ proc setModeStr(mode: Mode): string =
 proc writeStatusBar*(status: var EditorStatus) =
   status.statusWindow.erase
   let
-    color = status.settings.editorColor.statusBarMode
+    color = EditorColorPair.statusBarMode
     mode = status.bufStatus[status.currentBuffer].mode
     modeStr = setModeStr(status.bufStatus[status.currentBuffer].mode)
 
@@ -212,7 +213,7 @@ proc writeStatusBar*(status: var EditorStatus) =
 
   status.statusWindow.refresh
 
-proc writeTab(tabWin: var Window, start, tabWidth: int, filename: string, color: Colorpair) =
+proc writeTab(tabWin: var Window, start, tabWidth: int, filename: string, color: EditorColorPair) =
   let
     title = if filename == "": "New file" else: filename
     buffer = if filename.len < tabWidth: " " & title & " ".repeat(tabWidth - title.len) else: " " & (title).substr(0, tabWidth - 3) & "~"
@@ -221,8 +222,8 @@ proc writeTab(tabWin: var Window, start, tabWidth: int, filename: string, color:
 proc writeTabLine*(status: var EditorStatus) =
   let
     tabWidth = calcTabWidth(status.mainWindowInfo.len)
-    defaultColor = status.settings.editorColor.tab
-    currentTabColor = status.settings.editorColor.currentTab
+    defaultColor = EditorColorPair.tab
+    currentTabColor = EditorColorPair.currentTab
 
   status.tabWindow.erase
 
@@ -274,7 +275,7 @@ proc update*(status: var EditorStatus) =
     let
       bufIndex = status.mainWindowInfo[i].bufferIndex
       isCurrentMainWin = if i == status.currentMainWindow: true else: false
-      color = status.settings.editorColor
+      color = EditorColorPair.editor
       isLineNumber = status.settings.lineNumber
       isCurrentLineNumber = status.settings.currentLineNumber
       isCursorLine = status.settings.cursorLine
@@ -339,11 +340,11 @@ proc addNewBuffer*(status:var EditorStatus, filename: string) =
       status.bufStatus[index].buffer = textAndEncoding.text.toGapBuffer
       status.settings.characterEncoding = textAndEncoding.encoding
     except IOError:
-      status.commandWindow.writeFileOpenError(filename, status.settings.editorColor.errorMessage)
+      status.commandWindow.writeFileOpenError(filename, EditorColorPair.errorMessage)
       return
 
   let lang = if status.settings.syntax: status.bufStatus[index].language else: SourceLanguage.langNone
-  status.bufStatus[index].highlight = initHighlight($status.bufStatus[index].buffer, lang, status.settings.editorColor.editor)
+  status.bufStatus[index].highlight = initHighlight($status.bufStatus[index].buffer, lang, status.settings.editorColorTheme)
 
   let
     numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[index].buffer.len) - 2 else: 0
@@ -362,7 +363,7 @@ proc updateHighlight*(status: var EditorStatus) =
     currentBuf = status.currentBuffer
     syntax = status.settings.syntax
 
-  status.bufStatus[currentBuf].highlight = initHighlight($status.bufStatus[currentBuf].buffer, if syntax: status.bufStatus[currentBuf].language else: SourceLanguage.langNone, status.settings.editorColor.editor)
+  status.bufStatus[currentBuf].highlight = initHighlight($status.bufStatus[currentBuf].buffer, if syntax: status.bufStatus[currentBuf].language else: SourceLanguage.langNone, status.settings.editorColorTheme)
 
   # highlight search results
   if status.bufStatus[status.currentBuffer].isHighlight and status.searchHistory.len > 0:

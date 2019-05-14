@@ -167,16 +167,21 @@ proc scrollDown*[T](view: var EditorView, buffer: T) =
     view.start.addLast(singleLine.start)
     view.length.addLast(singleLine.length)
 
-proc writeLineNum(view: EditorView, win: var Window, y, line: int, colorPair: ColorPair) =
+proc writeLineNum(view: EditorView, win: var Window, y, line: int, colorPair: EditorColorPair) =
   let width = view.widthOfLineNum
   win.write(y, 0, strutils.align($(line+1), view.widthOfLineNum-1), colorPair, false)
 
-proc write(view: EditorView, win: var Window, y, x: int, str: seq[Rune], color: ColorPair) =
+proc write(view: EditorView, win: var Window, y, x: int, str: seq[Rune], color: EditorColorPair) =
   # TODO: use settings file
   const tab = "    "
   win.write(y, x, ($str).replace("\t", tab), color, false)
 
-proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, currentLineNumber, cursorLine, currentWin: bool, buffer: T, highlight: Highlight, editorColor: EditorColor, currentLine: int) =
+#TODO: delete
+proc write(view: EditorView, win: var Window, y, x: int, str: seq[Rune], color: Colorpair) =
+  const tab = "    "
+  win.write(y, x, ($str).replace("\t", tab), color, false)
+
+proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, currentLineNumber, cursorLine, currentWin: bool, buffer: T, highlight: Highlight, editorColor: EditorColorPair, currentLine: int) =
   win.erase
   view.widthOfLineNum = if lineNumber: buffer.len.numberOfDigits+1 else: 0
 
@@ -189,11 +194,11 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, curren
 
     let isCurrentLine = view.originalLine[y] == currentLine
     if lineNumber and view.start[y] == 0:
-      view.writeLineNum(win, y, view.originalLine[y], if isCurrentLine and currentWin and currentLineNumber: editorColor.currentLineNum else: editorColor.lineNum)
+      view.writeLineNum(win, y, view.originalLine[y], if isCurrentLine and currentWin and currentLineNumber: EditorColorPair.currentLineNum else: EditorColorPair.lineNum)
 
     var x = view.widthOfLineNum
     if view.length[y] == 0:
-      view.write(win, y, x, view.lines[y], ColorPair.brightGreenDefault)
+      view.write(win, y, x, view.lines[y], EditorColorPair.editor)
       continue
 
     while i < highlight.len and highlight[i].firstRow < view.originalLine[y]: inc(i)
@@ -227,7 +232,7 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, curren
 
   win.refresh
 
-proc update*[T](view: var EditorView, win: var Window, lineNumber, currentLineNumber, cursorLine, currentWin: bool, buffer: T, highlight: Highlight, editorColor: EditorColor, currentLine: int) =
+proc update*[T](view: var EditorView, win: var Window, lineNumber, currentLineNumber, cursorLine, currentWin: bool, buffer: T, highlight: Highlight, editorColor: EditorColorPair, currentLine: int) =
   let widthOfLineNum = buffer.len.intToStr.len+1
   if lineNumber and widthOfLineNum != view.widthOfLineNum: view.resize(buffer, view.height, view.width+view.widthOfLineNum-widthOfLineNum, widthOfLineNum)
   view.writeAllLines(win, lineNumber, currentLineNumber, cursorLine, currentWin, buffer, highlight, editorColor, currentLine)

@@ -142,7 +142,7 @@ proc changeThemeSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   elif command == ru"vivid": status.settings.editorColorTheme = ColorTheme.vivid
   elif command == ru"config": status.settings.editorColorTheme = ColorTheme.config
 
-  changeTheme(status)
+  #changeTheme(status)
   status.resize(terminalHeight(), terminalWidth())
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
@@ -157,7 +157,7 @@ proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   elif command == ru"off": status.settings.syntax = false
 
   let sourceLang = if status.settings.syntax: status.bufStatus[status.currentBuffer].language else: SourceLanguage.langNone
-  status.bufStatus[status.currentBuffer].highlight = initHighlight($status.bufStatus[status.currentBuffer].buffer, sourceLang, status.settings.editorColor.editor)
+  status.bufStatus[status.currentBuffer].highlight = initHighlight($status.bufStatus[status.currentBuffer].buffer, sourceLang, status.settings.editorColorTheme)
 
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
@@ -251,12 +251,12 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
   status.changeMode(Mode.normal)
 
   if status.bufStatus[status.currentBuffer].countChange > 0 or countReferencedWindow(status.mainWindowInfo, status.currentBuffer) == 0:
-    writeNoWriteError(status.commandWindow, status.settings.editorColor.errorMessage)
+    writeNoWriteError(status.commandWindow, EditorColorPair.errorMessage)
   else:
     if existsDir($filename):
       try: setCurrentDir($filename)
       except OSError:
-        status.commandWindow.writeFileOpenError($filename, status.settings.editorColor.errorMessage)
+        status.commandWindow.writeFileOpenError($filename, EditorColorPair.errorMessage)
         addNewBuffer(status, "")
       status.bufStatus.add(BufferStatus(mode: Mode.filer))
     else: addNewBuffer(status, $filename)
@@ -265,7 +265,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
 
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   if filename.len == 0:
-    status.commandwindow.writeNoFileNameError(status.settings.editorColor.errorMessage)
+    status.commandwindow.writeNoFileNameError(EditorColorPair.errorMessage)
     status.changeMode(Mode.normal)
     return
 
@@ -274,7 +274,7 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
     status.bufStatus[status.currentMainWindow].filename = filename
     status.bufStatus[status.currentBuffer].countChange = 0
   except IOError:
-    writeSaveError(status.commandWindow, status.settings.editorColor.errorMessage)
+    writeSaveError(status.commandWindow, EditorColorPair.errorMessage)
 
   status.changeMode(Mode.normal)
 
@@ -283,7 +283,7 @@ proc quitCommand(status: var EditorStatus) =
     closeWindow(status, status.currentMainWindow)
     status.changeMode(Mode.normal)
   else:
-    writeNoWriteError(status.commandWindow, status.settings.editorColor.errorMessage)
+    writeNoWriteError(status.commandWindow, EditorColorPair.errorMessage)
     status.changeMode(Mode.normal)
 
 proc writeAndQuitCommand(status: var EditorStatus) =
@@ -292,7 +292,7 @@ proc writeAndQuitCommand(status: var EditorStatus) =
     saveFile(status.bufStatus[status.currentBuffer].filename, status.bufStatus[status.currentBuffer].buffer.toRunes, status.settings.characterEncoding)
     closeWindow(status, status.currentMainWindow)
   except IOError:
-    writeSaveError(status.commandWindow, status.settings.editorColor.errorMessage)
+    writeSaveError(status.commandWindow, EditorColorPair.errorMessage)
 
   status.changeMode(Mode.normal)
 
@@ -303,7 +303,7 @@ proc forceQuitCommand(status: var EditorStatus) =
 proc allBufferQuitCommand(status: var EditorStatus) =
   for i in 0 ..< status.mainWindowInfo.len:
     if status.bufStatus[status.mainWindowInfo[0].bufferIndex].countChange > 0:
-      writeNoWriteError(status.commandWindow, status.settings.editorColor.errorMessage)
+      writeNoWriteError(status.commandWindow, EditorColorPair.errorMessage)
       status.changeMode(Mode.normal)
       return
 
@@ -317,7 +317,7 @@ proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
     let bufIndex = status.mainWindowInfo[0].bufferIndex
     try: saveFile(status.bufStatus[bufIndex].filename, status.bufStatus[bufIndex].buffer.toRunes, status.settings.characterEncoding)
     except IOError:
-      writeSaveError(status.commandWindow, status.settings.editorColor.errorMessage)
+      writeSaveError(status.commandWindow, EditorColorPair.errorMessage)
       status.changeMode(Mode.normal)
       return
 

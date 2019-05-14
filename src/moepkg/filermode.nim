@@ -52,14 +52,14 @@ proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
     if filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].kind == pcDir:
       try:
         removeDir(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path)
-        status.commandWindow.writeMessageDeletedFile(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path, Colorpair.brightWhiteDefault)
+        status.commandWindow.writeMessageDeletedFile(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path, EditorColorPair.commandBar)
       except OSError:
-        status.commandWindow.writeRemoveDirError(status.settings.editorColor.errorMessage)
+        status.commandWindow.writeRemoveDirError(EditorColorPair.commandBar)
     else:
       if tryRemoveFile(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path):
-        status.commandWindow.writeMessageDeletedFile(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path, Colorpair.brightWhiteDefault)
+        status.commandWindow.writeMessageDeletedFile(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path, EditorColorPair.commandBar)
       else:
-        status.commandWindow.writeRemoveFileError(status.settings.editorColor.errorMessage)
+        status.commandWindow.writeRemoveFileError(EditorColorPair.commandBar)
 
 proc sortDirList(dirList: seq[PathInfo], sortBy: Sort): seq[PathInfo] =
   case sortBy:
@@ -136,18 +136,18 @@ proc cutFile(filerStatus: var FilerStatus, currentLine: int) =
   filerStatus.register.filename = filerStatus.dirList[currentLine].path
   filerStatus.register.originPath = getCurrentDir() / filerStatus.dirList[currentLine].path
 
-proc pasteFile(commandWindow: var Window, filerStatus: var FilerStatus, errorMessageColor: ColorPair) =
+proc pasteFile(commandWindow: var Window, filerStatus: var FilerStatus) =
   try:
     copyFile(filerStatus.register.originPath, getCurrentDir() / filerStatus.register.filename)
     filerStatus.dirlistUpdate = true
     filerStatus.viewUpdate = true
   except OSError:
-    writeCopyFileError(commandWindow, errorMessageColor)
+    commandWindow.writeCopyFileError(EditorColorPair.errorMessage)
     return
 
   if filerStatus.register.cut:
     if tryRemoveFile(filerStatus.register.originPath / filerStatus.register.filename): filerStatus.register.cut = false
-    else: writeRemoveFileError(commandWindow, errorMessageColor)
+    else: commandWindow.writeRemoveFileError(EditorColorPair.errorMessage)
 
 proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   let dirname = getCommand(status, "New file name: ")
@@ -155,7 +155,7 @@ proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   try:
     createDir($dirname[0])
     filerStatus.dirlistUpdate = true
-  except OSError: writeCreateDirError(status.commandWindow, status.settings.editorColor.errorMessage)
+  except OSError: writeCreateDirError(status.commandWindow, EditorColorPair.errorMessage)
    
 proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   let
@@ -170,7 +170,7 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
     try:
       setCurrentDir(path)
       filerStatus.dirlistUpdate = true
-    except OSError: status.commandWindow.writeFileOpenError(path, status.settings.editorColor.errorMessage)
+    except OSError: status.commandWindow.writeFileOpenError(path, EditorColorPair.errorMessage)
 
 proc setDirListColor(kind: PathComponent, isCurrentLine: bool): ColorPair =
   case kind
@@ -261,7 +261,7 @@ proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
   filerStatus.viewUpdate = true
   if filerStatus.dirList.len == 0:
     status.mainWindowInfo[status.currentMainWindow].window.erase
-    status.mainWindowInfo[status.currentMainWindow].window.write(0, 0, "not found")
+    status.mainWindowInfo[status.currentMainWindow].window.write(0, 0, "not found", EditorColorPair.commandBar)
     status.mainWindowInfo[status.currentMainWindow].window.refresh
     discard getKey(status.commandWindow)
     status.commandWindow.erase
@@ -311,7 +311,7 @@ proc filerMode*(status: var EditorStatus) =
     elif key == ord('C'):
       cutFile(filerStatus, status.bufStatus[status.currentBuffer].currentLine)
     elif key == ord('p'):
-      pasteFile(status.commandWindow, filerStatus, status.settings.editorColor.errorMessage)
+      pasteFile(status.commandWindow, filerStatus)
     elif key == ord('s'):
       changeSortBy(filerStatus)
     elif key == ord('N'):

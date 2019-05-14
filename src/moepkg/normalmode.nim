@@ -13,7 +13,7 @@ import searchmode, replacemode
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.erase
 
-  status.commandWindow.write(0, 0, ru"debuf info: ")
+  status.commandWindow.write(0, 0, "debuf info: ", EditorColorPair.commandBar)
   status.commandWindow.append(fmt"currentLine: {status.bufStatus[status.currentBuffer].currentLine}, currentColumn: {status.bufStatus[status.currentBuffer].currentColumn}")
   status.commandWindow.append(fmt", cursor.y: {status.bufStatus[status.currentBuffer].cursor.y}, cursor.x: {status.bufStatus[status.currentBuffer].cursor.x}")
   status.commandWindow.append(fmt", {str}")
@@ -290,7 +290,7 @@ proc yankLines(status: var EditorStatus, first, last: int) =
 
   # TODO: Refator
   status.commandWindow.erase
-  status.commandwindow.write(0, 0, fmt"{status.registers.yankedLines.len} line yanked")
+  status.commandwindow.write(0, 0, fmt"{status.registers.yankedLines.len} line yanked", EditorColorPair.commandBar)
   status.commandWindow.refresh
 
 proc pasteLines(status: var EditorStatus) =
@@ -309,7 +309,7 @@ proc yankString(status: var EditorStatus, length: int) =
 
   # TODO: Refator
   status.commandWindow.erase
-  status.commandwindow.write(0, 0, fmt"{status.registers.yankedStr.len} character yanked")
+  status.commandwindow.write(0, 0, fmt"{status.registers.yankedStr.len} character yanked", EditorColorPair.commandBar)
   status.commandWindow.refresh
 
 proc pasteString(status: var EditorStatus) =
@@ -404,14 +404,14 @@ proc turnOffHighlighting*(status: var EditorStatus) =
 
 proc writeFileAndExit(status: var EditorStatus) =
   if status.bufStatus[status.currentBuffer].filename.len == 0:
-    status.commandwindow.writeNoFileNameError(status.settings.editorColor.errorMessage)
+    status.commandwindow.writeNoFileNameError(EditorColorPair.errorMessage)
     status.changeMode(Mode.normal)
   else:
     try:
       saveFile(status.bufStatus[status.currentBuffer].filename, status.bufStatus[status.currentBuffer].buffer.toRunes, status.settings.characterEncoding)
       closeWindow(status, status.currentMainWindow)
     except IOError:
-      writeSaveError(status.commandWindow, status.settings.editorColor.errorMessage)
+      writeSaveError(status.commandWindow, EditorColorPair.errorMessage)
 
 proc forceExit(status: var Editorstatus) = closeWindow(status, status.currentMainWindow)
 

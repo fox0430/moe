@@ -92,7 +92,7 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Theme"].contains("baseTheme"):
       let theme = parseEnum[ColorTheme](settings["Theme"]["baseTheme"].getStr())
       ColorThemeTable[ColorTheme.config] = ColorThemeTable[theme]
-
+#[
     template color(str: string): untyped =
       parseEnum[ColorPair](settings["Theme"][str].getStr())
 
@@ -125,3 +125,4 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     result.editorColorTheme = ColorTheme.config
     result.editorColor = ColorThemeTable[ColorTheme.config]
+]#
