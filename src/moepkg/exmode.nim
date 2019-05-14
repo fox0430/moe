@@ -1,8 +1,7 @@
 import sequtils, strutils, os, terminal, strformat, deques, packages/docutils/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview
 
-type
-  replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
+type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
 
 proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   var numOfSlash = 0
@@ -142,7 +141,7 @@ proc changeThemeSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   elif command == ru"vivid": status.settings.editorColorTheme = ColorTheme.vivid
   elif command == ru"config": status.settings.editorColorTheme = ColorTheme.config
 
-  #changeTheme(status)
+  changeTheme(status)
   status.resize(terminalHeight(), terminalWidth())
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
