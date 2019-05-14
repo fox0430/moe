@@ -72,7 +72,7 @@ proc yankBuffer(status: var EditorStatus, area: SelectArea) =
       status.registers.yankedLines.add(status.bufStatus[status.currentBuffer].buffer[i])
 
 proc deleteBuffer(status: var EditorStatus, area: SelectArea) =
-  if status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].len < 1: return
+  if status.bufStatus[status.currentBuffer].buffer.len == 1 and status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].len < 1: return
   yankBuffer(status, area)
 
   for i in area.startLine .. area.endLine:
