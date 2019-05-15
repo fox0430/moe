@@ -53,6 +53,7 @@ proc swapSlectArea(area: var SelectArea) =
     swap(area.startColumn, area.endColumn)
 
 proc yankBuffer(status: var EditorStatus, area: SelectArea) =
+  if status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].len < 1: return
   status.registers.yankedLines = @[]
   status.registers.yankedStr = @[]
 
@@ -76,7 +77,7 @@ proc deleteBuffer(status: var EditorStatus, area: SelectArea) =
   yankBuffer(status, area)
 
   for i in area.startLine .. area.endLine:
-    if area.startLine == area.endLine:
+    if area.startLine == area.endLine and status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].len > 1:
       for j in area.startColumn .. area.endColumn:
         status.bufStatus[status.currentBuffer].buffer[area.startLine].delete(area.startColumn)
     elif i == area.startLine and area.startColumn > 0:
@@ -91,7 +92,8 @@ proc deleteBuffer(status: var EditorStatus, area: SelectArea) =
       status.bufStatus[status.currentBuffer].buffer.delete(area.startLine, area.startLine + 1)
 
   inc(status.bufStatus[status.currentBuffer].countChange)
-  status.bufStatus[status.currentBuffer].currentLine = area.startLine
+  if area.startLine > status.bufStatus[status.currentBuffer].buffer.high: status.bufStatus[status.currentBuffer].currentLine = status.bufStatus[status.currentBuffer].buffer.high
+  else: status.bufStatus[status.currentBuffer].currentLine = area.startLine
   status.bufStatus[status.currentBuffer].currentColumn = area.startColumn
   status.bufStatus[status.currentBuffer].expandedColumn = area.startColumn
 
