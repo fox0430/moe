@@ -238,9 +238,12 @@ proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string)
   status.bufStatus[status.currentBuffer].currentLine = 0
 
   status.update
-
   setCursor(false)
-  discard status.mainWindowInfo[status.currentMainWindow].window.getKey
+  while isResizekey(status.mainWindowInfo[status.currentMainWindow].window.getKey):
+    status.resize(terminalHeight(), terminalWidth())
+    status.update
+    setCursor(false)
+
   status.bufStatus[status.currentBuffer].currentLine = tmpCurrentLine
 
 proc changeSortBy(filerStatus: var FilerStatus) =
