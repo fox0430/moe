@@ -5,7 +5,7 @@ test "initHighlight: start with newline":
   let
     code = "\x0Aproc test =\x0A  echo \"Hello, world!\""
     buffer = split(code, '\n')
-    highlight = initHighlight(code, SourceLanguage.langNim, ColorPair.brightWhiteDefault)
+    highlight = initHighlight(code, SourceLanguage.langNim)
   
   # unite segments
   var unitedStr: string
@@ -19,13 +19,13 @@ test "initHighlight: start with newline":
 test "index: basic":
   let
     code = "proc test =\x0A  echo \"Hello, world!\""
-    highlight = initHighlight(code, SourceLanguage.langNim, ColorPair.brightWhiteDefault)
+    highlight = initHighlight(code, SourceLanguage.langNim)
   
   check(highlight.index(0, 0) == 0)
 
 test "index: start with newline":
   let
     code = "\x0Aproc test =\x0A  echo \"Hello, world!\""
-    highlight = initHighlight(code, SourceLanguage.langNim, ColorPair.brightWhiteDefault)
+    highlight = initHighlight(code, SourceLanguage.langNim)
   
   check(highlight.index(0, 0) == 0)

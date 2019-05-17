@@ -3,7 +3,7 @@ import gapbuffer, ui, editorstatus, normalmode, unicodeext, highlight
 
 proc initFilelistHighlight[T](buffer: T, currentLine: int): Highlight =
   for i in 0 ..< buffer.len:
-    let color = if i == currentLine: Colorpair.brightGreenDefault else: brightWhiteDefault
+    let color = if i == currentLine: EditorColorPair.currentLineNum else: EditorColorPair.defaultChar
     result.colorSegments.add(ColorSegment(firstRow: i, firstColumn: 0, lastRow: i, lastColumn: buffer[i].len, color: color))
 
 proc setBufferList(status: var Editorstatus) =

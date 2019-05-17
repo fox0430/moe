@@ -4,36 +4,36 @@ import editorstatus, editorview, ui, unicodeext
 type
   ExModeViewStatus = tuple[buffer: seq[Rune], prompt: string, cursorY, cursorX, currentPosition, startPosition: int]
 
-proc writeMessageOnCommandWindow(cmdWin: var Window, message: string, color: ColorPair) =
+proc writeMessageOnCommandWindow(cmdWin: var Window, message: string, color: EditorColorPair) =
   cmdWin.erase
   cmdWin.write(0, 0, message, color)
   cmdWin.refresh
 
-proc writeNoWriteError*(cmdWin: var Window, errorMessageColor: ColorPair) =
+proc writeNoWriteError*(cmdWin: var Window, errorMessageColor: EditorColorPair) =
   cmdWin.writeMessageOnCommandWindow("Error: No write since last change", errorMessageColor)
 
-proc writeSaveError*(cmdWin: var Window, errorMessageColor: ColorPair) =
+proc writeSaveError*(cmdWin: var Window, errorMessageColor: EditorColorPair) =
   cmdWin.writeMessageOnCommandWindow("Error: Failed to save the file", errorMessageColor)
 
-proc writeRemoveFileError*(cmdWin: var Window, errorMessageColor: ColorPair) =
+proc writeRemoveFileError*(cmdWin: var Window, errorMessageColor: EditorColorPair) =
   cmdWin.writeMessageOnCommandWindow("Error: can not remove file", errorMessageColor)
 
-proc writeRemoveDirError*(cmdWin: var Window, errorMessageColor: ColorPair) =
+proc writeRemoveDirError*(cmdWin: var Window, errorMessageColor: EditorColorPair) =
   cmdWin.writeMessageOnCommandWindow("Error: can not remove directory", errorMessageColor)
 
-proc writeCopyFileError*(cmdWin: var Window, errorMessageColor: ColorPair) =
+proc writeCopyFileError*(cmdWin: var Window, errorMessageColor: EditorColorPair) =
   cmdWin.writeMessageOnCommandWindow("Error: can not copy file", errorMessageColor)
 
-proc writeFileOpenError*(cmdWin: var Window, fileName: string, errorMessageColor: Colorpair) =
+proc writeFileOpenError*(cmdWin: var Window, fileName: string, errorMessageColor: EditorColorPair) =
   cmdWin.writeMessageOnCommandWindow("Error: can not open: " & fileName, errorMessageColor)
 
-proc writeCreateDirError*(cmdWin: var Window, errorMessageColor: Colorpair) =
+proc writeCreateDirError*(cmdWin: var Window, errorMessageColor: EditorColorPair) =
   cmdWin.writeMessageOnCommandWindow("Error: : can not create direcotry", errorMessageColor)
 
-proc writeMessageDeletedFile*(cmdWin: var Window, filename: string, messageColor: Colorpair) =
+proc writeMessageDeletedFile*(cmdWin: var Window, filename: string, messageColor: EditorColorPair) =
   cmdWin.writeMessageOnCommandWindow("Deleted: " & filename, messageColor)
 
-proc writeNoFileNameError*(cmdWin: var Window, messageColor: Colorpair) =
+proc writeNoFileNameError*(cmdWin: var Window, messageColor: EditorColorPair) =
   cmdWin.writeMessageOnCommandWindow("Error: No file name" , messageColor)
 
 proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
@@ -74,7 +74,7 @@ proc splitCommand(command: string): seq[seq[Rune]] =
   else:
     return strutils.splitWhitespace(command).map(proc(s: string): seq[Rune] = toRunes(s))
 
-proc writeExModeView(commandWindow: var Window, exStatus: ExModeViewStatus, color: ColorPair) =
+proc writeExModeView(commandWindow: var Window, exStatus: ExModeViewStatus, color: EditorColorPair) =
   let buffer = ($exStatus.buffer).substr(exStatus.startPosition, exStatus.buffer.len)
 
   commandWindow.erase
@@ -134,7 +134,7 @@ proc insertCommandBuffer(exStatus: var ExModeViewStatus, c: Rune) =
 proc getKeyword*(status: var EditorStatus, prompt: string): seq[Rune] =
   var exStatus = initExModeViewStatus(prompt)
   while true:
-    writeExModeView(status.commandWindow, exStatus, status.settings.editorColor.commandBar)
+    writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
 
     var key = getKey(status.commandWindow)
 
@@ -157,7 +157,7 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
   status.resize(terminalHeight(), terminalWidth())
 
   while true:
-    writeExModeView(status.commandWindow, exStatus, status.settings.editorColor.commandBar)
+    writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
 
     var key = getKey(status.commandWindow)
 

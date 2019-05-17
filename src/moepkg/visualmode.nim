@@ -12,7 +12,7 @@ proc initColorSegment(startLine, startColumn: int): ColorSegment =
   result.firstColumn = startColumn
   result.lastRow = startLine
   result.lastColumn = startColumn
-  result.color = defaultMagenta
+  result.color = EditorColorPair.visualMode
 
 proc initSelectArea(startLine, startColumn: int): SelectArea =
   result.startLine = startLine
