@@ -315,6 +315,15 @@ type EditorColor* = object
   gtComment*: Color
   gtLongComment*: Color
   gtWhitespace*: Color
+  # filer mode
+  currentFile*: Color
+  currentFileBg*: Color
+  file*: Color
+  fileBg*: Color
+  dir*: Color
+  dirBg*: Color
+  pcLink*: Color
+  pcLinkBg*: Color
 
 type EditorColorPair* = enum
   lineNum = 1
@@ -335,6 +344,15 @@ type EditorColorPair* = enum
   comment = 15
   longComment = 16
   whitespace = 17
+  # filer mode
+  currentFile = 18
+  currentFileBg = 19
+  file = 20
+  fileBg = 21
+  dir = 22
+  dirBg = 23
+  pcLink = 24
+  pcLinkBg = 25
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -366,7 +384,16 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtDecNumber: aqua,
     gtComment: white,
     gtLongComment: white,
-    gtWhitespace: gray100
+    gtWhitespace: gray100,
+    # filer mode
+    currentFile: gray100,
+    currentFileBg: teal,
+    file: gray100,
+    fileBg: default,
+    dir: blue,
+    dirBg: default,
+    pcLink: teal,
+    pcLinkBg: default
   ),
   dark: EditorColor(
     editorBg: default,
@@ -397,7 +424,16 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtDecNumber: aqua,
     gtComment: white,
     gtLongComment: white,
-    gtWhitespace: gray100
+    gtWhitespace: gray100,
+    # filer mode
+    currentFile: gray100,
+    currentFileBg: teal,
+    file: gray100,
+    fileBg: default,
+    dir: blue,
+    dirBg: default,
+    pcLink: teal,
+    pcLinkBg: default
   ),
   light: EditorColor(
     editorBg: default,
@@ -428,7 +464,16 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtDecNumber: aqua,
     gtComment: white,
     gtLongComment: white,
-    gtWhitespace: gray100
+    gtWhitespace: gray100,
+    # filer mode
+    currentFile: black,
+    currentFileBg: deepPink1_1,
+    file: black,
+    fileBg: default,
+    dir: deepPink1_1,
+    dirBg: default,
+    pcLink: teal,
+    pcLinkBg: default
   ),
   vivid: EditorColor(
     editorBg: default,
@@ -459,7 +504,16 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtDecNumber: aqua,
     gtComment: white,
     gtLongComment: white,
-    gtWhitespace: gray100
+    gtWhitespace: gray100,
+    # filer mode
+    currentFile: gray100,
+    currentFileBg: deepPink1_1,
+    file: gray100,
+    fileBg: default,
+    dir: deepPink1_1,
+    dirBg: default,
+    pcLink: teal,
+    pcLinkBg: default
   ),
 ]
 
@@ -485,6 +539,7 @@ proc setCursesColor*(editorColor: EditorColor) =
   setColorPair(EditorColorPair.errorMessage , editorColor.errorMessage, editorColor.errorMessageBg)
   setColorPair(EditorColorPair.searchResult, editorColor.searchResult, editorColor.searchResultBg)
   setColorPair(EditorColorPair.visualMode, editorColor.visualMode, editorColor.visualModeBg)
+
   setColorPair(EditorColorPair.defaultChar, editorColor.defaultChar, Color.default)
   setColorPair(EditorColorPair.keyword, editorColor.gtKeyword, Color.default)
   setColorPair(EditorColorPair.stringLit, editorColor.gtStringLit, Color.default)
@@ -492,6 +547,11 @@ proc setCursesColor*(editorColor: EditorColor) =
   setColorPair(EditorColorPair.comment, editorColor.gtComment, Color.default)
   setColorPair(EditorColorPair.longComment, editorColor.gtLongComment, Color.default)
   setColorPair(EditorColorPair.whitespace, editorColor.gtWhitespace, Color.default)
+
+  setColorPair(EditorColorPair.currentFile, editorColor.currentFile, editorColor.currentFileBg)
+  setColorPair(EditorColorPair.file, editorColor.file, editorColor.fileBg)
+  setColorPair(EditorColorPair.dir, editorColor.dir, editorColor.dirBg)
+  setColorPair(EditorColorPair.pcLink, editorColor.pcLink, editorColor.pcLinkBg)
 
 proc setIbeamCursor*() = discard execShellCmd("printf '\\033[6 q'")
 

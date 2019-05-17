@@ -172,23 +172,13 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
       filerStatus.dirlistUpdate = true
     except OSError: status.commandWindow.writeFileOpenError(path, EditorColorPair.errorMessage)
 
-#[
-proc setDirListColor(kind: PathComponent, isCurrentLine: bool): ColorPair =
-  case kind
-  of pcFile:
-    if isCurrentLine: result = ColorPair.brightWhiteGreen
-    else: result = ColorPair.brightWhiteDefault
-  of pcDir:
-    if isCurrentLine: result = ColorPair.brightWhiteGreen
-    else: result = ColorPair.brightGreenDefault
-  of pcLinkToDir, pcLinkToFile:
-    if isCurrentLine: result = ColorPair.whiteCyan
-    else: result = ColorPair.cyanDefault
-]#
-
 proc setDirListColor(kind: PathComponent, isCurrentLine: bool): EditorColorPair =
-  if isCurrentLine: result = EditorColorPair.currentLineNum
-  else: result = EditorColorPair.defaultChar
+  if isCurrentLine: result = EditorColorPair.currentFile
+  else:
+    case kind
+    of pcFile: result = EditorColorPair.file
+    of pcDir: result = EditorColorPair.dir
+    of pcLinkToDir, pcLinkToFile: result = EditorColorPair.pcLink
 
 proc initFilelistHighlight[T](dirList: seq[PathInfo], buffer: T, currentLine: int): Highlight =
   for i in 0 ..< dirList.len:
