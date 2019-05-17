@@ -212,7 +212,6 @@ proc initFileDeitalHighlight[T](buffer: T): Highlight =
   for i in 0 ..< buffer.len:
     result.colorSegments.add(ColorSegment(firstRow: i, firstColumn: 0, lastRow: i, lastColumn: buffer[i].len, color: EditorColorPair.defaultChar))
 
-## TODO: Add items
 proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string) =
   status.bufStatus[status.currentBuffer].buffer = initGapBuffer[seq[Rune]]()
 
@@ -224,9 +223,11 @@ proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string)
   elif fileInfo.kind == pcLinkToFile: status.bufStatus[status.currentBuffer].buffer.add(ru"kind        : " & ru"Symbolic link to file")
   elif fileInfo.kind == pcLinkToDir: status.bufStatus[status.currentBuffer].buffer.add(ru"kind        : " & ru"Symbolic link to directory")
 
+  status.bufStatus[status.currentBuffer].buffer.add(("size        : " & $fileInfo.size & " bytes").toRunes)
   status.bufStatus[status.currentBuffer].buffer.add(("permissions : " & substr($fileInfo.permissions, 1, ($fileInfo.permissions).high - 1)).toRunes)
-  status.bufStatus[status.currentBuffer].buffer.add(("last access : " & $fileInfo.lastAccessTime).toRunes)
+  status.bufStatus[status.currentBuffer].buffer.add(("create time : " & $fileInfo.creationTime).toRunes)
   status.bufStatus[status.currentBuffer].buffer.add(("last write  : " & $fileInfo.lastWriteTime).toRunes)
+  status.bufStatus[status.currentBuffer].buffer.add(("last access : " & $fileInfo.lastAccessTime).toRunes)
 
   status.bufStatus[status.currentBuffer].highlight = initFileDeitalHighlight(status.bufStatus[status.currentBuffer].buffer)
 
@@ -238,9 +239,12 @@ proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string)
   status.bufStatus[status.currentBuffer].currentLine = 0
 
   status.update
-
   setCursor(false)
-  discard status.mainWindowInfo[status.currentMainWindow].window.getKey
+  while isResizekey(status.mainWindowInfo[status.currentMainWindow].window.getKey):
+    status.resize(terminalHeight(), terminalWidth())
+    status.update
+    setCursor(false)
+
   status.bufStatus[status.currentBuffer].currentLine = tmpCurrentLine
 
 proc changeSortBy(filerStatus: var FilerStatus) =
