@@ -166,4 +166,28 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Theme"].contains("gtWhitespaceColor"):
       ColorThemeTable[ColorTheme.config].gtLongComment = color("gtWhitespaceColor")
 
+    if settings["Theme"].contains("currentFile"):
+      ColorThemeTable[ColorTheme.config].currentFile = color("currentFile")
+
+    if settings["Theme"].contains("currentFileBg"):
+      ColorThemeTable[ColorTheme.config].currentFileBg = color("currentFileBg")
+
+    if settings["Theme"].contains("file"):
+      ColorThemeTable[ColorTheme.config].file = color("file")
+
+    if settings["Theme"].contains("fileBg"):
+      ColorThemeTable[ColorTheme.config].fileBg = color("fileBg")
+
+    if settings["Theme"].contains("dir"):
+      ColorThemeTable[ColorTheme.config].dir = color("dir")
+
+    if settings["Theme"].contains("dirBg"):
+      ColorThemeTable[ColorTheme.config].dirBg = color("dirBg")
+
+    if settings["Theme"].contains("pcLink"):
+      ColorThemeTable[ColorTheme.config].pcLink = color("pcLink")
+
+    if settings["Theme"].contains("pcLinkBg"):
+      ColorThemeTable[ColorTheme.config].pcLinkBg = color("pcLinkBg")
+
     result.editorColorTheme = ColorTheme.config
