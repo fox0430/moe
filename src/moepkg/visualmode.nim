@@ -52,48 +52,49 @@ proc swapSlectArea(area: var SelectArea) =
     swap(area.startLine, area.endLine)
     swap(area.startColumn, area.endColumn)
 
-proc yankBuffer(status: var EditorStatus, area: SelectArea) =
-  status.registers.yankedLines = @[]
-  status.registers.yankedStr = @[]
+proc yankBuffer(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea) =
+  if bufStatus.buffer[bufStatus.currentLine].len < 1: return
+  registers.yankedLines = @[]
+  registers.yankedStr = @[]
 
   for i in area.startLine .. area.endLine:
     if area.startLine == area.endLine:
-      for j in area.startColumn .. area.endColumn:
-        status.registers.yankedStr.add(status.bufStatus[status.currentBuffer].buffer[area.startLine][j])
+      for j in area.startColumn .. area.endColumn: registers.yankedStr.add(bufStatus.buffer[area.startLine][j])
     if i == area.startLine and area.startColumn > 0:
-      status.registers.yankedLines.add(ru"")
-      for j in area.startColumn ..< status.bufStatus[status.currentBuffer].buffer[area.startLine].len:
-        status.registers.yankedLines[status.registers.yankedLines.high].add(status.bufStatus[status.currentBuffer].buffer[area.startLine][j])
-    elif i == area.endLine and area.endColumn < status.bufStatus[status.currentBuffer].buffer[area.endLine].len:
-      status.registers.yankedLines.add(ru"")
+      registers.yankedLines.add(ru"")
+      for j in area.startColumn ..< bufStatus.buffer[area.startLine].len:
+        registers.yankedLines[registers.yankedLines.high].add(bufStatus.buffer[area.startLine][j])
+    elif i == area.endLine and area.endColumn < bufStatus.buffer[area.endLine].len:
+      registers.yankedLines.add(ru"")
       for j in 0 .. area.endColumn:
-        status.registers.yankedLines[status.registers.yankedLines.high].add(status.bufStatus[status.currentBuffer].buffer[area.endLine][j])
+        registers.yankedLines[registers.yankedLines.high].add(bufStatus.buffer[area.endLine][j])
     else:
-      status.registers.yankedLines.add(status.bufStatus[status.currentBuffer].buffer[i])
+      registers.yankedLines.add(bufStatus.buffer[i])
 
-proc deleteBuffer(status: var EditorStatus, area: SelectArea) =
-  if status.bufStatus[status.currentBuffer].buffer.len == 1 and status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].len < 1: return
-  yankBuffer(status, area)
+proc deleteBuffer(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea) =
+  if bufStatus.buffer.len == 1 and bufStatus.buffer[bufStatus.currentLine].len < 1: return
+  yankBuffer(bufStatus, registers, area)
 
+  var currentLine = area.startLine
   for i in area.startLine .. area.endLine:
-    if area.startLine == area.endLine:
-      for j in area.startColumn .. area.endColumn:
-        status.bufStatus[status.currentBuffer].buffer[area.startLine].delete(area.startColumn)
-    elif i == area.startLine and area.startColumn > 0:
-      for j in area.startColumn .. status.bufStatus[status.currentBuffer].buffer[area.startLine].high:
-        status.bufStatus[status.currentBuffer].buffer[area.startLine].delete(area.startColumn)
-    elif i == area.endLine and area.endColumn < status.bufStatus[status.currentBuffer].buffer[area.startLine].high:
-      for j in 0 .. area.endColumn:
-        status.bufStatus[status.currentBuffer].buffer[area.startLine].delete(0)
-    elif status.bufStatus[status.currentBuffer].buffer.len == 1 and status.bufStatus[status.currentBuffer].buffer[0].len < 1:
-      break
-    else:
-      status.bufStatus[status.currentBuffer].buffer.delete(area.startLine, area.startLine + 1)
+    if area.startLine == area.endLine and 0 < bufStatus.buffer[currentLine].len:
+      for j in area.startColumn .. area.endColumn: bufStatus.buffer[currentLine].delete(area.startColumn)
+    elif i == area.startLine and 0 < area.startColumn:
+      for j in area.startColumn .. bufStatus.buffer[currentLine].high: bufStatus.buffer[currentLine].delete(area.startColumn)
+      inc(currentLine)
+    elif i == area.endLine and area.endColumn < bufStatus.buffer[currentLine].high:
+      for j in 0 .. area.endColumn: bufStatus.buffer[currentLine].delete(0)
+    else: bufStatus.buffer.delete(currentLine, currentLine + 1)
 
-  inc(status.bufStatus[status.currentBuffer].countChange)
-  status.bufStatus[status.currentBuffer].currentLine = area.startLine
-  status.bufStatus[status.currentBuffer].currentColumn = area.startColumn
-  status.bufStatus[status.currentBuffer].expandedColumn = area.startColumn
+  if bufStatus.buffer.len < 1: bufStatus.buffer.add(ru"")
+
+  if area.startLine > bufStatus.buffer.high: bufStatus.currentLine = bufStatus.buffer.high
+  else: bufStatus.currentLine = area.startLine
+  let column = if area.startColumn > 0: area.startColumn - 1 else: 0
+  bufStatus.currentColumn = column
+  bufStatus.expandedColumn = column
+
+  inc(bufStatus.countChange)
 
 proc addIndent(bufStatus: var BufferStatus, area: SelectArea, tabStop: int) =
   bufStatus.currentLine = area.startLine
@@ -114,8 +115,8 @@ proc deleteIndent(bufStatus: var BufferStatus, area: SelectArea, tabStop: int) =
 proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSlectArea
 
-  if key == ord('y') or isDcKey(key): yankBuffer(status, area)
-  elif key == ord('x') or key == ord('d'): deleteBuffer(status, area)
+  if key == ord('y') or isDcKey(key): yankBuffer(status.bufStatus[status.currentBuffer], status.registers, area)
+  elif key == ord('x') or key == ord('d'): deleteBuffer(status.bufStatus[status.currentBuffer], status.registers, area)
   elif key == ord('>'): addIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
   elif key == ord('<'): deleteIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
   else: discard
