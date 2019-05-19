@@ -283,6 +283,42 @@ proc deleteLine(bufStatus: var BufferStatus, line: int) =
   bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)
 
+proc deleteWord(bufStatus: var BufferStatus) =
+  if bufStatus.buffer.len == 1 and bufStatus.buffer[bufStatus.currentLine].len < 1: return
+  elif bufStatus.buffer.len > 1 and bufStatus.buffer[bufStatus.currentLine].len < 1:
+    bufStatus.buffer.delete(bufStatus.currentLine, bufStatus.currentLine + 1)
+    if bufStatus.currentLine > bufStatus.buffer.high: bufStatus.currentLine = bufStatus.buffer.high
+  elif bufStatus.currentColumn == bufStatus.buffer[bufStatus.currentLine].high:
+    bufStatus.buffer[bufStatus.currentLine].delete(bufStatus.currentColumn)
+    if bufStatus.currentColumn > 0: dec(bufStatus.currentColumn)
+  else:
+    let
+      currentLine = bufStatus.currentLine
+      currentColumn = bufStatus.currentColumn
+      startWith = if bufStatus.buffer[currentLine].len == 0: ru'\n' else: bufStatus.buffer[currentLine][currentColumn]
+      isSkipped = if unicodeext.isPunct(startWith): unicodeext.isPunct elif unicodeext.isAlpha(startWith): unicodeext.isAlpha elif unicodeext.isDigit(startWith): unicodeext.isDigit else: nil
+
+    if isSkipped == nil:
+      (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.next(currentLine, currentColumn)
+    else:
+      while true:
+        inc(bufStatus.currentColumn)
+        if bufStatus.currentColumn >= bufStatus.buffer[bufStatus.currentLine].len: break
+        if not isSkipped(bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn]): break
+
+    while true:
+      if bufStatus.currentColumn > bufStatus.buffer[bufStatus.currentLine].high: break
+      let curr = bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn]
+      if isPunct(curr) or isAlpha(curr) or isDigit(curr): break
+      inc(bufStatus.currentColumn)
+
+    for i in currentColumn ..< bufStatus.currentColumn: bufStatus.buffer[currentLine].delete(currentColumn)
+    bufStatus.expandedColumn = currentColumn
+    bufStatus.currentColumn = currentColumn
+
+  bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
+  inc(bufStatus.countChange)
+
 proc yankLines(status: var EditorStatus, first, last: int) =
   status.registers.yankedStr = @[]
   status.registers.yankedLines = @[]
@@ -476,9 +512,11 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     status.updateHighlight
     status.changeMode(Mode.insert)
   elif key == ord('d'):
-    if getKey(status.mainWindowInfo[status.currentMainWindow].window) == ord('d'):
+    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    if key == ord('d'):
       yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
       for i in 0 ..< min(cmdLoop, status.bufStatus[currentBuf].buffer.len - status.bufStatus[currentBuf].currentLine): deleteLine(status.bufStatus[status.currentBuffer], status.bufStatus[currentBuf].currentLine)
+    elif key == ord('w'): deleteWord(status.bufStatus[status.currentBuffer])
   elif key == ord('y'):
     if getkey(status.mainWindowInfo[status.currentMainWindow].window) == ord('y'):
       yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
