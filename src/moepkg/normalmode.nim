@@ -178,7 +178,7 @@ proc moveToBackwardWord*(bufStatus: var BufferStatus) =
       currentLine = bufStatus.currentLine
       currentColumn = bufStatus.currentColumn
       
-    if bufStatus.buffer.len == 0 or bufStatus.buffer.isFirst(currentLine, currentColumn): break
+    if bufStatus.buffer[bufStatus.currentLine].len == 0 or bufStatus.buffer.isFirst(currentLine, currentColumn): break
 
     let curr = bufStatus.buffer[currentLine][currentColumn]
     if unicodeext.isSpace(curr): continue
