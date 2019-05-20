@@ -59,6 +59,8 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Select data structures
 
+- Edit files over ssh
+
 - Language Server Protocol
 
 - Fuzzy search
