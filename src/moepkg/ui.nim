@@ -685,5 +685,5 @@ proc isPageUpKey*(key: Rune): bool = key == KEY_PPAGE or key == 2
 proc isPageDownkey*(key: Rune): bool = key == KEY_NPAGE or key == 6
 
 proc isControlU*(key: Rune): bool = int(key) == 21
-proc isControlH*(key: Rune): bool = int(key) == 8
+proc isControlH*(key: Rune): bool = int(key) == 263
 proc isControlL*(key: Rune): bool = int(key) == 12
