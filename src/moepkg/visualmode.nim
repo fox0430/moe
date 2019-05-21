@@ -1,4 +1,4 @@
-import terminal
+import terminal, strutils, sequtils
 import editorstatus, editorview, ui, gapbuffer, normalmode, highlight, unicodeext
 
 type SelectArea = object
@@ -142,6 +142,9 @@ proc deleteIndent(bufStatus: var BufferStatus, area: SelectArea, tabStop: int) =
 
   bufStatus.currentLine = area.startLine
 
+proc insertIndent(bufStatus: var BufferStatus, area: SelectArea, tabStop: int) =
+  for i in area.startLine .. area.endLine: bufStatus.buffer[i].insert(ru' '.repeat(tabStop), min(area.startColumn, bufStatus.buffer[i].high))
+
 proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSlectArea
 
@@ -156,6 +159,7 @@ proc visualBlockCommand(status: var EditorStatus, area: var SelectArea, key: Run
 
   if key == ord('y') or isDcKey(key): yankBufferBlock(status.bufStatus[status.currentBuffer], status.registers, area)
   elif key == ord('x') or key == ord('d'): deleteBufferBlock(status.bufStatus[status.currentBuffer], status.registers, area)
+  elif key == ord('>'): insertIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
   else: discard
 
 proc visualMode*(status: var EditorStatus) =
