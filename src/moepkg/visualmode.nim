@@ -165,13 +165,13 @@ proc visualMode*(status: var EditorStatus) =
   var area = initSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
 
   while status.bufStatus[status.currentBuffer].mode == Mode.visual or status.bufStatus[status.currentBuffer].mode == Mode.visualBlock:
-    let isBlock = if status.bufStatus[status.currentBuffer].mode == Mode.visualBlock: true else: false
+    let isBlockMode = if status.bufStatus[status.currentBuffer].mode == Mode.visualBlock: true else: false
 
     area.updateSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
     colorSegment.updateColorSegment(area)
 
     status.updatehighlight
-    if isBlock: status.bufStatus[status.currentBuffer].highlight.overwriteColorSegmentBlock(area, status.bufStatus[status.currentBuffer].buffer)
+    if isBlockMode: status.bufStatus[status.currentBuffer].highlight.overwriteColorSegmentBlock(area, status.bufStatus[status.currentBuffer].buffer)
     else: status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
 
     status.update
@@ -217,7 +217,7 @@ proc visualMode*(status: var EditorStatus) =
       status.changeMode(Mode.insert)
 
     else:
-      if isBlock: visualBlockCommand(status, area, key)
+      if isBlockMode: visualBlockCommand(status, area, key)
       else: visualCommand(status, area, key)
       status.updatehighlight
       status.changeMode(Mode.normal)
