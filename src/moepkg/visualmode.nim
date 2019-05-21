@@ -45,6 +45,11 @@ proc updateColorSegment(colorSegment: var ColorSegment, area: SelectArea) =
     colorSegment.firstColumn = area.endColumn
     colorSegment.lastColumn = area.startColumn
 
+proc overwriteColorSegmentBlock[T](highlight: var Highlight, area: SelectArea, buffer: T) =
+  for i in area.startLine .. area.endLine:
+    let colorSegment = ColorSegment(firstRow: i, firstColumn: area.startColumn, lastRow: i, lastColumn: min(area.endColumn, buffer[i].high), color: EditorColorPair.visualMode)
+    highlight = highlight.overwrite(colorSegment)
+
 proc swapSlectArea(area: var SelectArea) =
   if area.startLine == area.endLine:
     if area.endColumn < area.startColumn: swap(area.startColumn, area.endColumn)
@@ -127,13 +132,16 @@ proc visualMode*(status: var EditorStatus) =
   var colorSegment = initColorSegment(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
   var area = initSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
 
-  while status.bufStatus[status.currentBuffer].mode == Mode.visual:
+  while status.bufStatus[status.currentBuffer].mode == Mode.visual or status.bufStatus[status.currentBuffer].mode == Mode.visualBlock:
+    let isBlock = if status.bufStatus[status.currentBuffer].mode == Mode.visualBlock: true else: false
 
     area.updateSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
     colorSegment.updateColorSegment(area)
 
     status.updatehighlight
-    status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
+    if isBlock: status.bufStatus[status.currentBuffer].highlight.overwriteColorSegmentBlock(area, status.bufStatus[status.currentBuffer].buffer)
+    else: status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
+
     status.update
 
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
@@ -177,6 +185,7 @@ proc visualMode*(status: var EditorStatus) =
       status.changeMode(Mode.insert)
 
     else:
-      visualCommand(status, area, key)
+      if isBlock: discard
+      else: visualCommand(status, area, key)
       status.updatehighlight
       status.changeMode(Mode.normal)

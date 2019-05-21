@@ -2,7 +2,7 @@ import packages/docutils/highlite, strutils, terminal, os, strformat
 import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils
 
 type Mode* = enum
-  normal, insert, visual, replace, ex, filer, search, bufManager
+  normal, insert, visual, visualBlock, replace, ex, filer, search, bufManager
 
 type Registers* = object
   yankedLines*: seq[seq[Rune]]
