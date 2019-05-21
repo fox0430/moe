@@ -462,6 +462,8 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     moveNextWindow(status)
   elif isControlH(key):
     movePrevWindow(status)
+  elif isControlV(key):
+    status.changeMode(Mode.visualBlock)
   elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
     for i in 0 ..< cmdLoop: keyLeft(status.bufStatus[status.currentBuffer])
   elif key == ord('l') or isRightKey(key):

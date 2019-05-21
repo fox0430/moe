@@ -2,7 +2,7 @@ import packages/docutils/highlite, strutils, terminal, os, strformat
 import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils
 
 type Mode* = enum
-  normal, insert, visual, replace, ex, filer, search, bufManager
+  normal, insert, visual, visualBlock, replace, ex, filer, search, bufManager
 
 type Registers* = object
   yankedLines*: seq[seq[Rune]]
@@ -150,7 +150,7 @@ proc writeStatusBarNormalModeInfo(status: var EditorStatus) =
 
   var modeNameLen = 0
   if status.bufStatus[currentBuf].mode == Mode.ex: modeNameLen = 2
-  elif currentMode == Mode.normal or currentMode == Mode.insert or currentMode == Mode.visual or currentMode == Mode.replace: modeNameLen = 6
+  elif currentMode == Mode.normal or currentMode == Mode.insert or currentMode == Mode.visual or currentMode == Mode.visualBlock or currentMode == Mode.replace: modeNameLen = 6
   if terminalWidth() - modeNameLen < 0: return
   status.statusWindow.append(ru " ".repeat(terminalWidth() - modeNameLen), color)
 
@@ -178,7 +178,7 @@ proc writeStatusBarBufferManagerModeInfo(status: var EditorStatus) =
 proc setModeStr(mode: Mode): string =
   case mode:
   of Mode.insert: result = " INSERT "
-  of Mode.visual: result = " VISUAL "
+  of Mode.visual, Mode.visualBlock: result = " VISUAL "
   of Mode.replace: result = " REPLACE "
   of Mode.filer: result = " FILER "
   of Mode.bufManager: result = " BUFFER "
@@ -196,7 +196,7 @@ proc writeStatusBar*(status: var EditorStatus) =
 
   if mode == Mode.ex and status.bufStatus[status.currentBuffer].prevMode == Mode.filer: writeStatusBarFilerModeInfo(status)
   elif mode == Mode.ex: writeStatusBarNormalModeInfo(status)
-  elif mode == Mode.visual: writeStatusBarNormalModeInfo(status)
+  elif mode == Mode.visual or mode == Mode.visualBlock: writeStatusBarNormalModeInfo(status)
   elif mode == Mode.replace: writeStatusBarNormalModeInfo(status)
   elif mode == Mode.filer: writeStatusBarFilerModeInfo(status)
   elif mode == Mode.bufManager: writeStatusBarBufferManagerModeInfo(status)

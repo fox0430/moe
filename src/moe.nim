@@ -39,7 +39,7 @@ proc main() =
     case status.bufStatus[status.currentBuffer].mode:
     of Mode.normal: normalMode(status)
     of Mode.insert: insertMode(status)
-    of Mode.visual: visualMode(status)
+    of Mode.visual, Mode.visualBlock: visualMode(status)
     of Mode.replace: replaceMode(status)
     of Mode.ex: exMode(status)
     of Mode.filer: filerMode(status)
