@@ -145,6 +145,23 @@ proc deleteIndent(bufStatus: var BufferStatus, area: SelectArea, tabStop: int) =
 proc insertIndent(bufStatus: var BufferStatus, area: SelectArea, tabStop: int) =
   for i in area.startLine .. area.endLine: bufStatus.buffer[i].insert(ru' '.repeat(tabStop), min(area.startColumn, bufStatus.buffer[i].high))
 
+proc replaceCharactor(bufStatus: var BufferStatus, area: SelectArea, ch: Rune) =
+  for i in area.startLine .. area.endLine:
+    if area.startLine == area.endLine:
+      for j in area.startColumn .. area.endColumn: bufStatus.buffer[i][j] = ch
+    elif i == area.startLine:
+      for j in area.startColumn .. bufStatus.buffer[i].high: bufStatus.buffer[i][j] = ch
+    elif i == area.endLine:
+      for j in 0 .. area.endColumn: bufStatus.buffer[i][j] = ch
+    else:
+      for j in 0 .. bufStatus.buffer[i].high: bufStatus.buffer[i][j] = ch
+
+  inc(bufStatus.countChange)
+
+proc replaceCharactorBlock(bufStatus: var BufferStatus, area: SelectArea, ch: Rune) =
+  for i in area.startLine .. area.endLine:
+    for j in area.startColumn .. min(area.endColumn, bufStatus.buffer[i].high): bufStatus.buffer[i][j] = ch
+
 proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSlectArea
 
@@ -152,6 +169,9 @@ proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   elif key == ord('x') or key == ord('d'): deleteBuffer(status.bufStatus[status.currentBuffer], status.registers, area)
   elif key == ord('>'): addIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
   elif key == ord('<'): deleteIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
+  elif key == ord('r'):
+    let ch = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    if not isEscKey(ch): replaceCharactor(status.bufStatus[status.currentBuffer], area, ch)
   else: discard
 
 proc visualBlockCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
@@ -160,6 +180,9 @@ proc visualBlockCommand(status: var EditorStatus, area: var SelectArea, key: Run
   if key == ord('y') or isDcKey(key): yankBufferBlock(status.bufStatus[status.currentBuffer], status.registers, area)
   elif key == ord('x') or key == ord('d'): deleteBufferBlock(status.bufStatus[status.currentBuffer], status.registers, area)
   elif key == ord('>'): insertIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
+  elif key == ord('r'):
+    let ch = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    if not isEscKey(ch): replaceCharactorBlock(status.bufStatus[status.currentBuffer], area, ch)
   else: discard
 
 proc visualMode*(status: var EditorStatus) =
