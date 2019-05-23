@@ -52,14 +52,14 @@ proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
     if filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].kind == pcDir:
       try:
         removeDir(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path)
-        status.commandWindow.writeMessageDeletedFile(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path, EditorColorPair.commandBar)
+        status.commandWindow.writeMessageDeletedFile(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path)
       except OSError:
-        status.commandWindow.writeRemoveDirError(EditorColorPair.commandBar)
+        status.commandWindow.writeRemoveDirError
     else:
       if tryRemoveFile(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path):
-        status.commandWindow.writeMessageDeletedFile(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path, EditorColorPair.commandBar)
+        status.commandWindow.writeMessageDeletedFile(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path)
       else:
-        status.commandWindow.writeRemoveFileError(EditorColorPair.commandBar)
+        status.commandWindow.writeRemoveFileError
 
 proc sortDirList(dirList: seq[PathInfo], sortBy: Sort): seq[PathInfo] =
   case sortBy:
@@ -142,12 +142,12 @@ proc pasteFile(commandWindow: var Window, filerStatus: var FilerStatus) =
     filerStatus.dirlistUpdate = true
     filerStatus.viewUpdate = true
   except OSError:
-    commandWindow.writeCopyFileError(EditorColorPair.errorMessage)
+    commandWindow.writeCopyFileError
     return
 
   if filerStatus.register.cut:
     if tryRemoveFile(filerStatus.register.originPath / filerStatus.register.filename): filerStatus.register.cut = false
-    else: commandWindow.writeRemoveFileError(EditorColorPair.errorMessage)
+    else: commandWindow.writeRemoveFileError
 
 proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   let dirname = getCommand(status, "New file name: ")
@@ -155,7 +155,7 @@ proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   try:
     createDir($dirname[0])
     filerStatus.dirlistUpdate = true
-  except OSError: writeCreateDirError(status.commandWindow, EditorColorPair.errorMessage)
+  except OSError: status.commandWindow.writeCreateDirError
    
 proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   let
@@ -170,7 +170,7 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
     try:
       setCurrentDir(path)
       filerStatus.dirlistUpdate = true
-    except OSError: status.commandWindow.writeFileOpenError(path, EditorColorPair.errorMessage)
+    except OSError: status.commandWindow.writeFileOpenError(path)
 
 proc setDirListColor(kind: PathComponent, isCurrentLine: bool): EditorColorPair =
   if isCurrentLine: result = EditorColorPair.currentFile

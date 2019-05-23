@@ -331,7 +331,7 @@ proc addNewBuffer*(status:var EditorStatus, filename: string) =
       status.bufStatus[index].buffer = textAndEncoding.text.toGapBuffer
       status.settings.characterEncoding = textAndEncoding.encoding
     except IOError:
-      status.commandWindow.writeFileOpenError(filename, EditorColorPair.errorMessage)
+      status.commandWindow.writeFileOpenError(filename)
       return
 
   let lang = if status.settings.syntax: status.bufStatus[index].language else: SourceLanguage.langNone
