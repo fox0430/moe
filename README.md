@@ -45,6 +45,8 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Supports Regular expression and PEG
 
+- Supports EditorConfig
+
 - Window management
 
 - Syntax checker  
