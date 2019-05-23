@@ -3,13 +3,11 @@
 
 ## moe
 
-**m**oe is an **o**ptimal **e**ditor.  
-
 A command line based editor inspired by vi/vim written in Nim.  
  
 This project's goal is a very customizable, high productivity, high performance and funny animation editor.
 
-![moe-0](https://user-images.githubusercontent.com/15966436/56851723-5fabbe80-694d-11e9-8f56-bd5d5da9461a.png)
+![moe](https://user-images.githubusercontent.com/15966436/58185716-8bbd2400-7cee-11e9-93d9-6ec94c876711.png)
 
 ## Features
 
@@ -47,7 +45,9 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Supports Regular expression and PEG
 
-- Tiling window
+- Supports EditorConfig
+
+- Window management
 
 - Syntax checker  
 
@@ -61,7 +61,11 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Select data structures
 
+- Edit files over ssh
+
 - Language Server Protocol
+
+- Fuzzy search
 
 - Plugins
 
@@ -75,6 +79,13 @@ nimble install moe
 
 ## Usage
 https://github.com/fox0430/moe/wiki  
+
+## The origin of the name
+moe is a recursive acronym for "moe is an optimal editor".    
+And one more, it comes from the Japanese slang 萌え(moe)
+
+## Contribute and bug report
+Welcome❤
 
 ## License
 
