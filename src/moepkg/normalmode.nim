@@ -458,9 +458,9 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     cmdLoop = status.bufStatus[status.currentBuffer].cmdLoop
     currentBuf = status.currentBuffer
 
-  if isControlL(key):
+  if isControlK(key):
     moveNextWindow(status)
-  elif isControlH(key):
+  elif isControlJ(key):
     movePrevWindow(status)
   elif isControlV(key):
     status.changeMode(Mode.visualBlock)
