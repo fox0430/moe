@@ -317,9 +317,9 @@ proc filerMode*(status: var EditorStatus) =
       changeSortBy(filerStatus)
     elif key == ord('N'):
       createDir(status, filerStatus)
-    elif isControlH(key):
+    elif isControlJ(key):
       movePrevWindow(status)
-    elif isControlL(key):
+    elif isControlK(key):
       moveNextWindow(status)
     elif isEnterKey(key):
       openFileOrDir(status, filerStatus)

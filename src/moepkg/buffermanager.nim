@@ -58,8 +58,8 @@ proc bufferManager*(status: var Editorstatus) =
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
 
     if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
-    elif isControlL(key): status.moveNextWindow
-    elif isControlH(key): status.movePrevWindow
+    elif isControlK(key): status.moveNextWindow
+    elif isControlJ(key): status.movePrevWindow
     elif key == ord(':'): status.changeMode(Mode.ex)
     elif key == ord('k') or isUpKey(key): status.bufStatus[status.currentBuffer].keyUp
     elif key == ord('j') or isDownKey(key): status.bufStatus[status.currentBuffer].keyDown
