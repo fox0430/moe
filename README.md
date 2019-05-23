@@ -84,6 +84,9 @@ https://github.com/fox0430/moe/wiki
 moe is a recursive acronym for "moe is an optimal editor".    
 And one more, it comes from the Japanese slang 萌え(moe)
 
+## Contribute and bug report
+Welcome❤
+
 ## License
 
 GNU General Public License version 3
