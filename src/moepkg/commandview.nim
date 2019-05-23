@@ -9,32 +9,38 @@ proc writeMessageOnCommandWindow(cmdWin: var Window, message: string, color: Edi
   cmdWin.write(0, 0, message, color)
   cmdWin.refresh
 
-proc writeNoWriteError*(cmdWin: var Window, errorMessageColor: EditorColorPair) =
-  cmdWin.writeMessageOnCommandWindow("Error: No write since last change", errorMessageColor)
+proc writeNoWriteError*(cmdWin: var Window) =
+  cmdWin.writeMessageOnCommandWindow("Error: No write since last change", EditorColorPair.errorMessage)
 
-proc writeSaveError*(cmdWin: var Window, errorMessageColor: EditorColorPair) =
-  cmdWin.writeMessageOnCommandWindow("Error: Failed to save the file", errorMessageColor)
+proc writeSaveError*(cmdWin: var Window) =
+  cmdWin.writeMessageOnCommandWindow("Error: Failed to save the file", EditorColorPair.errorMessage)
 
-proc writeRemoveFileError*(cmdWin: var Window, errorMessageColor: EditorColorPair) =
-  cmdWin.writeMessageOnCommandWindow("Error: can not remove file", errorMessageColor)
+proc writeRemoveFileError*(cmdWin: var Window) =
+  cmdWin.writeMessageOnCommandWindow("Error: can not remove file", EditorColorPair.errorMessage)
 
-proc writeRemoveDirError*(cmdWin: var Window, errorMessageColor: EditorColorPair) =
-  cmdWin.writeMessageOnCommandWindow("Error: can not remove directory", errorMessageColor)
+proc writeRemoveDirError*(cmdWin: var Window) =
+  cmdWin.writeMessageOnCommandWindow("Error: can not remove directory", EditorColorPair.errorMessage)
 
-proc writeCopyFileError*(cmdWin: var Window, errorMessageColor: EditorColorPair) =
-  cmdWin.writeMessageOnCommandWindow("Error: can not copy file", errorMessageColor)
+proc writeCopyFileError*(cmdWin: var Window) =
+  cmdWin.writeMessageOnCommandWindow("Error: can not copy file", EditorColorPair.errorMessage)
 
-proc writeFileOpenError*(cmdWin: var Window, fileName: string, errorMessageColor: EditorColorPair) =
-  cmdWin.writeMessageOnCommandWindow("Error: can not open: " & fileName, errorMessageColor)
+proc writeFileOpenError*(cmdWin: var Window, fileName: string) =
+  cmdWin.writeMessageOnCommandWindow("Error: can not open: " & fileName, EditorColorPair.errorMessage)
 
-proc writeCreateDirError*(cmdWin: var Window, errorMessageColor: EditorColorPair) =
-  cmdWin.writeMessageOnCommandWindow("Error: : can not create direcotry", errorMessageColor)
+proc writeCreateDirError*(cmdWin: var Window) =
+  cmdWin.writeMessageOnCommandWindow("Error: : can not create direcotry", EditorColorPair.errorMessage)
 
-proc writeMessageDeletedFile*(cmdWin: var Window, filename: string, messageColor: EditorColorPair) =
-  cmdWin.writeMessageOnCommandWindow("Deleted: " & filename, messageColor)
+proc writeMessageDeletedFile*(cmdWin: var Window, filename: string) =
+  cmdWin.writeMessageOnCommandWindow("Deleted: " & filename, EditorColorPair.commandBar)
 
-proc writeNoFileNameError*(cmdWin: var Window, messageColor: EditorColorPair) =
-  cmdWin.writeMessageOnCommandWindow("Error: No file name" , messageColor)
+proc writeNoFileNameError*(cmdWin: var Window) =
+  cmdWin.writeMessageOnCommandWindow("Error: No file name" , EditorColorPair.errorMessage)
+
+proc writeMessageYankedLine*(cmdWin: var Window, numOfLine: int) =
+  cmdWin.writeMessageOnCommandWindow(fmt"{numOfLine} line yanked" , EditorColorPair.commandBar)
+
+proc writeMessageYankedCharactor*(cmdWin: var Window, numOfChar: int) =
+  cmdWin.writeMessageOnCommandWindow(fmt"{numOfChar} charactor yanked" , EditorColorPair.commandBar)
 
 proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
   for i in 0 .. r.high:

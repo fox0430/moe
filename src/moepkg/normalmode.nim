@@ -324,10 +324,7 @@ proc yankLines(status: var EditorStatus, first, last: int) =
   status.registers.yankedLines = @[]
   for i in first .. last: status.registers.yankedLines.add(status.bufStatus[status.currentBuffer].buffer[i])
 
-  # TODO: Refator
-  status.commandWindow.erase
-  status.commandwindow.write(0, 0, fmt"{status.registers.yankedLines.len} line yanked", EditorColorPair.commandBar)
-  status.commandWindow.refresh
+  status.commandWindow.writeMessageYankedLine(status.registers.yankedLines.len)
 
 proc pasteLines(status: var EditorStatus) =
   for i in 0 ..< status.registers.yankedLines.len:
@@ -343,10 +340,7 @@ proc yankString(status: var EditorStatus, length: int) =
   for i in status.bufStatus[status.currentBuffer].currentColumn ..< length:
     status.registers.yankedStr.add(status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine][i])
 
-  # TODO: Refator
-  status.commandWindow.erase
-  status.commandwindow.write(0, 0, fmt"{status.registers.yankedStr.len} character yanked", EditorColorPair.commandBar)
-  status.commandWindow.refresh
+  status.commandWindow.writeMessageYankedCharactor(status.registers.yankedStr.len)
 
 proc pasteString(status: var EditorStatus) =
   let index = status.currentBuffer
@@ -440,14 +434,14 @@ proc turnOffHighlighting*(status: var EditorStatus) =
 
 proc writeFileAndExit(status: var EditorStatus) =
   if status.bufStatus[status.currentBuffer].filename.len == 0:
-    status.commandwindow.writeNoFileNameError(EditorColorPair.errorMessage)
+    status.commandwindow.writeNoFileNameError
     status.changeMode(Mode.normal)
   else:
     try:
       saveFile(status.bufStatus[status.currentBuffer].filename, status.bufStatus[status.currentBuffer].buffer.toRunes, status.settings.characterEncoding)
       closeWindow(status, status.currentMainWindow)
     except IOError:
-      writeSaveError(status.commandWindow, EditorColorPair.errorMessage)
+      status.commandWindow.writeSaveError
 
 proc forceExit(status: var Editorstatus) = closeWindow(status, status.currentMainWindow)
 
