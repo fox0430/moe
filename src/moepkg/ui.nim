@@ -581,6 +581,7 @@ proc startUi*() =
   discard setLocale(LC_ALL, "")   # enable UTF-8
   initscr()   # start terminal control
   cbreak()    # enable cbreak mode
+  nonl();     # exit new line mode and improve move cursor performance
   setCursor(true)
 
   if can_change_color(): setCursesColor(ColorThemeTable[ColorTheme.vivid]) # default is vivid
@@ -680,7 +681,7 @@ proc isHomeKey*(key: Rune): bool = key == KEY_HOME
 proc isEndKey*(key: Rune): bool = key == KEY_END
 proc isBackspaceKey*(key: Rune): bool = key == KEY_BACKSPACE or key == 8 or key == 127
 proc isDcKey*(key: Rune): bool = key == KEY_DC
-proc isEnterKey*(key: Rune): bool = key == KEY_ENTER or key == ord('\n')
+proc isEnterKey*(key: Rune): bool = key == KEY_ENTER or key == ord('\n') or key == 13
 proc isPageUpKey*(key: Rune): bool = key == KEY_PPAGE or key == 2
 proc isPageDownkey*(key: Rune): bool = key == KEY_NPAGE or key == 6
 
@@ -689,4 +690,4 @@ proc isControlK*(key: Rune): bool = int(key) == 11
 proc isControlL*(key: Rune): bool = int(key) == 12
 proc isControlU*(key: Rune): bool = int(key) == 21
 proc isControlV*(key: Rune): bool = int(key) == 22
-#proc isControlH*(key: Rune): bool = int(key) == 263
+proc isControlH*(key: Rune): bool = int(key) == 263
