@@ -3,10 +3,10 @@ import unicodeext, ui
 
 type ColorSegment* = object
   firstRow*, firstColumn*, lastRow*, lastColumn*: int
-  color*: ColorPair
+  color*: EditorColorPair
 
 type Highlight* = object
-  colorSegments: seq[ColorSegment]
+  colorSegments*: seq[ColorSegment]
 
 proc len*(highlight: Highlight): int = highlight.colorSegments.len
 
@@ -63,8 +63,7 @@ proc overwrite*(highlight: Highlight, colorSegment: ColorSegment): Highlight =
     let cs = highlight.colorSegments[i]
     result.colorSegments.add(cs.overwrite(colorSegment))
 
-proc initHighlight*(buffer: string, language: SourceLanguage, defaultColor: Colorpair): Highlight =
-  # TODO: use settings file
+proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
   var currentRow, currentColumn: int
 
   template splitByNewline(str, c: typed) =
@@ -74,7 +73,7 @@ proc initHighlight*(buffer: string, language: SourceLanguage, defaultColor: Colo
       empty = true
     for r in runes(str):
       if r == newline:
-        if empty: result.colorSegments.add(ColorSegment(firstRow: currentRow, firstColumn: 0, lastRow: currentRow, lastColumn: -1, color: defaultColor))
+        if empty: result.colorSegments.add(ColorSegment(firstRow: currentRow, firstColumn: currentColumn, lastRow: currentRow, lastColumn: currentColumn-1, color: EditorColorPair.defaultChar)) # push an empty segment
         else: result.colorSegments.add(cs)
         inc(currentRow)
         currentColumn = 0
@@ -90,7 +89,7 @@ proc initHighlight*(buffer: string, language: SourceLanguage, defaultColor: Colo
     if not empty: result.colorSegments.add(cs)
 
   if language == SourceLanguage.langNone:
-    splitByNewline(buffer, defaultColor)
+    splitByNewline(buffer, EditorColorPair.defaultChar)
     return result
 
   var token = GeneralTokenizer()
@@ -99,7 +98,7 @@ proc initHighlight*(buffer: string, language: SourceLanguage, defaultColor: Colo
   # `highlite.initGeneralTokenizer' skips initial whitespace (including newline('0x0A')), so we parse it by ourselves.
   var pad: string
   if buffer.parseWhile(pad, {' ', '\x09'..'\x0D'}) > 0:
-    splitByNewline(pad, defaultColor)
+    splitByNewline(pad, EditorColorPair.defaultChar)
 
   while true:
     token.getNextToken(language)
@@ -115,12 +114,13 @@ proc initHighlight*(buffer: string, language: SourceLanguage, defaultColor: Colo
       continue
     
     let color = case token.kind:
-        of gtKeyword: brightGreenDefault
-        of gtStringLit: magentaDefault
-        of gtDecNumber: lightBlueDefault
-        of gtComment, gtLongComment: whiteDefault
-        of gtWhitespace: defaultColor
-        else: defaultColor
+        of gtKeyword: EditorColorPair.keyword
+        of gtStringLit: EditorColorPair.stringLit
+        of gtDecNumber: EditorColorPair.decNumber
+        of gtComment: EditorColorPair.comment
+        of gtLongComment: EditorColorPair.longComment
+        of gtWhitespace: EditorColorPair.defaultChar
+        else: EditorColorPair.defaultChar
     splitByNewline(buffer[first..last], color)
 
 proc index*(highlight: Highlight, row, column: int): int =

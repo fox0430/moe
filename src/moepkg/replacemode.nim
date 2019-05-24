@@ -12,22 +12,22 @@ proc replaceMode*(status: var EditorStatus) =
 
     status.update
 
-    let key = getkey(status.mainWindow[status.currentMainWindow])
+    let key = getkey(status.mainWindowInfo[status.currentMainWindow].window)
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
     elif isEscKey(key):
       status.changeMode(Mode.normal)
 
     elif isRightKey(key):
-      keyRight(status)
+      keyRight(status.bufStatus[status.currentBuffer])
     elif isLeftKey(key) or isBackspaceKey(key):
-      keyLeft(status)
+      keyLeft(status.bufStatus[status.currentBuffer])
     elif isUpKey(key):
-      keyUp(status)
+      keyUp(status.bufStatus[status.currentBuffer])
     elif isDownKey(key) or isEnterKey(key):
-      keyDown(status)
+      keyDown(status.bufStatus[status.currentBuffer])
  
     else:
-      replaceCurrentCharacter(status, key)
-      keyRight(status)
+      replaceCurrentCharacter(status.bufStatus[status.currentBuffer], status.settings.autoIndent, key)
+      keyRight(status.bufStatus[status.currentBuffer])
       bufferChanged = true

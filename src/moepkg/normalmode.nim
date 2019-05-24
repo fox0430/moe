@@ -1,109 +1,97 @@
 import strutils, strformat, terminal, deques, sequtils
-import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight
+import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight, fileutils, commandview
 
 proc jumpLine*(status: var EditorStatus, destination: int)
-proc keyRight*(status: var EditorStatus)
-proc keyLeft*(status: var EditorStatus)
-proc keyUp*(status: var EditorStatus)
-proc keyDown*(status: var EditorStatus)
-proc replaceCurrentCharacter*(status: var EditorStatus, character: Rune)
+proc keyRight*(bufStatus: var BufferStatus)
+proc keyLeft*(bufStatus: var BufferStatus)
+proc keyUp*(bufStatus: var BufferStatus)
+proc keyDown*(bufStatus: var BufferStatus)
+proc replaceCurrentCharacter*(bufStatus: var BufferStatus, autoIndent:bool, character: Rune)
 
 import searchmode, replacemode
-
 
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.erase
 
-  status.commandWindow.write(0, 0, ru"debuf info: ")
+  status.commandWindow.write(0, 0, "debuf info: ", EditorColorPair.commandBar)
   status.commandWindow.append(fmt"currentLine: {status.bufStatus[status.currentBuffer].currentLine}, currentColumn: {status.bufStatus[status.currentBuffer].currentColumn}")
   status.commandWindow.append(fmt", cursor.y: {status.bufStatus[status.currentBuffer].cursor.y}, cursor.x: {status.bufStatus[status.currentBuffer].cursor.x}")
   status.commandWindow.append(fmt", {str}")
 
   status.commandWindow.refresh
 
-proc keyLeft*(status: var EditorStatus) =
-  if status.bufStatus[status.currentBuffer].currentColumn == 0: return
+proc keyLeft*(bufStatus: var BufferStatus) =
+  if bufStatus.currentColumn == 0: return
 
-  dec(status.bufStatus[status.currentBuffer].currentColumn)
-  status.bufStatus[status.currentBuffer].expandedColumn = status.bufStatus[status.currentBuffer].currentColumn
+  dec(bufStatus.currentColumn)
+  bufStatus.expandedColumn = bufStatus.currentColumn
 
-proc keyRight*(status: var EditorStatus) =
+proc keyRight*(bufStatus: var BufferStatus) =
+  if bufStatus.currentColumn + 1 >= bufStatus.buffer[bufStatus.currentLine].len + (if bufStatus.mode == Mode.insert: 1 else: 0): return
+  inc(bufStatus.currentColumn)
+  bufStatus.expandedColumn = bufStatus.currentColumn
+
+proc keyUp*(bufStatus: var BufferStatus) =
+  if bufStatus.currentLine == 0: return
+
+  dec(bufStatus.currentLine)
+  let maxColumn = bufStatus.buffer[bufStatus.currentLine].len - 1 + (if bufStatus.mode == Mode.insert: 1 else: 0)
+  bufStatus.currentColumn = min(bufStatus.expandedColumn, maxColumn)
+
+  if bufStatus.currentColumn < 0: bufStatus.currentColumn = 0
+
+proc keyDown*(bufStatus: var BufferStatus) =
+  if bufStatus.currentLine+1 == bufStatus.buffer.len: return
+
+  inc(bufStatus.currentLine)
+  let maxColumn = bufStatus.buffer[bufStatus.currentLine].len - 1 + (if bufStatus.mode == Mode.insert: 1 else: 0)
+
+  bufStatus.currentColumn = min(bufStatus.expandedColumn, maxColumn)
+  if bufStatus.currentColumn < 0: bufStatus.currentColumn = 0
+
+proc moveToFirstNonBlankOfLine*(bufStatus: var BufferStatus) =
+  bufStatus.currentColumn = 0
+  while bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn] == ru' ':
+    inc(bufStatus.currentColumn)
+  bufStatus.expandedColumn = bufStatus.currentColumn
+
+proc moveToFirstOfLine*(bufStatus: var BufferStatus) =
+  bufStatus.currentColumn = 0
+  bufStatus.expandedColumn = bufStatus.currentColumn
+
+proc moveToLastOfLine*(bufStatus: var BufferStatus) =
+  bufStatus.currentColumn = max(bufStatus.buffer[bufStatus.currentLine].len - 1, 0)
+  bufStatus.expandedColumn = bufStatus.currentColumn
+
+proc moveToFirstOfPreviousLine(bufStatus: var BufferStatus) =
+  if bufStatus.currentLine == 0: return
+  keyUp(bufStatus)
+  moveToFirstOfLine(bufStatus)
+
+proc moveToFirstOfNextLine(bufStatus: var BufferStatus) =
+  if bufStatus.currentLine + 1 == bufStatus.buffer.len: return
+  keyDown(bufStatus)
+  moveToFirstOfLine(bufStatus)
+
+proc deleteCurrentCharacter*(bufStatus: var BufferStatus) =
   let
-    currentColumn = status.bufStatus[status.currentBuffer].currentColumn
-    currentLine = status.bufStatus[status.currentBuffer].currentLine
-    currentMode = status.bufStatus[status.currentBuffer].mode
+    currentLine = bufStatus.currentLine
+    currentColumn = bufStatus.currentColumn
+    currentMode = bufStatus.mode
 
-  if currentColumn + 1 >= status.bufStatus[status.currentBuffer].buffer[currentLine].len + (if currentMode == Mode.insert: 1 else: 0): return
+  if currentLine >= bufStatus.buffer.high and currentColumn > bufStatus.buffer[currentLine].high: return 
 
-  inc(status.bufStatus[status.currentBuffer].currentColumn)
-  status.bufStatus[status.currentBuffer].expandedColumn = status.bufStatus[status.currentBuffer].currentColumn
-
-proc keyUp*(status: var EditorStatus) =
-  if status.bufStatus[status.currentBuffer].currentLine == 0: return
-
-  dec(status.bufStatus[status.currentBuffer].currentLine)
-  let
-    currentLine = status.bufStatus[status.currentBuffer].currentLine
-    maxColumn = status.bufStatus[status.currentBuffer].buffer[currentLine].len - 1 + (if status.bufStatus[status.currentBuffer].mode == Mode.insert: 1 else: 0)
-
-  status.bufStatus[status.currentBuffer].currentColumn = min(status.bufStatus[status.currentBuffer].expandedColumn, maxColumn)
-  if status.bufStatus[status.currentBuffer].currentColumn < 0: status.bufStatus[status.currentBuffer].currentColumn = 0
-
-proc keyDown*(status: var EditorStatus) =
-  if status.bufStatus[status.currentBuffer].currentLine+1 == status.bufStatus[status.currentBuffer].buffer.len: return
-
-  inc(status.bufStatus[status.currentBuffer].currentLine)
-  let
-    currentLine = status.bufStatus[status.currentBuffer].currentLine
-    maxColumn = status.bufStatus[status.currentBuffer].buffer[currentLine].len - 1 + (if status.bufStatus[status.currentBuffer].mode == Mode.insert: 1 else: 0)
-
-  status.bufStatus[status.currentBuffer].currentColumn = min(status.bufStatus[status.currentBuffer].expandedColumn, maxColumn)
-  if status.bufStatus[status.currentBuffer].currentColumn < 0: status.bufStatus[status.currentBuffer].currentColumn = 0
-
-proc moveToFirstNonBlankOfLine*(status: var EditorStatus) =
-  status.bufStatus[status.currentBuffer].currentColumn = 0
-  while status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine][status.bufStatus[status.currentBuffer].currentColumn] == ru' ':
-    inc(status.bufStatus[status.currentBuffer].currentColumn)
-  status.bufStatus[status.currentBuffer].expandedColumn = status.bufStatus[status.currentBuffer].currentColumn
-
-proc moveToFirstOfLine*(status: var EditorStatus) =
-  status.bufStatus[status.currentBuffer].currentColumn = 0
-  status.bufStatus[status.currentBuffer].expandedColumn = status.bufStatus[status.currentBuffer].currentColumn
-
-proc moveToLastOfLine*(status: var EditorStatus) =
-  status.bufStatus[status.currentBuffer].currentColumn = max(status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].len - 1, 0)
-  status.bufStatus[status.currentBuffer].expandedColumn = status.bufStatus[status.currentBuffer].currentColumn
-
-proc moveToFirstOfPreviousLine(status: var EditorStatus) =
-  if status.bufStatus[status.currentBuffer].currentLine == 0: return
-  keyUp(status)
-  moveToFirstOfLine(status)
-
-proc moveToFirstOfNextLine(status: var EditorStatus) =
-  if status.bufStatus[status.currentBuffer].currentLine+1 == status.bufStatus[status.currentBuffer].buffer.len: return
-  keyDown(status)
-  moveToFirstOfLine(status)
-
-proc deleteCurrentCharacter*(status: var EditorStatus) =
-  let
-    currentLine = status.bufStatus[status.currentBuffer].currentLine
-    currentColumn = status.bufStatus[status.currentBuffer].currentColumn
-    currentMode = status.bufStatus[status.currentBuffer].mode
-    index = status.currentBuffer
-
-  if currentLine >= status.bufStatus[index].buffer.high and currentColumn > status.bufStatus[index].buffer[currentLine].high: return 
-
-  if currentColumn == status.bufStatus[index].buffer[currentLine].len:
-    status.bufStatus[index].buffer[currentLine].insert(status.bufStatus[index].buffer[currentLine + 1], currentColumn)
-    status.bufStatus[index].buffer.delete(currentLine + 1, currentLine + 2)
+  if currentColumn == bufStatus.buffer[currentLine].len:
+    bufStatus.buffer[currentLine].insert(bufStatus.buffer[currentLine + 1], currentColumn)
+    bufStatus.buffer.delete(currentLine + 1, currentLine + 2)
   else:
-    status.bufStatus[index].buffer[currentLine].delete(currentColumn)
-    if status.bufStatus[index].buffer[currentLine].len > 0 and currentColumn == status.bufStatus[index].buffer[currentLine].len and currentMode != Mode.insert:
-      status.bufStatus[index].currentColumn = status.bufStatus[index].buffer[status.bufStatus[index].currentLine].len-1
-      status.bufStatus[index].expandedColumn = status.bufStatus[index].buffer[status.bufStatus[index].currentLine].len-1
+    bufStatus.buffer[currentLine].delete(currentColumn)
+    if bufStatus.buffer[currentLine].len > 0 and currentColumn == bufStatus.buffer[currentLine].len and currentMode != Mode.insert:
+      bufStatus.currentColumn = bufStatus.buffer[bufStatus.currentLine].len-1
+      bufStatus.expandedColumn = bufStatus.buffer[bufStatus.currentLine].len-1
 
-  status.bufStatus[index].view.reload(status.bufStatus[index].buffer, status.bufStatus[index].view.originalLine[0])
-  inc(status.bufStatus[index].countChange)
+  bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
+  inc(bufStatus.countChange)
 
 proc jumpLine*(status: var EditorStatus, destination: int) =
   let
@@ -115,20 +103,17 @@ proc jumpLine*(status: var EditorStatus, destination: int) =
 
   if not (view.originalLine[0] <= destination and (view.originalLine[view.height - 1] == -1 or destination <= view.originalLine[view.height - 1])):
     var startOfPrintedLines = 0
-    if destination > status.bufStatus[status.currentBuffer].buffer.len - 1 - status.mainWindow[status.currentMainWindow].height - 1:
-      startOfPrintedLines = status.bufStatus[status.currentBuffer].buffer.len - 1 - status.mainWindow[status.currentMainWindow].height - 1
+    if destination > status.bufStatus[status.currentBuffer].buffer.len - 1 - status.mainWindowInfo[status.currentMainWindow].window.height - 1:
+      startOfPrintedLines = status.bufStatus[status.currentBuffer].buffer.len - 1 - status.mainWindowInfo[status.currentMainWindow].window.height - 1
     else:
       startOfPrintedLines = max(destination - (currentLine - status.bufStatus[status.currentBuffer].view.originalLine[0]), 0)
     status.bufStatus[status.currentBuffer].view.reload(status.bufStatus[status.currentBuffer].buffer, startOfPrintedLines)
 
-proc moveToFirstLine*(status: var EditorStatus) =
-  jumpLine(status, 0)
+proc moveToFirstLine*(status: var EditorStatus) = jumpLine(status, 0)
 
 proc moveToLastLine*(status: var EditorStatus) =
-  if status.bufStatus[status.currentBuffer].cmdLoop > 1:
-    jumpLine(status, status.bufStatus[status.currentBuffer].cmdLoop - 1)
-  else:
-    jumpLine(status, status.bufStatus[status.currentBuffer].buffer.len-1)
+  if status.bufStatus[status.currentBuffer].cmdLoop > 1: jumpLine(status, status.bufStatus[status.currentBuffer].cmdLoop - 1)
+  else: jumpLine(status, status.bufStatus[status.currentBuffer].buffer.len - 1)
 
 proc pageUp*(status: var EditorStatus) =
   let destination = max(status.bufStatus[status.currentBuffer].currentLine - status.bufStatus[status.currentBuffer].view.height, 0)
@@ -147,155 +132,199 @@ proc pageDown*(status: var EditorStatus) =
     let startOfPrintedLines = max(destination - (currentLine - status.bufStatus[status.currentBuffer].view.originalLine[0]), 0)
     status.bufStatus[status.currentBuffer].view.reload(status.bufStatus[status.currentBuffer].buffer, startOfPrintedLines)
 
-proc moveToForwardWord*(status: var EditorStatus) =
+proc moveToForwardWord*(bufStatus: var BufferStatus) =
   let
-    currentLine = status.bufStatus[status.currentBuffer].currentLine
-    currentColumn = status.bufStatus[status.currentBuffer].currentColumn
-    index = status.currentBuffer
-    startWith = if status.bufStatus[index].buffer[currentLine].len == 0: ru'\n' else: status.bufStatus[index].buffer[currentLine][currentColumn]
+    currentLine = bufStatus.currentLine
+    currentColumn = bufStatus.currentColumn
+    startWith = if bufStatus.buffer[currentLine].len == 0: ru'\n' else: bufStatus.buffer[currentLine][currentColumn]
     isSkipped = if unicodeext.isPunct(startWith): unicodeext.isPunct elif unicodeext.isAlpha(startWith): unicodeext.isAlpha elif unicodeext.isDigit(startWith): unicodeext.isDigit else: nil
 
   if isSkipped == nil:
-    (status.bufStatus[index].currentLine, status.bufStatus[index].currentColumn) = status.bufStatus[index].buffer.next(currentLine, currentColumn)
+    (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.next(currentLine, currentColumn)
   else:
     while true:
-      inc(status.bufStatus[status.currentBuffer].currentColumn)
-      if status.bufStatus[index].currentColumn >= status.bufStatus[index].buffer[status.bufStatus[index].currentLine].len:
-        inc(status.bufStatus[index].currentLine)
-        status.bufStatus[index].currentColumn = 0
+      inc(bufStatus.currentColumn)
+      if bufStatus.currentColumn >= bufStatus.buffer[bufStatus.currentLine].len:
+        inc(bufStatus.currentLine)
+        bufStatus.currentColumn = 0
         break
-      if not isSkipped(status.bufStatus[index].buffer[status.bufStatus[index].currentLine][status.bufStatus[index].currentColumn]): break
+      if not isSkipped(bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn]): break
 
   while true:
-    if status.bufStatus[index].currentLine >= status.bufStatus[index].buffer.len:
-      status.bufStatus[index].currentLine = status.bufStatus[index].buffer.len-1
-      status.bufStatus[index].currentColumn = status.bufStatus[index].buffer[status.bufStatus[index].buffer.high].high
-      if status.bufStatus[index].currentColumn == -1: status.bufStatus[index].currentColumn = 0
+    if bufStatus.currentLine >= bufStatus.buffer.len:
+      bufStatus.currentLine = bufStatus.buffer.len-1
+      bufStatus.currentColumn = bufStatus.buffer[bufStatus.buffer.high].high
+      if bufStatus.currentColumn == -1: bufStatus.currentColumn = 0
       break
 
-    if status.bufStatus[index].buffer[status.bufStatus[index].currentLine].len == 0: break
-    if status.bufStatus[index].currentColumn == status.bufStatus[index].buffer[status.bufStatus[index].currentLine].len:
-      inc(status.bufStatus[index].currentLine)
-      status.bufStatus[index].currentColumn = 0
+    if bufStatus.buffer[bufStatus.currentLine].len == 0: break
+    if bufStatus.currentColumn == bufStatus.buffer[bufStatus.currentLine].len:
+      inc(bufStatus.currentLine)
+      bufStatus.currentColumn = 0
       continue
 
-    let curr = status.bufStatus[index].buffer[status.bufStatus[index].currentLine][status.bufStatus[index].currentColumn]
+    let curr = bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn]
     if isPunct(curr) or isAlpha(curr) or isDigit(curr): break
-    inc(status.bufStatus[index].currentColumn)
+    inc(bufStatus.currentColumn)
 
-  status.bufStatus[index].expandedColumn = status.bufStatus[index].currentColumn
+  bufStatus.expandedColumn = bufStatus.currentColumn
 
-proc moveToBackwardWord*(status: var EditorStatus) =
-  if status.bufStatus[status.currentBuffer].buffer.isFirst(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn): return
-
-  let index = status.currentBuffer
+proc moveToBackwardWord*(bufStatus: var BufferStatus) =
+  if bufStatus.buffer.isFirst(bufStatus.currentLine, bufStatus.currentColumn): return
 
   while true:
-    (status.bufStatus[index].currentLine, status.bufStatus[index].currentColumn) = status.bufStatus[index].buffer.prev(status.bufStatus[index].currentLine, status.bufStatus[index].currentColumn)
+    (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.prev(bufStatus.currentLine, bufStatus.currentColumn)
     let
-      currentLine = status.bufStatus[index].currentLine
-      currentColumn = status.bufStatus[index].currentColumn
+      currentLine = bufStatus.currentLine
+      currentColumn = bufStatus.currentColumn
       
-    if status.bufStatus[index].buffer[currentLine].len == 0 or status.bufStatus[index].buffer.isFirst(currentLine, currentColumn): break
+    if bufStatus.buffer[bufStatus.currentLine].len == 0 or bufStatus.buffer.isFirst(currentLine, currentColumn): break
 
-    let curr = status.bufStatus[index].buffer[currentLine][currentColumn]
+    let curr = bufStatus.buffer[currentLine][currentColumn]
     if unicodeext.isSpace(curr): continue
 
-    if status.bufStatus[status.currentBuffer].currentColumn == 0: break
+    if bufStatus.currentColumn == 0: break
 
     let
-      (backLine, backColumn) = status.bufStatus[index].buffer.prev(currentLine, currentColumn)
-      back = status.bufStatus[status.currentBuffer].buffer[backLine][backColumn]
+      (backLine, backColumn) = bufStatus.buffer.prev(currentLine, currentColumn)
+      back = bufStatus.buffer[backLine][backColumn]
 
     let
       currType = if isAlpha(curr): 1 elif isDigit(curr): 2 elif isPunct(curr): 3 else: 0
       backType = if isAlpha(back): 1 elif isDigit(back): 2 elif isPunct(back): 3 else: 0
     if currType != backType: break
 
-  status.bufStatus[index].expandedColumn = status.bufStatus[index].currentColumn
+  bufStatus.expandedColumn = bufStatus.currentColumn
 
-proc moveToForwardEndOfWord*(status: var EditorStatus) =
+proc moveToForwardEndOfWord*(bufStatus: var BufferStatus) =
   let
-    currentLine = status.bufStatus[status.currentBuffer].currentLine
-    currentColumn = status.bufStatus[status.currentBuffer].currentColumn
-    startWith = if status.bufStatus[status.currentBuffer].buffer[currentLine].len == 0: ru'\n' else: status.bufStatus[status.currentBuffer].buffer[currentLine][currentColumn]
+    currentLine = bufStatus.currentLine
+    currentColumn = bufStatus.currentColumn
+    startWith = if bufStatus.buffer[currentLine].len == 0: ru'\n' else: bufStatus.buffer[currentLine][currentColumn]
     isSkipped = if unicodeext.isPunct(startWith): unicodeext.isPunct elif unicodeext.isAlpha(startWith): unicodeext.isAlpha elif unicodeext.isDigit(startWith): unicodeext.isDigit else: nil
 
   if isSkipped == nil:
-    let index = status.currentBuffer
-    (status.bufStatus[index].currentLine, status.bufStatus[index].currentColumn) = status.bufStatus[index].buffer.next(currentLine, currentColumn)
+    (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.next(currentLine, currentColumn)
   else:
     while true:
-      inc(status.bufStatus[status.currentBuffer].currentColumn)
-      if status.bufStatus[status.currentBuffer].currentColumn == status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].len - 1: break
-      if status.bufStatus[status.currentBuffer].currentColumn >= status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].len:
-        inc(status.bufStatus[status.currentBuffer].currentLine)
-        status.bufStatus[status.currentBuffer].currentColumn = 0
+      inc(bufStatus.currentColumn)
+      if bufStatus.currentColumn == bufStatus.buffer[bufStatus.currentLine].len - 1: break
+      if bufStatus.currentColumn >= bufStatus.buffer[bufStatus.currentLine].len:
+        inc(bufStatus.currentLine)
+        bufStatus.currentColumn = 0
         break
-      if not isSkipped(status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine][status.bufStatus[status.currentBuffer].currentColumn + 1]): break
+      if not isSkipped(bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn + 1]): break
 
   while true:
-    if status.bufStatus[status.currentBuffer].currentLine >= status.bufStatus[status.currentBuffer].buffer.len:
-      status.bufStatus[status.currentBuffer].currentLine = status.bufStatus[status.currentBuffer].buffer.len - 1
-      status.bufStatus[status.currentBuffer].currentColumn = status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].buffer.high].high
-      if status.bufStatus[status.currentBuffer].currentColumn == -1: status.bufStatus[status.currentBuffer].currentColumn = 0
+    if bufStatus.currentLine >= bufStatus.buffer.len:
+      bufStatus.currentLine = bufStatus.buffer.len - 1
+      bufStatus.currentColumn = bufStatus.buffer[bufStatus.buffer.high].high
+      if bufStatus.currentColumn == -1: bufStatus.currentColumn = 0
       break
 
-    if status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].len == 0: break
-    if status.bufStatus[status.currentBuffer].currentColumn == status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].len:
-      inc(status.bufStatus[status.currentBuffer].currentLine)
-      status.bufStatus[status.currentBuffer].currentColumn = 0
+    if bufStatus.buffer[bufStatus.currentLine].len == 0: break
+    if bufStatus.currentColumn == bufStatus.buffer[bufStatus.currentLine].len:
+      inc(bufStatus.currentLine)
+      bufStatus.currentColumn = 0
       continue
 
-    let curr = status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine][status.bufStatus[status.currentBuffer].currentColumn]
+    let curr = bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn]
     if isPunct(curr) or isAlpha(curr) or isDigit(curr): break
-    inc(status.bufStatus[status.currentBuffer].currentColumn)
+    inc(bufStatus.currentColumn)
 
-  status.bufStatus[status.currentBuffer].expandedColumn = status.bufStatus[status.currentBuffer].currentColumn
+  bufStatus.expandedColumn = bufStatus.currentColumn
 
-proc openBlankLineBelow(status: var EditorStatus) =
-  let indent = sequtils.repeat(ru' ', countRepeat(status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine], Whitespace, 0))
+proc moveCenterScreen(bufStatus: var BufferStatus) =
+  if bufStatus.currentLine > int(bufStatus.view.height / 2):
+    if bufStatus.cursor.y > int(bufStatus.view.height / 2):
+      let startOfPrintedLines = bufStatus.cursor.y - int(bufStatus.view.height / 2)
+      bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[startOfPrintedLines])
+    else:
+      let numOfTime = int(bufStatus.view.height / 2) - bufStatus.cursor.y
+      for i in 0 ..< numOfTime: scrollUp(bufStatus.view, bufStatus.buffer)
 
-  status.bufStatus[status.currentBuffer].buffer.insert(indent, status.bufStatus[status.currentBuffer].currentLine+1)
-  inc(status.bufStatus[status.currentBuffer].currentLine)
-  status.bufStatus[status.currentBuffer].currentColumn = indent.len
+proc scrollScreenTop(bufStatus: var BufferStatus) = bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[bufStatus.cursor.y])
 
-  status.bufStatus[status.currentBuffer].view.reload(status.bufStatus[status.currentBuffer].buffer, status.bufStatus[status.currentBuffer].view.originalLine[0])
-  inc(status.bufStatus[status.currentBuffer].countChange)
+proc scrollScreenBottom(bufStatus: var BufferStatus) =
+  if bufStatus.currentLine > bufStatus.view.height:
+    let numOfTime = bufStatus.view.height - bufStatus.cursor.y - 2
+    for i in 0 ..< numOfTime: scrollUp(bufStatus.view, bufStatus.buffer)
 
-proc openBlankLineAbove(status: var EditorStatus) =
-  let indent = sequtils.repeat(ru' ', countRepeat(status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine], Whitespace, 0))
+proc openBlankLineBelow(bufStatus: var BufferStatus) =
+  let indent = sequtils.repeat(ru' ', countRepeat(bufStatus.buffer[bufStatus.currentLine], Whitespace, 0))
 
-  status.bufStatus[status.currentBuffer].buffer.insert(indent, status.bufStatus[status.currentBuffer].currentLine)
-  status.bufStatus[status.currentBuffer].currentColumn = indent.len
+  bufStatus.buffer.insert(indent, bufStatus.currentLine+1)
+  inc(bufStatus.currentLine)
+  bufStatus.currentColumn = indent.len
 
-  status.bufStatus[status.currentBuffer].view.reload(status.bufStatus[status.currentBuffer].buffer, status.bufStatus[status.currentBuffer].view.originalLine[0])
-  inc(status.bufStatus[status.currentBuffer].countChange)
+  bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
+  inc(bufStatus.countChange)
 
-proc deleteLine(status: var EditorStatus, line: int) =
-  status.bufStatus[status.currentBuffer].buffer.delete(line, line + 1)
+proc openBlankLineAbove(bufStatus: var BufferStatus) =
+  let indent = sequtils.repeat(ru' ', countRepeat(bufStatus.buffer[bufStatus.currentLine], Whitespace, 0))
 
-  let index = status.currentBuffer
+  bufStatus.buffer.insert(indent, bufStatus.currentLine)
+  bufStatus.currentColumn = indent.len
 
-  if status.bufStatus[index].buffer.len == 0: status.bufStatus[index].buffer.insert(ru"", 0)
+  bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
+  inc(bufStatus.countChange)
 
-  if line < status.bufStatus[index].currentLine: dec(status.bufStatus[index].currentLine)
-  if status.bufStatus[index].currentLine >= status.bufStatus[index].buffer.len: status.bufStatus[index].currentLine = status.bufStatus[index].buffer.high
+proc deleteLine(bufStatus: var BufferStatus, line: int) =
+  bufStatus.buffer.delete(line, line + 1)
+
+  if bufStatus.buffer.len == 0: bufStatus.buffer.insert(ru"", 0)
+
+  if line < bufStatus.currentLine: dec(bufStatus.currentLine)
+  if bufStatus.currentLine >= bufStatus.buffer.len: bufStatus.currentLine = bufStatus.buffer.high
   
-  status.bufStatus[index].currentColumn = 0
-  status.bufStatus[index].expandedColumn = 0
+  bufStatus.currentColumn = 0
+  bufStatus.expandedColumn = 0
 
-  status.bufStatus[index].view.reload(status.bufStatus[index].buffer, min(status.bufStatus[index].view.originalLine[0], status.bufStatus[index].buffer.high))
-  inc(status.bufStatus[index].countChange)
+  bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
+  inc(bufStatus.countChange)
+
+proc deleteWord(bufStatus: var BufferStatus) =
+  if bufStatus.buffer.len == 1 and bufStatus.buffer[bufStatus.currentLine].len < 1: return
+  elif bufStatus.buffer.len > 1 and bufStatus.buffer[bufStatus.currentLine].len < 1:
+    bufStatus.buffer.delete(bufStatus.currentLine, bufStatus.currentLine + 1)
+    if bufStatus.currentLine > bufStatus.buffer.high: bufStatus.currentLine = bufStatus.buffer.high
+  elif bufStatus.currentColumn == bufStatus.buffer[bufStatus.currentLine].high:
+    bufStatus.buffer[bufStatus.currentLine].delete(bufStatus.currentColumn)
+    if bufStatus.currentColumn > 0: dec(bufStatus.currentColumn)
+  else:
+    let
+      currentLine = bufStatus.currentLine
+      currentColumn = bufStatus.currentColumn
+      startWith = if bufStatus.buffer[currentLine].len == 0: ru'\n' else: bufStatus.buffer[currentLine][currentColumn]
+      isSkipped = if unicodeext.isPunct(startWith): unicodeext.isPunct elif unicodeext.isAlpha(startWith): unicodeext.isAlpha elif unicodeext.isDigit(startWith): unicodeext.isDigit else: nil
+
+    if isSkipped == nil:
+      (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.next(currentLine, currentColumn)
+    else:
+      while true:
+        inc(bufStatus.currentColumn)
+        if bufStatus.currentColumn >= bufStatus.buffer[bufStatus.currentLine].len: break
+        if not isSkipped(bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn]): break
+
+    while true:
+      if bufStatus.currentColumn > bufStatus.buffer[bufStatus.currentLine].high: break
+      let curr = bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn]
+      if isPunct(curr) or isAlpha(curr) or isDigit(curr): break
+      inc(bufStatus.currentColumn)
+
+    for i in currentColumn ..< bufStatus.currentColumn: bufStatus.buffer[currentLine].delete(currentColumn)
+    bufStatus.expandedColumn = currentColumn
+    bufStatus.currentColumn = currentColumn
+
+  bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
+  inc(bufStatus.countChange)
 
 proc yankLines(status: var EditorStatus, first, last: int) =
   status.registers.yankedStr = @[]
   status.registers.yankedLines = @[]
   for i in first .. last: status.registers.yankedLines.add(status.bufStatus[status.currentBuffer].buffer[i])
 
-  status.commandWindow.erase
-  status.commandwindow.write(0, 0, fmt"{status.registers.yankedLines.len} line yanked")
-  status.commandWindow.refresh
+  status.commandWindow.writeMessageYankedLine(status.registers.yankedLines.len)
 
 proc pasteLines(status: var EditorStatus) =
   for i in 0 ..< status.registers.yankedLines.len:
@@ -311,9 +340,7 @@ proc yankString(status: var EditorStatus, length: int) =
   for i in status.bufStatus[status.currentBuffer].currentColumn ..< length:
     status.registers.yankedStr.add(status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine][i])
 
-  status.commandWindow.erase
-  status.commandwindow.write(0, 0, fmt"{status.registers.yankedStr.len} character yanked")
-  status.commandWindow.refresh
+  status.commandWindow.writeMessageYankedCharactor(status.registers.yankedStr.len)
 
 proc pasteString(status: var EditorStatus) =
   let index = status.currentBuffer
@@ -338,75 +365,85 @@ proc pasteBeforeCursor(status: var EditorStatus) =
   elif status.registers.yankedStr.len > 0:
     pasteString(status)
 
-proc replaceCurrentCharacter*(status: var EditorStatus, character: Rune) =
-  status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine][status.bufStatus[status.currentBuffer].currentColumn] = character
-  status.bufStatus[status.currentBuffer].view.reload(status.bufStatus[status.currentBuffer].buffer, status.bufStatus[status.currentBuffer].view.originalLine[0])
-  inc(status.bufStatus[status.currentBuffer].countChange)
+from insertmode import keyEnter
 
-proc addIndent*(status: var EditorStatus) =
-  status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].insert(newSeqWith(status.settings.tabStop, ru' '))
+proc replaceCurrentCharacter*(bufStatus: var BufferStatus, autoIndent: bool, character: Rune) =
+  if isEnterKey(character):
+    deleteCurrentCharacter(bufStatus)
+    keyEnter(bufStatus, autoIndent)
+  else:
+    bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn] = character
+    bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
+    inc(bufStatus.countChange)
 
-  status.bufStatus[status.currentBuffer].view.reload(status.bufStatus[status.currentBuffer].buffer, status.bufStatus[status.currentBuffer].view.originalLine[0])
-  inc(status.bufStatus[status.currentBuffer].countChange)
+proc addIndent*(bufStatus: var BufferStatus, tabStop: int) =
+  bufStatus.buffer[bufStatus.currentLine].insert(newSeqWith(tabStop, ru' '))
 
-proc deleteIndent*(status: var EditorStatus) =
-  if status.bufStatus[status.currentBuffer].buffer.len == 0: return
+  bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
+  inc(bufStatus.countChange)
 
-  let index = status.currentBuffer
+proc deleteIndent*(bufStatus: var BufferStatus, tabStop: int) =
+  if bufStatus.buffer.len == 0: return
 
-  if status.bufStatus[index].buffer[status.bufStatus[index].currentLine][0] == ru' ':
-    for i in 0 ..< status.settings.tabStop:
-      if status.bufStatus[index].buffer.len == 0 or status.bufStatus[index].buffer[status.bufStatus[index].currentLine][0] != ru' ': break
-      status.bufStatus[index].buffer[status.bufStatus[index].currentLine].delete(0, 0)
-  status.bufStatus[index].view.reload(status.bufStatus[index].buffer, status.bufStatus[index].view.originalLine[0])
-  inc(status.bufStatus[index].countChange)
+  if bufStatus.buffer[bufStatus.currentLine][0] == ru' ':
+    for i in 0 ..< tabStop:
+      if bufStatus.buffer.len == 0 or bufStatus.buffer[bufStatus.currentLine][0] != ru' ': break
+      bufStatus.buffer[bufStatus.currentLine].delete(0, 0)
+  bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
+  inc(bufStatus.countChange)
 
-proc joinLine(status: var EditorStatus) =
-  let index = status.currentBuffer
-  if status.bufStatus[index].currentLine == status.bufStatus[index].buffer.len - 1 or status.bufStatus[index].buffer[status.bufStatus[index].currentLine + 1].len < 1:
+proc joinLine(bufStatus: var BufferStatus) =
+  if bufStatus.currentLine == bufStatus.buffer.len - 1 or bufStatus.buffer[bufStatus.currentLine + 1].len < 1:
     return
 
-  status.bufStatus[index].buffer[status.bufStatus[index].currentLine].add(status.bufStatus[index].buffer[status.bufStatus[index].currentLine + 1])
-  status.bufStatus[index].buffer.delete(status.bufStatus[index].currentLine + 1, status.bufStatus[index].currentLine + 2)
+  bufStatus.buffer[bufStatus.currentLine].add(bufStatus.buffer[bufStatus.currentLine + 1])
+  bufStatus.buffer.delete(bufStatus.currentLine + 1, bufStatus.currentLine + 2)
 
-  status.bufStatus[index].view.reload(status.bufStatus[index].buffer, min(status.bufStatus[index].view.originalLine[0], status.bufStatus[index].buffer.high))
-  inc(status.bufStatus[index].countChange)
+  bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
+  inc(bufStatus.countChange)
 
 proc searchNextOccurrence(status: var EditorStatus) =
   if status.searchHistory.len < 1: return
 
   let keyword = status.searchHistory[status.searchHistory.high]
   
-  keyRight(status)
+  keyRight(status.bufStatus[status.currentBuffer])
   let searchResult = searchBuffer(status, keyword)
   if searchResult.line > -1:
     jumpLine(status, searchResult.line)
-    for column in 0 ..< searchResult.column:
-      keyRight(status)
+    for column in 0 ..< searchResult.column: keyRight(status.bufStatus[status.currentBuffer])
   elif searchResult.line == -1:
-    keyLeft(status)
+    keyLeft(status.bufStatus[status.currentBuffer])
 
 proc searchNextOccurrenceReversely(status: var EditorStatus) =
   if status.searchHistory.len < 1: return
 
   let keyword = status.searchHistory[status.searchHistory.high]
   
-  keyLeft(status)
+  keyLeft(status.bufStatus[status.currentBuffer])
   let searchResult = searchBufferReversely(status, keyword)
   if searchResult.line > -1:
     jumpLine(status, searchResult.line)
-    for column in 0 ..< searchResult.column:
-      keyRight(status)
+    for column in 0 ..< searchResult.column: keyRight(status.bufStatus[status.currentBuffer])
   elif searchResult.line == -1:
-    keyRight(status)
+    keyRight(status.bufStatus[status.currentBuffer])
 
 proc turnOffHighlighting*(status: var EditorStatus) =
   status.bufStatus[status.currentBuffer].isHighlight = false
   status.updateHighlight
 
-proc moveNextWindow(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow + 1)
+proc writeFileAndExit(status: var EditorStatus) =
+  if status.bufStatus[status.currentBuffer].filename.len == 0:
+    status.commandwindow.writeNoFileNameError
+    status.changeMode(Mode.normal)
+  else:
+    try:
+      saveFile(status.bufStatus[status.currentBuffer].filename, status.bufStatus[status.currentBuffer].buffer.toRunes, status.settings.characterEncoding)
+      closeWindow(status, status.currentMainWindow)
+    except IOError:
+      status.commandWindow.writeSaveError
 
-proc movePrevWindow(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindow - 1)
+proc forceExit(status: var Editorstatus) = closeWindow(status, status.currentMainWindow)
 
 proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.bufStatus[status.currentBuffer].cmdLoop == 0: status.bufStatus[status.currentBuffer].cmdLoop = 1
@@ -414,77 +451,90 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   let
     cmdLoop = status.bufStatus[status.currentBuffer].cmdLoop
     currentBuf = status.currentBuffer
-  
-  if key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
-    for i in 0 ..< cmdLoop: keyLeft(status)
+
+  if isControlK(key):
+    moveNextWindow(status)
+  elif isControlJ(key):
+    movePrevWindow(status)
+  elif isControlV(key):
+    status.changeMode(Mode.visualBlock)
+  elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
+    for i in 0 ..< cmdLoop: keyLeft(status.bufStatus[status.currentBuffer])
   elif key == ord('l') or isRightKey(key):
-    for i in 0 ..< cmdLoop: keyRight(status)
+    for i in 0 ..< cmdLoop: keyRight(status.bufStatus[status.currentBuffer])
   elif key == ord('k') or isUpKey(key):
-    for i in 0 ..< cmdLoop: keyUp(status)
+    for i in 0 ..< cmdLoop: keyUp(status.bufStatus[status.currentBuffer])
   elif key == ord('j') or isDownKey(key) or isEnterKey(key):
-    for i in 0 ..< cmdLoop: keyDown(status)
+    for i in 0 ..< cmdLoop: keyDown(status.bufStatus[status.currentBuffer])
   elif key == ord('x') or isDcKey(key):
     yankString(status, min(cmdLoop, status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len - status.bufStatus[currentBuf].currentColumn))
     for i in 0 ..< min(cmdLoop, status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len - status.bufStatus[currentBuf].currentColumn):
-      deleteCurrentCharacter(status)
+      deleteCurrentCharacter(status.bufStatus[status.currentBuffer])
   elif key == ord('^'):
-    moveToFirstNonBlankOfLine(status)
+    moveToFirstNonBlankOfLine(status.bufStatus[status.currentBuffer])
   elif key == ord('0') or isHomeKey(key):
-    moveToFirstOfLine(status)
+    moveToFirstOfLine(status.bufStatus[status.currentBuffer])
   elif key == ord('$') or isEndKey(key):
-    moveToLastOfLine(status)
+    moveToLastOfLine(status.bufStatus[status.currentBuffer])
   elif key == ord('-'):
-    moveToFirstOfPreviousLine(status)
+    moveToFirstOfPreviousLine(status.bufStatus[status.currentBuffer])
   elif key == ord('+'):
-    moveToFirstOfNextLine(status)
+    moveToFirstOfNextLine(status.bufStatus[status.currentBuffer])
   elif key == ord('g'):
-    if getKey(status.mainWindow[status.currentMainWindow]) == ord('g'): moveToFirstLine(status)
+    if getKey(status.mainWindowInfo[status.currentMainWindow].window) == ord('g'): moveToFirstLine(status)
   elif key == ord('G'):
     moveToLastLine(status)
-  elif isPageUpkey(key):
+  elif isPageUpkey(key) or isControlU(key):
     for i in 0 ..< cmdLoop: pageUp(status)
-  elif isPageDownKey(key):
+  elif isPageDownKey(key): ## Page down and Ctrl - F
     for i in 0 ..< cmdLoop: pageDown(status)
   elif key == ord('w'):
-    for i in 0 ..< cmdLoop: moveToForwardWord(status)
+    for i in 0 ..< cmdLoop: moveToForwardWord(status.bufStatus[status.currentBuffer])
   elif key == ord('b'):
-    for i in 0 ..< cmdLoop: moveToBackwardWord(status)
+    for i in 0 ..< cmdLoop: moveToBackwardWord(status.bufStatus[status.currentBuffer])
   elif key == ord('e'):
-    for i in 0 ..< cmdLoop: moveToForwardEndOfWord(status)
+    for i in 0 ..< cmdLoop: moveToForwardEndOfWord(status.bufStatus[status.currentBuffer])
+  elif key == ord('z'):
+    let key = getkey(status.mainWindowInfo[status.currentMainWindow].window)
+    if key == ord('.'): moveCenterScreen(status.bufStatus[status.currentBuffer])
+    elif key == ord('t'): scrollScreenTop(status.bufStatus[status.currentBuffer])
+    elif key == ord('b'): scrollScreenBottom(status.bufStatus[status.currentBuffer])
   elif key == ord('o'):
-    for i in 0 ..< cmdLoop: openBlankLineBelow(status)
+    for i in 0 ..< cmdLoop: openBlankLineBelow(status.bufStatus[status.currentBuffer])
     status.updateHighlight
     status.changeMode(Mode.insert)
   elif key == ord('O'):
-    for i in 0 ..< cmdLoop: openBlankLineAbove(status)
+    for i in 0 ..< cmdLoop: openBlankLineAbove(status.bufStatus[status.currentBuffer])
     status.updateHighlight
     status.changeMode(Mode.insert)
   elif key == ord('d'):
-    if getKey(status.mainWindow[status.currentMainWindow]) == ord('d'):
+    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    if key == ord('d'):
       yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
-      for i in 0 ..< min(cmdLoop, status.bufStatus[currentBuf].buffer.len - status.bufStatus[currentBuf].currentLine):deleteLine(status, status.bufStatus[currentBuf].currentLine)
+      for i in 0 ..< min(cmdLoop, status.bufStatus[currentBuf].buffer.len - status.bufStatus[currentBuf].currentLine): deleteLine(status.bufStatus[status.currentBuffer], status.bufStatus[currentBuf].currentLine)
+    elif key == ord('w'): deleteWord(status.bufStatus[status.currentBuffer])
   elif key == ord('y'):
-    if getkey(status.mainWindow[status.currentMainWindow]) == ord('y'):
+    if getkey(status.mainWindowInfo[status.currentMainWindow].window) == ord('y'):
       yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
   elif key == ord('p'):
     pasteAfterCursor(status)
   elif key == ord('P'):
     pasteBeforeCursor(status)
   elif key == ord('>'):
-    for i in 0 ..< cmdLoop: addIndent(status)
+    for i in 0 ..< cmdLoop: addIndent(status.bufStatus[status.currentBuffer], status.settings.tabStop)
   elif key == ord('<'):
-    for i in 0 ..< cmdLoop: deleteIndent(status)
+    for i in 0 ..< cmdLoop: deleteIndent(status.bufStatus[status.currentBuffer], status.settings.tabStop)
   elif key == ord('J'):
-    joinLine(status)
+    joinLine(status.bufStatus[status.currentBuffer])
   elif key == ord('r'):
     if cmdLoop > status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len - status.bufStatus[currentBuf].currentColumn: return
 
-    let ch = getKey(status.mainWindow[status.currentMainWindow])
+    let ch = getKey(status.mainWindowInfo[status.currentMainWindow].window)
     for i in 0 ..< cmdLoop:
       if i > 0:
         inc(status.bufStatus[status.currentBuffer].currentColumn)
         status.bufStatus[status.currentBuffer].expandedColumn = status.bufStatus[status.currentBuffer].currentColumn
-      replaceCurrentCharacter(status, ch)
+      replaceCurrentCharacter(status.bufStatus[status.currentBuffer], status.settings.autoIndent, ch)
   elif key == ord('n'):
     searchNextOccurrence(status)
   elif key == ord('N'):
@@ -499,17 +549,20 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('v'):
     status.changeMode(Mode.visual)
   elif key == ord('a'):
-    if status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len > 0: inc(status.bufStatus[currentBuf].currentColumn)
+    let lineWidth = status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len
+    if lineWidth == 0: discard
+    elif lineWidth == status.bufStatus[currentBuf].currentColumn: discard
+    else: inc(status.bufStatus[currentBuf].currentColumn)
     status.changeMode(Mode.insert)
   elif key == ord('A'):
     status.bufStatus[currentBuf].currentColumn = status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len
     status.changeMode(Mode.insert)
-  elif key == ord('L'):
-    moveNextWindow(status)
-  elif key == ord('H'):
-    movePrevWindow(status)
+  elif key == ord('Z'):
+    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    if  key == ord('Z'): writeFileAndExit(status)
+    elif key == ord('Q'): forceExit(status)
   elif isEscKey(key):
-    let key = getKey(status.mainWindow[status.currentMainWindow])
+    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
     if isEscKey(key): turnOffHighlighting(status)
   else:
     discard
@@ -521,14 +574,14 @@ proc normalMode*(status: var EditorStatus) =
 
   changeCursorType(status.settings.normalModeCursor)
 
-  while status.bufStatus[status.currentBuffer].mode == Mode.normal:
+  while status.bufStatus[status.currentBuffer].mode == Mode.normal and status.mainWindowInfo.len > 0:
     if status.bufStatus[status.currentBuffer].countChange > countChange:
       status.updateHighlight
       countChange = status.bufStatus[status.currentBuffer].countChange
 
     status.update
 
-    let key = getKey(status.mainWindow[status.currentMainWindow])
+    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())

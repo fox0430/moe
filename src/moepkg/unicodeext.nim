@@ -195,4 +195,4 @@ proc toGapBuffer*(runes: seq[Rune]): GapBuffer[seq[Rune]] = runes.split(ru'\n').
 proc toRunes*(buffer: GapBuffer[seq[Rune]]): seq[Rune] =
   for i in 0 ..< buffer.len:
     result.add(buffer[i])
-    result.add(ru'\n')
+    if i+1 < buffer.len: result.add(ru'\n')
