@@ -305,8 +305,8 @@ type EditorColor* = object
   errorMessageBg*: Color
   searchResult*: Color
   searchResultBg*: Color
-  visualMode: Color
-  visualModeBg: Color
+  visualMode*: Color
+  visualModeBg*: Color
   # color scheme
   defaultChar*: Color
   gtKeyword*: Color
