@@ -382,8 +382,8 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtKeyword: seaGreen1_2,
     gtStringLit: purple_1,
     gtDecNumber: aqua,
-    gtComment: white,
-    gtLongComment: white,
+    gtComment: gray,
+    gtLongComment: gray,
     gtWhitespace: gray100,
     # filer mode
     currentFile: gray100,
@@ -422,8 +422,8 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtKeyword: seaGreen1_2,
     gtStringLit: purple_1,
     gtDecNumber: aqua,
-    gtComment: white,
-    gtLongComment: white,
+    gtComment: gray,
+    gtLongComment: gray,
     gtWhitespace: gray100,
     # filer mode
     currentFile: gray100,
@@ -462,8 +462,8 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtKeyword: seaGreen1_2,
     gtStringLit: purple_1,
     gtDecNumber: aqua,
-    gtComment: white,
-    gtLongComment: white,
+    gtComment: gray,
+    gtLongComment: gray,
     gtWhitespace: gray100,
     # filer mode
     currentFile: black,
@@ -502,8 +502,8 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtKeyword: seaGreen1_2,
     gtStringLit: purple_1,
     gtDecNumber: aqua,
-    gtComment: white,
-    gtLongComment: white,
+    gtComment: gray,
+    gtLongComment: gray,
     gtWhitespace: gray100,
     # filer mode
     currentFile: gray100,

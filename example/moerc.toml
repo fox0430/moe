@@ -96,9 +96,9 @@ gtStringLitColor = "purple_1"
 
 gtDecNumberColor = "aqua"
 
-gtCommentColor = "white"
+gtCommentColor = "gray"
 
-gtLongCommentColor = "white"
+gtLongCommentColor = "gray"
 
 gtWhitespaceColor = "gray100"
 
