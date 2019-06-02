@@ -41,7 +41,6 @@ type EditorSettings* = object
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
-  undoRedoStack*: UndoRedoStack[seq[Rune]]
   highlight*: Highlight
   view*: EditorView
   language*: SourceLanguage
@@ -329,7 +328,7 @@ proc addNewBuffer*(status:var EditorStatus, filename: string)
 from commandview import writeFileOpenError
 
 proc addNewBuffer*(status:var EditorStatus, filename: string) =
-  status.bufStatus.add(BufferStatus(filename: filename.toRunes, undoRedoStack: initUndoRedoStack[seq[Rune]]()))
+  status.bufStatus.add(BufferStatus(filename: filename.toRunes))
   let index = status.bufStatus.high
 
   if filename == "" or existsFile(filename) == false:

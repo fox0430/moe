@@ -78,13 +78,16 @@ proc deleteBuffer(status: var EditorStatus, area: SelectArea) =
   for i in area.startLine .. area.endLine:
     if area.startLine == area.endLine:
       for j in area.startColumn .. area.endColumn:
-        status.bufStatus[status.currentBuffer].buffer[area.startLine].delete(area.startColumn)
+        # TODO: status.bufStatus[status.currentBuffer].buffer[area.startLine].delete(area.startColumn)
+        discard
     elif i == area.startLine and area.startColumn > 0:
       for j in area.startColumn .. status.bufStatus[status.currentBuffer].buffer[area.startLine].high:
-        status.bufStatus[status.currentBuffer].buffer[area.startLine].delete(area.startColumn)
+        # TODO: status.bufStatus[status.currentBuffer].buffer[area.startLine].delete(area.startColumn)
+        discard
     elif i == area.endLine and area.endColumn < status.bufStatus[status.currentBuffer].buffer[area.startLine].high:
       for j in 0 .. area.endColumn:
-        status.bufStatus[status.currentBuffer].buffer[area.startLine].delete(0)
+        # TODO: status.bufStatus[status.currentBuffer].buffer[area.startLine].delete(0)
+        discard
     elif status.bufStatus[status.currentBuffer].buffer.len == 1 and status.bufStatus[status.currentBuffer].buffer[0].len < 1:
       break
     else:

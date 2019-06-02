@@ -315,7 +315,6 @@ proc shellCommand(status: var EditorStatus, shellCommand: string) =
   status.commandWindow.refresh
 
 proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
-
   let replaceInfo = parseReplaceCommand(command)
 
   if replaceInfo.searhWord == ru"'\n'" and status.bufStatus[status.currentBuffer].buffer.len > 1:
@@ -324,16 +323,18 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
       endLine = status.bufStatus[status.currentBuffer].buffer.high
 
     for i in 0 .. status.bufStatus[status.currentBuffer].buffer.high - 2:
-      status.bufStatus[status.currentBuffer].buffer[startLine].insert(replaceInfo.replaceWord, status.bufStatus[status.currentBuffer].buffer[startLine].len)
+      # TODO: status.bufStatus[status.currentBuffer].buffer[startLine].insert(replaceInfo.replaceWord, status.bufStatus[status.currentBuffer].buffer[startLine].len)
       for j in 0 .. status.bufStatus[status.currentBuffer].buffer[startLine + 1].high:
-        status.bufStatus[status.currentBuffer].buffer[startLine].insert(status.bufStatus[status.currentBuffer].buffer[startLine + 1][j], status.bufStatus[status.currentBuffer].buffer[startLine].len)
+        # TODO: status.bufStatus[status.currentBuffer].buffer[startLine].insert(status.bufStatus[status.currentBuffer].buffer[startLine + 1][j], status.bufStatus[status.currentBuffer].buffer[startLine].len)
+        discard
       status.bufStatus[status.currentBuffer].buffer.delete(startLine + 1, startLine + 1)
   else:
     for i in 0 .. status.bufStatus[status.currentBuffer].buffer.high:
       let searchResult = searchBuffer(status, replaceInfo.searhWord)
       if searchResult.line > -1:
-        status.bufStatus[status.currentBuffer].buffer[searchResult.line].delete(searchResult.column, searchResult.column + replaceInfo.searhWord.high)
-        status.bufStatus[status.currentBuffer].buffer[searchResult.line].insert(replaceInfo.replaceWord, searchResult.column)
+        # TODO: status.bufStatus[status.currentBuffer].buffer[searchResult.line].delete(searchResult.column, searchResult.column + replaceInfo.searhWord.high)
+        # TODO: status.bufStatus[status.currentBuffer].buffer[searchResult.line].insert(replaceInfo.replaceWord, searchResult.column)
+        discard
 
   inc(status.bufStatus[status.currentBuffer].countChange)
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)

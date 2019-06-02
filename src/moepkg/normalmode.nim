@@ -82,10 +82,10 @@ proc deleteCurrentCharacter*(bufStatus: var BufferStatus) =
   if currentLine >= bufStatus.buffer.high and currentColumn > bufStatus.buffer[currentLine].high: return 
 
   if currentColumn == bufStatus.buffer[currentLine].len:
-    bufStatus.buffer[currentLine].insert(bufStatus.buffer[currentLine + 1], currentColumn)
+    # TODO: bufStatus.buffer[currentLine].insert(bufStatus.buffer[currentLine + 1], currentColumn)
     bufStatus.buffer.delete(currentLine + 1, currentLine + 1)
   else:
-    bufStatus.buffer[currentLine].delete(currentColumn)
+    # TODO: bufStatus.buffer[currentLine].delete(currentColumn)
     if bufStatus.buffer[currentLine].len > 0 and currentColumn == bufStatus.buffer[currentLine].len and currentMode != Mode.insert:
       bufStatus.currentColumn = bufStatus.buffer[bufStatus.currentLine].len-1
       bufStatus.expandedColumn = bufStatus.buffer[bufStatus.currentLine].len-1
@@ -299,7 +299,7 @@ proc yankString(status: var EditorStatus, length: int) =
 
 proc pasteString(status: var EditorStatus) =
   let index = status.currentBuffer
-  status.bufStatus[index].buffer[status.bufStatus[index].currentLine].insert(status.registers.yankedStr, status.bufStatus[index].currentColumn)
+  # TODO: status.bufStatus[index].buffer[status.bufStatus[index].currentLine].insert(status.registers.yankedStr, status.bufStatus[index].currentColumn)
   status.bufStatus[status.currentBuffer].currentColumn += status.registers.yankedStr.high
 
   status.bufStatus[index].view.reload(status.bufStatus[index].buffer, min(status.bufStatus[index].view.originalLine[0], status.bufStatus[index].buffer.high))
@@ -327,17 +327,13 @@ proc replaceCurrentCharacter*(bufStatus: var BufferStatus, autoIndent: bool, cha
     deleteCurrentCharacter(bufStatus)
     keyEnter(bufStatus, autoIndent)
   else:
-    var oldLine, newLine: seq[Rune]
-    oldLine = bufStatus.buffer[bufStatus.currentLine]
-    bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn] = character
-    newLine = bufStatus.buffer[bufStatus.currentLine]
-    push[seq[Rune]](bufStatus.undoRedoStack, newAssignCommand[seq[Rune]](oldLine, newLine, bufStatus.currentLine))
+    # TODO: bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn] = character
 
     bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
     inc(bufStatus.countChange)
 
 proc addIndent*(bufStatus: var BufferStatus, tabStop: int) =
-  bufStatus.buffer[bufStatus.currentLine].insert(newSeqWith(tabStop, ru' '))
+  # TODO: bufStatus.buffer[bufStatus.currentLine].insert(newSeqWith(tabStop, ru' '))
 
   bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
   inc(bufStatus.countChange)
@@ -348,7 +344,7 @@ proc deleteIndent*(bufStatus: var BufferStatus, tabStop: int) =
   if bufStatus.buffer[bufStatus.currentLine][0] == ru' ':
     for i in 0 ..< tabStop:
       if bufStatus.buffer.len == 0 or bufStatus.buffer[bufStatus.currentLine][0] != ru' ': break
-      bufStatus.buffer[bufStatus.currentLine].delete(0, 0)
+      # TODO* bufStatus.buffer[bufStatus.currentLine].delete(0, 0)
   bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
   inc(bufStatus.countChange)
 
@@ -356,8 +352,8 @@ proc joinLine(bufStatus: var BufferStatus) =
   if bufStatus.currentLine == bufStatus.buffer.len - 1 or bufStatus.buffer[bufStatus.currentLine + 1].len < 1:
     return
 
-  bufStatus.buffer[bufStatus.currentLine].add(bufStatus.buffer[bufStatus.currentLine + 1])
-  bufStatus.buffer.delete(bufStatus.currentLine + 1, bufStatus.currentLine + 1)
+  # TODO: bufStatus.buffer[bufStatus.currentLine].add(bufStatus.buffer[bufStatus.currentLine + 1])
+  # TODO: bufStatus.buffer.delete(bufStatus.currentLine + 1, bufStatus.currentLine + 1)
 
   bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)
@@ -393,14 +389,22 @@ proc turnOffHighlighting*(status: var EditorStatus) =
   status.updateHighlight
 
 proc undo(bufStatus: var BufferStatus) =
-  if not bufStatus.undoRedoStack.canUndo: return
-  undo[seq[Rune], GapBuffer[seq[Rune]]](bufStatus.undoRedoStack, bufStatus.buffer)
+  if not bufStatus.buffer.canUndo: return
+  bufStatus.buffer.undo
   bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
+  while not bufStatus.view.findCursorPosition(bufStatus.currentLine, bufStatus.currentColumn).success:
+    (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.prev(bufStatus.currentLine, bufStatus.currentColumn)
+  if bufStatus.currentColumn == bufStatus.buffer[bufStatus.currentLine].len and (bufStatus.currentLine, bufStatus.currentColumn) != (0, 0):
+    (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.prev(bufStatus.currentLine, bufStatus.currentColumn)
 
 proc redo(bufStatus: var BufferStatus) =
-  if not bufStatus.undoRedoStack.canRedo: return
-  redo[seq[Rune], GapBuffer[seq[Rune]]](bufStatus.undoRedoStack, bufStatus.buffer)
+  if not bufStatus.buffer.canRedo: return
+  bufStatus.buffer.redo
   bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
+  while not bufStatus.view.findCursorPosition(bufStatus.currentLine, bufStatus.currentColumn).success:
+    (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.prev(bufStatus.currentLine, bufStatus.currentColumn)
+  if bufStatus.currentColumn == bufStatus.buffer[bufStatus.currentLine].len and (bufStatus.currentLine, bufStatus.currentColumn) != (0, 0):
+    (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.prev(bufStatus.currentLine, bufStatus.currentColumn)
 
 proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.bufStatus[status.currentBuffer].cmdLoop == 0: status.bufStatus[status.currentBuffer].cmdLoop = 1

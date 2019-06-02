@@ -1,8 +1,13 @@
+import macros
+import undoredostack
+export undoredostack
+
 type GapBuffer*[T] = object
   buffer: seq[T]
   size: int # 意味のあるデータが実際に格納されているサイズ
   capacity: int # Amount of secured memory
   gapBegin, gapEnd: int # 半開区間[gapBegin,gapEnd)を隙間とする
+  undoRedoStack: UndoRedoStack[T]
 
 proc gapLen(gapBuffer: GapBuffer): int = gapBuffer.gapEnd - gapBuffer.gapBegin
 
@@ -31,10 +36,12 @@ proc reserve(gapBuffer: var GapBuffer, capacity: int) =
   gapBuffer.gapEnd = capacity
   gapBuffer.capacity = capacity
 
-proc insert*[T](gapBuffer: var GapBuffer, element: T, position: int) =
+proc insert*[T](gapBuffer: var GapBuffer, element: T, position: int, pushToStack: bool = true) =
   ## positionの直前に要素を挿入する.末尾に追加したい場合はpositionにバッファの要素数を渡す.
   ## ex.空のバッファに要素を追加する場合はpositionに0を渡す.
   doAssert(0<=position and position <= gapBuffer.size, "Gapbuffer: Invalid position.")
+
+  if pushToStack: gapBuffer.undoRedoStack.push(newInsertCommand[T](element, position))
 
   if gapBuffer.size == gapBuffer.capacity: gapBuffer.reserve(gapBuffer.capacity*2)
   if gapBuffer.gapBegin != position: gapBuffer.makeGap(position)
@@ -42,19 +49,20 @@ proc insert*[T](gapBuffer: var GapBuffer, element: T, position: int) =
   inc(gapBuffer.gapBegin)
   inc(gapBuffer.size)
 
-proc add*[T](gapBuffer: var GapBuffer[T], val: T) =
-  gapBuffer.insert(val, gapBuffer.len)
+proc add*[T](gapBuffer: var GapBuffer[T], val: T, pushToStack: bool = true) =
+  gapBuffer.insert(val, gapBuffer.len, pushToStack)
 
 proc initGapBuffer*[T](): GapBuffer[T] =
   result.buffer = newSeq[T](1)
   result.capacity = 1
   result.gapEnd = 1
+  result.undoRedoStack = initUndoRedoStack[T]()
 
 proc initGapBuffer*[T](elements: seq[T]): GapBuffer[T] =
   result = initGapBuffer[T]()
   for e in elements: result.add(e)
 
-proc delete*(gapBuffer: var GapBuffer, first, last: int) =
+proc deleteInterval(gapBuffer: var GapBuffer, first, last: int) =
   ## Delete [first, last] elements
   let
     delBegin = first
@@ -80,11 +88,23 @@ proc delete*(gapBuffer: var GapBuffer, first, last: int) =
   gapBuffer.size -= delEnd - delBegin
   while gapBuffer.size > 0 and gapBuffer.size*4 <= gapBuffer.capacity: gapBuffer.reserve(gapBuffer.capacity div 2)
 
-proc assign*[T](gapBuffer: var GapBuffer, val: T, index: int) =
+proc delete*[T](gapBuffer: var GapBuffer[T], index: int, pushToStack: bool = true) =
+  ## Delete the i-th element
+  if pushToStack: gapBuffer.undoRedoStack.push(newDeleteCommand[T](gapBuffer[index], index))
+  gapBuffer.deleteInterval(index, index)
+
+proc delete*[T](gapBuffer: var GapBuffer[T], first, last: int, pushToStack: bool = true) =
+  ## Delete [first, last] elements
+  for i in first..last: gapBuffer.delete(i)
+
+proc assign*[T](gapBuffer: var GapBuffer, val: T, index: int, pushToStack: bool = true) =
   doAssert(0<=index and index<gapBuffer.size, "Gapbuffer: Invalid index.")
 
+  if pushToStack: gapBuffer.undoRedoStack.push(newAssignCommand[T](gapBuffer[index], val, index))
   if index < gapBuffer.gapBegin: gapBuffer.buffer[index] = val
   else: gapBuffer.buffer[gapBuffer.gapEnd+(index-gapBuffer.gapBegin)] = val
+
+proc `[]=`*[T](gapBuffer: var GapBuffer, index: int, val: T) = gapBuffer.assign(val, index)
 
 proc `[]`*[T](gapBuffer: GapBuffer[T], index: int): T =
   doAssert(0<=index and index<gapBuffer.size, "Gapbuffer: Invalid index. index = "&($index)&", gapBuffer.size = "&($gapBuffer.size))
@@ -92,13 +112,91 @@ proc `[]`*[T](gapBuffer: GapBuffer[T], index: int): T =
   if index < gapBuffer.gapBegin: return gapBuffer.buffer[index]
   return gapBuffer.buffer[gapBuffer.gapEnd+(index-gapBuffer.gapBegin)]
 
-proc `[]`*[T](gapBuffer: var GapBuffer[T], index: int): var T =
-  doAssert(0<=index and index<gapBuffer.size, "Gapbuffer: Invalid index.")
+proc canUndo*(gapBuffer: GapBuffer): bool = gapBuffer.undoRedoStack.canUndo
 
-  if index < gapBuffer.gapBegin: return gapBuffer.buffer[index]
-  return gapBuffer.buffer[gapBuffer.gapEnd+(index-gapBuffer.gapBegin)]
+proc canRedo*(gapBuffer: GapBuffer): bool = gapBuffer.undoRedoStack.canRedo
 
-proc `[]=`*[T](gapBuffer: var GapBuffer, index: int, val: T) = gapBuffer.assign(val, index)
+proc undo*(gapBuffer: var GapBuffer) = gapBuffer.undoRedoStack.undo(gapBuffer)
+
+proc redo*(gapBuffer: var GapBuffer) = gapBuffer.undoRedoStack.redo(gapBuffer)
+
+#[
+proc replaceBrackerExpr(n, p: NimNode, bufferName: string, canReplace: bool, count: var int): seq[NimNode] {.compileTime.} =
+  if canReplace and n.kind == nnkBracketExpr and n[0].repr == bufferName:
+    for i, child in p.pairs:
+      if child == n:
+        p[i] = ident("newLine" & $count)
+        break
+    return @[n]
+  
+  var replaces: seq[(int, NimNode)]
+  for i, child in n.pairs:
+    let bracketExpr = replaceBrackerExpr(child, n, bufferName,
+      not (n.kind in [nnkIfStmt, nnkWhenStmt, nnkForStmt, nnkParForStmt, nnkWhileStmt, nnkCaseStmt]) and (canReplace or n.kind == nnkStmtList),
+      count)
+    if bracketExpr.len > 0:
+      if n.kind == nnkStmtList:
+        replaces.add((i, bracketExpr[0])) # TODO: Can I ignore bracketExpr[1..bracketExpr.high] ?
+        continue
+
+      result.add(bracketExpr)
+      continue
+
+  if replaces.len == 0:
+    return result
+
+  for i, b in replaces.items:
+    let replace = newStmtList(
+      nnkVarSection.newTree(
+        newIdentDefs(ident("oldLine" & $count), nnkBracketExpr.newTree(ident("seq"), ident("Rune"))),
+        newIdentDefs(ident("newLine" & $count), nnkBracketExpr.newTree(ident("seq"), ident("Rune")))
+      ),
+      nnkAsgn.newTree(ident("oldLine" & $count), b.copy),
+      n[i],
+      newIfStmt((
+        infix(ident("oldLine" & $count), "!=", ident("newLine" & $count)),
+        newCall(
+          # proc
+          nnkBracketExpr.newTree(
+            ident("push"),
+            newNimNode(nnkBracketExpr).add(
+              ident("seq"),
+              ident("Rune")
+            )
+          ),
+          # args
+          newDotExpr(
+            parseExpr(bufferName),
+            ident("undoRedoStack")
+          ),
+          newCall(
+            nnkBracketExpr.newTree(
+              ident("newAssignCommand"),
+              nnkBracketExpr.newTree(
+                ident("seq"),
+                ident("Rune")
+              )
+            ),
+            ident("oldLine" & $count),
+            ident("newLine" & $count),
+            b[1] # line
+          )
+        )
+      ))
+    )
+    n[i] = replace
+    inc(count)
+
+  return @[]
+
+macro bufferIndexer*(bufferName: static[string], x: untyped): untyped =
+  echo(x.astGenRepr)
+  echo("before: \n" & x.repr)
+  var count = 0
+  discard replaceBrackerExpr(x, nil, bufferName, true, count)
+  result = x
+  echo("after: \n" & result.repr)
+]#
 
 proc len*(gapBuffer: GapBuffer): int = gapBuffer.size
 

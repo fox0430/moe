@@ -1,26 +1,36 @@
-import deques, strutils, strformat, sequtils, terminal
+import deques, strutils, strformat, sequtils, terminal, macros
 from os import execShellCmd
 import ui, editorstatus, editorview, cursor, gapbuffer, editorview, normalmode, unicodeext, highlight, undoredostack
 
 proc insertCloseParen(bufStatus: var BufferStatus, c: char) =
   case c
   of '(':
-    bufStatus.buffer[bufStatus.currentLine].insert(ru')', bufStatus.currentColumn)
+    # TODO: bufStatus.buffer[bufStatus.currentLine].insert(ru')', bufStatus.currentColumn)
+    discard
   of '{':
-    bufStatus.buffer[bufStatus.currentLine].insert(ru'}', bufStatus.currentColumn)
+    # TODO: bufStatus.buffer[bufStatus.currentLine].insert(ru'}', bufStatus.currentColumn)
+    discard
   of '[':
-    bufStatus.buffer[bufStatus.currentLine].insert(ru']', bufStatus.currentColumn)
+    # TODO: bufStatus.buffer[bufStatus.currentLine].insert(ru']', bufStatus.currentColumn)
+    discard
   of '"':
-    bufStatus.buffer[bufStatus.currentLine].insert(ru('\"'), bufStatus.currentColumn)
+    # TODO: bufStatus.buffer[bufStatus.currentLine].insert(ru('\"'), bufStatus.currentColumn)
+    discard
   of '\'':
-    bufStatus.buffer[bufStatus.currentLine].insert(ru'\'', bufStatus.currentColumn)
+    # TODO: bufStatus.buffer[bufStatus.currentLine].insert(ru'\'', bufStatus.currentColumn)
+    discard
   else:
     doAssert(false, fmt"Invalid parentheses: {c}")
 
 proc isOpenParen(ch: char): bool = ch in ['(', '{', '[', '\"', '\'']
 
 proc insertCharacter(bufStatus: var BufferStatus, autoCloseParen: bool, c: Rune) =
-  bufStatus.buffer[bufStatus.currentLine].insert(c, bufStatus.currentColumn)
+  var oldLine, newLine: seq[Rune]
+  oldLine = bufStatus.buffer[bufStatus.currentLine]
+  newLine = bufStatus.buffer[bufStatus.currentLine]
+  newLine.insert(c, bufStatus.currentColumn)
+  if oldLine != newLine:
+    bufStatus.buffer[bufStatus.currentLine] = newLine
   inc(bufStatus.currentColumn)
 
   if autoCloseParen and canConvertToChar(c):
@@ -35,19 +45,19 @@ proc keyBackspace(bufStatus: var BufferStatus) =
 
   if bufStatus.currentColumn == 0:
     bufStatus.currentColumn = bufStatus.buffer[bufStatus.currentLine - 1].len
-    bufStatus.buffer[bufStatus.currentLine - 1] &= bufStatus.buffer[bufStatus.currentLine]
+    # TODO: bufStatus.buffer[bufStatus.currentLine - 1] &= bufStatus.buffer[bufStatus.currentLine]
     bufStatus.buffer.delete(bufStatus.currentLine, bufStatus.currentLine)
     dec(bufStatus.currentLine)
   else:
     dec(bufStatus.currentColumn)
-    bufStatus.buffer[bufStatus.currentLine].delete(bufStatus.currentColumn)
+    # TODO: bufStatus.buffer[bufStatus.currentLine].delete(bufStatus.currentColumn)
 
   bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)
 
 proc insertIndent(bufStatus: var BufferStatus) =
   let indent = min(countRepeat(bufStatus.buffer[bufStatus.currentLine], Whitespace, 0), bufStatus.currentColumn)
-  bufStatus.buffer[bufStatus.currentLine + 1] &= repeat(' ', indent).toRunes
+  # TODO: bufStatus.buffer[bufStatus.currentLine + 1] &= repeat(' ', indent).toRunes
 
 proc keyEnter*(bufStatus: var BufferStatus, autoIndent: bool) =
   bufStatus.buffer.insert(ru"", bufStatus.currentLine + 1)
@@ -58,17 +68,17 @@ proc keyEnter*(bufStatus: var BufferStatus, autoIndent: bool) =
     var startOfCopy = max(countRepeat(bufStatus.buffer[bufStatus.currentLine], Whitespace, 0), bufStatus.currentColumn)
     startOfCopy += countRepeat(bufStatus.buffer[bufStatus.currentLine], Whitespace, startOfCopy)
 
-    bufStatus.buffer[bufStatus.currentLine + 1] &= bufStatus.buffer[bufStatus.currentLine][startOfCopy ..< bufStatus.buffer[bufStatus.currentLine].len]
+    # TODO: bufStatus.buffer[bufStatus.currentLine + 1] &= bufStatus.buffer[bufStatus.currentLine][startOfCopy ..< bufStatus.buffer[bufStatus.currentLine].len]
     let
       first = bufStatus.currentColumn
       last = bufStatus.buffer[bufStatus.currentLine].high
-    if first <= last: bufStatus.buffer[bufStatus.currentLine].delete(first, last)
+    # TODO: if first <= last: bufStatus.buffer[bufStatus.currentLine].delete(first, last)
 
     inc(bufStatus.currentLine)
     bufStatus.currentColumn = countRepeat(bufStatus.buffer[bufStatus.currentLine], Whitespace, 0)
   else:
-    bufStatus.buffer[bufStatus.currentLine + 1] &= bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn ..< bufStatus.buffer[bufStatus.currentLine].len]
-    bufStatus.buffer[bufStatus.currentLine].delete(bufStatus.currentColumn, bufStatus.buffer[bufStatus.currentLine].high)
+    # TODO: bufStatus.buffer[bufStatus.currentLine + 1] &= bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn ..< bufStatus.buffer[bufStatus.currentLine].len]
+    # TODO: bufStatus.buffer[bufStatus.currentLine].delete(bufStatus.currentColumn, bufStatus.buffer[bufStatus.currentLine].high)
 
     inc(bufStatus.currentLine)
     bufStatus.currentColumn = 0
