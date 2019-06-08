@@ -4,6 +4,12 @@ import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutil
 type Mode* = enum
   normal, insert, visual, visualBlock, replace, ex, filer, search, bufManager
 
+type SelectArea* = object
+  startLine*: int
+  startColumn*: int
+  endLine*: int
+  endColumn*: int
+
 type Registers* = object
   yankedLines*: seq[seq[Rune]]
   yankedStr*: seq[Rune]
@@ -44,6 +50,7 @@ type BufferStatus* = object
   view*: EditorView
   language*: SourceLanguage
   cursor*: CursorPosition
+  selectArea*: SelectArea
   isHighlight*: bool
   filename*: seq[Rune]
   openDir: seq[Rune]
@@ -266,13 +273,15 @@ proc update*(status: var EditorStatus) =
     let
       bufIndex = status.mainWindowInfo[i].bufferIndex
       isCurrentMainWin = if i == status.currentMainWindow: true else: false
-      color = EditorColorPair.defaultChar
       isLineNumber = status.settings.lineNumber
       isCurrentLineNumber = status.settings.currentLineNumber
       isCursorLine = status.settings.cursorLine
+      isVisualMode = if status.bufStatus[bufIndex].mode == Mode.visual or status.bufStatus[bufIndex].mode == Mode.visualBlock: true else: false
+      startSelectedLine = status.bufStatus[bufIndex].selectArea.startLine
+      endSelectedLine = status.bufStatus[bufIndex].selectArea.endLine
 
     status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
-    status.bufStatus[bufIndex].view.update(status.mainWindowInfo[i].window, isLineNumber, isCurrentLineNumber, isCursorLine, isCurrentMainWin, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, color, status.bufStatus[bufIndex].currentLine)
+    status.bufStatus[bufIndex].view.update(status.mainWindowInfo[i].window, isLineNumber, isCurrentLineNumber, isCursorLine, isCurrentMainWin, isVisualMode, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, status.bufStatus[bufIndex].currentLine, startSelectedLine, endSelectedLine)
 
     status.bufStatus[bufIndex].cursor.update(status.bufStatus[bufIndex].view, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 

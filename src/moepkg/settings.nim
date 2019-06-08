@@ -145,6 +145,18 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Theme"].contains("errorMessageBg"):
       ColorThemeTable[ColorTheme.config].errorMessageBg = color("errorMessageBg")
 
+    if settings["Theme"].contains("searchResult"):
+      ColorThemeTable[ColorTheme.config].searchResult = color("searchResult")
+
+    if settings["Theme"].contains("searchResultBg"):
+      ColorThemeTable[ColorTheme.config].searchResultBg = color("searchResultBg")
+
+    if settings["Theme"].contains("visualMode"):
+      ColorThemeTable[ColorTheme.config].visualMode = color("visualMode")
+
+    if settings["Theme"].contains("visualModeBg"):
+      ColorThemeTable[ColorTheme.config].visualModeBg = color("visualModeBg")
+
     if settings["Theme"].contains("defaultCharactorColor"):
       ColorThemeTable[ColorTheme.config].defaultChar = color("defaultCharactorColor")
 

@@ -80,6 +80,14 @@ errorMessage = "red"
 
 errorMessageBg = "default"
 
+searchResult = "default"
+
+searchResultBg = "red"
+
+visualMode = "gray100"
+
+visualModeBg = "purple_1"
+
 defaultCharactorColor = "gray100"
 
 gtKeywordColor = "seaGreen1_2"
@@ -88,9 +96,9 @@ gtStringLitColor = "purple_1"
 
 gtDecNumberColor = "aqua"
 
-gtCommentColor = "white"
+gtCommentColor = "gray"
 
-gtLongCommentColor = "white"
+gtLongCommentColor = "gray"
 
 gtWhitespaceColor = "gray100"
 
