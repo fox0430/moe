@@ -9,7 +9,7 @@ bin           = @["moe"]
 
 # Dependencies
 
-requires "nim >= 0.19.6"
+requires "nim >= 0.20.0"
 requires "https://github.com/walkre-niboshi/nim-ncurses >= 1.0.1"
 requires "unicodedb >= 0.7.0"
 requires "parsetoml >= 0.4.0"
