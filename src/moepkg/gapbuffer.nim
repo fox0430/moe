@@ -112,6 +112,8 @@ proc `[]`*[T](gapBuffer: GapBuffer[T], index: int): T =
   if index < gapBuffer.gapBegin: return gapBuffer.buffer[index]
   return gapBuffer.buffer[gapBuffer.gapEnd+(index-gapBuffer.gapBegin)]
 
+proc beginNewSuitIfNeeded*(gapBuffer: var GapBuffer) = gapBuffer.undoRedoStack.beginNewSuitIfNeeded
+
 proc canUndo*(gapBuffer: GapBuffer): bool = gapBuffer.undoRedoStack.canUndo
 
 proc canRedo*(gapBuffer: GapBuffer): bool = gapBuffer.undoRedoStack.canRedo
@@ -119,84 +121,6 @@ proc canRedo*(gapBuffer: GapBuffer): bool = gapBuffer.undoRedoStack.canRedo
 proc undo*(gapBuffer: var GapBuffer) = gapBuffer.undoRedoStack.undo(gapBuffer)
 
 proc redo*(gapBuffer: var GapBuffer) = gapBuffer.undoRedoStack.redo(gapBuffer)
-
-#[
-proc replaceBrackerExpr(n, p: NimNode, bufferName: string, canReplace: bool, count: var int): seq[NimNode] {.compileTime.} =
-  if canReplace and n.kind == nnkBracketExpr and n[0].repr == bufferName:
-    for i, child in p.pairs:
-      if child == n:
-        p[i] = ident("newLine" & $count)
-        break
-    return @[n]
-  
-  var replaces: seq[(int, NimNode)]
-  for i, child in n.pairs:
-    let bracketExpr = replaceBrackerExpr(child, n, bufferName,
-      not (n.kind in [nnkIfStmt, nnkWhenStmt, nnkForStmt, nnkParForStmt, nnkWhileStmt, nnkCaseStmt]) and (canReplace or n.kind == nnkStmtList),
-      count)
-    if bracketExpr.len > 0:
-      if n.kind == nnkStmtList:
-        replaces.add((i, bracketExpr[0])) # TODO: Can I ignore bracketExpr[1..bracketExpr.high] ?
-        continue
-
-      result.add(bracketExpr)
-      continue
-
-  if replaces.len == 0:
-    return result
-
-  for i, b in replaces.items:
-    let replace = newStmtList(
-      nnkVarSection.newTree(
-        newIdentDefs(ident("oldLine" & $count), nnkBracketExpr.newTree(ident("seq"), ident("Rune"))),
-        newIdentDefs(ident("newLine" & $count), nnkBracketExpr.newTree(ident("seq"), ident("Rune")))
-      ),
-      nnkAsgn.newTree(ident("oldLine" & $count), b.copy),
-      n[i],
-      newIfStmt((
-        infix(ident("oldLine" & $count), "!=", ident("newLine" & $count)),
-        newCall(
-          # proc
-          nnkBracketExpr.newTree(
-            ident("push"),
-            newNimNode(nnkBracketExpr).add(
-              ident("seq"),
-              ident("Rune")
-            )
-          ),
-          # args
-          newDotExpr(
-            parseExpr(bufferName),
-            ident("undoRedoStack")
-          ),
-          newCall(
-            nnkBracketExpr.newTree(
-              ident("newAssignCommand"),
-              nnkBracketExpr.newTree(
-                ident("seq"),
-                ident("Rune")
-              )
-            ),
-            ident("oldLine" & $count),
-            ident("newLine" & $count),
-            b[1] # line
-          )
-        )
-      ))
-    )
-    n[i] = replace
-    inc(count)
-
-  return @[]
-
-macro bufferIndexer*(bufferName: static[string], x: untyped): untyped =
-  echo(x.astGenRepr)
-  echo("before: \n" & x.repr)
-  var count = 0
-  discard replaceBrackerExpr(x, nil, bufferName, true, count)
-  result = x
-  echo("after: \n" & result.repr)
-]#
 
 proc len*(gapBuffer: GapBuffer): int = gapBuffer.size
 

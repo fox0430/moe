@@ -82,10 +82,18 @@ proc deleteCurrentCharacter*(bufStatus: var BufferStatus) =
   if currentLine >= bufStatus.buffer.high and currentColumn > bufStatus.buffer[currentLine].high: return 
 
   if currentColumn == bufStatus.buffer[currentLine].len:
-    # TODO: bufStatus.buffer[currentLine].insert(bufStatus.buffer[currentLine + 1], currentColumn)
+    let oldLine = bufStatus.buffer[bufStatus.currentLine]
+    var newLine = bufStatus.buffer[bufStatus.currentLine]
+    newLine.insert(bufStatus.buffer[currentLine + 1], currentColumn)
+    if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
+
     bufStatus.buffer.delete(currentLine + 1, currentLine + 1)
   else:
-    # TODO: bufStatus.buffer[currentLine].delete(currentColumn)
+    let oldLine = bufStatus.buffer[bufStatus.currentLine]
+    var newLine = bufStatus.buffer[bufStatus.currentLine]
+    newLine.delete(currentColumn)
+    if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
+    
     if bufStatus.buffer[currentLine].len > 0 and currentColumn == bufStatus.buffer[currentLine].len and currentMode != Mode.insert:
       bufStatus.currentColumn = bufStatus.buffer[bufStatus.currentLine].len-1
       bufStatus.expandedColumn = bufStatus.buffer[bufStatus.currentLine].len-1
@@ -299,7 +307,12 @@ proc yankString(status: var EditorStatus, length: int) =
 
 proc pasteString(status: var EditorStatus) =
   let index = status.currentBuffer
-  # TODO: status.bufStatus[index].buffer[status.bufStatus[index].currentLine].insert(status.registers.yankedStr, status.bufStatus[index].currentColumn)
+
+  let oldLine = status.bufStatus[index].buffer[status.bufStatus[index].currentLine]
+  var newLine = status.bufStatus[index].buffer[status.bufStatus[index].currentLine]
+  newLine.insert(status.registers.yankedStr, status.bufStatus[index].currentColumn)
+  if oldLine != newLine: status.bufStatus[index].buffer[status.bufStatus[index].currentLine] = newLine
+
   status.bufStatus[status.currentBuffer].currentColumn += status.registers.yankedStr.high
 
   status.bufStatus[index].view.reload(status.bufStatus[index].buffer, min(status.bufStatus[index].view.originalLine[0], status.bufStatus[index].buffer.high))
@@ -327,13 +340,19 @@ proc replaceCurrentCharacter*(bufStatus: var BufferStatus, autoIndent: bool, cha
     deleteCurrentCharacter(bufStatus)
     keyEnter(bufStatus, autoIndent)
   else:
-    # TODO: bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn] = character
+    let oldLine = bufStatus.buffer[bufStatus.currentLine]
+    var newLine = bufStatus.buffer[bufStatus.currentLine]
+    newLine[bufStatus.currentColumn] = character
+    if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
 
     bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
     inc(bufStatus.countChange)
 
 proc addIndent*(bufStatus: var BufferStatus, tabStop: int) =
-  # TODO: bufStatus.buffer[bufStatus.currentLine].insert(newSeqWith(tabStop, ru' '))
+  let oldLine = bufStatus.buffer[bufStatus.currentLine]
+  var newLine = bufStatus.buffer[bufStatus.currentLine]
+  newLine.insert(newSeqWith(tabStop, ru' '))
+  if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
 
   bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
   inc(bufStatus.countChange)
@@ -344,7 +363,10 @@ proc deleteIndent*(bufStatus: var BufferStatus, tabStop: int) =
   if bufStatus.buffer[bufStatus.currentLine][0] == ru' ':
     for i in 0 ..< tabStop:
       if bufStatus.buffer.len == 0 or bufStatus.buffer[bufStatus.currentLine][0] != ru' ': break
-      # TODO* bufStatus.buffer[bufStatus.currentLine].delete(0, 0)
+      let oldLine = bufStatus.buffer[bufStatus.currentLine]
+      var newLine = bufStatus.buffer[bufStatus.currentLine]
+      newLine.delete(0, 0)
+      if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
   bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
   inc(bufStatus.countChange)
 
@@ -352,8 +374,12 @@ proc joinLine(bufStatus: var BufferStatus) =
   if bufStatus.currentLine == bufStatus.buffer.len - 1 or bufStatus.buffer[bufStatus.currentLine + 1].len < 1:
     return
 
-  # TODO: bufStatus.buffer[bufStatus.currentLine].add(bufStatus.buffer[bufStatus.currentLine + 1])
-  # TODO: bufStatus.buffer.delete(bufStatus.currentLine + 1, bufStatus.currentLine + 1)
+  let oldLine = bufStatus.buffer[bufStatus.currentLine]
+  var newLine = bufStatus.buffer[bufStatus.currentLine]
+  newLine.add(bufStatus.buffer[bufStatus.currentLine + 1])
+  if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
+
+  bufStatus.buffer.delete(bufStatus.currentLine + 1, bufStatus.currentLine + 1)
 
   bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)
@@ -531,6 +557,8 @@ proc normalMode*(status: var EditorStatus) =
     status.update
 
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+
+    status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())

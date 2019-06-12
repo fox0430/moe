@@ -74,30 +74,55 @@ proc inverseCommand[T](command: Command[T]): Command[T] =
   of insert: inverseOfInsert(command)
   of assign: inverseOfAssign(command)
 
-type UndoRedoStack*[T] = object
-  nextCommandIndex: int
-  commands: seq[Command[T]]
+type
+  CommandSuit[T] = object
+    commands: seq[Command[T]]
+    locked: bool
+  
+  UndoRedoStack*[T] = object
+    undoSuits, redoSuits: seq[CommandSuit[T]]
+    currentSuit: CommandSuit[T]
+
+proc len[T](commandSuit: CommandSuit[T]): int = commandSuit.commands.len
+
+proc add[T](commandSuit: var CommandSuit[T], x: Command[T]) = commandSuit.commands.add(x)
+
+proc `[]`[T](commandSuit: CommandSuit[T], i: Natural): Command[T] = commandSuit.commands[i]
+
+proc `[]`[T](commandSuit: CommandSuit[T], i: BackwardsIndex): Command[T] = commandSuit.commands[i]
 
 proc initUndoRedoStack*[T](): UndoRedoStack[T] =
-  result.nextCommandIndex = -1
+  result.currentSuit = CommandSuit[T](commands: @[], locked: false)
+
+proc beginNewSuitIfNeeded*[T](undoRedoStack: var UndoRedoStack[T]) =
+  if undoRedoStack.currentSuit.len > 0:
+    undoRedoStack.currentSuit.locked = true
+    undoRedoStack.undoSuits.add(undoRedoStack.currentSuit)
+    undoRedoStack.currentSuit = CommandSuit[T](commands: @[], locked: false)
 
 proc push*[T](undoRedoStack: var UndoRedoStack[T], command: Command[T]) =
-  if undoRedoStack.commands.len > 0: undoRedoStack.commands.delete(undoRedoStack.nextCommandIndex, undoRedoStack.commands.high)
-  undoRedoStack.commands.add(command)
-  undoRedoStack.nextCommandIndex = undoRedoStack.commands.len
-  write(stderr, $command.kind)
-  write(stderr, $undoRedoStack.nextCommandIndex)
+  if  undoRedoStack.redoSuits.len > 0: undoRedoStack.redoSuits = @[]
+  
+  doAssert(not undoRedoStack.currentSuit.locked)
+  undoRedoStack.currentSuit.add(command)
 
 proc undo*[T, U](undoRedoStack: var UndoRedoStack[T], buffer: var U) =
-  doAssert(undoRedoStack.nextCommandIndex > 0)
-  dec(undoRedoStack.nextCommandIndex)
-  doCommand[T,U](inverseCommand[T](undoRedoStack.commands[undoRedoStack.nextCommandIndex]), buffer, false)
+  doAssert(undoRedoStack.undoSuits.len > 0)
+
+  for i in 1..undoRedoStack.undoSuits[undoRedoStack.undoSuits.high].len:
+    doCommand[T,U](inverseCommand[T](undoRedoStack.undoSuits[undoRedoStack.undoSuits.high][^i]), buffer, false)
+  
+  undoRedoStack.redoSuits.add(undoRedoStack.undoSuits.pop)
 
 proc redo*[T, U](undoRedoStack: var UndoRedoStack[T], buffer: var U) =
-  doAssert(undoRedoStack.nextCommandIndex < undoRedoStack.commands.len)
-  doCommand[T, U](undoRedoStack.commands[undoRedoStack.nextCommandIndex], buffer, false)
-  inc(undoRedoStack.nextCommandIndex)
+  doAssert(undoRedoStack.redoSuits.len > 0)
 
-proc canUndo*[T](undoRedoStack: UndoRedoStack[T]): bool = undoRedoStack.nextCommandIndex > 0
+  for i in 0..<undoRedoStack.redoSuits[undoRedoStack.redoSuits.high].len:
+    let command = undoRedoStack.redoSuits[undoRedoStack.redoSuits.high][i]
+    doCommand[T, U](command, buffer, false)
+  
+  undoRedoStack.undoSuits.add(undoRedoStack.redoSuits.pop)
 
-proc canRedo*[T](undoRedoStack: UndoRedoStack[T]): bool = 0 <= undoRedoStack.nextCommandIndex-1 and undoRedoStack.nextCommandIndex < undoRedoStack.commands.len
+proc canUndo*[T](undoRedoStack: UndoRedoStack[T]): bool = return undoRedoStack.undoSuits.len > 0
+
+proc canRedo*[T](undoRedoStack: UndoRedoStack[T]): bool = return undoRedoStack.redoSuits.len > 0

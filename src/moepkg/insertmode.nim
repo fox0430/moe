@@ -3,34 +3,33 @@ from os import execShellCmd
 import ui, editorstatus, editorview, cursor, gapbuffer, editorview, normalmode, unicodeext, highlight, undoredostack
 
 proc insertCloseParen(bufStatus: var BufferStatus, c: char) =
+  let oldLine = bufStatus.buffer[bufStatus.currentLine]
+  var newLine = bufStatus.buffer[bufStatus.currentLine]
+
   case c
   of '(':
-    # TODO: bufStatus.buffer[bufStatus.currentLine].insert(ru')', bufStatus.currentColumn)
-    discard
+    newLine.insert(ru')', bufStatus.currentColumn)
   of '{':
-    # TODO: bufStatus.buffer[bufStatus.currentLine].insert(ru'}', bufStatus.currentColumn)
-    discard
+    newLine.insert(ru'}', bufStatus.currentColumn)
   of '[':
-    # TODO: bufStatus.buffer[bufStatus.currentLine].insert(ru']', bufStatus.currentColumn)
-    discard
+    newLine.insert(ru']', bufStatus.currentColumn)
   of '"':
-    # TODO: bufStatus.buffer[bufStatus.currentLine].insert(ru('\"'), bufStatus.currentColumn)
-    discard
+    newLine.insert(ru('\"'), bufStatus.currentColumn)
   of '\'':
-    # TODO: bufStatus.buffer[bufStatus.currentLine].insert(ru'\'', bufStatus.currentColumn)
-    discard
+    newLine.insert(ru'\'', bufStatus.currentColumn)
   else:
     doAssert(false, fmt"Invalid parentheses: {c}")
+
+  if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
 
 proc isOpenParen(ch: char): bool = ch in ['(', '{', '[', '\"', '\'']
 
 proc insertCharacter(bufStatus: var BufferStatus, autoCloseParen: bool, c: Rune) =
-  var oldLine, newLine: seq[Rune]
-  oldLine = bufStatus.buffer[bufStatus.currentLine]
-  newLine = bufStatus.buffer[bufStatus.currentLine]
+  let oldLine = bufStatus.buffer[bufStatus.currentLine]
+  var newLine = bufStatus.buffer[bufStatus.currentLine]
   newLine.insert(c, bufStatus.currentColumn)
-  if oldLine != newLine:
-    bufStatus.buffer[bufStatus.currentLine] = newLine
+  if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
+
   inc(bufStatus.currentColumn)
 
   if autoCloseParen and canConvertToChar(c):
@@ -45,19 +44,32 @@ proc keyBackspace(bufStatus: var BufferStatus) =
 
   if bufStatus.currentColumn == 0:
     bufStatus.currentColumn = bufStatus.buffer[bufStatus.currentLine - 1].len
-    # TODO: bufStatus.buffer[bufStatus.currentLine - 1] &= bufStatus.buffer[bufStatus.currentLine]
+
+    let oldLine = bufStatus.buffer[bufStatus.currentLine - 1]
+    var newLine = bufStatus.buffer[bufStatus.currentLine - 1]
+    newLine &= bufStatus.buffer[bufStatus.currentLine]
     bufStatus.buffer.delete(bufStatus.currentLine, bufStatus.currentLine)
+    if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine - 1] = newLine
+
     dec(bufStatus.currentLine)
   else:
     dec(bufStatus.currentColumn)
-    # TODO: bufStatus.buffer[bufStatus.currentLine].delete(bufStatus.currentColumn)
+
+    let oldLine = bufStatus.buffer[bufStatus.currentLine]
+    var newLine = bufStatus.buffer[bufStatus.currentLine]
+    newLine.delete(bufStatus.currentColumn)
+    if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
 
   bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)
 
 proc insertIndent(bufStatus: var BufferStatus) =
   let indent = min(countRepeat(bufStatus.buffer[bufStatus.currentLine], Whitespace, 0), bufStatus.currentColumn)
-  # TODO: bufStatus.buffer[bufStatus.currentLine + 1] &= repeat(' ', indent).toRunes
+
+  let oldLine = bufStatus.buffer[bufStatus.currentLine + 1]
+  var newLine = bufStatus.buffer[bufStatus.currentLine + 1]
+  newLine &= repeat(' ', indent).toRunes
+  if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
 
 proc keyEnter*(bufStatus: var BufferStatus, autoIndent: bool) =
   bufStatus.buffer.insert(ru"", bufStatus.currentLine + 1)
@@ -68,17 +80,36 @@ proc keyEnter*(bufStatus: var BufferStatus, autoIndent: bool) =
     var startOfCopy = max(countRepeat(bufStatus.buffer[bufStatus.currentLine], Whitespace, 0), bufStatus.currentColumn)
     startOfCopy += countRepeat(bufStatus.buffer[bufStatus.currentLine], Whitespace, startOfCopy)
 
-    # TODO: bufStatus.buffer[bufStatus.currentLine + 1] &= bufStatus.buffer[bufStatus.currentLine][startOfCopy ..< bufStatus.buffer[bufStatus.currentLine].len]
-    let
-      first = bufStatus.currentColumn
-      last = bufStatus.buffer[bufStatus.currentLine].high
-    # TODO: if first <= last: bufStatus.buffer[bufStatus.currentLine].delete(first, last)
+    block:
+      let oldLine = bufStatus.buffer[bufStatus.currentLine + 1]
+      var newLine = bufStatus.buffer[bufStatus.currentLine + 1]
+      newLine &= bufStatus.buffer[bufStatus.currentLine][startOfCopy ..< bufStatus.buffer[bufStatus.currentLine].len]
+      if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine + 1] = newLine
+    
+    block:
+      let
+        first = bufStatus.currentColumn
+        last = bufStatus.buffer[bufStatus.currentLine].high
+      if first <= last:
+        let oldLine = bufStatus.buffer[bufStatus.currentLine]
+        var newLine = bufStatus.buffer[bufStatus.currentLine]
+        newLine.delete(first, last)
+        if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
 
     inc(bufStatus.currentLine)
     bufStatus.currentColumn = countRepeat(bufStatus.buffer[bufStatus.currentLine], Whitespace, 0)
   else:
-    # TODO: bufStatus.buffer[bufStatus.currentLine + 1] &= bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn ..< bufStatus.buffer[bufStatus.currentLine].len]
-    # TODO: bufStatus.buffer[bufStatus.currentLine].delete(bufStatus.currentColumn, bufStatus.buffer[bufStatus.currentLine].high)
+    block:
+      let oldLine = bufStatus.buffer[bufStatus.currentLine + 1]
+      var newLine = bufStatus.buffer[bufStatus.currentLine + 1]
+      newLine &= bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn ..< bufStatus.buffer[bufStatus.currentLine].len]
+      if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine + 1] = newLine
+
+    block:
+      let oldLine = bufStatus.buffer[bufStatus.currentLine]
+      var newLine = bufStatus.buffer[bufStatus.currentLine]
+      newLine.delete(bufStatus.currentColumn, bufStatus.buffer[bufStatus.currentLine].high)
+      if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
 
     inc(bufStatus.currentLine)
     bufStatus.currentColumn = 0
@@ -103,6 +134,8 @@ proc insertMode*(status: var EditorStatus) =
 
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
 
+    status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
+    
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
     elif isEscKey(key):

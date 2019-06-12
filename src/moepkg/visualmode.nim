@@ -76,22 +76,22 @@ proc deleteBuffer(status: var EditorStatus, area: SelectArea) =
   yankBuffer(status, area)
 
   for i in area.startLine .. area.endLine:
+    let oldLine = status.bufStatus[status.currentBuffer].buffer[area.startLine]
+    var newLine = status.bufStatus[status.currentBuffer].buffer[area.startLine]
     if area.startLine == area.endLine:
       for j in area.startColumn .. area.endColumn:
-        # TODO: status.bufStatus[status.currentBuffer].buffer[area.startLine].delete(area.startColumn)
-        discard
+        newLine.delete(area.startColumn)
     elif i == area.startLine and area.startColumn > 0:
       for j in area.startColumn .. status.bufStatus[status.currentBuffer].buffer[area.startLine].high:
-        # TODO: status.bufStatus[status.currentBuffer].buffer[area.startLine].delete(area.startColumn)
-        discard
+        newLine.delete(area.startColumn)
     elif i == area.endLine and area.endColumn < status.bufStatus[status.currentBuffer].buffer[area.startLine].high:
       for j in 0 .. area.endColumn:
-        # TODO: status.bufStatus[status.currentBuffer].buffer[area.startLine].delete(0)
-        discard
+        newLine.delete(0)
     elif status.bufStatus[status.currentBuffer].buffer.len == 1 and status.bufStatus[status.currentBuffer].buffer[0].len < 1:
       break
     else:
       status.bufStatus[status.currentBuffer].buffer.delete(area.startLine, area.startLine)
+    if oldLine != newLine: status.bufStatus[status.currentBuffer].buffer[area.startLine] = newLine
 
   inc(status.bufStatus[status.currentBuffer].countChange)
   status.bufStatus[status.currentBuffer].currentLine = area.startLine
@@ -139,6 +139,8 @@ proc visualMode*(status: var EditorStatus) =
     status.update
 
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+
+    status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
