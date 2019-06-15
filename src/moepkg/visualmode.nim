@@ -40,7 +40,12 @@ proc updateColorSegment(colorSegment: var ColorSegment, area: SelectArea) =
     colorSegment.lastColumn = area.startColumn
 
 proc overwriteColorSegmentBlock[T](highlight: var Highlight, area: SelectArea, buffer: T) =
-  for i in area.startLine .. area.endLine:
+  var
+    startLine = area.startLine
+    endLine = area.endLine
+  if startLine > endLine: swap(startLine, endLine)
+
+  for i in startLine .. endLine:
     let colorSegment = ColorSegment(firstRow: i, firstColumn: area.startColumn, lastRow: i, lastColumn: min(area.endColumn, buffer[i].high), color: EditorColorPair.visualMode)
     highlight = highlight.overwrite(colorSegment)
 
