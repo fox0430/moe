@@ -291,11 +291,7 @@ proc update*(status: var EditorStatus) =
   setCursor(true)
 
 proc splitWindow*(status: var EditorStatus) =
-  let
-    numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
-    useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-    useTab = if status.settings.tabLine.useTab: 1 else: 0
-
+  let useTab = if status.settings.tabLine.useTab: 1 else: 0
   status.mainWindowInfo.insert(MainWindowInfo(window: initWindow(terminalHeight() - useTab - 1, int(terminalWidth() / status.mainWindowInfo.len), useTab, int(terminalWidth() / status.mainWindowInfo.len)), bufferIndex: status.currentBuffer), status.currentMainWindow)
 
   status.update
@@ -331,10 +327,8 @@ proc addNewBuffer*(status:var EditorStatus, filename: string) =
   status.bufStatus.add(BufferStatus(filename: filename.toRunes))
   let index = status.bufStatus.high
 
-  if filename == "" or existsFile(filename) == false:
-    status.bufStatus[index].buffer = newFile()
+  if existsFile(filename) == false: status.bufStatus[index].buffer = newFile()
   else:
-    status.bufStatus[index].language = detectLanguage(filename)
     try:
       let textAndEncoding = openFile(filename.toRunes)
       status.bufStatus[index].buffer = textAndEncoding.text.toGapBuffer
@@ -343,6 +337,7 @@ proc addNewBuffer*(status:var EditorStatus, filename: string) =
       status.commandWindow.writeFileOpenError(filename)
       return
 
+  if filename != "": status.bufStatus[index].language = detectLanguage(filename)
   let lang = if status.settings.syntax: status.bufStatus[index].language else: SourceLanguage.langNone
   status.bufStatus[index].highlight = initHighlight($status.bufStatus[index].buffer, lang)
 
