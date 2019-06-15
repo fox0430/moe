@@ -422,6 +422,7 @@ proc undo(bufStatus: var BufferStatus) =
     (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.prev(bufStatus.currentLine, bufStatus.currentColumn)
   if bufStatus.currentColumn == bufStatus.buffer[bufStatus.currentLine].len and (bufStatus.currentLine, bufStatus.currentColumn) != (0, 0):
     (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.prev(bufStatus.currentLine, bufStatus.currentColumn)
+  inc(bufStatus.countChange)
 
 proc redo(bufStatus: var BufferStatus) =
   if not bufStatus.buffer.canRedo: return
@@ -431,6 +432,7 @@ proc redo(bufStatus: var BufferStatus) =
     (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.prev(bufStatus.currentLine, bufStatus.currentColumn)
   if bufStatus.currentColumn == bufStatus.buffer[bufStatus.currentLine].len and (bufStatus.currentLine, bufStatus.currentColumn) != (0, 0):
     (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.prev(bufStatus.currentLine, bufStatus.currentColumn)
+  inc(bufStatus.countChange)
 
 proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.bufStatus[status.currentBuffer].cmdLoop == 0: status.bufStatus[status.currentBuffer].cmdLoop = 1

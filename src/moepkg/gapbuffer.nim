@@ -60,7 +60,7 @@ proc initGapBuffer*[T](): GapBuffer[T] =
 
 proc initGapBuffer*[T](elements: seq[T]): GapBuffer[T] =
   result = initGapBuffer[T]()
-  for e in elements: result.add(e)
+  for e in elements: result.add(e, false)
 
 proc deleteInterval(gapBuffer: var GapBuffer, first, last: int) =
   ## Delete [first, last] elements
