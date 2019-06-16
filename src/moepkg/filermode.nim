@@ -194,12 +194,12 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus, settings: EditorSettings, 
       kind = filerStatus.dirList[i].kind
     bufStatus.buffer.add(filename.toRunes)
 
-  let oldLine =  bufStatus.buffer[i]
-  var newLine =  bufStatus.buffer[i]
-  if kind == pcDir and 0 < i: newLine.add(ru"/")
-  elif kind == pcLinkToFile: newLine.add(ru"@ -> " & expandsymLink(filename).toRunes)
-  elif kind == pcLinkToDir: newLine.add(ru"@ -> " & expandsymLink(filename).toRunes & ru"/")
-  if oldLine != newLine: bufStatus.buffer[i] = newLine
+    let oldLine =  bufStatus.buffer[i]
+    var newLine =  bufStatus.buffer[i]
+    if kind == pcDir and 0 < i: newLine.add(ru"/")
+    elif kind == pcLinkToFile: newLine.add(ru"@ -> " & expandsymLink(filename).toRunes)
+    elif kind == pcLinkToDir: newLine.add(ru"@ -> " & expandsymLink(filename).toRunes & ru"/")
+    if oldLine != newLine: bufStatus.buffer[i] = newLine
   
   let useStatusBar = if settings.statusBar.useBar: 1 else: 0
   let numOfFile = filerStatus.dirList.len

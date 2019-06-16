@@ -122,9 +122,12 @@ proc deleteBufferBlock(bufStatus: var BufferStatus, registers: var Registers, ar
   for i in area.startLine .. area.endLine:
     if bufStatus.buffer[currentLine].len < 1: bufStatus.buffer.delete(currentLine, currentLine + 1)
     else:
+      let oldLine = bufStatus.buffer[i]
+      var newLine = bufStatus.buffer[i]
       for j in area.startColumn.. min(area.endColumn, bufStatus.buffer[i].high):
-        bufStatus.buffer[i].delete(area.startColumn)
+        newLine.delete(area.startColumn)
         inc(currentLine)
+      if oldLine != newLine: bufStatus.buffer[i] = newLine
 
   bufStatus.currentLine = min(area.startLine, bufStatus.buffer.high)
   bufStatus.currentColumn = area.startColumn
@@ -147,24 +150,34 @@ proc deleteIndent(bufStatus: var BufferStatus, area: SelectArea, tabStop: int) =
   bufStatus.currentLine = area.startLine
 
 proc insertIndent(bufStatus: var BufferStatus, area: SelectArea, tabStop: int) =
-  for i in area.startLine .. area.endLine: bufStatus.buffer[i].insert(ru' '.repeat(tabStop), min(area.startColumn, bufStatus.buffer[i].high))
+  for i in area.startLine .. area.endLine:
+    let oldLine = bufStatus.buffer[i]
+    var newLine = bufStatus.buffer[i]
+    newLine.insert(ru' '.repeat(tabStop), min(area.startColumn, bufStatus.buffer[i].high))
+    if oldLine != newLine: bufStatus.buffer[i] = newLine
 
 proc replaceCharactor(bufStatus: var BufferStatus, area: SelectArea, ch: Rune) =
   for i in area.startLine .. area.endLine:
+    let oldLine = bufStatus.buffer[i]
+    var newLine = bufStatus.buffer[i]
     if area.startLine == area.endLine:
-      for j in area.startColumn .. area.endColumn: bufStatus.buffer[i][j] = ch
+      for j in area.startColumn .. area.endColumn: newLine[j] = ch
     elif i == area.startLine:
-      for j in area.startColumn .. bufStatus.buffer[i].high: bufStatus.buffer[i][j] = ch
+      for j in area.startColumn .. bufStatus.buffer[i].high: newLine[j] = ch
     elif i == area.endLine:
-      for j in 0 .. area.endColumn: bufStatus.buffer[i][j] = ch
+      for j in 0 .. area.endColumn: newLine[j] = ch
     else:
-      for j in 0 .. bufStatus.buffer[i].high: bufStatus.buffer[i][j] = ch
+      for j in 0 .. bufStatus.buffer[i].high: newLine[j] = ch
+    if oldLine != newLine: bufStatus.buffer[i] = newLine
 
   inc(bufStatus.countChange)
 
 proc replaceCharactorBlock(bufStatus: var BufferStatus, area: SelectArea, ch: Rune) =
   for i in area.startLine .. area.endLine:
-    for j in area.startColumn .. min(area.endColumn, bufStatus.buffer[i].high): bufStatus.buffer[i][j] = ch
+    let oldLine = bufStatus.buffer[i]
+    var newLine = bufStatus.buffer[i]
+    for j in area.startColumn .. min(area.endColumn, bufStatus.buffer[i].high): newLine[j] = ch
+    if oldLine != newLine: bufStatus.buffer[i] = newLine
 
 proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSlectArea

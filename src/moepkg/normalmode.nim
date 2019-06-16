@@ -297,7 +297,11 @@ proc deleteWord(bufStatus: var BufferStatus) =
     bufStatus.buffer.delete(bufStatus.currentLine, bufStatus.currentLine + 1)
     if bufStatus.currentLine > bufStatus.buffer.high: bufStatus.currentLine = bufStatus.buffer.high
   elif bufStatus.currentColumn == bufStatus.buffer[bufStatus.currentLine].high:
-    bufStatus.buffer[bufStatus.currentLine].delete(bufStatus.currentColumn)
+    let oldLine = bufStatus.buffer[bufStatus.currentLine]
+    var newLine = bufStatus.buffer[bufStatus.currentLine]
+    newLine.delete(bufStatus.currentColumn)
+    if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
+
     if bufStatus.currentColumn > 0: dec(bufStatus.currentColumn)
   else:
     let
@@ -320,7 +324,10 @@ proc deleteWord(bufStatus: var BufferStatus) =
       if isPunct(curr) or isAlpha(curr) or isDigit(curr): break
       inc(bufStatus.currentColumn)
 
-    for i in currentColumn ..< bufStatus.currentColumn: bufStatus.buffer[currentLine].delete(currentColumn)
+    let oldLine = bufStatus.buffer[currentLine]
+    var newLine = bufStatus.buffer[currentLine]
+    for i in currentColumn ..< bufStatus.currentColumn: newLine.delete(currentColumn)
+    if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
     bufStatus.expandedColumn = currentColumn
     bufStatus.currentColumn = currentColumn
 
