@@ -1,5 +1,5 @@
 import strutils, strformat, terminal, deques, sequtils
-import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight, undoredostack
+import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight, fileutils, commandview, undoredostack
 
 proc jumpLine*(status: var EditorStatus, destination: int)
 proc keyRight*(bufStatus: var BufferStatus)
@@ -13,7 +13,7 @@ import searchmode, replacemode
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.erase
 
-  status.commandWindow.write(0, 0, ru"debuf info: ")
+  status.commandWindow.write(0, 0, "debuf info: ", EditorColorPair.commandBar)
   status.commandWindow.append(fmt"currentLine: {status.bufStatus[status.currentBuffer].currentLine}, currentColumn: {status.bufStatus[status.currentBuffer].currentColumn}")
   status.commandWindow.append(fmt", cursor.y: {status.bufStatus[status.currentBuffer].cursor.y}, cursor.x: {status.bufStatus[status.currentBuffer].cursor.x}")
   status.commandWindow.append(fmt", {str}")
@@ -117,14 +117,11 @@ proc jumpLine*(status: var EditorStatus, destination: int) =
       startOfPrintedLines = max(destination - (currentLine - status.bufStatus[status.currentBuffer].view.originalLine[0]), 0)
     status.bufStatus[status.currentBuffer].view.reload(status.bufStatus[status.currentBuffer].buffer, startOfPrintedLines)
 
-proc moveToFirstLine*(status: var EditorStatus) =
-  jumpLine(status, 0)
+proc moveToFirstLine*(status: var EditorStatus) = jumpLine(status, 0)
 
 proc moveToLastLine*(status: var EditorStatus) =
-  if status.bufStatus[status.currentBuffer].cmdLoop > 1:
-    jumpLine(status, status.bufStatus[status.currentBuffer].cmdLoop - 1)
-  else:
-    jumpLine(status, status.bufStatus[status.currentBuffer].buffer.len-1)
+  if status.bufStatus[status.currentBuffer].cmdLoop > 1: jumpLine(status, status.bufStatus[status.currentBuffer].cmdLoop - 1)
+  else: jumpLine(status, status.bufStatus[status.currentBuffer].buffer.len - 1)
 
 proc pageUp*(status: var EditorStatus) =
   let destination = max(status.bufStatus[status.currentBuffer].currentLine - status.bufStatus[status.currentBuffer].view.height, 0)
@@ -189,7 +186,7 @@ proc moveToBackwardWord*(bufStatus: var BufferStatus) =
       currentLine = bufStatus.currentLine
       currentColumn = bufStatus.currentColumn
       
-    if bufStatus.buffer.len == 0 or bufStatus.buffer.isFirst(currentLine, currentColumn): break
+    if bufStatus.buffer[bufStatus.currentLine].len == 0 or bufStatus.buffer.isFirst(currentLine, currentColumn): break
 
     let curr = bufStatus.buffer[currentLine][currentColumn]
     if unicodeext.isSpace(curr): continue
@@ -245,6 +242,22 @@ proc moveToForwardEndOfWord*(bufStatus: var BufferStatus) =
 
   bufStatus.expandedColumn = bufStatus.currentColumn
 
+proc moveCenterScreen(bufStatus: var BufferStatus) =
+  if bufStatus.currentLine > int(bufStatus.view.height / 2):
+    if bufStatus.cursor.y > int(bufStatus.view.height / 2):
+      let startOfPrintedLines = bufStatus.cursor.y - int(bufStatus.view.height / 2)
+      bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[startOfPrintedLines])
+    else:
+      let numOfTime = int(bufStatus.view.height / 2) - bufStatus.cursor.y
+      for i in 0 ..< numOfTime: scrollUp(bufStatus.view, bufStatus.buffer)
+
+proc scrollScreenTop(bufStatus: var BufferStatus) = bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[bufStatus.cursor.y])
+
+proc scrollScreenBottom(bufStatus: var BufferStatus) =
+  if bufStatus.currentLine > bufStatus.view.height:
+    let numOfTime = bufStatus.view.height - bufStatus.cursor.y - 2
+    for i in 0 ..< numOfTime: scrollUp(bufStatus.view, bufStatus.buffer)
+
 proc openBlankLineBelow(bufStatus: var BufferStatus) =
   let indent = sequtils.repeat(ru' ', countRepeat(bufStatus.buffer[bufStatus.currentLine], Whitespace, 0))
 
@@ -278,14 +291,48 @@ proc deleteLine(bufStatus: var BufferStatus, line: int) =
   bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)
 
+proc deleteWord(bufStatus: var BufferStatus) =
+  if bufStatus.buffer.len == 1 and bufStatus.buffer[bufStatus.currentLine].len < 1: return
+  elif bufStatus.buffer.len > 1 and bufStatus.buffer[bufStatus.currentLine].len < 1:
+    bufStatus.buffer.delete(bufStatus.currentLine, bufStatus.currentLine + 1)
+    if bufStatus.currentLine > bufStatus.buffer.high: bufStatus.currentLine = bufStatus.buffer.high
+  elif bufStatus.currentColumn == bufStatus.buffer[bufStatus.currentLine].high:
+    bufStatus.buffer[bufStatus.currentLine].delete(bufStatus.currentColumn)
+    if bufStatus.currentColumn > 0: dec(bufStatus.currentColumn)
+  else:
+    let
+      currentLine = bufStatus.currentLine
+      currentColumn = bufStatus.currentColumn
+      startWith = if bufStatus.buffer[currentLine].len == 0: ru'\n' else: bufStatus.buffer[currentLine][currentColumn]
+      isSkipped = if unicodeext.isPunct(startWith): unicodeext.isPunct elif unicodeext.isAlpha(startWith): unicodeext.isAlpha elif unicodeext.isDigit(startWith): unicodeext.isDigit else: nil
+
+    if isSkipped == nil:
+      (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.next(currentLine, currentColumn)
+    else:
+      while true:
+        inc(bufStatus.currentColumn)
+        if bufStatus.currentColumn >= bufStatus.buffer[bufStatus.currentLine].len: break
+        if not isSkipped(bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn]): break
+
+    while true:
+      if bufStatus.currentColumn > bufStatus.buffer[bufStatus.currentLine].high: break
+      let curr = bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn]
+      if isPunct(curr) or isAlpha(curr) or isDigit(curr): break
+      inc(bufStatus.currentColumn)
+
+    for i in currentColumn ..< bufStatus.currentColumn: bufStatus.buffer[currentLine].delete(currentColumn)
+    bufStatus.expandedColumn = currentColumn
+    bufStatus.currentColumn = currentColumn
+
+  bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
+  inc(bufStatus.countChange)
+
 proc yankLines(status: var EditorStatus, first, last: int) =
   status.registers.yankedStr = @[]
   status.registers.yankedLines = @[]
   for i in first .. last: status.registers.yankedLines.add(status.bufStatus[status.currentBuffer].buffer[i])
 
-  status.commandWindow.erase
-  status.commandwindow.write(0, 0, fmt"{status.registers.yankedLines.len} line yanked")
-  status.commandWindow.refresh
+  status.commandWindow.writeMessageYankedLine(status.registers.yankedLines.len)
 
 proc pasteLines(status: var EditorStatus) =
   for i in 0 ..< status.registers.yankedLines.len:
@@ -301,9 +348,7 @@ proc yankString(status: var EditorStatus, length: int) =
   for i in status.bufStatus[status.currentBuffer].currentColumn ..< length:
     status.registers.yankedStr.add(status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine][i])
 
-  status.commandWindow.erase
-  status.commandwindow.write(0, 0, fmt"{status.registers.yankedStr.len} character yanked")
-  status.commandWindow.refresh
+  status.commandWindow.writeMessageYankedCharactor(status.registers.yankedStr.len)
 
 proc pasteString(status: var EditorStatus) =
   let index = status.currentBuffer
@@ -433,6 +478,18 @@ proc redo(bufStatus: var BufferStatus) =
   if bufStatus.currentColumn == bufStatus.buffer[bufStatus.currentLine].len and (bufStatus.currentLine, bufStatus.currentColumn) != (0, 0):
     (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.prev(bufStatus.currentLine, bufStatus.currentColumn)
   inc(bufStatus.countChange)
+proc writeFileAndExit(status: var EditorStatus) =
+  if status.bufStatus[status.currentBuffer].filename.len == 0:
+    status.commandwindow.writeNoFileNameError
+    status.changeMode(Mode.normal)
+  else:
+    try:
+      saveFile(status.bufStatus[status.currentBuffer].filename, status.bufStatus[status.currentBuffer].buffer.toRunes, status.settings.characterEncoding)
+      closeWindow(status, status.currentMainWindow)
+    except IOError:
+      status.commandWindow.writeSaveError
+
+proc forceExit(status: var Editorstatus) = closeWindow(status, status.currentMainWindow)
 
 proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.bufStatus[status.currentBuffer].cmdLoop == 0: status.bufStatus[status.currentBuffer].cmdLoop = 1
@@ -441,10 +498,12 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     cmdLoop = status.bufStatus[status.currentBuffer].cmdLoop
     currentBuf = status.currentBuffer
 
-  if isControlL(key):
+  if isControlK(key):
     moveNextWindow(status)
-  elif isControlH(key):
+  elif isControlJ(key):
     movePrevWindow(status)
+  elif isControlV(key):
+    status.changeMode(Mode.visualBlock)
   elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
     for i in 0 ..< cmdLoop: keyLeft(status.bufStatus[status.currentBuffer])
   elif key == ord('l') or isRightKey(key):
@@ -481,6 +540,11 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     for i in 0 ..< cmdLoop: moveToBackwardWord(status.bufStatus[status.currentBuffer])
   elif key == ord('e'):
     for i in 0 ..< cmdLoop: moveToForwardEndOfWord(status.bufStatus[status.currentBuffer])
+  elif key == ord('z'):
+    let key = getkey(status.mainWindowInfo[status.currentMainWindow].window)
+    if key == ord('.'): moveCenterScreen(status.bufStatus[status.currentBuffer])
+    elif key == ord('t'): scrollScreenTop(status.bufStatus[status.currentBuffer])
+    elif key == ord('b'): scrollScreenBottom(status.bufStatus[status.currentBuffer])
   elif key == ord('o'):
     for i in 0 ..< cmdLoop: openBlankLineBelow(status.bufStatus[status.currentBuffer])
     status.updateHighlight
@@ -490,9 +554,11 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     status.updateHighlight
     status.changeMode(Mode.insert)
   elif key == ord('d'):
-    if getKey(status.mainWindowInfo[status.currentMainWindow].window) == ord('d'):
+    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    if key == ord('d'):
       yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
       for i in 0 ..< min(cmdLoop, status.bufStatus[currentBuf].buffer.len - status.bufStatus[currentBuf].currentLine): deleteLine(status.bufStatus[status.currentBuffer], status.bufStatus[currentBuf].currentLine)
+    elif key == ord('w'): deleteWord(status.bufStatus[status.currentBuffer])
   elif key == ord('y'):
     if getkey(status.mainWindowInfo[status.currentMainWindow].window) == ord('y'):
       yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
@@ -529,7 +595,10 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('v'):
     status.changeMode(Mode.visual)
   elif key == ord('a'):
-    if status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len > 0: inc(status.bufStatus[currentBuf].currentColumn)
+    let lineWidth = status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len
+    if lineWidth == 0: discard
+    elif lineWidth == status.bufStatus[currentBuf].currentColumn: discard
+    else: inc(status.bufStatus[currentBuf].currentColumn)
     status.changeMode(Mode.insert)
   elif key == ord('A'):
     status.bufStatus[currentBuf].currentColumn = status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len
@@ -538,6 +607,10 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     undo(status.bufStatus[status.currentBuffer])
   elif isControlR(key):
     redo(status.bufStatus[status.currentBuffer])
+  elif key == ord('Z'):
+    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    if  key == ord('Z'): writeFileAndExit(status)
+    elif key == ord('Q'): forceExit(status)
   elif isEscKey(key):
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
     if isEscKey(key): turnOffHighlighting(status)
@@ -551,7 +624,7 @@ proc normalMode*(status: var EditorStatus) =
 
   changeCursorType(status.settings.normalModeCursor)
 
-  while status.bufStatus[status.currentBuffer].mode == Mode.normal:
+  while status.bufStatus[status.currentBuffer].mode == Mode.normal and status.mainWindowInfo.len > 0:
     if status.bufStatus[status.currentBuffer].countChange > countChange:
       status.updateHighlight
       countChange = status.bufStatus[status.currentBuffer].countChange

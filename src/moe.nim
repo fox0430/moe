@@ -9,6 +9,7 @@ import moepkg/replacemode
 import moepkg/filermode
 import moepkg/exmode
 import moepkg/searchmode
+import moepkg/buffermanager
 import moepkg/editorview
 import moepkg/cmdoption
 import moepkg/settings
@@ -30,7 +31,7 @@ proc main() =
   if existsDir(parsedList.filename):
     try: setCurrentDir(parsedList.filename)
     except OSError:
-      status.commandWindow.writeFileOpenError(parsedList.filename, status.settings.editorColor.errorMessage)
+      status.commandWindow.writeFileOpenError(parsedList.filename)
       addNewBuffer(status, "")
     status.bufStatus.add(BufferStatus(mode: Mode.filer))
   else: addNewBuffer(status, parsedList.filename)
@@ -40,12 +41,13 @@ proc main() =
     case status.bufStatus[status.currentBuffer].mode:
     of Mode.normal: normalMode(status)
     of Mode.insert: insertMode(status)
-    of Mode.visual: visualMode(status)
+    of Mode.visual, Mode.visualBlock: visualMode(status)
     of Mode.replace: replaceMode(status)
     of Mode.ex: exMode(status)
     of Mode.filer: filerMode(status)
     of Mode.search: searchMode(status)
+    of Mode.bufManager: bufferManager(status)
 
-  executeOnExit(status.settings)
+  exitEditor(status.settings)
 
 when isMainModule: main()

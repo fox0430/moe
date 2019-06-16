@@ -1,18 +1,12 @@
-import terminal
+import terminal, strutils, sequtils
 import editorstatus, editorview, ui, gapbuffer, normalmode, highlight, unicodeext
-
-type SelectArea = object
-  startLine: int
-  startColumn: int
-  endLine: int
-  endColumn: int
 
 proc initColorSegment(startLine, startColumn: int): ColorSegment =
   result.firstRow = startLine
   result.firstColumn = startColumn
   result.lastRow = startLine
   result.lastColumn = startColumn
-  result.color = defaultMagenta
+  result.color = EditorColorPair.visualMode
 
 proc initSelectArea(startLine, startColumn: int): SelectArea =
   result.startLine = startLine
@@ -45,6 +39,16 @@ proc updateColorSegment(colorSegment: var ColorSegment, area: SelectArea) =
     colorSegment.firstColumn = area.endColumn
     colorSegment.lastColumn = area.startColumn
 
+proc overwriteColorSegmentBlock[T](highlight: var Highlight, area: SelectArea, buffer: T) =
+  var
+    startLine = area.startLine
+    endLine = area.endLine
+  if startLine > endLine: swap(startLine, endLine)
+
+  for i in startLine .. endLine:
+    let colorSegment = ColorSegment(firstRow: i, firstColumn: area.startColumn, lastRow: i, lastColumn: min(area.endColumn, buffer[i].high), color: EditorColorPair.visualMode)
+    highlight = highlight.overwrite(colorSegment)
+
 proc swapSlectArea(area: var SelectArea) =
   if area.startLine == area.endLine:
     if area.endColumn < area.startColumn: swap(area.startColumn, area.endColumn)
@@ -52,51 +56,79 @@ proc swapSlectArea(area: var SelectArea) =
     swap(area.startLine, area.endLine)
     swap(area.startColumn, area.endColumn)
 
-proc yankBuffer(status: var EditorStatus, area: SelectArea) =
-  status.registers.yankedLines = @[]
-  status.registers.yankedStr = @[]
+proc yankBuffer(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea) =
+  if bufStatus.buffer[bufStatus.currentLine].len < 1: return
+  registers.yankedLines = @[]
+  registers.yankedStr = @[]
 
   for i in area.startLine .. area.endLine:
     if area.startLine == area.endLine:
-      for j in area.startColumn .. area.endColumn:
-        status.registers.yankedStr.add(status.bufStatus[status.currentBuffer].buffer[area.startLine][j])
+      for j in area.startColumn .. area.endColumn: registers.yankedStr.add(bufStatus.buffer[area.startLine][j])
     if i == area.startLine and area.startColumn > 0:
-      status.registers.yankedLines.add(ru"")
-      for j in area.startColumn ..< status.bufStatus[status.currentBuffer].buffer[area.startLine].len:
-        status.registers.yankedLines[status.registers.yankedLines.high].add(status.bufStatus[status.currentBuffer].buffer[area.startLine][j])
-    elif i == area.endLine and area.endColumn < status.bufStatus[status.currentBuffer].buffer[area.endLine].len:
-      status.registers.yankedLines.add(ru"")
+      registers.yankedLines.add(ru"")
+      for j in area.startColumn ..< bufStatus.buffer[area.startLine].len:
+        registers.yankedLines[registers.yankedLines.high].add(bufStatus.buffer[area.startLine][j])
+    elif i == area.endLine and area.endColumn < bufStatus.buffer[area.endLine].len:
+      registers.yankedLines.add(ru"")
       for j in 0 .. area.endColumn:
-        status.registers.yankedLines[status.registers.yankedLines.high].add(status.bufStatus[status.currentBuffer].buffer[area.endLine][j])
+        registers.yankedLines[registers.yankedLines.high].add(bufStatus.buffer[area.endLine][j])
     else:
-      status.registers.yankedLines.add(status.bufStatus[status.currentBuffer].buffer[i])
+      registers.yankedLines.add(bufStatus.buffer[i])
 
-proc deleteBuffer(status: var EditorStatus, area: SelectArea) =
-  if status.bufStatus[status.currentBuffer].buffer.len == 1 and status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine].len < 1: return
-  yankBuffer(status, area)
+proc yankBufferBlock(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea) =
+  if bufStatus.buffer.len == 1 and bufStatus.buffer[bufStatus.currentLine].len < 1: return
+  registers.yankedLines = @[]
+  registers.yankedStr = @[]
 
   for i in area.startLine .. area.endLine:
-    let oldLine = status.bufStatus[status.currentBuffer].buffer[area.startLine]
-    var newLine = status.bufStatus[status.currentBuffer].buffer[area.startLine]
-    if area.startLine == area.endLine:
-      for j in area.startColumn .. area.endColumn:
-        newLine.delete(area.startColumn)
-    elif i == area.startLine and area.startColumn > 0:
-      for j in area.startColumn .. status.bufStatus[status.currentBuffer].buffer[area.startLine].high:
-        newLine.delete(area.startColumn)
-    elif i == area.endLine and area.endColumn < status.bufStatus[status.currentBuffer].buffer[area.startLine].high:
-      for j in 0 .. area.endColumn:
-        newLine.delete(0)
-    elif status.bufStatus[status.currentBuffer].buffer.len == 1 and status.bufStatus[status.currentBuffer].buffer[0].len < 1:
-      break
-    else:
-      status.bufStatus[status.currentBuffer].buffer.delete(area.startLine, area.startLine)
-    if oldLine != newLine: status.bufStatus[status.currentBuffer].buffer[area.startLine] = newLine
+    registers.yankedLines.add(ru"")
+    for j in area.startColumn .. min(bufStatus.buffer[i].high, area.endColumn): registers.yankedLines[registers.yankedLines.high].add(bufStatus.buffer[i][j])
 
-  inc(status.bufStatus[status.currentBuffer].countChange)
-  status.bufStatus[status.currentBuffer].currentLine = area.startLine
-  status.bufStatus[status.currentBuffer].currentColumn = area.startColumn
-  status.bufStatus[status.currentBuffer].expandedColumn = area.startColumn
+proc deleteBuffer(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea) =
+  if bufStatus.buffer.len == 1 and bufStatus.buffer[bufStatus.currentLine].len < 1: return
+  yankBuffer(bufStatus, registers, area)
+
+  var currentLine = area.startLine
+  for i in area.startLine .. area.endLine:
+    let oldLine = bufStatus.buffer[area.startLine]
+    var newLine = bufStatus.buffer[area.startLine]
+
+    if area.startLine == area.endLine and 0 < bufStatus.buffer[currentLine].len:
+      for j in area.startColumn .. area.endColumn: newLine.delete(area.startColumn)
+    elif i == area.startLine and 0 < area.startColumn:
+      for j in area.startColumn .. bufStatus.buffer[currentLine].high: newLine.delete(area.startColumn)
+      inc(currentLine)
+    elif i == area.endLine and area.endColumn < bufStatus.buffer[currentLine].high:
+      for j in 0 .. area.endColumn: newLine.delete(0)
+    else: bufStatus.buffer.delete(currentLine, currentLine + 1)
+    
+    if oldLine != newLine: bufStatus.buffer[area.startLine] = newLine
+
+  if bufStatus.buffer.len < 1: bufStatus.buffer.add(ru"")
+
+  if area.startLine > bufStatus.buffer.high: bufStatus.currentLine = bufStatus.buffer.high
+  else: bufStatus.currentLine = area.startLine
+  let column = if area.startColumn > 0: area.startColumn - 1 else: 0
+  bufStatus.currentColumn = column
+  bufStatus.expandedColumn = column
+
+  inc(bufStatus.countChange)
+
+proc deleteBufferBlock(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea) =
+  if bufStatus.buffer.len == 1 and bufStatus.buffer[bufStatus.currentLine].len < 1: return
+  yankBufferBlock(bufStatus, registers, area)
+
+  var currentLine = area.startLine
+  for i in area.startLine .. area.endLine:
+    if bufStatus.buffer[currentLine].len < 1: bufStatus.buffer.delete(currentLine, currentLine + 1)
+    else:
+      for j in area.startColumn.. min(area.endColumn, bufStatus.buffer[i].high):
+        bufStatus.buffer[i].delete(area.startColumn)
+        inc(currentLine)
+
+  bufStatus.currentLine = min(area.startLine, bufStatus.buffer.high)
+  bufStatus.currentColumn = area.startColumn
+  inc(bufStatus.countChange)
 
 proc addIndent(bufStatus: var BufferStatus, area: SelectArea, tabStop: int) =
   bufStatus.currentLine = area.startLine
@@ -114,28 +146,66 @@ proc deleteIndent(bufStatus: var BufferStatus, area: SelectArea, tabStop: int) =
 
   bufStatus.currentLine = area.startLine
 
+proc insertIndent(bufStatus: var BufferStatus, area: SelectArea, tabStop: int) =
+  for i in area.startLine .. area.endLine: bufStatus.buffer[i].insert(ru' '.repeat(tabStop), min(area.startColumn, bufStatus.buffer[i].high))
+
+proc replaceCharactor(bufStatus: var BufferStatus, area: SelectArea, ch: Rune) =
+  for i in area.startLine .. area.endLine:
+    if area.startLine == area.endLine:
+      for j in area.startColumn .. area.endColumn: bufStatus.buffer[i][j] = ch
+    elif i == area.startLine:
+      for j in area.startColumn .. bufStatus.buffer[i].high: bufStatus.buffer[i][j] = ch
+    elif i == area.endLine:
+      for j in 0 .. area.endColumn: bufStatus.buffer[i][j] = ch
+    else:
+      for j in 0 .. bufStatus.buffer[i].high: bufStatus.buffer[i][j] = ch
+
+  inc(bufStatus.countChange)
+
+proc replaceCharactorBlock(bufStatus: var BufferStatus, area: SelectArea, ch: Rune) =
+  for i in area.startLine .. area.endLine:
+    for j in area.startColumn .. min(area.endColumn, bufStatus.buffer[i].high): bufStatus.buffer[i][j] = ch
+
 proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSlectArea
 
-  if key == ord('y') or isDcKey(key): yankBuffer(status, area)
-  elif key == ord('x') or key == ord('d'): deleteBuffer(status, area)
+  if key == ord('y') or isDcKey(key): yankBuffer(status.bufStatus[status.currentBuffer], status.registers, area)
+  elif key == ord('x') or key == ord('d'): deleteBuffer(status.bufStatus[status.currentBuffer], status.registers, area)
   elif key == ord('>'): addIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
   elif key == ord('<'): deleteIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
+  elif key == ord('r'):
+    let ch = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    if not isEscKey(ch): replaceCharactor(status.bufStatus[status.currentBuffer], area, ch)
+  else: discard
+
+proc visualBlockCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
+  area.swapSlectArea
+
+  if key == ord('y') or isDcKey(key): yankBufferBlock(status.bufStatus[status.currentBuffer], status.registers, area)
+  elif key == ord('x') or key == ord('d'): deleteBufferBlock(status.bufStatus[status.currentBuffer], status.registers, area)
+  elif key == ord('>'): insertIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
+  elif key == ord('r'):
+    let ch = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    if not isEscKey(ch): replaceCharactorBlock(status.bufStatus[status.currentBuffer], area, ch)
   else: discard
 
 proc visualMode*(status: var EditorStatus) =
   status.resize(terminalHeight(), terminalWidth())
+  let currentBuf = status.currentBuffer
 
   var colorSegment = initColorSegment(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
-  var area = initSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
+  status.bufStatus[currentBuf].selectArea = initSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
 
-  while status.bufStatus[status.currentBuffer].mode == Mode.visual:
+  while status.bufStatus[status.currentBuffer].mode == Mode.visual or status.bufStatus[status.currentBuffer].mode == Mode.visualBlock:
+    let isBlockMode = if status.bufStatus[status.currentBuffer].mode == Mode.visualBlock: true else: false
 
-    area.updateSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
-    colorSegment.updateColorSegment(area)
+    status.bufStatus[currentBuf].selectArea.updateSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
+    colorSegment.updateColorSegment(status.bufStatus[currentBuf].selectArea)
 
     status.updatehighlight
-    status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
+    if isBlockMode: status.bufStatus[status.currentBuffer].highlight.overwriteColorSegmentBlock(status.bufStatus[currentBuf].selectArea, status.bufStatus[status.currentBuffer].buffer)
+    else: status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
+
     status.update
 
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
@@ -173,14 +243,15 @@ proc visualMode*(status: var EditorStatus) =
     elif key == ord('g'):
       if getKey(status.mainWindowInfo[status.currentMainWindow].window) == ord('g'): moveToFirstLine(status)
     elif key == ord('i'):
-      status.bufStatus[status.currentBuffer].currentLine = area.startLine
+      status.bufStatus[status.currentBuffer].currentLine = status.bufStatus[currentBuf].selectArea.startLine
       status.changeMode(Mode.insert)
     elif key == ord('I'):
-      status.bufStatus[status.currentBuffer].currentLine = area.startLine
+      status.bufStatus[status.currentBuffer].currentLine = status.bufStatus[currentBuf].selectArea.startLine
       status.bufStatus[status.currentBuffer].currentColumn = 0
       status.changeMode(Mode.insert)
 
     else:
-      visualCommand(status, area, key)
+      if isBlockMode: visualBlockCommand(status, status.bufStatus[currentBuf].selectArea, key)
+      else: visualCommand(status, status.bufStatus[currentBuf].selectArea, key)
       status.updatehighlight
       status.changeMode(Mode.normal)

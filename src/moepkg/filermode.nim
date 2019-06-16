@@ -52,14 +52,14 @@ proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
     if filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].kind == pcDir:
       try:
         removeDir(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path)
-        status.commandWindow.writeMessageDeletedFile(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path, Colorpair.brightWhiteDefault)
+        status.commandWindow.writeMessageDeletedFile(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path)
       except OSError:
-        status.commandWindow.writeRemoveDirError(status.settings.editorColor.errorMessage)
+        status.commandWindow.writeRemoveDirError
     else:
       if tryRemoveFile(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path):
-        status.commandWindow.writeMessageDeletedFile(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path, Colorpair.brightWhiteDefault)
+        status.commandWindow.writeMessageDeletedFile(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path)
       else:
-        status.commandWindow.writeRemoveFileError(status.settings.editorColor.errorMessage)
+        status.commandWindow.writeRemoveFileError
 
 proc sortDirList(dirList: seq[PathInfo], sortBy: Sort): seq[PathInfo] =
   case sortBy:
@@ -136,18 +136,18 @@ proc cutFile(filerStatus: var FilerStatus, currentLine: int) =
   filerStatus.register.filename = filerStatus.dirList[currentLine].path
   filerStatus.register.originPath = getCurrentDir() / filerStatus.dirList[currentLine].path
 
-proc pasteFile(commandWindow: var Window, filerStatus: var FilerStatus, errorMessageColor: ColorPair) =
+proc pasteFile(commandWindow: var Window, filerStatus: var FilerStatus) =
   try:
     copyFile(filerStatus.register.originPath, getCurrentDir() / filerStatus.register.filename)
     filerStatus.dirlistUpdate = true
     filerStatus.viewUpdate = true
   except OSError:
-    writeCopyFileError(commandWindow, errorMessageColor)
+    commandWindow.writeCopyFileError
     return
 
   if filerStatus.register.cut:
     if tryRemoveFile(filerStatus.register.originPath / filerStatus.register.filename): filerStatus.register.cut = false
-    else: writeRemoveFileError(commandWindow, errorMessageColor)
+    else: commandWindow.writeRemoveFileError
 
 proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   let dirname = getCommand(status, "New file name: ")
@@ -155,7 +155,7 @@ proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   try:
     createDir($dirname[0])
     filerStatus.dirlistUpdate = true
-  except OSError: writeCreateDirError(status.commandWindow, status.settings.editorColor.errorMessage)
+  except OSError: status.commandWindow.writeCreateDirError
    
 proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   let
@@ -170,19 +170,15 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
     try:
       setCurrentDir(path)
       filerStatus.dirlistUpdate = true
-    except OSError: status.commandWindow.writeFileOpenError(path, status.settings.editorColor.errorMessage)
+    except OSError: status.commandWindow.writeFileOpenError(path)
 
-proc setDirListColor(kind: PathComponent, isCurrentLine: bool): ColorPair =
-  case kind
-  of pcFile:
-    if isCurrentLine: result = ColorPair.brightWhiteGreen
-    else: result = ColorPair.brightWhiteDefault
-  of pcDir:
-    if isCurrentLine: result = ColorPair.brightWhiteGreen
-    else: result = ColorPair.brightGreenDefault
-  of pcLinkToDir, pcLinkToFile:
-    if isCurrentLine: result = ColorPair.whiteCyan
-    else: result = ColorPair.cyanDefault
+proc setDirListColor(kind: PathComponent, isCurrentLine: bool): EditorColorPair =
+  if isCurrentLine: result = EditorColorPair.currentFile
+  else:
+    case kind
+    of pcFile: result = EditorColorPair.file
+    of pcDir: result = EditorColorPair.dir
+    of pcLinkToDir, pcLinkToFile: result = EditorColorPair.pcLink
 
 proc initFilelistHighlight[T](dirList: seq[PathInfo], buffer: T, currentLine: int): Highlight =
   for i in 0 ..< dirList.len:
@@ -198,12 +194,13 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus, settings: EditorSettings, 
       kind = filerStatus.dirList[i].kind
     bufStatus.buffer.add(filename.toRunes)
 
-    let oldLine =  bufStatus.buffer[i]
-    var newLine =  bufStatus.buffer[i]
-    if kind == pcLinkToFile: newLine.add(ru"@ -> " & expandsymLink(filename).toRunes)
-    if kind == pcLinkToDir: newLine.add(ru"@ -> " & expandsymLink(filename).toRunes & ru"/")
-    if oldLine != newLine: bufStatus.buffer[i] = newLine
-
+  let oldLine =  bufStatus.buffer[i]
+  var newLine =  bufStatus.buffer[i]
+  if kind == pcDir and 0 < i: newLine.add(ru"/")
+  elif kind == pcLinkToFile: newLine.add(ru"@ -> " & expandsymLink(filename).toRunes)
+  elif kind == pcLinkToDir: newLine.add(ru"@ -> " & expandsymLink(filename).toRunes & ru"/")
+  if oldLine != newLine: bufStatus.buffer[i] = newLine
+  
   let useStatusBar = if settings.statusBar.useBar: 1 else: 0
   let numOfFile = filerStatus.dirList.len
   bufStatus.highlight = initFilelistHighlight(filerStatus.dirList, bufStatus.buffer, bufStatus.currentLine)
@@ -217,9 +214,8 @@ proc updateFilerView(status: var EditorStatus, filerStatus: var FilerStatus) =
 
 proc initFileDeitalHighlight[T](buffer: T): Highlight =
   for i in 0 ..< buffer.len:
-    result.colorSegments.add(ColorSegment(firstRow: i, firstColumn: 0, lastRow: i, lastColumn: buffer[i].len, color: ColorPair.brightWhiteDefault))
+    result.colorSegments.add(ColorSegment(firstRow: i, firstColumn: 0, lastRow: i, lastColumn: buffer[i].len, color: EditorColorPair.defaultChar))
 
-## TODO: Add items
 proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string) =
   status.bufStatus[status.currentBuffer].buffer = initGapBuffer[seq[Rune]]()
 
@@ -231,9 +227,11 @@ proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string)
   elif fileInfo.kind == pcLinkToFile: status.bufStatus[status.currentBuffer].buffer.add(ru"kind        : " & ru"Symbolic link to file")
   elif fileInfo.kind == pcLinkToDir: status.bufStatus[status.currentBuffer].buffer.add(ru"kind        : " & ru"Symbolic link to directory")
 
+  status.bufStatus[status.currentBuffer].buffer.add(("size        : " & $fileInfo.size & " bytes").toRunes)
   status.bufStatus[status.currentBuffer].buffer.add(("permissions : " & substr($fileInfo.permissions, 1, ($fileInfo.permissions).high - 1)).toRunes)
-  status.bufStatus[status.currentBuffer].buffer.add(("last access : " & $fileInfo.lastAccessTime).toRunes)
+  status.bufStatus[status.currentBuffer].buffer.add(("create time : " & $fileInfo.creationTime).toRunes)
   status.bufStatus[status.currentBuffer].buffer.add(("last write  : " & $fileInfo.lastWriteTime).toRunes)
+  status.bufStatus[status.currentBuffer].buffer.add(("last access : " & $fileInfo.lastAccessTime).toRunes)
 
   status.bufStatus[status.currentBuffer].highlight = initFileDeitalHighlight(status.bufStatus[status.currentBuffer].buffer)
 
@@ -245,9 +243,12 @@ proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string)
   status.bufStatus[status.currentBuffer].currentLine = 0
 
   status.update
-
   setCursor(false)
-  discard status.mainWindowInfo[status.currentMainWindow].window.getKey
+  while isResizekey(status.mainWindowInfo[status.currentMainWindow].window.getKey):
+    status.resize(terminalHeight(), terminalWidth())
+    status.update
+    setCursor(false)
+
   status.bufStatus[status.currentBuffer].currentLine = tmpCurrentLine
 
 proc changeSortBy(filerStatus: var FilerStatus) =
@@ -265,7 +266,7 @@ proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
   filerStatus.viewUpdate = true
   if filerStatus.dirList.len == 0:
     status.mainWindowInfo[status.currentMainWindow].window.erase
-    status.mainWindowInfo[status.currentMainWindow].window.write(0, 0, "not found")
+    status.mainWindowInfo[status.currentMainWindow].window.write(0, 0, "not found", EditorColorPair.commandBar)
     status.mainWindowInfo[status.currentMainWindow].window.refresh
     discard getKey(status.commandWindow)
     status.commandWindow.erase
@@ -317,14 +318,14 @@ proc filerMode*(status: var EditorStatus) =
     elif key == ord('C'):
       cutFile(filerStatus, status.bufStatus[status.currentBuffer].currentLine)
     elif key == ord('p'):
-      pasteFile(status.commandWindow, filerStatus, status.settings.editorColor.errorMessage)
+      pasteFile(status.commandWindow, filerStatus)
     elif key == ord('s'):
       changeSortBy(filerStatus)
     elif key == ord('N'):
       createDir(status, filerStatus)
-    elif isControlH(key):
+    elif isControlJ(key):
       movePrevWindow(status)
-    elif isControlL(key):
+    elif isControlK(key):
       moveNextWindow(status)
     elif isEnterKey(key):
       openFileOrDir(status, filerStatus)

@@ -1,5 +1,6 @@
 import parsetoml
 import editorstatus, ui
+from strutils import parseEnum
 
 proc getCursorType(cursorType, mode: string): CursorType =
   case cursorType
@@ -20,10 +21,8 @@ proc parseSettingsFile*(filename: string): EditorSettings =
   result = initEditorSettings()
   
   var settings: TomlValueRef
-  try:
-    settings = parsetoml.parseFile(filename)
-  except IOError:
-    return
+  try: settings = parsetoml.parseFile(filename)
+  except IOError: return
 
   if settings.contains("Standard"):
     if settings["Standard"].contains("theme"):
@@ -31,6 +30,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["Standard"].contains("number"):
       result.lineNumber = settings["Standard"]["number"].getbool()
+
+    if settings["Standard"].contains("currentNumber"):
+      result.currentLineNumber = settings["Standard"]["currentNumber"].getbool()
+
+    if settings["Standard"].contains("cursorLine"):
+      result.cursorLine = settings["Standard"]["cursorLine"].getbool()
 
     if settings["Standard"].contains("statusBar"):
       result.statusBar.useBar = settings["Standard"]["statusBar"].getbool()
@@ -80,3 +85,121 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["StatusBar"].contains("directory"):
         result.statusBar.language = settings["StatusBar"]["directory"].getbool()
+
+  if settings.contains("Theme"):
+    if settings["Theme"].contains("baseTheme"):
+      let theme = parseEnum[ColorTheme](settings["Theme"]["baseTheme"].getStr())
+      ColorThemeTable[ColorTheme.config] = ColorThemeTable[theme]
+
+    template color(str: string): untyped =
+      parseEnum[Color](settings["Theme"][str].getStr())
+
+    if settings["Theme"].contains("editorBg"):
+      ColorThemeTable[ColorTheme.config].editorBg = color("editorBg")
+
+    if settings["Theme"].contains("lineNum"):
+      ColorThemeTable[ColorTheme.config].lineNum = color("lineNum")
+
+    if settings["Theme"].contains("lineNumBg"):
+      ColorThemeTable[ColorTheme.config].lineNumBg = color("lineNumBg")
+
+    if settings["Theme"].contains("currentLineNum"):
+      ColorThemeTable[ColorTheme.config].currentLineNum = color("currentLineNum")
+
+    if settings["Theme"].contains("currentLineNumBg"):
+      ColorThemeTable[ColorTheme.config].currentLineNumBg = color("currentLineNumBg")
+
+    if settings["Theme"].contains("statusBar"):
+      ColorThemeTable[ColorTheme.config].statusBar = color("statusBar")
+
+    if settings["Theme"].contains("statusBarBg"):
+      ColorThemeTable[ColorTheme.config].statusBarBg = color("statusBarBg")
+
+    if settings["Theme"].contains("statusBarMode"):
+      ColorThemeTable[ColorTheme.config].statusBarMode = color("statusBarMode")
+
+    if settings["Theme"].contains("statusBarModeBg"):
+      ColorThemeTable[ColorTheme.config].statusBarModeBg = color("statusBarModeBg")
+
+    if settings["Theme"].contains("tab"):
+      ColorThemeTable[ColorTheme.config].tab = color("tab")
+
+    if settings["Theme"].contains("tabBg"):
+      ColorThemeTable[ColorTheme.config].tabBg = color("tabBg")
+
+    if settings["Theme"].contains("currentTab"):
+      ColorThemeTable[ColorTheme.config].currentTab = color("currentTab")
+
+    if settings["Theme"].contains("currentTabBg"):
+      ColorThemeTable[ColorTheme.config].currentTabBg = color("currentTabBg")
+
+    if settings["Theme"].contains("commandBar"):
+      ColorThemeTable[ColorTheme.config].commandBar = color("commandBar")
+
+    if settings["Theme"].contains("commandBarBg"):
+      ColorThemeTable[ColorTheme.config].commandBarBg = color("commandBarBg")
+
+    if settings["Theme"].contains("errorMessage"):
+      ColorThemeTable[ColorTheme.config].errorMessage = color("errorMessage")
+
+    if settings["Theme"].contains("errorMessageBg"):
+      ColorThemeTable[ColorTheme.config].errorMessageBg = color("errorMessageBg")
+
+    if settings["Theme"].contains("searchResult"):
+      ColorThemeTable[ColorTheme.config].searchResult = color("searchResult")
+
+    if settings["Theme"].contains("searchResultBg"):
+      ColorThemeTable[ColorTheme.config].searchResultBg = color("searchResultBg")
+
+    if settings["Theme"].contains("visualMode"):
+      ColorThemeTable[ColorTheme.config].visualMode = color("visualMode")
+
+    if settings["Theme"].contains("visualModeBg"):
+      ColorThemeTable[ColorTheme.config].visualModeBg = color("visualModeBg")
+
+    if settings["Theme"].contains("defaultCharactorColor"):
+      ColorThemeTable[ColorTheme.config].defaultChar = color("defaultCharactorColor")
+
+    if settings["Theme"].contains("gtKeywordColor"):
+      ColorThemeTable[ColorTheme.config].gtKeyword = color("gtKeywordColor")
+
+    if settings["Theme"].contains("gtStringLitColor"):
+      ColorThemeTable[ColorTheme.config].gtStringLit = color("gtStringLitColor")
+
+    if settings["Theme"].contains("gtDecNumberColor"):
+      ColorThemeTable[ColorTheme.config].gtDecNumber = color("gtDecNumberColor")
+
+    if settings["Theme"].contains("gtCommentColor"):
+      ColorThemeTable[ColorTheme.config].gtComment = color("gtCommentColor")
+
+    if settings["Theme"].contains("gtLongCommentColor"):
+      ColorThemeTable[ColorTheme.config].gtLongComment = color("gtLongCommentColor")
+
+    if settings["Theme"].contains("gtWhitespaceColor"):
+      ColorThemeTable[ColorTheme.config].gtLongComment = color("gtWhitespaceColor")
+
+    if settings["Theme"].contains("currentFile"):
+      ColorThemeTable[ColorTheme.config].currentFile = color("currentFile")
+
+    if settings["Theme"].contains("currentFileBg"):
+      ColorThemeTable[ColorTheme.config].currentFileBg = color("currentFileBg")
+
+    if settings["Theme"].contains("file"):
+      ColorThemeTable[ColorTheme.config].file = color("file")
+
+    if settings["Theme"].contains("fileBg"):
+      ColorThemeTable[ColorTheme.config].fileBg = color("fileBg")
+
+    if settings["Theme"].contains("dir"):
+      ColorThemeTable[ColorTheme.config].dir = color("dir")
+
+    if settings["Theme"].contains("dirBg"):
+      ColorThemeTable[ColorTheme.config].dirBg = color("dirBg")
+
+    if settings["Theme"].contains("pcLink"):
+      ColorThemeTable[ColorTheme.config].pcLink = color("pcLink")
+
+    if settings["Theme"].contains("pcLinkBg"):
+      ColorThemeTable[ColorTheme.config].pcLinkBg = color("pcLinkBg")
+
+    result.editorColorTheme = ColorTheme.config

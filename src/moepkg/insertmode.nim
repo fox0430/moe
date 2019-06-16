@@ -19,25 +19,45 @@ proc insertCloseParen(bufStatus: var BufferStatus, c: char) =
     newLine.insert(ru'\'', bufStatus.currentColumn)
   else:
     doAssert(false, fmt"Invalid parentheses: {c}")
-
+  
   if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
 
-proc isOpenParen(ch: char): bool = ch in ['(', '{', '[', '\"', '\'']
+proc isOpenParen(ch: char): bool = ch in {'(', '{', '[', '\"', '\''}
+
+proc isCloseParen(ch: char): bool = ch in {')', '}', ']', '\"', '\''}
+
+proc nextRuneIs(bufStatus: var BufferStatus, c: Rune): bool =
+  if bufStatus.buffer[bufStatus.currentLine].len > bufStatus.currentColumn:
+    result = bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn] == c
 
 proc insertCharacter(bufStatus: var BufferStatus, autoCloseParen: bool, c: Rune) =
   let oldLine = bufStatus.buffer[bufStatus.currentLine]
   var newLine = bufStatus.buffer[bufStatus.currentLine]
-  newLine.insert(c, bufStatus.currentColumn)
-  if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
-
-  inc(bufStatus.currentColumn)
+  template insert = newLine.insert(c, bufStatus.currentColumn)
+  template moveRight = inc(bufStatus.currentColumn)
+  template inserted =
+    bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
+    inc(bufStatus.countChange)
 
   if autoCloseParen and canConvertToChar(c):
     let ch = c.toChar
-    if isOpenParen(ch): insertCloseParen(bufStatus, ch)
-
-  bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
-  inc(bufStatus.countChange)
+    if isCloseParen(ch) and nextRuneIs(bufStatus, c):
+      moveRight()
+      inserted()
+    elif isOpenParen(ch):
+      insert()
+      moveRight()
+      insertCloseParen(bufStatus, ch)
+      inserted()
+    else:
+      insert()
+      moveRight()
+      inserted()
+  else:
+    insert()
+    moveRight()
+    inserted()
+  if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
 
 proc keyBackspace(bufStatus: var BufferStatus) =
   if bufStatus.currentLine == 0 and bufStatus.currentColumn == 0: return
@@ -174,4 +194,4 @@ proc insertMode*(status: var EditorStatus) =
       insertCharacter(status.bufStatus[status.currentBuffer], status.settings.autoCloseParen, key)
       bufferChanged = true
 
-  discard execShellCmd("printf '\\033[2 q'")
+  stdout.write "\x1b[2 q"

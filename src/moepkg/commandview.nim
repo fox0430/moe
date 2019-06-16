@@ -4,34 +4,43 @@ import editorstatus, editorview, ui, unicodeext
 type
   ExModeViewStatus = tuple[buffer: seq[Rune], prompt: string, cursorY, cursorX, currentPosition, startPosition: int]
 
-proc writeMessageOnCommandWindow(cmdWin: var Window, message: string, color: ColorPair) =
+proc writeMessageOnCommandWindow(cmdWin: var Window, message: string, color: EditorColorPair) =
   cmdWin.erase
   cmdWin.write(0, 0, message, color)
   cmdWin.refresh
 
-proc writeNoWriteError*(cmdWin: var Window, errorMessageColor: ColorPair) =
-  cmdWin.writeMessageOnCommandWindow("Error: No write since last change", errorMessageColor)
+proc writeNoWriteError*(cmdWin: var Window) =
+  cmdWin.writeMessageOnCommandWindow("Error: No write since last change", EditorColorPair.errorMessage)
 
-proc writeSaveError*(cmdWin: var Window, errorMessageColor: ColorPair) =
-  cmdWin.writeMessageOnCommandWindow("Error: Failed to save the file", errorMessageColor)
+proc writeSaveError*(cmdWin: var Window) =
+  cmdWin.writeMessageOnCommandWindow("Error: Failed to save the file", EditorColorPair.errorMessage)
 
-proc writeRemoveFileError*(cmdWin: var Window, errorMessageColor: ColorPair) =
-  cmdWin.writeMessageOnCommandWindow("Error: can not remove file", errorMessageColor)
+proc writeRemoveFileError*(cmdWin: var Window) =
+  cmdWin.writeMessageOnCommandWindow("Error: can not remove file", EditorColorPair.errorMessage)
 
-proc writeRemoveDirError*(cmdWin: var Window, errorMessageColor: ColorPair) =
-  cmdWin.writeMessageOnCommandWindow("Error: can not remove directory", errorMessageColor)
+proc writeRemoveDirError*(cmdWin: var Window) =
+  cmdWin.writeMessageOnCommandWindow("Error: can not remove directory", EditorColorPair.errorMessage)
 
-proc writeCopyFileError*(cmdWin: var Window, errorMessageColor: ColorPair) =
-  cmdWin.writeMessageOnCommandWindow("Error: can not copy file", errorMessageColor)
+proc writeCopyFileError*(cmdWin: var Window) =
+  cmdWin.writeMessageOnCommandWindow("Error: can not copy file", EditorColorPair.errorMessage)
 
-proc writeFileOpenError*(cmdWin: var Window, fileName: string, errorMessageColor: Colorpair) =
-  cmdWin.writeMessageOnCommandWindow("Error: can not open: " & fileName, errorMessageColor)
+proc writeFileOpenError*(cmdWin: var Window, fileName: string) =
+  cmdWin.writeMessageOnCommandWindow("Error: can not open: " & fileName, EditorColorPair.errorMessage)
 
-proc writeCreateDirError*(cmdWin: var Window, errorMessageColor: Colorpair) =
-  cmdWin.writeMessageOnCommandWindow("Error: : can not create direcotry", errorMessageColor)
+proc writeCreateDirError*(cmdWin: var Window) =
+  cmdWin.writeMessageOnCommandWindow("Error: : can not create direcotry", EditorColorPair.errorMessage)
 
-proc writeMessageDeletedFile*(cmdWin: var Window, filename: string, messageColor: Colorpair) =
-  cmdWin.writeMessageOnCommandWindow("Deleted: " & filename, messageColor)
+proc writeMessageDeletedFile*(cmdWin: var Window, filename: string) =
+  cmdWin.writeMessageOnCommandWindow("Deleted: " & filename, EditorColorPair.commandBar)
+
+proc writeNoFileNameError*(cmdWin: var Window) =
+  cmdWin.writeMessageOnCommandWindow("Error: No file name" , EditorColorPair.errorMessage)
+
+proc writeMessageYankedLine*(cmdWin: var Window, numOfLine: int) =
+  cmdWin.writeMessageOnCommandWindow(fmt"{numOfLine} line yanked" , EditorColorPair.commandBar)
+
+proc writeMessageYankedCharactor*(cmdWin: var Window, numOfChar: int) =
+  cmdWin.writeMessageOnCommandWindow(fmt"{numOfChar} charactor yanked" , EditorColorPair.commandBar)
 
 proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
   for i in 0 .. r.high:
@@ -71,7 +80,7 @@ proc splitCommand(command: string): seq[seq[Rune]] =
   else:
     return strutils.splitWhitespace(command).map(proc(s: string): seq[Rune] = toRunes(s))
 
-proc writeExModeView(commandWindow: var Window, exStatus: ExModeViewStatus, color: ColorPair) =
+proc writeExModeView(commandWindow: var Window, exStatus: ExModeViewStatus, color: EditorColorPair) =
   let buffer = ($exStatus.buffer).substr(exStatus.startPosition, exStatus.buffer.len)
 
   commandWindow.erase
@@ -131,7 +140,7 @@ proc insertCommandBuffer(exStatus: var ExModeViewStatus, c: Rune) =
 proc getKeyword*(status: var EditorStatus, prompt: string): seq[Rune] =
   var exStatus = initExModeViewStatus(prompt)
   while true:
-    writeExModeView(status.commandWindow, exStatus, status.settings.editorColor.commandBar)
+    writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
 
     var key = getKey(status.commandWindow)
 
@@ -154,7 +163,7 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
   status.resize(terminalHeight(), terminalWidth())
 
   while true:
-    writeExModeView(status.commandWindow, exStatus, status.settings.editorColor.commandBar)
+    writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
 
     var key = getKey(status.commandWindow)
 

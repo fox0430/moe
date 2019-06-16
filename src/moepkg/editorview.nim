@@ -107,7 +107,7 @@ proc resize*[T](view: var EditorView, buffer: T, height, width, widthOfLineNum: 
   view.updated = true
   view.reload(buffer, topLine)
 
-proc scrollUp[T](view: var EditorView, buffer: T) =
+proc scrollUp*[T](view: var EditorView, buffer: T) =
   ## EditorView表示を1ライン上にずらす
 
   view.updated = true
@@ -136,7 +136,7 @@ proc scrollUp[T](view: var EditorView, buffer: T) =
       view.length.addFirst(singleLine.length)
       break
 
-proc scrollDown[T](view: var EditorView, buffer: T) =
+proc scrollDown*[T](view: var EditorView, buffer: T) =
   ## EditorViewの表示を1ライン下にずらす
 
   view.updated = true
@@ -167,18 +167,18 @@ proc scrollDown[T](view: var EditorView, buffer: T) =
     view.start.addLast(singleLine.start)
     view.length.addLast(singleLine.length)
 
-proc writeLineNum(view: EditorView, win: var Window, y, line: int, colorPair: ColorPair) =
+proc writeLineNum(view: EditorView, win: var Window, y, line: int, colorPair: EditorColorPair) =
   let width = view.widthOfLineNum
   win.write(y, 0, strutils.align($(line+1), view.widthOfLineNum-1), colorPair, false)
 
-proc write(view: EditorView, win: var Window, y, x: int, str: seq[Rune], color: ColorPair) =
+proc write(view: EditorView, win: var Window, y, x: int, str: seq[Rune], color: EditorColorPair) =
   # TODO: use settings file
   const tab = "    "
   win.write(y, x, ($str).replace("\t", tab), color, false)
 
-proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, currentWin: bool, buffer: T, highlight: Highlight, editorColor: EditorColor, currentLine: int) =
+proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, currentLineNumber, cursorLine, currentWin, isVisualMode: bool, buffer: T, highlight: Highlight, currentLine, startSelectedLine, endSelectedLine: int) =
   win.erase
-  view.widthOfLineNum = if lineNumber: buffer.len.numberOfDigits+1 else: 0
+  view.widthOfLineNum = if lineNumber: buffer.len.numberOfDigits + 1 else: 0
 
   let
     start = (view.originalLine[0], view.start[0])
@@ -189,15 +189,18 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, curren
 
     let isCurrentLine = view.originalLine[y] == currentLine
     if lineNumber and view.start[y] == 0:
-      view.writeLineNum(win, y, view.originalLine[y], if isCurrentLine and currentWin: editorColor.currentLineNum else: editorColor.lineNum)
+      view.writeLineNum(win, y, view.originalLine[y], if isCurrentLine and currentWin and currentLineNumber: EditorColorPair.currentLineNum else: EditorColorPair.lineNum)
 
     var x = view.widthOfLineNum
     if view.length[y] == 0:
-      view.write(win, y, x, view.lines[y], ColorPair.brightGreenDefault)
+      if isVisualMode and (view.originalLine[y] >= startSelectedLine and endSelectedLine >= view.originalLine[y]):
+        view.write(win, y, x, ru" ", EditorColorPair.visualMode)
+      else: view.write(win, y, x, view.lines[y], EditorColorPair.defaultChar)
       continue
 
     while i < highlight.len and highlight[i].firstRow < view.originalLine[y]: inc(i)
     while i < highlight.len and highlight[i].firstRow == view.originalLine[y]:
+      if (highlight[i].firstRow, highlight[i].firstColumn) > (highlight[i].lastRow, highlight[i].lastColumn) : break # skip an empty segment
       let
         first = max(highlight[i].firstColumn-view.start[y], 0)
         last = min(highlight[i].lastColumn-view.start[y], view.lines[y].high)
@@ -213,21 +216,23 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, curren
         assert(first <= last, fmt"first = {first}, last = {last}")
       
       let str = view.lines[y][first .. last]
-      view.write(win, y, x, str, highlight[i].color)
+      if isCurrentLine and cursorLine:
+        win.attron(Attributes.underline)
+        view.write(win, y, x, str, highlight[i].color)
+        win.attroff(Attributes.underline)
+      else: view.write(win, y, x, str, highlight[i].color)
       x += width(str)
-      if last == highlight[i].lastColumn - view.start[y]:
-        # consumed a whole segment
-        inc(i)
+      if last == highlight[i].lastColumn - view.start[y]: inc(i) # consumed a whole segment
       else: break
 
   win.refresh
 
-proc update*[T](view: var EditorView, win: var Window, lineNumber, currentWin: bool, buffer: T, highlight: Highlight, editorColor: EditorColor, currentLine: int) =
-  let widthOfLineNum = buffer.len.intToStr.len+1
-  if widthOfLineNum != view.widthOfLineNum: view.resize(buffer, view.height, view.width+view.widthOfLineNum-widthOfLineNum, widthOfLineNum)
-  view.writeAllLines(win, lineNumber, currentWin, buffer, highlight, editorColor, currentLine)
+proc update*[T](view: var EditorView, win: var Window, lineNumber, currentLineNumber, cursorLine, currentWin, isVisualMode: bool, buffer: T, highlight: Highlight, currentLine, startSelectedLine, endSelectedLine: int) =
+  let widthOfLineNum = buffer.len.intToStr.len + 1
+  if lineNumber and widthOfLineNum != view.widthOfLineNum: view.resize(buffer, view.height, view.width + view.widthOfLineNum - widthOfLineNum, widthOfLineNum)
+  view.writeAllLines(win, lineNumber, currentLineNumber, cursorLine, currentWin, isVisualMode, buffer, highlight, currentLine, startSelectedLine, endSelectedLine)
   view.updated = false
 
 proc seekCursor*[T](view: var EditorView, buffer: T, currentLine, currentColumn: int) =
   while currentLine < view.originalLine[0] or (currentLine == view.originalLine[0] and view.length[0] > 0 and currentColumn < view.start[0]): view.scrollUp(buffer)
-  while (view.originalLine[view.height-1] != -1 and currentLine > view.originalLine[view.height-1]) or (currentLine == view.originalLine[view.height-1] and view.length[view.height-1] > 0 and currentColumn >= view.start[view.height-1]+view.length[view.height-1]): view.scrollDown(buffer)
+  while (view.originalLine[view.height - 1] != -1 and currentLine > view.originalLine[view.height - 1]) or (currentLine == view.originalLine[view.height - 1] and view.length[view.height - 1] > 0 and currentColumn >= view.start[view.height - 1]+view.length[view.height - 1]): view.scrollDown(buffer)
