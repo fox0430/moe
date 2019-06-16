@@ -36,6 +36,7 @@ proc insertCharacter(bufStatus: var BufferStatus, autoCloseParen: bool, c: Rune)
   template insert = newLine.insert(c, bufStatus.currentColumn)
   template moveRight = inc(bufStatus.currentColumn)
   template inserted =
+    if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
     bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
     inc(bufStatus.countChange)
 
@@ -47,6 +48,7 @@ proc insertCharacter(bufStatus: var BufferStatus, autoCloseParen: bool, c: Rune)
     elif isOpenParen(ch):
       insert()
       moveRight()
+      if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
       insertCloseParen(bufStatus, ch)
       inserted()
     else:
@@ -57,7 +59,6 @@ proc insertCharacter(bufStatus: var BufferStatus, autoCloseParen: bool, c: Rune)
     insert()
     moveRight()
     inserted()
-  if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
 
 proc keyBackspace(bufStatus: var BufferStatus) =
   if bufStatus.currentLine == 0 and bufStatus.currentColumn == 0: return
