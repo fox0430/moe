@@ -20,23 +20,13 @@ type
       assignPosition*: int
 
 proc newInsertCommand*[T](element: T, position: int): Command[T] =
-  new(result)
-  result.kind = insert
-  result.insertElement = element
-  result.insertPosition = position
+  Command[T](kind: insert, insertElement: element, insertPosition: position)
 
 proc newDeleteCommand*[T](element: T, position: int): Command[T] =
-  new(result)
-  result.kind = delete
-  result.deleteElement = element
-  result.deletePosition = position
+  Command[T](kind: delete, deleteElement: element, deletePosition: position)
 
 proc newAssignCommand*[T](oldElement, newElement: T, position: int): Command[T] =
-  new(result)
-  result.kind = assign
-  result.oldElement = oldElement
-  result.newElement = newElement
-  result.assignPosition = position
+  Command[T](kind: assign, oldElement: oldElement, newElement: newElement, assignPosition: position)
 
 proc doInsert[T, U](command: Command[T], buffer: var U, pushToStack: bool = true) =
   doAssert(command.kind == CommandKind.insert)

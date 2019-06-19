@@ -95,7 +95,7 @@ proc delete*[T](gapBuffer: var GapBuffer[T], index: int, pushToStack: bool = tru
 
 proc delete*[T](gapBuffer: var GapBuffer[T], first, last: int, pushToStack: bool = true) =
   ## Delete [first, last] elements
-  for i in first..last: gapBuffer.delete(i)
+  for i in countdown(last, first): gapBuffer.delete(i)
 
 proc assign*[T](gapBuffer: var GapBuffer, val: T, index: int, pushToStack: bool = true) =
   doAssert(0<=index and index<gapBuffer.size, "Gapbuffer: Invalid index.")
