@@ -90,7 +90,7 @@ proc insertIndent(bufStatus: var BufferStatus) =
   let oldLine = bufStatus.buffer[bufStatus.currentLine + 1]
   var newLine = bufStatus.buffer[bufStatus.currentLine + 1]
   newLine &= repeat(' ', indent).toRunes
-  if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
+  if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine + 1] = newLine
 
 proc keyEnter*(bufStatus: var BufferStatus, autoIndent: bool) =
   bufStatus.buffer.insert(ru"", bufStatus.currentLine + 1)
