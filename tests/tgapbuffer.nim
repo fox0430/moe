@@ -77,3 +77,110 @@ test "prev":
 
   check(buffer.prev(1, 0) == (0, 0))
   check(buffer.prev(0, 0) == (0, 0))
+
+proc insertAndLockSuit(buffer: var GapBuffer[string], s: string, i: Natural) =
+  buffer.insert(s, i)
+  buffer.beginNewSuitIfNeeded
+
+proc deleteAndLockSuit(buffer: var GapBuffer[string], i: Natural) =
+  buffer.delete(i)
+  buffer.beginNewSuitIfNeeded
+
+proc assignAndLockSuit(buffer: var GapBuffer[string], s: string, i: Natural) =
+  buffer[i] = s
+  buffer.beginNewSuitIfNeeded
+
+test "undo/redo(only construction)":
+  var buffer = initGapBuffer[string]()
+  check(not buffer.canUndo)
+  check(not buffer.canRedo)
+  check($buffer == "")
+
+test "undo/redo(insert)":
+  var buffer = initGapBuffer[string]()
+  buffer.insertAndLockSuit("0", 0) # ["0"]
+  buffer.insertAndLockSuit("1", 0) # ["1", "0"]
+  buffer.insertAndLockSuit("2", 1) # ["1", "2", "0"]
+  buffer.insertAndLockSuit("3", 3) # ["1", "2", "0", "3"]
+
+  check(not buffer.canRedo)
+
+  check($buffer == "1\n2\n0\n3\n")
+
+  buffer.undo # ["1", "2", "0"]
+  check($buffer == "1\n2\n0\n")
+
+  buffer.undo # ["1", "0"]
+  check($buffer == "1\n0\n")
+
+  buffer.undo # ["0"]
+  check($buffer == "0\n")
+
+  buffer.undo # []
+  check($buffer == "")
+
+  check(not buffer.canUndo)
+
+  buffer.redo # ["0"]
+  check($buffer == "0\n")
+
+  buffer.redo # ["1", "0"]
+  check($buffer == "1\n0\n")
+
+  buffer.redo # ["1", "2", "0"]
+  check($buffer == "1\n2\n0\n")
+
+  buffer.redo # ["1", "2", "0", "3"]
+  check($buffer == "1\n2\n0\n3\n")
+
+  check(not buffer.canRedo)
+
+test "undo/redo(delete)":
+  var buffer = initGapBuffer[string]()
+  buffer.insertAndLockSuit("0", 0) # ["0"]
+  buffer.deleteAndLockSuit(0) # []
+
+  check(not buffer.canRedo)
+
+  check($buffer == "")
+
+  buffer.undo # ["0"]
+  check($buffer == "0\n")
+
+  buffer.undo # []
+  check($buffer == "")
+
+  check(not buffer.canUndo)
+
+  buffer.redo # ["0"]
+  check($buffer == "0\n")
+
+  buffer.redo # []
+  check($buffer == "")
+
+  check(not buffer.canRedo)
+
+test "undo/redo(assign)":
+  var buffer = initGapBuffer[string]()
+  buffer.insertAndLockSuit("0", 0) # ["0"]
+  buffer.assignAndLockSuit("1", 0) # ["1"]
+
+  check(not buffer.canRedo)
+
+  check($buffer == "1\n")
+
+  buffer.undo # ["0"]
+  check($buffer == "0\n")
+
+  buffer.undo # []
+  check($buffer == "")
+
+  check(not buffer.canUndo)
+
+  buffer.redo # ["0"]
+  check($buffer == "0\n")
+
+  buffer.redo # ["1"]
+  check($buffer == "1\n")
+
+  check(not buffer.canRedo)

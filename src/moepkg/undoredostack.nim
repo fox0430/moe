@@ -84,11 +84,13 @@ proc `[]`[T](commandSuit: CommandSuit[T], i: BackwardsIndex): Command[T] = comma
 proc initUndoRedoStack*[T](): UndoRedoStack[T] =
   result.currentSuit = CommandSuit[T](commands: @[], locked: false)
 
+proc lockCurrentSuit*[T](undoRedoStack: var UndoRedoStack[T]) =
+  undoRedoStack.currentSuit.locked = true
+  undoRedoStack.undoSuits.add(undoRedoStack.currentSuit)
+  undoRedoStack.currentSuit = CommandSuit[T](commands: @[], locked: false)
+
 proc beginNewSuitIfNeeded*[T](undoRedoStack: var UndoRedoStack[T]) =
-  if undoRedoStack.currentSuit.len > 0:
-    undoRedoStack.currentSuit.locked = true
-    undoRedoStack.undoSuits.add(undoRedoStack.currentSuit)
-    undoRedoStack.currentSuit = CommandSuit[T](commands: @[], locked: false)
+  if undoRedoStack.currentSuit.len > 0: undoRedoStack.lockCurrentSuit
 
 proc push*[T](undoRedoStack: var UndoRedoStack[T], command: Command[T]) =
   if  undoRedoStack.redoSuits.len > 0: undoRedoStack.redoSuits = @[]
