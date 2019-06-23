@@ -101,6 +101,7 @@ proc lockCurrentSuit*[T](undoRedoStack: var UndoRedoStack[T]) =
   undoRedoStack.currentSuit = initCommandSuit[T]()
 
 proc lastSuitId*[T](undoRedoStack: UndoRedoStack[T]): int =
+  ## Return the id that was applied last.
   if undoRedoStack.undoSuits.len == 0: return 0
   if undoRedoStack.currentSuit.len > 0: undoRedoStack.currentSuit.id
   else: undoRedoStack.undoSuits[^1].id
