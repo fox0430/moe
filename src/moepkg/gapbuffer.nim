@@ -112,6 +112,8 @@ proc `[]`*[T](gapBuffer: GapBuffer[T], index: int): T =
   if index < gapBuffer.gapBegin: return gapBuffer.buffer[index]
   return gapBuffer.buffer[gapBuffer.gapEnd+(index-gapBuffer.gapBegin)]
 
+proc lastSuitId*(gapBuffer: GapBuffer): int = gapBuffer.undoRedoStack.lastSuitId
+
 proc beginNewSuitIfNeeded*(gapBuffer: var GapBuffer) = gapBuffer.undoRedoStack.beginNewSuitIfNeeded
 
 proc canUndo*(gapBuffer: GapBuffer): bool = gapBuffer.undoRedoStack.canUndo

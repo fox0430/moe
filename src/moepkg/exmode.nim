@@ -477,4 +477,6 @@ proc exMode*(status: var EditorStatus) =
   let command = getCommand(status, ":")
   
   status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
+  status.bufStatus[status.currentBuffer].tryRecordCurrentPosition
+  
   exModeCommand(status, command)

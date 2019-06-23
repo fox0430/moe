@@ -1,4 +1,4 @@
-import sequtils, strformat
+import sequtils, strformat, tables
 
 type
   CommandKind = enum
@@ -68,10 +68,19 @@ type
   CommandSuit[T] = object
     commands: seq[Command[T]]
     locked: bool
+    id: int
   
   UndoRedoStack*[T] = object
     undoSuits, redoSuits: seq[CommandSuit[T]]
     currentSuit: CommandSuit[T]
+
+var
+  isLocked: Table[int, bool]
+  nextSuitId = 1
+
+proc initCommandSuit[T](): CommandSuit[T] =
+  result = CommandSuit[T](commands: @[], locked: false, id: nextSuitId)
+  inc(nextSuitId)
 
 proc len[T](commandSuit: CommandSuit[T]): int = commandSuit.commands.len
 
@@ -82,12 +91,19 @@ proc `[]`[T](commandSuit: CommandSuit[T], i: Natural): Command[T] = commandSuit.
 proc `[]`[T](commandSuit: CommandSuit[T], i: BackwardsIndex): Command[T] = commandSuit.commands[i]
 
 proc initUndoRedoStack*[T](): UndoRedoStack[T] =
-  result.currentSuit = CommandSuit[T](commands: @[], locked: false)
+  result.currentSuit = initCommandSuit[T]()
 
 proc lockCurrentSuit*[T](undoRedoStack: var UndoRedoStack[T]) =
+  isLocked[undoRedoStack.currentSuit.id] = true
+
   undoRedoStack.currentSuit.locked = true
   undoRedoStack.undoSuits.add(undoRedoStack.currentSuit)
-  undoRedoStack.currentSuit = CommandSuit[T](commands: @[], locked: false)
+  undoRedoStack.currentSuit = initCommandSuit[T]()
+
+proc lastSuitId*[T](undoRedoStack: UndoRedoStack[T]): int =
+  if undoRedoStack.undoSuits.len == 0: return 0
+  if undoRedoStack.currentSuit.len > 0: undoRedoStack.currentSuit.id
+  else: undoRedoStack.undoSuits[^1].id
 
 proc beginNewSuitIfNeeded*[T](undoRedoStack: var UndoRedoStack[T]) =
   if undoRedoStack.currentSuit.len > 0: undoRedoStack.lockCurrentSuit

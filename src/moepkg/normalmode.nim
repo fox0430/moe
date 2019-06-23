@@ -469,22 +469,19 @@ proc turnOffHighlighting*(status: var EditorStatus) =
 proc undo(bufStatus: var BufferStatus) =
   if not bufStatus.buffer.canUndo: return
   bufStatus.buffer.undo
+  bufStatus.revertPosition(bufStatus.buffer.lastSuitId)
+  if bufStatus.currentColumn == bufStatus.buffer[bufStatus.currentLine].len and bufStatus.currentColumn > 0:
+    (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.prev(bufStatus.currentLine, bufStatus.currentColumn)
   bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
-  while not bufStatus.view.findCursorPosition(bufStatus.currentLine, bufStatus.currentColumn).success:
-    (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.prev(bufStatus.currentLine, bufStatus.currentColumn)
-  if bufStatus.currentColumn == bufStatus.buffer[bufStatus.currentLine].len and (bufStatus.currentLine, bufStatus.currentColumn) != (0, 0):
-    (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.prev(bufStatus.currentLine, bufStatus.currentColumn)
   inc(bufStatus.countChange)
 
 proc redo(bufStatus: var BufferStatus) =
   if not bufStatus.buffer.canRedo: return
   bufStatus.buffer.redo
+  bufStatus.revertPosition(bufStatus.buffer.lastSuitId)
   bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
-  while not bufStatus.view.findCursorPosition(bufStatus.currentLine, bufStatus.currentColumn).success:
-    (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.prev(bufStatus.currentLine, bufStatus.currentColumn)
-  if bufStatus.currentColumn == bufStatus.buffer[bufStatus.currentLine].len and (bufStatus.currentLine, bufStatus.currentColumn) != (0, 0):
-    (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.prev(bufStatus.currentLine, bufStatus.currentColumn)
   inc(bufStatus.countChange)
+
 proc writeFileAndExit(status: var EditorStatus) =
   if status.bufStatus[status.currentBuffer].filename.len == 0:
     status.commandwindow.writeNoFileNameError
@@ -641,6 +638,7 @@ proc normalMode*(status: var EditorStatus) =
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
 
     status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
+    status.bufStatus[status.currentBuffer].tryRecordCurrentPosition
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())

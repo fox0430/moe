@@ -287,6 +287,7 @@ proc filerMode*(status: var EditorStatus) =
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
 
     status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
+    status.bufStatus[status.currentBuffer].tryRecordCurrentPosition
     
     if key == ord(':'): status.changeMode(Mode.ex)
 

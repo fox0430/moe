@@ -1,4 +1,4 @@
-import packages/docutils/highlite, strutils, terminal, os, strformat
+import packages/docutils/highlite, strutils, terminal, os, strformat, tables
 import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils, undoredostack
 
 type Mode* = enum
@@ -54,6 +54,7 @@ type BufferStatus* = object
   isHighlight*: bool
   filename*: seq[Rune]
   openDir: seq[Rune]
+  positionRecord*: Table[int, tuple[line, column, expandedColumn: int]]
   currentLine*: int
   currentColumn*: int
   expandedColumn*: int
@@ -349,6 +350,16 @@ proc addNewBuffer*(status:var EditorStatus, filename: string) =
 
   status.changeCurrentBuffer(index)
   status.changeMode(Mode.normal)
+
+proc tryRecordCurrentPosition*(bufStatus: var BufferStatus) =
+  bufStatus.positionRecord[bufStatus.buffer.lastSuitId] = (bufStatus.currentLine, bufStatus.currentColumn, bufStatus.expandedColumn)
+
+proc revertPosition*(bufStatus: var BufferStatus, id: int) =
+  doAssert(bufStatus.positionRecord.contains(id), fmt"The id not recorded was requested. [bufStatus.positionRecord = {bufStatus.positionRecord}, id = {id}]")
+
+  bufStatus.currentLine = bufStatus.positionRecord[id].line
+  bufStatus.currentColumn = bufStatus.positionRecord[id].column
+  bufStatus.expandedColumn = bufStatus.positionRecord[id].expandedColumn
 
 proc updateHighlight*(status: var EditorStatus)
 from searchmode import searchAllOccurrence

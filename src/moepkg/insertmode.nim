@@ -156,6 +156,7 @@ proc insertMode*(status: var EditorStatus) =
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
 
     status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
+    status.bufStatus[status.currentBuffer].tryRecordCurrentPosition
     
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
