@@ -74,9 +74,7 @@ type
     undoSuits, redoSuits: seq[CommandSuit[T]]
     currentSuit: CommandSuit[T]
 
-var
-  isLocked: Table[int, bool]
-  nextSuitId = 1
+var nextSuitId = 1
 
 proc initCommandSuit[T](): CommandSuit[T] =
   result = CommandSuit[T](commands: @[], locked: false, id: nextSuitId)
@@ -94,8 +92,6 @@ proc initUndoRedoStack*[T](): UndoRedoStack[T] =
   result.currentSuit = initCommandSuit[T]()
 
 proc lockCurrentSuit*[T](undoRedoStack: var UndoRedoStack[T]) =
-  isLocked[undoRedoStack.currentSuit.id] = true
-
   undoRedoStack.currentSuit.locked = true
   undoRedoStack.undoSuits.add(undoRedoStack.currentSuit)
   undoRedoStack.currentSuit = initCommandSuit[T]()
