@@ -2,25 +2,14 @@ import deques, strutils, strformat, sequtils, terminal, macros
 from os import execShellCmd
 import ui, editorstatus, editorview, cursor, gapbuffer, editorview, normalmode, unicodeext, highlight, undoredostack
 
-proc insertCloseParen(bufStatus: var BufferStatus, c: char) =
-  let oldLine = bufStatus.buffer[bufStatus.currentLine]
-  var newLine = bufStatus.buffer[bufStatus.currentLine]
-
+proc correspondingCloseParen(c: char): char =
   case c
-  of '(':
-    newLine.insert(ru')', bufStatus.currentColumn)
-  of '{':
-    newLine.insert(ru'}', bufStatus.currentColumn)
-  of '[':
-    newLine.insert(ru']', bufStatus.currentColumn)
-  of '"':
-    newLine.insert(ru('\"'), bufStatus.currentColumn)
-  of '\'':
-    newLine.insert(ru'\'', bufStatus.currentColumn)
-  else:
-    doAssert(false, fmt"Invalid parentheses: {c}")
-  
-  if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
+  of '(': return ')'
+  of '{': return '}'
+  of '[': return ']'
+  of '"': return  '\"'
+  of '\'': return '\''
+  else: doAssert(false, fmt"Invalid parentheses: {c}")
 
 proc isOpenParen(ch: char): bool = ch in {'(', '{', '[', '\"', '\''}
 
@@ -48,8 +37,7 @@ proc insertCharacter(bufStatus: var BufferStatus, autoCloseParen: bool, c: Rune)
     elif isOpenParen(ch):
       insert()
       moveRight()
-      if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
-      insertCloseParen(bufStatus, ch)
+      newLine.insert(correspondingCloseParen(ch).ru, bufStatus.currentColumn)
       inserted()
     else:
       insert()
