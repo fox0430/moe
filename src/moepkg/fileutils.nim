@@ -25,7 +25,7 @@ proc openFile*(filename: seq[Rune]): tuple[text: seq[Rune], encoding: CharacterE
 
 proc newFile*(): GapBuffer[seq[Rune]] =
   result = initGapBuffer[seq[Rune]]()
-  result.add(ru"")
+  result.add(ru"", false)
 
 proc saveFile*(filename: seq[Rune], runes: seq[Rune], encoding: CharacterEncoding) =
   writeFile($filename, convert($runes, $(if encoding == CharacterEncoding.unknown: CharacterEncoding.utf8 else: encoding), "UTF-8"))
