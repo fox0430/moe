@@ -1,5 +1,5 @@
-import packages/docutils/highlite, strutils, terminal, os, strformat
-import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils
+import packages/docutils/highlite, strutils, terminal, os, strformat, tables
+import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils, undoredostack
 
 type Mode* = enum
   normal, insert, visual, visualBlock, replace, ex, filer, search, bufManager
@@ -54,6 +54,7 @@ type BufferStatus* = object
   isHighlight*: bool
   filename*: seq[Rune]
   openDir: seq[Rune]
+  positionRecord*: Table[int, tuple[line, column, expandedColumn: int]]
   currentLine*: int
   currentColumn*: int
   expandedColumn*: int
@@ -291,11 +292,7 @@ proc update*(status: var EditorStatus) =
   setCursor(true)
 
 proc splitWindow*(status: var EditorStatus) =
-  let
-    numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
-    useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-    useTab = if status.settings.tabLine.useTab: 1 else: 0
-
+  let useTab = if status.settings.tabLine.useTab: 1 else: 0
   status.mainWindowInfo.insert(MainWindowInfo(window: initWindow(terminalHeight() - useTab - 1, int(terminalWidth() / status.mainWindowInfo.len), useTab, int(terminalWidth() / status.mainWindowInfo.len)), bufferIndex: status.currentBuffer), status.currentMainWindow)
 
   status.update
@@ -331,10 +328,8 @@ proc addNewBuffer*(status:var EditorStatus, filename: string) =
   status.bufStatus.add(BufferStatus(filename: filename.toRunes))
   let index = status.bufStatus.high
 
-  if filename == "" or existsFile(filename) == false:
-    status.bufStatus[index].buffer = newFile()
+  if existsFile(filename) == false: status.bufStatus[index].buffer = newFile()
   else:
-    status.bufStatus[index].language = detectLanguage(filename)
     try:
       let textAndEncoding = openFile(filename.toRunes)
       status.bufStatus[index].buffer = textAndEncoding.text.toGapBuffer
@@ -343,6 +338,7 @@ proc addNewBuffer*(status:var EditorStatus, filename: string) =
       status.commandWindow.writeFileOpenError(filename)
       return
 
+  if filename != "": status.bufStatus[index].language = detectLanguage(filename)
   let lang = if status.settings.syntax: status.bufStatus[index].language else: SourceLanguage.langNone
   status.bufStatus[index].highlight = initHighlight($status.bufStatus[index].buffer, lang)
 
@@ -354,6 +350,16 @@ proc addNewBuffer*(status:var EditorStatus, filename: string) =
 
   status.changeCurrentBuffer(index)
   status.changeMode(Mode.normal)
+
+proc tryRecordCurrentPosition*(bufStatus: var BufferStatus) =
+  bufStatus.positionRecord[bufStatus.buffer.lastSuitId] = (bufStatus.currentLine, bufStatus.currentColumn, bufStatus.expandedColumn)
+
+proc revertPosition*(bufStatus: var BufferStatus, id: int) =
+  doAssert(bufStatus.positionRecord.contains(id), fmt"The id not recorded was requested. [bufStatus.positionRecord = {bufStatus.positionRecord}, id = {id}]")
+
+  bufStatus.currentLine = bufStatus.positionRecord[id].line
+  bufStatus.currentColumn = bufStatus.positionRecord[id].column
+  bufStatus.expandedColumn = bufStatus.positionRecord[id].expandedColumn
 
 proc updateHighlight*(status: var EditorStatus)
 from searchmode import searchAllOccurrence

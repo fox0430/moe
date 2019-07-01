@@ -1,8 +1,13 @@
+import macros
+import undoredostack
+export undoredostack
+
 type GapBuffer*[T] = object
   buffer: seq[T]
   size: int # 意味のあるデータが実際に格納されているサイズ
   capacity: int # Amount of secured memory
   gapBegin, gapEnd: int # 半開区間[gapBegin,gapEnd)を隙間とする
+  undoRedoStack: UndoRedoStack[T]
 
 proc gapLen(gapBuffer: GapBuffer): int = gapBuffer.gapEnd - gapBuffer.gapBegin
 
@@ -31,10 +36,12 @@ proc reserve(gapBuffer: var GapBuffer, capacity: int) =
   gapBuffer.gapEnd = capacity
   gapBuffer.capacity = capacity
 
-proc insert*[T](gapBuffer: var GapBuffer, element: T, position: int) =
+proc insert*[T](gapBuffer: var GapBuffer, element: T, position: int, pushToStack: bool = true) =
   ## positionの直前に要素を挿入する.末尾に追加したい場合はpositionにバッファの要素数を渡す.
   ## ex.空のバッファに要素を追加する場合はpositionに0を渡す.
   doAssert(0<=position and position <= gapBuffer.size, "Gapbuffer: Invalid position.")
+
+  if pushToStack: gapBuffer.undoRedoStack.push(newInsertCommand[T](element, position))
 
   if gapBuffer.size == gapBuffer.capacity: gapBuffer.reserve(gapBuffer.capacity*2)
   if gapBuffer.gapBegin != position: gapBuffer.makeGap(position)
@@ -42,20 +49,24 @@ proc insert*[T](gapBuffer: var GapBuffer, element: T, position: int) =
   inc(gapBuffer.gapBegin)
   inc(gapBuffer.size)
 
-proc add*[T](gapBuffer: var GapBuffer[T], val: T) =
-  gapBuffer.insert(val, gapBuffer.len)
+proc add*[T](gapBuffer: var GapBuffer[T], val: T, pushToStack: bool = true) =
+  gapBuffer.insert(val, gapBuffer.len, pushToStack)
 
 proc initGapBuffer*[T](): GapBuffer[T] =
   result.buffer = newSeq[T](1)
   result.capacity = 1
   result.gapEnd = 1
+  result.undoRedoStack = initUndoRedoStack[T]()
 
 proc initGapBuffer*[T](elements: seq[T]): GapBuffer[T] =
   result = initGapBuffer[T]()
-  for e in elements: result.add(e)
+  for e in elements: result.add(e, false)
 
-proc delete*(gapBuffer: var GapBuffer, delBegin, delEnd: int) =
-  ## Delete [delBegin, delEnd) elements
+proc deleteInterval(gapBuffer: var GapBuffer, first, last: int) =
+  ## Delete [first, last] elements
+  let
+    delBegin = first
+    delEnd = last+1
   doAssert(0<=delBegin and delBegin <= delEnd and delEnd <= gapBuffer.size, "Gapbuffer: Invalid interval.")
 
   let
@@ -77,23 +88,41 @@ proc delete*(gapBuffer: var GapBuffer, delBegin, delEnd: int) =
   gapBuffer.size -= delEnd - delBegin
   while gapBuffer.size > 0 and gapBuffer.size*4 <= gapBuffer.capacity: gapBuffer.reserve(gapBuffer.capacity div 2)
 
+proc delete*[T](gapBuffer: var GapBuffer[T], index: int, pushToStack: bool = true) =
+  ## Delete the i-th element
+  if pushToStack: gapBuffer.undoRedoStack.push(newDeleteCommand[T](gapBuffer[index], index))
+  gapBuffer.deleteInterval(index, index)
+
+proc delete*[T](gapBuffer: var GapBuffer[T], first, last: int, pushToStack: bool = true) =
+  ## Delete [first, last] elements
+  for i in countdown(last, first): gapBuffer.delete(i)
+
+proc assign*[T](gapBuffer: var GapBuffer, val: T, index: int, pushToStack: bool = true) =
+  doAssert(0<=index and index<gapBuffer.size, "Gapbuffer: Invalid index.")
+
+  if pushToStack: gapBuffer.undoRedoStack.push(newAssignCommand[T](gapBuffer[index], val, index))
+  if index < gapBuffer.gapBegin: gapBuffer.buffer[index] = val
+  else: gapBuffer.buffer[gapBuffer.gapEnd+(index-gapBuffer.gapBegin)] = val
+
+proc `[]=`*[T](gapBuffer: var GapBuffer, index: int, val: T) = gapBuffer.assign(val, index)
+
 proc `[]`*[T](gapBuffer: GapBuffer[T], index: int): T =
   doAssert(0<=index and index<gapBuffer.size, "Gapbuffer: Invalid index. index = "&($index)&", gapBuffer.size = "&($gapBuffer.size))
 
   if index < gapBuffer.gapBegin: return gapBuffer.buffer[index]
   return gapBuffer.buffer[gapBuffer.gapEnd+(index-gapBuffer.gapBegin)]
 
-proc `[]`*[T](gapBuffer: var GapBuffer[T], index: int): var T =
-  doAssert(0<=index and index<gapBuffer.size, "Gapbuffer: Invalid index.")
+proc lastSuitId*(gapBuffer: GapBuffer): int = gapBuffer.undoRedoStack.lastSuitId
 
-  if index < gapBuffer.gapBegin: return gapBuffer.buffer[index]
-  return gapBuffer.buffer[gapBuffer.gapEnd+(index-gapBuffer.gapBegin)]
+proc beginNewSuitIfNeeded*(gapBuffer: var GapBuffer) = gapBuffer.undoRedoStack.beginNewSuitIfNeeded
 
-proc `[]=`*[T](gapBuffer: var GapBuffer, index: int, val: T) =
-  doAssert(0<=index and index<gapBuffer.size, "Gapbuffer: Invalid index.")
+proc canUndo*(gapBuffer: GapBuffer): bool = gapBuffer.undoRedoStack.canUndo
 
-  if index < gapBuffer.gapBegin: gapBuffer.buffer[index] = val
-  else: gapBuffer.buffer[gapBuffer.gapEnd+(index-gapBuffer.gapBegin)] = val
+proc canRedo*(gapBuffer: GapBuffer): bool = gapBuffer.undoRedoStack.canRedo
+
+proc undo*(gapBuffer: var GapBuffer) = gapBuffer.undoRedoStack.undo(gapBuffer)
+
+proc redo*(gapBuffer: var GapBuffer) = gapBuffer.undoRedoStack.redo(gapBuffer)
 
 proc len*(gapBuffer: GapBuffer): int = gapBuffer.size
 

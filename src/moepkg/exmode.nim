@@ -373,7 +373,6 @@ proc listAllBufferCommand(status: var Editorstatus) =
   status.deleteBufferStatusCommand(status.bufStatus.high)
 
 proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
-
   let replaceInfo = parseReplaceCommand(command)
 
   if replaceInfo.searhWord == ru"'\n'" and status.bufStatus[status.currentBuffer].buffer.len > 1:
@@ -382,16 +381,23 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
       endLine = status.bufStatus[status.currentBuffer].buffer.high
 
     for i in 0 .. status.bufStatus[status.currentBuffer].buffer.high - 2:
-      status.bufStatus[status.currentBuffer].buffer[startLine].insert(replaceInfo.replaceWord, status.bufStatus[status.currentBuffer].buffer[startLine].len)
+      let oldLine = status.bufStatus[status.currentBuffer].buffer[startLine]
+      var newLine = status.bufStatus[status.currentBuffer].buffer[startLine]
+      newLine.insert(replaceInfo.replaceWord, status.bufStatus[status.currentBuffer].buffer[startLine].len)
       for j in 0 .. status.bufStatus[status.currentBuffer].buffer[startLine + 1].high:
-        status.bufStatus[status.currentBuffer].buffer[startLine].insert(status.bufStatus[status.currentBuffer].buffer[startLine + 1][j], status.bufStatus[status.currentBuffer].buffer[startLine].len)
-      status.bufStatus[status.currentBuffer].buffer.delete(startLine + 1, startLine + 2)
+        newLine.insert(status.bufStatus[status.currentBuffer].buffer[startLine + 1][j], status.bufStatus[status.currentBuffer].buffer[startLine].len)
+      if oldLine != newLine: status.bufStatus[status.currentBuffer].buffer[startLine] = newLine
+
+      status.bufStatus[status.currentBuffer].buffer.delete(startLine + 1, startLine + 1)
   else:
     for i in 0 .. status.bufStatus[status.currentBuffer].buffer.high:
       let searchResult = searchBuffer(status, replaceInfo.searhWord)
       if searchResult.line > -1:
-        status.bufStatus[status.currentBuffer].buffer[searchResult.line].delete(searchResult.column, searchResult.column + replaceInfo.searhWord.high)
-        status.bufStatus[status.currentBuffer].buffer[searchResult.line].insert(replaceInfo.replaceWord, searchResult.column)
+        let oldLine = status.bufStatus[status.currentBuffer].buffer[searchResult.line]
+        var newLine = status.bufStatus[status.currentBuffer].buffer[searchResult.line]
+        newLine.delete(searchResult.column, searchResult.column + replaceInfo.searhWord.high)
+        newLine.insert(replaceInfo.replaceWord, searchResult.column)
+        if oldLine != newLine: status.bufStatus[status.currentBuffer].buffer[searchResult.line] = newLine
 
   inc(status.bufStatus[status.currentBuffer].countChange)
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
@@ -469,4 +475,8 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
 
 proc exMode*(status: var EditorStatus) =
   let command = getCommand(status, ":")
+  
+  status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
+  status.bufStatus[status.currentBuffer].tryRecordCurrentPosition
+  
   exModeCommand(status, command)

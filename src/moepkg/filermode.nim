@@ -193,10 +193,14 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus, settings: EditorSettings, 
       filename = filerStatus.dirList[i].path
       kind = filerStatus.dirList[i].kind
     bufStatus.buffer.add(filename.toRunes)
-    if kind == pcDir and 0 < i: bufStatus.buffer[i].add(ru"/")
-    elif kind == pcLinkToFile: bufStatus.buffer[i].add(ru"@ -> " & expandsymLink(filename).toRunes)
-    elif kind == pcLinkToDir: bufStatus.buffer[i].add(ru"@ -> " & expandsymLink(filename).toRunes & ru"/")
 
+    let oldLine =  bufStatus.buffer[i]
+    var newLine =  bufStatus.buffer[i]
+    if kind == pcDir and 0 < i: newLine.add(ru"/")
+    elif kind == pcLinkToFile: newLine.add(ru"@ -> " & expandsymLink(filename).toRunes)
+    elif kind == pcLinkToDir: newLine.add(ru"@ -> " & expandsymLink(filename).toRunes & ru"/")
+    if oldLine != newLine: bufStatus.buffer[i] = newLine
+  
   let useStatusBar = if settings.statusBar.useBar: 1 else: 0
   let numOfFile = filerStatus.dirList.len
   bufStatus.highlight = initFilelistHighlight(filerStatus.dirList, bufStatus.buffer, bufStatus.currentLine)
@@ -282,6 +286,9 @@ proc filerMode*(status: var EditorStatus) =
     setCursor(false)
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
 
+    status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
+    status.bufStatus[status.currentBuffer].tryRecordCurrentPosition
+    
     if key == ord(':'): status.changeMode(Mode.ex)
 
     elif isResizekey(key):

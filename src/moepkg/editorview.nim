@@ -193,7 +193,7 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, curren
 
     var x = view.widthOfLineNum
     if view.length[y] == 0:
-      if isVisualMode and (y >= startSelectedLine and endSelectedLine >= y):
+      if isVisualMode and (view.originalLine[y] >= startSelectedLine and endSelectedLine >= view.originalLine[y]):
         view.write(win, y, x, ru" ", EditorColorPair.visualMode)
       else: view.write(win, y, x, view.lines[y], EditorColorPair.defaultChar)
       continue

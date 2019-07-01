@@ -1,5 +1,5 @@
 import strutils, strformat, terminal, deques, sequtils
-import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight, fileutils, commandview
+import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight, fileutils, commandview, undoredostack
 
 proc jumpLine*(status: var EditorStatus, destination: int)
 proc keyRight*(bufStatus: var BufferStatus)
@@ -82,10 +82,18 @@ proc deleteCurrentCharacter*(bufStatus: var BufferStatus) =
   if currentLine >= bufStatus.buffer.high and currentColumn > bufStatus.buffer[currentLine].high: return 
 
   if currentColumn == bufStatus.buffer[currentLine].len:
-    bufStatus.buffer[currentLine].insert(bufStatus.buffer[currentLine + 1], currentColumn)
-    bufStatus.buffer.delete(currentLine + 1, currentLine + 2)
+    let oldLine = bufStatus.buffer[bufStatus.currentLine]
+    var newLine = bufStatus.buffer[bufStatus.currentLine]
+    newLine.insert(bufStatus.buffer[currentLine + 1], currentColumn)
+    if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
+
+    bufStatus.buffer.delete(currentLine + 1, currentLine + 1)
   else:
-    bufStatus.buffer[currentLine].delete(currentColumn)
+    let oldLine = bufStatus.buffer[bufStatus.currentLine]
+    var newLine = bufStatus.buffer[bufStatus.currentLine]
+    newLine.delete(currentColumn)
+    if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
+    
     if bufStatus.buffer[currentLine].len > 0 and currentColumn == bufStatus.buffer[currentLine].len and currentMode != Mode.insert:
       bufStatus.currentColumn = bufStatus.buffer[bufStatus.currentLine].len-1
       bufStatus.expandedColumn = bufStatus.buffer[bufStatus.currentLine].len-1
@@ -270,7 +278,7 @@ proc openBlankLineAbove(bufStatus: var BufferStatus) =
   inc(bufStatus.countChange)
 
 proc deleteLine(bufStatus: var BufferStatus, line: int) =
-  bufStatus.buffer.delete(line, line + 1)
+  bufStatus.buffer.delete(line, line)
 
   if bufStatus.buffer.len == 0: bufStatus.buffer.insert(ru"", 0)
 
@@ -289,7 +297,11 @@ proc deleteWord(bufStatus: var BufferStatus) =
     bufStatus.buffer.delete(bufStatus.currentLine, bufStatus.currentLine + 1)
     if bufStatus.currentLine > bufStatus.buffer.high: bufStatus.currentLine = bufStatus.buffer.high
   elif bufStatus.currentColumn == bufStatus.buffer[bufStatus.currentLine].high:
-    bufStatus.buffer[bufStatus.currentLine].delete(bufStatus.currentColumn)
+    let oldLine = bufStatus.buffer[bufStatus.currentLine]
+    var newLine = bufStatus.buffer[bufStatus.currentLine]
+    newLine.delete(bufStatus.currentColumn)
+    if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
+
     if bufStatus.currentColumn > 0: dec(bufStatus.currentColumn)
   else:
     let
@@ -312,7 +324,10 @@ proc deleteWord(bufStatus: var BufferStatus) =
       if isPunct(curr) or isAlpha(curr) or isDigit(curr): break
       inc(bufStatus.currentColumn)
 
-    for i in currentColumn ..< bufStatus.currentColumn: bufStatus.buffer[currentLine].delete(currentColumn)
+    let oldLine = bufStatus.buffer[currentLine]
+    var newLine = bufStatus.buffer[currentLine]
+    for i in currentColumn ..< bufStatus.currentColumn: newLine.delete(currentColumn)
+    if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
     bufStatus.expandedColumn = currentColumn
     bufStatus.currentColumn = currentColumn
 
@@ -344,7 +359,12 @@ proc yankString(status: var EditorStatus, length: int) =
 
 proc pasteString(status: var EditorStatus) =
   let index = status.currentBuffer
-  status.bufStatus[index].buffer[status.bufStatus[index].currentLine].insert(status.registers.yankedStr, status.bufStatus[index].currentColumn)
+
+  let oldLine = status.bufStatus[index].buffer[status.bufStatus[index].currentLine]
+  var newLine = status.bufStatus[index].buffer[status.bufStatus[index].currentLine]
+  newLine.insert(status.registers.yankedStr, status.bufStatus[index].currentColumn)
+  if oldLine != newLine: status.bufStatus[index].buffer[status.bufStatus[index].currentLine] = newLine
+
   status.bufStatus[status.currentBuffer].currentColumn += status.registers.yankedStr.high
 
   status.bufStatus[index].view.reload(status.bufStatus[index].buffer, min(status.bufStatus[index].view.originalLine[0], status.bufStatus[index].buffer.high))
@@ -372,12 +392,19 @@ proc replaceCurrentCharacter*(bufStatus: var BufferStatus, autoIndent: bool, cha
     deleteCurrentCharacter(bufStatus)
     keyEnter(bufStatus, autoIndent)
   else:
-    bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn] = character
+    let oldLine = bufStatus.buffer[bufStatus.currentLine]
+    var newLine = bufStatus.buffer[bufStatus.currentLine]
+    newLine[bufStatus.currentColumn] = character
+    if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
+
     bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
     inc(bufStatus.countChange)
 
 proc addIndent*(bufStatus: var BufferStatus, tabStop: int) =
-  bufStatus.buffer[bufStatus.currentLine].insert(newSeqWith(tabStop, ru' '))
+  let oldLine = bufStatus.buffer[bufStatus.currentLine]
+  var newLine = bufStatus.buffer[bufStatus.currentLine]
+  newLine.insert(newSeqWith(tabStop, ru' '))
+  if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
 
   bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
   inc(bufStatus.countChange)
@@ -388,7 +415,10 @@ proc deleteIndent*(bufStatus: var BufferStatus, tabStop: int) =
   if bufStatus.buffer[bufStatus.currentLine][0] == ru' ':
     for i in 0 ..< tabStop:
       if bufStatus.buffer.len == 0 or bufStatus.buffer[bufStatus.currentLine][0] != ru' ': break
-      bufStatus.buffer[bufStatus.currentLine].delete(0, 0)
+      let oldLine = bufStatus.buffer[bufStatus.currentLine]
+      var newLine = bufStatus.buffer[bufStatus.currentLine]
+      newLine.delete(0, 0)
+      if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
   bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
   inc(bufStatus.countChange)
 
@@ -396,8 +426,12 @@ proc joinLine(bufStatus: var BufferStatus) =
   if bufStatus.currentLine == bufStatus.buffer.len - 1 or bufStatus.buffer[bufStatus.currentLine + 1].len < 1:
     return
 
-  bufStatus.buffer[bufStatus.currentLine].add(bufStatus.buffer[bufStatus.currentLine + 1])
-  bufStatus.buffer.delete(bufStatus.currentLine + 1, bufStatus.currentLine + 2)
+  let oldLine = bufStatus.buffer[bufStatus.currentLine]
+  var newLine = bufStatus.buffer[bufStatus.currentLine]
+  newLine.add(bufStatus.buffer[bufStatus.currentLine + 1])
+  if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
+
+  bufStatus.buffer.delete(bufStatus.currentLine + 1, bufStatus.currentLine + 1)
 
   bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)
@@ -431,6 +465,22 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) =
 proc turnOffHighlighting*(status: var EditorStatus) =
   status.bufStatus[status.currentBuffer].isHighlight = false
   status.updateHighlight
+
+proc undo(bufStatus: var BufferStatus) =
+  if not bufStatus.buffer.canUndo: return
+  bufStatus.buffer.undo
+  bufStatus.revertPosition(bufStatus.buffer.lastSuitId)
+  if bufStatus.currentColumn == bufStatus.buffer[bufStatus.currentLine].len and bufStatus.currentColumn > 0:
+    (bufStatus.currentLine, bufStatus.currentColumn) = bufStatus.buffer.prev(bufStatus.currentLine, bufStatus.currentColumn)
+  bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
+  inc(bufStatus.countChange)
+
+proc redo(bufStatus: var BufferStatus) =
+  if not bufStatus.buffer.canRedo: return
+  bufStatus.buffer.redo
+  bufStatus.revertPosition(bufStatus.buffer.lastSuitId)
+  bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
+  inc(bufStatus.countChange)
 
 proc writeFileAndExit(status: var EditorStatus) =
   if status.bufStatus[status.currentBuffer].filename.len == 0:
@@ -557,6 +607,10 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('A'):
     status.bufStatus[currentBuf].currentColumn = status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len
     status.changeMode(Mode.insert)
+  elif key == ord('u'):
+    undo(status.bufStatus[status.currentBuffer])
+  elif isControlR(key):
+    redo(status.bufStatus[status.currentBuffer])
   elif key == ord('Z'):
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
     if  key == ord('Z'): writeFileAndExit(status)
@@ -582,6 +636,9 @@ proc normalMode*(status: var EditorStatus) =
     status.update
 
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+
+    status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
+    status.bufStatus[status.currentBuffer].tryRecordCurrentPosition
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
