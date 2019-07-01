@@ -21,6 +21,8 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Vim like keybinds
 
+- Infinite undo/redo
+
 - Syntax highlighting (Nim, C, C++, C#, Java, Yaml)
 
 - Configuration file
@@ -38,8 +40,6 @@ This project's goal is a very customizable, high productivity, high performance 
 - Simple auto indent  
 
 ## Planned features
-
-- Infinite undo/redo
 
 - Configuration mode
 
