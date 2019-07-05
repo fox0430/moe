@@ -64,6 +64,7 @@ type BufferStatus* = object
   cmdLoop*: int
   mode* : Mode
   prevMode* : Mode
+  lastSaveTime: DateTime
 
 type MainWindowInfo = object
   window*: Window
@@ -76,7 +77,6 @@ type EditorStatus* = object
   registers*: Registers
   settings*: EditorSettings
   currentDir: seq[Rune]
-  lastSaveTime: DateTime
   debugMode: int
   currentMainWindow*: int
   mainWindowInfo*: seq[MainWindowInfo]
@@ -118,7 +118,6 @@ proc initEditorSettings*(): EditorSettings =
   result.autoSaveInterval = 5
 
 proc initEditorStatus*(): EditorStatus =
-  result.lastSaveTime = now()
   result.currentDir = getCurrentDir().toRunes
   result.registers = initRegisters()
   result.settings = initEditorSettings()
@@ -334,7 +333,7 @@ proc addNewBuffer*(status:var EditorStatus, filename: string)
 from commandview import writeFileOpenError
 
 proc addNewBuffer*(status:var EditorStatus, filename: string) =
-  status.bufStatus.add(BufferStatus(filename: filename.toRunes))
+  status.bufStatus.add(BufferStatus(filename: filename.toRunes, lastSaveTime: now()))
   let index = status.bufStatus.high
 
   if existsFile(filename) == false: status.bufStatus[index].buffer = newFile()
@@ -398,8 +397,9 @@ from commandview import writeMessageAutoSave
 proc autoSave(status: var Editorstatus) =
   if not status.settings.autoSave: return
 
-  if now() > status.lastSaveTime + status.settings.autoSaveInterval.minutes:
-    let bufStatus = status.bufStatus[status.currentBuffer]
-    saveFile(bufStatus.filename, bufStatus.buffer.toRunes, status.settings.characterEncoding)
-    status.commandWindow.writeMessageAutoSave(bufStatus.filename)
-    status.lastSaveTime = now()
+  let interval = status.settings.autoSaveInterval.minutes
+  for i in 0 ..< status.bufStatus.len:
+    if status.bufStatus[i].filename != ru"" and now() > status.bufStatus[i].lastSaveTime + interval:
+      saveFile(status.bufStatus[i].filename, status.bufStatus[i].buffer.toRunes, status.settings.characterEncoding)
+      status.commandWindow.writeMessageAutoSave(status.bufStatus[i].filename)
+      status.bufStatus[i].lastSaveTime = now()
