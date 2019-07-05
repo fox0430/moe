@@ -1,4 +1,4 @@
-import packages/docutils/highlite, strutils, terminal, os, strformat, tables
+import packages/docutils/highlite, strutils, terminal, os, strformat, tables, times
 import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils, undoredostack
 
 type Mode* = enum
@@ -43,6 +43,7 @@ type EditorSettings* = object
   defaultCursor*: CursorType
   normalModeCursor*: CursorType
   insertModeCursor*: CursorType
+  autoSave: bool
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -74,6 +75,7 @@ type EditorStatus* = object
   registers*: Registers
   settings*: EditorSettings
   currentDir: seq[Rune]
+  lastSaveTime: DateTime
   debugMode: int
   currentMainWindow*: int
   mainWindowInfo*: seq[MainWindowInfo]
@@ -114,6 +116,7 @@ proc initEditorSettings*(): EditorSettings =
   result.insertModeCursor = CursorType.ibeamMode
 
 proc initEditorStatus*(): EditorStatus =
+  result.lastSaveTime = now()
   result.currentDir = getCurrentDir().toRunes
   result.registers = initRegisters()
   result.settings = initEditorSettings()
@@ -366,8 +369,9 @@ proc revertPosition*(bufStatus: var BufferStatus, id: int) =
   bufStatus.expandedColumn = bufStatus.positionRecord[id].expandedColumn
 
 proc updateHighlight*(status: var EditorStatus)
-from searchmode import searchAllOccurrence
+proc autoSave*(status: var Editorstatus)
 
+from searchmode import searchAllOccurrence
 proc updateHighlight*(status: var EditorStatus) =
   let
     currentBuf = status.currentBuffer
@@ -387,3 +391,13 @@ proc updateHighlight*(status: var EditorStatus) =
 proc changeTheme*(status: var EditorStatus) =
   setCursesColor(ColorThemeTable[status.settings.editorColorTheme])
   if status.settings.editorColorTheme == ColorTheme.light: status.updateHighlight
+
+from commandview import writeMessageAutoSave
+proc autoSave(status: var Editorstatus) =
+  if not status.settings.autoSave: return
+
+  if now() > status.lastSaveTime + 1.minutes:
+    let bufStatus = status.bufStatus[status.currentBuffer]
+    saveFile(bufStatus.filename, bufStatus.buffer.toRunes, status.settings.characterEncoding)
+    status.commandWindow.writeMessageAutoSave(bufStatus.filename)
+    status.lastSaveTime = now()

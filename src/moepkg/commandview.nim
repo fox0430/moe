@@ -42,6 +42,9 @@ proc writeMessageYankedLine*(cmdWin: var Window, numOfLine: int) =
 proc writeMessageYankedCharactor*(cmdWin: var Window, numOfChar: int) =
   cmdWin.writeMessageOnCommandWindow(fmt"{numOfChar} charactor yanked" , EditorColorPair.commandBar)
 
+proc writeMessageAutoSave*(cmdWin: var Window, filename: seq[Rune]) =
+  cmdWin.writeMessageOnCommandWindow(fmt"Auto saved {filename}" , EditorColorPair.commandBar)
+
 proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
   for i in 0 .. r.high:
     var string = $r[i]
