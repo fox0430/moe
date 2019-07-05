@@ -64,6 +64,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("insertModeCursor"):
       result.insertModeCursor = getCursorType(settings["Standard"]["insertModeCursor"].getStr(), "insert")
 
+    if settings["Standard"].contains("autoSave"):
+      result.autoSave = settings["Standard"]["autoSave"].getbool()
+
+    if settings["Standard"].contains("autoSaveInterval"):
+      result.autoSaveInterval = settings["Standard"]["autoSaveInterval"].getInt()
+
   if settings.contains("StatusBar"):
     if settings["StatusBar"].contains("mode"):
         result.statusBar.mode= settings["StatusBar"]["mode"].getbool()

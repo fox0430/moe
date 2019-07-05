@@ -43,7 +43,8 @@ type EditorSettings* = object
   defaultCursor*: CursorType
   normalModeCursor*: CursorType
   insertModeCursor*: CursorType
-  autoSave: bool
+  autoSave*: bool
+  autoSaveInterval*: int # minutes
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -114,6 +115,7 @@ proc initEditorSettings*(): EditorSettings =
   result.defaultCursor = CursorType.blockMode   # Terminal default curosr shape
   result.normalModeCursor = CursorType.blockMode
   result.insertModeCursor = CursorType.ibeamMode
+  result.autoSaveInterval = 5
 
 proc initEditorStatus*(): EditorStatus =
   result.lastSaveTime = now()
@@ -396,7 +398,7 @@ from commandview import writeMessageAutoSave
 proc autoSave(status: var Editorstatus) =
   if not status.settings.autoSave: return
 
-  if now() > status.lastSaveTime + 1.minutes:
+  if now() > status.lastSaveTime + status.settings.autoSaveInterval.minutes:
     let bufStatus = status.bufStatus[status.currentBuffer]
     saveFile(bufStatus.filename, bufStatus.buffer.toRunes, status.settings.characterEncoding)
     status.commandWindow.writeMessageAutoSave(bufStatus.filename)
