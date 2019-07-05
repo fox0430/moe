@@ -1,4 +1,4 @@
-import sequtils, strutils, os, terminal, strformat, deques, packages/docutils/highlite
+import sequtils, strutils, os, terminal, strformat, deques, packages/docutils/highlite, times
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview
 
 type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
@@ -257,7 +257,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
       except OSError:
         status.commandWindow.writeFileOpenError($filename)
         addNewBuffer(status, "")
-      status.bufStatus.add(BufferStatus(mode: Mode.filer))
+      status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSaveTime: now()))
     else: addNewBuffer(status, $filename)
 
     changeCurrentBuffer(status, status.bufStatus.high)

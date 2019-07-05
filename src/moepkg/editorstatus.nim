@@ -64,7 +64,7 @@ type BufferStatus* = object
   cmdLoop*: int
   mode* : Mode
   prevMode* : Mode
-  lastSaveTime: DateTime
+  lastSaveTime*: DateTime
 
 type MainWindowInfo = object
   window*: Window
