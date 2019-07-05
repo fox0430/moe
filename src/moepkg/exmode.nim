@@ -376,9 +376,7 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
   let replaceInfo = parseReplaceCommand(command)
 
   if replaceInfo.searhWord == ru"'\n'" and status.bufStatus[status.currentBuffer].buffer.len > 1:
-    let
-      startLine = 0
-      endLine = status.bufStatus[status.currentBuffer].buffer.high
+    let startLine = 0
 
     for i in 0 .. status.bufStatus[status.currentBuffer].buffer.high - 2:
       let oldLine = status.bufStatus[status.currentBuffer].buffer[startLine]
@@ -413,7 +411,7 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
   elif isEditCommand(command):
     editCommand(status, command[1].normalizePath)
   elif isWriteCommand(status, command):
-    writeCommand(status, if command.len < 2: status.bufStatus[status.currentMainWindow].filename else: command[1])
+    writeCommand(status, if command.len < 2: status.bufStatus[status.currentBuffer].filename else: command[1])
   elif isQuitCommand(command):
     quitCommand(status)
   elif isWriteAndQuitCommand(status, command):
