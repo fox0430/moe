@@ -26,6 +26,10 @@ normalModeCursor = "block"
 
 insertModeCursor = "ibeam"
 
+autoSave = false
+
+autoSaveInterval = 5
+
 [StatusBar]
 
 mode = true
