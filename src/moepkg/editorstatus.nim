@@ -123,7 +123,10 @@ proc initEditorStatus*(): EditorStatus =
     useTab = if result.settings.tabLine.useTab: 1 else: 0
 
   if result.settings.tabLine.useTab: result.tabWindow = initWindow(1, terminalWidth(), 0, 0)
+
   result.mainWindowInfo.add(MainWindowInfo(window: initWindow(terminalHeight() - useTab - 1, terminalWidth(), useTab, 0), bufferIndex: 0))
+  result.mainWindowInfo[result.mainWindowInfo.high].window.setTimeout()
+
   if result.settings.statusBar.useBar: result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0)
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight() - 1, 0)
 
@@ -294,6 +297,7 @@ proc update*(status: var EditorStatus) =
 proc splitWindow*(status: var EditorStatus) =
   let useTab = if status.settings.tabLine.useTab: 1 else: 0
   status.mainWindowInfo.insert(MainWindowInfo(window: initWindow(terminalHeight() - useTab - 1, int(terminalWidth() / status.mainWindowInfo.len), useTab, int(terminalWidth() / status.mainWindowInfo.len)), bufferIndex: status.currentBuffer), status.currentMainWindow)
+  status.mainWindowInfo[status.currentMainWindow + 1].window.setTimeout()
 
   status.update
 

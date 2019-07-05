@@ -576,6 +576,8 @@ proc keyEcho*(keyecho: bool) =
   if keyecho == true: echo()
   elif keyecho == false: noecho()
     
+proc setTimeout*(win: var Window) = win.cursesWindow.wtimeout(cint(1000)) # 1000mm sec
+
 proc startUi*() =
   disableControlC()
   discard setLocale(LC_ALL, "")   # enable UTF-8
@@ -642,7 +644,7 @@ proc attroff*(win: var Window, attributes: Attributes) = win.cursesWindow.wattro
 
 proc moveCursor*(win: Window, y, x: int) = wmove(win.cursesWindow, cint(y), cint(x))
 
-let KEY_ESC = 27
+const KEY_ESC = 27
 var KEY_RESIZE {.header: "<ncurses.h>", importc: "KEY_RESIZE".}: int
 var KEY_DOWN {.header: "<ncurses.h>", importc: "KEY_DOWN".}: int
 var KEY_UP {.header: "<ncurses.h>", importc: "KEY_UP".}: int
@@ -662,6 +664,7 @@ proc getKey*(win: Window): Rune =
     len: int
   block getfirst:
     let key = wgetch(win.cursesWindow)
+    if key == -1: return Rune('\0')
     if not (key <= 0x7F or (0xC2 <= key and key <= 0xF0) or key == 0xF3): return Rune(key)
     s.add(char(key))
     len = numberOfBytes(char(key))
