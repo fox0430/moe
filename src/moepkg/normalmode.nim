@@ -636,7 +636,9 @@ proc normalMode*(status: var EditorStatus) =
     status.update
 
     var key: Rune = Rune('\0')
-    while key == Rune('\0'): key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    while key == Rune('\0'):
+      status.autoSave
+      key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
 
     status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
     status.bufStatus[status.currentBuffer].tryRecordCurrentPosition

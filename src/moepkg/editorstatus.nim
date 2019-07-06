@@ -1,4 +1,4 @@
-import packages/docutils/highlite, strutils, terminal, os, strformat, tables
+import packages/docutils/highlite, strutils, terminal, os, strformat, tables, times
 import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils, undoredostack
 
 type Mode* = enum
@@ -43,6 +43,8 @@ type EditorSettings* = object
   defaultCursor*: CursorType
   normalModeCursor*: CursorType
   insertModeCursor*: CursorType
+  autoSave*: bool
+  autoSaveInterval*: int # minutes
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -62,6 +64,7 @@ type BufferStatus* = object
   cmdLoop*: int
   mode* : Mode
   prevMode* : Mode
+  lastSaveTime*: DateTime
 
 type MainWindowInfo = object
   window*: Window
@@ -112,6 +115,7 @@ proc initEditorSettings*(): EditorSettings =
   result.defaultCursor = CursorType.blockMode   # Terminal default curosr shape
   result.normalModeCursor = CursorType.blockMode
   result.insertModeCursor = CursorType.ibeamMode
+  result.autoSaveInterval = 5
 
 proc initEditorStatus*(): EditorStatus =
   result.currentDir = getCurrentDir().toRunes
@@ -329,7 +333,7 @@ proc addNewBuffer*(status:var EditorStatus, filename: string)
 from commandview import writeFileOpenError
 
 proc addNewBuffer*(status:var EditorStatus, filename: string) =
-  status.bufStatus.add(BufferStatus(filename: filename.toRunes))
+  status.bufStatus.add(BufferStatus(filename: filename.toRunes, lastSaveTime: now()))
   let index = status.bufStatus.high
 
   if existsFile(filename) == false: status.bufStatus[index].buffer = newFile()
@@ -366,8 +370,9 @@ proc revertPosition*(bufStatus: var BufferStatus, id: int) =
   bufStatus.expandedColumn = bufStatus.positionRecord[id].expandedColumn
 
 proc updateHighlight*(status: var EditorStatus)
-from searchmode import searchAllOccurrence
+proc autoSave*(status: var Editorstatus)
 
+from searchmode import searchAllOccurrence
 proc updateHighlight*(status: var EditorStatus) =
   let
     currentBuf = status.currentBuffer
@@ -387,3 +392,14 @@ proc updateHighlight*(status: var EditorStatus) =
 proc changeTheme*(status: var EditorStatus) =
   setCursesColor(ColorThemeTable[status.settings.editorColorTheme])
   if status.settings.editorColorTheme == ColorTheme.light: status.updateHighlight
+
+from commandview import writeMessageAutoSave
+proc autoSave(status: var Editorstatus) =
+  if not status.settings.autoSave: return
+
+  let interval = status.settings.autoSaveInterval.minutes
+  for i in 0 ..< status.bufStatus.len:
+    if status.bufStatus[i].filename != ru"" and now() > status.bufStatus[i].lastSaveTime + interval:
+      saveFile(status.bufStatus[i].filename, status.bufStatus[i].buffer.toRunes, status.settings.characterEncoding)
+      status.commandWindow.writeMessageAutoSave(status.bufStatus[i].filename)
+      status.bufStatus[i].lastSaveTime = now()
