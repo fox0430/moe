@@ -1,4 +1,4 @@
-import parsetoml
+import parsetoml, os
 import editorstatus, ui
 from strutils import parseEnum
 
@@ -209,3 +209,7 @@ proc parseSettingsFile*(filename: string): EditorSettings =
       ColorThemeTable[ColorTheme.config].pcLinkBg = color("pcLinkBg")
 
     result.editorColorTheme = ColorTheme.config
+
+proc loadSettingFile*(settings: var EditorSettings) =
+  try: settings = parseSettingsFile(getConfigDir() / "moe" / "moerc.toml")
+  except ValueError: return

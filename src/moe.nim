@@ -25,7 +25,7 @@ proc main() =
   startUi()
 
   var status = initEditorStatus()
-  status.settings = parseSettingsFile(getConfigDir() / "moe" / "moerc.toml")
+  status.settings.loadSettingFile
   changeTheme(status)
 
   if existsDir(parsedList.filename):
