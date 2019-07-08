@@ -340,6 +340,12 @@ proc deleteCharacterUntilEndOfLine(bufStatus: var BufferStatus) =
     startColumn = bufStatus.currentColumn
   for i in startColumn ..< bufStatus.buffer[currentLine].len: deleteCurrentCharacter(bufStatus)
 
+proc deleteCharacterBeginningOfLine(bufStatus: var BufferStatus) =
+  let beforColumn = bufStatus.currentColumn
+  bufStatus.currentColumn = 0
+  bufStatus.expandedColumn = 0
+  for i in 0 ..< beforColumn: deleteCurrentCharacter(bufStatus)
+
 proc yankLines(status: var EditorStatus, first, last: int) =
   status.registers.yankedStr = @[]
   status.registers.yankedLines = @[]
@@ -570,6 +576,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
       for i in 0 ..< min(cmdLoop, status.bufStatus[currentBuf].buffer.len - status.bufStatus[currentBuf].currentLine): deleteLine(status.bufStatus[status.currentBuffer], status.bufStatus[currentBuf].currentLine)
     elif key == ord('w'): deleteWord(status.bufStatus[status.currentBuffer])
     elif key == ('$') or isEndKey(key): deleteCharacterUntilEndOfLine(status.bufStatus[status.currentBuffer])
+    elif key == ('0') or isHomeKey(key): deleteCharacterBeginningOfLine(status.bufStatus[status.currentBuffer])
   elif key == ord('y'):
     if getkey(status.mainWindowInfo[status.currentMainWindow].window) == ord('y'):
       yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
