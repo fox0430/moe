@@ -615,9 +615,6 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
     if  key == ord('Z'): writeFileAndExit(status)
     elif key == ord('Q'): forceExit(status)
-  elif isEscKey(key):
-    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
-    if isEscKey(key): turnOffHighlighting(status)
   else:
     discard
 
@@ -642,6 +639,13 @@ proc normalMode*(status: var EditorStatus) =
 
     status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
     status.bufStatus[status.currentBuffer].tryRecordCurrentPosition
+
+    if isEscKey(key):
+      let keyAfterEsc = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+      if isEscKey(key):
+        turnOffHighlighting(status)
+        continue
+      else: key = keyAfterEsc
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
