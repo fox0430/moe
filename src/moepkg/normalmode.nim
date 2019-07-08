@@ -334,6 +334,12 @@ proc deleteWord(bufStatus: var BufferStatus) =
   bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)
 
+proc deleteCharacterUntilEndOfLine(bufStatus: var BufferStatus) =
+  let
+    currentLine = bufStatus.currentLine
+    startColumn = bufStatus.currentColumn
+  for i in startColumn ..< bufStatus.buffer[currentLine].len: deleteCurrentCharacter(bufStatus)
+
 proc yankLines(status: var EditorStatus, first, last: int) =
   status.registers.yankedStr = @[]
   status.registers.yankedLines = @[]
@@ -563,6 +569,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
       yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
       for i in 0 ..< min(cmdLoop, status.bufStatus[currentBuf].buffer.len - status.bufStatus[currentBuf].currentLine): deleteLine(status.bufStatus[status.currentBuffer], status.bufStatus[currentBuf].currentLine)
     elif key == ord('w'): deleteWord(status.bufStatus[status.currentBuffer])
+    elif key == ('$') or isEndKey(key): deleteCharacterUntilEndOfLine(status.bufStatus[status.currentBuffer])
   elif key == ord('y'):
     if getkey(status.mainWindowInfo[status.currentMainWindow].window) == ord('y'):
       yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
