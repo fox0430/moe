@@ -370,7 +370,7 @@ proc revertPosition*(bufStatus: var BufferStatus, id: int) =
   bufStatus.expandedColumn = bufStatus.positionRecord[id].expandedColumn
 
 proc updateHighlight*(status: var EditorStatus)
-proc autoSave*(status: var Editorstatus)
+proc eventLoopTask*(status: var Editorstatus)
 
 from searchmode import searchAllOccurrence
 proc updateHighlight*(status: var EditorStatus) =
@@ -403,3 +403,8 @@ proc autoSave(status: var Editorstatus) =
       saveFile(status.bufStatus[i].filename, status.bufStatus[i].buffer.toRunes, status.settings.characterEncoding)
       status.commandWindow.writeMessageAutoSave(status.bufStatus[i].filename)
       status.bufStatus[i].lastSaveTime = now()
+
+from settings import loadSettingFile
+proc eventLoopTask(status: var Editorstatus) =
+  status.autoSave
+  status.settings.loadSettingFile

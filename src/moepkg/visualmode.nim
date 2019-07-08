@@ -223,7 +223,7 @@ proc visualMode*(status: var EditorStatus) =
 
     var key: Rune = Rune('\0')
     while key == Rune('\0'):
-      status.autoSave
+      status.eventLoopTask
       key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
 
     status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
