@@ -30,6 +30,8 @@ autoSave = false
 
 autoSaveInterval = 5
 
+liveReloadOfConf = false
+
 [StatusBar]
 
 mode = true
