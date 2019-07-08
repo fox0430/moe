@@ -70,6 +70,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("autoSaveInterval"):
       result.autoSaveInterval = settings["Standard"]["autoSaveInterval"].getInt()
 
+    if settings["Standard"].contains("liveReloadOfConf"):
+      result.liveReloadOfConf = settings["Standard"]["liveReloadOfConf"].getbool()
+
   if settings.contains("StatusBar"):
     if settings["StatusBar"].contains("mode"):
         result.statusBar.mode= settings["StatusBar"]["mode"].getbool()

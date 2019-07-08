@@ -45,6 +45,7 @@ type EditorSettings* = object
   insertModeCursor*: CursorType
   autoSave*: bool
   autoSaveInterval*: int # minutes
+  liveReloadOfConf*: bool
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
