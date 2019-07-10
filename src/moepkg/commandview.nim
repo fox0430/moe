@@ -45,6 +45,11 @@ proc writeMessageYankedCharactor*(cmdWin: var Window, numOfChar: int) =
 proc writeMessageAutoSave*(cmdWin: var Window, filename: seq[Rune]) =
   cmdWin.writeMessageOnCommandWindow(fmt"Auto saved {filename}" , EditorColorPair.commandBar)
 
+proc writeNotEditorCommandError*(cmdWin: var Window, command: seq[seq[Rune]]) =
+  var cmd = ""
+  for i in 0 ..< command.len: cmd = cmd & $command[i] & " "
+  cmdWin.writeMessageOnCommandWindow(fmt"Error: Not an editor command: {cmd}" , EditorColorPair.errorMessage)
+
 proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
   for i in 0 .. r.high:
     var string = $r[i]

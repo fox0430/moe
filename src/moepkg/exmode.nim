@@ -469,6 +469,7 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
   elif isOpenBufferManager(command):
     openBufferManager(status)
   else:
+    status.commandWindow.writeNotEditorCommandError(command)
     status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
 proc exMode*(status: var EditorStatus) =
