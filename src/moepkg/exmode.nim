@@ -143,6 +143,7 @@ proc changeThemeSettingCommand(status: var EditorStatus, command: seq[Rune]) =
 
   changeTheme(status)
   status.resize(terminalHeight(), terminalWidth())
+  status.commandWindow.erase
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
 proc tabLineSettingCommand(status: var EditorStatus, command: seq[Rune]) =
@@ -150,6 +151,7 @@ proc tabLineSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   elif command == ru"off": status.settings.tabLine.useTab = false
 
   status.resize(terminalHeight(), terminalWidth())
+  status.commandWindow.erase
 
 proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.syntax = true
@@ -158,23 +160,27 @@ proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   let sourceLang = if status.settings.syntax: status.bufStatus[status.currentBuffer].language else: SourceLanguage.langNone
   status.bufStatus[status.currentBuffer].highlight = initHighlight($status.bufStatus[status.currentBuffer].buffer, sourceLang)
 
+  status.commandWindow.erase
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
 proc tabStopSettingCommand(status: var EditorStatus, command: int) =
   status.settings.tabStop = command
 
+  status.commandWindow.erase
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
 proc autoCloseParenSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.autoCloseParen = true
   elif command == ru"off": status.settings.autoCloseParen = false
 
+  status.commandWindow.erase
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
 proc autoIndentSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.autoIndent = true
   elif command == ru"off": status.settings.autoIndent = false
 
+  status.commandWindow.erase
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
 proc lineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
@@ -185,6 +191,7 @@ proc lineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
   status.bufStatus[status.currentBuffer].view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
 
+  status.commandWindow.erase
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
 proc statusBarSettingCommand(status: var EditorStatus, command: seq[Rune]) =
@@ -195,10 +202,13 @@ proc statusBarSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
   status.bufStatus[status.currentBuffer].view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
 
+  status.commandWindow.erase
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
 proc turnOffHighlightingCommand(status: var EditorStatus) =
   turnOffHighlighting(status)
+
+  status.commandWindow.erase
   status.changeMode(Mode.normal)
 
 proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
@@ -214,36 +224,48 @@ proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
   elif index < status.currentBuffer: dec(status.currentBuffer)
 
   if status.bufStatus[status.currentBuffer].mode == Mode.ex: status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
-  else: status.changeMode(status.bufStatus[status.currentBuffer].mode)
+  else:
+    status.commandWindow.erase
+    status.changeMode(status.bufStatus[status.currentBuffer].mode)
 
 proc changeFirstBufferCommand(status: var EditorStatus) =
   changeCurrentBuffer(status, 0)
+
+  status.commandWindow.erase
   status.changeMode(Mode.normal)
 
 proc changeLastBufferCommand(status: var EditorStatus) =
   changeCurrentBuffer(status, status.bufStatus.high)
+
+  status.commandWindow.erase
   status.changeMode(Mode.normal)
 
 proc opneBufferByNumberCommand(status: var EditorStatus, number: int) =
   if number < 0 or number > status.bufStatus.high: return
 
   changeCurrentBuffer(status, number)
+  status.commandWindow.erase
   status.changeMode(Mode.normal)
 
 proc changeNextBufferCommand(status: var EditorStatus) =
   if status.currentBuffer == status.bufStatus.high: return
 
   changeCurrentBuffer(status, status.currentBuffer + 1)
+  status.commandWindow.erase
   status.changeMode(Mode.normal)
 
 proc changePreveBufferCommand(status: var EditorStatus) =
   if status.currentBuffer < 1: return
 
   changeCurrentBuffer(status, status.currentBuffer - 1)
+
+  status.commandWindow.erase
   status.changeMode(Mode.normal)
 
 proc jumpCommand(status: var EditorStatus, line: int) =
   jumpLine(status, line)
+
+  status.commandWindow.erase
   status.changeMode(Mode.normal)
 
 proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
@@ -399,6 +421,7 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
         if oldLine != newLine: status.bufStatus[status.currentBuffer].buffer[searchResult.line] = newLine
 
   inc(status.bufStatus[status.currentBuffer].countChange)
+  status.commandWindow.erase
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
 proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
