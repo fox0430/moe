@@ -264,7 +264,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
 
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   if filename.len == 0:
-    status.commandwindow.writeNoFileNameError
+    status.commandWindow.writeNoFileNameError
     status.changeMode(Mode.normal)
     return
 
@@ -275,6 +275,7 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   except IOError:
     status.commandWindow.writeSaveError
 
+  status.commandWindow.writeMessageSaveFile(filename)
   status.changeMode(Mode.normal)
 
 proc quitCommand(status: var EditorStatus) =
