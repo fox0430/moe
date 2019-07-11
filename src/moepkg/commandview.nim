@@ -50,6 +50,9 @@ proc writeNotEditorCommandError*(cmdWin: var Window, command: seq[seq[Rune]]) =
   for i in 0 ..< command.len: cmd = cmd & $command[i] & " "
   cmdWin.writeMessageOnCommandWindow(fmt"Error: Not an editor command: {cmd}" , EditorColorPair.errorMessage)
 
+proc writeMessageSaveFile*(cmdWin: var Window, filename: seq[Rune]) =
+  cmdWin.writeMessageOnCommandWindow(fmt"Saved {filename}" , EditorColorPair.commandBar)
+
 proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
   for i in 0 .. r.high:
     var string = $r[i]
