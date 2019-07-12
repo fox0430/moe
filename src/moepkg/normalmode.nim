@@ -408,7 +408,7 @@ proc pasteString(status: var EditorStatus) =
   newLine.insert(status.registers.yankedStr, status.bufStatus[index].currentColumn)
   if oldLine != newLine: status.bufStatus[index].buffer[status.bufStatus[index].currentLine] = newLine
 
-  status.bufStatus[status.currentBuffer].currentColumn += status.registers.yankedStr.high
+  status.bufStatus[status.currentBuffer].currentColumn += status.registers.yankedStr.high - 1
 
   status.bufStatus[index].view.reload(status.bufStatus[index].buffer, min(status.bufStatus[index].view.originalLine[0], status.bufStatus[index].buffer.high))
   inc(status.bufStatus[index].countChange)
