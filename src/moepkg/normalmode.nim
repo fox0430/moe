@@ -369,6 +369,37 @@ proc yankString(status: var EditorStatus, length: int) =
 
   status.commandWindow.writeMessageYankedCharactor(status.registers.yankedStr.len)
 
+proc yankWord(status: var Editorstatus, loop: int) =
+  status.registers.yankedLines = @[]
+  status.registers.yankedStr = @[]
+
+  let
+    currentBuf = status.currentBuffer
+    line = status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine]
+  var startColumn = status.bufStatus[currentBuf].currentColumn
+
+  for i in 0 ..< loop:
+    if line.len < 1:
+      status.registers.yankedLines = @[ru""]
+      return
+    if isPunct(line[startColumn]):
+      status.registers.yankedStr.add(line[startColumn])
+      return
+
+    for j in startColumn ..< line.len:
+      let rune = line[j]
+      if isWhiteSpace(rune):
+        for k in j ..< line.len:
+          if isWhiteSpace(line[k]):status.registers.yankedStr.add(rune)
+          else:
+            startColumn = k
+            break
+        break
+      elif not isAlpha(rune) or isPunct(rune) or isDigit(rune):
+        startColumn = j
+        break
+      else: status.registers.yankedStr.add(rune)
+
 proc pasteString(status: var EditorStatus) =
   let index = status.currentBuffer
 
@@ -377,7 +408,7 @@ proc pasteString(status: var EditorStatus) =
   newLine.insert(status.registers.yankedStr, status.bufStatus[index].currentColumn)
   if oldLine != newLine: status.bufStatus[index].buffer[status.bufStatus[index].currentLine] = newLine
 
-  status.bufStatus[status.currentBuffer].currentColumn += status.registers.yankedStr.high
+  status.bufStatus[status.currentBuffer].currentColumn += status.registers.yankedStr.high - 1
 
   status.bufStatus[index].view.reload(status.bufStatus[index].buffer, min(status.bufStatus[index].view.originalLine[0], status.bufStatus[index].buffer.high))
   inc(status.bufStatus[index].countChange)
@@ -578,8 +609,9 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     elif key == ('$') or isEndKey(key): deleteCharacterUntilEndOfLine(status.bufStatus[status.currentBuffer])
     elif key == ('0') or isHomeKey(key): deleteCharacterBeginningOfLine(status.bufStatus[status.currentBuffer])
   elif key == ord('y'):
-    if getkey(status.mainWindowInfo[status.currentMainWindow].window) == ord('y'):
-      yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
+    let key = getkey(status.mainWindowInfo[status.currentMainWindow].window)
+    if key == ord('y'): yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
+    elif key == ord('w'): yankWord(status, cmdLoop)
   elif key == ord('p'):
     pasteAfterCursor(status)
   elif key == ord('P'):
