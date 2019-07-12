@@ -396,8 +396,6 @@ proc changeTheme*(status: var EditorStatus) =
 
 from commandview import writeMessageAutoSave
 proc autoSave(status: var Editorstatus) =
-  if not status.settings.autoSave: return
-
   let interval = status.settings.autoSaveInterval.minutes
   for i in 0 ..< status.bufStatus.len:
     if status.bufStatus[i].filename != ru"" and now() > status.bufStatus[i].lastSaveTime + interval:
@@ -407,5 +405,5 @@ proc autoSave(status: var Editorstatus) =
 
 from settings import loadSettingFile
 proc eventLoopTask(status: var Editorstatus) =
-  status.autoSave
-  status.settings.loadSettingFile
+  if status.settings.autoSave: status.autoSave
+  if status.settings.liveReloadOfConf: status.settings.loadSettingFile
