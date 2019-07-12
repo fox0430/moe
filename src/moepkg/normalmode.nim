@@ -369,27 +369,36 @@ proc yankString(status: var EditorStatus, length: int) =
 
   status.commandWindow.writeMessageYankedCharactor(status.registers.yankedStr.len)
 
-proc yankWord(status: var Editorstatus) =
+proc yankWord(status: var Editorstatus, loop: int) =
   status.registers.yankedLines = @[]
   status.registers.yankedStr = @[]
 
   let
     currentBuf = status.currentBuffer
-    startColumn = status.bufStatus[currentBuf].currentColumn
     line = status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine]
+  var startColumn = status.bufStatus[currentBuf].currentColumn
 
-  if line.len < 1: status.registers.yankedLines = @[ru""]
-  elif isPunct(line[startColumn]): status.registers.yankedStr.add(line[startColumn])
-  else:
-    for i in startColumn ..< line.len:
-      let rune = line[i]
+  for i in 0 ..< loop:
+    if line.len < 1:
+      status.registers.yankedLines = @[ru""]
+      return
+    if isPunct(line[startColumn]):
+      status.registers.yankedStr.add(line[startColumn])
+      return
+
+    for j in startColumn ..< line.len:
+      let rune = line[j]
       if isWhiteSpace(rune):
-        for j in i ..< line.len:
-          if isWhiteSpace(line[j]): status.registers.yankedStr.add(ru' ')
-          else: break
-        return
-      if not isAlpha(rune) or isPunct(rune) or isDigit(rune): break
-      status.registers.yankedStr.add(rune)
+        for k in j ..< line.len:
+          if isWhiteSpace(line[k]):status.registers.yankedStr.add(rune)
+          else:
+            startColumn = k
+            break
+        break
+      elif not isAlpha(rune) or isPunct(rune) or isDigit(rune):
+        startColumn = j
+        break
+      else: status.registers.yankedStr.add(rune)
 
 proc pasteString(status: var EditorStatus) =
   let index = status.currentBuffer
@@ -602,7 +611,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('y'):
     let key = getkey(status.mainWindowInfo[status.currentMainWindow].window)
     if key == ord('y'): yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
-    elif key == ord('w'): yankWord(status)
+    elif key == ord('w'): yankWord(status, cmdLoop)
   elif key == ord('p'):
     pasteAfterCursor(status)
   elif key == ord('P'):
