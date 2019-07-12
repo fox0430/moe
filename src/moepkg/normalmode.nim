@@ -479,6 +479,26 @@ proc joinLine(bufStatus: var BufferStatus) =
   bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)
 
+proc searchOneCharactorToEndOfLine(bufStatus: var BufferStatus, rune: Rune) =
+  let line = bufStatus.buffer[bufStatus.currentLine]
+
+  if line.len < 1 or isEscKey(rune) or (bufStatus.currentColumn == line.high): return
+
+  for col in bufStatus.currentColumn + 1 ..< line.len:
+    if line[col] == rune:
+      bufStatus.currentColumn = col
+      break
+
+proc searchOneCharactorToBeginOfLine(bufStatus: var BufferStatus, rune: Rune) =
+  let line = bufStatus.buffer[bufStatus.currentLine]
+
+  if line.len < 1 or isEscKey(rune) or (bufStatus.currentColumn == 0): return
+
+  for col in countdown(bufStatus.currentColumn - 1, 0):
+    if line[col] == rune:
+      bufStatus.currentColumn = col
+      break
+
 proc searchNextOccurrence(status: var EditorStatus) =
   if status.searchHistory.len < 1: return
 
@@ -635,6 +655,12 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     searchNextOccurrence(status)
   elif key == ord('N'):
     searchNextOccurrenceReversely(status)
+  elif key == ord('f'):
+    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    searchOneCharactorToEndOfLine(status.bufStatus[status.currentBuffer], key)
+  elif key == ord('F'):
+    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    searchOneCharactorToBeginOfLine(status.bufStatus[status.currentBuffer], key)
   elif key == ord('R'):
     status.changeMode(Mode.replace)
   elif key == ord('i'):

@@ -19,7 +19,7 @@ proc replaceMode*(status: var EditorStatus) =
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-    elif isEscKey(key):
+    elif isEscKey(key) or isControlSquareBracketsRight(key):
       status.changeMode(Mode.normal)
 
     elif isRightKey(key):
