@@ -459,9 +459,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     visualModeBg: purple_1,
     # color scheme
     defaultChar: black,
-    gtKeyword: seaGreen1_2,
+    gtKeyword: blue,
     gtStringLit: purple_1,
-    gtDecNumber: aqua,
+    gtDecNumber: orange1,
     gtComment: gray,
     gtLongComment: gray,
     gtWhitespace: gray100,
