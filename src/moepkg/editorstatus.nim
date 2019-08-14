@@ -390,9 +390,7 @@ proc updateHighlight*(status: var EditorStatus) =
       let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column+keyword.high, color: EditorColorPair.searchResult)
       status.bufStatus[currentBuf].highlight = status.bufStatus[currentBuf].highlight.overwrite(colorSegment)
 
-proc changeTheme*(status: var EditorStatus) =
-  setCursesColor(ColorThemeTable[status.settings.editorColorTheme])
-  if status.settings.editorColorTheme == ColorTheme.light: status.updateHighlight
+proc changeTheme*(status: var EditorStatus) = setCursesColor(ColorThemeTable[status.settings.editorColorTheme])
 
 from commandview import writeMessageAutoSave
 proc autoSave(status: var Editorstatus) =
