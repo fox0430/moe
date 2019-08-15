@@ -419,7 +419,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     visualModeBg: purple_1,
     # color scheme
     defaultChar: gray100,
-    gtKeyword: seaGreen1_2,
+    gtKeyword: cyan1,
     gtStringLit: purple_1,
     gtDecNumber: aqua,
     gtComment: gray,
@@ -459,9 +459,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     visualModeBg: purple_1,
     # color scheme
     defaultChar: black,
-    gtKeyword: seaGreen1_2,
+    gtKeyword: blue,
     gtStringLit: purple_1,
-    gtDecNumber: aqua,
+    gtDecNumber: orange1,
     gtComment: gray,
     gtLongComment: gray,
     gtWhitespace: gray100,
@@ -499,11 +499,11 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     visualModeBg: purple_1,
     # color scheme
     defaultChar: gray100,
-    gtKeyword: seaGreen1_2,
-    gtStringLit: purple_1,
-    gtDecNumber: aqua,
-    gtComment: gray,
-    gtLongComment: gray,
+    gtKeyword: deepPink1_1,
+    gtStringLit: cyan1,
+    gtDecNumber: green1,
+    gtComment: purple_1,
+    gtLongComment: purple_1,
     gtWhitespace: gray100,
     # filer mode
     currentFile: gray100,
@@ -512,7 +512,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     fileBg: default,
     dir: deepPink1_1,
     dirBg: default,
-    pcLink: teal,
+    pcLink: cyan1,
     pcLinkBg: default
   ),
 ]
