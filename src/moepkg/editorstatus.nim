@@ -406,5 +406,9 @@ from settings import loadSettingFile
 proc eventLoopTask(status: var Editorstatus) =
   if status.settings.autoSave: status.autoSave
   if status.settings.liveReloadOfConf and status.timeConfFileLastReloaded + 1.seconds < now():
+    let beforeTheme = status.settings.editorColorTheme
     status.settings.loadSettingFile
     status.timeConfFileLastReloaded = now()
+    if beforeTheme != status.settings.editorColorTheme:
+      changeTheme(status)
+      status.resize(terminalHeight(), terminalWidth())
