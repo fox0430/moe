@@ -26,6 +26,7 @@ proc main() =
 
   var status = initEditorStatus()
   status.settings.loadSettingFile
+  status.timeConfFileLastReloaded = now()
   changeTheme(status)
 
   if existsDir(parsedList.filename):
