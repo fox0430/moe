@@ -138,9 +138,12 @@ proc splitWindowCommand(status: var EditorStatus) =
   splitWindow(status)
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
-proc liveReloadOfConfSettingCommand(settings: var EditorSettings, command: seq[Rune]) =
-  if command == ru "true": settings.liveReloadOfConf = true
-  elif command == ru"false": settings.liveReloadOfConf = false
+proc liveReloadOfConfSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru "true": status.settings.liveReloadOfConf = true
+  elif command == ru"false": status.settings.liveReloadOfConf = false
+
+  status.commandWindow.erase
+  status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
 proc changeThemeSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"dark": status.settings.editorColorTheme = ColorTheme.dark
@@ -500,7 +503,7 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
   elif isOpenBufferManager(command):
     openBufferManager(status)
   elif isLiveReloadOfConfSettingCommand(command):
-    liveReloadOfConfSettingCommand(status.settings, command[1])
+    liveReloadOfConfSettingCommand(status, command[1])
   else:
     status.commandWindow.writeNotEditorCommandError(command)
     status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
