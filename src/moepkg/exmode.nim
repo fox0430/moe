@@ -46,6 +46,9 @@ proc isAllBufferQuitCommand(command: seq[seq[Rune]]): bool =
 proc isSplitWindowCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"vs"
 
+proc isLiveReloadOfConfSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"livereload"
+
 proc isChangeThemeSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru "theme"
 
@@ -134,6 +137,10 @@ proc changeCursorLineCommand(status: var Editorstatus, command: seq[Rune]) =
 proc splitWindowCommand(status: var EditorStatus) =
   splitWindow(status)
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
+
+proc liveReloadOfConfSettingCommand(settings: var EditorSettings, command: seq[Rune]) =
+  if command == ru "true": settings.liveReloadOfConf = true
+  elif command == ru"false": settings.liveReloadOfConf = false
 
 proc changeThemeSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"dark": status.settings.editorColorTheme = ColorTheme.dark
@@ -492,6 +499,8 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     listAllBufferCommand(status)
   elif isOpenBufferManager(command):
     openBufferManager(status)
+  elif isLiveReloadOfConfSettingCommand(command):
+    liveReloadOfConfSettingCommand(status.settings, command[1])
   else:
     status.commandWindow.writeNotEditorCommandError(command)
     status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
