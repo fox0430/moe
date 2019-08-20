@@ -84,7 +84,6 @@ proc splitQout(s: string): seq[seq[Rune]]=
 
   return result.removeSuffix(" ")
 
-
 proc splitCommand(command: string): seq[seq[Rune]] =
   if (command).contains('"'):
     return splitQout(command)
@@ -169,6 +168,52 @@ proc getKeyword*(status: var EditorStatus, prompt: string): seq[Rune] =
 
   return exStatus.buffer
 
+proc suggestMode(status: var Editorstatus, exStatus: var ExModeViewStatus, key: var Rune) =
+  const exCommandList = [
+    ru"!",
+    ru"b",
+    ru"bd",
+    ru"bfirst",
+    ru"blast",
+    ru"bnext",
+    ru"bprev",
+    ru"buf",
+    ru"cursorLine",
+    ru"e",
+    ru"indent",
+    ru"linenum",
+    ru"livereload",
+    ru"ls",
+    ru"noh",
+    ru"paren",
+    ru"q",
+    ru"q!",
+    ru"qa",
+    ru"qa!",
+    ru"statusbar",
+    ru"syntax",
+    ru"tabstop",
+    ru"theme",
+    ru"vs",
+    ru"wq",
+    ru"wqa",
+  ]
+  
+  var suggestIndex = 0
+  if exStatus.buffer.len == 0:
+    while isTabkey(key):
+      exStatus.buffer = ru""
+      exStatus.currentPosition = 0
+      exStatus.cursorX = 1
+
+      for rune in exCommandList[suggestIndex]: exStatus.insertCommandBuffer(rune)
+      writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
+
+      if suggestIndex < exCommandList.high: inc(suggestIndex)
+      else: suggestIndex = 0
+
+      key = getKey(status.commandWindow)
+  
 proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
   var exStatus = initExModeViewStatus(prompt)
   status.resize(terminalHeight(), terminalWidth())
@@ -177,6 +222,8 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
     writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
 
     var key = getKey(status.commandWindow)
+
+    if isTabkey(key): suggestMode(status, exStatus, key)
 
     if isEnterKey(key): break
     elif isEscKey(key):
