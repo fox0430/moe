@@ -196,3 +196,10 @@ proc toRunes*(buffer: GapBuffer[seq[Rune]]): seq[Rune] =
   for i in 0 ..< buffer.len:
     result.add(buffer[i])
     if i+1 < buffer.len: result.add(ru'\n')
+
+proc startsWith*(runes1, runes2: seq[Rune]): bool =
+  result = true
+  for i in 0 ..< min(runes1.len, runes2.len):
+    if runes1[i] != runes2[i]:
+      result = false
+      break

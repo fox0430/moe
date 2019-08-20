@@ -213,6 +213,23 @@ proc suggestMode(status: var Editorstatus, exStatus: var ExModeViewStatus, key: 
       else: suggestIndex = 0
 
       key = getKey(status.commandWindow)
+  else:
+    var suggestlist: seq[seq[Rune]] = @[]
+    for runes in exCommandList:
+      if exStatus.buffer.startsWith(runes): suggestlist.add(runes)
+
+    while isTabkey(key) and suggestlist.len > 0:
+      exStatus.buffer = ru""
+      exStatus.currentPosition = 0
+      exStatus.cursorX = 1
+
+      for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
+      writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
+
+      if suggestIndex < suggestlist.high: inc(suggestIndex)
+      else: suggestIndex = 0
+
+      key = getKey(status.commandWindow)
   
 proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
   var exStatus = initExModeViewStatus(prompt)
