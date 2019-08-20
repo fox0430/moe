@@ -31,7 +31,7 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Split window
 
-- IDE like tab line
+- Tab line
 
 - Simple file manager
 
