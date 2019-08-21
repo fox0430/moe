@@ -243,8 +243,8 @@ proc suggestExCommand(exStatus: var ExModeViewStatus, cmdWin: var Window, key: v
 
 proc suggestMode(status: var Editorstatus, exStatus: var ExModeViewStatus, key: var Rune) =
  
-  if exStatus.buffer.len == 0: suggestExCommand(exStatus, status.commandWindow, key)
-  elif exStatus.buffer.startsWith(ru"e "): suggestFilePath(exStatus, status.commandWindow, key)
+  if exStatus.buffer.len > 0 and exStatus.buffer.startsWith(ru"e "): suggestFilePath(exStatus, status.commandWindow, key)
+  else: suggestExCommand(exStatus, status.commandWindow, key)
   
 proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
   var exStatus = initExModeViewStatus(prompt)
