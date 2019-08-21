@@ -1,5 +1,5 @@
-import terminal, strutils, sequtils, strformat
-import editorstatus, editorview, ui, unicodeext
+import terminal, strutils, sequtils, strformat, os
+import editorstatus, editorview, ui, unicodeext, fileutils
 
 type
   ExModeViewStatus = tuple[buffer: seq[Rune], prompt: string, cursorY, cursorX, currentPosition, startPosition: int]
@@ -168,7 +168,31 @@ proc getKeyword*(status: var EditorStatus, prompt: string): seq[Rune] =
 
   return exStatus.buffer
 
-proc suggestMode(status: var Editorstatus, exStatus: var ExModeViewStatus, key: var Rune) =
+proc suggestFilePath(exStatus: var ExModeViewStatus, cmdWin: var Window, key: var Rune) =
+  var suggestIndex = 0
+  var suggestlist: seq[seq[Rune]] = @[]
+  let inputPath = ($exStatus.buffer).substr(2)
+  if inputPath.len == 0 or not inputPath.contains("/"):
+    for kind, path in walkDir("./"):
+      if ($path.toRunes.normalizePath).startsWith(inputPath): suggestlist.add(path.toRunes.normalizePath)
+  elif ($inputPath).contains("/"):
+    for kind, path in walkDir(($inputPath).substr(0, ($inputPath).rfind("/"))):
+      if ($path.toRunes.normalizePath).startsWith(inputPath): suggestlist.add(path.toRunes.normalizePath)
+
+  while isTabkey(key) and suggestlist.len > 0:
+    exStatus.buffer = ru"e "
+    exStatus.currentPosition = 2
+    exStatus.cursorX = 3
+
+    for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
+    writeExModeView(cmdWin, exStatus, EditorColorPair.commandBar)
+
+    if suggestIndex < suggestlist.high: inc(suggestIndex)
+    else: suggestIndex = 0
+
+    key = getKey(cmdWin)
+
+proc suggestExCommand(exStatus: var ExModeViewStatus, cmdWin: var Window, key: var Rune) =
   const exCommandList = [
     ru"!",
     ru"b",
@@ -198,7 +222,7 @@ proc suggestMode(status: var Editorstatus, exStatus: var ExModeViewStatus, key: 
     ru"wq",
     ru"wqa",
   ]
-  
+ 
   var suggestIndex = 0
   var suggestlist: seq[seq[Rune]] = @[]
   for runes in exCommandList:
@@ -210,12 +234,17 @@ proc suggestMode(status: var Editorstatus, exStatus: var ExModeViewStatus, key: 
     exStatus.cursorX = 1
 
     for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
-    writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
+    writeExModeView(cmdWin, exStatus, EditorColorPair.commandBar)
 
     if suggestIndex < suggestlist.high: inc(suggestIndex)
     else: suggestIndex = 0
 
-    key = getKey(status.commandWindow)
+    key = getKey(cmdWin)
+
+proc suggestMode(status: var Editorstatus, exStatus: var ExModeViewStatus, key: var Rune) =
+ 
+  if exStatus.buffer.len == 0: suggestExCommand(exStatus, status.commandWindow, key)
+  elif exStatus.buffer.startsWith(ru"e "): suggestFilePath(exStatus, status.commandWindow, key)
   
 proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
   var exStatus = initExModeViewStatus(prompt)
