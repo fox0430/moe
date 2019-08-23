@@ -185,6 +185,9 @@ proc suggestFilePath(exStatus: var ExModeViewStatus, cmdWin: var Window, key: va
     exStatus.cursorX = 3
 
     for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
+    if suggestlist.len == 1:
+      key = ru'/'
+      return 
     writeExModeView(cmdWin, exStatus, EditorColorPair.commandBar)
 
     if suggestIndex < suggestlist.high: inc(suggestIndex)
