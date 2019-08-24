@@ -4,6 +4,36 @@ import editorstatus, editorview, ui, unicodeext, fileutils
 type
   ExModeViewStatus = tuple[buffer: seq[Rune], prompt: string, cursorY, cursorX, currentPosition, startPosition: int]
 
+const exCommandList = [
+  ru"!",
+  ru"b",
+  ru"bd",
+  ru"bfirst",
+  ru"blast",
+  ru"bnext",
+  ru"bprev",
+  ru"buf",
+  ru"cursorLine",
+  ru"e",
+  ru"indent",
+  ru"linenum",
+  ru"livereload",
+  ru"ls",
+  ru"noh",
+  ru"paren",
+  ru"q",
+  ru"q!",
+  ru"qa",
+  ru"qa!",
+  ru"statusbar",
+  ru"syntax",
+  ru"tabstop",
+  ru"theme",
+  ru"vs",
+  ru"wq",
+  ru"wqa",
+]
+
 proc writeMessageOnCommandWindow(cmdWin: var Window, message: string, color: EditorColorPair) =
   cmdWin.erase
   cmdWin.write(0, 0, message, color)
@@ -169,8 +199,9 @@ proc getKeyword*(status: var EditorStatus, prompt: string): seq[Rune] =
   return exStatus.buffer
 
 proc suggestFilePath(exStatus: var ExModeViewStatus, cmdWin: var Window, key: var Rune) =
-  var suggestIndex = 0
-  var suggestlist: seq[seq[Rune]] = @[]
+  var
+    suggestIndex = 0
+    suggestlist: seq[seq[Rune]] = @[]
   let inputPath = ($exStatus.buffer).substr(2)
   if inputPath.len == 0 or not inputPath.contains("/"):
     for kind, path in walkDir("./"):
@@ -195,39 +226,51 @@ proc suggestFilePath(exStatus: var ExModeViewStatus, cmdWin: var Window, key: va
 
     key = getKey(cmdWin)
 
+proc isExCommand(exBuffer: seq[Rune]): bool =
+  result = false
+  for i in 0 ..< exCommandList.len:
+    if ($exBuffer).startsWith($exCommandList[i]):
+      result = true
+      break
+
+proc suggestExCommandOption(exStatus: var ExModeViewStatus, cmdWin: var Window, key: var Rune) =
+  var
+    suggestIndex = 0
+    suggestlist: seq[seq[Rune]] = @[]
+    argList: seq[string] = @[]
+
+  let
+    command = (strutils.splitWhitespace($exStatus.buffer))[0]
+    arg = if (strutils.splitWhitespace($exStatus.buffer)).len > 1: (strutils.splitWhitespace($exStatus.buffer))[1] else: ""
+
+  case command:
+    of "cursorLine", "indent", "linenum", "livereload", "statusbar", "syntax", "tabstop": argList = @["on", "off"]
+    of "theme": argList= @["vivid", "dark", "light", "config"]
+    of "e": suggestFilePath(exStatus, cmdWin, key)
+    else: discard
+
+  for i in 0 ..< argList.len:
+    if argList[i].startsWith(arg): suggestlist.add(argList[i].toRunes)
+
+  while isTabkey(key) and suggestlist.len > 0:
+    exStatus.currentPosition = 0
+    exStatus.cursorX = 1
+    exStatus.buffer = ru""
+
+    for rune in command.toRunes & ru' ':exStatus.insertCommandBuffer(rune)
+    for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
+    writeExModeView(cmdWin, exStatus, EditorColorPair.commandBar)
+
+    if suggestIndex < suggestlist.high: inc(suggestIndex)
+    else: suggestIndex = 0
+
+    key = getKey(cmdWin)
+
 proc suggestExCommand(exStatus: var ExModeViewStatus, cmdWin: var Window, key: var Rune) =
-  const exCommandList = [
-    ru"!",
-    ru"b",
-    ru"bd",
-    ru"bfirst",
-    ru"blast",
-    ru"bnext",
-    ru"bprev",
-    ru"buf",
-    ru"cursorLine",
-    ru"e",
-    ru"indent",
-    ru"linenum",
-    ru"livereload",
-    ru"ls",
-    ru"noh",
-    ru"paren",
-    ru"q",
-    ru"q!",
-    ru"qa",
-    ru"qa!",
-    ru"statusbar",
-    ru"syntax",
-    ru"tabstop",
-    ru"theme",
-    ru"vs",
-    ru"wq",
-    ru"wqa",
-  ]
- 
-  var suggestIndex = 0
-  var suggestlist: seq[seq[Rune]] = @[]
+
+  var
+    suggestIndex = 0
+    suggestlist: seq[seq[Rune]] = @[]
   for runes in exCommandList:
     if exStatus.buffer.startsWith(runes): suggestlist.add(runes)
 
@@ -246,7 +289,7 @@ proc suggestExCommand(exStatus: var ExModeViewStatus, cmdWin: var Window, key: v
 
 proc suggestMode(status: var Editorstatus, exStatus: var ExModeViewStatus, key: var Rune) =
  
-  if exStatus.buffer.len > 0 and exStatus.buffer.startsWith(ru"e "): suggestFilePath(exStatus, status.commandWindow, key)
+  if exStatus.buffer.len > 0 and exStatus.buffer.isExCommand: exStatus.suggestExCommandOption(status.commandWindow, key)
   else: suggestExCommand(exStatus, status.commandWindow, key)
   
 proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
