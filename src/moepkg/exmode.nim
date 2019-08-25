@@ -139,8 +139,8 @@ proc splitWindowCommand(status: var EditorStatus) =
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
 proc liveReloadOfConfSettingCommand(status: var EditorStatus, command: seq[Rune]) =
-  if command == ru "true": status.settings.liveReloadOfConf = true
-  elif command == ru"false": status.settings.liveReloadOfConf = false
+  if command == ru "on": status.settings.liveReloadOfConf = true
+  elif command == ru"off": status.settings.liveReloadOfConf = false
 
   status.commandWindow.erase
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
