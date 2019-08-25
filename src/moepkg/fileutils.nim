@@ -1,4 +1,4 @@
-import sequtils, ospaths, encodings
+import sequtils, os, encodings
 import editorstatus, gapbuffer, unicodeext
 
 proc normalizePath*(path: seq[Rune]): seq[Rune] =

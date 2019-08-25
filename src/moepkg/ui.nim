@@ -419,7 +419,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     visualModeBg: purple_1,
     # color scheme
     defaultChar: gray100,
-    gtKeyword: seaGreen1_2,
+    gtKeyword: cyan1,
     gtStringLit: purple_1,
     gtDecNumber: aqua,
     gtComment: gray,
@@ -459,9 +459,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     visualModeBg: purple_1,
     # color scheme
     defaultChar: black,
-    gtKeyword: seaGreen1_2,
+    gtKeyword: blue,
     gtStringLit: purple_1,
-    gtDecNumber: aqua,
+    gtDecNumber: orange1,
     gtComment: gray,
     gtLongComment: gray,
     gtWhitespace: gray100,
@@ -499,11 +499,11 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     visualModeBg: purple_1,
     # color scheme
     defaultChar: gray100,
-    gtKeyword: seaGreen1_2,
-    gtStringLit: purple_1,
-    gtDecNumber: aqua,
-    gtComment: gray,
-    gtLongComment: gray,
+    gtKeyword: deepPink1_1,
+    gtStringLit: cyan1,
+    gtDecNumber: green1,
+    gtComment: purple_1,
+    gtLongComment: purple_1,
     gtWhitespace: gray100,
     # filer mode
     currentFile: gray100,
@@ -512,7 +512,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     fileBg: default,
     dir: deepPink1_1,
     dirBg: default,
-    pcLink: teal,
+    pcLink: cyan1,
     pcLinkBg: default
   ),
 ]
@@ -576,6 +576,8 @@ proc keyEcho*(keyecho: bool) =
   if keyecho == true: echo()
   elif keyecho == false: noecho()
     
+proc setTimeout*(win: var Window) = win.cursesWindow.wtimeout(cint(1000)) # 1000mm sec
+
 proc startUi*() =
   disableControlC()
   discard setLocale(LC_ALL, "")   # enable UTF-8
@@ -642,7 +644,7 @@ proc attroff*(win: var Window, attributes: Attributes) = win.cursesWindow.wattro
 
 proc moveCursor*(win: Window, y, x: int) = wmove(win.cursesWindow, cint(y), cint(x))
 
-let KEY_ESC = 27
+const KEY_ESC = 27
 var KEY_RESIZE {.header: "<ncurses.h>", importc: "KEY_RESIZE".}: int
 var KEY_DOWN {.header: "<ncurses.h>", importc: "KEY_DOWN".}: int
 var KEY_UP {.header: "<ncurses.h>", importc: "KEY_UP".}: int
@@ -662,6 +664,7 @@ proc getKey*(win: Window): Rune =
     len: int
   block getfirst:
     let key = wgetch(win.cursesWindow)
+    if key == -1: return Rune('\0')
     if not (key <= 0x7F or (0xC2 <= key and key <= 0xF0) or key == 0xF3): return Rune(key)
     s.add(char(key))
     len = numberOfBytes(char(key))
@@ -684,6 +687,7 @@ proc isDcKey*(key: Rune): bool = key == KEY_DC
 proc isEnterKey*(key: Rune): bool = key == KEY_ENTER or key == ord('\n') or key == 13
 proc isPageUpKey*(key: Rune): bool = key == KEY_PPAGE or key == 2
 proc isPageDownkey*(key: Rune): bool = key == KEY_NPAGE or key == 6
+proc isTabkey*(key: Rune): bool = key == ord('\t') or key == 9
 proc isControlR*(key: Rune): bool = key == 18
 proc isControlJ*(key: Rune): bool = int(key) == 10
 proc isControlK*(key: Rune): bool = int(key) == 11
@@ -691,3 +695,4 @@ proc isControlL*(key: Rune): bool = int(key) == 12
 proc isControlU*(key: Rune): bool = int(key) == 21
 proc isControlV*(key: Rune): bool = int(key) == 22
 proc isControlH*(key: Rune): bool = int(key) == 263
+proc isControlSquareBracketsRight*(key: Rune): bool = int(key) == 27  # Ctrl - [

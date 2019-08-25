@@ -1,4 +1,4 @@
-import os, terminal, strutils, strformat, unicode, macros
+import os, terminal, strutils, strformat, unicode, macros, times
 import packages/docutils/highlite
 import moepkg/ui
 import moepkg/editorstatus
@@ -25,7 +25,8 @@ proc main() =
   startUi()
 
   var status = initEditorStatus()
-  status.settings = parseSettingsFile(getConfigDir() / "moe" / "moerc.toml")
+  status.settings.loadSettingFile
+  status.timeConfFileLastReloaded = now()
   changeTheme(status)
 
   if existsDir(parsedList.filename):
@@ -33,7 +34,7 @@ proc main() =
     except OSError:
       status.commandWindow.writeFileOpenError(parsedList.filename)
       addNewBuffer(status, "")
-    status.bufStatus.add(BufferStatus(mode: Mode.filer))
+    status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSavetime: now()))
   else: addNewBuffer(status, parsedList.filename)
 
   while status.mainWindowInfo.len > 0:

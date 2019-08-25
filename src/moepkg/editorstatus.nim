@@ -1,4 +1,4 @@
-import packages/docutils/highlite, strutils, terminal, os, strformat, tables
+import packages/docutils/highlite, strutils, terminal, os, strformat, tables, times
 import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils, undoredostack
 
 type Mode* = enum
@@ -43,6 +43,9 @@ type EditorSettings* = object
   defaultCursor*: CursorType
   normalModeCursor*: CursorType
   insertModeCursor*: CursorType
+  autoSave*: bool
+  autoSaveInterval*: int # minutes
+  liveReloadOfConf*: bool
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -62,6 +65,7 @@ type BufferStatus* = object
   cmdLoop*: int
   mode* : Mode
   prevMode* : Mode
+  lastSaveTime*: DateTime
 
 type MainWindowInfo = object
   window*: Window
@@ -73,6 +77,7 @@ type EditorStatus* = object
   searchHistory*: seq[seq[Rune]]
   registers*: Registers
   settings*: EditorSettings
+  timeConfFileLastReloaded*: DateTime
   currentDir: seq[Rune]
   debugMode: int
   currentMainWindow*: int
@@ -112,6 +117,7 @@ proc initEditorSettings*(): EditorSettings =
   result.defaultCursor = CursorType.blockMode   # Terminal default curosr shape
   result.normalModeCursor = CursorType.blockMode
   result.insertModeCursor = CursorType.ibeamMode
+  result.autoSaveInterval = 5
 
 proc initEditorStatus*(): EditorStatus =
   result.currentDir = getCurrentDir().toRunes
@@ -123,7 +129,10 @@ proc initEditorStatus*(): EditorStatus =
     useTab = if result.settings.tabLine.useTab: 1 else: 0
 
   if result.settings.tabLine.useTab: result.tabWindow = initWindow(1, terminalWidth(), 0, 0)
+
   result.mainWindowInfo.add(MainWindowInfo(window: initWindow(terminalHeight() - useTab - 1, terminalWidth(), useTab, 0), bufferIndex: 0))
+  result.mainWindowInfo[result.mainWindowInfo.high].window.setTimeout()
+
   if result.settings.statusBar.useBar: result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0)
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight() - 1, 0)
 
@@ -294,6 +303,7 @@ proc update*(status: var EditorStatus) =
 proc splitWindow*(status: var EditorStatus) =
   let useTab = if status.settings.tabLine.useTab: 1 else: 0
   status.mainWindowInfo.insert(MainWindowInfo(window: initWindow(terminalHeight() - useTab - 1, int(terminalWidth() / status.mainWindowInfo.len), useTab, int(terminalWidth() / status.mainWindowInfo.len)), bufferIndex: status.currentBuffer), status.currentMainWindow)
+  status.mainWindowInfo[status.currentMainWindow + 1].window.setTimeout()
 
   status.update
 
@@ -325,7 +335,7 @@ proc addNewBuffer*(status:var EditorStatus, filename: string)
 from commandview import writeFileOpenError
 
 proc addNewBuffer*(status:var EditorStatus, filename: string) =
-  status.bufStatus.add(BufferStatus(filename: filename.toRunes))
+  status.bufStatus.add(BufferStatus(filename: filename.toRunes, lastSaveTime: now()))
   let index = status.bufStatus.high
 
   if existsFile(filename) == false: status.bufStatus[index].buffer = newFile()
@@ -362,8 +372,9 @@ proc revertPosition*(bufStatus: var BufferStatus, id: int) =
   bufStatus.expandedColumn = bufStatus.positionRecord[id].expandedColumn
 
 proc updateHighlight*(status: var EditorStatus)
-from searchmode import searchAllOccurrence
+proc eventLoopTask*(status: var Editorstatus)
 
+from searchmode import searchAllOccurrence
 proc updateHighlight*(status: var EditorStatus) =
   let
     currentBuf = status.currentBuffer
@@ -380,6 +391,24 @@ proc updateHighlight*(status: var EditorStatus) =
       let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column+keyword.high, color: EditorColorPair.searchResult)
       status.bufStatus[currentBuf].highlight = status.bufStatus[currentBuf].highlight.overwrite(colorSegment)
 
-proc changeTheme*(status: var EditorStatus) =
-  setCursesColor(ColorThemeTable[status.settings.editorColorTheme])
-  if status.settings.editorColorTheme == ColorTheme.light: status.updateHighlight
+proc changeTheme*(status: var EditorStatus) = setCursesColor(ColorThemeTable[status.settings.editorColorTheme])
+
+from commandview import writeMessageAutoSave
+proc autoSave(status: var Editorstatus) =
+  let interval = status.settings.autoSaveInterval.minutes
+  for i in 0 ..< status.bufStatus.len:
+    if status.bufStatus[i].filename != ru"" and now() > status.bufStatus[i].lastSaveTime + interval:
+      saveFile(status.bufStatus[i].filename, status.bufStatus[i].buffer.toRunes, status.settings.characterEncoding)
+      status.commandWindow.writeMessageAutoSave(status.bufStatus[i].filename)
+      status.bufStatus[i].lastSaveTime = now()
+
+from settings import loadSettingFile
+proc eventLoopTask(status: var Editorstatus) =
+  if status.settings.autoSave: status.autoSave
+  if status.settings.liveReloadOfConf and status.timeConfFileLastReloaded + 1.seconds < now():
+    let beforeTheme = status.settings.editorColorTheme
+    status.settings.loadSettingFile
+    status.timeConfFileLastReloaded = now()
+    if beforeTheme != status.settings.editorColorTheme:
+      changeTheme(status)
+      status.resize(terminalHeight(), terminalWidth())

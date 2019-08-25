@@ -1,8 +1,38 @@
-import terminal, strutils, sequtils, strformat
-import editorstatus, editorview, ui, unicodeext
+import terminal, strutils, sequtils, strformat, os
+import editorstatus, editorview, ui, unicodeext, fileutils
 
 type
   ExModeViewStatus = tuple[buffer: seq[Rune], prompt: string, cursorY, cursorX, currentPosition, startPosition: int]
+
+const exCommandList = [
+  ru"!",
+  ru"b",
+  ru"bd",
+  ru"bfirst",
+  ru"blast",
+  ru"bnext",
+  ru"bprev",
+  ru"buf",
+  ru"cursorLine",
+  ru"e",
+  ru"indent",
+  ru"linenum",
+  ru"livereload",
+  ru"ls",
+  ru"noh",
+  ru"paren",
+  ru"q",
+  ru"q!",
+  ru"qa",
+  ru"qa!",
+  ru"statusbar",
+  ru"syntax",
+  ru"tabstop",
+  ru"theme",
+  ru"vs",
+  ru"wq",
+  ru"wqa",
+]
 
 proc writeMessageOnCommandWindow(cmdWin: var Window, message: string, color: EditorColorPair) =
   cmdWin.erase
@@ -42,6 +72,17 @@ proc writeMessageYankedLine*(cmdWin: var Window, numOfLine: int) =
 proc writeMessageYankedCharactor*(cmdWin: var Window, numOfChar: int) =
   cmdWin.writeMessageOnCommandWindow(fmt"{numOfChar} charactor yanked" , EditorColorPair.commandBar)
 
+proc writeMessageAutoSave*(cmdWin: var Window, filename: seq[Rune]) =
+  cmdWin.writeMessageOnCommandWindow(fmt"Auto saved {filename}" , EditorColorPair.commandBar)
+
+proc writeNotEditorCommandError*(cmdWin: var Window, command: seq[seq[Rune]]) =
+  var cmd = ""
+  for i in 0 ..< command.len: cmd = cmd & $command[i] & " "
+  cmdWin.writeMessageOnCommandWindow(fmt"Error: Not an editor command: {cmd}" , EditorColorPair.errorMessage)
+
+proc writeMessageSaveFile*(cmdWin: var Window, filename: seq[Rune]) =
+  cmdWin.writeMessageOnCommandWindow(fmt"Saved {filename}" , EditorColorPair.commandBar)
+
 proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
   for i in 0 .. r.high:
     var string = $r[i]
@@ -72,7 +113,6 @@ proc splitQout(s: string): seq[seq[Rune]]=
       result[result.high].add(($s[i]).toRunes)
 
   return result.removeSuffix(" ")
-
 
 proc splitCommand(command: string): seq[seq[Rune]] =
   if (command).contains('"'):
@@ -158,6 +198,100 @@ proc getKeyword*(status: var EditorStatus, prompt: string): seq[Rune] =
 
   return exStatus.buffer
 
+proc suggestFilePath(exStatus: var ExModeViewStatus, cmdWin: var Window, key: var Rune) =
+  var
+    suggestIndex = 0
+    suggestlist: seq[seq[Rune]] = @[]
+  let inputPath = ($exStatus.buffer).substr(2)
+  if inputPath.len == 0 or not inputPath.contains("/"):
+    for kind, path in walkDir("./"):
+      if ($path.toRunes.normalizePath).startsWith(inputPath): suggestlist.add(path.toRunes.normalizePath)
+  elif ($inputPath).contains("/"):
+    for kind, path in walkDir(($inputPath).substr(0, ($inputPath).rfind("/"))):
+      if ($path.toRunes.normalizePath).startsWith(inputPath): suggestlist.add(path.toRunes.normalizePath)
+
+  while isTabkey(key) and suggestlist.len > 0:
+    exStatus.buffer = ru"e "
+    exStatus.currentPosition = 2
+    exStatus.cursorX = 3
+
+    for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
+    if suggestlist.len == 1:
+      key = ru'/'
+      return 
+    writeExModeView(cmdWin, exStatus, EditorColorPair.commandBar)
+
+    if suggestIndex < suggestlist.high: inc(suggestIndex)
+    else: suggestIndex = 0
+
+    key = getKey(cmdWin)
+
+proc isExCommand(exBuffer: seq[Rune]): bool =
+  result = false
+  for i in 0 ..< exCommandList.len:
+    if ($exBuffer).startsWith($exCommandList[i]):
+      result = true
+      break
+
+proc suggestExCommandOption(exStatus: var ExModeViewStatus, cmdWin: var Window, key: var Rune) =
+  var
+    suggestIndex = 0
+    suggestlist: seq[seq[Rune]] = @[]
+    argList: seq[string] = @[]
+
+  let
+    command = (strutils.splitWhitespace($exStatus.buffer))[0]
+    arg = if (strutils.splitWhitespace($exStatus.buffer)).len > 1: (strutils.splitWhitespace($exStatus.buffer))[1] else: ""
+
+  case command:
+    of "cursorLine", "indent", "linenum", "livereload", "statusbar", "syntax", "tabstop": argList = @["on", "off"]
+    of "theme": argList= @["vivid", "dark", "light", "config"]
+    of "e": suggestFilePath(exStatus, cmdWin, key)
+    else: discard
+
+  for i in 0 ..< argList.len:
+    if argList[i].startsWith(arg): suggestlist.add(argList[i].toRunes)
+
+  while isTabkey(key) and suggestlist.len > 0:
+    exStatus.currentPosition = 0
+    exStatus.cursorX = 1
+    exStatus.buffer = ru""
+
+    for rune in command.toRunes & ru' ':exStatus.insertCommandBuffer(rune)
+    for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
+    writeExModeView(cmdWin, exStatus, EditorColorPair.commandBar)
+
+    if suggestIndex < suggestlist.high: inc(suggestIndex)
+    else: suggestIndex = 0
+
+    key = getKey(cmdWin)
+
+proc suggestExCommand(exStatus: var ExModeViewStatus, cmdWin: var Window, key: var Rune) =
+
+  var
+    suggestIndex = 0
+    suggestlist: seq[seq[Rune]] = @[]
+  for runes in exCommandList:
+    if exStatus.buffer.startsWith(runes): suggestlist.add(runes)
+
+  while isTabkey(key) and suggestlist.len > 0:
+    exStatus.buffer = ru""
+    exStatus.currentPosition = 0
+    exStatus.cursorX = 1
+
+    for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
+    writeExModeView(cmdWin, exStatus, EditorColorPair.commandBar)
+
+    if suggestIndex < suggestlist.high: inc(suggestIndex)
+    else: suggestIndex = 0
+
+    key = getKey(cmdWin)
+
+proc suggestMode(status: var Editorstatus, exStatus: var ExModeViewStatus, key: var Rune) =
+ 
+  if exStatus.buffer.len > 0 and exStatus.buffer.isExCommand: exStatus.suggestExCommandOption(status.commandWindow, key)
+  else: suggestExCommand(exStatus, status.commandWindow, key)
+  
 proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
   var exStatus = initExModeViewStatus(prompt)
   status.resize(terminalHeight(), terminalWidth())
@@ -167,8 +301,12 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
 
     var key = getKey(status.commandWindow)
 
+    if isTabkey(key): suggestMode(status, exStatus, key)
+
     if isEnterKey(key): break
-    elif isEscKey(key): return @[ru""]
+    elif isEscKey(key):
+      status.commandWindow.erase
+      return @[ru""]
     elif isResizeKey(key):
       status.resize(terminalHeight(), terminalWidth())
       status.update

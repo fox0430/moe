@@ -221,14 +221,17 @@ proc visualMode*(status: var EditorStatus) =
 
     status.update
 
-    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    var key: Rune = Rune('\0')
+    while key == Rune('\0'):
+      status.eventLoopTask
+      key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
 
     status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
     status.bufStatus[status.currentBuffer].tryRecordCurrentPosition
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-    elif isEscKey(key):
+    elif isEscKey(key) or isControlSquareBracketsRight(key):
       status.updatehighlight
       status.changeMode(Mode.normal)
 

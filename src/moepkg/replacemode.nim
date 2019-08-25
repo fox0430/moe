@@ -1,5 +1,5 @@
 import terminal
-import editorstatus, ui, normalmode, highlight
+import editorstatus, ui, normalmode, highlight, unicodeext
 
 proc replaceMode*(status: var EditorStatus) =
 
@@ -12,10 +12,14 @@ proc replaceMode*(status: var EditorStatus) =
 
     status.update
 
-    let key = getkey(status.mainWindowInfo[status.currentMainWindow].window)
+    var key: Rune = Rune('\0')
+    while key == Rune('\0'):
+      status.eventLoopTask
+      key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-    elif isEscKey(key):
+    elif isEscKey(key) or isControlSquareBracketsRight(key):
       status.changeMode(Mode.normal)
 
     elif isRightKey(key):

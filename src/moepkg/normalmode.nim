@@ -334,6 +334,18 @@ proc deleteWord(bufStatus: var BufferStatus) =
   bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)
 
+proc deleteCharacterUntilEndOfLine(bufStatus: var BufferStatus) =
+  let
+    currentLine = bufStatus.currentLine
+    startColumn = bufStatus.currentColumn
+  for i in startColumn ..< bufStatus.buffer[currentLine].len: deleteCurrentCharacter(bufStatus)
+
+proc deleteCharacterBeginningOfLine(bufStatus: var BufferStatus) =
+  let beforColumn = bufStatus.currentColumn
+  bufStatus.currentColumn = 0
+  bufStatus.expandedColumn = 0
+  for i in 0 ..< beforColumn: deleteCurrentCharacter(bufStatus)
+
 proc yankLines(status: var EditorStatus, first, last: int) =
   status.registers.yankedStr = @[]
   status.registers.yankedLines = @[]
@@ -357,6 +369,37 @@ proc yankString(status: var EditorStatus, length: int) =
 
   status.commandWindow.writeMessageYankedCharactor(status.registers.yankedStr.len)
 
+proc yankWord(status: var Editorstatus, loop: int) =
+  status.registers.yankedLines = @[]
+  status.registers.yankedStr = @[]
+
+  let
+    currentBuf = status.currentBuffer
+    line = status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine]
+  var startColumn = status.bufStatus[currentBuf].currentColumn
+
+  for i in 0 ..< loop:
+    if line.len < 1:
+      status.registers.yankedLines = @[ru""]
+      return
+    if isPunct(line[startColumn]):
+      status.registers.yankedStr.add(line[startColumn])
+      return
+
+    for j in startColumn ..< line.len:
+      let rune = line[j]
+      if isWhiteSpace(rune):
+        for k in j ..< line.len:
+          if isWhiteSpace(line[k]):status.registers.yankedStr.add(rune)
+          else:
+            startColumn = k
+            break
+        break
+      elif not isAlpha(rune) or isPunct(rune) or isDigit(rune):
+        startColumn = j
+        break
+      else: status.registers.yankedStr.add(rune)
+
 proc pasteString(status: var EditorStatus) =
   let index = status.currentBuffer
 
@@ -365,7 +408,7 @@ proc pasteString(status: var EditorStatus) =
   newLine.insert(status.registers.yankedStr, status.bufStatus[index].currentColumn)
   if oldLine != newLine: status.bufStatus[index].buffer[status.bufStatus[index].currentLine] = newLine
 
-  status.bufStatus[status.currentBuffer].currentColumn += status.registers.yankedStr.high
+  status.bufStatus[status.currentBuffer].currentColumn += status.registers.yankedStr.high - 1
 
   status.bufStatus[index].view.reload(status.bufStatus[index].buffer, min(status.bufStatus[index].view.originalLine[0], status.bufStatus[index].buffer.high))
   inc(status.bufStatus[index].countChange)
@@ -435,6 +478,26 @@ proc joinLine(bufStatus: var BufferStatus) =
 
   bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)
+
+proc searchOneCharactorToEndOfLine(bufStatus: var BufferStatus, rune: Rune) =
+  let line = bufStatus.buffer[bufStatus.currentLine]
+
+  if line.len < 1 or isEscKey(rune) or (bufStatus.currentColumn == line.high): return
+
+  for col in bufStatus.currentColumn + 1 ..< line.len:
+    if line[col] == rune:
+      bufStatus.currentColumn = col
+      break
+
+proc searchOneCharactorToBeginOfLine(bufStatus: var BufferStatus, rune: Rune) =
+  let line = bufStatus.buffer[bufStatus.currentLine]
+
+  if line.len < 1 or isEscKey(rune) or (bufStatus.currentColumn == 0): return
+
+  for col in countdown(bufStatus.currentColumn - 1, 0):
+    if line[col] == rune:
+      bufStatus.currentColumn = col
+      break
 
 proc searchNextOccurrence(status: var EditorStatus) =
   if status.searchHistory.len < 1: return
@@ -563,9 +626,12 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
       yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
       for i in 0 ..< min(cmdLoop, status.bufStatus[currentBuf].buffer.len - status.bufStatus[currentBuf].currentLine): deleteLine(status.bufStatus[status.currentBuffer], status.bufStatus[currentBuf].currentLine)
     elif key == ord('w'): deleteWord(status.bufStatus[status.currentBuffer])
+    elif key == ('$') or isEndKey(key): deleteCharacterUntilEndOfLine(status.bufStatus[status.currentBuffer])
+    elif key == ('0') or isHomeKey(key): deleteCharacterBeginningOfLine(status.bufStatus[status.currentBuffer])
   elif key == ord('y'):
-    if getkey(status.mainWindowInfo[status.currentMainWindow].window) == ord('y'):
-      yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
+    let key = getkey(status.mainWindowInfo[status.currentMainWindow].window)
+    if key == ord('y'): yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
+    elif key == ord('w'): yankWord(status, cmdLoop)
   elif key == ord('p'):
     pasteAfterCursor(status)
   elif key == ord('P'):
@@ -589,6 +655,12 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     searchNextOccurrence(status)
   elif key == ord('N'):
     searchNextOccurrenceReversely(status)
+  elif key == ord('f'):
+    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    searchOneCharactorToEndOfLine(status.bufStatus[status.currentBuffer], key)
+  elif key == ord('F'):
+    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    searchOneCharactorToBeginOfLine(status.bufStatus[status.currentBuffer], key)
   elif key == ord('R'):
     status.changeMode(Mode.replace)
   elif key == ord('i'):
@@ -615,9 +687,6 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
     if  key == ord('Z'): writeFileAndExit(status)
     elif key == ord('Q'): forceExit(status)
-  elif isEscKey(key):
-    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
-    if isEscKey(key): turnOffHighlighting(status)
   else:
     discard
 
@@ -635,10 +704,20 @@ proc normalMode*(status: var EditorStatus) =
 
     status.update
 
-    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    var key: Rune = Rune('\0')
+    while key == Rune('\0'):
+      status.eventLoopTask
+      key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
 
     status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
     status.bufStatus[status.currentBuffer].tryRecordCurrentPosition
+
+    if isEscKey(key):
+      let keyAfterEsc = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+      if isEscKey(key):
+        turnOffHighlighting(status)
+        continue
+      else: key = keyAfterEsc
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
