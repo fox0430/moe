@@ -46,6 +46,7 @@ type EditorSettings* = object
   autoSave*: bool
   autoSaveInterval*: int # minutes
   liveReloadOfConf*: bool
+  realtimeSearch*: bool
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]

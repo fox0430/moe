@@ -70,6 +70,8 @@ proc searchFirstOccurrence(status: var EditorStatus) =
     for column in 0 ..< searchResult.column:
       keyRight(status.bufStatus[status.currentBuffer])
 
+  status.updateHighlight
+
 proc realtimeSearch(status: var Editorstatus) =
   const prompt = "/"
   var keyword = ru""
@@ -91,8 +93,6 @@ proc realtimeSearch(status: var Editorstatus) =
     status.update
 
 proc searchMode*(status: var EditorStatus) =
-  let isRealtimeSearch = true
-  if isRealtimeSearch: realtimeSearch(status)
+  if status.settings.realtimeSearch: realtimeSearch(status)
   else: searchFirstOccurrence(status)
-  #status.updateHighlight
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
