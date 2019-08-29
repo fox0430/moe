@@ -1,4 +1,4 @@
-import unicodeext, strformat, sequtils, system
+import unicodeext, strformat, sequtils, system, terminal
 import ui, editorstatus, gapbuffer, highlight, commandview
 
 type
@@ -70,7 +70,29 @@ proc searchFirstOccurrence(status: var EditorStatus) =
     for column in 0 ..< searchResult.column:
       keyRight(status.bufStatus[status.currentBuffer])
 
+proc realtimeSearch(status: var Editorstatus) =
+  const prompt = "/"
+  var keyword = ru""
+  var exitSearch = false
+  status.searchHistory.add(ru"")
+  status.bufStatus[status.currentMainWindow].isHighlight = true
+
+  while exitSearch == false:
+    let returnWord = getKeyOnceAndWriteCommandView(status, prompt, keyword)
+
+    keyword = returnWord[0]
+    exitSearch = returnWord[1]
+    status.searchHistory[status.searchHistory.high] = keyword
+
+    if exitSearch: break
+
+    status.updateHighlight
+    status.resize(terminalHeight(), terminalWidth())
+    status.update
+
 proc searchMode*(status: var EditorStatus) =
-  searchFirstOccurrence(status)
-  status.updateHighlight
+  let isRealtimeSearch = true
+  if isRealtimeSearch: realtimeSearch(status)
+  else: searchFirstOccurrence(status)
+  #status.updateHighlight
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)

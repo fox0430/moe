@@ -198,6 +198,38 @@ proc getKeyword*(status: var EditorStatus, prompt: string): seq[Rune] =
 
   return exStatus.buffer
 
+proc getKeyOnceAndWriteCommandView*(status: var Editorstatus, prompt: string, buffer: seq[Rune]): (seq[Rune], bool) =
+  var exStatus = initExModeViewStatus(prompt)
+  for rune in buffer: exStatus.insertCommandBuffer(rune)
+  var exitSearch = false
+
+  while true:
+    writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
+
+    var key = getKey(status.commandWindow)
+    if isEnterKey(key) or isEscKey(key):
+      exitSearch = true
+      break
+    elif isResizeKey(key):
+      status.resize(terminalHeight(), terminalWidth())
+      status.update
+    elif isLeftKey(key): moveLeft(status.commandWindow, exStatus)
+    elif isRightkey(key): moveRight(exStatus)
+    elif isHomeKey(key): moveTop(exStatus)
+    elif isEndKey(key): moveEnd(exStatus)
+    elif isBackspaceKey(key):
+      deleteCommandBuffer(exStatus)
+      break
+    elif isDcKey(key):
+      deleteCommandBufferCurrentPosition(exStatus)
+      break
+    else:
+      insertCommandBuffer(exStatus, key)
+      break
+
+  writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
+  return (exStatus.buffer, exitSearch)
+
 proc suggestFilePath(exStatus: var ExModeViewStatus, cmdWin: var Window, key: var Rune) =
   var
     suggestIndex = 0
