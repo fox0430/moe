@@ -81,7 +81,6 @@ proc realtimeSearch(status: var Editorstatus) =
     exitSearch = false
     cancelSearch = false
   status.searchHistory.add(ru"")
-  status.bufStatus[status.currentMainWindow].isHighlight = true
 
   while exitSearch == false:
     let returnWord = getKeyOnceAndWriteCommandView(status, prompt, keyword)
@@ -94,10 +93,13 @@ proc realtimeSearch(status: var Editorstatus) =
     if exitSearch or cancelSearch: break
 
     if keyword.len > 0:
+      status.bufStatus[status.currentMainWindow].isHighlight = true
       status.jumpToSearchResults(keyword)
-      status.updateHighlight
-      status.resize(terminalHeight(), terminalWidth())
-      status.update
+    else: status.bufStatus[status.currentMainWindow].isHighlight = false
+
+    status.updateHighlight
+    status.resize(terminalHeight(), terminalWidth())
+    status.update
 
   if cancelSearch:
     status.searchHistory.delete(status.searchHistory.high)
