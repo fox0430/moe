@@ -74,7 +74,7 @@ proc isStatusBarSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"statusbar"
 
 proc isRealtimeSearchSettingCommand(command: seq[seq[Rune]]): bool =
-  return command.len == 1 and command[0] == ru"realtimeSearch"
+  return command.len == 2 and command[0] == ru"realtimesearch"
 
 proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"noh"
