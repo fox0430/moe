@@ -98,9 +98,8 @@ proc realtimeSearch(status: var Editorstatus) =
   if cancelSearch:
     status.searchHistory.delete(status.searchHistory.high)
 
+    status.bufStatus[status.currentMainWindow].isHighlight = false
     status.updateHighlight
-    status.resize(terminalHeight(), terminalWidth())
-    status.update
 
     status.commandWindow.erase
 
