@@ -25,6 +25,7 @@ const exCommandList = [
   ru"q!",
   ru"qa",
   ru"qa!",
+  ru"realtimesearch",
   ru"statusbar",
   ru"syntax",
   ru"tabstop",
@@ -281,7 +282,7 @@ proc suggestExCommandOption(exStatus: var ExModeViewStatus, cmdWin: var Window, 
     arg = if (strutils.splitWhitespace($exStatus.buffer)).len > 1: (strutils.splitWhitespace($exStatus.buffer))[1] else: ""
 
   case command:
-    of "cursorLine", "indent", "linenum", "livereload", "statusbar", "syntax", "tabstop": argList = @["on", "off"]
+    of "cursorLine", "indent", "linenum", "livereload", "realtimesearch", "statusbar", "syntax", "tabstop": argList = @["on", "off"]
     of "theme": argList= @["vivid", "dark", "light", "config"]
     of "e": suggestFilePath(exStatus, cmdWin, key)
     else: discard
