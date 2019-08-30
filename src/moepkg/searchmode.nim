@@ -53,6 +53,13 @@ proc searchAllOccurrence*(buffer: GapBuffer[seq[Rune]], keyword: seq[Rune]): seq
       result.add((line, begin + position))
       begin += position + keyword.len
 
+proc jumpToSearchResults(status: var Editorstatus, keyword: seq[Rune]) =
+  let searchResult = searchBuffer(status, keyword)
+  if searchResult.line > -1:
+    jumpLine(status, searchResult.line)
+    for column in 0 ..< searchResult.column:
+      keyRight(status.bufStatus[status.currentBuffer])
+
 proc searchFirstOccurrence(status: var EditorStatus) =
   let keyword = getKeyword(status, "/")
 
@@ -63,20 +70,16 @@ proc searchFirstOccurrence(status: var EditorStatus) =
 
   status.searchHistory.add(keyword)
   status.bufStatus[status.currentMainWindow].isHighlight = true
-
-  let searchResult = searchBuffer(status, keyword)
-  if searchResult.line > -1:
-    jumpLine(status, searchResult.line)
-    for column in 0 ..< searchResult.column:
-      keyRight(status.bufStatus[status.currentBuffer])
+  status.jumpToSearchResults(keyword)
 
   status.updateHighlight
 
 proc realtimeSearch(status: var Editorstatus) =
   const prompt = "/"
-  var keyword = ru""
-  var exitSearch = false
-  var cancelSearch = false
+  var
+    keyword = ru""
+    exitSearch = false
+    cancelSearch = false
   status.searchHistory.add(ru"")
   status.bufStatus[status.currentMainWindow].isHighlight = true
 
@@ -91,6 +94,7 @@ proc realtimeSearch(status: var Editorstatus) =
     if exitSearch or cancelSearch: break
 
     if keyword.len > 0:
+      status.jumpToSearchResults(keyword)
       status.updateHighlight
       status.resize(terminalHeight(), terminalWidth())
       status.update
