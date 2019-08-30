@@ -84,13 +84,14 @@ proc realtimeSearch(status: var Editorstatus) =
 
     keyword = returnWord[0]
     exitSearch = returnWord[1]
-    status.searchHistory[status.searchHistory.high] = keyword
+    if keyword.len > 0: status.searchHistory[status.searchHistory.high] = keyword
 
     if exitSearch: break
 
-    status.updateHighlight
-    status.resize(terminalHeight(), terminalWidth())
-    status.update
+    if keyword.len > 0:
+      status.updateHighlight
+      status.resize(terminalHeight(), terminalWidth())
+      status.update
 
 proc searchMode*(status: var EditorStatus) =
   if status.settings.realtimeSearch: realtimeSearch(status)
