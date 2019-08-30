@@ -32,6 +32,8 @@ autoSaveInterval = 5
 
 liveReloadOfConf = false
 
+realtimeSearch = true
+
 [StatusBar]
 
 mode = true
