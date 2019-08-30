@@ -76,6 +76,7 @@ proc realtimeSearch(status: var Editorstatus) =
   const prompt = "/"
   var keyword = ru""
   var exitSearch = false
+  var cancelSearch = false
   status.searchHistory.add(ru"")
   status.bufStatus[status.currentMainWindow].isHighlight = true
 
@@ -84,14 +85,24 @@ proc realtimeSearch(status: var Editorstatus) =
 
     keyword = returnWord[0]
     exitSearch = returnWord[1]
+    cancelSearch = returnWord[2]
     if keyword.len > 0: status.searchHistory[status.searchHistory.high] = keyword
 
-    if exitSearch: break
+    if exitSearch or cancelSearch: break
 
     if keyword.len > 0:
       status.updateHighlight
       status.resize(terminalHeight(), terminalWidth())
       status.update
+
+  if cancelSearch:
+    status.searchHistory.delete(status.searchHistory.high)
+
+    status.updateHighlight
+    status.resize(terminalHeight(), terminalWidth())
+    status.update
+
+    status.commandWindow.erase
 
 proc searchMode*(status: var EditorStatus) =
   if status.settings.realtimeSearch: realtimeSearch(status)
