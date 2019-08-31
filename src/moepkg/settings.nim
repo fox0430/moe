@@ -73,6 +73,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("liveReloadOfConf"):
       result.liveReloadOfConf = settings["Standard"]["liveReloadOfConf"].getbool()
 
+    if settings["Standard"].contains("realtimeSearch"):
+      result.realtimeSearch = settings["Standard"]["realtimeSearch"].getbool()
+
   if settings.contains("StatusBar"):
     if settings["StatusBar"].contains("mode"):
         result.statusBar.mode= settings["StatusBar"]["mode"].getbool()

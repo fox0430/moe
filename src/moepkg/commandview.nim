@@ -25,6 +25,7 @@ const exCommandList = [
   ru"q!",
   ru"qa",
   ru"qa!",
+  ru"realtimesearch",
   ru"statusbar",
   ru"syntax",
   ru"tabstop",
@@ -198,6 +199,43 @@ proc getKeyword*(status: var EditorStatus, prompt: string): seq[Rune] =
 
   return exStatus.buffer
 
+proc getKeyOnceAndWriteCommandView*(status: var Editorstatus, prompt: string, buffer: seq[Rune]): (seq[Rune], bool, bool) =
+  var
+    exStatus = initExModeViewStatus(prompt)
+    exitSearch = false
+    cancelSearch = false
+  for rune in buffer: exStatus.insertCommandBuffer(rune)
+
+  while true:
+    writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
+
+    var key = getKey(status.commandWindow)
+    if isEnterKey(key):
+      exitSearch = true
+      break
+    elif isEscKey(key):
+      cancelSearch = true
+      break
+    elif isResizeKey(key):
+      status.resize(terminalHeight(), terminalWidth())
+      status.update
+    elif isLeftKey(key): moveLeft(status.commandWindow, exStatus)
+    elif isRightkey(key): moveRight(exStatus)
+    elif isHomeKey(key): moveTop(exStatus)
+    elif isEndKey(key): moveEnd(exStatus)
+    elif isBackspaceKey(key):
+      deleteCommandBuffer(exStatus)
+      break
+    elif isDcKey(key):
+      deleteCommandBufferCurrentPosition(exStatus)
+      break
+    else:
+      insertCommandBuffer(exStatus, key)
+      break
+
+  writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
+  return (exStatus.buffer, exitSearch, cancelSearch)
+
 proc suggestFilePath(exStatus: var ExModeViewStatus, cmdWin: var Window, key: var Rune) =
   var
     suggestIndex = 0
@@ -244,7 +282,7 @@ proc suggestExCommandOption(exStatus: var ExModeViewStatus, cmdWin: var Window, 
     arg = if (strutils.splitWhitespace($exStatus.buffer)).len > 1: (strutils.splitWhitespace($exStatus.buffer))[1] else: ""
 
   case command:
-    of "cursorLine", "indent", "linenum", "livereload", "statusbar", "syntax", "tabstop": argList = @["on", "off"]
+    of "cursorLine", "indent", "linenum", "livereload", "realtimesearch", "statusbar", "syntax", "tabstop": argList = @["on", "off"]
     of "theme": argList= @["vivid", "dark", "light", "config"]
     of "e": suggestFilePath(exStatus, cmdWin, key)
     else: discard
