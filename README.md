@@ -27,6 +27,8 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Configuration file
 
+- Live reload of configuration file
+
 - Multiple file buffers
 
 - Split window
@@ -41,11 +43,13 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Real time search
 
+- Auto save
+
 ## Planned features
 
 - Configuration mode
 
-- Supports Regular expression and PEG
+- Supports regular expression and PEG
 
 - Supports EditorConfig
 
@@ -84,7 +88,7 @@ https://github.com/fox0430/moe/wiki
 
 ## The origin of the name
 moe is a recursive acronym for "moe is an optimal editor".    
-And one more, it comes from the Japanese slang 萌え(moe)
+And one more, it comes from the Japanese slang 萌え(moe).
 
 ## Contribute and bug report
 Welcome❤
