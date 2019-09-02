@@ -351,7 +351,7 @@ proc yankLines(status: var EditorStatus, first, last: int) =
   status.registers.yankedLines = @[]
   for i in first .. last: status.registers.yankedLines.add(status.bufStatus[status.currentBuffer].buffer[i])
 
-  status.commandWindow.writeMessageYankedLine(status.registers.yankedLines.len)
+  status.commandWindow.writeMessageYankedLine(status.registers.yankedLines.len, status.messageLog)
 
 proc pasteLines(status: var EditorStatus) =
   for i in 0 ..< status.registers.yankedLines.len:
@@ -367,7 +367,7 @@ proc yankString(status: var EditorStatus, length: int) =
   for i in status.bufStatus[status.currentBuffer].currentColumn ..< length:
     status.registers.yankedStr.add(status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine][i])
 
-  status.commandWindow.writeMessageYankedCharactor(status.registers.yankedStr.len)
+  status.commandWindow.writeMessageYankedCharactor(status.registers.yankedStr.len, status.messageLog)
 
 proc yankWord(status: var Editorstatus, loop: int) =
   status.registers.yankedLines = @[]
@@ -547,14 +547,14 @@ proc redo(bufStatus: var BufferStatus) =
 
 proc writeFileAndExit(status: var EditorStatus) =
   if status.bufStatus[status.currentBuffer].filename.len == 0:
-    status.commandwindow.writeNoFileNameError
+    status.commandwindow.writeNoFileNameError(status.messageLog)
     status.changeMode(Mode.normal)
   else:
     try:
       saveFile(status.bufStatus[status.currentBuffer].filename, status.bufStatus[status.currentBuffer].buffer.toRunes, status.settings.characterEncoding)
       closeWindow(status, status.currentMainWindow)
     except IOError:
-      status.commandWindow.writeSaveError
+      status.commandWindow.writeSaveError(status.messageLog)
 
 proc forceExit(status: var Editorstatus) = closeWindow(status, status.currentMainWindow)
 

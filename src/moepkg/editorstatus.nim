@@ -2,7 +2,7 @@ import packages/docutils/highlite, strutils, terminal, os, strformat, tables, ti
 import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils, undoredostack
 
 type Mode* = enum
-  normal, insert, visual, visualBlock, replace, ex, filer, search, bufManager
+  normal, insert, visual, visualBlock, replace, ex, filer, search, bufManager, logViewer
 
 type SelectArea* = object
   startLine*: int
@@ -80,6 +80,7 @@ type EditorStatus* = object
   settings*: EditorSettings
   timeConfFileLastReloaded*: DateTime
   currentDir: seq[Rune]
+  messageLog*: seq[seq[Rune]]
   debugMode: int
   currentMainWindow*: int
   mainWindowInfo*: seq[MainWindowInfo]
@@ -346,7 +347,7 @@ proc addNewBuffer*(status:var EditorStatus, filename: string) =
       status.bufStatus[index].buffer = textAndEncoding.text.toGapBuffer
       status.settings.characterEncoding = textAndEncoding.encoding
     except IOError:
-      status.commandWindow.writeFileOpenError(filename)
+      status.commandWindow.writeFileOpenError(filename, status.messageLog)
       return
 
   if filename != "": status.bufStatus[index].language = detectLanguage(filename)
@@ -400,7 +401,7 @@ proc autoSave(status: var Editorstatus) =
   for i in 0 ..< status.bufStatus.len:
     if status.bufStatus[i].filename != ru"" and now() > status.bufStatus[i].lastSaveTime + interval:
       saveFile(status.bufStatus[i].filename, status.bufStatus[i].buffer.toRunes, status.settings.characterEncoding)
-      status.commandWindow.writeMessageAutoSave(status.bufStatus[i].filename)
+      status.commandWindow.writeMessageAutoSave(status.bufStatus[i].filename, status.messageLog)
       status.bufStatus[i].lastSaveTime = now()
 
 from settings import loadSettingFile
