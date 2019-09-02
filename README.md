@@ -45,6 +45,8 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Auto save
 
+- Suggestions in ex mode
+
 ## Planned features
 
 - Configuration mode
@@ -74,6 +76,8 @@ This project's goal is a very customizable, high productivity, high performance 
 - Fuzzy search
 
 - Plugins
+
+- Supports huge file
 
 - Funny animation...
 
