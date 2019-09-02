@@ -9,8 +9,7 @@ proc setMessageLog(status: var Editorstatus) =
 
   status.updateHighlight
 
-proc exitLogViewer(status: var Editorstatus) =
-  status.bufStatus.delete(status.bufStatus.high)
+proc exitLogViewer(status: var Editorstatus) = status.bufStatus.delete(status.currentBuffer)
 
 proc messageLogViewer*(status: var Editorstatus) =
   status.addNewBuffer("")
@@ -32,8 +31,6 @@ proc messageLogViewer*(status: var Editorstatus) =
     elif key == ord('j') or isDownKey(key): status.bufStatus[status.currentBuffer].keyDown
     elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key): keyLeft(status.bufStatus[status.currentBuffer])
     elif key == ord('l') or isRightKey(key): keyRight(status.bufStatus[status.currentBuffer])
-    elif key == ord('0') or isHomeKey(key):
-      moveToFirstOfLine(status.bufStatus[status.currentBuffer])
-    elif key == ord('$') or isEndKey(key):
-      moveToLastOfLine(status.bufStatus[status.currentBuffer])
+    elif key == ord('0') or isHomeKey(key): moveToFirstOfLine(status.bufStatus[status.currentBuffer])
+    elif key == ord('$') or isEndKey(key): moveToLastOfLine(status.bufStatus[status.currentBuffer])
     elif key == ord('q') or isEscKey(key): status.exitLogViewer
