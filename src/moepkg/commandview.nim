@@ -40,49 +40,77 @@ proc writeMessageOnCommandWindow(cmdWin: var Window, message: string, color: Edi
   cmdWin.write(0, 0, message, color)
   cmdWin.refresh
 
-proc writeNoWriteError*(cmdWin: var Window) =
-  cmdWin.writeMessageOnCommandWindow("Error: No write since last change", EditorColorPair.errorMessage)
+proc writeNoWriteError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+  let mess = "Error: No write since last change"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  messageLog.add(mess.toRunes)
 
-proc writeSaveError*(cmdWin: var Window) =
-  cmdWin.writeMessageOnCommandWindow("Error: Failed to save the file", EditorColorPair.errorMessage)
+proc writeSaveError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+  let mess = "Error: Failed to save the file"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  messageLog.add(mess.toRunes)
 
-proc writeRemoveFileError*(cmdWin: var Window) =
-  cmdWin.writeMessageOnCommandWindow("Error: can not remove file", EditorColorPair.errorMessage)
+proc writeRemoveFileError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+  let mess = "Error: can not remove file"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  messageLog.add(mess.toRunes)
 
-proc writeRemoveDirError*(cmdWin: var Window) =
-  cmdWin.writeMessageOnCommandWindow("Error: can not remove directory", EditorColorPair.errorMessage)
+proc writeRemoveDirError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+  let mess = "Error: can not remove directory"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  messageLog.add(mess.toRunes)
 
-proc writeCopyFileError*(cmdWin: var Window) =
-  cmdWin.writeMessageOnCommandWindow("Error: can not copy file", EditorColorPair.errorMessage)
+proc writeCopyFileError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+  let mess = "Error: can not copy file"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  messageLog.add(mess.toRunes)
 
-proc writeFileOpenError*(cmdWin: var Window, fileName: string) =
-  cmdWin.writeMessageOnCommandWindow("Error: can not open: " & fileName, EditorColorPair.errorMessage)
+proc writeFileOpenError*(cmdWin: var Window, fileName: string, messageLog: var seq[seq[Rune]]) =
+  let mess = "Error: can not open: " & fileName
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  messageLog.add(mess.toRunes)
 
-proc writeCreateDirError*(cmdWin: var Window) =
-  cmdWin.writeMessageOnCommandWindow("Error: : can not create direcotry", EditorColorPair.errorMessage)
+proc writeCreateDirError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+  let mess = "Error: : can not create direcotry"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  messageLog.add(mess.toRunes)
 
-proc writeMessageDeletedFile*(cmdWin: var Window, filename: string) =
-  cmdWin.writeMessageOnCommandWindow("Deleted: " & filename, EditorColorPair.commandBar)
+proc writeMessageDeletedFile*(cmdWin: var Window, filename: string, messageLog: var seq[seq[Rune]]) =
+  let mess = "Deleted: " & filename
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  messageLog.add(mess.toRunes)
 
-proc writeNoFileNameError*(cmdWin: var Window) =
-  cmdWin.writeMessageOnCommandWindow("Error: No file name" , EditorColorPair.errorMessage)
+proc writeNoFileNameError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+  let mess = "Error: No file name" 
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  messageLog.add(mess.toRunes)
 
-proc writeMessageYankedLine*(cmdWin: var Window, numOfLine: int) =
-  cmdWin.writeMessageOnCommandWindow(fmt"{numOfLine} line yanked" , EditorColorPair.commandBar)
+proc writeMessageYankedLine*(cmdWin: var Window, numOfLine: int, messageLog: var seq[seq[Rune]]) =
+  let mess = fmt"{numOfLine} line yanked"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  messageLog.add(mess.toRunes)
 
-proc writeMessageYankedCharactor*(cmdWin: var Window, numOfChar: int) =
-  cmdWin.writeMessageOnCommandWindow(fmt"{numOfChar} charactor yanked" , EditorColorPair.commandBar)
+proc writeMessageYankedCharactor*(cmdWin: var Window, numOfChar: int, messageLog: var seq[seq[Rune]]) =
+  let mess = fmt"{numOfChar} charactor yanked"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  messageLog.add(mess.toRunes)
 
-proc writeMessageAutoSave*(cmdWin: var Window, filename: seq[Rune]) =
-  cmdWin.writeMessageOnCommandWindow(fmt"Auto saved {filename}" , EditorColorPair.commandBar)
+proc writeMessageAutoSave*(cmdWin: var Window, filename: seq[Rune], messageLog: var seq[seq[Rune]]) =
+  let mess = fmt"Auto saved {filename}"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  messageLog.add(mess.toRunes)
 
-proc writeNotEditorCommandError*(cmdWin: var Window, command: seq[seq[Rune]]) =
+proc writeNotEditorCommandError*(cmdWin: var Window, command: seq[seq[Rune]], messageLog: var seq[seq[Rune]]) =
   var cmd = ""
   for i in 0 ..< command.len: cmd = cmd & $command[i] & " "
-  cmdWin.writeMessageOnCommandWindow(fmt"Error: Not an editor command: {cmd}" , EditorColorPair.errorMessage)
+  let mess = fmt"Error: Not an editor command: {cmd}" 
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  messageLog.add(mess.toRunes)
 
-proc writeMessageSaveFile*(cmdWin: var Window, filename: seq[Rune]) =
-  cmdWin.writeMessageOnCommandWindow(fmt"Saved {filename}" , EditorColorPair.commandBar)
+proc writeMessageSaveFile*(cmdWin: var Window, filename: seq[Rune], messageLog: var seq[seq[Rune]]) =
+  let mess = fmt"Saved {filename}"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  messageLog.add(mess.toRunes)
 
 proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
   for i in 0 .. r.high:

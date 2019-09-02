@@ -10,6 +10,7 @@ import moepkg/filermode
 import moepkg/exmode
 import moepkg/searchmode
 import moepkg/buffermanager
+import moepkg/logviewer
 import moepkg/editorview
 import moepkg/cmdoption
 import moepkg/settings
@@ -32,7 +33,7 @@ proc main() =
   if existsDir(parsedList.filename):
     try: setCurrentDir(parsedList.filename)
     except OSError:
-      status.commandWindow.writeFileOpenError(parsedList.filename)
+      status.commandWindow.writeFileOpenError(parsedList.filename, status.messageLog)
       addNewBuffer(status, "")
     status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSavetime: now()))
   else: addNewBuffer(status, parsedList.filename)
@@ -48,6 +49,7 @@ proc main() =
     of Mode.filer: filerMode(status)
     of Mode.search: searchMode(status)
     of Mode.bufManager: bufferManager(status)
+    of Mode.logViewer: messageLogViewer(status)
 
   exitEditor(status.settings)
 

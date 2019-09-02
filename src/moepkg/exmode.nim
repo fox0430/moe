@@ -25,6 +25,9 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   
   return (searhWord: searchWord, replaceWord: replaceWord)
 
+proc isOpenMessageLogViweer(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"log"
+
 proc isOpenBufferManager(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"buf"
 
@@ -123,6 +126,14 @@ proc isShellCommand(command: seq[seq[Rune]]): bool =
 
 proc isReplaceCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
+
+proc openMessageMessageLogViewer(status: var Editorstatus) =
+  status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
+  status.splitWindow
+  status.moveNextWindow
+  status.addNewBuffer("")
+  status.changeCurrentBuffer(status.bufStatus.high)
+  status.changeMode(Mode.logviewer)
 
 proc openBufferManager(status: var Editorstatus) =
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
@@ -292,12 +303,12 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
   status.changeMode(Mode.normal)
 
   if status.bufStatus[status.currentBuffer].countChange > 0 or countReferencedWindow(status.mainWindowInfo, status.currentBuffer) == 0:
-    status.commandWindow.writeNoWriteError
+    status.commandWindow.writeNoWriteError(status.messageLog)
   else:
     if existsDir($filename):
       try: setCurrentDir($filename)
       except OSError:
-        status.commandWindow.writeFileOpenError($filename)
+        status.commandWindow.writeFileOpenError($filename, status.messageLog)
         addNewBuffer(status, "")
       status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSaveTime: now()))
     else: addNewBuffer(status, $filename)
@@ -306,7 +317,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
 
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   if filename.len == 0:
-    status.commandWindow.writeNoFileNameError
+    status.commandWindow.writeNoFileNameError(status.messageLog)
     status.changeMode(Mode.normal)
     return
 
@@ -315,9 +326,9 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
     status.bufStatus[status.currentMainWindow].filename = filename
     status.bufStatus[status.currentBuffer].countChange = 0
   except IOError:
-    status.commandWindow.writeSaveError
+    status.commandWindow.writeSaveError(status.messageLog)
 
-  status.commandWindow.writeMessageSaveFile(filename)
+  status.commandWindow.writeMessageSaveFile(filename, status.messageLog)
   status.changeMode(Mode.normal)
 
 proc quitCommand(status: var EditorStatus) =
@@ -325,7 +336,7 @@ proc quitCommand(status: var EditorStatus) =
     closeWindow(status, status.currentMainWindow)
     status.changeMode(Mode.normal)
   else:
-    status.commandWindow.writeNoWriteError
+    status.commandWindow.writeNoWriteError(status.messageLog)
     status.changeMode(Mode.normal)
 
 proc writeAndQuitCommand(status: var EditorStatus) =
@@ -334,7 +345,7 @@ proc writeAndQuitCommand(status: var EditorStatus) =
     saveFile(status.bufStatus[status.currentBuffer].filename, status.bufStatus[status.currentBuffer].buffer.toRunes, status.settings.characterEncoding)
     closeWindow(status, status.currentMainWindow)
   except IOError:
-    status.commandWindow.writeSaveError
+    status.commandWindow.writeSaveError(status.messageLog)
 
   status.changeMode(Mode.normal)
 
@@ -345,7 +356,7 @@ proc forceQuitCommand(status: var EditorStatus) =
 proc allBufferQuitCommand(status: var EditorStatus) =
   for i in 0 ..< status.mainWindowInfo.len:
     if status.bufStatus[status.mainWindowInfo[0].bufferIndex].countChange > 0:
-      status.commandWindow.writeNoWriteError
+      status.commandWindow.writeNoWriteError(status.messageLog)
       status.changeMode(Mode.normal)
       return
 
@@ -359,7 +370,7 @@ proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
     let bufIndex = status.mainWindowInfo[0].bufferIndex
     try: saveFile(status.bufStatus[bufIndex].filename, status.bufStatus[bufIndex].buffer.toRunes, status.settings.characterEncoding)
     except IOError:
-      status.commandWindow.writeSaveError
+      status.commandWindow.writeSaveError(status.messageLog)
       status.changeMode(Mode.normal)
       return
 
@@ -516,8 +527,10 @@ proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
     liveReloadOfConfSettingCommand(status, command[1])
   elif isRealtimeSearchSettingCommand(command):
     realtimeSearchSettingCommand(status, command[1])
+  elif isOpenMessageLogViweer(command):
+    openMessageMessageLogViewer(status)
   else:
-    status.commandWindow.writeNotEditorCommandError(command)
+    status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
 proc exMode*(status: var EditorStatus) =
