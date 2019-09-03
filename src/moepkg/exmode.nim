@@ -420,11 +420,15 @@ proc listAllBufferCommand(status: var Editorstatus) =
     setCursor(false)
     let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
     if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
+    elif key.int == 0: discard
     else: break
 
   status.settings.currentLineNumber = swapCurrentLineNumStting
   status.changeCurrentBuffer(swapCurrentBufferIndex)
   status.deleteBufferStatusCommand(status.bufStatus.high)
+
+  status.commandWindow.erase
+  status.commandWindow.refresh
 
 proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
   let replaceInfo = parseReplaceCommand(command)
