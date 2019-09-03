@@ -427,6 +427,9 @@ proc listAllBufferCommand(status: var Editorstatus) =
   status.changeCurrentBuffer(swapCurrentBufferIndex)
   status.deleteBufferStatusCommand(status.bufStatus.high)
 
+  status.commandWindow.erase
+  status.commandWindow.refresh
+
 proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
   let replaceInfo = parseReplaceCommand(command)
 
