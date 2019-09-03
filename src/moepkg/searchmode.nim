@@ -61,9 +61,13 @@ proc jumpToSearchResults(status: var Editorstatus, keyword: seq[Rune]) =
       keyRight(status.bufStatus[status.currentBuffer])
 
 proc searchFirstOccurrence(status: var EditorStatus) =
-  let keyword = getKeyword(status, "/")
+  const prompt = "/"
+  let
+    returnWord = getKeyword(status, prompt)
+    keyword = returnWord[0]
+    isCancel = returnWord[1]
 
-  if keyword.len == 0:
+  if keyword.len == 0 or isCancel:
     status.commandWindow.erase
     status.commandWindow.refresh
     return

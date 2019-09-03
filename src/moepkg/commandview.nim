@@ -206,14 +206,19 @@ proc insertCommandBuffer(exStatus: var ExModeViewStatus, c: Rune) =
   if exStatus.cursorX < terminalWidth() - 1: inc(exStatus.cursorX)
   else: inc(exStatus.startPosition)
 
-proc getKeyword*(status: var EditorStatus, prompt: string): seq[Rune] =
-  var exStatus = initExModeViewStatus(prompt)
+proc getKeyword*(status: var EditorStatus, prompt: string): (seq[Rune], bool) =
+  var
+    exStatus = initExModeViewStatus(prompt)
+    cancelSearch = false
   while true:
     writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
 
     var key = getKey(status.commandWindow)
 
-    if isEnterKey(key) or isEscKey(key): break
+    if isEnterKey(key): break
+    elif isEscKey(key):
+      cancelSearch = true
+      break
     elif isResizeKey(key):
       status.resize(terminalHeight(), terminalWidth())
       status.update
@@ -225,7 +230,7 @@ proc getKeyword*(status: var EditorStatus, prompt: string): seq[Rune] =
     elif isDcKey(key): deleteCommandBufferCurrentPosition(exStatus)
     else: insertCommandBuffer(exStatus, key)
 
-  return exStatus.buffer
+  return (exStatus.buffer, cancelSearch)
 
 proc getKeyOnceAndWriteCommandView*(status: var Editorstatus, prompt: string, buffer: seq[Rune]): (seq[Rune], bool, bool) =
   var
