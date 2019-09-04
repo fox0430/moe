@@ -504,6 +504,9 @@ proc searchNextOccurrence(status: var EditorStatus) =
 
   let keyword = status.searchHistory[status.searchHistory.high]
   
+  status.bufStatus[status.currentMainWindow].isHighlight = true
+  status.updateHighlight
+
   keyRight(status.bufStatus[status.currentBuffer])
   let searchResult = searchBuffer(status, keyword)
   if searchResult.line > -1:
@@ -517,6 +520,9 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) =
 
   let keyword = status.searchHistory[status.searchHistory.high]
   
+  status.bufStatus[status.currentMainWindow].isHighlight = true
+  status.updateHighlight
+
   keyLeft(status.bufStatus[status.currentBuffer])
   let searchResult = searchBufferReversely(status, keyword)
   if searchResult.line > -1:
