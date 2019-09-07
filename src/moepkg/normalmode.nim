@@ -1,4 +1,4 @@
-import strutils, strformat, terminal, deques, sequtils
+import strutils, strformat, terminal, deques, sequtils, osproc
 import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight, fileutils, commandview, undoredostack
 
 proc jumpLine*(status: var EditorStatus, destination: int)
@@ -346,6 +346,8 @@ proc deleteCharacterBeginningOfLine(bufStatus: var BufferStatus) =
   bufStatus.expandedColumn = 0
   for i in 0 ..< beforColumn: deleteCurrentCharacter(bufStatus)
 
+proc sendToClipboad(buffer: seq[Rune]) = discard execCmd("echo " & $buffer & " | xclip")
+
 proc yankLines(status: var EditorStatus, first, last: int) =
   status.registers.yankedStr = @[]
   status.registers.yankedLines = @[]
@@ -366,6 +368,8 @@ proc yankString(status: var EditorStatus, length: int) =
   status.registers.yankedStr = @[]
   for i in status.bufStatus[status.currentBuffer].currentColumn ..< length:
     status.registers.yankedStr.add(status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine][i])
+
+  status.registers.yankedStr.sendToClipboad
 
   status.commandWindow.writeMessageYankedCharactor(status.registers.yankedStr.len, status.messageLog)
 
