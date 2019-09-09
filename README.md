@@ -61,6 +61,8 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Auto-complete
 
+- Spell checker
+
 - Macros
 
 - Terminal
