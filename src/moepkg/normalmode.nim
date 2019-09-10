@@ -346,7 +346,12 @@ proc deleteCharacterBeginningOfLine(bufStatus: var BufferStatus) =
   bufStatus.expandedColumn = 0
   for i in 0 ..< beforColumn: deleteCurrentCharacter(bufStatus)
 
-proc sendToClipboad(buffer: seq[Rune]) = discard execCmd("echo " & $buffer & " | xclip")
+proc sendToClipboad*(registers: Registers, platform: Platform) =
+  let buffer = if registers.yankedStr.len > 0: $registers.yankedStr else: $registers.yankedLines
+  case platform
+    of linux: discard execCmd("echo " & $buffer & " | xclip")
+    of wsl: discard execCmd("echo " & $buffer & " | clip.exe")
+    else: discard
 
 proc yankLines(status: var EditorStatus, first, last: int) =
   status.registers.yankedStr = @[]
@@ -369,7 +374,7 @@ proc yankString(status: var EditorStatus, length: int) =
   for i in status.bufStatus[status.currentBuffer].currentColumn ..< length:
     status.registers.yankedStr.add(status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine][i])
 
-  status.registers.yankedStr.sendToClipboad
+  status.registers.sendToClipboad(status.platform)
 
   status.commandWindow.writeMessageYankedCharactor(status.registers.yankedStr.len, status.messageLog)
 
