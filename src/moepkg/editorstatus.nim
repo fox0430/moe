@@ -2,7 +2,7 @@ import packages/docutils/highlite, strutils, terminal, os, strformat, tables, ti
 import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils, undoredostack
 
 type Platform* = enum
-  linux, wsl, other
+  linux, wsl, mac, other
 
 type Mode* = enum
   normal, insert, visual, visualBlock, replace, ex, filer, search, bufManager, logViewer
@@ -96,6 +96,7 @@ proc initPlatform(): Platform =
   if defined linux:
     if execProcess("uname -r").contains("Microsoft"): result = Platform.wsl
     else: result = Platform.linux
+  elif defined macosx: result = Platform.mac
   else: result = Platform.other
 
 proc initRegisters(): Registers =

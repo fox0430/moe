@@ -351,6 +351,7 @@ proc sendToClipboad*(registers: Registers, platform: Platform) =
   case platform
     of linux: discard execCmd("echo " & $buffer & " | xclip")
     of wsl: discard execCmd("echo " & $buffer & " | clip.exe")
+    of mac: discard execCmd("echo " & $buffer & " | pbcopy")
     else: discard
 
 proc yankLines(status: var EditorStatus, first, last: int) =
