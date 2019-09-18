@@ -203,3 +203,6 @@ proc startsWith*(runes1, runes2: seq[Rune]): bool =
     if runes1[i] != runes2[i]:
       result = false
       break
+
+proc `$`*(seqRunes: seq[seq[Rune]]): string =
+  for runes in seqRunes: result = result & $runes

@@ -1,4 +1,4 @@
-import strutils, strformat, terminal, deques, sequtils
+import strutils, strformat, terminal, deques, sequtils, os, osproc
 import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight, fileutils, commandview, undoredostack
 
 proc jumpLine*(status: var EditorStatus, destination: int)
@@ -346,12 +346,23 @@ proc deleteCharacterBeginningOfLine(bufStatus: var BufferStatus) =
   bufStatus.expandedColumn = 0
   for i in 0 ..< beforColumn: deleteCurrentCharacter(bufStatus)
 
+proc sendToClipboad*(registers: Registers, platform: Platform) =
+  let buffer = if registers.yankedStr.len > 0: $registers.yankedStr else: $registers.yankedLines
+  case platform
+    of linux:
+      ## Check if X server is running
+      let (output, exitCode) = execCmdEx("xset q")
+      if exitCode == 0: discard execShellCmd("echo " & $buffer & " | xclip")
+    of wsl: discard execShellCmd("echo " & $buffer & " | clip.exe")
+    of mac: discard execShellCmd("echo " & $buffer & " | pbcopy")
+    else: discard
+
 proc yankLines(status: var EditorStatus, first, last: int) =
   status.registers.yankedStr = @[]
   status.registers.yankedLines = @[]
   for i in first .. last: status.registers.yankedLines.add(status.bufStatus[status.currentBuffer].buffer[i])
 
-  status.commandWindow.writeMessageYankedLine(status.registers.yankedLines.len)
+  status.commandWindow.writeMessageYankedLine(status.registers.yankedLines.len, status.messageLog)
 
 proc pasteLines(status: var EditorStatus) =
   for i in 0 ..< status.registers.yankedLines.len:
@@ -367,7 +378,9 @@ proc yankString(status: var EditorStatus, length: int) =
   for i in status.bufStatus[status.currentBuffer].currentColumn ..< length:
     status.registers.yankedStr.add(status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine][i])
 
-  status.commandWindow.writeMessageYankedCharactor(status.registers.yankedStr.len)
+  status.registers.sendToClipboad(status.platform)
+
+  status.commandWindow.writeMessageYankedCharactor(status.registers.yankedStr.len, status.messageLog)
 
 proc yankWord(status: var Editorstatus, loop: int) =
   status.registers.yankedLines = @[]
@@ -504,6 +517,9 @@ proc searchNextOccurrence(status: var EditorStatus) =
 
   let keyword = status.searchHistory[status.searchHistory.high]
   
+  status.bufStatus[status.currentMainWindow].isHighlight = true
+  status.updateHighlight
+
   keyRight(status.bufStatus[status.currentBuffer])
   let searchResult = searchBuffer(status, keyword)
   if searchResult.line > -1:
@@ -517,6 +533,9 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) =
 
   let keyword = status.searchHistory[status.searchHistory.high]
   
+  status.bufStatus[status.currentMainWindow].isHighlight = true
+  status.updateHighlight
+
   keyLeft(status.bufStatus[status.currentBuffer])
   let searchResult = searchBufferReversely(status, keyword)
   if searchResult.line > -1:
@@ -547,14 +566,14 @@ proc redo(bufStatus: var BufferStatus) =
 
 proc writeFileAndExit(status: var EditorStatus) =
   if status.bufStatus[status.currentBuffer].filename.len == 0:
-    status.commandwindow.writeNoFileNameError
+    status.commandwindow.writeNoFileNameError(status.messageLog)
     status.changeMode(Mode.normal)
   else:
     try:
       saveFile(status.bufStatus[status.currentBuffer].filename, status.bufStatus[status.currentBuffer].buffer.toRunes, status.settings.characterEncoding)
       closeWindow(status, status.currentMainWindow)
     except IOError:
-      status.commandWindow.writeSaveError
+      status.commandWindow.writeSaveError(status.messageLog)
 
 proc forceExit(status: var Editorstatus) = closeWindow(status, status.currentMainWindow)
 

@@ -1,8 +1,11 @@
-import packages/docutils/highlite, strutils, terminal, os, strformat, tables, times
+import packages/docutils/highlite, strutils, terminal, os, strformat, tables, times, osproc
 import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils, undoredostack
 
+type Platform* = enum
+  linux, wsl, mac, other
+
 type Mode* = enum
-  normal, insert, visual, visualBlock, replace, ex, filer, search, bufManager
+  normal, insert, visual, visualBlock, replace, ex, filer, search, bufManager, logViewer
 
 type SelectArea* = object
   startLine*: int
@@ -46,6 +49,7 @@ type EditorSettings* = object
   autoSave*: bool
   autoSaveInterval*: int # minutes
   liveReloadOfConf*: bool
+  realtimeSearch*: bool
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -72,6 +76,7 @@ type MainWindowInfo = object
   bufferIndex*: int
 
 type EditorStatus* = object
+  platform*: Platform
   bufStatus*: seq[BufferStatus]
   currentBuffer*: int
   searchHistory*: seq[seq[Rune]]
@@ -79,12 +84,20 @@ type EditorStatus* = object
   settings*: EditorSettings
   timeConfFileLastReloaded*: DateTime
   currentDir: seq[Rune]
+  messageLog*: seq[seq[Rune]]
   debugMode: int
   currentMainWindow*: int
   mainWindowInfo*: seq[MainWindowInfo]
   statusWindow*: Window
   commandWindow*: Window
   tabWindow*: Window
+
+proc initPlatform(): Platform =
+  if defined linux:
+    if execProcess("uname -r").contains("Microsoft"): result = Platform.wsl
+    else: result = Platform.linux
+  elif defined macosx: result = Platform.mac
+  else: result = Platform.other
 
 proc initRegisters(): Registers =
   result.yankedLines = @[]
@@ -120,6 +133,7 @@ proc initEditorSettings*(): EditorSettings =
   result.autoSaveInterval = 5
 
 proc initEditorStatus*(): EditorStatus =
+  result.platform= initPlatform()
   result.currentDir = getCurrentDir().toRunes
   result.registers = initRegisters()
   result.settings = initEditorSettings()
@@ -345,7 +359,7 @@ proc addNewBuffer*(status:var EditorStatus, filename: string) =
       status.bufStatus[index].buffer = textAndEncoding.text.toGapBuffer
       status.settings.characterEncoding = textAndEncoding.encoding
     except IOError:
-      status.commandWindow.writeFileOpenError(filename)
+      status.commandWindow.writeFileOpenError(filename, status.messageLog)
       return
 
   if filename != "": status.bufStatus[index].language = detectLanguage(filename)
@@ -399,7 +413,7 @@ proc autoSave(status: var Editorstatus) =
   for i in 0 ..< status.bufStatus.len:
     if status.bufStatus[i].filename != ru"" and now() > status.bufStatus[i].lastSaveTime + interval:
       saveFile(status.bufStatus[i].filename, status.bufStatus[i].buffer.toRunes, status.settings.characterEncoding)
-      status.commandWindow.writeMessageAutoSave(status.bufStatus[i].filename)
+      status.commandWindow.writeMessageAutoSave(status.bufStatus[i].filename, status.messageLog)
       status.bufStatus[i].lastSaveTime = now()
 
 from settings import loadSettingFile

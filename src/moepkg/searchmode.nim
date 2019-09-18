@@ -1,4 +1,4 @@
-import unicodeext, strformat, sequtils, system
+import unicodeext, strformat, sequtils, system, terminal
 import ui, editorstatus, gapbuffer, highlight, commandview
 
 type
@@ -53,24 +53,67 @@ proc searchAllOccurrence*(buffer: GapBuffer[seq[Rune]], keyword: seq[Rune]): seq
       result.add((line, begin + position))
       begin += position + keyword.len
 
-proc searchFirstOccurrence(status: var EditorStatus) =
-  let keyword = getKeyword(status, "/")
-
-  if keyword.len == 0:
-    status.commandWindow.erase
-    status.commandWindow.refresh
-    return
-
-  status.searchHistory.add(keyword)
-  status.bufStatus[status.currentMainWindow].isHighlight = true
-
+proc jumpToSearchResults(status: var Editorstatus, keyword: seq[Rune]) =
   let searchResult = searchBuffer(status, keyword)
   if searchResult.line > -1:
     jumpLine(status, searchResult.line)
     for column in 0 ..< searchResult.column:
       keyRight(status.bufStatus[status.currentBuffer])
 
-proc searchMode*(status: var EditorStatus) =
-  searchFirstOccurrence(status)
+proc searchFirstOccurrence(status: var EditorStatus) =
+  const prompt = "/"
+  let
+    returnWord = getKeyword(status, prompt)
+    keyword = returnWord[0]
+    isCancel = returnWord[1]
+
+  if keyword.len == 0 or isCancel:
+    status.commandWindow.erase
+    status.commandWindow.refresh
+    return
+
+  status.searchHistory.add(keyword)
+  status.bufStatus[status.currentMainWindow].isHighlight = true
+  status.jumpToSearchResults(keyword)
+
   status.updateHighlight
+
+proc realtimeSearch(status: var Editorstatus) =
+  const prompt = "/"
+  var
+    keyword = ru""
+    exitSearch = false
+    cancelSearch = false
+  status.searchHistory.add(ru"")
+
+  while exitSearch == false:
+    let returnWord = getKeyOnceAndWriteCommandView(status, prompt, keyword)
+
+    keyword = returnWord[0]
+    exitSearch = returnWord[1]
+    cancelSearch = returnWord[2]
+    if keyword.len > 0: status.searchHistory[status.searchHistory.high] = keyword
+
+    if exitSearch or cancelSearch: break
+
+    if keyword.len > 0:
+      status.bufStatus[status.currentMainWindow].isHighlight = true
+      status.jumpToSearchResults(keyword)
+    else: status.bufStatus[status.currentMainWindow].isHighlight = false
+
+    status.updateHighlight
+    status.resize(terminalHeight(), terminalWidth())
+    status.update
+
+  if cancelSearch:
+    status.searchHistory.delete(status.searchHistory.high)
+
+    status.bufStatus[status.currentMainWindow].isHighlight = false
+    status.updateHighlight
+
+    status.commandWindow.erase
+
+proc searchMode*(status: var EditorStatus) =
+  if status.settings.realtimeSearch: realtimeSearch(status)
+  else: searchFirstOccurrence(status)
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
