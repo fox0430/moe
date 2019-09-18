@@ -1,4 +1,4 @@
-import strutils, strformat, terminal, deques, sequtils
+import strutils, strformat, terminal, deques, sequtils, os, osproc
 import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight, fileutils, commandview, undoredostack
 
 proc jumpLine*(status: var EditorStatus, destination: int)
@@ -346,6 +346,17 @@ proc deleteCharacterBeginningOfLine(bufStatus: var BufferStatus) =
   bufStatus.expandedColumn = 0
   for i in 0 ..< beforColumn: deleteCurrentCharacter(bufStatus)
 
+proc sendToClipboad*(registers: Registers, platform: Platform) =
+  let buffer = if registers.yankedStr.len > 0: $registers.yankedStr else: $registers.yankedLines
+  case platform
+    of linux:
+      ## Check if X server is running
+      let (output, exitCode) = execCmdEx("xset q")
+      if exitCode == 0: discard execShellCmd("echo " & $buffer & " | xclip")
+    of wsl: discard execShellCmd("echo " & $buffer & " | clip.exe")
+    of mac: discard execShellCmd("echo " & $buffer & " | pbcopy")
+    else: discard
+
 proc yankLines(status: var EditorStatus, first, last: int) =
   status.registers.yankedStr = @[]
   status.registers.yankedLines = @[]
@@ -366,6 +377,8 @@ proc yankString(status: var EditorStatus, length: int) =
   status.registers.yankedStr = @[]
   for i in status.bufStatus[status.currentBuffer].currentColumn ..< length:
     status.registers.yankedStr.add(status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine][i])
+
+  status.registers.sendToClipboad(status.platform)
 
   status.commandWindow.writeMessageYankedCharactor(status.registers.yankedStr.len, status.messageLog)
 

@@ -1,4 +1,4 @@
-import terminal, strutils, sequtils
+import terminal, strutils, sequtils, osproc
 import editorstatus, editorview, ui, gapbuffer, normalmode, highlight, unicodeext
 
 proc initColorSegment(startLine, startColumn: int): ColorSegment =
@@ -56,7 +56,7 @@ proc swapSlectArea(area: var SelectArea) =
     swap(area.startLine, area.endLine)
     swap(area.startColumn, area.endColumn)
 
-proc yankBuffer(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea) =
+proc yankBuffer(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea, platform: Platform) =
   if bufStatus.buffer[bufStatus.currentLine].len < 1: return
   registers.yankedLines = @[]
   registers.yankedStr = @[]
@@ -75,6 +75,8 @@ proc yankBuffer(bufStatus: var BufferStatus, registers: var Registers, area: Sel
     else:
       registers.yankedLines.add(bufStatus.buffer[i])
 
+    registers.sendToClipboad(platform)
+
 proc yankBufferBlock(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea) =
   if bufStatus.buffer.len == 1 and bufStatus.buffer[bufStatus.currentLine].len < 1: return
   registers.yankedLines = @[]
@@ -84,9 +86,9 @@ proc yankBufferBlock(bufStatus: var BufferStatus, registers: var Registers, area
     registers.yankedLines.add(ru"")
     for j in area.startColumn .. min(bufStatus.buffer[i].high, area.endColumn): registers.yankedLines[registers.yankedLines.high].add(bufStatus.buffer[i][j])
 
-proc deleteBuffer(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea) =
+proc deleteBuffer(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea, platform: Platform) =
   if bufStatus.buffer.len == 1 and bufStatus.buffer[bufStatus.currentLine].len < 1: return
-  yankBuffer(bufStatus, registers, area)
+  bufStatus.yankBuffer(registers, area, platform)
 
   var currentLine = area.startLine
   for i in area.startLine .. area.endLine:
@@ -182,8 +184,8 @@ proc replaceCharactorBlock(bufStatus: var BufferStatus, area: SelectArea, ch: Ru
 proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSlectArea
 
-  if key == ord('y') or isDcKey(key): yankBuffer(status.bufStatus[status.currentBuffer], status.registers, area)
-  elif key == ord('x') or key == ord('d'): deleteBuffer(status.bufStatus[status.currentBuffer], status.registers, area)
+  if key == ord('y') or isDcKey(key): status.bufStatus[status.currentBuffer].yankBuffer(status.registers, area, status.platform)
+  elif key == ord('x') or key == ord('d'): status.bufStatus[status.currentBuffer].deleteBuffer(status.registers, area, status.platform)
   elif key == ord('>'): addIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
   elif key == ord('<'): deleteIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
   elif key == ord('r'):

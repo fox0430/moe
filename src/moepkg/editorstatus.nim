@@ -1,5 +1,8 @@
-import packages/docutils/highlite, strutils, terminal, os, strformat, tables, times
+import packages/docutils/highlite, strutils, terminal, os, strformat, tables, times, osproc
 import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils, undoredostack
+
+type Platform* = enum
+  linux, wsl, mac, other
 
 type Mode* = enum
   normal, insert, visual, visualBlock, replace, ex, filer, search, bufManager, logViewer
@@ -73,6 +76,7 @@ type MainWindowInfo = object
   bufferIndex*: int
 
 type EditorStatus* = object
+  platform*: Platform
   bufStatus*: seq[BufferStatus]
   currentBuffer*: int
   searchHistory*: seq[seq[Rune]]
@@ -87,6 +91,13 @@ type EditorStatus* = object
   statusWindow*: Window
   commandWindow*: Window
   tabWindow*: Window
+
+proc initPlatform(): Platform =
+  if defined linux:
+    if execProcess("uname -r").contains("Microsoft"): result = Platform.wsl
+    else: result = Platform.linux
+  elif defined macosx: result = Platform.mac
+  else: result = Platform.other
 
 proc initRegisters(): Registers =
   result.yankedLines = @[]
@@ -122,6 +133,7 @@ proc initEditorSettings*(): EditorSettings =
   result.autoSaveInterval = 5
 
 proc initEditorStatus*(): EditorStatus =
+  result.platform= initPlatform()
   result.currentDir = getCurrentDir().toRunes
   result.registers = initRegisters()
   result.settings = initEditorSettings()
