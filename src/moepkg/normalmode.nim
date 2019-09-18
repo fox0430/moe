@@ -1,4 +1,4 @@
-import strutils, strformat, terminal, deques, sequtils, osproc
+import strutils, strformat, terminal, deques, sequtils, os, osproc
 import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight, fileutils, commandview, undoredostack
 
 proc jumpLine*(status: var EditorStatus, destination: int)
@@ -349,9 +349,12 @@ proc deleteCharacterBeginningOfLine(bufStatus: var BufferStatus) =
 proc sendToClipboad*(registers: Registers, platform: Platform) =
   let buffer = if registers.yankedStr.len > 0: $registers.yankedStr else: $registers.yankedLines
   case platform
-    of linux: discard execCmd("echo " & $buffer & " | xclip")
-    of wsl: discard execCmd("echo " & $buffer & " | clip.exe")
-    of mac: discard execCmd("echo " & $buffer & " | pbcopy")
+    of linux:
+      ## Check if X server is running
+      let (output, exitCode) = execCmdEx("xset q")
+      if exitCode == 0: discard execShellCmd("echo " & $buffer & " | xclip")
+    of wsl: discard execShellCmd("echo " & $buffer & " | clip.exe")
+    of mac: discard execShellCmd("echo " & $buffer & " | pbcopy")
     else: discard
 
 proc yankLines(status: var EditorStatus, first, last: int) =
