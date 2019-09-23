@@ -131,6 +131,7 @@ proc initEditorSettings*(): EditorSettings =
   result.normalModeCursor = CursorType.blockMode
   result.insertModeCursor = CursorType.ibeamMode
   result.autoSaveInterval = 5
+  result.realtimeSearch = true
 
 proc initEditorStatus*(): EditorStatus =
   result.platform= initPlatform()
