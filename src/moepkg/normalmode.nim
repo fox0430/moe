@@ -359,8 +359,8 @@ proc sendToClipboad*(registers: Registers, platform: Platform) =
       ## Check if X server is running
       let (output, exitCode) = execCmdEx("xset q")
       if exitCode == 0: discard execShellCmd("xclip <<" & delimiterStr & "\n" & buffer & "\n"  & delimiterStr & "\n")
-    of wsl: discard execShellCmd("echo " & $buffer & " | clip.exe")
-    of mac: discard execShellCmd("echo " & $buffer & " | pbcopy")
+    of wsl: discard execShellCmd("clip.exe <<" & delimiterStr & "\n" & buffer & "\n"  & delimiterStr & "\n")
+    of mac: discard execShellCmd("pbcopy <<" & delimiterStr & "\n" & buffer & "\n"  & delimiterStr & "\n")
     else: discard
 
 proc yankLines(status: var EditorStatus, first, last: int) =
