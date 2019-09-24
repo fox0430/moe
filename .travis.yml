@@ -8,7 +8,7 @@ before_install:
   - sh init.sh -y
   - export PATH=~/.nimble/bin:$PATH
   - echo "export PATH=~/.nimble/bin:$PATH" >> ~/.profile
-  - choosenim stable
+  - choosenim 0.20.2
 before_script:
   - set -e
   - export PATH=$(pwd)/nim/bin:$(pwd):$PATH
