@@ -1,3 +1,11 @@
+## Exiting
+check command bar  
+
+```:w``` - write file  
+```:q``` - quit  
+```:wq``` - write file and quit  
+```:q!``` - force quit  
+
 ## Normal mode
 ```h``` - ←  
 ```j``` - ↓  
@@ -55,3 +63,5 @@
 ```ZQ``` - same as ":q!"  
 
 ```/``` - Search text
+
+k
