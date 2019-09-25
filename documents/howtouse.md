@@ -7,9 +7,9 @@ check command bar
 ```:q``` - Quit  
 ```:wq``` - Write file and quit  
 ```:q!``` - Force quit  
-```qa``` - Quit all window
-```wqa``` - Write and quit all window
-```qa!``` - Force quit all window
+```qa``` - Quit all window  
+```wqa``` - Write and quit all window  
+```qa!``` - Force quit all window  
 
 ## Normal mode
 ```h``` - ←  
