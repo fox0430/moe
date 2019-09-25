@@ -93,7 +93,7 @@ Insert mode
 ```i``` - Detail information  
 
 ## Ex mode
-```number``` - Jump to line number : Exmaple ```:10```
+```number``` - Jump to line number : Exmaple ```:10```  
 ```!``` shell command - Shell command execution  
 
 ```e``` filename - Open file  
