@@ -107,7 +107,7 @@ Insert mode
 ```bnext``` - Switch to the next buffer  
 ```bfirst``` - Switch to the first buffer  
 ```blast``` - Switch to the last buffer  
-```bd``` or ```bd number``` - Delete buffer
+```bd``` or ```bd number``` - Delete buffer  
 ```buf``` - Open buffer manager  
 
 ```vs``` - Split window  
@@ -115,10 +115,10 @@ Insert mode
 ```livereload on``` or ```livereload on``` - Change setting of live reload of configuration file  
 ```theme themeName``` - Change color theme : Exmaple ```theme dark```  
 ```tab on``` or ```tab off``` - Change tab line setting  
-```synatx on`` or ```syntax off``` - Change syntax highlighting setting  
-```tabstop number``` - Change tabStop setting : Exmaple ```tabstop 2```
+```synatx on``` or ```syntax off``` - Change syntax highlighting setting  
+```tabstop number``` - Change tabStop setting : Exmaple ```tabstop 2```  
 ```paren on``` or paren off``` - Change auto close paren setting  
-```indent on``` or ```indent off``` - Chnage auto indent sestting
+```indent on``` or ```indent off``` - Chnage auto indent sestting  
 ```linenum on``` or ```linenum off``` - Change dispaly line number setting  
 ```statusbar on``` or ```statusbar on``` - Change display stattus bar setting  
 ```realtimesearch on``` or ```realtimesearch off``` - Change real-time search setting  
