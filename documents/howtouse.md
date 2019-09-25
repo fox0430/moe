@@ -62,6 +62,44 @@ check command bar
 ```ZZ``` - write current file and exit  
 ```ZQ``` - same as ":q!"  
 
-```/``` - Search text
+```/``` - search text  
+```:``` - start ex mode  
 
-k
+## Visual mode
+```d ```or ```x``` - delete(cut) text  
+```y``` - copy text  
+```r``` - replace character  
+
+```>``` - indent  
+```<``` - unindent  
+
+```Esc``` - start normal mode  
+
+## Replace mode
+```Esc``` - start normal mode  
+
+Insert mode
+```Esc``` - start normal mode  
+
+## Filer mode
+```D``` - delete file  
+```g``` - go to top of list  
+```G``` - go to last of list  
+```i``` - detail information  
+
+## Ex mode
+```:!``` shell command - shell command execution  
+
+```:e``` filename - open file  
+
+```/keyword``` - search text, file or directory  
+
+```:%s/keyword1/keyword2/``` - replace text (normal mode only)  
+
+```ls``` - Display all buffer  
+```bprev``` - Switch to the previous buffer  
+```bnext``` - Switch to the next buffer  
+```bfirst``` - Switch to the first buffer  
+```blast``` - Switch to the last buffer  
+
+```vs``` - Split window  
