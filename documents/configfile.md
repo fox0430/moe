@@ -379,74 +379,146 @@ gray93
 
 -- Color Srttings --
 
+```
 editorBg
+```
 
+```
 lineNum
+```
 
+```
 lineNumBg
+```
 
+```
 currentLineNum
+```
 
+```
 currentLineNumBg
+```
 
+```
 statusBar
+```
 
+```
 statusBarBg
+```
 
+```
 statusBarMode
+```
 
+```
 statusBarModeBg
+```
 
+```
 tab
+```
 
+```
 tabBg
+```
 
+```
 currentTab
+```
 
+```
 currentTabBg
+```
 
+```
 commandBar
+```
 
+```
 commandBarBg
+```
 
+```
 errorMessage
+```
 
+```
 errorMessageBg
+```
 
+```
 searchResult
+```
 
+```
 searchResultBg
+```
 
+```
 visualMode
+```
 
+```
 visualModeBg
+```
 
+```
 defaultCharactorColor
+```
 
+```
 gtKeywordColor
+```
 
+```
 gtStringLitColor
+```
 
+```
 gtDecNumberColor
+```
 
+```
 gtCommentColor
+```
 
+```
 gtLongCommentColor
+```
 
+```
 gtWhitespaceColor
+```
 
+```
 currentFile
+```
 
+```
 currentFileBg
+```
 
+```
 file
+```
 
+```
 fileBg
+```
 
+```
 dir
+```
 
+```
 dirBg
+```
 
+```
 pcLink
+```
 
+```
 pcLinkBg
+```
