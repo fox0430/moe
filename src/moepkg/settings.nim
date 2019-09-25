@@ -76,6 +76,10 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("realtimeSearch"):
       result.realtimeSearch = settings["Standard"]["realtimeSearch"].getbool()
 
+  if settings.contains("TabLine"):
+    if settings["TabLine"].contains("allBuffer"):
+        result.tabLine.allBuffer= settings["TabLine"]["allBuffer"].getbool()
+
   if settings.contains("StatusBar"):
     if settings["StatusBar"].contains("mode"):
         result.statusBar.mode= settings["StatusBar"]["mode"].getbool()

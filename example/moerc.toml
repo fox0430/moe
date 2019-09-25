@@ -34,6 +34,10 @@ liveReloadOfConf = false
 
 realtimeSearch = true
 
+[TabLine]
+
+allBuffer = false
+
 [StatusBar]
 
 mode = true
