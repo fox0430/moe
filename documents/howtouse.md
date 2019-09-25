@@ -1,105 +1,127 @@
+# How to use
+
 ## Exiting
 check command bar  
 
-```:w``` - write file  
-```:q``` - quit  
-```:wq``` - write file and quit  
-```:q!``` - force quit  
+```:w``` - Write file  
+```:q``` - Quit  
+```:wq``` - Write file and quit  
+```:q!``` - Force quit  
+```qa``` - Quit all window
+```wqa``` - Write and quit all window
+```qa!``` - Force quit all window
 
 ## Normal mode
 ```h``` - ←  
 ```j``` - ↓  
 ```k``` - ↑  
 ```l``` - →  
-```+``` - same as j  
-```-``` - same as k  
-```w``` - move forwards to the start of a word  
-```e``` - move forwards to the end of a word  
-```b``` - move backwards to the start of a word  
-```Page Up``` - page up  
-```Page Down``` - page down  
-```gg``` - move to the first line  
-```G``` - move to the last line  
-```0``` - (zero) first of the line  
-```$``` - end of the line  
-```^``` - same as 0  
+```+``` - Same as j  
+```-``` - Same as k  
+```w``` - Move forwards to the start of a word  
+```e``` - Move forwards to the end of a word  
+```b``` - Move backwards to the start of a word  
+```Page Up``` - Page up  
+```Page Down``` - Page down  
+```gg``` - Move to the first line  
+```G``` - Move to the last line  
+```0``` - (zero) First of the line  
+```$``` - End of the line  
+```^``` - Same as 0  
 
-```u``` - undo  
-```Ctrl-r``` - redo  
+```u``` - Undo  
+```Ctrl-r``` - Redo  
 
-```v``` - start visual mode  
-```Ctrl-v``` start visual block mode  
-```r``` - start replace mode  
-```i``` - start insert mode  
-```o``` - insert a new line and start insert mode  
-```a``` - append after the cursor and start insert mode  
-```r``` - replace a character at the cursor  
-```A``` - same as $a  
-```I``` - same as 0a  
+```v``` - Start visual mode  
+```Ctrl-v``` Start visual block mode  
+```r``` - Start replace mode  
+```i``` - Start insert mode  
+```o``` - Insert a new line and start insert mode  
+```a``` - Append after the cursor and start insert mode  
+```r``` - Replace a character at the cursor  
+```A``` - Same as $a  
+```I``` - Same as 0a  
 
-```>``` - indent  
-```<``` - unindent
+```>``` - Indent  
+```<``` - Unindent
 
-```dd``` - delete(cut) a line  
-```x``` - delete(cut) current character  
+```dd``` - Delete(cut) a line  
+```x``` - Delete(cut) current character  
 
-```yy``` - copy a line  
-```p``` - paste the clipboard  
+```yy``` - Copy a line  
+```p``` - Paste the clipboard  
 
-```n``` - repeat search in same direction  
-```N``` - repeat search in opposite direction  
+```n``` - Repeat search in same direction  
+```N``` - Repeat search in opposite direction  
 
-```f``` - jump to next occurrence
-```F``` - jump to previous occurence
+```f``` - Jump to next occurrence
+```F``` - Jump to previous occurence
 
-```Ctrl-k``` - move next window  
-```Ctrl-j``` - move prev window  
+```Ctrl-k``` - Move next window  
+```Ctrl-j``` - Move prev window  
 
-```z.``` - center the screen on the cursor  
-```zt``` - scroll the screen so the cursor is at the top  
-```zb``` - scroll the screen so the cursor is at the bottom  
+```z.``` - Center the screen on the cursor  
+```zt``` - Scroll the screen so the cursor is at the top  
+```zb``` - Scroll the screen so the cursor is at the bottom  
 
-```ZZ``` - write current file and exit  
-```ZQ``` - same as ":q!"  
+```ZZ``` - Write current file and exit  
+```ZQ``` - Same as ":q!"  
 
-```/``` - search text  
-```:``` - start ex mode  
+```/``` - Search text  
+```:``` - Start ex mode  
 
 ## Visual mode
-```d ```or ```x``` - delete(cut) text  
-```y``` - copy text  
-```r``` - replace character  
+```d ```or ```x``` - Delete(cut) text  
+```y``` - Copy text  
+```r``` - Replace character  
 
-```>``` - indent  
-```<``` - unindent  
+```>``` - Indent  
+```<``` - Unindent  
 
-```Esc``` - start normal mode  
+```Esc``` - Start normal mode  
 
 ## Replace mode
-```Esc``` - start normal mode  
+```Esc``` - Start normal mode  
 
 Insert mode
-```Esc``` - start normal mode  
+```Esc``` - Start normal mode  
 
 ## Filer mode
-```D``` - delete file  
-```g``` - go to top of list  
-```G``` - go to last of list  
-```i``` - detail information  
+```D``` - Delete file  
+```g``` - Go to top of list  
+```G``` - Go to last of list  
+```i``` - Detail information  
 
 ## Ex mode
-```:!``` shell command - shell command execution  
+```number``` - Jump to line number : Exmaple ```:10```
+```!``` shell command - Shell command execution  
 
-```:e``` filename - open file  
+```e``` filename - Open file  
 
-```/keyword``` - search text, file or directory  
+```/keyword``` - Search text, file or directory  
 
-```:%s/keyword1/keyword2/``` - replace text (normal mode only)  
+```%s/keyword1/keyword2/``` - Replace text (normal mode only)  
 
 ```ls``` - Display all buffer  
 ```bprev``` - Switch to the previous buffer  
 ```bnext``` - Switch to the next buffer  
 ```bfirst``` - Switch to the first buffer  
 ```blast``` - Switch to the last buffer  
+```bd``` or ```bd number``` - Delete buffer
+```buf``` - Open buffer manager  
 
 ```vs``` - Split window  
+
+```livereload on``` or ```livereload on``` - Change setting of live reload of configuration file  
+```theme themeName``` - Change color theme : Exmaple ```theme dark```  
+```tab on``` or ```tab off``` - Change tab line setting  
+```synatx on`` or ```syntax off``` - Change syntax highlighting setting  
+```tabstop number``` - Change tabStop setting : Exmaple ```tabstop 2```
+```paren on``` or paren off``` - Change auto close paren setting  
+```indent on``` or ```indent off``` - Chnage auto indent sestting
+```linenum on``` or ```linenum off``` - Change dispaly line number setting  
+```statusbar on``` or ```statusbar on``` - Change display stattus bar setting  
+```realtimesearch on``` or ```realtimesearch off``` - Change real-time search setting  
+```noh``` - Turn off highlights  
+
+```log``` - Open messages log viwer  
