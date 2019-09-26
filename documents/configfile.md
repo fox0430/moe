@@ -73,6 +73,13 @@ default is ibeam
 insertModeCursor
 ```
 
+### TabLine table
+Dispaly all bufer in tab line (bool)  
+default is false  
+```
+allBuffer
+```
+
 ### StatusBar table
 Display current mode (bool)  
 default is true
