@@ -386,146 +386,182 @@ gray93
 
 -- Color Srttings --
 
+Background color
 ```
 editorBg
 ```
 
+Line number color
 ```
 lineNum
 ```
 
+Line number background color
 ```
 lineNumBg
 ```
+Current line number highlighting color
 
 ```
 currentLineNum
 ```
 
+Current line number highlighting background color
 ```
 currentLineNumBg
 ```
 
+Character color of Status bar
 ```
 statusBar
 ```
 
+Status bar base color
 ```
 statusBarBg
 ```
 
+Character color of mode in status bar
 ```
 statusBarMode
 ```
 
+Background color of mode in status bar
 ```
 statusBarModeBg
 ```
 
+Character color of tab title in tab line
 ```
 tab
 ```
 
+Background color of tab title in tab line
 ```
 tabBg
 ```
 
+
+Character color of current tab title in tab line
 ```
 currentTab
 ```
 
+Background color of current tab title in tab line
 ```
 currentTabBg
 ```
 
+Character color in command bar
 ```
 commandBar
 ```
 
+Background color in command bar
 ```
 commandBarBg
 ```
 
+Character color of error messages
 ```
 errorMessage
 ```
 
+Background color of error messages
 ```
 errorMessageBg
 ```
 
+Character color of search result highlighting
 ```
 searchResult
 ```
 
+Background color of search result highlighting
 ```
 searchResultBg
 ```
 
+Character color selected in visual mode
 ```
 visualMode
 ```
 
+Background color selected in visual mode
 ```
 visualModeBg
 ```
 
+Default text color
 ```
 defaultCharactorColor
 ```
 
+Syntax highlighting color
 ```
 gtKeywordColor
 ```
 
+Syntax highlighting color
 ```
 gtStringLitColor
 ```
 
+Syntax highlighting color
 ```
 gtDecNumberColor
 ```
 
+Syntax highlighting color
 ```
 gtCommentColor
 ```
 
+Syntax highlighting color
 ```
 gtLongCommentColor
 ```
 
+Syntax highlighting color
 ```
 gtWhitespaceColor
 ```
 
+Character color of current file name in filer mode
 ```
 currentFile
 ```
 
+Background color of current file name in filer mode
 ```
 currentFileBg
 ```
 
+Character color of file name in filer mode
 ```
 file
 ```
 
+Background color of file name in filer mode
 ```
 fileBg
 ```
 
+Character color of directory name in filer mode
 ```
 dir
 ```
 
+Background color of directory name in filer mode
 ```
 dirBg
 ```
-
+Character color of symbolic links to file in filer mode
 ```
 pcLink
 ```
 
+Background color of symbolic links to file in filer mode
 ```
 pcLinkBg
 ```
