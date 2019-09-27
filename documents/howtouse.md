@@ -1,7 +1,7 @@
 # How to use
 
 ## Exiting
-check command bar  
+Check command bar  
 
 ```:w``` - Write file  
 ```:q``` - Quit  

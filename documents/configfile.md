@@ -18,7 +18,7 @@ default is ```"vivid"```. ```"vivid"``` or ```"dark"``` or ```"light"```
 theme
 ```
 
-isplay line numbers (bool)  
+Display line numbers (bool)  
 default is true
 ```
 number
