@@ -42,19 +42,19 @@ test "Change theme":
 
   status.settings.editorColorTheme = ColorTheme.dark
   changeTheme(status)
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize(20, 20)
 
   status.settings.editorColorTheme = ColorTheme.vivid
   changeTheme(status)
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize(20, 20)
 
   status.settings.editorColorTheme = ColorTheme.light
   changeTheme(status)
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize(20, 20)
 
   status.settings.editorColorTheme = ColorTheme.config
   changeTheme(status)
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize(20, 20)
 
 test "resize 1":
   var status = initEditorStatus()
