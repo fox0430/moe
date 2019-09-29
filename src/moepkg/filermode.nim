@@ -91,7 +91,7 @@ proc initFileRegister(): FileRegister =
   result.originPath = ""
   result.filename = ""
 
-proc initFilerStatus(): FilerStatus =
+proc initFilerStatus*(): FilerStatus =
   result.register = initFileRegister()
   result.viewUpdate = true
   result.dirlistUpdate = true
@@ -99,7 +99,7 @@ proc initFilerStatus(): FilerStatus =
   result.sortBy = name
   result.searchMode = false
 
-proc updateDirList(filerStatus: var FilerStatus): FilerStatus =
+proc updateDirList*(filerStatus: var FilerStatus): FilerStatus =
   filerStatus.dirList = @[]
   filerStatus.dirList.add refreshDirList(filerStatus.sortBy)
   filerStatus.viewUpdate = true
@@ -206,7 +206,7 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus, settings: EditorSettings, 
   bufStatus.highlight = initFilelistHighlight(filerStatus.dirList, bufStatus.buffer, bufStatus.currentLine)
   bufStatus.view = initEditorView(bufStatus.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
 
-proc updateFilerView(status: var EditorStatus, filerStatus: var FilerStatus) =
+proc updateFilerView*(status: var EditorStatus, filerStatus: var FilerStatus) =
   fileNameToGapBuffer(status.bufStatus[status.currentBuffer], status.settings, filerStatus)
   status.resize(terminalHeight(), terminalWidth())
   status.update
