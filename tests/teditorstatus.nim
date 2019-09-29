@@ -36,26 +36,6 @@ test "Move window 2":
   for i in 0 ..< 3: status.movePrevWindow
   check(status.currentMainWindow == 0)
 
-test "Change theme":
-  var status = initEditorStatus()
-  status.addNewBuffer("")
-
-  status.settings.editorColorTheme = ColorTheme.dark
-  changeTheme(status)
-  status.resize(20, 20)
-
-  status.settings.editorColorTheme = ColorTheme.vivid
-  changeTheme(status)
-  status.resize(20, 20)
-
-  status.settings.editorColorTheme = ColorTheme.light
-  changeTheme(status)
-  status.resize(20, 20)
-
-  status.settings.editorColorTheme = ColorTheme.config
-  changeTheme(status)
-  status.resize(20, 20)
-
 test "resize 1":
   var status = initEditorStatus()
   addNewBuffer(status, "")
