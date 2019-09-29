@@ -6,4 +6,4 @@ test "Update directory list":
   status.addNewBuffer("")
   var filerStatus = initFilerStatus()
   filerStatus = filerStatus.updateDirList
-  status.tupdateFilerView(filerStatus)
+  status.updateFilerView(filerStatus)
