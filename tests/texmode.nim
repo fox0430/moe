@@ -1,9 +1,10 @@
 import unittest
-import moepkg/editorstatus, moepkg/exmode, moepkg/unicodeext
+import moepkg/ui, moepkg/editorstatus, moepkg/exmode, moepkg/unicodeext
 
 test "Change theme command":
   var status = initEditorStatus()
   status.addNewBuffer("")
+  startUi()
   
   block:
     const command = @[ru"theme", ru"vivid"]
