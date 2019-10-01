@@ -459,7 +459,7 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
   status.commandWindow.erase
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
-proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
+proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
   if command.len == 0 or command[0].len == 0:
     status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
   elif isJumpCommand(status, command):
