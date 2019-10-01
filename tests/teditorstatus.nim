@@ -1,5 +1,5 @@
-import terminal, strutils, unittest
-import moepkg/ui, moepkg/highlight, moepkg/editorstatus, moepkg/editorview, moepkg/gapbuffer, moepkg/unicodeext, moepkg/insertmode
+import unittest
+import moepkg/highlight, moepkg/editorstatus, moepkg/editorview, moepkg/gapbuffer, moepkg/unicodeext, moepkg/insertmode
 
 test "Add new buffer":
   var status = initEditorStatus()
