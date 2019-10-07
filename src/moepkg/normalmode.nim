@@ -63,12 +63,12 @@ proc moveToLastOfLine*(bufStatus: var BufferStatus) =
   bufStatus.currentColumn = max(bufStatus.buffer[bufStatus.currentLine].len - 1, 0)
   bufStatus.expandedColumn = bufStatus.currentColumn
 
-proc moveToFirstOfPreviousLine(bufStatus: var BufferStatus) =
+proc moveToFirstOfPreviousLine*(bufStatus: var BufferStatus) =
   if bufStatus.currentLine == 0: return
   keyUp(bufStatus)
   moveToFirstOfLine(bufStatus)
 
-proc moveToFirstOfNextLine(bufStatus: var BufferStatus) =
+proc moveToFirstOfNextLine*(bufStatus: var BufferStatus) =
   if bufStatus.currentLine + 1 == bufStatus.buffer.len: return
   keyDown(bufStatus)
   moveToFirstOfLine(bufStatus)
