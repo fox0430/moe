@@ -1,4 +1,4 @@
-import parsetoml, os, times
+import parsetoml, os
 import editorstatus, ui
 from strutils import parseEnum
 

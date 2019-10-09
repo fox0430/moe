@@ -1,4 +1,4 @@
-import parseopt, unicode
+import parseopt
 
 type ComdParsedList* = tuple[filename: string]
 

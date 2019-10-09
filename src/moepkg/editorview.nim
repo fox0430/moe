@@ -1,4 +1,4 @@
-import deques, sequtils, strutils, math, algorithm, strformat
+import deques, strutils, math, strformat
 import gapbuffer, ui, unicodeext, highlight, independentutils
 
 type EditorView* = object
@@ -168,7 +168,6 @@ proc scrollDown*[T](view: var EditorView, buffer: T) =
     view.length.addLast(singleLine.length)
 
 proc writeLineNum(view: EditorView, win: var Window, y, line: int, colorPair: EditorColorPair) =
-  let width = view.widthOfLineNum
   win.write(y, 0, strutils.align($(line+1), view.widthOfLineNum-1), colorPair, false)
 
 proc write(view: EditorView, win: var Window, y, x: int, str: seq[Rune], color: EditorColorPair) =

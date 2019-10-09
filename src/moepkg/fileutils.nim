@@ -1,5 +1,5 @@
-import sequtils, os, encodings
-import editorstatus, gapbuffer, unicodeext
+import os, encodings
+import gapbuffer, unicodeext
 
 proc normalizePath*(path: seq[Rune]): seq[Rune] =
   if path[0] == ru'~':

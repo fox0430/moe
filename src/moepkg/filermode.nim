@@ -1,6 +1,5 @@
-import os, sequtils, terminal, strformat, strutils, unicodeext, times, algorithm
-import packages/docutils/highlite
-import editorstatus, ui, fileutils, editorview, gapbuffer, independentutils, highlight, commandview, highlight
+import os, terminal, strutils, unicodeext, times, algorithm
+import editorstatus, ui, fileutils, editorview, gapbuffer, highlight, commandview, highlight
 
 type PathInfo = tuple[kind: PathComponent, path: string, size: int64, lastWriteTime: times.Time]
 
@@ -166,7 +165,6 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   of pcFile, pcLinkToFile:
     addNewBuffer(status, path)
   of pcDir, pcLinkToDir:
-    let directoryName = if kind == pcDir: path else: expandSymlink(path)
     try:
       setCurrentDir(path)
       filerStatus.dirlistUpdate = true

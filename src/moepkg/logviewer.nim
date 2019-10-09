@@ -1,5 +1,5 @@
-import terminal, sequtils
-import gapbuffer, ui, editorstatus, normalmode, unicodeext, highlight
+import terminal
+import gapbuffer, ui, editorstatus, normalmode, unicodeext
 
 proc setMessageLog(status: var Editorstatus) =
   status.bufStatus[status.currentBuffer].filename = ru"Buffer manager"
