@@ -1,5 +1,5 @@
-import terminal, strutils, sequtils, osproc
-import editorstatus, editorview, ui, gapbuffer, normalmode, highlight, unicodeext
+import terminal, strutils, sequtils
+import editorstatus, ui, gapbuffer, normalmode, highlight, unicodeext
 
 proc initColorSegment(startLine, startColumn: int): ColorSegment =
   result.firstRow = startLine

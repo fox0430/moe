@@ -1,4 +1,4 @@
-import sequtils, strformat, tables
+import sequtils, tables
 
 type
   CommandKind = enum

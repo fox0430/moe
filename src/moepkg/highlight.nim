@@ -1,4 +1,4 @@
-import packages/docutils/highlite, strutils, sequtils, ospaths, strformat, parseutils
+import packages/docutils/highlite, sequtils, os, strformat, parseutils
 import unicodeext, ui
 
 type ColorSegment* = object

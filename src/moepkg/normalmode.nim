@@ -1,5 +1,5 @@
 import strutils, strformat, terminal, deques, sequtils, os, osproc, random
-import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight, fileutils, commandview, undoredostack
+import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, fileutils, commandview, undoredostack
 
 proc jumpLine*(status: var EditorStatus, destination: int)
 proc keyRight*(bufStatus: var BufferStatus)
@@ -8,7 +8,7 @@ proc keyUp*(bufStatus: var BufferStatus)
 proc keyDown*(bufStatus: var BufferStatus)
 proc replaceCurrentCharacter*(bufStatus: var BufferStatus, autoIndent:bool, character: Rune)
 
-import searchmode, replacemode
+import searchmode
 
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.erase
