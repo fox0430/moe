@@ -54,7 +54,7 @@ Check command bar
 ```n``` - Repeat search in same direction  
 ```N``` - Repeat search in opposite direction  
 
-```f``` - Jump to next occurrence
+```f``` - Jump to next occurrence  
 ```F``` - Jump to previous occurence
 
 ```Ctrl-k``` - Move next window  
