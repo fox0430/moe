@@ -112,6 +112,11 @@ proc writeMessageSaveFile*(cmdWin: var Window, filename: seq[Rune], messageLog: 
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
   messageLog.add(mess.toRunes)
 
+proc writeNoBufferDeletedError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+  let mess = "Error: No buffers were deleted"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  messageLog.add(mess.toRunes)
+
 proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
   for i in 0 .. r.high:
     var string = $r[i]
