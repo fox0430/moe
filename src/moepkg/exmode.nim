@@ -243,7 +243,7 @@ proc turnOffHighlightingCommand(status: var EditorStatus) =
   status.changeMode(Mode.normal)
 
 proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
-  if index < 0 and index > status.bufStatus.high: return 
+  if index < 0 or index > status.bufStatus.high: return 
 
   status.bufStatus.delete(index)
 
