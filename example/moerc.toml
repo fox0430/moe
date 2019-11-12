@@ -2,9 +2,9 @@
 
 theme = "vivid"
 
-number = true 
+number = true
 
-currentNumber = true 
+currentNumber = true
 
 cursorLine = false
 
@@ -75,6 +75,54 @@ statusBarBg = "blue"
 statusBarMode = "black"
 
 statusBarModeBg = "white"
+
+statusBarNormalMode = "white"
+
+statusBarNormalModeBg = "blue"
+
+statusBarModeNormalMode = "black"
+
+statusBarModeNormalModeBg = "white"
+
+statusBarInserMode = "white"
+
+statusBarInserModeBg = "blue"
+
+statusBarModeInserMode = "black"
+
+statusBarModeInserModeBg = "white"
+
+statusBarVisualMode = "white"
+
+statusBarVisualModeBg = "blue"
+
+statusBarModeVisualMode = "black"
+
+statusBarModeVisualModeBg = "white"
+
+statusBarReplaceMode = "white"
+
+statusBarReplaceModeBg = "blue"
+
+statusBarModeReplaceMode = "black"
+
+statusBarModeReplaceModeBg = "white"
+
+statusBarFilerMode = "white"
+
+statusBarFilerModeBg = "blue"
+
+statusBarModeFilerMode = "black"
+
+statusBarModeFilerModeBg = "white"
+
+statusBarExMode = "black"
+
+statusBarExModeBg = "white"
+
+statusBarModeExMode = "black"
+
+statusBarModeExModeBg = "white"
 
 tab = "white"
 
