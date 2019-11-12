@@ -137,17 +137,17 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Theme"].contains("statusBarModeNormalModeBg"):
       ColorThemeTable[ColorTheme.config].statusBarModeNormalModeBg = color("statusBarModeNormalModeBg")
 
-    if settings["Theme"].contains("statusBarInserMode"):
-      ColorThemeTable[ColorTheme.config].statusBarInserMode = color("statusBarInserMode")
+    if settings["Theme"].contains("statusBarInsertMode"):
+      ColorThemeTable[ColorTheme.config].statusBarInsertMode = color("statusBarInsertMode")
 
-    if settings["Theme"].contains("statusBarInserModeBg"):
-      ColorThemeTable[ColorTheme.config].statusBarInserModeBg = color("statusBarInserModeBg")
+    if settings["Theme"].contains("statusBarInsertModeBg"):
+      ColorThemeTable[ColorTheme.config].statusBarInsertModeBg = color("statusBarInsertModeBg")
 
-    if settings["Theme"].contains("statusBarModeInserMode"):
-      ColorThemeTable[ColorTheme.config].statusBarModeInserMode = color("statusBarModeInserMode")
+    if settings["Theme"].contains("statusBarModeInsertMode"):
+      ColorThemeTable[ColorTheme.config].statusBarModeInsertMode = color("statusBarModeInsertMode")
 
-    if settings["Theme"].contains("statusBarModeInserModeBg"):
-      ColorThemeTable[ColorTheme.config].statusBarModeInserModeBg = color("statusBarModeInserModeBg")
+    if settings["Theme"].contains("statusBarModeInsertModeBg"):
+      ColorThemeTable[ColorTheme.config].statusBarModeInsertModeBg = color("statusBarModeInsertModeBg")
 
     if settings["Theme"].contains("statusBarVisualMode"):
       ColorThemeTable[ColorTheme.config].statusBarVisualMode = color("statusBarVisualMode")

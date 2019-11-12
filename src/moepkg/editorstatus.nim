@@ -220,7 +220,7 @@ proc setModeStr(mode: Mode): string =
 
 proc setModeStrColor(mode: Mode): EditorColorPair =
   case mode
-    of Mode.insert: return EditorColorPair.statusBarModeInserMode
+    of Mode.insert: return EditorColorPair.statusBarModeInsertMode
     of Mode.visual: return EditorColorPair.statusBarModeVisualMode
     of Mode.replace: return EditorColorPair.statusBarModeReplaceMode
     of Mode.filer: return EditorColorPair.statusBarModeFilerMode

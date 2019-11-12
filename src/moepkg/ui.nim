@@ -297,10 +297,10 @@ type EditorColor* = object
   statusBarModeNormalMode*: Color
   statusBarModeNormalModeBg*: Color
 
-  statusBarInserMode*: Color
-  statusBarInserModeBg*: Color
-  statusBarModeInserMode*: Color
-  statusBarModeInserModeBg*: Color
+  statusBarInsertMode*: Color
+  statusBarInsertModeBg*: Color
+  statusBarModeInsertMode*: Color
+  statusBarModeInsertModeBg*: Color
 
   statusBarVisualMode*: Color
   statusBarVisualModeBg*: Color
@@ -362,8 +362,8 @@ type EditorColorPair* = enum
   # status bar
   statusBarNormalMode = 3
   statusBarModeNormalMode = 4
-  statusBarInserMode = 5
-  statusBarModeInserMode = 6
+  statusBarInsertMode = 5
+  statusBarModeInsertMode = 6
   statusBarVisualMode = 7
   statusBarModeVisualMode = 8
   statusBarReplaceMode = 9
@@ -414,10 +414,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     statusBarNormalModeBg: blue,
     statusBarModeNormalMode: black,
     statusBarModeNormalModeBg: white,
-    statusBarInserMode: white,
-    statusBarInserModeBg: blue,
-    statusBarModeInserMode: black,
-    statusBarModeInserModeBg: white,
+    statusBarInsertMode: white,
+    statusBarInsertModeBg: blue,
+    statusBarModeInsertMode: black,
+    statusBarModeInsertModeBg: white,
     statusBarVisualMode: white,
     statusBarVisualModeBg: blue,
     statusBarModeVisualMode: black,
@@ -480,10 +480,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     statusBarNormalModeBg: blue,
     statusBarModeNormalMode: black,
     statusBarModeNormalModeBg: white,
-    statusBarInserMode: white,
-    statusBarInserModeBg: blue,
-    statusBarModeInserMode: black,
-    statusBarModeInserModeBg: white,
+    statusBarInsertMode: white,
+    statusBarInsertModeBg: blue,
+    statusBarModeInsertMode: black,
+    statusBarModeInsertModeBg: white,
     statusBarVisualMode: white,
     statusBarVisualModeBg: blue,
     statusBarModeVisualMode: black,
@@ -546,10 +546,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     statusBarNormalModeBg: gray54,
     statusBarModeNormalMode: white,
     statusBarModeNormalModeBg: teal,
-    statusBarInserMode: blue,
-    statusBarInserModeBg: gray54,
-    statusBarModeInserMode: white,
-    statusBarModeInserModeBg: teal,
+    statusBarInsertMode: blue,
+    statusBarInsertModeBg: gray54,
+    statusBarModeInsertMode: white,
+    statusBarModeInsertModeBg: teal,
     statusBarVisualMode: blue,
     statusBarVisualModeBg: gray54,
     statusBarModeVisualMode: white,
@@ -612,10 +612,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     statusBarNormalModeBg: deepPink1_1,
     statusBarModeNormalMode: black,
     statusBarModeNormalModeBg: gray100,
-    statusBarInserMode: black,
-    statusBarInserModeBg: deepPink1_1,
-    statusBarModeInserMode: black,
-    statusBarModeInserModeBg: gray100,
+    statusBarInsertMode: black,
+    statusBarInsertModeBg: deepPink1_1,
+    statusBarModeInsertMode: black,
+    statusBarModeInsertModeBg: gray100,
     statusBarVisualMode: black,
     statusBarVisualModeBg: deepPink1_1,
     statusBarModeVisualMode: black,
@@ -687,8 +687,8 @@ proc setCursesColor*(editorColor: EditorColor) =
   setColorPair(EditorColorPair.statusBarNormalMode, editorColor.statusBarNormalMode, editorColor.statusBarNormalModeBg)
   setColorPair(EditorColorPair.statusBarModeNormalMode, editorColor.statusBarModeNormalMode, editorColor.statusBarModeNormalModeBg)
 
-  setColorPair(EditorColorPair.statusBarInserMode, editorColor.statusBarInserMode, editorColor.statusBarInserModeBg)
-  setColorPair(EditorColorPair.statusBarModeInserMode, editorColor.statusBarModeInserMode, editorColor.statusBarModeInserModeBg)
+  setColorPair(EditorColorPair.statusBarInsertMode, editorColor.statusBarInsertMode, editorColor.statusBarInsertModeBg)
+  setColorPair(EditorColorPair.statusBarModeInsertMode, editorColor.statusBarModeInsertMode, editorColor.statusBarModeInsertModeBg)
 
   setColorPair(EditorColorPair.statusBarVisualMode, editorColor.statusBarVisualMode, editorColor.statusBarVisualModeBg)
   setColorPair(EditorColorPair.statusBarModeVisualMode, editorColor.statusBarModeVisualMode, editorColor.statusBarModeVisualModeBg)
