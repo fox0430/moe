@@ -376,6 +376,8 @@ proc suggestMode(status: var Editorstatus, exStatus: var ExModeViewStatus, key: 
   elif exStatus.buffer.len > 0 and exStatus.buffer.muchExCommand == 1: exStatus.suggestExCommandOption(status.commandWindow, key)
   else: suggestExCommand(exStatus, status.commandWindow, key)
 
+  while isTabkey(key) or isShiftTab(key): key = getKey(status.commandWindow)
+
 proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
   var exStatus = initExModeViewStatus(prompt)
   status.resize(terminalHeight(), terminalWidth())
