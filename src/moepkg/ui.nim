@@ -291,20 +291,51 @@ type EditorColor* = object
   lineNumBg*: Color
   currentLineNum*: Color
   currentLineNumBg*: Color
-  statusBar*: Color
-  statusBarBg*: Color
-  statusBarMode*: Color
-  statusBarModeBg*: Color
+  # status bar
+  statusBarNormalMode*: Color
+  statusBarNormalModeBg*: Color
+  statusBarModeNormalMode*: Color
+  statusBarModeNormalModeBg*: Color
+
+  statusBarInsertMode*: Color
+  statusBarInsertModeBg*: Color
+  statusBarModeInsertMode*: Color
+  statusBarModeInsertModeBg*: Color
+
+  statusBarVisualMode*: Color
+  statusBarVisualModeBg*: Color
+  statusBarModeVisualMode*: Color
+  statusBarModeVisualModeBg*: Color
+
+  statusBarReplaceMode*: Color
+  statusBarReplaceModeBg*: Color
+  statusBarModeReplaceMode*: Color
+  statusBarModeReplaceModeBg*: Color
+
+  statusBarFilerMode*: Color
+  statusBarFilerModeBg*: Color
+  statusBarModeFilerMode*: Color
+  statusBarModeFilerModeBg*: Color
+
+  statusBarExMode*: Color
+  statusBarExModeBg*: Color
+  statusBarModeExMode*: Color
+  statusBarModeExModeBg*: Color
+  # tab line
   tab*: Color
   tabBg*: Color
   currentTab*: Color
   currentTabBg*: Color
+  # command bar
   commandBar*: Color
   commandBarBg*: Color
+  # error message
   errorMessage*: Color
   errorMessageBg*: Color
+  # search result highlight
   searchResult*: Color
   searchResultBg*: Color
+  # selected area in visual mode
   visualMode*: Color
   visualModeBg*: Color
   # color scheme
@@ -328,31 +359,48 @@ type EditorColor* = object
 type EditorColorPair* = enum
   lineNum = 1
   currentLineNum = 2
-  statusBar = 3
-  statusBarMode = 4
-  tab = 5
-  currentTab = 6
-  commandBar = 7
-  errorMessage = 8
-  searchResult = 9
-  visualMode = 10
+  # status bar
+  statusBarNormalMode = 3
+  statusBarModeNormalMode = 4
+  statusBarInsertMode = 5
+  statusBarModeInsertMode = 6
+  statusBarVisualMode = 7
+  statusBarModeVisualMode = 8
+  statusBarReplaceMode = 9
+  statusBarModeReplaceMode = 10
+  statusBarFilerMode = 12
+  statusBarModeFilerMode = 13
+  statusBarExMode = 14
+  statusBarModeExMode = 15
+  # tab lnie
+  tab = 16
+  # tab line
+  currentTab = 17
+  # command bar
+  commandBar = 18
+  # error message
+  errorMessage = 19
+  # search result highlight
+  searchResult = 20
+  # selected area in visual mode
+  visualMode = 21
   # color scheme
-  defaultChar = 11
-  keyword = 12
-  stringLit = 13
-  decNumber = 14
-  comment = 15
-  longComment = 16
-  whitespace = 17
+  defaultChar = 22
+  keyword = 23
+  stringLit = 24
+  decNumber = 25
+  comment = 26
+  longComment = 27
+  whitespace = 28
   # filer mode
-  currentFile = 18
-  currentFileBg = 19
-  file = 20
-  fileBg = 21
-  dir = 22
-  dirBg = 23
-  pcLink = 24
-  pcLinkBg = 25
+  currentFile = 29
+  currentFileBg = 30
+  file = 31
+  fileBg = 32
+  dir = 33
+  dirBg = 34
+  pcLink = 35
+  pcLinkBg = 36
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -361,20 +409,46 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     lineNumBg: default,
     currentLineNum: teal,
     currentLineNumBg: default,
-    statusBar: white,
-    statusBarBg: blue,
-    statusBarMode: black,
-    statusBarModeBg: white,
+    # statsu bar
+    statusBarNormalMode: white,
+    statusBarNormalModeBg: blue,
+    statusBarModeNormalMode: black,
+    statusBarModeNormalModeBg: white,
+    statusBarInsertMode: white,
+    statusBarInsertModeBg: blue,
+    statusBarModeInsertMode: black,
+    statusBarModeInsertModeBg: white,
+    statusBarVisualMode: white,
+    statusBarVisualModeBg: blue,
+    statusBarModeVisualMode: black,
+    statusBarModeVisualModeBg: white,
+    statusBarReplaceMode: white,
+    statusBarReplaceModeBg: blue,
+    statusBarModeReplaceMode: black,
+    statusBarModeReplaceModeBg: white,
+    statusBarFilerMode: white,
+    statusBarFilerModeBg: blue,
+    statusBarModeFilerMode: black,
+    statusBarModeFilerModeBg: white,
+    statusBarExMode: white,
+    statusBarExModeBg: blue,
+    statusBarModeExMode: black,
+    statusBarModeExModeBg: white,
+    # tab line
     tab: white,
     tabBg: default,
     currentTab: white,
     currentTabBg: blue,
+    # command  bar
     commandBar: gray100,
     commandBarBg: default,
+    # error message
     errorMessage: red,
     errorMessageBg: default,
+    # search result highlight
     searchResult: default,
     searchResultBg: red,
+    # selected area in visual mode
     visualMode: gray100,
     visualModeBg: purple_1,
     # color scheme
@@ -401,20 +475,46 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     lineNumBg: default,
     currentLineNum: teal,
     currentLineNumBg: default,
-    statusBar: white,
-    statusBarBg: blue,
-    statusBarMode: black,
-    statusBarModeBg: white,
+    # statsu bar
+    statusBarNormalMode: white,
+    statusBarNormalModeBg: blue,
+    statusBarModeNormalMode: black,
+    statusBarModeNormalModeBg: white,
+    statusBarInsertMode: white,
+    statusBarInsertModeBg: blue,
+    statusBarModeInsertMode: black,
+    statusBarModeInsertModeBg: white,
+    statusBarVisualMode: white,
+    statusBarVisualModeBg: blue,
+    statusBarModeVisualMode: black,
+    statusBarModeVisualModeBg: white,
+    statusBarReplaceMode: white,
+    statusBarReplaceModeBg: blue,
+    statusBarModeReplaceMode: black,
+    statusBarModeReplaceModeBg: white,
+    statusBarFilerMode: white,
+    statusBarFilerModeBg: blue,
+    statusBarModeFilerMode: black,
+    statusBarModeFilerModeBg: white,
+    statusBarExMode: white,
+    statusBarExModeBg: blue,
+    statusBarModeExMode: black,
+    statusBarModeExModeBg: white,
+    # tab line
     tab: white,
     tabBg: default,
     currentTab: white,
     currentTabBg: blue,
+    # command bar
     commandBar: gray100,
     commandBarBg: default,
+    # error message
     errorMessage: red,
     errorMessageBg: default,
+    # search result highlight
     searchResult: default,
     searchResultBg: red,
+    # selected area in visual mode
     visualMode: gray100,
     visualModeBg: purple_1,
     # color scheme
@@ -441,20 +541,46 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     lineNumBg: default,
     currentLineNum: black,
     currentLineNumBg: default,
-    statusBar: blue,
-    statusBarBg: gray54,
-    statusBarMode: white,
-    statusBarModeBg: teal,
+    # statsu bar
+    statusBarNormalMode: blue,
+    statusBarNormalModeBg: gray54,
+    statusBarModeNormalMode: white,
+    statusBarModeNormalModeBg: teal,
+    statusBarInsertMode: blue,
+    statusBarInsertModeBg: gray54,
+    statusBarModeInsertMode: white,
+    statusBarModeInsertModeBg: teal,
+    statusBarVisualMode: blue,
+    statusBarVisualModeBg: gray54,
+    statusBarModeVisualMode: white,
+    statusBarModeVisualModeBg: teal,
+    statusBarReplaceMode: blue,
+    statusBarReplaceModeBg: gray54,
+    statusBarModeReplaceMode: white,
+    statusBarModeReplaceModeBg: teal,
+    statusBarFilerMode: blue,
+    statusBarFilerModeBg: gray54,
+    statusBarModeFilerMode: white,
+    statusBarModeFilerModeBg: teal,
+    statusBarExMode: blue,
+    statusBarExModeBg: gray54,
+    statusBarModeExMode: white,
+    statusBarModeExModeBg: teal,
+    # tab line
     tab: blue,
     tabBg: gray54,
     currentTab: white,
     currentTabBg: blue,
+    # command bar
     commandBar: black,
     commandBarBg: default,
+    # error message
     errorMessage: red,
     errorMessageBg: default,
+    # search result highlight
     searchResult: default,
     searchResultBg: red,
+    # selected area in visual mode
     visualMode: black,
     visualModeBg: purple_1,
     # color scheme
@@ -481,20 +607,46 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     lineNumBg: default,
     currentLineNum: deepPink1_1,
     currentLineNumBg: default,
-    statusBar: black,
-    statusBarBg: deepPink1_1,
-    statusBarMode: black,
-    statusBarModeBg: gray100,
+    # statsu bar
+    statusBarNormalMode: black,
+    statusBarNormalModeBg: deepPink1_1,
+    statusBarModeNormalMode: black,
+    statusBarModeNormalModeBg: gray100,
+    statusBarInsertMode: black,
+    statusBarInsertModeBg: deepPink1_1,
+    statusBarModeInsertMode: black,
+    statusBarModeInsertModeBg: gray100,
+    statusBarVisualMode: black,
+    statusBarVisualModeBg: deepPink1_1,
+    statusBarModeVisualMode: black,
+    statusBarModeVisualModeBg: gray100,
+    statusBarReplaceMode: black,
+    statusBarReplaceModeBg: deepPink1_1,
+    statusBarModeReplaceMode: black,
+    statusBarModeReplaceModeBg: gray100,
+    statusBarFilerMode: black,
+    statusBarFilerModeBg: deepPink1_1,
+    statusBarModeFilerMode: black,
+    statusBarModeFilerModeBg: gray100,
+    statusBarExMode: black,
+    statusBarExModeBg: deepPink1_1,
+    statusBarModeExMode: black,
+    statusBarModeExModeBg: gray100,
+    # tab line
     tab: white,
     tabBg: default,
     currentTab: black,
     currentTabBg: deepPink1_1,
+    # command bar
     commandBar: gray100,
     commandBarBg: default,
+    # error message
     errorMessage: red,
     errorMessageBg: default,
+    # search result highlight
     searchResult: default,
     searchResultBg: red,
+    # selected area in visual mode
     visualMode: gray100,
     visualModeBg: purple_1,
     # color scheme
@@ -531,15 +683,36 @@ proc setCursesColor*(editorColor: EditorColor) =
 
   setColorPair(EditorColorPair.lineNum , editorColor.lineNum, editorColor.lineNumBg)
   setColorPair(EditorColorPair.currentLineNum, editorColor.currentLineNum, editorColor.currentLineNumBg)
-  setColorPair(EditorColorPair.statusBar, editorColor.statusBar, editorColor.statusBarBg)
-  setColorPair(EditorColorPair.statusBarMode, editorColor.statusBarMode, editorColor.statusBarModeBg)
+  # status bar
+  setColorPair(EditorColorPair.statusBarNormalMode, editorColor.statusBarNormalMode, editorColor.statusBarNormalModeBg)
+  setColorPair(EditorColorPair.statusBarModeNormalMode, editorColor.statusBarModeNormalMode, editorColor.statusBarModeNormalModeBg)
+
+  setColorPair(EditorColorPair.statusBarInsertMode, editorColor.statusBarInsertMode, editorColor.statusBarInsertModeBg)
+  setColorPair(EditorColorPair.statusBarModeInsertMode, editorColor.statusBarModeInsertMode, editorColor.statusBarModeInsertModeBg)
+
+  setColorPair(EditorColorPair.statusBarVisualMode, editorColor.statusBarVisualMode, editorColor.statusBarVisualModeBg)
+  setColorPair(EditorColorPair.statusBarModeVisualMode, editorColor.statusBarModeVisualMode, editorColor.statusBarModeVisualModeBg)
+
+  setColorPair(EditorColorPair.statusBarReplaceMode, editorColor.statusBarReplaceMode, editorColor.statusBarReplaceModeBg)
+  setColorPair(EditorColorPair.statusBarModeReplaceMode, editorColor.statusBarModeReplaceMode, editorColor.statusBarModeReplaceModeBg)
+
+  setColorPair(EditorColorPair.statusBarExMode, editorColor.statusBarExMode, editorColor.statusBarExModeBg)
+  setColorPair(EditorColorPair.statusBarModeExMode, editorColor.statusBarModeExMode, editorColor.statusBarExModeBg)
+
+  setColorPair(EditorColorPair.statusBarFilerMode, editorColor.statusBarFilerMode, editorColor.statusBarFilerModeBg)
+  setColorPair(EditorColorPair.statusBarModeFilerMode, editorColor.statusBarModeFilerMode, editorColor.statusBarModeFilerModeBg)
+  # tab line
   setColorPair(EditorColorPair.tab , editorColor.tab, editorColor.tabBg)
   setColorPair(EditorColorPair.currentTab , editorColor.currentTab, editorColor.currentTabBg)
+  # command bar
   setColorPair(EditorColorPair.commandBar , editorColor.commandBar, editorColor.commandBarBg)
+  # error message
   setColorPair(EditorColorPair.errorMessage , editorColor.errorMessage, editorColor.errorMessageBg)
+  # search result highlight
   setColorPair(EditorColorPair.searchResult, editorColor.searchResult, editorColor.searchResultBg)
+  # selected area in visual mode
   setColorPair(EditorColorPair.visualMode, editorColor.visualMode, editorColor.visualModeBg)
-
+  # color scheme
   setColorPair(EditorColorPair.defaultChar, editorColor.defaultChar, Color.default)
   setColorPair(EditorColorPair.keyword, editorColor.gtKeyword, Color.default)
   setColorPair(EditorColorPair.stringLit, editorColor.gtStringLit, Color.default)
@@ -547,7 +720,7 @@ proc setCursesColor*(editorColor: EditorColor) =
   setColorPair(EditorColorPair.comment, editorColor.gtComment, Color.default)
   setColorPair(EditorColorPair.longComment, editorColor.gtLongComment, Color.default)
   setColorPair(EditorColorPair.whitespace, editorColor.gtWhitespace, Color.default)
-
+  # filer
   setColorPair(EditorColorPair.currentFile, editorColor.currentFile, editorColor.currentFileBg)
   setColorPair(EditorColorPair.file, editorColor.file, editorColor.fileBg)
   setColorPair(EditorColorPair.dir, editorColor.dir, editorColor.dirBg)
@@ -575,7 +748,7 @@ proc setCursor*(cursor: bool) =
 proc keyEcho*(keyecho: bool) =
   if keyecho == true: echo()
   elif keyecho == false: noecho()
-    
+
 proc setTimeout*(win: var Window) = win.cursesWindow.wtimeout(cint(1000)) # 1000mm sec
 
 proc startUi*() =
@@ -622,7 +795,7 @@ proc append*(win: var Window, str: string, color: EditorColorPair = EditorColorP
   win.x += str.toRunes.width
 
 proc append*(win: var Window, str: seq[Rune], color: EditorColorPair = EditorColorPair.defaultChar) = append(win, $str, color)
-  
+
 proc erase*(win: var Window) =
   werase(win.cursesWindow)
   win.y = 0
@@ -669,7 +842,7 @@ proc getKey*(win: Window): Rune =
     s.add(char(key))
     len = numberOfBytes(char(key))
   for i in 0 ..< len-1: s.add(char(wgetch(win.cursesWindow)))
-  
+
   let runes = toRunes(s)
   doAssert(runes.len == 1, fmt"runes length shoud be 1.")
   return runes[0]

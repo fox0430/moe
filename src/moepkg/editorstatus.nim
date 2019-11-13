@@ -41,7 +41,7 @@ type EditorSettings* = object
   cursorLine*: bool
   syntax*: bool
   autoCloseParen*: bool
-  autoIndent*: bool 
+  autoIndent*: bool
   tabStop*: int
   characterEncoding*: CharacterEncoding # TODO: move to EditorStatus ...?
   defaultCursor*: CursorType
@@ -173,7 +173,7 @@ proc exitEditor*(settings: EditorSettings) =
 
 proc writeStatusBarNormalModeInfo(status: var EditorStatus) =
   let
-    color = EditorColorPair.statusBar
+    color = EditorColorPair.statusBarNormalMode
     currentBuf = status.currentBuffer
     currentMode = status.bufStatus[currentBuf].mode
 
@@ -196,14 +196,14 @@ proc writeStatusBarNormalModeInfo(status: var EditorStatus) =
   status.statusWindow.write(0, terminalWidth() - info.len, info, color)
 
 proc writeStatusBarFilerModeInfo(status: var EditorStatus) =
-  let color = EditorColorPair.statusBar
+  let color = EditorColorPair.statusBarFilerMode
   if status.settings.statusBar.directory: status.statusWindow.append(ru" ", color)
   status.statusWindow.append(getCurrentDir().toRunes, color)
   status.statusWindow.append(ru " ".repeat(terminalWidth() - 5), color)
 
 proc writeStatusBarBufferManagerModeInfo(status: var EditorStatus) =
   let
-    color = EditorColorPair.statusBar
+    color = EditorColorPair.statusBarNormalMode
     info = fmt"{status.bufStatus[status.currentBuffer].currentLine + 1}/{status.bufStatus.len - 1}"
   status.statusWindow.append(ru " ".repeat(terminalWidth() - " BUFFER ".len), color)
   status.statusWindow.write(0, terminalWidth() - info.len - 1, info, color)
@@ -218,11 +218,20 @@ proc setModeStr(mode: Mode): string =
   of Mode.ex: result = " EX "
   else: result = " NORMAL "
 
+proc setModeStrColor(mode: Mode): EditorColorPair =
+  case mode
+    of Mode.insert: return EditorColorPair.statusBarModeInsertMode
+    of Mode.visual: return EditorColorPair.statusBarModeVisualMode
+    of Mode.replace: return EditorColorPair.statusBarModeReplaceMode
+    of Mode.filer: return EditorColorPair.statusBarModeFilerMode
+    of Mode.ex: return EditorColorPair.statusBarModeExMode
+    else: return EditorColorPair.statusBarModeNormalMode
+
 proc writeStatusBar*(status: var EditorStatus) =
   status.statusWindow.erase
   let
-    color = EditorColorPair.statusBarMode
     mode = status.bufStatus[status.currentBuffer].mode
+    color = setModeStrColor(mode)
     modeStr = setModeStr(status.bufStatus[status.currentBuffer].mode)
 
   if status.settings.statusBar.mode: status.statusWindow.write(0, 0, modeStr, color)
