@@ -411,24 +411,124 @@ Current line number highlighting background color
 currentLineNumBg
 ```
 
-Character color of Status bar
+Character color of Status bar in normal mode
 ```
-statusBar
-```
-
-Status bar base color
-```
-statusBarBg
+statusBarNormalMode
 ```
 
-Character color of mode in status bar
+Status bar base color in normal mode
 ```
-statusBarMode
+statusBarNormalModeBg
 ```
 
-Background color of mode in status bar
+Mode text color in the status bar in normal mode
 ```
-statusBarModeBg
+statusBarModeNormalMode
+```
+
+Background color of mode text in the status bar in normal mode
+```
+statusBarModeNormalModeBg
+```
+
+Character color of Status bar in insert mode
+```
+statusBarInsertMode
+```
+
+Status bar base color in insert mode
+```
+statusBarInsertModeBg
+```
+
+Mode text color in the status bar in insert mode
+```
+statusBarModeInsertMode
+```
+
+Background color of mode text in the status bar in insert mode
+```
+statusBarModeInsertModeBg
+```
+
+Character color of Status bar in visual mode
+```
+statusBarVisualMode
+```
+
+Status bar base color in visual mode
+```
+statusBarVisualModeBg
+```
+
+Mode text color in the status bar in visual mode
+```
+statusBarModeVisualMode
+```
+
+Background color of mode text in the status bar in visual mode
+```
+statusBarModeVisualModeBg
+```
+
+Character color of Status bar replace in mode
+```
+statusBarReplaceMode
+```
+
+Status bar base color in replace mode
+```
+statusBarReplaceModeBg
+```
+
+Mode text color in the status bar in replace mode
+```
+statusBarModeReplaceMode
+```
+
+Background color of mode text in the status bar in replace mode
+```
+statusBarModeReplaceModeBg
+```
+
+Character color of Status bar in filer mode
+```
+statusBarFilerMode
+```
+
+Status bar base color in filer mode
+```
+statusBarFilerModeBg
+```
+
+Mode text color in the status bar in filer mode
+```
+statusBarModeFilerMode
+```
+
+Background color of mode text in the status bar in filer mode
+```
+statusBarModeFilerModeBg
+```
+
+Character color of Status bar in ex mode
+```
+statusBarExMode
+```
+
+Status bar base color in ex mode
+```
+statusBarExModeBg
+```
+
+Mode text color in the status bar in ex mode
+```
+statusBarExModeBg
+```
+
+Background color of mode text in the status bar in ex mode
+```
+statusBarModeExModeBg
 ```
 
 Character color of tab title in tab line
@@ -440,7 +540,6 @@ Background color of tab title in tab line
 ```
 tabBg
 ```
-
 
 Character color of current tab title in tab line
 ```
