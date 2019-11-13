@@ -299,11 +299,10 @@ proc suggestFilePath(exStatus: var ExModeViewStatus, cmdWin: var Window, key: va
 
     key = getKey(cmdWin)
 
-proc isExCommand(exBuffer: seq[Rune]): bool =
-  result = false
+proc muchExCommand(exBuffer: seq[Rune]): int =
   for i in 0 ..< exCommandList.len:
     if ($exBuffer).startsWith($exCommandList[i]):
-      result = true
+      inc(result)
       break
 
 proc suggestExCommandOption(exStatus: var ExModeViewStatus, cmdWin: var Window, key: var Rune) =
@@ -367,7 +366,7 @@ proc suggestExCommand(exStatus: var ExModeViewStatus, cmdWin: var Window, key: v
 
 proc suggestMode(status: var Editorstatus, exStatus: var ExModeViewStatus, key: var Rune) =
 
-  if exStatus.buffer.len > 0 and exStatus.buffer.isExCommand: exStatus.suggestExCommandOption(status.commandWindow, key)
+  if exStatus.buffer.len > 0 and exStatus.buffer.muchExCommand > 1: exStatus.suggestExCommandOption(status.commandWindow, key)
   else: suggestExCommand(exStatus, status.commandWindow, key)
 
 proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
