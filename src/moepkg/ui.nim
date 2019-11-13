@@ -622,7 +622,7 @@ proc append*(win: var Window, str: string, color: EditorColorPair = EditorColorP
   win.x += str.toRunes.width
 
 proc append*(win: var Window, str: seq[Rune], color: EditorColorPair = EditorColorPair.defaultChar) = append(win, $str, color)
-  
+
 proc erase*(win: var Window) =
   werase(win.cursesWindow)
   win.y = 0
@@ -669,7 +669,7 @@ proc getKey*(win: Window): Rune =
     s.add(char(key))
     len = numberOfBytes(char(key))
   for i in 0 ..< len-1: s.add(char(wgetch(win.cursesWindow)))
-  
+
   let runes = toRunes(s)
   doAssert(runes.len == 1, fmt"runes length shoud be 1.")
   return runes[0]
@@ -696,3 +696,4 @@ proc isControlU*(key: Rune): bool = int(key) == 21
 proc isControlV*(key: Rune): bool = int(key) == 22
 proc isControlH*(key: Rune): bool = int(key) == 263
 proc isControlSquareBracketsRight*(key: Rune): bool = int(key) == 27  # Ctrl - [
+proc isShiftTab*(key: Rune): bool = int(key) == 353
