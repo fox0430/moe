@@ -305,6 +305,12 @@ proc muchExCommand(exBuffer: seq[Rune]): int =
       inc(result)
       break
 
+proc isExCommand(exBuffer: seq[Rune]): bool =
+  for i in 0 ..< exCommandList.len:
+    if $exBuffer == $exCommandList[i] & " ":
+      result = true
+      break
+
 proc suggestExCommandOption(exStatus: var ExModeViewStatus, cmdWin: var Window, key: var Rune) =
   var
     suggestlist: seq[seq[Rune]] = @[]
@@ -366,7 +372,8 @@ proc suggestExCommand(exStatus: var ExModeViewStatus, cmdWin: var Window, key: v
 
 proc suggestMode(status: var Editorstatus, exStatus: var ExModeViewStatus, key: var Rune) =
 
-  if exStatus.buffer.len > 0 and exStatus.buffer.muchExCommand > 1: exStatus.suggestExCommandOption(status.commandWindow, key)
+  if exStatus.buffer.len > 0 and exStatus.buffer.isExCommand: exStatus.suggestExCommandOption(status.commandWindow, key)
+  elif exStatus.buffer.len > 0 and exStatus.buffer.muchExCommand == 1: exStatus.suggestExCommandOption(status.commandWindow, key)
   else: suggestExCommand(exStatus, status.commandWindow, key)
 
 proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
