@@ -81,7 +81,7 @@ proc writeMessageDeletedFile*(cmdWin: var Window, filename: string, messageLog: 
   messageLog.add(mess.toRunes)
 
 proc writeNoFileNameError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
-  let mess = "Error: No file name" 
+  let mess = "Error: No file name"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
 
@@ -103,7 +103,7 @@ proc writeMessageAutoSave*(cmdWin: var Window, filename: seq[Rune], messageLog: 
 proc writeNotEditorCommandError*(cmdWin: var Window, command: seq[seq[Rune]], messageLog: var seq[seq[Rune]]) =
   var cmd = ""
   for i in 0 ..< command.len: cmd = cmd & $command[i] & " "
-  let mess = fmt"Error: Not an editor command: {cmd}" 
+  let mess = fmt"Error: Not an editor command: {cmd}"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
 
@@ -133,7 +133,7 @@ proc splitQout(s: string): seq[seq[Rune]]=
     if s[i] == '\\':
       backSlash = true
     elif backSlash:
-      backSlash = false 
+      backSlash = false
       result[result.high].add(($s[i]).toRunes)
     elif i > 0 and s[i - 1] == '\\':
       result[result.high].add(($s[i]).toRunes)
@@ -275,9 +275,7 @@ proc getKeyOnceAndWriteCommandView*(status: var Editorstatus, prompt: string, bu
   return (exStatus.buffer, exitSearch, cancelSearch)
 
 proc suggestFilePath(exStatus: var ExModeViewStatus, cmdWin: var Window, key: var Rune) =
-  var
-    suggestIndex = 0
-    suggestlist: seq[seq[Rune]] = @[]
+  var suggestlist: seq[seq[Rune]] = @[]
   let inputPath = ($exStatus.buffer).substr(2)
   if inputPath.len == 0 or not inputPath.contains("/"):
     for kind, path in walkDir("./"):
@@ -286,7 +284,9 @@ proc suggestFilePath(exStatus: var ExModeViewStatus, cmdWin: var Window, key: va
     for kind, path in walkDir(($inputPath).substr(0, ($inputPath).rfind("/"))):
       if ($path.toRunes.normalizePath).startsWith(inputPath): suggestlist.add(path.toRunes.normalizePath)
 
-  while isTabkey(key) and suggestlist.len > 0:
+  var suggestIndex = if isShiftTab(key): 0 else: suggestlist.high
+
+  while (isTabkey(key) or isShiftTab(key)) and suggestlist.len > 0:
     exStatus.buffer = ru"e "
     exStatus.currentPosition = 2
     exStatus.cursorX = 3
@@ -294,24 +294,30 @@ proc suggestFilePath(exStatus: var ExModeViewStatus, cmdWin: var Window, key: va
     for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
     if suggestlist.len == 1:
       key = ru'/'
-      return 
+      return
     writeExModeView(cmdWin, exStatus, EditorColorPair.commandBar)
 
-    if suggestIndex < suggestlist.high: inc(suggestIndex)
+    if isTabkey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
+    elif isShiftTab(key) and suggestIndex > 0: dec(suggestIndex)
+    elif isShiftTab(key) and suggestIndex == 0: suggestIndex = suggestlist.high
     else: suggestIndex = 0
 
     key = getKey(cmdWin)
 
-proc isExCommand(exBuffer: seq[Rune]): bool =
-  result = false
+proc muchExCommand(exBuffer: seq[Rune]): int =
   for i in 0 ..< exCommandList.len:
     if ($exBuffer).startsWith($exCommandList[i]):
+      inc(result)
+      break
+
+proc isExCommand(exBuffer: seq[Rune]): bool =
+  for i in 0 ..< exCommandList.len:
+    if $exBuffer == $exCommandList[i] & " ":
       result = true
       break
 
 proc suggestExCommandOption(exStatus: var ExModeViewStatus, cmdWin: var Window, key: var Rune) =
   var
-    suggestIndex = 0
     suggestlist: seq[seq[Rune]] = @[]
     argList: seq[string] = @[]
 
@@ -328,7 +334,9 @@ proc suggestExCommandOption(exStatus: var ExModeViewStatus, cmdWin: var Window, 
   for i in 0 ..< argList.len:
     if argList[i].startsWith(arg): suggestlist.add(argList[i].toRunes)
 
-  while isTabkey(key) and suggestlist.len > 0:
+  var suggestIndex = if isTabkey(key): 0 else: suggestlist.high
+
+  while (isTabkey(key) or isShiftTab(key)) and suggestlist.len > 0:
     exStatus.currentPosition = 0
     exStatus.cursorX = 1
     exStatus.buffer = ru""
@@ -337,20 +345,22 @@ proc suggestExCommandOption(exStatus: var ExModeViewStatus, cmdWin: var Window, 
     for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
     writeExModeView(cmdWin, exStatus, EditorColorPair.commandBar)
 
-    if suggestIndex < suggestlist.high: inc(suggestIndex)
+    if isTabkey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
+    elif isShiftTab(key) and suggestIndex > 0: dec(suggestIndex)
+    elif isShiftTab(key) and suggestIndex == 0: suggestIndex = suggestlist.high
     else: suggestIndex = 0
 
     key = getKey(cmdWin)
 
 proc suggestExCommand(exStatus: var ExModeViewStatus, cmdWin: var Window, key: var Rune) =
 
-  var
-    suggestIndex = 0
-    suggestlist: seq[seq[Rune]] = @[]
+  var suggestlist: seq[seq[Rune]] = @[]
   for runes in exCommandList:
     if exStatus.buffer.startsWith(runes): suggestlist.add(runes)
 
-  while isTabkey(key) and suggestlist.len > 0:
+  var suggestIndex = if isTabkey(key): 0 else: suggestlist.high
+
+  while (isTabkey(key) or isShiftTab(key)) and suggestlist.len > 0:
     exStatus.buffer = ru""
     exStatus.currentPosition = 0
     exStatus.cursorX = 1
@@ -358,16 +368,21 @@ proc suggestExCommand(exStatus: var ExModeViewStatus, cmdWin: var Window, key: v
     for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
     writeExModeView(cmdWin, exStatus, EditorColorPair.commandBar)
 
-    if suggestIndex < suggestlist.high: inc(suggestIndex)
+    if isTabkey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
+    elif isShiftTab(key) and suggestIndex > 0: dec(suggestIndex)
+    elif isShiftTab(key) and suggestIndex == 0: suggestIndex = suggestlist.high
     else: suggestIndex = 0
 
     key = getKey(cmdWin)
 
 proc suggestMode(status: var Editorstatus, exStatus: var ExModeViewStatus, key: var Rune) =
- 
+
   if exStatus.buffer.len > 0 and exStatus.buffer.isExCommand: exStatus.suggestExCommandOption(status.commandWindow, key)
+  elif exStatus.buffer.len > 0 and exStatus.buffer.muchExCommand == 1: exStatus.suggestExCommandOption(status.commandWindow, key)
   else: suggestExCommand(exStatus, status.commandWindow, key)
-  
+
+  while isTabkey(key) or isShiftTab(key): key = getKey(status.commandWindow)
+
 proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
   var exStatus = initExModeViewStatus(prompt)
   status.resize(terminalHeight(), terminalWidth())
@@ -377,7 +392,7 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
 
     var key = getKey(status.commandWindow)
 
-    if isTabkey(key): suggestMode(status, exStatus, key)
+    if isTabkey(key) or isShiftTab(key): suggestMode(status, exStatus, key)
 
     if isEnterKey(key): break
     elif isEscKey(key):
