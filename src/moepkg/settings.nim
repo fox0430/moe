@@ -1,4 +1,4 @@
-import parsetoml, os, times
+import parsetoml, os
 import editorstatus, ui
 from strutils import parseEnum
 
@@ -19,7 +19,7 @@ proc getTheme(theme: string): ColorTheme =
 
 proc parseSettingsFile*(filename: string): EditorSettings =
   result = initEditorSettings()
-  
+
   var settings: TomlValueRef
   try: settings = parsetoml.parseFile(filename)
   except IOError: return
@@ -76,6 +76,10 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("realtimeSearch"):
       result.realtimeSearch = settings["Standard"]["realtimeSearch"].getbool()
 
+  if settings.contains("TabLine"):
+    if settings["TabLine"].contains("allBuffer"):
+        result.tabLine.allBuffer= settings["TabLine"]["allBuffer"].getbool()
+
   if settings.contains("StatusBar"):
     if settings["StatusBar"].contains("mode"):
         result.statusBar.mode= settings["StatusBar"]["mode"].getbool()
@@ -121,17 +125,74 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Theme"].contains("currentLineNumBg"):
       ColorThemeTable[ColorTheme.config].currentLineNumBg = color("currentLineNumBg")
 
-    if settings["Theme"].contains("statusBar"):
-      ColorThemeTable[ColorTheme.config].statusBar = color("statusBar")
+    if settings["Theme"].contains("statusBarNormalMode"):
+      ColorThemeTable[ColorTheme.config].statusBarNormalMode = color("statusBarNormalMode")
 
-    if settings["Theme"].contains("statusBarBg"):
-      ColorThemeTable[ColorTheme.config].statusBarBg = color("statusBarBg")
+    if settings["Theme"].contains("statusBarNormalModeBg"):
+      ColorThemeTable[ColorTheme.config].statusBarNormalModeBg = color("statusBarNormalModeBg")
 
-    if settings["Theme"].contains("statusBarMode"):
-      ColorThemeTable[ColorTheme.config].statusBarMode = color("statusBarMode")
+    if settings["Theme"].contains("statusBarModeNormalMode"):
+      ColorThemeTable[ColorTheme.config].statusBarModeNormalMode = color("statusBarModeNormalMode")
 
-    if settings["Theme"].contains("statusBarModeBg"):
-      ColorThemeTable[ColorTheme.config].statusBarModeBg = color("statusBarModeBg")
+    if settings["Theme"].contains("statusBarModeNormalModeBg"):
+      ColorThemeTable[ColorTheme.config].statusBarModeNormalModeBg = color("statusBarModeNormalModeBg")
+
+    if settings["Theme"].contains("statusBarInsertMode"):
+      ColorThemeTable[ColorTheme.config].statusBarInsertMode = color("statusBarInsertMode")
+
+    if settings["Theme"].contains("statusBarInsertModeBg"):
+      ColorThemeTable[ColorTheme.config].statusBarInsertModeBg = color("statusBarInsertModeBg")
+
+    if settings["Theme"].contains("statusBarModeInsertMode"):
+      ColorThemeTable[ColorTheme.config].statusBarModeInsertMode = color("statusBarModeInsertMode")
+
+    if settings["Theme"].contains("statusBarModeInsertModeBg"):
+      ColorThemeTable[ColorTheme.config].statusBarModeInsertModeBg = color("statusBarModeInsertModeBg")
+
+    if settings["Theme"].contains("statusBarVisualMode"):
+      ColorThemeTable[ColorTheme.config].statusBarVisualMode = color("statusBarVisualMode")
+
+    if settings["Theme"].contains("statusBarModeVisualMode"):
+      ColorThemeTable[ColorTheme.config].statusBarModeVisualMode = color("statusBarModeVisualMode")
+
+    if settings["Theme"].contains("statusBarModeVisualModeBg"):
+      ColorThemeTable[ColorTheme.config].statusBarModeVisualModeBg = color("statusBarModeVisualModeBg")
+
+    if settings["Theme"].contains("statusBarReplaceMode"):
+      ColorThemeTable[ColorTheme.config].statusBarReplaceMode = color("statusBarReplaceMode")
+
+    if settings["Theme"].contains("statusBarReplaceModeBg"):
+      ColorThemeTable[ColorTheme.config].statusBarReplaceModeBg = color("statusBarReplaceModeBg")
+
+    if settings["Theme"].contains("statusBarModeReplaceMode"):
+      ColorThemeTable[ColorTheme.config].statusBarModeReplaceMode = color("statusBarModeReplaceMode")
+
+    if settings["Theme"].contains("statusBarModeReplaceModeBg"):
+      ColorThemeTable[ColorTheme.config].statusBarModeReplaceModeBg = color("statusBarModeReplaceModeBg")
+
+    if settings["Theme"].contains("statusBarFilerMode"):
+      ColorThemeTable[ColorTheme.config].statusBarFilerMode = color("statusBarFilerMode")
+
+    if settings["Theme"].contains("statusBarFilerModeBg"):
+      ColorThemeTable[ColorTheme.config].statusBarFilerModeBg = color("statusBarFilerModeBg")
+
+    if settings["Theme"].contains("statusBarModeFilerMode"):
+      ColorThemeTable[ColorTheme.config].statusBarModeFilerMode = color("statusBarModeFilerMode")
+
+    if settings["Theme"].contains("statusBarModeFilerModeBg"):
+      ColorThemeTable[ColorTheme.config].statusBarModeFilerModeBg = color("statusBarModeFilerModeBg")
+
+    if settings["Theme"].contains("statusBarExMode"):
+      ColorThemeTable[ColorTheme.config].statusBarExMode = color("statusBarExMode")
+
+    if settings["Theme"].contains("statusBarExModeBg"):
+      ColorThemeTable[ColorTheme.config].statusBarExModeBg = color("statusBarExModeBg")
+
+    if settings["Theme"].contains("statusBarModeExMode"):
+      ColorThemeTable[ColorTheme.config].statusBarModeExMode = color("statusBarModeExMode")
+
+    if settings["Theme"].contains("statusBarModeExModeBg"):
+      ColorThemeTable[ColorTheme.config].statusBarModeExModeBg = color("statusBarModeExModeBg")
 
     if settings["Theme"].contains("tab"):
       ColorThemeTable[ColorTheme.config].tab = color("tab")

@@ -1,5 +1,5 @@
 import terminal
-import editorstatus, ui, normalmode, highlight, unicodeext
+import editorstatus, ui, normalmode, unicodeext
 
 proc replaceMode*(status: var EditorStatus) =
 

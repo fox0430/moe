@@ -1,4 +1,4 @@
-import sequtils, strutils, os, terminal, strformat, deques, packages/docutils/highlite, times
+import sequtils, strutils, os, terminal, packages/docutils/highlite, times
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview
 
 type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
@@ -243,7 +243,10 @@ proc turnOffHighlightingCommand(status: var EditorStatus) =
   status.changeMode(Mode.normal)
 
 proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
-  if index < 0 and index > status.bufStatus.high: return 
+  if index < 0 or index > status.bufStatus.high:
+    status.commandWindow.writeNoBufferDeletedError(status.messageLog)
+    status.changeMode(Mode.normal)
+    return
 
   status.bufStatus.delete(index)
 
@@ -459,7 +462,7 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
   status.commandWindow.erase
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
-proc exModeCommand(status: var EditorStatus, command: seq[seq[Rune]]) =
+proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
   if command.len == 0 or command[0].len == 0:
     status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
   elif isJumpCommand(status, command):

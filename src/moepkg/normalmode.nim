@@ -1,5 +1,5 @@
-import strutils, strformat, terminal, deques, sequtils, os, osproc
-import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, highlight, fileutils, commandview, undoredostack
+import strutils, strformat, terminal, deques, sequtils, os, osproc, random
+import editorstatus, editorview, cursor, ui, gapbuffer, unicodeext, fileutils, commandview, undoredostack
 
 proc jumpLine*(status: var EditorStatus, destination: int)
 proc keyRight*(bufStatus: var BufferStatus)
@@ -8,7 +8,7 @@ proc keyUp*(bufStatus: var BufferStatus)
 proc keyDown*(bufStatus: var BufferStatus)
 proc replaceCurrentCharacter*(bufStatus: var BufferStatus, autoIndent:bool, character: Rune)
 
-import searchmode, replacemode
+import searchmode
 
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.erase
@@ -63,12 +63,12 @@ proc moveToLastOfLine*(bufStatus: var BufferStatus) =
   bufStatus.currentColumn = max(bufStatus.buffer[bufStatus.currentLine].len - 1, 0)
   bufStatus.expandedColumn = bufStatus.currentColumn
 
-proc moveToFirstOfPreviousLine(bufStatus: var BufferStatus) =
+proc moveToFirstOfPreviousLine*(bufStatus: var BufferStatus) =
   if bufStatus.currentLine == 0: return
   keyUp(bufStatus)
   moveToFirstOfLine(bufStatus)
 
-proc moveToFirstOfNextLine(bufStatus: var BufferStatus) =
+proc moveToFirstOfNextLine*(bufStatus: var BufferStatus) =
   if bufStatus.currentLine + 1 == bufStatus.buffer.len: return
   keyDown(bufStatus)
   moveToFirstOfLine(bufStatus)
@@ -346,15 +346,21 @@ proc deleteCharacterBeginningOfLine(bufStatus: var BufferStatus) =
   bufStatus.expandedColumn = 0
   for i in 0 ..< beforColumn: deleteCurrentCharacter(bufStatus)
 
+proc genDelimiterStr(buffer: string): string =
+  while true:
+    for _ in .. 10: add(result, char(rand(int('A') .. int('z'))))
+    if buffer != result: break
+
 proc sendToClipboad*(registers: Registers, platform: Platform) =
   let buffer = if registers.yankedStr.len > 0: $registers.yankedStr else: $registers.yankedLines
+  let delimiterStr = genDelimiterStr(buffer)
   case platform
     of linux:
       ## Check if X server is running
       let (output, exitCode) = execCmdEx("xset q")
-      if exitCode == 0: discard execShellCmd("echo " & $buffer & " | xclip")
-    of wsl: discard execShellCmd("echo " & $buffer & " | clip.exe")
-    of mac: discard execShellCmd("echo " & $buffer & " | pbcopy")
+      if exitCode == 0: discard execShellCmd("xclip <<" & delimiterStr & "\n" & buffer & "\n"  & delimiterStr & "\n")
+    of wsl: discard execShellCmd("clip.exe <<" & delimiterStr & "\n" & buffer & "\n"  & delimiterStr & "\n")
+    of mac: discard execShellCmd("pbcopy <<" & delimiterStr & "\n" & buffer & "\n"  & delimiterStr & "\n")
     else: discard
 
 proc yankLines(status: var EditorStatus, first, last: int) =

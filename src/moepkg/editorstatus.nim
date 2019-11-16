@@ -28,19 +28,20 @@ type StatusBarSettings* = object
   language*: bool
   directory*: bool
 
-type TabBarSettings* = object
+type TabLineSettings* = object
   useTab*: bool
+  allbuffer*: bool
 
 type EditorSettings* = object
   editorColorTheme*: ColorTheme
   statusBar*: StatusBarSettings
-  tabLine*: TabBarSettings
+  tabLine*: TabLineSettings
   lineNumber*: bool
   currentLineNumber*: bool
   cursorLine*: bool
   syntax*: bool
   autoCloseParen*: bool
-  autoIndent*: bool 
+  autoIndent*: bool
   tabStop*: int
   characterEncoding*: CharacterEncoding # TODO: move to EditorStatus ...?
   defaultCursor*: CursorType
@@ -103,7 +104,7 @@ proc initRegisters(): Registers =
   result.yankedLines = @[]
   result.yankedStr = @[]
 
-proc initTabBarSettings*(): TabBarSettings =
+proc initTabBarSettings*(): TabLineSettings =
   result.useTab = true
 
 proc initStatusBarSettings*(): StatusBarSettings =
@@ -131,6 +132,7 @@ proc initEditorSettings*(): EditorSettings =
   result.normalModeCursor = CursorType.blockMode
   result.insertModeCursor = CursorType.ibeamMode
   result.autoSaveInterval = 5
+  result.realtimeSearch = true
 
 proc initEditorStatus*(): EditorStatus =
   result.platform= initPlatform()
@@ -171,7 +173,7 @@ proc exitEditor*(settings: EditorSettings) =
 
 proc writeStatusBarNormalModeInfo(status: var EditorStatus) =
   let
-    color = EditorColorPair.statusBar
+    color = EditorColorPair.statusBarNormalMode
     currentBuf = status.currentBuffer
     currentMode = status.bufStatus[currentBuf].mode
 
@@ -194,14 +196,14 @@ proc writeStatusBarNormalModeInfo(status: var EditorStatus) =
   status.statusWindow.write(0, terminalWidth() - info.len, info, color)
 
 proc writeStatusBarFilerModeInfo(status: var EditorStatus) =
-  let color = EditorColorPair.statusBar
+  let color = EditorColorPair.statusBarFilerMode
   if status.settings.statusBar.directory: status.statusWindow.append(ru" ", color)
   status.statusWindow.append(getCurrentDir().toRunes, color)
   status.statusWindow.append(ru " ".repeat(terminalWidth() - 5), color)
 
 proc writeStatusBarBufferManagerModeInfo(status: var EditorStatus) =
   let
-    color = EditorColorPair.statusBar
+    color = EditorColorPair.statusBarNormalMode
     info = fmt"{status.bufStatus[status.currentBuffer].currentLine + 1}/{status.bufStatus.len - 1}"
   status.statusWindow.append(ru " ".repeat(terminalWidth() - " BUFFER ".len), color)
   status.statusWindow.write(0, terminalWidth() - info.len - 1, info, color)
@@ -216,11 +218,20 @@ proc setModeStr(mode: Mode): string =
   of Mode.ex: result = " EX "
   else: result = " NORMAL "
 
+proc setModeStrColor(mode: Mode): EditorColorPair =
+  case mode
+    of Mode.insert: return EditorColorPair.statusBarModeInsertMode
+    of Mode.visual: return EditorColorPair.statusBarModeVisualMode
+    of Mode.replace: return EditorColorPair.statusBarModeReplaceMode
+    of Mode.filer: return EditorColorPair.statusBarModeFilerMode
+    of Mode.ex: return EditorColorPair.statusBarModeExMode
+    else: return EditorColorPair.statusBarModeNormalMode
+
 proc writeStatusBar*(status: var EditorStatus) =
   status.statusWindow.erase
   let
-    color = EditorColorPair.statusBarMode
     mode = status.bufStatus[status.currentBuffer].mode
+    color = setModeStrColor(mode)
     modeStr = setModeStr(status.bufStatus[status.currentBuffer].mode)
 
   if status.settings.statusBar.mode: status.statusWindow.write(0, 0, modeStr, color)
@@ -243,19 +254,31 @@ proc writeTab(tabWin: var Window, start, tabWidth: int, filename: string, color:
 
 proc writeTabLine*(status: var EditorStatus) =
   let
-    tabWidth = calcTabWidth(status.mainWindowInfo.len)
+    isAllBuffer = status.settings.tabLine.allbuffer
+    tabWidth = if isAllBuffer: calcTabWidth(status.bufStatus.len) else: calcTabWidth(status.mainWindowInfo.len)
     defaultColor = EditorColorPair.tab
     currentTabColor = EditorColorPair.currentTab
 
   status.tabWindow.erase
 
-  for i in 0 ..< status.mainWindowInfo.len:
-    let
-      color = if status.currentMainWindow == i: currentTabColor else: defaultColor
-      currentMode = status.bufStatus[status.mainWindowInfo[i].bufferIndex].mode
-      prevMode = status.bufStatus[status.mainWindowInfo[i].bufferIndex].prevMode
-      filename = if (currentMode == Mode.filer) or (prevMode == Mode.filer and currentMode == Mode.ex): getCurrentDir() else: $status.bufStatus[status.mainWindowInfo[i].bufferIndex].filename
-    status.tabWindow.writeTab(i * tabWidth, tabWidth, filename, color)
+  if isAllBuffer:
+    ## Display all buffer
+    for index, bufStatus in status.bufStatus:
+      let
+        color = if status.currentBuffer == index: currentTabColor else: defaultColor
+        currentMode = bufStatus.mode
+        prevMode = bufStatus.prevMode
+        filename = if (currentMode == Mode.filer) or (prevMode == Mode.filer and currentMode == Mode.ex): getCurrentDir() else: $bufStatus.filename
+      status.tabWindow.writeTab(index * tabWidth, tabWidth, filename, color)
+  else:
+    ## Displays only the buffer currently displayed in the window
+    for index, mainWindowInfo in status.mainWindowInfo:
+      let
+        color = if status.currentMainWindow == index: currentTabColor else: defaultColor
+        currentMode = status.bufStatus[mainWindowInfo.bufferIndex].mode
+        prevMode = status.bufStatus[mainWindowInfo.bufferIndex].prevMode
+        filename = if (currentMode == Mode.filer) or (prevMode == Mode.filer and currentMode == Mode.ex): getCurrentDir() else: $status.bufStatus[mainWindowInfo.bufferIndex].filename
+      status.tabWindow.writeTab(index * tabWidth, tabWidth, filename, color)
 
   status.tabWindow.refresh
 
@@ -266,14 +289,14 @@ proc resize*(status: var EditorStatus, height, width: int) =
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useTab = if status.settings.tabLine.useTab: 1 else: 0
 
-  for i in 0 ..< status.mainWindowInfo.len:
+  for index, mainWindowInfo in status.mainWindowInfo:
     let
-      bufIndex = status.mainWindowInfo[i].bufferIndex
-      beginX = i * int(terminalWidth() / status.mainWindowInfo.len)
+      bufIndex = mainWindowInfo.bufferIndex
+      beginX = index * int(terminalWidth() / status.mainWindowInfo.len)
       widthOfLineNum = status.bufStatus[bufIndex].view.widthOfLineNum
       adjustedWidth = max(int(width / status.mainWindowInfo.len), widthOfLineNum + 4)
 
-    status.mainWindowInfo[i].window.resize(adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, useTab, beginX)
+    mainWindowInfo.window.resize(adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, useTab, beginX)
 
     if status.settings.statusBar.useBar: resize(status.statusWindow, 1, terminalWidth(), adjustedHeight - 2, 0)
     if status.settings.tabLine.useTab: resize(status.tabWindow, 1, terminalWidth(), 0, 0)
@@ -293,10 +316,10 @@ proc update*(status: var EditorStatus) =
   setCursor(false)
   if status.settings.statusBar.useBar: writeStatusBar(status)
 
-  for i in 0 ..< status.mainWindowInfo.len:
+  for index, mainWindowInfo in status.mainWindowInfo:
     let
-      bufIndex = status.mainWindowInfo[i].bufferIndex
-      isCurrentMainWin = if i == status.currentMainWindow: true else: false
+      bufIndex = mainWindowInfo.bufferIndex
+      isCurrentMainWin = if index == status.currentMainWindow: true else: false
       isLineNumber = status.settings.lineNumber
       isCurrentLineNumber = status.settings.currentLineNumber
       isCursorLine = status.settings.cursorLine
@@ -305,11 +328,11 @@ proc update*(status: var EditorStatus) =
       endSelectedLine = status.bufStatus[bufIndex].selectArea.endLine
 
     status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
-    status.bufStatus[bufIndex].view.update(status.mainWindowInfo[i].window, isLineNumber, isCurrentLineNumber, isCursorLine, isCurrentMainWin, isVisualMode, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, status.bufStatus[bufIndex].currentLine, startSelectedLine, endSelectedLine)
+    status.bufStatus[bufIndex].view.update(status.mainWindowInfo[index].window, isLineNumber, isCurrentLineNumber, isCursorLine, isCurrentMainWin, isVisualMode, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, status.bufStatus[bufIndex].currentLine, startSelectedLine, endSelectedLine)
 
     status.bufStatus[bufIndex].cursor.update(status.bufStatus[bufIndex].view, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
-    status.mainWindowInfo[i].window.refresh
+    mainWindowInfo.window.refresh
 
   status.mainWindowInfo[status.currentMainWindow].window.moveCursor(status.bufStatus[status.currentBuffer].cursor.y, status.bufStatus[status.currentBuffer].view.widthOfLineNum + status.bufStatus[status.currentBuffer].cursor.x)
   setCursor(true)
@@ -342,8 +365,8 @@ proc movePrevWindow*(status: var EditorStatus) = moveCurrentMainWindow(status, s
 
 proc countReferencedWindow*(mainWins: seq[MainWindowInfo], bufferIndex: int): int =
   result = 0
-  for i in 0 ..< mainWins.len:
-    if mainWins[i].bufferIndex == bufferIndex: result.inc
+  for win in mainWins:
+    if win.bufferIndex == bufferIndex: result.inc
 
 proc addNewBuffer*(status:var EditorStatus, filename: string)
 from commandview import writeFileOpenError
@@ -410,11 +433,11 @@ proc changeTheme*(status: var EditorStatus) = setCursesColor(ColorThemeTable[sta
 from commandview import writeMessageAutoSave
 proc autoSave(status: var Editorstatus) =
   let interval = status.settings.autoSaveInterval.minutes
-  for i in 0 ..< status.bufStatus.len:
-    if status.bufStatus[i].filename != ru"" and now() > status.bufStatus[i].lastSaveTime + interval:
-      saveFile(status.bufStatus[i].filename, status.bufStatus[i].buffer.toRunes, status.settings.characterEncoding)
-      status.commandWindow.writeMessageAutoSave(status.bufStatus[i].filename, status.messageLog)
-      status.bufStatus[i].lastSaveTime = now()
+  for index, bufStatus in status.bufStatus:
+    if bufStatus.filename != ru"" and now() > bufStatus.lastSaveTime + interval:
+      saveFile(bufStatus.filename, bufStatus.buffer.toRunes, status.settings.characterEncoding)
+      status.commandWindow.writeMessageAutoSave(bufStatus.filename, status.messageLog)
+      status.bufStatus[index].lastSaveTime = now()
 
 from settings import loadSettingFile
 proc eventLoopTask(status: var Editorstatus) =

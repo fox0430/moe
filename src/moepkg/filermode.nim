@@ -1,6 +1,5 @@
-import os, sequtils, terminal, strformat, strutils, unicodeext, times, algorithm
-import packages/docutils/highlite
-import editorstatus, ui, fileutils, editorview, gapbuffer, independentutils, highlight, commandview, highlight
+import os, terminal, strutils, unicodeext, times, algorithm
+import editorstatus, ui, fileutils, editorview, gapbuffer, highlight, commandview, highlight
 
 type PathInfo = tuple[kind: PathComponent, path: string, size: int64, lastWriteTime: times.Time]
 
@@ -38,8 +37,8 @@ proc searchFiles(status: var EditorStatus, dirList: seq[PathInfo]): seq[PathInfo
 
   let str = command[0].join("")
   result = @[]
-  for index in 0 .. dirList.high:
-    if dirList[index].path.contains(str): result.add dirList[index]
+  for dir in dirList:
+    if dir.path.contains(str): result.add dir
 
 proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
   setCursor(true)
@@ -91,7 +90,7 @@ proc initFileRegister(): FileRegister =
   result.originPath = ""
   result.filename = ""
 
-proc initFilerStatus(): FilerStatus =
+proc initFilerStatus*(): FilerStatus =
   result.register = initFileRegister()
   result.viewUpdate = true
   result.dirlistUpdate = true
@@ -99,7 +98,7 @@ proc initFilerStatus(): FilerStatus =
   result.sortBy = name
   result.searchMode = false
 
-proc updateDirList(filerStatus: var FilerStatus): FilerStatus =
+proc updateDirList*(filerStatus: var FilerStatus): FilerStatus =
   filerStatus.dirList = @[]
   filerStatus.dirList.add refreshDirList(filerStatus.sortBy)
   filerStatus.viewUpdate = true
@@ -166,7 +165,6 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   of pcFile, pcLinkToFile:
     addNewBuffer(status, path)
   of pcDir, pcLinkToDir:
-    let directoryName = if kind == pcDir: path else: expandSymlink(path)
     try:
       setCurrentDir(path)
       filerStatus.dirlistUpdate = true
@@ -181,32 +179,32 @@ proc setDirListColor(kind: PathComponent, isCurrentLine: bool): EditorColorPair 
     of pcLinkToDir, pcLinkToFile: result = EditorColorPair.pcLink
 
 proc initFilelistHighlight[T](dirList: seq[PathInfo], buffer: T, currentLine: int): Highlight =
-  for i in 0 ..< dirList.len:
-    let color = setDirListColor(dirList[i].kind, i == currentLine)
-    result.colorSegments.add(ColorSegment(firstRow: i, firstColumn: 0, lastRow: i, lastColumn: buffer[i].len, color: color))
+  for index, dir in dirList:
+    let color = setDirListColor(dir.kind, index == currentLine)
+    result.colorSegments.add(ColorSegment(firstRow: index, firstColumn: 0, lastRow: index, lastColumn: buffer[index].len, color: color))
 
 proc fileNameToGapBuffer(bufStatus: var BufferStatus, settings: EditorSettings, filerStatus: FilerStatus) =
   bufStatus.buffer = initGapBuffer[seq[Rune]]()
 
-  for i in 0 ..< filerStatus.dirList.len:
+  for index, dir in filerStatus.dirList:
     let
-      filename = filerStatus.dirList[i].path
-      kind = filerStatus.dirList[i].kind
+      filename = dir.path
+      kind = dir.kind
     bufStatus.buffer.add(filename.toRunes)
 
-    let oldLine =  bufStatus.buffer[i]
-    var newLine =  bufStatus.buffer[i]
-    if kind == pcDir and 0 < i: newLine.add(ru"/")
+    let oldLine =  bufStatus.buffer[index]
+    var newLine =  bufStatus.buffer[index]
+    if kind == pcDir and 0 < index: newLine.add(ru"/")
     elif kind == pcLinkToFile: newLine.add(ru"@ -> " & expandsymLink(filename).toRunes)
     elif kind == pcLinkToDir: newLine.add(ru"@ -> " & expandsymLink(filename).toRunes & ru"/")
-    if oldLine != newLine: bufStatus.buffer[i] = newLine
+    if oldLine != newLine: bufStatus.buffer[index] = newLine
   
   let useStatusBar = if settings.statusBar.useBar: 1 else: 0
   let numOfFile = filerStatus.dirList.len
   bufStatus.highlight = initFilelistHighlight(filerStatus.dirList, bufStatus.buffer, bufStatus.currentLine)
   bufStatus.view = initEditorView(bufStatus.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
 
-proc updateFilerView(status: var EditorStatus, filerStatus: var FilerStatus) =
+proc updateFilerView*(status: var EditorStatus, filerStatus: var FilerStatus) =
   fileNameToGapBuffer(status.bufStatus[status.currentBuffer], status.settings, filerStatus)
   status.resize(terminalHeight(), terminalWidth())
   status.update

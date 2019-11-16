@@ -1,5 +1,4 @@
-import os, terminal, strutils, strformat, unicode, macros, times
-import packages/docutils/highlite
+import os, unicode, times
 import moepkg/ui
 import moepkg/editorstatus
 import moepkg/normalmode
@@ -11,12 +10,9 @@ import moepkg/exmode
 import moepkg/searchmode
 import moepkg/buffermanager
 import moepkg/logviewer
-import moepkg/editorview
 import moepkg/cmdoption
 import moepkg/settings
 import moepkg/commandview
-import moepkg/unicodeext
-import moepkg/gapbuffer
 
 proc main() =
   let parsedList = parseCommandLineOption(commandLineParams())
