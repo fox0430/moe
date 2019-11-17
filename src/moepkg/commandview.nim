@@ -352,13 +352,18 @@ proc suggestExCommandOption(exStatus: var ExModeViewStatus, cmdWin: var Window, 
 
     key = getKey(cmdWin)
 
-proc suggestExCommand(exStatus: var ExModeViewStatus, cmdWin: var Window, key: var Rune) =
+proc suggestExCommand(status: var Editorstatus, exStatus: var ExModeViewStatus, cmdWin: var Window, key: var Rune) =
 
   var suggestlist: seq[seq[Rune]] = @[]
   for runes in exCommandList:
     if exStatus.buffer.startsWith(runes): suggestlist.add(runes)
 
   var suggestIndex = if isTabkey(key): 0 else: suggestlist.high
+
+  # Pop up window position
+  var
+    x = 1
+    y = terminalHeight() - 1
 
   while (isTabkey(key) or isShiftTab(key)) and suggestlist.len > 0:
     exStatus.buffer = ru""
@@ -367,6 +372,8 @@ proc suggestExCommand(exStatus: var ExModeViewStatus, cmdWin: var Window, key: v
 
     for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
     writeExModeView(cmdWin, exStatus, EditorColorPair.commandBar)
+
+    writePopUpWindow(status, x, y, suggestIndex, suggestlist)
 
     if isTabkey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
     elif isShiftTab(key) and suggestIndex > 0: dec(suggestIndex)
@@ -379,7 +386,7 @@ proc suggestMode(status: var Editorstatus, exStatus: var ExModeViewStatus, key: 
 
   if exStatus.buffer.len > 0 and exStatus.buffer.isExCommand: exStatus.suggestExCommandOption(status.commandWindow, key)
   elif exStatus.buffer.len > 0 and exStatus.buffer.muchExCommand == 1: exStatus.suggestExCommandOption(status.commandWindow, key)
-  else: suggestExCommand(exStatus, status.commandWindow, key)
+  else: suggestExCommand(status, exStatus, status.commandWindow, key)
 
   while isTabkey(key) or isShiftTab(key): key = getKey(status.commandWindow)
 

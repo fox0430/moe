@@ -92,6 +92,7 @@ type EditorStatus* = object
   statusWindow*: Window
   commandWindow*: Window
   tabWindow*: Window
+  popUpWindow*: Window
 
 proc initPlatform(): Platform =
   if defined linux:
@@ -367,6 +368,27 @@ proc countReferencedWindow*(mainWins: seq[MainWindowInfo], bufferIndex: int): in
   result = 0
   for win in mainWins:
     if win.bufferIndex == bufferIndex: result.inc
+
+proc writePopUpWindow*(status: var Editorstatus, x, y, currentLine: var int,  buffer: seq[seq[Rune]]) =
+  # Pop up window size 
+  var maxBufferLen = 0
+  for runes in buffer:
+    if maxBufferLen < runes.len: maxBufferLen = runes.len
+  let
+    h = buffer.len
+    w = maxBufferLen
+
+  # Pop up window position
+  if y == terminalHeight() - 1: y = y - h
+  if w > terminalHeight() - x: x = terminalHeight() - w
+
+  status.popUpWindow = initWindow(h, w, y, x)
+
+  for i in 0 ..< buffer.len:
+    if i == currentLine: status.popUpWindow.write(i, 0, buffer[i], EditorColorPair.keyword)
+    else: status.popUpWindow.write(i, 0, buffer[i], EditorColorPair.defaultChar)
+
+  status.popUpWindow.refresh
 
 proc addNewBuffer*(status:var EditorStatus, filename: string)
 from commandview import writeFileOpenError
