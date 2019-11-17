@@ -370,10 +370,10 @@ proc suggestExCommand(status: var Editorstatus, exStatus: var ExModeViewStatus, 
     exStatus.currentPosition = 0
     exStatus.cursorX = 1
 
+    if status.settings.popUpWindowInExmode: writePopUpWindow(status, x, y, suggestIndex, suggestlist)
+
     for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
     writeExModeView(cmdWin, exStatus, EditorColorPair.commandBar)
-
-    writePopUpWindow(status, x, y, suggestIndex, suggestlist)
 
     if isTabkey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
     elif isShiftTab(key) and suggestIndex > 0: dec(suggestIndex)
@@ -388,6 +388,8 @@ proc suggestMode(status: var Editorstatus, exStatus: var ExModeViewStatus, key: 
   elif exStatus.buffer.len > 0 and exStatus.buffer.muchExCommand == 1: exStatus.suggestExCommandOption(status.commandWindow, key)
   else: suggestExCommand(status, exStatus, status.commandWindow, key)
 
+  if status.settings.popUpWindowInExmode: status.deletePopUpWindow
+
   while isTabkey(key) or isShiftTab(key): key = getKey(status.commandWindow)
 
 proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
@@ -399,7 +401,12 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
 
     var key = getKey(status.commandWindow)
 
-    if isTabkey(key) or isShiftTab(key): suggestMode(status, exStatus, key)
+    # Suggestion mode
+    if isTabkey(key) or isShiftTab(key):
+      suggestMode(status, exStatus, key)
+      if status.settings.popUpWindowInExmode and isEnterKey(key):
+        moveCursor(status.commandWindow, exStatus.cursorY, exStatus.cursorX)
+        key = getKey(status.commandWindow)
 
     if isEnterKey(key): break
     elif isEscKey(key):

@@ -51,6 +51,7 @@ type EditorSettings* = object
   autoSaveInterval*: int # minutes
   liveReloadOfConf*: bool
   realtimeSearch*: bool
+  popUpWindowInExmode*: bool
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -134,6 +135,7 @@ proc initEditorSettings*(): EditorSettings =
   result.insertModeCursor = CursorType.ibeamMode
   result.autoSaveInterval = 5
   result.realtimeSearch = true
+  result.popUpWindowInExmode = true
 
 proc initEditorStatus*(): EditorStatus =
   result.platform= initPlatform()
@@ -389,6 +391,10 @@ proc writePopUpWindow*(status: var Editorstatus, x, y, currentLine: var int,  bu
     else: status.popUpWindow.write(i, 0, buffer[i], EditorColorPair.defaultChar)
 
   status.popUpWindow.refresh
+
+proc deletePopUpWindow*(status: var Editorstatus) =
+  status.popUpWindow.deleteWindow
+  status.update
 
 proc addNewBuffer*(status:var EditorStatus, filename: string)
 from commandview import writeFileOpenError

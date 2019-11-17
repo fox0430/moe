@@ -817,6 +817,8 @@ proc attroff*(win: var Window, attributes: Attributes) = win.cursesWindow.wattro
 
 proc moveCursor*(win: Window, y, x: int) = wmove(win.cursesWindow, cint(y), cint(x))
 
+proc deleteWindow*(win: var Window) = delwin(win.cursesWindow)
+
 const KEY_ESC = 27
 var KEY_RESIZE {.header: "<ncurses.h>", importc: "KEY_RESIZE".}: int
 var KEY_DOWN {.header: "<ncurses.h>", importc: "KEY_DOWN".}: int
