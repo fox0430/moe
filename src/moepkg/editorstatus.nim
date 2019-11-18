@@ -147,13 +147,13 @@ proc initEditorStatus*(): EditorStatus =
     useStatusBar = if result.settings.statusBar.useBar: 1 else: 0
     useTab = if result.settings.tabLine.useTab: 1 else: 0
 
-  if result.settings.tabLine.useTab: result.tabWindow = initWindow(1, terminalWidth(), 0, 0)
+  if result.settings.tabLine.useTab: result.tabWindow = initWindow(1, terminalWidth(), 0, 0, EditorColorPair.defaultChar)
 
-  result.mainWindowInfo.add(MainWindowInfo(window: initWindow(terminalHeight() - useTab - 1, terminalWidth(), useTab, 0), bufferIndex: 0))
+  result.mainWindowInfo.add(MainWindowInfo(window: initWindow(terminalHeight() - useTab - 1, terminalWidth(), useTab, 0, EditorColorPair.defaultChar), bufferIndex: 0))
   result.mainWindowInfo[result.mainWindowInfo.high].window.setTimeout()
 
-  if result.settings.statusBar.useBar: result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0)
-  result.commandWindow = initWindow(1, terminalWidth(), terminalHeight() - 1, 0)
+  if result.settings.statusBar.useBar: result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0, EditorColorPair.defaultChar)
+  result.commandWindow = initWindow(1, terminalWidth(), terminalHeight() - 1, 0, EditorColorPair.defaultChar)
 
 proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
   if bufferIndex < 0 and status.bufStatus.high < bufferIndex: return
@@ -342,7 +342,7 @@ proc update*(status: var EditorStatus) =
 
 proc splitWindow*(status: var EditorStatus) =
   let useTab = if status.settings.tabLine.useTab: 1 else: 0
-  status.mainWindowInfo.insert(MainWindowInfo(window: initWindow(terminalHeight() - useTab - 1, int(terminalWidth() / status.mainWindowInfo.len), useTab, int(terminalWidth() / status.mainWindowInfo.len)), bufferIndex: status.currentBuffer), status.currentMainWindow)
+  status.mainWindowInfo.insert(MainWindowInfo(window: initWindow(terminalHeight() - useTab - 1, int(terminalWidth() / status.mainWindowInfo.len), useTab, int(terminalWidth() / status.mainWindowInfo.len), EditorColorPair.defaultChar), bufferIndex: status.currentBuffer), status.currentMainWindow)
   status.mainWindowInfo[status.currentMainWindow + 1].window.setTimeout()
 
   status.update
@@ -377,18 +377,18 @@ proc writePopUpWindow*(status: var Editorstatus, x, y, currentLine: var int,  bu
   for runes in buffer:
     if maxBufferLen < runes.len: maxBufferLen = runes.len
   let
-    h = buffer.len + 1
-    w = maxBufferLen + 1
+    h = buffer.len
+    w = maxBufferLen + 2
 
   # Pop up window position
   if y == terminalHeight() - 1: y = y - h
   if w > terminalHeight() - x: x = terminalHeight() - w
 
-  status.popUpWindow = initWindow(h, w, y, x)
+  status.popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
 
   for i in 0 ..< buffer.len:
-    if i == currentLine: status.popUpWindow.write(i, 0, buffer[i], EditorColorPair.keyword)
-    else: status.popUpWindow.write(i, 0, buffer[i], EditorColorPair.defaultChar)
+    if i == currentLine: status.popUpWindow.write(i, 1, buffer[i], EditorColorPair.popUpWinCurrentLine)
+    else: status.popUpWindow.write(i, 1, buffer[i], EditorColorPair.popUpWindow)
 
   status.popUpWindow.refresh
 
