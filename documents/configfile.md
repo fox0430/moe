@@ -73,6 +73,31 @@ default is ibeam
 insertModeCursor
 ```
 
+Auto save setting (bool)
+```
+autoSave
+```
+
+Auto save interval setting (minits) (int)
+```
+autoSaveInterval
+```
+
+Live reload of configuration file setting (bool)
+```
+liveReloadOfConf
+```
+
+Realtime search setting (bool)
+```
+realtimeSearch
+```
+
+Pop-up window in ex mode setting (bool)
+```
+popUpWindowInExmode 
+```
+
 ### TabLine table
 Dispaly all bufer in tab line (bool)  
 default is false  
@@ -663,4 +688,24 @@ pcLink
 Background color of symbolic links to file in filer mode
 ```
 pcLinkBg
+```
+
+Pop-up window text color
+```
+popUpWindow
+```
+
+Pop-up window background color
+```
+popUpWindowBg
+```
+
+Pop-up window current line text color
+```
+popUpWinCurrentLine
+```
+
+Pop-up window current line background color
+```
+popUpWinCurrentLineBg
 ```
