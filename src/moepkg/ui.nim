@@ -619,7 +619,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     pcLink: teal,
     pcLinkBg: default,
     # pop up window
-    popUpWindow: gray100,
+    popUpWindow: black,
     popUpWindowBg: gray,
     popUpWinCurrentLine: blue,
     popUpWinCurrentLineBg: gray,
@@ -692,7 +692,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # pop up window
     popUpWindow: gray100,
     popUpWindowBg: gray,
-    popUpWinCurrentLine: blue,
+    popUpWinCurrentLine: deepPink1_1,
     popUpWinCurrentLineBg: gray,
   ),
 ]
