@@ -377,7 +377,7 @@ proc writePopUpWindow*(status: var Editorstatus, x, y, currentLine: var int,  bu
   for runes in buffer:
     if maxBufferLen < runes.len: maxBufferLen = runes.len
   let
-    h = buffer.len
+    h = if buffer.len > terminalHeight() - 1: terminalHeight() - 1 else: buffer.len
     w = maxBufferLen + 2
 
   # Pop up window position
@@ -386,9 +386,10 @@ proc writePopUpWindow*(status: var Editorstatus, x, y, currentLine: var int,  bu
 
   status.popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
 
-  for i in 0 ..< buffer.len:
-    if i == currentLine: status.popUpWindow.write(i, 1, buffer[i], EditorColorPair.popUpWinCurrentLine)
-    else: status.popUpWindow.write(i, 1, buffer[i], EditorColorPair.popUpWindow)
+  for i in 0 ..< h:
+    let startLine = if currentLine - h + 1 > 0: currentLine - h + 1 else: 0
+    if i + startLine == currentLine: status.popUpWindow.write(i, 1, buffer[i + startLine], EditorColorPair.popUpWinCurrentLine)
+    else: status.popUpWindow.write(i, 1, buffer[i + startLine], EditorColorPair.popUpWindow)
 
   status.popUpWindow.refresh
 
