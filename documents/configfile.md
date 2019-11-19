@@ -73,27 +73,32 @@ default is ibeam
 insertModeCursor
 ```
 
-Auto save setting (bool)
+Auto save setting (bool)  
+default is false
 ```
 autoSave
 ```
 
-Auto save interval setting (minits) (int)
+Auto save interval setting (minits) (int)  
+default is 5 (5 minits)
 ```
 autoSaveInterval
 ```
 
-Live reload of configuration file setting (bool)
+Live reload of configuration file setting (bool)  
+default is false
 ```
 liveReloadOfConf
 ```
 
-Realtime search setting (bool)
+Realtime search setting (bool)  
+default is true
 ```
 realtimeSearch
 ```
 
-Pop-up window in ex mode setting (bool)
+Pop-up window in ex mode setting (bool)  
+default is true
 ```
 popUpWindowInExmode 
 ```
