@@ -22,7 +22,7 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   for i in startReplaceWordIndex .. command.high:
     if command[i] == '/': break
     replaceWord.add(command[i])
-  
+
   return (searhWord: searchWord, replaceWord: replaceWord)
 
 proc isOpenMessageLogViweer(command: seq[seq[Rune]]): bool =
@@ -541,9 +541,41 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
 proc exMode*(status: var EditorStatus) =
-  let command = getCommand(status, ":")
-  
+  const prompt = ":"
+  var
+    command = ru""
+    exitInput = false
+    cancelInput = false
+
+  status.searchHistory.add(ru"")
+
+  while exitInput == false:
+    let returnWord = status.getKeyOnceAndWriteCommandView(prompt, command)
+
+    command = returnWord[0]
+    exitInput = returnWord[1]
+    cancelInput = returnWord[2]
+
+    if command.len > 3 and command.startsWith(ru"%s/"):
+      var keyword = ru""
+      for i in 3 ..< command.len :
+          if command[i] == ru'/': break
+          keyword.add(command[i])
+      status.searchHistory[status.searchHistory.high] = keyword
+      status.bufStatus[status.currentMainWindow].isHighlight = true
+    else: status.bufStatus[status.currentMainWindow].isHighlight = false
+
+    if exitInput or cancelInput: break
+
+    status.updateHighlight
+    status.resize(terminalHeight(), terminalWidth())
+    status.update
+
+  status.searchHistory.delete(status.searchHistory.high)
+  status.bufStatus[status.currentMainWindow].isHighlight = false
+  status.updateHighlight
+
   status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
   status.bufStatus[status.currentBuffer].tryRecordCurrentPosition
-  
-  exModeCommand(status, command)
+
+  exModeCommand(status, splitCommand($command))

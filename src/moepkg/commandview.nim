@@ -150,7 +150,7 @@ proc splitQout(s: string): seq[seq[Rune]]=
 
   return result.removeSuffix(" ")
 
-proc splitCommand(command: string): seq[seq[Rune]] =
+proc splitCommand*(command: string): seq[seq[Rune]] =
   if (command).contains('"'):
     return splitQout(command)
   else:
