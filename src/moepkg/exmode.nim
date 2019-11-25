@@ -558,7 +558,7 @@ proc exMode*(status: var EditorStatus) =
     cancelInput = returnWord[2]
 
     if cancelInput or exitInput: break
-    elif command.len > 3 and command.startsWith(ru"%s/"):
+    elif status.settings.replaceTextHighlight and  command.len > 3 and command.startsWith(ru"%s/"):
       var keyword = ru""
       for i in 3 ..< command.len :
           if command[i] == ru'/': break
