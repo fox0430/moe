@@ -714,3 +714,13 @@ Pop-up window current line background color
 ```
 popUpWinCurrentLineBg
 ```
+
+Text color when replace text 
+```
+replaceText
+```
+
+Background color when replace text 
+```
+replaceTextBg
+```
