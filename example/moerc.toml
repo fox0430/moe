@@ -179,3 +179,15 @@ dirBg = "default"
 pcLink = "teal"
 
 pcLinkBg = "default"
+
+popUpWindow = "gray100"
+
+popUpWindowBg = "gray"
+
+popUpWinCurrentLine = "blue"
+
+popUpWinCurrentLineBg = "gray"
+
+replaceText = "default"
+
+replaceTextBg = "red"
