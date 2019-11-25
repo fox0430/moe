@@ -546,17 +546,19 @@ proc exMode*(status: var EditorStatus) =
     command = ru""
     exitInput = false
     cancelInput = false
+    isSuggest = true
 
   status.searchHistory.add(ru"")
 
   while exitInput == false:
-    let returnWord = status.getKeyOnceAndWriteCommandView(prompt, command)
+    let returnWord = status.getKeyOnceAndWriteCommandView(prompt, command, isSuggest)
 
     command = returnWord[0]
     exitInput = returnWord[1]
     cancelInput = returnWord[2]
 
-    if command.len > 3 and command.startsWith(ru"%s/"):
+    if cancelInput or exitInput: break
+    elif command.len > 3 and command.startsWith(ru"%s/"):
       var keyword = ru""
       for i in 3 ..< command.len :
           if command[i] == ru'/': break
@@ -564,8 +566,6 @@ proc exMode*(status: var EditorStatus) =
       status.searchHistory[status.searchHistory.high] = keyword
       status.bufStatus[status.currentMainWindow].isHighlight = true
     else: status.bufStatus[status.currentMainWindow].isHighlight = false
-
-    if exitInput or cancelInput: break
 
     status.updateHighlight
     status.resize(terminalHeight(), terminalWidth())
@@ -575,7 +575,11 @@ proc exMode*(status: var EditorStatus) =
   status.bufStatus[status.currentMainWindow].isHighlight = false
   status.updateHighlight
 
-  status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
-  status.bufStatus[status.currentBuffer].tryRecordCurrentPosition
+  if cancelInput:
+    status.commandWindow.erase
+    status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
+  else:
+    status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
+    status.bufStatus[status.currentBuffer].tryRecordCurrentPosition
 
-  exModeCommand(status, splitCommand($command))
+    exModeCommand(status, splitCommand($command))
