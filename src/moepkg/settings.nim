@@ -290,6 +290,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Theme"].contains("popUpWinCurrentLineBg"):
       ColorThemeTable[ColorTheme.config].popUpWinCurrentLineBg = color("popUpWinCurrentLineBg")
 
+    if settings["Theme"].contains("replaceText"):
+      ColorThemeTable[ColorTheme.config].replaceText = color("replaceText")
+
+    if settings["Theme"].contains("replaceTextBg"):
+      ColorThemeTable[ColorTheme.config].replaceTextBg = color("replaceTextBg")
+
     result.editorColorTheme = ColorTheme.config
 
 proc loadSettingFile*(settings: var EditorSettings) =
