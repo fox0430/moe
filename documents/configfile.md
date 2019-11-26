@@ -103,7 +103,7 @@ default is true
 popUpWindowInExmode 
 ```
 
-highlighting when replace text setting (bool)  
+Highlighting when replace text setting (bool)  
 default is true
 ```
 replaceTextHighlight
