@@ -376,7 +376,7 @@ proc countReferencedWindow*(mainWins: seq[MainWindowInfo], bufferIndex: int): in
     if win.bufferIndex == bufferIndex: result.inc
 
 proc writePopUpWindow*(status: var Editorstatus, x, y, currentLine: var int,  buffer: seq[seq[Rune]]) =
-  # Pop up window size 
+  # Pop up window size
   var maxBufferLen = 0
   for runes in buffer:
     if maxBufferLen < runes.len: maxBufferLen = runes.len
