@@ -79,6 +79,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("popUpWindowInExmode "):
       result.popUpWindowInExmode = settings["Standard"]["popUpWindowInExmode"].getbool()
 
+    if settings["Standard"].contains("replaceTextHighlight"):
+      result.replaceTextHighlight = settings["Standard"]["replaceTextHighlight"].getbool()
+
   if settings.contains("TabLine"):
     if settings["TabLine"].contains("allBuffer"):
         result.tabLine.allBuffer= settings["TabLine"]["allBuffer"].getbool()
@@ -289,6 +292,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["Theme"].contains("popUpWinCurrentLineBg"):
       ColorThemeTable[ColorTheme.config].popUpWinCurrentLineBg = color("popUpWinCurrentLineBg")
+
+    if settings["Theme"].contains("replaceText"):
+      ColorThemeTable[ColorTheme.config].replaceText = color("replaceText")
+
+    if settings["Theme"].contains("replaceTextBg"):
+      ColorThemeTable[ColorTheme.config].replaceTextBg = color("replaceTextBg")
 
     result.editorColorTheme = ColorTheme.config
 

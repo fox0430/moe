@@ -103,6 +103,12 @@ default is true
 popUpWindowInExmode 
 ```
 
+Highlighting when replace text setting (bool)  
+default is true
+```
+replaceTextHighlight
+```
+
 ### TabLine table
 Dispaly all bufer in tab line (bool)  
 default is false  
@@ -713,4 +719,14 @@ popUpWinCurrentLine
 Pop-up window current line background color
 ```
 popUpWinCurrentLineBg
+```
+
+Text color when replace text 
+```
+replaceText
+```
+
+Background color when replace text 
+```
+replaceTextBg
 ```

@@ -52,6 +52,7 @@ type EditorSettings* = object
   liveReloadOfConf*: bool
   realtimeSearch*: bool
   popUpWindowInExmode*: bool
+  replaceTextHighlight*: bool
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -85,6 +86,8 @@ type EditorStatus* = object
   registers*: Registers
   settings*: EditorSettings
   timeConfFileLastReloaded*: DateTime
+  isSearchHighlight*: bool
+  isReplaceTextHighlight*: bool
   currentDir: seq[Rune]
   messageLog*: seq[seq[Rune]]
   debugMode: int
@@ -136,6 +139,7 @@ proc initEditorSettings*(): EditorSettings =
   result.autoSaveInterval = 5
   result.realtimeSearch = true
   result.popUpWindowInExmode = true
+  result.replaceTextHighlight = true
 
 proc initEditorStatus*(): EditorStatus =
   result.platform= initPlatform()
@@ -372,7 +376,7 @@ proc countReferencedWindow*(mainWins: seq[MainWindowInfo], bufferIndex: int): in
     if win.bufferIndex == bufferIndex: result.inc
 
 proc writePopUpWindow*(status: var Editorstatus, x, y, currentLine: var int,  buffer: seq[seq[Rune]]) =
-  # Pop up window size 
+  # Pop up window size
   var maxBufferLen = 0
   for runes in buffer:
     if maxBufferLen < runes.len: maxBufferLen = runes.len
@@ -453,8 +457,9 @@ proc updateHighlight*(status: var EditorStatus) =
     let
       keyword = status.searchHistory[^1]
       allOccurrence = searchAllOccurrence(status.bufStatus[currentBuf].buffer, keyword)
+      color = if status.isSearchHighlight: EditorColorPair.searchResult else: EditorColorPair.replaceText
     for pos in allOccurrence:
-      let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column+keyword.high, color: EditorColorPair.searchResult)
+      let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column+keyword.high, color: color)
       status.bufStatus[currentBuf].highlight = status.bufStatus[currentBuf].highlight.overwrite(colorSegment)
 
 proc changeTheme*(status: var EditorStatus) = setCursesColor(ColorThemeTable[status.settings.editorColorTheme])

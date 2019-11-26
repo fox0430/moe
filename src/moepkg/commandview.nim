@@ -150,7 +150,7 @@ proc splitQout(s: string): seq[seq[Rune]]=
 
   return result.removeSuffix(" ")
 
-proc splitCommand(command: string): seq[seq[Rune]] =
+proc splitCommand*(command: string): seq[seq[Rune]] =
   if (command).contains('"'):
     return splitQout(command)
   else:
@@ -238,43 +238,6 @@ proc getKeyword*(status: var EditorStatus, prompt: string): (seq[Rune], bool) =
     else: insertCommandBuffer(exStatus, key)
 
   return (exStatus.buffer, cancelSearch)
-
-proc getKeyOnceAndWriteCommandView*(status: var Editorstatus, prompt: string, buffer: seq[Rune]): (seq[Rune], bool, bool) =
-  var
-    exStatus = initExModeViewStatus(prompt)
-    exitSearch = false
-    cancelSearch = false
-  for rune in buffer: exStatus.insertCommandBuffer(rune)
-
-  while true:
-    writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
-
-    var key = getKey(status.commandWindow)
-    if isEnterKey(key):
-      exitSearch = true
-      break
-    elif isEscKey(key):
-      cancelSearch = true
-      break
-    elif isResizeKey(key):
-      status.resize(terminalHeight(), terminalWidth())
-      status.update
-    elif isLeftKey(key): moveLeft(status.commandWindow, exStatus)
-    elif isRightkey(key): moveRight(exStatus)
-    elif isHomeKey(key): moveTop(exStatus)
-    elif isEndKey(key): moveEnd(exStatus)
-    elif isBackspaceKey(key):
-      deleteCommandBuffer(exStatus)
-      break
-    elif isDcKey(key):
-      deleteCommandBufferCurrentPosition(exStatus)
-      break
-    else:
-      insertCommandBuffer(exStatus, key)
-      break
-
-  writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
-  return (exStatus.buffer, exitSearch, cancelSearch)
 
 proc suggestFilePath(status: var Editorstatus, exStatus: var ExModeViewStatus, key: var Rune) =
   var suggestlist: seq[seq[Rune]] = @[]
@@ -408,6 +371,50 @@ proc suggestMode(status: var Editorstatus, exStatus: var ExModeViewStatus, key: 
   if status.settings.popUpWindowInExmode: status.deletePopUpWindow
 
   while isTabkey(key) or isShiftTab(key): key = getKey(status.commandWindow)
+
+proc getKeyOnceAndWriteCommandView*(status: var Editorstatus, prompt: string, buffer: seq[Rune], isSuggest: bool): (seq[Rune], bool, bool) =
+  var
+    exStatus = initExModeViewStatus(prompt)
+    exitSearch = false
+    cancelSearch = false
+  for rune in buffer: exStatus.insertCommandBuffer(rune)
+
+  while true:
+    writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
+
+    var key = getKey(status.commandWindow)
+
+    # Suggestion mode
+    if isTabkey(key) or isShiftTab(key):
+      suggestMode(status, exStatus, key)
+      if status.settings.popUpWindowInExmode and isEnterKey(key): moveCursor(status.commandWindow, exStatus.cursorY, exStatus.cursorX)
+      key = getKey(status.commandWindow)
+
+    if isEnterKey(key):
+      exitSearch = true
+      break
+    elif isEscKey(key):
+      cancelSearch = true
+      break
+    elif isResizeKey(key):
+      status.resize(terminalHeight(), terminalWidth())
+      status.update
+    elif isLeftKey(key): moveLeft(status.commandWindow, exStatus)
+    elif isRightkey(key): moveRight(exStatus)
+    elif isHomeKey(key): moveTop(exStatus)
+    elif isEndKey(key): moveEnd(exStatus)
+    elif isBackspaceKey(key):
+      deleteCommandBuffer(exStatus)
+      break
+    elif isDcKey(key):
+      deleteCommandBufferCurrentPosition(exStatus)
+      break
+    else:
+      insertCommandBuffer(exStatus, key)
+      break
+
+  writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
+  return (exStatus.buffer, exitSearch, cancelSearch)
 
 proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
   var exStatus = initExModeViewStatus(prompt)

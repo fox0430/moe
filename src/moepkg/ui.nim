@@ -332,7 +332,7 @@ type EditorColor* = object
   # error message
   errorMessage*: Color
   errorMessageBg*: Color
-  # search result highlight
+  # search result highlighting
   searchResult*: Color
   searchResultBg*: Color
   # selected area in visual mode
@@ -360,6 +360,9 @@ type EditorColor* = object
   popUpWindowBg*: Color
   popUpWinCurrentLine*: Color
   popUpWinCurrentLineBg*: Color
+  # replace text highlighting
+  replaceText*: Color
+  replaceTextBg*: Color
 
 type EditorColorPair* = enum
   lineNum = 1
@@ -385,7 +388,7 @@ type EditorColorPair* = enum
   commandBar = 18
   # error message
   errorMessage = 19
-  # search result highlight
+  # search result highlighting
   searchResult = 20
   # selected area in visual mode
   visualMode = 21
@@ -409,6 +412,8 @@ type EditorColorPair* = enum
   # pop up window
   popUpWindow = 37
   popUpWinCurrentLine = 38
+  # replace text highlighting
+  replaceText = 39
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -453,7 +458,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # error message
     errorMessage: red,
     errorMessageBg: default,
-    # search result highlight
+    # search result highlighting
     searchResult: default,
     searchResultBg: red,
     # selected area in visual mode
@@ -481,6 +486,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     popUpWindowBg: gray,
     popUpWinCurrentLine: blue,
     popUpWinCurrentLineBg: gray,
+    # replace text highlighting
+    replaceText: default,
+    replaceTextBg: red
   ),
   dark: EditorColor(
     editorBg: default,
@@ -524,7 +532,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # error message
     errorMessage: red,
     errorMessageBg: default,
-    # search result highlight
+    # search result highlighting
     searchResult: default,
     searchResultBg: red,
     # selected area in visual mode
@@ -552,6 +560,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     popUpWindowBg: gray,
     popUpWinCurrentLine: blue,
     popUpWinCurrentLineBg: gray,
+    # replace text highlighting
+    replaceText: default,
+    replaceTextBg: red
   ),
   light: EditorColor(
     editorBg: default,
@@ -595,7 +606,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # error message
     errorMessage: red,
     errorMessageBg: default,
-    # search result highlight
+    # search result highlighting
     searchResult: default,
     searchResultBg: red,
     # selected area in visual mode
@@ -623,6 +634,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     popUpWindowBg: gray,
     popUpWinCurrentLine: blue,
     popUpWinCurrentLineBg: gray,
+    # replace text highlighting
+    replaceText: default,
+    replaceTextBg: red
   ),
   vivid: EditorColor(
     editorBg: default,
@@ -666,7 +680,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # error message
     errorMessage: red,
     errorMessageBg: default,
-    # search result highlight
+    # search result highlighting
     searchResult: default,
     searchResultBg: red,
     # selected area in visual mode
@@ -694,6 +708,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     popUpWindowBg: gray,
     popUpWinCurrentLine: deepPink1_1,
     popUpWinCurrentLineBg: gray,
+    # replace text highlighting
+    replaceText: default,
+    replaceTextBg: red
   ),
 ]
 
@@ -736,7 +753,7 @@ proc setCursesColor*(editorColor: EditorColor) =
   setColorPair(EditorColorPair.commandBar , editorColor.commandBar, editorColor.commandBarBg)
   # error message
   setColorPair(EditorColorPair.errorMessage , editorColor.errorMessage, editorColor.errorMessageBg)
-  # search result highlight
+  # search result highlighting
   setColorPair(EditorColorPair.searchResult, editorColor.searchResult, editorColor.searchResultBg)
   # selected area in visual mode
   setColorPair(EditorColorPair.visualMode, editorColor.visualMode, editorColor.visualModeBg)
@@ -756,6 +773,9 @@ proc setCursesColor*(editorColor: EditorColor) =
   # pop up window
   setColorPair(EditorColorPair.popUpWindow, editorColor.popUpWindow, editorColor.popUpWindowBg)
   setColorPair(EditorColorPair.popUpWinCurrentLine, editorColor.popUpWinCurrentLine, editorColor.popUpWinCurrentLineBg)
+
+  # replace text highlighting
+  setColorPair(EditorColorPair.replaceText, editorColor.replaceText, editorColor.replaceTextBg)
 
 proc setIbeamCursor*() = discard execShellCmd("printf '\\033[6 q'")
 
