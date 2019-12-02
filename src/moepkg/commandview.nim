@@ -253,7 +253,7 @@ proc suggestFilePath(status: var Editorstatus, exStatus: var ExModeViewStatus, k
 
   # Pop up window position
   var
-    x = 1
+    x = exStatus.cursorX
     y = terminalHeight() - 1
 
   while (isTabkey(key) or isShiftTab(key)) and suggestlist.len > 0:
@@ -310,7 +310,7 @@ proc suggestExCommandOption(status: var Editorstatus, exStatus: var ExModeViewSt
 
   # Pop up window position
   var
-    x = 1
+    x = exStatus.cursorX
     y = terminalHeight() - 1
 
   while (isTabkey(key) or isShiftTab(key)) and suggestlist.len > 0:
@@ -341,7 +341,7 @@ proc suggestExCommand(status: var Editorstatus, exStatus: var ExModeViewStatus, 
 
   # Pop up window position
   var
-    x = exStatus.prompt.len
+    x = exStatus.cursorX
     y = terminalHeight() - 1
 
   while (isTabkey(key) or isShiftTab(key)) and suggestlist.len > 0:
