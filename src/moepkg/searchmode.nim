@@ -87,7 +87,8 @@ proc realtimeSearch(status: var Editorstatus) =
   status.searchHistory.add(ru"")
 
   while exitSearch == false:
-    let returnWord = getKeyOnceAndWriteCommandView(status, prompt, keyword)
+    const isSuggest = false
+    let returnWord = getKeyOnceAndWriteCommandView(status, prompt, keyword, isSuggest)
 
     keyword = returnWord[0]
     exitSearch = returnWord[1]

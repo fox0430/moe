@@ -76,6 +76,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("realtimeSearch"):
       result.realtimeSearch = settings["Standard"]["realtimeSearch"].getbool()
 
+    if settings["Standard"].contains("popUpWindowInExmode "):
+      result.popUpWindowInExmode = settings["Standard"]["popUpWindowInExmode"].getbool()
+
+    if settings["Standard"].contains("replaceTextHighlight"):
+      result.replaceTextHighlight = settings["Standard"]["replaceTextHighlight"].getbool()
+
   if settings.contains("TabLine"):
     if settings["TabLine"].contains("allBuffer"):
         result.tabLine.allBuffer= settings["TabLine"]["allBuffer"].getbool()
@@ -274,6 +280,24 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["Theme"].contains("pcLinkBg"):
       ColorThemeTable[ColorTheme.config].pcLinkBg = color("pcLinkBg")
+
+    if settings["Theme"].contains("popUpWindow"):
+      ColorThemeTable[ColorTheme.config].popUpWindow = color("popUpWindow")
+
+    if settings["Theme"].contains("popUpWindowBg"):
+      ColorThemeTable[ColorTheme.config].popUpWindowBg = color("popUpWindowBg")
+
+    if settings["Theme"].contains("popUpWindowBg"):
+      ColorThemeTable[ColorTheme.config].popUpWindowBg = color("popUpWindowBg")
+
+    if settings["Theme"].contains("popUpWinCurrentLineBg"):
+      ColorThemeTable[ColorTheme.config].popUpWinCurrentLineBg = color("popUpWinCurrentLineBg")
+
+    if settings["Theme"].contains("replaceText"):
+      ColorThemeTable[ColorTheme.config].replaceText = color("replaceText")
+
+    if settings["Theme"].contains("replaceTextBg"):
+      ColorThemeTable[ColorTheme.config].replaceTextBg = color("replaceTextBg")
 
     result.editorColorTheme = ColorTheme.config
 

@@ -51,6 +51,8 @@ type EditorSettings* = object
   autoSaveInterval*: int # minutes
   liveReloadOfConf*: bool
   realtimeSearch*: bool
+  popUpWindowInExmode*: bool
+  replaceTextHighlight*: bool
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -84,6 +86,8 @@ type EditorStatus* = object
   registers*: Registers
   settings*: EditorSettings
   timeConfFileLastReloaded*: DateTime
+  isSearchHighlight*: bool
+  isReplaceTextHighlight*: bool
   currentDir: seq[Rune]
   messageLog*: seq[seq[Rune]]
   debugMode: int
@@ -92,6 +96,7 @@ type EditorStatus* = object
   statusWindow*: Window
   commandWindow*: Window
   tabWindow*: Window
+  popUpWindow*: Window
 
 proc initPlatform(): Platform =
   if defined linux:
@@ -133,6 +138,8 @@ proc initEditorSettings*(): EditorSettings =
   result.insertModeCursor = CursorType.ibeamMode
   result.autoSaveInterval = 5
   result.realtimeSearch = true
+  result.popUpWindowInExmode = true
+  result.replaceTextHighlight = true
 
 proc initEditorStatus*(): EditorStatus =
   result.platform= initPlatform()
@@ -144,13 +151,13 @@ proc initEditorStatus*(): EditorStatus =
     useStatusBar = if result.settings.statusBar.useBar: 1 else: 0
     useTab = if result.settings.tabLine.useTab: 1 else: 0
 
-  if result.settings.tabLine.useTab: result.tabWindow = initWindow(1, terminalWidth(), 0, 0)
+  if result.settings.tabLine.useTab: result.tabWindow = initWindow(1, terminalWidth(), 0, 0, EditorColorPair.defaultChar)
 
-  result.mainWindowInfo.add(MainWindowInfo(window: initWindow(terminalHeight() - useTab - 1, terminalWidth(), useTab, 0), bufferIndex: 0))
+  result.mainWindowInfo.add(MainWindowInfo(window: initWindow(terminalHeight() - useTab - 1, terminalWidth(), useTab, 0, EditorColorPair.defaultChar), bufferIndex: 0))
   result.mainWindowInfo[result.mainWindowInfo.high].window.setTimeout()
 
-  if result.settings.statusBar.useBar: result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0)
-  result.commandWindow = initWindow(1, terminalWidth(), terminalHeight() - 1, 0)
+  if result.settings.statusBar.useBar: result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0, EditorColorPair.defaultChar)
+  result.commandWindow = initWindow(1, terminalWidth(), terminalHeight() - 1, 0, EditorColorPair.defaultChar)
 
 proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
   if bufferIndex < 0 and status.bufStatus.high < bufferIndex: return
@@ -339,7 +346,7 @@ proc update*(status: var EditorStatus) =
 
 proc splitWindow*(status: var EditorStatus) =
   let useTab = if status.settings.tabLine.useTab: 1 else: 0
-  status.mainWindowInfo.insert(MainWindowInfo(window: initWindow(terminalHeight() - useTab - 1, int(terminalWidth() / status.mainWindowInfo.len), useTab, int(terminalWidth() / status.mainWindowInfo.len)), bufferIndex: status.currentBuffer), status.currentMainWindow)
+  status.mainWindowInfo.insert(MainWindowInfo(window: initWindow(terminalHeight() - useTab - 1, int(terminalWidth() / status.mainWindowInfo.len), useTab, int(terminalWidth() / status.mainWindowInfo.len), EditorColorPair.defaultChar), bufferIndex: status.currentBuffer), status.currentMainWindow)
   status.mainWindowInfo[status.currentMainWindow + 1].window.setTimeout()
 
   status.update
@@ -367,6 +374,32 @@ proc countReferencedWindow*(mainWins: seq[MainWindowInfo], bufferIndex: int): in
   result = 0
   for win in mainWins:
     if win.bufferIndex == bufferIndex: result.inc
+
+proc writePopUpWindow*(status: var Editorstatus, x, y, currentLine: var int,  buffer: seq[seq[Rune]]) =
+  # Pop up window size
+  var maxBufferLen = 0
+  for runes in buffer:
+    if maxBufferLen < runes.len: maxBufferLen = runes.len
+  let
+    h = if buffer.len > terminalHeight() - 1: terminalHeight() - 1 else: buffer.len
+    w = maxBufferLen + 2
+
+  # Pop up window position
+  if y == terminalHeight() - 1: y = y - h
+  if w > terminalHeight() - x: x = terminalHeight() - w
+
+  status.popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
+
+  for i in 0 ..< h:
+    let startLine = if currentLine - h + 1 > 0: currentLine - h + 1 else: 0
+    if i + startLine == currentLine: status.popUpWindow.write(i, 1, buffer[i + startLine], EditorColorPair.popUpWinCurrentLine)
+    else: status.popUpWindow.write(i, 1, buffer[i + startLine], EditorColorPair.popUpWindow)
+
+  status.popUpWindow.refresh
+
+proc deletePopUpWindow*(status: var Editorstatus) =
+  status.popUpWindow.deleteWindow
+  status.update
 
 proc addNewBuffer*(status:var EditorStatus, filename: string)
 from commandview import writeFileOpenError
@@ -424,8 +457,9 @@ proc updateHighlight*(status: var EditorStatus) =
     let
       keyword = status.searchHistory[^1]
       allOccurrence = searchAllOccurrence(status.bufStatus[currentBuf].buffer, keyword)
+      color = if status.isSearchHighlight: EditorColorPair.searchResult else: EditorColorPair.replaceText
     for pos in allOccurrence:
-      let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column+keyword.high, color: EditorColorPair.searchResult)
+      let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column+keyword.high, color: color)
       status.bufStatus[currentBuf].highlight = status.bufStatus[currentBuf].highlight.overwrite(colorSegment)
 
 proc changeTheme*(status: var EditorStatus) = setCursesColor(ColorThemeTable[status.settings.editorColorTheme])

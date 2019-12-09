@@ -3,7 +3,7 @@ import parseopt
 type ComdParsedList* = tuple[filename: string]
 
 proc writeVersion() =
-  echo "v0.1.2"
+  echo "v0.1.3"
   quit()
 
 proc writeHelp() =

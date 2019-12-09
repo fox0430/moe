@@ -3,7 +3,7 @@
 
 ## moe
 
-A command line based editor inspired by vi/vim written in Nim.  
+A command line based editor inspired by vi/vim written in Nim.
  
 This project's goal is a very customizable, high productivity, high performance and funny animation editor.
 
@@ -11,9 +11,9 @@ This project's goal is a very customizable, high productivity, high performance 
 
 ## Features
 
-- Written in Nim  
+- Written in Nim
 
-- Adopt GapBuffer  
+- Adopt GapBuffer
 
 - UTF-8 and other encodings support (Incomplete)
 
@@ -37,15 +37,17 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Simple file manager
 
-- Auto close paren  
+- Auto close paren
 
-- Simple auto indent  
+- Simple auto indent
 
 - Real time search
 
 - Auto save
 
 - Suggestions in ex mode
+
+- Pop-up window
 
 ## Planned features
 
@@ -57,7 +59,7 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Window management
 
-- Syntax checker  
+- Syntax checker
 
 - Auto-complete
 
