@@ -189,7 +189,7 @@ proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   elif key == ord('>'): addIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
   elif key == ord('<'): deleteIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
   elif key == ord('r'):
-    let ch = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    let ch = getKey(status.currentMainWindowNode.mainWindowInfo.window)
     if not isEscKey(ch): replaceCharactor(status.bufStatus[status.currentBuffer], area, ch)
   else: discard
 
@@ -200,7 +200,7 @@ proc visualBlockCommand(status: var EditorStatus, area: var SelectArea, key: Run
   elif key == ord('x') or key == ord('d'): deleteBufferBlock(status.bufStatus[status.currentBuffer], status.registers, area)
   elif key == ord('>'): insertIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
   elif key == ord('r'):
-    let ch = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    let ch = getKey(status.currentMainWindowNode.mainWindowInfo.window)
     if not isEscKey(ch): replaceCharactorBlock(status.bufStatus[status.currentBuffer], area, ch)
   else: discard
 
@@ -226,7 +226,7 @@ proc visualMode*(status: var EditorStatus) =
     var key: Rune = Rune('\0')
     while key == Rune('\0'):
       status.eventLoopTask
-      key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+      key = getKey(status.currentMainWindowNode.mainWindowInfo.window)
 
     status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
     status.bufStatus[status.currentBuffer].tryRecordCurrentPosition
@@ -260,7 +260,7 @@ proc visualMode*(status: var EditorStatus) =
     elif key == ord('G'):
       moveToLastLine(status)
     elif key == ord('g'):
-      if getKey(status.mainWindowInfo[status.currentMainWindow].window) == ord('g'): moveToFirstLine(status)
+      if getKey(status.currentMainWindowNode.mainWindowInfo.window) == ord('g'): moveToFirstLine(status)
     elif key == ord('i'):
       status.bufStatus[status.currentBuffer].currentLine = status.bufStatus[currentBuf].selectArea.startLine
       status.changeMode(Mode.insert)

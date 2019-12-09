@@ -302,21 +302,21 @@ proc jumpCommand(status: var EditorStatus, line: int) =
   status.commandWindow.erase
   status.changeMode(Mode.normal)
 
-proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
-  status.changeMode(Mode.normal)
-
-  if status.bufStatus[status.currentBuffer].countChange > 0 or countReferencedWindow(status.mainWindowInfo, status.currentBuffer) == 0:
-    status.commandWindow.writeNoWriteError(status.messageLog)
-  else:
-    if existsDir($filename):
-      try: setCurrentDir($filename)
-      except OSError:
-        status.commandWindow.writeFileOpenError($filename, status.messageLog)
-        addNewBuffer(status, "")
-      status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSaveTime: now()))
-    else: addNewBuffer(status, $filename)
-
-    changeCurrentBuffer(status, status.bufStatus.high)
+proc editCommand(status: var EditorStatus, filename: seq[Rune]) = discard
+#  status.changeMode(Mode.normal)
+#
+#  if status.bufStatus[status.currentBuffer].countChange > 0 or countReferencedWindow(status.mainWindowInfo, status.currentBuffer) == 0:
+#    status.commandWindow.writeNoWriteError(status.messageLog)
+#  else:
+#    if existsDir($filename):
+#      try: setCurrentDir($filename)
+#      except OSError:
+#        status.commandWindow.writeFileOpenError($filename, status.messageLog)
+#        addNewBuffer(status, "")
+#      status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSaveTime: now()))
+#    else: addNewBuffer(status, $filename)
+#
+#    changeCurrentBuffer(status, status.bufStatus.high)
 
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   if filename.len == 0:
@@ -326,7 +326,8 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
 
   try:
     saveFile(filename, status.bufStatus[status.currentBuffer].buffer.toRunes, status.settings.characterEncoding)
-    status.bufStatus[status.currentMainWindow].filename = filename
+    let bufferIndex = status.currentMainWindowNode.mainWindowInfo.bufferIndex
+    status.bufStatus[bufferIndex].filename = filename
     status.bufStatus[status.currentBuffer].countChange = 0
   except IOError:
     status.commandWindow.writeSaveError(status.messageLog)
@@ -334,50 +335,50 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   status.commandWindow.writeMessageSaveFile(filename, status.messageLog)
   status.changeMode(Mode.normal)
 
-proc quitCommand(status: var EditorStatus) =
-  if status.bufStatus[status.currentBuffer].countChange == 0 or countReferencedWindow(status.mainWindowInfo, status.currentBuffer) > 1:
-    closeWindow(status, status.currentMainWindow)
-    status.changeMode(Mode.normal)
-  else:
-    status.commandWindow.writeNoWriteError(status.messageLog)
-    status.changeMode(Mode.normal)
+proc quitCommand(status: var EditorStatus) = discard
+#  if status.bufStatus[status.currentBuffer].countChange == 0 or countReferencedWindow(status.mainWindowInfo, status.currentBuffer) > 1:
+#    status.closeWindow
+#    status.changeMode(Mode.normal)
+#  else:
+#    status.commandWindow.writeNoWriteError(status.messageLog)
+#    status.changeMode(Mode.normal)
 
 proc writeAndQuitCommand(status: var EditorStatus) =
   try:
     status.bufStatus[status.currentBuffer].countChange = 0
     saveFile(status.bufStatus[status.currentBuffer].filename, status.bufStatus[status.currentBuffer].buffer.toRunes, status.settings.characterEncoding)
-    closeWindow(status, status.currentMainWindow)
+    status.closeWindow
   except IOError:
     status.commandWindow.writeSaveError(status.messageLog)
 
   status.changeMode(Mode.normal)
 
 proc forceQuitCommand(status: var EditorStatus) =
-  closeWindow(status, status.currentMainWindow)
+  status.closeWindow
   status.changeMode(Mode.normal)
 
-proc allBufferQuitCommand(status: var EditorStatus) =
-  for i in 0 ..< status.mainWindowInfo.len:
-    if status.bufStatus[status.mainWindowInfo[0].bufferIndex].countChange > 0:
-      status.commandWindow.writeNoWriteError(status.messageLog)
-      status.changeMode(Mode.normal)
-      return
+proc allBufferQuitCommand(status: var EditorStatus) = discard
+#  for i in 0 ..< status.numOfMainWindow:
+#    if status.bufStatus[status.mainWindowInfo[0].bufferIndex].countChange > 0:
+#      status.commandWindow.writeNoWriteError(status.messageLog)
+#      status.changeMode(Mode.normal)
+#      return
+#
+#  for i in 0 ..< status.mainWindowInfo.len: closeWindow(status, 0)
 
-  for i in 0 ..< status.mainWindowInfo.len: closeWindow(status, 0)
+proc forceAllBufferQuitCommand(status: var EditorStatus) = discard
+#  for i in 0 ..< status.mainWindowInfo.len: closeWindow(status, 0)
 
-proc forceAllBufferQuitCommand(status: var EditorStatus) =
-  for i in 0 ..< status.mainWindowInfo.len: closeWindow(status, 0)
-
-proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
-  for i in 0 ..< status.mainWindowInfo.len:
-    let bufIndex = status.mainWindowInfo[0].bufferIndex
-    try: saveFile(status.bufStatus[bufIndex].filename, status.bufStatus[bufIndex].buffer.toRunes, status.settings.characterEncoding)
-    except IOError:
-      status.commandWindow.writeSaveError(status.messageLog)
-      status.changeMode(Mode.normal)
-      return
-
-    closeWindow(status, i)
+proc writeAndQuitAllBufferCommand(status: var Editorstatus) = discard
+#  for i in 0 ..< status.mainWindowInfo.len:
+#    let bufIndex = status.mainWindowInfo[0].bufferIndex
+#    try: saveFile(status.bufStatus[bufIndex].filename, status.bufStatus[bufIndex].buffer.toRunes, status.settings.characterEncoding)
+#    except IOError:
+#      status.commandWindow.writeSaveError(status.messageLog)
+#      status.changeMode(Mode.normal)
+#      return
+#
+#    closeWindow(status, i)
 
 proc shellCommand(status: var EditorStatus, shellCommand: string) =
   saveCurrentTerminalModes()
@@ -421,7 +422,7 @@ proc listAllBufferCommand(status: var Editorstatus) =
   while true:
     status.update
     setCursor(false)
-    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    let key = getKey(status.currentMainWindowNode.mainWindowInfo.window)
     if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
     elif key.int == 0: discard
     else: break
@@ -564,15 +565,19 @@ proc exMode*(status: var EditorStatus) =
           if command[i] == ru'/': break
           keyword.add(command[i])
       status.searchHistory[status.searchHistory.high] = keyword
-      status.bufStatus[status.currentMainWindow].isHighlight = true
-    else: status.bufStatus[status.currentMainWindow].isHighlight = false
+      let bufferIndex = status.currentMainWindowNode.mainWindowInfo.bufferIndex
+      status.bufStatus[bufferIndex].isHighlight = true
+    else:
+      let bufferIndex = status.currentMainWindowNode.mainWindowInfo.bufferIndex
+      status.bufStatus[bufferIndex].isHighlight = false
 
     status.updateHighlight
     status.resize(terminalHeight(), terminalWidth())
     status.update
 
   status.searchHistory.delete(status.searchHistory.high)
-  status.bufStatus[status.currentMainWindow].isHighlight = false
+  let bufferIndex = status.currentMainWindowNode.mainWindowInfo.bufferIndex
+  status.bufStatus[bufferIndex].isHighlight = false
   status.updateHighlight
 
   if cancelInput:

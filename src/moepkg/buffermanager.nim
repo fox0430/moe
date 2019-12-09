@@ -22,21 +22,21 @@ proc updateBufferManagerHighlight(status: var Editorstatus) =
   let index = status.currentBuffer
   status.bufStatus[index].highlight = initFilelistHighlight(status.bufStatus[index].buffer, status.bufStatus[index].currentLine)
 
-proc deleteSelectedBuffer(status: var Editorstatus) =
-  let deleteIndex = status.bufStatus[status.currentBuffer].currentLine
-  for i in 0 ..< status.mainWindowInfo.high:
-    if status.mainWindowInfo[i].bufferIndex == deleteIndex: status.closeWindow(i)
-
-  if status.mainWindowInfo.len > 0:
-    status.bufStatus.delete(deleteIndex)
-    for i in 0 ..< status.mainWindowInfo.len:
-      if status.mainWindowInfo[i].bufferIndex > deleteIndex: dec(status.mainWindowInfo[i].bufferIndex)
-
-    if status.currentBuffer > deleteIndex: dec(status.currentBuffer)
-    if status.bufStatus[status.currentBuffer].currentLine > 0: dec(status.bufStatus[status.currentBuffer].currentLine)
-    status.currentMainWindow = status.mainWindowInfo.high
-    status.setBufferList
-    status.resize(terminalHeight(), terminalWidth())
+proc deleteSelectedBuffer(status: var Editorstatus) = discard
+#  let deleteIndex = status.bufStatus[status.currentBuffer].currentLine
+#  for i in 0 ..< status.mainWindowInfo.high:
+#    if status.mainWindowInfo[i].bufferIndex == deleteIndex: status.closeWindow(i)
+#
+#  if status.mainWindowInfo.len > 0:
+#    status.bufStatus.delete(deleteIndex)
+#    for i in 0 ..< status.mainWindowInfo.len:
+#      if status.mainWindowInfo[i].bufferIndex > deleteIndex: dec(status.mainWindowInfo[i].bufferIndex)
+#
+#    if status.currentBuffer > deleteIndex: dec(status.currentBuffer)
+#    if status.bufStatus[status.currentBuffer].currentLine > 0: dec(status.bufStatus[status.currentBuffer].currentLine)
+#    status.currentMainWindow = status.mainWindowInfo.high
+#    status.setBufferList
+#    status.resize(terminalHeight(), terminalWidth())
   
 proc openSelectedBuffer(status: var Editorstatus, isNewWindow: bool) =
   if isNewWindow:
@@ -55,7 +55,7 @@ proc bufferManager*(status: var Editorstatus) =
     status.updateBufferManagerHighlight
     status.update
     setCursor(false)
-    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    let key = getKey(status.currentMainWindowNode.mainWindowInfo.window)
 
     if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
     elif isControlK(key): status.moveNextWindow
