@@ -46,8 +46,11 @@ proc isForceAllBufferQuitCommand(command: seq[seq[Rune]]): bool =
 proc isAllBufferQuitCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"qa"
 
-proc isSplitWindowCommand(command: seq[seq[Rune]]): bool =
+proc isVerticalSplitWindowCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"vs"
+
+proc isHorizontalSplitWindowCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"sv"
 
 proc isLiveReloadOfConfSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"livereload"
@@ -129,7 +132,7 @@ proc isReplaceCommand(command: seq[seq[Rune]]): bool =
 
 proc openMessageMessageLogViewer(status: var Editorstatus) =
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
-  status.splitWindow
+  status.verticalSplitWindow
   status.moveNextWindow
   status.addNewBuffer("")
   status.changeCurrentBuffer(status.bufStatus.high)
@@ -137,7 +140,7 @@ proc openMessageMessageLogViewer(status: var Editorstatus) =
 
 proc openBufferManager(status: var Editorstatus) =
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
-  status.splitWindow
+  status.verticalSplitWindow
   status.moveNextWindow
   status.addNewBuffer("")
   status.changeCurrentBuffer(status.bufStatus.high)
@@ -148,8 +151,12 @@ proc changeCursorLineCommand(status: var Editorstatus, command: seq[Rune]) =
   elif command == ru"off": status.settings.cursorLine = false
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
-proc splitWindowCommand(status: var EditorStatus) =
-  splitWindow(status)
+proc verticalSplitWindowCommand(status: var EditorStatus) =
+  status.verticalSplitWindow
+  status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
+
+proc horizontalSplitWindowCommand(status: var Editorstatus) =
+  status.horizontalSplitWindow
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
 proc liveReloadOfConfSettingCommand(status: var EditorStatus, command: seq[Rune]) =
@@ -519,8 +526,10 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     changeThemeSettingCommand(status, command[1])
   elif isChangeCursorLineCommand(command):
     changeCursorLineCommand(status, command[1])
-  elif isSplitWindowCommand(command):
-    splitWindowCommand(status)
+  elif isVerticalSplitWindowCommand(command):
+    verticalSplitWindowCommand(status)
+  elif isHorizontalSplitWindowCommand(command):
+    horizontalSplitWindowCommand(status)
   elif isAllBufferQuitCommand(command):
     allBufferQuitCommand(status)
   elif isForceAllBufferQuitCommand(command):

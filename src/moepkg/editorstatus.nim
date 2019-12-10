@@ -360,11 +360,15 @@ proc update*(status: var EditorStatus) =
   status.currentMainWindowNode.mainWindowInfo.window.moveCursor(status.bufStatus[status.currentBuffer].cursor.y, status.bufStatus[status.currentBuffer].view.widthOfLineNum + status.bufStatus[status.currentBuffer].cursor.x)
   setCursor(true)
 
-proc splitWindow*(status: var EditorStatus) =
-  let useTab = if status.settings.tabLine.useTab: 1 else: 0
+proc verticalSplitWindow*(status: var EditorStatus) =
   status.currentMainWindowNode.verticalSplit
   inc(status.numOfMainWindow)
-  #status.mainWindowInfo[status.currentMainWindow + 1].window.setTimeout()
+
+  status.update
+
+proc horizontalSplitWindow*(status: var Editorstatus) =
+  status.currentMainWindowNode.horizontalSplit
+  inc(status.numOfMainWindow)
 
   status.update
 

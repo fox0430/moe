@@ -40,7 +40,7 @@ proc deleteSelectedBuffer(status: var Editorstatus) = discard
   
 proc openSelectedBuffer(status: var Editorstatus, isNewWindow: bool) =
   if isNewWindow:
-    status.splitWindow
+    status.verticalSplitWindow
     status.moveNextWindow
     status.changeCurrentBuffer(status.bufStatus[status.currentBuffer].currentLine)
   else:

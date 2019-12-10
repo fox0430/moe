@@ -33,28 +33,33 @@ proc initWindowNode*(): WindowNode =
 proc verticalSplit*(n: var WindowNode) =
   var parent = n.parent
   
+  var win = MainWindowInfo(window: initWindow(terminalHeight(), terminalWidth(), 0, 0, EditorColorPair.defaultChar), bufferIndex: n.mainWindowInfo.bufferIndex)
+  win.window.setTimeout()
   if parent.splitType == SplitType.vertical:
-    var
-      win = MainWindowInfo(window: initWindow(terminalHeight(), terminalWidth(), 0, 0, EditorColorPair.defaultChar), bufferIndex: n.mainWindowInfo.bufferIndex)
-      child = WindowNode(parent: parent, child: @[], splitType: SplitType.vertical, mainWindowInfo: win, h: terminalHeight(), w: terminalWidth())
+    var  child = WindowNode(parent: parent, child: @[], splitType: SplitType.vertical, mainWindowInfo: win, h: terminalHeight(), w: terminalWidth())
+
     parent.child.add(child)
     #n = child
   else:
-    var child = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: terminalHeight(), w: terminalWidth())
+    var child = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: terminalHeight(), mainWindowInfo: win, w: terminalWidth())
     n.splitType = SplitType.vertical
     n.child.add(child)
     n.child.add(child)
     #n = child
 
-proc horizeontlSplit*(n: var WindowNode) =
+proc horizontalSplit*(n: var WindowNode) =
   var parent = n.parent
 
+  var win = MainWindowInfo(window: initWindow(terminalHeight(), terminalWidth(), 0, 0, EditorColorPair.defaultChar), bufferIndex: n.mainWindowInfo.bufferIndex)
+  win.window.setTimeout()
+
   if parent.splitType == SplitType.horaizontal:
-    var child = WindowNode(parent: parent, child: @[], splitType: SplitType.horaizontal, h: terminalHeight(), w: terminalWidth())
+    var  child = WindowNode(parent: parent, child: @[], splitType: SplitType.horaizontal, mainWindowInfo: win, h: terminalHeight(), w: terminalWidth())
+
     parent.child.add(child)
     n = child
   else:
-    var child = WindowNode(parent: n, child: @[], splitType: SplitType.horaizontal, h: terminalHeight(), w: terminalWidth())
+    var child = WindowNode(parent: n, child: @[], splitType: SplitType.horaizontal, h: terminalHeight(), mainWindowInfo: win, w: terminalWidth())
     n.splitType = SplitType.horaizontal
     n.child.add(child)
     n.child.add(child)
@@ -89,7 +94,6 @@ proc resize*(root: WindowNode, height, width: int) =
 
       if child.child.len > 0:
         for node in child.child: qeue.push(node)
-    echo ""
 
 proc searchByIndex*(root: WindowNode, index: int): WindowNode =
   var qeue = initHeapQueue[WindowNode]()
