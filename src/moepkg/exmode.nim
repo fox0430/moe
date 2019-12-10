@@ -333,7 +333,7 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
 
   try:
     saveFile(filename, status.bufStatus[status.currentBuffer].buffer.toRunes, status.settings.characterEncoding)
-    let bufferIndex = status.currentMainWindowNode.mainWindowInfo.bufferIndex
+    let bufferIndex = status.currentMainWindowNode.bufferIndex
     status.bufStatus[bufferIndex].filename = filename
     status.bufStatus[status.currentBuffer].countChange = 0
   except IOError:
@@ -429,7 +429,7 @@ proc listAllBufferCommand(status: var Editorstatus) =
   while true:
     status.update
     setCursor(false)
-    let key = getKey(status.currentMainWindowNode.mainWindowInfo.window)
+    let key = getKey(status.currentMainWindowNode.window)
     if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
     elif key.int == 0: discard
     else: break
@@ -574,10 +574,10 @@ proc exMode*(status: var EditorStatus) =
           if command[i] == ru'/': break
           keyword.add(command[i])
       status.searchHistory[status.searchHistory.high] = keyword
-      let bufferIndex = status.currentMainWindowNode.mainWindowInfo.bufferIndex
+      let bufferIndex = status.currentMainWindowNode.bufferIndex
       status.bufStatus[bufferIndex].isHighlight = true
     else:
-      let bufferIndex = status.currentMainWindowNode.mainWindowInfo.bufferIndex
+      let bufferIndex = status.currentMainWindowNode.bufferIndex
       status.bufStatus[bufferIndex].isHighlight = false
 
     status.updateHighlight
@@ -585,7 +585,7 @@ proc exMode*(status: var EditorStatus) =
     status.update
 
   status.searchHistory.delete(status.searchHistory.high)
-  let bufferIndex = status.currentMainWindowNode.mainWindowInfo.bufferIndex
+  let bufferIndex = status.currentMainWindowNode.bufferIndex
   status.bufStatus[bufferIndex].isHighlight = false
   status.updateHighlight
 

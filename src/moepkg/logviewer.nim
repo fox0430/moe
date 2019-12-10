@@ -21,7 +21,7 @@ proc messageLogViewer*(status: var Editorstatus) =
   while status.bufStatus[status.currentBuffer].mode == Mode.logViewer:
     status.update
 
-    let key = getKey(status.currentMainWindowNode.mainWindowInfo.window)
+    let key = getKey(status.currentMainWindowNode.window)
 
     if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
     elif isControlK(key): status.moveNextWindow

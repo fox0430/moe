@@ -160,7 +160,7 @@ proc initEditorStatus*(): EditorStatus =
 proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
   if bufferIndex < 0 and status.bufStatus.high < bufferIndex: return
   status.currentBuffer = bufferIndex
-  status.currentMainWindowNode.mainWindowInfo.bufferIndex = bufferIndex
+  status.currentMainWindowNode.bufferIndex = bufferIndex
 
 proc changeMode*(status: var EditorStatus, mode: Mode) =
   status.bufStatus[status.currentBuffer].prevMode = status.bufStatus[status.currentBuffer].mode
@@ -258,6 +258,7 @@ proc writeTab(tabWin: var Window, start, tabWidth: int, filename: string, color:
     buffer = if filename.len < tabWidth: " " & title & " ".repeat(tabWidth - title.len) else: " " & (title).substr(0, tabWidth - 3) & "~"
   tabWin.write(0, start, buffer, color)
 
+# TODO: Need fix writeTabLine
 proc writeTabLine*(status: var EditorStatus) =
   let
     isAllBuffer = status.settings.tabLine.allbuffer
@@ -278,13 +279,13 @@ proc writeTabLine*(status: var EditorStatus) =
       status.tabWindow.writeTab(index * tabWidth, tabWidth, filename, color)
   else:
     ## Displays only the buffer currently displayed in the window
-    let seqMainWindowInfo = getAllWindowInfo(status.mainWindowNode)
+    let seqMainWindowInfo = getAllBufferIndex(status.mainWindowNode)
     for index, mainWindowInfo in seqMainWindowInfo:
       let
-        color = if status.currentMainWindowNode.mainWindowInfo.bufferIndex == index: currentTabColor else: defaultColor
-        currentMode = status.bufStatus[mainWindowInfo.bufferIndex].mode
-        prevMode = status.bufStatus[mainWindowInfo.bufferIndex].prevMode
-        filename = if (currentMode == Mode.filer) or (prevMode == Mode.filer and currentMode == Mode.ex): getCurrentDir() else: $status.bufStatus[mainWindowInfo.bufferIndex].filename
+        color = if index == index: currentTabColor else: defaultColor
+        currentMode = status.bufStatus[index].mode
+        prevMode = status.bufStatus[index].prevMode
+        filename = if (currentMode == Mode.filer) or (prevMode == Mode.filer and currentMode == Mode.ex): getCurrentDir() else: $status.bufStatus[index].filename
       status.tabWindow.writeTab(index * tabWidth, tabWidth, filename, color)
 
   status.tabWindow.refresh
@@ -298,19 +299,26 @@ proc resize*(status: var EditorStatus, height, width: int) =
 
   status.mainWindowNode.resize(terminalHeight(), terminalWidth())
 
+  exitUi()
+  echo "start"
+
   var qeue = initHeapQueue[WindowNode]()
   for node in status.mainWindowNode.child: qeue.push(node)
   while qeue.len > 0:
     for i in  0 ..< qeue.len:
       let node = qeue.pop
-      if node.mainWindowInfo != nil:
+      if node.window != nil:
         let
-          bufIndex = node.mainWindowInfo.bufferIndex
+          bufIndex = node.bufferIndex
           widthOfLineNum = status.bufStatus[bufIndex].view.widthOfLineNum
           adjustedHeight = max(node.h, 4)
           adjustedWidth = max(node.w, 4)
 
-        node.mainWindowInfo.window.resize(adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, node.y + useTab, node.x)
+        node.window.resize(adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, node.y + useTab, node.x)
+
+        echo node.y
+        echo node.x
+        echo ""
 
         status.bufStatus[bufIndex].view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight - useStatusBar - useTab - 1, adjustedWidth - widthOfLineNum - 1, widthOfLineNum)
         status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
@@ -337,8 +345,9 @@ proc update*(status: var EditorStatus) =
   while qeue.len > 0:
     for i in  0 ..< qeue.len:
       let node = qeue.pop
+      if node.window == nil: break
       let
-        bufIndex = node.mainWindowInfo.bufferIndex
+        bufIndex = node.bufferIndex
         isCurrentMainWin = if node.windowIndex == status.currentMainWindowNode.windowIndex: true else: false
         isLineNumber = status.settings.lineNumber
         isCurrentLineNumber = status.settings.currentLineNumber
@@ -348,26 +357,26 @@ proc update*(status: var EditorStatus) =
         endSelectedLine = status.bufStatus[bufIndex].selectArea.endLine
 
       status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
-      status.bufStatus[bufIndex].view.update(node.mainWindowInfo.window, isLineNumber, isCurrentLineNumber, isCursorLine, isCurrentMainWin, isVisualMode, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, status.bufStatus[bufIndex].currentLine, startSelectedLine, endSelectedLine)
+      status.bufStatus[bufIndex].view.update(node.window, isLineNumber, isCurrentLineNumber, isCursorLine, isCurrentMainWin, isVisualMode, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, status.bufStatus[bufIndex].currentLine, startSelectedLine, endSelectedLine)
 
       status.bufStatus[bufIndex].cursor.update(status.bufStatus[bufIndex].view, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
-      node.mainWindowInfo.window.refresh
+      node.window.refresh
 
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
 
-  status.currentMainWindowNode.mainWindowInfo.window.moveCursor(status.bufStatus[status.currentBuffer].cursor.y, status.bufStatus[status.currentBuffer].view.widthOfLineNum + status.bufStatus[status.currentBuffer].cursor.x)
+  status.currentMainWindowNode.window.moveCursor(status.bufStatus[status.currentBuffer].cursor.y, status.bufStatus[status.currentBuffer].view.widthOfLineNum + status.bufStatus[status.currentBuffer].cursor.x)
   setCursor(true)
 
 proc verticalSplitWindow*(status: var EditorStatus) =
-  status.currentMainWindowNode.verticalSplit
+  status.currentMainWindowNode = status.currentMainWindowNode.verticalSplit
   inc(status.numOfMainWindow)
 
   status.update
 
 proc horizontalSplitWindow*(status: var Editorstatus) =
-  status.currentMainWindowNode.horizontalSplit
+  status.currentMainWindowNode = status.currentMainWindowNode.horizontalSplit
   inc(status.numOfMainWindow)
 
   status.update
@@ -391,10 +400,10 @@ proc moveNextWindow*(status: var EditorStatus) = discard # moveCurrentMainWindow
 
 proc movePrevWindow*(status: var EditorStatus) = discard # moveCurrentMainWindow(status, status.currentMainWindow - 1)
 
-proc countReferencedWindow*(mainWins: seq[MainWindowInfo], bufferIndex: int): int =
-  result = 0
-  for win in mainWins:
-    if win.bufferIndex == bufferIndex: result.inc
+#proc countReferencedWindow*(mainWins: seq[MainWindowInfo], bufferIndex: int): int =
+#  result = 0
+#  for win in mainWins:
+#    if win.bufferIndex == bufferIndex: result.inc
 
 proc writePopUpWindow*(status: var Editorstatus, x, y, currentLine: var int,  buffer: seq[seq[Rune]]) =
   # Pop up window size

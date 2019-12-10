@@ -242,7 +242,7 @@ proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string)
 
   status.update
   setCursor(false)
-  while isResizekey(status.currentMainWindowNode.mainWindowInfo.window.getKey):
+  while isResizekey(status.currentMainWindowNode.window.getKey):
     status.resize(terminalHeight(), terminalWidth())
     status.update
     setCursor(false)
@@ -263,9 +263,9 @@ proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
   status.bufStatus[status.currentBuffer].currentLine = 0
   filerStatus.viewUpdate = true
   if filerStatus.dirList.len == 0:
-    status.currentMainWindowNode.mainWindowInfo.window.erase
-    status.currentMainWindowNode.mainWindowInfo.window.write(0, 0, "not found", EditorColorPair.commandBar)
-    status.currentMainWindowNode.mainWindowInfo.window.refresh
+    status.currentMainWindowNode.window.erase
+    status.currentMainWindowNode.window.write(0, 0, "not found", EditorColorPair.commandBar)
+    status.currentMainWindowNode.window.refresh
     discard getKey(status.commandWindow)
     status.commandWindow.erase
     status.commandWindow.refresh
@@ -282,7 +282,7 @@ proc filerMode*(status: var EditorStatus) =
     if filerStatus.viewUpdate: updateFilerView(status, filerStatus)
 
     setCursor(false)
-    let key = getKey(status.currentMainWindowNode.mainWindowInfo.window)
+    let key = getKey(status.currentMainWindowNode.window)
 
     status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
     status.bufStatus[status.currentBuffer].tryRecordCurrentPosition

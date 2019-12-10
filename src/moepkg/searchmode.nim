@@ -73,7 +73,7 @@ proc searchFirstOccurrence(status: var EditorStatus) =
     return
 
   status.searchHistory.add(keyword)
-  let bufferIndex = status.currentMainWindowNode.mainWindowInfo.bufferIndex
+  let bufferIndex = status.currentMainWindowNode.bufferIndex
   status.bufStatus[bufferIndex].isHighlight = true
   status.jumpToSearchResults(keyword)
 
@@ -98,7 +98,7 @@ proc realtimeSearch(status: var Editorstatus) =
 
     if exitSearch or cancelSearch: break
 
-    let bufferIndex = status.currentMainWindowNode.mainWindowInfo.bufferIndex
+    let bufferIndex = status.currentMainWindowNode.bufferIndex
     if keyword.len > 0:
       status.bufStatus[bufferIndex].isHighlight = true
       status.jumpToSearchResults(keyword)
@@ -111,7 +111,7 @@ proc realtimeSearch(status: var Editorstatus) =
   if cancelSearch:
     status.searchHistory.delete(status.searchHistory.high)
 
-    let bufferIndex = status.currentMainWindowNode.mainWindowInfo.bufferIndex
+    let bufferIndex = status.currentMainWindowNode.bufferIndex
     status.bufStatus[bufferIndex].isHighlight = false
     status.updateHighlight
 

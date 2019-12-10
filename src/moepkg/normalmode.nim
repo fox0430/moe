@@ -111,8 +111,8 @@ proc jumpLine*(status: var EditorStatus, destination: int) =
 
   if not (view.originalLine[0] <= destination and (view.originalLine[view.height - 1] == -1 or destination <= view.originalLine[view.height - 1])):
     var startOfPrintedLines = 0
-    if destination > status.bufStatus[status.currentBuffer].buffer.len - 1 - status.currentMainWindowNode.mainWindowInfo.window.height - 1:
-      startOfPrintedLines = status.bufStatus[status.currentBuffer].buffer.len - 1 - status.currentMainWindowNode.mainWindowInfo.window.height - 1
+    if destination > status.bufStatus[status.currentBuffer].buffer.len - 1 - status.currentMainWindowNode.window.height - 1:
+      startOfPrintedLines = status.bufStatus[status.currentBuffer].buffer.len - 1 - status.currentMainWindowNode.window.height - 1
     else:
       startOfPrintedLines = max(destination - (currentLine - status.bufStatus[status.currentBuffer].view.originalLine[0]), 0)
     status.bufStatus[status.currentBuffer].view.reload(status.bufStatus[status.currentBuffer].buffer, startOfPrintedLines)
@@ -523,7 +523,7 @@ proc searchNextOccurrence(status: var EditorStatus) =
 
   let keyword = status.searchHistory[status.searchHistory.high]
   
-  let bufferIndex = status.currentMainWindowNode.mainWindowInfo.bufferIndex
+  let bufferIndex = status.currentMainWindowNode.bufferIndex
   status.bufStatus[bufferIndex].isHighlight = true
   status.updateHighlight
 
@@ -540,7 +540,7 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) =
 
   let keyword = status.searchHistory[status.searchHistory.high]
   
-  let bufferIndex = status.currentMainWindowNode.mainWindowInfo.bufferIndex
+  let bufferIndex = status.currentMainWindowNode.bufferIndex
   status.bufStatus[bufferIndex].isHighlight = true
   status.updateHighlight
 
@@ -621,7 +621,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('+'):
     moveToFirstOfNextLine(status.bufStatus[status.currentBuffer])
   elif key == ord('g'):
-    if getKey(status.currentMainWindowNode.mainWindowInfo.window) == ord('g'): moveToFirstLine(status)
+    if getKey(status.currentMainWindowNode.window) == ord('g'): moveToFirstLine(status)
   elif key == ord('G'):
     moveToLastLine(status)
   elif isPageUpkey(key) or isControlU(key):
@@ -635,7 +635,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('e'):
     for i in 0 ..< cmdLoop: moveToForwardEndOfWord(status.bufStatus[status.currentBuffer])
   elif key == ord('z'):
-    let key = getkey(status.currentMainWindowNode.mainWindowInfo.window)
+    let key = getkey(status.currentMainWindowNode.window)
     if key == ord('.'): moveCenterScreen(status.bufStatus[status.currentBuffer])
     elif key == ord('t'): scrollScreenTop(status.bufStatus[status.currentBuffer])
     elif key == ord('b'): scrollScreenBottom(status.bufStatus[status.currentBuffer])
@@ -648,7 +648,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     status.updateHighlight
     status.changeMode(Mode.insert)
   elif key == ord('d'):
-    let key = getKey(status.currentMainWindowNode.mainWindowInfo.window)
+    let key = getKey(status.currentMainWindowNode.window)
     if key == ord('d'):
       yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
       for i in 0 ..< min(cmdLoop, status.bufStatus[currentBuf].buffer.len - status.bufStatus[currentBuf].currentLine): deleteLine(status.bufStatus[status.currentBuffer], status.bufStatus[currentBuf].currentLine)
@@ -656,7 +656,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     elif key == ('$') or isEndKey(key): deleteCharacterUntilEndOfLine(status.bufStatus[status.currentBuffer])
     elif key == ('0') or isHomeKey(key): deleteCharacterBeginningOfLine(status.bufStatus[status.currentBuffer])
   elif key == ord('y'):
-    let key = getkey(status.currentMainWindowNode.mainWindowInfo.window)
+    let key = getkey(status.currentMainWindowNode.window)
     if key == ord('y'): yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
     elif key == ord('w'): yankWord(status, cmdLoop)
   elif key == ord('p'):
@@ -672,7 +672,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('r'):
     if cmdLoop > status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len - status.bufStatus[currentBuf].currentColumn: return
 
-    let ch = getKey(status.currentMainWindowNode.mainWindowInfo.window)
+    let ch = getKey(status.currentMainWindowNode.window)
     for i in 0 ..< cmdLoop:
       if i > 0:
         inc(status.bufStatus[status.currentBuffer].currentColumn)
@@ -683,10 +683,10 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('N'):
     searchNextOccurrenceReversely(status)
   elif key == ord('f'):
-    let key = getKey(status.currentMainWindowNode.mainWindowInfo.window)
+    let key = getKey(status.currentMainWindowNode.window)
     searchOneCharactorToEndOfLine(status.bufStatus[status.currentBuffer], key)
   elif key == ord('F'):
-    let key = getKey(status.currentMainWindowNode.mainWindowInfo.window)
+    let key = getKey(status.currentMainWindowNode.window)
     searchOneCharactorToBeginOfLine(status.bufStatus[status.currentBuffer], key)
   elif key == ord('R'):
     status.changeMode(Mode.replace)
@@ -711,7 +711,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif isControlR(key):
     redo(status.bufStatus[status.currentBuffer])
   elif key == ord('Z'):
-    let key = getKey(status.currentMainWindowNode.mainWindowInfo.window)
+    let key = getKey(status.currentMainWindowNode.window)
     if  key == ord('Z'): writeFileAndExit(status)
     elif key == ord('Q'): forceExit(status)
   else:
@@ -734,13 +734,13 @@ proc normalMode*(status: var EditorStatus) =
     var key: Rune = Rune('\0')
     while key == Rune('\0'):
       status.eventLoopTask
-      key = getKey(status.currentMainWindowNode.mainWindowInfo.window)
+      key = getKey(status.currentMainWindowNode.window)
 
     status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
     status.bufStatus[status.currentBuffer].tryRecordCurrentPosition
 
     if isEscKey(key):
-      let keyAfterEsc = getKey(status.currentMainWindowNode.mainWindowInfo.window)
+      let keyAfterEsc = getKey(status.currentMainWindowNode.window)
       if isEscKey(key):
         turnOffHighlighting(status)
         continue

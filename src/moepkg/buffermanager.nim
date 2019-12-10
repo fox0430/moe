@@ -55,7 +55,7 @@ proc bufferManager*(status: var Editorstatus) =
     status.updateBufferManagerHighlight
     status.update
     setCursor(false)
-    let key = getKey(status.currentMainWindowNode.mainWindowInfo.window)
+    let key = getKey(status.currentMainWindowNode.window)
 
     if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
     elif isControlK(key): status.moveNextWindow
