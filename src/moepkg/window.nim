@@ -1,14 +1,14 @@
 import heapqueue, terminal
 import ui
 
-type SplitType = enum
+type SplitType* = enum
   vertical = 0
   horaizontal = 1
 
 type WindowNode* = ref object
   parent*: WindowNode
   child*: seq[WindowNode]
-  splitType: SplitType
+  splitType*: SplitType
   window*: Window
   bufferIndex*: int
   windowIndex*: int
@@ -85,7 +85,8 @@ proc resize*(root: WindowNode, height, width: int) =
       node.h = int(height / root.child.len)
       node.w = terminalWidth()
       node.y = node.h * index
-    if node.child.len > 0: qeue.push(node)
+    if node.child.len > 0:
+      for child in node.child: qeue.push(child)
 
   while qeue.len > 0:
     for i in  0 ..< qeue.len:
@@ -95,14 +96,12 @@ proc resize*(root: WindowNode, height, width: int) =
       if parent.splitType == SplitType.vertical:
         child.w = int(width / parent.child.len)
         child.h = parent.h
-        # Need fix
-        child.x = parent.child[0].w * i
+        child.x = child.w * i
         child.y = parent.y
       else:
         child.h = int(height / child.parent.child.len)
         child.w = parent.w
-        # Need fix
-        child.y = parent.child[0].h * i
+        child.y = child.h * i
         child.x = parent.x
 
       if child.child.len > 0:
@@ -128,6 +127,23 @@ proc getAllBufferIndex*(root: WindowNode): seq[int]  =
     for i in  0 ..< qeue.len:
       let node = qeue.pop
       if node.window != nil: result.add(node.bufferIndex)
+
+      if node.child.len > 0:
+        for node in node.child: qeue.push(node)
+
+proc getAllWindowNode*(root: WindowNode) =
+  var qeue = initHeapQueue[WindowNode]()
+  for node in root.child: qeue.push(node)
+
+  exitUi()
+  echo "start get window node"
+  while qeue.len > 0:
+    for i in  0 ..< qeue.len:
+      let node = qeue.pop
+      echo node.splitType
+      echo node.child.len
+      if node.window == nil: echo "nil" else: echo "active"
+      echo ""
 
       if node.child.len > 0:
         for node in node.child: qeue.push(node)

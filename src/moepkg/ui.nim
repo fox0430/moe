@@ -857,7 +857,15 @@ proc refresh*(win: Window) = wrefresh(win.cursesWindow)
 
 proc move*(win: Window, y, x: int) = mvwin(win.cursesWindow, cint(y), cint(x))
 
-proc resize*(win: Window, height, width: int) = wresize(win.cursesWindow, cint(height), cint(width))
+proc resize*(win: Window, height, width: int) =
+  wresize(win.cursesWindow, cint(height), cint(width))
+
+  exitUi()
+  echo "get curses win size"
+  var h, w = cint(0)
+  win.cursesWindow.getmaxyx(h, w)
+  echo h
+  echo w
 
 proc resize*(win: Window, height, width, y, x: int) =
   win.resize(height, width)

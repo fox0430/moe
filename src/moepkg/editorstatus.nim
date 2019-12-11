@@ -297,10 +297,10 @@ proc resize*(status: var EditorStatus, height, width: int) =
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useTab = if status.settings.tabLine.useTab: 1 else: 0
 
-  status.mainWindowNode.resize(terminalHeight(), terminalWidth())
-
   exitUi()
-  echo "start"
+  echo "------------"
+
+  status.mainWindowNode.resize(terminalHeight(), terminalWidth())
 
   var qeue = initHeapQueue[WindowNode]()
   for node in status.mainWindowNode.child: qeue.push(node)
@@ -314,13 +314,17 @@ proc resize*(status: var EditorStatus, height, width: int) =
           adjustedHeight = max(node.h, 4)
           adjustedWidth = max(node.w, 4)
 
-        node.window.resize(adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, node.y + useTab, node.x)
+        echo node.parent.splitType
+        echo fmt"y: {node.y}"
+        echo fmt"x: {node.x}"
+        echo fmt"h: {adjustedHeight}"
+        echo fmt"w: {adjustedWidth}"
 
-        echo node.y
-        echo node.x
+        node.window.resize(adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, node.y + useTab, node.x)
         echo ""
 
         status.bufStatus[bufIndex].view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight - useStatusBar - useTab - 1, adjustedWidth - widthOfLineNum - 1, widthOfLineNum)
+        #echo status.bufStatus[bufIndex].view.height
         status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
@@ -345,23 +349,23 @@ proc update*(status: var EditorStatus) =
   while qeue.len > 0:
     for i in  0 ..< qeue.len:
       let node = qeue.pop
-      if node.window == nil: break
-      let
-        bufIndex = node.bufferIndex
-        isCurrentMainWin = if node.windowIndex == status.currentMainWindowNode.windowIndex: true else: false
-        isLineNumber = status.settings.lineNumber
-        isCurrentLineNumber = status.settings.currentLineNumber
-        isCursorLine = status.settings.cursorLine
-        isVisualMode = if status.bufStatus[bufIndex].mode == Mode.visual or status.bufStatus[bufIndex].mode == Mode.visualBlock: true else: false
-        startSelectedLine = status.bufStatus[bufIndex].selectArea.startLine
-        endSelectedLine = status.bufStatus[bufIndex].selectArea.endLine
+      if node.window != nil:
+        let
+          bufIndex = node.bufferIndex
+          isCurrentMainWin = if node.windowIndex == status.currentMainWindowNode.windowIndex: true else: false
+          isLineNumber = status.settings.lineNumber
+          isCurrentLineNumber = status.settings.currentLineNumber
+          isCursorLine = status.settings.cursorLine
+          isVisualMode = if status.bufStatus[bufIndex].mode == Mode.visual or status.bufStatus[bufIndex].mode == Mode.visualBlock: true else: false
+          startSelectedLine = status.bufStatus[bufIndex].selectArea.startLine
+          endSelectedLine = status.bufStatus[bufIndex].selectArea.endLine
 
-      status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
-      status.bufStatus[bufIndex].view.update(node.window, isLineNumber, isCurrentLineNumber, isCursorLine, isCurrentMainWin, isVisualMode, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, status.bufStatus[bufIndex].currentLine, startSelectedLine, endSelectedLine)
+        status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
+        status.bufStatus[bufIndex].view.update(node.window, isLineNumber, isCurrentLineNumber, isCursorLine, isCurrentMainWin, isVisualMode, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, status.bufStatus[bufIndex].currentLine, startSelectedLine, endSelectedLine)
 
-      status.bufStatus[bufIndex].cursor.update(status.bufStatus[bufIndex].view, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
+        status.bufStatus[bufIndex].cursor.update(status.bufStatus[bufIndex].view, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
-      node.window.refresh
+        node.window.refresh
 
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
