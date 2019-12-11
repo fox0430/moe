@@ -1,5 +1,5 @@
 import heapqueue, terminal
-import ui
+import ui, editorview
 
 type SplitType* = enum
   vertical = 0
@@ -10,6 +10,7 @@ type WindowNode* = ref object
   child*: seq[WindowNode]
   splitType*: SplitType
   window*: Window
+  view*: EditorView
   bufferIndex*: int
   windowIndex*: int
   y*: int

@@ -57,7 +57,6 @@ type EditorSettings* = object
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
   highlight*: Highlight
-  view*: EditorView
   language*: SourceLanguage
   cursor*: CursorPosition
   selectArea*: SelectArea
@@ -297,9 +296,6 @@ proc resize*(status: var EditorStatus, height, width: int) =
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useTab = if status.settings.tabLine.useTab: 1 else: 0
 
-  exitUi()
-  echo "------------"
-
   status.mainWindowNode.resize(terminalHeight(), terminalWidth())
 
   var qeue = initHeapQueue[WindowNode]()
@@ -310,22 +306,14 @@ proc resize*(status: var EditorStatus, height, width: int) =
       if node.window != nil:
         let
           bufIndex = node.bufferIndex
-          widthOfLineNum = status.bufStatus[bufIndex].view.widthOfLineNum
+          widthOfLineNum = node.view.widthOfLineNum
           adjustedHeight = max(node.h, 4)
           adjustedWidth = max(node.w, 4)
 
-        echo node.parent.splitType
-        echo fmt"y: {node.y}"
-        echo fmt"x: {node.x}"
-        echo fmt"h: {adjustedHeight}"
-        echo fmt"w: {adjustedWidth}"
-
         node.window.resize(adjustedHeight - useStatusBar - useTab - 1, adjustedWidth, node.y + useTab, node.x)
-        echo ""
 
-        status.bufStatus[bufIndex].view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight - useStatusBar - useTab - 1, adjustedWidth - widthOfLineNum - 1, widthOfLineNum)
-        #echo status.bufStatus[bufIndex].view.height
-        status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
+        node.view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight - useStatusBar - useTab - 1, adjustedWidth - widthOfLineNum - 1, widthOfLineNum)
+        node.view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
 
@@ -360,17 +348,17 @@ proc update*(status: var EditorStatus) =
           startSelectedLine = status.bufStatus[bufIndex].selectArea.startLine
           endSelectedLine = status.bufStatus[bufIndex].selectArea.endLine
 
-        status.bufStatus[bufIndex].view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
-        status.bufStatus[bufIndex].view.update(node.window, isLineNumber, isCurrentLineNumber, isCursorLine, isCurrentMainWin, isVisualMode, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, status.bufStatus[bufIndex].currentLine, startSelectedLine, endSelectedLine)
+        node.view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
+        node.view.update(node.window, isLineNumber, isCurrentLineNumber, isCursorLine, isCurrentMainWin, isVisualMode, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, status.bufStatus[bufIndex].currentLine, startSelectedLine, endSelectedLine)
 
-        status.bufStatus[bufIndex].cursor.update(status.bufStatus[bufIndex].view, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
+        status.bufStatus[bufIndex].cursor.update(node.view, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
         node.window.refresh
 
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
 
-  status.currentMainWindowNode.window.moveCursor(status.bufStatus[status.currentBuffer].cursor.y, status.bufStatus[status.currentBuffer].view.widthOfLineNum + status.bufStatus[status.currentBuffer].cursor.x)
+  status.currentMainWindowNode.window.moveCursor(status.bufStatus[status.currentBuffer].cursor.y, status.currentMainWindowNode.view.widthOfLineNum + status.bufStatus[status.currentBuffer].cursor.x)
   setCursor(true)
 
 proc verticalSplitWindow*(status: var EditorStatus) =
@@ -460,7 +448,7 @@ proc addNewBuffer*(status:var EditorStatus, filename: string) =
     numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[index].buffer.len) - 2 else: 0
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useTab = if status.settings.tabLine.useTab: 1 else: 0
-  status.bufStatus[index].view = initEditorView(status.bufStatus[index].buffer, terminalHeight() - useStatusBar - useTab - 1, terminalWidth() - numberOfDigitsLen)
+  status.currentMainWindowNode.view = initEditorView(status.bufStatus[index].buffer, terminalHeight() - useStatusBar - useTab - 1, terminalWidth() - numberOfDigitsLen)
 
   status.changeCurrentBuffer(index)
   status.changeMode(Mode.normal)

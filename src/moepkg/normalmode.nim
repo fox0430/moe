@@ -104,7 +104,7 @@ proc deleteCurrentCharacter*(bufStatus: var BufferStatus) =
 proc jumpLine*(status: var EditorStatus, destination: int) =
   let
     currentLine = status.bufStatus[status.currentBuffer].currentLine
-    view = status.bufStatus[status.currentBuffer].view
+    view = status.currentMainWindowNode.view
   status.bufStatus[status.currentBuffer].currentLine = destination
   status.bufStatus[status.currentBuffer].currentColumn = 0
   status.bufStatus[status.currentBuffer].expandedColumn = 0
@@ -114,8 +114,8 @@ proc jumpLine*(status: var EditorStatus, destination: int) =
     if destination > status.bufStatus[status.currentBuffer].buffer.len - 1 - status.currentMainWindowNode.window.height - 1:
       startOfPrintedLines = status.bufStatus[status.currentBuffer].buffer.len - 1 - status.currentMainWindowNode.window.height - 1
     else:
-      startOfPrintedLines = max(destination - (currentLine - status.bufStatus[status.currentBuffer].view.originalLine[0]), 0)
-    status.bufStatus[status.currentBuffer].view.reload(status.bufStatus[status.currentBuffer].buffer, startOfPrintedLines)
+      startOfPrintedLines = max(destination - (currentLine - status.currentMainWindowNode.view.originalLine[0]), 0)
+    status.currentMainWindowNode.view.reload(status.bufStatus[status.currentBuffer].buffer, startOfPrintedLines)
 
 proc moveToFirstLine*(status: var EditorStatus) = jumpLine(status, 0)
 
@@ -124,21 +124,21 @@ proc moveToLastLine*(status: var EditorStatus) =
   else: jumpLine(status, status.bufStatus[status.currentBuffer].buffer.len - 1)
 
 proc pageUp*(status: var EditorStatus) =
-  let destination = max(status.bufStatus[status.currentBuffer].currentLine - status.bufStatus[status.currentBuffer].view.height, 0)
+  let destination = max(status.bufStatus[status.currentBuffer].currentLine - status.currentMainWindowNode.view.height, 0)
   jumpLine(status, destination)
 
 proc pageDown*(status: var EditorStatus) =
   let
-    destination = min(status.bufStatus[status.currentBuffer].currentLine + status.bufStatus[status.currentBuffer].view.height, status.bufStatus[status.currentBuffer].buffer.len - 1)
+    destination = min(status.bufStatus[status.currentBuffer].currentLine + status.currentMainWindowNode.view.height, status.bufStatus[status.currentBuffer].buffer.len - 1)
     currentLine = status.bufStatus[status.currentBuffer].currentLine
-    view = status.bufStatus[status.currentBuffer].view
+    view = status.currentMainWindowNode.view
   status.bufStatus[status.currentBuffer].currentLine = destination
   status.bufStatus[status.currentBuffer].currentColumn = 0
   status.bufStatus[status.currentBuffer].expandedColumn = 0
 
   if not (view.originalLine[0] <= destination and (view.originalLine[view.height - 1] == -1 or destination <= view.originalLine[view.height - 1])):
-    let startOfPrintedLines = max(destination - (currentLine - status.bufStatus[status.currentBuffer].view.originalLine[0]), 0)
-    status.bufStatus[status.currentBuffer].view.reload(status.bufStatus[status.currentBuffer].buffer, startOfPrintedLines)
+    let startOfPrintedLines = max(destination - (currentLine - status.currentMainWindowNode.view.originalLine[0]), 0)
+    status.currentMainWindowNode.view.reload(status.bufStatus[status.currentBuffer].buffer, startOfPrintedLines)
 
 proc moveToForwardWord*(bufStatus: var BufferStatus) =
   let
@@ -242,40 +242,40 @@ proc moveToForwardEndOfWord*(bufStatus: var BufferStatus) =
 
   bufStatus.expandedColumn = bufStatus.currentColumn
 
-proc moveCenterScreen(bufStatus: var BufferStatus) =
-  if bufStatus.currentLine > int(bufStatus.view.height / 2):
-    if bufStatus.cursor.y > int(bufStatus.view.height / 2):
-      let startOfPrintedLines = bufStatus.cursor.y - int(bufStatus.view.height / 2)
-      bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[startOfPrintedLines])
-    else:
-      let numOfTime = int(bufStatus.view.height / 2) - bufStatus.cursor.y
-      for i in 0 ..< numOfTime: scrollUp(bufStatus.view, bufStatus.buffer)
+#proc moveCenterScreen(bufStatus: var BufferStatus) =
+#  if bufStatus.currentLine > int(bufStatus.view.height / 2):
+#    if bufStatus.cursor.y > int(bufStatus.view.height / 2):
+#      let startOfPrintedLines = bufStatus.cursor.y - int(bufStatus.view.height / 2)
+#      bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[startOfPrintedLines])
+#    else:
+#      let numOfTime = int(bufStatus.view.height / 2) - bufStatus.cursor.y
+#      for i in 0 ..< numOfTime: scrollUp(bufStatus.view, bufStatus.buffer)
+#
+#proc scrollScreenTop(bufStatus: var BufferStatus) = bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[bufStatus.cursor.y])
+#
+#proc scrollScreenBottom(bufStatus: var BufferStatus) =
+#  if bufStatus.currentLine > bufStatus.view.height:
+#    let numOfTime = bufStatus.view.height - bufStatus.cursor.y - 2
+#    for i in 0 ..< numOfTime: scrollUp(bufStatus.view, bufStatus.buffer)
 
-proc scrollScreenTop(bufStatus: var BufferStatus) = bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[bufStatus.cursor.y])
-
-proc scrollScreenBottom(bufStatus: var BufferStatus) =
-  if bufStatus.currentLine > bufStatus.view.height:
-    let numOfTime = bufStatus.view.height - bufStatus.cursor.y - 2
-    for i in 0 ..< numOfTime: scrollUp(bufStatus.view, bufStatus.buffer)
-
-proc openBlankLineBelow(bufStatus: var BufferStatus) =
-  let indent = sequtils.repeat(ru' ', countRepeat(bufStatus.buffer[bufStatus.currentLine], Whitespace, 0))
-
-  bufStatus.buffer.insert(indent, bufStatus.currentLine+1)
-  inc(bufStatus.currentLine)
-  bufStatus.currentColumn = indent.len
-
-  bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
-  inc(bufStatus.countChange)
-
-proc openBlankLineAbove(bufStatus: var BufferStatus) =
-  let indent = sequtils.repeat(ru' ', countRepeat(bufStatus.buffer[bufStatus.currentLine], Whitespace, 0))
-
-  bufStatus.buffer.insert(indent, bufStatus.currentLine)
-  bufStatus.currentColumn = indent.len
-
-  bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
-  inc(bufStatus.countChange)
+#proc openBlankLineBelow(bufStatus: var BufferStatus) =
+#  let indent = sequtils.repeat(ru' ', countRepeat(bufStatus.buffer[bufStatus.currentLine], Whitespace, 0))
+#
+#  bufStatus.buffer.insert(indent, bufStatus.currentLine+1)
+#  inc(bufStatus.currentLine)
+#  bufStatus.currentColumn = indent.len
+#
+#  bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
+#  inc(bufStatus.countChange)
+#
+#proc openBlankLineAbove(bufStatus: var BufferStatus) =
+#  let indent = sequtils.repeat(ru' ', countRepeat(bufStatus.buffer[bufStatus.currentLine], Whitespace, 0))
+#
+#  bufStatus.buffer.insert(indent, bufStatus.currentLine)
+#  bufStatus.currentColumn = indent.len
+#
+#  bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
+#  inc(bufStatus.countChange)
 
 proc deleteLine(bufStatus: var BufferStatus, line: int) =
   bufStatus.buffer.delete(line, line)
