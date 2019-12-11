@@ -1,6 +1,6 @@
 import deques, strutils, strformat, sequtils, terminal, macros
 from os import execShellCmd
-import ui, editorstatus, editorview, gapbuffer, editorview, normalmode, unicodeext, highlight, undoredostack
+import ui, editorstatus, editorview, gapbuffer, editorview, normalmode, unicodeext, highlight, undoredostack, window
 
 proc correspondingCloseParen(c: char): char =
   case c
@@ -19,14 +19,14 @@ proc nextRuneIs(bufStatus: var BufferStatus, c: Rune): bool =
   if bufStatus.buffer[bufStatus.currentLine].len > bufStatus.currentColumn:
     result = bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn] == c
 
-proc insertCharacter(bufStatus: var BufferStatus, autoCloseParen: bool, c: Rune) =
+proc insertCharacter(bufStatus: var BufferStatus, currentWin: WindowNode, autoCloseParen: bool, c: Rune) =
   let oldLine = bufStatus.buffer[bufStatus.currentLine]
   var newLine = bufStatus.buffer[bufStatus.currentLine]
   template insert = newLine.insert(c, bufStatus.currentColumn)
   template moveRight = inc(bufStatus.currentColumn)
   template inserted =
     if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
-    bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
+    currentWin.view.reload(bufStatus.buffer, currentWin.view.originalLine[0])
     inc(bufStatus.countChange)
 
   if autoCloseParen and canConvertToChar(c):
@@ -48,7 +48,7 @@ proc insertCharacter(bufStatus: var BufferStatus, autoCloseParen: bool, c: Rune)
     moveRight()
     inserted()
 
-proc keyBackspace(bufStatus: var BufferStatus) =
+proc keyBackspace(bufStatus: var BufferStatus, currentWin: WindowNode) =
   if bufStatus.currentLine == 0 and bufStatus.currentColumn == 0: return
 
   if bufStatus.currentColumn == 0:
@@ -69,7 +69,7 @@ proc keyBackspace(bufStatus: var BufferStatus) =
     newLine.delete(bufStatus.currentColumn)
     if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
 
-  bufStatus.view.reload(bufStatus.buffer, min(bufStatus.view.originalLine[0], bufStatus.buffer.high))
+  currentWin.view.reload(bufStatus.buffer, min(currentWin.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)
 
 proc insertIndent(bufStatus: var BufferStatus) =
@@ -80,7 +80,7 @@ proc insertIndent(bufStatus: var BufferStatus) =
   newLine &= repeat(' ', indent).toRunes
   if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine + 1] = newLine
 
-proc keyEnter*(bufStatus: var BufferStatus, autoIndent: bool) =
+proc keyEnter*(bufStatus: var BufferStatus, currentWin: WindowNode, autoIndent: bool) =
   bufStatus.buffer.insert(ru"", bufStatus.currentLine + 1)
 
   if autoIndent:
@@ -124,11 +124,11 @@ proc keyEnter*(bufStatus: var BufferStatus, autoIndent: bool) =
     bufStatus.currentColumn = 0
     bufStatus.expandedColumn = 0
 
-  bufStatus.view.reload(bufStatus.buffer, bufStatus.view.originalLine[0])
+  currentWin.view.reload(bufStatus.buffer, currentWin.view.originalLine[0])
   inc(bufStatus.countChange)
 
-proc insertTab(bufStatus: var BufferStatus, tabStop: int, autoCloseParen: bool) =
-  for i in 0 ..< tabStop: insertCharacter(bufStatus, autoCloseParen, ru' ')
+proc insertTab(bufStatus: var BufferStatus, currentWin: WindowNode, tabStop: int, autoCloseParen: bool) =
+  for i in 0 ..< tabStop: insertCharacter(bufStatus, currentWin, autoCloseParen, ru' ')
 
 proc insertMode*(status: var EditorStatus) =
   changeCursorType(status.settings.insertModeCursor)
@@ -172,19 +172,19 @@ proc insertMode*(status: var EditorStatus) =
     elif isEndKey(key):
       moveToLastOfLine(status.bufStatus[status.currentBuffer])
     elif isDcKey(key):
-      deleteCurrentCharacter(status.bufStatus[status.currentBuffer])
+      deleteCurrentCharacter(status.bufStatus[status.currentBuffer], status.currentMainWindowNode)
       bufferChanged = true
     elif isBackspaceKey(key):
-      keyBackspace(status.bufStatus[status.currentBuffer])
+      keyBackspace(status.bufStatus[status.currentBuffer], status.currentMainWindowNode)
       bufferChanged = true
     elif isEnterKey(key):
-      keyEnter(status.bufStatus[status.currentBuffer], status.settings.autoIndent)
+      keyEnter(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, status.settings.autoIndent)
       bufferChanged = true
     elif key == ord('\t'):
-      insertTab(status.bufStatus[status.currentBuffer], status.settings.tabStop, status.settings.autoCloseParen)
+      insertTab(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, status.settings.tabStop, status.settings.autoCloseParen)
       bufferChanged = true
     else:
-      insertCharacter(status.bufStatus[status.currentBuffer], status.settings.autoCloseParen, key)
+      insertCharacter(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, status.settings.autoCloseParen, key)
       bufferChanged = true
 
   stdout.write "\x1b[2 q"

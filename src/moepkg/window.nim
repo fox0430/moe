@@ -1,5 +1,5 @@
 import heapqueue, terminal
-import ui, editorview
+import ui, editorview, gapbuffer, unicodeext
 
 type SplitType* = enum
   vertical = 0
@@ -28,21 +28,25 @@ proc initWindowNode*(): WindowNode =
   node.window.setTimeout()
   return root
 
-proc verticalSplit*(n: var WindowNode): WindowNode =
+proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
   var parent = n.parent
   
-  var win = initWindow(terminalHeight(), terminalWidth(), 0, 0, EditorColorPair.defaultChar)
-  win.setTimeout()
   if parent.splitType == SplitType.vertical:
-    var child = WindowNode(parent: parent, child: @[], splitType: SplitType.vertical, window: win, bufferIndex: n.bufferIndex, h: terminalHeight(), w: terminalWidth())
+    var
+      view = initEditorView(buffer, terminalHeight(), terminalWidth())
+      win = initWindow(terminalHeight(), terminalWidth(), 0, 0, EditorColorPair.defaultChar)
+      child = WindowNode(parent: parent, child: @[], splitType: SplitType.vertical, window: win, view: view, bufferIndex: n.bufferIndex, h: terminalHeight(), w: terminalWidth())
+    win.setTimeout()
     parent.child.add(child)
     return child
   else:
     var
+      view1 = initEditorView(buffer, terminalHeight(), terminalWidth())
+      view2 = initEditorView(buffer, terminalHeight(), terminalWidth())
       win1 = initWindow(terminalHeight(), terminalWidth(), 0, 0, EditorColorPair.defaultChar)
       win2 = initWindow(terminalHeight(), terminalWidth(), 0, 0, EditorColorPair.defaultChar)
-      newNode1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: terminalHeight(), window: win1, bufferIndex: n.bufferIndex, w: terminalWidth())
-      newNode2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: terminalHeight(), window: win2, bufferIndex: n.bufferIndex, w: terminalWidth())
+      newNode1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: terminalHeight(), window: win1, view: view1, bufferIndex: n.bufferIndex, w: terminalWidth())
+      newNode2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: terminalHeight(), window: win2, view: view2, bufferIndex: n.bufferIndex, w: terminalWidth())
     win1.setTimeout()
     win2.setTimeout()
     n.splitType = SplitType.vertical
@@ -51,22 +55,27 @@ proc verticalSplit*(n: var WindowNode): WindowNode =
     n.window = nil
     return newNode1
 
-proc horizontalSplit*(n: var WindowNode): WindowNode =
+proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
   var parent = n.parent
 
-  var win = initWindow(terminalHeight(), terminalWidth(), 0, 0, EditorColorPair.defaultChar)
-  win.setTimeout()
 
   if parent.splitType == SplitType.horaizontal:
-    var child = WindowNode(parent: parent, child: @[], splitType: SplitType.horaizontal, window: win, bufferIndex: n.bufferIndex, h: 0, w: 0)
+
+    var
+      view = initEditorView(buffer, terminalHeight(), terminalWidth())
+      win = initWindow(terminalHeight(), terminalWidth(), 0, 0, EditorColorPair.defaultChar)
+      child = WindowNode(parent: parent, child: @[], splitType: SplitType.horaizontal, window: win, view: view, bufferIndex: n.bufferIndex, h: 0, w: 0)
+    win.setTimeout()
     parent.child.add(child)
     return child
   else:
     var
+      view1 = initEditorView(buffer, terminalHeight(), terminalWidth())
+      view2 = initEditorView(buffer, terminalHeight(), terminalWidth())
       win1 = initWindow(terminalHeight(), terminalWidth(), 0, 0, EditorColorPair.defaultChar)
       win2 = initWindow(terminalHeight(), terminalWidth(), 0, 0, EditorColorPair.defaultChar)
-      newNode1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: terminalHeight(), window: win1, bufferIndex: n.bufferIndex, w: terminalWidth())
-      newNode2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: terminalHeight(), window: win2, bufferIndex: n.bufferIndex, w: terminalWidth())
+      newNode1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: terminalHeight(), window: win1, view: view1, bufferIndex: n.bufferIndex, w: terminalWidth())
+      newNode2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: terminalHeight(), window: win2, view: view2, bufferIndex: n.bufferIndex, w: terminalWidth())
     win1.setTimeout()
     win2.setTimeout()
     n.splitType = SplitType.horaizontal

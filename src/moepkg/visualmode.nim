@@ -1,5 +1,5 @@
 import terminal, strutils, sequtils
-import editorstatus, ui, gapbuffer, normalmode, highlight, unicodeext
+import editorstatus, ui, gapbuffer, normalmode, highlight, unicodeext, window
 
 proc initColorSegment(startLine, startColumn: int): ColorSegment =
   result.firstRow = startLine
@@ -135,18 +135,18 @@ proc deleteBufferBlock(bufStatus: var BufferStatus, registers: var Registers, ar
   bufStatus.currentColumn = area.startColumn
   inc(bufStatus.countChange)
 
-proc addIndent(bufStatus: var BufferStatus, area: SelectArea, tabStop: int) =
+proc addIndent(bufStatus: var BufferStatus, currentWin: WindowNode, area: SelectArea, tabStop: int) =
   bufStatus.currentLine = area.startLine
   for i in area.startLine .. area.endLine:
-    addIndent(bufStatus, tabStop)
+    addIndent(bufStatus, currentWin, tabStop)
     inc(bufStatus.currentLine)
 
   bufStatus.currentLine = area.startLine
 
-proc deleteIndent(bufStatus: var BufferStatus, area: SelectArea, tabStop: int) =
+proc deleteIndent(bufStatus: var BufferStatus, currentWin: WindowNode, area: SelectArea, tabStop: int) =
   bufStatus.currentLine = area.startLine
   for i in area.startLine .. area.endLine:
-    deleteIndent(bufStatus, tabStop)
+    deleteIndent(bufStatus, currentWin, tabStop)
     inc(bufStatus.currentLine)
 
   bufStatus.currentLine = area.startLine
@@ -186,8 +186,8 @@ proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
 
   if key == ord('y') or isDcKey(key): status.bufStatus[status.currentBuffer].yankBuffer(status.registers, area, status.platform)
   elif key == ord('x') or key == ord('d'): status.bufStatus[status.currentBuffer].deleteBuffer(status.registers, area, status.platform)
-  elif key == ord('>'): addIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
-  elif key == ord('<'): deleteIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
+  elif key == ord('>'): addIndent(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, area, status.settings.tabStop)
+  elif key == ord('<'): deleteIndent(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, area, status.settings.tabStop)
   elif key == ord('r'):
     let ch = getKey(status.currentMainWindowNode.window)
     if not isEscKey(ch): replaceCharactor(status.bufStatus[status.currentBuffer], area, ch)

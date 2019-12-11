@@ -362,16 +362,12 @@ proc update*(status: var EditorStatus) =
   setCursor(true)
 
 proc verticalSplitWindow*(status: var EditorStatus) =
-  status.currentMainWindowNode = status.currentMainWindowNode.verticalSplit
+  status.currentMainWindowNode = status.currentMainWindowNode.verticalSplit(status.bufStatus[status.currentBuffer].buffer)
   inc(status.numOfMainWindow)
-
-  status.update
 
 proc horizontalSplitWindow*(status: var Editorstatus) =
-  status.currentMainWindowNode = status.currentMainWindowNode.horizontalSplit
+  status.currentMainWindowNode = status.currentMainWindowNode.horizontalSplit(status.bufStatus[status.currentBuffer].buffer)
   inc(status.numOfMainWindow)
-
-  status.update
 
 proc closeWindow*(status: var EditorStatus) = discard
 #  if index < 0 or index > status.numOfMainWindow: return
@@ -444,11 +440,7 @@ proc addNewBuffer*(status:var EditorStatus, filename: string) =
   let lang = if status.settings.syntax: status.bufStatus[index].language else: SourceLanguage.langNone
   status.bufStatus[index].highlight = initHighlight($status.bufStatus[index].buffer, lang)
 
-  let
-    numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[index].buffer.len) - 2 else: 0
-    useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-    useTab = if status.settings.tabLine.useTab: 1 else: 0
-  status.currentMainWindowNode.view = initEditorView(status.bufStatus[index].buffer, terminalHeight() - useStatusBar - useTab - 1, terminalWidth() - numberOfDigitsLen)
+  status.currentMainWindowNode.view = initEditorView(status.bufStatus[index].buffer, terminalHeight(), terminalWidth())
 
   status.changeCurrentBuffer(index)
   status.changeMode(Mode.normal)

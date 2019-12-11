@@ -1,5 +1,5 @@
 import os, terminal, strutils, unicodeext, times, algorithm
-import editorstatus, ui, fileutils, editorview, gapbuffer, highlight, commandview, highlight
+import editorstatus, ui, fileutils, editorview, gapbuffer, highlight, commandview, highlight, window
 
 type PathInfo = tuple[kind: PathComponent, path: string, size: int64, lastWriteTime: times.Time]
 
@@ -183,7 +183,7 @@ proc initFilelistHighlight[T](dirList: seq[PathInfo], buffer: T, currentLine: in
     let color = setDirListColor(dir.kind, index == currentLine)
     result.colorSegments.add(ColorSegment(firstRow: index, firstColumn: 0, lastRow: index, lastColumn: buffer[index].len, color: color))
 
-proc fileNameToGapBuffer(bufStatus: var BufferStatus, settings: EditorSettings, filerStatus: FilerStatus) =
+proc fileNameToGapBuffer(bufStatus: var BufferStatus, currentWin: WindowNode, settings: EditorSettings, filerStatus: FilerStatus) =
   bufStatus.buffer = initGapBuffer[seq[Rune]]()
 
   for index, dir in filerStatus.dirList:
@@ -202,10 +202,10 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus, settings: EditorSettings, 
   let useStatusBar = if settings.statusBar.useBar: 1 else: 0
   let numOfFile = filerStatus.dirList.len
   bufStatus.highlight = initFilelistHighlight(filerStatus.dirList, bufStatus.buffer, bufStatus.currentLine)
-  bufStatus.view = initEditorView(bufStatus.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
+  currentWin.view = initEditorView(bufStatus.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
 
 proc updateFilerView*(status: var EditorStatus, filerStatus: var FilerStatus) =
-  fileNameToGapBuffer(status.bufStatus[status.currentBuffer], status.settings, filerStatus)
+  fileNameToGapBuffer(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, status.settings, filerStatus)
   status.resize(terminalHeight(), terminalWidth())
   status.update
   filerStatus.viewUpdate = false
@@ -237,7 +237,7 @@ proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string)
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     tmpCurrentLine = status.bufStatus[status.currentBuffer].currentLine
 
-  status.bufStatus[status.currentBuffer].view = initEditorView(status.bufStatus[status.currentBuffer].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
+  status.currentMainWindowNode.view = initEditorView(status.bufStatus[status.currentBuffer].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
   status.bufStatus[status.currentBuffer].currentLine = 0
 
   status.update
