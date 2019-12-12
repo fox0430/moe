@@ -1,5 +1,5 @@
 import sequtils, strutils, os, terminal, packages/docutils/highlite, times
-import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview
+import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview, window
 
 type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
 
@@ -342,27 +342,27 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   status.commandWindow.writeMessageSaveFile(filename, status.messageLog)
   status.changeMode(Mode.normal)
 
-proc quitCommand(status: var EditorStatus) = discard
-#  if status.bufStatus[status.currentBuffer].countChange == 0 or countReferencedWindow(status.mainWindowInfo, status.currentBuffer) > 1:
+proc quitCommand(status: var EditorStatus) =
+  if status.bufStatus[status.currentBuffer].countChange == 0 or status.mainWindowNode.countReferencedWindow(status.currentBuffer) > 1:
+    status.closeWindow(status.currentMainWindowNode)
+    status.changeMode(Mode.normal)
+  else:
+    status.commandWindow.writeNoWriteError(status.messageLog)
+    status.changeMode(Mode.normal)
+
+proc writeAndQuitCommand(status: var EditorStatus) = discard
+#  try:
+#    status.bufStatus[status.currentBuffer].countChange = 0
+#    saveFile(status.bufStatus[status.currentBuffer].filename, status.bufStatus[status.currentBuffer].buffer.toRunes, status.settings.characterEncoding)
 #    status.closeWindow
-#    status.changeMode(Mode.normal)
-#  else:
-#    status.commandWindow.writeNoWriteError(status.messageLog)
-#    status.changeMode(Mode.normal)
+#  except IOError:
+#    status.commandWindow.writeSaveError(status.messageLog)
+#
+#  status.changeMode(Mode.normal)
 
-proc writeAndQuitCommand(status: var EditorStatus) =
-  try:
-    status.bufStatus[status.currentBuffer].countChange = 0
-    saveFile(status.bufStatus[status.currentBuffer].filename, status.bufStatus[status.currentBuffer].buffer.toRunes, status.settings.characterEncoding)
-    status.closeWindow
-  except IOError:
-    status.commandWindow.writeSaveError(status.messageLog)
-
-  status.changeMode(Mode.normal)
-
-proc forceQuitCommand(status: var EditorStatus) =
-  status.closeWindow
-  status.changeMode(Mode.normal)
+proc forceQuitCommand(status: var EditorStatus) = discard
+#  status.closeWindow
+#  status.changeMode(Mode.normal)
 
 proc allBufferQuitCommand(status: var EditorStatus) = discard
 #  for i in 0 ..< status.numOfMainWindow:

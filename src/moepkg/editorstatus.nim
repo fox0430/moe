@@ -167,7 +167,7 @@ proc changeMode*(status: var EditorStatus, mode: Mode) =
 
 proc changeCurrentWin*(status:var EditorStatus, index: int) =
   if index < status.numOfMainWindow and index > 0:
-    status.currentMainWindowNode = status.mainWindowNode.searchByIndex(index)
+    status.currentMainWindowNode = status.mainWindowNode.searchByWindowIndex(index)
 
 proc executeOnExit(settings: EditorSettings) = changeCursorType(settings.defaultCursor)
 
@@ -362,21 +362,42 @@ proc update*(status: var EditorStatus) =
   setCursor(true)
 
 proc verticalSplitWindow*(status: var EditorStatus) =
-  status.currentMainWindowNode = status.currentMainWindowNode.verticalSplit(status.bufStatus[status.currentBuffer].buffer)
+  let buffer = status.bufStatus[status.currentBuffer].buffer
+  status.currentMainWindowNode = status.currentMainWindowNode.verticalSplit(buffer , status.numOfMainWindow)
   inc(status.numOfMainWindow)
+
+  resetIndex(status.mainWindowNode)
+  resetWindowIndex(status.mainWindowNode)
 
 proc horizontalSplitWindow*(status: var Editorstatus) =
-  status.currentMainWindowNode = status.currentMainWindowNode.horizontalSplit(status.bufStatus[status.currentBuffer].buffer)
+  let buffer = status.bufStatus[status.currentBuffer].buffer
+  status.currentMainWindowNode = status.currentMainWindowNode.horizontalSplit(buffer, status.numOfMainWindow)
   inc(status.numOfMainWindow)
 
-proc closeWindow*(status: var EditorStatus) = discard
-#  if index < 0 or index > status.numOfMainWindow: return
-#
-#  status.mainWindowInfo.delete(index)
-#  if status.mainWindowInfo.len > 0:
-#    status.currentMainWindow = if index > status.mainWindowInfo.high: status.mainWindowInfo.high else: index
-#    status.currentBuffer = status.mainWindowInfo[status.currentMainWindow].bufferIndex
-#
+  resetIndex(status.mainWindowNode)
+  resetWindowIndex(status.mainWindowNode)
+
+proc closeWindow*(status: var EditorStatus, node: WindowNode) =
+  if status.numOfMainWindow == 1: exitEditor(status.settings)
+
+  let deleteWindowIndex = node.windowIndex
+  var parent = node.parent
+
+  if parent.child.len == 1:
+    parent.parent.child.delete(parent.index)
+    dec(status.numOfMainWindow)
+    resetIndex(status.mainWindowNode)
+    resetWindowIndex(status.mainWindowNode)
+    let newCurrentWinIndex = if deleteWindowIndex > status.numOfMainWindow - 1: status.numOfMainWindow - 1 else: deleteWindowIndex
+    status.currentMainWindowNode = status.mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
+  else:
+    parent.child.delete(node.index)
+    dec(status.numOfMainWindow)
+    resetIndex(status.mainWindowNode)
+    resetWindowIndex(status.mainWindowNode)
+    let newCurrentWinIndex = if deleteWindowIndex > status.numOfMainWindow - 1: status.numOfMainWindow - 1 else: deleteWindowIndex
+    status.currentMainWindowNode = status.mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
+
 proc moveCurrentMainWindow*(status: var EditorStatus, index: int) = discard
 #  if index < 0 or status.mainWindowInfo.high < index: return
 #

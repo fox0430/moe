@@ -581,11 +581,11 @@ proc writeFileAndExit(status: var EditorStatus) =
   else:
     try:
       saveFile(status.bufStatus[status.currentBuffer].filename, status.bufStatus[status.currentBuffer].buffer.toRunes, status.settings.characterEncoding)
-      status.closeWindow
+      status.closeWindow(status.currentMainWindowNode)
     except IOError:
       status.commandWindow.writeSaveError(status.messageLog)
 
-proc forceExit(status: var Editorstatus) = status.closeWindow
+proc forceExit(status: var Editorstatus) = status.closeWindow(status.currentMainWindowNode)
 
 proc normalCommand(status: var EditorStatus, key: Rune) =
   if status.bufStatus[status.currentBuffer].cmdLoop == 0: status.bufStatus[status.currentBuffer].cmdLoop = 1
