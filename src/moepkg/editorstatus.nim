@@ -398,21 +398,16 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
     let newCurrentWinIndex = if deleteWindowIndex > status.numOfMainWindow - 1: status.numOfMainWindow - 1 else: deleteWindowIndex
     status.currentMainWindowNode = status.mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
 
-proc moveCurrentMainWindow*(status: var EditorStatus, index: int) = discard
-#  if index < 0 or status.mainWindowInfo.high < index: return
-#
-#  status.currentMainWindow = index
-#  changeCurrentBuffer(status, status.mainWindowInfo[index].bufferIndex)
-#  if status.settings.tabLine.useTab: writeTabLine(status)
-#
-proc moveNextWindow*(status: var EditorStatus) = discard # moveCurrentMainWindow(status, status.currentMainWindow + 1)
+proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
+  if index < 0 or status.numOfMainWindow < index: return
 
-proc movePrevWindow*(status: var EditorStatus) = discard # moveCurrentMainWindow(status, status.currentMainWindow - 1)
+  status.currentMainWindowNode = status.mainWindowNode.searchByWindowIndex(index)
+  changeCurrentBuffer(status, status.currentMainWindowNode.bufferIndex)
+  if status.settings.tabLine.useTab: writeTabLine(status)
 
-#proc countReferencedWindow*(mainWins: seq[MainWindowInfo], bufferIndex: int): int =
-#  result = 0
-#  for win in mainWins:
-#    if win.bufferIndex == bufferIndex: result.inc
+proc moveNextWindow*(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindowNode.windowIndex + 1)
+
+proc movePrevWindow*(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindowNode.windowIndex - 1)
 
 proc writePopUpWindow*(status: var Editorstatus, x, y, currentLine: var int,  buffer: seq[seq[Rune]]) =
   # Pop up window size

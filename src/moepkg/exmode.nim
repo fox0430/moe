@@ -309,21 +309,21 @@ proc jumpCommand(status: var EditorStatus, line: int) =
   status.commandWindow.erase
   status.changeMode(Mode.normal)
 
-proc editCommand(status: var EditorStatus, filename: seq[Rune]) = discard
-#  status.changeMode(Mode.normal)
-#
-#  if status.bufStatus[status.currentBuffer].countChange > 0 or countReferencedWindow(status.mainWindowInfo, status.currentBuffer) == 0:
-#    status.commandWindow.writeNoWriteError(status.messageLog)
-#  else:
-#    if existsDir($filename):
-#      try: setCurrentDir($filename)
-#      except OSError:
-#        status.commandWindow.writeFileOpenError($filename, status.messageLog)
-#        addNewBuffer(status, "")
-#      status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSaveTime: now()))
-#    else: addNewBuffer(status, $filename)
-#
-#    changeCurrentBuffer(status, status.bufStatus.high)
+proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
+  status.changeMode(Mode.normal)
+
+  if status.bufStatus[status.currentBuffer].countChange > 0 or countReferencedWindow(status.mainWindowNode, status.currentBuffer) == 0:
+    status.commandWindow.writeNoWriteError(status.messageLog)
+  else:
+    if existsDir($filename):
+      try: setCurrentDir($filename)
+      except OSError:
+        status.commandWindow.writeFileOpenError($filename, status.messageLog)
+        addNewBuffer(status, "")
+      status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSaveTime: now()))
+    else: addNewBuffer(status, $filename)
+
+    changeCurrentBuffer(status, status.bufStatus.high)
 
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   if filename.len == 0:
@@ -350,42 +350,41 @@ proc quitCommand(status: var EditorStatus) =
     status.commandWindow.writeNoWriteError(status.messageLog)
     status.changeMode(Mode.normal)
 
-proc writeAndQuitCommand(status: var EditorStatus) = discard
-#  try:
-#    status.bufStatus[status.currentBuffer].countChange = 0
-#    saveFile(status.bufStatus[status.currentBuffer].filename, status.bufStatus[status.currentBuffer].buffer.toRunes, status.settings.characterEncoding)
-#    status.closeWindow
-#  except IOError:
-#    status.commandWindow.writeSaveError(status.messageLog)
-#
-#  status.changeMode(Mode.normal)
+proc writeAndQuitCommand(status: var EditorStatus) =
+  try:
+    status.bufStatus[status.currentBuffer].countChange = 0
+    saveFile(status.bufStatus[status.currentBuffer].filename, status.bufStatus[status.currentBuffer].buffer.toRunes, status.settings.characterEncoding)
+    status.closeWindow(status.currentMainWindowNode)
+  except IOError:
+    status.commandWindow.writeSaveError(status.messageLog)
 
-proc forceQuitCommand(status: var EditorStatus) = discard
-#  status.closeWindow
-#  status.changeMode(Mode.normal)
+  status.changeMode(Mode.normal)
 
-proc allBufferQuitCommand(status: var EditorStatus) = discard
-#  for i in 0 ..< status.numOfMainWindow:
-#    if status.bufStatus[status.mainWindowInfo[0].bufferIndex].countChange > 0:
-#      status.commandWindow.writeNoWriteError(status.messageLog)
-#      status.changeMode(Mode.normal)
-#      return
-#
-#  for i in 0 ..< status.mainWindowInfo.len: closeWindow(status, 0)
+proc forceQuitCommand(status: var EditorStatus) =
+  status.closeWindow(status.currentMainWindowNode)
+  status.changeMode(Mode.normal)
 
-proc forceAllBufferQuitCommand(status: var EditorStatus) = discard
-#  for i in 0 ..< status.mainWindowInfo.len: closeWindow(status, 0)
+proc allBufferQuitCommand(status: var EditorStatus) =
+  for i in 0 ..< status.numOfMainWindow:
+    let node = status.mainWindowNode.searchByWindowIndex(i)
+    if status.bufStatus[node.bufferIndex].countChange > 0:
+      status.commandWindow.writeNoWriteError(status.messageLog)
+      status.changeMode(Mode.normal)
+      return
 
-proc writeAndQuitAllBufferCommand(status: var Editorstatus) = discard
-#  for i in 0 ..< status.mainWindowInfo.len:
-#    let bufIndex = status.mainWindowInfo[0].bufferIndex
-#    try: saveFile(status.bufStatus[bufIndex].filename, status.bufStatus[bufIndex].buffer.toRunes, status.settings.characterEncoding)
-#    except IOError:
-#      status.commandWindow.writeSaveError(status.messageLog)
-#      status.changeMode(Mode.normal)
-#      return
-#
-#    closeWindow(status, i)
+  exitEditor(status.settings)
+
+proc forceAllBufferQuitCommand(status: var EditorStatus) = exitEditor(status.settings)
+
+proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
+  for bufStatus in status.bufStatus:
+    try: saveFile(bufStatus.filename, bufStatus.buffer.toRunes, status.settings.characterEncoding)
+    except IOError:
+      status.commandWindow.writeSaveError(status.messageLog)
+      status.changeMode(Mode.normal)
+      return
+
+  exitEditor(status.settings)
 
 proc shellCommand(status: var EditorStatus, shellCommand: string) =
   saveCurrentTerminalModes()
