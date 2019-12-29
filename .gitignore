@@ -3,3 +3,4 @@ src/moe
 tests/*
 !tests/*.nim
 moe
+test.txt
