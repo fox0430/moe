@@ -96,7 +96,7 @@ proc resize*(root: WindowNode, height, width: int) =
       for child in node.child: qeue.push(child)
 
   while qeue.len > 0:
-    for i in  0 ..< qeue.len:
+    for i in 0 ..< qeue.len:
       let
         child = qeue.pop
         parent = child.parent
@@ -119,7 +119,7 @@ proc searchByWindowIndex*(root: WindowNode, index: int): WindowNode =
   for node in root.child: qeue.push(node)
 
   while qeue.len > 0:
-    for i in  0 ..< qeue.len:
+    for i in 0 ..< qeue.len:
       let node = qeue.pop
       if node.windowIndex == index: return node
 
@@ -131,7 +131,7 @@ proc getAllBufferIndex*(root: WindowNode): seq[int]  =
   for node in root.child: qeue.push(node)
 
   while qeue.len > 0:
-    for i in  0 ..< qeue.len:
+    for i in 0 ..< qeue.len:
       let node = qeue.pop
       if node.window != nil: result.add(node.bufferIndex)
 
@@ -143,7 +143,7 @@ proc resetIndex*(root: WindowNode) =
   for node in root.child: qeue.push(node)
 
   while qeue.len > 0:
-    for i in  0 ..< qeue.len:
+    for i in 0 ..< qeue.len:
       let node = qeue.pop
       for index, child in node.child: child.index = index
 
@@ -170,7 +170,7 @@ proc countReferencedWindow*(root: WindowNode, bufferIndex: int): int =
   for node in root.child: qeue.push(node)
 
   while qeue.len > 0:
-    for i in  0 ..< qeue.len:
+    for i in 0 ..< qeue.len:
       let node = qeue.pop
       if node.window != nil and bufferIndex == node.bufferIndex: inc(result)
 
@@ -184,7 +184,7 @@ proc getAllWindowNode*(root: WindowNode) =
   exitUi()
   echo "start get window node"
   while qeue.len > 0:
-    for i in  0 ..< qeue.len:
+    for i in 0 ..< qeue.len:
       let node = qeue.pop
       echo node.splitType
       echo node.child.len

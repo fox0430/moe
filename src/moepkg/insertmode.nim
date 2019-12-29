@@ -139,6 +139,7 @@ proc insertMode*(status: var EditorStatus) =
       status.updateHighlight
       bufferChanged = false
 
+    status.resize(terminalHeight(), terminalWidth())
     status.update
 
     var key: Rune = Rune('\0')

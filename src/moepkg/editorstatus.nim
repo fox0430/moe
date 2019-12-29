@@ -138,10 +138,11 @@ proc initEditorSettings*(): EditorSettings =
   result.replaceTextHighlight = true
 
 proc initEditorStatus*(): EditorStatus =
-  result.platform= initPlatform()
+  result.platform = initPlatform()
   result.currentDir = getCurrentDir().toRunes
   result.registers = initRegisters()
   result.settings = initEditorSettings()
+  result.numOfMainWindow = 1
 
   let
     useStatusBar = if result.settings.statusBar.useBar: 1 else: 0
@@ -351,14 +352,16 @@ proc update*(status: var EditorStatus) =
         node.view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
         node.view.update(node.window, isLineNumber, isCurrentLineNumber, isCursorLine, isCurrentMainWin, isVisualMode, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, status.bufStatus[bufIndex].currentLine, startSelectedLine, endSelectedLine)
 
-        status.bufStatus[bufIndex].cursor.update(node.view, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
+        if isCurrentMainWin:
+          status.bufStatus[bufIndex].cursor.update(node.view, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
         node.window.refresh
 
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
 
-  status.currentMainWindowNode.window.moveCursor(status.bufStatus[status.currentBuffer].cursor.y, status.currentMainWindowNode.view.widthOfLineNum + status.bufStatus[status.currentBuffer].cursor.x)
+  let bufIndex = status.currentMainWindowNode.bufferIndex
+  status.currentMainWindowNode.window.moveCursor(status.bufStatus[bufIndex].cursor.y, status.currentMainWindowNode.view.widthOfLineNum + status.bufStatus[bufIndex].cursor.x)
   setCursor(true)
 
 proc verticalSplitWindow*(status: var EditorStatus) =
