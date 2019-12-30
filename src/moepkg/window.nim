@@ -103,14 +103,14 @@ proc resize*(root: WindowNode, height, width: int) =
         child = qeue.pop
         parent = child.parent
       if parent.splitType == SplitType.vertical:
-        child.w = int(width / parent.child.len)
+        child.w = int(parent.w / parent.child.len)
         child.h = parent.h
-        child.x = child.w * i
+        child.x = parent.x + (child.w * i)
         child.y = parent.y
       else:
-        child.h = int(height / child.parent.child.len)
+        child.h = int(parent.h / child.parent.child.len)
         child.w = parent.w
-        child.y = child.h * i
+        child.y = child.y + (child.h * i)
         child.x = parent.x
 
       if child.child.len > 0:
