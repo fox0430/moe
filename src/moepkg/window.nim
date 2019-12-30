@@ -52,6 +52,7 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): Win
       node1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: terminalHeight(), window: win1, view: view1, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, w: terminalWidth())
       node2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: terminalHeight(), window: win2, view: view2, bufferIndex: n.bufferIndex, windowIndex: numOfWindow + 1, w: terminalWidth())
     n.splitType = SplitType.vertical
+    n.windowIndex = -1
     n.child.add(node1)
     n.child.add(node2)
     n.window = nil
@@ -76,6 +77,7 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): W
       node1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: terminalHeight(), window: win1, view: view1, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, w: terminalWidth())
       node2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: terminalHeight(), window: win2, view: view2, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, w: terminalWidth())
     n.splitType = SplitType.horaizontal
+    n.windowIndex = -1
     n.child.add(node1)
     n.child.add(node2)
     n.window = nil

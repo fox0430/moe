@@ -402,15 +402,15 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
     status.currentMainWindowNode = status.mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
 
 proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
-  if index < 0 or status.numOfMainWindow < index: return
+  if index < 0 or status.numOfMainWindow <= index: return
 
   status.currentMainWindowNode = status.mainWindowNode.searchByWindowIndex(index)
-  changeCurrentBuffer(status, status.currentMainWindowNode.bufferIndex)
-  if status.settings.tabLine.useTab: writeTabLine(status)
+  status.changeCurrentBuffer(status.currentMainWindowNode.bufferIndex)
+  if status.settings.tabLine.useTab: status.writeTabLine
 
-proc moveNextWindow*(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindowNode.windowIndex + 1)
+proc moveNextWindow*(status: var EditorStatus) = status.moveCurrentMainWindow(status.currentMainWindowNode.windowIndex + 1)
 
-proc movePrevWindow*(status: var EditorStatus) = moveCurrentMainWindow(status, status.currentMainWindowNode.windowIndex - 1)
+proc movePrevWindow*(status: var EditorStatus) = status.moveCurrentMainWindow(status.currentMainWindowNode.windowIndex - 1)
 
 proc writePopUpWindow*(status: var Editorstatus, x, y, currentLine: var int,  buffer: seq[seq[Rune]]) =
   # Pop up window size
