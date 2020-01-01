@@ -10,6 +10,7 @@ type WindowNode* = ref object
   parent*: WindowNode
   child*: seq[WindowNode]
   splitType*: SplitType
+  isCurrentWindow*: bool
   window*: Window
   view*: EditorView
   bufferIndex*: int
@@ -23,7 +24,7 @@ type WindowNode* = ref object
 proc initWindowNode*(): WindowNode =
   var
     win = initWindow(1, 1, 0, 0, EditorColorPair.defaultChar)
-    node = WindowNode(child: @[], splitType: SplitType.vertical, window: win, bufferIndex: 0, h: 1, w: 1)
+    node = WindowNode(child: @[], splitType: SplitType.vertical, isCurrentWindow: true, window: win, bufferIndex: 0, h: 1, w: 1)
     root = WindowNode(child: @[node], splitType: SplitType.vertical, y: 0, x: 0, h: 1, w: 1)
   node.parent = root
 
@@ -50,8 +51,8 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): Win
       view2 = initEditorView(buffer, 1, 1)
       win1 = newWindow()
       win2 = newWindow()
-      node1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: 1, window: win1, view: view1, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, w: 1)
-      node2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: 1, window: win2, view: view2, bufferIndex: n.bufferIndex, windowIndex: numOfWindow + 1, w: 1)
+      node1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win1, view: view1, bufferIndex: n.bufferIndex, windowIndex: numOfWindow)
+      node2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win2, view: view2, bufferIndex: n.bufferIndex, windowIndex: numOfWindow + 1)
     n.splitType = SplitType.vertical
     n.windowIndex = -1
     n.child.add(node1)
@@ -66,7 +67,7 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): W
     var
       view = initEditorView(buffer, 1, 1)
       win = newWindow()
-      node = WindowNode(parent: parent, child: @[], splitType: SplitType.horaizontal, window: win, view: view, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, h: 0, w: 0)
+      node = WindowNode(parent: parent, child: @[], splitType: SplitType.horaizontal, window: win, view: view, bufferIndex: n.bufferIndex, windowIndex: numOfWindow)
     parent.child.add(node)
     return n
   # if parent is root and one window
@@ -74,7 +75,7 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): W
     var
       view = initEditorView(buffer, 1, 1)
       win = newWindow()
-      node = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: 1, window: win, view: view, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, w: 1)
+      node = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win, view: view, bufferIndex: n.bufferIndex, windowIndex: numOfWindow)
     n.parent.splitType = SplitType.horaizontal
     n.parent.child.insert(node, n.index + 1)
     return n
@@ -84,8 +85,8 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): W
       view2 = initEditorView(buffer, 1, 1)
       win1 = newWindow()
       win2 = newWindow()
-      node1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: 1, window: win1, view: view1, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, w: 1)
-      node2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: 1, window: win2, view: view2, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, w: 1)
+      node1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win1, view: view1, bufferIndex: n.bufferIndex, windowIndex: numOfWindow)
+      node2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win2, view: view2, bufferIndex: n.bufferIndex, windowIndex: numOfWindow)
     n.splitType = SplitType.horaizontal
     n.windowIndex = -1
     n.child.add(node1)
@@ -155,6 +156,18 @@ proc searchByWindowIndex*(root: WindowNode, index: int): WindowNode =
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
 
+proc getAllWindowNode*(root: WindowNode): seq[WindowNode] =
+  var qeue = initHeapQueue[WindowNode]()
+  for node in root.child: qeue.push(node)
+
+  while qeue.len > 0:
+    for i in 0 ..< qeue.len:
+      let node = qeue.pop
+      if node.window != nil: result.add(node)
+
+      if node.child.len > 0:
+        for node in node.child: qeue.push(node)
+
 proc getAllBufferIndex*(root: WindowNode): seq[int]  =
   var qeue = initHeapQueue[WindowNode]()
   for node in root.child: qeue.push(node)
@@ -162,7 +175,13 @@ proc getAllBufferIndex*(root: WindowNode): seq[int]  =
   while qeue.len > 0:
     for i in 0 ..< qeue.len:
       let node = qeue.pop
-      if node.window != nil: result.add(node.bufferIndex)
+      if node.window != nil:
+        var exist = false
+        for index in result:
+          if index == node.bufferIndex:
+            exist = true
+            break
+        if exist == false: result.add(node.bufferIndex)
 
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
@@ -202,23 +221,6 @@ proc countReferencedWindow*(root: WindowNode, bufferIndex: int): int =
     for i in 0 ..< qeue.len:
       let node = qeue.pop
       if node.window != nil and bufferIndex == node.bufferIndex: inc(result)
-
-      if node.child.len > 0:
-        for node in node.child: qeue.push(node)
-
-proc getAllWindowNode*(root: WindowNode) =
-  var qeue = initHeapQueue[WindowNode]()
-  for node in root.child: qeue.push(node)
-
-  exitUi()
-  echo "start get window node"
-  while qeue.len > 0:
-    for i in 0 ..< qeue.len:
-      let node = qeue.pop
-      echo node.splitType
-      echo node.child.len
-      if node.window == nil: echo "nil" else: echo "active"
-      echo ""
 
       if node.child.len > 0:
         for node in node.child: qeue.push(node)

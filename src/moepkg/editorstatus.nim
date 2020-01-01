@@ -106,7 +106,7 @@ proc initRegisters(): Registers =
   result.yankedStr = @[]
 
 proc initTabBarSettings*(): TabLineSettings =
-  result.useTab = false
+  result.useTab = true
 
 proc initStatusBarSettings*(): StatusBarSettings =
   result.useBar = true
@@ -258,13 +258,13 @@ proc writeTab(tabWin: var Window, start, tabWidth: int, filename: string, color:
     buffer = if filename.len < tabWidth: " " & title & " ".repeat(tabWidth - title.len) else: " " & (title).substr(0, tabWidth - 3) & "~"
   tabWin.write(0, start, buffer, color)
 
-# TODO: Need fix writeTabLine
 proc writeTabLine*(status: var EditorStatus) =
   let
     isAllBuffer = status.settings.tabLine.allbuffer
-    tabWidth = if isAllBuffer: calcTabWidth(status.bufStatus.len) else: calcTabWidth(status.numOfMainWindow)
+    tabWidth = calcTabWidth(status.bufStatus.len)
     defaultColor = EditorColorPair.tab
     currentTabColor = EditorColorPair.currentTab
+    currentWindowBuffer = status.currentMainWindowNode.bufferIndex
 
   status.tabWindow.erase
 
@@ -272,20 +272,21 @@ proc writeTabLine*(status: var EditorStatus) =
     ## Display all buffer
     for index, bufStatus in status.bufStatus:
       let
-        color = if status.currentBuffer == index: currentTabColor else: defaultColor
+        color = if currentWindowBuffer == index: currentTabColor else: defaultColor
         currentMode = bufStatus.mode
         prevMode = bufStatus.prevMode
         filename = if (currentMode == Mode.filer) or (prevMode == Mode.filer and currentMode == Mode.ex): getCurrentDir() else: $bufStatus.filename
       status.tabWindow.writeTab(index * tabWidth, tabWidth, filename, color)
   else:
     ## Displays only the buffer currently displayed in the window
-    let seqMainWindowInfo = getAllBufferIndex(status.mainWindowNode)
-    for index, mainWindowInfo in seqMainWindowInfo:
+    let allBufferIndex = status.mainWindowNode.getAllBufferIndex
+    for index, bufIndex in allBufferIndex:
       let
-        color = if index == index: currentTabColor else: defaultColor
-        currentMode = status.bufStatus[index].mode
-        prevMode = status.bufStatus[index].prevMode
-        filename = if (currentMode == Mode.filer) or (prevMode == Mode.filer and currentMode == Mode.ex): getCurrentDir() else: $status.bufStatus[index].filename
+        color = if currentWindowBuffer == bufIndex: currentTabColor else: defaultColor
+        bufStatus = status.bufStatus[bufIndex]
+        currentMode = bufStatus.mode
+        prevMode = bufStatus.prevMode
+        filename = if (currentMode == Mode.filer) or (prevMode == Mode.filer and currentMode == Mode.ex): getCurrentDir() else: $bufStatus.filename
       status.tabWindow.writeTab(index * tabWidth, tabWidth, filename, color)
 
   status.tabWindow.refresh
