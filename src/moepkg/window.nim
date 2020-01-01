@@ -1,4 +1,4 @@
-import heapqueue, terminal
+import heapqueue
 import ui, editorview, gapbuffer
 
 # vertical is default
@@ -22,16 +22,16 @@ type WindowNode* = ref object
 
 proc initWindowNode*(): WindowNode =
   var
-    win = initWindow(terminalHeight(), terminalWidth(), 0, 0, EditorColorPair.defaultChar)
-    node = WindowNode(child: @[], splitType: SplitType.vertical, window: win, bufferIndex: 0, h: terminalHeight(), w: terminalWidth())
-    root = WindowNode(child: @[node], splitType: SplitType.vertical, y: 0, x: 0, h: terminalHeight(), w: terminalWidth())
+    win = initWindow(1, 1, 0, 0, EditorColorPair.defaultChar)
+    node = WindowNode(child: @[], splitType: SplitType.vertical, window: win, bufferIndex: 0, h: 1, w: 1)
+    root = WindowNode(child: @[node], splitType: SplitType.vertical, y: 0, x: 0, h: 1, w: 1)
   node.parent = root
 
   node.window.setTimeout()
   return root
 
 proc newWindow(): Window =
-  result = initWindow(terminalHeight(), terminalWidth(), 0, 0, EditorColorPair.defaultChar)
+  result = initWindow(1, 1, 0, 0, EditorColorPair.defaultChar)
   result.setTimeout()
 
 proc verticalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): WindowNode =
@@ -39,19 +39,19 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): Win
   
   if parent.splitType == SplitType.vertical:
     var
-      view = initEditorView(buffer, terminalHeight(), terminalWidth())
+      view = initEditorView(buffer, 1, 1)
       win = newWindow()
-      node = WindowNode(parent: n.parent, child: @[], splitType: SplitType.vertical, window: win, view: view, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, h: terminalHeight(), w: terminalWidth())
+      node = WindowNode(parent: n.parent, child: @[], splitType: SplitType.vertical, window: win, view: view, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, h: 1, w: 1)
     parent.child.add(node)
     return n
   else:
     var
-      view1 = initEditorView(buffer, terminalHeight(), terminalWidth())
-      view2 = initEditorView(buffer, terminalHeight(), terminalWidth())
+      view1 = initEditorView(buffer, 1, 1)
+      view2 = initEditorView(buffer, 1, 1)
       win1 = newWindow()
       win2 = newWindow()
-      node1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: terminalHeight(), window: win1, view: view1, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, w: terminalWidth())
-      node2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: terminalHeight(), window: win2, view: view2, bufferIndex: n.bufferIndex, windowIndex: numOfWindow + 1, w: terminalWidth())
+      node1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: 1, window: win1, view: view1, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, w: 1)
+      node2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: 1, window: win2, view: view2, bufferIndex: n.bufferIndex, windowIndex: numOfWindow + 1, w: 1)
     n.splitType = SplitType.vertical
     n.windowIndex = -1
     n.child.add(node1)
@@ -64,7 +64,7 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): W
 
   if parent.splitType == SplitType.horaizontal:
     var
-      view = initEditorView(buffer, terminalHeight(), terminalWidth())
+      view = initEditorView(buffer, 1, 1)
       win = newWindow()
       node = WindowNode(parent: parent, child: @[], splitType: SplitType.horaizontal, window: win, view: view, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, h: 0, w: 0)
     parent.child.add(node)
@@ -72,20 +72,20 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): W
   # if parent is root and one window
   elif parent.parent == nil and parent.child.len == 1:
     var
-      view = initEditorView(buffer, terminalHeight(), terminalWidth())
+      view = initEditorView(buffer, 1, 1)
       win = newWindow()
-      node = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: terminalHeight(), window: win, view: view, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, w: terminalWidth())
+      node = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: 1, window: win, view: view, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, w: 1)
     n.parent.splitType = SplitType.horaizontal
     n.parent.child.insert(node, n.index + 1)
     return n
   else:
     var
-      view1 = initEditorView(buffer, terminalHeight(), terminalWidth())
-      view2 = initEditorView(buffer, terminalHeight(), terminalWidth())
+      view1 = initEditorView(buffer, 1, 1)
+      view2 = initEditorView(buffer, 1, 1)
       win1 = newWindow()
       win2 = newWindow()
-      node1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: terminalHeight(), window: win1, view: view1, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, w: terminalWidth())
-      node2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: terminalHeight(), window: win2, view: view2, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, w: terminalWidth())
+      node1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: 1, window: win1, view: view1, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, w: 1)
+      node2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: 1, window: win2, view: view2, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, w: 1)
     n.splitType = SplitType.horaizontal
     n.windowIndex = -1
     n.child.add(node1)
