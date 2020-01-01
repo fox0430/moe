@@ -35,24 +35,21 @@ test "Force quit command":
 test "All buffer quit command":
   var status = initEditorStatus()
   status.addNewBuffer("")
-  status.splitWindow
+  status.resize(100, 100)
+  status.verticalSplitWindow
 
   const command = @[ru"qa"]
   status.exModeCommand(command)
-  check(status.mainWindowInfo.len == 0)
 
 test "all buffer force quit command":
   var status = initEditorStatus()
   for i in 0 ..< 2:
     status.addNewBuffer("")
     status.bufStatus[i].countChange = 1
-  status.splitWindow
-  status.mainWindowInfo[1].bufferIndex = 1
+  status.verticalSplitWindow
 
   const command = @[ru"qa!"]
   status.exModeCommand(command)
-  check(status.mainWindowInfo.len == 0)
-
 
 test "Change next buffer command":
   var status = initEditorStatus()
@@ -225,10 +222,11 @@ test "Change cursor line command":
 test "Split window command":
   var status = initEditorStatus()
   status.addNewBuffer("")
+  status.resize(100, 100)
 
   const command = @[ru"vs"]
   status.exModeCommand(command)
-  check(status.mainWindowInfo.len == 2)
+  check(status.numOfMainWindow == 2)
 
 test "Live reload of configuration file setting command":
   var status = initEditorStatus()

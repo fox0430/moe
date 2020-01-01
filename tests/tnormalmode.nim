@@ -80,7 +80,7 @@ test "Delete current character":
   status.addNewBuffer("")
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
   status.bufStatus[0].currentColumn = 1
-  status.bufStatus[0].deleteCurrentCharacter
+  status.bufStatus[0].deleteCurrentCharacter(status.currentMainWindowNode)
   check(status.bufStatus[0].buffer[0] == ru"ac")
 
 test "Jump line":
@@ -141,7 +141,7 @@ test "Add indent":
   status.addNewBuffer("")
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
   const tabStop = 2
-  status.bufStatus[0].addIndent(tabStop)
+  status.bufStatus[0].addIndent(status.currentMainWindowNode, tabStop)
   check(status.bufStatus[0].buffer[0] == ru"  abc")
 
 test "Delete indent":
@@ -149,6 +149,6 @@ test "Delete indent":
   status.addNewBuffer("")
   status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc"])
   const tabStop = 2
-  status.bufStatus[0].deleteIndent(tabStop)
+  status.bufStatus[0].deleteIndent(status.currentMainWindowNode, tabStop)
   check(status.bufStatus[0].buffer[0] == ru"abc")
 
