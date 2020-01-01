@@ -304,15 +304,16 @@ proc resize*(status: var EditorStatus, height, width: int) =
     for i in  0 ..< qeue.len:
       let node = qeue.pop
       if node.window != nil:
+
+        node.window.resize(node.h, node.w, node.y + useTab, node.x)
+
         let
           bufIndex = node.bufferIndex
           widthOfLineNum = node.view.widthOfLineNum
           adjustedHeight = max(node.h, 4)
-          adjustedWidth = max(node.w, 4)
+          adjustedWidth = max(node.w - widthOfLineNum - 1, 4)
 
-        node.window.resize(adjustedHeight, adjustedWidth, node.y + useTab, node.x)
-
-        node.view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight, adjustedWidth - widthOfLineNum - 1, widthOfLineNum)
+        node.view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight, adjustedWidth, widthOfLineNum)
         node.view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
