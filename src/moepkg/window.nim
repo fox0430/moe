@@ -1,6 +1,7 @@
 import heapqueue, terminal
 import ui, editorview, gapbuffer
 
+# vertical is default
 type SplitType* = enum
   vertical = 0
   horaizontal = 1
@@ -40,9 +41,9 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): Win
     var
       view = initEditorView(buffer, terminalHeight(), terminalWidth())
       win = newWindow()
-      node = WindowNode(parent: parent, child: @[], splitType: SplitType.vertical, window: win, view: view, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, h: terminalHeight(), w: terminalWidth())
+      node = WindowNode(parent: n.parent, child: @[], splitType: SplitType.vertical, window: win, view: view, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, h: terminalHeight(), w: terminalWidth())
     parent.child.add(node)
-    return node
+    return n
   else:
     var
       view1 = initEditorView(buffer, terminalHeight(), terminalWidth())
@@ -67,7 +68,16 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): W
       win = newWindow()
       node = WindowNode(parent: parent, child: @[], splitType: SplitType.horaizontal, window: win, view: view, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, h: 0, w: 0)
     parent.child.add(node)
-    return node
+    return n
+  # if parent is root and one window
+  elif parent.parent == nil and parent.child.len == 1:
+    var
+      view = initEditorView(buffer, terminalHeight(), terminalWidth())
+      win = newWindow()
+      node = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, h: terminalHeight(), window: win, view: view, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, w: terminalWidth())
+    n.parent.splitType = SplitType.horaizontal
+    n.parent.child.insert(node, n.index + 1)
+    return n
   else:
     var
       view1 = initEditorView(buffer, terminalHeight(), terminalWidth())
@@ -83,17 +93,26 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): W
     n.window = nil
     return node1
 
+# TODO: Add arg y and x
 proc resize*(root: WindowNode, height, width: int) =
   var qeue = initHeapQueue[WindowNode]()
   for index, node in root.child:
     if root.splitType == SplitType.vertical:
-      node.h = terminalHeight()
-      node.w = int(width / root.child.len)
-      node.x = node.w * index
+      if width mod root.child.len != 0 and index == 0: node.w = int(width / root.child.len) + 1
+      else: node.w = int(width / root.child.len)
+
+      if width mod root.child.len != 0 and index > 0: node.x = (node.w * index) + 1
+      else: node.x = node.w * index
+
+      node.h = height
     else:
-      node.h = int(height / root.child.len)
-      node.w = terminalWidth()
-      node.y = node.h * index
+      if height mod root.child.len != 0 and index == 0: node.h = int(height / root.child.len) + 1
+      else: node.h = int(height / root.child.len)
+
+      if height mod root.child.len != 0 and index > 0: node.y = (node.h * index) + 1
+      else: node.y = node.h * index
+
+      node.w = width
     if node.child.len > 0:
       for child in node.child: qeue.push(child)
 
@@ -103,14 +122,22 @@ proc resize*(root: WindowNode, height, width: int) =
         child = qeue.pop
         parent = child.parent
       if parent.splitType == SplitType.vertical:
-        child.w = int(parent.w / parent.child.len)
+        if parent.w mod parent.child.len != 0 and i == 0: child.w = int(parent.w / parent.child.len) + 1
+        else: child.w = int(parent.w / parent.child.len)
+
+        if parent.w mod parent.child.len != 0 and i > 0: child.x = parent.x + (child.w * i) + 1
+        else: child.x = parent.x + (child.w * i)
+
         child.h = parent.h
-        child.x = parent.x + (child.w * i)
         child.y = parent.y
       else:
-        child.h = int(parent.h / child.parent.child.len)
+        if parent.h mod parent.child.len != 0 and i == 0: child.h = int(parent.h / parent.child.len) + 1
+        else: child.h = int(parent.h / parent.child.len)
+
+        if parent.h mod parent.child.len != 0 and i > 0: child.y = parent.y + (child.h * i) + 1
+        else: child.y = parent.y + (child.h * i)
+
         child.w = parent.w
-        child.y = child.y + (child.h * i)
         child.x = parent.x
 
       if child.child.len > 0:
