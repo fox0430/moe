@@ -296,7 +296,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useTab = if status.settings.tabLine.useTab: 1 else: 0
 
-  status.mainWindowNode.resize(terminalHeight() - useStatusBar - useTab - 1, terminalWidth())
+  status.mainWindowNode.resize(height - useStatusBar - useTab - 1, width)
 
   var qeue = initHeapQueue[WindowNode]()
   for node in status.mainWindowNode.child: qeue.push(node)
@@ -312,19 +312,19 @@ proc resize*(status: var EditorStatus, height, width: int) =
           widthOfLineNum = node.view.widthOfLineNum
           adjustedHeight = max(node.h, 4)
           adjustedWidth = max(node.w - widthOfLineNum - 1, 4)
-
         node.view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight, adjustedWidth, widthOfLineNum)
+
         node.view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
 
-  let  adjustedHeight = max(height, 4)
-  if status.settings.statusBar.useBar: status.statusWindow.resize(1, terminalWidth(), adjustedHeight - 2, 0)
-  if status.settings.tabLine.useTab: status.tabWindow.resize(1, terminalWidth(), 0, 0)
+  let adjustedHeight = max(height, 4)
+  if status.settings.statusBar.useBar: status.statusWindow.resize(1, width, adjustedHeight - 2, 0)
+  if status.settings.tabLine.useTab: status.tabWindow.resize(1, width, 0, 0)
 
   if status.settings.statusBar.useBar: writeStatusBar(status)
 
-  status.commandWindow.resize(1, terminalWidth(), adjustedHeight - 1, 0)
+  status.commandWindow.resize(1, width, adjustedHeight - 1, 0)
   status.commandWindow.refresh
 
   if status.settings.tabLine.useTab: status.writeTabLine
