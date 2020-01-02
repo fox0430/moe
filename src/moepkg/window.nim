@@ -35,7 +35,7 @@ proc newWindow(): Window =
   result = initWindow(1, 1, 0, 0, EditorColorPair.defaultChar)
   result.setTimeout()
 
-proc verticalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): WindowNode =
+proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
   var parent = n.parent
   
   if parent.splitType == SplitType.vertical:
@@ -60,7 +60,7 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): Win
     n.window = nil
     return node1
 
-proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): WindowNode =
+proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
   var parent = n.parent
 
   if parent.splitType == SplitType.horaizontal:

@@ -142,7 +142,6 @@ proc initEditorStatus*(): EditorStatus =
   result.currentDir = getCurrentDir().toRunes
   result.registers = initRegisters()
   result.settings = initEditorSettings()
-  result.numOfMainWindow = 1
 
   if result.settings.tabLine.useTab: result.tabWindow = initWindow(1, terminalWidth(), 0, 0, EditorColorPair.defaultChar)
   var rootNode = initWindowNode()
@@ -362,7 +361,7 @@ proc update*(status: var EditorStatus) =
 
 proc verticalSplitWindow*(status: var EditorStatus) =
   let buffer = status.bufStatus[status.currentBuffer].buffer
-  status.currentMainWindowNode = status.currentMainWindowNode.verticalSplit(buffer , status.numOfMainWindow)
+  status.currentMainWindowNode = status.currentMainWindowNode.verticalSplit(buffer)
   inc(status.numOfMainWindow)
 
   #resetIndex(status.mainWindowNode)
@@ -370,7 +369,7 @@ proc verticalSplitWindow*(status: var EditorStatus) =
 
 proc horizontalSplitWindow*(status: var Editorstatus) =
   let buffer = status.bufStatus[status.currentBuffer].buffer
-  status.currentMainWindowNode = status.currentMainWindowNode.horizontalSplit(buffer, status.numOfMainWindow)
+  status.currentMainWindowNode = status.currentMainWindowNode.horizontalSplit(buffer)
   inc(status.numOfMainWindow)
 
   #resetIndex(status.mainWindowNode)
