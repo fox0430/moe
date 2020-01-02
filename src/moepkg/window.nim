@@ -6,6 +6,7 @@ type SplitType* = enum
   vertical = 0
   horaizontal = 1
 
+## WindowNode is N-Ary tree
 type WindowNode* = ref object
   parent*: WindowNode
   child*: seq[WindowNode]
@@ -41,7 +42,7 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): Win
     var
       view = initEditorView(buffer, 1, 1)
       win = newWindow()
-      node = WindowNode(parent: n.parent, child: @[], splitType: SplitType.vertical, window: win, view: view, bufferIndex: n.bufferIndex, windowIndex: numOfWindow, h: 1, w: 1)
+      node = WindowNode(parent: n.parent, child: @[], splitType: SplitType.vertical, window: win, view: view, bufferIndex: n.bufferIndex, h: 1, w: 1)
     parent.child.add(node)
     return n
   else:
@@ -50,8 +51,8 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): Win
       view2 = initEditorView(buffer, 1, 1)
       win1 = newWindow()
       win2 = newWindow()
-      node1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win1, view: view1, bufferIndex: n.bufferIndex, windowIndex: numOfWindow)
-      node2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win2, view: view2, bufferIndex: n.bufferIndex, windowIndex: numOfWindow + 1)
+      node1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win1, view: view1, bufferIndex: n.bufferIndex)
+      node2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win2, view: view2, bufferIndex: n.bufferIndex)
     n.splitType = SplitType.vertical
     n.windowIndex = -1
     n.child.add(node1)
@@ -66,7 +67,7 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): W
     var
       view = initEditorView(buffer, 1, 1)
       win = newWindow()
-      node = WindowNode(parent: parent, child: @[], splitType: SplitType.horaizontal, window: win, view: view, bufferIndex: n.bufferIndex, windowIndex: numOfWindow)
+      node = WindowNode(parent: parent, child: @[], splitType: SplitType.horaizontal, window: win, view: view, bufferIndex: n.bufferIndex)
     parent.child.add(node)
     return n
   # if parent is root and one window
@@ -74,7 +75,7 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): W
     var
       view = initEditorView(buffer, 1, 1)
       win = newWindow()
-      node = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win, view: view, bufferIndex: n.bufferIndex, windowIndex: numOfWindow)
+      node = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win, view: view, bufferIndex: n.bufferIndex)
     n.parent.splitType = SplitType.horaizontal
     n.parent.child.insert(node, n.index + 1)
     return n
@@ -84,8 +85,8 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): W
       view2 = initEditorView(buffer, 1, 1)
       win1 = newWindow()
       win2 = newWindow()
-      node1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win1, view: view1, bufferIndex: n.bufferIndex, windowIndex: numOfWindow)
-      node2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win2, view: view2, bufferIndex: n.bufferIndex, windowIndex: numOfWindow)
+      node1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win1, view: view1, bufferIndex: n.bufferIndex)
+      node2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win2, view: view2, bufferIndex: n.bufferIndex)
     n.splitType = SplitType.horaizontal
     n.windowIndex = -1
     n.child.add(node1)
