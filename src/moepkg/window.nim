@@ -10,7 +10,6 @@ type WindowNode* = ref object
   parent*: WindowNode
   child*: seq[WindowNode]
   splitType*: SplitType
-  isCurrentWindow*: bool
   window*: Window
   view*: EditorView
   bufferIndex*: int
@@ -24,7 +23,7 @@ type WindowNode* = ref object
 proc initWindowNode*(): WindowNode =
   var
     win = initWindow(1, 1, 0, 0, EditorColorPair.defaultChar)
-    node = WindowNode(child: @[], splitType: SplitType.vertical, isCurrentWindow: true, window: win, bufferIndex: 0, h: 1, w: 1)
+    node = WindowNode(child: @[], splitType: SplitType.vertical, window: win, h: 1, w: 1)
     root = WindowNode(child: @[node], splitType: SplitType.vertical, y: 0, x: 0, h: 1, w: 1)
   node.parent = root
 
@@ -94,26 +93,49 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer, numOfWindow: int): W
     n.window = nil
     return node1
 
-# TODO: Add arg y and x
-proc resize*(root: WindowNode, height, width: int) =
+# Resize all window and reset index, windowIndex
+proc resize*(root: WindowNode, y, x, height, width: int) =
   var qeue = initHeapQueue[WindowNode]()
+  var windowIndex = 0
+
   for index, node in root.child:
     if root.splitType == SplitType.vertical:
+      ## Vertical split
+      
+      ## Calc window width
       if width mod root.child.len != 0 and index == 0: node.w = int(width / root.child.len) + 1
       else: node.w = int(width / root.child.len)
 
+      ## Calc window x
       if width mod root.child.len != 0 and index > 0: node.x = (node.w * index) + 1
       else: node.x = node.w * index
 
       node.h = height
+      node.y = y
     else:
+      ## Horaizontal split
+
+      ## Calc window height
       if height mod root.child.len != 0 and index == 0: node.h = int(height / root.child.len) + 1
       else: node.h = int(height / root.child.len)
 
+      ## Calc window y
       if height mod root.child.len != 0 and index > 0: node.y = (node.h * index) + 1
       else: node.y = node.h * index
 
       node.w = width
+      node.x = x
+
+    if node.window != nil:
+      ## Resize curses window
+      node.window.resize(node.h, node.w, node.y, node.x)
+      ## Set windowIndex
+      node.windowIndex = windowIndex
+      inc(windowIndex)
+
+    ## Set index
+    node.index = index
+
     if node.child.len > 0:
       for child in node.child: qeue.push(child)
 
@@ -123,23 +145,41 @@ proc resize*(root: WindowNode, height, width: int) =
         child = qeue.pop
         parent = child.parent
       if parent.splitType == SplitType.vertical:
+        ## Vertical split
+
+        ## Calc window width
         if parent.w mod parent.child.len != 0 and i == 0: child.w = int(parent.w / parent.child.len) + 1
         else: child.w = int(parent.w / parent.child.len)
 
+        ## Calc window x
         if parent.w mod parent.child.len != 0 and i > 0: child.x = parent.x + (child.w * i) + 1
         else: child.x = parent.x + (child.w * i)
 
         child.h = parent.h
         child.y = parent.y
       else:
+        ## Horaizontal split
+
+        ## Calc window height
         if parent.h mod parent.child.len != 0 and i == 0: child.h = int(parent.h / parent.child.len) + 1
         else: child.h = int(parent.h / parent.child.len)
 
+        ## Calc window y
         if parent.h mod parent.child.len != 0 and i > 0: child.y = parent.y + (child.h * i) + 1
         else: child.y = parent.y + (child.h * i)
 
         child.w = parent.w
         child.x = parent.x
+
+      if child.window != nil:
+        # Resize curses window
+        child.window.resize(child.h, child.w, child.y, child.x)
+        # Set windowIndex
+        child.windowIndex = windowIndex
+        inc(windowIndex)
+
+      ## Set index
+      for i, n in child.child: n.index = i
 
       if child.child.len > 0:
         for node in child.child: qeue.push(node)
@@ -182,33 +222,6 @@ proc getAllBufferIndex*(root: WindowNode): seq[int]  =
             exist = true
             break
         if exist == false: result.add(node.bufferIndex)
-
-      if node.child.len > 0:
-        for node in node.child: qeue.push(node)
-
-proc resetIndex*(root: WindowNode) =
-  var qeue = initHeapQueue[WindowNode]()
-  for node in root.child: qeue.push(node)
-
-  while qeue.len > 0:
-    for i in 0 ..< qeue.len:
-      let node = qeue.pop
-      for index, child in node.child: child.index = index
-
-      if node.child.len > 0:
-        for node in node.child: qeue.push(node)
-
-proc resetWindowIndex*(root: WindowNode) =
-  var qeue = initHeapQueue[WindowNode]()
-  for node in root.child: qeue.push(node)
-
-  var index = 0
-  while qeue.len > 0:
-    for i in  0 ..< qeue.len:
-      let node = qeue.pop
-      if node.window != nil:
-        node.windowIndex = index
-        inc(index)
 
       if node.child.len > 0:
         for node in node.child: qeue.push(node)

@@ -144,17 +144,13 @@ proc initEditorStatus*(): EditorStatus =
   result.settings = initEditorSettings()
   result.numOfMainWindow = 1
 
-  let
-    useStatusBar = if result.settings.statusBar.useBar: 1 else: 0
-    useTab = if result.settings.tabLine.useTab: 1 else: 0
-
   if result.settings.tabLine.useTab: result.tabWindow = initWindow(1, terminalWidth(), 0, 0, EditorColorPair.defaultChar)
   var rootNode = initWindowNode()
   result.mainWindowNode = rootNode
   result.currentMainWindowNode = rootNode.child[0]
   result.numOfMainWindow = 1
 
-  if result.settings.statusBar.useBar: result.statusWindow = initWindow(1, terminalWidth(), terminalHeight() - useStatusBar - 1, 0, EditorColorPair.defaultChar)
+  if result.settings.statusBar.useBar: result.statusWindow = initWindow(1, 1, 1, 1, EditorColorPair.defaultChar)
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight() - 1, 0, EditorColorPair.defaultChar)
 
 proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
@@ -297,7 +293,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useTab = if status.settings.tabLine.useTab: 1 else: 0
 
-  status.mainWindowNode.resize(height - useStatusBar - useTab - 1, width)
+  status.mainWindowNode.resize(useTab, 0, height - useStatusBar - useTab - 1, width)
 
   var qeue = initHeapQueue[WindowNode]()
   for node in status.mainWindowNode.child: qeue.push(node)
@@ -305,17 +301,15 @@ proc resize*(status: var EditorStatus, height, width: int) =
     for i in  0 ..< qeue.len:
       let node = qeue.pop
       if node.window != nil:
-
-        node.window.resize(node.h, node.w, node.y + useTab, node.x)
-
         let
           bufIndex = node.bufferIndex
           widthOfLineNum = node.view.widthOfLineNum
           adjustedHeight = max(node.h, 4)
           adjustedWidth = max(node.w - widthOfLineNum - 1, 4)
-        node.view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight, adjustedWidth, widthOfLineNum)
 
+        node.view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight, adjustedWidth, widthOfLineNum)
         node.view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
+
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
 
@@ -371,16 +365,16 @@ proc verticalSplitWindow*(status: var EditorStatus) =
   status.currentMainWindowNode = status.currentMainWindowNode.verticalSplit(buffer , status.numOfMainWindow)
   inc(status.numOfMainWindow)
 
-  resetIndex(status.mainWindowNode)
-  resetWindowIndex(status.mainWindowNode)
+  #resetIndex(status.mainWindowNode)
+  #resetWindowIndex(status.mainWindowNode)
 
 proc horizontalSplitWindow*(status: var Editorstatus) =
   let buffer = status.bufStatus[status.currentBuffer].buffer
   status.currentMainWindowNode = status.currentMainWindowNode.horizontalSplit(buffer, status.numOfMainWindow)
   inc(status.numOfMainWindow)
 
-  resetIndex(status.mainWindowNode)
-  resetWindowIndex(status.mainWindowNode)
+  #resetIndex(status.mainWindowNode)
+  #resetWindowIndex(status.mainWindowNode)
 
 proc closeWindow*(status: var EditorStatus, node: WindowNode) =
   if status.numOfMainWindow == 1: exitEditor(status.settings)
@@ -391,15 +385,17 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
   if parent.child.len == 1:
     parent.parent.child.delete(parent.index)
     dec(status.numOfMainWindow)
-    resetIndex(status.mainWindowNode)
-    resetWindowIndex(status.mainWindowNode)
+
+    status.resize(terminalHeight(), terminalWidth())
+
     let newCurrentWinIndex = if deleteWindowIndex > status.numOfMainWindow - 1: status.numOfMainWindow - 1 else: deleteWindowIndex
     status.currentMainWindowNode = status.mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
   else:
     parent.child.delete(node.index)
     dec(status.numOfMainWindow)
-    resetIndex(status.mainWindowNode)
-    resetWindowIndex(status.mainWindowNode)
+
+    status.resize(terminalHeight(), terminalWidth())
+
     let newCurrentWinIndex = if deleteWindowIndex > status.numOfMainWindow - 1: status.numOfMainWindow - 1 else: deleteWindowIndex
     status.currentMainWindowNode = status.mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
 
