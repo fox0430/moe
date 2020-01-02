@@ -14,7 +14,7 @@ type WindowNode* = ref object
   view*: EditorView
   bufferIndex*: int
   windowIndex*: int
-  index*: int
+  index*: int   ## Index as seen by parent node
   y*: int
   x*: int
   h*: int
