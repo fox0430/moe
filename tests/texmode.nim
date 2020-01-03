@@ -17,40 +17,6 @@ test "Wite command":
   const command = @[ru"w"]
   status.exModeCommand(command)
 
-test "Quit command":
-  var status = initEditorStatus()
-  status.addNewBuffer("")
-
-  const command = @[ru"q"]
-  status.exModeCommand(command)
-
-test "Force quit command":
-  var status = initEditorStatus()
-  status.addNewBuffer("")
-
-  status.bufStatus[0].countChange = 1
-  const command = @[ru"q!"]
-  status.exModeCommand(command)
-
-test "All buffer quit command":
-  var status = initEditorStatus()
-  status.addNewBuffer("")
-  status.resize(100, 100)
-  status.verticalSplitWindow
-
-  const command = @[ru"qa"]
-  status.exModeCommand(command)
-
-test "all buffer force quit command":
-  var status = initEditorStatus()
-  for i in 0 ..< 2:
-    status.addNewBuffer("")
-    status.bufStatus[i].countChange = 1
-  status.verticalSplitWindow
-
-  const command = @[ru"qa!"]
-  status.exModeCommand(command)
-
 test "Change next buffer command":
   var status = initEditorStatus()
   for i in 0 ..< 2: status.addNewBuffer("")
@@ -274,3 +240,55 @@ test "Change theme command":
   block:
     const command = @[ru"theme", ru"config"]
     status.exModeCommand(command)
+
+test "Open buffer manager":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  startUi()
+
+  const command = @[ru"buf"]
+  status.exModeCommand(command)
+
+test "Open log viewer":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  startUi()
+
+  const command = @[ru"log"]
+  status.exModeCommand(command)
+
+test "Quit command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  const command = @[ru"q"]
+  status.exModeCommand(command)
+
+test "Force quit command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.bufStatus[0].countChange = 1
+  const command = @[ru"q!"]
+  status.exModeCommand(command)
+
+test "All buffer quit command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.resize(100, 100)
+  status.verticalSplitWindow
+
+  const command = @[ru"qa"]
+  status.exModeCommand(command)
+
+test "all buffer force quit command":
+  var status = initEditorStatus()
+  for i in 0 ..< 2:
+    status.addNewBuffer("")
+    status.bufStatus[i].countChange = 1
+  status.verticalSplitWindow
+
+  const command = @[ru"qa!"]
+  status.exModeCommand(command)
+
+
