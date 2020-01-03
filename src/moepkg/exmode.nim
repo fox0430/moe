@@ -132,16 +132,22 @@ proc isReplaceCommand(command: seq[seq[Rune]]): bool =
 
 proc openMessageMessageLogViewer(status: var Editorstatus) =
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
+
   status.verticalSplitWindow
+  status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
+
   status.addNewBuffer("")
   status.changeCurrentBuffer(status.bufStatus.high)
   status.changeMode(Mode.logviewer)
 
 proc openBufferManager(status: var Editorstatus) =
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
+
   status.verticalSplitWindow
+  status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
+
   status.addNewBuffer("")
   status.changeCurrentBuffer(status.bufStatus.high)
   status.changeMode(Mode.bufManager)
