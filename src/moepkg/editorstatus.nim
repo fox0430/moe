@@ -364,16 +364,10 @@ proc verticalSplitWindow*(status: var EditorStatus) =
   status.currentMainWindowNode = status.currentMainWindowNode.verticalSplit(buffer)
   inc(status.numOfMainWindow)
 
-  #resetIndex(status.mainWindowNode)
-  #resetWindowIndex(status.mainWindowNode)
-
 proc horizontalSplitWindow*(status: var Editorstatus) =
   let buffer = status.bufStatus[status.currentBuffer].buffer
   status.currentMainWindowNode = status.currentMainWindowNode.horizontalSplit(buffer)
   inc(status.numOfMainWindow)
-
-  #resetIndex(status.mainWindowNode)
-  #resetWindowIndex(status.mainWindowNode)
 
 proc closeWindow*(status: var EditorStatus, node: WindowNode) =
   if status.numOfMainWindow == 1: exitEditor(status.settings)
