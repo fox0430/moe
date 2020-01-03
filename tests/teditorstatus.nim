@@ -1,58 +1,68 @@
-import unittest
+import unittest, terminal
 import moepkg/highlight, moepkg/editorstatus, moepkg/editorview, moepkg/gapbuffer, moepkg/unicodeext, moepkg/insertmode
 
 test "Add new buffer":
   var status = initEditorStatus()
   status.addNewBuffer("")
   status.addNewBuffer("")
+  status.resize(100, 100)
   check(status.bufStatus.len == 2)
 
-test "Split window":
+test "Vertical split window":
   var status = initEditorStatus()
   status.addNewBuffer("")
-  status.splitWindow
+  status.resize(100, 100)
+  status.verticalSplitWindow
+  
+test "Horizontal splitsplit window":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.resize(100, 100)
+  status.horizontalSplitWindow
 
 test "Close window":
   var status = initEditorStatus()
   status.addNewBuffer("")
-  status.splitWindow
-  status.closeWindow(1)
-  status.closeWindow(0)
+  status.resize(100, 100)
+  status.verticalSplitWindow
+  status.closeWindow(status.currentMainWindowNode)
+  status.closeWindow(status.currentMainWindowNode)
 
 test "Move window 1":
   var status = initEditorStatus()
   status.addNewBuffer("")
-  status.splitWindow
+  status.resize(100, 100)
+  status.verticalSplitWindow
   status.moveCurrentMainWindow(1)
-  check(status.currentMainWindow == 1)
 
 test "Move window 2":
   var status = initEditorStatus()
   status.addNewBuffer("")
-  for i in 0 ..< 2: status.splitWindow
+  status.resize(100, 100)
+  for i in 0 ..< 2: status.verticalSplitWindow
   for i in 0 ..< 3: status.moveNextWindow
-  check(status.currentMainWindow == 2)
 
   for i in 0 ..< 3: status.movePrevWindow
-  check(status.currentMainWindow == 0)
 
 test "resize 1":
   var status = initEditorStatus()
   addNewBuffer(status, "")
+  status.resize(100, 100)
   status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
   status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
-  status.bufStatus[0].view = initEditorView(status.bufStatus[0].buffer, 1, 1)
+  status.currentMainWindowNode.view = initEditorView(status.bufStatus[0].buffer, 1, 1)
   status.resize(0, 0)
 
 test "resize 2":
   var status = initEditorStatus()
   addNewBuffer(status, "")
+  status.resize(100, 100)
   status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
   status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
-  status.bufStatus[0].view= initEditorView(status.bufStatus[0].buffer, 20, 4)
+  status.currentMainWindowNode.view= initEditorView(status.bufStatus[0].buffer, 20, 4)
   status.resize(20, 4)
   status.bufStatus[0].currentColumn = 1
   status.changeMode(Mode.insert)
   for i in 0 ..< 10:
-    keyEnter(status.bufStatus[0], status.settings.autoCloseParen)
+    status.bufStatus[0].keyEnter(status.currentMainWindowNode, status.settings.autoCloseParen)
     status.update
