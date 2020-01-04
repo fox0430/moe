@@ -92,7 +92,7 @@ nimble install moe
 ```
 
 ## Usage
-https://github.com/fox0430/moe/blob/documents/documents/index.md
+[Document](https://github.com/fox0430/moe/blob/documents/documents/index.md)
 
 ## The origin of the name
 moe is a recursive acronym for "moe is an optimal editor".    
