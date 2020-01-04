@@ -303,7 +303,8 @@ proc resize*(status: var EditorStatus, height, width: int) =
         let
           bufIndex = node.bufferIndex
           widthOfLineNum = node.view.widthOfLineNum
-          adjustedHeight = max(node.h, 4)
+          blankLine = if node.parent.splitType == SplitType.horaizontal and i == 0: 1 else: 0
+          adjustedHeight = max(node.h - blankLine, 4)
           adjustedWidth = max(node.w - widthOfLineNum - 1, 4)
 
         node.view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight, adjustedWidth, widthOfLineNum)
