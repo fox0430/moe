@@ -1,5 +1,5 @@
-import terminal, os
-import gapbuffer, ui, editorstatus, normalmode, unicodeext, highlight
+import terminal, os, heapqueue
+import gapbuffer, ui, editorstatus, normalmode, unicodeext, highlight, window
 
 proc initFilelistHighlight[T](buffer: T, currentLine: int): Highlight =
   for i in 0 ..< buffer.len:
@@ -22,21 +22,40 @@ proc updateBufferManagerHighlight(status: var Editorstatus) =
   let index = status.currentBuffer
   status.bufStatus[index].highlight = initFilelistHighlight(status.bufStatus[index].buffer, status.bufStatus[index].currentLine)
 
-proc deleteSelectedBuffer(status: var Editorstatus) = discard
-#  let deleteIndex = status.bufStatus[status.currentBuffer].currentLine
-#  for i in 0 ..< status.mainWindowInfo.high:
-#    if status.mainWindowInfo[i].bufferIndex == deleteIndex: status.closeWindow(i)
-#
-#  if status.mainWindowInfo.len > 0:
-#    status.bufStatus.delete(deleteIndex)
-#    for i in 0 ..< status.mainWindowInfo.len:
-#      if status.mainWindowInfo[i].bufferIndex > deleteIndex: dec(status.mainWindowInfo[i].bufferIndex)
-#
-#    if status.currentBuffer > deleteIndex: dec(status.currentBuffer)
-#    if status.bufStatus[status.currentBuffer].currentLine > 0: dec(status.bufStatus[status.currentBuffer].currentLine)
-#    status.currentMainWindow = status.mainWindowInfo.high
-#    status.setBufferList
-#    status.resize(terminalHeight(), terminalWidth())
+proc deleteSelectedBuffer(status: var Editorstatus) =
+  let deleteIndex = status.bufStatus[status.currentBuffer].currentLine
+
+  var qeue = initHeapQueue[WindowNode]()
+  for node in status.mainWindowNode.child: qeue.push(node)
+  while qeue.len > 0:
+    for i in 0 ..< qeue.len:
+      let node = qeue.pop
+      if node.bufferIndex == deleteIndex: status.closeWindow(node)
+
+      if node.child.len > 0:
+        for node in node.child: qeue.push(node)
+
+  status.resize(terminalHeight(), terminalWidth())
+
+  if status.numOfMainWindow > 0:
+    status.bufStatus.delete(deleteIndex)
+
+    var qeue = initHeapQueue[WindowNode]()
+    for node in status.mainWindowNode.child: qeue.push(node)
+    while qeue.len > 0:
+      for i in 0 ..< qeue.len:
+        var node = qeue.pop
+        if node.bufferIndex > deleteIndex: dec(node.bufferIndex)
+
+        if node.child.len > 0:
+          for node in node.child: qeue.push(node)
+
+    if status.currentBuffer > deleteIndex: dec(status.currentBuffer)
+    if status.bufStatus[status.currentBuffer].currentLine > 0: dec(status.bufStatus[status.currentBuffer].currentLine)
+    status.currentMainWindowNode = status.mainWindowNode.searchByWindowIndex(status.numOfMainWindow - 1)
+    status.setBufferList
+
+    status.resize(terminalHeight(), terminalWidth())
   
 proc openSelectedBuffer(status: var Editorstatus, isNewWindow: bool) =
   if isNewWindow:
