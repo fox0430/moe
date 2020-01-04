@@ -83,7 +83,7 @@ Check command bar
 ## Replace mode
 ```Esc``` - Start normal mode  
 
-Insert mode
+## Insert mode
 ```Esc``` - Start normal mode  
 
 ## Filer mode
