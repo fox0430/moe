@@ -1,5 +1,5 @@
 import os, terminal, strutils, unicodeext, times, algorithm
-import editorstatus, ui, fileutils, editorview, gapbuffer, highlight, commandview, highlight
+import editorstatus, ui, fileutils, editorview, gapbuffer, highlight, commandview, highlight, window
 
 type PathInfo = tuple[kind: PathComponent, path: string, size: int64, lastWriteTime: times.Time]
 
@@ -183,7 +183,7 @@ proc initFilelistHighlight[T](dirList: seq[PathInfo], buffer: T, currentLine: in
     let color = setDirListColor(dir.kind, index == currentLine)
     result.colorSegments.add(ColorSegment(firstRow: index, firstColumn: 0, lastRow: index, lastColumn: buffer[index].len, color: color))
 
-proc fileNameToGapBuffer(bufStatus: var BufferStatus, settings: EditorSettings, filerStatus: FilerStatus) =
+proc fileNameToGapBuffer(bufStatus: var BufferStatus, currentWin: WindowNode, settings: EditorSettings, filerStatus: FilerStatus) =
   bufStatus.buffer = initGapBuffer[seq[Rune]]()
 
   for index, dir in filerStatus.dirList:
@@ -202,10 +202,10 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus, settings: EditorSettings, 
   let useStatusBar = if settings.statusBar.useBar: 1 else: 0
   let numOfFile = filerStatus.dirList.len
   bufStatus.highlight = initFilelistHighlight(filerStatus.dirList, bufStatus.buffer, bufStatus.currentLine)
-  bufStatus.view = initEditorView(bufStatus.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
+  currentWin.view = initEditorView(bufStatus.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
 
 proc updateFilerView*(status: var EditorStatus, filerStatus: var FilerStatus) =
-  fileNameToGapBuffer(status.bufStatus[status.currentBuffer], status.settings, filerStatus)
+  fileNameToGapBuffer(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, status.settings, filerStatus)
   status.resize(terminalHeight(), terminalWidth())
   status.update
   filerStatus.viewUpdate = false
@@ -237,12 +237,12 @@ proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string)
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     tmpCurrentLine = status.bufStatus[status.currentBuffer].currentLine
 
-  status.bufStatus[status.currentBuffer].view = initEditorView(status.bufStatus[status.currentBuffer].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
+  status.currentMainWindowNode.view = initEditorView(status.bufStatus[status.currentBuffer].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
   status.bufStatus[status.currentBuffer].currentLine = 0
 
   status.update
   setCursor(false)
-  while isResizekey(status.mainWindowInfo[status.currentMainWindow].window.getKey):
+  while isResizekey(status.currentMainWindowNode.window.getKey):
     status.resize(terminalHeight(), terminalWidth())
     status.update
     setCursor(false)
@@ -263,9 +263,9 @@ proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
   status.bufStatus[status.currentBuffer].currentLine = 0
   filerStatus.viewUpdate = true
   if filerStatus.dirList.len == 0:
-    status.mainWindowInfo[status.currentMainWindow].window.erase
-    status.mainWindowInfo[status.currentMainWindow].window.write(0, 0, "not found", EditorColorPair.commandBar)
-    status.mainWindowInfo[status.currentMainWindow].window.refresh
+    status.currentMainWindowNode.window.erase
+    status.currentMainWindowNode.window.write(0, 0, "not found", EditorColorPair.commandBar)
+    status.currentMainWindowNode.window.refresh
     discard getKey(status.commandWindow)
     status.commandWindow.erase
     status.commandWindow.refresh
@@ -282,7 +282,7 @@ proc filerMode*(status: var EditorStatus) =
     if filerStatus.viewUpdate: updateFilerView(status, filerStatus)
 
     setCursor(false)
-    let key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+    let key = getKey(status.currentMainWindowNode.window)
 
     status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
     status.bufStatus[status.currentBuffer].tryRecordCurrentPosition

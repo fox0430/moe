@@ -31,7 +31,7 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Multiple file buffers
 
-- Split window
+- Vertical/Horizontal split window
 
 - Tab line
 
