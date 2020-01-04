@@ -75,7 +75,7 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
     var
       view = initEditorView(buffer, 1, 1)
       win = newWindow()
-      node = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win, view: view, bufferIndex: n.bufferIndex)
+      node = WindowNode(parent: n.parent, child: @[], splitType: SplitType.vertical, window: win, view: view, bufferIndex: n.bufferIndex)
     n.parent.splitType = SplitType.horaizontal
     n.parent.child.insert(node, n.index + 1)
     return n
@@ -122,7 +122,7 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
 
       ## Calc window y
       if height mod root.child.len != 0 and index > 0: node.y = (node.h * index) + 1
-      else: node.y = node.h * index
+      else: node.y = node.h * index + y
 
       node.w = width
       node.x = x

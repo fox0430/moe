@@ -297,13 +297,14 @@ proc resize*(status: var EditorStatus, height, width: int) =
   var qeue = initHeapQueue[WindowNode]()
   for node in status.mainWindowNode.child: qeue.push(node)
   while qeue.len > 0:
-    for i in  0 ..< qeue.len:
+    let qeueLength = qeue.len
+    for i in  0 ..< qeueLength:
       let node = qeue.pop
       if node.window != nil:
         let
           bufIndex = node.bufferIndex
           widthOfLineNum = node.view.widthOfLineNum
-          blankLine = if node.parent.splitType == SplitType.horaizontal and i == 0: 1 else: 0
+          blankLine = if node.parent.splitType == SplitType.horaizontal and i < qeueLength - 1: 1 else: 0
           adjustedHeight = max(node.h - blankLine, 4)
           adjustedWidth = max(node.w - widthOfLineNum - 1, 4)
 
