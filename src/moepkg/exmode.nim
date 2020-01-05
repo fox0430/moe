@@ -349,13 +349,15 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   status.changeMode(Mode.normal)
 
 proc quitCommand(status: var EditorStatus) =
-  if status.bufStatus[status.currentBuffer].countChange == 0 or status.mainWindowNode.countReferencedWindow(status.currentBuffer) > 1:
-    status.closeWindow(status.currentMainWindowNode)
-    status.changeMode(Mode.normal)
+  if status.bufStatus[status.currentBuffer].prevMode == Mode.filer:
+    status.deleteBuffer(status.currentBuffer)
   else:
-    status.commandWindow.writeNoWriteError(status.messageLog)
-    status.changeMode(Mode.normal)
+    if status.bufStatus[status.currentBuffer].countChange == 0 or status.mainWindowNode.countReferencedWindow(status.currentBuffer) > 1:
+      status.closeWindow(status.currentMainWindowNode)
+    else:
+      status.commandWindow.writeNoWriteError(status.messageLog)
 
+  status.changeMode(Mode.normal)
 proc writeAndQuitCommand(status: var EditorStatus) =
   try:
     status.bufStatus[status.currentBuffer].countChange = 0

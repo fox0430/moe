@@ -431,10 +431,10 @@ proc deletePopUpWindow*(status: var Editorstatus) =
   status.popUpWindow.deleteWindow
   status.update
 
-proc addNewBuffer*(status:var EditorStatus, filename: string)
+proc addNewBuffer*(status: var EditorStatus, filename: string)
 from commandview import writeFileOpenError
 
-proc addNewBuffer*(status:var EditorStatus, filename: string) =
+proc addNewBuffer*(status: var EditorStatus, filename: string) =
   status.bufStatus.add(BufferStatus(filename: filename.toRunes, lastSaveTime: now()))
   let index = status.bufStatus.high
 
@@ -456,6 +456,38 @@ proc addNewBuffer*(status:var EditorStatus, filename: string) =
 
   status.changeCurrentBuffer(index)
   status.changeMode(Mode.normal)
+
+proc deleteBuffer*(status: var Editorstatus, deleteIndex: int) =
+  let beforeWindowIndex = status.currentMainWindowNode.windowIndex
+
+  var qeue = initHeapQueue[WindowNode]()
+  for node in status.mainWindowNode.child: qeue.push(node)
+  while qeue.len > 0:
+    for i in 0 ..< qeue.len:
+      let node = qeue.pop
+      if node.bufferIndex == deleteIndex: status.closeWindow(node)
+
+      if node.child.len > 0:
+        for node in node.child: qeue.push(node)
+
+  status.resize(terminalHeight(), terminalWidth())
+
+  status.bufStatus.delete(deleteIndex)
+
+  qeue = initHeapQueue[WindowNode]()
+  for node in status.mainWindowNode.child: qeue.push(node)
+  while qeue.len > 0:
+    for i in 0 ..< qeue.len:
+      var node = qeue.pop
+      if node.bufferIndex > deleteIndex: dec(node.bufferIndex)
+
+      if node.child.len > 0:
+        for node in node.child: qeue.push(node)
+
+  if status.currentBuffer > status.bufStatus.high: status.currentBuffer = status.bufStatus.high
+
+  let afterWindowIndex = if beforeWindowIndex > status.numOfMainWindow - 1: status.numOfMainWindow - 1 else: beforeWindowIndex
+  status.currentMainWindowNode = status.mainWindowNode.searchByWindowIndex(afterWindowIndex)
 
 proc tryRecordCurrentPosition*(bufStatus: var BufferStatus) =
   bufStatus.positionRecord[bufStatus.buffer.lastSuitId] = (bufStatus.currentLine, bufStatus.currentColumn, bufStatus.expandedColumn)
