@@ -265,8 +265,9 @@ proc suggestFilePath(status: var Editorstatus, exStatus: var ExModeViewStatus, k
 
     for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
     if suggestlist.len == 1:
-      key = ru'/'
+      writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
       return
+
     writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
 
     if isTabkey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
@@ -320,7 +321,7 @@ proc suggestExCommandOption(status: var Editorstatus, exStatus: var ExModeViewSt
 
     if status.settings.popUpWindowInExmode: writePopUpWindow(status, x, y, suggestIndex, suggestlist)
 
-    for rune in command.toRunes & ru' ':exStatus.insertCommandBuffer(rune)
+    for rune in command.toRunes & ru' ': exStatus.insertCommandBuffer(rune)
     for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
     writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
 
@@ -388,7 +389,6 @@ proc getKeyOnceAndWriteCommandView*(status: var Editorstatus, prompt: string, bu
     if isTabkey(key) or isShiftTab(key):
       suggestMode(status, exStatus, key)
       if status.settings.popUpWindowInExmode and isEnterKey(key): moveCursor(status.commandWindow, exStatus.cursorY, exStatus.cursorX)
-      key = getKey(status.commandWindow)
 
     if isEnterKey(key):
       exitSearch = true
