@@ -316,8 +316,6 @@ proc jumpCommand(status: var EditorStatus, line: int) =
   status.changeMode(Mode.normal)
 
 proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
-  status.changeMode(Mode.normal)
-
   if status.bufStatus[status.currentBuffer].countChange > 0 or countReferencedWindow(status.mainWindowNode, status.currentBuffer) == 0:
     status.commandWindow.writeNoWriteError(status.messageLog)
   else:
