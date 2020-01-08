@@ -47,7 +47,9 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Suggestions in ex mode
 
-- Pop-up window
+- Popup window
+
+- Color themes
 
 ## Planned features
 
