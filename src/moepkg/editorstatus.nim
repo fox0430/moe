@@ -256,7 +256,6 @@ proc writeTab(tabWin: var Window, start, tabWidth: int, filename: string, color:
 proc writeTabLine*(status: var EditorStatus) =
   let
     isAllBuffer = status.settings.tabLine.allbuffer
-    tabWidth = calcTabWidth(status.bufStatus.len)
     defaultColor = EditorColorPair.tab
     currentTabColor = EditorColorPair.currentTab
     currentWindowBuffer = status.currentMainWindowNode.bufferIndex
@@ -271,6 +270,7 @@ proc writeTabLine*(status: var EditorStatus) =
         currentMode = bufStatus.mode
         prevMode = bufStatus.prevMode
         filename = if (currentMode == Mode.filer) or (prevMode == Mode.filer and currentMode == Mode.ex): getCurrentDir() else: $bufStatus.filename
+        tabWidth = status.bufStatus.len.calcTabWidth
       status.tabWindow.writeTab(index * tabWidth, tabWidth, filename, color)
   else:
     ## Displays only the buffer currently displayed in the window
@@ -282,6 +282,7 @@ proc writeTabLine*(status: var EditorStatus) =
         currentMode = bufStatus.mode
         prevMode = bufStatus.prevMode
         filename = if (currentMode == Mode.filer) or (prevMode == Mode.filer and currentMode == Mode.ex): getCurrentDir() else: $bufStatus.filename
+        tabWidth = status.numOfMainWindow.calcTabWidth
       status.tabWindow.writeTab(index * tabWidth, tabWidth, filename, color)
 
   status.tabWindow.refresh
