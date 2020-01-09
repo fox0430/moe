@@ -714,7 +714,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   ),
 ]
 
-type Window* = object
+type Window* = ref object
   cursesWindow*: ptr window
   top, left, height*, width*: int
   y*, x*: int
@@ -819,6 +819,7 @@ proc startUi*() =
 proc exitUi*() = endwin()
 
 proc initWindow*(height, width, top, left: int, color: EditorColorPair): Window =
+  result = Window()
   result.top = top
   result.left = left
   result.height = height

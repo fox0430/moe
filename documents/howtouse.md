@@ -83,7 +83,7 @@ Check command bar
 ## Replace mode
 ```Esc``` - Start normal mode  
 
-Insert mode
+## Insert mode
 ```Esc``` - Start normal mode  
 
 ## Filer mode
@@ -110,7 +110,8 @@ Insert mode
 ```bd``` or ```bd number``` - Delete buffer  
 ```buf``` - Open buffer manager  
 
-```vs``` - Split window  
+```vs``` - Vertical split window  
+```sv``` - Horizontal split window  
 
 ```livereload on``` or ```livereload on``` - Change setting of live reload of configuration file  
 ```theme themeName``` - Change color theme : Exmaple ```theme dark```  

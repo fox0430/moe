@@ -15,7 +15,7 @@ proc replaceMode*(status: var EditorStatus) =
     var key: Rune = Rune('\0')
     while key == Rune('\0'):
       status.eventLoopTask
-      key = getKey(status.mainWindowInfo[status.currentMainWindow].window)
+      key = getKey(status.currentMainWindowNode.window)
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
@@ -32,6 +32,6 @@ proc replaceMode*(status: var EditorStatus) =
       keyDown(status.bufStatus[status.currentBuffer])
  
     else:
-      replaceCurrentCharacter(status.bufStatus[status.currentBuffer], status.settings.autoIndent, key)
+      replaceCurrentCharacter(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, status.settings.autoIndent, key)
       keyRight(status.bufStatus[status.currentBuffer])
       bufferChanged = true

@@ -7,7 +7,7 @@ A command line based editor inspired by vi/vim written in Nim.
  
 This project's goal is a very customizable, high productivity, high performance and funny animation editor.
 
-![moe](https://user-images.githubusercontent.com/15966436/63640362-4982f480-c6da-11e9-95a9-0e1500facb79.png)
+![moe](https://user-images.githubusercontent.com/15966436/71997723-b52cbf00-3281-11ea-8111-0986cc94068e.png)
 
 ## Features
 
@@ -31,7 +31,7 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Multiple file buffers
 
-- Split window
+- Vertical/Horizontal split window
 
 - Tab line
 
@@ -47,7 +47,9 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Suggestions in ex mode
 
-- Pop-up window
+- Popup window
+
+- Color themes
 
 ## Planned features
 
@@ -92,13 +94,13 @@ nimble install moe
 ```
 
 ## Usage
-https://github.com/fox0430/moe/blob/documents/documents/index.md
+[Documents](https://github.com/fox0430/moe/blob/documents/documents/index.md)
 
 ## The origin of the name
 moe is a recursive acronym for "moe is an optimal editor".    
 And one more, it comes from the Japanese slang 萌え(moe).
 
-## Contribute and bug report
+## Contributing, bug reports, requests
 Welcome❤
 
 ## License

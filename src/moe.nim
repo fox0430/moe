@@ -34,7 +34,7 @@ proc main() =
     status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSavetime: now()))
   else: addNewBuffer(status, parsedList.filename)
 
-  while status.mainWindowInfo.len > 0:
+  while status.numOfMainWindow > 0:
 
     case status.bufStatus[status.currentBuffer].mode:
     of Mode.normal: normalMode(status)
