@@ -10,7 +10,7 @@ import moepkg/exmode
 import moepkg/searchmode
 import moepkg/buffermanager
 import moepkg/logviewer
-import moepkg/cmdoption
+import moepkg/cmdlineoption
 import moepkg/settings
 import moepkg/commandview
 
