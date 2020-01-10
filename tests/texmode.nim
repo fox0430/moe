@@ -224,7 +224,7 @@ test "Change theme command":
   var status = initEditorStatus()
   status.addNewBuffer("")
   startUi()
-  
+
   block:
     const command = @[ru"theme", ru"vivid"]
     status.exModeCommand(command)
