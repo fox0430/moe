@@ -256,39 +256,3 @@ test "Open log viewer":
 
   const command = @[ru"log"]
   status.exModeCommand(command)
-
-test "Quit command":
-  var status = initEditorStatus()
-  status.addNewBuffer("")
-
-  const command = @[ru"q"]
-  status.exModeCommand(command)
-
-test "Force quit command":
-  var status = initEditorStatus()
-  status.addNewBuffer("")
-
-  status.bufStatus[0].countChange = 1
-  const command = @[ru"q!"]
-  status.exModeCommand(command)
-
-test "All buffer quit command":
-  var status = initEditorStatus()
-  status.addNewBuffer("")
-  status.resize(100, 100)
-  status.verticalSplitWindow
-
-  const command = @[ru"qa"]
-  status.exModeCommand(command)
-
-test "all buffer force quit command":
-  var status = initEditorStatus()
-  for i in 0 ..< 2:
-    status.addNewBuffer("")
-    status.bufStatus[i].countChange = 1
-  status.verticalSplitWindow
-
-  const command = @[ru"qa!"]
-  status.exModeCommand(command)
-
-
