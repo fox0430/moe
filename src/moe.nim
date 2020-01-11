@@ -26,6 +26,11 @@ proc main() =
   status.timeConfFileLastReloaded = now()
   changeTheme(status)
 
+  setControlCHook(proc() {.noconv.} =
+    exitUi()
+    quit()
+  )
+
   if existsDir(parsedList.filename):
     try: setCurrentDir(parsedList.filename)
     except OSError:
@@ -33,6 +38,8 @@ proc main() =
       addNewBuffer(status, "")
     status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSavetime: now()))
   else: addNewBuffer(status, parsedList.filename)
+
+  disableControlC()
 
   while status.numOfMainWindow > 0:
 
