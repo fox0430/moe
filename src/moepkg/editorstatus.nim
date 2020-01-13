@@ -511,24 +511,37 @@ proc eventLoopTask*(status: var Editorstatus)
 proc highlightPairOfParen(status: var Editorstatus) =
   status.updateHighlight
 
-  let
-    currentLine = status.bufStatus[status.currentBuffer].currentLine
-    currentColumn = status.bufStatus[status.currentBuffer].currentColumn
+  let 
     buffer = status.bufStatus[status.currentBuffer].buffer
+    currentLine = status.bufStatus[status.currentBuffer].currentLine
+    currentColumn = if status.bufStatus[status.currentBuffer].currentColumn > buffer[currentLine].high: buffer[currentLine].high else: status.bufStatus[status.currentBuffer].currentColumn
 
-  if buffer[currentLine].len > 0 and buffer[currentLine][currentColumn] != ru'(': status.bufStatus[status.currentBuffer].isHighlightPairOfParen = false
-  else:
-    if buffer[currentLine].len > 0 and buffer[currentLine][currentColumn] == ru'(':
-      var depth = 0
-      for i in currentLine ..< buffer.len:
-        for j in currentColumn ..< buffer[i].len:
-          if buffer[i][j] == ru'(': inc(depth)
-          elif buffer[i][j] == ru')': dec(depth)
-          if depth == 0:
-            let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j, color: EditorColorPair.searchResult)
-            status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
-            status.bufStatus[status.currentBuffer].isHighlightPairOfParen = true
-            return
+  if buffer[currentLine].len < 1: return
+
+  if (buffer[currentLine][currentColumn] != ru'(') and (buffer[currentLine][currentColumn] != ru')'):
+    status.bufStatus[status.currentBuffer].isHighlightPairOfParen = false
+  elif buffer[currentLine][currentColumn] == ru'(':
+    var depth = 0
+    for i in currentLine ..< buffer.len:
+      for j in currentColumn ..< buffer[i].len:
+        if buffer[i][j] == ru'(': inc(depth)
+        elif buffer[i][j] == ru')': dec(depth)
+        if depth == 0:
+          let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j, color: EditorColorPair.searchResult)
+          status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
+          status.bufStatus[status.currentBuffer].isHighlightPairOfParen = true
+          return
+  elif buffer[currentLine][currentColumn] == ru')':
+    var depth = 0
+    for i in countdown(currentLine, 0):
+      for j in countdown(currentColumn, 0):
+        if buffer[i][j] == ru')': inc(depth)
+        elif buffer[i][j] == ru'(': dec(depth)
+        if depth == 0:
+          let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j, color: EditorColorPair.searchResult)
+          status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
+          status.bufStatus[status.currentBuffer].isHighlightPairOfParen = true
+          return
 
 from searchmode import searchAllOccurrence
 proc updateHighlight*(status: var EditorStatus) =
