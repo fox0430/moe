@@ -529,7 +529,7 @@ proc highlightPairOfParen(status: var Editorstatus) =
         if buffer[i][j] == ru'(': inc(depth)
         elif buffer[i][j] == ru')': dec(depth)
         if depth == 0:
-          let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j, color: EditorColorPair.searchResult)
+          let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j, color: EditorColorPair.parenText)
           status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
           status.bufStatus[status.currentBuffer].isHighlightPairOfParen = true
           return
@@ -540,7 +540,7 @@ proc highlightPairOfParen(status: var Editorstatus) =
         if buffer[i][j] == ru')': inc(depth)
         elif buffer[i][j] == ru'(': dec(depth)
         if depth == 0:
-          let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j, color: EditorColorPair.searchResult)
+          let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j, color: EditorColorPair.parenText)
           status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
           status.bufStatus[status.currentBuffer].isHighlightPairOfParen = true
           return
