@@ -73,7 +73,6 @@ type BufferStatus* = object
   mode* : Mode
   prevMode* : Mode
   lastSaveTime*: DateTime
-  isHighlightPairOfParen: bool 
 
 type EditorStatus* = object
   platform*: Platform
@@ -518,31 +517,33 @@ proc highlightPairOfParen(status: var Editorstatus) =
     currentLine = status.bufStatus[status.currentBuffer].currentLine
     currentColumn = if status.bufStatus[status.currentBuffer].currentColumn > buffer[currentLine].high: buffer[currentLine].high else: status.bufStatus[status.currentBuffer].currentColumn
 
-  if buffer[currentLine].len < 1: return
+  if buffer[currentLine].len < 1 or (buffer[currentLine][currentColumn] == ru'"') or (buffer[currentLine][currentColumn] == ru'\''): return
 
-  if (buffer[currentLine][currentColumn] != ru'(') and (buffer[currentLine][currentColumn] != ru')'):
-    status.bufStatus[status.currentBuffer].isHighlightPairOfParen = false
-  elif buffer[currentLine][currentColumn] == ru'(':
+  if isOpenParen(buffer[currentLine][currentColumn]):
     var depth = 0
+    let
+      openParen = buffer[currentLine][currentColumn]
+      closeParen = correspondingCloseParen(openParen)
     for i in currentLine ..< buffer.len:
       for j in currentColumn ..< buffer[i].len:
-        if buffer[i][j] == ru'(': inc(depth)
-        elif buffer[i][j] == ru')': dec(depth)
+        if buffer[i][j] == openParen: inc(depth)
+        elif buffer[i][j] == closeParen: dec(depth)
         if depth == 0:
           let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j, color: EditorColorPair.parenText)
           status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
-          status.bufStatus[status.currentBuffer].isHighlightPairOfParen = true
           return
-  elif buffer[currentLine][currentColumn] == ru')':
+  elif isCloseParen(buffer[currentLine][currentColumn]):
     var depth = 0
+    let
+      closeParen = buffer[currentLine][currentColumn]
+      openParen = correspondingOpenParen(closeParen)
     for i in countdown(currentLine, 0):
       for j in countdown(currentColumn, 0):
-        if buffer[i][j] == ru')': inc(depth)
-        elif buffer[i][j] == ru'(': dec(depth)
+        if buffer[i][j] == closeParen: inc(depth)
+        elif buffer[i][j] == openParen: dec(depth)
         if depth == 0:
           let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j, color: EditorColorPair.parenText)
           status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
-          status.bufStatus[status.currentBuffer].isHighlightPairOfParen = true
           return
 
 from searchmode import searchAllOccurrence
