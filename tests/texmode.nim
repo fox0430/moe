@@ -264,7 +264,6 @@ test "Open log viewer":
   exitUi()
 
 test "Highlight pair of paren settig command":
-  echo "-----------------------------------------------------------------------" 
   var status = initEditorStatus()
   status.addNewBuffer("")
 
