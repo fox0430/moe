@@ -519,9 +519,9 @@ proc highlightPairOfParen(status: var Editorstatus) =
   if buffer[currentLine].len > 0 and buffer[currentLine][currentColumn] != ru'(': status.bufStatus[status.currentBuffer].isHighlightPairOfParen = false
   else:
     if buffer[currentLine].len > 0 and buffer[currentLine][currentColumn] == ru'(':
-      var depth = 1
+      var depth = 0
       for i in currentLine ..< buffer.len:
-        for j in currentColumn + 1 ..< buffer[i].len:
+        for j in currentColumn ..< buffer[i].len:
           if buffer[i][j] == ru'(': inc(depth)
           elif buffer[i][j] == ru')': dec(depth)
           if depth == 0:
