@@ -1,4 +1,4 @@
-import packages/docutils/highlite, strutils, terminal, os, strformat, tables, times, osproc, heapqueue, sequtils
+import packages/docutils/highlite, strutils, terminal, os, strformat, tables, times, osproc, heapqueue
 import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils, undoredostack, window
 
 type Platform* = enum
