@@ -82,6 +82,9 @@ proc isStatusBarSettingCommand(command: seq[seq[Rune]]): bool =
 proc isRealtimeSearchSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"realtimesearch"
 
+proc isHighlightPairOfParenSettigCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"highlightparen"
+
 proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"noh"
 
@@ -246,6 +249,13 @@ proc realtimeSearchSettingCommand(status: var Editorstatus, command: seq[Rune]) 
   if command == ru"on": status.settings.realtimeSearch= true
   elif command == ru"off": status.settings.realtimeSearch = false
 
+  status.commandWindow.erase
+  status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
+
+proc highlightPairOfParenSettigCommand(status: var Editorstatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.highlightPairOfParen = true
+  elif command == ru"off": status.settings.highlightPairOfParen = false
+ 
   status.commandWindow.erase
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
@@ -551,6 +561,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     realtimeSearchSettingCommand(status, command[1])
   elif isOpenMessageLogViweer(command):
     openMessageMessageLogViewer(status)
+  elif isHighlightPairOfParenSettigCommand(command):
+    highlightPairOfParenSettigCommand(status, command[1])
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[status.currentBuffer].prevMode)

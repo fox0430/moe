@@ -332,6 +332,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
 proc highlightPairOfParen(status: var Editorstatus)
 
 proc update*(status: var EditorStatus) =
+  stdout.eraseScreen()
   setCursor(false)
   if status.settings.statusBar.useBar: status.writeStatusBar()
 
