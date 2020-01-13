@@ -82,6 +82,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("replaceTextHighlight"):
       result.replaceTextHighlight = settings["Standard"]["replaceTextHighlight"].getbool()
 
+    if settings["Standard"].contains("highlightPairOfParen"):
+      result.highlightPairOfParen =  settings["Standard"]["highlightPairOfParen"].getbool()
+
   if settings.contains("TabLine"):
     if settings["TabLine"].contains("allBuffer"):
         result.tabLine.allBuffer= settings["TabLine"]["allBuffer"].getbool()

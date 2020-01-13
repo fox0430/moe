@@ -53,6 +53,7 @@ type EditorSettings* = object
   realtimeSearch*: bool
   popUpWindowInExmode*: bool
   replaceTextHighlight*: bool
+  highlightPairOfParen*: bool
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -137,6 +138,7 @@ proc initEditorSettings*(): EditorSettings =
   result.realtimeSearch = true
   result.popUpWindowInExmode = true
   result.replaceTextHighlight = true
+  result.highlightPairOfParen = true
 
 proc initEditorStatus*(): EditorStatus =
   result.platform = initPlatform()
@@ -334,7 +336,7 @@ proc update*(status: var EditorStatus) =
   setCursor(false)
   if status.settings.statusBar.useBar: status.writeStatusBar()
 
-  status.highlightPairOfParen
+  if status.settings.highlightPairOfParen: status.highlightPairOfParen
 
   var queue = initHeapQueue[WindowNode]()
   for node in status.mainWindowNode.child: queue.push(node)
