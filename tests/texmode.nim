@@ -241,8 +241,6 @@ test "Change theme command":
     const command = @[ru"theme", ru"config"]
     status.exModeCommand(command)
 
-  exitUi()
-
 test "Open buffer manager":
   var status = initEditorStatus()
   status.addNewBuffer("")
@@ -251,8 +249,6 @@ test "Open buffer manager":
   const command = @[ru"buf"]
   status.exModeCommand(command)
 
-  exitUi()
-
 test "Open log viewer":
   var status = initEditorStatus()
   status.addNewBuffer("")
@@ -260,8 +256,6 @@ test "Open log viewer":
 
   const command = @[ru"log"]
   status.exModeCommand(command)
-
-  exitUi()
 
 test "Highlight pair of paren settig command":
   var status = initEditorStatus()

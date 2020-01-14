@@ -13,7 +13,7 @@ test "Vertical split window":
   status.addNewBuffer("")
   status.resize(100, 100)
   status.verticalSplitWindow
-  
+
 test "Horizontal split window":
   var status = initEditorStatus()
   status.addNewBuffer("")
@@ -26,22 +26,6 @@ test "Close window":
   status.resize(100, 100)
   status.verticalSplitWindow
   status.closeWindow(status.currentMainWindowNode)
-
-#test "Move window 1":
-#  var status = initEditorStatus()
-#  status.addNewBuffer("")
-#  status.resize(100, 100)
-#  status.verticalSplitWindow
-#  status.moveCurrentMainWindow(0)
-#
-#test "Move window 2":
-#  var status = initEditorStatus()
-#  status.addNewBuffer("")
-#  status.resize(100, 100)
-#
-#  for i in 0 ..< 2: status.verticalSplitWindow
-#  for i in 0 ..< 3: status.moveNextWindow
-#  for i in 0 ..< 3: status.movePrevWindow
 
 test "resize 1":
   var status = initEditorStatus()
@@ -71,12 +55,36 @@ test "Highlight of a pair of paren 1":
   status.addNewBuffer("")
   status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
 
-  status.bufStatus[0].buffer = initGapBuffer(@[ru"()"])
-  status.updateHighlight
-  status.update
-  
-  check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0)
-  check(status.bufStatus[0].highlight[1].color == EditorColorPair.parenText and status.bufStatus[0].highlight[1].firstColumn == 1)
+  block:
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"()"])
+    status.updateHighlight
+    status.update
+
+    check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0)
+    check(status.bufStatus[0].highlight[1].color == EditorColorPair.parenText and status.bufStatus[0].highlight[1].firstColumn == 1)
+
+  block:
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"[]"])
+    status.updateHighlight
+    status.update
+
+    check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0)
+    check(status.bufStatus[0].highlight[1].color == EditorColorPair.parenText and status.bufStatus[0].highlight[1].firstColumn == 1)
+
+  block:
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"{}"])
+    status.updateHighlight
+    status.update
+
+    check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0)
+    check(status.bufStatus[0].highlight[1].color == EditorColorPair.parenText and status.bufStatus[0].highlight[1].firstColumn == 1)
+
+  block:
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"(()"])
+    status.updateHighlight
+    status.update
+
+    check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0 and status.bufStatus[0].highlight[0].lastColumn == 2)
 
 test "Highlight of a pair of paren 2":
   var status = initEditorStatus()
