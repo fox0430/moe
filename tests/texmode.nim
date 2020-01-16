@@ -256,3 +256,17 @@ test "Open log viewer":
 
   const command = @[ru"log"]
   status.exModeCommand(command)
+
+test "Highlight pair of paren settig command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  block:
+    const command = @[ru"highlightparen", ru"off"]
+    status.exModeCommand(command)
+    check(status.settings.highlightPairOfParen == false)
+
+  block:
+    const command = @[ru"highlightparen", ru"on"]
+    status.exModeCommand(command)
+    check(status.settings.highlightPairOfParen == true)

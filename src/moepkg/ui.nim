@@ -364,6 +364,10 @@ type EditorColor* = object
   replaceText*: Color
   replaceTextBg*: Color
 
+  # pair of paren highlighting
+  parenText*: Color
+  parenTextBg*: Color
+
 type EditorColorPair* = enum
   lineNum = 1
   currentLineNum = 2
@@ -414,6 +418,9 @@ type EditorColorPair* = enum
   popUpWinCurrentLine = 38
   # replace text highlighting
   replaceText = 39
+
+  # pair of paren highlighting
+  parenText = 40
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -488,7 +495,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     popUpWinCurrentLineBg: gray,
     # replace text highlighting
     replaceText: default,
-    replaceTextBg: red
+    replaceTextBg: red,
+    # pair of paren highlighting
+    parenText: default,
+    parenTextBg: white
   ),
   dark: EditorColor(
     editorBg: default,
@@ -562,7 +572,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     popUpWinCurrentLineBg: gray,
     # replace text highlighting
     replaceText: default,
-    replaceTextBg: red
+    replaceTextBg: red,
+    # pair of paren highlighting
+    parenText: default,
+    parenTextBg: white
   ),
   light: EditorColor(
     editorBg: default,
@@ -636,7 +649,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     popUpWinCurrentLineBg: gray,
     # replace text highlighting
     replaceText: default,
-    replaceTextBg: red
+    replaceTextBg: red,
+    # pair of paren highlighting
+    parenText: default,
+    parenTextBg: gray
   ),
   vivid: EditorColor(
     editorBg: default,
@@ -710,7 +726,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     popUpWinCurrentLineBg: gray,
     # replace text highlighting
     replaceText: default,
-    replaceTextBg: red
+    replaceTextBg: red,
+    # pair of paren highlighting
+    parenText: default,
+    parenTextBg: white
   ),
 ]
 
@@ -776,6 +795,9 @@ proc setCursesColor*(editorColor: EditorColor) =
 
   # replace text highlighting
   setColorPair(EditorColorPair.replaceText, editorColor.replaceText, editorColor.replaceTextBg)
+
+  # pair of paren highlighting
+  setColorPair(EditorColorPair.parenText, editorColor.parenText, editorColor.parenTextBg)
 
 proc setIbeamCursor*() = discard execShellCmd("printf '\\033[6 q'")
 
