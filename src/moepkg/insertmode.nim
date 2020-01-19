@@ -73,6 +73,9 @@ proc keyBackspace(bufStatus: var BufferStatus, autoDeleteParen: bool, currentWin
 
     if autoDeleteParen: bufStatus.deleteParen(currentChar)
 
+    if bufStatus.mode == Mode.insert and bufStatus.currentColumn > bufStatus.buffer[bufStatus.currentLine].len:
+      bufStatus.currentColumn = bufStatus.buffer[bufStatus.currentLine].len
+
   currentWin.view.reload(bufStatus.buffer, min(currentWin.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)
 
