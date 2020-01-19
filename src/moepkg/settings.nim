@@ -85,6 +85,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("highlightPairOfParen"):
       result.highlightPairOfParen =  settings["Standard"]["highlightPairOfParen"].getbool()
 
+    if settings["Standard"].contains("autoDeleteParen"):
+      result.autoDeleteParen =  settings["Standard"]["autoDeleteParen"].getbool()
+
   if settings.contains("TabLine"):
     if settings["TabLine"].contains("allBuffer"):
         result.tabLine.allBuffer= settings["TabLine"]["allBuffer"].getbool()
