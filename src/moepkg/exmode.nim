@@ -86,7 +86,7 @@ proc isHighlightPairOfParenSettigCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"highlightparen"
 
 proc isAutoDeleteParenSettingCommand(command: seq[seq[Rune]]): bool =
-  return command.len == 2 and command[0] == ru"autoDeleteParen"
+  return command.len == 2 and command[0] == ru"deleteparen"
 
 proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"noh"
