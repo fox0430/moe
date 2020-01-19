@@ -6,6 +6,7 @@ type
 
 const exCommandList = [
   ru"!",
+  ru"deleteparen",
   ru"b",
   ru"bd",
   ru"bfirst",

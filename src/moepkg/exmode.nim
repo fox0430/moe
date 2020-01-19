@@ -85,6 +85,9 @@ proc isRealtimeSearchSettingCommand(command: seq[seq[Rune]]): bool =
 proc isHighlightPairOfParenSettigCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"highlightparen"
 
+proc isAutoDeleteParenSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"autoDeleteParen"
+
 proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"noh"
 
@@ -256,6 +259,13 @@ proc highlightPairOfParenSettigCommand(status: var Editorstatus, command: seq[Ru
   if command == ru"on": status.settings.highlightPairOfParen = true
   elif command == ru"off": status.settings.highlightPairOfParen = false
  
+  status.commandWindow.erase
+  status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
+
+proc autoDeleteParenSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.autoDeleteParen = true
+  elif command == ru"off": status.settings.autoDeleteParen = false
+
   status.commandWindow.erase
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
@@ -563,6 +573,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     openMessageMessageLogViewer(status)
   elif isHighlightPairOfParenSettigCommand(command):
     highlightPairOfParenSettigCommand(status, command[1])
+  elif isAutoDeleteParenSettingCommand(command):
+    autoDeleteParenSettingCommand(status, command[1])
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
