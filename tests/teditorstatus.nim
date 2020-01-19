@@ -126,5 +126,169 @@ test "Highlight of a pair of paren 4":
   status.updateHighlight
   status.update
 
-  #check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstRow == 0)
-  #check(status.bufStatus[0].highlight[1].color == EditorColorPair.parenText and status.bufStatus[0].highlight[1].firstRow == 1)
+test "Auto delete paren 1":
+  block:
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"()"])
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentMainWindowNode)
+
+    check(status.bufStatus[0].buffer[0] == ru"")
+
+  block:
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"()"])
+    status.bufStatus[0].keyRight
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentMainWindowNode)
+
+    check(status.bufStatus[0].buffer[0] == ru"")
+
+test "Auto delete paren 2":
+  block:
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"(())"])
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentMainWindowNode)
+
+    check(status.bufStatus[0].buffer[0] == ru"()")
+
+  block:
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"(())"])
+    status.bufStatus[0].keyRight
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentMainWindowNode)
+
+    check(status.bufStatus[0].buffer[0] == ru"()")
+
+  block:
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"(())"])
+    for i in 0 ..< 2: status.bufStatus[0].keyRight
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentMainWindowNode)
+
+    check(status.bufStatus[0].buffer[0] == ru"()")
+
+  block:
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"(())"])
+    for i in 0 ..< 3: status.bufStatus[0].keyRight
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentMainWindowNode)
+
+    check(status.bufStatus[0].buffer[0] == ru"()")
+
+test "Auto delete paren 3":
+  block:
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"(()"])
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentMainWindowNode)
+
+    check(status.bufStatus[0].buffer[0] == ru"()")
+
+  block:
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"(()"])
+    status.bufStatus[0].keyRight
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentMainWindowNode)
+
+    check(status.bufStatus[0].buffer[0] == ru"(")
+
+  block:
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"(()"])
+    for i in 0 ..< 2: status.bufStatus[0].keyRight
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentMainWindowNode)
+
+    check(status.bufStatus[0].buffer[0] == ru"(")
+
+  block:
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"())"])
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentMainWindowNode)
+
+    check(status.bufStatus[0].buffer[0] == ru")")
+
+  block:
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"())"])
+    status.bufStatus[0].keyRight
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentMainWindowNode)
+
+    check(status.bufStatus[0].buffer[0] == ru")")
+
+  block:
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"())"])
+    for i in 0 ..< 3: status.bufStatus[0].keyRight
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentMainWindowNode)
+
+    check(status.bufStatus[0].buffer[0] == ru"()")
+
+test "Auto delete paren 4":
+  block:
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"(", ru")"])
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentMainWindowNode)
+
+    check(status.bufStatus[0].buffer[0] == ru"" and status.bufStatus[0].buffer[1] == ru"")
+
+  block:
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"(", ru")"])
+    status.bufStatus[0].keyDown
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentMainWindowNode)
+
+    check(status.bufStatus[0].buffer[0] == ru"" and status.bufStatus[0].buffer[1] == ru"")
+
+test "Auto delete paren 5":
+  block:
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"()"])
+    status.changeMode(Mode.insert)
+    status.bufStatus[0].keyRight
+    status.bufStatus[0].keyBackspace(status.settings.autoDeleteParen, status.currentMainWindowNode)
+
+    check(status.bufStatus[0].buffer[0] == ru"")
+
+  block:
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"()"])
+    status.changeMode(Mode.insert)
+    for i in 0 ..< 2: status.bufStatus[0].keyRight
+    status.bufStatus[0].keyBackspace(status.settings.autoDeleteParen, status.currentMainWindowNode)
+
+    check(status.bufStatus[0].buffer[0] == ru"")
+
+test "Auto delete paren 6":
+  block:
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"(a(a))"])
+    status.changeMode(Mode.insert)
+    for i in 0 ..< 5: status.bufStatus[0].keyRight
+    status.bufStatus[0].keyBackspace(status.settings.autoDeleteParen, status.currentMainWindowNode)
+
+    check(status.bufStatus[0].buffer[0] == ru"(aa)")
+
+  block:
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"(a(a))"])
+    status.changeMode(Mode.insert)
+    for i in 0 ..< 6: status.bufStatus[0].keyRight
+    status.bufStatus[0].keyBackspace(status.settings.autoDeleteParen, status.currentMainWindowNode)
+
+    check(status.bufStatus[0].buffer[0] == ru"a(a)")

@@ -48,7 +48,7 @@ proc insertCharacter(bufStatus: var BufferStatus, currentWin: WindowNode, autoCl
     moveRight()
     inserted()
 
-proc keyBackspace(bufStatus: var BufferStatus, autoDeleteParen: bool, currentWin: WindowNode) =
+proc keyBackspace*(bufStatus: var BufferStatus, autoDeleteParen: bool, currentWin: WindowNode) =
   if bufStatus.currentLine == 0 and bufStatus.currentColumn == 0: return
 
   if bufStatus.currentColumn == 0:
