@@ -48,7 +48,7 @@ proc insertCharacter(bufStatus: var BufferStatus, currentWin: WindowNode, autoCl
     moveRight()
     inserted()
 
-proc keyBackspace(bufStatus: var BufferStatus, currentWin: WindowNode) =
+proc keyBackspace(bufStatus: var BufferStatus, autoDeleteParen: bool, currentWin: WindowNode) =
   if bufStatus.currentLine == 0 and bufStatus.currentColumn == 0: return
 
   if bufStatus.currentColumn == 0:
@@ -64,10 +64,14 @@ proc keyBackspace(bufStatus: var BufferStatus, currentWin: WindowNode) =
   else:
     dec(bufStatus.currentColumn)
 
-    let oldLine = bufStatus.buffer[bufStatus.currentLine]
+    let
+      currentChar = bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn]
+      oldLine = bufStatus.buffer[bufStatus.currentLine]
     var newLine = bufStatus.buffer[bufStatus.currentLine]
     newLine.delete(bufStatus.currentColumn)
     if oldLine != newLine: bufStatus.buffer[bufStatus.currentLine] = newLine
+
+    if autoDeleteParen: bufStatus.deleteParen(currentChar)
 
   currentWin.view.reload(bufStatus.buffer, min(currentWin.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)
@@ -173,10 +177,10 @@ proc insertMode*(status: var EditorStatus) =
     elif isEndKey(key):
       moveToLastOfLine(status.bufStatus[status.currentBuffer])
     elif isDcKey(key):
-      deleteCurrentCharacter(status.bufStatus[status.currentBuffer], status.currentMainWindowNode)
+      status.bufStatus[status.currentBuffer].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentMainWindowNode)
       bufferChanged = true
     elif isBackspaceKey(key):
-      keyBackspace(status.bufStatus[status.currentBuffer], status.currentMainWindowNode)
+      status.bufStatus[status.currentBuffer].keyBackspace(status.settings.autoDeleteParen, status.currentMainWindowNode)
       bufferChanged = true
     elif isEnterKey(key):
       keyEnter(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, status.settings.autoIndent)

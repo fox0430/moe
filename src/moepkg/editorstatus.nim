@@ -54,6 +54,7 @@ type EditorSettings* = object
   popUpWindowInExmode*: bool
   replaceTextHighlight*: bool
   highlightPairOfParen*: bool
+  autoDeleteParen*: bool
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -138,6 +139,7 @@ proc initEditorSettings*(): EditorSettings =
   result.popUpWindowInExmode = true
   result.replaceTextHighlight = true
   result.highlightPairOfParen = true
+  result.autoDeleteParen = true
 
 proc initEditorStatus*(): EditorStatus =
   result.platform = initPlatform()
