@@ -525,7 +525,8 @@ proc highlightPairOfParen(status: var Editorstatus) =
       openParen = buffer[currentLine][currentColumn]
       closeParen = correspondingCloseParen(openParen)
     for i in currentLine ..< buffer.len:
-      for j in currentColumn ..< buffer[i].len:
+      let startColumn = if i == currentLine: currentColumn else: 0
+      for j in startColumn ..< buffer[i].len:
         if buffer[i][j] == openParen: inc(depth)
         elif buffer[i][j] == closeParen: dec(depth)
         if depth == 0:
@@ -538,7 +539,9 @@ proc highlightPairOfParen(status: var Editorstatus) =
       closeParen = buffer[currentLine][currentColumn]
       openParen = correspondingOpenParen(closeParen)
     for i in countdown(currentLine, 0):
-      for j in countdown(currentColumn, 0):
+      let startColumn = if i == currentLine: currentColumn else: buffer[currentLine].high
+      for j in countdown(startColumn, 0):
+        if buffer[i].len < 1: break
         if buffer[i][j] == closeParen: inc(depth)
         elif buffer[i][j] == openParen: dec(depth)
         if depth == 0:
