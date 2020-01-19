@@ -99,7 +99,8 @@ proc deleteParen*(bufStatus: var BufferStatus, currentChar: Rune) =
       closeParen = currentChar
       openParen = correspondingOpenParen(closeParen)
     for i in countdown(currentLine, 0):
-      for j in countdown(buffer[i].high, 0):
+      let startColumn = if i == currentLine: currentColumn - 1 else: buffer[i].high 
+      for j in countdown(startColumn, 0):
         if buffer[i][j] == closeParen: inc(depth)
         elif buffer[i][j] == openParen: dec(depth)
         if depth == 0:
@@ -131,9 +132,12 @@ proc deleteCurrentCharacter*(bufStatus: var BufferStatus, autoDeleteParen: bool,
     newLine.delete(currentColumn)
     if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
 
-    if autoDeleteParen: bufStatus.deleteParen(currentChar)
+    if autoDeleteParen and currentChar.isParen: bufStatus.deleteParen(currentChar)
 
-    if bufStatus.buffer[currentLine].len > 0 and currentColumn > bufStatus.buffer[currentLine].high and currentMode != Mode.insert:
+    if bufStatus.buffer[currentLine].len < 1:
+      bufStatus.currentColumn = 0
+      bufStatus.expandedColumn = 0
+    elif bufStatus.buffer[currentLine].len > 0 and currentColumn > bufStatus.buffer[currentLine].high and currentMode != Mode.insert:
       bufStatus.currentColumn = bufStatus.buffer[bufStatus.currentLine].len - 1
       bufStatus.expandedColumn = bufStatus.buffer[bufStatus.currentLine].len - 1
 
