@@ -1,5 +1,5 @@
 import unittest
-import moepkg/ui, moepkg/highlight, moepkg/editorstatus, moepkg/editorview, moepkg/gapbuffer, moepkg/unicodeext, moepkg/insertmode
+import moepkg/ui, moepkg/highlight, moepkg/editorstatus, moepkg/editorview, moepkg/gapbuffer, moepkg/unicodeext, moepkg/insertmode, moepkg/normalmode
 
 test "Add new buffer":
   var status = initEditorStatus()
@@ -109,3 +109,22 @@ test "Highlight of a pair of paren 3":
 
   check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstRow == 0)
   check(status.bufStatus[0].highlight[1].color == EditorColorPair.parenText and status.bufStatus[0].highlight[1].firstRow == 1)
+
+test "Highlight of a pair of paren 4":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"(", ru")"])
+  status.updateHighlight
+  status.update
+
+  status.bufStatus[0].keyDown
+  status.changeMode(Mode.insert)
+  status.bufStatus[0].keyEnter(status.currentMainWindowNode, status.settings.autoIndent)
+
+  status.updateHighlight
+  status.update
+
+  #check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstRow == 0)
+  #check(status.bufStatus[0].highlight[1].color == EditorColorPair.parenText and status.bufStatus[0].highlight[1].firstRow == 1)
