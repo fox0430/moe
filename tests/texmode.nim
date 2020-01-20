@@ -270,3 +270,17 @@ test "Highlight pair of paren settig command":
     const command = @[ru"highlightparen", ru"on"]
     status.exModeCommand(command)
     check(status.settings.highlightPairOfParen == true)
+
+test "Auto delete paren setting command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  block:
+    const command = @[ru"deleteparen", ru"off"]
+    status.exModeCommand(command)
+    check(status.settings.autoDeleteParen == false)
+
+  block:
+    const command = @[ru"deleteparen", ru"on"]
+    status.exModeCommand(command)
+    check(status.settings.autoDeleteParen == true)
