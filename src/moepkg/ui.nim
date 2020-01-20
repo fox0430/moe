@@ -822,7 +822,9 @@ proc keyEcho*(keyecho: bool) =
   if keyecho == true: echo()
   elif keyecho == false: noecho()
 
-proc setTimeout*(win: var Window) = win.cursesWindow.wtimeout(cint(1000)) # 1000mm sec
+proc setTimeout*(win: var Window) = win.cursesWindow.wtimeout(cint(500)) # 500mm sec
+
+proc setTimeout*(win: var Window, time: int) = win.cursesWindow.wtimeout(cint(time))
 
 proc startUi*() =
   discard setLocale(LC_ALL, "")   # enable UTF-8
