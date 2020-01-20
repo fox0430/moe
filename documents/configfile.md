@@ -114,6 +114,12 @@ default is true
 highlightPairOfParen
 ```
 
+Auto delete paren (bool)  
+default is true
+```
+autoDeleteParen
+```
+
 ### TabLine table
 Dispaly all bufer in tab line (bool)  
 default is false  

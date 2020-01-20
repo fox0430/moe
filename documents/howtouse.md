@@ -123,6 +123,7 @@ Check command bar
 ```linenum on``` or ```linenum off``` - Change dispaly line number setting  
 ```statusbar on``` or ```statusbar on``` - Change display stattus bar setting  
 ```realtimesearch on``` or ```realtimesearch off``` - Change real-time search setting  
+```deleteparen on``` or ```deleteparen off``` - Change auto delete paren setting  
 ```noh``` - Turn off highlights  
 
 ```log``` - Open messages log viwer  
