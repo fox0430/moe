@@ -91,6 +91,9 @@ proc isAutoDeleteParenSettingCommand(command: seq[seq[Rune]]): bool =
 proc isSmoothScrollSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"smoothscroll"
 
+proc isSmoothScrollSpeedSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"scrollspeed" and isDigit(command[1])
+
 proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"noh"
 
@@ -275,6 +278,12 @@ proc autoDeleteParenSettingCommand(status: var EditorStatus, command: seq[Rune])
 proc smoothScrollSettingCommand(status: var Editorstatus, command: seq[Rune]) =
   if command == ru"on": status.settings.smoothScroll = true
   elif command == ru"off": status.settings.smoothScroll = false
+
+  status.commandWindow.erase
+  status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
+
+proc smoothScrollSpeedSettingCommand(status: var Editorstatus, speed: int) =
+  if speed > 0: status.settings.smoothScrollSpeed = speed
 
   status.commandWindow.erase
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
@@ -587,6 +596,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     autoDeleteParenSettingCommand(status, command[1])
   elif isSmoothScrollSettingCommand(command):
     smoothScrollSettingCommand(status, command[1])
+  elif isSmoothScrollSpeedSettingCommand(command):
+    smoothScrollSpeedSettingCommand(status, ($command[1]).parseInt)
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
