@@ -167,11 +167,10 @@ proc moveToLastLine*(status: var EditorStatus) =
   else: jumpLine(status, status.bufStatus[status.currentBuffer].buffer.len - 1)
 
 proc pageUp*(status: var EditorStatus) =
-  let
-    destination = max(status.bufStatus[status.currentBuffer].currentLine - status.currentMainWindowNode.view.height, 0)
-    currentLine = status.bufStatus[status.currentBuffer].currentLine
+  let destination = max(status.bufStatus[status.currentBuffer].currentLine - status.currentMainWindowNode.view.height, 0)
 
   if status.settings.smoothScroll:
+    let  currentLine = status.bufStatus[status.currentBuffer].currentLine
     for i in countdown(currentLine, destination):
       if i == 0: break
 
