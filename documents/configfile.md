@@ -120,6 +120,18 @@ default is true
 autoDeleteParen
 ```
 
+smooth scroll (bool)  
+default is true
+```
+smoothScroll
+```
+
+smooth scroll speed (int)  
+default is 16
+```
+smoothScrollSpeed
+```
+
 ### TabLine table
 Dispaly all bufer in tab line (bool)  
 default is false  

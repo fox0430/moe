@@ -114,7 +114,7 @@ Check command bar
 ```sv``` - Horizontal split window  
 
 ```livereload on``` or ```livereload on``` - Change setting of live reload of configuration file  
-```theme themeName``` - Change color theme : Exmaple ```theme dark```  
+```theme themeName``` - Change color theme : Example ```theme dark```  
 ```tab on``` or ```tab off``` - Change tab line setting  
 ```synatx on``` or ```syntax off``` - Change syntax highlighting setting  
 ```tabstop number``` - Change tabStop setting : Exmaple ```tabstop 2```  
@@ -124,6 +124,8 @@ Check command bar
 ```statusbar on``` or ```statusbar on``` - Change display stattus bar setting  
 ```realtimesearch on``` or ```realtimesearch off``` - Change real-time search setting  
 ```deleteparen on``` or ```deleteparen off``` - Change auto delete paren setting  
+```smoothscroll on``` or ```smoothscroll off``` - Change smooth scroll setting  
+```scrollspeed number``` - Set smooth scroll speed : Example ```scrollspeed 10```  
 ```noh``` - Turn off highlights  
 
 ```log``` - Open messages log viwer  
