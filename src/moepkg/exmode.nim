@@ -88,6 +88,9 @@ proc isHighlightPairOfParenSettigCommand(command: seq[seq[Rune]]): bool =
 proc isAutoDeleteParenSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"deleteparen"
 
+proc isSmoothScrollSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"smoothscroll"
+
 proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"noh"
 
@@ -265,6 +268,13 @@ proc highlightPairOfParenSettigCommand(status: var Editorstatus, command: seq[Ru
 proc autoDeleteParenSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.autoDeleteParen = true
   elif command == ru"off": status.settings.autoDeleteParen = false
+
+  status.commandWindow.erase
+  status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
+
+proc smoothScrollSettingCommand(status: var Editorstatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.smoothScroll = true
+  elif command == ru"off": status.settings.smoothScroll = false
 
   status.commandWindow.erase
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
@@ -575,6 +585,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     highlightPairOfParenSettigCommand(status, command[1])
   elif isAutoDeleteParenSettingCommand(command):
     autoDeleteParenSettingCommand(status, command[1])
+  elif isSmoothScrollSettingCommand(command):
+    smoothScrollSettingCommand(status, command[1])
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[status.currentBuffer].prevMode)

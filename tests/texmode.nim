@@ -284,3 +284,17 @@ test "Auto delete paren setting command":
     const command = @[ru"deleteparen", ru"on"]
     status.exModeCommand(command)
     check(status.settings.autoDeleteParen == true)
+
+test "Smooth scroll setting command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  block:
+    const command = @[ru"smoothscroll", ru"off"]
+    status.exModeCommand(command)
+    check(status.settings.smoothScroll == false)
+
+  block:
+    const command = @[ru"smoothscroll", ru"on"]
+    status.exModeCommand(command)
+    check(status.settings.smoothScroll == true)
