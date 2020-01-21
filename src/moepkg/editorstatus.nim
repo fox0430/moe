@@ -55,6 +55,8 @@ type EditorSettings* = object
   replaceTextHighlight*: bool
   highlightPairOfParen*: bool
   autoDeleteParen*: bool
+  smoothScroll*: bool
+  smoothScrollSpeed*: int
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -140,6 +142,8 @@ proc initEditorSettings*(): EditorSettings =
   result.replaceTextHighlight = true
   result.highlightPairOfParen = true
   result.autoDeleteParen = true
+  result.smoothScroll = true
+  result.smoothScrollSpeed = 17
 
 proc initEditorStatus*(): EditorStatus =
   result.platform = initPlatform()

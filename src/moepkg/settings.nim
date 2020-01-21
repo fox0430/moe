@@ -88,6 +88,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("autoDeleteParen"):
       result.autoDeleteParen =  settings["Standard"]["autoDeleteParen"].getbool()
 
+    if settings["Standard"].contains("smoothScroll"):
+      result.smoothScroll =  settings["Standard"]["smoothScroll"].getbool()
+
+    if settings["Standard"].contains("smoothScrollSpeed"):
+      result.smoothScrollSpeed =  settings["Standard"]["smoothScrollSpeed"].getint()
+
   if settings.contains("TabLine"):
     if settings["TabLine"].contains("allBuffer"):
         result.tabLine.allBuffer= settings["TabLine"]["allBuffer"].getbool()
