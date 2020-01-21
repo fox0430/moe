@@ -37,7 +37,7 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Simple file manager
 
-- Auto close paren
+- Auto close/delete paren
 
 - Simple auto indent
 
