@@ -821,7 +821,7 @@ proc normalMode*(status: var EditorStatus) =
 
     if isEscKey(key):
       let keyAfterEsc = getKey(status.currentMainWindowNode.window)
-      if isEscKey(key):
+      if isEscKey(keyAfterEsc):
         turnOffHighlighting(status)
         continue
       else: key = keyAfterEsc
