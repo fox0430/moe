@@ -57,6 +57,7 @@ type EditorSettings* = object
   autoDeleteParen*: bool
   smoothScroll*: bool
   smoothScrollSpeed*: int
+  highlightOtherUsesCurrentWord*: bool
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -144,6 +145,7 @@ proc initEditorSettings*(): EditorSettings =
   result.autoDeleteParen = true
   result.smoothScroll = true
   result.smoothScrollSpeed = 17
+  result.highlightOtherUsesCurrentWord = true
 
 proc initEditorStatus*(): EditorStatus =
   result.platform = initPlatform()
@@ -338,12 +340,14 @@ proc resize*(status: var EditorStatus, height, width: int) =
 proc highlightPairOfParen(status: var Editorstatus)
 proc highlightOtherUsesCurrentWord*(status: var Editorstatus)
 
+proc updateHighlight*(status: var EditorStatus)
 proc update*(status: var EditorStatus) =
   setCursor(false)
   if status.settings.statusBar.useBar: status.writeStatusBar()
 
+  if status.settings.highlightOtherUsesCurrentWord or status.settings.highlightPairOfParen: status.updateHighlight
+  if status.settings.highlightOtherUsesCurrentWord: status.highlightOtherUsesCurrentWord
   if status.settings.highlightPairOfParen: status.highlightPairOfParen
-  status.highlightOtherUsesCurrentWord
 
   var queue = initHeapQueue[WindowNode]()
   for node in status.mainWindowNode.child: queue.push(node)
@@ -514,12 +518,9 @@ proc revertPosition*(bufStatus: var BufferStatus, id: int) =
   bufStatus.currentColumn = bufStatus.positionRecord[id].column
   bufStatus.expandedColumn = bufStatus.positionRecord[id].expandedColumn
 
-proc updateHighlight*(status: var EditorStatus)
 proc eventLoopTask*(status: var Editorstatus)
 
 proc highlightPairOfParen(status: var Editorstatus) =
-  status.updateHighlight
-
   let 
     buffer = status.bufStatus[status.currentBuffer].buffer
     currentLine = status.bufStatus[status.currentBuffer].currentLine
@@ -559,8 +560,6 @@ proc highlightPairOfParen(status: var Editorstatus) =
 
 # Highlighting other uses of the current word under the cursor
 proc highlightOtherUsesCurrentWord*(status: var Editorstatus) =
-  status.updateHighlight
-
   let
     bufStatus = status.bufStatus[status.currentBuffer]
     line = bufStatus.buffer[bufStatus.currentLine]
