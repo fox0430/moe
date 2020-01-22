@@ -336,12 +336,14 @@ proc resize*(status: var EditorStatus, height, width: int) =
   setCursor(true)
 
 proc highlightPairOfParen(status: var Editorstatus)
+proc highlightOtherUsesCurrentWord*(status: var Editorstatus)
 
 proc update*(status: var EditorStatus) =
   setCursor(false)
   if status.settings.statusBar.useBar: status.writeStatusBar()
 
   if status.settings.highlightPairOfParen: status.highlightPairOfParen
+  status.highlightOtherUsesCurrentWord
 
   var queue = initHeapQueue[WindowNode]()
   for node in status.mainWindowNode.child: queue.push(node)
@@ -554,6 +556,42 @@ proc highlightPairOfParen(status: var Editorstatus) =
           let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j, color: EditorColorPair.parenText)
           status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
           return
+
+# Highlighting other uses of the current word under the cursor
+proc highlightOtherUsesCurrentWord*(status: var Editorstatus) =
+  status.updateHighlight
+
+  let
+    bufStatus = status.bufStatus[status.currentBuffer]
+    line = bufStatus.buffer[bufStatus.currentLine]
+
+  if line.len < 1 or unicodeext.isPunct(line[bufStatus.currentColumn]) or line[bufStatus.currentColumn].isSpace: return
+
+  var
+    startCol = bufStatus.currentColumn
+    endCol = bufStatus.currentColumn
+
+  # Set start col
+  for i in countdown(bufStatus.currentColumn - 1, 1):
+    if unicodeext.isPunct(line[i]) or line[i].isSpace: break
+    else: startCol.dec
+
+  # Set end col
+  for i in bufStatus.currentColumn ..< line.len:
+    if unicodeext.isPunct(line[i]) or line[i].isSpace: break
+    else: endCol.inc
+
+  let highlightWord = line[startCol ..< endCol]
+
+  for i in 0 ..< bufStatus.buffer.len:
+    let line = bufStatus.buffer[i]
+    for j in 0 .. (line.len - highlightWord.len):
+      let endCol = j + highlightWord.len
+      if line[j ..< endCol] == highlightWord:
+        if j == 0 or (j > 0 and (unicodeext.isPunct(line[j - 1]) or line[j - 1].isSpace)):
+          if (j == (line.len - highlightWord.len)) or (unicodeext.isPunct(line[j + highlightWord.len]) or line[j + highlightWord.len].isSpace):
+            let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j + highlightWord.high, color: EditorColorPair.parenText)
+            status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
 
 from searchmode import searchAllOccurrence
 proc updateHighlight*(status: var EditorStatus) =
