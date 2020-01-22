@@ -426,7 +426,7 @@ proc deleteCharacterBeginningOfLine(bufStatus: var BufferStatus, autoDeleteParen
 
 proc genDelimiterStr(buffer: string): string =
   while true:
-    for _ in .. 10: add(result, char(rand(int('A') .. int('z'))))
+    for _ in .. 10: add(result, char(rand(int('A') .. int('Z'))))
     if buffer != result: break
 
 proc sendToClipboad*(registers: Registers, platform: Platform) =
