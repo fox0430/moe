@@ -430,22 +430,24 @@ proc genDelimiterStr(buffer: string): string =
     if buffer != result: break
 
 proc sendToClipboad*(registers: Registers, platform: Platform) =
-  var buffer = if registers.yankedStr.len > 0: $registers.yankedStr else: $registers.yankedLines
+  let buffer = if registers.yankedStr.len > 0: $registers.yankedStr else: $registers.yankedLines
   if buffer.len < 1: return
 
-  if buffer in "`":
+  var sendStr = ""
+  if buffer.contains('`'):
     for i in 0 ..< buffer.len:
-      if i == 0 and buffer[0] == '`': buffer = "\\" & buffer
-      elif buffer[i] == '`': buffer.insert("\\", i - 1)
+      if buffer[i] == '`': sendStr.add("\\`")
+      else: sendStr.add(buffer[i])
+  else: sendStr = buffer
 
   let delimiterStr = genDelimiterStr(buffer)
   case platform
     of linux:
       ## Check if X server is running
       let (output, exitCode) = execCmdEx("xset q")
-      if exitCode == 0: discard execShellCmd("xclip <<" & delimiterStr & "\n" & buffer & "\n"  & delimiterStr & "\n")
-    of wsl: discard execShellCmd("clip.exe <<" & delimiterStr & "\n" & buffer & "\n"  & delimiterStr & "\n")
-    of mac: discard execShellCmd("pbcopy <<" & delimiterStr & "\n" & buffer & "\n"  & delimiterStr & "\n")
+      if exitCode == 0: discard execShellCmd("xclip <<" & delimiterStr & "\n" & sendStr & "\n"  & delimiterStr & "\n")
+    of wsl: discard execShellCmd("clip.exe <<" & delimiterStr & "\n" & sendStr & "\n"  & delimiterStr & "\n")
+    of mac: discard execShellCmd("pbcopy <<" & delimiterStr & "\n" & sendStr & "\n"  & delimiterStr & "\n")
     else: discard
 
 proc yankLines(status: var EditorStatus, first, last: int) =
