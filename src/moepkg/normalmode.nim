@@ -430,7 +430,14 @@ proc genDelimiterStr(buffer: string): string =
     if buffer != result: break
 
 proc sendToClipboad*(registers: Registers, platform: Platform) =
-  let buffer = if registers.yankedStr.len > 0: $registers.yankedStr else: $registers.yankedLines
+  var buffer = if registers.yankedStr.len > 0: $registers.yankedStr else: $registers.yankedLines
+  if buffer.len < 1: return
+
+  if buffer in "`":
+    for i in 0 ..< buffer.len:
+      if i == 0 and buffer[0] == '`': buffer = "\\" & buffer
+      elif buffer[i] == '`': buffer.insert("\\", i - 1)
+
   let delimiterStr = genDelimiterStr(buffer)
   case platform
     of linux:
