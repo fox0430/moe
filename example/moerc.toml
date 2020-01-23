@@ -42,6 +42,8 @@ highlightPairOfParen = true
 
 autoDeleteParen = true
 
+systemClipboard = true
+
 [TabLine]
 
 allBuffer = false
