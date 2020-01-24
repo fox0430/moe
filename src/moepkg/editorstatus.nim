@@ -57,6 +57,7 @@ type EditorSettings* = object
   autoDeleteParen*: bool
   smoothScroll*: bool
   smoothScrollSpeed*: int
+  systemClipboard*: bool
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -144,6 +145,7 @@ proc initEditorSettings*(): EditorSettings =
   result.autoDeleteParen = true
   result.smoothScroll = true
   result.smoothScrollSpeed = 17
+  result.systemClipboard = true
 
 proc initEditorStatus*(): EditorStatus =
   result.platform = initPlatform()

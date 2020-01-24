@@ -126,6 +126,7 @@ Check command bar
 ```deleteparen on``` or ```deleteparen off``` - Change auto delete paren setting  
 ```smoothscroll on``` or ```smoothscroll off``` - Change smooth scroll setting  
 ```scrollspeed number``` - Set smooth scroll speed : Example ```scrollspeed 10```  
+```clipboard on``` or ```clipboard off``` - Change system clipboard setting  
 ```noh``` - Turn off highlights  
 
 ```log``` - Open messages log viwer  

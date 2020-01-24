@@ -94,6 +94,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("smoothScrollSpeed"):
       result.smoothScrollSpeed =  settings["Standard"]["smoothScrollSpeed"].getint()
 
+    if settings["Standard"].contains("systemClipboard"):
+      result.systemClipboard = settings["Standard"]["systemClipboard"].getbool()
+
   if settings.contains("TabLine"):
     if settings["TabLine"].contains("allBuffer"):
         result.tabLine.allBuffer= settings["TabLine"]["allBuffer"].getbool()
