@@ -433,14 +433,10 @@ proc sendToClipboad*(registers: Registers, platform: Platform) =
   let buffer = if registers.yankedStr.len > 0: $registers.yankedStr else: $registers.yankedLines
   if buffer.len < 1: return
 
-  var sendStr = ""
-  if buffer.contains('`'):
-    for i in 0 ..< buffer.len:
-      if buffer[i] == '`': sendStr.add("\\`")
-      else: sendStr.add(buffer[i])
-  else: sendStr = buffer
+  let
+    sendStr = buffer.multireplace([("\\", "\\\\"), ("`", "\\`")])
+    delimiterStr = genDelimiterStr(buffer)
 
-  let delimiterStr = genDelimiterStr(buffer)
   case platform
     of linux:
       ## Check if X server is running
