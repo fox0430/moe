@@ -433,17 +433,15 @@ proc sendToClipboad*(registers: Registers, platform: Platform) =
   let buffer = if registers.yankedStr.len > 0: $registers.yankedStr else: $registers.yankedLines
   if buffer.len < 1: return
 
-  let
-    sendStr = buffer.multireplace([("\\", "\\\\"), ("`", "\\`")])
-    delimiterStr = genDelimiterStr(buffer)
+  let delimiterStr = genDelimiterStr(buffer)
 
   case platform
     of linux:
       ## Check if X server is running
       let (output, exitCode) = execCmdEx("xset q")
-      if exitCode == 0: discard execShellCmd("xclip -r <<" & "'" & delimiterStr & "'" & "\n" & sendStr & "\n" & delimiterStr & "\n")
-    of wsl: discard execShellCmd("clip.exe <<" & "'" & delimiterStr & "'" & "\n" & sendStr & "\n"  & delimiterStr & "\n")
-    of mac: discard execShellCmd("pbcopy <<" & "'" & delimiterStr & "'" & "\n" & sendStr & "\n"  & delimiterStr & "\n")
+      if exitCode == 0: discard execShellCmd("xclip -r <<" & "'" & delimiterStr & "'" & "\n" & buffer & "\n" & delimiterStr & "\n")
+    of wsl: discard execShellCmd("clip.exe <<" & "'" & delimiterStr & "'" & "\n" & buffer & "\n"  & delimiterStr & "\n")
+    of mac: discard execShellCmd("pbcopy <<" & "'" & delimiterStr & "'" & "\n" & buffer & "\n"  & delimiterStr & "\n")
     else: discard
 
 proc yankLines(status: var EditorStatus, first, last: int) =
