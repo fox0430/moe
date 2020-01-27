@@ -339,13 +339,20 @@ proc resize*(status: var EditorStatus, height, width: int) =
 
 proc highlightPairOfParen(status: var Editorstatus)
 proc highlightOtherUsesCurrentWord*(status: var Editorstatus)
-
+proc highlightSelectedArea(status: var Editorstatus)
 proc updateHighlight*(status: var EditorStatus)
+
 proc update*(status: var EditorStatus) =
   setCursor(false)
   if status.settings.statusBar.useBar: status.writeStatusBar()
 
-  if status.settings.highlightOtherUsesCurrentWord or status.settings.highlightPairOfParen: status.updateHighlight
+  let
+    currentMode = status.bufStatus[status.currentBuffer].mode
+    prevMode = status.bufStatus[status.currentBuffer].prevMode
+    isVisualMode = if (currentMode == Mode.visual) or (prevMode == Mode.visual and currentMode == Mode.ex) or (currentMode == Mode.visualBlock) or (prevMode == Mode.visualBlock and currentMode == Mode.ex): true else: false
+
+  if status.settings.highlightOtherUsesCurrentWord or status.settings.highlightPairOfParen or isVisualMode: status.updateHighlight
+  if isVisualMode: status.highlightSelectedArea
   if status.settings.highlightOtherUsesCurrentWord: status.highlightOtherUsesCurrentWord
   if status.settings.highlightPairOfParen: status.highlightPairOfParen
 
@@ -520,8 +527,58 @@ proc revertPosition*(bufStatus: var BufferStatus, id: int) =
 
 proc eventLoopTask*(status: var Editorstatus)
 
+proc initSelectedAreaColorSegment(startLine, startColumn: int): ColorSegment =
+  result.firstRow = startLine
+  result.firstColumn = startColumn
+  result.lastRow = startLine
+  result.lastColumn = startColumn
+  result.color = EditorColorPair.visualMode
+
+proc overwriteColorSegmentBlock[T](highlight: var Highlight, area: SelectArea, buffer: T) =
+  var
+    startLine = area.startLine
+    endLine = area.endLine
+  if startLine > endLine: swap(startLine, endLine)
+
+  for i in startLine .. endLine:
+    let colorSegment = ColorSegment(firstRow: i, firstColumn: area.startColumn, lastRow: i, lastColumn: min(area.endColumn, buffer[i].high), color: EditorColorPair.visualMode)
+    highlight = highlight.overwrite(colorSegment)
+
+proc highlightSelectedArea(status: var Editorstatus) =
+  var colorSegment = initSelectedAreaColorSegment(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
+  let area = status.bufStatus[status.currentBuffer].selectArea
+
+  if area.startLine == area.endLine:
+    colorSegment.firstRow = area.startLine
+    colorSegment.lastRow = area.endLine
+    if area.startColumn < area.endColumn:
+      colorSegment.firstColumn = area.startColumn
+      colorSegment.lastColumn = area.endColumn
+    else:
+      colorSegment.firstColumn = area.endColumn
+      colorSegment.lastColumn = area.startColumn
+  elif area.startLine < area.endLine:
+    colorSegment.firstRow = area.startLine
+    colorSegment.lastRow = area.endLine
+    colorSegment.firstColumn = area.startColumn
+    colorSegment.lastColumn = area.endColumn
+  else:
+    colorSegment.firstRow = area.endLine
+    colorSegment.lastRow = area.startLine
+    colorSegment.firstColumn = area.endColumn
+    colorSegment.lastColumn = area.startColumn
+
+  let
+    currentMode = status.bufStatus[status.currentBuffer].mode
+    prevMode = status.bufStatus[status.currentBuffer].prevMode
+
+  if (currentMode == Mode.visual) or (currentMode == Mode.ex and prevMode == Mode.visual):
+    status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
+  elif (currentMode == Mode.visualBlock) or (currentMode == Mode.ex and prevMode == Mode.visualBlock):
+    status.bufStatus[status.currentBuffer].highlight.overwriteColorSegmentBlock(status.bufStatus[status.currentBuffer].selectArea, status.bufStatus[status.currentBuffer].buffer)
+
 proc highlightPairOfParen(status: var Editorstatus) =
-  let 
+  let
     buffer = status.bufStatus[status.currentBuffer].buffer
     currentLine = status.bufStatus[status.currentBuffer].currentLine
     currentColumn = if status.bufStatus[status.currentBuffer].currentColumn > buffer[currentLine].high: buffer[currentLine].high else: status.bufStatus[status.currentBuffer].currentColumn

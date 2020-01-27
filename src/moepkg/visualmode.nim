@@ -1,13 +1,6 @@
 import terminal, strutils, sequtils
 import editorstatus, ui, gapbuffer, normalmode, highlight, unicodeext, window
 
-proc initColorSegment(startLine, startColumn: int): ColorSegment =
-  result.firstRow = startLine
-  result.firstColumn = startColumn
-  result.lastRow = startLine
-  result.lastColumn = startColumn
-  result.color = EditorColorPair.visualMode
-
 proc initSelectArea(startLine, startColumn: int): SelectArea =
   result.startLine = startLine
   result.startColumn = startColumn
@@ -17,37 +10,6 @@ proc initSelectArea(startLine, startColumn: int): SelectArea =
 proc updateSelectArea(area: var SelectArea, currentLine, currentColumn: int) =
   area.endLine = currentLine
   area.endColumn = currentColumn
-
-proc updateColorSegment(colorSegment: var ColorSegment, area: SelectArea) =
-  if area.startLine == area.endLine:
-    colorSegment.firstRow = area.startLine
-    colorSegment.lastRow = area.endLine
-    if area.startColumn < area.endColumn:
-      colorSegment.firstColumn = area.startColumn
-      colorSegment.lastColumn = area.endColumn
-    else:
-      colorSegment.firstColumn = area.endColumn
-      colorSegment.lastColumn = area.startColumn
-  elif area.startLine < area.endLine:
-    colorSegment.firstRow = area.startLine
-    colorSegment.lastRow = area.endLine
-    colorSegment.firstColumn = area.startColumn
-    colorSegment.lastColumn = area.endColumn
-  else:
-    colorSegment.firstRow = area.endLine
-    colorSegment.lastRow = area.startLine
-    colorSegment.firstColumn = area.endColumn
-    colorSegment.lastColumn = area.startColumn
-
-proc overwriteColorSegmentBlock[T](highlight: var Highlight, area: SelectArea, buffer: T) =
-  var
-    startLine = area.startLine
-    endLine = area.endLine
-  if startLine > endLine: swap(startLine, endLine)
-
-  for i in startLine .. endLine:
-    let colorSegment = ColorSegment(firstRow: i, firstColumn: area.startColumn, lastRow: i, lastColumn: min(area.endColumn, buffer[i].high), color: EditorColorPair.visualMode)
-    highlight = highlight.overwrite(colorSegment)
 
 proc swapSlectArea(area: var SelectArea) =
   if area.startLine == area.endLine:
@@ -103,7 +65,7 @@ proc deleteBuffer(bufStatus: var BufferStatus, registers: var Registers, area: S
     elif i == area.endLine and area.endColumn < bufStatus.buffer[currentLine].high:
       for j in 0 .. area.endColumn: newLine.delete(0)
     else: bufStatus.buffer.delete(currentLine, currentLine + 1)
-    
+
     if oldLine != newLine: bufStatus.buffer[area.startLine] = newLine
 
   if bufStatus.buffer.len < 1: bufStatus.buffer.add(ru"")
@@ -208,18 +170,12 @@ proc visualMode*(status: var EditorStatus) =
   status.resize(terminalHeight(), terminalWidth())
   let currentBuf = status.currentBuffer
 
-  var colorSegment = initColorSegment(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
   status.bufStatus[currentBuf].selectArea = initSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
 
   while status.bufStatus[status.currentBuffer].mode == Mode.visual or status.bufStatus[status.currentBuffer].mode == Mode.visualBlock:
     let isBlockMode = if status.bufStatus[status.currentBuffer].mode == Mode.visualBlock: true else: false
 
     status.bufStatus[currentBuf].selectArea.updateSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
-    colorSegment.updateColorSegment(status.bufStatus[currentBuf].selectArea)
-
-    status.updatehighlight
-    if isBlockMode: status.bufStatus[status.currentBuffer].highlight.overwriteColorSegmentBlock(status.bufStatus[currentBuf].selectArea, status.bufStatus[status.currentBuffer].buffer)
-    else: status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
 
     status.update
 
