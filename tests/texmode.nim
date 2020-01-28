@@ -307,3 +307,17 @@ test "Smooth scroll speed setting command":
     const command = @[ru"scrollspeed", ru"1"]
     status.exModeCommand(command)
     check(status.settings.smoothScrollSpeed == 1)
+
+test "Highlight current word setting command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  block:
+    const command = @[ru"highlightcurrentword", ru"off"]
+    status.exModeCommand(command)
+    check(status.settings.highlightOtherUsesCurrentWord == false)
+
+  block:
+    const command = @[ru"highlightcurrentword", ru"on"]
+    status.exModeCommand(command)
+    check(status.settings.highlightOtherUsesCurrentWord == true)
