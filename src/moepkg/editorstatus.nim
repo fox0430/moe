@@ -629,7 +629,7 @@ proc highlightOtherUsesCurrentWord*(status: var Editorstatus) =
     endCol = bufStatus.currentColumn
 
   # Set start col
-  for i in countdown(bufStatus.currentColumn - 1, 1):
+  for i in countdown(bufStatus.currentColumn - 1, 0):
     if unicodeext.isPunct(line[i]) or line[i].isSpace: break
     else: startCol.dec
 
