@@ -368,6 +368,10 @@ type EditorColor* = object
   parenText*: Color
   parenTextBg*: Color
 
+  # highlight other uses current word
+  currentWord*: Color
+  currentWordBg*: Color
+
 type EditorColorPair* = enum
   lineNum = 1
   currentLineNum = 2
@@ -418,9 +422,10 @@ type EditorColorPair* = enum
   popUpWinCurrentLine = 38
   # replace text highlighting
   replaceText = 39
-
   # pair of paren highlighting
   parenText = 40
+  # highlight other uses current word
+  currentWord = 41
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -498,7 +503,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     replaceTextBg: red,
     # pair of paren highlighting
     parenText: default,
-    parenTextBg: white
+    parenTextBg: white,
+    # highlight other uses current word
+    currentWord: default,
+    currentWordBg: gray
   ),
   dark: EditorColor(
     editorBg: default,
@@ -575,7 +583,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     replaceTextBg: red,
     # pair of paren highlighting
     parenText: default,
-    parenTextBg: white
+    parenTextBg: white,
+    # highlight other uses current word
+    currentWord: default,
+    currentWordBg: gray
   ),
   light: EditorColor(
     editorBg: default,
@@ -652,7 +663,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     replaceTextBg: red,
     # pair of paren highlighting
     parenText: default,
-    parenTextBg: gray
+    parenTextBg: gray,
+    # highlight other uses current word
+    currentWord: default,
+    currentWordBg: gray
   ),
   vivid: EditorColor(
     editorBg: default,
@@ -729,7 +743,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     replaceTextBg: red,
     # pair of paren highlighting
     parenText: default,
-    parenTextBg: white
+    parenTextBg: white,
+    # highlight other uses current word
+    currentWord: default,
+    currentWordBg: gray
   ),
 ]
 
@@ -738,7 +755,7 @@ type Window* = ref object
   top, left, height*, width*: int
   y*, x*: int
 
-proc setColorPair(colorPair: EditorColorPair, character, background: Color) =
+proc setColorPair*(colorPair: EditorColorPair, character, background: Color) =
   init_pair(cshort(ord(colorPair)), cshort(ord(character)), cshort(ord(background)))
 
 proc setCursesColor*(editorColor: EditorColor) =
@@ -766,12 +783,12 @@ proc setCursesColor*(editorColor: EditorColor) =
   setColorPair(EditorColorPair.statusBarFilerMode, editorColor.statusBarFilerMode, editorColor.statusBarFilerModeBg)
   setColorPair(EditorColorPair.statusBarModeFilerMode, editorColor.statusBarModeFilerMode, editorColor.statusBarModeFilerModeBg)
   # tab line
-  setColorPair(EditorColorPair.tab , editorColor.tab, editorColor.tabBg)
-  setColorPair(EditorColorPair.currentTab , editorColor.currentTab, editorColor.currentTabBg)
+  setColorPair(EditorColorPair.tab, editorColor.tab, editorColor.tabBg)
+  setColorPair(EditorColorPair.currentTab, editorColor.currentTab, editorColor.currentTabBg)
   # command bar
-  setColorPair(EditorColorPair.commandBar , editorColor.commandBar, editorColor.commandBarBg)
+  setColorPair(EditorColorPair.commandBar, editorColor.commandBar, editorColor.commandBarBg)
   # error message
-  setColorPair(EditorColorPair.errorMessage , editorColor.errorMessage, editorColor.errorMessageBg)
+  setColorPair(EditorColorPair.errorMessage, editorColor.errorMessage, editorColor.errorMessageBg)
   # search result highlighting
   setColorPair(EditorColorPair.searchResult, editorColor.searchResult, editorColor.searchResultBg)
   # selected area in visual mode
@@ -798,6 +815,49 @@ proc setCursesColor*(editorColor: EditorColor) =
 
   # pair of paren highlighting
   setColorPair(EditorColorPair.parenText, editorColor.parenText, editorColor.parenTextBg)
+
+  # highlight other uses current word
+  setColorPair(EditorColorPair.currentWord, editorColor.currentWord, editorColor.currentWordBg)
+
+proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Color, Color) =
+  let editorColor = ColorThemeTable[theme]
+
+  case pair
+  of EditorColorPair.lineNum: return (editorColor.lineNum, editorColor.lineNumBg)
+  of EditorColorPair.currentLineNum: return (editorColor.currentLineNum, editorColor.currentLineNumBg)
+  of EditorColorPair.statusBarNormalMode: return (editorColor.statusBarNormalMode, editorColor.statusBarNormalModeBg)
+  of EditorColorPair.statusBarModeNormalMode: return (editorColor.statusBarModeNormalMode, editorColor.statusBarModeNormalModeBg)
+  of EditorColorPair.statusBarInsertMode: return (editorColor.statusBarInsertMode, editorColor.statusBarInsertModeBg)
+  of EditorColorPair.statusBarModeInsertMode: return (editorColor.statusBarModeInsertMode, editorColor.statusBarModeInsertModeBg)
+  of EditorColorPair.statusBarVisualMode: return (editorColor.statusBarVisualMode, editorColor.statusBarVisualModeBg)
+  of EditorColorPair.statusBarModeVisualMode: return (editorColor.statusBarModeVisualMode, editorColor.statusBarModeVisualModeBg)
+  of EditorColorPair.statusBarReplaceMode: return (editorColor.statusBarReplaceMode, editorColor.statusBarReplaceModeBg)
+  of EditorColorPair.statusBarModeReplaceMode: return (editorColor.statusBarModeReplaceMode, editorColor.statusBarModeReplaceModeBg)
+  of EditorColorPair.statusBarExMode: return (editorColor.statusBarExMode, editorColor.statusBarExModeBg)
+  of EditorColorPair.statusBarModeExMode: return (editorColor.statusBarModeExMode, editorColor.statusBarModeExModeBg)
+  of EditorColorPair.statusBarFilerMode: return (editorColor.statusBarFilerMode, editorColor.statusBarFilerModeBg)
+  of EditorColorPair.statusBarModeFilerMode: return (editorColor.statusBarModeFilerMode, editorColor.statusBarModeFilerModeBg)
+  of EditorColorPair.tab: return (editorColor.tab, editorColor.tabBg)
+  of EditorColorPair.currentTab: return (editorColor.currentTab, editorColor.currentTabBg)
+  of EditorColorPair.commandBar: return (editorColor.commandBar, editorColor.commandBarBg)
+  of EditorColorPair.errorMessage: return (editorColor.errorMessage, editorColor.errorMessageBg)
+  of EditorColorPair.searchResult: return (editorColor.searchResult, editorColor.searchResultBg)
+  of EditorColorPair.visualMode: return (editorColor.visualMode, editorColor.visualModeBg)
+  of EditorColorPair.defaultChar: return (editorColor.defaultChar, Color.default)
+  of EditorColorPair.keyword: return (editorColor.gtKeyword, Color.default)
+  of EditorColorPair.stringLit: return (editorColor.gtStringLit, Color.default)
+  of EditorColorPair.decNumber: return (editorColor.gtDecNumber, Color.default)
+  of EditorColorPair.comment: return (editorColor.gtComment, Color.default)
+  of EditorColorPair.longComment: return (editorColor.gtLongComment, Color.default)
+  of EditorColorPair.whitespace: return (editorColor.gtWhitespace, Color.default)
+  of EditorColorPair.currentFile: return (editorColor.currentFile, editorColor.currentFileBg)
+  of EditorColorPair.file: return (editorColor.file, editorColor.fileBg)
+  of EditorColorPair.dir: return (editorColor.dir, editorColor.dirBg)
+  of EditorColorPair.pcLink: return (editorColor.pcLink, editorColor.pcLinkBg)
+  of EditorColorPair.popUpWindow: return (editorColor.popUpWindow, editorColor.popUpWindowBg)
+  of EditorColorPair.popUpWinCurrentLine: return (editorColor.popUpWinCurrentLine, editorColor.popUpWinCurrentLineBg)
+  of EditorColorPair.replaceText: return (editorColor.replaceText, editorColor.replaceTextBg)
+  else: return (editorColor.parenText, editorColor.parenTextBg)
 
 proc setIbeamCursor*() = discard execShellCmd("printf '\\033[6 q'")
 

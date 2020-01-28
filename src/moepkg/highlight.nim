@@ -16,6 +16,10 @@ proc `[]`*(highlight: Highlight, i: int): ColorSegment = highlight.colorSegments
 
 proc `[]`*(highlight: Highlight, i: BackwardsIndex): ColorSegment = highlight.colorSegments[highlight.colorSegments.len - int(i)]
 
+proc getColorPair*(highlight: Highlight, line, col: int): EditorColorPair =
+  for colorSegment in highlight.colorSegments:
+    if line >= colorSegment.firstRow and colorSegment.lastRow >= line and col >= colorSegment.firstColumn and colorSegment.lastColumn >= col: return colorSegment.color
+
 proc isIntersect(s, t: ColorSegment): bool = not ((t.lastRow, t.lastColumn) < (s.firstRow, s.firstColumn) or (s.lastRow, s.lastColumn) < (t.firstRow, t.firstColumn))
 
 proc contains(s, t: ColorSegment): bool = ((s.firstRow, s.firstColumn) <= (t.firstRow, t.firstColumn) and (t.lastRow, t.lastColumn) <= (s.lastRow, s.lastColumn))

@@ -349,10 +349,11 @@ proc update*(status: var EditorStatus) =
   let
     currentMode = status.bufStatus[status.currentBuffer].mode
     prevMode = status.bufStatus[status.currentBuffer].prevMode
-    isVisualMode = if (currentMode == Mode.visual) or (prevMode == Mode.visual and currentMode == Mode.ex) or (currentMode == Mode.visualBlock) or (prevMode == Mode.visualBlock and currentMode == Mode.ex): true else: false
+    isVisualMode = if (currentMode == Mode.visual) or (prevMode == Mode.visual and currentMode == Mode.ex): true else: false
+    isVisualBlockMode = if (currentMode == Mode.visualBlock) or (prevMode == Mode.visualBlock and currentMode == Mode.ex): true else: false
 
   if status.settings.highlightOtherUsesCurrentWord or status.settings.highlightPairOfParen or isVisualMode: status.updateHighlight
-  if isVisualMode: status.highlightSelectedArea
+  if isVisualMode or isVisualBlockMode: status.highlightSelectedArea
   if status.settings.highlightOtherUsesCurrentWord: status.highlightOtherUsesCurrentWord
   if status.settings.highlightPairOfParen: status.highlightPairOfParen
 
@@ -621,7 +622,7 @@ proc highlightOtherUsesCurrentWord*(status: var Editorstatus) =
     bufStatus = status.bufStatus[status.currentBuffer]
     line = bufStatus.buffer[bufStatus.currentLine]
 
-  if line.len < 1 or unicodeext.isPunct(line[bufStatus.currentColumn]) or line[bufStatus.currentColumn].isSpace: return
+  if line.len < 1 or bufStatus.currentColumn > line.high or unicodeext.isPunct(line[bufStatus.currentColumn]) or line[bufStatus.currentColumn].isSpace: return
 
   var
     startCol = bufStatus.currentColumn
@@ -646,7 +647,14 @@ proc highlightOtherUsesCurrentWord*(status: var Editorstatus) =
       if line[j ..< endCol] == highlightWord:
         if j == 0 or (j > 0 and (unicodeext.isPunct(line[j - 1]) or line[j - 1].isSpace)):
           if (j == (line.len - highlightWord.len)) or (unicodeext.isPunct(line[j + highlightWord.len]) or line[j + highlightWord.len].isSpace):
-            let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j + highlightWord.high, color: EditorColorPair.parenText)
+            # Set color
+            let
+              originalColorPair = status.bufStatus[status.currentBuffer].highlight.getColorPair(i, j)
+              theme = status.settings.editorColorTheme
+              colors = theme.getColorFromEditorColorPair(originalColorPair)
+            setColorPair(EditorColorPair.currentWord, colors[0], ColorThemeTable[theme].currentWordBg)
+
+            let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j + highlightWord.high, color: EditorColorPair.currentWord)
             status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
 
 from searchmode import searchAllOccurrence
