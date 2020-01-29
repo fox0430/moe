@@ -115,17 +115,18 @@ Check command bar
 
 ```livereload on``` or ```livereload on``` - Change setting of live reload of configuration file  
 ```theme themeName``` - Change color theme : Example ```theme dark```  
-```tab on``` or ```tab off``` - Change tab line setting  
-```synatx on``` or ```syntax off``` - Change syntax highlighting setting  
-```tabstop number``` - Change tabStop setting : Exmaple ```tabstop 2```  
-```paren on``` or ```paren off``` - Change auto close paren setting  
-```indent on``` or ```indent off``` - Chnage auto indent sestting  
-```linenum on``` or ```linenum off``` - Change dispaly line number setting  
-```statusbar on``` or ```statusbar on``` - Change display stattus bar setting  
-```realtimesearch on``` or ```realtimesearch off``` - Change real-time search setting  
-```deleteparen on``` or ```deleteparen off``` - Change auto delete paren setting  
-```smoothscroll on``` or ```smoothscroll off``` - Change smooth scroll setting  
+```tab on``` or ```tab off``` - Change setting to tab line  
+```synatx on``` or ```syntax off``` - Change setting to syntax highlighting  
+```tabstop number``` - Change setting to tabStop : Exmaple ```tabstop 2```  
+```paren on``` or ```paren off``` - Change setting to auto close paren  
+```indent on``` or ```indent off``` - Chnage sestting to auto indent  
+```linenum on``` or ```linenum off``` - Change setting to dispaly line number  
+```statusbar on``` or ```statusbar on``` - Change setting to display stattus bar  
+```realtimesearch on``` or ```realtimesearch off``` - Change setting to real-time search   
+```deleteparen on``` or ```deleteparen off``` - Change setting to auto delete paren  
+```smoothscroll on``` or ```smoothscroll off``` - Change setting to smooth scroll  
 ```scrollspeed number``` - Set smooth scroll speed : Example ```scrollspeed 10```  
+```highlightcurrentword on``` or ```highlightcurrentword off``` - Change setting to highlight other uses of the current word
 ```noh``` - Turn off highlights  
 
 ```log``` - Open messages log viwer  

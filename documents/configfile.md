@@ -120,16 +120,21 @@ default is true
 autoDeleteParen
 ```
 
-smooth scroll (bool)  
+Smooth scroll (bool)  
 default is true
 ```
 smoothScroll
 ```
 
-smooth scroll speed (int)  
+Smooth scroll speed (int)  
 default is 16
 ```
 smoothScrollSpeed
+```
+highlight other uses of the current word under the cursor (bool)  
+default is true
+```
+highlightCurrentWord
 ```
 
 ### TabLine table
