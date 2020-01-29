@@ -622,7 +622,7 @@ proc highlightOtherUsesCurrentWord*(status: var Editorstatus) =
     bufStatus = status.bufStatus[status.currentBuffer]
     line = bufStatus.buffer[bufStatus.currentLine]
 
-  if line.len < 1 or bufStatus.currentColumn > line.high or unicodeext.isPunct(line[bufStatus.currentColumn]) or line[bufStatus.currentColumn].isSpace: return
+  if line.len < 1 or bufStatus.currentColumn > line.high or (line[bufStatus.currentColumn] != '_' and unicodeext.isPunct(line[bufStatus.currentColumn])) or line[bufStatus.currentColumn].isSpace: return
 
   var
     startCol = bufStatus.currentColumn
@@ -630,12 +630,12 @@ proc highlightOtherUsesCurrentWord*(status: var Editorstatus) =
 
   # Set start col
   for i in countdown(bufStatus.currentColumn - 1, 0):
-    if unicodeext.isPunct(line[i]) or line[i].isSpace: break
+    if (line[i] != '_' and unicodeext.isPunct(line[i])) or line[i].isSpace: break
     else: startCol.dec
 
   # Set end col
   for i in bufStatus.currentColumn ..< line.len:
-    if unicodeext.isPunct(line[i]) or line[i].isSpace: break
+    if (line[i] != '_' and unicodeext.isPunct(line[i])) or line[i].isSpace: break
     else: endCol.inc
 
   let highlightWord = line[startCol ..< endCol]
@@ -645,8 +645,8 @@ proc highlightOtherUsesCurrentWord*(status: var Editorstatus) =
     for j in 0 .. (line.len - highlightWord.len):
       let endCol = j + highlightWord.len
       if line[j ..< endCol] == highlightWord:
-        if j == 0 or (j > 0 and (unicodeext.isPunct(line[j - 1]) or line[j - 1].isSpace)):
-          if (j == (line.len - highlightWord.len)) or (unicodeext.isPunct(line[j + highlightWord.len]) or line[j + highlightWord.len].isSpace):
+        if j == 0 or (j > 0 and ((line[j - 1] != '_' and unicodeext.isPunct(line[j - 1])) or line[j - 1].isSpace)):
+          if (j == (line.len - highlightWord.len)) or ((line[j + highlightWord.len] != '_' and unicodeext.isPunct(line[j + highlightWord.len])) or line[j + highlightWord.len].isSpace):
             # Set color
             let
               originalColorPair = status.bufStatus[status.currentBuffer].highlight.getColorPair(i, j)
