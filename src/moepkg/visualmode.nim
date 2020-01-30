@@ -1,24 +1,24 @@
 import terminal, strutils, sequtils
 import editorstatus, ui, gapbuffer, normalmode, highlight, unicodeext, window
 
-proc initColorSegment(startLine, startColumn: int): ColorSegment =
+proc initColorSegment*(startLine, startColumn: int): ColorSegment =
   result.firstRow = startLine
   result.firstColumn = startColumn
   result.lastRow = startLine
   result.lastColumn = startColumn
   result.color = EditorColorPair.visualMode
 
-proc initSelectArea(startLine, startColumn: int): SelectArea =
+proc initSelectArea*(startLine, startColumn: int): SelectArea =
   result.startLine = startLine
   result.startColumn = startColumn
   result.endLine = startLine
   result.endColumn = startColumn
 
-proc updateSelectArea(area: var SelectArea, currentLine, currentColumn: int) =
+proc updateSelectArea*(area: var SelectArea, currentLine, currentColumn: int) =
   area.endLine = currentLine
   area.endColumn = currentColumn
 
-proc updateColorSegment(colorSegment: var ColorSegment, area: SelectArea) =
+proc updateColorSegment*(colorSegment: var ColorSegment, area: SelectArea) =
   if area.startLine == area.endLine:
     colorSegment.firstRow = area.startLine
     colorSegment.lastRow = area.endLine
@@ -56,7 +56,7 @@ proc swapSlectArea(area: var SelectArea) =
     swap(area.startLine, area.endLine)
     swap(area.startColumn, area.endColumn)
 
-proc yankBuffer(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea, platform: Platform) =
+proc yankBuffer(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea, platform: Platform, clipboard: bool) =
   if bufStatus.buffer[bufStatus.currentLine].len < 1: return
   registers.yankedLines = @[]
   registers.yankedStr = @[]
@@ -75,7 +75,7 @@ proc yankBuffer(bufStatus: var BufferStatus, registers: var Registers, area: Sel
     else:
       registers.yankedLines.add(bufStatus.buffer[i])
 
-    registers.sendToClipboad(platform)
+    if clipboard: registers.sendToClipboad(platform)
 
 proc yankBufferBlock(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea) =
   if bufStatus.buffer.len == 1 and bufStatus.buffer[bufStatus.currentLine].len < 1: return
@@ -86,25 +86,26 @@ proc yankBufferBlock(bufStatus: var BufferStatus, registers: var Registers, area
     registers.yankedLines.add(ru"")
     for j in area.startColumn .. min(bufStatus.buffer[i].high, area.endColumn): registers.yankedLines[registers.yankedLines.high].add(bufStatus.buffer[i][j])
 
-proc deleteBuffer(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea, platform: Platform) =
+proc deleteBuffer(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea, platform: Platform, clipboard: bool) =
   if bufStatus.buffer.len == 1 and bufStatus.buffer[bufStatus.currentLine].len < 1: return
-  bufStatus.yankBuffer(registers, area, platform)
+  if clipboard: bufStatus.yankBuffer(registers, area, platform, clipboard)
 
   var currentLine = area.startLine
   for i in area.startLine .. area.endLine:
-    let oldLine = bufStatus.buffer[area.startLine]
-    var newLine = bufStatus.buffer[area.startLine]
+    let oldLine = bufStatus.buffer[currentLine]
+    var newLine = bufStatus.buffer[currentLine]
 
-    if area.startLine == area.endLine and 0 < bufStatus.buffer[currentLine].len:
+    if area.startLine == area.endLine:
       for j in area.startColumn .. area.endColumn: newLine.delete(area.startColumn)
+      if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
     elif i == area.startLine and 0 < area.startColumn:
       for j in area.startColumn .. bufStatus.buffer[currentLine].high: newLine.delete(area.startColumn)
+      if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
       inc(currentLine)
     elif i == area.endLine and area.endColumn < bufStatus.buffer[currentLine].high:
       for j in 0 .. area.endColumn: newLine.delete(0)
-    else: bufStatus.buffer.delete(currentLine, currentLine + 1)
-    
-    if oldLine != newLine: bufStatus.buffer[area.startLine] = newLine
+      if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
+    else: bufStatus.buffer.delete(currentLine, currentLine)
 
   if bufStatus.buffer.len < 1: bufStatus.buffer.add(ru"")
 
@@ -181,11 +182,13 @@ proc replaceCharactorBlock(bufStatus: var BufferStatus, area: SelectArea, ch: Ru
     for j in area.startColumn .. min(area.endColumn, bufStatus.buffer[i].high): newLine[j] = ch
     if oldLine != newLine: bufStatus.buffer[i] = newLine
 
-proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
+proc visualCommand*(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSlectArea
 
-  if key == ord('y') or isDcKey(key): status.bufStatus[status.currentBuffer].yankBuffer(status.registers, area, status.platform)
-  elif key == ord('x') or key == ord('d'): status.bufStatus[status.currentBuffer].deleteBuffer(status.registers, area, status.platform)
+  let clipboard = status.settings.systemClipboard
+
+  if key == ord('y') or isDcKey(key): status.bufStatus[status.currentBuffer].yankBuffer(status.registers, area, status.platform, clipboard)
+  elif key == ord('x') or key == ord('d'): status.bufStatus[status.currentBuffer].deleteBuffer(status.registers, area, status.platform, clipboard)
   elif key == ord('>'): addIndent(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, area, status.settings.tabStop)
   elif key == ord('<'): deleteIndent(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, area, status.settings.tabStop)
   elif key == ord('r'):

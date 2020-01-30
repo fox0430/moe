@@ -465,7 +465,7 @@ proc yankString(status: var EditorStatus, length: int) =
   for i in status.bufStatus[status.currentBuffer].currentColumn ..< length:
     status.registers.yankedStr.add(status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine][i])
 
-  status.registers.sendToClipboad(status.platform)
+  if status.settings.systemClipboard: status.registers.sendToClipboad(status.platform)
 
   status.commandWindow.writeMessageYankedCharactor(status.registers.yankedStr.len, status.messageLog)
 
@@ -824,7 +824,7 @@ proc normalMode*(status: var EditorStatus) =
 
     if isEscKey(key):
       let keyAfterEsc = getKey(status.currentMainWindowNode.window)
-      if isEscKey(key):
+      if isEscKey(keyAfterEsc):
         turnOffHighlighting(status)
         continue
       else: key = keyAfterEsc

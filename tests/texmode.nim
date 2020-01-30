@@ -307,3 +307,17 @@ test "Smooth scroll speed setting command":
     const command = @[ru"scrollspeed", ru"1"]
     status.exModeCommand(command)
     check(status.settings.smoothScrollSpeed == 1)
+
+test "Clipboard setting command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  block:
+    const command = @[ru"clipboard", ru"off"]
+    status.exModeCommand(command)
+    check(status.settings.systemClipboard == false)
+
+  block:
+    const command = @[ru"clipboard", ru"on"]
+    status.exModeCommand(command)
+    check(status.settings.systemClipboard == true)

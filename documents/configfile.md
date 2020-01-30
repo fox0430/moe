@@ -120,16 +120,22 @@ default is true
 autoDeleteParen
 ```
 
-smooth scroll (bool)  
+Smooth scroll (bool)  
 default is true
 ```
 smoothScroll
 ```
 
-smooth scroll speed (int)  
+Smooth scroll speed (int)  
 default is 16
 ```
 smoothScrollSpeed
+```
+
+System clipboard (bool)  
+default is true
+```
+systemClipboard
 ```
 
 ### TabLine table
