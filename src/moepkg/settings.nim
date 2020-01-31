@@ -320,6 +320,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Theme"].contains("parenTextBg"):
       ColorThemeTable[ColorTheme.config].parenTextBg = color("parenTextBg")
 
+    if settings["Theme"].contains("currentWordBg"):
+      ColorThemeTable[ColorTheme.config].currentWordBg = color("currentWordBg")
+
     result.editorColorTheme = ColorTheme.config
 
 proc loadSettingFile*(settings: var EditorSettings) =

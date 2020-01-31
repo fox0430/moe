@@ -758,3 +758,8 @@ Background color when replace text
 ```
 replaceTextBg
 ```
+
+Background color of current word
+```
+currentWordBg
+```
