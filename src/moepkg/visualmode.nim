@@ -66,9 +66,8 @@ proc deleteBuffer(bufStatus: var BufferStatus, registers: var Registers, area: S
       inc(currentLine)
     elif i == area.endLine and area.endColumn < bufStatus.buffer[currentLine].high:
       for j in 0 .. area.endColumn: newLine.delete(0)
-    else: bufStatus.buffer.delete(currentLine, currentLine + 1)
-
-    if oldLine != newLine: bufStatus.buffer[area.startLine] = newLine
+      if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
+    else: bufStatus.buffer.delete(currentLine, currentLine)
 
   if bufStatus.buffer.len < 1: bufStatus.buffer.add(ru"")
 
