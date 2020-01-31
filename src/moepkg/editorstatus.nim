@@ -57,6 +57,7 @@ type EditorSettings* = object
   autoDeleteParen*: bool
   smoothScroll*: bool
   smoothScrollSpeed*: int
+  highlightOtherUsesCurrentWord*: bool
   systemClipboard*: bool
 
 type BufferStatus* = object
@@ -145,6 +146,7 @@ proc initEditorSettings*(): EditorSettings =
   result.autoDeleteParen = true
   result.smoothScroll = true
   result.smoothScrollSpeed = 17
+  result.highlightOtherUsesCurrentWord = true
   result.systemClipboard = true
 
 proc initEditorStatus*(): EditorStatus =
@@ -338,11 +340,23 @@ proc resize*(status: var EditorStatus, height, width: int) =
   setCursor(true)
 
 proc highlightPairOfParen(status: var Editorstatus)
+proc highlightOtherUsesCurrentWord*(status: var Editorstatus)
+proc highlightSelectedArea(status: var Editorstatus)
+proc updateHighlight*(status: var EditorStatus)
 
 proc update*(status: var EditorStatus) =
   setCursor(false)
   if status.settings.statusBar.useBar: status.writeStatusBar()
 
+  let
+    currentMode = status.bufStatus[status.currentBuffer].mode
+    prevMode = status.bufStatus[status.currentBuffer].prevMode
+    isVisualMode = if (currentMode == Mode.visual) or (prevMode == Mode.visual and currentMode == Mode.ex): true else: false
+    isVisualBlockMode = if (currentMode == Mode.visualBlock) or (prevMode == Mode.visualBlock and currentMode == Mode.ex): true else: false
+
+  if status.settings.highlightOtherUsesCurrentWord or status.settings.highlightPairOfParen or isVisualMode: status.updateHighlight
+  if isVisualMode or isVisualBlockMode: status.highlightSelectedArea
+  if status.settings.highlightOtherUsesCurrentWord: status.highlightOtherUsesCurrentWord
   if status.settings.highlightPairOfParen: status.highlightPairOfParen
 
   var queue = initHeapQueue[WindowNode]()
@@ -514,13 +528,60 @@ proc revertPosition*(bufStatus: var BufferStatus, id: int) =
   bufStatus.currentColumn = bufStatus.positionRecord[id].column
   bufStatus.expandedColumn = bufStatus.positionRecord[id].expandedColumn
 
-proc updateHighlight*(status: var EditorStatus)
 proc eventLoopTask*(status: var Editorstatus)
 
-proc highlightPairOfParen(status: var Editorstatus) =
-  status.updateHighlight
+proc initSelectedAreaColorSegment(startLine, startColumn: int): ColorSegment =
+  result.firstRow = startLine
+  result.firstColumn = startColumn
+  result.lastRow = startLine
+  result.lastColumn = startColumn
+  result.color = EditorColorPair.visualMode
 
-  let 
+proc overwriteColorSegmentBlock[T](highlight: var Highlight, area: SelectArea, buffer: T) =
+  var
+    startLine = area.startLine
+    endLine = area.endLine
+  if startLine > endLine: swap(startLine, endLine)
+
+  for i in startLine .. endLine:
+    let colorSegment = ColorSegment(firstRow: i, firstColumn: area.startColumn, lastRow: i, lastColumn: min(area.endColumn, buffer[i].high), color: EditorColorPair.visualMode)
+    highlight = highlight.overwrite(colorSegment)
+
+proc highlightSelectedArea(status: var Editorstatus) =
+  var colorSegment = initSelectedAreaColorSegment(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
+  let area = status.bufStatus[status.currentBuffer].selectArea
+
+  if area.startLine == area.endLine:
+    colorSegment.firstRow = area.startLine
+    colorSegment.lastRow = area.endLine
+    if area.startColumn < area.endColumn:
+      colorSegment.firstColumn = area.startColumn
+      colorSegment.lastColumn = area.endColumn
+    else:
+      colorSegment.firstColumn = area.endColumn
+      colorSegment.lastColumn = area.startColumn
+  elif area.startLine < area.endLine:
+    colorSegment.firstRow = area.startLine
+    colorSegment.lastRow = area.endLine
+    colorSegment.firstColumn = area.startColumn
+    colorSegment.lastColumn = area.endColumn
+  else:
+    colorSegment.firstRow = area.endLine
+    colorSegment.lastRow = area.startLine
+    colorSegment.firstColumn = area.endColumn
+    colorSegment.lastColumn = area.startColumn
+
+  let
+    currentMode = status.bufStatus[status.currentBuffer].mode
+    prevMode = status.bufStatus[status.currentBuffer].prevMode
+
+  if (currentMode == Mode.visual) or (currentMode == Mode.ex and prevMode == Mode.visual):
+    status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
+  elif (currentMode == Mode.visualBlock) or (currentMode == Mode.ex and prevMode == Mode.visualBlock):
+    status.bufStatus[status.currentBuffer].highlight.overwriteColorSegmentBlock(status.bufStatus[status.currentBuffer].selectArea, status.bufStatus[status.currentBuffer].buffer)
+
+proc highlightPairOfParen(status: var Editorstatus) =
+  let
     buffer = status.bufStatus[status.currentBuffer].buffer
     currentLine = status.bufStatus[status.currentBuffer].currentLine
     currentColumn = if status.bufStatus[status.currentBuffer].currentColumn > buffer[currentLine].high: buffer[currentLine].high else: status.bufStatus[status.currentBuffer].currentColumn
@@ -556,6 +617,47 @@ proc highlightPairOfParen(status: var Editorstatus) =
           let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j, color: EditorColorPair.parenText)
           status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
           return
+
+# Highlighting other uses of the current word under the cursor
+proc highlightOtherUsesCurrentWord*(status: var Editorstatus) =
+  let
+    bufStatus = status.bufStatus[status.currentBuffer]
+    line = bufStatus.buffer[bufStatus.currentLine]
+
+  if line.len < 1 or bufStatus.currentColumn > line.high or (line[bufStatus.currentColumn] != '_' and unicodeext.isPunct(line[bufStatus.currentColumn])) or line[bufStatus.currentColumn].isSpace: return
+
+  var
+    startCol = bufStatus.currentColumn
+    endCol = bufStatus.currentColumn
+
+  # Set start col
+  for i in countdown(bufStatus.currentColumn - 1, 0):
+    if (line[i] != '_' and unicodeext.isPunct(line[i])) or line[i].isSpace: break
+    else: startCol.dec
+
+  # Set end col
+  for i in bufStatus.currentColumn ..< line.len:
+    if (line[i] != '_' and unicodeext.isPunct(line[i])) or line[i].isSpace: break
+    else: endCol.inc
+
+  let highlightWord = line[startCol ..< endCol]
+
+  for i in 0 ..< bufStatus.buffer.len:
+    let line = bufStatus.buffer[i]
+    for j in 0 .. (line.len - highlightWord.len):
+      let endCol = j + highlightWord.len
+      if line[j ..< endCol] == highlightWord:
+        if j == 0 or (j > 0 and ((line[j - 1] != '_' and unicodeext.isPunct(line[j - 1])) or line[j - 1].isSpace)):
+          if (j == (line.len - highlightWord.len)) or ((line[j + highlightWord.len] != '_' and unicodeext.isPunct(line[j + highlightWord.len])) or line[j + highlightWord.len].isSpace):
+            # Set color
+            let
+              originalColorPair = status.bufStatus[status.currentBuffer].highlight.getColorPair(i, j)
+              theme = status.settings.editorColorTheme
+              colors = theme.getColorFromEditorColorPair(originalColorPair)
+            setColorPair(EditorColorPair.currentWord, colors[0], ColorThemeTable[theme].currentWordBg)
+
+            let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j + highlightWord.high, color: EditorColorPair.currentWord)
+            status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
 
 from searchmode import searchAllOccurrence
 proc updateHighlight*(status: var EditorStatus) =

@@ -199,3 +199,5 @@ popUpWinCurrentLineBg = "gray"
 replaceText = "default"
 
 replaceTextBg = "red"
+
+currentWordBg = "gray"

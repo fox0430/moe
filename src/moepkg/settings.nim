@@ -94,6 +94,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("smoothScrollSpeed"):
       result.smoothScrollSpeed =  settings["Standard"]["smoothScrollSpeed"].getint()
 
+    if settings["Standard"].contains("highlightCurrentWord"):
+      result.highlightOtherUsesCurrentWord = settings["Standard"]["highlightCurrentWord"].getbool()
+
     if settings["Standard"].contains("systemClipboard"):
       result.systemClipboard = settings["Standard"]["systemClipboard"].getbool()
 
@@ -319,6 +322,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["Theme"].contains("parenTextBg"):
       ColorThemeTable[ColorTheme.config].parenTextBg = color("parenTextBg")
+
+    if settings["Theme"].contains("currentWordBg"):
+      ColorThemeTable[ColorTheme.config].currentWordBg = color("currentWordBg")
 
     result.editorColorTheme = ColorTheme.config
 

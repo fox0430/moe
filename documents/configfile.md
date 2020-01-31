@@ -131,6 +131,11 @@ default is 16
 ```
 smoothScrollSpeed
 ```
+highlight other uses of the current word under the cursor (bool)  
+default is true
+```
+highlightCurrentWord
+```
 
 System clipboard (bool)  
 default is true
@@ -758,4 +763,9 @@ replaceText
 Background color when replace text 
 ```
 replaceTextBg
+```
+
+Background color of current word
+```
+currentWordBg
 ```

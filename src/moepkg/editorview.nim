@@ -146,7 +146,7 @@ proc scrollDown*[T](view: var EditorView, buffer: T) =
   view.originalLine.popFirst
   view.start.popFirst
   view.length.popFirst
-  
+
   var originalLine, start: int
   if view.start[height-2]+view.length[height-2] == buffer[view.originalLine[height-2]].len:
     originalLine =  if view.originalLine[height-2] == -1 or view.originalLine[height-2]+1 == buffer.len: -1 else: view.originalLine[height-2]+1
@@ -154,7 +154,7 @@ proc scrollDown*[T](view: var EditorView, buffer: T) =
   else:
     originalLine = view.originalLine[height-2]
     start = view.start[height-2]+view.length[height-2]
-    
+
   if originalLine == -1:
     view.lines.addLast(ru"")
     view.originalLine.addLast(-1)
@@ -205,7 +205,7 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, curren
         last = min(highlight[i].lastColumn-view.start[y], view.lines[y].high)
 
       if first > last: break
-      
+
       block:
         let
           firstStr = $first
@@ -213,7 +213,7 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, curren
           lineStr = $view.lines[y]
         assert(last <= view.lines[y].high, fmt"last = {lastStr}, view.lines[y] = {lineStr}")
         assert(first <= last, fmt"first = {first}, last = {last}")
-      
+
       let str = view.lines[y][first .. last]
       if isCurrentLine and cursorLine:
         win.attron(Attributes.underline)
