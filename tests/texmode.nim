@@ -326,6 +326,7 @@ test "Clipboard setting command":
   var status = initEditorStatus()
   status.addNewBuffer("")
 
+  block:
     const command = @[ru"clipboard", ru"off"]
     status.exModeCommand(command)
     check(status.settings.systemClipboard == false)
