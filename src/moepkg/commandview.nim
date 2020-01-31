@@ -14,6 +14,7 @@ const exCommandList = [
   ru"bnext",
   ru"bprev",
   ru"buf",
+  ru"clipboard",
   ru"cursorLine",
   ru"e",
   ru"highlightcurrentword",
@@ -304,7 +305,7 @@ proc suggestExCommandOption(status: var Editorstatus, exStatus: var ExModeViewSt
     arg = if (strutils.splitWhitespace($exStatus.buffer)).len > 1: (strutils.splitWhitespace($exStatus.buffer))[1] else: ""
 
   case command:
-    of "cursorLine", "highlightparen", "indent", "linenum", "livereload", "realtimesearch", "statusbar", "syntax", "tabstop", "smoothscroll", "highlightcurrentword":
+    of "cursorLine", "highlightparen", "indent", "linenum", "livereload", "realtimesearch", "statusbar", "syntax", "tabstop", "smoothscroll", "clipboard", "highlightcurrentword":
       argList = @["on", "off"]
     of "theme":
       argList= @["vivid", "dark", "light", "config"]

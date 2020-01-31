@@ -126,7 +126,8 @@ Check command bar
 ```deleteparen on``` or ```deleteparen off``` - Change setting to auto delete paren  
 ```smoothscroll on``` or ```smoothscroll off``` - Change setting to smooth scroll  
 ```scrollspeed number``` - Set smooth scroll speed : Example ```scrollspeed 10```  
-```highlightcurrentword on``` or ```highlightcurrentword off``` - Change setting to highlight other uses of the current word
+```highlightcurrentword on``` or ```highlightcurrentword off``` - Change setting to highlight other uses of the current word  
+```clipboard on``` or ```clipboard off``` - Change system clipboard setting  
 ```noh``` - Turn off highlights  
 
 ```log``` - Open messages log viwer  

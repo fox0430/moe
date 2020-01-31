@@ -96,6 +96,8 @@ proc isSmoothScrollSpeedSettingCommand(command: seq[seq[Rune]]): bool =
 
 proc isHighlightCurrentWordSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"highlightcurrentword"
+proc isSystemClipboardSettingCommand(command: seq[seq[RUne]]): bool =
+  return command.len == 2 and command[0] == ru"clipboard"
 
 proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"noh"
@@ -290,10 +292,17 @@ proc smoothScrollSpeedSettingCommand(status: var Editorstatus, speed: int) =
 
   status.commandWindow.erase
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
-
+  
 proc highlightCurrentWordSettingCommand(status: var Editorstatus, command: seq[Rune]) =
   if command == ru"on": status.settings.highlightOtherUsesCurrentWord = true
   if command == ru"off": status.settings.highlightOtherUsesCurrentWord = false
+  
+  status.commandWindow.erase
+  status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
+
+proc systemClipboardSettingCommand(status: var Editorstatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.systemClipboard = true
+  elif command == ru"off": status.settings.systemClipboard = false
 
   status.commandWindow.erase
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
@@ -610,6 +619,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     smoothScrollSpeedSettingCommand(status, ($command[1]).parseInt)
   elif isHighlightCurrentWordSettingCommand(command):
     highlightCurrentWordSettingCommand(status, command[1])
+  elif isSystemClipboardSettingCommand(command):
+    systemClipboardSettingCommand(status, command[1])
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[status.currentBuffer].prevMode)

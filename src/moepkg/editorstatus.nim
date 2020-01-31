@@ -58,6 +58,7 @@ type EditorSettings* = object
   smoothScroll*: bool
   smoothScrollSpeed*: int
   highlightOtherUsesCurrentWord*: bool
+  systemClipboard*: bool
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -146,6 +147,7 @@ proc initEditorSettings*(): EditorSettings =
   result.smoothScroll = true
   result.smoothScrollSpeed = 17
   result.highlightOtherUsesCurrentWord = true
+  result.systemClipboard = true
 
 proc initEditorStatus*(): EditorStatus =
   result.platform = initPlatform()

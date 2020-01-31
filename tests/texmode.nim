@@ -321,3 +321,16 @@ test "Highlight current word setting command":
     const command = @[ru"highlightcurrentword", ru"on"]
     status.exModeCommand(command)
     check(status.settings.highlightOtherUsesCurrentWord == true)
+
+test "Clipboard setting command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+    const command = @[ru"clipboard", ru"off"]
+    status.exModeCommand(command)
+    check(status.settings.systemClipboard == false)
+
+  block:
+    const command = @[ru"clipboard", ru"on"]
+    status.exModeCommand(command)
+    check(status.settings.systemClipboard == true)

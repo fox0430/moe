@@ -97,6 +97,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("highlightCurrentWord"):
       result.highlightOtherUsesCurrentWord = settings["Standard"]["highlightCurrentWord"].getbool()
 
+    if settings["Standard"].contains("systemClipboard"):
+      result.systemClipboard = settings["Standard"]["systemClipboard"].getbool()
+
   if settings.contains("TabLine"):
     if settings["TabLine"].contains("allBuffer"):
         result.tabLine.allBuffer= settings["TabLine"]["allBuffer"].getbool()

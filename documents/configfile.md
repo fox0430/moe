@@ -137,6 +137,12 @@ default is true
 highlightCurrentWord
 ```
 
+System clipboard (bool)  
+default is true
+```
+systemClipboard
+```
+
 ### TabLine table
 Dispaly all bufer in tab line (bool)  
 default is false  
