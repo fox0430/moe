@@ -1,6 +1,8 @@
 language: c
 compiler:
   - gcc
+services:
+  - xvfb
 before_install:
   - sudo ln -sf /lib/x86_64-linux-gnu/libncursesw.so.5.9 /usr/lib/x86_64-linux-gnu/libncursesw.so
   - export CHOOSENIM_NO_ANALYTICS=1
@@ -11,6 +13,7 @@ before_install:
   - export PATH=~/.nimble/bin:$PATH
   - echo "export PATH=~/.nimble/bin:$PATH" >> ~/.profile
   - choosenim stable
+  - sudo apt install xclip
 before_script:
   - set -e
   - export PATH=$(pwd)/nim/bin:$(pwd):$PATH
