@@ -1,4 +1,4 @@
-import unittest
+import unittest, osproc
 import moepkg/editorstatus, moepkg/gapbuffer, moepkg/normalmode, moepkg/unicodeext, moepkg/highlight
 
 test "Move right":
@@ -152,3 +152,42 @@ test "Delete indent":
   status.bufStatus[0].deleteIndent(status.currentMainWindowNode, tabStop)
   check(status.bufStatus[0].buffer[0] == ru"abc")
 
+test "Send to clipboard 1":
+  const registers = Registers(yankedLines: @[], yankedStr: ru"Clipboard test")
+
+  const platform = Platform.linux
+
+  registers.sendToClipboad(platform)
+  let (output, exitCode) = execCmdEx("xclip -o")
+
+  check(exitCode == 0 and output[0 .. output.high - 1] == "Clipboard test")
+
+test "Send to clipboard 2":
+  const registers = Registers(yankedLines: @[], yankedStr: ru"`Clipboard test`")
+
+  const platform = Platform.linux
+
+  registers.sendToClipboad(platform)
+  let (output, exitCode) = execCmdEx("xclip -o")
+
+  check(exitCode == 0 and output[0 .. output.high - 1] == "`Clipboard test`")
+
+test "Send to clipboard 3":
+  const registers = Registers(yankedLines: @[], yankedStr: ru"`````")
+
+  const platform = Platform.linux
+
+  registers.sendToClipboad(platform)
+  let (output, exitCode) = execCmdEx("xclip -o")
+
+  check(exitCode == 0 and output[0 .. output.high - 1] == "`````")
+
+test "Send to clipboard 4":
+  const registers = Registers(yankedLines: @[], yankedStr: ru"$Clipboard test")
+
+  const platform = Platform.linux
+
+  registers.sendToClipboad(platform)
+  let (output, exitCode) = execCmdEx("xclip -o")
+
+  check(exitCode == 0 and output[0 .. output.high - 1] == "$Clipboard test")
