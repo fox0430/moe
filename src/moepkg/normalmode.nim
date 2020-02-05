@@ -426,19 +426,22 @@ proc deleteCharacterBeginningOfLine(bufStatus: var BufferStatus, autoDeleteParen
 
 proc genDelimiterStr(buffer: string): string =
   while true:
-    for _ in .. 10: add(result, char(rand(int('A') .. int('z'))))
+    for _ in .. 10: add(result, char(rand(int('A') .. int('Z'))))
     if buffer != result: break
 
 proc sendToClipboad*(registers: Registers, platform: Platform) =
   let buffer = if registers.yankedStr.len > 0: $registers.yankedStr else: $registers.yankedLines
+  if buffer.len < 1: return
+
   let delimiterStr = genDelimiterStr(buffer)
+
   case platform
     of linux:
       ## Check if X server is running
       let (output, exitCode) = execCmdEx("xset q")
-      if exitCode == 0: discard execShellCmd("xclip <<" & delimiterStr & "\n" & buffer & "\n"  & delimiterStr & "\n")
-    of wsl: discard execShellCmd("clip.exe <<" & delimiterStr & "\n" & buffer & "\n"  & delimiterStr & "\n")
-    of mac: discard execShellCmd("pbcopy <<" & delimiterStr & "\n" & buffer & "\n"  & delimiterStr & "\n")
+      if exitCode == 0: discard execShellCmd("xclip -r <<" & "'" & delimiterStr & "'" & "\n" & buffer & "\n" & delimiterStr & "\n")
+    of wsl: discard execShellCmd("clip.exe <<" & "'" & delimiterStr & "'" & "\n" & buffer & "\n"  & delimiterStr & "\n")
+    of mac: discard execShellCmd("pbcopy <<" & "'" & delimiterStr & "'" & "\n" & buffer & "\n"  & delimiterStr & "\n")
     else: discard
 
 proc yankLines(status: var EditorStatus, first, last: int) =
