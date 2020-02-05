@@ -96,8 +96,12 @@ proc isSmoothScrollSpeedSettingCommand(command: seq[seq[Rune]]): bool =
 
 proc isHighlightCurrentWordSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"highlightcurrentword"
+
 proc isSystemClipboardSettingCommand(command: seq[seq[RUne]]): bool =
   return command.len == 2 and command[0] == ru"clipboard"
+
+proc isHighlightFullWidthSpaceSettingCommand(command: seq[seq[RUne]]): bool =
+  return command.len == 2 and command[0] == ru"highlightfullspace"
 
 proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"noh"
@@ -303,6 +307,13 @@ proc highlightCurrentWordSettingCommand(status: var Editorstatus, command: seq[R
 proc systemClipboardSettingCommand(status: var Editorstatus, command: seq[Rune]) =
   if command == ru"on": status.settings.systemClipboard = true
   elif command == ru"off": status.settings.systemClipboard = false
+
+  status.commandWindow.erase
+  status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
+
+proc highlightFullWidthSpaceSettingCommand(status: var Editorstatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.highlightFullWidthSpace = true
+  elif command == ru"off": status.settings.highlightFullWidthSpace = false
 
   status.commandWindow.erase
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
@@ -621,6 +632,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     highlightCurrentWordSettingCommand(status, command[1])
   elif isSystemClipboardSettingCommand(command):
     systemClipboardSettingCommand(status, command[1])
+  elif isHighlightFullWidthSpaceSettingCommand(command):
+    highlightFullWidthSpaceSettingCommand(status, command[1])
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[status.currentBuffer].prevMode)

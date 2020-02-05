@@ -335,3 +335,17 @@ test "Clipboard setting command":
     const command = @[ru"clipboard", ru"on"]
     status.exModeCommand(command)
     check(status.settings.systemClipboard == true)
+
+test "Highlight full width space command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  block:
+    const command = @[ru"highlightfullspace", ru"off"]
+    status.exModeCommand(command)
+    check(status.settings.highlightFullWidthSpace == false)
+
+  block:
+    const command = @[ru"highlightfullspace", ru"on"]
+    status.exModeCommand(command)
+    check(status.settings.highlightFullWidthSpace == true)
