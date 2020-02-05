@@ -13,11 +13,13 @@ before_install:
   - export PATH=~/.nimble/bin:$PATH
   - echo "export PATH=~/.nimble/bin:$PATH" >> ~/.profile
   - choosenim stable
+  # Manual install xclip v0.13
+  - wget http://mirrors.kernel.org/ubuntu/pool/universe/x/xclip/xclip_0.13-1_amd64.deb
+  - sudo dpkg -i xclip_0.13-1_amd64.deb
 before_script:
   - set -e
   - export PATH=$(pwd)/nim/bin:$(pwd):$PATH
 script:
-  - sudo apt-get install xclip
   - nimble refresh
   - yes | nimble test --verbose
   - nimble install --verbose
