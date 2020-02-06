@@ -100,6 +100,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("systemClipboard"):
       result.systemClipboard = settings["Standard"]["systemClipboard"].getbool()
 
+    if settings["Standard"].contains("highlightFullWidthSpace"):
+      result.highlightFullWidthSpace = settings["Standard"]["highlightFullWidthSpace"].getbool()
+
   if settings.contains("TabLine"):
     if settings["TabLine"].contains("allBuffer"):
         result.tabLine.allBuffer= settings["TabLine"]["allBuffer"].getbool()
@@ -325,6 +328,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["Theme"].contains("currentWordBg"):
       ColorThemeTable[ColorTheme.config].currentWordBg = color("currentWordBg")
+
+    if settings["Theme"].contains("highlightFullWidthSpace"):
+      ColorThemeTable[ColorTheme.config].highlightFullWidthSpace = color("highlightFullWidthSpace")
+
+    if settings["Theme"].contains("highlightFullWidthSpaceBg"):
+      ColorThemeTable[ColorTheme.config].highlightFullWidthSpaceBg = color("highlightFullWidthSpaceBg")
 
     result.editorColorTheme = ColorTheme.config
 

@@ -59,6 +59,7 @@ type EditorSettings* = object
   smoothScrollSpeed*: int
   highlightOtherUsesCurrentWord*: bool
   systemClipboard*: bool
+  highlightFullWidthSpace*: bool
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -148,6 +149,7 @@ proc initEditorSettings*(): EditorSettings =
   result.smoothScrollSpeed = 17
   result.highlightOtherUsesCurrentWord = true
   result.systemClipboard = true
+  result.highlightFullWidthSpace = true
 
 proc initEditorStatus*(): EditorStatus =
   result.platform = initPlatform()
@@ -667,6 +669,16 @@ proc updateHighlight*(status: var EditorStatus) =
 
   if not (status.bufStatus[currentBuf].mode == Mode.ex and status.bufStatus[currentBuf].prevMode == Mode.filer):
     status.bufStatus[currentBuf].highlight = initHighlight($status.bufStatus[currentBuf].buffer, if syntax: status.bufStatus[currentBuf].language else: SourceLanguage.langNone)
+
+  # highlight full width space
+  if status.settings.highlightFullWidthSpace:
+    let
+      fullWidthSpace = ru"　"
+      allOccurrence = searchAllOccurrence(status.bufStatus[currentBuf].buffer, fullWidthSpace)
+      color = EditorColorPair.highlightFullWidthSpace
+    for pos in allOccurrence:
+      let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column, color: color)
+      status.bufStatus[currentBuf].highlight = status.bufStatus[currentBuf].highlight.overwrite(colorSegment)
 
   # highlight search results
   if status.bufStatus[status.currentBuffer].isHighlight and status.searchHistory.len > 0:

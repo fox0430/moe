@@ -127,7 +127,8 @@ Check command bar
 ```smoothscroll on``` or ```smoothscroll off``` - Change setting to smooth scroll  
 ```scrollspeed number``` - Set smooth scroll speed : Example ```scrollspeed 10```  
 ```highlightcurrentword on``` or ```highlightcurrentword off``` - Change setting to highlight other uses of the current word  
-```clipboard on``` or ```clipboard off``` - Change system clipboard setting  
+```clipboard on``` or ```clipboard off``` - Change setting to system clipboard  
+```highlightfullspace on``` or ```highlightfullspace off``` - Change setting to highlight full width space  
 ```noh``` - Turn off highlights  
 
 ```log``` - Open messages log viwer  

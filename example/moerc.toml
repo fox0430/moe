@@ -44,6 +44,8 @@ autoDeleteParen = true
 
 systemClipboard = true
 
+highlightFullWidthSpace = true
+
 [TabLine]
 
 allBuffer = false

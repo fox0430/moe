@@ -372,6 +372,10 @@ type EditorColor* = object
   currentWord*: Color
   currentWordBg*: Color
 
+  # highlight full width space
+  highlightFullWidthSpace*: Color
+  highlightFullWidthSpaceBg*: Color
+
 type EditorColorPair* = enum
   lineNum = 1
   currentLineNum = 2
@@ -426,6 +430,8 @@ type EditorColorPair* = enum
   parenText = 40
   # highlight other uses current word
   currentWord = 41
+  # highlight full width space
+  highlightFullWidthSpace = 42
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -506,7 +512,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     parenTextBg: white,
     # highlight other uses current word
     currentWord: default,
-    currentWordBg: gray
+    currentWordBg: gray,
+    # highlight full width space
+    highlightFullWidthSpace: red,
+    highlightFullWidthSpaceBg: red
   ),
   dark: EditorColor(
     editorBg: default,
@@ -586,7 +595,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     parenTextBg: white,
     # highlight other uses current word
     currentWord: default,
-    currentWordBg: gray
+    currentWordBg: gray,
+    # highlight full width space
+    highlightFullWidthSpace: red,
+    highlightFullWidthSpaceBg: red
   ),
   light: EditorColor(
     editorBg: default,
@@ -666,7 +678,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     parenTextBg: gray,
     # highlight other uses current word
     currentWord: default,
-    currentWordBg: gray
+    currentWordBg: gray,
+    # highlight full width space
+    highlightFullWidthSpace: red,
+    highlightFullWidthSpaceBg: red
   ),
   vivid: EditorColor(
     editorBg: default,
@@ -746,7 +761,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     parenTextBg: white,
     # highlight other uses current word
     currentWord: default,
-    currentWordBg: gray
+    currentWordBg: gray,
+    # highlight full width space
+    highlightFullWidthSpace: red,
+    highlightFullWidthSpaceBg: red
   ),
 ]
 
@@ -818,6 +836,9 @@ proc setCursesColor*(editorColor: EditorColor) =
 
   # highlight other uses current word
   setColorPair(EditorColorPair.currentWord, editorColor.currentWord, editorColor.currentWordBg)
+
+  # highlight full width space
+  setColorPair(EditorColorPair.highlightFullWidthSpace, editorColor.highlightFullWidthSpace, editorColor.highlightFullWidthSpace)
 
 proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Color, Color) =
   let editorColor = ColorThemeTable[theme]
