@@ -17,7 +17,4 @@ test "Check highlight in filer mode":
   filerStatus = filerStatus.updateDirList
   status.updateFilerView(filerStatus)
 
-  echo status.bufStatus[0].buffer
-  echo status.bufStatus[0].highlight
-
   check(status.bufStatus[0].highlight[0].color == EditorColorPair.currentFile)
