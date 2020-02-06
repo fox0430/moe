@@ -143,6 +143,12 @@ default is true
 systemClipboard
 ```
 
+Highlight full-width space (bool)  
+default is true
+```
+highlightFullWidthSpace
+```
+
 ### TabLine table
 Dispaly all bufer in tab line (bool)  
 default is false  
