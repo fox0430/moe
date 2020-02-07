@@ -364,6 +364,18 @@ type EditorColor* = object
   replaceText*: Color
   replaceTextBg*: Color
 
+  # pair of paren highlighting
+  parenText*: Color
+  parenTextBg*: Color
+
+  # highlight other uses current word
+  currentWord*: Color
+  currentWordBg*: Color
+
+  # highlight full width space
+  highlightFullWidthSpace*: Color
+  highlightFullWidthSpaceBg*: Color
+
 type EditorColorPair* = enum
   lineNum = 1
   currentLineNum = 2
@@ -414,6 +426,12 @@ type EditorColorPair* = enum
   popUpWinCurrentLine = 38
   # replace text highlighting
   replaceText = 39
+  # pair of paren highlighting
+  parenText = 40
+  # highlight other uses current word
+  currentWord = 41
+  # highlight full width space
+  highlightFullWidthSpace = 42
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -488,7 +506,16 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     popUpWinCurrentLineBg: gray,
     # replace text highlighting
     replaceText: default,
-    replaceTextBg: red
+    replaceTextBg: red,
+    # pair of paren highlighting
+    parenText: default,
+    parenTextBg: white,
+    # highlight other uses current word
+    currentWord: default,
+    currentWordBg: gray,
+    # highlight full width space
+    highlightFullWidthSpace: red,
+    highlightFullWidthSpaceBg: red
   ),
   dark: EditorColor(
     editorBg: default,
@@ -562,7 +589,16 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     popUpWinCurrentLineBg: gray,
     # replace text highlighting
     replaceText: default,
-    replaceTextBg: red
+    replaceTextBg: red,
+    # pair of paren highlighting
+    parenText: default,
+    parenTextBg: white,
+    # highlight other uses current word
+    currentWord: default,
+    currentWordBg: gray,
+    # highlight full width space
+    highlightFullWidthSpace: red,
+    highlightFullWidthSpaceBg: red
   ),
   light: EditorColor(
     editorBg: default,
@@ -636,7 +672,16 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     popUpWinCurrentLineBg: gray,
     # replace text highlighting
     replaceText: default,
-    replaceTextBg: red
+    replaceTextBg: red,
+    # pair of paren highlighting
+    parenText: default,
+    parenTextBg: gray,
+    # highlight other uses current word
+    currentWord: default,
+    currentWordBg: gray,
+    # highlight full width space
+    highlightFullWidthSpace: red,
+    highlightFullWidthSpaceBg: red
   ),
   vivid: EditorColor(
     editorBg: default,
@@ -710,7 +755,16 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     popUpWinCurrentLineBg: gray,
     # replace text highlighting
     replaceText: default,
-    replaceTextBg: red
+    replaceTextBg: red,
+    # pair of paren highlighting
+    parenText: default,
+    parenTextBg: white,
+    # highlight other uses current word
+    currentWord: default,
+    currentWordBg: gray,
+    # highlight full width space
+    highlightFullWidthSpace: red,
+    highlightFullWidthSpaceBg: red
   ),
 ]
 
@@ -719,7 +773,7 @@ type Window* = ref object
   top, left, height*, width*: int
   y*, x*: int
 
-proc setColorPair(colorPair: EditorColorPair, character, background: Color) =
+proc setColorPair*(colorPair: EditorColorPair, character, background: Color) =
   init_pair(cshort(ord(colorPair)), cshort(ord(character)), cshort(ord(background)))
 
 proc setCursesColor*(editorColor: EditorColor) =
@@ -747,12 +801,12 @@ proc setCursesColor*(editorColor: EditorColor) =
   setColorPair(EditorColorPair.statusBarFilerMode, editorColor.statusBarFilerMode, editorColor.statusBarFilerModeBg)
   setColorPair(EditorColorPair.statusBarModeFilerMode, editorColor.statusBarModeFilerMode, editorColor.statusBarModeFilerModeBg)
   # tab line
-  setColorPair(EditorColorPair.tab , editorColor.tab, editorColor.tabBg)
-  setColorPair(EditorColorPair.currentTab , editorColor.currentTab, editorColor.currentTabBg)
+  setColorPair(EditorColorPair.tab, editorColor.tab, editorColor.tabBg)
+  setColorPair(EditorColorPair.currentTab, editorColor.currentTab, editorColor.currentTabBg)
   # command bar
-  setColorPair(EditorColorPair.commandBar , editorColor.commandBar, editorColor.commandBarBg)
+  setColorPair(EditorColorPair.commandBar, editorColor.commandBar, editorColor.commandBarBg)
   # error message
-  setColorPair(EditorColorPair.errorMessage , editorColor.errorMessage, editorColor.errorMessageBg)
+  setColorPair(EditorColorPair.errorMessage, editorColor.errorMessage, editorColor.errorMessageBg)
   # search result highlighting
   setColorPair(EditorColorPair.searchResult, editorColor.searchResult, editorColor.searchResultBg)
   # selected area in visual mode
@@ -777,6 +831,55 @@ proc setCursesColor*(editorColor: EditorColor) =
   # replace text highlighting
   setColorPair(EditorColorPair.replaceText, editorColor.replaceText, editorColor.replaceTextBg)
 
+  # pair of paren highlighting
+  setColorPair(EditorColorPair.parenText, editorColor.parenText, editorColor.parenTextBg)
+
+  # highlight other uses current word
+  setColorPair(EditorColorPair.currentWord, editorColor.currentWord, editorColor.currentWordBg)
+
+  # highlight full width space
+  setColorPair(EditorColorPair.highlightFullWidthSpace, editorColor.highlightFullWidthSpace, editorColor.highlightFullWidthSpace)
+
+proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Color, Color) =
+  let editorColor = ColorThemeTable[theme]
+
+  case pair
+  of EditorColorPair.lineNum: return (editorColor.lineNum, editorColor.lineNumBg)
+  of EditorColorPair.currentLineNum: return (editorColor.currentLineNum, editorColor.currentLineNumBg)
+  of EditorColorPair.statusBarNormalMode: return (editorColor.statusBarNormalMode, editorColor.statusBarNormalModeBg)
+  of EditorColorPair.statusBarModeNormalMode: return (editorColor.statusBarModeNormalMode, editorColor.statusBarModeNormalModeBg)
+  of EditorColorPair.statusBarInsertMode: return (editorColor.statusBarInsertMode, editorColor.statusBarInsertModeBg)
+  of EditorColorPair.statusBarModeInsertMode: return (editorColor.statusBarModeInsertMode, editorColor.statusBarModeInsertModeBg)
+  of EditorColorPair.statusBarVisualMode: return (editorColor.statusBarVisualMode, editorColor.statusBarVisualModeBg)
+  of EditorColorPair.statusBarModeVisualMode: return (editorColor.statusBarModeVisualMode, editorColor.statusBarModeVisualModeBg)
+  of EditorColorPair.statusBarReplaceMode: return (editorColor.statusBarReplaceMode, editorColor.statusBarReplaceModeBg)
+  of EditorColorPair.statusBarModeReplaceMode: return (editorColor.statusBarModeReplaceMode, editorColor.statusBarModeReplaceModeBg)
+  of EditorColorPair.statusBarExMode: return (editorColor.statusBarExMode, editorColor.statusBarExModeBg)
+  of EditorColorPair.statusBarModeExMode: return (editorColor.statusBarModeExMode, editorColor.statusBarModeExModeBg)
+  of EditorColorPair.statusBarFilerMode: return (editorColor.statusBarFilerMode, editorColor.statusBarFilerModeBg)
+  of EditorColorPair.statusBarModeFilerMode: return (editorColor.statusBarModeFilerMode, editorColor.statusBarModeFilerModeBg)
+  of EditorColorPair.tab: return (editorColor.tab, editorColor.tabBg)
+  of EditorColorPair.currentTab: return (editorColor.currentTab, editorColor.currentTabBg)
+  of EditorColorPair.commandBar: return (editorColor.commandBar, editorColor.commandBarBg)
+  of EditorColorPair.errorMessage: return (editorColor.errorMessage, editorColor.errorMessageBg)
+  of EditorColorPair.searchResult: return (editorColor.searchResult, editorColor.searchResultBg)
+  of EditorColorPair.visualMode: return (editorColor.visualMode, editorColor.visualModeBg)
+  of EditorColorPair.defaultChar: return (editorColor.defaultChar, Color.default)
+  of EditorColorPair.keyword: return (editorColor.gtKeyword, Color.default)
+  of EditorColorPair.stringLit: return (editorColor.gtStringLit, Color.default)
+  of EditorColorPair.decNumber: return (editorColor.gtDecNumber, Color.default)
+  of EditorColorPair.comment: return (editorColor.gtComment, Color.default)
+  of EditorColorPair.longComment: return (editorColor.gtLongComment, Color.default)
+  of EditorColorPair.whitespace: return (editorColor.gtWhitespace, Color.default)
+  of EditorColorPair.currentFile: return (editorColor.currentFile, editorColor.currentFileBg)
+  of EditorColorPair.file: return (editorColor.file, editorColor.fileBg)
+  of EditorColorPair.dir: return (editorColor.dir, editorColor.dirBg)
+  of EditorColorPair.pcLink: return (editorColor.pcLink, editorColor.pcLinkBg)
+  of EditorColorPair.popUpWindow: return (editorColor.popUpWindow, editorColor.popUpWindowBg)
+  of EditorColorPair.popUpWinCurrentLine: return (editorColor.popUpWinCurrentLine, editorColor.popUpWinCurrentLineBg)
+  of EditorColorPair.replaceText: return (editorColor.replaceText, editorColor.replaceTextBg)
+  else: return (editorColor.parenText, editorColor.parenTextBg)
+
 proc setIbeamCursor*() = discard execShellCmd("printf '\\033[6 q'")
 
 proc setBlockCursor*() = discard execShellCmd("printf '\e[0 q'")
@@ -786,7 +889,7 @@ proc changeCursorType*(cursorType: CursorType) =
   of blockMode: setBlockCursor()
   of ibeamMode: setIbeamCursor()
 
-proc disableControlC() = setControlCHook(proc() {.noconv.} = discard)
+proc disableControlC*() = setControlCHook(proc() {.noconv.} = discard)
 
 proc restoreTerminalModes*() = reset_prog_mode()
 
@@ -800,10 +903,11 @@ proc keyEcho*(keyecho: bool) =
   if keyecho == true: echo()
   elif keyecho == false: noecho()
 
-proc setTimeout*(win: var Window) = win.cursesWindow.wtimeout(cint(1000)) # 1000mm sec
+proc setTimeout*(win: var Window) = win.cursesWindow.wtimeout(cint(1000)) # 500mm sec
+
+proc setTimeout*(win: var Window, time: int) = win.cursesWindow.wtimeout(cint(time))
 
 proc startUi*() =
-  disableControlC()
   discard setLocale(LC_ALL, "")   # enable UTF-8
   initscr()   # start terminal control
   cbreak()    # enable cbreak mode

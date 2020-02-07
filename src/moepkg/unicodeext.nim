@@ -1,4 +1,4 @@
-import unicode, strutils, sequtils
+import unicode, strutils, sequtils, strutils, strformat
 import unicodedb/widths
 import gapbuffer
 export unicode
@@ -206,3 +206,35 @@ proc startsWith*(runes1, runes2: seq[Rune]): bool =
 
 proc `$`*(seqRunes: seq[seq[Rune]]): string =
   for runes in seqRunes: result = result & $runes
+
+proc correspondingOpenParen*(r: Rune): Rune =
+  case r
+  of ru')': return ru'('
+  of ru'}': return ru'{'
+  of ru']': return ru'['
+  of ru'"': return ru '\"'
+  of ru'\'': return ru'\''
+  else: doAssert(false, fmt"Invalid parentheses: {r}")
+
+proc correspondingCloseParen*(r: Rune): Rune =
+  case r
+  of ru'(': return ru')'
+  of ru'{': return ru'}'
+  of ru'[': return ru']'
+  of ru'"': return ru '\"'
+  of ru'\'': return ru'\''
+  else: doAssert(false, fmt"Invalid parentheses: {r}")
+
+proc isOpenParen*(r: Rune): bool =
+  case r
+  of ru'(', ru'{', ru'[', ru'\"', ru'\'': return true
+  else: return false
+
+proc isCloseParen*(r: Rune): bool =
+  case r
+  of ru')', ru'}', ru']', ru'\"', ru'\'': return true
+  else: return false
+
+proc isParen*(r: Rune): bool =
+  if r.isOpenParen or r.isCloseParen: return true
+  else: return false

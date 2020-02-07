@@ -6,6 +6,7 @@ type
 
 const exCommandList = [
   ru"!",
+  ru"deleteparen",
   ru"b",
   ru"bd",
   ru"bfirst",
@@ -13,8 +14,12 @@ const exCommandList = [
   ru"bnext",
   ru"bprev",
   ru"buf",
+  ru"clipboard",
   ru"cursorLine",
   ru"e",
+  ru"highlightcurrentword",
+  ru"highlightfullspace",
+  ru"highlightparen",
   ru"indent",
   ru"linenum",
   ru"livereload",
@@ -27,6 +32,8 @@ const exCommandList = [
   ru"qa",
   ru"qa!",
   ru"realtimesearch",
+  ru"scrollspeed",
+  ru"smoothscroll",
   ru"statusbar",
   ru"syntax",
   ru"tab",
@@ -299,9 +306,12 @@ proc suggestExCommandOption(status: var Editorstatus, exStatus: var ExModeViewSt
     arg = if (strutils.splitWhitespace($exStatus.buffer)).len > 1: (strutils.splitWhitespace($exStatus.buffer))[1] else: ""
 
   case command:
-    of "cursorLine", "indent", "linenum", "livereload", "realtimesearch", "statusbar", "syntax", "tabstop": argList = @["on", "off"]
-    of "theme": argList= @["vivid", "dark", "light", "config"]
-    of "e": suggestFilePath(status, exStatus, key)
+    of "cursorLine", "highlightparen", "indent", "linenum", "livereload", "realtimesearch", "statusbar", "syntax", "tabstop", "smoothscroll", "clipboard", "highlightcurrentword", "highlightfullspace":
+      argList = @["on", "off"]
+    of "theme":
+      argList= @["vivid", "dark", "light", "config"]
+    of "e":
+      suggestFilePath(status, exStatus, key)
     else: discard
 
   for i in 0 ..< argList.len:

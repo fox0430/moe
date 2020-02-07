@@ -73,40 +73,80 @@ default is ibeam
 insertModeCursor
 ```
 
-Auto save setting (bool)  
+Auto save (bool)  
 default is false
 ```
 autoSave
 ```
 
-Auto save interval setting (minits) (int)  
+Auto save interval (minits) (int)  
 default is 5 (5 minits)
 ```
 autoSaveInterval
 ```
 
-Live reload of configuration file setting (bool)  
+Live reload of configuration file (bool)  
 default is false
 ```
 liveReloadOfConf
 ```
 
-Realtime search setting (bool)  
+Realtime search (bool)  
 default is true
 ```
 realtimeSearch
 ```
 
-Pop-up window in ex mode setting (bool)  
+Pop-up window in ex mode (bool)  
 default is true
 ```
 popUpWindowInExmode 
 ```
 
-Highlighting when replace text setting (bool)  
+Highlight replacement text (bool)  
 default is true
 ```
 replaceTextHighlight
+```
+Highlight a pair of paren (bool)  
+default is true
+```
+highlightPairOfParen
+```
+
+Auto delete paren (bool)  
+default is true
+```
+autoDeleteParen
+```
+
+Smooth scroll (bool)  
+default is true
+```
+smoothScroll
+```
+
+Smooth scroll speed (int)  
+default is 16
+```
+smoothScrollSpeed
+```
+highlight other uses of the current word under the cursor (bool)  
+default is true
+```
+highlightCurrentWord
+```
+
+System clipboard (bool)  
+default is true
+```
+systemClipboard
+```
+
+Highlight full-width space (bool)  
+default is true
+```
+highlightFullWidthSpace
 ```
 
 ### TabLine table
@@ -729,4 +769,9 @@ replaceText
 Background color when replace text 
 ```
 replaceTextBg
+```
+
+Background color of current word
+```
+currentWordBg
 ```

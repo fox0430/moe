@@ -36,6 +36,16 @@ realtimeSearch = true
 
 popUpWindowInExmode = true
 
+replaceTextHighlight = true
+
+highlightPairOfParen = true
+
+autoDeleteParen = true
+
+systemClipboard = true
+
+highlightFullWidthSpace = true
+
 [TabLine]
 
 allBuffer = false
@@ -191,3 +201,5 @@ popUpWinCurrentLineBg = "gray"
 replaceText = "default"
 
 replaceTextBg = "red"
+
+currentWordBg = "gray"
