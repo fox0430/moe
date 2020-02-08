@@ -181,8 +181,8 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, curren
 
   let
     start = (view.originalLine[0], view.start[0])
-    useHighlight = highlight.len > 0 and (highlight[0].firstRow, highlight[0].firstColumn) <= start and start <= (highlight[^1].firstRow, highlight[^1].firstColumn)
-  var i = if useHighlight: highlight.index(view.originalLine[0], view.start[0]) else: -1
+    useHighlight = highlight.len > 0 and (highlight[0].firstRow, highlight[0].firstColumn) <= start and start <= (highlight[^1].lastRow, highlight[^1].lastColumn)
+  var i = if useHighlight: highlight.indexOf(view.originalLine[0], view.start[0]) else: -1
   for y in 0 ..< view.height:
     if view.originalLine[y] == -1: break
 
