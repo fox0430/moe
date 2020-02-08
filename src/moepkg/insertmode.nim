@@ -19,7 +19,7 @@ proc nextRuneIs(bufStatus: var BufferStatus, c: Rune): bool =
   if bufStatus.buffer[bufStatus.currentLine].len > bufStatus.currentColumn:
     result = bufStatus.buffer[bufStatus.currentLine][bufStatus.currentColumn] == c
 
-proc insertCharacter(bufStatus: var BufferStatus, currentWin: WindowNode, autoCloseParen: bool, c: Rune) =
+proc insertCharacter*(bufStatus: var BufferStatus, currentWin: WindowNode, autoCloseParen: bool, c: Rune) =
   let oldLine = bufStatus.buffer[bufStatus.currentLine]
   var newLine = bufStatus.buffer[bufStatus.currentLine]
   template insert = newLine.insert(c, bufStatus.currentColumn)

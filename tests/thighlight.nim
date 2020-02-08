@@ -16,16 +16,16 @@ test "initHighlight: start with newline":
 
   check(unitedStr == code)
 
-test "index: basic":
+test "indexOf: basic":
   let
     code = "proc test =\x0A  echo \"Hello, world!\""
     highlight = initHighlight(code, SourceLanguage.langNim)
   
-  check(highlight.index(0, 0) == 0)
+  check(highlight.indexOf(0, 0) == 0)
 
-test "index: start with newline":
+test "indexOf: start with newline":
   let
     code = "\x0Aproc test =\x0A  echo \"Hello, world!\""
     highlight = initHighlight(code, SourceLanguage.langNim)
   
-  check(highlight.index(0, 0) == 0)
+  check(highlight.indexOf(0, 0) == 0)
