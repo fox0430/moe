@@ -92,7 +92,6 @@ test "Highlight of a pair of paren 2":
   status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"(())"])
-  status.updateHighlight
   status.update
 
   check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0 and status.bufStatus[0].highlight[0].lastColumn == 2)
@@ -104,7 +103,6 @@ test "Highlight of a pair of paren 3":
   status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"(", ru")"])
-  status.updateHighlight
   status.update
 
   check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstRow == 0)
@@ -116,14 +114,24 @@ test "Highlight of a pair of paren 4":
   status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"(", ru")"])
-  status.updateHighlight
   status.update
 
   status.bufStatus[0].keyDown
   status.changeMode(Mode.insert)
   status.bufStatus[0].keyEnter(status.currentMainWindowNode, status.settings.autoIndent)
 
-  status.updateHighlight
+  status.update
+
+test "Highlight of a pair of paren 5":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.resize(100, 100)
+  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"a)"])
+  status.resize(100, 100)
+
+  status.bufStatus[0].keyDown
   status.update
 
 test "Auto delete paren 1":
@@ -328,7 +336,6 @@ test "Highlight full width space 1":
 
   status.update
 
-  echo status.bufStatus[0].highlight
   check(status.bufStatus[0].highlight[0].color == EditorColorPair.highlightFullWidthSpace)
 
 test "Highlight full width space 2":
@@ -339,7 +346,6 @@ test "Highlight full width space 2":
 
   status.update
 
-  echo status.bufStatus[0].highlight
   check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[1].color == EditorColorPair.highlightFullWidthSpace)
 
 test "Highlight full width space 3":
@@ -350,7 +356,6 @@ test "Highlight full width space 3":
 
   status.update
 
-  echo status.bufStatus[0].highlight
   check(status.bufStatus[0].highlight[0].color == EditorColorPair.highlightFullWidthSpace)
 
 test "Highlight full width space 2":
@@ -361,5 +366,4 @@ test "Highlight full width space 2":
 
   status.update
 
-  echo status.bufStatus[0].highlight
   check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[1].color == EditorColorPair.highlightFullWidthSpace and status.bufStatus[0].highlight[2].color == EditorColorPair.defaultChar)
