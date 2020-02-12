@@ -645,7 +645,12 @@ proc highlightOtherUsesCurrentWord*(status: var Editorstatus) =
 
   let highlightWord = line[startCol ..< endCol]
 
-  for i in 0 ..< bufStatus.buffer.len:
+  let
+    range = status.currentMainWindowNode.view.rangeOfOriginalLineInView
+    startLine = range[0]
+    endLine = if bufStatus.buffer.len > range[1] + 1: range[1] + 2 elif bufStatus.buffer.len > range[1]: range[1] + 1 else: range[1]
+
+  for i in startLine ..< endLine:
     let line = bufStatus.buffer[i]
     for j in 0 .. (line.len - highlightWord.len):
       let endCol = j + highlightWord.len
