@@ -671,16 +671,24 @@ from searchmode import searchAllOccurrence
 proc updateHighlight*(status: var EditorStatus) =
   let
     currentBuf = status.currentBuffer
+    bufStatus = status.bufStatus[currentBuf]
     syntax = status.settings.syntax
 
   if not (status.bufStatus[currentBuf].mode == Mode.ex and status.bufStatus[currentBuf].prevMode == Mode.filer):
     status.bufStatus[currentBuf].highlight = initHighlight($status.bufStatus[currentBuf].buffer, if syntax: status.bufStatus[currentBuf].language else: SourceLanguage.langNone)
 
+  let
+    range = status.currentMainWindowNode.view.rangeOfOriginalLineInView
+    startLine = range[0]
+    endLine = if bufStatus.buffer.len > range[1] + 1: range[1] + 2 elif bufStatus.buffer.len > range[1]: range[1] + 1 else: range[1]
+  var bufferInView = initGapBuffer[seq[Rune]]()
+  for i in startLine ..< endLine: bufferInView.add(bufStatus.buffer[i])
+
   # highlight full width space
   if status.settings.highlightFullWidthSpace:
     let
       fullWidthSpace = ru"　"
-      allOccurrence = searchAllOccurrence(status.bufStatus[currentBuf].buffer, fullWidthSpace)
+      allOccurrence = searchAllOccurrence(bufferInView, fullWidthSpace)
       color = EditorColorPair.highlightFullWidthSpace
     for pos in allOccurrence:
       let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column, color: color)
@@ -690,7 +698,7 @@ proc updateHighlight*(status: var EditorStatus) =
   if status.bufStatus[status.currentBuffer].isHighlight and status.searchHistory.len > 0:
     let
       keyword = status.searchHistory[^1]
-      allOccurrence = searchAllOccurrence(status.bufStatus[currentBuf].buffer, keyword)
+      allOccurrence = searchAllOccurrence(bufferInView, keyword)
       color = if status.isSearchHighlight: EditorColorPair.searchResult else: EditorColorPair.replaceText
     for pos in allOccurrence:
       let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column+keyword.high, color: color)
