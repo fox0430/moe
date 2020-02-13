@@ -305,6 +305,8 @@ test "Highlight current word 1":
   var status = initEditorStatus()
   status.addNewBuffer("")
   status.bufStatus[0].buffer = initGapBuffer(@[ru"test abc test"])
+
+  status.resize(100, 100)
   status.update
 
   check(status.bufStatus[0].highlight[0].color == EditorColorPair.currentWord and status.bufStatus[0].highlight[2].color == EditorColorPair.currentWord)
@@ -313,6 +315,8 @@ test "Highlight current word 2":
   var status = initEditorStatus()
   status.addNewBuffer("")
   status.bufStatus[0].buffer = initGapBuffer(@[ru"test", ru"test"])
+
+  status.resize(100, 100)
   status.update
 
   check(status.bufStatus[0].highlight[0].color == EditorColorPair.currentWord and status.bufStatus[0].highlight[1].color == EditorColorPair.currentWord)
