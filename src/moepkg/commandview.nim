@@ -250,9 +250,11 @@ proc suggestFilePath(status: var Editorstatus, exStatus: var ExModeViewStatus, k
   var suggestlist: seq[seq[Rune]] = @[]
   let inputPath = ($exStatus.buffer).substr(2)
   if inputPath.len == 0 or not inputPath.contains("/"):
+    suggestlist.add(ru"")
     for kind, path in walkDir("./"):
       if ($path.toRunes.normalizePath).startsWith(inputPath): suggestlist.add(path.toRunes.normalizePath)
   elif ($inputPath).contains("/"):
+    suggestlist.add(($inputPath).substr(0, ($inputPath).rfind("/")).toRunes)
     for kind, path in walkDir(($inputPath).substr(0, ($inputPath).rfind("/"))):
       if ($path.toRunes.normalizePath).startsWith(inputPath): suggestlist.add(path.toRunes.normalizePath)
 
@@ -263,12 +265,14 @@ proc suggestFilePath(status: var Editorstatus, exStatus: var ExModeViewStatus, k
     x = exStatus.cursorX
     y = terminalHeight() - 1
 
-  while (isTabkey(key) or isShiftTab(key)) and suggestlist.len > 0:
+  while (isTabkey(key) or isShiftTab(key)) and suggestlist.len > 1:
     exStatus.buffer = ru"e "
     exStatus.currentPosition = 2
     exStatus.cursorX = 3
 
-    if status.settings.popUpWindowInExmode: writePopUpWindow(status, x, y, suggestIndex, suggestlist)
+    if status.settings.popUpWindowInExmode:
+      let currentLine = if suggestIndex == 0: -1 else: suggestIndex - 1
+      status.writePopUpWindow(x, y, currentLine, suggestlist[1 .. suggestlist.high])
 
     for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
     if suggestlist.len == 1:
