@@ -437,7 +437,7 @@ proc moveNextWindow*(status: var EditorStatus) = status.moveCurrentMainWindow(st
 
 proc movePrevWindow*(status: var EditorStatus) = status.moveCurrentMainWindow(status.currentMainWindowNode.windowIndex - 1)
 
-proc writePopUpWindow*(status: var Editorstatus, x, y, currentLine: var int,  buffer: seq[seq[Rune]]) =
+proc writePopUpWindow*(status: var Editorstatus, x, y: var int, currentLine: int,  buffer: seq[seq[Rune]]) =
   # Pop up window size
   var maxBufferLen = 0
   for runes in buffer:
@@ -452,9 +452,9 @@ proc writePopUpWindow*(status: var Editorstatus, x, y, currentLine: var int,  bu
 
   status.popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
 
+  let startLine = if currentLine == -1: 0 elif currentLine - h + 1 > 0: currentLine - h + 1 else: 0
   for i in 0 ..< h:
-    let startLine = if currentLine - h + 1 > 0: currentLine - h + 1 else: 0
-    if i + startLine == currentLine: status.popUpWindow.write(i, 1, buffer[i + startLine], EditorColorPair.popUpWinCurrentLine)
+    if currentLine != -1 and i + startLine == currentLine: status.popUpWindow.write(i, 1, buffer[i + startLine], EditorColorPair.popUpWinCurrentLine)
     else: status.popUpWindow.write(i, 1, buffer[i + startLine], EditorColorPair.popUpWindow)
 
   status.popUpWindow.refresh
