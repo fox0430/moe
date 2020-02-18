@@ -332,7 +332,7 @@ proc suggestExCommandOption(status: var Editorstatus, exStatus: var ExModeViewSt
     x = exStatus.cursorX
     y = terminalHeight() - 1
 
-  while (isTabkey(key) or isShiftTab(key)) and suggestlist.len > 0:
+  while (isTabkey(key) or isShiftTab(key)) and suggestlist.len > 1:
     exStatus.currentPosition = 0
     exStatus.cursorX = 1
     exStatus.buffer = ru""
@@ -364,7 +364,7 @@ proc suggestExCommand(status: var Editorstatus, exStatus: var ExModeViewStatus, 
     x = exStatus.cursorX
     y = terminalHeight() - 1
 
-  while (isTabkey(key) or isShiftTab(key)) and suggestlist.len > 0:
+  while (isTabkey(key) or isShiftTab(key)) and suggestlist.len > 1:
     exStatus.buffer = ru""
     exStatus.currentPosition = 0
     exStatus.cursorX = 1

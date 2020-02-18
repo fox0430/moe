@@ -460,8 +460,9 @@ proc writePopUpWindow*(status: var Editorstatus, x, y: var int, currentLine: int
   status.popUpWindow.refresh
 
 proc deletePopUpWindow*(status: var Editorstatus) =
-  status.popUpWindow.deleteWindow
-  status.update
+  if status.popUpWindow != nil:
+    status.popUpWindow.deleteWindow
+    status.update
 
 proc addNewBuffer*(status: var EditorStatus, filename: string)
 from commandview import writeFileOpenError
