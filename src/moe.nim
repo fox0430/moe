@@ -31,13 +31,14 @@ proc main() =
     quit()
   )
 
-  if existsDir(parsedList.filename):
-    try: setCurrentDir(parsedList.filename)
-    except OSError:
-      status.commandWindow.writeFileOpenError(parsedList.filename, status.messageLog)
-      addNewBuffer(status, "")
-    status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSavetime: now()))
-  else: addNewBuffer(status, parsedList.filename)
+  for p in parsedList:
+    if existsDir(p.filename):
+      try: setCurrentDir(p.filename)
+      except OSError:
+        status.commandWindow.writeFileOpenError(p.filename, status.messageLog)
+        addNewBuffer(status, "")
+      status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSavetime: now()))
+    else: addNewBuffer(status, p.filename)
 
   disableControlC()
 
