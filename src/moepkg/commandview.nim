@@ -272,7 +272,13 @@ proc suggestFilePath(status: var Editorstatus, exStatus: var ExModeViewStatus, k
 
     if status.settings.popUpWindowInExmode:
       let currentLine = if suggestIndex == 0: -1 else: suggestIndex - 1
-      status.writePopUpWindow(x, y, currentLine, suggestlist[1 .. suggestlist.high])
+
+      var displayBuffer: seq[seq[Rune]] = @[]
+      if ($suggestlist[1]).contains("/"):
+        for i in 1 ..< suggestlist.len: displayBuffer.add(suggestlist[i][($suggestlist[i]).rfind("/") + 1 ..< suggestlist[i].len])
+      else: displayBuffer = suggestlist[1 ..< suggestlist.len]
+
+      status.writePopUpWindow(x, y, currentLine, displayBuffer)
 
     for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
     if suggestlist.len == 1:
