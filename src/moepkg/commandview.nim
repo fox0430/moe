@@ -296,7 +296,7 @@ proc suggestFilePath(status: var Editorstatus, exStatus: var ExModeViewStatus, k
 
 proc isExCommand(exBuffer: seq[Rune]): bool =
   for i in 0 ..< exCommandList.len:
-    if $exBuffer == $exCommandList[i] & " ":
+    if exBuffer == exCommandList[i] & ru" ":
       result = true
       break
 
