@@ -295,8 +295,11 @@ proc suggestFilePath(status: var Editorstatus, exStatus: var ExModeViewStatus, k
     key = getKey(status.commandWindow)
 
 proc isExCommand(exBuffer: seq[Rune]): bool =
+  if ($exBuffer).contains(" ") == false: return false
+
+  let buffer = ($exBuffer).splitWhitespace(-1)
   for i in 0 ..< exCommandList.len:
-    if exBuffer == exCommandList[i] & ru" ":
+    if buffer[0] == $exCommandList[i]:
       result = true
       break
 
