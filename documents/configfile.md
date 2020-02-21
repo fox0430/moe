@@ -73,40 +73,63 @@ default is ibeam
 insertModeCursor
 ```
 
-Auto save setting (bool)  
+Auto save (bool)  
 default is false
 ```
 autoSave
 ```
 
-Auto save interval setting (minits) (int)  
+Auto save interval (minits) (int)  
 default is 5 (5 minits)
 ```
 autoSaveInterval
 ```
 
-Live reload of configuration file setting (bool)  
+Live reload of configuration file (bool)  
 default is false
 ```
 liveReloadOfConf
 ```
 
-Realtime search setting (bool)  
+Realtime search (bool)  
 default is true
 ```
 realtimeSearch
 ```
 
-Pop-up window in ex mode setting (bool)  
+Pop-up window in ex mode (bool)  
 default is true
 ```
 popUpWindowInExmode 
 ```
 
-Highlighting when replace text setting (bool)  
+Highlight replacement text (bool)  
 default is true
 ```
 replaceTextHighlight
+```
+Highlight a pair of paren (bool)  
+default is true
+```
+highlightPairOfParen
+```
+
+Auto delete paren (bool)  
+default is true
+```
+autoDeleteParen
+```
+
+smooth scroll (bool)  
+default is true
+```
+smoothScroll
+```
+
+smooth scroll speed (int)  
+default is 16
+```
+smoothScrollSpeed
 ```
 
 ### TabLine table

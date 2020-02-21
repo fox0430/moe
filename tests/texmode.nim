@@ -224,7 +224,7 @@ test "Change theme command":
   var status = initEditorStatus()
   status.addNewBuffer("")
   startUi()
-  
+
   block:
     const command = @[ru"theme", ru"vivid"]
     status.exModeCommand(command)
@@ -257,38 +257,53 @@ test "Open log viewer":
   const command = @[ru"log"]
   status.exModeCommand(command)
 
-test "Quit command":
+test "Highlight pair of paren settig command":
   var status = initEditorStatus()
   status.addNewBuffer("")
 
-  const command = @[ru"q"]
-  status.exModeCommand(command)
+  block:
+    const command = @[ru"highlightparen", ru"off"]
+    status.exModeCommand(command)
+    check(status.settings.highlightPairOfParen == false)
 
-test "Force quit command":
+  block:
+    const command = @[ru"highlightparen", ru"on"]
+    status.exModeCommand(command)
+    check(status.settings.highlightPairOfParen == true)
+
+test "Auto delete paren setting command":
   var status = initEditorStatus()
   status.addNewBuffer("")
 
-  status.bufStatus[0].countChange = 1
-  const command = @[ru"q!"]
-  status.exModeCommand(command)
+  block:
+    const command = @[ru"deleteparen", ru"off"]
+    status.exModeCommand(command)
+    check(status.settings.autoDeleteParen == false)
 
-test "All buffer quit command":
+  block:
+    const command = @[ru"deleteparen", ru"on"]
+    status.exModeCommand(command)
+    check(status.settings.autoDeleteParen == true)
+
+test "Smooth scroll setting command":
   var status = initEditorStatus()
   status.addNewBuffer("")
-  status.resize(100, 100)
-  status.verticalSplitWindow
 
-  const command = @[ru"qa"]
-  status.exModeCommand(command)
+  block:
+    const command = @[ru"smoothscroll", ru"off"]
+    status.exModeCommand(command)
+    check(status.settings.smoothScroll == false)
 
-test "all buffer force quit command":
+  block:
+    const command = @[ru"smoothscroll", ru"on"]
+    status.exModeCommand(command)
+    check(status.settings.smoothScroll == true)
+
+test "Smooth scroll speed setting command":
   var status = initEditorStatus()
-  for i in 0 ..< 2:
-    status.addNewBuffer("")
-    status.bufStatus[i].countChange = 1
-  status.verticalSplitWindow
+  status.addNewBuffer("")
 
-  const command = @[ru"qa!"]
-  status.exModeCommand(command)
-
-
+  block:
+    const command = @[ru"scrollspeed", ru"1"]
+    status.exModeCommand(command)
+    check(status.settings.smoothScrollSpeed == 1)

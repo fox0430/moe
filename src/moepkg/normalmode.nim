@@ -6,7 +6,7 @@ proc keyRight*(bufStatus: var BufferStatus)
 proc keyLeft*(bufStatus: var BufferStatus)
 proc keyUp*(bufStatus: var BufferStatus)
 proc keyDown*(bufStatus: var BufferStatus)
-proc replaceCurrentCharacter*(bufStatus: var BufferStatus, currentWin: WindowNode, autoIndent:bool, character: Rune)
+proc replaceCurrentCharacter*(bufStatus: var BufferStatus, currentWin: WindowNode, autoIndent:bool, autoDeleteParen: bool, character: Rune)
 
 import searchmode
 
@@ -41,7 +41,7 @@ proc keyUp*(bufStatus: var BufferStatus) =
   if bufStatus.currentColumn < 0: bufStatus.currentColumn = 0
 
 proc keyDown*(bufStatus: var BufferStatus) =
-  if bufStatus.currentLine+1 == bufStatus.buffer.len: return
+  if bufStatus.currentLine + 1 == bufStatus.buffer.len: return
 
   inc(bufStatus.currentLine)
   let maxColumn = bufStatus.buffer[bufStatus.currentLine].len - 1 + (if bufStatus.mode == Mode.insert: 1 else: 0)
@@ -73,7 +73,43 @@ proc moveToFirstOfNextLine*(bufStatus: var BufferStatus) =
   keyDown(bufStatus)
   moveToFirstOfLine(bufStatus)
 
-proc deleteCurrentCharacter*(bufStatus: var BufferStatus, currentWin: WindowNode) =
+proc deleteParen*(bufStatus: var BufferStatus, currentChar: Rune) =
+  let
+    currentLine = bufStatus.currentLine
+    currentColumn = bufStatus.currentColumn
+    buffer = bufStatus.buffer
+
+  if isOpenParen(currentChar):
+    var depth = 1
+    let
+      openParen = currentChar
+      closeParen = correspondingCloseParen(openParen)
+    for i in currentLine ..< buffer.len:
+      for j in currentColumn ..< buffer[i].len:
+        if buffer[i][j] == openParen: inc(depth)
+        elif buffer[i][j] == closeParen: dec(depth)
+        if depth == 0:
+          var line = bufStatus.buffer[i]
+          line.delete(j)
+          bufStatus.buffer[i] = line
+          return
+  elif isCloseParen(currentChar):
+    var depth = 1
+    let
+      closeParen = currentChar
+      openParen = correspondingOpenParen(closeParen)
+    for i in countdown(currentLine, 0):
+      let startColumn = if i == currentLine: currentColumn - 1 else: buffer[i].high 
+      for j in countdown(startColumn, 0):
+        if buffer[i][j] == closeParen: inc(depth)
+        elif buffer[i][j] == openParen: dec(depth)
+        if depth == 0:
+          var line = bufStatus.buffer[i]
+          line.delete(j)
+          bufStatus.buffer[i] = line
+          return
+
+proc deleteCurrentCharacter*(bufStatus: var BufferStatus, autoDeleteParen: bool, currentWin: WindowNode) =
   let
     currentLine = bufStatus.currentLine
     currentColumn = bufStatus.currentColumn
@@ -89,14 +125,21 @@ proc deleteCurrentCharacter*(bufStatus: var BufferStatus, currentWin: WindowNode
 
     bufStatus.buffer.delete(currentLine + 1, currentLine + 1)
   else:
-    let oldLine = bufStatus.buffer[bufStatus.currentLine]
+    let
+      currentChar = bufStatus.buffer[currentLine][currentColumn]
+      oldLine = bufStatus.buffer[bufStatus.currentLine]
     var newLine = bufStatus.buffer[bufStatus.currentLine]
     newLine.delete(currentColumn)
     if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
-    
-    if bufStatus.buffer[currentLine].len > 0 and currentColumn == bufStatus.buffer[currentLine].len and currentMode != Mode.insert:
-      bufStatus.currentColumn = bufStatus.buffer[bufStatus.currentLine].len-1
-      bufStatus.expandedColumn = bufStatus.buffer[bufStatus.currentLine].len-1
+
+    if autoDeleteParen and currentChar.isParen: bufStatus.deleteParen(currentChar)
+
+    if bufStatus.buffer[currentLine].len < 1:
+      bufStatus.currentColumn = 0
+      bufStatus.expandedColumn = 0
+    elif bufStatus.buffer[currentLine].len > 0 and currentColumn > bufStatus.buffer[currentLine].high and currentMode != Mode.insert:
+      bufStatus.currentColumn = bufStatus.buffer[bufStatus.currentLine].len - 1
+      bufStatus.expandedColumn = bufStatus.buffer[bufStatus.currentLine].len - 1
 
   currentWin.view.reload(bufStatus.buffer, currentWin.view.originalLine[0])
   inc(bufStatus.countChange)
@@ -125,21 +168,54 @@ proc moveToLastLine*(status: var EditorStatus) =
 
 proc pageUp*(status: var EditorStatus) =
   let destination = max(status.bufStatus[status.currentBuffer].currentLine - status.currentMainWindowNode.view.height, 0)
-  jumpLine(status, destination)
+
+  if status.settings.smoothScroll:
+    let  currentLine = status.bufStatus[status.currentBuffer].currentLine
+    for i in countdown(currentLine, destination):
+      if i == 0: break
+
+      status.bufStatus[status.currentBuffer].keyUp
+      status.update
+      status.currentMainWindowNode.window.setTimeout(status.settings.smoothScrollSpeed)
+      var key: Rune = ru'\0'
+      key = getKey(status.currentMainWindowNode.window)
+      if key != ru'\0': break
+
+    ## Set default time out setting
+    status.currentMainWindowNode.window.setTimeout
+
+  else:
+    jumpLine(status, destination)
 
 proc pageDown*(status: var EditorStatus) =
   let
     destination = min(status.bufStatus[status.currentBuffer].currentLine + status.currentMainWindowNode.view.height, status.bufStatus[status.currentBuffer].buffer.len - 1)
     currentLine = status.bufStatus[status.currentBuffer].currentLine
-    view = status.currentMainWindowNode.view
-  status.bufStatus[status.currentBuffer].currentLine = destination
-  status.bufStatus[status.currentBuffer].currentColumn = 0
-  status.bufStatus[status.currentBuffer].expandedColumn = 0
 
-  if not (view.originalLine[0] <= destination and (view.originalLine[view.height - 1] == -1 or destination <= view.originalLine[view.height - 1])):
-    let startOfPrintedLines = max(destination - (currentLine - status.currentMainWindowNode.view.originalLine[0]), 0)
-    status.currentMainWindowNode.view.reload(status.bufStatus[status.currentBuffer].buffer, startOfPrintedLines)
+  if status.settings.smoothScroll:
+    for i in currentLine ..< destination:
+      if i == status.bufStatus[status.currentBuffer].buffer.high: break
 
+      status.bufStatus[status.currentBuffer].keyDown
+      status.update
+      status.currentMainWindowNode.window.setTimeout(status.settings.smoothScrollSpeed)
+      var key: Rune = ru'\0'
+      key = getKey(status.currentMainWindowNode.window)
+      if key != ru'\0': break
+
+    ## Set default time out setting
+    status.currentMainWindowNode.window.setTimeout
+
+  else:
+    let  view = status.currentMainWindowNode.view
+    status.bufStatus[status.currentBuffer].currentLine = destination
+    status.bufStatus[status.currentBuffer].currentColumn = 0
+    status.bufStatus[status.currentBuffer].expandedColumn = 0
+
+    if not (view.originalLine[0] <= destination and (view.originalLine[view.height - 1] == -1 or destination <= view.originalLine[view.height - 1])):
+      let startOfPrintedLines = max(destination - (currentLine - status.currentMainWindowNode.view.originalLine[0]), 0)
+      status.currentMainWindowNode.view.reload(status.bufStatus[status.currentBuffer].buffer, startOfPrintedLines)
+  
 proc moveToForwardWord*(bufStatus: var BufferStatus) =
   let
     currentLine = bufStatus.currentLine
@@ -336,17 +412,17 @@ proc deleteWord(bufStatus: var BufferStatus, currentWin: WindowNode) =
   currentWin.view.reload(bufStatus.buffer, min(currentWin.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)
 
-proc deleteCharacterUntilEndOfLine(bufStatus: var BufferStatus, currentWin: WindowNode) =
+proc deleteCharacterUntilEndOfLine(bufStatus: var BufferStatus, autoDeleteParen: bool, currentWin: WindowNode) =
   let
     currentLine = bufStatus.currentLine
     startColumn = bufStatus.currentColumn
-  for i in startColumn ..< bufStatus.buffer[currentLine].len: deleteCurrentCharacter(bufStatus, currentWin)
+  for i in startColumn ..< bufStatus.buffer[currentLine].len: bufStatus.deleteCurrentCharacter(autoDeleteParen, currentWin)
 
-proc deleteCharacterBeginningOfLine(bufStatus: var BufferStatus, currentWin: WindowNode) =
+proc deleteCharacterBeginningOfLine(bufStatus: var BufferStatus, autoDeleteParen: bool, currentWin: WindowNode) =
   let beforColumn = bufStatus.currentColumn
   bufStatus.currentColumn = 0
   bufStatus.expandedColumn = 0
-  for i in 0 ..< beforColumn: deleteCurrentCharacter(bufStatus, currentWin)
+  for i in 0 ..< beforColumn: bufStatus.deleteCurrentCharacter(autoDeleteParen, currentWin)
 
 proc genDelimiterStr(buffer: string): string =
   while true:
@@ -451,9 +527,9 @@ proc pasteBeforeCursor(status: var EditorStatus) =
 
 from insertmode import keyEnter
 
-proc replaceCurrentCharacter*(bufStatus: var BufferStatus, currentWin: WindowNode, autoIndent: bool, character: Rune) =
+proc replaceCurrentCharacter*(bufStatus: var BufferStatus, currentWin: WindowNode, autoIndent: bool, autoDeleteParen: bool, character: Rune) =
   if isEnterKey(character):
-    deleteCurrentCharacter(bufStatus, currentWin)
+    bufStatus.deleteCurrentCharacter(autoDeleteParen, currentWin)
     keyEnter(bufStatus, currentWin, autoIndent)
   else:
     let oldLine = bufStatus.buffer[bufStatus.currentLine]
@@ -611,7 +687,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('x') or isDcKey(key):
     yankString(status, min(cmdLoop, status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len - status.bufStatus[currentBuf].currentColumn))
     for i in 0 ..< min(cmdLoop, status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len - status.bufStatus[currentBuf].currentColumn):
-      deleteCurrentCharacter(status.bufStatus[status.currentBuffer], status.currentMainWindowNode)
+      status.bufStatus[status.currentBuffer].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentMainWindowNode)
   elif key == ord('^'):
     moveToFirstNonBlankOfLine(status.bufStatus[status.currentBuffer])
   elif key == ord('0') or isHomeKey(key):
@@ -655,8 +731,10 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
       yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
       for i in 0 ..< min(cmdLoop, status.bufStatus[currentBuf].buffer.len - status.bufStatus[currentBuf].currentLine): deleteLine(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, status.bufStatus[currentBuf].currentLine)
     elif key == ord('w'): deleteWord(status.bufStatus[status.currentBuffer], status.currentMainWindowNode)
-    elif key == ('$') or isEndKey(key): deleteCharacterUntilEndOfLine(status.bufStatus[status.currentBuffer], status.currentMainWindowNode)
-    elif key == ('0') or isHomeKey(key): deleteCharacterBeginningOfLine(status.bufStatus[status.currentBuffer], status.currentMainWindowNode)
+    elif key == ('$') or isEndKey(key):
+      status.bufStatus[status.currentBuffer].deleteCharacterUntilEndOfLine(status.settings.autoDeleteParen, status.currentMainWindowNode)
+    elif key == ('0') or isHomeKey(key):
+      status.bufStatus[status.currentBuffer].deleteCharacterBeginningOfLine(status.settings.autoDeleteParen, status.currentMainWindowNode)
   elif key == ord('y'):
     let key = getkey(status.currentMainWindowNode.window)
     if key == ord('y'): yankLines(status, status.bufStatus[currentBuf].currentLine, min(status.bufStatus[currentBuf].currentLine + cmdLoop - 1, status.bufStatus[currentBuf].buffer.high))
@@ -679,7 +757,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
       if i > 0:
         inc(status.bufStatus[status.currentBuffer].currentColumn)
         status.bufStatus[status.currentBuffer].expandedColumn = status.bufStatus[status.currentBuffer].currentColumn
-      replaceCurrentCharacter(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, status.settings.autoIndent, ch)
+      status.bufStatus[status.currentBuffer].replaceCurrentCharacter(status.currentMainWindowNode, status.settings.autoIndent, status.settings.autoDeleteParen, ch)
   elif key == ord('n'):
     searchNextOccurrence(status)
   elif key == ord('N'):
@@ -733,8 +811,8 @@ proc normalMode*(status: var EditorStatus) =
 
     status.update
 
-    var key: Rune = Rune('\0')
-    while key == Rune('\0'):
+    var key: Rune = ru'\0'
+    while key == ru'\0':
       status.eventLoopTask
       key = getKey(status.currentMainWindowNode.window)
 

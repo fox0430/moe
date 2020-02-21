@@ -80,7 +80,7 @@ test "Delete current character":
   status.addNewBuffer("")
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
   status.bufStatus[0].currentColumn = 1
-  status.bufStatus[0].deleteCurrentCharacter(status.currentMainWindowNode)
+  status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentMainWindowNode)
   check(status.bufStatus[0].buffer[0] == ru"ac")
 
 test "Jump line":

@@ -82,6 +82,18 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("replaceTextHighlight"):
       result.replaceTextHighlight = settings["Standard"]["replaceTextHighlight"].getbool()
 
+    if settings["Standard"].contains("highlightPairOfParen"):
+      result.highlightPairOfParen =  settings["Standard"]["highlightPairOfParen"].getbool()
+
+    if settings["Standard"].contains("autoDeleteParen"):
+      result.autoDeleteParen =  settings["Standard"]["autoDeleteParen"].getbool()
+
+    if settings["Standard"].contains("smoothScroll"):
+      result.smoothScroll =  settings["Standard"]["smoothScroll"].getbool()
+
+    if settings["Standard"].contains("smoothScrollSpeed"):
+      result.smoothScrollSpeed =  settings["Standard"]["smoothScrollSpeed"].getint()
+
   if settings.contains("TabLine"):
     if settings["TabLine"].contains("allBuffer"):
         result.tabLine.allBuffer= settings["TabLine"]["allBuffer"].getbool()
@@ -298,6 +310,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["Theme"].contains("replaceTextBg"):
       ColorThemeTable[ColorTheme.config].replaceTextBg = color("replaceTextBg")
+
+    if settings["Theme"].contains("parenText"):
+      ColorThemeTable[ColorTheme.config].parenText = color("parenText")
+
+    if settings["Theme"].contains("parenTextBg"):
+      ColorThemeTable[ColorTheme.config].parenTextBg = color("parenTextBg")
 
     result.editorColorTheme = ColorTheme.config
 

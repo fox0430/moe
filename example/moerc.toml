@@ -36,6 +36,12 @@ realtimeSearch = true
 
 popUpWindowInExmode = true
 
+replaceTextHighlight = true
+
+highlightPairOfParen = true
+
+autoDeleteParen = true
+
 [TabLine]
 
 allBuffer = false

@@ -53,6 +53,10 @@ type EditorSettings* = object
   realtimeSearch*: bool
   popUpWindowInExmode*: bool
   replaceTextHighlight*: bool
+  highlightPairOfParen*: bool
+  autoDeleteParen*: bool
+  smoothScroll*: bool
+  smoothScrollSpeed*: int
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -136,6 +140,10 @@ proc initEditorSettings*(): EditorSettings =
   result.realtimeSearch = true
   result.popUpWindowInExmode = true
   result.replaceTextHighlight = true
+  result.highlightPairOfParen = true
+  result.autoDeleteParen = true
+  result.smoothScroll = true
+  result.smoothScrollSpeed = 17
 
 proc initEditorStatus*(): EditorStatus =
   result.platform = initPlatform()
@@ -256,7 +264,6 @@ proc writeTab(tabWin: var Window, start, tabWidth: int, filename: string, color:
 proc writeTabLine*(status: var EditorStatus) =
   let
     isAllBuffer = status.settings.tabLine.allbuffer
-    tabWidth = calcTabWidth(status.bufStatus.len)
     defaultColor = EditorColorPair.tab
     currentTabColor = EditorColorPair.currentTab
     currentWindowBuffer = status.currentMainWindowNode.bufferIndex
@@ -271,6 +278,7 @@ proc writeTabLine*(status: var EditorStatus) =
         currentMode = bufStatus.mode
         prevMode = bufStatus.prevMode
         filename = if (currentMode == Mode.filer) or (prevMode == Mode.filer and currentMode == Mode.ex): getCurrentDir() else: $bufStatus.filename
+        tabWidth = status.bufStatus.len.calcTabWidth
       status.tabWindow.writeTab(index * tabWidth, tabWidth, filename, color)
   else:
     ## Displays only the buffer currently displayed in the window
@@ -282,6 +290,7 @@ proc writeTabLine*(status: var EditorStatus) =
         currentMode = bufStatus.mode
         prevMode = bufStatus.prevMode
         filename = if (currentMode == Mode.filer) or (prevMode == Mode.filer and currentMode == Mode.ex): getCurrentDir() else: $bufStatus.filename
+        tabWidth = status.numOfMainWindow.calcTabWidth
       status.tabWindow.writeTab(index * tabWidth, tabWidth, filename, color)
 
   status.tabWindow.refresh
@@ -294,17 +303,17 @@ proc resize*(status: var EditorStatus, height, width: int) =
 
   status.mainWindowNode.resize(useTab, 0, height - useStatusBar - useTab - 1, width)
 
-  var qeue = initHeapQueue[WindowNode]()
-  for node in status.mainWindowNode.child: qeue.push(node)
-  while qeue.len > 0:
-    let qeueLength = qeue.len
-    for i in  0 ..< qeueLength:
-      let node = qeue.pop
+  var queue = initHeapQueue[WindowNode]()
+  for node in status.mainWindowNode.child: queue.push(node)
+  while queue.len > 0:
+    let queueLength = queue.len
+    for i in  0 ..< queueLength:
+      let node = queue.pop
       if node.window != nil:
         let
           bufIndex = node.bufferIndex
           widthOfLineNum = node.view.widthOfLineNum
-          blankLine = if node.parent.splitType == SplitType.horaizontal and i < qeueLength - 1: 1 else: 0
+          blankLine = if node.parent.splitType == SplitType.horaizontal and i < queueLength - 1: 1 else: 0
           adjustedHeight = max(node.h - blankLine, 4)
           adjustedWidth = max(node.w - widthOfLineNum - 1, 4)
 
@@ -312,7 +321,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
         node.view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
       if node.child.len > 0:
-        for node in node.child: qeue.push(node)
+        for node in node.child: queue.push(node)
 
   let adjustedHeight = max(height, 4)
   if status.settings.statusBar.useBar: status.statusWindow.resize(1, width, adjustedHeight - 2, 0)
@@ -326,15 +335,19 @@ proc resize*(status: var EditorStatus, height, width: int) =
   if status.settings.tabLine.useTab: status.writeTabLine
   setCursor(true)
 
+proc highlightPairOfParen(status: var Editorstatus)
+
 proc update*(status: var EditorStatus) =
   setCursor(false)
   if status.settings.statusBar.useBar: status.writeStatusBar()
 
-  var qeue = initHeapQueue[WindowNode]()
-  for node in status.mainWindowNode.child: qeue.push(node)
-  while qeue.len > 0:
-    for i in  0 ..< qeue.len:
-      let node = qeue.pop
+  if status.settings.highlightPairOfParen: status.highlightPairOfParen
+
+  var queue = initHeapQueue[WindowNode]()
+  for node in status.mainWindowNode.child: queue.push(node)
+  while queue.len > 0:
+    for i in  0 ..< queue.len:
+      let node = queue.pop
       if node.window != nil:
         let
           bufIndex = node.bufferIndex
@@ -355,7 +368,7 @@ proc update*(status: var EditorStatus) =
         node.window.refresh
 
       if node.child.len > 0:
-        for node in node.child: qeue.push(node)
+        for node in node.child: queue.push(node)
 
   let bufIndex = status.currentMainWindowNode.bufferIndex
   status.currentMainWindowNode.window.moveCursor(status.bufStatus[bufIndex].cursor.y, status.currentMainWindowNode.view.widthOfLineNum + status.bufStatus[bufIndex].cursor.x)
@@ -460,29 +473,29 @@ proc addNewBuffer*(status: var EditorStatus, filename: string) =
 proc deleteBuffer*(status: var Editorstatus, deleteIndex: int) =
   let beforeWindowIndex = status.currentMainWindowNode.windowIndex
 
-  var qeue = initHeapQueue[WindowNode]()
-  for node in status.mainWindowNode.child: qeue.push(node)
-  while qeue.len > 0:
-    for i in 0 ..< qeue.len:
-      let node = qeue.pop
+  var queue = initHeapQueue[WindowNode]()
+  for node in status.mainWindowNode.child: queue.push(node)
+  while queue.len > 0:
+    for i in 0 ..< queue.len:
+      let node = queue.pop
       if node.bufferIndex == deleteIndex: status.closeWindow(node)
 
       if node.child.len > 0:
-        for node in node.child: qeue.push(node)
+        for node in node.child: queue.push(node)
 
   status.resize(terminalHeight(), terminalWidth())
 
   status.bufStatus.delete(deleteIndex)
 
-  qeue = initHeapQueue[WindowNode]()
-  for node in status.mainWindowNode.child: qeue.push(node)
-  while qeue.len > 0:
-    for i in 0 ..< qeue.len:
-      var node = qeue.pop
+  queue = initHeapQueue[WindowNode]()
+  for node in status.mainWindowNode.child: queue.push(node)
+  while queue.len > 0:
+    for i in 0 ..< queue.len:
+      var node = queue.pop
       if node.bufferIndex > deleteIndex: dec(node.bufferIndex)
 
       if node.child.len > 0:
-        for node in node.child: qeue.push(node)
+        for node in node.child: queue.push(node)
 
   if status.currentBuffer > status.bufStatus.high: status.currentBuffer = status.bufStatus.high
 
@@ -501,6 +514,46 @@ proc revertPosition*(bufStatus: var BufferStatus, id: int) =
 
 proc updateHighlight*(status: var EditorStatus)
 proc eventLoopTask*(status: var Editorstatus)
+
+proc highlightPairOfParen(status: var Editorstatus) =
+  status.updateHighlight
+
+  let 
+    buffer = status.bufStatus[status.currentBuffer].buffer
+    currentLine = status.bufStatus[status.currentBuffer].currentLine
+    currentColumn = if status.bufStatus[status.currentBuffer].currentColumn > buffer[currentLine].high: buffer[currentLine].high else: status.bufStatus[status.currentBuffer].currentColumn
+
+  if buffer[currentLine].len < 1 or (buffer[currentLine][currentColumn] == ru'"') or (buffer[currentLine][currentColumn] == ru'\''): return
+
+  if isOpenParen(buffer[currentLine][currentColumn]):
+    var depth = 0
+    let
+      openParen = buffer[currentLine][currentColumn]
+      closeParen = correspondingCloseParen(openParen)
+    for i in currentLine ..< buffer.len:
+      let startColumn = if i == currentLine: currentColumn else: 0
+      for j in startColumn ..< buffer[i].len:
+        if buffer[i][j] == openParen: inc(depth)
+        elif buffer[i][j] == closeParen: dec(depth)
+        if depth == 0:
+          let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j, color: EditorColorPair.parenText)
+          status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
+          return
+  elif isCloseParen(buffer[currentLine][currentColumn]):
+    var depth = 0
+    let
+      closeParen = buffer[currentLine][currentColumn]
+      openParen = correspondingOpenParen(closeParen)
+    for i in countdown(currentLine, 0):
+      let startColumn = if i == currentLine: currentColumn else: buffer[currentLine].high
+      for j in countdown(startColumn, 0):
+        if buffer[i].len < 1: break
+        if buffer[i][j] == closeParen: inc(depth)
+        elif buffer[i][j] == openParen: dec(depth)
+        if depth == 0:
+          let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j, color: EditorColorPair.parenText)
+          status.bufStatus[status.currentBuffer].highlight = status.bufStatus[status.currentBuffer].highlight.overwrite(colorSegment)
+          return
 
 from searchmode import searchAllOccurrence
 proc updateHighlight*(status: var EditorStatus) =
