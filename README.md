@@ -65,6 +65,8 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Auto-complete
 
+- Snippets
+
 - Spell checker
 
 - Macros
