@@ -258,7 +258,7 @@ proc suggestFilePath(status: var Editorstatus, exStatus: var ExModeViewStatus, k
     for kind, path in walkDir(($inputPath).substr(0, ($inputPath).rfind("/"))):
       if ($path.toRunes.normalizePath).startsWith(inputPath): suggestlist.add(path.toRunes.normalizePath)
 
-  var suggestIndex = 1
+  var suggestIndex = 0
 
   # Pop up window position
   var
@@ -269,6 +269,11 @@ proc suggestFilePath(status: var Editorstatus, exStatus: var ExModeViewStatus, k
     exStatus.buffer = ru"e "
     exStatus.currentPosition = 2
     exStatus.cursorX = 3
+
+    if isTabkey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
+    elif isShiftTab(key) and suggestIndex > 0: dec(suggestIndex)
+    elif isShiftTab(key) and suggestIndex == 0: suggestIndex = suggestlist.high
+    else: suggestIndex = 0
 
     if status.settings.popUpWindowInExmode:
       let currentLine = if suggestIndex == 0: -1 else: suggestIndex - 1
@@ -286,11 +291,6 @@ proc suggestFilePath(status: var Editorstatus, exStatus: var ExModeViewStatus, k
       return
 
     writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
-
-    if isTabkey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
-    elif isShiftTab(key) and suggestIndex > 0: dec(suggestIndex)
-    elif isShiftTab(key) and suggestIndex == 0: suggestIndex = suggestlist.high
-    else: suggestIndex = 0
 
     key = getKey(status.commandWindow)
 
@@ -322,7 +322,7 @@ proc suggestExCommandOption(status: var Editorstatus, exStatus: var ExModeViewSt
   for i in 0 ..< argList.len:
     if argList[i].startsWith(arg): suggestlist.add(argList[i].toRunes)
 
-  var suggestIndex = 1
+  var suggestIndex = 0
 
   # Pop up window position
   var
@@ -334,18 +334,19 @@ proc suggestExCommandOption(status: var Editorstatus, exStatus: var ExModeViewSt
     exStatus.cursorX = 1
     exStatus.buffer = ru""
 
+    if isTabkey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
+    elif isShiftTab(key) and suggestIndex > 0: dec(suggestIndex)
+    elif isShiftTab(key) and suggestIndex == 0: suggestIndex = suggestlist.high
+    else: suggestIndex = 0
+
     if status.settings.popUpWindowInExmode:
       let currentLine = if suggestIndex == 0: -1 else: suggestIndex - 1
       status.writePopUpWindow(x, y, currentLine, suggestlist[1 .. suggestlist.high])
 
     for rune in command.toRunes & ru' ': exStatus.insertCommandBuffer(rune)
     for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
-    status.commandWindow.writeExModeView(exStatus, EditorColorPair.commandBar)
 
-    if isTabkey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
-    elif isShiftTab(key) and suggestIndex > 0: dec(suggestIndex)
-    elif isShiftTab(key) and suggestIndex == 0: suggestIndex = suggestlist.high
-    else: suggestIndex = 0
+    status.commandWindow.writeExModeView(exStatus, EditorColorPair.commandBar)
 
     key = getKey(status.commandWindow)
 
@@ -354,7 +355,7 @@ proc suggestExCommand(status: var Editorstatus, exStatus: var ExModeViewStatus, 
   for runes in exCommandList:
     if exStatus.buffer.startsWith(runes): suggestlist.add(runes)
 
-  var suggestIndex = 1
+  var suggestIndex = 0
 
   # Pop up window position
   var
@@ -366,17 +367,18 @@ proc suggestExCommand(status: var Editorstatus, exStatus: var ExModeViewStatus, 
     exStatus.currentPosition = 0
     exStatus.cursorX = 1
 
+    if isTabkey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
+    elif isShiftTab(key) and suggestIndex > 0: dec(suggestIndex)
+    elif isShiftTab(key) and suggestIndex == 0: suggestIndex = suggestlist.high
+    else: suggestIndex = 0
+
     if status.settings.popUpWindowInExmode:
       let currentLine = if suggestIndex == 0: -1 else: suggestIndex - 1
       status.writePopUpWindow(x, y, currentLine, suggestlist[1 .. suggestlist.high])
 
     for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
-    status.commandWindow.writeExModeView(exStatus, EditorColorPair.commandBar)
 
-    if isTabkey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
-    elif isShiftTab(key) and suggestIndex > 0: dec(suggestIndex)
-    elif isShiftTab(key) and suggestIndex == 0: suggestIndex = suggestlist.high
-    else: suggestIndex = 0
+    status.commandWindow.writeExModeView(exStatus, EditorColorPair.commandBar)
 
     key = getKey(status.commandWindow)
 
