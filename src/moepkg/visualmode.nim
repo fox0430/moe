@@ -18,7 +18,7 @@ proc swapSlectArea(area: var SelectArea) =
     swap(area.startLine, area.endLine)
     swap(area.startColumn, area.endColumn)
 
-proc yankBuffer(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea, platform: Platform, clipboard: bool) =
+proc yankBuffer*(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea, platform: Platform, clipboard: bool) =
   if bufStatus.buffer[bufStatus.currentLine].len < 1: return
   registers.yankedLines = @[]
   registers.yankedStr = @[]
@@ -39,7 +39,7 @@ proc yankBuffer(bufStatus: var BufferStatus, registers: var Registers, area: Sel
 
     if clipboard: registers.sendToClipboad(platform)
 
-proc yankBufferBlock(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea) =
+proc yankBufferBlock*(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea) =
   if bufStatus.buffer.len == 1 and bufStatus.buffer[bufStatus.currentLine].len < 1: return
   registers.yankedLines = @[]
   registers.yankedStr = @[]
@@ -79,7 +79,7 @@ proc deleteBuffer(bufStatus: var BufferStatus, registers: var Registers, area: S
 
   inc(bufStatus.countChange)
 
-proc deleteBufferBlock(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea) =
+proc deleteBufferBlock*(bufStatus: var BufferStatus, registers: var Registers, area: SelectArea) =
   if bufStatus.buffer.len == 1 and bufStatus.buffer[bufStatus.currentLine].len < 1: return
   yankBufferBlock(bufStatus, registers, area)
 
