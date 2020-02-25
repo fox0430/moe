@@ -160,8 +160,10 @@ test "Visual block mode: Yank buffer 1":
   status.bufStatus[0].selectArea.updateSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
   status.update
 
-  let area = status.bufStatus[0].selectArea
-  status.bufStatus[status.currentBuffer].yankBufferBlock(status.registers, area)
+  let
+    area = status.bufStatus[0].selectArea
+    clipboard = true
+  status.bufStatus[status.currentBuffer].yankBufferBlock(status.registers, area, status.platform, clipboard)
 
   check(status.registers.yankedLines == @[ru"a", ru"d"])
 
@@ -184,8 +186,10 @@ test "Visual block mode: Yank buffer 2":
   status.bufStatus[0].selectArea.updateSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
   status.update
 
-  let area = status.bufStatus[0].selectArea
-  status.bufStatus[status.currentBuffer].yankBufferBlock(status.registers, area)
+  let
+    area = status.bufStatus[0].selectArea
+    clipboard = true
+  status.bufStatus[status.currentBuffer].yankBufferBlock(status.registers, area, status.platform, clipboard)
 
   check(status.registers.yankedLines == @[ru"a", ru"d"])
 
@@ -203,8 +207,10 @@ test "Visual block mode: Delete buffer 1":
   status.bufStatus[0].selectArea.updateSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
   status.update
 
-  let area = status.bufStatus[0].selectArea
-  status.bufStatus[status.currentBuffer].deleteBufferBlock(status.registers, area)
+  let
+    area = status.bufStatus[0].selectArea
+    clipboard = true
+  status.bufStatus[status.currentBuffer].deleteBufferBlock(status.registers, area, status.platform, clipboard)
 
   check(status.bufStatus[0].buffer[0] == ru"bc")
   check(status.bufStatus[0].buffer[1] == ru"ef")
