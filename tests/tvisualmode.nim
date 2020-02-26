@@ -379,3 +379,91 @@ test "Visual block mode: Join lines":
   status.bufStatus[status.currentBuffer].joinLines(status.currentMainWindowNode, area)
 
   check(status.bufStatus[status.currentBuffer].buffer.len == 1 and status.bufStatus[status.currentBuffer].buffer[0] == ru"abcdefghi")
+
+test "Visual mode: Add indent":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
+  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.resize(100, 100)
+
+  status.changeMode(Mode.visual)
+  status.bufStatus[0].selectArea = initSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
+
+  for i in 0 ..< 2:
+    status.bufStatus[0].keyDown
+    status.bufStatus[0].selectArea.updateSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
+    status.update
+
+  status.update
+  status.visualCommand(status.bufStatus[0].selectArea, ru'>')
+
+  check(status.bufStatus[status.currentBuffer].buffer[0] == ru"  abc")
+  check(status.bufStatus[status.currentBuffer].buffer[1] == ru"  def")
+  check(status.bufStatus[status.currentBuffer].buffer[2] == ru"  ghi")
+
+test "Visual block mode: Add indent":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
+  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.resize(100, 100)
+
+  status.changeMode(Mode.visualblock)
+  status.bufStatus[0].selectArea = initSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
+
+  for i in 0 ..< 2:
+    status.bufStatus[0].keyDown
+    status.bufStatus[0].selectArea.updateSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
+    status.update
+
+  status.update
+  status.visualBlockCommand(status.bufStatus[0].selectArea, ru'>')
+
+  check(status.bufStatus[status.currentBuffer].buffer[0] == ru"  abc")
+  check(status.bufStatus[status.currentBuffer].buffer[1] == ru"  def")
+  check(status.bufStatus[status.currentBuffer].buffer[2] == ru"  ghi")
+
+test "Visual mode: Delete indent":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc", ru"  def", ru"  ghi"])
+  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.resize(100, 100)
+
+  status.changeMode(Mode.visual)
+  status.bufStatus[0].selectArea = initSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
+
+  for i in 0 ..< 2:
+    status.bufStatus[0].keyDown
+    status.bufStatus[0].selectArea.updateSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
+    status.update
+
+  status.update
+  status.visualCommand(status.bufStatus[0].selectArea, ru'<')
+
+  check(status.bufStatus[status.currentBuffer].buffer[0] == ru"abc")
+  check(status.bufStatus[status.currentBuffer].buffer[1] == ru"def")
+  check(status.bufStatus[status.currentBuffer].buffer[2] == ru"ghi")
+
+test "Visual block mode: Delete indent":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc", ru"  def", ru"  ghi"])
+  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.resize(100, 100)
+
+  status.changeMode(Mode.visualblock)
+  status.bufStatus[0].selectArea = initSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
+
+  for i in 0 ..< 2:
+    status.bufStatus[0].keyDown
+    status.bufStatus[0].selectArea.updateSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
+    status.update
+
+  status.update
+  status.visualBlockCommand(status.bufStatus[0].selectArea, ru'<')
+
+  check(status.bufStatus[status.currentBuffer].buffer[0] == ru"abc")
+  check(status.bufStatus[status.currentBuffer].buffer[1] == ru"def")
+  check(status.bufStatus[status.currentBuffer].buffer[2] == ru"ghi")
