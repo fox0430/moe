@@ -571,7 +571,7 @@ proc deleteIndent*(bufStatus: var BufferStatus, currentWin: WindowNode, tabStop:
   currentWin.view.reload(bufStatus.buffer, currentWin.view.originalLine[0])
   inc(bufStatus.countChange)
 
-proc joinLine(bufStatus: var BufferStatus, currentWin: WindowNode) =
+proc joinLine*(bufStatus: var BufferStatus, currentWin: WindowNode) =
   if bufStatus.currentLine == bufStatus.buffer.len - 1 or bufStatus.buffer[bufStatus.currentLine + 1].len < 1:
     return
 
