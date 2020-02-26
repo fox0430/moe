@@ -174,6 +174,7 @@ proc visualBlockCommand(status: var EditorStatus, area: var SelectArea, key: Run
   if key == ord('y') or isDcKey(key): yankBufferBlock(status.bufStatus[status.currentBuffer], status.registers, area, status.platform, clipboard)
   elif key == ord('x') or key == ord('d'): deleteBufferBlock(status.bufStatus[status.currentBuffer], status.registers, area, status.platform, clipboard)
   elif key == ord('>'): insertIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
+  elif key == ord('J'): status.bufStatus[status.currentBuffer].joinLines(status.currentMainWindowNode, area)
   elif key == ord('r'):
     let ch = getKey(status.currentMainWindowNode.window)
     if not isEscKey(ch): replaceCharactorBlock(status.bufStatus[status.currentBuffer], area, ch)

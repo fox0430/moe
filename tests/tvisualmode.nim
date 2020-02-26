@@ -343,6 +343,28 @@ test "Visual mode: Join lines":
   status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
   status.resize(100, 100)
 
+  status.changeMode(Mode.visual)
+  status.bufStatus[0].selectArea = initSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
+
+  for i in 0 ..< 2:
+    status.bufStatus[0].keyDown
+    status.bufStatus[0].selectArea.updateSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
+    status.update
+
+  let area = status.bufStatus[0].selectArea
+
+  status.update
+  status.bufStatus[status.currentBuffer].joinLines(status.currentMainWindowNode, area)
+
+  check(status.bufStatus[status.currentBuffer].buffer.len == 1 and status.bufStatus[status.currentBuffer].buffer[0] == ru"abcdefghi")
+
+test "Visual block mode: Join lines":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
+  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.resize(100, 100)
+
   status.changeMode(Mode.visualBlock)
   status.bufStatus[0].selectArea = initSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
 
