@@ -70,10 +70,11 @@ Check command bar
 ```/``` - Search text  
 ```:``` - Start ex mode  
 
-## Visual mode
+## Visual (block) mode
 ```d ```or ```x``` - Delete(cut) text  
 ```y``` - Copy text  
 ```r``` - Replace character  
+```J``` - Join lines  
 
 ```>``` - Indent  
 ```<``` - Unindent  
