@@ -7,7 +7,7 @@ A command line based editor inspired by vi/vim written in Nim.
  
 This project's goal is a very customizable, high productivity, high performance and funny animation editor.
 
-![moe](https://user-images.githubusercontent.com/15966436/71997723-b52cbf00-3281-11ea-8111-0986cc94068e.png)
+![moe](https://user-images.githubusercontent.com/15966436/75631364-9cafa400-5c35-11ea-827d-21d72b2b36b1.png)
 
 ## Features
 
