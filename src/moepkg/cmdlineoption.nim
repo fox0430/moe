@@ -1,9 +1,9 @@
 import parseopt
 
-type ComdParsedList* = tuple[filename: string]
+type ComdParsedList* = seq[tuple[filename: string]]
 
 proc writeVersion() =
-  echo "v0.1.5"
+  echo "v0.1.6"
   quit()
 
 proc writeHelp() =
@@ -16,15 +16,17 @@ proc writeHelp() =
   quit()
 
 proc parseCommandLineOption*(line: seq[string]): ComdParsedList  =
-  result.filename = ""
   var parsedLine = initOptParser(line)
+  var index = 0
   for kind, key, val in parsedLine.getopt():
     case kind:
       of cmdArgument:
-        result.filename = key
+        result.add((filename: key))
       of cmdShortOption, cmdLongOption:
         case key:
           of "v", "version": writeVersion()
           of "help": writeHelp()
       of cmdEnd:
         assert(false)
+
+    inc(index)

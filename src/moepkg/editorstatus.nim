@@ -437,7 +437,7 @@ proc moveNextWindow*(status: var EditorStatus) = status.moveCurrentMainWindow(st
 
 proc movePrevWindow*(status: var EditorStatus) = status.moveCurrentMainWindow(status.currentMainWindowNode.windowIndex - 1)
 
-proc writePopUpWindow*(status: var Editorstatus, x, y, currentLine: var int,  buffer: seq[seq[Rune]]) =
+proc writePopUpWindow*(status: var Editorstatus, x, y: var int, currentLine: int,  buffer: seq[seq[Rune]]) =
   # Pop up window size
   var maxBufferLen = 0
   for runes in buffer:
@@ -452,16 +452,17 @@ proc writePopUpWindow*(status: var Editorstatus, x, y, currentLine: var int,  bu
 
   status.popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
 
+  let startLine = if currentLine == -1: 0 elif currentLine - h + 1 > 0: currentLine - h + 1 else: 0
   for i in 0 ..< h:
-    let startLine = if currentLine - h + 1 > 0: currentLine - h + 1 else: 0
-    if i + startLine == currentLine: status.popUpWindow.write(i, 1, buffer[i + startLine], EditorColorPair.popUpWinCurrentLine)
+    if currentLine != -1 and i + startLine == currentLine: status.popUpWindow.write(i, 1, buffer[i + startLine], EditorColorPair.popUpWinCurrentLine)
     else: status.popUpWindow.write(i, 1, buffer[i + startLine], EditorColorPair.popUpWindow)
 
   status.popUpWindow.refresh
 
 proc deletePopUpWindow*(status: var Editorstatus) =
-  status.popUpWindow.deleteWindow
-  status.update
+  if status.popUpWindow != nil:
+    status.popUpWindow.deleteWindow
+    status.update
 
 proc addNewBuffer*(status: var EditorStatus, filename: string)
 from commandview import writeFileOpenError
@@ -611,7 +612,7 @@ proc highlightPairOfParen(status: var Editorstatus) =
       closeParen = buffer[currentLine][currentColumn]
       openParen = correspondingOpenParen(closeParen)
     for i in countdown(currentLine, 0):
-      let startColumn = if i == currentLine: currentColumn else: buffer[currentLine].high
+      let startColumn = if i == currentLine: currentColumn else: buffer[i].high
       for j in countdown(startColumn, 0):
         if buffer[i].len < 1: break
         if buffer[i][j] == closeParen: inc(depth)
@@ -645,7 +646,12 @@ proc highlightOtherUsesCurrentWord*(status: var Editorstatus) =
 
   let highlightWord = line[startCol ..< endCol]
 
-  for i in 0 ..< bufStatus.buffer.len:
+  let
+    range = status.currentMainWindowNode.view.rangeOfOriginalLineInView
+    startLine = range[0]
+    endLine = if bufStatus.buffer.len > range[1] + 1: range[1] + 2 elif bufStatus.buffer.len > range[1]: range[1] + 1 else: range[1]
+
+  for i in startLine ..< endLine:
     let line = bufStatus.buffer[i]
     for j in 0 .. (line.len - highlightWord.len):
       let endCol = j + highlightWord.len
@@ -666,16 +672,24 @@ from searchmode import searchAllOccurrence
 proc updateHighlight*(status: var EditorStatus) =
   let
     currentBuf = status.currentBuffer
+    bufStatus = status.bufStatus[currentBuf]
     syntax = status.settings.syntax
 
   if not (status.bufStatus[currentBuf].mode == Mode.ex and status.bufStatus[currentBuf].prevMode == Mode.filer):
     status.bufStatus[currentBuf].highlight = initHighlight($status.bufStatus[currentBuf].buffer, if syntax: status.bufStatus[currentBuf].language else: SourceLanguage.langNone)
 
+  let
+    range = status.currentMainWindowNode.view.rangeOfOriginalLineInView
+    startLine = range[0]
+    endLine = if bufStatus.buffer.len > range[1] + 1: range[1] + 2 elif bufStatus.buffer.len > range[1]: range[1] + 1 else: range[1]
+  var bufferInView = initGapBuffer[seq[Rune]]()
+  for i in startLine ..< endLine: bufferInView.add(bufStatus.buffer[i])
+
   # highlight full width space
   if status.settings.highlightFullWidthSpace:
     let
       fullWidthSpace = ru"　"
-      allOccurrence = searchAllOccurrence(status.bufStatus[currentBuf].buffer, fullWidthSpace)
+      allOccurrence = searchAllOccurrence(bufferInView, fullWidthSpace)
       color = EditorColorPair.highlightFullWidthSpace
     for pos in allOccurrence:
       let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column, color: color)
@@ -685,7 +699,7 @@ proc updateHighlight*(status: var EditorStatus) =
   if status.bufStatus[status.currentBuffer].isHighlight and status.searchHistory.len > 0:
     let
       keyword = status.searchHistory[^1]
-      allOccurrence = searchAllOccurrence(status.bufStatus[currentBuf].buffer, keyword)
+      allOccurrence = searchAllOccurrence(bufferInView, keyword)
       color = if status.isSearchHighlight: EditorColorPair.searchResult else: EditorColorPair.replaceText
     for pos in allOccurrence:
       let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column+keyword.high, color: color)

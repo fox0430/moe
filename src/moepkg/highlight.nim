@@ -127,11 +127,11 @@ proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
         else: EditorColorPair.defaultChar
     splitByNewline(buffer[first..last], color)
 
-proc index*(highlight: Highlight, row, column: int): int =
-  ## calculate index of color segment (row, column) belonging
+proc indexOf*(highlight: Highlight, row, column: int): int =
+  ## calculate the index of the color segment which the pair (row, column) belongs to
 
   doAssert((row, column) >= (highlight[0].firstRow, highlight[0].firstColumn), fmt"row = {row}, column = {column}, highlight[0].firstRow = {highlight[0].firstRow}, hightlihgt[0].firstColumn = {highlight[0].firstColumn}")
-  doAssert((row, column) <= (highlight[^1].firstRow, highlight[^1].firstColumn), fmt"row = {row}, column = {column}, highlight[^1].firstRow = {highlight[^1].firstRow}, hightlihgt[^1].firstColumn = {highlight[^1].firstColumn}")
+  doAssert((row, column) <= (highlight[^1].lastRow, highlight[^1].lastColumn), fmt"row = {row}, column = {column}, highlight[^1].lastRow = {highlight[^1].lastRow}, hightlihgt[^1].lastColumn = {highlight[^1].lastColumn}, highlight = {highlight}")
 
   var
     lb = 0

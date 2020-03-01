@@ -501,9 +501,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     pcLinkBg: default,
     # pop up window
     popUpWindow: gray100,
-    popUpWindowBg: gray,
+    popUpWindowBg: black,
     popUpWinCurrentLine: blue,
-    popUpWinCurrentLineBg: gray,
+    popUpWinCurrentLineBg: black,
     # replace text highlighting
     replaceText: default,
     replaceTextBg: red,
@@ -584,9 +584,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     pcLinkBg: default,
     # pop up window
     popUpWindow: gray100,
-    popUpWindowBg: gray,
+    popUpWindowBg: black,
     popUpWinCurrentLine: blue,
-    popUpWinCurrentLineBg: gray,
+    popUpWinCurrentLineBg: black,
     # replace text highlighting
     replaceText: default,
     replaceTextBg: red,
@@ -750,9 +750,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     pcLinkBg: default,
     # pop up window
     popUpWindow: gray100,
-    popUpWindowBg: gray,
+    popUpWindowBg: black,
     popUpWinCurrentLine: deepPink1_1,
-    popUpWinCurrentLineBg: gray,
+    popUpWinCurrentLineBg: black,
     # replace text highlighting
     replaceText: default,
     replaceTextBg: red,

@@ -181,8 +181,8 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, curren
 
   let
     start = (view.originalLine[0], view.start[0])
-    useHighlight = highlight.len > 0 and (highlight[0].firstRow, highlight[0].firstColumn) <= start and start <= (highlight[^1].firstRow, highlight[^1].firstColumn)
-  var i = if useHighlight: highlight.index(view.originalLine[0], view.start[0]) else: -1
+    useHighlight = highlight.len > 0 and (highlight[0].firstRow, highlight[0].firstColumn) <= start and start <= (highlight[^1].lastRow, highlight[^1].lastColumn)
+  var i = if useHighlight: highlight.indexOf(view.originalLine[0], view.start[0]) else: -1
   for y in 0 ..< view.height:
     if view.originalLine[y] == -1: break
 
@@ -235,3 +235,14 @@ proc update*[T](view: var EditorView, win: var Window, lineNumber, currentLineNu
 proc seekCursor*[T](view: var EditorView, buffer: T, currentLine, currentColumn: int) =
   while currentLine < view.originalLine[0] or (currentLine == view.originalLine[0] and view.length[0] > 0 and currentColumn < view.start[0]): view.scrollUp(buffer)
   while (view.originalLine[view.height - 1] != -1 and currentLine > view.originalLine[view.height - 1]) or (currentLine == view.originalLine[view.height - 1] and view.length[view.height - 1] > 0 and currentColumn >= view.start[view.height - 1]+view.length[view.height - 1]): view.scrollDown(buffer)
+
+proc rangeOfOriginalLineInView*(view: EditorView): (int, int) =
+  var
+    startLine = 0
+    endLine = 0
+  for index, lineNum in view.originalLine:
+    if index == 0: startLine = lineNum
+    elif lineNum == 0 or lineNum == -1: break
+    else: endLine = lineNum
+
+  return (startLine, endLine)
