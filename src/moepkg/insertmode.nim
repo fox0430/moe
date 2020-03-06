@@ -1,6 +1,6 @@
 import deques, strutils, strformat, sequtils, terminal, macros
 from os import execShellCmd
-import ui, editorstatus, editorview, gapbuffer, editorview, normalmode, unicodeext, highlight, undoredostack, window
+import ui, editorstatus, editorview, gapbuffer, editorview, unicodeext, highlight, undoredostack, window, movement, editor
 
 proc correspondingCloseParen(c: char): char =
   case c

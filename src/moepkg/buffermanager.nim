@@ -1,5 +1,5 @@
 import terminal, os, heapqueue
-import gapbuffer, ui, editorstatus, normalmode, unicodeext, highlight, window
+import gapbuffer, ui, editorstatus, unicodeext, highlight, window, movement
 
 proc initFilelistHighlight[T](buffer: T, currentLine: int): Highlight =
   for i in 0 ..< buffer.len:
