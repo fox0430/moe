@@ -1,5 +1,5 @@
 import unittest, osproc
-import moepkg/[editorstatus, gapbuffer, normalmode, unicodeext]
+import moepkg/[editorstatus, gapbuffer, normalmode, unicodeext, editor]
 
 test "Delete current character":
   var status = initEditorStatus()
