@@ -1,5 +1,5 @@
 import unittest
-import moepkg/editorstatus, moepkg/unicodeext, moepkg/exmode, moepkg/ui
+import moepkg/[editorstatus, unicodeext, exmode, ui]
 
 test "Open buffer manager":
   var status = initEditorStatus()

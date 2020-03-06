@@ -1,5 +1,5 @@
 import unittest
-import moepkg/ui, moepkg/editorstatus, moepkg/gapbuffer, moepkg/exmode, moepkg/unicodeext
+import moepkg/[ui, editorstatus, gapbuffer, exmode, unicodeext]
 
 test "Edit command":
   var status = initEditorStatus()

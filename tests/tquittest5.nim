@@ -1,5 +1,5 @@
 import unittest
-import moepkg/editorstatus, moepkg/unicodeext, moepkg/exmode
+import moepkg/[editorstatus, unicodeext, exmode]
 
 test "All buffer force quit command":
   var status = initEditorStatus()
