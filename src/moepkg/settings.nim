@@ -29,13 +29,13 @@ proc parseSettingsFile*(filename: string): EditorSettings =
       result.editorColorTheme = getTheme(settings["Standard"]["theme"].getStr())
 
     if settings["Standard"].contains("number"):
-      result.lineNumber = settings["Standard"]["number"].getbool()
+      result.view.lineNumber = settings["Standard"]["number"].getbool()
 
     if settings["Standard"].contains("currentNumber"):
-      result.currentLineNumber = settings["Standard"]["currentNumber"].getbool()
+      result.view.currentLineNumber = settings["Standard"]["currentNumber"].getbool()
 
     if settings["Standard"].contains("cursorLine"):
-      result.cursorLine = settings["Standard"]["cursorLine"].getbool()
+      result.view.cursorLine = settings["Standard"]["cursorLine"].getbool()
 
     if settings["Standard"].contains("statusBar"):
       result.statusBar.useBar = settings["Standard"]["statusBar"].getbool()

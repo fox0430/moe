@@ -36,9 +36,7 @@ type EditorSettings* = object
   editorColorTheme*: ColorTheme
   statusBar*: StatusBarSettings
   tabLine*: TabLineSettings
-  lineNumber*: bool
-  currentLineNumber*: bool
-  cursorLine*: bool
+  view*: EditorViewSettings
   syntax*: bool
   autoCloseParen*: bool
   autoIndent*: bool
@@ -130,8 +128,7 @@ proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = ColorTheme.vivid
   result.statusBar = initStatusBarSettings()
   result.tabLine = initTabBarSettings()
-  result.lineNumber = true
-  result.currentLineNumber = true
+  result.view = initEditorViewSettings()
   result.syntax = true
   result.autoCloseParen = true
   result.autoIndent = true
@@ -371,15 +368,12 @@ proc update*(status: var EditorStatus) =
         let
           bufIndex = node.bufferIndex
           isCurrentMainWin = if node.windowIndex == status.currentMainWindowNode.windowIndex: true else: false
-          isLineNumber = status.settings.lineNumber
-          isCurrentLineNumber = status.settings.currentLineNumber
-          isCursorLine = status.settings.cursorLine
           isVisualMode = if status.bufStatus[bufIndex].mode == Mode.visual or status.bufStatus[bufIndex].mode == Mode.visualBlock: true else: false
           startSelectedLine = status.bufStatus[bufIndex].selectArea.startLine
           endSelectedLine = status.bufStatus[bufIndex].selectArea.endLine
 
         node.view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
-        node.view.update(node.window, isLineNumber, isCurrentLineNumber, isCursorLine, isCurrentMainWin, isVisualMode, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, status.bufStatus[bufIndex].currentLine, startSelectedLine, endSelectedLine)
+        node.view.update(node.window, status.settings.view, isCurrentMainWin, isVisualMode, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, status.bufStatus[bufIndex].currentLine, startSelectedLine, endSelectedLine)
 
         if isCurrentMainWin:
           status.bufStatus[bufIndex].cursor.update(node.view, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)

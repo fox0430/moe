@@ -174,8 +174,8 @@ proc openBufferManager(status: var Editorstatus) =
   status.changeMode(Mode.bufManager)
 
 proc changeCursorLineCommand(status: var Editorstatus, command: seq[Rune]) =
-  if command == ru"on" : status.settings.cursorLine = true 
-  elif command == ru"off": status.settings.cursorLine = false
+  if command == ru"on" : status.settings.view.cursorLine = true 
+  elif command == ru"off": status.settings.view.cursorLine = false
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
 proc verticalSplitWindowCommand(status: var EditorStatus) =
@@ -242,10 +242,10 @@ proc autoIndentSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
 proc lineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
-  if command == ru "on": status.settings.lineNumber = true
-  elif command == ru"off": status.settings.lineNumber = false
+  if command == ru "on": status.settings.view.lineNumber = true
+  elif command == ru"off": status.settings.view.lineNumber = false
 
-  let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
+  let numberOfDigitsLen = if status.settings.view.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
   let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
   status.currentMainWindowNode.view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
 
@@ -256,7 +256,7 @@ proc statusBarSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.statusBar.useBar = true
   elif command == ru"off": status.settings.statusBar.useBar = false
 
-  let numberOfDigitsLen = if status.settings.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
+  let numberOfDigitsLen = if status.settings.view.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
   let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
   status.currentMainWindowNode.view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
 
@@ -492,9 +492,9 @@ proc listAllBufferCommand(status: var Editorstatus) =
   let
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useTab = if status.settings.tabLine.useTab: 1 else: 0
-    swapCurrentLineNumStting = status.settings.currentLineNumber
+    swapCurrentLineNumStting = status.settings.view.currentLineNumber
   
-  status.settings.currentLineNumber = false
+  status.settings.view.currentLineNumber = false
   status.currentMainWindowNode.view = initEditorView(status.bufStatus[status.currentBuffer].buffer, terminalHeight() - useStatusBar - useTab - 1, terminalWidth())
   status.bufStatus[status.currentBuffer].currentLine = 0
 
@@ -508,7 +508,7 @@ proc listAllBufferCommand(status: var Editorstatus) =
     elif key.int == 0: discard
     else: break
 
-  status.settings.currentLineNumber = swapCurrentLineNumStting
+  status.settings.view.currentLineNumber = swapCurrentLineNumStting
   status.changeCurrentBuffer(swapCurrentBufferIndex)
   status.deleteBufferStatusCommand(status.bufStatus.high)
 
