@@ -1,5 +1,5 @@
 import unittest
-import moepkg/[ui, highlight, editorstatus, editorview, gapbuffer, unicodeext, insertmode, normalmode, movement, editor]
+import moepkg/[ui, highlight, editorstatus, editorview, gapbuffer, unicodeext, insertmode, movement, editor]
 
 test "Add new buffer":
   var status = initEditorStatus()
@@ -371,3 +371,11 @@ test "Highlight full width space 2":
   status.update
 
   check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[1].color == EditorColorPair.highlightFullWidthSpace and status.bufStatus[0].highlight[2].color == EditorColorPair.defaultChar)
+
+test "Write tab line":
+  var status = initEditorStatus()
+  status.addNewBuffer("test.txt")
+
+  status.resize(100, 100)
+
+  check(status.tabWindow.width == 100)
