@@ -411,6 +411,7 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
 
     let newCurrentWinIndex = if deleteWindowIndex > status.numOfMainWindow - 1: status.numOfMainWindow - 1 else: deleteWindowIndex
     status.currentMainWindowNode = status.mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
+    status.currentBuffer = status.currentMainWindowNode.bufferIndex
   else:
     parent.child.delete(node.index)
     dec(status.numOfMainWindow)
@@ -419,6 +420,7 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
 
     let newCurrentWinIndex = if deleteWindowIndex > status.numOfMainWindow - 1: status.numOfMainWindow - 1 else: deleteWindowIndex
     status.currentMainWindowNode = status.mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
+    status.currentBuffer = status.currentMainWindowNode.bufferIndex
 
 proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
   if index < 0 or status.numOfMainWindow <= index: return

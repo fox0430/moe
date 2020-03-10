@@ -379,3 +379,29 @@ test "Write tab line":
   status.resize(100, 100)
 
   check(status.tabWindow.width == 100)
+
+test "Close window":
+  var status = initEditorStatus()
+  status.addNewBuffer("test.nim")
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"echo 'a'"])
+
+  status.resize(100, 100)
+  status.update
+
+  status.verticalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  status.moveCurrentMainWindow(1)
+  status.addNewBuffer("test2.nim")
+  status.bufStatus[1].buffer = initGapBuffer(@[ru"proc a() = discard"])
+  status.changeCurrentBuffer(1)
+  status.resize(100, 100)
+  status.update
+
+  status.closeWindow(status.currentMainWindowNode)
+  status.resize(100, 100)
+  status.update
+
+  check(status.currentMainWindowNode.bufferIndex == 0)
+  check(status.currentBuffer == 0)
