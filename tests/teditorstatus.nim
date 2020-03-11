@@ -1,5 +1,5 @@
 import unittest
-import moepkg/[ui, highlight, editorstatus, editorview, gapbuffer, unicodeext, insertmode, movement, editor]
+import moepkg/[ui, highlight, editorstatus, editorview, gapbuffer, unicodeext, insertmode, movement, editor, window]
 
 test "Add new buffer":
   var status = initEditorStatus()
@@ -370,7 +370,9 @@ test "Highlight full width space 2":
 
   status.update
 
-  check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[1].color == EditorColorPair.highlightFullWidthSpace and status.bufStatus[0].highlight[2].color == EditorColorPair.defaultChar)
+  check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar)
+  check(status.bufStatus[0].highlight[1].color == EditorColorPair.highlightFullWidthSpace)
+  check(status.bufStatus[0].highlight[2].color == EditorColorPair.defaultChar)
 
 test "Write tab line":
   var status = initEditorStatus()
@@ -380,7 +382,204 @@ test "Write tab line":
 
   check(status.tabWindow.width == 100)
 
+test "Split window":
+  var status = initEditorStatus()
+  status.addNewBuffer("test.nim")
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"echo 'a'"])
+
+  status.resize(100, 100)
+  status.update
+
+  status.verticalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  let windowNodeList = status.mainWindowNode.getAllWindowNode
+
+  check(windowNodeList.len == 2)
+
+  for n in windowNodeList:
+    check(n.w == 50)
+    check(n.h == 97)
+
+test "Split window 2":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.resize(100, 100)
+  status.update
+
+  status.verticalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  status.horizontalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  let windowNodeList = status.mainWindowNode.getAllWindowNode
+
+  check(windowNodeList.len == 3)
+
+  check(windowNodeList[0].w == 50)
+  check(windowNodeList[0].h == 97)
+
+  check(windowNodeList[1].w == 50)
+  check(windowNodeList[1].h == 49)
+
+  check(windowNodeList[2].w == 50)
+  check(windowNodeList[2].h == 48)
+
+test "Split window 3":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.resize(100, 100)
+  status.update
+
+  status.horizontalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  let windowNodeList = status.mainWindowNode.getAllWindowNode
+
+  check(windowNodeList.len == 2)
+
+  check(windowNodeList[0].w == 100)
+  check(windowNodeList[0].h == 49)
+
+  check(windowNodeList[1].w == 100)
+  check(windowNodeList[1].h == 48)
+
+test "Split window 4":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.resize(100, 100)
+  status.update
+
+  status.horizontalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  status.verticalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  let windowNodeList = status.mainWindowNode.getAllWindowNode
+
+  check(windowNodeList.len == 3)
+
+  check(windowNodeList[0].w == 100)
+  check(windowNodeList[0].h == 48)
+
+  check(windowNodeList[1].w == 50)
+  check(windowNodeList[1].h == 49)
+
+  check(windowNodeList[2].w == 50)
+  check(windowNodeList[2].h == 49)
+
 test "Close window":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.resize(100, 100)
+  status.update
+
+  status.verticalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  status.closeWindow(status.currentMainWindowNode)
+  status.resize(100, 100)
+  status.update
+
+  let windowNodeList = status.mainWindowNode.getAllWindowNode
+
+  check(windowNodeList.len == 1)
+
+  check(status.currentMainWindowNode.h == 97)
+  check(status.currentMainWindowNode.w == 100)
+
+test "Close window 2":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.resize(100, 100)
+  status.update
+
+  status.horizontalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  status.closeWindow(status.currentMainWindowNode)
+  status.resize(100, 100)
+  status.update
+
+  let windowNodeList = status.mainWindowNode.getAllWindowNode
+
+  check(windowNodeList.len == 1)
+
+  check(status.currentMainWindowNode.h == 97)
+  check(status.currentMainWindowNode.w == 100)
+
+test "Close window 3":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.resize(100, 100)
+  status.update
+
+  status.verticalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  status.horizontalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  status.closeWindow(status.currentMainWindowNode)
+  status.resize(100, 100)
+  status.update
+
+  let windowNodeList = status.mainWindowNode.getAllWindowNode
+
+  check(windowNodeList.len == 2)
+
+  for n in windowNodeList:
+    check(n.w == 50)
+    check(n.h == 97)
+
+test "Close window 4":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.resize(100, 100)
+  status.update
+
+  status.horizontalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  status.verticalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  status.closeWindow(status.currentMainWindowNode)
+  status.resize(100, 100)
+  status.update
+
+  let windowNodeList = status.mainWindowNode.getAllWindowNode
+
+  check(windowNodeList.len == 2)
+
+  check(windowNodeList[0].w == 100)
+  check(windowNodeList[0].h == 48)
+
+  check(windowNodeList[1].w == 100)
+  check(windowNodeList[1].h == 49)
+
+test "Close window 5":
   var status = initEditorStatus()
   status.addNewBuffer("test.nim")
   status.bufStatus[0].buffer = initGapBuffer(@[ru"echo 'a'"])
