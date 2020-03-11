@@ -574,10 +574,10 @@ test "Close window 4":
   check(windowNodeList.len == 2)
 
   check(windowNodeList[0].w == 100)
-  check(windowNodeList[0].h == 49)
+  check(windowNodeList[0].h == 48)
 
   check(windowNodeList[1].w == 100)
-  check(windowNodeList[1].h == 48)
+  check(windowNodeList[1].h == 49)
 
 test "Close window 5":
   var status = initEditorStatus()
