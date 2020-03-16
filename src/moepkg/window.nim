@@ -119,6 +119,7 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
       ## Calc window height
       if height mod root.child.len != 0 and index == 0: node.h = int(height / root.child.len) + 1
       else: node.h = int(height / root.child.len)
+      if index < root.child.high: node.h -= 1
 
       ## Calc window y
       if height mod root.child.len != 0 and index > 0: node.y = (node.h * index) + 1
@@ -141,6 +142,7 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
       for child in node.child: qeue.push(child)
 
   while qeue.len > 0:
+    let queueLength = qeue.len
     for i in 0 ..< qeue.len:
       let
         child = qeue.pop
@@ -164,6 +166,7 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
         ## Calc window height
         if parent.h mod parent.child.len != 0 and i == 0: child.h = int(parent.h / parent.child.len) + 1
         else: child.h = int(parent.h / parent.child.len)
+        if i < queueLength - 1: child.h -= 1
 
         ## Calc window y
         if parent.h mod parent.child.len != 0 and i > 0: child.y = parent.y + (child.h * i) + 1
