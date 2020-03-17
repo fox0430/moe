@@ -25,6 +25,7 @@ const exCommandList = [
   ru"livereload",
   ru"log",
   ru"ls",
+  ru"multiplestatusbar",
   ru"noh",
   ru"paren",
   ru"q",
@@ -308,7 +309,7 @@ proc suggestExCommandOption(status: var Editorstatus, exStatus: var ExModeViewSt
   let command = (strutils.splitWhitespace($exStatus.buffer))[0]
 
   case command:
-    of "cursorLine", "highlightparen", "indent", "linenum", "livereload", "realtimesearch", "statusbar", "syntax", "tabstop", "smoothscroll", "clipboard", "highlightcurrentword", "highlightfullspace":
+    of "cursorLine", "highlightparen", "indent", "linenum", "livereload", "realtimesearch", "statusbar", "syntax", "tabstop", "smoothscroll", "clipboard", "highlightcurrentword", "highlightfullspace", "multiplestatusbar":
       argList = @["on", "off"]
     of "theme":
       argList= @["vivid", "dark", "light", "config"]
