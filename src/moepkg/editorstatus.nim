@@ -249,6 +249,11 @@ proc setModeStrColor(mode: Mode): EditorColorPair =
 
 proc writeStatusBar*(status: var EditorStatus, statusBarIndex: int) =
   status.statusBar[statusBarIndex].window.erase
+
+  if statusBarIndex > 0 and not status.settings.statusBar.multipleStatusBar:
+    status.statusBar[statusBarIndex].window.refresh
+    return
+
   let
     mode = status.bufStatus[status.currentBuffer].mode
     color = setModeStrColor(mode)
@@ -330,7 +335,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
         node.view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight, adjustedWidth, widthOfLineNum)
         node.view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
-        if status.settings.statusBar.useBar and status.settings.statusBar.multipleStatusBar: status.statusBar[i].window.resize(1, node.w, node.y + adjustedHeight, node.x)
+        if status.settings.statusBar.useBar: status.statusBar[i].window.resize(1, node.w, node.y + adjustedHeight, node.x)
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)
@@ -354,9 +359,7 @@ proc updateHighlight*(status: var EditorStatus)
 proc update*(status: var EditorStatus) =
   setCursor(false)
   if status.settings.statusBar.useBar:
-    if status.settings.statusBar.multipleStatusBar:
-      for i in 0 ..< status.statusBar.len: status.writeStatusBar(i)
-    else: status.writeStatusBar(0)
+    for i in 0 ..< status.statusBar.len: status.writeStatusBar(i)
 
   let
     currentMode = status.bufStatus[status.currentBuffer].mode
@@ -403,20 +406,18 @@ proc verticalSplitWindow*(status: var EditorStatus) =
   status.currentMainWindowNode = status.currentMainWindowNode.verticalSplit(buffer)
   inc(status.numOfMainWindow)
 
-  if status.settings.statusBar.multipleStatusBar:
-    var statusBar = initStatusBar()
-    statusBar.windowIndex = status.currentMainWindowNode.windowIndex
-    status.statusBar.add(statusBar)
+  var statusBar = initStatusBar()
+  statusBar.windowIndex = status.currentMainWindowNode.windowIndex
+  status.statusBar.add(statusBar)
 
 proc horizontalSplitWindow*(status: var Editorstatus) =
   let buffer = status.bufStatus[status.currentBuffer].buffer
   status.currentMainWindowNode = status.currentMainWindowNode.horizontalSplit(buffer)
   inc(status.numOfMainWindow)
 
-  if status.settings.statusBar.multipleStatusBar:
-    var statusBar = initStatusBar()
-    statusBar.windowIndex = status.currentMainWindowNode.windowIndex
-    status.statusBar.add(statusBar)
+  var statusBar = initStatusBar()
+  statusBar.windowIndex = status.currentMainWindowNode.windowIndex
+  status.statusBar.add(statusBar)
 
 proc closeWindow*(status: var EditorStatus, node: WindowNode) =
   if status.numOfMainWindow == 1: exitEditor(status.settings)
