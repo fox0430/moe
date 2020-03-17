@@ -192,7 +192,7 @@ pcLinkBg = "default"
 
 popUpWindow = "gray100"
 
-popUpWindowBg = black"
+popUpWindowBg = "black"
 
 popUpWinCurrentLine = "blue"
 
