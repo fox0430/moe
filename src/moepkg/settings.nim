@@ -127,7 +127,7 @@ proc parseSettingsFile*(filename: string): EditorSettings =
         result.statusBar.language = settings["StatusBar"]["language"].getbool()
 
     if settings["StatusBar"].contains("directory"):
-        result.statusBar.language = settings["StatusBar"]["directory"].getbool()
+        result.statusBar.directory = settings["StatusBar"]["directory"].getbool()
 
     if settings["StatusBar"].contains("multipleStatusBar"):
         result.statusBar.multipleStatusBar = settings["StatusBar"]["multipleStatusBar"].getbool()
