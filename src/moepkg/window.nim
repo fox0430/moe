@@ -99,8 +99,6 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
   var qeue = initHeapQueue[WindowNode]()
   var windowIndex = 0
 
-  exitUi()
-  echo ""
   if root.splitType == SplitType.vertical:
     for index, node in root.child:
       ## Calc window width
@@ -138,7 +136,9 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
 
       ## Calc window y
       if index == 0: node.y = y
-      else: node.y = root.child[index - 1].y + root.child[index - 1].h + 1
+      else:
+        const blankLine = 1
+        node.y = root.child[index - 1].y + root.child[index - 1].h + blankLine
 
       node.w = width
       node.x = x
@@ -162,8 +162,6 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
         child = qeue.pop
         parent = child.parent
       if parent.splitType == SplitType.vertical:
-        ## Vertical split
-
         ## Calc window width
         if parent.w mod parent.child.len != 0 and i == 0: child.w = int(parent.w / parent.child.len) + width mod parent.child.len
         else: child.w = int(parent.w / parent.child.len)
@@ -179,13 +177,17 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
 
         ## Calc window height
         let numOfStatusBarLine = parent.child.len
-        if (parent.h - numOfStatusBarLine) mod parent.child.len != 0 and i == 0:
-          child.h = int((parent.h - numOfStatusBarLine) / parent.child.len) + ((parent.h - numOfStatusBarLine) mod parent.child.len)
-        else: child.h = int((parent.h - numOfStatusBarLine) / parent.child.len)
+        ## +1 is blank line space
+        let height = parent.h + 1
+        if (height - numOfStatusBarLine) mod parent.child.len != 0 and i == 0:
+          child.h = int((height - numOfStatusBarLine) / parent.child.len) + (height - numOfStatusBarLine) mod parent.child.len
+        else: child.h = int((height - numOfStatusBarLine) / parent.child.len)
 
         ## Calc window y
         if i == 0: child.y = parent.y
-        else: child.y = parent.child[i - 1].y + parent.child[i - 1].h
+        else:
+          const blankLine = 1
+          child.y = parent.child[i - 1].y + parent.child[i - 1].h + blankLine
 
         child.w = parent.w
         child.x = parent.x
