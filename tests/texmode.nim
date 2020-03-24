@@ -8,7 +8,22 @@ test "Edit command":
   const command = @[ru"e", ru"test"]
   status.exModeCommand(command)
 
-test "Wite command":
+test "Edit command 2":
+  var status = initEditorStatus()
+  status.addNewBuffer("test")
+
+  status.resize(100, 100)
+  status.verticalSplitWindow
+  status.resize(100, 100)
+
+  status.changeMode(Mode.ex)
+  const command = @[ru"e", ru"test2"]
+  status.exModeCommand(command)
+
+  check(status.bufStatus[0].mode == Mode.normal)
+  check(status.bufStatus[1].mode == Mode.normal)
+
+test "Write command":
   var status = initEditorStatus()
   status.addNewBuffer("")
 
