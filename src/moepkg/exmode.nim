@@ -388,6 +388,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
   if status.bufStatus[status.currentBuffer].countChange > 0 or countReferencedWindow(status.mainWindowNode, status.currentBuffer) == 0:
     status.commandWindow.writeNoWriteError(status.messageLog)
   else:
+    status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
     if existsDir($filename):
       try: setCurrentDir($filename)
       except OSError:
