@@ -105,11 +105,11 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
       ## Vertical split
 
       ## Calc window width
-      if width mod root.child.len != 0 and index == 0: node.w = int(width / root.child.len) + 1
+      if width mod root.child.len != 0 and index == 0: node.w = int(width / root.child.len) + (width mod root.child.len)
       else: node.w = int(width / root.child.len)
 
       ## Calc window x
-      if width mod root.child.len != 0 and index > 0: node.x = (node.w * index) + 1
+      if width mod root.child.len != 0 and index > 0: node.x = (node.w * index) + (width mod root.child.len)
       else: node.x = node.w * index
 
       node.h = height
@@ -118,11 +118,11 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
       ## Horaizontal split
 
       ## Calc window height
-      if height mod root.child.len != 0 and index == 0: node.h = int(height / root.child.len) + 1
+      if height mod root.child.len != 0 and index == 0: node.h = int(height / root.child.len) + (height mod root.child.len)
       else: node.h = int(height / root.child.len)
 
       ## Calc window y
-      if height mod root.child.len != 0 and index > 0: node.y = (node.h * index) + 1
+      if height mod root.child.len != 0 and index > 0: node.y = (node.h * index) + (height mod root.child.len) + y
       else: node.y = node.h * index + y
 
       node.w = width
