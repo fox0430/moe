@@ -94,67 +94,52 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
     n.window = nil
     return node1
 
-# Resize all window and reset index, windowIndex
 proc resize*(root: WindowNode, y, x, height, width: int) =
   var qeue = initHeapQueue[WindowNode]()
   var windowIndex = 0
+ 
+  const statusBarHeight = 1
+   
+  for index, node in root.child:
+    if root.splitType == SplitType.vertical:
+      ## Vertical split
 
-  if root.splitType == SplitType.vertical:
-    for index, node in root.child:
       ## Calc window width
-      if width mod root.child.len != 0 and index == 0: node.w = int(width / root.child.len) + width mod root.child.len
+      if width mod root.child.len != 0 and index == 0: node.w = int(width / root.child.len) + 1
       else: node.w = int(width / root.child.len)
 
       ## Calc window x
-      if index == 0: node.x = x
-      else: node.x = root.child[index - 1].x + root.child[index - 1].w
+      if width mod root.child.len != 0 and index > 0: node.x = (node.w * index) + 1
+      else: node.x = node.w * index
 
-      const commandWindowLine = 1
-      node.h = height - commandWindowLine
+      node.h = height
       node.y = y
+    else:
+      ## Horaizontal split
 
-      if node.window != nil:
-        ## Resize curses window
-        node.window.resize(node.h, node.w, node.y, node.x)
-        ## Set windowIndex
-        node.windowIndex = windowIndex
-        inc(windowIndex)
-
-      ## Set index
-      node.index = index
-
-      if node.child.len > 0:
-        for child in node.child: qeue.push(child)
-  else:
-    ## Horaizontal split
-    for index, node in root.child:
       ## Calc window height
-      let numOfStatusBarLine = root.child.len
-      if (height - numOfStatusBarLine) mod root.child.len != 0 and index == 0:
-        node.h = int((height - numOfStatusBarLine) / root.child.len) + (height - numOfStatusBarLine) mod root.child.len
-      else: node.h = int((height - numOfStatusBarLine) / root.child.len)
+      if height mod root.child.len != 0 and index == 0: node.h = int(height / root.child.len) + 1
+      else: node.h = int(height / root.child.len)
 
       ## Calc window y
-      if index == 0: node.y = y
-      else:
-        const blankLine = 1
-        node.y = root.child[index - 1].y + root.child[index - 1].h + blankLine
+      if height mod root.child.len != 0 and index > 0: node.y = (node.h * index) + 1
+      else: node.y = node.h * index + y
 
       node.w = width
       node.x = x
 
-      if node.window != nil:
-        ## Resize curses window
-        node.window.resize(node.h, node.w, node.y, node.x)
-        ## Set windowIndex
-        node.windowIndex = windowIndex
-        inc(windowIndex)
+    if node.window != nil:
+      ## Resize curses window
+      node.window.resize(node.h - statusBarHeight, node.w, node.y, node.x)
+      ## Set windowIndex
+      node.windowIndex = windowIndex
+      inc(windowIndex)
 
-      ## Set index
-      node.index = index
+    ## Set index
+    node.index = index
 
-      if node.child.len > 0:
-        for child in node.child: qeue.push(child)
+    if node.child.len > 0:
+      for child in node.child: qeue.push(child)
 
   while qeue.len > 0:
     for i in 0 ..< qeue.len:
@@ -162,13 +147,15 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
         child = qeue.pop
         parent = child.parent
       if parent.splitType == SplitType.vertical:
+        ## Vertical split
+
         ## Calc window width
-        if parent.w mod parent.child.len != 0 and i == 0: child.w = int(parent.w / parent.child.len) + width mod parent.child.len
+        if parent.w mod parent.child.len != 0 and i == 0: child.w = int(parent.w / parent.child.len) + 1
         else: child.w = int(parent.w / parent.child.len)
 
         ## Calc window x
-        if i == 0: child.x = parent.x
-        else: child.x = parent.child[i - 1].x + parent.child[i - 1].w
+        if parent.w mod parent.child.len != 0 and i > 0: child.x = parent.x + (child.w * i) + 1
+        else: child.x = parent.x + (child.w * i)
 
         child.h = parent.h
         child.y = parent.y
@@ -176,25 +163,19 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
         ## Horaizontal split
 
         ## Calc window height
-        let numOfStatusBarLine = parent.child.len
-        ## +1 is blank line space
-        let height = parent.h + 1
-        if (height - numOfStatusBarLine) mod parent.child.len != 0 and i == 0:
-          child.h = int((height - numOfStatusBarLine) / parent.child.len) + (height - numOfStatusBarLine) mod parent.child.len
-        else: child.h = int((height - numOfStatusBarLine) / parent.child.len)
+        if parent.h mod parent.child.len != 0 and i == 0: child.h = int(parent.h / parent.child.len) + 1
+        else: child.h = int(parent.h / parent.child.len)
 
         ## Calc window y
-        if i == 0: child.y = parent.y
-        else:
-          const blankLine = 1
-          child.y = parent.child[i - 1].y + parent.child[i - 1].h + blankLine
+        if parent.h mod parent.child.len != 0 and i > 0: child.y = parent.y + (child.h * i) + 1
+        else: child.y = parent.y + (child.h * i)
 
         child.w = parent.w
         child.x = parent.x
 
       if child.window != nil:
         # Resize curses window
-        child.window.resize(child.h, child.w, child.y, child.x)
+        child.window.resize(child.h - statusBarHeight, child.w, child.y, child.x)
         # Set windowIndex
         child.windowIndex = windowIndex
         inc(windowIndex)

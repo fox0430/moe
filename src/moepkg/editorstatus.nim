@@ -320,6 +320,7 @@ proc writeTabLine*(status: var EditorStatus) =
 proc resize*(status: var EditorStatus, height, width: int) =
   setCursor(false)
   let useTab = if status.settings.tabLine.useTab: 1 else: 0
+  const statusBarHeight = 1
 
   status.mainWindowNode.resize(useTab, 0, height - useTab - 1, width)
 
@@ -333,13 +334,13 @@ proc resize*(status: var EditorStatus, height, width: int) =
         let
           bufIndex = node.bufferIndex
           widthOfLineNum = node.view.widthOfLineNum
-          adjustedHeight = max(node.h, 4)
+          adjustedHeight = max(node.h - statusBarHeight, 4)
           adjustedWidth = max(node.w - widthOfLineNum - 1, 4)
 
         node.view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight, adjustedWidth, widthOfLineNum)
         node.view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
-        if status.settings.statusBar.useBar and status.settings.statusBar.multipleStatusBar: status.statusBar[i].window.resize(1, node.w, node.y + adjustedHeight, node.x)
+        if status.settings.statusBar.useBar and status.settings.statusBar.multipleStatusBar: status.statusBar[i].window.resize(1, adjustedWidth, node.y + adjustedHeight, node.x)
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)
