@@ -256,9 +256,7 @@ proc setModeStrColor(mode: Mode): EditorColorPair =
 proc writeStatusBar*(status: var EditorStatus, statusBarIndex: int) =
   status.statusBar[statusBarIndex].window.erase
 
-  if statusBarIndex > 0 and not status.settings.statusBar.multipleStatusBar:
-    status.statusBar[statusBarIndex].window.refresh
-    return
+  if statusBarIndex > 0 and not status.settings.statusBar.multipleStatusBar: return
 
   let
     mode = status.bufStatus[status.currentBuffer].mode
@@ -340,7 +338,11 @@ proc resize*(status: var EditorStatus, height, width: int) =
         node.view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight, adjustedWidth, widthOfLineNum)
         node.view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
-        if status.settings.statusBar.useBar and status.settings.statusBar.multipleStatusBar: status.statusBar[i].window.resize(1, adjustedWidth, node.y + adjustedHeight, node.x)
+        ## Resize status bar window
+        if status.settings.statusBar.useBar and status.settings.statusBar.multipleStatusBar:
+          let x = if node.x > 0 and node.parent.splitType == SplitType.vertical: node.x + 1 else: node.x
+          status.statusBar[i].window.resize(1, node.w - 1, node.y + adjustedHeight, x)
+          status.statusBar[i].window.refresh
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)
