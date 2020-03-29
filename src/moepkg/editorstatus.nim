@@ -317,12 +317,15 @@ proc writeTabLine*(status: var EditorStatus) =
 
 proc resize*(status: var EditorStatus, height, width: int) =
   setCursor(false)
+
   let useTab = if status.settings.tabLine.useTab: 1 else: 0
   const statusBarHeight = 1
 
   status.mainWindowNode.resize(useTab, 0, height - useTab - 1, width)
 
-  var queue = initHeapQueue[WindowNode]()
+  var
+    statusBarIndex = 0
+    queue = initHeapQueue[WindowNode]()
   for node in status.mainWindowNode.child: queue.push(node)
   while queue.len > 0:
     let queueLength = queue.len
@@ -341,8 +344,10 @@ proc resize*(status: var EditorStatus, height, width: int) =
         ## Resize status bar window
         if status.settings.statusBar.useBar and status.settings.statusBar.multipleStatusBar:
           let x = if node.x > 0 and node.parent.splitType == SplitType.vertical: node.x + 1 else: node.x
-          status.statusBar[i].window.resize(1, node.w - 1, node.y + adjustedHeight, x)
-          status.statusBar[i].window.refresh
+          let w = if node.x > 0 and node.parent.splitType == SplitType.vertical: node.w - 1 else: node.w
+          status.statusBar[statusBarIndex].window.resize(1, w, node.y + adjustedHeight, x)
+          status.statusBar[statusBarIndex].window.refresh
+          inc(statusBarIndex)
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)
@@ -355,7 +360,6 @@ proc resize*(status: var EditorStatus, height, width: int) =
   status.commandWindow.resize(1, width, adjustedHeight - 1, 0)
   status.commandWindow.refresh
 
-  if status.settings.tabLine.useTab: status.writeTabLine
   setCursor(true)
 
 proc highlightPairOfParen(status: var Editorstatus)
@@ -365,6 +369,9 @@ proc updateHighlight*(status: var EditorStatus)
 
 proc update*(status: var EditorStatus) =
   setCursor(false)
+
+  if status.settings.tabLine.useTab: status.writeTabLine
+
   if status.settings.statusBar.useBar:
     for i in 0 ..< status.statusBar.len: status.writeStatusBar(i)
 
