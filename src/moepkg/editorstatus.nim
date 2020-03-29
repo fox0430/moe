@@ -82,6 +82,7 @@ type BufferStatus* = object
 type StatusBar = object
   window: Window
   windowIndex: int
+  bufferIndex: int
 
 type EditorStatus* = object
   platform*: Platform
@@ -193,14 +194,19 @@ proc exitEditor*(settings: EditorSettings) =
 
 proc writeStatusBarNormalModeInfo(status: var EditorStatus, statusBarIndex: int) =
   let
+    bufferIndex = status.statusBar[statusBarIndex].bufferIndex
     color = EditorColorPair.statusBarNormalMode
     currentBuf = status.currentBuffer
-    currentMode = status.bufStatus[currentBuf].mode
+    currentMode = status.bufStatus[bufferIndex].mode
     statusBarWidth = status.statusBar[statusBarIndex].window.width
 
   status.statusBar[statusBarIndex].window.append(ru" ", color)
-  if status.settings.statusBar.filename: status.statusBar[statusBarIndex].window.append(if status.bufStatus[currentBuf].filename.len > 0: status.bufStatus[currentBuf].filename else: ru"No name", color)
-  if status.bufStatus[currentBuf].countChange > 0 and status.settings.statusBar.chanedMark: status.statusBar[statusBarIndex].window.append(ru" [+]", color)
+
+  if status.settings.statusBar.filename:
+    let filename = if status.bufStatus[currentBuf].filename.len > 0: status.bufStatus[bufferIndex].filename else: ru"No name"
+    status.statusBar[statusBarIndex].window.append(filename, color)
+
+  if status.bufStatus[bufferIndex].countChange > 0 and status.settings.statusBar.chanedMark: status.statusBar[statusBarIndex].window.append(ru" [+]", color)
 
   var modeNameLen = 0
   if status.bufStatus[currentBuf].mode == Mode.ex: modeNameLen = 2
@@ -209,10 +215,10 @@ proc writeStatusBarNormalModeInfo(status: var EditorStatus, statusBarIndex: int)
   status.statusBar[statusBarIndex].window.append(ru " ".repeat(statusBarWidth - modeNameLen), color)
 
   let
-    line = if status.settings.statusBar.line: fmt"{status.bufStatus[currentBuf].currentLine + 1}/{status.bufStatus[currentBuf].buffer.len}" else: ""
-    column = if status.settings.statusBar.column: fmt"{status.bufStatus[currentBuf].currentColumn + 1}/{status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine].len}" else: ""
+    line = if status.settings.statusBar.line: fmt"{status.bufStatus[bufferIndex].currentLine + 1}/{status.bufStatus[bufferIndex].buffer.len}" else: ""
+    column = if status.settings.statusBar.column: fmt"{status.bufStatus[bufferIndex].currentColumn + 1}/{status.bufStatus[bufferIndex].buffer[status.bufStatus[bufferIndex].currentLine].len}" else: ""
     encoding = if status.settings.statusBar.characterEncoding: $status.settings.characterEncoding else: ""
-    language = if status.bufStatus[currentBuf].language == SourceLanguage.langNone: "Plain" else: sourceLanguageToStr[status.bufStatus[currentBuf].language]
+    language = if status.bufStatus[bufferIndex].language == SourceLanguage.langNone: "Plain" else: sourceLanguageToStr[status.bufStatus[bufferIndex].language]
     info = fmt"{line} {column} {encoding} {language} "
   status.statusBar[statusBarIndex].window.write(0, statusBarWidth - info.len, info, color)
 
@@ -227,8 +233,9 @@ proc writeStatusBarFilerModeInfo(status: var EditorStatus, statusBarIndex: int) 
 
 proc writeStatusBarBufferManagerModeInfo(status: var EditorStatus, statusBarIndex: int) =
   let
+    bufferIndex = status.statusBar[statusBarIndex].bufferIndex
     color = EditorColorPair.statusBarNormalMode
-    info = fmt"{status.bufStatus[status.currentBuffer].currentLine + 1}/{status.bufStatus.len - 1}"
+    info = fmt"{status.bufStatus[bufferIndex].currentLine + 1}/{status.bufStatus.len - 1}"
     statusBarWidth = status.statusBar[statusBarIndex].window.width
 
   status.statusBar[statusBarIndex].window.append(ru " ".repeat(statusBarWidth - " BUFFER ".len), color)
@@ -259,18 +266,21 @@ proc writeStatusBar*(status: var EditorStatus, statusBarIndex: int) =
   if statusBarIndex > 0 and not status.settings.statusBar.multipleStatusBar: return
 
   let
-    mode = status.bufStatus[status.currentBuffer].mode
-    color = setModeStrColor(mode)
-    modeStr = setModeStr(status.bufStatus[status.currentBuffer].mode)
+    bufferIndex = status.statusBar[statusBarIndex].bufferIndex
+    currentMode = status.bufStatus[bufferIndex].mode
+    prevMode = status.bufStatus[bufferIndex].prevMode
+    color = setModeStrColor(currentMode)
+    modeStr = setModeStr(currentMode)
 
+  ## Write current mode
   if status.settings.statusBar.mode: status.statusBar[statusBarIndex].window.write(0, 0, modeStr, color)
 
-  if mode == Mode.ex and status.bufStatus[status.currentBuffer].prevMode == Mode.filer: status.writeStatusBarFilerModeInfo(statusBarIndex)
-  elif mode == Mode.ex: status.writeStatusBarNormalModeInfo(statusBarIndex)
-  elif mode == Mode.visual or mode == Mode.visualBlock: status.writeStatusBarNormalModeInfo(statusBarIndex)
-  elif mode == Mode.replace: status.writeStatusBarNormalModeInfo(statusBarIndex)
-  elif mode == Mode.filer: status.writeStatusBarFilerModeInfo(statusBarIndex)
-  elif mode == Mode.bufManager: status.writeStatusBarBufferManagerModeInfo(statusBarIndex)
+  if currentMode == Mode.ex and prevMode == Mode.filer: status.writeStatusBarFilerModeInfo(statusBarIndex)
+  elif currentMode == Mode.ex: status.writeStatusBarNormalModeInfo(statusBarIndex)
+  elif currentMode == Mode.visual or currentMode == Mode.visualBlock: status.writeStatusBarNormalModeInfo(statusBarIndex)
+  elif currentMode == Mode.replace: status.writeStatusBarNormalModeInfo(statusBarIndex)
+  elif currentMode == Mode.filer: status.writeStatusBarFilerModeInfo(statusBarIndex)
+  elif currentMode == Mode.bufManager: status.writeStatusBarBufferManagerModeInfo(statusBarIndex)
   else: writeStatusBarNormalModeInfo(status, statusBarIndex)
 
   status.statusBar[statusBarIndex].window.refresh
@@ -341,12 +351,16 @@ proc resize*(status: var EditorStatus, height, width: int) =
         node.view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight, adjustedWidth, widthOfLineNum)
         node.view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
-        ## Resize status bar window
         if status.settings.statusBar.useBar and status.settings.statusBar.multipleStatusBar:
+          ## Resize status bar window
           let x = if node.x > 0 and node.parent.splitType == SplitType.vertical: node.x + 1 else: node.x
           let w = if node.x > 0 and node.parent.splitType == SplitType.vertical: node.w - 1 else: node.w
           status.statusBar[statusBarIndex].window.resize(1, w, node.y + adjustedHeight, x)
           status.statusBar[statusBarIndex].window.refresh
+
+          ## Set bufStatus index
+          status.statusBar[statusBarIndex].bufferIndex = bufIndex
+
           inc(statusBarIndex)
 
       if node.child.len > 0:
