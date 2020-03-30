@@ -745,10 +745,9 @@ proc updateHighlight*(status: var EditorStatus, bufferIndex: int) =
     bufStatus = status.bufStatus[bufferIndex]
     syntax = status.settings.syntax
 
-  if bufStatus.mode == Mode.filer: return
+  if (bufStatus.mode == Mode.filer) or (bufStatus.mode == Mode.ex and bufStatus.prevMode == Mode.filer): return
 
-  if not (bufStatus.mode == Mode.ex and bufStatus.prevMode == Mode.filer):
-    status.bufStatus[bufferIndex].highlight = initHighlight($bufStatus.buffer, if syntax: bufStatus.language else: SourceLanguage.langNone)
+  status.bufStatus[bufferIndex].highlight = initHighlight($bufStatus.buffer, if syntax: bufStatus.language else: SourceLanguage.langNone)
 
   let
     range = status.currentMainWindowNode.view.rangeOfOriginalLineInView
