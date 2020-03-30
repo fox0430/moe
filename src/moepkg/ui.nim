@@ -971,10 +971,10 @@ proc resize*(win: var Window, height, width, y, x: int) =
   win.resize(height, width)
   win.move(y, x)
 
-  win.height = height
-  win.width = width
   win.top = y
   win.left = x
+  win.y = y
+  win.x = x
 
 proc attron*(win: var Window, attributes: Attributes) = win.cursesWindow.wattron(cint(attributes))
 

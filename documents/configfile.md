@@ -157,6 +157,12 @@ allBuffer
 ```
 
 ### StatusBar table
+Multiple status bar (bool)  
+default is true
+```
+multipleStatusBar 
+```
+
 Display current mode (bool)  
 default is true
 ```

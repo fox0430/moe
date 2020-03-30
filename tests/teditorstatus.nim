@@ -20,13 +20,6 @@ test "Horizontal split window":
   status.resize(100, 100)
   status.horizontalSplitWindow
 
-test "Close window":
-  var status = initEditorStatus()
-  status.addNewBuffer("")
-  status.resize(100, 100)
-  status.verticalSplitWindow
-  status.closeWindow(status.currentMainWindowNode)
-
 test "resize 1":
   var status = initEditorStatus()
   status.addNewBuffer("")
@@ -382,6 +375,13 @@ test "Write tab line":
 
   check(status.tabWindow.width == 100)
 
+test "Close window":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.resize(100, 100)
+  status.verticalSplitWindow
+  status.closeWindow(status.currentMainWindowNode)
+
 test "Close window 2":
   var status = initEditorStatus()
   status.addNewBuffer("")
@@ -401,7 +401,7 @@ test "Close window 2":
 
   check(windowNodeList.len == 1)
 
-  check(status.currentMainWindowNode.h == 97)
+  check(status.currentMainWindowNode.h == 98)
   check(status.currentMainWindowNode.w == 100)
 
 test "Close window 3":
@@ -429,7 +429,7 @@ test "Close window 3":
 
   for n in windowNodeList:
     check(n.w == 50)
-    check(n.h == 97)
+    check(n.h == 98)
 
 test "Close window 4":
   var status = initEditorStatus()
@@ -455,7 +455,7 @@ test "Close window 4":
   check(windowNodeList.len == 2)
 
   check(windowNodeList[0].w == 100)
-  check(windowNodeList[0].h == 48)
+  check(windowNodeList[0].h == 49)
 
   check(windowNodeList[1].w == 100)
   check(windowNodeList[1].h == 49)

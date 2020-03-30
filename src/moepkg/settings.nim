@@ -129,6 +129,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["StatusBar"].contains("directory"):
         result.statusBar.directory = settings["StatusBar"]["directory"].getbool()
 
+    if settings["StatusBar"].contains("multipleStatusBar"):
+        result.statusBar.multipleStatusBar = settings["StatusBar"]["multipleStatusBar"].getbool()
+
   if settings.contains("Theme"):
     if settings["Theme"].contains("baseTheme"):
       let theme = parseEnum[ColorTheme](settings["Theme"]["baseTheme"].getStr())

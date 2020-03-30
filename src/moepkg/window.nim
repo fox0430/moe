@@ -94,21 +94,22 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
     n.window = nil
     return node1
 
-# Resize all window and reset index, windowIndex
 proc resize*(root: WindowNode, y, x, height, width: int) =
   var qeue = initHeapQueue[WindowNode]()
   var windowIndex = 0
-
+ 
+  const statusBarHeight = 1
+   
   for index, node in root.child:
     if root.splitType == SplitType.vertical:
       ## Vertical split
-      
+
       ## Calc window width
-      if width mod root.child.len != 0 and index == 0: node.w = int(width / root.child.len) + 1
+      if width mod root.child.len != 0 and index == 0: node.w = int(width / root.child.len) + (width mod root.child.len)
       else: node.w = int(width / root.child.len)
 
       ## Calc window x
-      if width mod root.child.len != 0 and index > 0: node.x = (node.w * index) + 1
+      if width mod root.child.len != 0 and index > 0: node.x = (node.w * index) + (width mod root.child.len)
       else: node.x = node.w * index
 
       node.h = height
@@ -117,11 +118,11 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
       ## Horaizontal split
 
       ## Calc window height
-      if height mod root.child.len != 0 and index == 0: node.h = int(height / root.child.len) + 1
+      if height mod root.child.len != 0 and index == 0: node.h = int(height / root.child.len) + (height mod root.child.len)
       else: node.h = int(height / root.child.len)
 
       ## Calc window y
-      if height mod root.child.len != 0 and index > 0: node.y = (node.h * index) + 1
+      if height mod root.child.len != 0 and index > 0: node.y = (node.h * index) + (height mod root.child.len) + y
       else: node.y = node.h * index + y
 
       node.w = width
@@ -129,7 +130,7 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
 
     if node.window != nil:
       ## Resize curses window
-      node.window.resize(node.h, node.w, node.y, node.x)
+      node.window.resize(node.h - statusBarHeight, node.w, node.y, node.x)
       ## Set windowIndex
       node.windowIndex = windowIndex
       inc(windowIndex)
@@ -174,7 +175,7 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
 
       if child.window != nil:
         # Resize curses window
-        child.window.resize(child.h, child.w, child.y, child.x)
+        child.window.resize(child.h - statusBarHeight, child.w, child.y, child.x)
         # Set windowIndex
         child.windowIndex = windowIndex
         inc(windowIndex)
