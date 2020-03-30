@@ -20,13 +20,6 @@ test "Horizontal split window":
   status.resize(100, 100)
   status.horizontalSplitWindow
 
-test "Close window":
-  var status = initEditorStatus()
-  status.addNewBuffer("")
-  status.resize(100, 100)
-  status.verticalSplitWindow
-  status.closeWindow(status.currentMainWindowNode)
-
 test "resize 1":
   var status = initEditorStatus()
   status.addNewBuffer("")
@@ -381,6 +374,13 @@ test "Write tab line":
   status.resize(100, 100)
 
   check(status.tabWindow.width == 100)
+
+test "Close window":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.resize(100, 100)
+  status.verticalSplitWindow
+  status.closeWindow(status.currentMainWindowNode)
 
 test "Close window 2":
   var status = initEditorStatus()
