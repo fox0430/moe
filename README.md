@@ -51,6 +51,8 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Color themes
 
+- Multiple status bar
+
 ## Planned features
 
 - Configuration mode
@@ -96,7 +98,7 @@ nimble install moe
 ```
 
 ## Usage
-[Documents](https://github.com/fox0430/moe/blob/documents/documents/index.md)
+[Documents](https://github.com/fox0430/moe/blob/develop/documents/index.md)
 
 ## The origin of the name
 moe is a recursive acronym for "moe is an optimal editor".    
