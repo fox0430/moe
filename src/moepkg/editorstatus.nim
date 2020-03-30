@@ -194,7 +194,7 @@ proc exitEditor*(settings: EditorSettings) =
 
 proc writeStatusBarNormalModeInfo(status: var EditorStatus, statusBarIndex: int) =
   let
-    bufferIndex = status.statusBar[statusBarIndex].bufferIndex
+    bufferIndex = if status.settings.statusBar.multipleStatusBar: status.statusBar[statusBarIndex].bufferIndex else: status.currentBuffer
     color = EditorColorPair.statusBarNormalMode
     currentBuf = status.currentBuffer
     currentMode = status.bufStatus[bufferIndex].mode
@@ -233,7 +233,7 @@ proc writeStatusBarFilerModeInfo(status: var EditorStatus, statusBarIndex: int) 
 
 proc writeStatusBarBufferManagerModeInfo(status: var EditorStatus, statusBarIndex: int) =
   let
-    bufferIndex = status.statusBar[statusBarIndex].bufferIndex
+    bufferIndex = if status.settings.statusBar.multipleStatusBar: status.statusBar[statusBarIndex].bufferIndex else: status.currentBuffer
     color = EditorColorPair.statusBarNormalMode
     info = fmt"{status.bufStatus[bufferIndex].currentLine + 1}/{status.bufStatus.len - 1}"
     statusBarWidth = status.statusBar[statusBarIndex].window.width
@@ -266,7 +266,7 @@ proc writeStatusBar*(status: var EditorStatus, statusBarIndex: int) =
   if statusBarIndex > 0 and not status.settings.statusBar.multipleStatusBar: return
 
   let
-    bufferIndex = status.statusBar[statusBarIndex].bufferIndex
+    bufferIndex = if status.settings.statusBar.multipleStatusBar: status.statusBar[statusBarIndex].bufferIndex else: status.currentBuffer
     currentMode = status.bufStatus[bufferIndex].mode
     prevMode = status.bufStatus[bufferIndex].prevMode
     color = setModeStrColor(currentMode)
@@ -351,27 +351,46 @@ proc resize*(status: var EditorStatus, height, width: int) =
         node.view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight, adjustedWidth, widthOfLineNum)
         node.view.seekCursor(status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].currentLine, status.bufStatus[bufIndex].currentColumn)
 
-        if status.settings.statusBar.useBar and status.settings.statusBar.multipleStatusBar:
-          ## Resize status bar window
-          let x = if node.x > 0 and node.parent.splitType == SplitType.vertical: node.x + 1 else: node.x
-          let w = if node.x > 0 and node.parent.splitType == SplitType.vertical: node.w - 1 else: node.w
-          status.statusBar[statusBarIndex].window.resize(1, w, node.y + adjustedHeight, x)
-          status.statusBar[statusBarIndex].window.refresh
+        ## Resize status bar window
+        const height = 1
+        let
+          width = if node.x > 0 and node.parent.splitType == SplitType.vertical: node.w - 1 else: node.w
+          y = node.y + adjustedHeight
+          x = if node.x > 0 and node.parent.splitType == SplitType.vertical: node.x + 1 else: node.x
+        status.statusBar[statusBarIndex].window.resize(height, width, y, x)
+        status.statusBar[statusBarIndex].window.refresh
 
-          ## Set bufStatus index
-          status.statusBar[statusBarIndex].bufferIndex = bufIndex
+        ## Set bufStatus index
+        status.statusBar[statusBarIndex].bufferIndex = bufIndex
 
-          inc(statusBarIndex)
+        inc(statusBarIndex)
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
-  let adjustedHeight = max(height, 4)
-  if status.settings.statusBar.useBar and not status.settings.statusBar.multipleStatusBar: status.statusBar[0].window.resize(1, width, adjustedHeight - 2, 0)
+  ## Resize status bar window
+  if status.settings.statusBar.useBar and not status.settings.statusBar.multipleStatusBar:
+    const
+      statusBarHeight = 1
+      x = 0
+    let 
+      y = max(height, 4) - 2
+    status.statusBar[0].window.resize(statusBarHeight, width, y, x)
 
-  if status.settings.tabLine.useTab: status.tabWindow.resize(1, width, 0, 0)
+  ## Resize tab line window
+  if status.settings.tabLine.useTab:
+    const
+      tabLineHeight = 1
+      x = 0
+      y = 0
+    status.tabWindow.resize(tabLineHeight, width, y, x)
 
-  status.commandWindow.resize(1, width, adjustedHeight - 1, 0)
+  ## Resize command window
+  const
+    commandWindowHeight = 1
+    x = 1
+  let y = max(height, 4) - 1
+  status.commandWindow.resize(commandWindowHeight, width, y, x)
   status.commandWindow.refresh
 
   setCursor(true)
