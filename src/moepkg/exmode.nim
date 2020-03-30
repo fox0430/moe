@@ -512,7 +512,7 @@ proc listAllBufferCommand(status: var Editorstatus) =
   status.currentMainWindowNode.view = initEditorView(status.bufStatus[status.currentBuffer].buffer, terminalHeight() - useStatusBar - useTab - 1, terminalWidth())
   status.bufStatus[status.currentBuffer].currentLine = 0
 
-  status.updateHighlight
+  status.updateHighlight(status.currentBuffer)
 
   while true:
     status.update
@@ -684,14 +684,14 @@ proc exMode*(status: var EditorStatus) =
       let bufferIndex = status.currentMainWindowNode.bufferIndex
       status.bufStatus[bufferIndex].isHighlight = false
 
-    status.updateHighlight
+    status.updateHighlight(status.currentBuffer)
     status.resize(terminalHeight(), terminalWidth())
     status.update
 
   status.searchHistory.delete(status.searchHistory.high)
   let bufferIndex = status.currentMainWindowNode.bufferIndex
   status.bufStatus[bufferIndex].isHighlight = false
-  status.updateHighlight
+  status.updateHighlight(status.currentBuffer)
 
   if cancelInput:
     status.commandWindow.erase

@@ -143,7 +143,7 @@ proc insertMode*(status: var EditorStatus) =
 
   while status.bufStatus[status.currentBuffer].mode == Mode.insert:
     if bufferChanged:
-      status.updateHighlight
+      status.updateHighlight(status.currentBuffer)
       bufferChanged = false
 
     status.resize(terminalHeight(), terminalWidth())
