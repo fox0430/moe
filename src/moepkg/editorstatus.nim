@@ -329,10 +329,11 @@ proc resize*(status: var EditorStatus, height, width: int) =
   setCursor(false)
 
   let useTab = if status.settings.tabLine.useTab: 1 else: 0
+  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+
+  status.mainWindowNode.resize(useTab, 0, height - useTab - useStatusBar, width)
+
   const statusBarHeight = 1
-
-  status.mainWindowNode.resize(useTab, 0, height - useTab - 1, width)
-
   var
     statusBarIndex = 0
     queue = initHeapQueue[WindowNode]()
