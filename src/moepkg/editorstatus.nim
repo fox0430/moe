@@ -454,7 +454,7 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
   var parent = node.parent
 
   if parent.child.len == 1:
-    if status.settings.statusBar.multipleStatusBar: status.statusBar.delete(parent.parent.child[parent.index].windowIndex)
+    if status.settings.statusBar.multipleStatusBar: status.statusBar.delete(status.statusBar.high)
 
     parent.parent.child.delete(parent.index)
     dec(status.numOfMainWindow)
@@ -465,7 +465,7 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
     status.currentMainWindowNode = status.mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
     status.currentBuffer = status.currentMainWindowNode.bufferIndex
   else:
-    if status.settings.statusBar.multipleStatusBar: status.statusBar.delete(parent.child[node.index].windowIndex)
+    if status.settings.statusBar.multipleStatusBar: status.statusBar.delete(status.statusBar.high)
 
     parent.child.delete(node.index)
     dec(status.numOfMainWindow)
