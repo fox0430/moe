@@ -66,6 +66,8 @@ language = true
 
 directory = true
 
+multipleStatusBar = true
+
 [Theme]
 
 baseTheme = "dark"
