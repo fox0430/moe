@@ -50,7 +50,7 @@ test "Highlight of a pair of paren 1":
 
   block:
     status.bufStatus[0].buffer = initGapBuffer(@[ru"()"])
-    status.updateHighlight
+    status.updateHighlight(status.currentBuffer)
     status.update
 
     check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0)
@@ -58,7 +58,7 @@ test "Highlight of a pair of paren 1":
 
   block:
     status.bufStatus[0].buffer = initGapBuffer(@[ru"[]"])
-    status.updateHighlight
+    status.updateHighlight(status.currentBuffer)
     status.update
 
     check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0)
@@ -66,7 +66,7 @@ test "Highlight of a pair of paren 1":
 
   block:
     status.bufStatus[0].buffer = initGapBuffer(@[ru"{}"])
-    status.updateHighlight
+    status.updateHighlight(status.currentBuffer)
     status.update
 
     check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0)
@@ -74,7 +74,7 @@ test "Highlight of a pair of paren 1":
 
   block:
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(()"])
-    status.updateHighlight
+    status.updateHighlight(status.currentBuffer)
     status.update
 
     check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0 and status.bufStatus[0].highlight[0].lastColumn == 2)

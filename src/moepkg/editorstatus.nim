@@ -758,13 +758,13 @@ proc updateHighlight*(status: var EditorStatus, bufferIndex: int) =
 
   # highlight full width space
   if status.settings.highlightFullWidthSpace:
+    const fullWidthSpace = ru"　"
     let
-      fullWidthSpace = ru"　"
-      allOccurrence = searchAllOccurrence(bufferInView, fullWidthSpace)
+      allOccurrence = bufferInView.searchAllOccurrence(fullWidthSpace)
       color = EditorColorPair.highlightFullWidthSpace
     for pos in allOccurrence:
       let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column, color: color)
-      status.bufStatus[bufferIndex].highlight = bufStatus.highlight.overwrite(colorSegment)
+      status.bufStatus[bufferIndex].highlight = status.bufStatus[bufferIndex].highlight.overwrite(colorSegment)
 
   # highlight search results
   if status.bufStatus[status.currentBuffer].isHighlight and status.searchHistory.len > 0:
@@ -774,7 +774,7 @@ proc updateHighlight*(status: var EditorStatus, bufferIndex: int) =
       color = if status.isSearchHighlight: EditorColorPair.searchResult else: EditorColorPair.replaceText
     for pos in allOccurrence:
       let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column + keyword.high, color: color)
-      status.bufStatus[bufferIndex].highlight = bufStatus.highlight.overwrite(colorSegment)
+      status.bufStatus[bufferIndex].highlight = status.bufStatus[bufferIndex].highlight.overwrite(colorSegment)
 
 proc changeTheme*(status: var EditorStatus) = setCursesColor(ColorThemeTable[status.settings.editorColorTheme])
 
