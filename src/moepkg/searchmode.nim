@@ -77,7 +77,7 @@ proc searchFirstOccurrence(status: var EditorStatus) =
   status.bufStatus[bufferIndex].isHighlight = true
   status.jumpToSearchResults(keyword)
 
-  status.updateHighlight
+  status.updateHighlight(status.currentBuffer)
 
 proc realtimeSearch(status: var Editorstatus) =
   const prompt = "/"
@@ -104,7 +104,7 @@ proc realtimeSearch(status: var Editorstatus) =
       status.jumpToSearchResults(keyword)
     else: status.bufStatus[bufferIndex].isHighlight = false
 
-    status.updateHighlight
+    status.updateHighlight(status.currentBuffer)
     status.resize(terminalHeight(), terminalWidth())
     status.update
 
@@ -113,7 +113,7 @@ proc realtimeSearch(status: var Editorstatus) =
 
     let bufferIndex = status.currentMainWindowNode.bufferIndex
     status.bufStatus[bufferIndex].isHighlight = false
-    status.updateHighlight
+    status.updateHighlight(status.currentBuffer)
 
     status.commandWindow.erase
 

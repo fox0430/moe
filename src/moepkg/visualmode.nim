@@ -205,7 +205,7 @@ proc visualMode*(status: var EditorStatus) =
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
     elif isEscKey(key) or isControlSquareBracketsRight(key):
-      status.updatehighlight
+      status.updatehighlight(status.currentBuffer)
       status.changeMode(Mode.normal)
 
     elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
@@ -243,5 +243,5 @@ proc visualMode*(status: var EditorStatus) =
     else:
       if isBlockMode: visualBlockCommand(status, status.bufStatus[currentBuf].selectArea, key)
       else: visualCommand(status, status.bufStatus[currentBuf].selectArea, key)
-      status.updatehighlight
+      status.updatehighlight(status.currentBuffer)
       status.changeMode(Mode.normal)

@@ -38,7 +38,7 @@ proc searchNextOccurrence(status: var EditorStatus) =
   
   let bufferIndex = status.currentMainWindowNode.bufferIndex
   status.bufStatus[bufferIndex].isHighlight = true
-  status.updateHighlight
+  status.updateHighlight(status.currentBuffer)
 
   keyRight(status.bufStatus[status.currentBuffer])
   let searchResult = searchBuffer(status, keyword)
@@ -55,7 +55,7 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) =
   
   let bufferIndex = status.currentMainWindowNode.bufferIndex
   status.bufStatus[bufferIndex].isHighlight = true
-  status.updateHighlight
+  status.updateHighlight(status.currentBuffer)
 
   keyLeft(status.bufStatus[status.currentBuffer])
   let searchResult = searchBufferReversely(status, keyword)
@@ -67,7 +67,7 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) =
 
 proc turnOffHighlighting*(status: var EditorStatus) =
   status.bufStatus[status.currentBuffer].isHighlight = false
-  status.updateHighlight
+  status.updateHighlight(status.currentBuffer)
 
 proc undo(bufStatus: var BufferStatus, currentWin: WindowNode) =
   if not bufStatus.buffer.canUndo: return
@@ -154,11 +154,11 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     elif key == ord('b'): scrollScreenBottom(status.bufStatus[status.currentBuffer], status.currentMainWindowNode)
   elif key == ord('o'):
     for i in 0 ..< cmdLoop: openBlankLineBelow(status.bufStatus[status.currentBuffer], status.currentMainWindowNode)
-    status.updateHighlight
+    status.updateHighlight(status.currentBuffer)
     status.changeMode(Mode.insert)
   elif key == ord('O'):
     for i in 0 ..< cmdLoop: openBlankLineAbove(status.bufStatus[status.currentBuffer], status.currentMainWindowNode)
-    status.updateHighlight
+    status.updateHighlight(status.currentBuffer)
     status.changeMode(Mode.insert)
   elif key == ord('d'):
     let key = getKey(status.currentMainWindowNode.window)
@@ -241,7 +241,7 @@ proc normalMode*(status: var EditorStatus) =
 
   while status.bufStatus[status.currentBuffer].mode == Mode.normal and status.numOfMainWindow > 0:
     if status.bufStatus[status.currentBuffer].countChange > countChange:
-      status.updateHighlight
+      status.updateHighlight(status.currentBuffer)
       countChange = status.bufStatus[status.currentBuffer].countChange
 
     status.update
