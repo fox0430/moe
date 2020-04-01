@@ -75,6 +75,8 @@ Check command bar
 ```y``` - Copy text  
 ```r``` - Replace character  
 ```J``` - Join lines  
+```u``` - Convert string to lowercase  
+```U``` - Convert string to uppercase  
 
 ```>``` - Indent  
 ```<``` - Unindent  
