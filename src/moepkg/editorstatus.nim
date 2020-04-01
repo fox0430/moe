@@ -389,7 +389,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
   ## Resize command window
   const
     commandWindowHeight = 1
-    x = 1
+    x = 0
   let y = max(height, 4) - 1
   status.commandWindow.resize(commandWindowHeight, width, y, x)
   status.commandWindow.refresh
@@ -447,6 +447,10 @@ proc update*(status: var EditorStatus) =
 
   let bufIndex = status.currentMainWindowNode.bufferIndex
   status.currentMainWindowNode.window.moveCursor(status.bufStatus[bufIndex].cursor.y, status.currentMainWindowNode.view.widthOfLineNum + status.bufStatus[bufIndex].cursor.x)
+
+  status.commandWindow.erase
+  status.commandWindow.refresh
+
   setCursor(true)
 
 proc verticalSplitWindow*(status: var EditorStatus) =
