@@ -204,14 +204,14 @@ proc visualCommand*(status: var EditorStatus, area: var SelectArea, key: Rune) =
 
   if key == ord('y') or isDcKey(key): status.bufStatus[status.currentBuffer].yankBuffer(status.registers, area, status.platform, clipboard)
   elif key == ord('x') or key == ord('d'): status.bufStatus[status.currentBuffer].deleteBuffer(status.registers, area, status.platform, clipboard)
-  elif key == ord('>'): addIndent(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, area, status.settings.tabStop)
-  elif key == ord('<'): deleteIndent(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, area, status.settings.tabStop)
+  elif key == ord('>'): status.bufStatus[status.currentBuffer].addIndent(status.currentMainWindowNode, area, status.settings.tabStop)
+  elif key == ord('<'): status.bufStatus[status.currentBuffer].deleteIndent(status.currentMainWindowNode, area, status.settings.tabStop)
   elif key == ord('J'): status.bufStatus[status.currentBuffer].joinLines(status.currentMainWindowNode, area)
   elif key == ord('u'): status.bufStatus[status.currentBuffer].toLowerString(area)
   elif key == ord('U'): status.bufStatus[status.currentBuffer].toUpperString(area)
   elif key == ord('r'):
-    let ch = getKey(status.currentMainWindowNode.window)
-    if not isEscKey(ch): replaceCharactor(status.bufStatus[status.currentBuffer], area, ch)
+    let ch = status.currentMainWindowNode.window.getKey
+    if not isEscKey(ch): status.bufStatus[status.currentBuffer].replaceCharactor(area, ch)
   else: discard
 
 proc visualBlockCommand*(status: var EditorStatus, area: var SelectArea, key: Rune) =
@@ -219,16 +219,16 @@ proc visualBlockCommand*(status: var EditorStatus, area: var SelectArea, key: Ru
 
   let clipboard = status.settings.systemClipboard
 
-  if key == ord('y') or isDcKey(key): yankBufferBlock(status.bufStatus[status.currentBuffer], status.registers, area, status.platform, clipboard)
-  elif key == ord('x') or key == ord('d'): deleteBufferBlock(status.bufStatus[status.currentBuffer], status.registers, area, status.platform, clipboard)
-  elif key == ord('>'): insertIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
-  elif key == ord('<'): deleteIndent(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, area, status.settings.tabStop)
+  if key == ord('y') or isDcKey(key): status.bufStatus[status.currentBuffer].yankBufferBlock(status.registers, area, status.platform, clipboard)
+  elif key == ord('x') or key == ord('d'): status.bufStatus[status.currentBuffer].deleteBufferBlock(status.registers, area, status.platform, clipboard)
+  elif key == ord('>'): status.bufStatus[status.currentBuffer].insertIndent(area, status.settings.tabStop)
+  elif key == ord('<'): status.bufStatus[status.currentBuffer].deleteIndent(status.currentMainWindowNode, area, status.settings.tabStop)
   elif key == ord('J'): status.bufStatus[status.currentBuffer].joinLines(status.currentMainWindowNode, area)
   elif key == ord('u'): status.bufStatus[status.currentBuffer].toLowerStringBlock(area)
   elif key == ord('U'): status.bufStatus[status.currentBuffer].toUpperStringBlock(area)
   elif key == ord('r'):
-    let ch = getKey(status.currentMainWindowNode.window)
-    if not isEscKey(ch): replaceCharactorBlock(status.bufStatus[status.currentBuffer], area, ch)
+    let ch = status.currentMainWindowNode.window.getKey
+    if not isEscKey(ch): status.bufStatus[status.currentBuffer].replaceCharactorBlock(area, ch)
   else: discard
 
 proc visualMode*(status: var EditorStatus) =
