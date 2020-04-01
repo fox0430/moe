@@ -151,6 +151,29 @@ proc joinLines*(bufStatus: var BufferStatus, win: WindowNode, area: SelectArea) 
     bufStatus.currentLine = area.startLine
     bufStatus.joinLine(win)
 
+proc toUpperString(bufStatus: var BufferStatus, area: SelectArea) =
+  for i in area.startLine .. area.endLine:
+    let oldLine = bufStatus.buffer[i]
+    var newLine = bufStatus.buffer[i]
+    if area.startLine == area.endLine:
+      for j in area.startColumn .. area.endColumn: newLine[j] = oldLine[j].toUpper
+    elif i == area.startLine:
+      for j in area.startColumn .. bufStatus.buffer[i].high: newLine[j] = oldLine[j].toUpper
+    elif i == area.endLine:
+      for j in 0 .. area.endColumn: newLine[j] = oldLine[j].toUpper
+    else:
+      for j in 0 .. bufStatus.buffer[i].high: newLine[j] = oldLine[j].toUpper
+    if oldLine != newLine: bufStatus.buffer[i] = newLine
+
+  inc(bufStatus.countChange)
+
+proc toUpperStringBlock(bufStatus: var BufferStatus, area: SelectArea) =
+  for i in area.startLine .. area.endLine:
+    let oldLine = bufStatus.buffer[i]
+    var newLine = bufStatus.buffer[i]
+    for j in area.startColumn .. min(area.endColumn, bufStatus.buffer[i].high): newLine[j] = oldLine[j].toUpper
+    if oldLine != newLine: bufStatus.buffer[i] = newLine
+
 proc visualCommand*(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSlectArea
 
@@ -161,6 +184,7 @@ proc visualCommand*(status: var EditorStatus, area: var SelectArea, key: Rune) =
   elif key == ord('>'): addIndent(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, area, status.settings.tabStop)
   elif key == ord('<'): deleteIndent(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, area, status.settings.tabStop)
   elif key == ord('J'): status.bufStatus[status.currentBuffer].joinLines(status.currentMainWindowNode, area)
+  elif key == ord('U'): status.bufStatus[status.currentBuffer].toUpperString(area)
   elif key == ord('r'):
     let ch = getKey(status.currentMainWindowNode.window)
     if not isEscKey(ch): replaceCharactor(status.bufStatus[status.currentBuffer], area, ch)
@@ -176,6 +200,7 @@ proc visualBlockCommand*(status: var EditorStatus, area: var SelectArea, key: Ru
   elif key == ord('>'): insertIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
   elif key == ord('<'): deleteIndent(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, area, status.settings.tabStop)
   elif key == ord('J'): status.bufStatus[status.currentBuffer].joinLines(status.currentMainWindowNode, area)
+  elif key == ord('U'): status.bufStatus[status.currentBuffer].toUpperStringBlock(area)
   elif key == ord('r'):
     let ch = getKey(status.currentMainWindowNode.window)
     if not isEscKey(ch): replaceCharactorBlock(status.bufStatus[status.currentBuffer], area, ch)
