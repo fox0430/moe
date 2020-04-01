@@ -468,6 +468,108 @@ test "Visual block mode: Delete indent":
   check(status.bufStatus[status.currentBuffer].buffer[1] == ru"def")
   check(status.bufStatus[status.currentBuffer].buffer[2] == ru"ghi")
 
+test "Visual mode: Converts string into lower-case string":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"ABC"])
+  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.resize(100, 100)
+
+  status.changeMode(Mode.visual)
+  status.bufStatus[0].selectArea = initSelectArea(status.bufStatus[0].currentLine, status.bufStatus[0].currentColumn)
+
+  for i in 0 ..< 2:
+    status.bufStatus[0].keyRight
+    status.bufStatus[0].selectArea.updateSelectArea(status.bufStatus[0].currentLine, status.bufStatus[0].currentColumn)
+    status.update
+
+  status.update
+  status.visualCommand(status.bufStatus[0].selectArea, ru'u')
+
+  check(status.bufStatus[0].buffer[0] == ru"abc")
+
+test "Visual mode: Converts string into lower-case string 2":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"AあbC"])
+  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.resize(100, 100)
+
+  status.changeMode(Mode.visual)
+  status.bufStatus[0].selectArea = initSelectArea(status.bufStatus[0].currentLine, status.bufStatus[0].currentColumn)
+
+  for i in 0 ..< 3:
+    status.bufStatus[0].keyRight
+    status.bufStatus[0].selectArea.updateSelectArea(status.bufStatus[0].currentLine, status.bufStatus[0].currentColumn)
+    status.update
+
+  status.update
+  status.visualCommand(status.bufStatus[0].selectArea, ru'u')
+
+  check(status.bufStatus[0].buffer[0] == ru"aあbc")
+
+test "Visual mode: Converts string into lower-case string 3":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"ABC", ru"DEF"])
+  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.resize(100, 100)
+
+  status.changeMode(Mode.visual)
+  status.bufStatus[0].selectArea = initSelectArea(status.bufStatus[0].currentLine, status.bufStatus[0].currentColumn)
+
+  status.bufStatus[0].keyDown
+  status.bufStatus[0].selectArea.updateSelectArea(status.bufStatus[0].currentLine, status.bufStatus[0].currentColumn)
+  status.update
+
+  status.visualCommand(status.bufStatus[0].selectArea, ru'u')
+
+  check(status.bufStatus[0].buffer[0] == ru"abc")
+  check(status.bufStatus[0].buffer[1] == ru"dEF")
+
+test "Visual block mode: Converts string into lower-case string":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"ABC"])
+  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.resize(100, 100)
+
+  status.changeMode(Mode.visualBlock)
+  status.bufStatus[0].selectArea = initSelectArea(status.bufStatus[0].currentLine, status.bufStatus[0].currentColumn)
+
+  for i in 0 ..< 2:
+    status.bufStatus[0].keyRight
+    status.bufStatus[0].selectArea.updateSelectArea(status.bufStatus[0].currentLine, status.bufStatus[0].currentColumn)
+    status.update
+
+  status.update
+  status.visualBlockCommand(status.bufStatus[0].selectArea, ru'u')
+
+  check(status.bufStatus[0].buffer[0] == ru"abc")
+
+test "Visual block mode: Converts string into lower-case string 2":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"ABC", ru"DEF"])
+  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.resize(100, 100)
+
+  status.changeMode(Mode.visualBlock)
+  status.bufStatus[0].selectArea = initSelectArea(status.bufStatus[0].currentLine, status.bufStatus[0].currentColumn)
+
+  status.bufStatus[0].keyRight
+  status.bufStatus[0].selectArea.updateSelectArea(status.bufStatus[0].currentLine, status.bufStatus[0].currentColumn)
+  status.update
+
+  status.bufStatus[0].keyDown
+  status.bufStatus[0].selectArea.updateSelectArea(status.bufStatus[0].currentLine, status.bufStatus[0].currentColumn)
+  status.update
+
+  status.visualBlockCommand(status.bufStatus[0].selectArea, ru'u')
+
+  check(status.bufStatus[0].buffer[0] == ru"abC")
+  check(status.bufStatus[0].buffer[1] == ru"deF")
+
 test "Visual mode: Converts string into upper-case string":
   var status = initEditorStatus()
   status.addNewBuffer("")
