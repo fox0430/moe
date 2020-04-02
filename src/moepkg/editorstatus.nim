@@ -417,8 +417,8 @@ proc update*(status: var EditorStatus) =
 
   if (currentMode != Mode.filer) or (currentMode == Mode.ex and prevMode == Mode.filer):
     if status.settings.highlightOtherUsesCurrentWord or status.settings.highlightPairOfParen or isVisualMode: status.updateHighlight(status.currentBuffer)
-    if isVisualMode or isVisualBlockMode: status.highlightSelectedArea
     if status.settings.highlightOtherUsesCurrentWord and currentMode != Mode.filer: status.highlightOtherUsesCurrentWord
+    if isVisualMode or isVisualBlockMode: status.highlightSelectedArea
     if status.settings.highlightPairOfParen and currentMode != Mode.filer: status.highlightPairOfParen
 
   var queue = initHeapQueue[WindowNode]()
