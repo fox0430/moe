@@ -66,6 +66,8 @@ language = true
 
 directory = true
 
+multipleStatusBar = true
+
 [Theme]
 
 baseTheme = "dark"
@@ -192,7 +194,7 @@ pcLinkBg = "default"
 
 popUpWindow = "gray100"
 
-popUpWindowBg = black"
+popUpWindowBg = "black"
 
 popUpWinCurrentLine = "blue"
 

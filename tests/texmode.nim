@@ -1,5 +1,5 @@
 import unittest
-import moepkg/ui, moepkg/editorstatus, moepkg/gapbuffer, moepkg/exmode, moepkg/unicodeext
+import moepkg/[ui, editorstatus, gapbuffer, exmode, unicodeext]
 
 test "Edit command":
   var status = initEditorStatus()
@@ -8,7 +8,22 @@ test "Edit command":
   const command = @[ru"e", ru"test"]
   status.exModeCommand(command)
 
-test "Wite command":
+test "Edit command 2":
+  var status = initEditorStatus()
+  status.addNewBuffer("test")
+
+  status.resize(100, 100)
+  status.verticalSplitWindow
+  status.resize(100, 100)
+
+  status.changeMode(Mode.ex)
+  const command = @[ru"e", ru"test2"]
+  status.exModeCommand(command)
+
+  check(status.bufStatus[0].mode == Mode.normal)
+  check(status.bufStatus[1].mode == Mode.normal)
+
+test "Write command":
   var status = initEditorStatus()
   status.addNewBuffer("")
 
@@ -114,11 +129,11 @@ test "Line number setting command":
   block:
     const command = @[ru"linenum", ru"off"]
     status.exModeCommand(command)
-  check(status.settings.lineNumber == false)
+  check(status.settings.view.lineNumber == false)
   block:
     const command = @[ru"linenum", ru"on"]
     status.exModeCommand(command)
-  check(status.settings.lineNumber == true)
+  check(status.settings.view.lineNumber == true)
 
 test "Auto indent setting command":
   var status = initEditorStatus()
@@ -179,11 +194,11 @@ test "Change cursor line command":
   block:
     const command = @[ru"cursorLine", ru"on"]
     status.exModeCommand(command)
-  check(status.settings.cursorLine == true)
+  check(status.settings.view.cursorLine == true)
   block:
     const command = @[ru"cursorLine", ru"off"]
     status.exModeCommand(command)
-  check(status.settings.cursorLine == false)
+  check(status.settings.view.cursorLine == false)
 
 test "Split window command":
   var status = initEditorStatus()

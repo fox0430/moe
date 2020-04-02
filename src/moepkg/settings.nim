@@ -29,13 +29,13 @@ proc parseSettingsFile*(filename: string): EditorSettings =
       result.editorColorTheme = getTheme(settings["Standard"]["theme"].getStr())
 
     if settings["Standard"].contains("number"):
-      result.lineNumber = settings["Standard"]["number"].getbool()
+      result.view.lineNumber = settings["Standard"]["number"].getbool()
 
     if settings["Standard"].contains("currentNumber"):
-      result.currentLineNumber = settings["Standard"]["currentNumber"].getbool()
+      result.view.currentLineNumber = settings["Standard"]["currentNumber"].getbool()
 
     if settings["Standard"].contains("cursorLine"):
-      result.cursorLine = settings["Standard"]["cursorLine"].getbool()
+      result.view.cursorLine = settings["Standard"]["cursorLine"].getbool()
 
     if settings["Standard"].contains("statusBar"):
       result.statusBar.useBar = settings["Standard"]["statusBar"].getbool()
@@ -127,7 +127,10 @@ proc parseSettingsFile*(filename: string): EditorSettings =
         result.statusBar.language = settings["StatusBar"]["language"].getbool()
 
     if settings["StatusBar"].contains("directory"):
-        result.statusBar.language = settings["StatusBar"]["directory"].getbool()
+        result.statusBar.directory = settings["StatusBar"]["directory"].getbool()
+
+    if settings["StatusBar"].contains("multipleStatusBar"):
+        result.statusBar.multipleStatusBar = settings["StatusBar"]["multipleStatusBar"].getbool()
 
   if settings.contains("Theme"):
     if settings["Theme"].contains("baseTheme"):

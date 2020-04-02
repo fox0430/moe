@@ -961,11 +961,20 @@ proc refresh*(win: Window) = wrefresh(win.cursesWindow)
 
 proc move*(win: Window, y, x: int) = mvwin(win.cursesWindow, cint(y), cint(x))
 
-proc resize*(win: Window, height, width: int) = wresize(win.cursesWindow, cint(height), cint(width))
+proc resize*(win: var Window, height, width: int) =
+  wresize(win.cursesWindow, cint(height), cint(width))
 
-proc resize*(win: Window, height, width, y, x: int) =
+  win.height = height
+  win.width = width
+
+proc resize*(win: var Window, height, width, y, x: int) =
   win.resize(height, width)
   win.move(y, x)
+
+  win.top = y
+  win.left = x
+  win.y = y
+  win.x = x
 
 proc attron*(win: var Window, attributes: Attributes) = win.cursesWindow.wattron(cint(attributes))
 

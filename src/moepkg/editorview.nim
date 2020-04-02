@@ -1,6 +1,11 @@
 import deques, strutils, math, strformat
 import gapbuffer, ui, unicodeext, highlight, independentutils
 
+type EditorViewSettings* = object
+  lineNumber*: bool
+  currentLineNumber*: bool
+  cursorLine*: bool
+
 type EditorView* = object
   height*, width*, widthOfLineNum*: int
   lines*: Deque[seq[Rune]]
@@ -10,6 +15,10 @@ type EditorView* = object
 type ViewLine = object
   line: seq[Rune]
   originalLine, start, length: int
+
+proc initEditorViewSettings*(): EditorViewSettings =
+  result.lineNumber = true
+  result.currentLineNumber = true
 
 proc loadSingleViewLine[T](view: EditorView, buffer: T, originalLine, start: int): ViewLine =
   result.line = ru""
@@ -175,9 +184,9 @@ proc write(view: EditorView, win: var Window, y, x: int, str: seq[Rune], color: 
   const tab = "    "
   win.write(y, x, ($str).replace("\t", tab), color, false)
 
-proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, currentLineNumber, cursorLine, currentWin, isVisualMode: bool, buffer: T, highlight: Highlight, currentLine, startSelectedLine, endSelectedLine: int) =
+proc writeAllLines*[T](view: var EditorView, win: var Window, viewSettings: EditorViewSettings, isCurrentWin, isVisualMode: bool, buffer: T, highlight: Highlight, currentLine, startSelectedLine, endSelectedLine: int) =
   win.erase
-  view.widthOfLineNum = if lineNumber: buffer.len.numberOfDigits + 1 else: 0
+  view.widthOfLineNum = if viewSettings.lineNumber: buffer.len.numberOfDigits + 1 else: 0
 
   let
     start = (view.originalLine[0], view.start[0])
@@ -187,8 +196,9 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, curren
     if view.originalLine[y] == -1: break
 
     let isCurrentLine = view.originalLine[y] == currentLine
-    if lineNumber and view.start[y] == 0:
-      view.writeLineNum(win, y, view.originalLine[y], if isCurrentLine and currentWin and currentLineNumber: EditorColorPair.currentLineNum else: EditorColorPair.lineNum)
+    if viewSettings.lineNumber and view.start[y] == 0:
+      let lineNumberColor = if isCurrentLine and isCurrentWin and viewSettings.currentLineNumber: EditorColorPair.currentLineNum else: EditorColorPair.lineNum
+      view.writeLineNum(win, y, view.originalLine[y], lineNumberColor)
 
     var x = view.widthOfLineNum
     if view.length[y] == 0:
@@ -215,7 +225,7 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, curren
         assert(first <= last, fmt"first = {first}, last = {last}")
 
       let str = view.lines[y][first .. last]
-      if isCurrentLine and cursorLine:
+      if isCurrentLine and viewSettings.cursorLine:
         win.attron(Attributes.underline)
         view.write(win, y, x, str, highlight[i].color)
         win.attroff(Attributes.underline)
@@ -226,10 +236,12 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, lineNumber, curren
 
   win.refresh
 
-proc update*[T](view: var EditorView, win: var Window, lineNumber, currentLineNumber, cursorLine, currentWin, isVisualMode: bool, buffer: T, highlight: Highlight, currentLine, startSelectedLine, endSelectedLine: int) =
+proc update*[T](view: var EditorView, win: var Window, viewSettings: EditorViewSettings, isCurrentWin, isVisualMode: bool, buffer: T, highlight: Highlight, currentLine, startSelectedLine, endSelectedLine: int) =
   let widthOfLineNum = buffer.len.intToStr.len + 1
-  if lineNumber and widthOfLineNum != view.widthOfLineNum: view.resize(buffer, view.height, view.width + view.widthOfLineNum - widthOfLineNum, widthOfLineNum)
-  view.writeAllLines(win, lineNumber, currentLineNumber, cursorLine, currentWin, isVisualMode, buffer, highlight, currentLine, startSelectedLine, endSelectedLine)
+  if viewSettings.lineNumber and widthOfLineNum != view.widthOfLineNum:
+    view.resize(buffer, view.height, view.width + view.widthOfLineNum - widthOfLineNum, widthOfLineNum)
+
+  view.writeAllLines(win, viewSettings, isCurrentWin, isVisualMode, buffer, highlight, currentLine, startSelectedLine, endSelectedLine)
   view.updated = false
 
 proc seekCursor*[T](view: var EditorView, buffer: T, currentLine, currentColumn: int) =
