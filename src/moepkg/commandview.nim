@@ -1,5 +1,5 @@
 import terminal, strutils, sequtils, strformat, os
-import editorstatus, ui, unicodeext, fileutils
+import editorstatus, ui, unicodeext, fileutils, color
 
 type
   ExModeViewStatus = tuple[buffer: seq[Rune], prompt: string, cursorY, cursorX, currentPosition, startPosition: int]

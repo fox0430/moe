@@ -1,5 +1,5 @@
 import deques, strutils, math, strformat
-import gapbuffer, ui, unicodeext, highlight, independentutils
+import gapbuffer, ui, unicodeext, highlight, independentutils, color
 
 type EditorViewSettings* = object
   lineNumber*: bool

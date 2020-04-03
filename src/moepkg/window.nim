@@ -1,5 +1,5 @@
 import heapqueue
-import ui, editorview, gapbuffer
+import ui, editorview, gapbuffer, color
 
 # vertical is default
 type SplitType* = enum
