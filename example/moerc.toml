@@ -50,7 +50,9 @@ highlightFullWidthSpace = true
 
 buildOnSave = false
 
-workspaceRoot = "~/git/moe"
+# workspaceRoot = "/home/fox/git/moe"
+
+# command = "cd /home/fox/git/moe && nimble build"
 
 [TabLine]
 

@@ -36,6 +36,7 @@ type TabLineSettings* = object
 type BuildOnSaveSettings* = object
   buildOnSave*: bool
   workspaceRoot*: seq[Rune]
+  command*: seq[Rune]
 
 type EditorSettings* = object
   editorColorTheme*: ColorTheme

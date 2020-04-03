@@ -139,6 +139,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["BuildOnSaveSettings"].contains("workspaceRoot"):
       result.buildOnSaveSettings.workspaceRoot = settings["BuildOnSaveSettings"]["workspaceRoot"].getStr().toRunes
 
+    if settings["BuildOnSaveSettings"].contains("command"):
+      result.buildOnSaveSettings.workspaceRoot = settings["BuildOnSaveSettings"]["command"].getStr().toRunes
+
   if settings.contains("Theme"):
     if settings["Theme"].contains("baseTheme"):
       let theme = parseEnum[ColorTheme](settings["Theme"]["baseTheme"].getStr())

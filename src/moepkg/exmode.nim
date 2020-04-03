@@ -412,23 +412,38 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
 
     changeCurrentBuffer(status, status.bufStatus.high)
 
+proc execCmdResultToMessageLog*(output: TaintedString, messageLog: var seq[seq[Rune]])=
+  var line = ""
+  for ch in output:
+    if ch == '\n':
+      messageLog.add(line.toRunes)
+      line = ""
+    else: line.add(ch)
+
 proc buildOnSave(status: var Editorstatus) =
   if status.bufStatus[status.currentBuffer].language == SourceLanguage.langNim:
     status.commandWindow.writeMessageBuildOnSave(status.messageLog)
     
     let
       currentDir = getCurrentDir()
-      cmd = if ($status.settings.buildOnSaveSettings.workspaceRoot).existsDir: fmt"cd {status.settings.buildOnSaveSettings.workspaceRoot} && nimble build" else: fmt"nim c {status.bufStatus[status.currentBuffer].filename}"
-      exitCode, log = cmd.execCmdEx
+      workspaceRoot = status.settings.buildOnSaveSettings.workspaceRoot
+      command = status.settings.buildOnSaveSettings.command
+      filename = status.bufStatus[status.currentBuffer].filename
+      cmd = if command.len > 0: $command elif ($workspaceRoot).existsDir: fmt"cd {workspaceRoot} && nimble build" else: fmt"nim c {filename}"
+      cmdResult = cmd.execCmdEx
     
     currentDir.setCurrentDir
 
-    var line = ""
-    for ch in log.output:
-      if ch == '\n':
-        status.messageLog.add(line.toRunes)
-        line = ""
-      else: line.add(ch)
+    cmdResult.output.execCmdResultToMessageLog(status.messageLog)
+
+  elif status.settings.buildOnSaveSettings.command.len > 0:
+    let
+      currentDir = getCurrentDir()
+      cmdResult = ($status.settings.buildOnSaveSettings.command).execCmdEx
+
+    if getCurrentDir() != currentDir: currentDir.setCurrentDir
+
+    cmdResult.output.execCmdResultToMessageLog(status.messageLog)
 
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   if filename.len == 0:
