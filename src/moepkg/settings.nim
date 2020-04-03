@@ -1,5 +1,5 @@
 import parsetoml, os
-import editorstatus, ui
+import editorstatus, ui, color
 from strutils import parseEnum
 
 proc getCursorType(cursorType, mode: string): CursorType =

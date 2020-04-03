@@ -1,5 +1,5 @@
 import unittest, packages/docutils/highlite, strutils
-import moepkg/[highlight, ui]
+import moepkg/[highlight, ui, color]
 
 test "initHighlight: start with newline":
   let
