@@ -110,6 +110,11 @@ proc writeMessageAutoSave*(cmdWin: var Window, filename: seq[Rune], messageLog: 
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
   messageLog.add(mess.toRunes)
 
+proc writeMessageBuildOnSave*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+  const mess = "Build on save..."
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  messageLog.add(mess.toRunes)
+
 proc writeNotEditorCommandError*(cmdWin: var Window, command: seq[seq[Rune]], messageLog: var seq[seq[Rune]]) =
   var cmd = ""
   for i in 0 ..< command.len: cmd = cmd & $command[i] & " "
@@ -126,6 +131,7 @@ proc writeNoBufferDeletedError*(cmdWin: var Window, messageLog: var seq[seq[Rune
   let mess = "Error: No buffers were deleted"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
+
 
 proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
   for i in 0 .. r.high:

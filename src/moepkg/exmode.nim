@@ -1,4 +1,4 @@
-import sequtils, strutils, os, terminal, packages/docutils/highlite, times
+import sequtils, strutils, os, terminal, packages/docutils/highlite, times, osproc, strformat
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview, window, movement, color
 
 type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
@@ -412,6 +412,24 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
 
     changeCurrentBuffer(status, status.bufStatus.high)
 
+proc buildOnSave(status: var Editorstatus) =
+  if status.bufStatus[status.currentBuffer].language == SourceLanguage.langNim:
+    status.commandWindow.writeMessageBuildOnSave(status.messageLog)
+    
+    let
+      currentDir = getCurrentDir()
+      cmd = if ($status.settings.buildOnSaveSettings.workspaceRoot).existsDir: fmt"cd {status.settings.buildOnSaveSettings.workspaceRoot} && nimble build" else: fmt"nim c {status.bufStatus[status.currentBuffer].filename}"
+      exitCode, log = cmd.execCmdEx
+    
+    currentDir.setCurrentDir
+
+    var line = ""
+    for ch in log.output:
+      if ch == '\n':
+        status.messageLog.add(line.toRunes)
+        line = ""
+      else: line.add(ch)
+
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   if filename.len == 0:
     status.commandWindow.writeNoFileNameError(status.messageLog)
@@ -423,6 +441,8 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
     let bufferIndex = status.currentMainWindowNode.bufferIndex
     status.bufStatus[bufferIndex].filename = filename
     status.bufStatus[status.currentBuffer].countChange = 0
+
+    if status.settings.buildOnSaveSettings.buildOnSave: status.buildOnSave
   except IOError:
     status.commandWindow.writeSaveError(status.messageLog)
 
