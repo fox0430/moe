@@ -46,6 +46,12 @@ systemClipboard = true
 
 highlightFullWidthSpace = true
 
+[BuildOnSaveSettings]
+
+buildOnSave = false
+
+workspaceRoot = "~/git/moe"
+
 [TabLine]
 
 allBuffer = false
