@@ -132,15 +132,15 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["StatusBar"].contains("multipleStatusBar"):
         result.statusBar.multipleStatusBar = settings["StatusBar"]["multipleStatusBar"].getbool()
 
-  if settings.contains("BuildOnSaveSettings"):
-    if settings["BuildOnSaveSettings"].contains("buildOnSave"):
-      result.buildOnSaveSettings.buildOnSave = settings["BuildOnSaveSettings"]["buildOnSave"].getbool()
+  if settings.contains("BuildOnSave"):
+    if settings["BuildOnSave"].contains("buildOnSave"):
+      result.buildOnSaveSettings.buildOnSave = settings["BuildOnSave"]["buildOnSave"].getbool()
 
-    if settings["BuildOnSaveSettings"].contains("workspaceRoot"):
-      result.buildOnSaveSettings.workspaceRoot = settings["BuildOnSaveSettings"]["workspaceRoot"].getStr().toRunes
+    if settings["BuildOnSave"].contains("workspaceRoot"):
+      result.buildOnSaveSettings.workspaceRoot = settings["BuildOnSave"]["workspaceRoot"].getStr().toRunes
 
-    if settings["BuildOnSaveSettings"].contains("command"):
-      result.buildOnSaveSettings.workspaceRoot = settings["BuildOnSaveSettings"]["command"].getStr().toRunes
+    if settings["BuildOnSave"].contains("command"):
+      result.buildOnSaveSettings.workspaceRoot = settings["BuildOnSave"]["command"].getStr().toRunes
 
   if settings.contains("Theme"):
     if settings["Theme"].contains("baseTheme"):
