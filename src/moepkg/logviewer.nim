@@ -2,7 +2,7 @@ import terminal
 import gapbuffer, ui, editorstatus, unicodeext, movement
 
 proc setMessageLog*(status: var Editorstatus) =
-  status.bufStatus[status.currentBuffer].filename = ru"Buffer manager"
+  status.bufStatus[status.currentBuffer].filename = ru"Log viewer"
   for i in 0 ..< status.messageLog.len:
     if i == 0: status.bufStatus[status.currentBuffer].buffer[0] = status.messageLog[0]
     else: status.bufStatus[status.currentBuffer].buffer.add(status.messageLog[i])
