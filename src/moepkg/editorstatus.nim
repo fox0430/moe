@@ -1,5 +1,5 @@
 import packages/docutils/highlite, strutils, terminal, os, strformat, tables, times, osproc, heapqueue
-import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils, undoredostack, window, color
+import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils, undoredostack, window, color, build
 
 type Platform* = enum
   linux, wsl, mac, other
@@ -32,11 +32,6 @@ type StatusBarSettings* = object
 type TabLineSettings* = object
   useTab*: bool
   allbuffer*: bool
-
-type BuildOnSaveSettings* = object
-  buildOnSave*: bool
-  workspaceRoot*: seq[Rune]
-  command*: seq[Rune]
 
 type EditorSettings* = object
   editorColorTheme*: ColorTheme

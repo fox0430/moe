@@ -1,5 +1,5 @@
-import sequtils, strutils, os, terminal, packages/docutils/highlite, times, osproc, strformat
-import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview, window, movement, color
+import sequtils, strutils, os, terminal, packages/docutils/highlite, times
+import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview, window, movement, color, build
 
 type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
 
@@ -421,29 +421,19 @@ proc execCmdResultToMessageLog*(output: TaintedString, messageLog: var seq[seq[R
     else: line.add(ch)
 
 proc buildOnSave(status: var Editorstatus) =
-  if status.bufStatus[status.currentBuffer].language == SourceLanguage.langNim:
-    status.commandWindow.writeMessageBuildOnSave(status.messageLog)
-    
-    let
-      currentDir = getCurrentDir()
-      workspaceRoot = status.settings.buildOnSaveSettings.workspaceRoot
-      command = status.settings.buildOnSaveSettings.command
-      filename = status.bufStatus[status.currentBuffer].filename
-      cmd = if command.len > 0: $command elif ($workspaceRoot).existsDir: fmt"cd {workspaceRoot} && nimble build" else: fmt"nim c {filename}"
-      cmdResult = cmd.execCmdEx
-    
-    currentDir.setCurrentDir
+  status.commandWindow.writeMessageBuildOnSave(status.messageLog)
 
-    cmdResult.output.execCmdResultToMessageLog(status.messageLog)
+  let
+    filename = status.bufStatus[status.currentBuffer].filename
+    workspaceRoot = status.settings.buildOnSaveSettings.workspaceRoot
+    command = status.settings.buildOnSaveSettings.command
+    language = status.bufStatus[status.currentBuffer].language
+    cmdResult = build(filename, workspaceRoot, command, language)
 
-  elif status.settings.buildOnSaveSettings.command.len > 0:
-    let
-      currentDir = getCurrentDir()
-      cmdResult = ($status.settings.buildOnSaveSettings.command).execCmdEx
+  cmdResult.output.execCmdResultToMessageLog(status.messageLog)
 
-    if getCurrentDir() != currentDir: currentDir.setCurrentDir
-
-    cmdResult.output.execCmdResultToMessageLog(status.messageLog)
+  if cmdResult.exitCode != 0: status.commandWindow.writeMessageFailedBuildOnSave(status.messageLog)
+  else: status.commandWindow.writeMessageSuccessBuildOnSave(status.messageLog)
 
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   if filename.len == 0:
@@ -458,10 +448,10 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
     status.bufStatus[status.currentBuffer].countChange = 0
 
     if status.settings.buildOnSaveSettings.buildOnSave: status.buildOnSave
+    else: status.commandWindow.writeMessageSaveFile(filename, status.messageLog)
   except IOError:
     status.commandWindow.writeSaveError(status.messageLog)
 
-  status.commandWindow.writeMessageSaveFile(filename, status.messageLog)
   status.changeMode(Mode.normal)
 
 proc quitCommand(status: var EditorStatus) =

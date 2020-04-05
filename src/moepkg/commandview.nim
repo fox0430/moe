@@ -115,6 +115,16 @@ proc writeMessageBuildOnSave*(cmdWin: var Window, messageLog: var seq[seq[Rune]]
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
   messageLog.add(mess.toRunes)
 
+proc writeMessageSuccessBuildOnSave*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+  const mess = "Success save and build"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  messageLog.add(mess.toRunes)
+
+proc writeMessageFailedBuildOnSave*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+  const mess = "Build failed"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  messageLog.add(mess.toRunes)
+
 proc writeNotEditorCommandError*(cmdWin: var Window, command: seq[seq[Rune]], messageLog: var seq[seq[Rune]]) =
   var cmd = ""
   for i in 0 ..< command.len: cmd = cmd & $command[i] & " "
