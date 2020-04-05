@@ -1,7 +1,7 @@
 import terminal
 import gapbuffer, ui, editorstatus, unicodeext, movement
 
-proc setMessageLog(status: var Editorstatus) =
+proc setMessageLog*(status: var Editorstatus) =
   status.bufStatus[status.currentBuffer].filename = ru"Buffer manager"
   for i in 0 ..< status.messageLog.len:
     if i == 0: status.bufStatus[status.currentBuffer].buffer[0] = status.messageLog[0]
@@ -9,7 +9,7 @@ proc setMessageLog(status: var Editorstatus) =
 
   status.updateHighlight(status.currentBuffer)
 
-proc exitLogViewer(status: var Editorstatus) = status.bufStatus.delete(status.currentBuffer)
+proc exitLogViewer*(status: var Editorstatus) = status.deleteBuffer(status.currentBuffer)
 
 proc messageLogViewer*(status: var Editorstatus) =
   status.addNewBuffer("")
