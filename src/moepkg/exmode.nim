@@ -344,9 +344,6 @@ proc multipleStatusBarSettingCommand(status: var Editorstatus, command: seq[Rune
   status.commandWindow.erase
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
 
-  exitUi()
-  echo status.settings.statusBar.multipleStatusBar
-
 proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
   if index < 0 or index > status.bufStatus.high:
     status.commandWindow.writeNoBufferDeletedError(status.messageLog)
