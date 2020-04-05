@@ -106,6 +106,9 @@ proc isHighlightFullWidthSpaceSettingCommand(command: seq[seq[RUne]]): bool =
 proc isMultipleStatusBarSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"multiplestatusbar"
 
+proc isBuildOnSaveSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"buildonsave"
+
 proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"noh"
 
@@ -317,6 +320,13 @@ proc systemClipboardSettingCommand(status: var Editorstatus, command: seq[Rune])
 proc highlightFullWidthSpaceSettingCommand(status: var Editorstatus, command: seq[Rune]) =
   if command == ru"on": status.settings.highlightFullWidthSpace = true
   elif command == ru"off": status.settings.highlightFullWidthSpace = false
+
+  status.commandWindow.erase
+  status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
+
+proc buildOnSaveSettingCommand(status: var Editorstatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.buildOnSaveSettings.buildOnSave = true
+  elif command == ru"off": status.settings.buildOnSaveSettings.buildOnSave = false
 
   status.commandWindow.erase
   status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
@@ -675,6 +685,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     highlightFullWidthSpaceSettingCommand(status, command[1])
   elif isMultipleStatusBarSettingCommand(command):
     multipleStatusBarSettingCommand(status, command[1])
+  elif isBuildOnSaveSettingCommand(command):
+    buildOnSaveSettingCommand(status, command[1])
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
