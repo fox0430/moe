@@ -243,6 +243,16 @@ proc writeStatusBarBufferManagerModeInfo(status: var EditorStatus, statusBarInde
   status.statusBar[statusBarIndex].window.append(ru " ".repeat(statusBarWidth - " BUFFER ".len), color)
   status.statusBar[statusBarIndex].window.write(0, statusBarWidth - info.len - 1, info, color)
 
+proc writeStatusLogViewerModeInfo(status: var EditorStatus, statusBarIndex: int) =
+  let
+    bufferIndex = if status.settings.statusBar.multipleStatusBar: status.statusBar[statusBarIndex].bufferIndex else: status.currentBuffer
+    color = EditorColorPair.statusBarNormalMode
+    info = fmt"{status.bufStatus[bufferIndex].currentLine + 1}/{status.bufStatus.len - 1}"
+    statusBarWidth = status.statusBar[statusBarIndex].window.width
+
+  status.statusBar[statusBarIndex].window.append(ru " ".repeat(statusBarWidth - " LOG ".len), color)
+  status.statusBar[statusBarIndex].window.write(0, statusBarWidth - info.len - 1, info, color)
+
 proc setModeStr(mode: Mode): string =
   case mode:
   of Mode.insert: result = " INSERT "
@@ -251,6 +261,7 @@ proc setModeStr(mode: Mode): string =
   of Mode.filer: result = " FILER "
   of Mode.bufManager: result = " BUFFER "
   of Mode.ex: result = " EX "
+  of Mode.logViewer: result = " LOG "
   else: result = " NORMAL "
 
 proc setModeStrColor(mode: Mode): EditorColorPair =
@@ -283,6 +294,7 @@ proc writeStatusBar*(status: var EditorStatus, statusBarIndex: int) =
   elif currentMode == Mode.replace: status.writeStatusBarNormalModeInfo(statusBarIndex)
   elif currentMode == Mode.filer: status.writeStatusBarFilerModeInfo(statusBarIndex)
   elif currentMode == Mode.bufManager: status.writeStatusBarBufferManagerModeInfo(statusBarIndex)
+  elif currentMode == Mode.logViewer: status.writeStatusLogViewerModeInfo(statusBarIndex)
   else: writeStatusBarNormalModeInfo(status, statusBarIndex)
 
   status.statusBar[statusBarIndex].window.refresh
