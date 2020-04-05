@@ -51,6 +51,8 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Color themes
 
+- Build on save
+
 - Multiple status bar
 
 ## Planned features
