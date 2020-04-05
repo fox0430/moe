@@ -24,9 +24,12 @@ proc messageLogViewer*(status: var Editorstatus) =
     let key = getKey(status.currentMainWindowNode.window)
 
     if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
+
     elif isControlK(key): status.moveNextWindow
     elif isControlJ(key): status.movePrevWindow
+
     elif key == ord(':'): status.changeMode(Mode.ex)
+
     elif key == ord('k') or isUpKey(key): status.bufStatus[status.currentBuffer].keyUp
     elif key == ord('j') or isDownKey(key): status.bufStatus[status.currentBuffer].keyDown
     elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key): keyLeft(status.bufStatus[status.currentBuffer])
@@ -34,3 +37,6 @@ proc messageLogViewer*(status: var Editorstatus) =
     elif key == ord('0') or isHomeKey(key): moveToFirstOfLine(status.bufStatus[status.currentBuffer])
     elif key == ord('$') or isEndKey(key): moveToLastOfLine(status.bufStatus[status.currentBuffer])
     elif key == ord('q') or isEscKey(key): status.exitLogViewer
+    elif key == ord('g'):
+      if getKey(status.currentMainWindowNode.window) == 'g': status.moveToFirstLine
+    elif key == ord('G'): status.moveToLastLine
