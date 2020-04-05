@@ -1,5 +1,5 @@
 import packages/docutils/highlite, strutils, terminal, os, strformat, tables, times, osproc, heapqueue
-import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils, undoredostack, window, color
+import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils, undoredostack, window, color, build
 
 type Platform* = enum
   linux, wsl, mac, other
@@ -59,6 +59,7 @@ type EditorSettings* = object
   highlightOtherUsesCurrentWord*: bool
   systemClipboard*: bool
   highlightFullWidthSpace*: bool
+  buildOnSaveSettings*: BuildOnSaveSettings
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -154,6 +155,7 @@ proc initEditorSettings*(): EditorSettings =
   result.highlightOtherUsesCurrentWord = true
   result.systemClipboard = true
   result.highlightFullWidthSpace = true
+  result.buildOnSaveSettings = BuildOnSaveSettings()
 
 proc initStatusBar*(): StatusBar = result.window = initWindow(1, 1, 1, 1, EditorColorPair.defaultChar)
 

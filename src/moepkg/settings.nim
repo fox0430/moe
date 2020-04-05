@@ -1,5 +1,5 @@
 import parsetoml, os
-import editorstatus, ui, color
+import editorstatus, ui, color, unicodeext
 from strutils import parseEnum
 
 proc getCursorType(cursorType, mode: string): CursorType =
@@ -131,6 +131,16 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["StatusBar"].contains("multipleStatusBar"):
         result.statusBar.multipleStatusBar = settings["StatusBar"]["multipleStatusBar"].getbool()
+
+  if settings.contains("BuildOnSave"):
+    if settings["BuildOnSave"].contains("buildOnSave"):
+      result.buildOnSaveSettings.buildOnSave = settings["BuildOnSave"]["buildOnSave"].getbool()
+
+    if settings["BuildOnSave"].contains("workspaceRoot"):
+      result.buildOnSaveSettings.workspaceRoot = settings["BuildOnSave"]["workspaceRoot"].getStr().toRunes
+
+    if settings["BuildOnSave"].contains("command"):
+      result.buildOnSaveSettings.workspaceRoot = settings["BuildOnSave"]["command"].getStr().toRunes
 
   if settings.contains("Theme"):
     if settings["Theme"].contains("baseTheme"):
