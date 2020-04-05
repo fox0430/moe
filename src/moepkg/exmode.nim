@@ -134,7 +134,8 @@ proc isChangePreveBufferCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"bprev"
 
 proc isJumpCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
-  return command.len == 1 and isDigit(command[0]) and status.bufStatus[status.currentBuffer].prevMode == Mode.normal
+  let prevMode = status.bufStatus[status.currentBuffer].prevMode
+  return command.len == 1 and isDigit(command[0]) and (prevMode == Mode.normal or prevMode == Mode.logviewer)
 
 proc isEditCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"e"
