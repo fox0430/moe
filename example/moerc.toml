@@ -46,6 +46,14 @@ systemClipboard = true
 
 highlightFullWidthSpace = true
 
+[BuildOnSaveSettings]
+
+buildOnSave = false
+
+# workspaceRoot = "/home/fox/git/moe"
+
+# command = "cd /home/fox/git/moe && nimble build"
+
 [TabLine]
 
 allBuffer = false
@@ -65,6 +73,8 @@ encoding = true
 language = true
 
 directory = true
+
+multipleStatusBar = true
 
 [Theme]
 
@@ -192,7 +202,7 @@ pcLinkBg = "default"
 
 popUpWindow = "gray100"
 
-popUpWindowBg = black"
+popUpWindowBg = "black"
 
 popUpWinCurrentLine = "blue"
 

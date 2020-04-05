@@ -1,5 +1,5 @@
 import unittest
-import moepkg/ui, moepkg/highlight, moepkg/editorstatus, moepkg/editorview, moepkg/gapbuffer, moepkg/unicodeext, moepkg/insertmode, moepkg/normalmode
+import moepkg/[ui, highlight, editorstatus, editorview, gapbuffer, unicodeext, insertmode, movement, editor, window, color]
 
 test "Add new buffer":
   var status = initEditorStatus()
@@ -19,13 +19,6 @@ test "Horizontal split window":
   status.addNewBuffer("")
   status.resize(100, 100)
   status.horizontalSplitWindow
-
-test "Close window":
-  var status = initEditorStatus()
-  status.addNewBuffer("")
-  status.resize(100, 100)
-  status.verticalSplitWindow
-  status.closeWindow(status.currentMainWindowNode)
 
 test "resize 1":
   var status = initEditorStatus()
@@ -57,7 +50,7 @@ test "Highlight of a pair of paren 1":
 
   block:
     status.bufStatus[0].buffer = initGapBuffer(@[ru"()"])
-    status.updateHighlight
+    status.updateHighlight(status.currentBuffer)
     status.update
 
     check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0)
@@ -65,7 +58,7 @@ test "Highlight of a pair of paren 1":
 
   block:
     status.bufStatus[0].buffer = initGapBuffer(@[ru"[]"])
-    status.updateHighlight
+    status.updateHighlight(status.currentBuffer)
     status.update
 
     check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0)
@@ -73,7 +66,7 @@ test "Highlight of a pair of paren 1":
 
   block:
     status.bufStatus[0].buffer = initGapBuffer(@[ru"{}"])
-    status.updateHighlight
+    status.updateHighlight(status.currentBuffer)
     status.update
 
     check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0)
@@ -81,7 +74,7 @@ test "Highlight of a pair of paren 1":
 
   block:
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(()"])
-    status.updateHighlight
+    status.updateHighlight(status.currentBuffer)
     status.update
 
     check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0 and status.bufStatus[0].highlight[0].lastColumn == 2)
@@ -370,4 +363,125 @@ test "Highlight full width space 2":
 
   status.update
 
-  check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[1].color == EditorColorPair.highlightFullWidthSpace and status.bufStatus[0].highlight[2].color == EditorColorPair.defaultChar)
+  check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar)
+  check(status.bufStatus[0].highlight[1].color == EditorColorPair.highlightFullWidthSpace)
+  check(status.bufStatus[0].highlight[2].color == EditorColorPair.defaultChar)
+
+test "Write tab line":
+  var status = initEditorStatus()
+  status.addNewBuffer("test.txt")
+
+  status.resize(100, 100)
+
+  check(status.tabWindow.width == 100)
+
+test "Close window":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.resize(100, 100)
+  status.verticalSplitWindow
+  status.closeWindow(status.currentMainWindowNode)
+
+test "Close window 2":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.resize(100, 100)
+  status.update
+
+  status.horizontalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  status.closeWindow(status.currentMainWindowNode)
+  status.resize(100, 100)
+  status.update
+
+  let windowNodeList = status.mainWindowNode.getAllWindowNode
+
+  check(windowNodeList.len == 1)
+
+  check(status.currentMainWindowNode.h == 98)
+  check(status.currentMainWindowNode.w == 100)
+
+test "Close window 3":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.resize(100, 100)
+  status.update
+
+  status.verticalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  status.horizontalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  status.closeWindow(status.currentMainWindowNode)
+  status.resize(100, 100)
+  status.update
+
+  let windowNodeList = status.mainWindowNode.getAllWindowNode
+
+  check(windowNodeList.len == 2)
+
+  for n in windowNodeList:
+    check(n.w == 50)
+    check(n.h == 98)
+
+test "Close window 4":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.resize(100, 100)
+  status.update
+
+  status.horizontalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  status.verticalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  status.closeWindow(status.currentMainWindowNode)
+  status.resize(100, 100)
+  status.update
+
+  let windowNodeList = status.mainWindowNode.getAllWindowNode
+
+  check(windowNodeList.len == 2)
+
+  check(windowNodeList[0].w == 100)
+  check(windowNodeList[0].h == 49)
+
+  check(windowNodeList[1].w == 100)
+  check(windowNodeList[1].h == 49)
+
+test "Close window 5":
+  var status = initEditorStatus()
+  status.addNewBuffer("test.nim")
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"echo 'a'"])
+
+  status.resize(100, 100)
+  status.update
+
+  status.verticalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  status.moveCurrentMainWindow(1)
+  status.addNewBuffer("test2.nim")
+  status.bufStatus[1].buffer = initGapBuffer(@[ru"proc a() = discard"])
+  status.changeCurrentBuffer(1)
+  status.resize(100, 100)
+  status.update
+
+  status.closeWindow(status.currentMainWindowNode)
+  status.resize(100, 100)
+  status.update
+
+  check(status.currentMainWindowNode.bufferIndex == 0)
+  check(status.currentBuffer == 0)

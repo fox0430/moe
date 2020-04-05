@@ -6,13 +6,27 @@ Currently you can use normal mode, visual mode, replace mode, insert mode, ex mo
 
 # Install and compile
 
-I recommend using nimble.
+## Requires
+- Nim 1.0 or higher
+- ncurses (ncursesw)
+
+I recommend using nimble to install:
+
 ```
 $ nimble install moe
 ```
-If you want to compile or use a version in development.
+
+If you want to compile moe or use a version in development:
+
 ```
 $ git clone https://github.com/fox0430/moe
 $ cd moe
 $ nimble install
+```
+
+If you are running Linux Ubuntu, or a distribution based on Ubuntu, you will likely need to run
+
+```
+$ sudo apt install libncurses5-dev libncursesw5-dev
+$ sudo ln -s /lib/x86_64-linux-gnu/libncursesw.so.5 /lib/x86_64-linux-gnu/libncursesw.so
 ```

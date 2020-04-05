@@ -1,5 +1,5 @@
 import terminal
-import editorstatus, ui, normalmode, unicodeext
+import editorstatus, ui, normalmode, unicodeext, movement, editor
 
 proc replaceMode*(status: var EditorStatus) =
 
@@ -7,7 +7,7 @@ proc replaceMode*(status: var EditorStatus) =
 
   while status.bufStatus[status.currentBuffer].mode == Mode.replace:
     if bufferChanged:
-      status.updateHighlight
+      status.updateHighlight(status.currentBuffer)
       bufferChanged = false
 
     status.update
