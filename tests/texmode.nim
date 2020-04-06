@@ -207,7 +207,7 @@ test "Split window command":
 
   const command = @[ru"vs"]
   status.exModeCommand(command)
-  check(status.numOfMainWindow == 2)
+  check(status.currentWorkSpace.numOfMainWindow == 2)
 
 test "Live reload of configuration file setting command":
   var status = initEditorStatus()

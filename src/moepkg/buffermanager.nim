@@ -26,7 +26,7 @@ proc deleteSelectedBuffer(status: var Editorstatus) =
   let deleteIndex = status.bufStatus[status.currentBuffer].currentLine
 
   var qeue = initHeapQueue[WindowNode]()
-  for node in status.mainWindowNode.child: qeue.push(node)
+  for node in status.currentWorkSpace.mainWindowNode.child: qeue.push(node)
   while qeue.len > 0:
     for i in 0 ..< qeue.len:
       let node = qeue.pop
@@ -37,11 +37,11 @@ proc deleteSelectedBuffer(status: var Editorstatus) =
 
   status.resize(terminalHeight(), terminalWidth())
 
-  if status.numOfMainWindow > 0:
+  if status.currentWorkSpace.numOfMainWindow > 0:
     status.bufStatus.delete(deleteIndex)
 
     var qeue = initHeapQueue[WindowNode]()
-    for node in status.mainWindowNode.child: qeue.push(node)
+    for node in status.currentWorkSpace.mainWindowNode.child: qeue.push(node)
     while qeue.len > 0:
       for i in 0 ..< qeue.len:
         var node = qeue.pop
@@ -52,7 +52,7 @@ proc deleteSelectedBuffer(status: var Editorstatus) =
 
     if status.currentBuffer > deleteIndex: dec(status.currentBuffer)
     if status.bufStatus[status.currentBuffer].currentLine > 0: dec(status.bufStatus[status.currentBuffer].currentLine)
-    status.currentMainWindowNode = status.mainWindowNode.searchByWindowIndex(status.numOfMainWindow - 1)
+    status.currentWorkSpace.currentMainWindowNode = status.currentWorkSpace.mainWindowNode.searchByWindowIndex(status.currentWorkSpace.numOfMainWindow - 1)
     status.setBufferList
 
     status.resize(terminalHeight(), terminalWidth())
@@ -74,7 +74,7 @@ proc bufferManager*(status: var Editorstatus) =
     status.updateBufferManagerHighlight
     status.update
     setCursor(false)
-    let key = getKey(status.currentMainWindowNode.window)
+    let key = getKey(status.currentWorkSpace.currentMainWindowNode.window)
 
     if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
     elif isControlK(key): status.moveNextWindow

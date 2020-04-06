@@ -21,7 +21,7 @@ proc messageLogViewer*(status: var Editorstatus) =
   while status.bufStatus[status.currentBuffer].mode == Mode.logViewer:
     status.update
 
-    let key = getKey(status.currentMainWindowNode.window)
+    let key = getKey(status.currentWorkSpace.currentMainWindowNode.window)
 
     if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
 
@@ -38,5 +38,5 @@ proc messageLogViewer*(status: var Editorstatus) =
     elif key == ord('$') or isEndKey(key): moveToLastOfLine(status.bufStatus[status.currentBuffer])
     elif key == ord('q') or isEscKey(key): status.exitLogViewer
     elif key == ord('g'):
-      if getKey(status.currentMainWindowNode.window) == 'g': status.moveToFirstLine
+      if getKey(status.currentWorkSpace.currentMainWindowNode.window) == 'g': status.moveToFirstLine
     elif key == ord('G'): status.moveToLastLine

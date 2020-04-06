@@ -354,7 +354,7 @@ test "Visual mode: Join lines":
   let area = status.bufStatus[0].selectArea
 
   status.update
-  status.bufStatus[status.currentBuffer].joinLines(status.currentMainWindowNode, area)
+  status.bufStatus[status.currentBuffer].joinLines(status.currentWorkSpace.currentMainWindowNode, area)
 
   check(status.bufStatus[status.currentBuffer].buffer.len == 1 and status.bufStatus[status.currentBuffer].buffer[0] == ru"abcdefghi")
 
@@ -376,7 +376,7 @@ test "Visual block mode: Join lines":
   let area = status.bufStatus[0].selectArea
 
   status.update
-  status.bufStatus[status.currentBuffer].joinLines(status.currentMainWindowNode, area)
+  status.bufStatus[status.currentBuffer].joinLines(status.currentWorkSpace.currentMainWindowNode, area)
 
   check(status.bufStatus[status.currentBuffer].buffer.len == 1 and status.bufStatus[status.currentBuffer].buffer[0] == ru"abcdefghi")
 
