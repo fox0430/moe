@@ -291,6 +291,7 @@ proc filerMode*(status: var EditorStatus) =
 
     elif isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
+      status.commandWindow.erase
       filerStatus.viewUpdate = true
 
     elif key == ord('/'): searchFileMode(status, filerStatus)

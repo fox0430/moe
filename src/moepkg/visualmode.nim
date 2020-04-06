@@ -254,6 +254,7 @@ proc visualMode*(status: var EditorStatus) =
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
+      status.commandWindow.erase
     elif isEscKey(key) or isControlSquareBracketsRight(key):
       status.updatehighlight(status.currentBuffer)
       status.changeMode(Mode.normal)
