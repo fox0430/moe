@@ -263,6 +263,7 @@ proc normalMode*(status: var EditorStatus) =
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
+      status.commandWindow.erase
     elif key == ord('/'):
       status.changeMode(Mode.search)
     elif key == ord(':'):

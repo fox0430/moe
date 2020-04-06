@@ -23,7 +23,9 @@ proc messageLogViewer*(status: var Editorstatus) =
 
     let key = getKey(status.currentMainWindowNode.window)
 
-    if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
+    if isResizekey(key):
+      status.resize(terminalHeight(), terminalWidth())
+      status.commandWindow.erase
 
     elif isControlK(key): status.moveNextWindow
     elif isControlJ(key): status.movePrevWindow
