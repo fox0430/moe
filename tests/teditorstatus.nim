@@ -26,7 +26,7 @@ test "resize 1":
   status.resize(100, 100)
   status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
   status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
-  status.currentWorkSpace.currentMainWindowNode.view = initEditorView(status.bufStatus[0].buffer, 1, 1)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = initEditorView(status.bufStatus[0].buffer, 1, 1)
   status.resize(0, 0)
 
 test "resize 2":
@@ -35,12 +35,12 @@ test "resize 2":
   status.resize(100, 100)
   status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
   status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
-  status.currentWorkSpace.currentMainWindowNode.view = initEditorView(status.bufStatus[0].buffer, 20, 4)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = initEditorView(status.bufStatus[0].buffer, 20, 4)
   status.resize(20, 4)
   status.bufStatus[0].currentColumn = 1
   status.changeMode(Mode.insert)
   for i in 0 ..< 10:
-    status.bufStatus[0].keyEnter(status.currentWorkSpace.currentMainWindowNode, status.settings.autoCloseParen)
+    status.bufStatus[0].keyEnter(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoCloseParen)
     status.update
 
 test "Highlight of a pair of paren 1":
@@ -50,7 +50,8 @@ test "Highlight of a pair of paren 1":
 
   block:
     status.bufStatus[0].buffer = initGapBuffer(@[ru"()"])
-    status.updateHighlight(status.currentBuffer)
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+    status.updateHighlight(currentBufferIndex)
     status.update
 
     check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0)
@@ -58,7 +59,8 @@ test "Highlight of a pair of paren 1":
 
   block:
     status.bufStatus[0].buffer = initGapBuffer(@[ru"[]"])
-    status.updateHighlight(status.currentBuffer)
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+    status.updateHighlight(currentBufferIndex)
     status.update
 
     check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0)
@@ -66,7 +68,8 @@ test "Highlight of a pair of paren 1":
 
   block:
     status.bufStatus[0].buffer = initGapBuffer(@[ru"{}"])
-    status.updateHighlight(status.currentBuffer)
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+    status.updateHighlight(currentBufferIndex)
     status.update
 
     check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0)
@@ -74,7 +77,8 @@ test "Highlight of a pair of paren 1":
 
   block:
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(()"])
-    status.updateHighlight(status.currentBuffer)
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+    status.updateHighlight(currentBufferIndex)
     status.update
 
     check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0 and status.bufStatus[0].highlight[0].lastColumn == 2)
@@ -111,7 +115,7 @@ test "Highlight of a pair of paren 4":
 
   status.bufStatus[0].keyDown
   status.changeMode(Mode.insert)
-  status.bufStatus[0].keyEnter(status.currentWorkSpace.currentMainWindowNode, status.settings.autoIndent)
+  status.bufStatus[0].keyEnter(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoIndent)
 
   status.update
 
@@ -132,7 +136,7 @@ test "Auto delete paren 1":
     var status = initEditorStatus()
     status.addNewBuffer("")
     status.bufStatus[0].buffer = initGapBuffer(@[ru"()"])
-    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentWorkSpace.currentMainWindowNode)
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"")
 
@@ -141,7 +145,7 @@ test "Auto delete paren 1":
     status.addNewBuffer("")
     status.bufStatus[0].buffer = initGapBuffer(@[ru"()"])
     status.bufStatus[0].keyRight
-    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentWorkSpace.currentMainWindowNode)
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"")
 
@@ -150,7 +154,7 @@ test "Auto delete paren 2":
     var status = initEditorStatus()
     status.addNewBuffer("")
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(())"])
-    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentWorkSpace.currentMainWindowNode)
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"()")
 
@@ -159,7 +163,7 @@ test "Auto delete paren 2":
     status.addNewBuffer("")
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(())"])
     status.bufStatus[0].keyRight
-    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentWorkSpace.currentMainWindowNode)
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"()")
 
@@ -168,7 +172,7 @@ test "Auto delete paren 2":
     status.addNewBuffer("")
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(())"])
     for i in 0 ..< 2: status.bufStatus[0].keyRight
-    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentWorkSpace.currentMainWindowNode)
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"()")
 
@@ -177,7 +181,7 @@ test "Auto delete paren 2":
     status.addNewBuffer("")
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(())"])
     for i in 0 ..< 3: status.bufStatus[0].keyRight
-    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentWorkSpace.currentMainWindowNode)
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"()")
 
@@ -186,7 +190,7 @@ test "Auto delete paren 3":
     var status = initEditorStatus()
     status.addNewBuffer("")
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(()"])
-    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentWorkSpace.currentMainWindowNode)
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"()")
 
@@ -195,7 +199,7 @@ test "Auto delete paren 3":
     status.addNewBuffer("")
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(()"])
     status.bufStatus[0].keyRight
-    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentWorkSpace.currentMainWindowNode)
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"(")
 
@@ -204,7 +208,7 @@ test "Auto delete paren 3":
     status.addNewBuffer("")
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(()"])
     for i in 0 ..< 2: status.bufStatus[0].keyRight
-    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentWorkSpace.currentMainWindowNode)
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"(")
 
@@ -212,7 +216,7 @@ test "Auto delete paren 3":
     var status = initEditorStatus()
     status.addNewBuffer("")
     status.bufStatus[0].buffer = initGapBuffer(@[ru"())"])
-    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentWorkSpace.currentMainWindowNode)
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru")")
 
@@ -221,7 +225,7 @@ test "Auto delete paren 3":
     status.addNewBuffer("")
     status.bufStatus[0].buffer = initGapBuffer(@[ru"())"])
     status.bufStatus[0].keyRight
-    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentWorkSpace.currentMainWindowNode)
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru")")
 
@@ -230,7 +234,7 @@ test "Auto delete paren 3":
     status.addNewBuffer("")
     status.bufStatus[0].buffer = initGapBuffer(@[ru"())"])
     for i in 0 ..< 3: status.bufStatus[0].keyRight
-    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentWorkSpace.currentMainWindowNode)
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"()")
 
@@ -239,7 +243,7 @@ test "Auto delete paren 4":
     var status = initEditorStatus()
     status.addNewBuffer("")
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(", ru")"])
-    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentWorkSpace.currentMainWindowNode)
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"" and status.bufStatus[0].buffer[1] == ru"")
 
@@ -248,7 +252,7 @@ test "Auto delete paren 4":
     status.addNewBuffer("")
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(", ru")"])
     status.bufStatus[0].keyDown
-    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentWorkSpace.currentMainWindowNode)
+    status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"" and status.bufStatus[0].buffer[1] == ru"")
 
@@ -259,7 +263,7 @@ test "Auto delete paren 5":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"()"])
     status.changeMode(Mode.insert)
     status.bufStatus[0].keyRight
-    status.bufStatus[0].keyBackspace(status.settings.autoDeleteParen, status.currentWorkSpace.currentMainWindowNode)
+    status.bufStatus[0].keyBackspace(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"")
 
@@ -269,7 +273,7 @@ test "Auto delete paren 5":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"()"])
     status.changeMode(Mode.insert)
     for i in 0 ..< 2: status.bufStatus[0].keyRight
-    status.bufStatus[0].keyBackspace(status.settings.autoDeleteParen, status.currentWorkSpace.currentMainWindowNode)
+    status.bufStatus[0].keyBackspace(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"")
 
@@ -280,7 +284,7 @@ test "Auto delete paren 6":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(a(a))"])
     status.changeMode(Mode.insert)
     for i in 0 ..< 5: status.bufStatus[0].keyRight
-    status.bufStatus[0].keyBackspace(status.settings.autoDeleteParen, status.currentWorkSpace.currentMainWindowNode)
+    status.bufStatus[0].keyBackspace(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"(aa)")
 
@@ -290,7 +294,7 @@ test "Auto delete paren 6":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(a(a))"])
     status.changeMode(Mode.insert)
     for i in 0 ..< 6: status.bufStatus[0].keyRight
-    status.bufStatus[0].keyBackspace(status.settings.autoDeleteParen, status.currentWorkSpace.currentMainWindowNode)
+    status.bufStatus[0].keyBackspace(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"a(a)")
 
@@ -380,7 +384,7 @@ test "Close window":
   status.addNewBuffer("")
   status.resize(100, 100)
   status.verticalSplitWindow
-  status.closeWindow(status.currentWorkSpace.currentMainWindowNode)
+  status.closeWindow(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
 test "Close window 2":
   var status = initEditorStatus()
@@ -393,16 +397,16 @@ test "Close window 2":
   status.resize(100, 100)
   status.update
 
-  status.closeWindow(status.currentWorkSpace.currentMainWindowNode)
+  status.closeWindow(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
   status.resize(100, 100)
   status.update
 
-  let windowNodeList = status.currentWorkSpace.mainWindowNode.getAllWindowNode
+  let windowNodeList = status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.getAllWindowNode
 
   check(windowNodeList.len == 1)
 
-  check(status.currentWorkSpace.currentMainWindowNode.h == 98)
-  check(status.currentWorkSpace.currentMainWindowNode.w == 100)
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.h == 98)
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.w == 100)
 
 test "Close window 3":
   var status = initEditorStatus()
@@ -419,11 +423,11 @@ test "Close window 3":
   status.resize(100, 100)
   status.update
 
-  status.closeWindow(status.currentWorkSpace.currentMainWindowNode)
+  status.closeWindow(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
   status.resize(100, 100)
   status.update
 
-  let windowNodeList = status.currentWorkSpace.mainWindowNode.getAllWindowNode
+  let windowNodeList = status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.getAllWindowNode
 
   check(windowNodeList.len == 2)
 
@@ -446,11 +450,11 @@ test "Close window 4":
   status.resize(100, 100)
   status.update
 
-  status.closeWindow(status.currentWorkSpace.currentMainWindowNode)
+  status.closeWindow(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
   status.resize(100, 100)
   status.update
 
-  let windowNodeList = status.currentWorkSpace.mainWindowNode.getAllWindowNode
+  let windowNodeList = status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.getAllWindowNode
 
   check(windowNodeList.len == 2)
 
@@ -479,9 +483,8 @@ test "Close window 5":
   status.resize(100, 100)
   status.update
 
-  status.closeWindow(status.currentWorkSpace.currentMainWindowNode)
+  status.closeWindow(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
   status.resize(100, 100)
   status.update
 
-  check(status.currentWorkSpace.currentMainWindowNode.bufferIndex == 0)
-  check(status.currentBuffer == 0)
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex == 0)

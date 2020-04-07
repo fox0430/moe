@@ -8,5 +8,5 @@ test "Issue #474":
   status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
   status.resize(10, 10)
 
-  for i in 0..<100: insertCharacter(status.bufStatus[0], status.currentWorkSpace.currentMainWindowNode, status.settings.autoCloseParen, ru'a')
+  for i in 0..<100: insertCharacter(status.bufStatus[0], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoCloseParen, ru'a')
   status.update
