@@ -44,7 +44,7 @@ proc main() =
 
   disableControlC()
 
-  while status.workSpace.len > 0 and status.currentWorkSpace.numOfMainWindow > 0:
+  while status.workSpace.len > 0 and status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow > 0:
 
     case status.bufStatus[status.currentBuffer].mode:
     of Mode.normal: normalMode(status)

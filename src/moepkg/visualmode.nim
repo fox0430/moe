@@ -204,13 +204,13 @@ proc visualCommand*(status: var EditorStatus, area: var SelectArea, key: Rune) =
 
   if key == ord('y') or isDcKey(key): status.bufStatus[status.currentBuffer].yankBuffer(status.registers, area, status.platform, clipboard)
   elif key == ord('x') or key == ord('d'): status.bufStatus[status.currentBuffer].deleteBuffer(status.registers, area, status.platform, clipboard)
-  elif key == ord('>'): status.bufStatus[status.currentBuffer].addIndent(status.currentWorkSpace.currentMainWindowNode, area, status.settings.tabStop)
-  elif key == ord('<'): status.bufStatus[status.currentBuffer].deleteIndent(status.currentWorkSpace.currentMainWindowNode, area, status.settings.tabStop)
-  elif key == ord('J'): status.bufStatus[status.currentBuffer].joinLines(status.currentWorkSpace.currentMainWindowNode, area)
+  elif key == ord('>'): status.bufStatus[status.currentBuffer].addIndent(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, area, status.settings.tabStop)
+  elif key == ord('<'): status.bufStatus[status.currentBuffer].deleteIndent(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, area, status.settings.tabStop)
+  elif key == ord('J'): status.bufStatus[status.currentBuffer].joinLines(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, area)
   elif key == ord('u'): status.bufStatus[status.currentBuffer].toLowerString(area)
   elif key == ord('U'): status.bufStatus[status.currentBuffer].toUpperString(area)
   elif key == ord('r'):
-    let ch = status.currentWorkSpace.currentMainWindowNode.window.getKey
+    let ch = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.getKey
     if not isEscKey(ch): status.bufStatus[status.currentBuffer].replaceCharactor(area, ch)
   else: discard
 
@@ -222,12 +222,12 @@ proc visualBlockCommand*(status: var EditorStatus, area: var SelectArea, key: Ru
   if key == ord('y') or isDcKey(key): status.bufStatus[status.currentBuffer].yankBufferBlock(status.registers, area, status.platform, clipboard)
   elif key == ord('x') or key == ord('d'): status.bufStatus[status.currentBuffer].deleteBufferBlock(status.registers, area, status.platform, clipboard)
   elif key == ord('>'): status.bufStatus[status.currentBuffer].insertIndent(area, status.settings.tabStop)
-  elif key == ord('<'): status.bufStatus[status.currentBuffer].deleteIndent(status.currentWorkSpace.currentMainWindowNode, area, status.settings.tabStop)
-  elif key == ord('J'): status.bufStatus[status.currentBuffer].joinLines(status.currentWorkSpace.currentMainWindowNode, area)
+  elif key == ord('<'): status.bufStatus[status.currentBuffer].deleteIndent(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, area, status.settings.tabStop)
+  elif key == ord('J'): status.bufStatus[status.currentBuffer].joinLines(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, area)
   elif key == ord('u'): status.bufStatus[status.currentBuffer].toLowerStringBlock(area)
   elif key == ord('U'): status.bufStatus[status.currentBuffer].toUpperStringBlock(area)
   elif key == ord('r'):
-    let ch = status.currentWorkSpace.currentMainWindowNode.window.getKey
+    let ch = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.getKey
     if not isEscKey(ch): status.bufStatus[status.currentBuffer].replaceCharactorBlock(area, ch)
   else: discard
 
@@ -247,7 +247,7 @@ proc visualMode*(status: var EditorStatus) =
     var key: Rune = Rune('\0')
     while key == Rune('\0'):
       status.eventLoopTask
-      key = getKey(status.currentWorkSpace.currentMainWindowNode.window)
+      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
 
     status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
     status.bufStatus[status.currentBuffer].tryRecordCurrentPosition
@@ -281,7 +281,7 @@ proc visualMode*(status: var EditorStatus) =
     elif key == ord('G'):
       moveToLastLine(status)
     elif key == ord('g'):
-      if getKey(status.currentWorkSpace.currentMainWindowNode.window) == ord('g'): moveToFirstLine(status)
+      if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window) == ord('g'): moveToFirstLine(status)
     elif key == ord('i'):
       status.bufStatus[status.currentBuffer].currentLine = status.bufStatus[currentBuf].selectArea.startLine
       status.changeMode(Mode.insert)

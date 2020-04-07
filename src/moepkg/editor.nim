@@ -200,7 +200,7 @@ proc pasteLines(status: var EditorStatus) =
     status.bufStatus[status.currentBuffer].buffer.insert(status.registers.yankedLines[i], status.bufStatus[status.currentBuffer].currentLine + i + 1)
 
   let index = status.currentBuffer
-  status.currentWorkSpace.currentMainWindowNode.view.reload(status.bufStatus[index].buffer, min(status.currentWorkSpace.currentMainWindowNode.view.originalLine[0], status.bufStatus[index].buffer.high))
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.reload(status.bufStatus[index].buffer, min(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.originalLine[0], status.bufStatus[index].buffer.high))
   inc(status.bufStatus[status.currentBuffer].countChange)
 
 proc yankString*(status: var EditorStatus, length: int) =
@@ -254,7 +254,7 @@ proc pasteString(status: var EditorStatus) =
 
   status.bufStatus[status.currentBuffer].currentColumn += status.registers.yankedStr.high - 1
 
-  status.currentWorkSpace.currentMainWindowNode.view.reload(status.bufStatus[index].buffer, min(status.currentWorkSpace.currentMainWindowNode.view.originalLine[0], status.bufStatus[index].buffer.high))
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.reload(status.bufStatus[index].buffer, min(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.originalLine[0], status.bufStatus[index].buffer.high))
   inc(status.bufStatus[index].countChange)
 
 proc pasteAfterCursor*(status: var EditorStatus) =
@@ -265,7 +265,7 @@ proc pasteAfterCursor*(status: var EditorStatus) =
     pasteLines(status)
 
 proc pasteBeforeCursor*(status: var EditorStatus) =
-  status.currentWorkSpace.currentMainWindowNode.view.reload(status.bufStatus[status.currentBuffer].buffer, status.currentWorkSpace.currentMainWindowNode.view.originalLine[0])
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.reload(status.bufStatus[status.currentBuffer].buffer, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.originalLine[0])
 
   if status.registers.yankedLines.len > 0:
     pasteLines(status)

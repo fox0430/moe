@@ -205,7 +205,7 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus, currentWin: WindowNode, se
   currentWin.view = initEditorView(bufStatus.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
 
 proc updateFilerView*(status: var EditorStatus, filerStatus: var FilerStatus) =
-  fileNameToGapBuffer(status.bufStatus[status.currentBuffer], status.currentWorkSpace.currentMainWindowNode, status.settings, filerStatus)
+  fileNameToGapBuffer(status.bufStatus[status.currentBuffer], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings, filerStatus)
   status.resize(terminalHeight(), terminalWidth())
   status.update
   filerStatus.viewUpdate = false
@@ -237,12 +237,12 @@ proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string)
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     tmpCurrentLine = status.bufStatus[status.currentBuffer].currentLine
 
-  status.currentWorkSpace.currentMainWindowNode.view = initEditorView(status.bufStatus[status.currentBuffer].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = initEditorView(status.bufStatus[status.currentBuffer].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
   status.bufStatus[status.currentBuffer].currentLine = 0
 
   status.update
   setCursor(false)
-  while isResizekey(status.currentWorkSpace.currentMainWindowNode.window.getKey):
+  while isResizekey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.getKey):
     status.resize(terminalHeight(), terminalWidth())
     status.update
     setCursor(false)
@@ -263,9 +263,9 @@ proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
   status.bufStatus[status.currentBuffer].currentLine = 0
   filerStatus.viewUpdate = true
   if filerStatus.dirList.len == 0:
-    status.currentWorkSpace.currentMainWindowNode.window.erase
-    status.currentWorkSpace.currentMainWindowNode.window.write(0, 0, "not found", EditorColorPair.commandBar)
-    status.currentWorkSpace.currentMainWindowNode.window.refresh
+    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.erase
+    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.write(0, 0, "not found", EditorColorPair.commandBar)
+    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.refresh
     discard getKey(status.commandWindow)
     status.commandWindow.erase
     status.commandWindow.refresh
@@ -282,7 +282,7 @@ proc filerMode*(status: var EditorStatus) =
     if filerStatus.viewUpdate: updateFilerView(status, filerStatus)
 
     setCursor(false)
-    let key = getKey(status.currentWorkSpace.currentMainWindowNode.window)
+    let key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
 
     status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
     status.bufStatus[status.currentBuffer].tryRecordCurrentPosition

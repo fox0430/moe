@@ -152,7 +152,7 @@ proc insertMode*(status: var EditorStatus) =
     var key: Rune = Rune('\0')
     while key == Rune('\0'):
       status.eventLoopTask
-      key = getKey(status.currentWorkSpace.currentMainWindowNode.window)
+      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
 
     status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
     status.bufStatus[status.currentBuffer].tryRecordCurrentPosition
@@ -180,19 +180,19 @@ proc insertMode*(status: var EditorStatus) =
     elif isEndKey(key):
       moveToLastOfLine(status.bufStatus[status.currentBuffer])
     elif isDcKey(key):
-      status.bufStatus[status.currentBuffer].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentWorkSpace.currentMainWindowNode)
+      status.bufStatus[status.currentBuffer].deleteCurrentCharacter(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
       bufferChanged = true
     elif isBackspaceKey(key):
-      status.bufStatus[status.currentBuffer].keyBackspace(status.settings.autoDeleteParen, status.currentWorkSpace.currentMainWindowNode)
+      status.bufStatus[status.currentBuffer].keyBackspace(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
       bufferChanged = true
     elif isEnterKey(key):
-      keyEnter(status.bufStatus[status.currentBuffer], status.currentWorkSpace.currentMainWindowNode, status.settings.autoIndent)
+      keyEnter(status.bufStatus[status.currentBuffer], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoIndent)
       bufferChanged = true
     elif key == ord('\t'):
-      insertTab(status.bufStatus[status.currentBuffer], status.currentWorkSpace.currentMainWindowNode, status.settings.tabStop, status.settings.autoCloseParen)
+      insertTab(status.bufStatus[status.currentBuffer], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.tabStop, status.settings.autoCloseParen)
       bufferChanged = true
     else:
-      insertCharacter(status.bufStatus[status.currentBuffer], status.currentWorkSpace.currentMainWindowNode, status.settings.autoCloseParen, key)
+      insertCharacter(status.bufStatus[status.currentBuffer], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoCloseParen, key)
       bufferChanged = true
 
   stdout.write "\x1b[2 q"
