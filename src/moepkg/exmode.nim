@@ -583,9 +583,7 @@ proc shellCommand(status: var EditorStatus, shellCommand: string) =
   status.commandWindow.refresh
 
 proc listAllBufferCommand(status: var Editorstatus) =
-  let
-    currentBufferIndex = status.bufferIndexInCurrentWindow
-    swapCurrentBufferIndex = currentBufferIndex
+  let swapCurrentBufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
   status.addNewBuffer("")
   status.changeCurrentBuffer(status.bufStatus.high)
 
@@ -597,6 +595,7 @@ proc listAllBufferCommand(status: var Editorstatus) =
     if currentMode == Mode.filer or (currentMode == Mode.ex and prevMode == Mode.filer): line = getCurrentDir().toRunes
     else: line = status.bufStatus[i].filename & ru"  line " & ($status.bufStatus[i].buffer.len).toRunes
 
+    let currentBufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
     if i == 0: status.bufStatus[currentBufferIndex].buffer[0] = line
     else: status.bufStatus[currentBufferIndex].buffer.insert(line, i)
 
@@ -604,9 +603,10 @@ proc listAllBufferCommand(status: var Editorstatus) =
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useTab = if status.settings.tabLine.useTab: 1 else: 0
     swapCurrentLineNumStting = status.settings.view.currentLineNumber
+    currentBufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
   
   status.settings.view.currentLineNumber = false
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = initEditorView(status.bufStatus[currentBufferIndex].buffer, terminalHeight() - useStatusBar - useTab - 1, terminalWidth())
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = status.bufStatus[currentBufferIndex].buffer.initEditorView(terminalHeight() - useStatusBar - useTab - 1, terminalWidth())
   status.bufStatus[currentBufferIndex].currentLine = 0
 
   status.updateHighlight(currentBufferIndex)
@@ -625,7 +625,6 @@ proc listAllBufferCommand(status: var Editorstatus) =
 
   status.commandWindow.erase
   status.commandWindow.refresh
-
 proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
   let
     replaceInfo = parseReplaceCommand(command)
