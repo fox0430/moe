@@ -56,35 +56,41 @@ proc moveToFirstOfNextLine*(bufStatus: var BufferStatus) =
 
 proc jumpLine*(status: var EditorStatus, destination: int) =
   let
-    currentLine = status.bufStatus[status.currentBuffer].currentLine
+    currentBufferIndex = status.bufferIndexInCurrentWindow
+    currentLine = status.bufStatus[currentBufferIndex].currentLine
     view = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view
-  status.bufStatus[status.currentBuffer].currentLine = destination
-  status.bufStatus[status.currentBuffer].currentColumn = 0
-  status.bufStatus[status.currentBuffer].expandedColumn = 0
+
+  status.bufStatus[currentBufferIndex].currentLine = destination
+  status.bufStatus[currentBufferIndex].currentColumn = 0
+  status.bufStatus[currentBufferIndex].expandedColumn = 0
 
   if not (view.originalLine[0] <= destination and (view.originalLine[view.height - 1] == -1 or destination <= view.originalLine[view.height - 1])):
     var startOfPrintedLines = 0
-    if destination > status.bufStatus[status.currentBuffer].buffer.len - 1 - status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.height - 1:
-      startOfPrintedLines = status.bufStatus[status.currentBuffer].buffer.len - 1 - status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.height - 1
+    if destination > status.bufStatus[currentBufferIndex].buffer.len - 1 - status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.height - 1:
+      startOfPrintedLines = status.bufStatus[currentBufferIndex].buffer.len - 1 - status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.height - 1
     else:
       startOfPrintedLines = max(destination - (currentLine - status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.originalLine[0]), 0)
-    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.reload(status.bufStatus[status.currentBuffer].buffer, startOfPrintedLines)
+    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.reload(status.bufStatus[currentBufferIndex].buffer, startOfPrintedLines)
 
 proc moveToFirstLine*(status: var EditorStatus) = jumpLine(status, 0)
 
 proc moveToLastLine*(status: var EditorStatus) =
-  if status.bufStatus[status.currentBuffer].cmdLoop > 1: jumpLine(status, status.bufStatus[status.currentBuffer].cmdLoop - 1)
-  else: jumpLine(status, status.bufStatus[status.currentBuffer].buffer.len - 1)
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+
+  if status.bufStatus[currentBufferIndex].cmdLoop > 1: jumpLine(status, status.bufStatus[currentBufferIndex].cmdLoop - 1)
+  else: jumpLine(status, status.bufStatus[currentBufferIndex].buffer.len - 1)
 
 proc pageUp*(status: var EditorStatus) =
-  let destination = max(status.bufStatus[status.currentBuffer].currentLine - status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.height, 0)
+  let
+    currentBufferIndex = status.bufferIndexInCurrentWindow
+    destination = max(status.bufStatus[currentBufferIndex].currentLine - status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.height, 0)
 
   if status.settings.smoothScroll:
-    let  currentLine = status.bufStatus[status.currentBuffer].currentLine
+    let  currentLine = status.bufStatus[currentBufferIndex].currentLine
     for i in countdown(currentLine, destination):
       if i == 0: break
 
-      status.bufStatus[status.currentBuffer].keyUp
+      status.bufStatus[currentBufferIndex].keyUp
       status.update
       status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.setTimeout(status.settings.smoothScrollSpeed)
       var key: Rune = ru'\0'
@@ -99,14 +105,15 @@ proc pageUp*(status: var EditorStatus) =
 
 proc pageDown*(status: var EditorStatus) =
   let
-    destination = min(status.bufStatus[status.currentBuffer].currentLine + status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.height, status.bufStatus[status.currentBuffer].buffer.len - 1)
-    currentLine = status.bufStatus[status.currentBuffer].currentLine
+    currentBufferIndex = status.bufferIndexInCurrentWindow
+    destination = min(status.bufStatus[currentBufferIndex].currentLine + status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.height, status.bufStatus[currentBufferIndex].buffer.len - 1)
+    currentLine = status.bufStatus[currentBufferIndex].currentLine
 
   if status.settings.smoothScroll:
     for i in currentLine ..< destination:
-      if i == status.bufStatus[status.currentBuffer].buffer.high: break
+      if i == status.bufStatus[currentBufferIndex].buffer.high: break
 
-      status.bufStatus[status.currentBuffer].keyDown
+      status.bufStatus[currentBufferIndex].keyDown
       status.update
       status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.setTimeout(status.settings.smoothScrollSpeed)
       var key: Rune = ru'\0'
@@ -118,13 +125,13 @@ proc pageDown*(status: var EditorStatus) =
 
   else:
     let  view = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view
-    status.bufStatus[status.currentBuffer].currentLine = destination
-    status.bufStatus[status.currentBuffer].currentColumn = 0
-    status.bufStatus[status.currentBuffer].expandedColumn = 0
+    status.bufStatus[currentBufferIndex].currentLine = destination
+    status.bufStatus[currentBufferIndex].currentColumn = 0
+    status.bufStatus[currentBufferIndex].expandedColumn = 0
 
     if not (view.originalLine[0] <= destination and (view.originalLine[view.height - 1] == -1 or destination <= view.originalLine[view.height - 1])):
       let startOfPrintedLines = max(destination - (currentLine - status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.originalLine[0]), 0)
-      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.reload(status.bufStatus[status.currentBuffer].buffer, startOfPrintedLines)
+      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.reload(status.bufStatus[currentBufferIndex].buffer, startOfPrintedLines)
   
 proc moveToForwardWord*(bufStatus: var BufferStatus) =
   let

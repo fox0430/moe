@@ -4,10 +4,11 @@ import editorstatus, ui, normalmode, unicodeext, movement, editor
 proc replaceMode*(status: var EditorStatus) =
 
   var bufferChanged = false
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
 
-  while status.bufStatus[status.currentBuffer].mode == Mode.replace:
+  while status.bufStatus[currentBufferIndex].mode == Mode.replace:
     if bufferChanged:
-      status.updateHighlight(status.currentBuffer)
+      status.updateHighlight(currentBufferIndex)
       bufferChanged = false
 
     status.update
@@ -23,15 +24,15 @@ proc replaceMode*(status: var EditorStatus) =
       status.changeMode(Mode.normal)
 
     elif isRightKey(key):
-      keyRight(status.bufStatus[status.currentBuffer])
+      keyRight(status.bufStatus[currentBufferIndex])
     elif isLeftKey(key) or isBackspaceKey(key):
-      keyLeft(status.bufStatus[status.currentBuffer])
+      keyLeft(status.bufStatus[currentBufferIndex])
     elif isUpKey(key):
-      keyUp(status.bufStatus[status.currentBuffer])
+      keyUp(status.bufStatus[currentBufferIndex])
     elif isDownKey(key) or isEnterKey(key):
-      keyDown(status.bufStatus[status.currentBuffer])
+      keyDown(status.bufStatus[currentBufferIndex])
  
     else:
-      status.bufStatus[status.currentBuffer].replaceCurrentCharacter(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoIndent, status.settings.autoDeleteParen, key)
-      keyRight(status.bufStatus[status.currentBuffer])
+      status.bufStatus[currentBufferIndex].replaceCurrentCharacter(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoIndent, status.settings.autoDeleteParen, key)
+      keyRight(status.bufStatus[currentBufferIndex])
       bufferChanged = true
