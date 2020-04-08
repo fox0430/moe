@@ -1,5 +1,5 @@
 import packages/docutils/highlite, strutils, terminal, os, strformat, tables, times, osproc, heapqueue
-import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils, undoredostack, window, color, build
+import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils, undoredostack, window, color, build, workspace
 
 type Platform* = enum
   linux, wsl, mac, other
@@ -16,11 +16,6 @@ type SelectArea* = object
 type Registers* = object
   yankedLines*: seq[seq[Rune]]
   yankedStr*: seq[Rune]
-
-type WorkSpace* = object
-  mainWindowNode*: WindowNode
-  currentMainWindowNode*: WindowNode
-  numOfMainWindow*: int
 
 type WorkSpaceSettings = object
   useBar*: bool
@@ -170,12 +165,6 @@ proc initEditorSettings*(): EditorSettings =
   result.workSpace= initWorkSpaceSettings()
 
 proc initStatusBar*(): StatusBar = result.window = initWindow(1, 1, 1, 1, EditorColorPair.defaultChar)
-
-proc initWorkSpace*(): WorkSpace =
-  var rootNode = initWindowNode()
-  result.mainWindowNode = rootNode
-  result.currentMainWindowNode = rootNode.child[0]
-  result.numOfMainWindow = 1
 
 proc initEditorStatus*(): EditorStatus =
   result.platform = initPlatform()
@@ -661,6 +650,14 @@ proc createWrokSpace*(status: var Editorstatus) =
   status.currentWorkSpaceIndex += 1
   status.addNewBuffer("")
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex = status.bufStatus.high
+
+proc deleteWorkSpace*(status: var Editorstatus, index: int) =
+  if 0 <= index and index < status.workSpace.len:
+    status.workspace.delete(index)
+
+    if status.workspace.len == 0: status.settings.exitEditor
+
+    if status.currentWorkSpaceIndex > status.workSpace.high: status.currentWorkSpaceIndex = status.workSpace.high
 
 proc changeCurrentWorkSpace*(status: var Editorstatus, index: int) =
   if 0 <= index and index < status.workSpace.len: status.currentWorkSpaceIndex = index

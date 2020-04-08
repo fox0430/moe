@@ -165,6 +165,9 @@ proc isReplaceCommand(command: seq[seq[Rune]]): bool =
 proc isCreateWrokSpaceCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"cws"
 
+proc isDeleteWorkSpaceCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"dws"
+
 proc isChangeCurrentWorkSpace(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"ws"
 
@@ -657,14 +660,29 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
 proc createWrokSpaceCommand(status: var Editorstatus) =
-  status.createWrokSpace
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
+  status.createWrokSpace
+
 proc changeCurrentWorkSpaceCommand(status: var Editorstatus, index: int) =
-  status.changeCurrentWorkSpace(index)
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
+  status.changeCurrentWorkSpace(index)
+
+proc deleteWorkSpaceCommand*(status: var Editorstatus) =
+  let index = status.currentWorkSpaceIndex
+  if 0 <= index and index < status.workSpace.len:
+    for i in 0 ..< status.workSpace[index].numOfMainWindow:
+      let node = status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.searchByWindowIndex(i)
+      ## Check if buffer has changed
+      if status.bufStatus[node.bufferIndex].countChange > 0:
+        status.commandWindow.writeNoWriteError(status.messageLog)
+        status.changeMode(Mode.normal)
+        return
+
+    status.deleteWorkSpace(index)
 
 proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -672,7 +690,7 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
   if command.len == 0 or command[0].len == 0:
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
   elif isJumpCommand(status, command):
-    var line = ($command[0]).parseInt-1
+    var line = ($command[0]).parseInt - 1
     if line < 0: line = 0
     if line >= status.bufStatus[currentBufferIndex].buffer.len: line = status.bufStatus[currentBufferIndex].buffer.high
     jumpCommand(status, line)
@@ -766,6 +784,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     createWrokSpaceCommand(status)
   elif isChangeCurrentWorkSpace(command):
     changeCurrentWorkSpaceCommand(status, ($command[1]).parseInt)
+  elif isDeleteWorkSpaceCommand(command):
+    deleteWorkSpaceCommand(status)
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
