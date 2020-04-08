@@ -356,6 +356,10 @@ type EditorColor* = object
   highlightFullWidthSpace*: Color
   highlightFullWidthSpaceBg*: Color
 
+  # work space bar
+  workSpaceBar*: Color
+  workSpaceBarBg*: Color
+
 type EditorColorPair* = enum
   lineNum = 1
   currentLineNum = 2
@@ -412,6 +416,8 @@ type EditorColorPair* = enum
   currentWord = 41
   # highlight full width space
   highlightFullWidthSpace = 42
+  # work space bar
+  workSpaceBar = 43
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -495,7 +501,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     currentWordBg: gray,
     # highlight full width space
     highlightFullWidthSpace: red,
-    highlightFullWidthSpaceBg: red
+    highlightFullWidthSpaceBg: red,
+    # work space bar
+    workSpaceBar: white,
+    workSpaceBarBg: blue
   ),
   dark: EditorColor(
     editorBg: default,
@@ -578,7 +587,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     currentWordBg: gray,
     # highlight full width space
     highlightFullWidthSpace: red,
-    highlightFullWidthSpaceBg: red
+    highlightFullWidthSpaceBg: red,
+    # work space bar
+    workSpaceBar: white,
+    workSpaceBarBg: blue
   ),
   light: EditorColor(
     editorBg: default,
@@ -661,7 +673,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     currentWordBg: gray,
     # highlight full width space
     highlightFullWidthSpace: red,
-    highlightFullWidthSpaceBg: red
+    highlightFullWidthSpaceBg: red,
+    # work space bar
+    workSpaceBar: blue,
+    workSpaceBarBg: gray54
   ),
   vivid: EditorColor(
     editorBg: default,
@@ -744,7 +759,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     currentWordBg: gray,
     # highlight full width space
     highlightFullWidthSpace: red,
-    highlightFullWidthSpaceBg: red
+    highlightFullWidthSpaceBg: red,
+    # work space bar
+    workSpaceBar: black,
+    workSpaceBarBg: deepPink1_1
   ),
 ]
 
@@ -815,6 +833,9 @@ proc setCursesColor*(editorColor: EditorColor) =
   # highlight full width space
   setColorPair(EditorColorPair.highlightFullWidthSpace, editorColor.highlightFullWidthSpace, editorColor.highlightFullWidthSpace)
 
+  # work space bar
+  setColorPair(EditorColorPair.workSpaceBar, editorColor.workSpaceBar, editorColor.workSpaceBarBg)
+
 proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Color, Color) =
   let editorColor = ColorThemeTable[theme]
 
@@ -853,4 +874,5 @@ proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Co
   of EditorColorPair.popUpWindow: return (editorColor.popUpWindow, editorColor.popUpWindowBg)
   of EditorColorPair.popUpWinCurrentLine: return (editorColor.popUpWinCurrentLine, editorColor.popUpWinCurrentLineBg)
   of EditorColorPair.replaceText: return (editorColor.replaceText, editorColor.replaceTextBg)
+  of EditorColorPair.workSpaceBar: return (editorColor.workSpaceBar, editorColor.workSpaceBarBg)
   else: return (editorColor.parenText, editorColor.parenTextBg)

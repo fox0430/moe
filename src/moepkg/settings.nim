@@ -142,6 +142,10 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["BuildOnSave"].contains("command"):
       result.buildOnSaveSettings.workspaceRoot = settings["BuildOnSave"]["command"].getStr().toRunes
 
+  if settings.contains("WorkSpace"):
+    if settings["WorkSpace"].contains("useBar"):
+        result.workSpace.useBar = settings["WorkSpace"]["useBar"].getbool()
+
   if settings.contains("Theme"):
     if settings["Theme"].contains("baseTheme"):
       let theme = parseEnum[ColorTheme](settings["Theme"]["baseTheme"].getStr())
@@ -347,6 +351,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["Theme"].contains("highlightFullWidthSpaceBg"):
       ColorThemeTable[ColorTheme.config].highlightFullWidthSpaceBg = color("highlightFullWidthSpaceBg")
+
+    if settings["Theme"].contains("workSpaceBar"):
+      ColorThemeTable[ColorTheme.config].workSpaceBar = color("wrokSpaceBar")
+
+    if settings["Theme"].contains("workSpaceBarBg"):
+      ColorThemeTable[ColorTheme.config].workSpaceBarBg = color("wrokSpaceBarBg")
 
     result.editorColorTheme = ColorTheme.config
 

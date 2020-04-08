@@ -22,6 +22,9 @@ type WorkSpace* = object
   currentMainWindowNode*: WindowNode
   numOfMainWindow*: int
 
+type WorkSpaceSettings = object
+  useBar*: bool
+
 type StatusBarSettings* = object
   useBar*: bool
   mode*: bool
@@ -65,6 +68,7 @@ type EditorSettings* = object
   systemClipboard*: bool
   highlightFullWidthSpace*: bool
   buildOnSaveSettings*: BuildOnSaveSettings
+  workSpace*: WorkSpaceSettings
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
@@ -108,6 +112,7 @@ type EditorStatus* = object
   commandWindow*: Window
   tabWindow*: Window
   popUpWindow*: Window
+  workSpaceInfoWindow*: Window
 
 proc initPlatform(): Platform =
   if defined linux:
@@ -135,6 +140,9 @@ proc initStatusBarSettings*(): StatusBarSettings =
   result.directory = true
   result.multipleStatusBar = true
 
+proc initWorkSpaceSettings(): WorkSpaceSettings =
+  result.useBar = true
+
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = ColorTheme.vivid
   result.statusBar = initStatusBarSettings()
@@ -159,6 +167,7 @@ proc initEditorSettings*(): EditorSettings =
   result.systemClipboard = true
   result.highlightFullWidthSpace = true
   result.buildOnSaveSettings = BuildOnSaveSettings()
+  result.workSpace= initWorkSpaceSettings()
 
 proc initStatusBar*(): StatusBar = result.window = initWindow(1, 1, 1, 1, EditorColorPair.defaultChar)
 
@@ -174,9 +183,12 @@ proc initEditorStatus*(): EditorStatus =
   result.registers = initRegisters()
   result.settings = initEditorSettings()
 
-  if result.settings.tabLine.useTab: result.tabWindow = initWindow(1, terminalWidth(), 0, 0, EditorColorPair.defaultChar)
+  if result.settings.workSpace.useBar: result.workSpaceInfoWindow = initWindow(1, terminalWidth(), 0, 0, EditorColorPair.defaultChar)
   var newWorkSpace = initWorkSpace()
   result.workSpace = @[newWorkSpace]
+
+  if result.settings.tabLine.useTab: result.tabWindow = initWindow(1, terminalWidth(), 0, 0, EditorColorPair.defaultChar)
+
   if result.settings.statusBar.useBar: result.statusBar = @[initStatusBar()]
 
   result.commandWindow = initWindow(1, terminalWidth(), terminalHeight() - 1, 0, EditorColorPair.defaultChar)
@@ -202,6 +214,16 @@ proc exitEditor*(settings: EditorSettings) =
   executeOnExit(settings)
   exitUi()
   quit()
+
+proc writeWorkSpaceInfoWindow(status: var Editorstatus) =
+  status.workSpaceInfoWindow.erase
+  let
+    width = status.workSpaceInfoWindow.width
+    currentWorkSpaceIndexStr = $status.currentWorkSpaceIndex
+    str = if int(width mod 2) == 0: " ".repeat(int(width / 2 - 1)) & currentWorkSpaceIndexStr & " ".repeat(int(width / 2)) else: " ".repeat(int(width / 2)) & currentWorkSpaceIndexStr & " ".repeat(int(width / 2))
+
+  status.workSpaceInfoWindow.write(0, 0, str, EditorColorPair.statusBarNormalMode)
+  status.workSpaceInfoWindow.refresh
 
 proc writeStatusBarNormalModeInfo(status: var EditorStatus, statusBarIndex: int) =
   let
@@ -350,10 +372,12 @@ proc writeTabLine*(status: var EditorStatus) =
 proc resize*(status: var EditorStatus, height, width: int) =
   setCursor(false)
 
-  let useTab = if status.settings.tabLine.useTab: 1 else: 0
-  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+  let
+    useTab = if status.settings.tabLine.useTab: 1 else: 0
+    useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+    useWorkSpaceBar = if status.settings.workSpace.useBar: 1 else: 0
 
-  status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.resize(useTab, 0, height - useTab - useStatusBar, width)
+  status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.resize(useTab + useWorkSpaceBar, 0, height - useTab - useStatusBar - useWorkSpaceBar, width)
 
   const statusBarHeight = 1
   var
@@ -400,12 +424,20 @@ proc resize*(status: var EditorStatus, height, width: int) =
       y = max(height, 4) - 2
     status.statusBar[0].window.resize(statusBarHeight, width, y, x)
 
+  ## Resize work space info window
+  if status.settings.workSpace.useBar:
+    const
+      workSpaceBarHeight = 1
+      x = 0
+      y = 0
+    status.workSpaceInfoWindow.resize(workSpaceBarHeight, width, y, x)
+
   ## Resize tab line window
   if status.settings.tabLine.useTab:
     const
       tabLineHeight = 1
       x = 0
-      y = 0
+    let y = if status.settings.workSpace.useBar: 1 else: 0
     status.tabWindow.resize(tabLineHeight, width, y, x)
 
   ## Resize command window
@@ -425,6 +457,8 @@ proc updateHighlight*(status: var EditorStatus, bufferIndex: int)
 
 proc update*(status: var EditorStatus) =
   setCursor(false)
+
+  if status.settings.workSpace.useBar: status.writeWorkSpaceInfoWindow
 
   if status.settings.tabLine.useTab: status.writeTabLine
 
