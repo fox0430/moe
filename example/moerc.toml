@@ -76,6 +76,10 @@ directory = true
 
 multipleStatusBar = true
 
+[WorkSpace]
+
+useBar = false
+
 [Theme]
 
 baseTheme = "dark"
@@ -213,3 +217,11 @@ replaceText = "default"
 replaceTextBg = "red"
 
 currentWordBg = "gray"
+
+highlightFullWidthSpace =  red
+
+highlightFullWidthSpaceBg = red
+
+workSpaceBar = white
+
+workSpaceBarBg = blue
