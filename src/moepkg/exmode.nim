@@ -162,7 +162,7 @@ proc isShellCommand(command: seq[seq[Rune]]): bool =
 proc isReplaceCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
 
-proc isCreateWrokSpaceCommand(command: seq[seq[Rune]]): bool =
+proc isCreateWorkSpaceCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"cws"
 
 proc isDeleteWorkSpaceCommand(command: seq[seq[Rune]]): bool =
@@ -780,7 +780,7 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     multipleStatusBarSettingCommand(status, command[1])
   elif isBuildOnSaveSettingCommand(command):
     buildOnSaveSettingCommand(status, command[1])
-  elif isCreateWrokSpaceCommand(command):
+  elif isCreateWorkSpaceCommand(command):
     createWrokSpaceCommand(status)
   elif isChangeCurrentWorkSpace(command):
     changeCurrentWorkSpaceCommand(status, ($command[1]).parseInt)
