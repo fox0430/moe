@@ -160,6 +160,7 @@ proc insertMode*(status: var EditorStatus) =
     
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
+      status.commandWindow.erase
     elif isEscKey(key) or isControlSquareBracketsRight(key):
       if status.bufStatus[currentBufferIndex].currentColumn > 0: dec(status.bufStatus[currentBufferIndex].currentColumn)
       status.bufStatus[currentBufferIndex].expandedColumn = status.bufStatus[currentBufferIndex].currentColumn

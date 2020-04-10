@@ -495,9 +495,6 @@ proc update*(status: var EditorStatus) =
   let bufIndex = status.bufferIndexInCurrentWindow
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.moveCursor(status.bufStatus[bufIndex].cursor.y, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.widthOfLineNum + status.bufStatus[bufIndex].cursor.x)
 
-  status.commandWindow.erase
-  status.commandWindow.refresh
-
   setCursor(true)
 
 proc verticalSplitWindow*(status: var EditorStatus) =

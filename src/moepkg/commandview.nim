@@ -374,7 +374,7 @@ proc suggestExCommandOption(status: var Editorstatus, exStatus: var ExModeViewSt
 proc suggestExCommand(status: var Editorstatus, exStatus: var ExModeViewStatus, key: var Rune) =
   var suggestlist: seq[seq[Rune]] = @[exStatus.buffer]
   for runes in exCommandList:
-    if exStatus.buffer.startsWith(runes): suggestlist.add(runes)
+    if runes.len >= exStatus.buffer.len and exStatus.buffer.startsWith(runes): suggestlist.add(runes)
 
   var suggestIndex = 0
 
