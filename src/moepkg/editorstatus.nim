@@ -1,4 +1,4 @@
-import packages/docutils/highlite, strutils, terminal, os, strformat, tables, times, osproc, heapqueue
+import packages/docutils/highlite, strutils, terminal, os, strformat, tables, times, osproc, heapqueue, math
 import gapbuffer, editorview, ui, cursor, unicodeext, highlight, independentutils, fileutils, undoredostack, window, color, build, workspace
 
 type Platform* = enum
@@ -136,7 +136,7 @@ proc initStatusBarSettings*(): StatusBarSettings =
   result.multipleStatusBar = true
 
 proc initWorkSpaceSettings(): WorkSpaceSettings =
-  result.useBar = false
+  result.useBar = true
 
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = ColorTheme.vivid
@@ -208,10 +208,11 @@ proc writeWorkSpaceInfoWindow(status: var Editorstatus) =
   status.workSpaceInfoWindow.erase
   let
     width = status.workSpaceInfoWindow.width
-    currentWorkSpaceIndexStr = $status.currentWorkSpaceIndex
-    str = if int(width mod 2) == 0: " ".repeat(int(width / 2 - 1)) & currentWorkSpaceIndexStr & " ".repeat(int(width / 2)) else: " ".repeat(int(width / 2)) & currentWorkSpaceIndexStr & " ".repeat(int(width / 2))
+    workspaceInfoStr =  $(status.currentWorkSpaceIndex + 1) & "/" & $status.workspace.len
+    textStartPosition = int(width / 2) - int(ceil(workspaceInfoStr.len / 2))
+    buffer = " ".repeat(textStartPosition) & workspaceInfoStr & " ".repeat(width - int(width / 2) - int(workspaceInfoStr.len / 2))
 
-  status.workSpaceInfoWindow.write(0, 0, str, EditorColorPair.statusBarNormalMode)
+  status.workSpaceInfoWindow.write(0, 0, buffer, EditorColorPair.statusBarNormalMode)
   status.workSpaceInfoWindow.refresh
 
 proc writeStatusBarNormalModeInfo(status: var EditorStatus, statusBarIndex: int) =
@@ -652,15 +653,15 @@ proc createWrokSpace*(status: var Editorstatus) =
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex = status.bufStatus.high
 
 proc deleteWorkSpace*(status: var Editorstatus, index: int) =
-  if 0 <= index and index < status.workSpace.len:
-    status.workspace.delete(index)
+  if 0 < index and index <= status.workSpace.len:
+    status.workspace.delete(index - 1)
 
     if status.workspace.len == 0: status.settings.exitEditor
 
     if status.currentWorkSpaceIndex > status.workSpace.high: status.currentWorkSpaceIndex = status.workSpace.high
 
 proc changeCurrentWorkSpace*(status: var Editorstatus, index: int) =
-  if 0 <= index and index < status.workSpace.len: status.currentWorkSpaceIndex = index
+  if 0 < index and index <= status.workSpace.len: status.currentWorkSpaceIndex = index - 1
 
 proc tryRecordCurrentPosition*(bufStatus: var BufferStatus) =
   bufStatus.positionRecord[bufStatus.buffer.lastSuitId] = (bufStatus.currentLine, bufStatus.currentColumn, bufStatus.expandedColumn)
