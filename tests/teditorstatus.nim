@@ -488,3 +488,40 @@ test "Close window 5":
   status.update
 
   check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex == 0)
+
+test "Create work space":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.resize(100, 100)
+  status.update
+
+  status.createWrokSpace
+
+  check(status.workspace.len == 2)
+  check(status.currentWorkSpaceIndex == 1)
+
+test "Change work space":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.resize(100, 100)
+  status.update
+
+  status.createWrokSpace
+
+  status.changeCurrentWorkSpace(1)
+  check(status.currentWorkSpaceIndex == 0)
+
+test "Delete work space":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.resize(100, 100)
+  status.update
+
+  status.createWrokSpace
+
+  status.deleteWorkSpace(1)
+
+  check(status.workSpace.len == 1)

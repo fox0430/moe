@@ -365,3 +365,34 @@ test "Highlight full width space command":
     const command = @[ru"highlightfullspace", ru"on"]
     status.exModeCommand(command)
     check(status.settings.highlightFullWidthSpace == true)
+
+test "Create work space command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  const command = @[ru"cws"]
+  status.exModeCommand(command)
+
+  check(status.workspace.len == 2)
+
+test "Change work space command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.createWrokSpace
+
+  const command = @[ru"ws", ru"1"]
+  status.exModeCommand(command)
+
+  check(status.currentWorkSpaceIndex == 0)
+
+test "Delete work space command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.createWrokSpace
+
+  const command = @[ru"dws"]
+  status.exModeCommand(command)
+
+  check(status.workspace.len == 1)
