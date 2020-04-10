@@ -136,7 +136,7 @@ proc initStatusBarSettings*(): StatusBarSettings =
   result.multipleStatusBar = true
 
 proc initWorkSpaceSettings(): WorkSpaceSettings =
-  result.useBar = true
+  result.useBar = false
 
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = ColorTheme.vivid
