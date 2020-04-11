@@ -124,7 +124,7 @@ proc isChangeFirstBufferCommand(command: seq[seq[Rune]]): bool =
 proc isChangeLastBufferCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"blast"
 
-proc isOpneBufferByNumber(command: seq[seq[Rune]]): bool =
+proc isOpenBufferByNumber(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"b" and isDigit(command[1])
 
 proc isChangeNextBufferCommand(command: seq[seq[Rune]]): bool =
@@ -712,7 +712,7 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     changeNextBufferCommand(status)
   elif isChangePreveBufferCommand(command):
     changePreveBufferCommand(status)
-  elif isOpneBufferByNumber(command):
+  elif isOpenBufferByNumber(command):
     opneBufferByNumberCommand(status, ($command[1]).parseInt)
   elif isChangeFirstBufferCommand(command):
     changeFirstBufferCommand(status)
