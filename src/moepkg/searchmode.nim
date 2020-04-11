@@ -1,5 +1,5 @@
 import unicodeext, system, terminal
-import ui, editorstatus, gapbuffer, commandview
+import ui, editorstatus, gapbuffer, commandview, movement
 
 type
   SearchResult* = tuple[line: int, column: int]
@@ -18,12 +18,14 @@ proc searchLine(line: seq[Rune], keyword: seq[Rune]): int =
 
 proc searchBuffer(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
   result = (-1, -1)
-  let startLine = status.bufStatus[status.currentBuffer].currentLine
-  for i in 0 ..< status.bufStatus[status.currentBuffer].buffer.len:
+  let
+    currentBufferIndex = status.bufferIndexInCurrentWindow
+    startLine = status.bufStatus[currentBufferIndex].currentLine
+  for i in 0 ..< status.bufStatus[currentBufferIndex].buffer.len:
     let
-      line = (startLine + i) mod status.bufStatus[status.currentBuffer].buffer.len
-      begin = if line == startLine and i == 0: status.bufStatus[status.currentBuffer].currentColumn else: 0
-      position = searchLine(status.bufStatus[status.currentBuffer].buffer[line][begin ..< status.bufStatus[status.currentBuffer].buffer[line].len], keyword)
+      line = (startLine + i) mod status.bufStatus[currentBufferIndex].buffer.len
+      begin = if line == startLine and i == 0: status.bufStatus[currentBufferIndex].currentColumn else: 0
+      position = searchLine(status.bufStatus[currentBufferIndex].buffer[line][begin ..< status.bufStatus[currentBufferIndex].buffer[line].len], keyword)
     if position > -1:  return (line, begin + position)
 
 proc searchLineReversely(line: seq[Rune], keyword: seq[Rune]): int =
@@ -35,13 +37,15 @@ proc searchLineReversely(line: seq[Rune], keyword: seq[Rune]): int =
 
 proc searchBufferReversely(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
   result = (-1, -1)
-  let startLine = status.bufStatus[status.currentBuffer].currentLine
-  for i in 0 ..< status.bufStatus[status.currentBuffer].buffer.len + 1:
-    var line = (startLine - i) mod status.bufStatus[status.currentBuffer].buffer.len
-    if line < 0: line = status.bufStatus[status.currentBuffer].buffer.len - i
+  let
+    currentBufferIndex = status.bufferIndexInCurrentWindow
+    startLine = status.bufStatus[currentBufferIndex].currentLine
+  for i in 0 ..< status.bufStatus[currentBufferIndex].buffer.len + 1:
+    var line = (startLine - i) mod status.bufStatus[currentBufferIndex].buffer.len
+    if line < 0: line = status.bufStatus[currentBufferIndex].buffer.len - i
     let
-      endPosition = if line == startLine and i == 0: status.bufStatus[status.currentBuffer].currentColumn else: status.bufStatus[status.currentBuffer].buffer[line].len 
-      position = searchLineReversely(status.bufStatus[status.currentBuffer].buffer[line][0 ..< endPosition], keyword)
+      endPosition = if line == startLine and i == 0: status.bufStatus[currentBufferIndex].currentColumn else: status.bufStatus[currentBufferIndex].buffer[line].len 
+      position = searchLineReversely(status.bufStatus[currentBufferIndex].buffer[line][0 ..< endPosition], keyword)
     if position > -1:  return (line, position)
 
 proc searchAllOccurrence*(buffer: GapBuffer[seq[Rune]], keyword: seq[Rune]): seq[SearchResult] =
@@ -57,8 +61,9 @@ proc jumpToSearchResults(status: var Editorstatus, keyword: seq[Rune]) =
   let searchResult = searchBuffer(status, keyword)
   if searchResult.line > -1:
     jumpLine(status, searchResult.line)
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
     for column in 0 ..< searchResult.column:
-      keyRight(status.bufStatus[status.currentBuffer])
+      keyRight(status.bufStatus[currentBufferIndex])
 
 proc searchFirstOccurrence(status: var EditorStatus) =
   const prompt = "/"
@@ -73,11 +78,12 @@ proc searchFirstOccurrence(status: var EditorStatus) =
     return
 
   status.searchHistory.add(keyword)
-  let bufferIndex = status.currentMainWindowNode.bufferIndex
+  let bufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
   status.bufStatus[bufferIndex].isHighlight = true
   status.jumpToSearchResults(keyword)
 
-  status.updateHighlight
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.updateHighlight(currentBufferIndex)
 
 proc realtimeSearch(status: var Editorstatus) =
   const prompt = "/"
@@ -98,26 +104,29 @@ proc realtimeSearch(status: var Editorstatus) =
 
     if exitSearch or cancelSearch: break
 
-    let bufferIndex = status.currentMainWindowNode.bufferIndex
+    let bufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
     if keyword.len > 0:
       status.bufStatus[bufferIndex].isHighlight = true
       status.jumpToSearchResults(keyword)
     else: status.bufStatus[bufferIndex].isHighlight = false
 
-    status.updateHighlight
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+    status.updateHighlight(currentBufferIndex)
     status.resize(terminalHeight(), terminalWidth())
     status.update
 
   if cancelSearch:
     status.searchHistory.delete(status.searchHistory.high)
 
-    let bufferIndex = status.currentMainWindowNode.bufferIndex
-    status.bufStatus[bufferIndex].isHighlight = false
-    status.updateHighlight
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+    status.bufStatus[currentBufferIndex].isHighlight = false
+    status.updateHighlight(currentBufferIndex)
 
     status.commandWindow.erase
 
 proc searchMode*(status: var EditorStatus) =
   if status.settings.realtimeSearch: realtimeSearch(status)
   else: searchFirstOccurrence(status)
-  status.changeMode(status.bufStatus[status.currentBuffer].prevMode)
+
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)

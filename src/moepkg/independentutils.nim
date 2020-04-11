@@ -1,5 +1,5 @@
-import strutils, math, terminal
+import strutils, math
 
 proc numberOfDigits*(x: int): int = x.intToStr.len
 
-proc calcTabWidth*(numOfBuffer: int): int = int(ceil(terminalWidth() / numOfBuffer))
+proc calcTabWidth*(numOfBuffer, windowSize: int): int = int(ceil(windowSize / numOfBuffer))

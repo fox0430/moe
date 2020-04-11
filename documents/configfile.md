@@ -157,6 +157,12 @@ allBuffer
 ```
 
 ### StatusBar table
+Multiple status bar (bool)  
+default is true
+```
+multipleStatusBar 
+```
+
 Display current mode (bool)  
 default is true
 ```
@@ -197,6 +203,23 @@ Display file location (bool)
 default is true
 ```
 directory
+```
+### BuildOnSave table
+
+Enable/Disable build on save (bool)  
+default is false
+```
+buildOnSave
+```
+
+Project root directory (string)  
+```
+workspaceRoot
+```
+
+Override commands executed at build (string)  
+```
+command
 ```
 
 ### Color and theme

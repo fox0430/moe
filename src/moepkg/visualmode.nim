@@ -1,5 +1,5 @@
 import terminal, strutils, sequtils
-import editorstatus, ui, gapbuffer, normalmode, unicodeext, window
+import editorstatus, ui, gapbuffer, normalmode, unicodeext, window, movement, editor
 
 proc initSelectArea*(startLine, startColumn: int): SelectArea =
   result.startLine = startLine
@@ -151,97 +151,152 @@ proc joinLines*(bufStatus: var BufferStatus, win: WindowNode, area: SelectArea) 
     bufStatus.currentLine = area.startLine
     bufStatus.joinLine(win)
 
+proc toLowerString(bufStatus: var BufferStatus, area: SelectArea) =
+  for i in area.startLine .. area.endLine:
+    let oldLine = bufStatus.buffer[i]
+    var newLine = bufStatus.buffer[i]
+    if area.startLine == area.endLine:
+      for j in area.startColumn .. area.endColumn: newLine[j] = oldLine[j].toLower
+    elif i == area.startLine:
+      for j in area.startColumn .. bufStatus.buffer[i].high: newLine[j] = oldLine[j].toLower
+    elif i == area.endLine:
+      for j in 0 .. area.endColumn: newLine[j] = oldLine[j].toLower
+    else:
+      for j in 0 .. bufStatus.buffer[i].high: newLine[j] = oldLine[j].toLower
+    if oldLine != newLine: bufStatus.buffer[i] = newLine
+
+  inc(bufStatus.countChange)
+
+proc toLowerStringBlock(bufStatus: var BufferStatus, area: SelectArea) =
+  for i in area.startLine .. area.endLine:
+    let oldLine = bufStatus.buffer[i]
+    var newLine = bufStatus.buffer[i]
+    for j in area.startColumn .. min(area.endColumn, bufStatus.buffer[i].high): newLine[j] = oldLine[j].toLower
+    if oldLine != newLine: bufStatus.buffer[i] = newLine
+
+proc toUpperString(bufStatus: var BufferStatus, area: SelectArea) =
+  for i in area.startLine .. area.endLine:
+    let oldLine = bufStatus.buffer[i]
+    var newLine = bufStatus.buffer[i]
+    if area.startLine == area.endLine:
+      for j in area.startColumn .. area.endColumn: newLine[j] = oldLine[j].toUpper
+    elif i == area.startLine:
+      for j in area.startColumn .. bufStatus.buffer[i].high: newLine[j] = oldLine[j].toUpper
+    elif i == area.endLine:
+      for j in 0 .. area.endColumn: newLine[j] = oldLine[j].toUpper
+    else:
+      for j in 0 .. bufStatus.buffer[i].high: newLine[j] = oldLine[j].toUpper
+    if oldLine != newLine: bufStatus.buffer[i] = newLine
+
+  inc(bufStatus.countChange)
+
+proc toUpperStringBlock(bufStatus: var BufferStatus, area: SelectArea) =
+  for i in area.startLine .. area.endLine:
+    let oldLine = bufStatus.buffer[i]
+    var newLine = bufStatus.buffer[i]
+    for j in area.startColumn .. min(area.endColumn, bufStatus.buffer[i].high): newLine[j] = oldLine[j].toUpper
+    if oldLine != newLine: bufStatus.buffer[i] = newLine
+
 proc visualCommand*(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSlectArea
 
-  let clipboard = status.settings.systemClipboard
+  let
+    clipboard = status.settings.systemClipboard
+    currentBufferIndex = status.bufferIndexInCurrentWindow
 
-  if key == ord('y') or isDcKey(key): status.bufStatus[status.currentBuffer].yankBuffer(status.registers, area, status.platform, clipboard)
-  elif key == ord('x') or key == ord('d'): status.bufStatus[status.currentBuffer].deleteBuffer(status.registers, area, status.platform, clipboard)
-  elif key == ord('>'): addIndent(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, area, status.settings.tabStop)
-  elif key == ord('<'): deleteIndent(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, area, status.settings.tabStop)
-  elif key == ord('J'): status.bufStatus[status.currentBuffer].joinLines(status.currentMainWindowNode, area)
+  if key == ord('y') or isDcKey(key): status.bufStatus[currentBufferIndex].yankBuffer(status.registers, area, status.platform, clipboard)
+  elif key == ord('x') or key == ord('d'): status.bufStatus[currentBufferIndex].deleteBuffer(status.registers, area, status.platform, clipboard)
+  elif key == ord('>'): status.bufStatus[currentBufferIndex].addIndent(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, area, status.settings.tabStop)
+  elif key == ord('<'): status.bufStatus[currentBufferIndex].deleteIndent(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, area, status.settings.tabStop)
+  elif key == ord('J'): status.bufStatus[currentBufferIndex].joinLines(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, area)
+  elif key == ord('u'): status.bufStatus[currentBufferIndex].toLowerString(area)
+  elif key == ord('U'): status.bufStatus[currentBufferIndex].toUpperString(area)
   elif key == ord('r'):
-    let ch = getKey(status.currentMainWindowNode.window)
-    if not isEscKey(ch): replaceCharactor(status.bufStatus[status.currentBuffer], area, ch)
+    let ch = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.getKey
+    if not isEscKey(ch): status.bufStatus[currentBufferIndex].replaceCharactor(area, ch)
   else: discard
 
 proc visualBlockCommand*(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSlectArea
 
-  let clipboard = status.settings.systemClipboard
+  let
+    clipboard = status.settings.systemClipboard
+    currentBufferIndex = status.bufferIndexInCurrentWindow
 
-  if key == ord('y') or isDcKey(key): yankBufferBlock(status.bufStatus[status.currentBuffer], status.registers, area, status.platform, clipboard)
-  elif key == ord('x') or key == ord('d'): deleteBufferBlock(status.bufStatus[status.currentBuffer], status.registers, area, status.platform, clipboard)
-  elif key == ord('>'): insertIndent(status.bufStatus[status.currentBuffer], area, status.settings.tabStop)
-  elif key == ord('<'): deleteIndent(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, area, status.settings.tabStop)
-  elif key == ord('J'): status.bufStatus[status.currentBuffer].joinLines(status.currentMainWindowNode, area)
+  if key == ord('y') or isDcKey(key): status.bufStatus[currentBufferIndex].yankBufferBlock(status.registers, area, status.platform, clipboard)
+  elif key == ord('x') or key == ord('d'): status.bufStatus[currentBufferIndex].deleteBufferBlock(status.registers, area, status.platform, clipboard)
+  elif key == ord('>'): status.bufStatus[currentBufferIndex].insertIndent(area, status.settings.tabStop)
+  elif key == ord('<'): status.bufStatus[currentBufferIndex].deleteIndent(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, area, status.settings.tabStop)
+  elif key == ord('J'): status.bufStatus[currentBufferIndex].joinLines(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, area)
+  elif key == ord('u'): status.bufStatus[currentBufferIndex].toLowerStringBlock(area)
+  elif key == ord('U'): status.bufStatus[currentBufferIndex].toUpperStringBlock(area)
   elif key == ord('r'):
-    let ch = getKey(status.currentMainWindowNode.window)
-    if not isEscKey(ch): replaceCharactorBlock(status.bufStatus[status.currentBuffer], area, ch)
+    let ch = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.getKey
+    if not isEscKey(ch): status.bufStatus[currentBufferIndex].replaceCharactorBlock(area, ch)
   else: discard
 
 proc visualMode*(status: var EditorStatus) =
   status.resize(terminalHeight(), terminalWidth())
-  let currentBuf = status.currentBuffer
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
 
-  status.bufStatus[currentBuf].selectArea = initSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
+  status.bufStatus[currentBufferIndex].selectArea = initSelectArea(status.bufStatus[currentBufferIndex].currentLine, status.bufStatus[currentBufferIndex].currentColumn)
 
-  while status.bufStatus[status.currentBuffer].mode == Mode.visual or status.bufStatus[status.currentBuffer].mode == Mode.visualBlock:
-    let isBlockMode = if status.bufStatus[status.currentBuffer].mode == Mode.visualBlock: true else: false
+  while status.bufStatus[currentBufferIndex].mode == Mode.visual or status.bufStatus[currentBufferIndex].mode == Mode.visualBlock:
+    let isBlockMode = if status.bufStatus[currentBufferIndex].mode == Mode.visualBlock: true else: false
 
-    status.bufStatus[currentBuf].selectArea.updateSelectArea(status.bufStatus[status.currentBuffer].currentLine, status.bufStatus[status.currentBuffer].currentColumn)
+    status.bufStatus[currentBufferIndex].selectArea.updateSelectArea(status.bufStatus[currentBufferIndex].currentLine, status.bufStatus[currentBufferIndex].currentColumn)
 
     status.update
 
     var key: Rune = Rune('\0')
     while key == Rune('\0'):
       status.eventLoopTask
-      key = getKey(status.currentMainWindowNode.window)
+      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
 
-    status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
-    status.bufStatus[status.currentBuffer].tryRecordCurrentPosition
+    status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
+    status.bufStatus[currentBufferIndex].tryRecordCurrentPosition
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
+      status.commandWindow.erase
     elif isEscKey(key) or isControlSquareBracketsRight(key):
-      status.updatehighlight
+      status.updatehighlight(currentBufferIndex)
       status.changeMode(Mode.normal)
 
     elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
-      keyLeft(status.bufStatus[status.currentBuffer])
+      keyLeft(status.bufStatus[currentBufferIndex])
     elif key == ord('l') or isRightKey(key):
-      keyRight(status.bufStatus[status.currentBuffer])
+      keyRight(status.bufStatus[currentBufferIndex])
     elif key == ord('k') or isUpKey(key):
-      keyUp(status.bufStatus[status.currentBuffer])
+      keyUp(status.bufStatus[currentBufferIndex])
     elif key == ord('j') or isDownKey(key) or isEnterKey(key):
-      keyDown(status.bufStatus[status.currentBuffer])
+      keyDown(status.bufStatus[currentBufferIndex])
     elif key == ord('^'):
-      moveToFirstNonBlankOfLine(status.bufStatus[status.currentBuffer])
+      moveToFirstNonBlankOfLine(status.bufStatus[currentBufferIndex])
     elif key == ord('0') or isHomeKey(key):
-      moveToFirstOfLine(status.bufStatus[status.currentBuffer])
+      moveToFirstOfLine(status.bufStatus[currentBufferIndex])
     elif key == ord('$') or isEndKey(key):
-      moveToLastOfLine(status.bufStatus[status.currentBuffer])
+      moveToLastOfLine(status.bufStatus[currentBufferIndex])
     elif key == ord('w'):
-      moveToForwardWord(status.bufStatus[status.currentBuffer])
+      moveToForwardWord(status.bufStatus[currentBufferIndex])
     elif key == ord('b'):
-      moveToBackwardWord(status.bufStatus[status.currentBuffer])
+      moveToBackwardWord(status.bufStatus[currentBufferIndex])
     elif key == ord('e'):
-      moveToForwardEndOfWord(status.bufStatus[status.currentBuffer])
+      moveToForwardEndOfWord(status.bufStatus[currentBufferIndex])
     elif key == ord('G'):
       moveToLastLine(status)
     elif key == ord('g'):
-      if getKey(status.currentMainWindowNode.window) == ord('g'): moveToFirstLine(status)
+      if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window) == ord('g'): moveToFirstLine(status)
     elif key == ord('i'):
-      status.bufStatus[status.currentBuffer].currentLine = status.bufStatus[currentBuf].selectArea.startLine
+      status.bufStatus[currentBufferIndex].currentLine = status.bufStatus[currentBufferIndex].selectArea.startLine
       status.changeMode(Mode.insert)
     elif key == ord('I'):
-      status.bufStatus[status.currentBuffer].currentLine = status.bufStatus[currentBuf].selectArea.startLine
-      status.bufStatus[status.currentBuffer].currentColumn = 0
+      status.bufStatus[currentBufferIndex].currentLine = status.bufStatus[currentBufferIndex].selectArea.startLine
+      status.bufStatus[currentBufferIndex].currentColumn = 0
       status.changeMode(Mode.insert)
 
     else:
-      if isBlockMode: visualBlockCommand(status, status.bufStatus[currentBuf].selectArea, key)
-      else: visualCommand(status, status.bufStatus[currentBuf].selectArea, key)
-      status.updatehighlight
+      if isBlockMode: visualBlockCommand(status, status.bufStatus[currentBufferIndex].selectArea, key)
+      else: visualCommand(status, status.bufStatus[currentBufferIndex].selectArea, key)
+      status.updatehighlight(currentBufferIndex)
       status.changeMode(Mode.normal)

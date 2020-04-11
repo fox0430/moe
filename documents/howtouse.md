@@ -75,6 +75,8 @@ Check command bar
 ```y``` - Copy text  
 ```r``` - Replace character  
 ```J``` - Join lines  
+```u``` - Convert string to lowercase  
+```U``` - Convert string to uppercase  
 
 ```>``` - Indent  
 ```<``` - Unindent  
@@ -130,6 +132,7 @@ Check command bar
 ```highlightcurrentword on``` or ```highlightcurrentword off``` - Change setting to highlight other uses of the current word  
 ```clipboard on``` or ```clipboard off``` - Change setting to system clipboard  
 ```highlightfullspace on``` or ```highlightfullspace off``` - Change setting to highlight full width space  
+```buildonsave on``` or ```buildonsave off``` - Change setting to build on save
 ```noh``` - Turn off highlights  
 
 ```log``` - Open messages log viwer  

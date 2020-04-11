@@ -44,9 +44,10 @@ proc main() =
 
   disableControlC()
 
-  while status.numOfMainWindow > 0:
+  while status.workSpace.len > 0 and status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow > 0:
 
-    case status.bufStatus[status.currentBuffer].mode:
+    let currentBufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
+    case status.bufStatus[currentBufferIndex].mode:
     of Mode.normal: normalMode(status)
     of Mode.insert: insertMode(status)
     of Mode.visual, Mode.visualBlock: visualMode(status)

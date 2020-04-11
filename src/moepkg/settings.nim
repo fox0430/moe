@@ -1,5 +1,5 @@
 import parsetoml, os
-import editorstatus, ui
+import editorstatus, ui, color, unicodeext
 from strutils import parseEnum
 
 proc getCursorType(cursorType, mode: string): CursorType =
@@ -29,13 +29,13 @@ proc parseSettingsFile*(filename: string): EditorSettings =
       result.editorColorTheme = getTheme(settings["Standard"]["theme"].getStr())
 
     if settings["Standard"].contains("number"):
-      result.lineNumber = settings["Standard"]["number"].getbool()
+      result.view.lineNumber = settings["Standard"]["number"].getbool()
 
     if settings["Standard"].contains("currentNumber"):
-      result.currentLineNumber = settings["Standard"]["currentNumber"].getbool()
+      result.view.currentLineNumber = settings["Standard"]["currentNumber"].getbool()
 
     if settings["Standard"].contains("cursorLine"):
-      result.cursorLine = settings["Standard"]["cursorLine"].getbool()
+      result.view.cursorLine = settings["Standard"]["cursorLine"].getbool()
 
     if settings["Standard"].contains("statusBar"):
       result.statusBar.useBar = settings["Standard"]["statusBar"].getbool()
@@ -127,7 +127,24 @@ proc parseSettingsFile*(filename: string): EditorSettings =
         result.statusBar.language = settings["StatusBar"]["language"].getbool()
 
     if settings["StatusBar"].contains("directory"):
-        result.statusBar.language = settings["StatusBar"]["directory"].getbool()
+        result.statusBar.directory = settings["StatusBar"]["directory"].getbool()
+
+    if settings["StatusBar"].contains("multipleStatusBar"):
+        result.statusBar.multipleStatusBar = settings["StatusBar"]["multipleStatusBar"].getbool()
+
+  if settings.contains("BuildOnSave"):
+    if settings["BuildOnSave"].contains("buildOnSave"):
+      result.buildOnSaveSettings.buildOnSave = settings["BuildOnSave"]["buildOnSave"].getbool()
+
+    if settings["BuildOnSave"].contains("workspaceRoot"):
+      result.buildOnSaveSettings.workspaceRoot = settings["BuildOnSave"]["workspaceRoot"].getStr().toRunes
+
+    if settings["BuildOnSave"].contains("command"):
+      result.buildOnSaveSettings.workspaceRoot = settings["BuildOnSave"]["command"].getStr().toRunes
+
+  if settings.contains("WorkSpace"):
+    if settings["WorkSpace"].contains("useBar"):
+        result.workSpace.useBar = settings["WorkSpace"]["useBar"].getbool()
 
   if settings.contains("Theme"):
     if settings["Theme"].contains("baseTheme"):
@@ -334,6 +351,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["Theme"].contains("highlightFullWidthSpaceBg"):
       ColorThemeTable[ColorTheme.config].highlightFullWidthSpaceBg = color("highlightFullWidthSpaceBg")
+
+    if settings["Theme"].contains("workSpaceBar"):
+      ColorThemeTable[ColorTheme.config].workSpaceBar = color("wrokSpaceBar")
+
+    if settings["Theme"].contains("workSpaceBarBg"):
+      ColorThemeTable[ColorTheme.config].workSpaceBarBg = color("wrokSpaceBarBg")
 
     result.editorColorTheme = ColorTheme.config
 
