@@ -53,6 +53,8 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Build on save
 
+- Work space
+
 - Multiple status bar
 
 ## Planned features
