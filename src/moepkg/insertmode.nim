@@ -141,9 +141,10 @@ proc insertMode*(status: var EditorStatus) =
   changeCursorType(status.settings.insertModeCursor)
   var bufferChanged = false
 
-  while status.bufStatus[status.currentBuffer].mode == Mode.insert:
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  while status.bufStatus[currentBufferIndex].mode == Mode.insert:
     if bufferChanged:
-      status.updateHighlight(status.currentBuffer)
+      status.updateHighlight(currentBufferIndex)
       bufferChanged = false
 
     status.resize(terminalHeight(), terminalWidth())
@@ -152,48 +153,48 @@ proc insertMode*(status: var EditorStatus) =
     var key: Rune = Rune('\0')
     while key == Rune('\0'):
       status.eventLoopTask
-      key = getKey(status.currentMainWindowNode.window)
+      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
 
-    status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
-    status.bufStatus[status.currentBuffer].tryRecordCurrentPosition
+    status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
+    status.bufStatus[currentBufferIndex].tryRecordCurrentPosition
     
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
       status.commandWindow.erase
     elif isEscKey(key) or isControlSquareBracketsRight(key):
-      if status.bufStatus[status.currentBuffer].currentColumn > 0: dec(status.bufStatus[status.currentBuffer].currentColumn)
-      status.bufStatus[status.currentBuffer].expandedColumn = status.bufStatus[status.currentBuffer].currentColumn
+      if status.bufStatus[currentBufferIndex].currentColumn > 0: dec(status.bufStatus[currentBufferIndex].currentColumn)
+      status.bufStatus[currentBufferIndex].expandedColumn = status.bufStatus[currentBufferIndex].currentColumn
       status.changeMode(Mode.normal)
     elif isLeftKey(key):
-      keyLeft(status.bufStatus[status.currentBuffer])
+      keyLeft(status.bufStatus[currentBufferIndex])
     elif isRightkey(key):
-      keyRight(status.bufStatus[status.currentBuffer])
+      keyRight(status.bufStatus[currentBufferIndex])
     elif isUpKey(key):
-      keyUp(status.bufStatus[status.currentBuffer])
+      keyUp(status.bufStatus[currentBufferIndex])
     elif isDownKey(key):
-      keyDown(status.bufStatus[status.currentBuffer])
+      keyDown(status.bufStatus[currentBufferIndex])
     elif isPageUpKey(key):
       pageUp(status)
     elif isPageDownKey(key):
       pageDown(status)
     elif isHomeKey(key):
-      moveToFirstOfLine(status.bufStatus[status.currentBuffer])
+      moveToFirstOfLine(status.bufStatus[currentBufferIndex])
     elif isEndKey(key):
-      moveToLastOfLine(status.bufStatus[status.currentBuffer])
+      moveToLastOfLine(status.bufStatus[currentBufferIndex])
     elif isDcKey(key):
-      status.bufStatus[status.currentBuffer].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentMainWindowNode)
+      status.bufStatus[currentBufferIndex].deleteCurrentCharacter(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
       bufferChanged = true
     elif isBackspaceKey(key):
-      status.bufStatus[status.currentBuffer].keyBackspace(status.settings.autoDeleteParen, status.currentMainWindowNode)
+      status.bufStatus[currentBufferIndex].keyBackspace(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
       bufferChanged = true
     elif isEnterKey(key):
-      keyEnter(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, status.settings.autoIndent)
+      keyEnter(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoIndent)
       bufferChanged = true
     elif key == ord('\t'):
-      insertTab(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, status.settings.tabStop, status.settings.autoCloseParen)
+      insertTab(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.tabStop, status.settings.autoCloseParen)
       bufferChanged = true
     else:
-      insertCharacter(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, status.settings.autoCloseParen, key)
+      insertCharacter(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoCloseParen, key)
       bufferChanged = true
 
   stdout.write "\x1b[2 q"

@@ -4,7 +4,8 @@ import moepkg/[editorstatus, logviewer]
 test "Exit log viewer":
   var status = initEditorStatus()
   status.addNewBuffer("")
-  status.bufStatus[status.currentBuffer].mode = Mode.logViewer
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.bufStatus[currentBufferIndex].mode = Mode.logViewer
 
   status.setMessageLog
   status.resize(terminalHeight(), terminalWidth())

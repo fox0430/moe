@@ -6,7 +6,7 @@ test "Delete current character":
   status.addNewBuffer("")
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
   status.bufStatus[0].currentColumn = 1
-  status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.currentMainWindowNode)
+  status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
   check(status.bufStatus[0].buffer[0] == ru"ac")
 
 test "Add indent":
@@ -14,7 +14,7 @@ test "Add indent":
   status.addNewBuffer("")
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
   const tabStop = 2
-  status.bufStatus[0].addIndent(status.currentMainWindowNode, tabStop)
+  status.bufStatus[0].addIndent(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, tabStop)
   check(status.bufStatus[0].buffer[0] == ru"  abc")
 
 test "Delete indent":
@@ -22,7 +22,7 @@ test "Delete indent":
   status.addNewBuffer("")
   status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc"])
   const tabStop = 2
-  status.bufStatus[0].deleteIndent(status.currentMainWindowNode, tabStop)
+  status.bufStatus[0].deleteIndent(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, tabStop)
   check(status.bufStatus[0].buffer[0] == ru"abc")
 
 test "Send to clipboard 1":

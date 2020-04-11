@@ -17,6 +17,8 @@ const exCommandList = [
   ru"buf",
   ru"clipboard",
   ru"cursorLine",
+  ru"cws",
+  ru"dws",
   ru"e",
   ru"highlightcurrentword",
   ru"highlightfullspace",
@@ -42,6 +44,7 @@ const exCommandList = [
   ru"tabstop",
   ru"theme",
   ru"vs",
+  ru"ws",
   ru"wq",
   ru"wqa",
 ]

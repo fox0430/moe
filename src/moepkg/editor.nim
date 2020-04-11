@@ -191,23 +191,28 @@ proc sendToClipboad*(registers: Registers, platform: Platform) =
 proc yankLines*(status: var EditorStatus, first, last: int) =
   status.registers.yankedStr = @[]
   status.registers.yankedLines = @[]
-  for i in first .. last: status.registers.yankedLines.add(status.bufStatus[status.currentBuffer].buffer[i])
+
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+
+  for i in first .. last: status.registers.yankedLines.add(status.bufStatus[currentBufferIndex].buffer[i])
 
   status.commandWindow.writeMessageYankedLine(status.registers.yankedLines.len, status.messageLog)
 
 proc pasteLines(status: var EditorStatus) =
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
   for i in 0 ..< status.registers.yankedLines.len:
-    status.bufStatus[status.currentBuffer].buffer.insert(status.registers.yankedLines[i], status.bufStatus[status.currentBuffer].currentLine + i + 1)
+    status.bufStatus[currentBufferIndex].buffer.insert(status.registers.yankedLines[i], status.bufStatus[currentBufferIndex].currentLine + i + 1)
 
-  let index = status.currentBuffer
-  status.currentMainWindowNode.view.reload(status.bufStatus[index].buffer, min(status.currentMainWindowNode.view.originalLine[0], status.bufStatus[index].buffer.high))
-  inc(status.bufStatus[status.currentBuffer].countChange)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.reload(status.bufStatus[currentBufferIndex].buffer, min(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.originalLine[0], status.bufStatus[currentBufferIndex].buffer.high))
+  inc(status.bufStatus[currentBufferIndex].countChange)
 
 proc yankString*(status: var EditorStatus, length: int) =
   status.registers.yankedLines = @[]
   status.registers.yankedStr = @[]
-  for i in status.bufStatus[status.currentBuffer].currentColumn ..< length:
-    status.registers.yankedStr.add(status.bufStatus[status.currentBuffer].buffer[status.bufStatus[status.currentBuffer].currentLine][i])
+
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  for i in status.bufStatus[currentBufferIndex].currentColumn ..< length:
+    status.registers.yankedStr.add(status.bufStatus[currentBufferIndex].buffer[status.bufStatus[currentBufferIndex].currentLine][i])
 
   if status.settings.systemClipboard: status.registers.sendToClipboad(status.platform)
 
@@ -218,9 +223,9 @@ proc yankWord*(status: var Editorstatus, loop: int) =
   status.registers.yankedStr = @[]
 
   let
-    currentBuf = status.currentBuffer
-    line = status.bufStatus[currentBuf].buffer[status.bufStatus[currentBuf].currentLine]
-  var startColumn = status.bufStatus[currentBuf].currentColumn
+    currentBufferIndex = status.bufferIndexInCurrentWindow
+    line = status.bufStatus[currentBufferIndex].buffer[status.bufStatus[currentBufferIndex].currentLine]
+  var startColumn = status.bufStatus[currentBufferIndex].currentColumn
 
   for i in 0 ..< loop:
     if line.len < 1:
@@ -245,27 +250,29 @@ proc yankWord*(status: var Editorstatus, loop: int) =
       else: status.registers.yankedStr.add(rune)
 
 proc pasteString(status: var EditorStatus) =
-  let index = status.currentBuffer
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
 
-  let oldLine = status.bufStatus[index].buffer[status.bufStatus[index].currentLine]
-  var newLine = status.bufStatus[index].buffer[status.bufStatus[index].currentLine]
-  newLine.insert(status.registers.yankedStr, status.bufStatus[index].currentColumn)
-  if oldLine != newLine: status.bufStatus[index].buffer[status.bufStatus[index].currentLine] = newLine
+  let oldLine = status.bufStatus[currentBufferIndex].buffer[status.bufStatus[currentBufferIndex].currentLine]
+  var newLine = status.bufStatus[currentBufferIndex].buffer[status.bufStatus[currentBufferIndex].currentLine]
+  newLine.insert(status.registers.yankedStr, status.bufStatus[currentBufferIndex].currentColumn)
+  if oldLine != newLine: status.bufStatus[currentBufferIndex].buffer[status.bufStatus[currentBufferIndex].currentLine] = newLine
 
-  status.bufStatus[status.currentBuffer].currentColumn += status.registers.yankedStr.high - 1
+  status.bufStatus[currentBufferIndex].currentColumn += status.registers.yankedStr.high - 1
 
-  status.currentMainWindowNode.view.reload(status.bufStatus[index].buffer, min(status.currentMainWindowNode.view.originalLine[0], status.bufStatus[index].buffer.high))
-  inc(status.bufStatus[index].countChange)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.reload(status.bufStatus[currentBufferIndex].buffer, min(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.originalLine[0], status.bufStatus[currentBufferIndex].buffer.high))
+  inc(status.bufStatus[currentBufferIndex].countChange)
 
 proc pasteAfterCursor*(status: var EditorStatus) =
   if status.registers.yankedStr.len > 0:
-    status.bufStatus[status.currentBuffer].currentColumn.inc
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+    status.bufStatus[currentBufferIndex].currentColumn.inc
     pasteString(status)
   elif status.registers.yankedLines.len > 0:
     pasteLines(status)
 
 proc pasteBeforeCursor*(status: var EditorStatus) =
-  status.currentMainWindowNode.view.reload(status.bufStatus[status.currentBuffer].buffer, status.currentMainWindowNode.view.originalLine[0])
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.reload(status.bufStatus[currentBufferIndex].buffer, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.originalLine[0])
 
   if status.registers.yankedLines.len > 0:
     pasteLines(status)

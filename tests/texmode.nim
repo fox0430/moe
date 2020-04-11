@@ -43,7 +43,7 @@ test "Change prev buffer command":
   var status = initEditorStatus()
   for i in 0 ..< 2: status.addNewBuffer("")
 
-  status.currentBuffer = 1
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex = 1
   const command = @[ru"bprev"]
   for i in 0 ..< 3: status.exModeCommand(command)
 
@@ -67,19 +67,20 @@ test "Change to first buffer command":
   var status = initEditorStatus()
   for i in 0 ..< 3: status.addNewBuffer("")
 
-  status.currentBuffer = 2
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex = 2
   const command = @[ru"bfirst"]
   status.exModeCommand(command)
-  check(status.currentBuffer == 0)
+  
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex == 0)
 
 test "Change to last buffer command":
   var status = initEditorStatus()
   for i in 0 ..< 3: status.addNewBuffer("")
 
-  status.currentBuffer = 0
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex = 0
   const command = @[ru"blast"]
   status.exModeCommand(command)
-  check(status.currentBuffer == 2)
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex == 2)
 
 test "Replace buffer command":
   var status = initEditorStatus()
@@ -207,7 +208,7 @@ test "Split window command":
 
   const command = @[ru"vs"]
   status.exModeCommand(command)
-  check(status.numOfMainWindow == 2)
+  check(status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow == 2)
 
 test "Live reload of configuration file setting command":
   var status = initEditorStatus()
@@ -364,3 +365,34 @@ test "Highlight full width space command":
     const command = @[ru"highlightfullspace", ru"on"]
     status.exModeCommand(command)
     check(status.settings.highlightFullWidthSpace == true)
+
+test "Create work space command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  const command = @[ru"cws"]
+  status.exModeCommand(command)
+
+  check(status.workspace.len == 2)
+
+test "Change work space command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.createWrokSpace
+
+  const command = @[ru"ws", ru"1"]
+  status.exModeCommand(command)
+
+  check(status.currentWorkSpaceIndex == 0)
+
+test "Delete work space command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.createWrokSpace
+
+  const command = @[ru"dws"]
+  status.exModeCommand(command)
+
+  check(status.workspace.len == 1)
