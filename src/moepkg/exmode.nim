@@ -169,7 +169,7 @@ proc isDeleteWorkSpaceCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"dws"
 
 proc isChangeCurrentWorkSpace(command: seq[seq[Rune]]): bool =
-  return command.len == 2 and command[0] == ru"ws"
+  return command.len == 2 and command[0] == ru"ws" and isDigit(command[1])
 
 proc openMessageMessageLogViewer(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
