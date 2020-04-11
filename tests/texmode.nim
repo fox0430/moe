@@ -454,3 +454,21 @@ test "Delete buffer status command 2":
   status.exModeCommand(command)
 
   check(status.bufStatus.len == 2)
+
+test "Open buffer by number command":
+  var status = initEditorStatus()
+  for i in 0 ..< 2: status.addNewBuffer("")
+
+  const command = @[ru"b", ru"0"]
+  status.exModeCommand(command)
+
+  check(status.bufferIndexInCurrentWindow == 0)
+
+test "Open buffer by number command 2":
+  var status = initEditorStatus()
+  for i in 0 ..< 2: status.addNewBuffer("")
+
+  const command = @[ru"b", ru"a"]
+  status.exModeCommand(command)
+
+  check(status.bufferIndexInCurrentWindow == 1)
