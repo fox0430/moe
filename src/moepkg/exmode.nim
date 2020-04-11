@@ -124,7 +124,7 @@ proc isChangeFirstBufferCommand(command: seq[seq[Rune]]): bool =
 proc isChangeLastBufferCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"blast"
 
-proc isOpneBufferByNumber(command: seq[seq[Rune]]): bool =
+proc isOpenBufferByNumber(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"b" and isDigit(command[1])
 
 proc isChangeNextBufferCommand(command: seq[seq[Rune]]): bool =
@@ -169,7 +169,7 @@ proc isDeleteWorkSpaceCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"dws"
 
 proc isChangeCurrentWorkSpace(command: seq[seq[Rune]]): bool =
-  return command.len == 2 and command[0] == ru"ws"
+  return command.len == 2 and command[0] == ru"ws" and isDigit(command[1])
 
 proc openMessageMessageLogViewer(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -409,19 +409,14 @@ proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
 
   status.bufStatus.delete(index)
 
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-
   if status.bufStatus.len == 0: addNewBuffer(status, "")
-  elif index == currentBufferIndex:
-    dec(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex)
-    if status.bufStatus.high < index: changeCurrentBuffer(status, index - 1)
-    else: changeCurrentBuffer(status, index)
-  elif index < currentBufferIndex: dec(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex)
+  elif status.bufferIndexInCurrentWindow > status.bufStatus.high:
+    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex = status.bufStatus.high 
 
-  if status.bufStatus[currentBufferIndex].mode == Mode.ex: status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+  if status.bufStatus[status.bufferIndexInCurrentWindow].mode == Mode.ex: status.changeMode(status.bufStatus[status.bufferIndexInCurrentWindow].prevMode)
   else:
     status.commandWindow.erase
-    status.changeMode(status.bufStatus[currentBufferIndex].mode)
+    status.changeMode(status.bufStatus[status.bufferIndexInCurrentWindow].mode)
 
 proc changeFirstBufferCommand(status: var EditorStatus) =
   changeCurrentBuffer(status, 0)
@@ -712,7 +707,7 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     changeNextBufferCommand(status)
   elif isChangePreveBufferCommand(command):
     changePreveBufferCommand(status)
-  elif isOpneBufferByNumber(command):
+  elif isOpenBufferByNumber(command):
     opneBufferByNumberCommand(status, ($command[1]).parseInt)
   elif isChangeFirstBufferCommand(command):
     changeFirstBufferCommand(status)
