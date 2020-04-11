@@ -396,3 +396,61 @@ test "Delete work space command":
   status.exModeCommand(command)
 
   check(status.workspace.len == 1)
+
+test "Tab stop setting command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  const command = @[ru"tabstop", ru"4"]
+  status.exModeCommand(command)
+
+  check(status.settings.tabStop == 4)
+
+test "Tab stop setting command 2":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  let defaultTabStop = status.settings.tabStop
+
+  const command = @[ru"tabstop", ru"a"]
+  status.exModeCommand(command)
+
+  check(status.settings.tabStop == defaultTabStop)
+
+test "Smooth scroll speed setting command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  const command = @[ru"scrollspeed", ru"1"]
+  status.exModeCommand(command)
+
+  check(status.settings.smoothScrollSpeed == 1)
+
+test "Smooth scroll speed setting command 2":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  let defaultSpeed = status.settings.smoothScrollSpeed
+
+  const command = @[ru"scrollspeed", ru"a"]
+  status.exModeCommand(command)
+
+  check(status.settings.smoothScrollSpeed == defaultSpeed)
+
+test "Delete buffer status command":
+  var status = initEditorStatus()
+  for i in 0 ..< 2: status.addNewBuffer("")
+
+  const command = @[ru"bd", ru"0"]
+  status.exModeCommand(command)
+
+  check(status.bufStatus.len == 1)
+
+test "Delete buffer status command 2":
+  var status = initEditorStatus()
+  for i in 0 ..< 2: status.addNewBuffer("")
+
+  const command = @[ru"bd", ru"a"]
+  status.exModeCommand(command)
+
+  check(status.bufStatus.len == 2)

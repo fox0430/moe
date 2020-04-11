@@ -409,19 +409,14 @@ proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
 
   status.bufStatus.delete(index)
 
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-
   if status.bufStatus.len == 0: addNewBuffer(status, "")
-  elif index == currentBufferIndex:
-    dec(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex)
-    if status.bufStatus.high < index: changeCurrentBuffer(status, index - 1)
-    else: changeCurrentBuffer(status, index)
-  elif index < currentBufferIndex: dec(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex)
+  elif status.bufferIndexInCurrentWindow > status.bufStatus.high:
+    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex = status.bufStatus.high 
 
-  if status.bufStatus[currentBufferIndex].mode == Mode.ex: status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+  if status.bufStatus[status.bufferIndexInCurrentWindow].mode == Mode.ex: status.changeMode(status.bufStatus[status.bufferIndexInCurrentWindow].prevMode)
   else:
     status.commandWindow.erase
-    status.changeMode(status.bufStatus[currentBufferIndex].mode)
+    status.changeMode(status.bufStatus[status.bufferIndexInCurrentWindow].mode)
 
 proc changeFirstBufferCommand(status: var EditorStatus) =
   changeCurrentBuffer(status, 0)
