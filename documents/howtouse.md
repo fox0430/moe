@@ -116,6 +116,10 @@ Check command bar
 ```vs``` - Vertical split window  
 ```sv``` - Horizontal split window  
 
+```cws``` - Create new work space  
+```ws number``` - Change current work space : Example ```ws 2```  
+```dws``` - Delete current work space  
+
 ```livereload on``` or ```livereload on``` - Change setting of live reload of configuration file  
 ```theme themeName``` - Change color theme : Example ```theme dark```  
 ```tab on``` or ```tab off``` - Change setting to tab line  
