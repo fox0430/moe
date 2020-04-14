@@ -651,7 +651,7 @@ proc createWrokSpace*(status: var Editorstatus) =
 
 proc deleteWorkSpace*(status: var Editorstatus, index: int) =
   if 0 < index and index <= status.workSpace.len:
-    status.workspace.delete(index - 1)
+    status.workspace.delete(index)
 
     if status.workspace.len == 0: status.settings.exitEditor
 
