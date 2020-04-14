@@ -165,7 +165,7 @@ proc isReplaceCommand(command: seq[seq[Rune]]): bool =
 proc isCreateWorkSpaceCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"cws"
 
-proc isDeleteWorkSpaceCommand(command: seq[seq[Rune]]): bool =
+proc isDeleteCurrentWorkSpaceCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"dws"
 
 proc isChangeCurrentWorkSpace(command: seq[seq[Rune]]): bool =
@@ -666,7 +666,7 @@ proc changeCurrentWorkSpaceCommand(status: var Editorstatus, index: int) =
 
   status.changeCurrentWorkSpace(index)
 
-proc deleteWorkSpaceCommand*(status: var Editorstatus) =
+proc deleteCurrentWorkSpaceCommand*(status: var Editorstatus) =
   let index = status.currentWorkSpaceIndex
   if 0 <= index and index < status.workSpace.len:
     for i in 0 ..< status.workSpace[index].numOfMainWindow:
@@ -779,8 +779,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     createWrokSpaceCommand(status)
   elif isChangeCurrentWorkSpace(command):
     changeCurrentWorkSpaceCommand(status, ($command[1]).parseInt)
-  elif isDeleteWorkSpaceCommand(command):
-    deleteWorkSpaceCommand(status)
+  elif isDeleteCurrentWorkSpaceCommand(command):
+    deleteCurrentWorkSpaceCommand(status)
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
