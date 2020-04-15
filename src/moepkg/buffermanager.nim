@@ -1,5 +1,5 @@
 import terminal, os, heapqueue
-import gapbuffer, ui, editorstatus, unicodeext, highlight, window, movement, color
+import gapbuffer, ui, editorstatus, unicodeext, highlight, window, movement, color, bufferstatus
 
 proc initFilelistHighlight[T](buffer: T, currentLine: int): Highlight =
   for i in 0 ..< buffer.len:
@@ -21,13 +21,15 @@ proc setBufferList(status: var Editorstatus) =
       status.bufStatus[currentBufferIndex].buffer.add(line)
 
 proc updateBufferManagerHighlight(status: var Editorstatus) =
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.bufStatus[currentBufferIndex].highlight = initFilelistHighlight(status.bufStatus[currentBufferIndex].buffer, status.bufStatus[currentBufferIndex].currentLine)
+  let
+    currentBufferIndex = status.bufferIndexInCurrentWindow
+    currentLine = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine
+  status.bufStatus[currentBufferIndex].highlight = initFilelistHighlight(status.bufStatus[currentBufferIndex].buffer, currentLine)
 
 proc deleteSelectedBuffer(status: var Editorstatus) =
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
-    deleteIndex = status.bufStatus[currentBufferIndex].currentLine
+    deleteIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine
 
   var qeue = initHeapQueue[WindowNode]()
   for node in status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.child: qeue.push(node)
@@ -55,21 +57,19 @@ proc deleteSelectedBuffer(status: var Editorstatus) =
           for node in node.child: qeue.push(node)
 
     if currentBufferIndex > deleteIndex: dec(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex)
-    if status.bufStatus[currentBufferIndex].currentLine > 0: dec(status.bufStatus[currentBufferIndex].currentLine)
+    if status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine > 0: dec(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine)
     status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode = status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.searchByWindowIndex(status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow - 1)
     status.setBufferList
 
     status.resize(terminalHeight(), terminalWidth())
   
 proc openSelectedBuffer(status: var Editorstatus, isNewWindow: bool) =
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-
   if isNewWindow:
     status.verticalSplitWindow
     status.moveNextWindow
-    status.changeCurrentBuffer(status.bufStatus[currentBufferIndex].currentLine)
+    status.changeCurrentBuffer(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine)
   else:
-    status.changeCurrentBuffer(status.bufStatus[currentBufferIndex].currentLine)
+    status.changeCurrentBuffer(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine)
     status.bufStatus.delete(status.bufStatus.high)
 
 proc bufferManager*(status: var Editorstatus) =
@@ -89,8 +89,8 @@ proc bufferManager*(status: var Editorstatus) =
     elif isControlK(key): status.moveNextWindow
     elif isControlJ(key): status.movePrevWindow
     elif key == ord(':'): status.changeMode(Mode.ex)
-    elif key == ord('k') or isUpKey(key): status.bufStatus[currentBufferIndex].keyUp
-    elif key == ord('j') or isDownKey(key): status.bufStatus[currentBufferIndex].keyDown
+    elif key == ord('k') or isUpKey(key): status.bufStatus[currentBufferIndex].keyUp(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+    elif key == ord('j') or isDownKey(key): status.bufStatus[currentBufferIndex].keyDown(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
     elif isEnterKey(key): status.openSelectedBuffer(false)
     elif key == ord('o'): status.openSelectedBuffer(true)
     elif key == ord('D'): status.deleteSelectedBuffer

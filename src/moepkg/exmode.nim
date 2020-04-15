@@ -1,5 +1,5 @@
 import sequtils, strutils, os, terminal, packages/docutils/highlite, times
-import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview, window, movement, color, build
+import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview, window, movement, color, build, bufferstatus
 
 type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
 
@@ -605,7 +605,7 @@ proc listAllBufferCommand(status: var Editorstatus) =
   
   status.settings.view.currentLineNumber = false
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = status.bufStatus[currentBufferIndex].buffer.initEditorView(terminalHeight() - useStatusBar - useTab - 1, terminalWidth())
-  status.bufStatus[currentBufferIndex].currentLine = 0
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine = 0
 
   status.updateHighlight(currentBufferIndex)
 
@@ -831,6 +831,6 @@ proc exMode*(status: var EditorStatus) =
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
   else:
     status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
-    status.bufStatus[currentBufferIndex].tryRecordCurrentPosition
+    status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     exModeCommand(status, splitCommand($command))

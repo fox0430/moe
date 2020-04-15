@@ -18,13 +18,14 @@ proc searchLine(line: seq[Rune], keyword: seq[Rune]): int =
 
 proc searchBuffer(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
   result = (-1, -1)
+  var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
-    startLine = status.bufStatus[currentBufferIndex].currentLine
+    startLine = windowNode.currentLine
   for i in 0 ..< status.bufStatus[currentBufferIndex].buffer.len:
     let
       line = (startLine + i) mod status.bufStatus[currentBufferIndex].buffer.len
-      begin = if line == startLine and i == 0: status.bufStatus[currentBufferIndex].currentColumn else: 0
+      begin = if line == startLine and i == 0: windowNode.currentColumn else: 0
       position = searchLine(status.bufStatus[currentBufferIndex].buffer[line][begin ..< status.bufStatus[currentBufferIndex].buffer[line].len], keyword)
     if position > -1:  return (line, begin + position)
 
@@ -37,14 +38,15 @@ proc searchLineReversely(line: seq[Rune], keyword: seq[Rune]): int =
 
 proc searchBufferReversely(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
   result = (-1, -1)
+  var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
-    startLine = status.bufStatus[currentBufferIndex].currentLine
+    startLine = windowNode.currentLine
   for i in 0 ..< status.bufStatus[currentBufferIndex].buffer.len + 1:
     var line = (startLine - i) mod status.bufStatus[currentBufferIndex].buffer.len
     if line < 0: line = status.bufStatus[currentBufferIndex].buffer.len - i
     let
-      endPosition = if line == startLine and i == 0: status.bufStatus[currentBufferIndex].currentColumn else: status.bufStatus[currentBufferIndex].buffer[line].len 
+      endPosition = if line == startLine and i == 0: windowNode.currentColumn else: status.bufStatus[currentBufferIndex].buffer[line].len 
       position = searchLineReversely(status.bufStatus[currentBufferIndex].buffer[line][0 ..< endPosition], keyword)
     if position > -1:  return (line, position)
 
@@ -63,7 +65,7 @@ proc jumpToSearchResults(status: var Editorstatus, keyword: seq[Rune]) =
     jumpLine(status, searchResult.line)
     let currentBufferIndex = status.bufferIndexInCurrentWindow
     for column in 0 ..< searchResult.column:
-      keyRight(status.bufStatus[currentBufferIndex])
+      status.bufStatus[currentBufferIndex].keyRight(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
 proc searchFirstOccurrence(status: var EditorStatus) =
   const prompt = "/"

@@ -1,5 +1,5 @@
 import heapqueue
-import ui, editorview, gapbuffer, color
+import ui, editorview, gapbuffer, color, cursor
 
 # vertical is default
 type SplitType* = enum
@@ -13,6 +13,10 @@ type WindowNode* = ref object
   splitType*: SplitType
   window*: Window
   view*: EditorView
+  cursor*: CursorPosition
+  currentLine*: int
+  currentColumn*: int
+  expandedColumn*: int
   bufferIndex*: int
   windowIndex*: int
   index*: int   ## Index as seen by parent node

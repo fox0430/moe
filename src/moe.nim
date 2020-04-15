@@ -13,6 +13,7 @@ import moepkg/logviewer
 import moepkg/cmdlineoption
 import moepkg/settings
 import moepkg/commandview
+import moepkg/bufferstatus
 
 proc main() =
   let parsedList = parseCommandLineOption(commandLineParams())
