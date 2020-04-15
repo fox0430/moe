@@ -5,8 +5,8 @@ test "Delete current character":
   var status = initEditorStatus()
   status.addNewBuffer("")
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
-  status.bufStatus[0].currentColumn = 1
-  status.bufStatus[0].deleteCurrentCharacter(status.settings.autoDeleteParen, status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentColumn = 1
+  status.bufStatus[0].deleteCurrentCharacter(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoDeleteParen)
   check(status.bufStatus[0].buffer[0] == ru"ac")
 
 test "Add indent":
