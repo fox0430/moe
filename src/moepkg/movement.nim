@@ -68,8 +68,7 @@ proc jumpLine*(status: var EditorStatus, destination: int) =
   if not (view.originalLine[0] <= destination and (view.originalLine[view.height - 1] == -1 or destination <= view.originalLine[view.height - 1])):
     var startOfPrintedLines = 0
     if destination > status.bufStatus[currentBufferIndex].buffer.high - windowNode.window.height - 1:
-      ## I don't know why but There are 2 less calculated value...
-      startOfPrintedLines = status.bufStatus[currentBufferIndex].buffer.high - windowNode.window.height - 1 + 2
+      startOfPrintedLines = status.bufStatus[currentBufferIndex].buffer.high - windowNode.window.height - 1
     else:
       startOfPrintedLines = max(destination - (currentLine - windowNode.view.originalLine[0]), 0)
 

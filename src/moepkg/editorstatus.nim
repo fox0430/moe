@@ -261,8 +261,8 @@ proc update*(status: var EditorStatus) =
           if isVisualMode or isVisualBlockMode: status.highlightSelectedArea
           if status.settings.highlightPairOfParen and currentMode != Mode.filer: status.highlightPairOfParen
 
-        node.view.update(node.window, status.settings.view, isCurrentMainWin, isVisualMode, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, node.currentLine, startSelectedLine, endSelectedLine)
         node.view.seekCursor(status.bufStatus[bufIndex].buffer, node.currentLine, node.currentColumn)
+        node.view.update(node.window, status.settings.view, isCurrentMainWin, isVisualMode, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, node.currentLine, startSelectedLine, endSelectedLine)
 
         if isCurrentMainWin: node.cursor.update(node.view, node.currentLine, node.currentColumn)
 
