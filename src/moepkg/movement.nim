@@ -57,7 +57,7 @@ proc moveToFirstOfNextLine*(bufStatus: var BufferStatus, windowNode: var WindowN
 proc jumpLine*(status: var EditorStatus, destination: int) =
   var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
   let
-    currentBufferIndex = status.bufferIndexInCurrentWindow
+    currentBufferIndex = windowNode.bufferIndex
     currentLine = windowNode.currentLine
     view = windowNode.view
 
@@ -67,11 +67,13 @@ proc jumpLine*(status: var EditorStatus, destination: int) =
 
   if not (view.originalLine[0] <= destination and (view.originalLine[view.height - 1] == -1 or destination <= view.originalLine[view.height - 1])):
     var startOfPrintedLines = 0
-    if destination > status.bufStatus[currentBufferIndex].buffer.len - 1 - status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.height - 1:
-      startOfPrintedLines = status.bufStatus[currentBufferIndex].buffer.len - 1 - status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.height - 1
+    if destination > status.bufStatus[currentBufferIndex].buffer.high - windowNode.window.height - 1:
+      ## I don't know why but There are 2 less calculated value...
+      startOfPrintedLines = status.bufStatus[currentBufferIndex].buffer.high - windowNode.window.height - 1 + 2
     else:
-      startOfPrintedLines = max(destination - (currentLine - status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.originalLine[0]), 0)
-    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.reload(status.bufStatus[currentBufferIndex].buffer, startOfPrintedLines)
+      startOfPrintedLines = max(destination - (currentLine - windowNode.view.originalLine[0]), 0)
+
+    windowNode.view.reload(status.bufStatus[currentBufferIndex].buffer, startOfPrintedLines)
 
 proc moveToFirstLine*(status: var EditorStatus) = status.jumpLine(0)
 
@@ -79,7 +81,7 @@ proc moveToLastLine*(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
   if status.bufStatus[currentBufferIndex].cmdLoop > 1: jumpLine(status, status.bufStatus[currentBufferIndex].cmdLoop - 1)
-  else: jumpLine(status, status.bufStatus[currentBufferIndex].buffer.len - 1)
+  else: status.jumpLine(status.bufStatus[currentBufferIndex].buffer.high)
 
 proc pageUp*(status: var EditorStatus) =
   var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode

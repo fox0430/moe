@@ -249,7 +249,7 @@ proc update*(status: var EditorStatus) =
           isVisualMode = if (currentMode == Mode.visual) or (prevMode == Mode.visual and currentMode == Mode.ex): true else: false
           isVisualBlockMode = if (currentMode == Mode.visualBlock) or (prevMode == Mode.visualBlock and currentMode == Mode.ex): true else: false
 
-        if status.bufStatus[bufIndex].buffer.high < node.currentLine: node.currentLine =  status.bufStatus[bufIndex].buffer.high
+        if status.bufStatus[bufIndex].buffer.high < node.currentLine: node.currentLine = status.bufStatus[bufIndex].buffer.high
         if status.bufStatus[bufIndex].buffer[node.currentLine].len > 0 and status.bufStatus[bufIndex].buffer[node.currentLine].high < node.currentColumn:
           node.currentColumn = status.bufStatus[bufIndex].buffer[node.currentLine].high
 
@@ -610,7 +610,7 @@ proc updateHighlight*(status: var EditorStatus, bufferIndex: int) =
   let
     range = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.rangeOfOriginalLineInView
     startLine = range[0]
-    endLine = if bufStatus.buffer.high > range[1]: range[1] + 2 elif bufStatus.buffer.len > range[1]: range[1] + 1 else: range[1]
+    endLine = if bufStatus.buffer.len > range[1] + 1: range[1] + 2 elif bufStatus.buffer.len > range[1]: range[1] + 1 else: range[1]
   var bufferInView = initGapBuffer[seq[Rune]]()
   for i in startLine ..< endLine: bufferInView.add(bufStatus.buffer[i])
 
