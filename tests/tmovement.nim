@@ -5,7 +5,7 @@ test "Move right":
   var status = initEditorStatus()
   status.addNewBuffer("")
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
-  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
   for i in 0 ..< 3: status.bufStatus[0].keyRight(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
   check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentColumn == 2)
 
@@ -13,7 +13,7 @@ test "Move left":
   var status = initEditorStatus()
   status.addNewBuffer("")
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
-  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentColumn = 2
   for i in 0 ..< 3: status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.keyLeft
   check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentColumn == 0)
@@ -22,7 +22,7 @@ test "Move down":
   var status = initEditorStatus()
   status.addNewBuffer("")
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"efg", ru"hij"])
-  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
   for i in 0 ..< 3: status.bufStatus[0].keyDown(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
   check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine == 2)
 
@@ -30,7 +30,7 @@ test "Move up":
   var status = initEditorStatus()
   status.addNewBuffer("")
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"efg", ru"hij"])
-  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine = 2
   for i in 0 ..< 3: status.bufStatus[0].keyUp(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
   check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine == 0)

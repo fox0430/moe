@@ -25,7 +25,7 @@ test "resize 1":
   status.addNewBuffer("")
   status.resize(100, 100)
   status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
-  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = initEditorView(status.bufStatus[0].buffer, 1, 1)
   status.resize(0, 0)
 
@@ -34,7 +34,7 @@ test "resize 2":
   status.addNewBuffer("")
   status.resize(100, 100)
   status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
-  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = initEditorView(status.bufStatus[0].buffer, 20, 4)
   status.resize(20, 4)
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentColumn = 1
@@ -46,69 +46,65 @@ test "resize 2":
 test "Highlight of a pair of paren 1":
   var status = initEditorStatus()
   status.addNewBuffer("")
-  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
 
   block:
     status.bufStatus[0].buffer = initGapBuffer(@[ru"()"])
-    let currentBufferIndex = status.bufferIndexInCurrentWindow
-    status.updateHighlight(currentBufferIndex)
+    status.updateHighlight(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
     status.update
 
-    check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0)
-    check(status.bufStatus[0].highlight[1].color == EditorColorPair.parenText and status.bufStatus[0].highlight[1].firstColumn == 1)
+    check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].color == EditorColorPair.defaultChar and status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].firstColumn == 0)
+    check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[1].color == EditorColorPair.parenText and status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[1].firstColumn == 1)
 
   block:
     status.bufStatus[0].buffer = initGapBuffer(@[ru"[]"])
-    let currentBufferIndex = status.bufferIndexInCurrentWindow
-    status.updateHighlight(currentBufferIndex)
+    status.updateHighlight(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
     status.update
 
-    check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0)
-    check(status.bufStatus[0].highlight[1].color == EditorColorPair.parenText and status.bufStatus[0].highlight[1].firstColumn == 1)
+    check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].color == EditorColorPair.defaultChar and status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].firstColumn == 0)
+    check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[1].color == EditorColorPair.parenText and status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[1].firstColumn == 1)
 
   block:
     status.bufStatus[0].buffer = initGapBuffer(@[ru"{}"])
-    let currentBufferIndex = status.bufferIndexInCurrentWindow
-    status.updateHighlight(currentBufferIndex)
+    status.updateHighlight(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
     status.update
 
-    check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0)
-    check(status.bufStatus[0].highlight[1].color == EditorColorPair.parenText and status.bufStatus[0].highlight[1].firstColumn == 1)
+    check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].color == EditorColorPair.defaultChar and status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].firstColumn == 0)
+    check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[1].color == EditorColorPair.parenText and status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[1].firstColumn == 1)
 
   block:
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(()"])
-    let currentBufferIndex = status.bufferIndexInCurrentWindow
-    status.updateHighlight(currentBufferIndex)
+    status.updateHighlight(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
     status.update
 
-    check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0 and status.bufStatus[0].highlight[0].lastColumn == 2)
+    check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].color == EditorColorPair.defaultChar and status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].firstColumn == 0 and status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].lastColumn == 2)
 
 test "Highlight of a pair of paren 2":
   var status = initEditorStatus()
   status.addNewBuffer("")
-  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"(())"])
   status.update
 
-  check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstColumn == 0 and status.bufStatus[0].highlight[0].lastColumn == 2)
-  check(status.bufStatus[0].highlight[1].color == EditorColorPair.parenText and status.bufStatus[0].highlight[1].firstColumn == 3)
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].color == EditorColorPair.defaultChar and status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].firstColumn == 0 and status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].lastColumn == 2)
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[1].color == EditorColorPair.parenText and status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[1].firstColumn == 3)
 
 test "Highlight of a pair of paren 3":
   var status = initEditorStatus()
   status.addNewBuffer("")
-  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"(", ru")"])
   status.update
 
-  check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[0].firstRow == 0)
-  check(status.bufStatus[0].highlight[1].color == EditorColorPair.parenText and status.bufStatus[0].highlight[1].firstRow == 1)
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].color == EditorColorPair.defaultChar and status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].firstRow == 0)
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[1].color == EditorColorPair.parenText and status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[1].firstRow == 1)
 
 test "Highlight of a pair of paren 4":
   var status = initEditorStatus()
   status.addNewBuffer("")
-  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"(", ru")"])
   status.update
@@ -123,7 +119,7 @@ test "Highlight of a pair of paren 5":
   var status = initEditorStatus()
   status.addNewBuffer("")
   status.resize(100, 100)
-  status.bufStatus[0].highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight($status.bufStatus[0].buffer, status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"a)"])
   status.resize(100, 100)
@@ -306,7 +302,7 @@ test "Highlight current word 1":
   status.resize(100, 100)
   status.update
 
-  check(status.bufStatus[0].highlight[0].color == EditorColorPair.currentWord and status.bufStatus[0].highlight[2].color == EditorColorPair.currentWord)
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].color == EditorColorPair.currentWord and status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[2].color == EditorColorPair.currentWord)
 
 test "Highlight current word 2":
   var status = initEditorStatus()
@@ -316,7 +312,7 @@ test "Highlight current word 2":
   status.resize(100, 100)
   status.update
 
-  check(status.bufStatus[0].highlight[0].color == EditorColorPair.currentWord and status.bufStatus[0].highlight[1].color == EditorColorPair.currentWord)
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].color == EditorColorPair.currentWord and status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[1].color == EditorColorPair.currentWord)
 
 test "Highlight current word 3":
   var status = initEditorStatus()
@@ -327,7 +323,7 @@ test "Highlight current word 3":
   status.bufStatus[0].keyRight(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
   status.update
 
-  check(status.bufStatus[0].highlight[1].color == EditorColorPair.currentWord and status.bufStatus[0].highlight[3].color == EditorColorPair.currentWord)
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[1].color == EditorColorPair.currentWord and status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[3].color == EditorColorPair.currentWord)
 
 test "Highlight full width space 1":
   var status = initEditorStatus()
@@ -337,7 +333,7 @@ test "Highlight full width space 1":
 
   status.update
 
-  check(status.bufStatus[0].highlight[0].color == EditorColorPair.highlightFullWidthSpace)
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].color == EditorColorPair.highlightFullWidthSpace)
 
 test "Highlight full width space 2":
   var status = initEditorStatus()
@@ -347,7 +343,7 @@ test "Highlight full width space 2":
 
   status.update
 
-  check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar and status.bufStatus[0].highlight[1].color == EditorColorPair.highlightFullWidthSpace)
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].color == EditorColorPair.defaultChar and status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[1].color == EditorColorPair.highlightFullWidthSpace)
 
 test "Highlight full width space 3":
   var status = initEditorStatus()
@@ -357,7 +353,7 @@ test "Highlight full width space 3":
 
   status.update
 
-  check(status.bufStatus[0].highlight[0].color == EditorColorPair.highlightFullWidthSpace)
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].color == EditorColorPair.highlightFullWidthSpace)
 
 test "Highlight full width space 2":
   var status = initEditorStatus()
@@ -367,9 +363,9 @@ test "Highlight full width space 2":
 
   status.update
 
-  check(status.bufStatus[0].highlight[0].color == EditorColorPair.defaultChar)
-  check(status.bufStatus[0].highlight[1].color == EditorColorPair.highlightFullWidthSpace)
-  check(status.bufStatus[0].highlight[2].color == EditorColorPair.defaultChar)
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].color == EditorColorPair.defaultChar)
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[1].color == EditorColorPair.highlightFullWidthSpace)
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[2].color == EditorColorPair.defaultChar)
 
 test "Write tab line":
   var status = initEditorStatus()

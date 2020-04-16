@@ -17,4 +17,4 @@ test "Check highlight in filer mode":
   filerStatus = filerStatus.updateDirList
   status.updateFilerView(filerStatus)
 
-  check(status.bufStatus[0].highlight[0].color == EditorColorPair.currentFile)
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].color == EditorColorPair.currentFile)
