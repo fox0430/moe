@@ -1,5 +1,5 @@
 import packages/docutils/highlite, strutils, terminal, os, strformat, tables, times, osproc, heapqueue, math
-import gapbuffer, editorview, ui, unicodeext, highlight, independentutils, fileutils, undoredostack, window, color, build, workspace, statusbar, settings, bufferstatus, cursor
+import gapbuffer, editorview, ui, unicodeext, highlight, independentutils, fileutils, undoredostack, window, color, workspace, statusbar, settings, bufferstatus, cursor
 
 type Platform* = enum
   linux, wsl, mac, other
