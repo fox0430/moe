@@ -1,4 +1,4 @@
-import packages/docutils/highlite, strutils, terminal, os, strformat, tables, times, osproc, heapqueue, math
+import packages/docutils/highlite, strutils, terminal, os, strformat, tables, times, osproc, heapqueue, math, deques
 import gapbuffer, editorview, ui, unicodeext, highlight, independentutils, fileutils, undoredostack, window, color, workspace, statusbar, settings, bufferstatus, cursor
 
 type Platform* = enum
@@ -253,13 +253,15 @@ proc update*(status: var EditorStatus) =
         if status.bufStatus[bufIndex].buffer[node.currentLine].len > 0 and status.bufStatus[bufIndex].buffer[node.currentLine].high < node.currentColumn:
           node.currentColumn = status.bufStatus[bufIndex].buffer[node.currentLine].high
 
+        node.view.reload(status.bufStatus[bufIndex].buffer, min(node.view.originalLine[0], status.bufStatus[bufIndex].buffer.high))
+
         ## Update highlight
-        ## TODO: Refactor
+        ## TODO: Refactor and fix
         if (currentMode != Mode.filer) or (currentMode == Mode.ex and prevMode == Mode.filer):
           if status.settings.highlightOtherUsesCurrentWord or status.settings.highlightPairOfParen or isVisualMode: status.updateHighlight(node)
-          if status.settings.highlightOtherUsesCurrentWord and currentMode != Mode.filer: status.highlightOtherUsesCurrentWord
+          if isCurrentMainWin and status.settings.highlightOtherUsesCurrentWord and currentMode != Mode.filer: status.highlightOtherUsesCurrentWord
           if isVisualMode or isVisualBlockMode: status.highlightSelectedArea
-          if status.settings.highlightPairOfParen and currentMode != Mode.filer: status.highlightPairOfParen
+          if isCurrentMainWin and status.settings.highlightPairOfParen and currentMode != Mode.filer: status.highlightPairOfParen
 
         node.view.seekCursor(status.bufStatus[bufIndex].buffer, node.currentLine, node.currentColumn)
         node.view.update(node.window, status.settings.view, isCurrentMainWin, isVisualMode, status.bufStatus[bufIndex].buffer, node.highlight, node.currentLine, startSelectedLine, endSelectedLine)
@@ -386,6 +388,7 @@ proc addNewBuffer*(status: var EditorStatus, filename: string) =
   if filename != "": status.bufStatus[index].language = detectLanguage(filename)
 
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = initEditorView(status.bufStatus[index].buffer, terminalHeight(), terminalWidth())
+  status.updateHighlight(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
   status.changeCurrentBuffer(index)
   status.changeMode(Mode.normal)
