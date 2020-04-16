@@ -216,35 +216,22 @@ proc highlightOtherUsesCurrentWord*(status: var Editorstatus)
 proc highlightSelectedArea(status: var Editorstatus)
 proc updateHighlight*(status: var EditorStatus, bufferIndex: int)
 
+proc updateStatusBar(status: var Editorstatus) =
+  if not status.settings.statusBar.multipleStatusBar:
+    status.bufStatus[status.statusBar[0].bufferIndex].writeStatusBar(status.statusBar[0], status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings)
+  else:
+    for i in 0 ..< status.statusBar.len:
+      let
+        bufferIndex = status.statusBar[i].bufferIndex
+        windowNode = status.workspace[status.currentWorkSpaceIndex].mainWindowNode.searchByWindowIndex(status.statusBar[i].windowIndex)
+      status.bufStatus[bufferIndex].writeStatusBar(status.statusBar[i], windowNode, status.settings)
+
 proc update*(status: var EditorStatus) =
   setCursor(false)
 
   if status.settings.workSpace.useBar: status.writeWorkSpaceInfoWindow
 
   if status.settings.tabLine.useTab: status.writeTabLine
-
-  if status.settings.statusBar.useBar:
-    if not status.settings.statusBar.multipleStatusBar:
-      status.bufStatus[status.statusBar[0].bufferIndex].writeStatusBar(status.statusBar[0], status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings)
-    else:
-      for i in 0 ..< status.statusBar.len:
-        let
-          bufferIndex = status.statusBar[i].bufferIndex
-          windowNode = status.workspace[status.currentWorkSpaceIndex].mainWindowNode.searchByWindowIndex(status.statusBar[i].windowIndex)
-        status.bufStatus[bufferIndex].writeStatusBar(status.statusBar[i], windowNode, status.settings)
-
-  let
-    currentBufferIndex = status.bufferIndexInCurrentWindow
-    currentMode = status.bufStatus[currentBufferIndex].mode
-    prevMode = status.bufStatus[currentBufferIndex].prevMode
-    isVisualMode = if (currentMode == Mode.visual) or (prevMode == Mode.visual and currentMode == Mode.ex): true else: false
-    isVisualBlockMode = if (currentMode == Mode.visualBlock) or (prevMode == Mode.visualBlock and currentMode == Mode.ex): true else: false
-
-  if (currentMode != Mode.filer) or (currentMode == Mode.ex and prevMode == Mode.filer):
-    if status.settings.highlightOtherUsesCurrentWord or status.settings.highlightPairOfParen or isVisualMode: status.updateHighlight(currentBufferIndex)
-    if status.settings.highlightOtherUsesCurrentWord and currentMode != Mode.filer: status.highlightOtherUsesCurrentWord
-    if isVisualMode or isVisualBlockMode: status.highlightSelectedArea
-    if status.settings.highlightPairOfParen and currentMode != Mode.filer: status.highlightPairOfParen
 
   var queue = initHeapQueue[WindowNode]()
   for node in status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.child: queue.push(node)
@@ -255,12 +242,27 @@ proc update*(status: var EditorStatus) =
         let
           bufIndex = node.bufferIndex
           isCurrentMainWin = if node.windowIndex == status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.windowIndex: true else: false
-          isVisualMode = if status.bufStatus[bufIndex].mode == Mode.visual or status.bufStatus[bufIndex].mode == Mode.visualBlock: true else: false
           startSelectedLine = status.bufStatus[bufIndex].selectArea.startLine
           endSelectedLine = status.bufStatus[bufIndex].selectArea.endLine
+          currentMode = status.bufStatus[bufIndex].mode
+          prevMode = status.bufStatus[bufIndex].prevMode
+          isVisualMode = if (currentMode == Mode.visual) or (prevMode == Mode.visual and currentMode == Mode.ex): true else: false
+          isVisualBlockMode = if (currentMode == Mode.visualBlock) or (prevMode == Mode.visualBlock and currentMode == Mode.ex): true else: false
 
-        node.view.seekCursor(status.bufStatus[bufIndex].buffer, node.currentLine, node.currentColumn)
+        if status.bufStatus[bufIndex].buffer.high < node.currentLine: node.currentLine =  status.bufStatus[bufIndex].buffer.high
+        if status.bufStatus[bufIndex].buffer[node.currentLine].len > 0 and status.bufStatus[bufIndex].buffer[node.currentLine].high < node.currentColumn:
+          node.currentColumn = status.bufStatus[bufIndex].buffer[node.currentLine].high
+
+        ## Update highlight
+        ## TODO: Refactor
+        if (currentMode != Mode.filer) or (currentMode == Mode.ex and prevMode == Mode.filer):
+          if status.settings.highlightOtherUsesCurrentWord or status.settings.highlightPairOfParen or isVisualMode: status.updateHighlight(bufIndex)
+          if status.settings.highlightOtherUsesCurrentWord and currentMode != Mode.filer: status.highlightOtherUsesCurrentWord
+          if isVisualMode or isVisualBlockMode: status.highlightSelectedArea
+          if status.settings.highlightPairOfParen and currentMode != Mode.filer: status.highlightPairOfParen
+
         node.view.update(node.window, status.settings.view, isCurrentMainWin, isVisualMode, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, node.currentLine, startSelectedLine, endSelectedLine)
+        node.view.seekCursor(status.bufStatus[bufIndex].buffer, node.currentLine, node.currentColumn)
 
         if isCurrentMainWin: node.cursor.update(node.view, node.currentLine, node.currentColumn)
 
@@ -271,6 +273,8 @@ proc update*(status: var EditorStatus) =
 
   var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
   windowNode.window.moveCursor(windowNode.cursor.y, windowNode.view.widthOfLineNum + windowNode.cursor.x)
+
+  if status.settings.statusBar.useBar: status.updateStatusBar
 
   setCursor(true)
 
@@ -602,10 +606,11 @@ proc updateHighlight*(status: var EditorStatus, bufferIndex: int) =
 
   status.bufStatus[bufferIndex].highlight = initHighlight($bufStatus.buffer, if syntax: bufStatus.language else: SourceLanguage.langNone)
 
+  ## TODO: Bug fix
   let
     range = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.rangeOfOriginalLineInView
     startLine = range[0]
-    endLine = if bufStatus.buffer.len > range[1] + 1: range[1] + 2 elif bufStatus.buffer.len > range[1]: range[1] + 1 else: range[1]
+    endLine = if bufStatus.buffer.high > range[1]: range[1] + 2 elif bufStatus.buffer.len > range[1]: range[1] + 1 else: range[1]
   var bufferInView = initGapBuffer[seq[Rune]]()
   for i in startLine ..< endLine: bufferInView.add(bufStatus.buffer[i])
 
