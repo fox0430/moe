@@ -1,5 +1,5 @@
 import packages/docutils/highlite, tables, times
-import gapbuffer, unicodeext, highlight
+import gapbuffer, unicodeext
 
 type Mode* = enum
   normal, insert, visual, visualBlock, replace, ex, filer, search, bufManager, logViewer
@@ -12,7 +12,6 @@ type SelectArea* = object
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
-  highlight*: Highlight
   language*: SourceLanguage
   selectArea*: SelectArea
   isHighlight*: bool
@@ -24,4 +23,3 @@ type BufferStatus* = object
   mode* : Mode
   prevMode* : Mode
   lastSaveTime*: DateTime
-

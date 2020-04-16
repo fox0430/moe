@@ -24,7 +24,7 @@ proc updateBufferManagerHighlight(status: var Editorstatus) =
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     currentLine = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine
-  status.bufStatus[currentBufferIndex].highlight = initFilelistHighlight(status.bufStatus[currentBufferIndex].buffer, currentLine)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initFilelistHighlight(status.bufStatus[currentBufferIndex].buffer, currentLine)
 
 proc deleteSelectedBuffer(status: var Editorstatus) =
   let

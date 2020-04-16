@@ -214,7 +214,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
 proc highlightPairOfParen(status: var Editorstatus)
 proc highlightOtherUsesCurrentWord*(status: var Editorstatus)
 proc highlightSelectedArea(status: var Editorstatus)
-proc updateHighlight*(status: var EditorStatus, bufferIndex: int)
+proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode)
 
 proc updateStatusBar(status: var Editorstatus) =
   if not status.settings.statusBar.multipleStatusBar:
@@ -256,13 +256,13 @@ proc update*(status: var EditorStatus) =
         ## Update highlight
         ## TODO: Refactor
         if (currentMode != Mode.filer) or (currentMode == Mode.ex and prevMode == Mode.filer):
-          if status.settings.highlightOtherUsesCurrentWord or status.settings.highlightPairOfParen or isVisualMode: status.updateHighlight(bufIndex)
+          if status.settings.highlightOtherUsesCurrentWord or status.settings.highlightPairOfParen or isVisualMode: status.updateHighlight(node)
           if status.settings.highlightOtherUsesCurrentWord and currentMode != Mode.filer: status.highlightOtherUsesCurrentWord
           if isVisualMode or isVisualBlockMode: status.highlightSelectedArea
           if status.settings.highlightPairOfParen and currentMode != Mode.filer: status.highlightPairOfParen
 
         node.view.seekCursor(status.bufStatus[bufIndex].buffer, node.currentLine, node.currentColumn)
-        node.view.update(node.window, status.settings.view, isCurrentMainWin, isVisualMode, status.bufStatus[bufIndex].buffer, status.bufStatus[bufIndex].highlight, node.currentLine, startSelectedLine, endSelectedLine)
+        node.view.update(node.window, status.settings.view, isCurrentMainWin, isVisualMode, status.bufStatus[bufIndex].buffer, node.highlight, node.currentLine, startSelectedLine, endSelectedLine)
 
         if isCurrentMainWin: node.cursor.update(node.view, node.currentLine, node.currentColumn)
 
@@ -330,9 +330,8 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
 proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
   if index < 0 or status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow <= index: return
 
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.updateHighlight(currentBufferIndex)
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode = status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.searchByWindowIndex(index)
+  status.updateHighlight(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
   status.changeCurrentBuffer(status.bufferIndexInCurrentWindow)
   if status.settings.tabLine.useTab: status.writeTabLine
 
@@ -385,8 +384,6 @@ proc addNewBuffer*(status: var EditorStatus, filename: string) =
       return
 
   if filename != "": status.bufStatus[index].language = detectLanguage(filename)
-  let lang = if status.settings.syntax: status.bufStatus[index].language else: SourceLanguage.langNone
-  status.bufStatus[index].highlight = initHighlight($status.bufStatus[index].buffer, lang)
 
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = initEditorView(status.bufStatus[index].buffer, terminalHeight(), terminalWidth())
 
@@ -503,9 +500,9 @@ proc highlightSelectedArea(status: var Editorstatus) =
     prevMode = status.bufStatus[currentBufferIndex].prevMode
 
   if (currentMode == Mode.visual) or (currentMode == Mode.ex and prevMode == Mode.visual):
-    status.bufStatus[currentBufferIndex].highlight = status.bufStatus[currentBufferIndex].highlight.overwrite(colorSegment)
+    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
   elif (currentMode == Mode.visualBlock) or (currentMode == Mode.ex and prevMode == Mode.visualBlock):
-    status.bufStatus[currentBufferIndex].highlight.overwriteColorSegmentBlock(status.bufStatus[currentBufferIndex].selectArea, status.bufStatus[currentBufferIndex].buffer)
+    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight.overwriteColorSegmentBlock(status.bufStatus[currentBufferIndex].selectArea, status.bufStatus[currentBufferIndex].buffer)
 
 proc highlightPairOfParen(status: var Editorstatus) =
   let
@@ -529,7 +526,7 @@ proc highlightPairOfParen(status: var Editorstatus) =
         elif buffer[i][j] == closeParen: dec(depth)
         if depth == 0:
           let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j, color: EditorColorPair.parenText)
-          status.bufStatus[currentBufferIndex].highlight = status.bufStatus[currentBufferIndex].highlight.overwrite(colorSegment)
+          status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
           return
   elif isCloseParen(buffer[currentLine][currentColumn]):
     var depth = 0
@@ -544,7 +541,7 @@ proc highlightPairOfParen(status: var Editorstatus) =
         elif buffer[i][j] == openParen: dec(depth)
         if depth == 0:
           let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j, color: EditorColorPair.parenText)
-          status.bufStatus[currentBufferIndex].highlight = status.bufStatus[currentBufferIndex].highlight.overwrite(colorSegment)
+          status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
           return
 
 # Highlighting other uses of the current word under the cursor
@@ -556,7 +553,6 @@ proc highlightOtherUsesCurrentWord*(status: var Editorstatus) =
     line = bufStatus.buffer[windowNode.currentLine]
 
   if line.len < 1 or windowNode.currentColumn > line.high or (line[windowNode.currentColumn] != '_' and unicodeext.isPunct(line[windowNode.currentColumn])) or line[windowNode.currentColumn].isSpace: return
-
   var
     startCol = windowNode.currentColumn
     endCol = windowNode.currentColumn
@@ -587,28 +583,26 @@ proc highlightOtherUsesCurrentWord*(status: var Editorstatus) =
           if (j == (line.len - highlightWord.len)) or ((line[j + highlightWord.len] != '_' and unicodeext.isPunct(line[j + highlightWord.len])) or line[j + highlightWord.len].isSpace):
             # Set color
             let
-              currentBufferIndex = status.bufferIndexInCurrentWindow
-              originalColorPair = status.bufStatus[currentBufferIndex].highlight.getColorPair(i, j)
+              originalColorPair = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight.getColorPair(i, j)
               theme = status.settings.editorColorTheme
               colors = theme.getColorFromEditorColorPair(originalColorPair)
             setColorPair(EditorColorPair.currentWord, colors[0], ColorThemeTable[theme].currentWordBg)
 
             let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j + highlightWord.high, color: EditorColorPair.currentWord)
-            status.bufStatus[currentBufferIndex].highlight = status.bufStatus[currentBufferIndex].highlight.overwrite(colorSegment)
+            status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
 
 from searchmode import searchAllOccurrence
-proc updateHighlight*(status: var EditorStatus, bufferIndex: int) =
+proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
   let
-    bufStatus = status.bufStatus[bufferIndex]
+    bufStatus = status.bufStatus[windowNode.bufferIndex]
     syntax = status.settings.syntax
 
   if (bufStatus.mode == Mode.filer) or (bufStatus.mode == Mode.ex and bufStatus.prevMode == Mode.filer): return
 
-  status.bufStatus[bufferIndex].highlight = initHighlight($bufStatus.buffer, if syntax: bufStatus.language else: SourceLanguage.langNone)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight($bufStatus.buffer, if syntax: bufStatus.language else: SourceLanguage.langNone)
 
-  ## TODO: Bug fix
   let
-    range = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.rangeOfOriginalLineInView
+    range = windowNode.view.rangeOfOriginalLineInView
     startLine = range[0]
     endLine = if bufStatus.buffer.len > range[1] + 1: range[1] + 2 elif bufStatus.buffer.len > range[1]: range[1] + 1 else: range[1]
   var bufferInView = initGapBuffer[seq[Rune]]()
@@ -622,18 +616,17 @@ proc updateHighlight*(status: var EditorStatus, bufferIndex: int) =
       color = EditorColorPair.highlightFullWidthSpace
     for pos in allOccurrence:
       let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column, color: color)
-      status.bufStatus[bufferIndex].highlight = status.bufStatus[bufferIndex].highlight.overwrite(colorSegment)
+      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
 
   # highlight search results
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  if status.bufStatus[currentBufferIndex].isHighlight and status.searchHistory.len > 0:
+  if status.bufStatus[windowNode.bufferIndex].isHighlight and status.searchHistory.len > 0:
     let
       keyword = status.searchHistory[^1]
       allOccurrence = searchAllOccurrence(bufferInView, keyword)
       color = if status.isSearchHighlight: EditorColorPair.searchResult else: EditorColorPair.replaceText
     for pos in allOccurrence:
       let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column + keyword.high, color: color)
-      status.bufStatus[bufferIndex].highlight = status.bufStatus[bufferIndex].highlight.overwrite(colorSegment)
+      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
 
 proc changeTheme*(status: var EditorStatus) = setCursesColor(ColorThemeTable[status.settings.editorColorTheme])
 

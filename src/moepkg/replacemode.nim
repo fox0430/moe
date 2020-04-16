@@ -10,7 +10,7 @@ proc replaceMode*(status: var EditorStatus) =
 
   while status.bufStatus[currentBufferIndex].mode == Mode.replace:
     if bufferChanged:
-      status.updateHighlight(currentBufferIndex)
+      status.updatehighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
       bufferChanged = false
 
     status.update

@@ -144,7 +144,7 @@ proc insertMode*(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   while status.bufStatus[currentBufferIndex].mode == Mode.insert:
     if bufferChanged:
-      status.updateHighlight(currentBufferIndex)
+      status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
       bufferChanged = false
 
     status.resize(terminalHeight(), terminalWidth())

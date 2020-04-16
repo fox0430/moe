@@ -249,7 +249,7 @@ proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   let sourceLang = if status.settings.syntax: status.bufStatus[currentBufferIndex].language else: SourceLanguage.langNone
-  status.bufStatus[currentBufferIndex].highlight = initHighlight($status.bufStatus[currentBufferIndex].buffer, sourceLang)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight($status.bufStatus[currentBufferIndex].buffer, sourceLang)
 
   status.commandWindow.erase
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
@@ -607,7 +607,7 @@ proc listAllBufferCommand(status: var Editorstatus) =
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = status.bufStatus[currentBufferIndex].buffer.initEditorView(terminalHeight() - useStatusBar - useTab - 1, terminalWidth())
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine = 0
 
-  status.updateHighlight(currentBufferIndex)
+  status.updatehighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
   while true:
     status.update
@@ -815,8 +815,7 @@ proc exMode*(status: var EditorStatus) =
       let bufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
       status.bufStatus[bufferIndex].isHighlight = false
 
-    let currentBufferIndex = status.bufferIndexInCurrentWindow
-    status.updateHighlight(currentBufferIndex)
+    status.updatehighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
     status.resize(terminalHeight(), terminalWidth())
     status.update
 
@@ -824,7 +823,7 @@ proc exMode*(status: var EditorStatus) =
   let bufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
   status.bufStatus[bufferIndex].isHighlight = false
   let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.updateHighlight(currentBufferIndex)
+  status.updatehighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
   if cancelInput:
     status.commandWindow.erase

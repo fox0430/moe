@@ -203,7 +203,7 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus, windowNode: WindowNode, se
   
   let useStatusBar = if settings.statusBar.useBar: 1 else: 0
   let numOfFile = filerStatus.dirList.len
-  bufStatus.highlight = initFilelistHighlight(filerStatus.dirList, bufStatus.buffer, windowNode.currentLine)
+  windowNode.highlight = initFilelistHighlight(filerStatus.dirList, bufStatus.buffer, windowNode.currentLine)
   windowNode.view = initEditorView(bufStatus.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
 
 proc updateFilerView*(status: var EditorStatus, filerStatus: var FilerStatus) =
@@ -237,7 +237,7 @@ proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string)
   status.bufStatus[currentBufferIndex].buffer.add(("last write  : " & $fileInfo.lastWriteTime).toRunes)
   status.bufStatus[currentBufferIndex].buffer.add(("last access : " & $fileInfo.lastAccessTime).toRunes)
 
-  status.bufStatus[currentBufferIndex].highlight = initFileDeitalHighlight(status.bufStatus[currentBufferIndex].buffer)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initFileDeitalHighlight(status.bufStatus[currentBufferIndex].buffer)
 
   var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
   let

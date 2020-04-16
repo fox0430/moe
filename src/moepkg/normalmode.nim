@@ -40,7 +40,7 @@ proc searchNextOccurrence(status: var EditorStatus) =
   
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.bufStatus[currentBufferIndex].isHighlight = true
-  status.updateHighlight(currentBufferIndex)
+  status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
   var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
 
@@ -58,7 +58,7 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) =
   
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.bufStatus[currentBufferIndex].isHighlight = true
-  status.updateHighlight(currentBufferIndex)
+  status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
   var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
 
@@ -73,7 +73,7 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) =
 proc turnOffHighlighting*(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.bufStatus[currentBufferIndex].isHighlight = false
-  status.updateHighlight(currentBufferIndex)
+  status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
 proc undo(bufStatus: var BufferStatus, windowNode: WindowNode) =
   if not bufStatus.buffer.canUndo: return
@@ -161,11 +161,11 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     elif key == ord('b'): scrollScreenBottom(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
   elif key == ord('o'):
     for i in 0 ..< cmdLoop: openBlankLineBelow(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
-    status.updateHighlight(currentBufferIndex)
+    status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
     status.changeMode(Mode.insert)
   elif key == ord('O'):
     for i in 0 ..< cmdLoop: openBlankLineAbove(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
-    status.updateHighlight(currentBufferIndex)
+    status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
     status.changeMode(Mode.insert)
   elif key == ord('d'):
     let key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
@@ -250,7 +250,7 @@ proc normalMode*(status: var EditorStatus) =
 
   while status.bufStatus[currentBufferIndex].mode == Mode.normal and status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow > 0:
     if status.bufStatus[currentBufferIndex].countChange > countChange:
-      status.updateHighlight(currentBufferIndex)
+      status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
       countChange = status.bufStatus[currentBufferIndex].countChange
 
     status.update

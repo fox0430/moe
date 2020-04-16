@@ -8,7 +8,7 @@ proc setMessageLog*(status: var Editorstatus) =
     if i == 0: status.bufStatus[currentBufferIndex].buffer[0] = status.messageLog[0]
     else: status.bufStatus[currentBufferIndex].buffer.add(status.messageLog[i])
 
-  status.updateHighlight(currentBufferIndex)
+  status.updatehighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
 proc exitLogViewer*(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
