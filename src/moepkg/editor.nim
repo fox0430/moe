@@ -69,7 +69,6 @@ proc deleteCurrentCharacter*(bufStatus: var BufferStatus, windowNode: WindowNode
       windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].len - 1
       windowNode.expandedColumn = bufStatus.buffer[windowNode.currentLine].len - 1
 
-  windowNode.view.reload(bufStatus.buffer, windowNode.view.originalLine[0])
   inc(bufStatus.countChange)
 
 proc openBlankLineBelow*(bufStatus: var BufferStatus, windowNode: WindowNode) =
@@ -80,7 +79,6 @@ proc openBlankLineBelow*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   inc(windowNode.currentLine)
   windowNode.currentColumn = indent.len
 
-  windowNode.view.reload(bufStatus.buffer, windowNode.view.originalLine[0])
   inc(bufStatus.countChange)
 
 proc openBlankLineAbove*(bufStatus: var BufferStatus, windowNode: WindowNode) =
@@ -90,7 +88,6 @@ proc openBlankLineAbove*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   bufStatus.buffer.insert(indent, windowNode.currentLine)
   windowNode.currentColumn = indent.len
 
-  windowNode.view.reload(bufStatus.buffer, windowNode.view.originalLine[0])
   inc(bufStatus.countChange)
 
 proc deleteLine*(bufStatus: var BufferStatus, windowNode: WindowNode, line: int) =
@@ -104,7 +101,6 @@ proc deleteLine*(bufStatus: var BufferStatus, windowNode: WindowNode, line: int)
   windowNode.currentColumn = 0
   windowNode.expandedColumn = 0
 
-  windowNode.view.reload(bufStatus.buffer, min(windowNode.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)
 
 proc deleteWord*(bufStatus: var BufferStatus, windowNode: WindowNode) =
@@ -147,7 +143,6 @@ proc deleteWord*(bufStatus: var BufferStatus, windowNode: WindowNode) =
     windowNode.expandedColumn = currentColumn
     windowNode.currentColumn = currentColumn
 
-  windowNode.view.reload(bufStatus.buffer, min(windowNode.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)
 
 proc deleteCharacterUntilEndOfLine*(bufStatus: var BufferStatus, autoDeleteParen: bool, windowNode: WindowNode) =
@@ -204,7 +199,6 @@ proc pasteLines(status: var EditorStatus) =
   for i in 0 ..< status.registers.yankedLines.len:
     status.bufStatus[currentBufferIndex].buffer.insert(status.registers.yankedLines[i], windowNode.currentLine + i + 1)
 
-  windowNode.view.reload(status.bufStatus[currentBufferIndex].buffer, min(windowNode.view.originalLine[0], status.bufStatus[currentBufferIndex].buffer.high))
   inc(status.bufStatus[currentBufferIndex].countChange)
 
 proc yankString*(status: var EditorStatus, length: int) =
@@ -264,7 +258,6 @@ proc pasteString(status: var EditorStatus) =
 
   windowNode.currentColumn += status.registers.yankedStr.high - 1
 
-  windowNode.view.reload(status.bufStatus[currentBufferIndex].buffer, min(windowNode.view.originalLine[0], status.bufStatus[currentBufferIndex].buffer.high))
   inc(status.bufStatus[currentBufferIndex].countChange)
 
 proc pasteAfterCursor*(status: var EditorStatus) =
@@ -278,7 +271,6 @@ proc pasteAfterCursor*(status: var EditorStatus) =
 proc pasteBeforeCursor*(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
-  windowNode.view.reload(status.bufStatus[currentBufferIndex].buffer, windowNode.view.originalLine[0])
 
   if status.registers.yankedLines.len > 0:
     pasteLines(status)
@@ -297,7 +289,6 @@ proc replaceCurrentCharacter*(bufStatus: var BufferStatus, windowNode: WindowNod
     newLine[windowNode.currentColumn] = character
     if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
 
-    windowNode.view.reload(bufStatus.buffer, windowNode.view.originalLine[0])
     inc(bufStatus.countChange)
 
 proc addIndent*(bufStatus: var BufferStatus, windowNode: WindowNode, tabStop: int) =
@@ -306,7 +297,6 @@ proc addIndent*(bufStatus: var BufferStatus, windowNode: WindowNode, tabStop: in
   newLine.insert(newSeqWith(tabStop, ru' '))
   if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
 
-  windowNode.view.reload(bufStatus.buffer, windowNode.view.originalLine[0])
   inc(bufStatus.countChange)
 
 proc deleteIndent*(bufStatus: var BufferStatus, windowNode: WindowNode, tabStop: int) =
@@ -319,7 +309,6 @@ proc deleteIndent*(bufStatus: var BufferStatus, windowNode: WindowNode, tabStop:
       var newLine = bufStatus.buffer[windowNode.currentLine]
       newLine.delete(0, 0)
       if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
-  windowNode.view.reload(bufStatus.buffer, windowNode.view.originalLine[0])
   inc(bufStatus.countChange)
 
 proc joinLine*(bufStatus: var BufferStatus, windowNode: WindowNode) =
@@ -332,5 +321,4 @@ proc joinLine*(bufStatus: var BufferStatus, windowNode: WindowNode) =
 
   bufStatus.buffer.delete(windowNode.currentLine + 1, windowNode.currentLine + 1)
 
-  windowNode.view.reload(bufStatus.buffer, min(windowNode.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)

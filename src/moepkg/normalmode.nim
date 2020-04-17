@@ -81,14 +81,12 @@ proc undo(bufStatus: var BufferStatus, windowNode: WindowNode) =
   bufStatus.revertPosition(windowNode, bufStatus.buffer.lastSuitId)
   if windowNode.currentColumn == bufStatus.buffer[windowNode.currentLine].len and windowNode.currentColumn > 0:
     (windowNode.currentLine, windowNode.currentColumn) = bufStatus.buffer.prev(windowNode.currentLine, windowNode.currentColumn)
-  windowNode.view.reload(bufStatus.buffer, min(windowNode.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)
 
 proc redo(bufStatus: var BufferStatus, windowNode: WindowNode) =
   if not bufStatus.buffer.canRedo: return
   bufStatus.buffer.redo
   bufStatus.revertPosition(windowNode, bufStatus.buffer.lastSuitId)
-  windowNode.view.reload(bufStatus.buffer, min(windowNode.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)
 
 proc writeFileAndExit(status: var EditorStatus) =

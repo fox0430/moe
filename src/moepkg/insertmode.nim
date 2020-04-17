@@ -26,7 +26,6 @@ proc insertCharacter*(bufStatus: var BufferStatus, windowNode: WindowNode, autoC
   template moveRight = inc(windowNode.currentColumn)
   template inserted =
     if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
-    windowNode.view.reload(bufStatus.buffer, windowNode.view.originalLine[0])
     inc(bufStatus.countChange)
 
   if autoCloseParen and canConvertToChar(c):
@@ -76,7 +75,6 @@ proc keyBackspace*(bufStatus: var BufferStatus, windowNode: WindowNode, autoDele
     if bufStatus.mode == Mode.insert and windowNode.currentColumn > bufStatus.buffer[windowNode.currentLine].len:
       windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].len
 
-  windowNode.view.reload(bufStatus.buffer, min(windowNode.view.originalLine[0], bufStatus.buffer.high))
   inc(bufStatus.countChange)
 
 proc insertIndent(bufStatus: var BufferStatus, windowNode: WindowNode) =
@@ -131,7 +129,6 @@ proc keyEnter*(bufStatus: var BufferStatus, windowNode: WindowNode, autoIndent: 
     windowNode.currentColumn = 0
     windowNode.expandedColumn = 0
 
-  windowNode.view.reload(bufStatus.buffer, windowNode.view.originalLine[0])
   inc(bufStatus.countChange)
 
 proc insertTab(bufStatus: var BufferStatus, windowNode: WindowNode, tabStop: int, autoCloseParen: bool) =
