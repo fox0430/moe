@@ -616,13 +616,8 @@ proc highlightOtherUsesCurrentWord*(status: var Editorstatus) =
 
 from searchmode import searchAllOccurrence
 proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
-  let
-    bufStatus = status.bufStatus[windowNode.bufferIndex]
-    syntax = status.settings.syntax
-
+  let bufStatus = status.bufStatus[windowNode.bufferIndex]
   if (bufStatus.mode == Mode.filer) or (bufStatus.mode == Mode.ex and bufStatus.prevMode == Mode.filer): return
-
-  #status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight($bufStatus.buffer, if syntax: bufStatus.language else: SourceLanguage.langNone)
 
   let
     range = windowNode.view.rangeOfOriginalLineInView
