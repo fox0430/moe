@@ -239,21 +239,20 @@ proc update*(status: var EditorStatus) =
     for i in  0 ..< queue.len:
       var node = queue.pop
       if node.window != nil:
-        let
-          bufStatus = status.bufStatus[node.bufferIndex]
-          isCurrentMainWin = if node.windowIndex == status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.windowIndex: true else: false
-          startSelectedLine = bufStatus.selectArea.startLine
-          endSelectedLine = bufStatus.selectArea.endLine
-          currentMode = bufStatus.mode
-          prevMode = bufStatus.prevMode
-          isVisualMode = if (currentMode == Mode.visual) or (prevMode == Mode.visual and currentMode == Mode.ex): true else: false
-          isVisualBlockMode = if (currentMode == Mode.visualBlock) or (prevMode == Mode.visualBlock and currentMode == Mode.ex): true else: false
+        let bufStatus = status.bufStatus[node.bufferIndex]
 
         if bufStatus.buffer.high < node.currentLine: node.currentLine = bufStatus.buffer.high
         if bufStatus.buffer[node.currentLine].len > 0 and bufStatus.buffer[node.currentLine].high < node.currentColumn:
           node.currentColumn = bufStatus.buffer[node.currentLine].high
 
         node.view.reload(bufStatus.buffer, min(node.view.originalLine[0], bufStatus.buffer.high))
+
+        let
+          isCurrentMainWin = if node.windowIndex == status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.windowIndex: true else: false
+          currentMode = bufStatus.mode
+          prevMode = bufStatus.prevMode
+          isVisualMode = if (currentMode == Mode.visual) or (prevMode == Mode.visual and currentMode == Mode.ex): true else: false
+          isVisualBlockMode = if (currentMode == Mode.visualBlock) or (prevMode == Mode.visualBlock and currentMode == Mode.ex): true else: false
 
         ## Update highlight
         ## TODO: Refactor and fix
@@ -263,6 +262,10 @@ proc update*(status: var EditorStatus) =
             if status.settings.highlightOtherUsesCurrentWord: status.highlightOtherUsesCurrentWord
             if isVisualMode or isVisualBlockMode: status.highlightSelectedArea
             if status.settings.highlightPairOfParen: status.highlightPairOfParen
+
+        let
+          startSelectedLine = bufStatus.selectArea.startLine
+          endSelectedLine = bufStatus.selectArea.endLine
 
         node.view.seekCursor(bufStatus.buffer, node.currentLine, node.currentColumn)
         node.view.update(node.window, status.settings.view, isCurrentMainWin, isVisualMode, bufStatus.buffer, node.highlight, node.currentLine, startSelectedLine, endSelectedLine)
@@ -388,7 +391,7 @@ proc addNewBuffer*(status: var EditorStatus, filename: string) =
 
   if filename != "": status.bufStatus[index].language = detectLanguage(filename)
 
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = initEditorView(status.bufStatus[index].buffer, terminalHeight(), terminalWidth())
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = status.bufStatus[index].buffer.initEditorView(terminalHeight(), terminalWidth())
   status.updateHighlight(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
   status.changeCurrentBuffer(index)
