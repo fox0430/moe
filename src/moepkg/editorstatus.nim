@@ -226,12 +226,28 @@ proc updateStatusBar(status: var Editorstatus) =
         windowNode = status.workspace[status.currentWorkSpaceIndex].mainWindowNode.searchByWindowIndex(status.statusBar[i].windowIndex)
       status.bufStatus[bufferIndex].writeStatusBar(status.statusBar[i], windowNode, status.settings)
 
+proc initSyntaxHighlight(windowNode: var WindowNode, bufStatus: seq[BufferStatus], isSyntaxHighlight: bool) =
+  var queue = initHeapQueue[WindowNode]()
+  for node in windowNode.child: queue.push(node)
+  while queue.len > 0:
+    for i in  0 ..< queue.len:
+      var node = queue.pop
+      if node.window != nil:
+        let bufStatus = bufStatus[node.bufferIndex]
+        if (bufStatus.mode != Mode.filer) or (bufStatus.mode== Mode.ex and bufStatus.prevMode == Mode.filer):
+          node.highlight = ($bufStatus.buffer).initHighlight(if isSyntaxHighlight: bufStatus.language else: SourceLanguage.langNone)
+
+      if node.child.len > 0:
+        for node in node.child: queue.push(node)
+
 proc update*(status: var EditorStatus) =
   setCursor(false)
 
   if status.settings.workSpace.useBar: status.writeWorkSpaceInfoWindow
 
   if status.settings.tabLine.useTab: status.writeTabLine
+
+  status.workspace[status.currentWorkSpaceIndex].mainWindowNode.initSyntaxHighlight(status.bufStatus, status.settings.syntax)
 
   var queue = initHeapQueue[WindowNode]()
   for node in status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.child: queue.push(node)
@@ -606,7 +622,7 @@ proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
 
   if (bufStatus.mode == Mode.filer) or (bufStatus.mode == Mode.ex and bufStatus.prevMode == Mode.filer): return
 
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight($bufStatus.buffer, if syntax: bufStatus.language else: SourceLanguage.langNone)
+  #status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight($bufStatus.buffer, if syntax: bufStatus.language else: SourceLanguage.langNone)
 
   let
     range = windowNode.view.rangeOfOriginalLineInView
