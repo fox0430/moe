@@ -240,31 +240,32 @@ proc update*(status: var EditorStatus) =
       var node = queue.pop
       if node.window != nil:
         let
-          bufIndex = node.bufferIndex
+          bufStatus = status.bufStatus[node.bufferIndex]
           isCurrentMainWin = if node.windowIndex == status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.windowIndex: true else: false
-          startSelectedLine = status.bufStatus[bufIndex].selectArea.startLine
-          endSelectedLine = status.bufStatus[bufIndex].selectArea.endLine
-          currentMode = status.bufStatus[bufIndex].mode
-          prevMode = status.bufStatus[bufIndex].prevMode
+          startSelectedLine = bufStatus.selectArea.startLine
+          endSelectedLine = bufStatus.selectArea.endLine
+          currentMode = bufStatus.mode
+          prevMode = bufStatus.prevMode
           isVisualMode = if (currentMode == Mode.visual) or (prevMode == Mode.visual and currentMode == Mode.ex): true else: false
           isVisualBlockMode = if (currentMode == Mode.visualBlock) or (prevMode == Mode.visualBlock and currentMode == Mode.ex): true else: false
 
-        if status.bufStatus[bufIndex].buffer.high < node.currentLine: node.currentLine = status.bufStatus[bufIndex].buffer.high
-        if status.bufStatus[bufIndex].buffer[node.currentLine].len > 0 and status.bufStatus[bufIndex].buffer[node.currentLine].high < node.currentColumn:
-          node.currentColumn = status.bufStatus[bufIndex].buffer[node.currentLine].high
+        if bufStatus.buffer.high < node.currentLine: node.currentLine = bufStatus.buffer.high
+        if bufStatus.buffer[node.currentLine].len > 0 and bufStatus.buffer[node.currentLine].high < node.currentColumn:
+          node.currentColumn = bufStatus.buffer[node.currentLine].high
 
-        node.view.reload(status.bufStatus[bufIndex].buffer, min(node.view.originalLine[0], status.bufStatus[bufIndex].buffer.high))
+        node.view.reload(bufStatus.buffer, min(node.view.originalLine[0], bufStatus.buffer.high))
 
         ## Update highlight
         ## TODO: Refactor and fix
         if (currentMode != Mode.filer) or (currentMode == Mode.ex and prevMode == Mode.filer):
-          if status.settings.highlightOtherUsesCurrentWord or status.settings.highlightPairOfParen or isVisualMode: status.updateHighlight(node)
-          if isCurrentMainWin and status.settings.highlightOtherUsesCurrentWord and currentMode != Mode.filer: status.highlightOtherUsesCurrentWord
-          if isVisualMode or isVisualBlockMode: status.highlightSelectedArea
-          if isCurrentMainWin and status.settings.highlightPairOfParen and currentMode != Mode.filer: status.highlightPairOfParen
+          status.updateHighlight(node)
+          if isCurrentMainWin:
+            if status.settings.highlightOtherUsesCurrentWord: status.highlightOtherUsesCurrentWord
+            if isVisualMode or isVisualBlockMode: status.highlightSelectedArea
+            if status.settings.highlightPairOfParen: status.highlightPairOfParen
 
-        node.view.seekCursor(status.bufStatus[bufIndex].buffer, node.currentLine, node.currentColumn)
-        node.view.update(node.window, status.settings.view, isCurrentMainWin, isVisualMode, status.bufStatus[bufIndex].buffer, node.highlight, node.currentLine, startSelectedLine, endSelectedLine)
+        node.view.seekCursor(bufStatus.buffer, node.currentLine, node.currentColumn)
+        node.view.update(node.window, status.settings.view, isCurrentMainWin, isVisualMode, bufStatus.buffer, node.highlight, node.currentLine, startSelectedLine, endSelectedLine)
 
         if isCurrentMainWin: node.cursor.update(node.view, node.currentLine, node.currentColumn)
 
@@ -273,8 +274,8 @@ proc update*(status: var EditorStatus) =
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
-  var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
-  windowNode.window.moveCursor(windowNode.cursor.y, windowNode.view.widthOfLineNum + windowNode.cursor.x)
+  var currentMainWindowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+  currentMainWindowNode.window.moveCursor(currentMainWindowNode.cursor.y, currentMainWindowNode.view.widthOfLineNum + currentMainWindowNode.cursor.x)
 
   if status.settings.statusBar.useBar: status.updateStatusBar
 
