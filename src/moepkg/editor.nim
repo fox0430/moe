@@ -1,5 +1,5 @@
-import strutils, deques, sequtils, os, osproc, random
-import editorstatus, editorview, ui, gapbuffer, unicodeext, commandview, undoredostack, window, bufferstatus
+import strutils, sequtils, os, osproc, random
+import editorstatus, ui, gapbuffer, unicodeext, commandview, undoredostack, window, bufferstatus
 
 proc deleteParen*(bufStatus: var BufferStatus, windowNode: WindowNode, currentChar: Rune) =
   let

@@ -1,5 +1,5 @@
-import strformat, terminal, deques
-import editorstatus, editorview, ui, gapbuffer, unicodeext, fileutils, commandview, undoredostack, window, movement, editor, searchmode, color, bufferstatus
+import strformat, terminal
+import editorstatus, ui, gapbuffer, unicodeext, fileutils, commandview, undoredostack, window, movement, editor, searchmode, color, bufferstatus
 
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.erase
