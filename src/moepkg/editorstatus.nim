@@ -263,7 +263,7 @@ proc update*(status: var EditorStatus) =
           prevMode = bufStatus.prevMode
 
         if bufStatus.buffer.high < node.currentLine: node.currentLine = bufStatus.buffer.high
-        if bufStatus.buffer[node.currentLine].len > 0 and bufStatus.buffer[node.currentLine].high < node.currentColumn:
+        if currentMode != Mode.insert and  bufStatus.buffer[node.currentLine].len > 0 and bufStatus.buffer[node.currentLine].high < node.currentColumn:
           node.currentColumn = bufStatus.buffer[node.currentLine].high
 
         node.view.reload(bufStatus.buffer, min(node.view.originalLine[0], bufStatus.buffer.high))
