@@ -1,5 +1,5 @@
 import sequtils, strutils, os, terminal, packages/docutils/highlite, times
-import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview, window, movement, color, build
+import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview, window, movement, color, build, bufferstatus
 
 type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
 
@@ -171,7 +171,7 @@ proc isDeleteCurrentWorkSpaceCommand(command: seq[seq[Rune]]): bool =
 proc isChangeCurrentWorkSpace(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"ws" and isDigit(command[1])
 
-proc openMessageMessageLogViewer(status: var Editorstatus) =
+proc openMessageLogViewer(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
@@ -249,7 +249,7 @@ proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   let sourceLang = if status.settings.syntax: status.bufStatus[currentBufferIndex].language else: SourceLanguage.langNone
-  status.bufStatus[currentBufferIndex].highlight = initHighlight($status.bufStatus[currentBufferIndex].buffer, sourceLang)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight($status.bufStatus[currentBufferIndex].buffer, sourceLang)
 
   status.commandWindow.erase
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
@@ -462,19 +462,21 @@ proc jumpCommand(status: var EditorStatus, line: int) =
 
 proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
+
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
   if status.bufStatus[currentBufferIndex].countChange > 0 or countReferencedWindow(status.workSpace[status.currentWorkSpaceIndex].mainWindowNode, currentBufferIndex) == 0:
     status.commandWindow.writeNoWriteError(status.messageLog)
   else:
-    status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
     if existsDir($filename):
       try: setCurrentDir($filename)
       except OSError:
         status.commandWindow.writeFileOpenError($filename, status.messageLog)
-        addNewBuffer(status, "")
+        status.addNewBuffer("")
       status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSaveTime: now()))
-    else: addNewBuffer(status, $filename)
+    else: status.addNewBuffer($filename)
 
-    changeCurrentBuffer(status, status.bufStatus.high)
+    status.changeCurrentBuffer(status.bufStatus.high)
 
 proc execCmdResultToMessageLog*(output: TaintedString, messageLog: var seq[seq[Rune]])=
   var line = ""
@@ -605,9 +607,9 @@ proc listAllBufferCommand(status: var Editorstatus) =
   
   status.settings.view.currentLineNumber = false
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = status.bufStatus[currentBufferIndex].buffer.initEditorView(terminalHeight() - useStatusBar - useTab - 1, terminalWidth())
-  status.bufStatus[currentBufferIndex].currentLine = 0
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine = 0
 
-  status.updateHighlight(currentBufferIndex)
+  status.updatehighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
   while true:
     status.update
@@ -756,7 +758,7 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
   elif isRealtimeSearchSettingCommand(command):
     realtimeSearchSettingCommand(status, command[1])
   elif isOpenMessageLogViweer(command):
-    openMessageMessageLogViewer(status)
+    openMessageLogViewer(status)
   elif isHighlightPairOfParenSettigCommand(command):
     highlightPairOfParenSettigCommand(status, command[1])
   elif isAutoDeleteParenSettingCommand(command):
@@ -815,8 +817,7 @@ proc exMode*(status: var EditorStatus) =
       let bufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
       status.bufStatus[bufferIndex].isHighlight = false
 
-    let currentBufferIndex = status.bufferIndexInCurrentWindow
-    status.updateHighlight(currentBufferIndex)
+    status.updatehighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
     status.resize(terminalHeight(), terminalWidth())
     status.update
 
@@ -824,13 +825,13 @@ proc exMode*(status: var EditorStatus) =
   let bufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
   status.bufStatus[bufferIndex].isHighlight = false
   let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.updateHighlight(currentBufferIndex)
+  status.updatehighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
   if cancelInput:
     status.commandWindow.erase
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
   else:
     status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
-    status.bufStatus[currentBufferIndex].tryRecordCurrentPosition
+    status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     exModeCommand(status, splitCommand($command))

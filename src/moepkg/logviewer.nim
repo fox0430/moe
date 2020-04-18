@@ -1,5 +1,5 @@
 import terminal
-import gapbuffer, ui, editorstatus, unicodeext, movement
+import gapbuffer, ui, editorstatus, unicodeext, movement, bufferstatus
 
 proc setMessageLog*(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -8,24 +8,24 @@ proc setMessageLog*(status: var Editorstatus) =
     if i == 0: status.bufStatus[currentBufferIndex].buffer[0] = status.messageLog[0]
     else: status.bufStatus[currentBufferIndex].buffer.add(status.messageLog[i])
 
-  status.updateHighlight(currentBufferIndex)
+  status.updatehighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
 proc exitLogViewer*(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.deleteBuffer(currentBufferIndex)
 
 proc messageLogViewer*(status: var Editorstatus) =
-  status.addNewBuffer("")
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.bufStatus[currentBufferIndex].mode = Mode.logViewer
-
   status.setMessageLog
   status.resize(terminalHeight(), terminalWidth())
 
-  while status.bufStatus[currentBufferIndex].mode == Mode.logViewer:
+  var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+
+  while status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.logViewer:
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+    
     status.update
 
-    let key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+    let key = getKey(windowNode.window)
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
@@ -36,12 +36,12 @@ proc messageLogViewer*(status: var Editorstatus) =
 
     elif key == ord(':'): status.changeMode(Mode.ex)
 
-    elif key == ord('k') or isUpKey(key): status.bufStatus[currentBufferIndex].keyUp
-    elif key == ord('j') or isDownKey(key): status.bufStatus[currentBufferIndex].keyDown
-    elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key): keyLeft(status.bufStatus[currentBufferIndex])
-    elif key == ord('l') or isRightKey(key): keyRight(status.bufStatus[currentBufferIndex])
-    elif key == ord('0') or isHomeKey(key): moveToFirstOfLine(status.bufStatus[currentBufferIndex])
-    elif key == ord('$') or isEndKey(key): moveToLastOfLine(status.bufStatus[currentBufferIndex])
+    elif key == ord('k') or isUpKey(key): status.bufStatus[currentBufferIndex].keyUp(windowNode)
+    elif key == ord('j') or isDownKey(key): status.bufStatus[currentBufferIndex].keyDown(windowNode)
+    elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key): windowNode.keyLeft
+    elif key == ord('l') or isRightKey(key): status.bufStatus[currentBufferIndex].keyRight(windowNode)
+    elif key == ord('0') or isHomeKey(key): windowNode.moveToFirstOfLine
+    elif key == ord('$') or isEndKey(key): status.bufStatus[currentBufferIndex].moveToLastOfLine(windowNode)
     elif key == ord('q') or isEscKey(key): status.exitLogViewer
     elif key == ord('g'):
       if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window) == 'g': status.moveToFirstLine

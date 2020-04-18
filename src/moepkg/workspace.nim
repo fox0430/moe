@@ -10,4 +10,3 @@ proc initWorkSpace*(): WorkSpace =
   result.mainWindowNode = rootNode
   result.currentMainWindowNode = rootNode.child[0]
   result.numOfMainWindow = 1
-
