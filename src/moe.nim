@@ -25,7 +25,7 @@ proc main() =
   var status = initEditorStatus()
   status.settings.loadSettingFile
   status.timeConfFileLastReloaded = now()
-  changeTheme(status)
+  status.changeTheme
 
   setControlCHook(proc() {.noconv.} =
     exitUi()
@@ -38,10 +38,10 @@ proc main() =
         try: setCurrentDir(p.filename)
         except OSError:
           status.commandWindow.writeFileOpenError(p.filename, status.messageLog)
-          addNewBuffer(status, "")
+          status.addNewBuffer("")
         status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSavetime: now()))
-      else: addNewBuffer(status, p.filename)
-  else: addNewBuffer(status, "")
+      else: status.addNewBuffer(p.filename)
+  else: status.addNewBuffer("")
 
   disableControlC()
 
@@ -49,16 +49,16 @@ proc main() =
 
     let currentBufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
     case status.bufStatus[currentBufferIndex].mode:
-    of Mode.normal: normalMode(status)
-    of Mode.insert: insertMode(status)
-    of Mode.visual, Mode.visualBlock: visualMode(status)
-    of Mode.replace: replaceMode(status)
-    of Mode.ex: exMode(status)
-    of Mode.filer: filerMode(status)
-    of Mode.search: searchMode(status)
-    of Mode.bufManager: bufferManager(status)
-    of Mode.logViewer: messageLogViewer(status)
+    of Mode.normal: status.normalMode
+    of Mode.insert: status.insertMode
+    of Mode.visual, Mode.visualBlock: status.visualMode
+    of Mode.replace: status.replaceMode
+    of Mode.ex: status.exMode
+    of Mode.filer: status.filerMode
+    of Mode.search: status.searchMode
+    of Mode.bufManager: status.bufferManager
+    of Mode.logViewer: status.messageLogViewer
 
-  exitEditor(status.settings)
+  status.settings.exitEditor
 
 when isMainModule: main()

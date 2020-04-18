@@ -76,8 +76,8 @@ proc bufferManager*(status: var Editorstatus) =
   status.setBufferList
   status.resize(terminalHeight(), terminalWidth())
 
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  while status.bufStatus[currentBufferIndex].mode == Mode.bufManager:
+  while status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.bufManager:
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
     status.updateBufferManagerHighlight
     status.update
     setCursor(false)

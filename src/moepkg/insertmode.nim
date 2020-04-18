@@ -136,15 +136,12 @@ proc insertTab(bufStatus: var BufferStatus, windowNode: WindowNode, tabStop: int
 
 proc insertMode*(status: var EditorStatus) =
   changeCursorType(status.settings.insertModeCursor)
-  var bufferChanged = false
 
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  while status.bufStatus[currentBufferIndex].mode == Mode.insert:
-    if bufferChanged:
-      status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
-      bufferChanged = false
+  status.resize(terminalHeight(), terminalWidth())
 
-    status.resize(terminalHeight(), terminalWidth())
+  while status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.insert:
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+
     status.update
 
     var key: Rune = Rune('\0')
@@ -182,18 +179,13 @@ proc insertMode*(status: var EditorStatus) =
       status.bufStatus[currentBufferIndex].moveToLastOfLine(windowNode)
     elif isDcKey(key):
       status.bufStatus[currentBufferIndex].deleteCurrentCharacter(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoDeleteParen)
-      bufferChanged = true
     elif isBackspaceKey(key):
       status.bufStatus[currentBufferIndex].keyBackspace(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoDeleteParen)
-      bufferChanged = true
     elif isEnterKey(key):
       keyEnter(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoIndent)
-      bufferChanged = true
     elif key == ord('\t'):
       insertTab(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.tabStop, status.settings.autoCloseParen)
-      bufferChanged = true
     else:
       insertCharacter(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoCloseParen, key)
-      bufferChanged = true
 
   stdout.write "\x1b[2 q"

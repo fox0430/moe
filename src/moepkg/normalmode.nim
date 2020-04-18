@@ -159,7 +159,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     elif key == ord('b'): scrollScreenBottom(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
   elif key == ord('o'):
     for i in 0 ..< cmdLoop: openBlankLineBelow(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
-    status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
+    #status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
     status.changeMode(Mode.insert)
   elif key == ord('O'):
     for i in 0 ..< cmdLoop: openBlankLineAbove(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
@@ -239,6 +239,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     discard
 
 proc normalMode*(status: var EditorStatus) =
+  ## TODO: Refactor
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.bufStatus[currentBufferIndex].cmdLoop = 0
   status.resize(terminalHeight(), terminalWidth())
@@ -246,9 +247,10 @@ proc normalMode*(status: var EditorStatus) =
 
   changeCursorType(status.settings.normalModeCursor)
 
-  while status.bufStatus[currentBufferIndex].mode == Mode.normal and status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow > 0:
+  while status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.normal:
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+
     if status.bufStatus[currentBufferIndex].countChange > countChange:
-      status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
       countChange = status.bufStatus[currentBufferIndex].countChange
 
     status.update

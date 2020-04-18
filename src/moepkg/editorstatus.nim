@@ -234,8 +234,9 @@ proc initSyntaxHighlight(windowNode: var WindowNode, bufStatus: seq[BufferStatus
       var node = queue.pop
       if node.window != nil:
         let bufStatus = bufStatus[node.bufferIndex]
-        if (bufStatus.mode != Mode.filer) or (bufStatus.mode== Mode.ex and bufStatus.prevMode == Mode.filer):
-          node.highlight = ($bufStatus.buffer).initHighlight(if isSyntaxHighlight: bufStatus.language else: SourceLanguage.langNone)
+        if (bufStatus.mode != Mode.filer) and not (bufStatus.mode == Mode.ex and bufStatus.prevMode == Mode.filer):
+          let lang = if isSyntaxHighlight: bufStatus.language else: SourceLanguage.langNone
+          node.highlight = ($bufStatus.buffer).initHighlight(lang)
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)
@@ -257,6 +258,10 @@ proc update*(status: var EditorStatus) =
       if node.window != nil:
         let bufStatus = status.bufStatus[node.bufferIndex]
 
+        let
+          currentMode = bufStatus.mode
+          prevMode = bufStatus.prevMode
+
         if bufStatus.buffer.high < node.currentLine: node.currentLine = bufStatus.buffer.high
         if bufStatus.buffer[node.currentLine].len > 0 and bufStatus.buffer[node.currentLine].high < node.currentColumn:
           node.currentColumn = bufStatus.buffer[node.currentLine].high
@@ -265,14 +270,12 @@ proc update*(status: var EditorStatus) =
 
         let
           isCurrentMainWin = if node.windowIndex == status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.windowIndex: true else: false
-          currentMode = bufStatus.mode
-          prevMode = bufStatus.prevMode
           isVisualMode = if (currentMode == Mode.visual) or (prevMode == Mode.visual and currentMode == Mode.ex): true else: false
           isVisualBlockMode = if (currentMode == Mode.visualBlock) or (prevMode == Mode.visualBlock and currentMode == Mode.ex): true else: false
 
         ## Update highlight
         ## TODO: Refactor and fix
-        if (currentMode != Mode.filer) or (currentMode == Mode.ex and prevMode == Mode.filer):
+        if (currentMode != Mode.filer) and not (currentMode == Mode.ex and prevMode == Mode.filer):
           status.updateHighlight(node)
           if isCurrentMainWin:
             if status.settings.highlightOtherUsesCurrentWord: status.highlightOtherUsesCurrentWord
@@ -294,7 +297,11 @@ proc update*(status: var EditorStatus) =
         for node in node.child: queue.push(node)
 
   var currentMainWindowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
-  currentMainWindowNode.window.moveCursor(currentMainWindowNode.cursor.y, currentMainWindowNode.view.widthOfLineNum + currentMainWindowNode.cursor.x)
+  let
+    currentMode = status.bufStatus[currentMainWindowNode.bufferIndex].mode
+    prevMode = status.bufStatus[currentMainWindowNode.bufferIndex].prevMode
+  if (currentMode != Mode.filer) and not (currentMode == Mode.ex and prevMode == Mode.filer):
+    currentMainWindowNode.window.moveCursor(currentMainWindowNode.cursor.y, currentMainWindowNode.view.widthOfLineNum + currentMainWindowNode.cursor.x)
 
   if status.settings.statusBar.useBar: status.updateStatusBar
 
@@ -353,9 +360,6 @@ proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
   if index < 0 or status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow <= index: return
 
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode = status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.searchByWindowIndex(index)
-  status.updateHighlight(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
-  status.changeCurrentBuffer(status.bufferIndexInCurrentWindow)
-  if status.settings.tabLine.useTab: status.writeTabLine
 
 proc moveNextWindow*(status: var EditorStatus) = status.moveCurrentMainWindow(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.windowIndex + 1)
 
@@ -408,7 +412,6 @@ proc addNewBuffer*(status: var EditorStatus, filename: string) =
   if filename != "": status.bufStatus[index].language = detectLanguage(filename)
 
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = status.bufStatus[index].buffer.initEditorView(terminalHeight(), terminalWidth())
-  status.updateHighlight(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
   status.changeCurrentBuffer(index)
   status.changeMode(Mode.normal)

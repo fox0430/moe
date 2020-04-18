@@ -1,14 +1,14 @@
 import terminal
-import editorstatus, ui, normalmode, unicodeext, movement, editor, bufferstatus
+import editorstatus, ui, unicodeext, movement, editor, bufferstatus
 
 proc replaceMode*(status: var EditorStatus) =
-
   var
     bufferChanged = false
     windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
 
-  while status.bufStatus[currentBufferIndex].mode == Mode.replace:
+  while status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.replace:
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+
     if bufferChanged:
       status.updatehighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
       bufferChanged = false

@@ -171,7 +171,7 @@ proc isDeleteCurrentWorkSpaceCommand(command: seq[seq[Rune]]): bool =
 proc isChangeCurrentWorkSpace(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"ws" and isDigit(command[1])
 
-proc openMessageMessageLogViewer(status: var Editorstatus) =
+proc openMessageLogViewer(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
@@ -462,19 +462,21 @@ proc jumpCommand(status: var EditorStatus, line: int) =
 
 proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
+
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
   if status.bufStatus[currentBufferIndex].countChange > 0 or countReferencedWindow(status.workSpace[status.currentWorkSpaceIndex].mainWindowNode, currentBufferIndex) == 0:
     status.commandWindow.writeNoWriteError(status.messageLog)
   else:
-    status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
     if existsDir($filename):
       try: setCurrentDir($filename)
       except OSError:
         status.commandWindow.writeFileOpenError($filename, status.messageLog)
-        addNewBuffer(status, "")
+        status.addNewBuffer("")
       status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSaveTime: now()))
-    else: addNewBuffer(status, $filename)
+    else: status.addNewBuffer($filename)
 
-    changeCurrentBuffer(status, status.bufStatus.high)
+    status.changeCurrentBuffer(status.bufStatus.high)
 
 proc execCmdResultToMessageLog*(output: TaintedString, messageLog: var seq[seq[Rune]])=
   var line = ""
@@ -756,7 +758,7 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
   elif isRealtimeSearchSettingCommand(command):
     realtimeSearchSettingCommand(status, command[1])
   elif isOpenMessageLogViweer(command):
-    openMessageMessageLogViewer(status)
+    openMessageLogViewer(status)
   elif isHighlightPairOfParenSettigCommand(command):
     highlightPairOfParenSettigCommand(status, command[1])
   elif isAutoDeleteParenSettingCommand(command):

@@ -15,16 +15,14 @@ proc exitLogViewer*(status: var Editorstatus) =
   status.deleteBuffer(currentBufferIndex)
 
 proc messageLogViewer*(status: var Editorstatus) =
-  status.addNewBuffer("")
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.bufStatus[currentBufferIndex].mode = Mode.logViewer
-
   status.setMessageLog
   status.resize(terminalHeight(), terminalWidth())
 
   var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
 
-  while status.bufStatus[currentBufferIndex].mode == Mode.logViewer:
+  while status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.logViewer:
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+    
     status.update
 
     let key = getKey(windowNode.window)

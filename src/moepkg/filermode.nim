@@ -283,11 +283,12 @@ proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
 
 proc filerMode*(status: var EditorStatus) =
   var filerStatus = initFilerStatus()
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
 
   var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
 
-  while status.bufStatus[currentBufferIndex].mode == Mode.filer:
+  while status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.filer:
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+
     if filerStatus.dirlistUpdate:
       filerStatus = updateDirList(filerStatus)
       windowNode.currentLine = 0
