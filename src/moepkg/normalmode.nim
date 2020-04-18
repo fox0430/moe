@@ -159,7 +159,6 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     elif key == ord('b'): scrollScreenBottom(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
   elif key == ord('o'):
     for i in 0 ..< cmdLoop: openBlankLineBelow(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
-    #status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
     status.changeMode(Mode.insert)
   elif key == ord('O'):
     for i in 0 ..< cmdLoop: openBlankLineAbove(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
