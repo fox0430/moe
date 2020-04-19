@@ -637,7 +637,7 @@ proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
       color = EditorColorPair.highlightFullWidthSpace
     for pos in allOccurrence:
       let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column, color: color)
-      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
+      windowNode.highlight = windowNode.highlight.overwrite(colorSegment)
 
   # highlight search results
   if status.bufStatus[windowNode.bufferIndex].isHighlight and status.searchHistory.len > 0:
@@ -647,7 +647,7 @@ proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
       color = if status.isSearchHighlight: EditorColorPair.searchResult else: EditorColorPair.replaceText
     for pos in allOccurrence:
       let colorSegment = ColorSegment(firstRow: pos.line, firstColumn: pos.column, lastRow: pos.line, lastColumn: pos.column + keyword.high, color: color)
-      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
+      windowNode.highlight = windowNode.highlight.overwrite(colorSegment)
 
 proc changeTheme*(status: var EditorStatus) = setCursesColor(ColorThemeTable[status.settings.editorColorTheme])
 
