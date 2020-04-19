@@ -276,11 +276,11 @@ proc update*(status: var EditorStatus) =
         ## Update highlight
         ## TODO: Refactor and fix
         if (currentMode != Mode.filer) and not (currentMode == Mode.ex and prevMode == Mode.filer):
-          status.updateHighlight(node)
           if isCurrentMainWin:
             if status.settings.highlightOtherUsesCurrentWord: status.highlightOtherUsesCurrentWord
             if isVisualMode or isVisualBlockMode: status.highlightSelectedArea
             if status.settings.highlightPairOfParen: status.highlightPairOfParen
+          status.updateHighlight(node)
 
         let
           startSelectedLine = bufStatus.selectArea.startLine
