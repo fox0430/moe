@@ -103,7 +103,7 @@ proc writeFileAndExit(status: var EditorStatus) =
 
 proc forceExit(status: var Editorstatus) = status.closeWindow(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
-proc normalCommand(status: var EditorStatus, key: Rune) =
+proc normalCommand*(status: var EditorStatus, key: Rune) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   if status.bufStatus[currentBufferIndex].cmdLoop == 0: status.bufStatus[currentBufferIndex].cmdLoop = 1
 
@@ -265,7 +265,7 @@ proc normalMode*(status: var EditorStatus) =
     if isEscKey(key):
       let keyAfterEsc = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
       if isEscKey(keyAfterEsc):
-        turnOffHighlighting(status)
+        status.turnOffHighlighting
         continue
       else: key = keyAfterEsc
 
@@ -279,7 +279,7 @@ proc normalMode*(status: var EditorStatus) =
     elif isDigit(key):
       let num = ($key)[0]
       if status.bufStatus[currentBufferIndex].cmdLoop == 0 and num == '0':
-        normalCommand(status, key)
+        status.normalCommand(key)
         continue
 
       status.bufStatus[currentBufferIndex].cmdLoop *= 10
@@ -287,5 +287,5 @@ proc normalMode*(status: var EditorStatus) =
       status.bufStatus[currentBufferIndex].cmdLoop = min(100000, status.bufStatus[currentBufferIndex].cmdLoop)
       continue
     else:
-      normalCommand(status, key)
+      status.normalCommand(key)
       status.bufStatus[currentBufferIndex].cmdLoop = 0
