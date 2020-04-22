@@ -237,19 +237,19 @@ proc normalCommand*(status: var EditorStatus, key: Rune) =
   else:
     discard
 
+proc isNormalMode(status: Editorstatus): bool = status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.normal
+
 proc normalMode*(status: var EditorStatus) =
   changeCursorType(status.settings.normalModeCursor)
 
-  var
+  status.resize(terminalHeight(), terminalWidth())
+
+  let
     currentBufferIndex = status.bufferIndexInCurrentWindow
-    countChange = 0
+    currentWorkSpace = status.currentWorkSpaceIndex
+  var countChange = 0
 
-  while status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.normal:
-    if currentBufferIndex != status.bufferIndexInCurrentWindow:
-      status.bufStatus[currentBufferIndex].cmdLoop = 0
-      currentBufferIndex = status.bufferIndexInCurrentWindow
-      countChange = 0
-
+  while status.isNormalMode and currentWorkSpace == status.currentWorkSpaceIndex and currentBufferIndex == status.bufferIndexInCurrentWindow:
     if status.bufStatus[currentBufferIndex].countChange > countChange:
       countChange = status.bufStatus[currentBufferIndex].countChange
 
