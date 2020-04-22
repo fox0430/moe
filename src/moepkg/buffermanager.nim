@@ -72,11 +72,17 @@ proc openSelectedBuffer(status: var Editorstatus, isNewWindow: bool) =
     status.changeCurrentBuffer(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine)
     status.bufStatus.delete(status.bufStatus.high)
 
+proc isBufferManagerMode(status: Editorstatus): bool = status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.bufManager
+
 proc bufferManager*(status: var Editorstatus) =
   status.setBufferList
   status.resize(terminalHeight(), terminalWidth())
 
-  while status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.bufManager:
+  let
+    currentBufferIndex = status.bufferIndexInCurrentWindow
+    currentWorkSpace = status.currentWorkSpaceIndex
+
+  while status.isBufferManagerMode and currentWorkSpace == status.currentWorkSpaceIndex and currentBufferIndex == status.bufferIndexInCurrentWindow:
     let currentBufferIndex = status.bufferIndexInCurrentWindow
     status.updateBufferManagerHighlight
     status.update
