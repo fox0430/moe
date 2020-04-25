@@ -6,6 +6,10 @@ Currently you can use normal mode, visual mode, replace mode, insert mode, ex mo
 
 # Install and compile
 
+## Requires
+- Nim 1.0 or higher
+- ncurses (ncursesw)
+
 I recommend using nimble to install:
 
 ```
@@ -23,6 +27,6 @@ $ nimble install
 If you are running Linux Ubuntu, or a distribution based on Ubuntu, you will likely need to run
 
 ```
-$ sudo apt install libncursesw5-dev
+$ sudo apt install libncurses5-dev libncursesw5-dev
 $ sudo ln -s /lib/x86_64-linux-gnu/libncursesw.so.5 /lib/x86_64-linux-gnu/libncursesw.so
 ```

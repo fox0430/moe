@@ -1,13 +1,16 @@
 import terminal
-import editorstatus, ui, normalmode, unicodeext, movement, editor
+import editorstatus, ui, unicodeext, movement, editor, bufferstatus
 
 proc replaceMode*(status: var EditorStatus) =
+  var
+    bufferChanged = false
+    windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
 
-  var bufferChanged = false
+  while status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.replace:
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
 
-  while status.bufStatus[status.currentBuffer].mode == Mode.replace:
     if bufferChanged:
-      status.updateHighlight(status.currentBuffer)
+      status.updatehighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
       bufferChanged = false
 
     status.update
@@ -15,23 +18,24 @@ proc replaceMode*(status: var EditorStatus) =
     var key: Rune = Rune('\0')
     while key == Rune('\0'):
       status.eventLoopTask
-      key = getKey(status.currentMainWindowNode.window)
+      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
+      status.commandWindow.erase
     elif isEscKey(key) or isControlSquareBracketsRight(key):
       status.changeMode(Mode.normal)
 
     elif isRightKey(key):
-      keyRight(status.bufStatus[status.currentBuffer])
+      status.bufStatus[currentBufferIndex].keyRight(windowNode)
     elif isLeftKey(key) or isBackspaceKey(key):
-      keyLeft(status.bufStatus[status.currentBuffer])
+      windowNode.keyLeft
     elif isUpKey(key):
-      keyUp(status.bufStatus[status.currentBuffer])
+      status.bufStatus[currentBufferIndex].keyUp(windowNode)
     elif isDownKey(key) or isEnterKey(key):
-      keyDown(status.bufStatus[status.currentBuffer])
+      status.bufStatus[currentBufferIndex].keyDown(windowNode)
  
     else:
-      status.bufStatus[status.currentBuffer].replaceCurrentCharacter(status.currentMainWindowNode, status.settings.autoIndent, status.settings.autoDeleteParen, key)
-      keyRight(status.bufStatus[status.currentBuffer])
+      status.bufStatus[currentBufferIndex].replaceCurrentCharacter(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoIndent, status.settings.autoDeleteParen, key)
+      status.bufStatus[currentBufferIndex].keyRight(windowNode)
       bufferChanged = true

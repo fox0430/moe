@@ -1,5 +1,5 @@
 import deques, strutils, math, strformat
-import gapbuffer, ui, unicodeext, highlight, independentutils
+import gapbuffer, ui, unicodeext, highlight, independentutils, color
 
 type EditorViewSettings* = object
   lineNumber*: bool
@@ -254,7 +254,7 @@ proc rangeOfOriginalLineInView*(view: EditorView): (int, int) =
     endLine = 0
   for index, lineNum in view.originalLine:
     if index == 0: startLine = lineNum
-    elif lineNum == 0 or lineNum == -1: break
+    elif lineNum == -1: break
     else: endLine = lineNum
 
   return (startLine, endLine)

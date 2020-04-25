@@ -1,5 +1,5 @@
 import packages/docutils/highlite, sequtils, os, strformat, parseutils
-import unicodeext, ui
+import unicodeext, ui, color
 
 type ColorSegment* = object
   firstRow*, firstColumn*, lastRow*, lastColumn*: int

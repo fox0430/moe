@@ -51,6 +51,10 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Color themes
 
+- Build on save
+
+- Work space
+
 - Multiple status bar
 
 ## Planned features
@@ -96,6 +100,7 @@ This project's goal is a very customizable, high productivity, high performance 
 ```sh
 nimble install moe
 ```
+Check [detail](https://github.com/fox0430/moe/blob/develop/documents/overview.md)
 
 ## Usage
 [Documents](https://github.com/fox0430/moe/blob/develop/documents/index.md)
