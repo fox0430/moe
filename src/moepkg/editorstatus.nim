@@ -61,6 +61,10 @@ proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
   if 0 <= bufferIndex and bufferIndex < status.bufStatus.len:
     status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex = bufferIndex
 
+    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine = 0
+    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentColumn = 0
+    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.expandedColumn = 0
+
 proc bufferIndexInCurrentWindow*(status: Editorstatus): int = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
 
 proc changeMode*(status: var EditorStatus, mode: Mode) =

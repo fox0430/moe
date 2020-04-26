@@ -521,3 +521,29 @@ test "Delete work space":
   status.deleteWorkSpace(1)
 
   check(status.workSpace.len == 1)
+
+# Fix #611
+test "Change current buffer":
+  var status = initEditorStatus()
+
+  status.addNewBuffer("")
+  status.bufStatus[0].filename =  ru"test"
+  status.bufStatus[0].buffer =  initGapBuffer(@[ru"", ru"abc"])
+
+  status.resize(100, 100)
+  status.update
+
+  let
+    currentLine = status.bufStatus[0].buffer.high
+    currentColumn = status.bufStatus[0].buffer[currentLine].high
+  status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine = currentLine
+  status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.currentColumn = currentColumn
+
+  status.addNewBuffer("")
+  status.bufStatus[0].filename =  ru"test2"
+  status.bufStatus[0].buffer =  initGapBuffer(@[ru""])
+
+  status.changeCurrentBuffer(1)
+
+  status.resize(100, 100)
+  status.update
