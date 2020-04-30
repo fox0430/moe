@@ -1,5 +1,6 @@
 import packages/docutils/highlite, sequtils, os, strformat, parseutils
 import unicodeext, ui, color
+from strutils import find
 
 type ColorSegment* = object
   firstRow*, firstColumn*, lastRow*, lastColumn*: int
@@ -7,6 +8,17 @@ type ColorSegment* = object
 
 type Highlight* = object
   colorSegments*: seq[ColorSegment]
+
+type
+  ReservedWord = object
+    word: string
+    color: EditorColorPair
+
+const
+  reservedWords = @[
+    ReservedWord(word: "TODO", color: EditorColorPair.todo),
+    ReservedWord(word: "WIP", color: EditorColorPair.todo),
+  ]
 
 proc len*(highlight: Highlight): int = highlight.colorSegments.len
 
@@ -67,6 +79,35 @@ proc overwrite*(highlight: Highlight, colorSegment: ColorSegment): Highlight =
     let cs = highlight.colorSegments[i]
     result.colorSegments.add(cs.overwrite(colorSegment))
 
+iterator parseReservedWord(buffer: string, color: EditorColorPair): (string, EditorColorPair) =
+  var
+    buffer = buffer
+  while true:
+    var
+      found: bool
+      pos = int.high
+      reservedWord: ReservedWord
+
+    # search minimum pos
+    for r in reservedWords:
+      let p = buffer.find(r.word)
+      if p < 0: continue
+      if p <= pos:
+        pos = p
+        reservedWord = r
+      found = true
+    if not found:
+      yield (buffer[0 ..^ 1], color)
+      break
+
+    const
+      first = 0
+    let
+      last = pos + reservedWord.word.len
+    yield (buffer[first ..< pos], color)
+    yield (buffer[pos ..< last], reservedWord.color)
+    buffer = buffer[last ..^ 1]
+
 proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
   var currentRow, currentColumn: int
 
@@ -125,6 +166,13 @@ proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
         of gtLongComment: EditorColorPair.longComment
         of gtWhitespace: EditorColorPair.defaultChar
         else: EditorColorPair.defaultChar
+
+    if token.kind == gtComment:
+      for r in buffer[first..last].parseReservedWord(color):
+        if r[0] == "": continue
+        splitByNewline(r[0], r[1])
+      continue
+
     splitByNewline(buffer[first..last], color)
 
 proc indexOf*(highlight: Highlight, row, column: int): int =
