@@ -360,6 +360,10 @@ type EditorColor* = object
   workSpaceBar*: Color
   workSpaceBarBg*: Color
 
+  # reserved word
+  todo*: Color
+  todoBg*: Color
+
 type EditorColorPair* = enum
   lineNum = 1
   currentLineNum = 2
@@ -418,6 +422,7 @@ type EditorColorPair* = enum
   highlightFullWidthSpace = 42
   # work space bar
   workSpaceBar = 43
+  todo = 44
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -504,7 +509,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     highlightFullWidthSpaceBg: red,
     # work space bar
     workSpaceBar: white,
-    workSpaceBarBg: blue
+    workSpaceBarBg: blue,
+    todo: white,
+    todoBg: gray,
   ),
   dark: EditorColor(
     editorBg: default,
@@ -590,7 +597,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     highlightFullWidthSpaceBg: red,
     # work space bar
     workSpaceBar: white,
-    workSpaceBarBg: blue
+    workSpaceBarBg: blue,
+    todo: white,
+    todoBg: gray,
   ),
   light: EditorColor(
     editorBg: default,
@@ -676,7 +685,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     highlightFullWidthSpaceBg: red,
     # work space bar
     workSpaceBar: blue,
-    workSpaceBarBg: gray54
+    workSpaceBarBg: gray54,
+    todo: white,
+    todoBg: gray,
   ),
   vivid: EditorColor(
     editorBg: default,
@@ -762,7 +773,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     highlightFullWidthSpaceBg: red,
     # work space bar
     workSpaceBar: black,
-    workSpaceBarBg: deepPink1_1
+    workSpaceBarBg: deepPink1_1,
+    todo: deepPink1_1,
+    todoBg: black,
   ),
 ]
 
@@ -875,4 +888,5 @@ proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Co
   of EditorColorPair.popUpWinCurrentLine: return (editorColor.popUpWinCurrentLine, editorColor.popUpWinCurrentLineBg)
   of EditorColorPair.replaceText: return (editorColor.replaceText, editorColor.replaceTextBg)
   of EditorColorPair.workSpaceBar: return (editorColor.workSpaceBar, editorColor.workSpaceBarBg)
+  of EditorColorPair.todo: return (editorColor.todo, editorColor.todoBg)
   else: return (editorColor.parenText, editorColor.parenTextBg)
