@@ -1,5 +1,5 @@
 import unittest
-import moepkg/[ui, editorstatus, gapbuffer, exmode, unicodeext]
+import moepkg/[ui, editorstatus, gapbuffer, exmode, unicodeext, bufferstatus]
 
 test "Edit command":
   var status = initEditorStatus()
@@ -43,7 +43,7 @@ test "Change prev buffer command":
   var status = initEditorStatus()
   for i in 0 ..< 2: status.addNewBuffer("")
 
-  status.currentBuffer = 1
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex = 1
   const command = @[ru"bprev"]
   for i in 0 ..< 3: status.exModeCommand(command)
 
@@ -67,19 +67,20 @@ test "Change to first buffer command":
   var status = initEditorStatus()
   for i in 0 ..< 3: status.addNewBuffer("")
 
-  status.currentBuffer = 2
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex = 2
   const command = @[ru"bfirst"]
   status.exModeCommand(command)
-  check(status.currentBuffer == 0)
+  
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex == 0)
 
 test "Change to last buffer command":
   var status = initEditorStatus()
   for i in 0 ..< 3: status.addNewBuffer("")
 
-  status.currentBuffer = 0
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex = 0
   const command = @[ru"blast"]
   status.exModeCommand(command)
-  check(status.currentBuffer == 2)
+  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex == 2)
 
 test "Replace buffer command":
   var status = initEditorStatus()
@@ -207,7 +208,7 @@ test "Split window command":
 
   const command = @[ru"vs"]
   status.exModeCommand(command)
-  check(status.numOfMainWindow == 2)
+  check(status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow == 2)
 
 test "Live reload of configuration file setting command":
   var status = initEditorStatus()
@@ -364,3 +365,110 @@ test "Highlight full width space command":
     const command = @[ru"highlightfullspace", ru"on"]
     status.exModeCommand(command)
     check(status.settings.highlightFullWidthSpace == true)
+
+test "Create work space command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  const command = @[ru"cws"]
+  status.exModeCommand(command)
+
+  check(status.workspace.len == 2)
+
+test "Change work space command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.createWrokSpace
+
+  const command = @[ru"ws", ru"1"]
+  status.exModeCommand(command)
+
+  check(status.currentWorkSpaceIndex == 0)
+
+test "Delete work space command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.createWrokSpace
+
+  const command = @[ru"dws"]
+  status.exModeCommand(command)
+
+  check(status.workspace.len == 1)
+
+test "Tab stop setting command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  const command = @[ru"tabstop", ru"4"]
+  status.exModeCommand(command)
+
+  check(status.settings.tabStop == 4)
+
+test "Tab stop setting command 2":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  let defaultTabStop = status.settings.tabStop
+
+  const command = @[ru"tabstop", ru"a"]
+  status.exModeCommand(command)
+
+  check(status.settings.tabStop == defaultTabStop)
+
+test "Smooth scroll speed setting command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  const command = @[ru"scrollspeed", ru"1"]
+  status.exModeCommand(command)
+
+  check(status.settings.smoothScrollSpeed == 1)
+
+test "Smooth scroll speed setting command 2":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  let defaultSpeed = status.settings.smoothScrollSpeed
+
+  const command = @[ru"scrollspeed", ru"a"]
+  status.exModeCommand(command)
+
+  check(status.settings.smoothScrollSpeed == defaultSpeed)
+
+test "Delete buffer status command":
+  var status = initEditorStatus()
+  for i in 0 ..< 2: status.addNewBuffer("")
+
+  const command = @[ru"bd", ru"0"]
+  status.exModeCommand(command)
+
+  check(status.bufStatus.len == 1)
+
+test "Delete buffer status command 2":
+  var status = initEditorStatus()
+  for i in 0 ..< 2: status.addNewBuffer("")
+
+  const command = @[ru"bd", ru"a"]
+  status.exModeCommand(command)
+
+  check(status.bufStatus.len == 2)
+
+test "Open buffer by number command":
+  var status = initEditorStatus()
+  for i in 0 ..< 2: status.addNewBuffer("")
+
+  const command = @[ru"b", ru"0"]
+  status.exModeCommand(command)
+
+  check(status.bufferIndexInCurrentWindow == 0)
+
+test "Open buffer by number command 2":
+  var status = initEditorStatus()
+  for i in 0 ..< 2: status.addNewBuffer("")
+
+  const command = @[ru"b", ru"a"]
+  status.exModeCommand(command)
+
+  check(status.bufferIndexInCurrentWindow == 1)

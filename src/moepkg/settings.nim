@@ -1,6 +1,98 @@
 import parsetoml, os
-import editorstatus, ui
 from strutils import parseEnum
+import ui, color, unicodeext, editorview, build
+
+type WorkSpaceSettings = object
+  useBar*: bool
+
+type StatusBarSettings* = object
+  useBar*: bool
+  mode*: bool
+  filename*: bool
+  chanedMark*: bool
+  line*: bool
+  column*: bool
+  characterEncoding*: bool
+  language*: bool
+  directory*: bool
+  multipleStatusBar*: bool
+
+type TabLineSettings* = object
+  useTab*: bool
+  allbuffer*: bool
+
+type EditorSettings* = object
+  editorColorTheme*: ColorTheme
+  statusBar*: StatusBarSettings
+  tabLine*: TabLineSettings
+  view*: EditorViewSettings
+  syntax*: bool
+  autoCloseParen*: bool
+  autoIndent*: bool
+  tabStop*: int
+  characterEncoding*: CharacterEncoding # TODO: move to EditorStatus ...?
+  defaultCursor*: CursorType
+  normalModeCursor*: CursorType
+  insertModeCursor*: CursorType
+  autoSave*: bool
+  autoSaveInterval*: int # minutes
+  liveReloadOfConf*: bool
+  realtimeSearch*: bool
+  popUpWindowInExmode*: bool
+  replaceTextHighlight*: bool
+  highlightPairOfParen*: bool
+  autoDeleteParen*: bool
+  smoothScroll*: bool
+  smoothScrollSpeed*: int
+  highlightOtherUsesCurrentWord*: bool
+  systemClipboard*: bool
+  highlightFullWidthSpace*: bool
+  buildOnSaveSettings*: BuildOnSaveSettings
+  workSpace*: WorkSpaceSettings
+
+proc initTabBarSettings*(): TabLineSettings =
+  result.useTab = true
+
+proc initStatusBarSettings*(): StatusBarSettings =
+  result.useBar = true
+  result.mode = true
+  result.filename = true
+  result.chanedMark = true
+  result.line = true
+  result.column = true
+  result.characterEncoding = true
+  result.language = true
+  result.directory = true
+  result.multipleStatusBar = true
+
+proc initWorkSpaceSettings(): WorkSpaceSettings =
+  result.useBar = false
+
+proc initEditorSettings*(): EditorSettings =
+  result.editorColorTheme = ColorTheme.vivid
+  result.statusBar = initStatusBarSettings()
+  result.tabLine = initTabBarSettings()
+  result.view = initEditorViewSettings()
+  result.syntax = true
+  result.autoCloseParen = true
+  result.autoIndent = true
+  result.tabStop = 2
+  result.defaultCursor = CursorType.blockMode   # Terminal default curosr shape
+  result.normalModeCursor = CursorType.blockMode
+  result.insertModeCursor = CursorType.ibeamMode
+  result.autoSaveInterval = 5
+  result.realtimeSearch = true
+  result.popUpWindowInExmode = true
+  result.replaceTextHighlight = true
+  result.highlightPairOfParen = true
+  result.autoDeleteParen = true
+  result.smoothScroll = true
+  result.smoothScrollSpeed = 17
+  result.highlightOtherUsesCurrentWord = true
+  result.systemClipboard = true
+  result.highlightFullWidthSpace = true
+  result.buildOnSaveSettings = BuildOnSaveSettings()
+  result.workSpace= initWorkSpaceSettings()
 
 proc getCursorType(cursorType, mode: string): CursorType =
   case cursorType
@@ -131,6 +223,20 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["StatusBar"].contains("multipleStatusBar"):
         result.statusBar.multipleStatusBar = settings["StatusBar"]["multipleStatusBar"].getbool()
+
+  if settings.contains("BuildOnSave"):
+    if settings["BuildOnSave"].contains("buildOnSave"):
+      result.buildOnSaveSettings.buildOnSave = settings["BuildOnSave"]["buildOnSave"].getbool()
+
+    if settings["BuildOnSave"].contains("workspaceRoot"):
+      result.buildOnSaveSettings.workspaceRoot = settings["BuildOnSave"]["workspaceRoot"].getStr().toRunes
+
+    if settings["BuildOnSave"].contains("command"):
+      result.buildOnSaveSettings.workspaceRoot = settings["BuildOnSave"]["command"].getStr().toRunes
+
+  if settings.contains("WorkSpace"):
+    if settings["WorkSpace"].contains("useBar"):
+        result.workSpace.useBar = settings["WorkSpace"]["useBar"].getbool()
 
   if settings.contains("Theme"):
     if settings["Theme"].contains("baseTheme"):
@@ -337,6 +443,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["Theme"].contains("highlightFullWidthSpaceBg"):
       ColorThemeTable[ColorTheme.config].highlightFullWidthSpaceBg = color("highlightFullWidthSpaceBg")
+
+    if settings["Theme"].contains("workSpaceBar"):
+      ColorThemeTable[ColorTheme.config].workSpaceBar = color("wrokSpaceBar")
+
+    if settings["Theme"].contains("workSpaceBarBg"):
+      ColorThemeTable[ColorTheme.config].workSpaceBarBg = color("wrokSpaceBarBg")
 
     result.editorColorTheme = ColorTheme.config
 

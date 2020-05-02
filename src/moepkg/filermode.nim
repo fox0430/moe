@@ -1,5 +1,5 @@
 import os, terminal, strutils, unicodeext, times, algorithm
-import editorstatus, ui, fileutils, editorview, gapbuffer, highlight, commandview, highlight, window
+import editorstatus, ui, fileutils, editorview, gapbuffer, highlight, commandview, highlight, window, color, bufferstatus, settings
 
 type PathInfo = tuple[kind: PathComponent, path: string, size: int64, lastWriteTime: times.Time]
 
@@ -48,15 +48,16 @@ proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
     status.commandWindow.erase
     status.commandWindow.refresh
   elif (command[0] == ru"y" or command[0] == ru"yes") and command.len == 1:
-    if filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].kind == pcDir:
+    var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+    if filerStatus.dirList[windowNode.currentLine].kind == pcDir:
       try:
-        removeDir(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path)
-        status.commandWindow.writeMessageDeletedFile(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path, status.messageLog)
+        removeDir(filerStatus.dirList[windowNode.currentLine].path)
+        status.commandWindow.writeMessageDeletedFile(filerStatus.dirList[windowNode.currentLine].path, status.messageLog)
       except OSError:
         status.commandWindow.writeRemoveDirError(status.messageLog)
     else:
-      if tryRemoveFile(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path):
-        status.commandWindow.writeMessageDeletedFile(filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path, status.messageLog)
+      if tryRemoveFile(filerStatus.dirList[windowNode.currentLine].path):
+        status.commandWindow.writeMessageDeletedFile(filerStatus.dirList[windowNode.currentLine].path, status.messageLog)
       else:
         status.commandWindow.writeRemoveFileError(status.messageLog)
 
@@ -157,9 +158,10 @@ proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   except OSError: status.commandWindow.writeCreateDirError(status.messageLog)
    
 proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
+  var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
   let
-    kind = filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].kind
-    path = filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine].path
+    kind = filerStatus.dirList[windowNode.currentLine].kind
+    path = filerStatus.dirList[windowNode.currentLine].path
 
   case kind
   of pcFile, pcLinkToFile:
@@ -183,7 +185,7 @@ proc initFilelistHighlight[T](dirList: seq[PathInfo], buffer: T, currentLine: in
     let color = setDirListColor(dir.kind, index == currentLine)
     result.colorSegments.add(ColorSegment(firstRow: index, firstColumn: 0, lastRow: index, lastColumn: buffer[index].len, color: color))
 
-proc fileNameToGapBuffer(bufStatus: var BufferStatus, currentWin: WindowNode, settings: EditorSettings, filerStatus: FilerStatus) =
+proc fileNameToGapBuffer(bufStatus: var BufferStatus, windowNode: WindowNode, settings: EditorSettings, filerStatus: FilerStatus) =
   bufStatus.buffer = initGapBuffer[seq[Rune]]()
 
   for index, dir in filerStatus.dirList:
@@ -201,11 +203,13 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus, currentWin: WindowNode, se
   
   let useStatusBar = if settings.statusBar.useBar: 1 else: 0
   let numOfFile = filerStatus.dirList.len
-  bufStatus.highlight = initFilelistHighlight(filerStatus.dirList, bufStatus.buffer, bufStatus.currentLine)
-  currentWin.view = initEditorView(bufStatus.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
+  windowNode.highlight = initFilelistHighlight(filerStatus.dirList, bufStatus.buffer, windowNode.currentLine)
+  windowNode.view = initEditorView(bufStatus.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
 
 proc updateFilerView*(status: var EditorStatus, filerStatus: var FilerStatus) =
-  fileNameToGapBuffer(status.bufStatus[status.currentBuffer], status.currentMainWindowNode, status.settings, filerStatus)
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+
+  fileNameToGapBuffer(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings, filerStatus)
   status.resize(terminalHeight(), terminalWidth())
   status.update
   filerStatus.viewUpdate = false
@@ -215,39 +219,42 @@ proc initFileDeitalHighlight[T](buffer: T): Highlight =
     result.colorSegments.add(ColorSegment(firstRow: i, firstColumn: 0, lastRow: i, lastColumn: buffer[i].len, color: EditorColorPair.defaultChar))
 
 proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string) =
-  status.bufStatus[status.currentBuffer].buffer = initGapBuffer[seq[Rune]]()
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+
+  status.bufStatus[currentBufferIndex].buffer = initGapBuffer[seq[Rune]]()
 
   let fileInfo = getFileInfo(fileName, false)
-  status.bufStatus[status.currentBuffer].buffer.add(ru"name        : " & fileName.toRunes)
+  status.bufStatus[currentBufferIndex].buffer.add(ru"name        : " & fileName.toRunes)
 
-  if fileInfo.kind == pcFile: status.bufStatus[status.currentBuffer].buffer.add(ru"kind        : " & ru"File")
-  elif fileInfo.kind == pcDir: status.bufStatus[status.currentBuffer].buffer.add(ru"kind        : " & ru"Directory")
-  elif fileInfo.kind == pcLinkToFile: status.bufStatus[status.currentBuffer].buffer.add(ru"kind        : " & ru"Symbolic link to file")
-  elif fileInfo.kind == pcLinkToDir: status.bufStatus[status.currentBuffer].buffer.add(ru"kind        : " & ru"Symbolic link to directory")
+  if fileInfo.kind == pcFile: status.bufStatus[currentBufferIndex].buffer.add(ru"kind        : " & ru"File")
+  elif fileInfo.kind == pcDir: status.bufStatus[currentBufferIndex].buffer.add(ru"kind        : " & ru"Directory")
+  elif fileInfo.kind == pcLinkToFile: status.bufStatus[currentBufferIndex].buffer.add(ru"kind        : " & ru"Symbolic link to file")
+  elif fileInfo.kind == pcLinkToDir: status.bufStatus[currentBufferIndex].buffer.add(ru"kind        : " & ru"Symbolic link to directory")
 
-  status.bufStatus[status.currentBuffer].buffer.add(("size        : " & $fileInfo.size & " bytes").toRunes)
-  status.bufStatus[status.currentBuffer].buffer.add(("permissions : " & substr($fileInfo.permissions, 1, ($fileInfo.permissions).high - 1)).toRunes)
-  status.bufStatus[status.currentBuffer].buffer.add(("create time : " & $fileInfo.creationTime).toRunes)
-  status.bufStatus[status.currentBuffer].buffer.add(("last write  : " & $fileInfo.lastWriteTime).toRunes)
-  status.bufStatus[status.currentBuffer].buffer.add(("last access : " & $fileInfo.lastAccessTime).toRunes)
+  status.bufStatus[currentBufferIndex].buffer.add(("size        : " & $fileInfo.size & " bytes").toRunes)
+  status.bufStatus[currentBufferIndex].buffer.add(("permissions : " & substr($fileInfo.permissions, 1, ($fileInfo.permissions).high - 1)).toRunes)
+  status.bufStatus[currentBufferIndex].buffer.add(("create time : " & $fileInfo.creationTime).toRunes)
+  status.bufStatus[currentBufferIndex].buffer.add(("last write  : " & $fileInfo.lastWriteTime).toRunes)
+  status.bufStatus[currentBufferIndex].buffer.add(("last access : " & $fileInfo.lastAccessTime).toRunes)
 
-  status.bufStatus[status.currentBuffer].highlight = initFileDeitalHighlight(status.bufStatus[status.currentBuffer].buffer)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initFileDeitalHighlight(status.bufStatus[currentBufferIndex].buffer)
 
+  var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
   let
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-    tmpCurrentLine = status.bufStatus[status.currentBuffer].currentLine
+    tmpCurrentLine = windowNode.currentLine
 
-  status.currentMainWindowNode.view = initEditorView(status.bufStatus[status.currentBuffer].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
-  status.bufStatus[status.currentBuffer].currentLine = 0
+  windowNode.view = initEditorView(status.bufStatus[currentBufferIndex].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
+  windowNode.currentLine = 0
 
   status.update
   setCursor(false)
-  while isResizekey(status.currentMainWindowNode.window.getKey):
+  while isResizekey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.getKey):
     status.resize(terminalHeight(), terminalWidth())
     status.update
     setCursor(false)
 
-  status.bufStatus[status.currentBuffer].currentLine = tmpCurrentLine
+  windowNode.currentLine = tmpCurrentLine
 
 proc changeSortBy(filerStatus: var FilerStatus) =
   case filerStatus.sortBy:
@@ -260,37 +267,51 @@ proc changeSortBy(filerStatus: var FilerStatus) =
 proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
   filerStatus.searchMode = true
   filerStatus.dirList = searchFiles(status, filerStatus.dirList)
-  status.bufStatus[status.currentBuffer].currentLine = 0
   filerStatus.viewUpdate = true
+
+  var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+  windowNode.currentLine = 0
+
   if filerStatus.dirList.len == 0:
-    status.currentMainWindowNode.window.erase
-    status.currentMainWindowNode.window.write(0, 0, "not found", EditorColorPair.commandBar)
-    status.currentMainWindowNode.window.refresh
+    windowNode.window.erase
+    windowNode.window.write(0, 0, "not found", EditorColorPair.commandBar)
+    windowNode.window.refresh
     discard getKey(status.commandWindow)
     status.commandWindow.erase
     status.commandWindow.refresh
     filerStatus.dirlistUpdate = true
 
+proc isFilerMode(status: Editorstatus): bool = status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.filer
+
 proc filerMode*(status: var EditorStatus) =
   var filerStatus = initFilerStatus()
 
-  while status.bufStatus[status.currentBuffer].mode == Mode.filer:
+  let
+    currentBufferIndex = status.bufferIndexInCurrentWindow
+    currentWorkSpace = status.currentWorkSpaceIndex
+
+  while status.isFilerMode and currentWorkSpace == status.currentWorkSpaceIndex and currentBufferIndex == status.bufferIndexInCurrentWindow:
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+
+    var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+
     if filerStatus.dirlistUpdate:
       filerStatus = updateDirList(filerStatus)
-      status.bufStatus[status.currentBuffer].currentLine = 0
+      windowNode.currentLine = 0
 
     if filerStatus.viewUpdate: updateFilerView(status, filerStatus)
 
     setCursor(false)
-    let key = getKey(status.currentMainWindowNode.window)
+    let key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
 
-    status.bufStatus[status.currentBuffer].buffer.beginNewSuitIfNeeded
-    status.bufStatus[status.currentBuffer].tryRecordCurrentPosition
+    status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
+    status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(windowNode)
     
     if key == ord(':'): status.changeMode(Mode.ex)
 
     elif isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
+      status.commandWindow.erase
       filerStatus.viewUpdate = true
 
     elif key == ord('/'): searchFileMode(status, filerStatus)
@@ -302,29 +323,29 @@ proc filerMode*(status: var EditorStatus) =
     elif key == ord('D'):
       deleteFile(status, filerStatus)
     elif key == ord('i'):
-      writeFileDetail(status, filerStatus.dirList.len, filerStatus.dirList[status.bufStatus[status.currentBuffer].currentLine][1])
+      writeFileDetail(status, filerStatus.dirList.len, filerStatus.dirList[windowNode.currentLine][1])
       filerStatus.viewUpdate = true
     elif key == 'j' or isDownKey(key):
-      keyDown(filerStatus, status.bufStatus[status.currentBuffer].currentLine)
+      filerStatus.keyDown(windowNode.currentLine)
     elif key == ord('k') or isUpKey(key):
-      keyUp(filerStatus, status.bufStatus[status.currentBuffer].currentLine)
+      filerStatus.keyUp(windowNode.currentLine)
     elif key == ord('g'):
-      moveToTopOfList(filerStatus, status.bufStatus[status.currentBuffer].currentLine)
+      filerStatus.moveToTopOfList(windowNode.currentLine)
     elif key == ord('G'):
-      moveToLastOfList(filerStatus, status.bufStatus[status.currentBuffer].currentLine)
+      filerStatus.moveToLastOfList(windowNode.currentLine)
     elif key == ord('y'):
-      copyFile(filerStatus, status.bufStatus[status.currentBuffer].currentLine)
+      filerStatus.copyFile(windowNode.currentLine)
     elif key == ord('C'):
-      cutFile(filerStatus, status.bufStatus[status.currentBuffer].currentLine)
+      filerStatus.cutFile(windowNode.currentLine)
     elif key == ord('p'):
-      pasteFile(status.commandWindow, filerStatus, status.messageLog)
+      status.commandWindow.pasteFile(filerStatus, status.messageLog)
     elif key == ord('s'):
-      changeSortBy(filerStatus)
+      filerStatus.changeSortBy
     elif key == ord('N'):
-      createDir(status, filerStatus)
+      status.createDir(filerStatus)
     elif isControlJ(key):
-      movePrevWindow(status)
+      status.movePrevWindow
     elif isControlK(key):
-      moveNextWindow(status)
+      status.moveNextWindow
     elif isEnterKey(key):
-      openFileOrDir(status, filerStatus)
+      status.openFileOrDir(filerStatus)

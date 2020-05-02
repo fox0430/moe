@@ -1,5 +1,5 @@
 import heapqueue
-import ui, editorview, gapbuffer
+import ui, editorview, gapbuffer, color, cursor, highlight
 
 # vertical is default
 type SplitType* = enum
@@ -13,6 +13,11 @@ type WindowNode* = ref object
   splitType*: SplitType
   window*: Window
   view*: EditorView
+  highlight*: Highlight
+  cursor*: CursorPosition
+  currentLine*: int
+  currentColumn*: int
+  expandedColumn*: int
   bufferIndex*: int
   windowIndex*: int
   index*: int   ## Index as seen by parent node
@@ -42,7 +47,7 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
     var
       view = initEditorView(buffer, 1, 1)
       win = newWindow()
-      node = WindowNode(parent: n.parent, child: @[], splitType: SplitType.vertical, window: win, view: view, bufferIndex: n.bufferIndex, h: 1, w: 1)
+      node = WindowNode(parent: n.parent, child: @[], splitType: SplitType.vertical, window: win, view: view, highlight: n.highlight, bufferIndex: n.bufferIndex, h: 1, w: 1)
     parent.child.add(node)
     return n
   else:
@@ -51,8 +56,8 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
       view2 = initEditorView(buffer, 1, 1)
       win1 = newWindow()
       win2 = newWindow()
-      node1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win1, view: view1, bufferIndex: n.bufferIndex)
-      node2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win2, view: view2, bufferIndex: n.bufferIndex)
+      node1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win1, view: view1, highlight: n.highlight, bufferIndex: n.bufferIndex)
+      node2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win2, view: view2, highlight: n.highlight, bufferIndex: n.bufferIndex)
     n.splitType = SplitType.vertical
     n.windowIndex = -1
     n.child.add(node1)
@@ -67,7 +72,7 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
     var
       view = initEditorView(buffer, 1, 1)
       win = newWindow()
-      node = WindowNode(parent: parent, child: @[], splitType: SplitType.horaizontal, window: win, view: view, bufferIndex: n.bufferIndex)
+      node = WindowNode(parent: parent, child: @[], splitType: SplitType.horaizontal, window: win, view: view, highlight: n.highlight, bufferIndex: n.bufferIndex)
     parent.child.add(node)
     return n
   # if parent is root and one window
@@ -75,7 +80,7 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
     var
       view = initEditorView(buffer, 1, 1)
       win = newWindow()
-      node = WindowNode(parent: n.parent, child: @[], splitType: SplitType.vertical, window: win, view: view, bufferIndex: n.bufferIndex)
+      node = WindowNode(parent: n.parent, child: @[], splitType: SplitType.vertical, window: win, view: view, highlight: n.highlight, bufferIndex: n.bufferIndex)
     n.parent.splitType = SplitType.horaizontal
     n.parent.child.insert(node, n.index + 1)
     return n
@@ -85,8 +90,8 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
       view2 = initEditorView(buffer, 1, 1)
       win1 = newWindow()
       win2 = newWindow()
-      node1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win1, view: view1, bufferIndex: n.bufferIndex)
-      node2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win2, view: view2, bufferIndex: n.bufferIndex)
+      node1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win1, view: view1, highlight: n.highlight, bufferIndex: n.bufferIndex)
+      node2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win2, view: view2, highlight: n.highlight, bufferIndex: n.bufferIndex)
     n.splitType = SplitType.horaizontal
     n.windowIndex = -1
     n.child.add(node1)
@@ -94,21 +99,22 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
     n.window = nil
     return node1
 
-# Resize all window and reset index, windowIndex
 proc resize*(root: WindowNode, y, x, height, width: int) =
   var qeue = initHeapQueue[WindowNode]()
   var windowIndex = 0
-
+ 
+  const statusBarHeight = 1
+   
   for index, node in root.child:
     if root.splitType == SplitType.vertical:
       ## Vertical split
-      
+
       ## Calc window width
-      if width mod root.child.len != 0 and index == 0: node.w = int(width / root.child.len) + 1
+      if width mod root.child.len != 0 and index == 0: node.w = int(width / root.child.len) + (width mod root.child.len)
       else: node.w = int(width / root.child.len)
 
       ## Calc window x
-      if width mod root.child.len != 0 and index > 0: node.x = (node.w * index) + 1
+      if width mod root.child.len != 0 and index > 0: node.x = (node.w * index) + (width mod root.child.len)
       else: node.x = node.w * index
 
       node.h = height
@@ -117,12 +123,11 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
       ## Horaizontal split
 
       ## Calc window height
-      if height mod root.child.len != 0 and index == 0: node.h = int(height / root.child.len) + 1
+      if height mod root.child.len != 0 and index == 0: node.h = int(height / root.child.len) + (height mod root.child.len)
       else: node.h = int(height / root.child.len)
-      if index < root.child.high: node.h -= 1
 
       ## Calc window y
-      if height mod root.child.len != 0 and index > 0: node.y = (node.h * index) + 1
+      if height mod root.child.len != 0 and index > 0: node.y = (node.h * index) + (height mod root.child.len) + y
       else: node.y = node.h * index + y
 
       node.w = width
@@ -130,7 +135,7 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
 
     if node.window != nil:
       ## Resize curses window
-      node.window.resize(node.h, node.w, node.y, node.x)
+      node.window.resize(node.h - statusBarHeight, node.w, node.y, node.x)
       ## Set windowIndex
       node.windowIndex = windowIndex
       inc(windowIndex)
@@ -142,7 +147,6 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
       for child in node.child: qeue.push(child)
 
   while qeue.len > 0:
-    let queueLength = qeue.len
     for i in 0 ..< qeue.len:
       let
         child = qeue.pop
@@ -166,7 +170,6 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
         ## Calc window height
         if parent.h mod parent.child.len != 0 and i == 0: child.h = int(parent.h / parent.child.len) + 1
         else: child.h = int(parent.h / parent.child.len)
-        if i < queueLength - 1: child.h -= 1
 
         ## Calc window y
         if parent.h mod parent.child.len != 0 and i > 0: child.y = parent.y + (child.h * i) + 1
@@ -177,7 +180,7 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
 
       if child.window != nil:
         # Resize curses window
-        child.window.resize(child.h, child.w, child.y, child.x)
+        child.window.resize(child.h - statusBarHeight, child.w, child.y, child.x)
         # Set windowIndex
         child.windowIndex = windowIndex
         inc(windowIndex)
