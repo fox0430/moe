@@ -18,6 +18,7 @@ const
   reservedWords = @[
     ReservedWord(word: "TODO", color: EditorColorPair.todo),
     ReservedWord(word: "WIP", color: EditorColorPair.todo),
+    ReservedWord(word: "NOTE", color: EditorColorPair.todo),
   ]
 
 proc len*(highlight: Highlight): int = highlight.colorSegments.len

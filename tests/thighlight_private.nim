@@ -29,23 +29,29 @@ suite "parseReservedWord":
       ("TODO", EditorColorPair.todo),
       ("", EditorColorPair.defaultChar),
     ]
-  test "TODO and WIP":
-    check toSeq(parseReservedWord("hello TODO WIP world", EditorColorPair.defaultChar)) == @[
+  test "TODO and WIP and NOTE":
+    check toSeq(parseReservedWord("hello TODO WIP NOTE world", EditorColorPair.defaultChar)) == @[
       ("hello ", EditorColorPair.defaultChar),
       ("TODO", EditorColorPair.todo),
       (" ", EditorColorPair.defaultChar),
       ("WIP", EditorColorPair.todo),
+      (" ", EditorColorPair.defaultChar),
+      ("NOTE", EditorColorPair.todo),
       (" world", EditorColorPair.defaultChar),
     ]
   test "no whitespace":
-    check toSeq(parseReservedWord("TODOWIPTODOWIP", EditorColorPair.defaultChar)) == @[
+    check toSeq(parseReservedWord("TODOWIPNOTETODOWIPNOTE", EditorColorPair.defaultChar)) == @[
       ("", EditorColorPair.defaultChar),
       ("TODO", EditorColorPair.todo),
       ("", EditorColorPair.defaultChar),
       ("WIP", EditorColorPair.todo),
       ("", EditorColorPair.defaultChar),
+      ("NOTE", EditorColorPair.todo),
+      ("", EditorColorPair.defaultChar),
       ("TODO", EditorColorPair.todo),
       ("", EditorColorPair.defaultChar),
       ("WIP", EditorColorPair.todo),
+      ("", EditorColorPair.defaultChar),
+      ("NOTE", EditorColorPair.todo),
       ("", EditorColorPair.defaultChar),
     ]
