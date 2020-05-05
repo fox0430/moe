@@ -798,3 +798,33 @@ Background color of current word
 ```
 currentWordBg
 ```
+
+Full width space text color
+```
+highlightFullWidthSpace
+```
+
+Full width space background color
+```
+highlightFullWidthSpaceBg
+```
+
+Workspace bar text color
+```
+workSpaceBar
+```
+
+Workspace bar background color
+```
+workSpaceBarBg
+```
+
+TODO highlight text color
+```
+todo
+```
+
+TODO highlight background color
+```
+todoBg
+```
