@@ -7,7 +7,7 @@ test "Exit log viewer":
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.bufStatus[currentBufferIndex].mode = Mode.logViewer
 
-  status.setMessageLog
+  status.initMessageLog
   status.resize(terminalHeight(), terminalWidth())
 
   status.exitLogViewer
