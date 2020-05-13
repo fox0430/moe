@@ -245,6 +245,10 @@ proc initSyntaxHighlight(windowNode: var WindowNode, bufStatus: seq[BufferStatus
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
+proc updateLogViewer(status: var Editorstatus, bufferIndex: int) =
+  status.bufStatus[bufferIndex].buffer = initGapBuffer(@[ru""])
+  for i in 0 ..< status.messageLog.len: status.bufStatus[bufferIndex].buffer.insert(status.messageLog[i], i)
+
 proc update*(status: var EditorStatus) =
   setCursor(false)
 
@@ -279,7 +283,10 @@ proc update*(status: var EditorStatus) =
 
         ## Update highlight
         ## TODO: Refactor and fix
-        if (currentMode != Mode.filer) and not (currentMode == Mode.ex and prevMode == Mode.filer):
+        if (currentMode == logViewer) or (currentMode == ex and prevMode == logViewer):
+          status.updateLogViewer(node.bufferIndex)
+          status.updateHighlight(node)
+        elif (currentMode != Mode.filer) and not (currentMode == Mode.ex and prevMode == Mode.filer):
           if isCurrentMainWin:
             if status.settings.highlightOtherUsesCurrentWord: status.highlightOtherUsesCurrentWord
             if isVisualMode or isVisualBlockMode: status.highlightSelectedArea

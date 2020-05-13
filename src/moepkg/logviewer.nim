@@ -1,14 +1,9 @@
 import terminal
-import gapbuffer, ui, editorstatus, unicodeext, movement, bufferstatus
+import ui, editorstatus, unicodeext, movement, bufferstatus
 
-proc setMessageLog*(status: var Editorstatus) =
+proc initMessageLog*(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.bufStatus[currentBufferIndex].filename = ru"Log viewer"
-  for i in 0 ..< status.messageLog.len:
-    if i == 0: status.bufStatus[currentBufferIndex].buffer[0] = status.messageLog[0]
-    else: status.bufStatus[currentBufferIndex].buffer.add(status.messageLog[i])
-
-  status.updatehighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
 proc exitLogViewer*(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -17,7 +12,7 @@ proc exitLogViewer*(status: var Editorstatus) =
 proc isLogViewerMode(status: Editorstatus): bool = status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.logViewer
 
 proc messageLogViewer*(status: var Editorstatus) =
-  status.setMessageLog
+  status.initMessageLog
   status.resize(terminalHeight(), terminalWidth())
 
   let
