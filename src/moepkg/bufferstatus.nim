@@ -2,7 +2,17 @@ import packages/docutils/highlite, tables, times
 import gapbuffer, unicodeext
 
 type Mode* = enum
-  normal, insert, visual, visualBlock, replace, ex, filer, search, bufManager, logViewer
+  normal,
+  insert,
+  visual,
+  visualBlock,
+  replace,
+  ex,
+  filer,
+  search,
+  bufManager,
+  logViewer,
+  help
 
 type SelectArea* = object
   startLine*: int
