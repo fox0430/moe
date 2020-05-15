@@ -472,3 +472,21 @@ test "Open buffer by number command 2":
   status.exModeCommand(command)
 
   check(status.bufferIndexInCurrentWindow == 1)
+
+test "Open help command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.resize(100, 100)
+  status.update
+
+  const command = @[ru"help"]
+  status.exModeCommand(command)
+
+  status.resize(100, 100)
+  status.update
+
+  check(status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow == 2)
+  check(status.bufferIndexInCurrentWindow == 1)
+
+  check(status.bufStatus[1].mode == Mode.help)
