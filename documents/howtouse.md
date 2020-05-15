@@ -7,9 +7,9 @@ Check command bar
 ```:q``` - Quit  
 ```:wq``` - Write file and quit  
 ```:q!``` - Force quit  
-```qa``` - Quit all window  
-```wqa``` - Write and quit all window  
-```qa!``` - Force quit all window  
+```:qa``` - Quit all window  
+```:wqa``` - Write and quit all window  
+```:qa!``` - Force quit all window  
 
 ## Normal mode
 ```h``` - ←  
@@ -33,7 +33,7 @@ Check command bar
 ```Ctrl-r``` - Redo  
 
 ```v``` - Start visual mode  
-```Ctrl-v``` Start visual block mode  
+```Ctrl-v``` - Start visual block mode  
 ```r``` - Start replace mode  
 ```i``` - Start insert mode  
 ```o``` - Insert a new line and start insert mode  
@@ -140,3 +140,5 @@ Check command bar
 ```noh``` - Turn off highlights  
 
 ```log``` - Open messages log viwer  
+
+```help``` - Open help

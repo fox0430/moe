@@ -25,6 +25,9 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
 
   return (searhWord: searchWord, replaceWord: replaceWord)
 
+proc isOpenHelpCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"help"
+
 proc isOpenMessageLogViweer(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"log"
 
@@ -170,6 +173,18 @@ proc isDeleteCurrentWorkSpaceCommand(command: seq[seq[Rune]]): bool =
 
 proc isChangeCurrentWorkSpace(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"ws" and isDigit(command[1])
+
+proc openHelp(status: var Editorstatus) =
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
+  status.verticalSplitWindow
+  status.resize(terminalHeight(), terminalWidth())
+  status.moveNextWindow
+
+  status.addNewBuffer("")
+  status.changeCurrentBuffer(status.bufStatus.high)
+  status.changeMode(Mode.help)
 
 proc openMessageLogViewer(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -783,6 +798,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     changeCurrentWorkSpaceCommand(status, ($command[1]).parseInt)
   elif isDeleteCurrentWorkSpaceCommand(command):
     deleteCurrentWorkSpaceCommand(status)
+  elif isOpenHelpCommand(command):
+    status.openHelp
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
