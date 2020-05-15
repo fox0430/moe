@@ -17,7 +17,11 @@ proc exitHelpMode(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.deleteBuffer(currentBufferIndex)
 
-proc isHelpMode(status: Editorstatus): bool = status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.help
+proc isHelpMode(status: Editorstatus): bool =
+  let
+    currentMode = status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode
+    prevMode = status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].prevMode
+  result = currentMode == Mode.help or (prevMode == Mode.help and currentMode == Mode.ex)
 
 proc helpMode*(status: var Editorstatus) =
   status.initHelpModeBuffer
@@ -51,7 +55,6 @@ proc helpMode*(status: var Editorstatus) =
     elif key == ord('l') or isRightKey(key): status.bufStatus[currentBufferIndex].keyRight(windowNode)
     elif key == ord('0') or isHomeKey(key): windowNode.moveToFirstOfLine
     elif key == ord('$') or isEndKey(key): status.bufStatus[currentBufferIndex].moveToLastOfLine(windowNode)
-    elif key == ord('q') or isEscKey(key): status.exitHelpMode
     elif key == ord('g'):
       if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window) == 'g': status.moveToFirstLine
     elif key == ord('G'): status.moveToLastLine
