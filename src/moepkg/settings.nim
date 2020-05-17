@@ -1,5 +1,11 @@
 import parsetoml, os
 from strutils import parseEnum
+
+when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
+  # This addresses a breaking change in https://github.com/nim-lang/Nim/pull/14046.
+  from strutils import nimIdentNormalize
+  export strutils.nimIdentNormalize
+
 import ui, color, unicodeext, editorview, build
 
 type WorkSpaceSettings = object
