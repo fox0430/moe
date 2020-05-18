@@ -1,4 +1,5 @@
 #!/usr/bin/env shpec
+# See Also: https://github.com/rylnd/shpec
 
 _has_pty_session_man() { [ ${#_pty_session_impl} -gt 0 ]; }
 
@@ -42,7 +43,7 @@ describe "moe is an editor"
     describe "invocation options"
 
         it "can display it's version"
-            assert egrep "`moe -v`" "^v\d+\.\d+\.\d+$"
+            assert egrep "`moe -v`" "^\d+\.\d+\.\d+$"
         end
 
         it "can display command line options"
