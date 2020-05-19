@@ -103,7 +103,7 @@ proc writeFileAndExit(status: var EditorStatus) =
 
 proc forceExit(status: var Editorstatus) = status.closeWindow(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
-proc normalCommand*(status: var EditorStatus, key: Rune) =
+proc normalCommand(status: var EditorStatus, key: Rune) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   if status.bufStatus[currentBufferIndex].cmdLoop == 0: status.bufStatus[currentBufferIndex].cmdLoop = 1
 
