@@ -1,5 +1,5 @@
 import terminal, strutils, sequtils
-import editorstatus, ui, gapbuffer, normalmode, unicodeext, window, movement, editor, bufferstatus
+import editorstatus, ui, gapbuffer, unicodeext, window, movement, editor, bufferstatus
 
 proc initSelectArea*(startLine, startColumn: int): SelectArea =
   result.startLine = startLine
