@@ -43,7 +43,7 @@ describe "moe is an editor"
     describe "invocation options"
 
         it "can display it's version"
-            assert egrep "`moe -v`" "^\d+\.\d+\.\d+$"
+            assert moe -v | grep "^\d+\.\d+\.\d+$"
         end
 
         it "can display command line options"
