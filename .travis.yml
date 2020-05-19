@@ -16,6 +16,9 @@ before_install:
   # Manual install xclip v0.13
   - wget http://mirrors.kernel.org/ubuntu/pool/universe/x/xclip/xclip_0.13-1_amd64.deb
   - sudo dpkg -i xclip_0.13-1_amd64.deb
+  # Integration test tools
+  - sudo sh -c "`curl -L https://raw.githubusercontent.com/rylnd/shpec/master/install.sh`"
+  - sudo apt-get update && sudo apt-get install -y abduco
 before_script:
   - set -e
   - export PATH=$(pwd)/nim/bin:$(pwd):$PATH
@@ -23,3 +26,4 @@ script:
   - nimble refresh
   - yes | nimble test --verbose
   - nimble install --verbose
+  - shpec ./shpec.sh
