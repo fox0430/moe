@@ -37,3 +37,23 @@ Fedora
 $ sudo dnf install ncurses-devel
 $ nimble install moe
 ```
+
+# Test
+
+## Unit test
+```
+nimble test
+```
+
+## Integration test
+
+### Requires
+
+[abduco](https://github.com/martanne/abduco)
+
+[shpec](https://github.com/rylnd/shpec)
+
+### Run integration test
+```
+shpec ./shpec.sh
+```
