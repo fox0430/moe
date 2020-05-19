@@ -39,7 +39,7 @@ proc initRegisters(): Registers =
   result.yankedLines = @[]
   result.yankedStr = @[]
 
-proc initStatusBar*(): StatusBar = result.window = initWindow(1, 1, 1, 1, EditorColorPair.defaultChar)
+proc initStatusBar(): StatusBar = result.window = initWindow(1, 1, 1, 1, EditorColorPair.defaultChar)
 
 proc initEditorStatus*(): EditorStatus =
   result.platform = initPlatform()
@@ -100,7 +100,7 @@ proc writeTab(tabWin: var Window, start, tabWidth: int, filename: string, color:
     buffer = if filename.len < tabWidth: " " & title & " ".repeat(tabWidth - title.len) else: " " & (title).substr(0, tabWidth - 3) & "~"
   tabWin.write(0, start, buffer, color)
 
-proc writeTabLine*(status: var EditorStatus) =
+proc writeTabLine(status: var EditorStatus) =
   let
     isAllBuffer = status.settings.tabLine.allbuffer
     defaultColor = EditorColorPair.tab
@@ -216,7 +216,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
   setCursor(true)
 
 proc highlightPairOfParen(status: var Editorstatus)
-proc highlightOtherUsesCurrentWord*(status: var Editorstatus)
+proc highlightOtherUsesCurrentWord(status: var Editorstatus)
 proc highlightSelectedArea(status: var Editorstatus)
 proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode)
 
@@ -582,7 +582,7 @@ proc highlightPairOfParen(status: var Editorstatus) =
           return
 
 # Highlighting other uses of the current word under the cursor
-proc highlightOtherUsesCurrentWord*(status: var Editorstatus) =
+proc highlightOtherUsesCurrentWord(status: var Editorstatus) =
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     bufStatus = status.bufStatus[currentBufferIndex]

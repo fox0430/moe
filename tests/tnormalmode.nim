@@ -2,6 +2,8 @@ import unittest, osproc
 import ncurses
 import moepkg/[editorstatus, gapbuffer, normalmode, unicodeext, editor, bufferstatus]
 
+include moepkg/normalmode
+
 test "Delete current character":
   var status = initEditorStatus()
   status.addNewBuffer("")
