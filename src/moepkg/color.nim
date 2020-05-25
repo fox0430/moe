@@ -849,6 +849,9 @@ proc setCursesColor*(editorColor: EditorColor) =
   # work space bar
   setColorPair(EditorColorPair.workSpaceBar, editorColor.workSpaceBar, editorColor.workSpaceBarBg)
 
+  # TODO words
+  setColorPair(EditorColorPair.todo, editorColor.todo, editorColor.todoBg)
+
 proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Color, Color) =
   let editorColor = ColorThemeTable[theme]
 
