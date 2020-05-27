@@ -178,6 +178,7 @@ proc isControlJ*(key: Rune): bool = int(key) == 10
 proc isControlK*(key: Rune): bool = int(key) == 11
 proc isControlL*(key: Rune): bool = int(key) == 12
 proc isControlU*(key: Rune): bool = int(key) == 21
+proc isControlD*(key: Rune): bool = int(key) == 4
 proc isControlV*(key: Rune): bool = int(key) == 22
 proc isControlH*(key: Rune): bool = int(key) == 263
 proc isControlSquareBracketsRight*(key: Rune): bool = int(key) == 27  # Ctrl - [

@@ -142,7 +142,11 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window) == ord('g'): moveToFirstLine(status)
   elif key == ord('G'):
     moveToLastLine(status)
-  elif isPageUpkey(key) or isControlU(key):
+  elif isControlU(key):
+    for i in 0 ..< cmdLoop: halfPageUp(status)
+  elif isControlD(key):
+    for i in 0 ..< cmdLoop: halfPageDown(status)
+  elif isPageUpkey(key):
     for i in 0 ..< cmdLoop: pageUp(status)
   elif isPageDownKey(key): ## Page down and Ctrl - F
     for i in 0 ..< cmdLoop: pageDown(status)
