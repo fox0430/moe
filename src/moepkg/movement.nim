@@ -36,8 +36,20 @@ proc getFirstNonBlankOfLine*(bufStatus: BufferStatus, windowNode: WindowNode): N
   while bufStatus.buffer[windowNode.currentLine][result] == ru' ':
     inc(result)
 
+proc getLastNonBlankOfLine*(bufStatus: BufferStatus, windowNode: WindowNode): Natural =
+  if bufStatus.buffer[windowNode.currentLine].len() == 0:
+    return 0
+
+  result = bufStatus.buffer[windowNode.currentLine].len()-1
+  while bufStatus.buffer[windowNode.currentLine][result] == ru' ':
+    dec(result)
+
 proc moveToFirstNonBlankOfLine*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   windowNode.currentColumn = getFirstNonBlankOfLine(bufStatus, windowNode)
+  windowNode.expandedColumn = windowNode.currentColumn
+
+proc moveToLastNonBlankOfLine*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
+  windowNode.currentColumn = getLastNonBlankOfLine(bufStatus, windowNode)
   windowNode.expandedColumn = windowNode.currentColumn
 
 proc moveToFirstOfLine*(windowNode: var WindowNode) =

@@ -139,7 +139,11 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('+'):
     status.bufStatus[currentBufferIndex].moveToFirstOfNextLine(windowNode)
   elif key == ord('g'):
-    if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window) == ord('g'): moveToFirstLine(status)
+    let secondKey = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+    if secondKey == ord('g'):
+      moveToFirstLine(status)
+    elif secondKey == ord('_'):
+      status.bufStatus[currentBufferIndex].moveToLastNonBlankOfLine(windowNode)
   elif key == ord('G'):
     moveToLastLine(status)
   elif isControlU(key):
