@@ -30,10 +30,14 @@ proc keyDown*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   windowNode.currentColumn = min(windowNode.expandedColumn, maxColumn)
   if windowNode.currentColumn < 0: windowNode.currentColumn = 0
 
+proc getFirstNonBlankOfLine*(bufStatus: BufferStatus, windowNode: WindowNode): Natural =
+  if bufStatus.buffer[windowNode.currentLine].len() == 0:
+    return 0
+  while bufStatus.buffer[windowNode.currentLine][result] == ru' ':
+    inc(result)
+
 proc moveToFirstNonBlankOfLine*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
-  windowNode.currentColumn = 0
-  while bufStatus.buffer[windowNode.currentLine][windowNode.currentColumn] == ru' ':
-    inc(windowNode.currentColumn)
+  windowNode.currentColumn = getFirstNonBlankOfLine(bufStatus, windowNode)
   windowNode.expandedColumn = windowNode.currentColumn
 
 proc moveToFirstOfLine*(windowNode: var WindowNode) =
