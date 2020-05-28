@@ -132,7 +132,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     else: inc(windowNode.currentColumn)
     status.changeMode(Mode.insert)
   
-  template deleteCharactersUntilEnfOfLine() =
+  template deleteCharactersUntilEndOfLine() =
     status.bufStatus[currentBufferIndex].deleteCharacterUntilEndOfLine(
       status.settings.autoDeleteParen, windowNode)
   
@@ -224,11 +224,11 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
         status.bufStatus[currentBufferIndex].deleteLine(windowNode, windowNode.currentLine)
     elif key == ord('w'): status.bufStatus[currentBufferIndex].deleteWord(windowNode)
     elif key == ('$') or isEndKey(key):
-      deleteCharactersUntilEnfOfLine()
+      deleteCharactersUntilEndOfLine()
     elif key == ('0') or isHomeKey(key):
       status.bufStatus[currentBufferIndex].deleteCharacterBeginningOfLine(status.settings.autoDeleteParen, windowNode)
   elif key == ord('D'):
-     deleteCharactersUntilEnfOfLine()
+     deleteCharactersUntilEndOfLine()
   elif key == ord('S'):
      deleteCharactersOfLine()
      insertAfterCursor()
