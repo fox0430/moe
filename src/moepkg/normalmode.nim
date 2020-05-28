@@ -103,12 +103,27 @@ proc writeFileAndExit(status: var EditorStatus) =
 
 proc forceExit(status: var Editorstatus) = status.closeWindow(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
+proc toggleCase(ch: Rune): Rune =
+  result = ch
+  if result.isUpper():
+    result = result.toLower()
+  elif result.isLower():
+    result = result.toUpper()
+  return result
+
 proc normalCommand(status: var EditorStatus, key: Rune) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   if status.bufStatus[currentBufferIndex].cmdLoop == 0: status.bufStatus[currentBufferIndex].cmdLoop = 1
 
   let cmdLoop = status.bufStatus[currentBufferIndex].cmdLoop
   var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+
+  template getCharacterUnderCursor(): Rune =
+    let line = status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine]
+    if line.len() <= windowNode.currentColumn:
+      return
+      
+    line[windowNode.currentColumn]
 
   template insertAfterCursor() =
     let lineWidth = status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine].len
@@ -123,6 +138,13 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   
   template deleteCharactersOfLine() =
     status.bufStatus[currentBufferIndex].deleteCharactersOfLine(status.settings.autoDeleteParen, windowNode)
+  
+  template replaceCurrentCharacter(newCharacter: Rune) =
+    status.bufStatus[currentBufferIndex].replaceCurrentCharacter(
+      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode,
+      status.settings.autoIndent,
+      status.settings.autoDeleteParen,
+      newCharacter)
   
   template getAnotherKey(): Rune =
     getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
@@ -224,6 +246,10 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     for i in 0 ..< cmdLoop: deleteIndent(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.tabStop)
   elif key == ord('J'):
     joinLine(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+  elif key == ord('~'):
+    for i in 0 ..< cmdLoop:
+      replaceCurrentCharacter(toggleCase(getCharacterUnderCursor()))
+      status.bufStatus[currentBufferIndex].keyRight(windowNode)
   elif key == ord('r'):
     if cmdLoop > status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine].len - windowNode.currentColumn: return
 
@@ -232,7 +258,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
       if i > 0:
         inc(windowNode.currentColumn)
         windowNode.expandedColumn = windowNode.currentColumn
-      status.bufStatus[currentBufferIndex].replaceCurrentCharacter(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoIndent, status.settings.autoDeleteParen, ch)
+      replaceCurrentCharacter(ch)
   elif key == ord('n'):
     searchNextOccurrence(status)
   elif key == ord('N'):
