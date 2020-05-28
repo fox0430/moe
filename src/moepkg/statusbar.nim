@@ -17,7 +17,8 @@ proc writeStatusBarNormalModeInfo(bufStatus: var BufferStatus, statusBar: var St
   if settings.statusBar.filename:
     var filename = if bufStatus.filename.len > 0: bufStatus.filename else: ru"No name"
     let homeDir = ru(getHomeDir())
-    if filename[0..homeDir.len()-1] == homeDir:
+    if (filename.len() >= homeDir.len() and
+        filename[0..homeDir.len()-1] == homeDir):
       filename = filename[homeDir.len()-1..filename.len()-1]
       if filename[0] == ru'/':
         filename = ru"~" & filename
