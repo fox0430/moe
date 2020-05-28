@@ -33,8 +33,11 @@ proc keyDown*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
 proc getFirstNonBlankOfLine*(bufStatus: BufferStatus, windowNode: WindowNode): Natural =
   if bufStatus.buffer[windowNode.currentLine].len() == 0:
     return 0
+  let lineLen = bufStatus.buffer[windowNode.currentLine].len()
   while bufStatus.buffer[windowNode.currentLine][result] == ru' ':
     inc(result)
+    if result == lineLen:
+      return 0
 
 proc getLastNonBlankOfLine*(bufStatus: BufferStatus, windowNode: WindowNode): Natural =
   if bufStatus.buffer[windowNode.currentLine].len() == 0:
