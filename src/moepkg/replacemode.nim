@@ -36,6 +36,7 @@ proc replaceMode*(status: var EditorStatus) =
       status.bufStatus[currentBufferIndex].keyDown(windowNode)
  
     else:
-      status.bufStatus[currentBufferIndex].replaceCurrentCharacter(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoIndent, status.settings.autoDeleteParen, key)
+      status.bufStatus[currentBufferIndex].replaceCurrentCharacter(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode,
+                                                                   status.settings.autoIndent, status.settings.autoDeleteParen, key)
       status.bufStatus[currentBufferIndex].keyRight(windowNode)
       bufferChanged = true

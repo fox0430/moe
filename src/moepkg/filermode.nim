@@ -1,5 +1,6 @@
 import os, terminal, strutils, unicodeext, times, algorithm
-import editorstatus, ui, fileutils, editorview, gapbuffer, highlight, commandview, highlight, window, color, bufferstatus, settings
+import
+  editorstatus, ui, fileutils, editorview, gapbuffer, highlight, commandview, highlight, window, color, bufferstatus, settings
 
 type PathInfo = tuple[kind: PathComponent, path: string, size: int64, lastWriteTime: times.Time]
 
@@ -76,7 +77,8 @@ proc refreshDirList(sortBy: Sort): seq[PathInfo] =
   result = @[(pcDir, "../", 0.int64, getLastModificationTime(getCurrentDir()))]
   for list in walkDir("./"):
     if list.kind == pcLinkToFile or list.kind == pcLinkToDir:
-      if tryExpandSymlink(list.path) != "": result.add (list.kind, list.path, 0.int64, getLastModificationTime(getCurrentDir()))
+      if tryExpandSymlink(list.path) != "":
+        result.add (list.kind, list.path, 0.int64, getLastModificationTime(getCurrentDir()))
     else:
       if list.kind == pcFile:
         try: result.add (list.kind, list.path, getFileSize(list.path), getLastModificationTime(list.path))
@@ -146,7 +148,8 @@ proc pasteFile(commandWindow: var Window, filerStatus: var FilerStatus, messageL
     return
 
   if filerStatus.register.cut:
-    if tryRemoveFile(filerStatus.register.originPath / filerStatus.register.filename): filerStatus.register.cut = false
+    if tryRemoveFile(filerStatus.register.originPath / filerStatus.register.filename):
+      filerStatus.register.cut = false
     else: commandWindow.writeRemoveFileError(messageLog)
 
 proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
@@ -183,9 +186,19 @@ proc setDirListColor(kind: PathComponent, isCurrentLine: bool): EditorColorPair 
 proc initFilelistHighlight[T](dirList: seq[PathInfo], buffer: T, currentLine: int): Highlight =
   for index, dir in dirList:
     let color = setDirListColor(dir.kind, index == currentLine)
-    result.colorSegments.add(ColorSegment(firstRow: index, firstColumn: 0, lastRow: index, lastColumn: buffer[index].len, color: color))
+    result.colorSegments.add(ColorSegment(
+                                          firstRow: index,
+                                          firstColumn: 0,
+                                          lastRow: index,
+                                          lastColumn: buffer[index].len,
+                                          color: color))
 
-proc fileNameToGapBuffer(bufStatus: var BufferStatus, windowNode: WindowNode, settings: EditorSettings, filerStatus: FilerStatus) =
+proc fileNameToGapBuffer(
+                         bufStatus: var BufferStatus,
+                         windowNode: WindowNode,
+                         settings: EditorSettings,
+                         filerStatus: FilerStatus) =
+
   bufStatus.buffer = initGapBuffer[seq[Rune]]()
 
   for index, dir in filerStatus.dirList:
@@ -209,14 +222,23 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus, windowNode: WindowNode, se
 proc updateFilerView*(status: var EditorStatus, filerStatus: var FilerStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
-  fileNameToGapBuffer(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings, filerStatus)
+  fileNameToGapBuffer(
+                      status.bufStatus[currentBufferIndex],
+                      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode,
+                      status.settings,
+                      filerStatus)
   status.resize(terminalHeight(), terminalWidth())
   status.update
   filerStatus.viewUpdate = false
 
 proc initFileDeitalHighlight[T](buffer: T): Highlight =
   for i in 0 ..< buffer.len:
-    result.colorSegments.add(ColorSegment(firstRow: i, firstColumn: 0, lastRow: i, lastColumn: buffer[i].len, color: EditorColorPair.defaultChar))
+    result.colorSegments.add(ColorSegment(
+                                          firstRow: i,
+                                          firstColumn: 0,
+                                          lastRow: i,
+                                          lastColumn: buffer[i].len,
+                                          color: EditorColorPair.defaultChar))
 
 proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -226,10 +248,14 @@ proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string)
   let fileInfo = getFileInfo(fileName, false)
   status.bufStatus[currentBufferIndex].buffer.add(ru"name        : " & fileName.toRunes)
 
-  if fileInfo.kind == pcFile: status.bufStatus[currentBufferIndex].buffer.add(ru"kind        : " & ru"File")
-  elif fileInfo.kind == pcDir: status.bufStatus[currentBufferIndex].buffer.add(ru"kind        : " & ru"Directory")
-  elif fileInfo.kind == pcLinkToFile: status.bufStatus[currentBufferIndex].buffer.add(ru"kind        : " & ru"Symbolic link to file")
-  elif fileInfo.kind == pcLinkToDir: status.bufStatus[currentBufferIndex].buffer.add(ru"kind        : " & ru"Symbolic link to directory")
+  if fileInfo.kind == pcFile:
+    status.bufStatus[currentBufferIndex].buffer.add(ru"kind        : " & ru"File")
+  elif fileInfo.kind == pcDir:
+    status.bufStatus[currentBufferIndex].buffer.add(ru"kind        : " & ru"Directory")
+  elif fileInfo.kind == pcLinkToFile:
+    status.bufStatus[currentBufferIndex].buffer.add(ru"kind        : " & ru"Symbolic link to file")
+  elif fileInfo.kind == pcLinkToDir:
+    status.bufStatus[currentBufferIndex].buffer.add(ru"kind        : " & ru"Symbolic link to directory")
 
   status.bufStatus[currentBufferIndex].buffer.add(("size        : " & $fileInfo.size & " bytes").toRunes)
   status.bufStatus[currentBufferIndex].buffer.add(("permissions : " & substr($fileInfo.permissions, 1, ($fileInfo.permissions).high - 1)).toRunes)
@@ -244,7 +270,10 @@ proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string)
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     tmpCurrentLine = windowNode.currentLine
 
-  windowNode.view = initEditorView(status.bufStatus[currentBufferIndex].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
+  windowNode.view = initEditorView(
+                                   status.bufStatus[currentBufferIndex].buffer,
+                                   terminalHeight() - useStatusBar - 1,
+                                   terminalWidth() - numOfFile)
   windowNode.currentLine = 0
 
   status.update
@@ -281,7 +310,8 @@ proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
     status.commandWindow.refresh
     filerStatus.dirlistUpdate = true
 
-proc isFilerMode(status: Editorstatus): bool = status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.filer
+proc isFilerMode(status: Editorstatus): bool =
+  status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.filer
 
 proc filerMode*(status: var EditorStatus) =
   var filerStatus = initFilerStatus()
@@ -290,7 +320,10 @@ proc filerMode*(status: var EditorStatus) =
     currentBufferIndex = status.bufferIndexInCurrentWindow
     currentWorkSpace = status.currentWorkSpaceIndex
 
-  while status.isFilerMode and currentWorkSpace == status.currentWorkSpaceIndex and currentBufferIndex == status.bufferIndexInCurrentWindow:
+  while status.isFilerMode and
+        currentWorkSpace == status.currentWorkSpaceIndex and
+        currentBufferIndex == status.bufferIndexInCurrentWindow:
+
     let currentBufferIndex = status.bufferIndexInCurrentWindow
 
     var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode

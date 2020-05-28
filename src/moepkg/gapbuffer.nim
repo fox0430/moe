@@ -154,5 +154,6 @@ proc prev*(gapBuffer: GapBuffer, line, column: int): (int, int) =
 
 proc isFirst*(gapBuffer: GapBuffer, line, column: int): bool = line == 0 and column == 0
 
-proc isLast*(gapBuffer: GapBuffer, line, column: int): bool = line == gapBuffer.len-1 and column >= gapBuffer[gapBuffer.len-1].len-1
+proc isLast*(gapBuffer: GapBuffer, line, column: int): bool =
+  line == gapBuffer.len-1 and column >= gapBuffer[gapBuffer.len-1].len-1
 

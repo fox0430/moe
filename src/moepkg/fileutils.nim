@@ -28,4 +28,5 @@ proc newFile*(): GapBuffer[seq[Rune]] =
   result.add(ru"", false)
 
 proc saveFile*(filename: seq[Rune], runes: seq[Rune], encoding: CharacterEncoding) =
-  writeFile($filename, convert($runes, $(if encoding == CharacterEncoding.unknown: CharacterEncoding.utf8 else: encoding), "UTF-8"))
+  let buffer = convert($runes, $(if encoding == CharacterEncoding.unknown: CharacterEncoding.utf8 else: encoding),"UTF-8")
+  writeFile($filename, buffer)

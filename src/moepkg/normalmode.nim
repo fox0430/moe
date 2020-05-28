@@ -1,5 +1,6 @@
 import strformat, terminal
-import editorstatus, ui, gapbuffer, unicodeext, fileutils, commandview, undoredostack, window, movement, editor, searchmode, color, bufferstatus
+import
+  editorstatus, ui, gapbuffer, unicodeext, fileutils, commandview, undoredostack, window, movement, editor, searchmode, color, bufferstatus
 
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.erase
@@ -48,7 +49,8 @@ proc searchNextOccurrence(status: var EditorStatus) =
   let searchResult = status.searchBuffer(keyword)
   if searchResult.line > -1:
     status.jumpLine(searchResult.line)
-    for column in 0 ..< searchResult.column: status.bufStatus[currentBufferIndex].keyRight(windowNode)
+    for column in 0 ..< searchResult.column:
+      status.bufStatus[currentBufferIndex].keyRight(windowNode)
   elif searchResult.line == -1: windowNode.keyLeft
 
 proc searchNextOccurrenceReversely(status: var EditorStatus) =
@@ -80,7 +82,8 @@ proc undo(bufStatus: var BufferStatus, windowNode: WindowNode) =
   bufStatus.buffer.undo
   bufStatus.revertPosition(windowNode, bufStatus.buffer.lastSuitId)
   if windowNode.currentColumn == bufStatus.buffer[windowNode.currentLine].len and windowNode.currentColumn > 0:
-    (windowNode.currentLine, windowNode.currentColumn) = bufStatus.buffer.prev(windowNode.currentLine, windowNode.currentColumn)
+    (windowNode.currentLine, windowNode.currentColumn) = bufStatus.buffer.prev(windowNode.currentLine,
+                                                                               windowNode.currentColumn)
   inc(bufStatus.countChange)
 
 proc redo(bufStatus: var BufferStatus, windowNode: WindowNode) =
@@ -96,12 +99,15 @@ proc writeFileAndExit(status: var EditorStatus) =
     status.changeMode(Mode.normal)
   else:
     try:
-      saveFile(status.bufStatus[currentBufferIndex].filename, status.bufStatus[currentBufferIndex].buffer.toRunes, status.settings.characterEncoding)
+      saveFile(status.bufStatus[currentBufferIndex].filename,
+               status.bufStatus[currentBufferIndex].buffer.toRunes,
+               status.settings.characterEncoding)
       status.closeWindow(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
     except IOError:
       status.commandWindow.writeSaveError(status.messageLog)
 
-proc forceExit(status: var Editorstatus) = status.closeWindow(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+proc forceExit(status: var Editorstatus) =
+  status.closeWindow(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
 proc normalCommand(status: var EditorStatus, key: Rune) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -179,14 +185,19 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     for i in 0 ..< cmdLoop: status.bufStatus[currentBufferIndex].moveToForwardEndOfWord(windowNode)
   elif key == ord('z'):
     let key = getAnotherKey()
-    if key == ord('.'): moveCenterScreen(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
-    elif key == ord('t'): scrollScreenTop(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
-    elif key == ord('b'): scrollScreenBottom(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+    if key == ord('.'):
+      moveCenterScreen(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+    elif key == ord('t'):
+      scrollScreenTop(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+    elif key == ord('b'):
+      scrollScreenBottom(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
   elif key == ord('o'):
-    for i in 0 ..< cmdLoop: openBlankLineBelow(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+    for i in 0 ..< cmdLoop:
+      openBlankLineBelow(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
     status.changeMode(Mode.insert)
   elif key == ord('O'):
-    for i in 0 ..< cmdLoop: openBlankLineAbove(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+    for i in 0 ..< cmdLoop:
+      openBlankLineAbove(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
     status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
     status.changeMode(Mode.insert)
   elif key == ord('c'):
@@ -221,7 +232,8 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('>'):
     for i in 0 ..< cmdLoop: status.bufStatus[currentBufferIndex].addIndent(windowNode, status.settings.tabStop)
   elif key == ord('<'):
-    for i in 0 ..< cmdLoop: deleteIndent(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.tabStop)
+    for i in 0 ..< cmdLoop:
+      deleteIndent(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.tabStop)
   elif key == ord('J'):
     joinLine(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
   elif key == ord('r'):
@@ -232,7 +244,8 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
       if i > 0:
         inc(windowNode.currentColumn)
         windowNode.expandedColumn = windowNode.currentColumn
-      status.bufStatus[currentBufferIndex].replaceCurrentCharacter(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoIndent, status.settings.autoDeleteParen, ch)
+      status.bufStatus[currentBufferIndex].replaceCurrentCharacter(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode,
+                                                                   status.settings.autoIndent, status.settings.autoDeleteParen, ch)
   elif key == ord('n'):
     searchNextOccurrence(status)
   elif key == ord('N'):
@@ -268,7 +281,8 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   else:
     discard
 
-proc isNormalMode(status: Editorstatus): bool = status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.normal
+proc isNormalMode(status: Editorstatus): bool =
+  status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.normal
 
 proc normalMode*(status: var EditorStatus) =
   changeCursorType(status.settings.normalModeCursor)
@@ -280,7 +294,10 @@ proc normalMode*(status: var EditorStatus) =
     currentWorkSpace = status.currentWorkSpaceIndex
   var countChange = 0
 
-  while status.isNormalMode and currentWorkSpace == status.currentWorkSpaceIndex and currentBufferIndex == status.bufferIndexInCurrentWindow:
+  while status.isNormalMode and
+        currentWorkSpace == status.currentWorkSpaceIndex and
+        currentBufferIndex == status.bufferIndexInCurrentWindow:
+
     if status.bufStatus[currentBufferIndex].countChange > countChange:
       countChange = status.bufStatus[currentBufferIndex].countChange
 

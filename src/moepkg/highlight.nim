@@ -27,15 +27,21 @@ proc high*(highlight: Highlight): int = highlight.colorSegments.high
 
 proc `[]`*(highlight: Highlight, i: int): ColorSegment = highlight.colorSegments[i]
 
-proc `[]`*(highlight: Highlight, i: BackwardsIndex): ColorSegment = highlight.colorSegments[highlight.colorSegments.len - int(i)]
+proc `[]`*(highlight: Highlight, i: BackwardsIndex): ColorSegment =
+  highlight.colorSegments[highlight.colorSegments.len - int(i)]
 
 proc getColorPair*(highlight: Highlight, line, col: int): EditorColorPair =
   for colorSegment in highlight.colorSegments:
-    if line >= colorSegment.firstRow and colorSegment.lastRow >= line and col >= colorSegment.firstColumn and colorSegment.lastColumn >= col: return colorSegment.color
+    if line >= colorSegment.firstRow and
+       colorSegment.lastRow >= line and
+       col >= colorSegment.firstColumn and
+       colorSegment.lastColumn >= col: return colorSegment.color
 
-proc isIntersect(s, t: ColorSegment): bool = not ((t.lastRow, t.lastColumn) < (s.firstRow, s.firstColumn) or (s.lastRow, s.lastColumn) < (t.firstRow, t.firstColumn))
+proc isIntersect(s, t: ColorSegment): bool =
+  not ((t.lastRow, t.lastColumn) < (s.firstRow, s.firstColumn) or (s.lastRow, s.lastColumn) < (t.firstRow, t.firstColumn))
 
-proc contains(s, t: ColorSegment): bool = ((s.firstRow, s.firstColumn) <= (t.firstRow, t.firstColumn) and (t.lastRow, t.lastColumn) <= (s.lastRow, s.lastColumn))
+proc contains(s, t: ColorSegment): bool =
+  ((s.firstRow, s.firstColumn) <= (t.firstRow, t.firstColumn) and (t.lastRow, t.lastColumn) <= (s.lastRow, s.lastColumn))
 
 proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
   ## Overwrite `s` with t
@@ -49,7 +55,8 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
 
   if not s.isIntersect(t): return @[s]
 
-  if t.contains(s): return @[ColorSegment(firstRow: s.firstRow, firstColumn: s.firstColumn, lastRow: s.lastRow, lastColumn: s.lastColumn, color: t.color)]
+  if t.contains(s):
+    return @[ColorSegment(firstRow: s.firstRow, firstColumn: s.firstColumn, lastRow: s.lastRow, lastColumn: s.lastColumn, color: t.color)]
   
   if s.contains(t):
     if (s.firstRow, s.firstColumn) < (t.firstRow, t.firstColumn):
@@ -119,7 +126,13 @@ proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
       empty = true
     for r in runes(str):
       if r == newline:
-        if empty: result.colorSegments.add(ColorSegment(firstRow: currentRow, firstColumn: currentColumn, lastRow: currentRow, lastColumn: currentColumn-1, color: EditorColorPair.defaultChar)) # push an empty segment
+        # push an empty segment
+        if empty: result.colorSegments.add(ColorSegment(
+                                                        firstRow: currentRow,
+                                                        firstColumn: currentColumn,
+                                                        lastRow: currentRow,
+                                                        lastColumn: currentColumn-1,
+                                                        color: EditorColorPair.defaultChar))
         else: result.colorSegments.add(cs)
         inc(currentRow)
         currentColumn = 0
@@ -179,8 +192,12 @@ proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
 proc indexOf*(highlight: Highlight, row, column: int): int =
   ## calculate the index of the color segment which the pair (row, column) belongs to
 
-  doAssert((row, column) >= (highlight[0].firstRow, highlight[0].firstColumn), fmt"row = {row}, column = {column}, highlight[0].firstRow = {highlight[0].firstRow}, hightlihgt[0].firstColumn = {highlight[0].firstColumn}")
-  doAssert((row, column) <= (highlight[^1].lastRow, highlight[^1].lastColumn), fmt"row = {row}, column = {column}, highlight[^1].lastRow = {highlight[^1].lastRow}, hightlihgt[^1].lastColumn = {highlight[^1].lastColumn}, highlight = {highlight}")
+  block:
+    let mess = fmt"row = {row}, column = {column}, highlight[0].firstRow = {highlight[0].firstRow}, hightlihgt[0].firstColumn = {highlight[0].firstColumn}"
+    doAssert((row, column) >= (highlight[0].firstRow, highlight[0].firstColumn), mess)
+  block:
+    let mess = fmt"row = {row}, column = {column}, highlight[^1].lastRow = {highlight[^1].lastRow}, hightlihgt[^1].lastColumn = {highlight[^1].lastColumn}, highlight = {highlight}"
+    doAssert((row, column) <= (highlight[^1].lastRow, highlight[^1].lastColumn), mess)
 
   var
     lb = 0

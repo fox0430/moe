@@ -9,7 +9,8 @@ proc exitLogViewer*(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.deleteBuffer(currentBufferIndex)
 
-proc isLogViewerMode(status: Editorstatus): bool = status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.logViewer
+proc isLogViewerMode(status: Editorstatus): bool =
+  status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.logViewer
 
 proc messageLogViewer*(status: var Editorstatus) =
   status.initMessageLog
@@ -19,7 +20,10 @@ proc messageLogViewer*(status: var Editorstatus) =
     currentBufferIndex = status.bufferIndexInCurrentWindow
     currentWorkSpace = status.currentWorkSpaceIndex
 
-  while status.isLogViewerMode and currentWorkSpace == status.currentWorkSpaceIndex and currentBufferIndex == status.bufferIndexInCurrentWindow:
+  while status.isLogViewerMode and
+        currentWorkSpace == status.currentWorkSpaceIndex and
+        currentBufferIndex == status.bufferIndexInCurrentWindow:
+
     let currentBufferIndex = status.bufferIndexInCurrentWindow
     
     status.update
@@ -45,5 +49,6 @@ proc messageLogViewer*(status: var Editorstatus) =
     elif key == ord('$') or isEndKey(key): status.bufStatus[currentBufferIndex].moveToLastOfLine(windowNode)
     elif key == ord('q') or isEscKey(key): status.exitLogViewer
     elif key == ord('g'):
-      if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window) == 'g': status.moveToFirstLine
+      if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window) == 'g':
+        status.moveToFirstLine
     elif key == ord('G'): status.moveToLastLine

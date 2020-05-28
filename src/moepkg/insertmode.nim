@@ -48,9 +48,10 @@ proc insertCharacter*(bufStatus: var BufferStatus, windowNode: WindowNode, autoC
     inserted()
 
 proc currentLineDeleteCharacterBeforeCursor(
-         bufStatus       : var BufferStatus,
-         windowNode      : WindowNode,
-         autoDeleteParen : bool            ) =
+                                            bufStatus: var BufferStatus,
+                                            windowNode: WindowNode,
+                                            autoDeleteParen: bool) =
+
   if windowNode.currentLine == 0 and windowNode.currentColumn == 0: return
 
   dec(windowNode.currentColumn)
@@ -73,9 +74,10 @@ proc currentLineDeleteCharacterBeforeCursor(
   inc(bufStatus.countChange)
      
 proc currentLineDeleteLineBreakBeforeCursor*(
-         bufStatus       : var BufferStatus,
-         windowNode      : WindowNode,
-         autoDeleteParen : bool             ) =
+                                             bufStatus: var BufferStatus,
+                                             windowNode: WindowNode,
+                                             autoDeleteParen : bool) =
+
   if windowNode.currentLine == 0 and windowNode.currentColumn == 0: return
 
   windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine - 1].len
@@ -101,13 +103,15 @@ proc deleteBeforeCursorToFirstNonBlank*(
          windowNode      : WindowNode  ) =
   if windowNode.currentColumn == 0:
     return
-  let firstNonBlank = getFirstNonBlankOfLine(bufStatus, windowNode) 
+  let firstNonBlank = getFirstNonBlankOfLine(bufStatus, windowNode)
   
   for _ in firstNonBlank..max(0, windowNode.currentColumn-1):
     currentLineDeleteCharacterBeforeCursor(bufStatus, windowNode, false)
 
 proc insertIndent(bufStatus: var BufferStatus, windowNode: WindowNode) =
-  let indent = min(countRepeat(bufStatus.buffer[windowNode.currentLine], Whitespace, 0), windowNode.currentColumn)
+  let indent = min(
+                   countRepeat(bufStatus.buffer[windowNode.currentLine], Whitespace, 0),
+                   windowNode.currentColumn)
 
   let oldLine = bufStatus.buffer[windowNode.currentLine + 1]
   var newLine = bufStatus.buffer[windowNode.currentLine + 1]
@@ -120,7 +124,9 @@ proc keyEnter*(bufStatus: var BufferStatus, windowNode: WindowNode, autoIndent: 
   if autoIndent:
     bufStatus.insertIndent(windowNode)
 
-    var startOfCopy = max(countRepeat(bufStatus.buffer[windowNode.currentLine], Whitespace, 0), windowNode.currentColumn)
+    var startOfCopy = max(
+                          countRepeat(bufStatus.buffer[windowNode.currentLine], Whitespace, 0),
+                          windowNode.currentColumn)
     startOfCopy += countRepeat(bufStatus.buffer[windowNode.currentLine], Whitespace, startOfCopy)
 
     block:
@@ -210,14 +216,28 @@ proc insertMode*(status: var EditorStatus) =
     elif isEndKey(key):
       status.bufStatus[currentBufferIndex].moveToLastOfLine(windowNode)
     elif isDcKey(key):
-      status.bufStatus[currentBufferIndex].deleteCurrentCharacter(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoDeleteParen)
+      status.bufStatus[currentBufferIndex].deleteCurrentCharacter(
+                                                                  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode,
+                                                                  status.settings.autoDeleteParen)
     elif isBackspaceKey(key):
-      status.bufStatus[currentBufferIndex].keyBackspace(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoDeleteParen)
+      status.bufStatus[currentBufferIndex].keyBackspace(
+                                                        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode,
+                                                        status.settings.autoDeleteParen)
     elif isEnterKey(key):
-      keyEnter(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoIndent)
+      keyEnter(
+               status.bufStatus[currentBufferIndex],
+               status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode,
+               status.settings.autoIndent)
     elif key == ord('\t'):
-      insertTab(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.tabStop, status.settings.autoCloseParen)
+      insertTab(
+                status.bufStatus[currentBufferIndex],
+                status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode,
+                status.settings.tabStop,
+                status.settings.autoCloseParen)
     else:
-      insertCharacter(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoCloseParen, key)
+      insertCharacter(
+                      status.bufStatus[currentBufferIndex],
+                      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode,
+                      status.settings.autoCloseParen, key)
 
   stdout.write "\x1b[2 q"

@@ -1,5 +1,6 @@
 import sequtils, strutils, os, terminal, packages/docutils/highlite, times
-import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview, window, movement, color, build, bufferstatus
+import
+  editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview, window, movement, color, build, bufferstatus
 
 type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
 
@@ -140,21 +141,28 @@ proc isJumpCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     prevMode = status.bufStatus[currentBufferIndex].prevMode
-  return command.len == 1 and isDigit(command[0]) and (prevMode == Mode.normal or prevMode == Mode.logviewer)
+  return command.len == 1 and
+         isDigit(command[0]) and
+         (prevMode == Mode.normal or
+         prevMode == Mode.logviewer)
 
 proc isEditCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"e"
 
 proc isWriteCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
-  return command.len in {1, 2} and command[0] == ru"w" and status.bufStatus[currentBufferIndex].prevMode == Mode.normal
+  return command.len in {1, 2} and
+         command[0] == ru"w" and
+         status.bufStatus[currentBufferIndex].prevMode == Mode.normal
 
 proc isQuitCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"q"
 
 proc isWriteAndQuitCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
-  return command.len == 1 and command[0] == ru"wq" and status.bufStatus[currentBufferIndex].prevMode == Mode.normal
+  return command.len == 1 and
+         command[0] == ru"wq" and
+         status.bufStatus[currentBufferIndex].prevMode == Mode.normal
 
 proc isForceQuitCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"q!"
@@ -263,7 +271,9 @@ proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   elif command == ru"off": status.settings.syntax = false
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
-  let sourceLang = if status.settings.syntax: status.bufStatus[currentBufferIndex].language else: SourceLanguage.langNone
+  let sourceLang = if status.settings.syntax: status.bufStatus[currentBufferIndex].language
+                   else: SourceLanguage.langNone
+
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight($status.bufStatus[currentBufferIndex].buffer, sourceLang)
 
   status.commandWindow.erase
@@ -301,7 +311,10 @@ proc lineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
 
   let numberOfDigitsLen = if status.settings.view.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
   let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = initEditorView(
+                                                                                             status.bufStatus[0].buffer,
+                                                                                             terminalHeight() - useStatusBar - 1,
+                                                                                             terminalWidth() - numberOfDigitsLen)
 
   status.commandWindow.erase
 
@@ -314,7 +327,10 @@ proc statusBarSettingCommand(status: var EditorStatus, command: seq[Rune]) =
 
   let numberOfDigitsLen = if status.settings.view.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
   let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = initEditorView(
+                                                                                             status.bufStatus[0].buffer,
+                                                                                             terminalHeight() - useStatusBar - 1,
+                                                                                             terminalWidth() - numberOfDigitsLen)
 
   status.commandWindow.erase
 
@@ -428,7 +444,8 @@ proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
   elif status.bufferIndexInCurrentWindow > status.bufStatus.high:
     status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex = status.bufStatus.high 
 
-  if status.bufStatus[status.bufferIndexInCurrentWindow].mode == Mode.ex: status.changeMode(status.bufStatus[status.bufferIndexInCurrentWindow].prevMode)
+  if status.bufStatus[status.bufferIndexInCurrentWindow].mode == Mode.ex:
+    status.changeMode(status.bufStatus[status.bufferIndexInCurrentWindow].prevMode)
   else:
     status.commandWindow.erase
     status.changeMode(status.bufStatus[status.bufferIndexInCurrentWindow].mode)
@@ -480,7 +497,8 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
 
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
-  if status.bufStatus[currentBufferIndex].countChange > 0 or countReferencedWindow(status.workSpace[status.currentWorkSpaceIndex].mainWindowNode, currentBufferIndex) == 0:
+  if status.bufStatus[currentBufferIndex].countChange > 0 or
+     countReferencedWindow(status.workSpace[status.currentWorkSpaceIndex].mainWindowNode, currentBufferIndex) == 0:
     status.commandWindow.writeNoWriteError(status.messageLog)
   else:
     if existsDir($filename):
@@ -542,7 +560,8 @@ proc quitCommand(status: var EditorStatus) =
   if status.bufStatus[currentBufferIndex].prevMode == Mode.filer:
     status.deleteBuffer(currentBufferIndex)
   else:
-    if status.bufStatus[currentBufferIndex].countChange == 0 or status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
+    if status.bufStatus[currentBufferIndex].countChange == 0 or
+       status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
       status.closeWindow(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
     else:
       status.commandWindow.writeNoWriteError(status.messageLog)
@@ -552,7 +571,10 @@ proc writeAndQuitCommand(status: var EditorStatus) =
   try:
     let currentBufferIndex = status.bufferIndexInCurrentWindow
     status.bufStatus[currentBufferIndex].countChange = 0
-    saveFile(status.bufStatus[currentBufferIndex].filename, status.bufStatus[currentBufferIndex].buffer.toRunes, status.settings.characterEncoding)
+    saveFile(
+             status.bufStatus[currentBufferIndex].filename,
+             status.bufStatus[currentBufferIndex].buffer.toRunes,
+             status.settings.characterEncoding)
     status.closeWindow(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
   except IOError:
     status.commandWindow.writeSaveError(status.messageLog)
@@ -621,7 +643,9 @@ proc listAllBufferCommand(status: var Editorstatus) =
     currentBufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
   
   status.settings.view.currentLineNumber = false
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = status.bufStatus[currentBufferIndex].buffer.initEditorView(terminalHeight() - useStatusBar - useTab - 1, terminalWidth())
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = status.bufStatus[currentBufferIndex].buffer.initEditorView(
+                                                                                                                                         terminalHeight() - useStatusBar - useTab - 1,
+                                                                                                                                         terminalWidth())
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine = 0
 
   status.updatehighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
@@ -653,7 +677,9 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
       var newLine = status.bufStatus[currentBufferIndex].buffer[startLine]
       newLine.insert(replaceInfo.replaceWord, status.bufStatus[currentBufferIndex].buffer[startLine].len)
       for j in 0 .. status.bufStatus[currentBufferIndex].buffer[startLine + 1].high:
-        newLine.insert(status.bufStatus[currentBufferIndex].buffer[startLine + 1][j], status.bufStatus[currentBufferIndex].buffer[startLine].len)
+        newLine.insert(
+                       status.bufStatus[currentBufferIndex].buffer[startLine + 1][j],
+                       status.bufStatus[currentBufferIndex].buffer[startLine].len)
       if oldLine != newLine: status.bufStatus[currentBufferIndex].buffer[startLine] = newLine
 
       status.bufStatus[currentBufferIndex].buffer.delete(startLine + 1, startLine + 1)
@@ -704,12 +730,14 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
   elif isJumpCommand(status, command):
     var line = ($command[0]).parseInt - 1
     if line < 0: line = 0
-    if line >= status.bufStatus[currentBufferIndex].buffer.len: line = status.bufStatus[currentBufferIndex].buffer.high
+    if line >= status.bufStatus[currentBufferIndex].buffer.len:
+      line = status.bufStatus[currentBufferIndex].buffer.high
     jumpCommand(status, line)
   elif isEditCommand(command):
     editCommand(status, command[1].normalizePath)
   elif isWriteCommand(status, command):
-    writeCommand(status, if command.len < 2: status.bufStatus[currentBufferIndex].filename else: command[1])
+    writeCommand(status, if command.len < 2:
+      status.bufStatus[currentBufferIndex].filename else: command[1])
   elif isQuitCommand(command):
     quitCommand(status)
   elif isWriteAndQuitCommand(status, command):
