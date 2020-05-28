@@ -15,7 +15,14 @@ proc writeStatusBarNormalModeInfo(bufStatus: var BufferStatus, statusBar: var St
   statusBar.window.append(ru" ", color)
 
   if settings.statusBar.filename:
-    let filename = if bufStatus.filename.len > 0: bufStatus.filename else: ru"No name"
+    var filename = if bufStatus.filename.len > 0: bufStatus.filename else: ru"No name"
+    let homeDir = ru(getHomeDir())
+    if filename[0..homeDir.len()-1] == homeDir:
+      filename = filename[homeDir.len()-1..filename.len()-1]
+      if filename[0] == ru'/':
+        filename = ru"~" & filename
+      else:
+        filename = ru"~/" & filename
     statusBar.window.append(filename, color)
 
   if bufStatus.countChange > 0 and settings.statusBar.chanedMark: statusBar.window.append(ru" [+]", color)
