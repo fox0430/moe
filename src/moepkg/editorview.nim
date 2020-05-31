@@ -5,6 +5,8 @@ type EditorViewSettings* = object
   lineNumber*: bool
   currentLineNumber*: bool
   cursorLine*: bool
+  indentationLines*: bool
+  tabStop*: int
 
 type EditorView* = object
   height*, width*, widthOfLineNum*: int
@@ -188,6 +190,10 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, viewSettings: Edit
   win.erase
   view.widthOfLineNum = if viewSettings.lineNumber: buffer.len.numberOfDigits + 1 else: 0
 
+  var
+    indents          = 0
+    lastOriginalLine = -1
+    lineStart        = 0
   let
     start = (view.originalLine[0], view.start[0])
     useHighlight = highlight.len > 0 and (highlight[0].firstRow, highlight[0].firstColumn) <= start and start <= (highlight[^1].lastRow, highlight[^1].lastColumn)
@@ -204,8 +210,26 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, viewSettings: Edit
     if view.length[y] == 0:
       if isVisualMode and (view.originalLine[y] >= startSelectedLine and endSelectedLine >= view.originalLine[y]):
         view.write(win, y, x, ru" ", EditorColorPair.visualMode)
-      else: view.write(win, y, x, view.lines[y], EditorColorPair.defaultChar)
+      else:
+        view.write(win, y, x, view.lines[y], EditorColorPair.defaultChar)
       continue
+
+    if viewSettings.indentationLines:
+      let currentOriginalLine = view.originalLine[y]
+      if currentOriginalLine != lastOriginalLine:
+        let line = if buffer.len() > currentOriginalLine: buffer[currentOriginalLine] else: ru""
+        lineStart = x
+        var numSpaces = 0
+        for i in 0..<line.len:
+          if line[i] != Rune(' '):
+            numSpaces = i+1
+            break
+          inc numSpaces
+        indents = int(numSpaces / viewSettings.tabStop)
+      else:
+        # Line wrapping
+        indents = 0
+      lastOriginalLine = view.originalLine[y]
 
     while i < highlight.len and highlight[i].firstRow < view.originalLine[y]: inc(i)
     while i < highlight.len and highlight[i].firstRow == view.originalLine[y]:
@@ -229,10 +253,19 @@ proc writeAllLines*[T](view: var EditorView, win: var Window, viewSettings: Edit
         win.attron(Attributes.underline)
         view.write(win, y, x, str, highlight[i].color)
         win.attroff(Attributes.underline)
-      else: view.write(win, y, x, str, highlight[i].color)
+      else:
+        view.write(win, y, x, str, highlight[i].color)
       x += width(str)
       if last == highlight[i].lastColumn - view.start[y]: inc(i) # consumed a whole segment
       else: break
+    
+    if viewSettings.indentationLines:
+      for i in 0..<indents:
+        view.write(win,
+                   y,
+                   lineStart+(viewSettings.tabStop*i),
+                   ru("┊"),
+                   EditorColorPair.whitespace)
 
   win.refresh
 
