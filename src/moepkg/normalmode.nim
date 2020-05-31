@@ -1,6 +1,6 @@
+from strutils import parseInt
 import strformat, terminal
-import
-  editorstatus, ui, gapbuffer, unicodeext, fileutils, commandview, undoredostack, window, movement, editor, searchmode, color, bufferstatus
+import editorstatus, ui, gapbuffer, unicodeext, fileutils, commandview, undoredostack, window, movement, editor, searchmode, color, bufferstatus, insertmode
 
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.erase
@@ -109,12 +109,50 @@ proc writeFileAndExit(status: var EditorStatus) =
 proc forceExit(status: var Editorstatus) =
   status.closeWindow(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
+proc toggleCase(ch: Rune): Rune =
+  result = ch
+  if result.isUpper():
+    result = result.toLower()
+  elif result.isLower():
+    result = result.toUpper()
+  return result
+
 proc normalCommand(status: var EditorStatus, key: Rune) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   if status.bufStatus[currentBufferIndex].cmdLoop == 0: status.bufStatus[currentBufferIndex].cmdLoop = 1
 
   let cmdLoop = status.bufStatus[currentBufferIndex].cmdLoop
   var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+
+  template getWordUnderCursor(): (int, seq[Rune]) =
+    let line = status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine]
+    if line.len() <= windowNode.currentColumn:
+      return
+    
+    let atCursorRune = line[windowNode.currentColumn]
+    if not atCursorRune.isAlpha() and not (char(atCursorRune) in '0'..'9'):
+      return
+
+    var beginCol = -1
+    var endCol = -1
+    for i in countdown(windowNode.currentColumn, 0):
+      if not line[i].isAlpha() and not (char(line[i]) in '0'..'9'):
+        beginCol = i + 1
+        break
+    for i in windowNode.currentColumn..line.len()-1:
+      if not line[i].isAlpha() and not (char(line[i]) in '0'..'9'):
+        endCol = i - 1
+        break
+    if endCol == -1:
+      endCol = line.len() - 1
+    # quasi return value
+    (beginCol, line[beginCol..endCol])
+  template getCharacterUnderCursor(): Rune =
+    let line = status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine]
+    if line.len() <= windowNode.currentColumn:
+      return
+      
+    line[windowNode.currentColumn]
 
   template insertAfterCursor() =
     let lineWidth = status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine].len
@@ -123,12 +161,73 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     else: inc(windowNode.currentColumn)
     status.changeMode(Mode.insert)
   
-  template deleteCharactersUntilEnfOfLine() =
+  template insertCharacter(rune: Rune) =
+    insertCharacter(
+      status.bufStatus[currentBufferIndex],
+      windowNode,
+      status.settings.autoCloseParen,
+      rune)
+  
+  template deleteCharactersUntilEndOfLine() =
     status.bufStatus[currentBufferIndex].deleteCharacterUntilEndOfLine(
       status.settings.autoDeleteParen, windowNode)
   
   template deleteCharactersOfLine() =
     status.bufStatus[currentBufferIndex].deleteCharactersOfLine(status.settings.autoDeleteParen, windowNode)
+  
+  template deleteCurrentCharacter() = 
+    status.bufStatus[currentBufferIndex].deleteCurrentCharacter(windowNode, status.settings.autoDeleteParen)
+  
+  template replaceCurrentCharacter(newCharacter: Rune) =
+    status.bufStatus[currentBufferIndex].replaceCurrentCharacter(
+      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode,
+      status.settings.autoIndent,
+      status.settings.autoDeleteParen,
+      newCharacter)
+
+  template modifyWordUnderCursor(amount: int) =
+    let wordUnderCursor      = getWordUnderCursor()
+    var theWord              = wordUnderCursor[1]
+    var beginCol             = wordUnderCursor[0]
+    var num                  = 0
+    var runeBefore           : Rune
+    var currentColumnBefore  = windowNode.currentColumn
+    var expandedColumnBefore = windowNode.expandedColumn
+    try:
+      # first we check if there could possibly be a
+      # minus sign before our word
+      if beginCol > 0:
+        windowNode.currentColumn  = beginCol - 1
+        windowNode.expandedColumn = windowNode.currentColumn - 1
+        runeBefore = getCharacterUnderCursor()
+        if runeBefore == toRune('-'):
+          # there is a minus sign
+          theWord.insert(runeBefore, 0)
+          beginCol = beginCol - 1
+
+      # if the word is a number, this will be successful,
+      # if not we land in the exception case
+      num               = parseInt($theWord) + amount 
+
+      # delete the old word/number
+      windowNode.currentColumn  = beginCol
+      windowNode.expandedColumn = windowNode.currentColumn
+      for _ in 1..len(theWord):
+        deleteCurrentCharacter()
+      
+      # change the word to the new number
+      theWord = toRunes($num)
+
+      # insert the new number
+      for i in 0..len(theWord)-1:
+        insertCharacter(theWord[i])
+      
+      # put the cursor on the last character of the number
+      windowNode.currentColumn  = beginCol + len(theWord)-1
+      windowNode.expandedColumn = windowNode.currentColumn
+    except:
+      windowNode.currentColumn  = currentColumnBefore
+      windowNode.expandedColumn = expandedColumnBefore
   
   template getAnotherKey(): Rune =
     getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
@@ -150,7 +249,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('x') or isDcKey(key):
     status.yankString(min(cmdLoop, status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine].len - windowNode.currentColumn))
     for i in 0 ..< min(cmdLoop, status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine].len - windowNode.currentColumn):
-      status.bufStatus[currentBufferIndex].deleteCurrentCharacter(windowNode, status.settings.autoDeleteParen)
+      deleteCurrentCharacter()
   elif key == ord('^') or key == ord('_'):
     status.bufStatus[currentBufferIndex].moveToFirstNonBlankOfLine(windowNode)
   elif key == ord('0') or isHomeKey(key):
@@ -213,11 +312,11 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
         status.bufStatus[currentBufferIndex].deleteLine(windowNode, windowNode.currentLine)
     elif key == ord('w'): status.bufStatus[currentBufferIndex].deleteWord(windowNode)
     elif key == ('$') or isEndKey(key):
-      deleteCharactersUntilEnfOfLine()
+      deleteCharactersUntilEndOfLine()
     elif key == ('0') or isHomeKey(key):
       status.bufStatus[currentBufferIndex].deleteCharacterBeginningOfLine(status.settings.autoDeleteParen, windowNode)
   elif key == ord('D'):
-     deleteCharactersUntilEnfOfLine()
+     deleteCharactersUntilEndOfLine()
   elif key == ord('S'):
      deleteCharactersOfLine()
      insertAfterCursor()
@@ -236,6 +335,14 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
       deleteIndent(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.tabStop)
   elif key == ord('J'):
     joinLine(status.bufStatus[currentBufferIndex], status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+  elif isControlA(key):
+    modifyWordUnderCursor(cmdLoop)
+  elif isControlX(key):
+    modifyWordUnderCursor(-cmdLoop)
+  elif key == ord('~'):
+    for i in 0 ..< cmdLoop:
+      replaceCurrentCharacter(toggleCase(getCharacterUnderCursor()))
+      status.bufStatus[currentBufferIndex].keyRight(windowNode)
   elif key == ord('r'):
     if cmdLoop > status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine].len - windowNode.currentColumn: return
 
@@ -244,8 +351,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
       if i > 0:
         inc(windowNode.currentColumn)
         windowNode.expandedColumn = windowNode.currentColumn
-      status.bufStatus[currentBufferIndex].replaceCurrentCharacter(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode,
-                                                                   status.settings.autoIndent, status.settings.autoDeleteParen, ch)
+      replaceCurrentCharacter(ch)
   elif key == ord('n'):
     searchNextOccurrence(status)
   elif key == ord('N'):
