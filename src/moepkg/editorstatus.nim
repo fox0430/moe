@@ -1,7 +1,9 @@
-import
-  packages/docutils/highlite, strutils, terminal, os, strformat, tables, times, osproc, heapqueue, math, deques
-import
-  gapbuffer, editorview, ui, unicodeext, highlight, independentutils, fileutils, undoredostack, window, color, workspace, statusbar, settings, bufferstatus, cursor
+import strutils, terminal, os, strformat, tables, times, osproc, heapqueue, math,
+       deques
+import packages/docutils/highlite
+import gapbuffer, editorview, ui, unicodeext, highlight, independentutils,
+       fileutils, undoredostack, window, color, workspace, statusbar, settings,
+       bufferstatus, cursor
 
 type Platform* = enum
   linux, wsl, mac, other
@@ -42,7 +44,15 @@ proc initRegisters(): Registers =
   result.yankedLines = @[]
   result.yankedStr = @[]
 
-proc initStatusBar(): StatusBar = result.window = initWindow(1, 1, 1, 1, EditorColorPair.defaultChar)
+proc initStatusBar(): StatusBar =
+  const
+    h = 1
+    w = 1
+    t = 1
+    l = 1
+    color = EditorColorPair.defaultChar
+
+  result.window = initWindow(h, w, t, l, color)
 
 proc initEditorStatus*(): EditorStatus =
   result.platform = initPlatform()
@@ -51,39 +61,72 @@ proc initEditorStatus*(): EditorStatus =
   result.settings = initEditorSettings()
 
   if result.settings.workSpace.useBar:
-    result.workSpaceInfoWindow = initWindow(1, terminalWidth(), 0, 0, EditorColorPair.defaultChar)
+    const
+      h = 1
+      t = 0
+      l = 0
+      color = EditorColorPair.defaultChar
+    let
+      w = terminalWidth()
+    result.workSpaceInfoWindow = initWindow(h, w, t, l, color)
+
   var newWorkSpace = initWorkSpace()
   result.workSpace = @[newWorkSpace]
 
   if result.settings.tabLine.useTab:
-    result.tabWindow = initWindow(1, terminalWidth(), 0, 0, EditorColorPair.defaultChar)
+    const
+      h = 1
+      t = 0
+      l = 0
+      color = EditorColorPair.defaultChar
+    let
+      w = terminalWidth()
+    result.tabWindow = initWindow(h, w, t, l, color)
 
-  if result.settings.statusBar.useBar: result.statusBar = @[initStatusBar()]
+  if result.settings.statusBar.useBar:
+    result.statusBar = @[initStatusBar()]
 
-  result.commandWindow = initWindow(1, terminalWidth(), terminalHeight() - 1, 0, EditorColorPair.defaultChar)
+  block:
+    const
+      t = 0
+      l = 0
+      color = EditorColorPair.defaultChar
+    let
+      w = terminalWidth()
+      h = terminalHeight() - 1
+    result.commandWindow = initWindow(h, w, t, l, color)
 
 proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
   if 0 <= bufferIndex and bufferIndex < status.bufStatus.len:
-    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex = bufferIndex
+    let workspaceIndex = status.currentWorkSpaceIndex
+    
+    status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex =
+      bufferIndex
 
-    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine = 0
-    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentColumn = 0
-    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.expandedColumn = 0
+    status.workSpace[workspaceIndex].currentMainWindowNode.currentLine = 0
+    status.workSpace[workspaceIndex].currentMainWindowNode.currentColumn = 0
+    status.workSpace[workspaceIndex].currentMainWindowNode.expandedColumn = 0
 
 proc bufferIndexInCurrentWindow*(status: Editorstatus): int =
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
+  let workspaceIndex = status.currentWorkSpaceIndex
+  status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
 
 proc changeMode*(status: var EditorStatus, mode: Mode) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.bufStatus[currentBufferIndex].prevMode = status.bufStatus[currentBufferIndex].mode
+  status.bufStatus[currentBufferIndex].prevMode =
+    status.bufStatus[currentBufferIndex].mode
   status.bufStatus[currentBufferIndex].mode = mode
 
 proc changeCurrentWin*(status:var EditorStatus, index: int) =
-  if index < status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow and index > 0:
-    var node = status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.searchByWindowIndex(index)
-    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode = node
+  let workspaceIndex = status.currentWorkSpaceIndex
+  
+  if index < status.workSpace[workspaceIndex].numOfMainWindow and index > 0:
+    var node =
+      status.workSpace[workspaceIndex].mainWindowNode.searchByWindowIndex(index)
+    status.workSpace[workspaceIndex].currentMainWindowNode = node
 
-proc executeOnExit(settings: EditorSettings) = changeCursorType(settings.defaultCursor)
+proc executeOnExit(settings: EditorSettings) =
+  changeCursorType(settings.defaultCursor)
 
 proc exitEditor*(settings: EditorSettings) =
   executeOnExit(settings)
@@ -94,17 +137,27 @@ proc writeWorkSpaceInfoWindow(status: var Editorstatus) =
   status.workSpaceInfoWindow.erase
   let
     width = status.workSpaceInfoWindow.width
-    workspaceInfoStr =  $(status.currentWorkSpaceIndex + 1) & "/" & $status.workspace.len
+    workspaceInfoStr = $(status.currentWorkSpaceIndex + 1) &
+                       "/" & $status.workspace.len
     textStartPosition = int(width / 2) - int(ceil(workspaceInfoStr.len / 2))
-    buffer = " ".repeat(textStartPosition) & workspaceInfoStr & " ".repeat(width - int(width / 2) - int(workspaceInfoStr.len / 2))
+    buffer = " ".repeat(textStartPosition) &
+             workspaceInfoStr &
+             " ".repeat(width - int(width / 2) - int(workspaceInfoStr.len / 2))
 
-  status.workSpaceInfoWindow.write(0, 0, buffer, EditorColorPair.statusBarNormalMode)
+  block:
+    let color = EditorColorPair.statusBarNormalMode
+    status.workSpaceInfoWindow.write(0, 0, buffer, color)
+    
   status.workSpaceInfoWindow.refresh
 
-proc writeTab(tabWin: var Window, start, tabWidth: int, filename: string, color: EditorColorPair) =
+proc writeTab(tabWin: var Window,
+              start, tabWidth: int,
+              filename: string,
+              color: EditorColorPair) =
   let
     title = if filename == "": "New file" else: filename
-    buffer = if filename.len < tabWidth: " " & title & " ".repeat(tabWidth - title.len)
+    buffer = if filename.len < tabWidth:
+               " " & title & " ".repeat(tabWidth - title.len)
              else: " " & (title).substr(0, tabWidth - 3) & "~"
   tabWin.write(0, start, buffer, color)
 
@@ -114,6 +167,7 @@ proc writeTabLine(status: var EditorStatus) =
     defaultColor = EditorColorPair.tab
     currentTabColor = EditorColorPair.currentTab
     currentWindowBuffer = status.bufferIndexInCurrentWindow
+    workspaceIndex = status.currentWorkSpaceIndex
 
   status.tabWindow.erase
 
@@ -121,7 +175,8 @@ proc writeTabLine(status: var EditorStatus) =
     ## Display all buffer
     for index, bufStatus in status.bufStatus:
       let
-        color = if currentWindowBuffer == index: currentTabColor else: defaultColor
+        color = if currentWindowBuffer == index: currentTabColor
+                else: defaultColor
         currentMode = bufStatus.mode
         prevMode = bufStatus.prevMode
         filename = if (currentMode == Mode.filer) or
@@ -132,10 +187,12 @@ proc writeTabLine(status: var EditorStatus) =
       status.tabWindow.writeTab(index * tabWidth, tabWidth, filename, color)
   else:
     ## Displays only the buffer currently displayed in the window
-    let allBufferIndex = status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.getAllBufferIndex
+    let allBufferIndex =
+      status.workSpace[workspaceIndex].mainWindowNode.getAllBufferIndex
     for index, bufIndex in allBufferIndex:
       let
-        color = if currentWindowBuffer == bufIndex: currentTabColor else: defaultColor
+        color = if currentWindowBuffer == bufIndex: currentTabColor
+                else: defaultColor
         bufStatus = status.bufStatus[bufIndex]
         currentMode = bufStatus.mode
         prevMode = bufStatus.prevMode
@@ -143,7 +200,9 @@ proc writeTabLine(status: var EditorStatus) =
                       (prevMode == Mode.filer and
                       currentMode == Mode.ex): getCurrentDir()
                    else: $bufStatus.filename
-        tabWidth = status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.getAllBufferIndex.len.calcTabWidth(terminalWidth())
+        numOfbuffer =
+          status.workSpace[workspaceIndex].mainWindowNode.getAllBufferIndex.len
+        tabWidth = numOfbuffer.calcTabWidth(terminalWidth())
       status.tabWindow.writeTab(index * tabWidth, tabWidth, filename, color)
 
   status.tabWindow.refresh
@@ -155,14 +214,22 @@ proc resize*(status: var EditorStatus, height, width: int) =
     useTab = if status.settings.tabLine.useTab: 1 else: 0
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useWorkSpaceBar = if status.settings.workSpace.useBar: 1 else: 0
+    workspaceIndex = status.currentWorkSpaceIndex
 
-  status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.resize(useTab + useWorkSpaceBar, 0, height - useTab - useStatusBar - useWorkSpaceBar, width)
+  block:
+    const x = 0
+    let
+      y = useTab + useWorkSpaceBar
+      h = height - useTab - useStatusBar - useWorkSpaceBar
+      w = width
+    status.workSpace[workspaceIndex].mainWindowNode.resize(y, x, h, w)
 
   const statusBarHeight = 1
   var
     statusBarIndex = 0
     queue = initHeapQueue[WindowNode]()
-  for node in status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.child: queue.push(node)
+  for node in status.workSpace[workspaceIndex].mainWindowNode.child:
+    queue.push(node)
   while queue.len > 0:
     let queueLength = queue.len
     for i in  0 ..< queueLength:
@@ -174,15 +241,24 @@ proc resize*(status: var EditorStatus, height, width: int) =
           adjustedHeight = max(node.h - statusBarHeight, 4)
           adjustedWidth = max(node.w - widthOfLineNum - 1, 4)
 
-        node.view.resize(status.bufStatus[bufIndex].buffer, adjustedHeight, adjustedWidth, widthOfLineNum)
-        node.view.seekCursor(status.bufStatus[bufIndex].buffer, node.currentLine, node.currentColumn)
+        node.view.resize(status.bufStatus[bufIndex].buffer,
+                         adjustedHeight,
+                         adjustedWidth,
+                         widthOfLineNum)
+        node.view.seekCursor(status.bufStatus[bufIndex].buffer,
+                             node.currentLine,
+                             node.currentColumn)
 
         ## Resize status bar window
         const height = 1
         let
-          width = if node.x > 0 and node.parent.splitType == SplitType.vertical: node.w - 1 else: node.w
+          width = if node.x > 0 and
+                     node.parent.splitType == SplitType.vertical:node.w - 1
+                  else: node.w
           y = node.y + adjustedHeight
-          x = if node.x > 0 and node.parent.splitType == SplitType.vertical: node.x + 1 else: node.x
+          x = if node.x > 0 and
+                 node.parent.splitType == SplitType.vertical: node.x + 1
+              else: node.x
         status.statusBar[statusBarIndex].window.resize(height, width, y, x)
         status.statusBar[statusBarIndex].window.refresh
 
@@ -195,7 +271,8 @@ proc resize*(status: var EditorStatus, height, width: int) =
         for node in node.child: queue.push(node)
 
   ## Resize status bar window
-  if status.settings.statusBar.useBar and not status.settings.statusBar.multipleStatusBar:
+  if status.settings.statusBar.useBar and
+     not status.settings.statusBar.multipleStatusBar:
     const
       statusBarHeight = 1
       x = 0
@@ -235,16 +312,28 @@ proc highlightSelectedArea(status: var Editorstatus)
 proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode)
 
 proc updateStatusBar(status: var Editorstatus) =
+  let workspaceIndex = status.currentWorkSpaceIndex
+
   if not status.settings.statusBar.multipleStatusBar:
-    status.bufStatus[status.statusBar[0].bufferIndex].writeStatusBar(status.statusBar[0], status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings)
+    let index = status.statusBar[0].bufferIndex
+    status.bufStatus[index].writeStatusBar(status.statusBar[0],
+                                           status.workspace[workspaceIndex].currentMainWindowNode,
+                                           status.settings)
   else:
     for i in 0 ..< status.statusBar.len:
       let
         bufferIndex = status.statusBar[i].bufferIndex
-        windowNode = status.workspace[status.currentWorkSpaceIndex].mainWindowNode.searchByWindowIndex(status.statusBar[i].windowIndex)
-      status.bufStatus[bufferIndex].writeStatusBar(status.statusBar[i], windowNode, status.settings)
+        index = status.statusBar[i].windowIndex
+        windowNode =
+          status.workspace[workspaceIndex].mainWindowNode.searchByWindowIndex(index)
+      status.bufStatus[bufferIndex].writeStatusBar(status.statusBar[i],
+                                                   windowNode,
+                                                   status.settings)
 
-proc initSyntaxHighlight(windowNode: var WindowNode, bufStatus: seq[BufferStatus], isSyntaxHighlight: bool) =
+proc initSyntaxHighlight(windowNode: var WindowNode,
+                         bufStatus: seq[BufferStatus],
+                         isSyntaxHighlight: bool) =
+                         
   var queue = initHeapQueue[WindowNode]()
   for node in windowNode.child: queue.push(node)
   while queue.len > 0:
@@ -252,8 +341,11 @@ proc initSyntaxHighlight(windowNode: var WindowNode, bufStatus: seq[BufferStatus
       var node = queue.pop
       if node.window != nil:
         let bufStatus = bufStatus[node.bufferIndex]
-        if (bufStatus.mode != Mode.filer) and not (bufStatus.mode == Mode.ex and bufStatus.prevMode == Mode.filer):
-          let lang = if isSyntaxHighlight: bufStatus.language else: SourceLanguage.langNone
+        if (bufStatus.mode != Mode.filer) and
+           not (bufStatus.mode == Mode.ex and
+           bufStatus.prevMode == Mode.filer):
+          let lang = if isSyntaxHighlight: bufStatus.language
+                     else: SourceLanguage.langNone
           node.highlight = ($bufStatus.buffer).initHighlight(lang)
 
       if node.child.len > 0:
@@ -261,7 +353,8 @@ proc initSyntaxHighlight(windowNode: var WindowNode, bufStatus: seq[BufferStatus
 
 proc updateLogViewer(status: var Editorstatus, bufferIndex: int) =
   status.bufStatus[bufferIndex].buffer = initGapBuffer(@[ru""])
-  for i in 0 ..< status.messageLog.len: status.bufStatus[bufferIndex].buffer.insert(status.messageLog[i], i)
+  for i in 0 ..< status.messageLog.len:
+    status.bufStatus[bufferIndex].buffer.insert(status.messageLog[i], i)
 
 proc update*(status: var EditorStatus) =
   setCursor(false)
@@ -270,10 +363,14 @@ proc update*(status: var EditorStatus) =
 
   if status.settings.tabLine.useTab: status.writeTabLine
 
-  status.workspace[status.currentWorkSpaceIndex].mainWindowNode.initSyntaxHighlight(status.bufStatus, status.settings.syntax)
+  let workspaceIndex = status.currentWorkSpaceIndex
+
+  status.workspace[workspaceIndex].mainWindowNode.initSyntaxHighlight(status.bufStatus,
+                                                                      status.settings.syntax)
 
   var queue = initHeapQueue[WindowNode]()
-  for node in status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.child: queue.push(node)
+  for node in status.workSpace[workspaceIndex].mainWindowNode.child:
+    queue.push(node)
   while queue.len > 0:
     for i in  0 ..< queue.len:
       var node = queue.pop
@@ -284,25 +381,44 @@ proc update*(status: var EditorStatus) =
           currentMode = bufStatus.mode
           prevMode = bufStatus.prevMode
 
-        if bufStatus.buffer.high < node.currentLine: node.currentLine = bufStatus.buffer.high
-        if currentMode != Mode.insert and  bufStatus.buffer[node.currentLine].len > 0 and bufStatus.buffer[node.currentLine].high < node.currentColumn:
+        if bufStatus.buffer.high < node.currentLine:
+          node.currentLine = bufStatus.buffer.high
+        if currentMode != Mode.insert and
+           bufStatus.buffer[node.currentLine].len > 0 and
+           bufStatus.buffer[node.currentLine].high < node.currentColumn:
           node.currentColumn = bufStatus.buffer[node.currentLine].high
 
-        node.view.reload(bufStatus.buffer, min(node.view.originalLine[0], bufStatus.buffer.high))
+        node.view.reload(bufStatus.buffer,
+                         min(node.view.originalLine[0],
+                         bufStatus.buffer.high))
 
         let
-          isCurrentMainWin = if node.windowIndex == status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.windowIndex: true else: false
-          isVisualMode = if (currentMode == Mode.visual) or (prevMode == Mode.visual and currentMode == Mode.ex): true else: false
-          isVisualBlockMode = if (currentMode == Mode.visualBlock) or (prevMode == Mode.visualBlock and currentMode == Mode.ex): true else: false
+          currentWindowIndex =
+            status.workSpace[workspaceIndex].currentMainWindowNode.windowIndex
+          isCurrentMainWin = if node.windowIndex == currentWindowIndex: true
+                             else: false
+          isVisualMode = if (currentMode == Mode.visual) or
+                            (prevMode == Mode.visual and
+                            currentMode == Mode.ex): true
+                         else: false
+          isVisualBlockMode = if (currentMode == Mode.visualBlock) or
+                                 (prevMode == Mode.visualBlock and
+                                 currentMode == Mode.ex): true
+                              else: false
 
         ## Update highlight
         ## TODO: Refactor and fix
-        if (currentMode == logViewer) or (currentMode == ex and prevMode == logViewer):
+        if (currentMode == logViewer) or
+           (currentMode == ex and
+           prevMode == logViewer):
           status.updateLogViewer(node.bufferIndex)
           status.updateHighlight(node)
-        elif (currentMode != Mode.filer) and not (currentMode == Mode.ex and prevMode == Mode.filer):
+        elif (currentMode != Mode.filer) and
+             not (currentMode == Mode.ex and
+             prevMode == Mode.filer):
           if isCurrentMainWin:
-            if status.settings.highlightOtherUsesCurrentWord: status.highlightOtherUsesCurrentWord
+            if status.settings.highlightOtherUsesCurrentWord:
+              status.highlightOtherUsesCurrentWord
             if isVisualMode or isVisualBlockMode: status.highlightSelectedArea
             if status.settings.highlightPairOfParen: status.highlightPairOfParen
           status.updateHighlight(node)
@@ -311,22 +427,39 @@ proc update*(status: var EditorStatus) =
           startSelectedLine = bufStatus.selectArea.startLine
           endSelectedLine = bufStatus.selectArea.endLine
 
-        node.view.seekCursor(bufStatus.buffer, node.currentLine, node.currentColumn)
-        node.view.update(node.window, status.settings.view, isCurrentMainWin, isVisualMode, bufStatus.buffer, node.highlight, node.currentLine, startSelectedLine, endSelectedLine)
+        node.view.seekCursor(bufStatus.buffer,
+                             node.currentLine,
+                             node.currentColumn)
+        node.view.update(node.window,
+                         status.settings.view,
+                         isCurrentMainWin,
+                         isVisualMode,
+                         bufStatus.buffer,
+                         node.highlight,
+                         node.currentLine,
+                         startSelectedLine,
+                         endSelectedLine)
 
-        if isCurrentMainWin: node.cursor.update(node.view, node.currentLine, node.currentColumn)
+        if isCurrentMainWin:
+          node.cursor.update(node.view, node.currentLine, node.currentColumn)
 
         node.window.refresh
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
-  var currentMainWindowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+  var currentMainWindowNode =
+    status.workSpace[workspaceIndex].currentMainWindowNode
   let
     currentMode = status.bufStatus[currentMainWindowNode.bufferIndex].mode
     prevMode = status.bufStatus[currentMainWindowNode.bufferIndex].prevMode
-  if (currentMode != Mode.filer) and not (currentMode == Mode.ex and prevMode == Mode.filer):
-    currentMainWindowNode.window.moveCursor(currentMainWindowNode.cursor.y, currentMainWindowNode.view.widthOfLineNum + currentMainWindowNode.cursor.x)
+  if (currentMode != Mode.filer) and
+     not (currentMode == Mode.ex and
+     prevMode == Mode.filer):
+    let
+      y = currentMainWindowNode.cursor.y
+      x = currentMainWindowNode.view.widthOfLineNum + currentMainWindowNode.cursor.x
+    currentMainWindowNode.window.moveCursor(y, x)
 
   if status.settings.statusBar.useBar: status.updateStatusBar
 
@@ -336,77 +469,109 @@ proc verticalSplitWindow*(status: var EditorStatus) =
   let 
     currentBufferIndex = status.bufferIndexInCurrentWindow
     buffer = status.bufStatus[currentBufferIndex].buffer
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.verticalSplit(buffer)
+    workspaceIndex = status.currentWorkSpaceIndex
+
+  status.workSpace[workspaceIndex].currentMainWindowNode =
+    status.workSpace[workspaceIndex].currentMainWindowNode.verticalSplit(buffer)
   inc(status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow)
 
   var statusBar = initStatusBar()
-  statusBar.windowIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.windowIndex
+  statusBar.windowIndex =
+    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.windowIndex
   status.statusBar.add(statusBar)
 
 proc horizontalSplitWindow*(status: var Editorstatus) =
   let 
     currentBufferIndex = status.bufferIndexInCurrentWindow
     buffer = status.bufStatus[currentBufferIndex].buffer
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.horizontalSplit(buffer)
-  inc(status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow)
+    workspaceIndex = status.currentWorkSpaceIndex
+
+  status.workSpace[workspaceIndex].currentMainWindowNode =
+    status.workSpace[workspaceIndex].currentMainWindowNode.horizontalSplit(buffer)
+  inc(status.workSpace[workspaceIndex].numOfMainWindow)
 
   var statusBar = initStatusBar()
-  statusBar.windowIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.windowIndex
+  statusBar.windowIndex = status.workSpace[workspaceIndex].currentMainWindowNode.windowIndex
   status.statusBar.add(statusBar)
 
 proc closeWindow*(status: var EditorStatus, node: WindowNode) =
-  if status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow == 1: exitEditor(status.settings)
+  let workspaceIndex = status.currentWorkSpaceIndex
+
+  if status.workSpace[workspaceIndex].numOfMainWindow == 1:
+    exitEditor(status.settings)
 
   let deleteWindowIndex = node.windowIndex
   var parent = node.parent
 
   if parent.child.len == 1:
-    if status.settings.statusBar.multipleStatusBar: status.statusBar.delete(status.statusBar.high)
+    if status.settings.statusBar.multipleStatusBar:
+      status.statusBar.delete(status.statusBar.high)
 
     parent.parent.child.delete(parent.index)
-    dec(status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow)
+    dec(status.workSpace[workspaceIndex].numOfMainWindow)
 
     status.resize(terminalHeight(), terminalWidth())
 
-    let newCurrentWinIndex = if deleteWindowIndex > status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow - 1:
-                                status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow - 1
-                             else: deleteWindowIndex
-    var node = status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
-    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode = node
+    let newCurrentWinIndex =
+      if deleteWindowIndex > status.workSpace[workspaceIndex].numOfMainWindow - 1:
+        status.workSpace[workspaceIndex].numOfMainWindow - 1
+      else: deleteWindowIndex
+    var node =
+      status.workSpace[workspaceIndex].mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
+    status.workSpace[workspaceIndex].currentMainWindowNode = node
   else:
-    if status.settings.statusBar.multipleStatusBar: status.statusBar.delete(status.statusBar.high)
+    if status.settings.statusBar.multipleStatusBar:
+      status.statusBar.delete(status.statusBar.high)
 
     parent.child.delete(node.index)
-    dec(status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow)
+    dec(status.workSpace[workspaceIndex].numOfMainWindow)
 
     status.resize(terminalHeight(), terminalWidth())
 
-    let newCurrentWinIndex = if deleteWindowIndex > status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow - 1:
-                                status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow - 1
-                             else: deleteWindowIndex
+    let newCurrentWinIndex =
+      if deleteWindowIndex > status.workSpace[workspaceIndex].numOfMainWindow - 1:
+        status.workSpace[workspaceIndex].numOfMainWindow - 1
+      else: deleteWindowIndex
 
-    var node = status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
-    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode = node
+    var node =
+      status.workSpace[workspaceIndex].mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
+    status.workSpace[workspaceIndex].currentMainWindowNode = node
 
 proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
-  if index < 0 or status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow <= index: return
+  let workspaceIndex = status.currentWorkSpaceIndex
+  if index < 0 or
+     status.workSpace[workspaceIndex].numOfMainWindow <= index: return
  
-  var node = status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.searchByWindowIndex(index)
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode = node
+  var node =
+    status.workSpace[workspaceIndex].mainWindowNode.searchByWindowIndex(index)
+  status.workSpace[workspaceIndex].currentMainWindowNode = node
 
 proc moveNextWindow*(status: var EditorStatus) =
-  status.moveCurrentMainWindow(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.windowIndex + 1)
+  let
+    workspaceIndex = status.currentWorkSpaceIndex
+    index =
+      status.workSpace[workspaceIndex].currentMainWindowNode.windowIndex + 1
+  status.moveCurrentMainWindow(index)
 
 proc movePrevWindow*(status: var EditorStatus) =
-  status.moveCurrentMainWindow(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.windowIndex - 1)
+  let
+    workspaceIndex = status.currentWorkSpaceIndex
+    index =
+      status.workSpace[workspaceIndex].currentMainWindowNode.windowIndex - 1
+  status.moveCurrentMainWindow(index)
 
-proc writePopUpWindow*(status: var Editorstatus, x, y: var int, currentLine: int,  buffer: seq[seq[Rune]]) =
+proc writePopUpWindow*(status: var Editorstatus,
+                       x, y: var int,
+                       currentLine: int,
+                       buffer: seq[seq[Rune]]) =
+                       
   # Pop up window size
   var maxBufferLen = 0
   for runes in buffer:
     if maxBufferLen < runes.len: maxBufferLen = runes.len
   let
-    h = if buffer.len > terminalHeight() - 1: terminalHeight() - 1 else: buffer.len
+    h = if buffer.len > terminalHeight() - 1: terminalHeight() - 1
+        else: buffer.len
     w = maxBufferLen + 2
 
   # Pop up window position
@@ -415,11 +580,16 @@ proc writePopUpWindow*(status: var Editorstatus, x, y: var int, currentLine: int
 
   status.popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
 
-  let startLine = if currentLine == -1: 0 elif currentLine - h + 1 > 0: currentLine - h + 1 else: 0
+  let startLine = if currentLine == -1: 0
+                  elif currentLine - h + 1 > 0: currentLine - h + 1
+                  else: 0
   for i in 0 ..< h:
     if currentLine != -1 and i + startLine == currentLine:
-      status.popUpWindow.write(i, 1, buffer[i + startLine], EditorColorPair.popUpWinCurrentLine)
-    else: status.popUpWindow.write(i, 1, buffer[i + startLine], EditorColorPair.popUpWindow)
+      let color = EditorColorPair.popUpWinCurrentLine
+      status.popUpWindow.write(i, 1, buffer[i + startLine], color)
+    else:
+      let color = EditorColorPair.popUpWindow
+      status.popUpWindow.write(i, 1, buffer[i + startLine], color)
 
   status.popUpWindow.refresh
 
@@ -432,7 +602,8 @@ proc addNewBuffer*(status: var EditorStatus, filename: string)
 from commandview import writeFileOpenError
 
 proc addNewBuffer*(status: var EditorStatus, filename: string) =
-  status.bufStatus.add(BufferStatus(filename: filename.toRunes, lastSaveTime: now()))
+  status.bufStatus.add(BufferStatus(filename: filename.toRunes,
+                       lastSaveTime: now()))
   let index = status.bufStatus.high
 
   if existsFile(filename) == false: status.bufStatus[index].buffer = newFile()
@@ -447,16 +618,22 @@ proc addNewBuffer*(status: var EditorStatus, filename: string) =
 
   if filename != "": status.bufStatus[index].language = detectLanguage(filename)
 
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = status.bufStatus[index].buffer.initEditorView(terminalHeight(), terminalWidth())
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view =
+    status.bufStatus[index].buffer.initEditorView(terminalHeight(),
+                                                  terminalWidth())
 
   status.changeCurrentBuffer(index)
   status.changeMode(Mode.normal)
 
 proc deleteBuffer*(status: var Editorstatus, deleteIndex: int) =
-  let beforeWindowIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.windowIndex
+  let
+    workspaceIndex = status.currentWorkSpaceIndex
+    beforeWindowIndex =
+      status.workSpace[workspaceIndex].currentMainWindowNode.windowIndex
 
   var queue = initHeapQueue[WindowNode]()
-  for node in status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.child: queue.push(node)
+  for node in status.workSpace[workspaceIndex].mainWindowNode.child:
+    queue.push(node)
   while queue.len > 0:
     for i in 0 ..< queue.len:
       let node = queue.pop
@@ -470,7 +647,8 @@ proc deleteBuffer*(status: var Editorstatus, deleteIndex: int) =
   status.bufStatus.delete(deleteIndex)
 
   queue = initHeapQueue[WindowNode]()
-  for node in status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.child: queue.push(node)
+  for node in status.workSpace[workspaceIndex].mainWindowNode.child:
+    queue.push(node)
   while queue.len > 0:
     for i in 0 ..< queue.len:
       var node = queue.pop
@@ -479,18 +657,22 @@ proc deleteBuffer*(status: var Editorstatus, deleteIndex: int) =
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
-  let afterWindowIndex = if beforeWindowIndex > status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow - 1:
-                            status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow - 1
+  let afterWindowIndex = if beforeWindowIndex > status.workSpace[workspaceIndex].numOfMainWindow - 1:
+                            status.workSpace[workspaceIndex].numOfMainWindow - 1
                          else: beforeWindowIndex
-  var node = status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.searchByWindowIndex(afterWindowIndex)
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode = node
+  var node = status.workSpace[workspaceIndex].mainWindowNode.searchByWindowIndex(afterWindowIndex)
+  status.workSpace[workspaceIndex].currentMainWindowNode = node
 
 proc createWrokSpace*(status: var Editorstatus) =
+  let
+    workspaceIndex = status.currentWorkSpaceIndex
   var newWorkSpace = initWorkSpace()
+
   status.workSpace.insert(newWorkSpace, status.currentWorkSpaceIndex + 1)
   status.currentWorkSpaceIndex += 1
   status.addNewBuffer("")
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex = status.bufStatus.high
+  status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex =
+    status.bufStatus.high
 
 proc deleteWorkSpace*(status: var Editorstatus, index: int) =
   if 0 < index and index <= status.workSpace.len:
@@ -498,15 +680,22 @@ proc deleteWorkSpace*(status: var Editorstatus, index: int) =
 
     if status.workspace.len == 0: status.settings.exitEditor
 
-    if status.currentWorkSpaceIndex > status.workSpace.high: status.currentWorkSpaceIndex = status.workSpace.high
+    if status.currentWorkSpaceIndex > status.workSpace.high:
+      status.currentWorkSpaceIndex = status.workSpace.high
 
 proc changeCurrentWorkSpace*(status: var Editorstatus, index: int) =
-  if 0 < index and index <= status.workSpace.len: status.currentWorkSpaceIndex = index - 1
+  if 0 < index and index <= status.workSpace.len:
+    status.currentWorkSpaceIndex = index - 1
 
 proc tryRecordCurrentPosition*(bufStatus: var BufferStatus, windowNode: WindowNode) =
-  bufStatus.positionRecord[bufStatus.buffer.lastSuitId] = (windowNode.currentLine, windowNode.currentColumn, windowNode.expandedColumn)
+  bufStatus.positionRecord[bufStatus.buffer.lastSuitId] = (windowNode.currentLine,
+                                                           windowNode.currentColumn,
+                                                           windowNode.expandedColumn)
 
-proc revertPosition*(bufStatus: var BufferStatus, windowNode: WindowNode, id: int) =
+proc revertPosition*(bufStatus: var BufferStatus,
+                     windowNode: WindowNode,
+                     id: int) =
+                     
   let mess = fmt"The id not recorded was requested. [bufStatus.positionRecord = {bufStatus.positionRecord}, id = {id}]"
   doAssert(bufStatus.positionRecord.contains(id), mess)
 
@@ -523,23 +712,32 @@ proc initSelectedAreaColorSegment(startLine, startColumn: int): ColorSegment =
   result.lastColumn = startColumn
   result.color = EditorColorPair.visualMode
 
-proc overwriteColorSegmentBlock[T](highlight: var Highlight, area: SelectArea, buffer: T) =
+proc overwriteColorSegmentBlock[T](highlight: var Highlight,
+                                   area: SelectArea,
+                                   buffer: T) =
+                                   
   var
     startLine = area.startLine
     endLine = area.endLine
   if startLine > endLine: swap(startLine, endLine)
 
   for i in startLine .. endLine:
-    let colorSegment = ColorSegment(firstRow: i, firstColumn: area.startColumn, lastRow: i, lastColumn: min(area.endColumn, buffer[i].high), color: EditorColorPair.visualMode)
+    let colorSegment = ColorSegment(firstRow: i,
+                                    firstColumn: area.startColumn,
+                                    lastRow: i,
+                                    lastColumn: min(area.endColumn, buffer[i].high),
+                                    color: EditorColorPair.visualMode)
     highlight = highlight.overwrite(colorSegment)
 
 proc highlightSelectedArea(status: var Editorstatus) =
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     area = status.bufStatus[currentBufferIndex].selectArea
-    windowNode = status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode
+    workspaceIndex = status.currentWorkSpaceIndex
+    windowNode = status.workspace[workspaceIndex].currentMainWindowNode
 
-  var colorSegment = initSelectedAreaColorSegment(windowNode.currentLine, windowNode.currentColumn)
+  var colorSegment = initSelectedAreaColorSegment(windowNode.currentLine,
+                                                  windowNode.currentColumn)
 
   if area.startLine == area.endLine:
     colorSegment.firstRow = area.startLine
@@ -565,20 +763,31 @@ proc highlightSelectedArea(status: var Editorstatus) =
     currentMode = status.bufStatus[currentBufferIndex].mode
     prevMode = status.bufStatus[currentBufferIndex].prevMode
 
-  if (currentMode == Mode.visual) or (currentMode == Mode.ex and prevMode == Mode.visual):
-    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
-  elif (currentMode == Mode.visualBlock) or (currentMode == Mode.ex and prevMode == Mode.visualBlock):
-    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight.overwriteColorSegmentBlock(status.bufStatus[currentBufferIndex].selectArea, status.bufStatus[currentBufferIndex].buffer)
+  if (currentMode == Mode.visual) or
+     (currentMode == Mode.ex and
+     prevMode == Mode.visual):
+    status.workSpace[workspaceIndex].currentMainWindowNode.highlight =
+      status.workSpace[workspaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
+  elif (currentMode == Mode.visualBlock) or
+       (currentMode == Mode.ex and
+       prevMode == Mode.visualBlock):
+    status.workSpace[workspaceIndex].currentMainWindowNode.highlight.overwriteColorSegmentBlock(status.bufStatus[currentBufferIndex].selectArea,
+                                                                                                status.bufStatus[currentBufferIndex].buffer)
 
 proc highlightPairOfParen(status: var Editorstatus) =
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     buffer = status.bufStatus[currentBufferIndex].buffer
-    windowNode = status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode
+    workspaceIndex = status.currentWorkSpaceIndex
+    windowNode = status.workspace[workspaceIndex].currentMainWindowNode
     currentLine = windowNode.currentLine
-    currentColumn = if windowNode.currentColumn > buffer[currentLine].high: buffer[currentLine].high else: windowNode.currentColumn
+    currentColumn = if windowNode.currentColumn > buffer[currentLine].high:
+                      buffer[currentLine].high
+                    else: windowNode.currentColumn
 
-  if buffer[currentLine].len < 1 or (buffer[currentLine][currentColumn] == ru'"') or (buffer[currentLine][currentColumn] == ru'\''): return
+  if buffer[currentLine].len < 1 or
+     (buffer[currentLine][currentColumn] == ru'"') or
+     (buffer[currentLine][currentColumn] == ru'\''): return
 
   if isOpenParen(buffer[currentLine][currentColumn]):
     var depth = 0
@@ -591,9 +800,17 @@ proc highlightPairOfParen(status: var Editorstatus) =
         if buffer[i][j] == openParen: inc(depth)
         elif buffer[i][j] == closeParen: dec(depth)
         if depth == 0:
-          let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j, color: EditorColorPair.parenText)
-          status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
+          let
+            color = EditorColorPair.parenText
+            colorSegment = ColorSegment(firstRow: i,
+                                        firstColumn: j,
+                                        lastRow: i,
+                                        lastColumn: j,
+                                        color: color)
+          status.workSpace[workspaceIndex].currentMainWindowNode.highlight =
+            status.workSpace[workspaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
           return
+          
   elif isCloseParen(buffer[currentLine][currentColumn]):
     var depth = 0
     let
@@ -606,8 +823,15 @@ proc highlightPairOfParen(status: var Editorstatus) =
         if buffer[i][j] == closeParen: inc(depth)
         elif buffer[i][j] == openParen: dec(depth)
         if depth == 0:
-          let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j, color: EditorColorPair.parenText)
-          status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
+          let
+            color = EditorColorPair.parenText
+            colorSegment = ColorSegment(firstRow: i,
+                                        firstColumn: j,
+                                        lastRow: i,
+                                        lastColumn: j,
+                                        color: color)
+          status.workSpace[workspaceIndex].currentMainWindowNode.highlight =
+            status.workSpace[workspaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
           return
 
 # Highlighting other uses of the current word under the cursor
@@ -615,7 +839,8 @@ proc highlightOtherUsesCurrentWord(status: var Editorstatus) =
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     bufStatus = status.bufStatus[currentBufferIndex]
-    windowNode = status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode
+    workspaceIndex = status.currentWorkSpaceIndex
+    windowNode = status.workspace[workspaceIndex].currentMainWindowNode
     line = bufStatus.buffer[windowNode.currentLine]
 
   if line.len < 1 or
@@ -629,18 +854,21 @@ proc highlightOtherUsesCurrentWord(status: var Editorstatus) =
 
   # Set start col
   for i in countdown(windowNode.currentColumn - 1, 0):
-    if (line[i] != '_' and unicodeext.isPunct(line[i])) or line[i].isSpace: break
+    if (line[i] != '_' and unicodeext.isPunct(line[i])) or line[i].isSpace:
+      break
     else: startCol.dec
 
   # Set end col
   for i in windowNode.currentColumn ..< line.len:
-    if (line[i] != '_' and unicodeext.isPunct(line[i])) or line[i].isSpace: break
+    if (line[i] != '_' and unicodeext.isPunct(line[i])) or line[i].isSpace:
+      break
     else: endCol.inc
 
   let highlightWord = line[startCol ..< endCol]
 
   let
-    range = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.rangeOfOriginalLineInView
+    range =
+      status.workSpace[workspaceIndex].currentMainWindowNode.view.rangeOfOriginalLineInView
     startLine = range[0]
     endLine = if bufStatus.buffer.len > range[1] + 1: range[1] + 2
               elif bufStatus.buffer.len > range[1]: range[1] + 1
@@ -663,18 +891,30 @@ proc highlightOtherUsesCurrentWord(status: var Editorstatus) =
              line[j + highlightWord.len].isSpace):
             # Set color
             let
-              originalColorPair = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight.getColorPair(i, j)
+              originalColorPair =
+                status.workSpace[workspaceIndex].currentMainWindowNode.highlight.getColorPair(i, j)
               theme = status.settings.editorColorTheme
               colors = theme.getColorFromEditorColorPair(originalColorPair)
-            setColorPair(EditorColorPair.currentWord, colors[0], ColorThemeTable[theme].currentWordBg)
+            setColorPair(EditorColorPair.currentWord,
+                         colors[0],
+                         ColorThemeTable[theme].currentWordBg)
 
-            let colorSegment = ColorSegment(firstRow: i, firstColumn: j, lastRow: i, lastColumn: j + highlightWord.high, color: EditorColorPair.currentWord)
-            status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
+            let
+              color = EditorColorPair.currentWord
+              colorSegment = ColorSegment(firstRow: i,
+                                          firstColumn: j,
+                                          lastRow: i,
+                                          lastColumn: j + highlightWord.high,
+                                          color: color)
+            status.workSpace[workspaceIndex].currentMainWindowNode.highlight =
+              status.workSpace[workspaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
 
 from searchmode import searchAllOccurrence
 proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
   let bufStatus = status.bufStatus[windowNode.bufferIndex]
-  if (bufStatus.mode == Mode.filer) or (bufStatus.mode == Mode.ex and bufStatus.prevMode == Mode.filer): return
+  if (bufStatus.mode == Mode.filer) or
+     (bufStatus.mode == Mode.ex and
+     bufStatus.prevMode == Mode.filer): return
 
   let
     range = windowNode.view.rangeOfOriginalLineInView
@@ -692,17 +932,27 @@ proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
       allOccurrence = bufferInView.searchAllOccurrence(fullWidthSpace)
       color = EditorColorPair.highlightFullWidthSpace
     for pos in allOccurrence:
-      let colorSegment = ColorSegment(firstRow: range[0] + pos.line, firstColumn: pos.column, lastRow: range[0] + pos.line, lastColumn: pos.column, color: color)
+      let colorSegment = ColorSegment(firstRow: range[0] + pos.line,
+                                      firstColumn: pos.column,
+                                      lastRow: range[0] + pos.line,
+                                      lastColumn: pos.column,
+                                      color: color)
       windowNode.highlight = windowNode.highlight.overwrite(colorSegment)
 
   # highlight search results
-  if status.bufStatus[windowNode.bufferIndex].isHighlight and status.searchHistory.len > 0:
+  if status.bufStatus[windowNode.bufferIndex].isHighlight and
+     status.searchHistory.len > 0:
     let
       keyword = status.searchHistory[^1]
       allOccurrence = searchAllOccurrence(bufferInView, keyword)
-      color = if status.isSearchHighlight: EditorColorPair.searchResult else: EditorColorPair.replaceText
+      color = if status.isSearchHighlight: EditorColorPair.searchResult
+              else: EditorColorPair.replaceText
     for pos in allOccurrence:
-      let colorSegment = ColorSegment(firstRow: range[0] + pos.line, firstColumn: pos.column, lastRow: range[0] + pos.line, lastColumn: pos.column + keyword.high, color: color)
+      let colorSegment = ColorSegment(firstRow: range[0] + pos.line,
+                                      firstColumn: pos.column,
+                                      lastRow: range[0] + pos.line,
+                                      lastColumn: pos.column + keyword.high,
+                                      color: color)
       windowNode.highlight = windowNode.highlight.overwrite(colorSegment)
 
 proc changeTheme*(status: var EditorStatus) =
@@ -713,14 +963,18 @@ proc autoSave(status: var Editorstatus) =
   let interval = status.settings.autoSaveInterval.minutes
   for index, bufStatus in status.bufStatus:
     if bufStatus.filename != ru"" and now() > bufStatus.lastSaveTime + interval:
-      saveFile(bufStatus.filename, bufStatus.buffer.toRunes, status.settings.characterEncoding)
-      status.commandWindow.writeMessageAutoSave(bufStatus.filename, status.messageLog)
+      saveFile(bufStatus.filename,
+               bufStatus.buffer.toRunes,
+               status.settings.characterEncoding)
+      status.commandWindow.writeMessageAutoSave(bufStatus.filename,
+                                                status.messageLog)
       status.bufStatus[index].lastSaveTime = now()
 
 from settings import loadSettingFile
 proc eventLoopTask(status: var Editorstatus) =
   if status.settings.autoSave: status.autoSave
-  if status.settings.liveReloadOfConf and status.timeConfFileLastReloaded + 1.seconds < now():
+  if status.settings.liveReloadOfConf and
+     status.timeConfFileLastReloaded + 1.seconds < now():
     let beforeTheme = status.settings.editorColorTheme
     status.settings.loadSettingFile
     status.timeConfFileLastReloaded = now()
