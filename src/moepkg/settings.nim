@@ -815,7 +815,7 @@ proc parseSettingsFile*(filename: string): EditorSettings =
       var vsCodeExtensionsDir = homeDir & "/.vscode-oss/extensions/"
       var vsCodeThemeSetting = ""
       if not existsFile(vsCodeSettingsFile):
-        vsCodeSettingsFile = homeDir & "/.config/VSCode/User/settings.json"
+        vsCodeSettingsFile = homeDir & "/.config/Code/User/settings.json"
       if existsFile(vsCodeSettingsFile):
         let vsCodeSettingsJson = json.parseFile(vsCodeSettingsFile)
         vsCodeThemeSetting = vsCodeSettingsJson{"workbench.colorTheme"}.getStr()
