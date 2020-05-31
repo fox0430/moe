@@ -18,7 +18,7 @@ default is ```"vivid"```. ```"vivid"``` or ```"dark"``` or ```"light"``` or ```"
 theme
 ```
 
-Note: ```"vscode"``` is you can use current VSCode/VSCodium theme. Check ![##648](https://github.com/fox0430/moe/pull/648)
+Note: ```"vscode"``` is you can use current VSCode/VSCodium theme. Check [#648](https://github.com/fox0430/moe/pull/648)
 
 Display line numbers (bool)  
 default is true
