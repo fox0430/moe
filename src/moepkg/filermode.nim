@@ -1,6 +1,5 @@
 import os, terminal, strutils, unicodeext, times, algorithm
-import
-  editorstatus, ui, fileutils, editorview, gapbuffer, highlight, commandview, highlight, window, color, bufferstatus, settings
+import editorstatus, ui, fileutils, editorview, gapbuffer, highlight, commandview, highlight, window, color, bufferstatus, settings
 
 type PathInfo = tuple[kind: PathComponent, path: string, size: int64, lastWriteTime: times.Time]
 
@@ -193,8 +192,84 @@ proc initFilelistHighlight[T](dirList: seq[PathInfo], buffer: T, currentLine: in
                                           lastColumn: buffer[index].len,
                                           color: color))
 
-proc fileNameToGapBuffer(
-                         bufStatus: var BufferStatus,
+proc pathToIcon(path: string): seq[Rune] =
+  if existsDir(path):
+    return ru"📁"
+
+  # Not sure if this is a perfect solution,
+  # it should detect if the current user can execute
+  # the file or not:
+  try:
+    let permissions = getFilePermissions(path)
+    if fpUserExec  in permissions or
+      fpGroupExec in permissions:
+      return ru"🏃"
+  except:
+    discard
+
+  # The symbols were selected for their looks,
+  # they don't always have to make perfect sense,
+  # there's simply not a symbol for every possible
+  # file extension in unicode.
+  let ext = path.split(".")[^1]
+  case ext.toLower():
+  of "nim":
+    return ru"👑"
+  of "nimble", "rpm", "deb":
+    return ru"📦"
+  of "py":
+    return ru"🐍"
+  of "ui", "glade":
+    return ru"🏠"
+  of "txt", "md", "rst":
+    return ru"📝"
+  of "cpp", "cxx", "hpp":
+    return ru"⧺"
+  of "c", "h":
+    return ru"🅒"
+  of "java":
+    return ru"🍵"
+  of "php":
+    return ru"🙈"
+  of "js", "json":
+    return ru"🙉"
+  of "html", "xhtml":
+    return ru"🏄"
+  of "css":
+    return ru"👚"
+  of "xml":
+    return ru"༕"
+  of "cfg", "ini":
+    return ru"🍳"
+  of "sh":
+    return ru"🐚"
+  of "pdf", "doc", "odf", "ods", "odt":
+    return ru"🍞"
+  of "wav", "mp3", "ogg":
+    return ru"🎼"
+  of "zip", "bz2", "xz", "gz", "tgz", "zstd":
+    return ru"🚢"
+  of "exe", "bin":
+    return ru"🏃"
+  of "mp4", "webm", "avi", "mpeg":
+    return ru"🎞"
+  of "patch":
+    return ru"💊"
+  of "lock":
+    return ru"🔒"
+  of "pem", "crt":
+    return ru"🔏"
+  of "png", "jpeg", "jpg", "bmp", "gif":
+    return ru"🎨"
+  else:
+    return ru"🍕"
+
+  # useful unicode symbols: that aren't used here yet:
+  # open book        : 📖
+  # penguin          : 🐧
+  # open file folder : 📂
+  #
+proc fileNameToGapBuffer(bufStatus: var BufferStatus,
                          windowNode: WindowNode,
                          settings: EditorSettings,
                          filerStatus: FilerStatus) =
@@ -209,10 +284,15 @@ proc fileNameToGapBuffer(
 
     let oldLine =  bufStatus.buffer[index]
     var newLine =  bufStatus.buffer[index]
-    if kind == pcDir and 0 < index: newLine.add(ru"/")
-    elif kind == pcLinkToFile: newLine.add(ru"@ -> " & expandsymLink(filename).toRunes)
-    elif kind == pcLinkToDir: newLine.add(ru"@ -> " & expandsymLink(filename).toRunes & ru"/")
-    if oldLine != newLine: bufStatus.buffer[index] = newLine
+    if kind == pcDir and 0 < index:
+      newLine.add(ru"/")
+    elif kind == pcLinkToFile:
+      newLine.add(ru"@ -> " & expandsymLink(filename).toRunes)
+    elif kind == pcLinkToDir:
+      newLine.add(ru"@ -> " & expandsymLink(filename).toRunes & ru"/")
+    newLine = pathToIcon(filename)
+    newLine.add oldLine
+    bufStatus.buffer[index] = newLine
   
   let useStatusBar = if settings.statusBar.useBar: 1 else: 0
   let numOfFile = filerStatus.dirList.len
