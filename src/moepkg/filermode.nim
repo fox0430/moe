@@ -66,24 +66,32 @@ proc sortDirList(dirList: seq[PathInfo], sortBy: Sort): seq[PathInfo] =
   of name:
     return dirList.sortedByIt(it.path)
   of fileSize:
-    result = @[(pcDir, "../", 0.int64, getLastModificationTime(getCurrentDir()))]
-    result.add dirList[1 .. dirList.high].sortedByIt(it.size).reversed
+    result.add dirList.sortedByIt(it.size).reversed
   of time:
-    result = @[(pcDir, "../", 0.int64, getLastModificationTime(getCurrentDir()))]
-    result.add dirList[1 .. dirList.high].sortedByIt(it.lastWriteTime)
+    result.add dirList.sortedByIt(it.lastWriteTime)
 
 proc refreshDirList(sortBy: Sort): seq[PathInfo] =
-  result = @[(pcDir, "../", 0.int64, getLastModificationTime(getCurrentDir()))]
+  var dirList  : seq[PathInfo]
+  var fileList : seq[PathInfo]
+  var item     : PathInfo
   for list in walkDir("./"):
     if list.kind == pcLinkToFile or list.kind == pcLinkToDir:
-      if tryExpandSymlink(list.path) != "": result.add (list.kind, list.path, 0.int64, getLastModificationTime(getCurrentDir()))
+      if tryExpandSymlink(list.path) != "":
+        item = (list.kind, list.path, 0.int64, getLastModificationTime(getCurrentDir()))
     else:
       if list.kind == pcFile:
-        try: result.add (list.kind, list.path, getFileSize(list.path), getLastModificationTime(list.path))
+        try:
+          item = (list.kind, list.path, getFileSize(list.path), getLastModificationTime(list.path))
         except OSError, IOError: discard
-      else: result.add (list.kind, list.path, 0.int64, getLastModificationTime(list.path))
-    result[result.high].path = $(result[result.high].path.toRunes.normalizePath)
-  return sortDirList(result, sortBy)
+      else:
+        item = (list.kind, list.path, 0.int64, getLastModificationTime(list.path))
+    item.path = $(item.path.toRunes.normalizePath)
+    if list.kind in {pcLinkToDir, pcDir}:
+      dirList.add item
+    else:
+      fileList.add item
+  return @[(pcDir, "../", 0.int64, getLastModificationTime(getCurrentDir()))] &
+    sortDirList(dirList, sortBy) & sortDirList(fileList, sortBy)
 
 proc initFileRegister(): FileRegister =
   result.copy = false
