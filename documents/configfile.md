@@ -13,10 +13,12 @@ You can use the example -> https://github.com/fox0430/moe/blob/master/example/mo
 
 ### Standard table
 Color theme (String)
-default is ```"vivid"```. ```"vivid"``` or ```"dark"``` or ```"light"```
+default is ```"vivid"```. ```"vivid"``` or ```"dark"``` or ```"light"``` or ```vscode```
 ```
 theme
 ```
+
+Note: ```vscode ``` is you can use current VSCode/VSCodium theme. Check #648
 
 Display line numbers (bool)  
 default is true
