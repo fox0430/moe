@@ -18,7 +18,8 @@ proc writeStatusBarNormalModeInfo(bufStatus: var BufferStatus,
   statusBar.window.append(ru" ", color)
 
   if settings.statusBar.filename:
-    var filename = if bufStatus.filename.len > 0: bufStatus.filename else: ru"No name"
+    var filename = if bufStatus.filename.len > 0: bufStatus.filename
+                   else: ru"No name"
     let homeDir = ru(getHomeDir())
     if (filename.len() >= homeDir.len() and
         filename[0..homeDir.len()-1] == homeDir):
@@ -29,7 +30,8 @@ proc writeStatusBarNormalModeInfo(bufStatus: var BufferStatus,
         filename = ru"~/" & filename
     statusBar.window.append(filename, color)
 
-  if bufStatus.countChange > 0 and settings.statusBar.chanedMark: statusBar.window.append(ru" [+]", color)
+  if bufStatus.countChange > 0 and settings.statusBar.chanedMark:
+    statusBar.window.append(ru" [+]", color)
 
   var modeNameLen = 0
   if bufStatus.mode == Mode.ex: modeNameLen = 2
@@ -42,10 +44,16 @@ proc writeStatusBarNormalModeInfo(bufStatus: var BufferStatus,
   statusBar.window.append(ru " ".repeat(statusBarWidth - modeNameLen), color)
 
   let
-    line = if settings.statusBar.line: fmt"{windowNode.currentLine + 1}/{bufStatus.buffer.len}" else: ""
-    column = if settings.statusBar.column: fmt"{windowNode.currentColumn + 1}/{bufStatus.buffer[windowNode.currentLine].len}" else: ""
-    encoding = if settings.statusBar.characterEncoding: $settings.characterEncoding else: ""
-    language = if bufStatus.language == SourceLanguage.langNone: "Plain" else: sourceLanguageToStr[bufStatus.language]
+    line = if settings.statusBar.line:
+             fmt"{windowNode.currentLine + 1}/{bufStatus.buffer.len}"
+           else: ""
+    column = if settings.statusBar.column:
+               fmt"{windowNode.currentColumn + 1}/{bufStatus.buffer[windowNode.currentLine].len}"
+             else: ""
+    encoding = if settings.statusBar.characterEncoding: $settings.characterEncoding
+               else: ""
+    language = if bufStatus.language == SourceLanguage.langNone: "Plain"
+               else: sourceLanguageToStr[bufStatus.language]
     info = fmt"{line} {column} {encoding} {language} "
   statusBar.window.write(0, statusBarWidth - info.len, info, color)
 
