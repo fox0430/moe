@@ -29,8 +29,17 @@ type WindowNode* = ref object
 proc initWindowNode*(): WindowNode =
   var
     win = initWindow(1, 1, 0, 0, EditorColorPair.defaultChar)
-    node = WindowNode(child: @[], splitType: SplitType.vertical, window: win, h: 1, w: 1)
-    root = WindowNode(child: @[node], splitType: SplitType.vertical, y: 0, x: 0, h: 1, w: 1)
+    node = WindowNode(child: @[],
+                      splitType: SplitType.vertical,
+                      window: win,
+                      h: 1,
+                      w: 1)
+    root = WindowNode(child: @[node],
+                      splitType: SplitType.vertical,
+                      y: 0,
+                      x: 0,
+                      h: 1,
+                      w: 1)
   node.parent = root
 
   node.window.setTimeout()
@@ -204,11 +213,13 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
         ## Vertical split
 
         ## Calc window width
-        if parent.w mod parent.child.len != 0 and i == 0: child.w = int(parent.w / parent.child.len) + 1
+        if parent.w mod parent.child.len != 0 and i == 0:
+          child.w = int(parent.w / parent.child.len) + 1
         else: child.w = int(parent.w / parent.child.len)
 
         ## Calc window x
-        if parent.w mod parent.child.len != 0 and i > 0: child.x = parent.x + (child.w * i) + 1
+        if parent.w mod parent.child.len != 0 and i > 0:
+          child.x = parent.x + (child.w * i) + 1
         else: child.x = parent.x + (child.w * i)
 
         child.h = parent.h
@@ -217,11 +228,13 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
         ## Horaizontal split
 
         ## Calc window height
-        if parent.h mod parent.child.len != 0 and i == 0: child.h = int(parent.h / parent.child.len) + 1
+        if parent.h mod parent.child.len != 0 and i == 0:
+          child.h = int(parent.h / parent.child.len) + 1
         else: child.h = int(parent.h / parent.child.len)
 
         ## Calc window y
-        if parent.h mod parent.child.len != 0 and i > 0: child.y = parent.y + (child.h * i) + 1
+        if parent.h mod parent.child.len != 0 and i > 0:
+          child.y = parent.y + (child.h * i) + 1
         else: child.y = parent.y + (child.h * i)
 
         child.w = parent.w
