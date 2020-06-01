@@ -14,6 +14,8 @@ tabLine = true
 
 syntax = true
 
+indentationLines = false
+
 tabStop = 2
 
 autoCloseParen = true
