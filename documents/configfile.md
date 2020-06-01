@@ -38,6 +38,12 @@ default is true
 syntax
 ```
 
+Enable/Disable indentation lines (bool)  
+default is false
+```
+indentationLines
+```
+
 Set tab width (Integer)  
 default is 2
 ```
