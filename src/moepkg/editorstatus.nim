@@ -39,7 +39,7 @@ proc initRegisters(): Registers =
   result.yankedLines = @[]
   result.yankedStr = @[]
 
-proc initStatusBar*(): StatusBar = result.window = initWindow(1, 1, 1, 1, EditorColorPair.defaultChar)
+proc initStatusBar(): StatusBar = result.window = initWindow(1, 1, 1, 1, EditorColorPair.defaultChar)
 
 proc initEditorStatus*(): EditorStatus =
   result.platform = initPlatform()
@@ -100,7 +100,7 @@ proc writeTab(tabWin: var Window, start, tabWidth: int, filename: string, color:
     buffer = if filename.len < tabWidth: " " & title & " ".repeat(tabWidth - title.len) else: " " & (title).substr(0, tabWidth - 3) & "~"
   tabWin.write(0, start, buffer, color)
 
-proc writeTabLine*(status: var EditorStatus) =
+proc writeTabLine(status: var EditorStatus) =
   let
     isAllBuffer = status.settings.tabLine.allbuffer
     defaultColor = EditorColorPair.tab
@@ -216,7 +216,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
   setCursor(true)
 
 proc highlightPairOfParen(status: var Editorstatus)
-proc highlightOtherUsesCurrentWord*(status: var Editorstatus)
+proc highlightOtherUsesCurrentWord(status: var Editorstatus)
 proc highlightSelectedArea(status: var Editorstatus)
 proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode)
 
@@ -244,6 +244,10 @@ proc initSyntaxHighlight(windowNode: var WindowNode, bufStatus: seq[BufferStatus
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)
+
+proc updateLogViewer(status: var Editorstatus, bufferIndex: int) =
+  status.bufStatus[bufferIndex].buffer = initGapBuffer(@[ru""])
+  for i in 0 ..< status.messageLog.len: status.bufStatus[bufferIndex].buffer.insert(status.messageLog[i], i)
 
 proc update*(status: var EditorStatus) =
   setCursor(false)
@@ -279,7 +283,10 @@ proc update*(status: var EditorStatus) =
 
         ## Update highlight
         ## TODO: Refactor and fix
-        if (currentMode != Mode.filer) and not (currentMode == Mode.ex and prevMode == Mode.filer):
+        if (currentMode == logViewer) or (currentMode == ex and prevMode == logViewer):
+          status.updateLogViewer(node.bufferIndex)
+          status.updateHighlight(node)
+        elif (currentMode != Mode.filer) and not (currentMode == Mode.ex and prevMode == Mode.filer):
           if isCurrentMainWin:
             if status.settings.highlightOtherUsesCurrentWord: status.highlightOtherUsesCurrentWord
             if isVisualMode or isVisualBlockMode: status.highlightSelectedArea
@@ -575,7 +582,7 @@ proc highlightPairOfParen(status: var Editorstatus) =
           return
 
 # Highlighting other uses of the current word under the cursor
-proc highlightOtherUsesCurrentWord*(status: var Editorstatus) =
+proc highlightOtherUsesCurrentWord(status: var Editorstatus) =
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     bufStatus = status.bufStatus[currentBufferIndex]

@@ -7,33 +7,35 @@ Check command bar
 ```:q``` - Quit  
 ```:wq``` - Write file and quit  
 ```:q!``` - Force quit  
-```qa``` - Quit all window  
-```wqa``` - Write and quit all window  
-```qa!``` - Force quit all window  
+```:qa``` - Quit all window  
+```:wqa``` - Write and quit all window  
+```:qa!``` - Force quit all window  
 
 ## Normal mode
 ```h``` - ←  
-```j``` - ↓  
-```k``` - ↑  
+```j``` or ```+``` - ↓  
+```k``` or ```-``` - ↑  
 ```l``` - →  
-```+``` - Same as j  
-```-``` - Same as k  
 ```w``` - Move forwards to the start of a word  
 ```e``` - Move forwards to the end of a word  
 ```b``` - Move backwards to the start of a word  
 ```Page Up``` - Page up  
 ```Page Down``` - Page down  
 ```gg``` - Move to the first line  
+```g_``` - Move to the last non-blank character of the line  
 ```G``` - Move to the last line  
 ```0``` - (zero) First of the line  
 ```$``` - End of the line  
-```^``` - Same as 0  
+```^``` or ```_``` -  Move to beginning of non-blank characters in a line  
+
+```Ctrl-u``` - Half page down  
+```Ctrl-d``` - Half page up  
 
 ```u``` - Undo  
 ```Ctrl-r``` - Redo  
 
 ```v``` - Start visual mode  
-```Ctrl-v``` Start visual block mode  
+```Ctrl-v``` - Start visual block mode  
 ```r``` - Start replace mode  
 ```i``` - Start insert mode  
 ```o``` - Insert a new line and start insert mode  
@@ -46,7 +48,11 @@ Check command bar
 ```<``` - Unindent
 
 ```dd``` - Delete(cut) a line  
+```d$``` or ```D``` -  Delete the characters under the cursor until the end of the line  
+
 ```x``` - Delete(cut) current character  
+
+```S``` or ```cc``` - Delete the characters in current line and start insert mode  
 
 ```yy``` - Copy a line  
 ```p``` - Paste the clipboard  
@@ -55,7 +61,7 @@ Check command bar
 ```N``` - Repeat search in opposite direction  
 
 ```f``` - Jump to next occurrence  
-```F``` - Jump to previous occurence
+```F``` - Jump to previous occurence  
 
 ```Ctrl-k``` - Move next window  
 ```Ctrl-j``` - Move prev window  
@@ -80,6 +86,12 @@ Check command bar
 
 ```>``` - Indent  
 ```<``` - Unindent  
+
+```Ctrl-a``` - Increas number under the cursor  
+```Ctrl-x``` - Decreas number under the cursor  
+
+```~``` - Toggle case of the character under the cursor  
+
 
 ```Esc``` - Start normal mode  
 
@@ -140,3 +152,5 @@ Check command bar
 ```noh``` - Turn off highlights  
 
 ```log``` - Open messages log viwer  
+
+```help``` - Open help

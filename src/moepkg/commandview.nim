@@ -20,6 +20,7 @@ const exCommandList = [
   ru"cws",
   ru"dws",
   ru"e",
+  ru "help",
   ru"highlightcurrentword",
   ru"highlightfullspace",
   ru"highlightparen",

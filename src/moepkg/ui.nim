@@ -173,11 +173,14 @@ proc isEnterKey*(key: Rune): bool = key == KEY_ENTER or key == ord('\n') or key 
 proc isPageUpKey*(key: Rune): bool = key == KEY_PPAGE or key == 2
 proc isPageDownkey*(key: Rune): bool = key == KEY_NPAGE or key == 6
 proc isTabkey*(key: Rune): bool = key == ord('\t') or key == 9
+proc isControlA*(key: Rune): bool = key == 1
+proc isControlX*(key: Rune): bool = key == 24
 proc isControlR*(key: Rune): bool = key == 18
 proc isControlJ*(key: Rune): bool = int(key) == 10
 proc isControlK*(key: Rune): bool = int(key) == 11
 proc isControlL*(key: Rune): bool = int(key) == 12
 proc isControlU*(key: Rune): bool = int(key) == 21
+proc isControlD*(key: Rune): bool = int(key) == 4
 proc isControlV*(key: Rune): bool = int(key) == 22
 proc isControlH*(key: Rune): bool = int(key) == 263
 proc isControlSquareBracketsRight*(key: Rune): bool = int(key) == 27  # Ctrl - [

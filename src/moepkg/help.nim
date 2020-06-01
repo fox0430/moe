@@ -1,27 +1,39 @@
+import editorstatus, bufferstatus, ui, movement, unicodeext, gapbuffer
+include helpsentence
 import terminal
-import ui, editorstatus, unicodeext, movement, bufferstatus
 
-proc initMessageLog*(status: var Editorstatus) =
+proc initHelpModeBuffer(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.bufStatus[currentBufferIndex].filename = ru"Log viewer"
+  status.bufStatus[currentBufferIndex].filename = ru"help"
 
-proc exitLogViewer*(status: var Editorstatus) =
+  var line = ""
+  for ch in helpSentences:
+    if ch == '\n':
+      status.bufStatus[currentBufferIndex].buffer.add(line.toRunes)
+      line = ""
+    else: line.add(ch)
+
+proc exitHelpMode(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.deleteBuffer(currentBufferIndex)
 
-proc isLogViewerMode(status: Editorstatus): bool = status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.logViewer
+proc isHelpMode(status: Editorstatus): bool =
+  let
+    currentMode = status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode
+    prevMode = status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].prevMode
+  result = currentMode == Mode.help or (prevMode == Mode.help and currentMode == Mode.ex)
 
-proc messageLogViewer*(status: var Editorstatus) =
-  status.initMessageLog
+proc helpMode*(status: var Editorstatus) =
+  status.initHelpModeBuffer
   status.resize(terminalHeight(), terminalWidth())
 
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     currentWorkSpace = status.currentWorkSpaceIndex
 
-  while status.isLogViewerMode and currentWorkSpace == status.currentWorkSpaceIndex and currentBufferIndex == status.bufferIndexInCurrentWindow:
+  while status.isHelpMode and currentWorkSpace == status.currentWorkSpaceIndex and currentBufferIndex == status.bufferIndexInCurrentWindow:
     let currentBufferIndex = status.bufferIndexInCurrentWindow
-    
+
     status.update
 
     var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
@@ -43,7 +55,6 @@ proc messageLogViewer*(status: var Editorstatus) =
     elif key == ord('l') or isRightKey(key): status.bufStatus[currentBufferIndex].keyRight(windowNode)
     elif key == ord('0') or isHomeKey(key): windowNode.moveToFirstOfLine
     elif key == ord('$') or isEndKey(key): status.bufStatus[currentBufferIndex].moveToLastOfLine(windowNode)
-    elif key == ord('q') or isEscKey(key): status.exitLogViewer
     elif key == ord('g'):
       if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window) == 'g': status.moveToFirstLine
     elif key == ord('G'): status.moveToLastLine

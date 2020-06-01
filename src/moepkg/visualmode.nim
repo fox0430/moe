@@ -1,13 +1,13 @@
 import terminal, strutils, sequtils
-import editorstatus, ui, gapbuffer, normalmode, unicodeext, window, movement, editor, bufferstatus
+import editorstatus, ui, gapbuffer, unicodeext, window, movement, editor, bufferstatus
 
-proc initSelectArea*(startLine, startColumn: int): SelectArea =
+proc initSelectArea(startLine, startColumn: int): SelectArea =
   result.startLine = startLine
   result.startColumn = startColumn
   result.endLine = startLine
   result.endColumn = startColumn
 
-proc updateSelectArea*(area: var SelectArea, currentLine, currentColumn: int) =
+proc updateSelectArea(area: var SelectArea, currentLine, currentColumn: int) =
   area.endLine = currentLine
   area.endColumn = currentColumn
 
@@ -18,7 +18,7 @@ proc swapSlectArea(area: var SelectArea) =
     swap(area.startLine, area.endLine)
     swap(area.startColumn, area.endColumn)
 
-proc yankBuffer*(bufStatus: var BufferStatus, registers: var Registers, windowNode: WindowNode, area: SelectArea, platform: Platform, clipboard: bool) =
+proc yankBuffer(bufStatus: var BufferStatus, registers: var Registers, windowNode: WindowNode, area: SelectArea, platform: Platform, clipboard: bool) =
   if bufStatus.buffer[windowNode.currentLine].len < 1: return
   registers.yankedLines = @[]
   registers.yankedStr = @[]
@@ -39,7 +39,7 @@ proc yankBuffer*(bufStatus: var BufferStatus, registers: var Registers, windowNo
 
     if clipboard: registers.sendToClipboad(platform)
 
-proc yankBufferBlock*(bufStatus: var BufferStatus, registers: var Registers, windowNode: WindowNode, area: SelectArea, platform: Platform, clipboard: bool) =
+proc yankBufferBlock(bufStatus: var BufferStatus, registers: var Registers, windowNode: WindowNode, area: SelectArea, platform: Platform, clipboard: bool) =
   if bufStatus.buffer.len == 1 and bufStatus.buffer[windowNode.currentLine].len < 1: return
   registers.yankedLines = @[]
   registers.yankedStr = @[]
@@ -81,7 +81,7 @@ proc deleteBuffer(bufStatus: var BufferStatus, registers: var Registers, windowN
 
   inc(bufStatus.countChange)
 
-proc deleteBufferBlock*(bufStatus: var BufferStatus, registers: var Registers, windowNode: WindowNode, area: SelectArea, platform: Platform, clipboard: bool) =
+proc deleteBufferBlock(bufStatus: var BufferStatus, registers: var Registers, windowNode: WindowNode, area: SelectArea, platform: Platform, clipboard: bool) =
   if bufStatus.buffer.len == 1 and bufStatus.buffer[windowNode.currentLine].len < 1: return
   bufStatus.yankBufferBlock(registers, windowNode, area, platform, clipboard)
 
@@ -146,7 +146,7 @@ proc replaceCharactorBlock(bufStatus: var BufferStatus, area: SelectArea, ch: Ru
     for j in area.startColumn .. min(area.endColumn, bufStatus.buffer[i].high): newLine[j] = ch
     if oldLine != newLine: bufStatus.buffer[i] = newLine
 
-proc joinLines*(bufStatus: var BufferStatus, windowNode: WindowNode, area: SelectArea) =
+proc joinLines(bufStatus: var BufferStatus, windowNode: WindowNode, area: SelectArea) =
   for i in area.startLine .. area.endLine:
     windowNode.currentLine = area.startLine
     bufStatus.joinLine(windowNode)
@@ -197,7 +197,7 @@ proc toUpperStringBlock(bufStatus: var BufferStatus, area: SelectArea) =
     for j in area.startColumn .. min(area.endColumn, bufStatus.buffer[i].high): newLine[j] = oldLine[j].toUpper
     if oldLine != newLine: bufStatus.buffer[i] = newLine
 
-proc visualCommand*(status: var EditorStatus, area: var SelectArea, key: Rune) =
+proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSlectArea
 
   let
@@ -217,7 +217,7 @@ proc visualCommand*(status: var EditorStatus, area: var SelectArea, key: Rune) =
     if not isEscKey(ch): status.bufStatus[currentBufferIndex].replaceCharactor(area, ch)
   else: discard
 
-proc visualBlockCommand*(status: var EditorStatus, area: var SelectArea, key: Rune) =
+proc visualBlockCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSlectArea
 
   let

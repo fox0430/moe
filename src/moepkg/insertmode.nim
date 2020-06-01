@@ -47,35 +47,64 @@ proc insertCharacter*(bufStatus: var BufferStatus, windowNode: WindowNode, autoC
     moveRight()
     inserted()
 
-proc keyBackspace*(bufStatus: var BufferStatus, windowNode: WindowNode, autoDeleteParen: bool) =
+proc currentLineDeleteCharacterBeforeCursor(
+         bufStatus       : var BufferStatus,
+         windowNode      : WindowNode,
+         autoDeleteParen : bool            ) =
   if windowNode.currentLine == 0 and windowNode.currentColumn == 0: return
 
-  if windowNode.currentColumn == 0:
-    windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine - 1].len
+  dec(windowNode.currentColumn)
+  let
+    currentChar = bufStatus.buffer[windowNode.currentLine][windowNode.currentColumn]
+    oldLine     = bufStatus.buffer[windowNode.currentLine]
+  var newLine   = bufStatus.buffer[windowNode.currentLine]
+  newLine.delete(windowNode.currentColumn)
 
-    let oldLine = bufStatus.buffer[windowNode.currentLine - 1]
-    var newLine = bufStatus.buffer[windowNode.currentLine - 1]
-    newLine &= bufStatus.buffer[windowNode.currentLine]
-    bufStatus.buffer.delete(windowNode.currentLine, windowNode.currentLine)
-    if oldLine != newLine: bufStatus.buffer[windowNode.currentLine - 1] = newLine
+  if oldLine != newLine:
+    bufStatus.buffer[windowNode.currentLine] = newLine
 
-    dec(windowNode.currentLine)
-  else:
-    dec(windowNode.currentColumn)
+  if autoDeleteParen:
+    bufStatus.deleteParen(windowNode, currentChar)
 
-    let
-      currentChar = bufStatus.buffer[windowNode.currentLine][windowNode.currentColumn]
-      oldLine = bufStatus.buffer[windowNode.currentLine]
-    var newLine = bufStatus.buffer[windowNode.currentLine]
-    newLine.delete(windowNode.currentColumn)
-    if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
-
-    if autoDeleteParen: bufStatus.deleteParen(windowNode, currentChar)
-
-    if bufStatus.mode == Mode.insert and windowNode.currentColumn > bufStatus.buffer[windowNode.currentLine].len:
-      windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].len
-
+  if(bufStatus.mode == Mode.insert and
+     windowNode.currentColumn > bufStatus.buffer[windowNode.currentLine].len):
+    windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].len
+  
   inc(bufStatus.countChange)
+     
+proc currentLineDeleteLineBreakBeforeCursor*(
+         bufStatus       : var BufferStatus,
+         windowNode      : WindowNode,
+         autoDeleteParen : bool             ) =
+  if windowNode.currentLine == 0 and windowNode.currentColumn == 0: return
+
+  windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine - 1].len
+
+  let oldLine = bufStatus.buffer[windowNode.currentLine - 1]
+  var newLine = bufStatus.buffer[windowNode.currentLine - 1]
+  newLine &= bufStatus.buffer[windowNode.currentLine]
+  bufStatus.buffer.delete(windowNode.currentLine, windowNode.currentLine)
+  if oldLine != newLine: bufStatus.buffer[windowNode.currentLine - 1] = newLine
+
+  dec(windowNode.currentLine)
+  
+  inc(bufStatus.countChange)
+
+proc keyBackspace*(bufStatus: var BufferStatus, windowNode: WindowNode, autoDeleteParen: bool) =
+  if windowNode.currentColumn == 0:
+    currentLineDeleteLineBreakBeforeCursor(bufStatus, windowNode, autoDeleteParen)
+  else:
+    currentLineDeleteCharacterBeforeCursor(bufStatus, windowNode, autoDeleteParen)
+
+proc deleteBeforeCursorToFirstNonBlank*(
+         bufStatus       : var BufferStatus,
+         windowNode      : WindowNode  ) =
+  if windowNode.currentColumn == 0:
+    return
+  let firstNonBlank = getFirstNonBlankOfLine(bufStatus, windowNode) 
+  
+  for _ in firstNonBlank..max(0, windowNode.currentColumn-1):
+    currentLineDeleteCharacterBeforeCursor(bufStatus, windowNode, false)
 
 proc insertIndent(bufStatus: var BufferStatus, windowNode: WindowNode) =
   let indent = min(countRepeat(bufStatus.buffer[windowNode.currentLine], Whitespace, 0), windowNode.currentColumn)
@@ -161,6 +190,9 @@ proc insertMode*(status: var EditorStatus) =
       if windowNode.currentColumn > 0: dec(windowNode.currentColumn)
       windowNode.expandedColumn = windowNode.currentColumn
       status.changeMode(Mode.normal)
+    elif isControlU(key):
+      status.bufStatus[currentBufferIndex].deleteBeforeCursorToFirstNonBlank(
+        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
     elif isLeftKey(key):
       windowNode.keyLeft
     elif isRightkey(key):

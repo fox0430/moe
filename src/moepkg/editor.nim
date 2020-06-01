@@ -1,5 +1,5 @@
 import strutils, sequtils, os, osproc, random
-import editorstatus, ui, gapbuffer, unicodeext, commandview, undoredostack, window, bufferstatus
+import editorstatus, ui, gapbuffer, unicodeext, commandview, undoredostack, window, bufferstatus, movement
 
 proc deleteParen*(bufStatus: var BufferStatus, windowNode: WindowNode, currentChar: Rune) =
   let
@@ -156,6 +156,15 @@ proc deleteCharacterBeginningOfLine*(bufStatus: var BufferStatus, autoDeletePare
   windowNode.currentColumn = 0
   windowNode.expandedColumn = 0
   for i in 0 ..< beforColumn: bufStatus.deleteCurrentCharacter(windowNode, autoDeleteParen)
+
+proc deleteCharactersOfLine*(bufStatus: var BufferStatus, autoDeleteParen: bool, windowNode: WindowNode) =
+  let
+    currentLine = windowNode.currentLine
+    firstNonBlank = getFirstNonBlankOfLineOrFirstColumn(bufStatus, windowNode)
+  windowNode.currentColumn = firstNonBlank
+  windowNode.expandedColumn = firstNonBlank
+  for _ in firstNonBlank ..< bufStatus.buffer[currentLine].len:
+    bufStatus.deleteCurrentCharacter(windowNode, autoDeleteParen)
 
 proc genDelimiterStr(buffer: string): string =
   while true:

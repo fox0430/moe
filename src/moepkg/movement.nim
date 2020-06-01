@@ -30,10 +30,41 @@ proc keyDown*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   windowNode.currentColumn = min(windowNode.expandedColumn, maxColumn)
   if windowNode.currentColumn < 0: windowNode.currentColumn = 0
 
+proc getFirstNonBlankOfLine*(bufStatus: BufferStatus, windowNode: WindowNode): int =
+  if bufStatus.buffer[windowNode.currentLine].len() == 0:
+    return 0
+  let lineLen = bufStatus.buffer[windowNode.currentLine].len()
+  while bufStatus.buffer[windowNode.currentLine][result] == ru' ':
+    inc(result)
+    if result == lineLen:
+      return -1
+
+proc getFirstNonBlankOfLineOrLastColumn*(bufStatus  : BufferStatus,
+                                         windowNode : WindowNode  ): int =
+  result = getFirstNonBlankOfLine(bufStatus, windowNode)
+  if result == -1:
+    return bufStatus.buffer[windowNode.currentLine].len()-1
+
+proc getFirstNonBlankOfLineOrFirstColumn*(bufStatus  : BufferStatus,
+                                          windowNode : WindowNode  ): int =
+  result = getFirstNonBlankOfLine(bufStatus, windowNode)
+  if result == -1:
+    return 0
+
+proc getLastNonBlankOfLine*(bufStatus: BufferStatus, windowNode: WindowNode): Natural =
+  if bufStatus.buffer[windowNode.currentLine].len() == 0:
+    return 0
+
+  result = bufStatus.buffer[windowNode.currentLine].len()-1
+  while bufStatus.buffer[windowNode.currentLine][result] == ru' ':
+    dec(result)
+
 proc moveToFirstNonBlankOfLine*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
-  windowNode.currentColumn = 0
-  while bufStatus.buffer[windowNode.currentLine][windowNode.currentColumn] == ru' ':
-    inc(windowNode.currentColumn)
+  windowNode.currentColumn = getFirstNonBlankOfLineOrLastColumn(bufStatus, windowNode)
+  windowNode.expandedColumn = windowNode.currentColumn
+
+proc moveToLastNonBlankOfLine*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
+  windowNode.currentColumn = getLastNonBlankOfLine(bufStatus, windowNode)
   windowNode.expandedColumn = windowNode.currentColumn
 
 proc moveToFirstOfLine*(windowNode: var WindowNode) =
@@ -82,11 +113,11 @@ proc moveToLastLine*(status: var EditorStatus) =
   if status.bufStatus[currentBufferIndex].cmdLoop > 1: jumpLine(status, status.bufStatus[currentBufferIndex].cmdLoop - 1)
   else: status.jumpLine(status.bufStatus[currentBufferIndex].buffer.high)
 
-proc pageUp*(status: var EditorStatus) =
+proc scrollUpNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
   var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
-    destination = max(windowNode.currentLine - windowNode.view.height, 0)
+    destination = max(windowNode.currentLine - numberOfLines, 0)
 
   if status.settings.smoothScroll:
     let  currentLine = windowNode.currentLine
@@ -106,11 +137,19 @@ proc pageUp*(status: var EditorStatus) =
   else:
     jumpLine(status, destination)
 
-proc pageDown*(status: var EditorStatus) =
+proc pageUp*(status: var EditorStatus) =
+  var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+  scrollUpNumberOfLines(status, windowNode.view.height)
+
+proc halfPageUp*(status: var EditorStatus) =
+  var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+  scrollUpNumberOfLines(status, Natural(windowNode.view.height / 2))
+
+proc scrollDownNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
   var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
-    destination = min(windowNode.currentLine + windowNode.view.height, status.bufStatus[currentBufferIndex].buffer.len - 1)
+    destination = min(windowNode.currentLine + numberOfLines, status.bufStatus[currentBufferIndex].buffer.len - 1)
     currentLine = windowNode.currentLine
 
   if status.settings.smoothScroll:
@@ -136,6 +175,14 @@ proc pageDown*(status: var EditorStatus) =
     if not (view.originalLine[0] <= destination and (view.originalLine[view.height - 1] == -1 or destination <= view.originalLine[view.height - 1])):
       let startOfPrintedLines = max(destination - (currentLine - status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.originalLine[0]), 0)
       status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.reload(status.bufStatus[currentBufferIndex].buffer, startOfPrintedLines)
+
+proc pageDown*(status: var EditorStatus) =
+  var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+  scrollDownNumberOfLines(status, windowNode.view.height)
+
+proc halfPageDown*(status: var EditorStatus) =
+  var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+  scrollDownNumberOfLines(status, Natural(windowNode.view.height / 2))
   
 proc moveToForwardWord*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   let

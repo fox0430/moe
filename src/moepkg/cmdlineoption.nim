@@ -1,9 +1,17 @@
-import parseopt
+import parseopt, pegs, os
 
 type ComdParsedList* = seq[tuple[filename: string]]
 
+proc staticReadVersionFromNimble: string {.compileTime.} =
+  let peg = """@ "version" \s* "=" \s* \" {[0-9.]+} \" @ $""".peg
+  var captures: seq[string] = @[""]
+  let nimbleSpec = staticRead(currentSourcePath.parentDir() / "../../moe.nimble")
+  assert nimbleSpec.match(peg, captures)
+  assert captures.len == 1
+  return captures[0]
+
 proc writeVersion() =
-  echo "v0.1.9"
+  echo staticReadVersionFromNimble()
   quit()
 
 proc writeHelp() =

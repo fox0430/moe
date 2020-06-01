@@ -1,5 +1,7 @@
 import unittest, osproc
-import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, visualmode, movement, bufferstatus]
+import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, movement, bufferstatus]
+
+include moepkg/visualmode
 
 test "Visual mode: Delete buffer 1":
   var status = initEditorStatus()

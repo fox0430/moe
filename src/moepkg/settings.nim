@@ -1,5 +1,11 @@
-import parsetoml, os
-from strutils import parseEnum
+import parsetoml, os, json, macros
+from strutils import parseEnum, endsWith
+
+when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
+  # This addresses a breaking change in https://github.com/nim-lang/Nim/pull/14046.
+  from strutils import nimIdentNormalize
+  export strutils.nimIdentNormalize
+
 import ui, color, unicodeext, editorview, build
 
 type WorkSpaceSettings = object
@@ -107,18 +113,356 @@ proc getCursorType(cursorType, mode: string): CursorType =
 proc getTheme(theme: string): ColorTheme =
   if theme == "dark": return ColorTheme.dark
   elif theme == "light": return ColorTheme.light
+  elif theme == "config": return ColorTheme.config
+  elif theme == "vscode": return ColorTheme.config
   else: return ColorTheme.vivid
+
+# This macro takes statement lists for the foreground and
+# background colors of a foreground/background color setting.
+# these statements are supposed to set the color, and
+# the first statement that doesn't result in Color.default
+# will be used. Color.default will only be used when there's
+# no success at all.
+# Finally adjusts can be used to generate a suitable color.
+# adjusts:
+#   InverseBackground    - inversing the background color
+#   InverseForeground    - inversing the foreground color
+#   ReadableVsBackground - adjusts foreground to be readable
+macro setEditorColor(args: varargs[untyped]): untyped =
+  echo args.treeRepr
+  let colorNameIdent           = args[0]
+  let colorNameBackgroundIdent = ident(colorNameIdent.strVal & "Bg")
+  let resultIdent              = ident"result"
+  let fgColorIdent             = genSym(nskVar, "fgColor")
+  let bgColorIdent             = genSym(nskVar, "bgColor")
+  let stmtList                 = args[^1]
+  let fgStmtList               = stmtList[0][^1]
+  let bgStmtList               = stmtList[^1][^1]
+  var setFgColor               : NimNode = quote do: discard
+  var setBgColor               : NimNode = quote do: discard
+  var fgDynamicAdjust          : NimNode = quote do: discard
+  var bgDynamicAdjust          : NimNode = quote do: discard
+  var assignColors             : NimNode = quote do: discard
+  var fallbackInverseBg        : NimNode = quote do:
+    if (`fgColorIdent` == Color.default and
+        `bgColorIdent` != Color.default):
+      `fgColorIdent` = inverseColor(`bgColorIdent`)
+  var fallbackInverseFg        : NimNode = quote do:
+    if (`fgColorIdent` != Color.default and
+        `bgColorIdent` == Color.default):
+      `bgColorIdent` = inverseColor(`fgColorIdent`)
+  var readableVsBackground     : NimNode = quote do:
+    `fgColorIdent` = readableOnBackground(`fgColorIdent`, `bgColorIdent`)
+  for statement in fgStmtList:
+    if (statement.kind == nnkCall and statement[0].kind == nnkIdent and
+        statement[0].strVal() == "adjust"):
+        let adjust = statement[^1][0].strVal()
+        case adjust
+        of "InverseBackground":
+          fgDynamicAdjust = quote do:
+            `fgDynamicAdjust`
+            `fallbackInverseBg`
+        of "ReadableVsBackground":
+          fgDynamicAdjust = quote do:
+            `fgDynamicAdjust`
+            `readableVsBackground`
+        else: discard
+    else:
+      setFgColor = quote do:
+        `setFgColor`
+        if `fgColorIdent` == Color.default:
+          `fgColorIdent` = `statement`
+  for statement in bgStmtList:
+    setBgColor = quote do:
+      `setBgColor`
+      if `bgColorIdent` == Color.default:
+        `bgColorIdent` = `statement`
+  if stmtList[0][0].strVal() == stmtList[^1][0].strVal():
+    # they are the same => there's only one
+    setBgColor = quote do: discard
+    #fgDynamicAdjust = quote do: discard
+    #bgDynamicAdjust = quote do: discard
+    assignColors    = quote do:
+      `resultIdent`.`colorNameIdent`           = `fgColorIdent`
+  else:
+    assignColors    = quote do:
+      `resultIdent`.`colorNameIdent`           = `fgColorIdent`
+      `resultIdent`.`colorNameBackgroundIdent` = `bgColorIdent`
+
+  return quote do:
+    var `fgColorIdent` = Color.default
+    var `bgColorIdent` = Color.default
+    `setFgColor`
+    `setBgColor`
+    `fgDynamicAdjust`
+    `bgDynamicAdjust`
+    `assignColors`
+
+proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
+  let jsonNode = json.parseFile(fileName)
+
+  # This converts a JsonNode JString to a 256-Color-Terminal-Color
+  proc colorFromNode(node: JsonNode): Color =
+    if node == nil:
+      return Color.default
+    var asString = node.getStr()
+    if (asString.len() >= 7   and
+        asString[0]    == '#'):
+        return hexToColor(asString[1..asString.len()-1])
+    return Color.default
+
+  var tokenNodes = initTable[string, JsonNode]()
+  for node in jsonNode{"tokenColors"}:
+    var scope = node{"scope"}
+    let settings = node{"settings"}
+    if scope == nil:
+      scope = parseJson("\"unnamedScope\"")
+    if settings == nil:
+      continue
+    if scope.len() > 0:
+      for item in scope:
+        tokenNodes[item.getStr()] = settings
+    else:
+      tokenNodes[scope.getStr()] = settings
+
+  # Convenience
+  proc getScope(key: string): JsonNode =
+    if tokenNodes.hasKey(key):
+      return tokenNodes[key]
+    else:
+      JsonNode.default()
+
+  # This is currently optimized and tested for the Forest Focus theme
+  # and even for that theme it only produces a partial and imperfect
+  # translation
+  expandMacros:
+    setEditorColor editorBg:
+      background:
+        colorFromNode(jsonNode{"colors", "editor.background"})
+    setEditorColor defaultChar:
+      foreground:
+        colorFromNode(jsonNode{"colors", "editor.foreground"})
+    setEditorColor gtKeyword:
+      foreground:
+        colorFromNode(getScope("keyword"){"foreground"})
+    setEditorColor gtStringLit:
+      foreground:
+        colorFromNode(getScope("string"){"foreground"})
+    setEditorColor gtDecNumber:
+      foreground:
+        colorFromNode(getScope("constant"){"foreground"})
+    setEditorColor gtComment:
+      foreground:
+        colorFromNode(getScope("comment"){"foreground"})
+    setEditorColor gtLongComment:
+      foreground:
+        colorFromNode(getScope("comment"){"foreground"})
+    setEditorColor gtWhitespace:
+      foreground:
+        colorFromNode(jsonNode{"colors", "editorWhitespace.foreground"})
+    # status bar
+    setEditorColor statusBarNormalMode:
+      foreground:
+        colorFromNode(jsonNode{"colors", "editor.foreground"})
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "statusBar.background"})
+    setEditorColor statusBarModeNormalMode:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "statusBar.background"})
+    setEditorColor statusBarInsertMode:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "statusBar.background"})
+    setEditorColor statusBarModeInsertMode:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        white
+    setEditorColor statusBarVisualMode:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "statusBar.background"})
+    setEditorColor statusBarModeVisualMode:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        white
+    setEditorColor statusBarReplaceMode:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "statusBar.background"})
+    setEditorColor statusBarModeReplaceMode:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        white
+    setEditorColor statusBarFilerMode:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "statusBar.background"})
+    setEditorColor statusBarModeFilerMode:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        white
+    setEditorColor statusBarExMode:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "statusBar.background"})
+    setEditorColor statusBarModeExMode:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        white
+    # command  bar
+    setEditorColor commandBar:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        Color.default
+    # error message
+    setEditorColor errorMessage:
+      foreground:
+        colorFromNode(getScope("console.error"){"foreground"})
+      background:
+        Color.default
+    setEditorColor currentTab:
+      foreground:
+        colorFromNode(jsonNode{"colors", "tab.foreground"})
+      background:
+        colorFromNode(jsonNode{"colors", "tab.activeBackground"})
+
+    setEditorColor tab:
+      foreground:
+        colorFromNode(jsonNode{"colors", "tab.foreground"})
+      background:
+        colorFromNode(jsonNode{"colors", "tab.inactiveBackground"})
+    
+    setEditorColor lineNum:
+      foreground:
+        colorFromNode(jsonNode{"colors", "editorLineNumber.foreground"})
+        adjust: InverseBackground
+      background:
+        colorFromNode(jsonNode{"colors", "editorLineNumber.background"})
+    
+    setEditorColor currentLineNum:
+      foreground:
+        colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
+      background:
+        colorFromNode(jsonNode{"colors", "editor.background"})
+
+    setEditorColor pcLink:
+      foreground:
+        colorFromNode(getScope("hyperlink"){"foreground"})
+        adjust: ReadableVsBackground
+      background:
+        Color.default
+    
+    # highlight other uses current word
+    setEditorColor currentWord:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
+    
+    setEditorColor popUpWinCurrentLine:
+      foreground:
+        colorFromNode(jsonNode{"colors", "sideBarTitle.forground"})
+      background:
+        colorFromNode(jsonNode{"colors", "sideBarSectionHeader.background"})
+        
+    # pop up window
+    setEditorColor popUpWindow:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "sideBar.background"})
+
+    # pair of paren highlighting
+    setEditorColor parenText:
+      foreground:
+        colorFromNode(getScope("unnamedScope"){"bracketsForeground"})
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
+
+    # replace text highlighting
+    setEditorColor replaceText:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors",
+          "gitDecoration.conflictingResourceForeground"})
+    # filer mode
+    setEditorColor currentFile:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
+    setEditorColor file:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        Color.default
+    setEditorColor dir:
+      foreground:
+        colorFromNode(getScope("hyperlink"){"foreground"})
+        adjust: ReadableVsBackground
+      background:
+        Color.default
+    # highlight full width space
+    setEditorColor highlightFullWidthSpace:
+      foreground:
+        colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+      background:
+        colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+    # work space bar
+    setEditorColor workSpaceBar:
+      foreground:
+        colorFromNode(jsonNode{"colors", "activityBar.foreground"})
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "activityBar.background"})
+    setEditorColor todo:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "activityBarBadge.background"})
+    # search result highlighting
+    setEditorColor searchResult:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+    # selected area in visual mode
+    setEditorColor visualMode:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "tab.activeBorder"})
 
 proc parseSettingsFile*(filename: string): EditorSettings =
   result = initEditorSettings()
 
+  var vscodeTheme = false
   var settings: TomlValueRef
   try: settings = parsetoml.parseFile(filename)
   except IOError: return
 
   if settings.contains("Standard"):
     if settings["Standard"].contains("theme"):
-      result.editorColorTheme = getTheme(settings["Standard"]["theme"].getStr())
+      let themeString = settings["Standard"]["theme"].getStr()
+      result.editorColorTheme = getTheme(themeString)
+      if themeString == "vscode":
+        vscodeTheme = true
 
     if settings["Standard"].contains("number"):
       result.view.lineNumber = settings["Standard"]["number"].getbool()
@@ -139,7 +483,8 @@ proc parseSettingsFile*(filename: string): EditorSettings =
       result.syntax = settings["Standard"]["syntax"].getbool()
 
     if settings["Standard"].contains("tabStop"):
-      result.tabStop = settings["Standard"]["tabStop"].getInt()
+      result.tabStop      = settings["Standard"]["tabStop"].getInt()
+      result.view.tabStop = settings["Standard"]["tabStop"].getInt()
 
     if settings["Standard"].contains("autoCloseParen"):
       result.autoCloseParen = settings["Standard"]["autoCloseParen"].getbool()
@@ -194,6 +539,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["Standard"].contains("highlightFullWidthSpace"):
       result.highlightFullWidthSpace = settings["Standard"]["highlightFullWidthSpace"].getbool()
+    
+    if settings["Standard"].contains("indentationLines"):
+      result.view.indentationLines= settings["Standard"]["indentationLines"].getbool()
 
   if settings.contains("TabLine"):
     if settings["TabLine"].contains("allBuffer"):
@@ -238,10 +586,14 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["WorkSpace"].contains("useBar"):
         result.workSpace.useBar = settings["WorkSpace"]["useBar"].getbool()
 
-  if settings.contains("Theme"):
+  if not vscodeTheme and settings.contains("Theme"):
     if settings["Theme"].contains("baseTheme"):
-      let theme = parseEnum[ColorTheme](settings["Theme"]["baseTheme"].getStr())
-      ColorThemeTable[ColorTheme.config] = ColorThemeTable[theme]
+      let themeString = settings["Theme"]["baseTheme"].getStr()
+      if fileExists(themeString):
+        ColorThemeTable[ColorTheme.config] = makeColorThemeFromVSCodeThemeFile(themeString)
+      else:
+        let theme = parseEnum[ColorTheme](themeString)
+        ColorThemeTable[ColorTheme.config] = ColorThemeTable[theme]
 
     template color(str: string): untyped =
       parseEnum[Color](settings["Theme"][str].getStr())
@@ -451,6 +803,67 @@ proc parseSettingsFile*(filename: string): EditorSettings =
       ColorThemeTable[ColorTheme.config].workSpaceBarBg = color("wrokSpaceBarBg")
 
     result.editorColorTheme = ColorTheme.config
+  if vscodeTheme:
+    # search for the vscode theme that is set in the current preferences of
+    # vscode/vscodium. Vscodium takes precedence, since you can assume that,
+    # people that install VScodium prefer it over Vscode for privacy reasons.
+    # If no vscode theme can be found, this defaults to the vivid theme.
+    # The first implementation is for finding the VsCode/VsCodium config and
+    # extension folders on Linux. Hopefully other contributors will come and
+    # add support for Windows, and other systems.
+    var vsCodeThemeLoaded = false
+    block vsCodeThemeLoading:
+      let homeDir = getHomeDir()
+      var vsCodeSettingsFile = homeDir & "/.config/VSCodium/User/settings.json"
+      var vsCodeThemeFile = ""
+      var vsCodeExtensionsDir = homeDir & "/.vscode-oss/extensions/"
+      var vsCodeThemeSetting = ""
+      if not existsFile(vsCodeSettingsFile):
+        vsCodeSettingsFile = homeDir & "/.config/Code/User/settings.json"
+      if existsFile(vsCodeSettingsFile):
+        let vsCodeSettingsJson = json.parseFile(vsCodeSettingsFile)
+        vsCodeThemeSetting = vsCodeSettingsJson{"workbench.colorTheme"}.getStr()
+        if vsCodeThemeSetting == "":
+          break vsCodeThemeLoading
+
+      else:
+        break vsCodeThemeLoading
+      
+      if not existsDir(vsCodeExtensionsDir):
+        vsCodeExtensionsDir = homeDir & "/.vscode/extensions/"
+        if not existsDir(vsCodeExtensionsDir):
+          break vsCodeThemeLoading
+      
+      # Note: walkDirRec was first used to solve this, however
+      #       the performance at runtime was much worse
+      for file in walkPattern(vsCodeExtensionsDir & "/*/package.json"):
+        if file.endsWith("/package.json"):
+          var vsCodePackageJson: JsonNode
+          try:
+            vsCodePackageJson = json.parseFile(file)
+          except:
+            break vsCodeThemeLoading
+          let displayName = vsCodePackageJson{"displayName"}
+          if displayName == nil: continue
+
+          if displayName.getStr() == vsCodeThemeSetting:
+            let themesJson = vsCodePackageJson{"contributes", "themes"}
+            if themesJson != nil and themesJson.len() > 0:
+              let theTheme = themesJson[0]
+              let theThemePath = theTheme{"path"}
+              if theThemePath != nil and theThemePath.kind == JString:
+                vsCodeThemeFile = parentDir(file) / theThemePath.getStr()
+            else:
+              break vsCodeThemeLoading
+            break
+      
+      if fileExists(vsCodeThemeFile):
+        result.editorColorTheme = ColorTheme.config
+        ColorThemeTable[ColorTheme.config] =
+          makeColorThemeFromVSCodeThemeFile(vsCodeThemeFile)
+        vsCodeThemeLoaded = true
+    if not vsCodeThemeLoaded:
+      result.editorColorTheme = ColorTheme.vivid
 
 proc loadSettingFile*(settings: var EditorSettings) =
   try: settings = parseSettingsFile(getConfigDir() / "moe" / "moerc.toml")

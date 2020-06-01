@@ -66,24 +66,32 @@ proc sortDirList(dirList: seq[PathInfo], sortBy: Sort): seq[PathInfo] =
   of name:
     return dirList.sortedByIt(it.path)
   of fileSize:
-    result = @[(pcDir, "../", 0.int64, getLastModificationTime(getCurrentDir()))]
-    result.add dirList[1 .. dirList.high].sortedByIt(it.size).reversed
+    result.add dirList.sortedByIt(it.size).reversed
   of time:
-    result = @[(pcDir, "../", 0.int64, getLastModificationTime(getCurrentDir()))]
-    result.add dirList[1 .. dirList.high].sortedByIt(it.lastWriteTime)
+    result.add dirList.sortedByIt(it.lastWriteTime)
 
 proc refreshDirList(sortBy: Sort): seq[PathInfo] =
-  result = @[(pcDir, "../", 0.int64, getLastModificationTime(getCurrentDir()))]
+  var dirList  : seq[PathInfo]
+  var fileList : seq[PathInfo]
+  var item     : PathInfo
   for list in walkDir("./"):
     if list.kind == pcLinkToFile or list.kind == pcLinkToDir:
-      if tryExpandSymlink(list.path) != "": result.add (list.kind, list.path, 0.int64, getLastModificationTime(getCurrentDir()))
+      if tryExpandSymlink(list.path) != "":
+        item = (list.kind, list.path, 0.int64, getLastModificationTime(getCurrentDir()))
     else:
       if list.kind == pcFile:
-        try: result.add (list.kind, list.path, getFileSize(list.path), getLastModificationTime(list.path))
+        try:
+          item = (list.kind, list.path, getFileSize(list.path), getLastModificationTime(list.path))
         except OSError, IOError: discard
-      else: result.add (list.kind, list.path, 0.int64, getLastModificationTime(list.path))
-    result[result.high].path = $(result[result.high].path.toRunes.normalizePath)
-  return sortDirList(result, sortBy)
+      else:
+        item = (list.kind, list.path, 0.int64, getLastModificationTime(list.path))
+    item.path = $(item.path.toRunes.normalizePath)
+    if list.kind in {pcLinkToDir, pcDir}:
+      dirList.add item
+    else:
+      fileList.add item
+  return @[(pcDir, "../", 0.int64, getLastModificationTime(getCurrentDir()))] &
+    sortDirList(dirList, sortBy) & sortDirList(fileList, sortBy)
 
 proc initFileRegister(): FileRegister =
   result.copy = false
@@ -185,6 +193,83 @@ proc initFilelistHighlight[T](dirList: seq[PathInfo], buffer: T, currentLine: in
     let color = setDirListColor(dir.kind, index == currentLine)
     result.colorSegments.add(ColorSegment(firstRow: index, firstColumn: 0, lastRow: index, lastColumn: buffer[index].len, color: color))
 
+proc pathToIcon(path: string): seq[Rune] =
+  if existsDir(path):
+    return ru"📁"
+
+  # Not sure if this is a perfect solution,
+  # it should detect if the current user can execute
+  # the file or not:
+  try:
+    let permissions = getFilePermissions(path)
+    if fpUserExec  in permissions or
+      fpGroupExec in permissions: 
+      return ru"🏃"
+  except:
+    discard
+
+  # The symbols were selected for their looks,
+  # they don't always have to make perfect sense,
+  # there's simply not a symbol for every possible
+  # file extension in unicode.
+  let ext = path.split(".")[^1]
+  case ext.toLower():
+  of "nim":
+    return ru"👑"
+  of "nimble", "rpm", "deb":
+    return ru"📦"
+  of "py":
+    return ru"🐍"
+  of "ui", "glade":
+    return ru"🏠"
+  of "txt", "md", "rst":
+    return ru"📝"
+  of "cpp", "cxx", "hpp":
+    return ru"⧺"
+  of "c", "h":
+    return ru"🅒"
+  of "java":
+    return ru"🍵"
+  of "php":
+    return ru"🙈"
+  of "js", "json":
+    return ru"🙉"
+  of "html", "xhtml":
+    return ru"🏄"
+  of "css":
+    return ru"👚"
+  of "xml":
+    return ru"༕"
+  of "cfg", "ini":
+    return ru"🍳"
+  of "sh":
+    return ru"🐚"
+  of "pdf", "doc", "odf", "ods", "odt":
+    return ru"🍞"
+  of "wav", "mp3", "ogg":
+    return ru"🎼"
+  of "zip", "bz2", "xz", "gz", "tgz", "zstd":
+    return ru"🚢"
+  of "exe", "bin":
+    return ru"🏃"
+  of "mp4", "webm", "avi", "mpeg":
+    return ru"🎞"
+  of "patch":
+    return ru"💊"
+  of "lock":
+    return ru"🔒"
+  of "pem", "crt":
+    return ru"🔏"
+  of "png", "jpeg", "jpg", "bmp", "gif":
+    return ru"🎨"
+  else:
+    return ru"🍕"
+
+  # useful unicode symbols: that aren't used here yet:
+  # open book        : 📖
+  # penguin          : 🐧
+  # open file folder : 📂
+
 proc fileNameToGapBuffer(bufStatus: var BufferStatus, windowNode: WindowNode, settings: EditorSettings, filerStatus: FilerStatus) =
   bufStatus.buffer = initGapBuffer[seq[Rune]]()
 
@@ -196,10 +281,15 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus, windowNode: WindowNode, se
 
     let oldLine =  bufStatus.buffer[index]
     var newLine =  bufStatus.buffer[index]
-    if kind == pcDir and 0 < index: newLine.add(ru"/")
-    elif kind == pcLinkToFile: newLine.add(ru"@ -> " & expandsymLink(filename).toRunes)
-    elif kind == pcLinkToDir: newLine.add(ru"@ -> " & expandsymLink(filename).toRunes & ru"/")
-    if oldLine != newLine: bufStatus.buffer[index] = newLine
+    if kind == pcDir and 0 < index:
+      newLine.add(ru"/")
+    elif kind == pcLinkToFile:
+      newLine.add(ru"@ -> " & expandsymLink(filename).toRunes)
+    elif kind == pcLinkToDir:
+      newLine.add(ru"@ -> " & expandsymLink(filename).toRunes & ru"/")
+    newLine = pathToIcon(filename)
+    newLine.add oldLine
+    bufStatus.buffer[index] = newLine
   
   let useStatusBar = if settings.statusBar.useBar: 1 else: 0
   let numOfFile = filerStatus.dirList.len
