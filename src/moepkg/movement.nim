@@ -30,14 +30,26 @@ proc keyDown*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   windowNode.currentColumn = min(windowNode.expandedColumn, maxColumn)
   if windowNode.currentColumn < 0: windowNode.currentColumn = 0
 
-proc getFirstNonBlankOfLine*(bufStatus: BufferStatus, windowNode: WindowNode): Natural =
+proc getFirstNonBlankOfLine*(bufStatus: BufferStatus, windowNode: WindowNode): int =
   if bufStatus.buffer[windowNode.currentLine].len() == 0:
     return 0
   let lineLen = bufStatus.buffer[windowNode.currentLine].len()
   while bufStatus.buffer[windowNode.currentLine][result] == ru' ':
     inc(result)
     if result == lineLen:
-      return 0
+      return -1
+
+proc getFirstNonBlankOfLineOrLastColumn*(bufStatus  : BufferStatus,
+                                         windowNode : WindowNode  ): int =
+  result = getFirstNonBlankOfLine(bufStatus, windowNode)
+  if result == -1:
+    return bufStatus.buffer[windowNode.currentLine].len()-1
+
+proc getFirstNonBlankOfLineOrFirstColumn*(bufStatus  : BufferStatus,
+                                          windowNode : WindowNode  ): int =
+  result = getFirstNonBlankOfLine(bufStatus, windowNode)
+  if result == -1:
+    return 0
 
 proc getLastNonBlankOfLine*(bufStatus: BufferStatus, windowNode: WindowNode): Natural =
   if bufStatus.buffer[windowNode.currentLine].len() == 0:
@@ -48,7 +60,7 @@ proc getLastNonBlankOfLine*(bufStatus: BufferStatus, windowNode: WindowNode): Na
     dec(result)
 
 proc moveToFirstNonBlankOfLine*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
-  windowNode.currentColumn = getFirstNonBlankOfLine(bufStatus, windowNode)
+  windowNode.currentColumn = getFirstNonBlankOfLineOrLastColumn(bufStatus, windowNode)
   windowNode.expandedColumn = windowNode.currentColumn
 
 proc moveToLastNonBlankOfLine*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
