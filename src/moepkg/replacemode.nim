@@ -1,12 +1,19 @@
 import terminal
 import editorstatus, ui, unicodeext, movement, editor, bufferstatus
 
+proc isReplaceMode(status: EditorStatus): bool =
+  let
+    workspaceIndex = status.currentWorkSpaceIndex
+    bufferIndex = status.workspace[workspaceIndex].currentMainWindowNode.bufferIndex
+  result = status.bufStatus[bufferIndex].mode == Mode.replace
+
 proc replaceMode*(status: var EditorStatus) =
   var
     bufferChanged = false
-    windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+    windowNode =
+      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
 
-  while status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode == Mode.replace:
+  while status.isReplaceMode:
     let currentBufferIndex = status.bufferIndexInCurrentWindow
 
     if bufferChanged:
@@ -36,6 +43,9 @@ proc replaceMode*(status: var EditorStatus) =
       status.bufStatus[currentBufferIndex].keyDown(windowNode)
  
     else:
-      status.bufStatus[currentBufferIndex].replaceCurrentCharacter(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode, status.settings.autoIndent, status.settings.autoDeleteParen, key)
+      status.bufStatus[currentBufferIndex].replaceCurrentCharacter(
+        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode,
+        status.settings.autoIndent, status.settings.autoDeleteParen, key)
+
       status.bufStatus[currentBufferIndex].keyRight(windowNode)
       bufferChanged = true

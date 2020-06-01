@@ -96,7 +96,9 @@ proc jumpLine*(status: var EditorStatus, destination: int) =
   windowNode.currentColumn = 0
   windowNode.expandedColumn = 0
 
-  if not (view.originalLine[0] <= destination and (view.originalLine[view.height - 1] == -1 or destination <= view.originalLine[view.height - 1])):
+  if not (view.originalLine[0] <= destination and
+     (view.originalLine[view.height - 1] == -1 or
+     destination <= view.originalLine[view.height - 1])):
     var startOfPrintedLines = 0
     if destination > status.bufStatus[currentBufferIndex].buffer.high - windowNode.window.height - 1:
       startOfPrintedLines = status.bufStatus[currentBufferIndex].buffer.high - windowNode.window.height - 1
@@ -110,7 +112,8 @@ proc moveToFirstLine*(status: var EditorStatus) = status.jumpLine(0)
 proc moveToLastLine*(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
-  if status.bufStatus[currentBufferIndex].cmdLoop > 1: jumpLine(status, status.bufStatus[currentBufferIndex].cmdLoop - 1)
+  if status.bufStatus[currentBufferIndex].cmdLoop > 1:
+    jumpLine(status, status.bufStatus[currentBufferIndex].cmdLoop - 1)
   else: status.jumpLine(status.bufStatus[currentBufferIndex].buffer.high)
 
 proc scrollUpNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
@@ -172,7 +175,9 @@ proc scrollDownNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
     windowNode.currentColumn = 0
     windowNode.expandedColumn = 0
 
-    if not (view.originalLine[0] <= destination and (view.originalLine[view.height - 1] == -1 or destination <= view.originalLine[view.height - 1])):
+    if not (view.originalLine[0] <= destination and
+       (view.originalLine[view.height - 1] == -1 or
+       destination <= view.originalLine[view.height - 1])):
       let startOfPrintedLines = max(destination - (currentLine - status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.originalLine[0]), 0)
       status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view.reload(status.bufStatus[currentBufferIndex].buffer, startOfPrintedLines)
 
@@ -188,8 +193,12 @@ proc moveToForwardWord*(bufStatus: var BufferStatus, windowNode: var WindowNode)
   let
     currentLine = windowNode.currentLine
     currentColumn = windowNode.currentColumn
-    startWith = if bufStatus.buffer[currentLine].len == 0: ru'\n' else: bufStatus.buffer[currentLine][currentColumn]
-    isSkipped = if unicodeext.isPunct(startWith): unicodeext.isPunct elif unicodeext.isAlpha(startWith): unicodeext.isAlpha elif unicodeext.isDigit(startWith): unicodeext.isDigit else: nil
+    startWith = if bufStatus.buffer[currentLine].len == 0: ru'\n' else:
+                   bufStatus.buffer[currentLine][currentColumn]
+    isSkipped = if unicodeext.isPunct(startWith): unicodeext.isPunct elif
+                   unicodeext.isAlpha(startWith): unicodeext.isAlpha elif
+                   unicodeext.isDigit(startWith): unicodeext.isDigit
+                else: nil
 
   if isSkipped == nil:
     (windowNode.currentLine, windowNode.currentColumn) = bufStatus.buffer.next(currentLine, currentColumn)
@@ -252,8 +261,12 @@ proc moveToForwardEndOfWord*(bufStatus: var BufferStatus, windowNode: var Window
   let
     currentLine = windowNode.currentLine
     currentColumn = windowNode.currentColumn
-    startWith = if bufStatus.buffer[currentLine].len == 0: ru'\n' else: bufStatus.buffer[currentLine][currentColumn]
-    isSkipped = if unicodeext.isPunct(startWith): unicodeext.isPunct elif unicodeext.isAlpha(startWith): unicodeext.isAlpha elif unicodeext.isDigit(startWith): unicodeext.isDigit else: nil
+    startWith = if bufStatus.buffer[currentLine].len == 0: ru'\n'
+                else: bufStatus.buffer[currentLine][currentColumn]
+    isSkipped = if unicodeext.isPunct(startWith): unicodeext.isPunct elif
+                   unicodeext.isAlpha(startWith): unicodeext.isAlpha elif
+                   unicodeext.isDigit(startWith): unicodeext.isDigit
+                else: nil
 
   if isSkipped == nil:
     (windowNode.currentLine, windowNode.currentColumn) = bufStatus.buffer.next(currentLine, currentColumn)
@@ -295,7 +308,8 @@ proc moveCenterScreen*(bufStatus: var BufferStatus, windowNode: WindowNode) =
       let numOfTime = int(windowNode.view.height / 2) - windowNode.cursor.y
       for i in 0 ..< numOfTime: scrollUp(windowNode.view, bufStatus.buffer)
 
-proc scrollScreenTop*(bufStatus: var BufferStatus, windowNode: var WindowNode) = windowNode.view.reload(bufStatus.buffer, windowNode.view.originalLine[windowNode.cursor.y])
+proc scrollScreenTop*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
+  windowNode.view.reload(bufStatus.buffer, windowNode.view.originalLine[windowNode.cursor.y])
 
 proc scrollScreenBottom*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   if windowNode.currentLine > windowNode.view.height:
