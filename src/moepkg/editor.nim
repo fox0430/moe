@@ -205,7 +205,7 @@ proc deleteCharactersOfLine*(bufStatus: var BufferStatus,
                              
   let
     currentLine = windowNode.currentLine
-    firstNonBlank = getFirstNonBlankOfLine(bufStatus, windowNode)
+    firstNonBlank = getFirstNonBlankOfLineOrFirstColumn(bufStatus, windowNode)
   windowNode.currentColumn = firstNonBlank
   windowNode.expandedColumn = firstNonBlank
   for _ in firstNonBlank ..< bufStatus.buffer[currentLine].len:

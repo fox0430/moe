@@ -483,7 +483,8 @@ proc parseSettingsFile*(filename: string): EditorSettings =
       result.syntax = settings["Standard"]["syntax"].getbool()
 
     if settings["Standard"].contains("tabStop"):
-      result.tabStop = settings["Standard"]["tabStop"].getInt()
+      result.tabStop      = settings["Standard"]["tabStop"].getInt()
+      result.view.tabStop = settings["Standard"]["tabStop"].getInt()
 
     if settings["Standard"].contains("autoCloseParen"):
       result.autoCloseParen = settings["Standard"]["autoCloseParen"].getbool()
@@ -538,6 +539,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["Standard"].contains("highlightFullWidthSpace"):
       result.highlightFullWidthSpace = settings["Standard"]["highlightFullWidthSpace"].getbool()
+    
+    if settings["Standard"].contains("indentationLines"):
+      result.view.indentationLines= settings["Standard"]["indentationLines"].getbool()
 
   if settings.contains("TabLine"):
     if settings["TabLine"].contains("allBuffer"):
@@ -830,7 +834,7 @@ proc parseSettingsFile*(filename: string): EditorSettings =
         if not existsDir(vsCodeExtensionsDir):
           break vsCodeThemeLoading
       
-      # note: walkDirRec was first used to solve this, however
+      # Note: walkDirRec was first used to solve this, however
       #       the performance at runtime was much worse
       for file in walkPattern(vsCodeExtensionsDir & "/*/package.json"):
         if file.endsWith("/package.json"):

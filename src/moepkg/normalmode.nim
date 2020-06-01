@@ -435,7 +435,7 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
   elif key == ord('i'):
     status.changeMode(Mode.insert)
   elif key == ord('I'):
-    windowNode.currentColumn = 0
+    status.bufStatus[currentBufferIndex].moveToFirstNonBlankOfLine(windowNode)
     status.changeMode(Mode.insert)
   elif key == ord('v'):
     status.changeMode(Mode.visual)
