@@ -28,6 +28,7 @@ const exCommandList = [
   ru"highlightfullspace",
   ru"highlightparen",
   ru"indent",
+  ru"indentationlines",
   ru"linenum",
   ru"livereload",
   ru"log",
