@@ -111,7 +111,7 @@ proc deleteBeforeCursorToFirstNonBlank*(bufStatus: var BufferStatus,
                                         windowNode: WindowNode  ) =
   if windowNode.currentColumn == 0:
     return
-  let firstNonBlank = getFirstNonBlankOfLine(bufStatus, windowNode)
+  let firstNonBlank = getFirstNonBlankOfLineOrFirstColumn(bufStatus, windowNode) 
   
   for _ in firstNonBlank..max(0, windowNode.currentColumn-1):
     currentLineDeleteCharacterBeforeCursor(bufStatus, windowNode, false)
