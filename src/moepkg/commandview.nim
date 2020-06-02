@@ -385,7 +385,8 @@ proc suggestExCommandOption(status: var Editorstatus, exStatus: var ExModeViewSt
        "highlightcurrentword",
        "highlightfullspace",
        "multiplestatusbar",
-       "buildonsave":
+       "buildonsave",
+       "indentationlines":
       argList = @["on", "off"]
     of "theme":
       argList= @["vivid", "dark", "light", "config"]
