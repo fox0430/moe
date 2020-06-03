@@ -37,6 +37,8 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Simple file manager
 
+- Indentation lines
+
 - Auto close/delete paren
 
 - Simple auto indent
@@ -49,7 +51,7 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Popup window
 
-- Color themes
+- VSCode themes
 
 - Build on save
 
