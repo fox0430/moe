@@ -28,6 +28,7 @@ const exCommandList = [
   ru"highlightfullspace",
   ru"highlightparen",
   ru"indent",
+  ru"indentationlines",
   ru"linenum",
   ru"livereload",
   ru"log",
@@ -384,7 +385,8 @@ proc suggestExCommandOption(status: var Editorstatus, exStatus: var ExModeViewSt
        "highlightcurrentword",
        "highlightfullspace",
        "multiplestatusbar",
-       "buildonsave":
+       "buildonsave",
+       "indentationlines":
       argList = @["on", "off"]
     of "theme":
       argList= @["vivid", "dark", "light", "config"]

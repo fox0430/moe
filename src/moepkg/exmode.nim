@@ -78,6 +78,9 @@ proc isAutoCloseParenSettingCommand(command: seq[seq[Rune]]): bool =
 proc isAutoIndentSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"indent"
 
+proc isIndentationLinesSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"indentationlines"
+
 proc isLineNumberSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"linenum"
 
@@ -303,6 +306,15 @@ proc autoCloseParenSettingCommand(status: var EditorStatus, command: seq[Rune]) 
 proc autoIndentSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.autoIndent = true
   elif command == ru"off": status.settings.autoIndent = false
+
+  status.commandWindow.erase
+
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
+proc indentationLinesSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.view.indentationLines = true
+  elif command == ru"off": status.settings.view.indentationLines = false
 
   status.commandWindow.erase
 
@@ -825,6 +837,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     statusBarSettingCommand(status, command[1])
   elif isLineNumberSettingCommand(command):
     lineNumberSettingCommand(status, command[1])
+  elif isIndentationLinesSettingCommand(command):
+    indentationLinesSettingCommand(status, command[1])
   elif isAutoIndentSettingCommand(command):
     autoIndentSettingCommand(status, command[1])
   elif isAutoCloseParenSettingCommand(command):
