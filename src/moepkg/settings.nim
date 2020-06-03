@@ -22,6 +22,7 @@ type StatusBarSettings* = object
   language*: bool
   directory*: bool
   multipleStatusBar*: bool
+  gitbranchName*: bool
 
 type TabLineSettings* = object
   useTab*: bool
@@ -70,6 +71,7 @@ proc initStatusBarSettings*(): StatusBarSettings =
   result.language = true
   result.directory = true
   result.multipleStatusBar = true
+  result.gitbranchName = true
 
 proc initWorkSpaceSettings(): WorkSpaceSettings =
   result.useBar = false
@@ -572,6 +574,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["StatusBar"].contains("multipleStatusBar"):
         result.statusBar.multipleStatusBar = settings["StatusBar"]["multipleStatusBar"].getbool()
 
+    if settings["StatusBar"].contains("gitbranchName"):
+        result.statusBar.gitbranchName = settings["StatusBar"]["gitbranchName"].getbool()
+
   if settings.contains("BuildOnSave"):
     if settings["BuildOnSave"].contains("buildOnSave"):
       result.buildOnSaveSettings.buildOnSave = settings["BuildOnSave"]["buildOnSave"].getbool()
@@ -681,6 +686,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["Theme"].contains("statusBarModeExModeBg"):
       ColorThemeTable[ColorTheme.config].statusBarModeExModeBg = color("statusBarModeExModeBg")
+
+    if settings["Theme"].contains("statusBarGitBranch"):
+      ColorThemeTable[ColorTheme.config].statusBarGitBranch = color("statusBarGitBranch")
+
+    if settings["Theme"].contains("statusBarGitBranchBg"):
+      ColorThemeTable[ColorTheme.config].statusBarGitBranchBg = color("statusBarGitBranchBg")
 
     if settings["Theme"].contains("tab"):
       ColorThemeTable[ColorTheme.config].tab = color("tab")
