@@ -158,7 +158,7 @@ highlightFullWidthSpace
 ```
 
 ### TabLine table
-Dispaly all bufer in tab line (bool)  
+Show all bufer in tab line (bool)  
 default is false  
 ```
 allBuffer
@@ -171,47 +171,54 @@ default is true
 multipleStatusBar 
 ```
 
-Display current mode (bool)  
+Show current mode (bool)  
 default is true
 ```
 mode
 ```
 
-Display edit history mark (bool)  
+Show edit history mark (bool)  
 default is true
 ```
 chanedMark
 ```
 
-Display line info (bool)  
+Show line info (bool)  
 default is true
 ```
 line
 ```
 
-Display column info (bool)  
+Show column info (bool)  
 default is ture
 ```
 column
 ```
 
-Display character encoding (bool)  
+Show character encoding (bool)  
 default is true
 ```
 encoding
 ```
 
-Display language (bool)  
+Show language (bool)  
 default is true
 ```
 language
 ```
 
-Display file location (bool)  
+Show file location (bool)  
 default is true
 ```
 directory
 ```
+
+Show current git branch name (bool)  
+default is true
+```
+gitbranchName
+```
+
 ### BuildOnSave table
 
 Enable/Disable build on save (bool)  
