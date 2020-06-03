@@ -437,6 +437,9 @@ type EditorColor* = object
   statusBarExModeBg*: Color
   statusBarModeExMode*: Color
   statusBarModeExModeBg*: Color
+
+  statusBarGitBranch*: Color
+  statusBarGitBranchBg*: Color
   # tab line
   tab*: Color
   tabBg*: Color
@@ -516,49 +519,50 @@ type EditorColorPair* = enum
   statusBarModeFilerMode = 13
   statusBarExMode = 14
   statusBarModeExMode = 15
+  statusBarGitBranch = 16
   # tab lnie
-  tab = 16
+  tab = 17
   # tab line
-  currentTab = 17
+  currentTab = 18
   # command bar
-  commandBar = 18
+  commandBar = 19
   # error message
-  errorMessage = 19
+  errorMessage = 20
   # search result highlighting
-  searchResult = 20
+  searchResult = 21
   # selected area in visual mode
-  visualMode = 21
+  visualMode = 22
   # color scheme
-  defaultChar = 22
-  keyword = 23
-  stringLit = 24
-  decNumber = 25
-  comment = 26
-  longComment = 27
-  whitespace = 28
+  defaultChar = 23
+  keyword = 24
+  stringLit = 25
+  decNumber = 26
+  comment = 27
+  longComment = 28
+  whitespace = 29
   # filer mode
-  currentFile = 29
-  currentFileBg = 30
-  file = 31
-  fileBg = 32
-  dir = 33
-  dirBg = 34
-  pcLink = 35
-  pcLinkBg = 36
+  currentFile = 30
+  currentFileBg = 31
+  file = 32
+  fileBg = 33
+  dir = 34
+  dirBg = 35
+  pcLink = 36
+  pcLinkBg = 37
   # pop up window
-  popUpWindow = 37
-  popUpWinCurrentLine = 38
+  popUpWindow = 38
+  popUpWinCurrentLine = 39
   # replace text highlighting
-  replaceText = 39
+  replaceText = 40
   # pair of paren highlighting
-  parenText = 40
+  parenText = 41
   # highlight other uses current word
-  currentWord = 41
+  currentWord = 42
   # highlight full width space
-  highlightFullWidthSpace = 42
+  highlightFullWidthSpace = 43
   # work space bar
-  workSpaceBar = 43
-  todo = 44
+  workSpaceBar = 44
+  todo = 45
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -592,6 +596,8 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     statusBarExModeBg: blue,
     statusBarModeExMode: black,
     statusBarModeExModeBg: white,
+    statusBarGitBranch: white,
+    statusBarGitBranchBg: blue,
     # tab line
     tab: white,
     tabBg: default,
@@ -680,6 +686,8 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     statusBarExModeBg: blue,
     statusBarModeExMode: black,
     statusBarModeExModeBg: white,
+    statusBarGitBranch: white,
+    statusBarGitBranchBg: blue,
     # tab line
     tab: white,
     tabBg: default,
@@ -768,6 +776,8 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     statusBarExModeBg: gray54,
     statusBarModeExMode: white,
     statusBarModeExModeBg: teal,
+    statusBarGitBranch: blue,
+    statusBarGitBranchBg: gray54,
     # tab line
     tab: blue,
     tabBg: gray54,
@@ -856,6 +866,8 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     statusBarExModeBg: deepPink1_1,
     statusBarModeExMode: black,
     statusBarModeExModeBg: gray100,
+    statusBarGitBranch: black,
+    statusBarGitBranchBg: deepPink1_1,
     # tab line
     tab: white,
     tabBg: default,
@@ -942,6 +954,9 @@ proc setCursesColor*(editorColor: EditorColor) =
 
   setColorPair(EditorColorPair.statusBarFilerMode, editorColor.statusBarFilerMode, editorColor.statusBarFilerModeBg)
   setColorPair(EditorColorPair.statusBarModeFilerMode, editorColor.statusBarModeFilerMode, editorColor.statusBarModeFilerModeBg)
+
+  setColorPair(EditorColorPair.statusBarGitBranch, editorColor.statusBarGitBranch, editorColor.statusBarGitBranchBg)
+
   # tab line
   setColorPair(EditorColorPair.tab, editorColor.tab, editorColor.tabBg)
   setColorPair(EditorColorPair.currentTab, editorColor.currentTab, editorColor.currentTabBg)
@@ -1020,6 +1035,8 @@ proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Co
     return (editorColor.statusBarFilerMode, editorColor.statusBarFilerModeBg)
   of EditorColorPair.statusBarModeFilerMode:
     return (editorColor.statusBarModeFilerMode, editorColor.statusBarModeFilerModeBg)
+  of EditorColorPair.statusBarGitBranch:
+    return (editorColor.statusBarGitBranch, editorColor.statusBarGitBranchBg)
   of EditorColorPair.tab:
     return (editorColor.tab, editorColor.tabBg)
   of EditorColorPair.currentTab:

@@ -645,6 +645,18 @@ Background color of mode text in the status bar in ex mode
 statusBarModeExModeBg
 ```
 
+Current git branch text color
+```
+statusBarGitBranch
+
+```
+
+Current git branch background color
+```
+statusBarGitBranchBg
+```
+
+
 Character color of tab title in tab line
 ```
 tab

@@ -687,6 +687,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Theme"].contains("statusBarModeExModeBg"):
       ColorThemeTable[ColorTheme.config].statusBarModeExModeBg = color("statusBarModeExModeBg")
 
+    if settings["Theme"].contains("statusBarGitBranch"):
+      ColorThemeTable[ColorTheme.config].statusBarGitBranch = color("statusBarGitBranch")
+
+    if settings["Theme"].contains("statusBarGitBranchBg"):
+      ColorThemeTable[ColorTheme.config].statusBarGitBranchBg = color("statusBarGitBranchBg")
+
     if settings["Theme"].contains("tab"):
       ColorThemeTable[ColorTheme.config].tab = color("tab")
 
