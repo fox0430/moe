@@ -43,14 +43,11 @@ proc searchOneCharactorToBeginOfLine(bufStatus: var BufferStatus,
       windowNode.currentColumn = col
       break
 
-proc searchNextOccurrence(status: var EditorStatus) =
-  if status.searchHistory.len < 1: return
-
+proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
   let
-    keyword = status.searchHistory[status.searchHistory.high]
     currentBufferIndex = status.bufferIndexInCurrentWindow
     workspaceIndex = status.currentWorkSpaceIndex
-
+  
   status.bufStatus[currentBufferIndex].isHighlight = true
 
   status.updateHighlight(status.workspace[workspaceIndex].currentMainWindowNode)
@@ -65,11 +62,15 @@ proc searchNextOccurrence(status: var EditorStatus) =
       status.bufStatus[currentBufferIndex].keyRight(windowNode)
   elif searchResult.line == -1: windowNode.keyLeft
 
-proc searchNextOccurrenceReversely(status: var EditorStatus) =
+proc searchNextOccurrence(status: var EditorStatus) =
   if status.searchHistory.len < 1: return
 
+  let keyword = status.searchHistory[status.searchHistory.high]
+
+  searchNextOccurrence(status, keyword)
+
+proc searchNextOccurrenceReversely(status: var EditorStatus, keyword: seq[Rune]) =
   let
-    keyword = status.searchHistory[status.searchHistory.high]
     currentBufferIndex = status.bufferIndexInCurrentWindow
     workspaceIndex = status.currentWorkSpaceIndex
 
@@ -86,6 +87,14 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) =
       status.bufStatus[currentBufferIndex].keyRight(windowNode)
   elif searchResult.line == -1:
     status.bufStatus[currentBufferIndex].keyRight(windowNode)
+
+proc searchNextOccurrenceReversely(status: var EditorStatus) =
+  if status.searchHistory.len < 1: return
+
+  let keyword = status.searchHistory[status.searchHistory.high]
+  
+  searchNextOccurrenceReversely(status, keyword)
+
 
 proc turnOffHighlighting*(status: var EditorStatus) =
   let
@@ -164,16 +173,16 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     var endCol = -1
     for i in countdown(windowNode.currentColumn, 0):
       if not line[i].isAlpha() and not (char(line[i]) in '0'..'9'):
-        beginCol = i + 1
         break
+      beginCol = i
     for i in windowNode.currentColumn..line.len()-1:
       if not line[i].isAlpha() and not (char(line[i]) in '0'..'9'):
-        endCol = i - 1
         break
-    if endCol == -1:
-      endCol = line.len() - 1
-    # quasi return value
-    (beginCol, line[beginCol..endCol])
+      endCol = i
+    if endCol == -1 or beginCol == -1:
+      (-1, seq[Rune].default)
+    else:
+      (beginCol, line[beginCol..endCol])
 
   template getCharacterUnderCursor(): Rune =
     let line = status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine]
@@ -424,6 +433,10 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     searchNextOccurrence(status)
   elif key == ord('N'):
     searchNextOccurrenceReversely(status)
+  elif key == ord('*'):
+    searchNextOccurrence(status, getWordUnderCursor()[1])
+  elif key == ord('#'):
+    searchNextOccurrenceReversely(status, getWordUnderCursor()[1])
   elif key == ord('f'):
     let key = getAnotherKey()
     status.bufStatus[currentBufferIndex].searchOneCharactorToEndOfLine(windowNode, key)
