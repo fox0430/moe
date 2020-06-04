@@ -622,7 +622,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtDecNumber: aqua,
     gtComment: gray,
     gtLongComment: gray,
-    gtWhitespace: gray100,
+    gtWhitespace: gray,
     # filer mode
     currentFile: gray100,
     currentFileBg: teal,
@@ -712,7 +712,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtDecNumber: aqua,
     gtComment: gray,
     gtLongComment: gray,
-    gtWhitespace: gray100,
+    gtWhitespace: gray,
     # filer mode
     currentFile: gray100,
     currentFileBg: teal,
@@ -802,7 +802,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtDecNumber: orange1,
     gtComment: gray,
     gtLongComment: gray,
-    gtWhitespace: gray100,
+    gtWhitespace: gray,
     # filer mode
     currentFile: black,
     currentFileBg: deepPink1_1,
@@ -892,7 +892,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtDecNumber: green1,
     gtComment: purple_1,
     gtLongComment: purple_1,
-    gtWhitespace: gray100,
+    gtWhitespace: gray,
     # filer mode
     currentFile: gray100,
     currentFileBg: deepPink1_1,
