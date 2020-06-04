@@ -229,7 +229,7 @@ proc initFilelistHighlight[T](dirList: seq[PathInfo], buffer: T, currentLine: in
 
 proc pathToIcon(path: string): seq[Rune] =
   if existsDir(path):
-    return ru"📁"
+    return ru"📁 "
 
   # Not sure if this is a perfect solution,
   # it should detect if the current user can execute
@@ -238,7 +238,7 @@ proc pathToIcon(path: string): seq[Rune] =
     let permissions = getFilePermissions(path)
     if fpUserExec  in permissions or
       fpGroupExec in permissions:
-      return ru"🏃"
+      return ru"🏃 "
   except:
     discard
 
@@ -249,55 +249,55 @@ proc pathToIcon(path: string): seq[Rune] =
   let ext = path.split(".")[^1]
   case ext.toLower():
   of "nim":
-    return ru"👑"
+    return ru"👑 "
   of "nimble", "rpm", "deb":
-    return ru"📦"
+    return ru"📦 "
   of "py":
-    return ru"🐍"
+    return ru"🐍 "
   of "ui", "glade":
-    return ru"🏠"
+    return ru"🏠 "
   of "txt", "md", "rst":
-    return ru"📝"
+    return ru"📝 "
   of "cpp", "cxx", "hpp":
-    return ru"⧺"
+    return ru"⧺ "
   of "c", "h":
-    return ru"🅒"
+    return ru"🅒 "
   of "java":
-    return ru"🍵"
+    return ru"🍵 "
   of "php":
-    return ru"🙈"
+    return ru"🙈 "
   of "js", "json":
-    return ru"🙉"
+    return ru"🙉 "
   of "html", "xhtml":
-    return ru"🏄"
+    return ru"🏄 "
   of "css":
-    return ru"👚"
+    return ru"👚 "
   of "xml":
-    return ru"༕"
+    return ru"༕ "
   of "cfg", "ini":
-    return ru"🍳"
+    return ru"🍳 "
   of "sh":
-    return ru"🐚"
+    return ru"🐚 "
   of "pdf", "doc", "odf", "ods", "odt":
-    return ru"🍞"
+    return ru"🍞 "
   of "wav", "mp3", "ogg":
-    return ru"🎼"
+    return ru"🎼 "
   of "zip", "bz2", "xz", "gz", "tgz", "zstd":
-    return ru"🚢"
+    return ru"🚢 "
   of "exe", "bin":
-    return ru"🏃"
+    return ru"🏃 "
   of "mp4", "webm", "avi", "mpeg":
-    return ru"🎞"
+    return ru"🎞 "
   of "patch":
-    return ru"💊"
+    return ru"💊 "
   of "lock":
-    return ru"🔒"
+    return ru"🔒 "
   of "pem", "crt":
-    return ru"🔏"
+    return ru"🔏 "
   of "png", "jpeg", "jpg", "bmp", "gif":
-    return ru"🎨"
+    return ru"🎨 "
   else:
-    return ru"🍕"
+    return ru"🍕 "
 
   # useful unicode symbols: that aren't used here yet:
   # open book        : 📖
