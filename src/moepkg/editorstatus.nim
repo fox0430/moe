@@ -270,6 +270,9 @@ proc resize*(status: var EditorStatus, height, width: int) =
         status.statusBar[statusBarIndex].window.resize(height, width, y, x)
         status.statusBar[statusBarIndex].window.refresh
 
+        # Update status bar info
+        status.statusbar[statusBarIndex].bufferIndex = node.bufferIndex
+        status.statusbar[statusBarIndex].windowIndex = node.windowIndex
         inc(statusBarIndex)
 
       if node.child.len > 0:
@@ -480,12 +483,7 @@ proc verticalSplitWindow*(status: var EditorStatus) =
     status.workSpace[workspaceIndex].currentMainWindowNode.verticalSplit(buffer)
   inc(status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow)
 
-  status.workSpace[workspaceIndex].mainWindowNode.resetWindowIndex
-
-  var statusBar = initStatusBar()
-  statusBar.windowIndex =
-    status.workSpace[workspaceIndex].currentMainWindowNode.windowIndex + 1
-  status.statusBar.add(statusBar)
+  status.statusBar.add(initStatusBar())
 
 proc horizontalSplitWindow*(status: var Editorstatus) =
   let 
@@ -497,12 +495,7 @@ proc horizontalSplitWindow*(status: var Editorstatus) =
     status.workSpace[workspaceIndex].currentMainWindowNode.horizontalSplit(buffer)
   inc(status.workSpace[workspaceIndex].numOfMainWindow)
 
-  status.workSpace[workspaceIndex].mainWindowNode.resetWindowIndex
-
-  var statusBar = initStatusBar()
-  statusBar.windowIndex =
-    status.workSpace[workspaceIndex].currentMainWindowNode.windowIndex + 1
-  status.statusBar.add(statusBar)
+  status.statusBar.add(initStatusBar())
 
 proc closeWindow*(status: var EditorStatus, node: WindowNode) =
   let workspaceIndex = status.currentWorkSpaceIndex

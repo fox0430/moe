@@ -306,18 +306,3 @@ proc countReferencedWindow*(root: WindowNode, bufferIndex: int): int =
 
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
-
-proc resetWindowIndex*(root: var WindowNode) =
-  var qeue = initHeapQueue[WindowNode]()
-  for node in root.child: qeue.push(node)
-
-  var windowIndex = 0
-  while qeue.len > 0:
-    for i in 0 ..< qeue.len:
-      let node = qeue.pop
-      if node.window != nil:
-        node.windowIndex = windowIndex
-        inc(windowIndex)
-
-      if node.child.len > 0:
-        for node in node.child: qeue.push(node)
