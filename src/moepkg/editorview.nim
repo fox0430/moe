@@ -21,6 +21,8 @@ type ViewLine = object
 proc initEditorViewSettings*(): EditorViewSettings =
   result.lineNumber = true
   result.currentLineNumber = true
+  result.indentationLines = true
+  result.tabStop = 2
 
 proc loadSingleViewLine[T](view: EditorView,
                            buffer: T,
