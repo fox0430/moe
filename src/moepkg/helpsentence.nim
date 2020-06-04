@@ -11,7 +11,6 @@ Check command bar
 :qa!  - Force quit all window
 
 # Normal mode
-
 h - move left
 j or + - move down
 k or - - move up
@@ -60,6 +59,9 @@ p - Paste the clipboard
 n - Repeat search in same direction
 N - Repeat search in opposite direction
 
+* - Search forward for the word in under the cursor
+# - Search backward for the word in under the cursor  
+
 f - Jump to next occurrence
 F - Jump to previous occurence
 
@@ -92,15 +94,19 @@ Ctrl-x - Decreas number under the cursor
 
 ~ - Toggle case of the character under the cursor
 
+## Replace mode
 Esc - Start normal mode
 
+## Insert mode
 Esc - Start normal mode
 
+## Filer mode
 D - Delete file  
 g - Go to top of list  
 G - Go to last of list  
 i - Detail information  
 
+## Ex mode
 number - Jump to line number : Exmaple :10  
 ! shell command - Shell command execution  
 
@@ -142,6 +148,7 @@ highlightcurrentword on or highlightcurrentword off - Change setting to highligh
 clipboard on or clipboard off - Change setting to system clipboard  
 highlightfullspace on or highlightfullspace off - Change setting to highlight full width space  
 buildonsave on or buildonsave off - Change setting to build on save
+indentationlines on or indentationlines off - Change setting to indentation lines  
 noh - Turn off highlights  
 
 log - Open messages log viwer  
