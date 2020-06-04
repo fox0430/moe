@@ -368,7 +368,9 @@ proc update*(status: var EditorStatus) =
   status.workspace[workspaceIndex].mainWindowNode.initSyntaxHighlight(status.bufStatus,
                                                                       status.settings.syntax)
 
-  var queue = initHeapQueue[WindowNode]()
+  var
+    queue = initHeapQueue[WindowNode]()
+    countWindow = 0
   for node in status.workSpace[workspaceIndex].mainWindowNode.child:
     queue.push(node)
   while queue.len > 0:
@@ -444,6 +446,10 @@ proc update*(status: var EditorStatus) =
           node.cursor.update(node.view, node.currentLine, node.currentColumn)
 
         node.window.refresh
+
+        # Update bufferIndex of status bar
+        status.statusBar[countWindow].bufferIndex = node.bufferIndex
+        inc(countWindow)
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)
