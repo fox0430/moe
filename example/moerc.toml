@@ -14,7 +14,7 @@ tabLine = true
 
 syntax = true
 
-indentationLines = false
+indentationLines = true
 
 tabStop = 2
 
@@ -220,10 +220,10 @@ replaceTextBg = "red"
 
 currentWordBg = "gray"
 
-highlightFullWidthSpace =  red
+highlightFullWidthSpace =  "red"
 
-highlightFullWidthSpaceBg = red
+highlightFullWidthSpaceBg = "red"
 
-workSpaceBar = white
+workSpaceBar = "white"
 
-workSpaceBarBg = blue
+workSpaceBarBg = "blue"
