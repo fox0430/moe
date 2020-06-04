@@ -60,6 +60,9 @@ Check command bar
 ```n``` - Repeat search in same direction  
 ```N``` - Repeat search in opposite direction  
 
+```*``` - Search forward for the word in under the cursor  
+```#``` - Search backward for the word in under the cursor  
+
 ```f``` - Jump to next occurrence  
 ```F``` - Jump to previous occurence  
 
