@@ -780,8 +780,8 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Theme"].contains("popUpWindowBg"):
       ColorThemeTable[ColorTheme.config].popUpWindowBg = color("popUpWindowBg")
 
-    if settings["Theme"].contains("popUpWindowBg"):
-      ColorThemeTable[ColorTheme.config].popUpWindowBg = color("popUpWindowBg")
+    if settings["Theme"].contains("popUpWinCurrentLine"):
+      ColorThemeTable[ColorTheme.config].popUpWinCurrentLine = color("popUpWinCurrentLine")
 
     if settings["Theme"].contains("popUpWinCurrentLineBg"):
       ColorThemeTable[ColorTheme.config].popUpWinCurrentLineBg = color("popUpWinCurrentLineBg")
