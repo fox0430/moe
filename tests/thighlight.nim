@@ -15,7 +15,7 @@ test "initHighlight: start with newline":
     let
       firstRow = segment.firstRow
       firstColumn = segment.firstColumn
-      lastColum = nsegment.lastColumn
+      lastColumn = segment.lastColumn
     unitedStr &= buffer[firstRow][firstColumn .. lastColumn]
 
   check(unitedStr == code)
