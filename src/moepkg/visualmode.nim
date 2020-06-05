@@ -206,7 +206,8 @@ proc toLowerString(bufStatus: var BufferStatus, area: SelectArea) =
   for i in area.startLine .. area.endLine:
     let oldLine = bufStatus.buffer[i]
     var newLine = bufStatus.buffer[i]
-    if area.startLine == area.endLine:
+    if oldLine.len == 0: discard
+    elif area.startLine == area.endLine:
       for j in area.startColumn .. area.endColumn: newLine[j] = oldLine[j].toLower
     elif i == area.startLine:
       for j in area.startColumn .. bufStatus.buffer[i].high:
@@ -231,7 +232,8 @@ proc toUpperString(bufStatus: var BufferStatus, area: SelectArea) =
   for i in area.startLine .. area.endLine:
     let oldLine = bufStatus.buffer[i]
     var newLine = bufStatus.buffer[i]
-    if area.startLine == area.endLine:
+    if oldLine.len == 0: discard
+    elif area.startLine == area.endLine:
       for j in area.startColumn .. area.endColumn:
         newLine[j] = oldLine[j].toUpper
     elif i == area.startLine:

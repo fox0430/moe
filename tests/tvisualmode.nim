@@ -562,6 +562,31 @@ test "Visual mode: Converts string into lower-case string 3":
   check(status.bufStatus[0].buffer[0] == ru"abc")
   check(status.bufStatus[0].buffer[1] == ru"dEF")
 
+# Fix #687
+test "Visual mode: Converts string into lower-case string 4":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"ABC", ru"", ru"DEF", ru""])
+  status.workSpace[0].currentMainWindowNode.highlight = initHighlight($status.bufStatus[0].buffer,
+                                                                      status.bufStatus[0].language)
+  status.resize(100, 100)
+
+  status.changeMode(Mode.visual)
+  status.bufStatus[0].selectArea = initSelectArea(status.workSpace[0].currentMainWindowNode.currentLine,
+                                                  status.workSpace[0].currentMainWindowNode.currentColumn)
+
+  for i in 0 ..< 3:
+    status.bufStatus[0].keyDown(status.workSpace[0].currentMainWindowNode)
+    status.update
+    status.bufStatus[0].selectArea.updateSelectArea(status.workSpace[0].currentMainWindowNode.currentLine,
+                                                    status.workSpace[0].currentMainWindowNode.currentColumn)
+
+  status.visualCommand(status.bufStatus[0].selectArea, ru'u')
+
+  check(status.bufStatus[0].buffer[0] == ru"abc")
+  check(status.bufStatus[0].buffer[1] == ru"")
+  check(status.bufStatus[0].buffer[2] == ru"def")
+
 test "Visual block mode: Converts string into lower-case string":
   var status = initEditorStatus()
   status.addNewBuffer("")
@@ -663,6 +688,32 @@ test "Visual mode: Converts string into upper-case string 3":
 
   check(status.bufStatus[0].buffer[0] == ru"ABC")
   check(status.bufStatus[0].buffer[1] == ru"Def")
+
+# Fix #687
+test "Visual mode: Converts string into upper-case string 4":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"", ru"def", ru""])
+  status.workSpace[0].currentMainWindowNode.highlight = initHighlight($status.bufStatus[0].buffer,
+                                                                      status.bufStatus[0].language)
+  status.resize(100, 100)
+
+  status.changeMode(Mode.visual)
+  status.bufStatus[0].selectArea = initSelectArea(status.workSpace[0].currentMainWindowNode.currentLine,
+                                                  status.workSpace[0].currentMainWindowNode.currentColumn)
+
+  for i in 0 ..< 3:
+    status.bufStatus[0].keyDown(status.workSpace[0].currentMainWindowNode)
+    status.update
+    status.bufStatus[0].selectArea.updateSelectArea(status.workSpace[0].currentMainWindowNode.currentLine,
+                                                    status.workSpace[0].currentMainWindowNode.currentColumn)
+
+  status.visualCommand(status.bufStatus[0].selectArea, ru'U')
+
+  check(status.bufStatus[0].buffer[0] == ru"ABC")
+  check(status.bufStatus[0].buffer[1] == ru"")
+  check(status.bufStatus[0].buffer[2] == ru"DEF")
+
 
 test "Visual block mode: Converts string into upper-case string":
   var status = initEditorStatus()
