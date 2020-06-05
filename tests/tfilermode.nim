@@ -1,5 +1,5 @@
 import unittest
-import moepkg/[filermode, editorstatus, ui, highlight, color, bufferstatus]
+import moepkg/[filermode, editorstatus, highlight, color, bufferstatus]
 
 test "Update directory list":
   var status = initEditorStatus()
@@ -17,4 +17,5 @@ test "Check highlight in filer mode":
   filerStatus = filerStatus.updateDirList
   status.updateFilerView(filerStatus)
 
-  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight[0].color == EditorColorPair.currentFile)
+  let node = status.workSpace[0].currentMainWindowNode
+  check(node.highlight[0].color == EditorColorPair.currentFile)
