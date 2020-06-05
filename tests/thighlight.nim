@@ -1,5 +1,5 @@
 import unittest, packages/docutils/highlite, strutils
-import moepkg/[highlight, ui, color]
+import moepkg/[highlight, color]
 
 test "initHighlight: start with newline":
   let
@@ -12,7 +12,11 @@ test "initHighlight: start with newline":
   for i in 0 ..< highlight.len:
     let segment = highlight[i]
     if i > 0 and segment.firstRow != highlight[i-1].lastRow: unitedStr &= "\n"
-    unitedStr &= buffer[segment.firstRow][segment.firstColumn .. segment.lastColumn]
+    let
+      firstRow = segment.firstRow
+      firstColumn = segment.firstColumn
+      lastColum = nsegment.lastColumn
+    unitedStr &= buffer[firstRow][firstColumn .. lastColumn]
 
   check(unitedStr == code)
 
@@ -34,7 +38,11 @@ test "over write":
   let
     code = "　"
     highlight = initHighlight(code, SourceLanguage.langNone)
-    colorSegment = ColorSegment(firstRow: 0, firstColumn: 0, lastRow: 0, lastColumn: 0, color: EditorColorPair.highlightFullWidthSpace)
+    colorSegment = ColorSegment(firstRow: 0,
+                                firstColumn: 0,
+                                lastRow: 0,
+                                lastColumn: 0,
+                                color: EditorColorPair.highlightFullWidthSpace)
     h = highlight.overwrite(colorSegment)
 
   check(h.len == 1)
