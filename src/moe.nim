@@ -14,6 +14,7 @@ import moepkg/cmdlineoption
 import moepkg/settings
 import moepkg/commandview
 import moepkg/bufferstatus
+import moepkg/help
 
 proc main() =
   let parsedList = parseCommandLineOption(commandLineParams())
@@ -58,6 +59,7 @@ proc main() =
     of Mode.search: status.searchMode
     of Mode.bufManager: status.bufferManager
     of Mode.logViewer: status.messageLogViewer
+    of Mode.help: status.helpMode
 
   status.settings.exitEditor
 

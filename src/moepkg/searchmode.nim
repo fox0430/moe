@@ -26,7 +26,8 @@ proc searchBuffer(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
     let
       line = (startLine + i) mod status.bufStatus[currentBufferIndex].buffer.len
       begin = if line == startLine and i == 0: windowNode.currentColumn else: 0
-      position = searchLine(status.bufStatus[currentBufferIndex].buffer[line][begin ..< status.bufStatus[currentBufferIndex].buffer[line].len], keyword)
+      position = searchLine(status.bufStatus[currentBufferIndex].buffer[line][begin ..< status.bufStatus[currentBufferIndex].buffer[line].len],
+                            keyword)
     if position > -1:  return (line, begin + position)
 
 proc searchLineReversely(line: seq[Rune], keyword: seq[Rune]): int =
@@ -46,7 +47,9 @@ proc searchBufferReversely(status: var EditorStatus, keyword: seq[Rune]): Search
     var line = (startLine - i) mod status.bufStatus[currentBufferIndex].buffer.len
     if line < 0: line = status.bufStatus[currentBufferIndex].buffer.len - i
     let
-      endPosition = if line == startLine and i == 0: windowNode.currentColumn else: status.bufStatus[currentBufferIndex].buffer[line].len 
+      endPosition = if line == startLine and
+                       i == 0: windowNode.currentColumn
+                    else: status.bufStatus[currentBufferIndex].buffer[line].len 
       position = searchLineReversely(status.bufStatus[currentBufferIndex].buffer[line][0 ..< endPosition], keyword)
     if position > -1:  return (line, position)
 

@@ -29,7 +29,8 @@ proc validateUtf16Be(s: string): bool =
     let curr = advance()
     if curr <= 0xD7FF or (0xE000 <= curr and curr <= 0xFFFF): continue
     let next = advance()
-    if (not (0xD800 <= curr and curr <= 0xDBFF)) or (not (0xDC00 <= next and next <= 0xDFFF)): return false
+    if (not (0xD800 <= curr and curr <= 0xDBFF)) or
+       (not (0xDC00 <= next and next <= 0xDFFF)): return false
     let
       higher = (curr and 0b11_1111_1111) shl 10
       lower = (next and 0b11_1111_1111)
@@ -50,7 +51,8 @@ proc validateUtf16Le(s: string): bool =
     let curr = advance()
     if curr <= 0xD7FF or (0xE000 <= curr and curr <= 0xFFFF): continue
     let next = advance()
-    if (not (0xD800 <= curr and curr <= 0xDBFF)) or (not (0xDC00 <= next and next <= 0xDFFF)): return false
+    if (not (0xD800 <= curr and curr <= 0xDBFF)) or
+       (not (0xDC00 <= next and next <= 0xDFFF)): return false
     let
       higher = (curr and 0b11_1111_1111) shl 10
       lower = (next and 0b11_1111_1111)
@@ -104,7 +106,8 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
 
   if s.len >= 4:
     # UTF-32のBOMチェック
-    if s[0..3] == "\x00\x00\xFE\xFF" or s[0..3] == "\xFF\xFE\x00\x00": return CharacterEncoding.utf32
+    if s[0..3] == "\x00\x00\xFE\xFF" or
+       s[0..3] == "\xFF\xFE\x00\x00": return CharacterEncoding.utf32
 
     # UTF-16のBOMチェック
     if s[0..1] == "\xFE\xFF" or s[0..1] == "\xFF\xFE": return CharacterEncoding.utf16
@@ -120,8 +123,10 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
   let threshold = (s.len / 2) * (2 / 5)
   if float(count0000(s)) >= threshold:
     # 0x000 が多すぎる場合にはUTF-16ではないとする
-    if validEncodings.contains(CharacterEncoding.utf16Be): validEncodings.delete(validEncodings.find(CharacterEncoding.utf16Be))
-    if validEncodings.contains(CharacterEncoding.utf16Le): validEncodings.delete(validEncodings.find(CharacterEncoding.utf16Le))
+    if validEncodings.contains(CharacterEncoding.utf16Be):
+      validEncodings.delete(validEncodings.find(CharacterEncoding.utf16Be))
+    if validEncodings.contains(CharacterEncoding.utf16Le):
+      validEncodings.delete(validEncodings.find(CharacterEncoding.utf16Le))
 
   if validEncodings.len == 1: return validEncodings[0]
 
@@ -152,7 +157,10 @@ proc width*(c: Rune): int =
   if int(c) > 0x10FFFF: return 1
   if c == tab: return 4
   case c.unicodeWidth
-  of UnicodeWidth.uwdtNarrow, UnicodeWidth.uwdtHalf, UnicodeWidth.uwdtAmbiguous, UnicodeWidth.uwdtNeutral: 1
+  of UnicodeWidth.uwdtNarrow,
+     UnicodeWidth.uwdtHalf,
+     UnicodeWidth.uwdtAmbiguous,
+     UnicodeWidth.uwdtNeutral: 1
   else: 2
 
 proc width*(runes: seq[Rune]): int =
@@ -176,7 +184,38 @@ proc isSpace*(c: Rune): bool =
 
 proc isPunct*(c: Rune): bool =
   let s = $c
-  return s.len == 1 and s[0] in {'!', '"', '#', '$', '%', '$', '\'', '(', ')', '*', '+', ',', '-', '.', '/', ':', ';', '<', '=', '>', '?', '@', '[', '\\', ']', '^', '_', '`', '{', '=', '}'}
+  return s.len == 1 and s[0] in {
+    '!',
+    '"',
+    '#',
+    '$',
+    '%',
+    '$',
+    '\'',
+    '(',
+    ')',
+    '*',
+    '+',
+    ',',
+    '-',
+    '.',
+    '/',
+    ':',
+    ';',
+    '<',
+    '=',
+    '>',
+    '?',
+    '@',
+    '[',
+    '\\',
+    ']',
+    '^',
+    '_',
+    '`',
+    '{',
+    '=',
+    '}'}
 
 proc countRepeat*(runes: seq[Rune], charSet: set[char], start: int): int =
   for i in start ..< runes.len:
@@ -190,7 +229,8 @@ proc split*(runes: seq[Rune], sep: Rune): seq[seq[Rune]] =
     if c == sep: result.add(@[])
     else: result[result.high].add(c)
 
-proc toGapBuffer*(runes: seq[Rune]): GapBuffer[seq[Rune]] = runes.split(ru'\n').initGapBuffer
+proc toGapBuffer*(runes: seq[Rune]): GapBuffer[seq[Rune]] =
+  runes.split(ru'\n').initGapBuffer
 
 proc toRunes*(buffer: GapBuffer[seq[Rune]]): seq[Rune] =
   for i in 0 ..< buffer.len:

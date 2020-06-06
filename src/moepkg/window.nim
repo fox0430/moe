@@ -29,8 +29,17 @@ type WindowNode* = ref object
 proc initWindowNode*(): WindowNode =
   var
     win = initWindow(1, 1, 0, 0, EditorColorPair.defaultChar)
-    node = WindowNode(child: @[], splitType: SplitType.vertical, window: win, h: 1, w: 1)
-    root = WindowNode(child: @[node], splitType: SplitType.vertical, y: 0, x: 0, h: 1, w: 1)
+    node = WindowNode(child: @[],
+                      splitType: SplitType.vertical,
+                      window: win,
+                      h: 1,
+                      w: 1)
+    root = WindowNode(child: @[node],
+                      splitType: SplitType.vertical,
+                      y: 0,
+                      x: 0,
+                      h: 1,
+                      w: 1)
   node.parent = root
 
   node.window.setTimeout()
@@ -47,7 +56,15 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
     var
       view = initEditorView(buffer, 1, 1)
       win = newWindow()
-      node = WindowNode(parent: n.parent, child: @[], splitType: SplitType.vertical, window: win, view: view, highlight: n.highlight, bufferIndex: n.bufferIndex, h: 1, w: 1)
+      node = WindowNode(parent: n.parent,
+                        child: @[],
+                        splitType: SplitType.vertical,
+                        window: win,
+                        view: view,
+                        highlight: n.highlight,
+                        bufferIndex: n.bufferIndex,
+                        h: 1,
+                        w: 1)
     parent.child.add(node)
     return n
   else:
@@ -56,8 +73,20 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
       view2 = initEditorView(buffer, 1, 1)
       win1 = newWindow()
       win2 = newWindow()
-      node1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win1, view: view1, highlight: n.highlight, bufferIndex: n.bufferIndex)
-      node2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win2, view: view2, highlight: n.highlight, bufferIndex: n.bufferIndex)
+      node1 = WindowNode(parent: n,
+                         child: @[],
+                         splitType: SplitType.vertical,
+                         window: win1,
+                         view: view1,
+                         highlight: n.highlight,
+                         bufferIndex: n.bufferIndex)
+      node2 = WindowNode(parent: n,
+                         child: @[],
+                         splitType: SplitType.vertical,
+                         window: win2,
+                         view: view2,
+                         highlight: n.highlight,
+                         bufferIndex: n.bufferIndex)
     n.splitType = SplitType.vertical
     n.windowIndex = -1
     n.child.add(node1)
@@ -72,7 +101,13 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
     var
       view = initEditorView(buffer, 1, 1)
       win = newWindow()
-      node = WindowNode(parent: parent, child: @[], splitType: SplitType.horaizontal, window: win, view: view, highlight: n.highlight, bufferIndex: n.bufferIndex)
+      node = WindowNode(parent: parent,
+                        child: @[],
+                        splitType: SplitType.horaizontal,
+                        window: win,
+                        view: view,
+                        highlight: n.highlight,
+                        bufferIndex: n.bufferIndex)
     parent.child.add(node)
     return n
   # if parent is root and one window
@@ -80,7 +115,13 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
     var
       view = initEditorView(buffer, 1, 1)
       win = newWindow()
-      node = WindowNode(parent: n.parent, child: @[], splitType: SplitType.vertical, window: win, view: view, highlight: n.highlight, bufferIndex: n.bufferIndex)
+      node = WindowNode(parent: n.parent,
+                        child: @[],
+                        splitType: SplitType.vertical,
+                        window: win,
+                        view: view,
+                        highlight: n.highlight,
+                        bufferIndex: n.bufferIndex)
     n.parent.splitType = SplitType.horaizontal
     n.parent.child.insert(node, n.index + 1)
     return n
@@ -90,8 +131,21 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
       view2 = initEditorView(buffer, 1, 1)
       win1 = newWindow()
       win2 = newWindow()
-      node1 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win1, view: view1, highlight: n.highlight, bufferIndex: n.bufferIndex)
-      node2 = WindowNode(parent: n, child: @[], splitType: SplitType.vertical, window: win2, view: view2, highlight: n.highlight, bufferIndex: n.bufferIndex)
+      node1 = WindowNode(
+                         parent: n,
+                         child: @[],
+                         splitType: SplitType.vertical,
+                         window: win1,
+                         view: view1,
+                         highlight: n.highlight,
+                         bufferIndex: n.bufferIndex)
+      node2 = WindowNode(parent: n,
+                         child: @[],
+                         splitType: SplitType.vertical,
+                         window: win2,
+                         view: view2,
+                         highlight: n.highlight,
+                         bufferIndex: n.bufferIndex)
     n.splitType = SplitType.horaizontal
     n.windowIndex = -1
     n.child.add(node1)
@@ -110,11 +164,13 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
       ## Vertical split
 
       ## Calc window width
-      if width mod root.child.len != 0 and index == 0: node.w = int(width / root.child.len) + (width mod root.child.len)
+      if width mod root.child.len != 0 and index == 0:
+        node.w = int(width / root.child.len) + (width mod root.child.len)
       else: node.w = int(width / root.child.len)
 
       ## Calc window x
-      if width mod root.child.len != 0 and index > 0: node.x = (node.w * index) + (width mod root.child.len)
+      if width mod root.child.len != 0 and index > 0:
+        node.x = (node.w * index) + (width mod root.child.len)
       else: node.x = node.w * index
 
       node.h = height
@@ -123,11 +179,13 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
       ## Horaizontal split
 
       ## Calc window height
-      if height mod root.child.len != 0 and index == 0: node.h = int(height / root.child.len) + (height mod root.child.len)
+      if height mod root.child.len != 0 and index == 0:
+        node.h = int(height / root.child.len) + (height mod root.child.len)
       else: node.h = int(height / root.child.len)
 
       ## Calc window y
-      if height mod root.child.len != 0 and index > 0: node.y = (node.h * index) + (height mod root.child.len) + y
+      if height mod root.child.len != 0 and index > 0:
+        node.y = (node.h * index) + (height mod root.child.len) + y
       else: node.y = node.h * index + y
 
       node.w = width
@@ -155,11 +213,13 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
         ## Vertical split
 
         ## Calc window width
-        if parent.w mod parent.child.len != 0 and i == 0: child.w = int(parent.w / parent.child.len) + 1
+        if parent.w mod parent.child.len != 0 and i == 0:
+          child.w = int(parent.w / parent.child.len) + 1
         else: child.w = int(parent.w / parent.child.len)
 
         ## Calc window x
-        if parent.w mod parent.child.len != 0 and i > 0: child.x = parent.x + (child.w * i) + 1
+        if parent.w mod parent.child.len != 0 and i > 0:
+          child.x = parent.x + (child.w * i) + 1
         else: child.x = parent.x + (child.w * i)
 
         child.h = parent.h
@@ -168,11 +228,13 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
         ## Horaizontal split
 
         ## Calc window height
-        if parent.h mod parent.child.len != 0 and i == 0: child.h = int(parent.h / parent.child.len) + 1
+        if parent.h mod parent.child.len != 0 and i == 0:
+          child.h = int(parent.h / parent.child.len) + 1
         else: child.h = int(parent.h / parent.child.len)
 
         ## Calc window y
-        if parent.h mod parent.child.len != 0 and i > 0: child.y = parent.y + (child.h * i) + 1
+        if parent.h mod parent.child.len != 0 and i > 0:
+          child.y = parent.y + (child.h * i) + 1
         else: child.y = parent.y + (child.h * i)
 
         child.w = parent.w

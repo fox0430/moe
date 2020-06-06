@@ -13,10 +13,12 @@ You can use the example -> https://github.com/fox0430/moe/blob/master/example/mo
 
 ### Standard table
 Color theme (String)
-default is ```"vivid"```. ```"vivid"``` or ```"dark"``` or ```"light"```
+default is ```"vivid"```. ```"vivid"``` or ```"dark"``` or ```"light"``` or ```"vscode"```
 ```
 theme
 ```
+
+Note: ```"vscode"``` is you can use current VSCode/VSCodium theme. Check [#648](https://github.com/fox0430/moe/pull/648)
 
 Display line numbers (bool)  
 default is true
@@ -34,6 +36,12 @@ Enable syntax highlighting (bool)
 default is true
 ```
 syntax
+```
+
+Enable/Disable indentation lines (bool)  
+default is false
+```
+indentationLines
 ```
 
 Set tab width (Integer)  
@@ -150,7 +158,7 @@ highlightFullWidthSpace
 ```
 
 ### TabLine table
-Dispaly all bufer in tab line (bool)  
+Show all bufer in tab line (bool)  
 default is false  
 ```
 allBuffer
@@ -163,47 +171,54 @@ default is true
 multipleStatusBar 
 ```
 
-Display current mode (bool)  
+Show current mode (bool)  
 default is true
 ```
 mode
 ```
 
-Display edit history mark (bool)  
+Show edit history mark (bool)  
 default is true
 ```
 chanedMark
 ```
 
-Display line info (bool)  
+Show line info (bool)  
 default is true
 ```
 line
 ```
 
-Display column info (bool)  
+Show column info (bool)  
 default is ture
 ```
 column
 ```
 
-Display character encoding (bool)  
+Show character encoding (bool)  
 default is true
 ```
 encoding
 ```
 
-Display language (bool)  
+Show language (bool)  
 default is true
 ```
 language
 ```
 
-Display file location (bool)  
+Show file location (bool)  
 default is true
 ```
 directory
 ```
+
+Show current git branch name (bool)  
+default is true
+```
+gitbranchName
+```
+
 ### BuildOnSave table
 
 Enable/Disable build on save (bool)  
@@ -630,6 +645,18 @@ Background color of mode text in the status bar in ex mode
 statusBarModeExModeBg
 ```
 
+Current git branch text color
+```
+statusBarGitBranch
+
+```
+
+Current git branch background color
+```
+statusBarGitBranchBg
+```
+
+
 Character color of tab title in tab line
 ```
 tab
@@ -797,4 +824,34 @@ replaceTextBg
 Background color of current word
 ```
 currentWordBg
+```
+
+Full width space text color
+```
+highlightFullWidthSpace
+```
+
+Full width space background color
+```
+highlightFullWidthSpaceBg
+```
+
+Workspace bar text color
+```
+workSpaceBar
+```
+
+Workspace bar background color
+```
+workSpaceBarBg
+```
+
+TODO highlight text color
+```
+todo
+```
+
+TODO highlight background color
+```
+todoBg
 ```

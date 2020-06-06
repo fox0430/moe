@@ -1,5 +1,7 @@
 import sequtils, strutils, os, terminal, packages/docutils/highlite, times
-import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext, independentutils, searchmode, highlight, commandview, window, movement, color, build, bufferstatus
+import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
+        unicodeext, independentutils, searchmode, highlight, commandview,
+        window, movement, color, build, bufferstatus
 
 type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
 
@@ -24,6 +26,9 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
     replaceWord.add(command[i])
 
   return (searhWord: searchWord, replaceWord: replaceWord)
+
+proc isOpenHelpCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"help"
 
 proc isOpenMessageLogViweer(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"log"
@@ -72,6 +77,9 @@ proc isAutoCloseParenSettingCommand(command: seq[seq[Rune]]): bool =
 
 proc isAutoIndentSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"indent"
+
+proc isIndentationLinesSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"indentationlines"
 
 proc isLineNumberSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"linenum"
@@ -137,21 +145,28 @@ proc isJumpCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     prevMode = status.bufStatus[currentBufferIndex].prevMode
-  return command.len == 1 and isDigit(command[0]) and (prevMode == Mode.normal or prevMode == Mode.logviewer)
+  return command.len == 1 and
+         isDigit(command[0]) and
+         (prevMode == Mode.normal or
+         prevMode == Mode.logviewer)
 
 proc isEditCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"e"
 
 proc isWriteCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
-  return command.len in {1, 2} and command[0] == ru"w" and status.bufStatus[currentBufferIndex].prevMode == Mode.normal
+  return command.len in {1, 2} and
+         command[0] == ru"w" and
+         status.bufStatus[currentBufferIndex].prevMode == Mode.normal
 
 proc isQuitCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"q"
 
 proc isWriteAndQuitCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
-  return command.len == 1 and command[0] == ru"wq" and status.bufStatus[currentBufferIndex].prevMode == Mode.normal
+  return command.len == 1 and
+         command[0] == ru"wq" and
+         status.bufStatus[currentBufferIndex].prevMode == Mode.normal
 
 proc isForceQuitCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"q!"
@@ -170,6 +185,18 @@ proc isDeleteCurrentWorkSpaceCommand(command: seq[seq[Rune]]): bool =
 
 proc isChangeCurrentWorkSpace(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"ws" and isDigit(command[1])
+
+proc openHelp(status: var Editorstatus) =
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
+  status.verticalSplitWindow
+  status.resize(terminalHeight(), terminalWidth())
+  status.moveNextWindow
+
+  status.addNewBuffer("")
+  status.changeCurrentBuffer(status.bufStatus.high)
+  status.changeMode(Mode.help)
 
 proc openMessageLogViewer(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -248,8 +275,13 @@ proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   elif command == ru"off": status.settings.syntax = false
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
-  let sourceLang = if status.settings.syntax: status.bufStatus[currentBufferIndex].language else: SourceLanguage.langNone
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight($status.bufStatus[currentBufferIndex].buffer, sourceLang)
+  let sourceLang = if status.settings.syntax:
+                     status.bufStatus[currentBufferIndex].language
+                   else: SourceLanguage.langNone
+
+  let workspaceIndex = status.currentWorkSpaceIndex
+  status.workSpace[workspaceIndex].currentMainWindowNode.highlight =
+    initHighlight($status.bufStatus[currentBufferIndex].buffer, sourceLang)
 
   status.commandWindow.erase
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
@@ -280,13 +312,29 @@ proc autoIndentSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
+proc indentationLinesSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.view.indentationLines = true
+  elif command == ru"off": status.settings.view.indentationLines = false
+
+  status.commandWindow.erase
+
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
 proc lineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru "on": status.settings.view.lineNumber = true
   elif command == ru"off": status.settings.view.lineNumber = false
 
-  let numberOfDigitsLen = if status.settings.view.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
+  let numberOfDigitsLen = if status.settings.view.lineNumber:
+                            numberOfDigits(status.bufStatus[0].buffer.len) - 2
+                          else: 0
   let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+  let workspaceIndex = status.currentWorkSpaceIndex
+
+  status.workSpace[workspaceIndex].currentMainWindowNode.view =
+    initEditorView(status.bufStatus[0].buffer,
+                   terminalHeight() - useStatusBar - 1,
+                   terminalWidth() - numberOfDigitsLen)
 
   status.commandWindow.erase
 
@@ -297,9 +345,16 @@ proc statusBarSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.statusBar.useBar = true
   elif command == ru"off": status.settings.statusBar.useBar = false
 
-  let numberOfDigitsLen = if status.settings.view.lineNumber: numberOfDigits(status.bufStatus[0].buffer.len) - 2 else: 0
+  let numberOfDigitsLen = if status.settings.view.lineNumber:
+                            numberOfDigits(status.bufStatus[0].buffer.len) - 2
+                          else: 0
   let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = initEditorView(status.bufStatus[0].buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numberOfDigitsLen)
+  let workspaceIndex = status.currentWorkSpaceIndex
+
+  status.workSpace[workspaceIndex].currentMainWindowNode.view =
+    initEditorView(status.bufStatus[0].buffer,
+                   terminalHeight() - useStatusBar - 1,
+                   terminalWidth() - numberOfDigitsLen)
 
   status.commandWindow.erase
 
@@ -315,7 +370,9 @@ proc realtimeSearchSettingCommand(status: var Editorstatus, command: seq[Rune]) 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
-proc highlightPairOfParenSettigCommand(status: var Editorstatus, command: seq[Rune]) =
+proc highlightPairOfParenSettigCommand(status: var Editorstatus,
+                                       command: seq[Rune]) =
+                                       
   if command == ru"on": status.settings.highlightPairOfParen = true
   elif command == ru"off": status.settings.highlightPairOfParen = false
  
@@ -324,7 +381,9 @@ proc highlightPairOfParenSettigCommand(status: var Editorstatus, command: seq[Ru
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
-proc autoDeleteParenSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+proc autoDeleteParenSettingCommand(status: var EditorStatus,
+                                   command: seq[Rune]) =
+                                   
   if command == ru"on": status.settings.autoDeleteParen = true
   elif command == ru"off": status.settings.autoDeleteParen = false
 
@@ -350,7 +409,9 @@ proc smoothScrollSpeedSettingCommand(status: var Editorstatus, speed: int) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
   
-proc highlightCurrentWordSettingCommand(status: var Editorstatus, command: seq[Rune]) =
+proc highlightCurrentWordSettingCommand(status: var Editorstatus,
+                                        command: seq[Rune]) =
+                                        
   if command == ru"on": status.settings.highlightOtherUsesCurrentWord = true
   if command == ru"off": status.settings.highlightOtherUsesCurrentWord = false
   
@@ -359,7 +420,9 @@ proc highlightCurrentWordSettingCommand(status: var Editorstatus, command: seq[R
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
-proc systemClipboardSettingCommand(status: var Editorstatus, command: seq[Rune]) =
+proc systemClipboardSettingCommand(status: var Editorstatus,
+                                   command: seq[Rune]) =
+
   if command == ru"on": status.settings.systemClipboard = true
   elif command == ru"off": status.settings.systemClipboard = false
 
@@ -368,7 +431,9 @@ proc systemClipboardSettingCommand(status: var Editorstatus, command: seq[Rune])
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
-proc highlightFullWidthSpaceSettingCommand(status: var Editorstatus, command: seq[Rune]) =
+proc highlightFullWidthSpaceSettingCommand(status: var Editorstatus,
+                                           command: seq[Rune]) =
+
   if command == ru"on": status.settings.highlightFullWidthSpace = true
   elif command == ru"off": status.settings.highlightFullWidthSpace = false
 
@@ -379,7 +444,8 @@ proc highlightFullWidthSpaceSettingCommand(status: var Editorstatus, command: se
 
 proc buildOnSaveSettingCommand(status: var Editorstatus, command: seq[Rune]) =
   if command == ru"on": status.settings.buildOnSaveSettings.buildOnSave = true
-  elif command == ru"off": status.settings.buildOnSaveSettings.buildOnSave = false
+  elif command == ru"off":
+    status.settings.buildOnSaveSettings.buildOnSave = false
 
   status.commandWindow.erase
 
@@ -392,7 +458,9 @@ proc turnOffHighlightingCommand(status: var EditorStatus) =
   status.commandWindow.erase
   status.changeMode(Mode.normal)
 
-proc multipleStatusBarSettingCommand(status: var Editorstatus, command: seq[Rune]) =
+proc multipleStatusBarSettingCommand(status: var Editorstatus,
+                                     command: seq[Rune]) =
+
   if command == ru"on": status.settings.statusBar.multipleStatusBar = true
   elif command == ru"off": status.settings.statusBar.multipleStatusBar = false
 
@@ -411,9 +479,13 @@ proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
 
   if status.bufStatus.len == 0: addNewBuffer(status, "")
   elif status.bufferIndexInCurrentWindow > status.bufStatus.high:
-    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex = status.bufStatus.high 
+    let workspaceIndex = status.currentWorkSpaceIndex
+    status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex =
+      status.bufStatus.high 
 
-  if status.bufStatus[status.bufferIndexInCurrentWindow].mode == Mode.ex: status.changeMode(status.bufStatus[status.bufferIndexInCurrentWindow].prevMode)
+  if status.bufStatus[status.bufferIndexInCurrentWindow].mode == Mode.ex:
+    let prevMode = status.bufStatus[status.bufferIndexInCurrentWindow].prevMode
+    status.changeMode(prevMode)
   else:
     status.commandWindow.erase
     status.changeMode(status.bufStatus[status.bufferIndexInCurrentWindow].mode)
@@ -465,7 +537,10 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
 
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
-  if status.bufStatus[currentBufferIndex].countChange > 0 or countReferencedWindow(status.workSpace[status.currentWorkSpaceIndex].mainWindowNode, currentBufferIndex) == 0:
+  let workspaceIndex = status.currentWorkSpaceIndex
+  if status.bufStatus[currentBufferIndex].countChange > 0 or
+     countReferencedWindow(status.workSpace[workspaceIndex].mainWindowNode,
+                           currentBufferIndex) == 0:
     status.commandWindow.writeNoWriteError(status.messageLog)
   else:
     if existsDir($filename):
@@ -478,7 +553,9 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
 
     status.changeCurrentBuffer(status.bufStatus.high)
 
-proc execCmdResultToMessageLog*(output: TaintedString, messageLog: var seq[seq[Rune]])=
+proc execCmdResultToMessageLog*(output: TaintedString,
+                                messageLog: var seq[seq[Rune]])=
+
   var line = ""
   for ch in output:
     if ch == '\n':
@@ -499,7 +576,8 @@ proc buildOnSave(status: var Editorstatus) =
 
   cmdResult.output.execCmdResultToMessageLog(status.messageLog)
 
-  if cmdResult.exitCode != 0: status.commandWindow.writeMessageFailedBuildOnSave(status.messageLog)
+  if cmdResult.exitCode != 0:
+    status.commandWindow.writeMessageFailedBuildOnSave(status.messageLog)
   else: status.commandWindow.writeMessageSuccessBuildOnSave(status.messageLog)
 
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
@@ -510,8 +588,11 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
 
   try:
     let currentBufferIndex = status.bufferIndexInCurrentWindow
-    saveFile(filename, status.bufStatus[currentBufferIndex].buffer.toRunes, status.settings.characterEncoding)
-    let bufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
+    saveFile(filename,
+             status.bufStatus[currentBufferIndex].buffer.toRunes,
+             status.settings.characterEncoding)
+    let workspaceIndex = status.currentWorkSpaceIndex
+    let bufferIndex = status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
     status.bufStatus[bufferIndex].filename = filename
     status.bufStatus[currentBufferIndex].countChange = 0
 
@@ -524,11 +605,13 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
 
 proc quitCommand(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
+  let workspaceIndex = status.currentWorkSpaceIndex
   if status.bufStatus[currentBufferIndex].prevMode == Mode.filer:
     status.deleteBuffer(currentBufferIndex)
   else:
-    if status.bufStatus[currentBufferIndex].countChange == 0 or status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
-      status.closeWindow(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+    if status.bufStatus[currentBufferIndex].countChange == 0 or
+       status.workSpace[workspaceIndex].mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
+      status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
     else:
       status.commandWindow.writeNoWriteError(status.messageLog)
 
@@ -536,21 +619,27 @@ proc quitCommand(status: var EditorStatus) =
 proc writeAndQuitCommand(status: var EditorStatus) =
   try:
     let currentBufferIndex = status.bufferIndexInCurrentWindow
+    let workspaceIndex = status.currentWorkSpaceIndex
     status.bufStatus[currentBufferIndex].countChange = 0
-    saveFile(status.bufStatus[currentBufferIndex].filename, status.bufStatus[currentBufferIndex].buffer.toRunes, status.settings.characterEncoding)
-    status.closeWindow(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+    saveFile(
+             status.bufStatus[currentBufferIndex].filename,
+             status.bufStatus[currentBufferIndex].buffer.toRunes,
+             status.settings.characterEncoding)
+    status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
   except IOError:
     status.commandWindow.writeSaveError(status.messageLog)
 
   status.changeMode(Mode.normal)
 
 proc forceQuitCommand(status: var EditorStatus) =
-  status.closeWindow(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+  let workspaceIndex = status.currentWorkSpaceIndex
+  status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
   status.changeMode(Mode.normal)
 
 proc allBufferQuitCommand(status: var EditorStatus) =
-  for i in 0 ..< status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow:
-    let node = status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.searchByWindowIndex(i)
+  let workspaceIndex = status.currentWorkSpaceIndex
+  for i in 0 ..< status.workSpace[workspaceIndex].numOfMainWindow:
+    let node = status.workSpace[workspaceIndex].mainWindowNode.searchByWindowIndex(i)
     if status.bufStatus[node.bufferIndex].countChange > 0:
       status.commandWindow.writeNoWriteError(status.messageLog)
       status.changeMode(Mode.normal)
@@ -562,7 +651,9 @@ proc forceAllBufferQuitCommand(status: var EditorStatus) = exitEditor(status.set
 
 proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
   for bufStatus in status.bufStatus:
-    try: saveFile(bufStatus.filename, bufStatus.buffer.toRunes, status.settings.characterEncoding)
+    try: saveFile(bufStatus.filename,
+                  bufStatus.buffer.toRunes,
+                  status.settings.characterEncoding)
     except IOError:
       status.commandWindow.writeSaveError(status.messageLog)
       status.changeMode(Mode.normal)
@@ -583,7 +674,9 @@ proc shellCommand(status: var EditorStatus, shellCommand: string) =
   status.commandWindow.refresh
 
 proc listAllBufferCommand(status: var Editorstatus) =
-  let swapCurrentBufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
+  let workspaceIndex = status.currentWorkSpaceIndex
+  let swapCurrentBufferIndex =
+    status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
   status.addNewBuffer("")
   status.changeCurrentBuffer(status.bufStatus.high)
 
@@ -592,10 +685,15 @@ proc listAllBufferCommand(status: var Editorstatus) =
     let
       currentMode = status.bufStatus[i].mode
       prevMode = status.bufStatus[i].prevMode
-    if currentMode == Mode.filer or (currentMode == Mode.ex and prevMode == Mode.filer): line = getCurrentDir().toRunes
-    else: line = status.bufStatus[i].filename & ru"  line " & ($status.bufStatus[i].buffer.len).toRunes
+    if currentMode == Mode.filer or
+       (currentMode == Mode.ex and
+       prevMode == Mode.filer): line = getCurrentDir().toRunes
+    else:
+      let filename = status.bufStatus[i].filename
+      line = filename & ru"  line " & ($status.bufStatus[i].buffer.len).toRunes
 
-    let currentBufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
+    let currentBufferIndex =
+      status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
     if i == 0: status.bufStatus[currentBufferIndex].buffer[0] = line
     else: status.bufStatus[currentBufferIndex].buffer.insert(line, i)
 
@@ -603,18 +701,21 @@ proc listAllBufferCommand(status: var Editorstatus) =
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
     useTab = if status.settings.tabLine.useTab: 1 else: 0
     swapCurrentLineNumStting = status.settings.view.currentLineNumber
-    currentBufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
+    currentBufferIndex =
+      status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
   
   status.settings.view.currentLineNumber = false
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view = status.bufStatus[currentBufferIndex].buffer.initEditorView(terminalHeight() - useStatusBar - useTab - 1, terminalWidth())
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine = 0
+  status.workSpace[workspaceIndex].currentMainWindowNode.view =
+    status.bufStatus[currentBufferIndex].buffer.initEditorView(terminalHeight() - useStatusBar - useTab - 1,
+                                                               terminalWidth())
+  status.workSpace[workspaceIndex].currentMainWindowNode.currentLine = 0
 
-  status.updatehighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
+  status.updatehighlight(status.workspace[workspaceIndex].currentMainWindowNode)
 
   while true:
     status.update
     setCursor(false)
-    let key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+    let key = getKey(status.workSpace[workspaceIndex].currentMainWindowNode.window)
     if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
     elif key.int == 0: discard
     else: break
@@ -636,21 +737,27 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
     for i in 0 .. status.bufStatus[currentBufferIndex].buffer.high - 2:
       let oldLine = status.bufStatus[currentBufferIndex].buffer[startLine]
       var newLine = status.bufStatus[currentBufferIndex].buffer[startLine]
-      newLine.insert(replaceInfo.replaceWord, status.bufStatus[currentBufferIndex].buffer[startLine].len)
+      newLine.insert(replaceInfo.replaceWord,
+                     status.bufStatus[currentBufferIndex].buffer[startLine].len)
       for j in 0 .. status.bufStatus[currentBufferIndex].buffer[startLine + 1].high:
-        newLine.insert(status.bufStatus[currentBufferIndex].buffer[startLine + 1][j], status.bufStatus[currentBufferIndex].buffer[startLine].len)
-      if oldLine != newLine: status.bufStatus[currentBufferIndex].buffer[startLine] = newLine
+        newLine.insert(status.bufStatus[currentBufferIndex].buffer[startLine + 1][j],
+                       status.bufStatus[currentBufferIndex].buffer[startLine].len)
+      if oldLine != newLine:
+        status.bufStatus[currentBufferIndex].buffer[startLine] = newLine
 
-      status.bufStatus[currentBufferIndex].buffer.delete(startLine + 1, startLine + 1)
+      status.bufStatus[currentBufferIndex].buffer.delete(startLine + 1,
+                                                         startLine + 1)
   else:
     for i in 0 .. status.bufStatus[currentBufferIndex].buffer.high:
       let searchResult = searchBuffer(status, replaceInfo.searhWord)
       if searchResult.line > -1:
         let oldLine = status.bufStatus[currentBufferIndex].buffer[searchResult.line]
         var newLine = status.bufStatus[currentBufferIndex].buffer[searchResult.line]
-        newLine.delete(searchResult.column, searchResult.column + replaceInfo.searhWord.high)
+        newLine.delete(searchResult.column,
+                       searchResult.column + replaceInfo.searhWord.high)
         newLine.insert(replaceInfo.replaceWord, searchResult.column)
-        if oldLine != newLine: status.bufStatus[currentBufferIndex].buffer[searchResult.line] = newLine
+        if oldLine != newLine:
+          status.bufStatus[currentBufferIndex].buffer[searchResult.line] = newLine
 
   inc(status.bufStatus[currentBufferIndex].countChange)
   status.commandWindow.erase
@@ -672,7 +779,8 @@ proc deleteCurrentWorkSpaceCommand*(status: var Editorstatus) =
   let index = status.currentWorkSpaceIndex
   if 0 <= index and index < status.workSpace.len:
     for i in 0 ..< status.workSpace[index].numOfMainWindow:
-      let node = status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.searchByWindowIndex(i)
+      let node =
+        status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.searchByWindowIndex(i)
       ## Check if buffer has changed
       if status.bufStatus[node.bufferIndex].countChange > 0:
         status.commandWindow.writeNoWriteError(status.messageLog)
@@ -689,12 +797,14 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
   elif isJumpCommand(status, command):
     var line = ($command[0]).parseInt - 1
     if line < 0: line = 0
-    if line >= status.bufStatus[currentBufferIndex].buffer.len: line = status.bufStatus[currentBufferIndex].buffer.high
+    if line >= status.bufStatus[currentBufferIndex].buffer.len:
+      line = status.bufStatus[currentBufferIndex].buffer.high
     jumpCommand(status, line)
   elif isEditCommand(command):
     editCommand(status, command[1].normalizePath)
   elif isWriteCommand(status, command):
-    writeCommand(status, if command.len < 2: status.bufStatus[currentBufferIndex].filename else: command[1])
+    writeCommand(status, if command.len < 2:
+      status.bufStatus[currentBufferIndex].filename else: command[1])
   elif isQuitCommand(command):
     quitCommand(status)
   elif isWriteAndQuitCommand(status, command):
@@ -727,6 +837,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     statusBarSettingCommand(status, command[1])
   elif isLineNumberSettingCommand(command):
     lineNumberSettingCommand(status, command[1])
+  elif isIndentationLinesSettingCommand(command):
+    indentationLinesSettingCommand(status, command[1])
   elif isAutoIndentSettingCommand(command):
     autoIndentSettingCommand(status, command[1])
   elif isAutoCloseParenSettingCommand(command):
@@ -783,6 +895,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     changeCurrentWorkSpaceCommand(status, ($command[1]).parseInt)
   elif isDeleteCurrentWorkSpaceCommand(command):
     deleteCurrentWorkSpaceCommand(status)
+  elif isOpenHelpCommand(command):
+    status.openHelp
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
@@ -797,41 +911,51 @@ proc exMode*(status: var EditorStatus) =
 
   status.searchHistory.add(ru"")
 
+  let workspaceIndex = status.currentWorkSpaceIndex
+
   while exitInput == false:
-    let returnWord = status.getKeyOnceAndWriteCommandView(prompt, command, isSuggest)
+    let returnWord = status.getKeyOnceAndWriteCommandView(prompt,
+                                                          command,
+                                                          isSuggest)
 
     command = returnWord[0]
     exitInput = returnWord[1]
     cancelInput = returnWord[2]
 
+
     if cancelInput or exitInput: break
-    elif status.settings.replaceTextHighlight and  command.len > 3 and command.startsWith(ru"%s/"):
+    elif status.settings.replaceTextHighlight and
+         command.len > 3 and
+         command.startsWith(ru"%s/"):
       var keyword = ru""
       for i in 3 ..< command.len :
           if command[i] == ru'/': break
           keyword.add(command[i])
       status.searchHistory[status.searchHistory.high] = keyword
-      let bufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
+      let bufferIndex =
+        status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
       status.bufStatus[bufferIndex].isHighlight = true
     else:
-      let bufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
+      let bufferIndex =
+        status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
       status.bufStatus[bufferIndex].isHighlight = false
 
-    status.updatehighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
+    status.updatehighlight(status.workspace[workspaceIndex].currentMainWindowNode)
     status.resize(terminalHeight(), terminalWidth())
     status.update
 
   status.searchHistory.delete(status.searchHistory.high)
-  let bufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
+  let bufferIndex =
+    status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
   status.bufStatus[bufferIndex].isHighlight = false
   let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.updatehighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
+  status.updatehighlight(status.workspace[workspaceIndex].currentMainWindowNode)
 
   if cancelInput:
     status.commandWindow.erase
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
   else:
     status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
-    status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+    status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(status.workSpace[workspaceIndex].currentMainWindowNode)
 
     exModeCommand(status, splitCommand($command))

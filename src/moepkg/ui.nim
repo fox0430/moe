@@ -41,8 +41,8 @@ proc restoreTerminalModes*() = reset_prog_mode()
 proc saveCurrentTerminalModes*() = def_prog_mode()
 
 proc setCursor*(cursor: bool) =
-  if cursor == true: curs_set(1)   # enable cursor
-  elif cursor == false: curs_set(0)   # disable cursor
+  if cursor == true: curs_set(1)      ## enable cursor
+  elif cursor == false: curs_set(0)   ## disable cursor
 
 proc keyEcho*(keyecho: bool) =
   if keyecho == true: echo()
@@ -54,12 +54,14 @@ proc setTimeout*(win: var Window, time: int) = win.cursesWindow.wtimeout(cint(ti
 
 proc startUi*() =
   discard setLocale(LC_ALL, "")   # enable UTF-8
-  initscr()   # start terminal control
-  cbreak()    # enable cbreak mode
-  nonl();     # exit new line mode and improve move cursor performance
+  initscr()   ## start terminal control
+  cbreak()    ## enable cbreak mode
+  nonl();     ## exit new line mode and improve move cursor performance
   setCursor(true)
 
-  if can_change_color(): setCursesColor(ColorThemeTable[ColorTheme.vivid]) # default is vivid
+  if can_change_color():
+    ## default is vivid
+    setCursesColor(ColorThemeTable[ColorTheme.vivid])
 
   erase()
   keyEcho(false)
@@ -77,25 +79,41 @@ proc initWindow*(height, width, top, left: int, color: EditorColorPair): Window 
   keypad(result.cursesWindow, true)
   discard wbkgd(result.cursesWindow, ncurses.COLOR_PAIR(color))
 
-proc write*(win: var Window, y, x: int, str: string, color: EditorColorPair = EditorColorPair.defaultChar, storeX: bool = true) =
+proc write*(win: var Window,
+            y, x: int,
+            str: string,
+            color: EditorColorPair = EditorColorPair.defaultChar,
+            storeX: bool = true) =
+  
   win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
   mvwaddstr(win.cursesWindow, cint(y), cint(x), str)
   if storeX:
     win.y = y
     win.x = x+str.toRunes.width
 
-proc write*(win: var Window, y, x: int, str: seq[Rune], color: EditorColorPair = EditorColorPair.defaultChar, storeX: bool = true) =
+proc write*(win: var Window,
+            y, x: int, str: seq[Rune],
+            color: EditorColorPair = EditorColorPair.defaultChar,
+            storeX: bool = true) =
+  
   write(win, y, x, $str, color, false)
   if storeX:
     win.y = y
     win.x = x+str.width
 
-proc append*(win: var Window, str: string, color: EditorColorPair = EditorColorPair.defaultChar) =
+proc append*(win: var Window,
+              str: string,
+              color: EditorColorPair = EditorColorPair.defaultChar) =
+  
   win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
   mvwaddstr(win.cursesWindow, cint(win.y), cint(win.x), $str)
   win.x += str.toRunes.width
 
-proc append*(win: var Window, str: seq[Rune], color: EditorColorPair = EditorColorPair.defaultChar) = append(win, $str, color)
+proc append*(win: var Window,
+            str: seq[Rune],
+            color: EditorColorPair = EditorColorPair.defaultChar) =
+  
+  append(win, $str, color)
 
 proc erase*(win: var Window) =
   werase(win.cursesWindow)
@@ -121,11 +139,14 @@ proc resize*(win: var Window, height, width, y, x: int) =
   win.y = y
   win.x = x
 
-proc attron*(win: var Window, attributes: Attributes) = win.cursesWindow.wattron(cint(attributes))
+proc attron*(win: var Window, attributes: Attributes) =
+  win.cursesWindow.wattron(cint(attributes))
 
-proc attroff*(win: var Window, attributes: Attributes) = win.cursesWindow.wattroff(cint(attributes))
+proc attroff*(win: var Window, attributes: Attributes) =
+  win.cursesWindow.wattroff(cint(attributes))
 
-proc moveCursor*(win: Window, y, x: int) = wmove(win.cursesWindow, cint(y), cint(x))
+proc moveCursor*(win: Window, y, x: int) =
+  wmove(win.cursesWindow, cint(y), cint(x))
 
 proc deleteWindow*(win: var Window) = delwin(win.cursesWindow)
 
@@ -167,18 +188,23 @@ proc isLeftKey*(key: Rune): bool = key == KEY_LEFT
 proc isRightKey*(key: Rune): bool = key == KEY_RIGHT
 proc isHomeKey*(key: Rune): bool = key == KEY_HOME
 proc isEndKey*(key: Rune): bool = key == KEY_END
-proc isBackspaceKey*(key: Rune): bool = key == KEY_BACKSPACE or key == 8 or key == 127
 proc isDcKey*(key: Rune): bool = key == KEY_DC
-proc isEnterKey*(key: Rune): bool = key == KEY_ENTER or key == ord('\n') or key == 13
 proc isPageUpKey*(key: Rune): bool = key == KEY_PPAGE or key == 2
 proc isPageDownkey*(key: Rune): bool = key == KEY_NPAGE or key == 6
 proc isTabkey*(key: Rune): bool = key == ord('\t') or key == 9
+proc isControlA*(key: Rune): bool = key == 1
+proc isControlX*(key: Rune): bool = key == 24
 proc isControlR*(key: Rune): bool = key == 18
 proc isControlJ*(key: Rune): bool = int(key) == 10
 proc isControlK*(key: Rune): bool = int(key) == 11
 proc isControlL*(key: Rune): bool = int(key) == 12
 proc isControlU*(key: Rune): bool = int(key) == 21
+proc isControlD*(key: Rune): bool = int(key) == 4
 proc isControlV*(key: Rune): bool = int(key) == 22
 proc isControlH*(key: Rune): bool = int(key) == 263
 proc isControlSquareBracketsRight*(key: Rune): bool = int(key) == 27  # Ctrl - [
 proc isShiftTab*(key: Rune): bool = int(key) == 353
+proc isBackspaceKey*(key: Rune): bool =
+  key == KEY_BACKSPACE or key == 8 or key == 127
+proc isEnterKey*(key: Rune): bool =
+  key == KEY_ENTER or key == ord('\n') or key == 13

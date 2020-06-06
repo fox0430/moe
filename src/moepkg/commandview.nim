@@ -2,7 +2,10 @@ import terminal, strutils, sequtils, strformat, os
 import editorstatus, ui, unicodeext, fileutils, color
 
 type
-  ExModeViewStatus = tuple[buffer: seq[Rune], prompt: string, cursorY, cursorX, currentPosition, startPosition: int]
+  ExModeViewStatus = tuple[
+                           buffer: seq[Rune],
+                           prompt: string,
+                           cursorY, cursorX, currentPosition, startPosition: int]
 
 const exCommandList = [
   ru"!",
@@ -20,10 +23,12 @@ const exCommandList = [
   ru"cws",
   ru"dws",
   ru"e",
+  ru "help",
   ru"highlightcurrentword",
   ru"highlightfullspace",
   ru"highlightparen",
   ru"indent",
+  ru"indentationlines",
   ru"linenum",
   ru"livereload",
   ru"log",
@@ -49,7 +54,10 @@ const exCommandList = [
   ru"wqa",
 ]
 
-proc writeMessageOnCommandWindow(cmdWin: var Window, message: string, color: EditorColorPair) =
+proc writeMessageOnCommandWindow(cmdWin: var Window,
+                                 message: string,
+                                 color: EditorColorPair) =
+
   cmdWin.erase
   cmdWin.write(0, 0, message, color)
   cmdWin.refresh
@@ -79,7 +87,10 @@ proc writeCopyFileError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
 
-proc writeFileOpenError*(cmdWin: var Window, fileName: string, messageLog: var seq[seq[Rune]]) =
+proc writeFileOpenError*(cmdWin: var Window,
+                         fileName: string,
+                         messageLog: var seq[seq[Rune]]) =
+                         
   let mess = "Error: can not open: " & fileName
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
@@ -89,7 +100,10 @@ proc writeCreateDirError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
 
-proc writeMessageDeletedFile*(cmdWin: var Window, filename: string, messageLog: var seq[seq[Rune]]) =
+proc writeMessageDeletedFile*(cmdWin: var Window,
+                              filename: string,
+                              messageLog: var seq[seq[Rune]]) =
+                              
   let mess = "Deleted: " & filename
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
   messageLog.add(mess.toRunes)
@@ -99,44 +113,65 @@ proc writeNoFileNameError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
 
-proc writeMessageYankedLine*(cmdWin: var Window, numOfLine: int, messageLog: var seq[seq[Rune]]) =
+proc writeMessageYankedLine*(cmdWin: var Window,
+                             numOfLine: int,
+                             messageLog: var seq[seq[Rune]]) =
+                             
   let mess = fmt"{numOfLine} line yanked"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
   messageLog.add(mess.toRunes)
 
-proc writeMessageYankedCharactor*(cmdWin: var Window, numOfChar: int, messageLog: var seq[seq[Rune]]) =
+proc writeMessageYankedCharactor*(cmdWin: var Window,
+                                  numOfChar: int,
+                                  messageLog: var seq[seq[Rune]]) =
+                                  
   let mess = fmt"{numOfChar} charactor yanked"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
   messageLog.add(mess.toRunes)
 
-proc writeMessageAutoSave*(cmdWin: var Window, filename: seq[Rune], messageLog: var seq[seq[Rune]]) =
+proc writeMessageAutoSave*(cmdWin: var Window,
+                           filename: seq[Rune],
+                           messageLog: var seq[seq[Rune]]) =
+                           
   let mess = fmt"Auto saved {filename}"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
   messageLog.add(mess.toRunes)
 
-proc writeMessageBuildOnSave*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+proc writeMessageBuildOnSave*(cmdWin: var Window,
+                              messageLog: var seq[seq[Rune]]) =
+                              
   const mess = "Build on save..."
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
   messageLog.add(mess.toRunes)
 
-proc writeMessageSuccessBuildOnSave*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+proc writeMessageSuccessBuildOnSave*(cmdWin: var Window,
+                                     messageLog: var seq[seq[Rune]]) =
+                                     
   const mess = "Success save and build"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
   messageLog.add(mess.toRunes)
 
-proc writeMessageFailedBuildOnSave*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+proc writeMessageFailedBuildOnSave*(cmdWin: var Window,
+                                    messageLog: var seq[seq[Rune]]) =
+                                    
   const mess = "Build failed"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
   messageLog.add(mess.toRunes)
 
-proc writeNotEditorCommandError*(cmdWin: var Window, command: seq[seq[Rune]], messageLog: var seq[seq[Rune]]) =
+proc writeNotEditorCommandError*(cmdWin: var Window,
+                                 command: seq[seq[Rune]],
+                                 messageLog: var seq[seq[Rune]]) =
+                                 
   var cmd = ""
   for i in 0 ..< command.len: cmd = cmd & $command[i] & " "
   let mess = fmt"Error: Not an editor command: {cmd}"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
 
-proc writeMessageSaveFile*(cmdWin: var Window, filename: seq[Rune], messageLog: var seq[seq[Rune]]) =
+proc writeMessageSaveFile*(cmdWin: var Window,
+                           filename: seq[Rune],
+                           messageLog: var seq[seq[Rune]]) =
+                           
   let mess = fmt"Saved {filename}"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
   messageLog.add(mess.toRunes)
@@ -184,7 +219,11 @@ proc splitCommand*(command: string): seq[seq[Rune]] =
   else:
     return strutils.splitWhitespace(command).map(proc(s: string): seq[Rune] = toRunes(s))
 
-proc writeExModeView(commandWindow: var Window, exStatus: ExModeViewStatus, color: EditorColorPair) =
+proc writeExModeView(
+                     commandWindow: var Window,
+                     exStatus: ExModeViewStatus,
+                     color: EditorColorPair) =
+                     
   let buffer = ($exStatus.buffer).substr(exStatus.startPosition, exStatus.buffer.len)
 
   commandWindow.erase
@@ -273,11 +312,13 @@ proc suggestFilePath(status: var Editorstatus, exStatus: var ExModeViewStatus, k
   if inputPath.len == 0 or not inputPath.contains("/"):
     suggestlist.add(ru"")
     for kind, path in walkDir("./"):
-      if ($path.toRunes.normalizePath).startsWith(inputPath): suggestlist.add(path.toRunes.normalizePath)
+      if ($path.toRunes.normalizePath).startsWith(inputPath):
+        suggestlist.add(path.toRunes.normalizePath)
   elif ($inputPath).contains("/"):
     suggestlist.add(($inputPath).substr(0, ($inputPath).rfind("/")).toRunes)
     for kind, path in walkDir(($inputPath).substr(0, ($inputPath).rfind("/"))):
-      if ($path.toRunes.normalizePath).startsWith(inputPath): suggestlist.add(path.toRunes.normalizePath)
+      if ($path.toRunes.normalizePath).startsWith(inputPath):
+        suggestlist.add(path.toRunes.normalizePath)
 
   var suggestIndex = 0
 
@@ -301,7 +342,8 @@ proc suggestFilePath(status: var Editorstatus, exStatus: var ExModeViewStatus, k
 
       var displayBuffer: seq[seq[Rune]] = @[]
       if ($suggestlist[1]).contains("/"):
-        for i in 1 ..< suggestlist.len: displayBuffer.add(suggestlist[i][($suggestlist[i]).rfind("/") + 1 ..< suggestlist[i].len])
+        for i in 1 ..< suggestlist.len:
+          displayBuffer.add(suggestlist[i][($suggestlist[i]).rfind("/") + 1 ..< suggestlist[i].len])
       else: displayBuffer = suggestlist[1 ..< suggestlist.len]
 
       status.writePopUpWindow(x, y, currentLine, displayBuffer)
@@ -329,7 +371,22 @@ proc suggestExCommandOption(status: var Editorstatus, exStatus: var ExModeViewSt
   let command = (strutils.splitWhitespace($exStatus.buffer))[0]
 
   case command:
-    of "cursorLine", "highlightparen", "indent", "linenum", "livereload", "realtimesearch", "statusbar", "syntax", "tabstop", "smoothscroll", "clipboard", "highlightcurrentword", "highlightfullspace", "multiplestatusbar", "buildonsave":
+    of "cursorLine",
+       "highlightparen",
+       "indent",
+       "linenum",
+       "livereload",
+       "realtimesearch",
+       "statusbar",
+       "syntax",
+       "tabstop",
+       "smoothscroll",
+       "clipboard",
+       "highlightcurrentword",
+       "highlightfullspace",
+       "multiplestatusbar",
+       "buildonsave",
+       "indentationlines":
       argList = @["on", "off"]
     of "theme":
       argList= @["vivid", "dark", "light", "config"]
@@ -371,10 +428,14 @@ proc suggestExCommandOption(status: var Editorstatus, exStatus: var ExModeViewSt
 
     key = getKey(status.commandWindow)
 
-proc suggestExCommand(status: var Editorstatus, exStatus: var ExModeViewStatus, key: var Rune) =
+proc suggestExCommand(status: var Editorstatus,
+                      exStatus: var ExModeViewStatus,
+                      key: var Rune) =
+                      
   var suggestlist: seq[seq[Rune]] = @[exStatus.buffer]
   for runes in exCommandList:
-    if runes.len >= exStatus.buffer.len and exStatus.buffer.startsWith(runes): suggestlist.add(runes)
+    if runes.len >= exStatus.buffer.len and
+       exStatus.buffer.startsWith(runes): suggestlist.add(runes)
 
   var suggestIndex = 0
 
@@ -403,9 +464,13 @@ proc suggestExCommand(status: var Editorstatus, exStatus: var ExModeViewStatus, 
 
     key = getKey(status.commandWindow)
 
-proc suggestMode(status: var Editorstatus, exStatus: var ExModeViewStatus, key: var Rune) =
+proc suggestMode(
+                 status: var Editorstatus,
+                 exStatus: var ExModeViewStatus,
+                 key: var Rune) =
 
-  if exStatus.buffer.len > 0 and exStatus.buffer.isExCommand: status.suggestExCommandOption(exStatus, key)
+  if exStatus.buffer.len > 0 and exStatus.buffer.isExCommand:
+    status.suggestExCommandOption(exStatus, key)
   else: suggestExCommand(status, exStatus, key)
 
   status.commandWindow.moveCursor(exStatus.cursorY, exStatus.cursorX)
@@ -413,7 +478,10 @@ proc suggestMode(status: var Editorstatus, exStatus: var ExModeViewStatus, key: 
 
   while isTabkey(key) or isShiftTab(key): key = getKey(status.commandWindow)
 
-proc getKeyOnceAndWriteCommandView*(status: var Editorstatus, prompt: string, buffer: seq[Rune], isSuggest: bool): (seq[Rune], bool, bool) =
+proc getKeyOnceAndWriteCommandView*(status: var Editorstatus,
+                                    prompt: string,
+                                    buffer: seq[Rune],
+                                    isSuggest: bool): (seq[Rune], bool, bool) =
   var
     exStatus = initExModeViewStatus(prompt)
     exitSearch = false
@@ -428,7 +496,8 @@ proc getKeyOnceAndWriteCommandView*(status: var Editorstatus, prompt: string, bu
     # Suggestion mode
     if isTabkey(key) or isShiftTab(key):
       suggestMode(status, exStatus, key)
-      if status.settings.popUpWindowInExmode and isEnterKey(key): moveCursor(status.commandWindow, exStatus.cursorY, exStatus.cursorX)
+      if status.settings.popUpWindowInExmode and isEnterKey(key):
+        moveCursor(status.commandWindow, exStatus.cursorY, exStatus.cursorX)
 
     if isEnterKey(key):
       exitSearch = true

@@ -1,5 +1,6 @@
 import packages/docutils/highlite, sequtils, os, strformat, parseutils
 import unicodeext, ui, color
+from strutils import find
 
 type ColorSegment* = object
   firstRow*, firstColumn*, lastRow*, lastColumn*: int
@@ -8,21 +9,42 @@ type ColorSegment* = object
 type Highlight* = object
   colorSegments*: seq[ColorSegment]
 
+type
+  ReservedWord = object
+    word: string
+    color: EditorColorPair
+
+const
+  reservedWords = @[
+    ReservedWord(word: "TODO", color: EditorColorPair.todo),
+    ReservedWord(word: "WIP", color: EditorColorPair.todo),
+    ReservedWord(word: "NOTE", color: EditorColorPair.todo),
+  ]
+
 proc len*(highlight: Highlight): int = highlight.colorSegments.len
 
 proc high*(highlight: Highlight): int = highlight.colorSegments.high
 
-proc `[]`*(highlight: Highlight, i: int): ColorSegment = highlight.colorSegments[i]
+proc `[]`*(highlight: Highlight, i: int): ColorSegment =
+  highlight.colorSegments[i]
 
-proc `[]`*(highlight: Highlight, i: BackwardsIndex): ColorSegment = highlight.colorSegments[highlight.colorSegments.len - int(i)]
+proc `[]`*(highlight: Highlight, i: BackwardsIndex): ColorSegment =
+  highlight.colorSegments[highlight.colorSegments.len - int(i)]
 
 proc getColorPair*(highlight: Highlight, line, col: int): EditorColorPair =
   for colorSegment in highlight.colorSegments:
-    if line >= colorSegment.firstRow and colorSegment.lastRow >= line and col >= colorSegment.firstColumn and colorSegment.lastColumn >= col: return colorSegment.color
+    if line >= colorSegment.firstRow and
+       colorSegment.lastRow >= line and
+       col >= colorSegment.firstColumn and
+       colorSegment.lastColumn >= col: return colorSegment.color
 
-proc isIntersect(s, t: ColorSegment): bool = not ((t.lastRow, t.lastColumn) < (s.firstRow, s.firstColumn) or (s.lastRow, s.lastColumn) < (t.firstRow, t.firstColumn))
+proc isIntersect(s, t: ColorSegment): bool =
+  not ((t.lastRow, t.lastColumn) < (s.firstRow, s.firstColumn) or
+  (s.lastRow, s.lastColumn) < (t.firstRow, t.firstColumn))
 
-proc contains(s, t: ColorSegment): bool = ((s.firstRow, s.firstColumn) <= (t.firstRow, t.firstColumn) and (t.lastRow, t.lastColumn) <= (s.lastRow, s.lastColumn))
+proc contains(s, t: ColorSegment): bool =
+  ((s.firstRow, s.firstColumn) <= (t.firstRow, t.firstColumn) and
+  (t.lastRow, t.lastColumn) <= (s.lastRow, s.lastColumn))
 
 proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
   ## Overwrite `s` with t
@@ -36,29 +58,58 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
 
   if not s.isIntersect(t): return @[s]
 
-  if t.contains(s): return @[ColorSegment(firstRow: s.firstRow, firstColumn: s.firstColumn, lastRow: s.lastRow, lastColumn: s.lastColumn, color: t.color)]
+  if t.contains(s):
+    return @[ColorSegment(firstRow: s.firstRow,
+                          firstColumn: s.firstColumn,
+                          lastRow: s.lastRow,
+                          lastColumn: s.lastColumn,
+                          color: t.color)]
   
   if s.contains(t):
     if (s.firstRow, s.firstColumn) < (t.firstRow, t.firstColumn):
       let last = prev((t.firstRow, t.firstColumn))
-      result.add(ColorSegment(firstRow: s.firstRow, firstColumn: s.firstColumn, lastRow: last.row, lastColumn: last.column, color: s.color))
+      result.add(ColorSegment(firstRow: s.firstRow,
+                              firstColumn: s.firstColumn,
+                              lastRow: last.row,
+                              lastColumn: last.column,
+                              color: s.color))
     
     result.add(t)
 
     if (t.lastRow, t.lastColumn) < (s.lastRow, s.lastColumn):
       let first = next((t.lastRow, t.lastColumn))
-      result.add(ColorSegment(firstRow: first.row, firstColumn: first.column, lastRow: s.lastRow, lastColumn: s.lastColumn, color: s.color))
+      result.add(ColorSegment(firstRow: first.row,
+                              firstColumn: first.column,
+                              lastRow: s.lastRow,
+                              lastColumn: s.lastColumn,
+                              color: s.color))
     
     return result
   
   if (t.firstRow, t.firstColumn) < (s.firstRow, s.firstColumn):
     let first = next((t.lastRow, t.lastColumn))
-    result.add(ColorSegment(firstRow: s.firstRow, firstColumn: s.firstColumn, lastRow: t.lastRow, lastColumn: t.lastColumn, color: t.color))
-    result.add(ColorSegment(firstRow: first.row, firstColumn: first.column, lastRow: s.lastRow, lastColumn: s.lastColumn, color: s.color))
+    result.add(ColorSegment(firstRow: s.firstRow,
+                            firstColumn: s.firstColumn,
+                            lastRow: t.lastRow,
+                            lastColumn: t.lastColumn,
+                            color: t.color))
+    result.add(ColorSegment(firstRow: first.row,
+                            firstColumn: first.column,
+                            lastRow: s.lastRow,
+                            lastColumn: s.lastColumn,
+                            color: s.color))
   else:
     let last = prev((t.firstRow, t.firstColumn))
-    result.add(ColorSegment(firstRow: s.firstRow, firstColumn: s.firstColumn, lastRow: last.row, lastColumn: last.column, color: s.color))
-    result.add(ColorSegment(firstRow: t.firstRow, firstColumn: t.firstColumn, lastRow: s.lastRow, lastColumn: s.lastColumn, color: t.color))
+    result.add(ColorSegment(firstRow: s.firstRow,
+                            firstColumn: s.firstColumn,
+                            lastRow: last.row,
+                            lastColumn: last.column,
+                            color: s.color))
+    result.add(ColorSegment(firstRow: t.firstRow,
+                            firstColumn: t.firstColumn,
+                            lastRow: s.lastRow,
+                            lastColumn: s.lastColumn,
+                            color: t.color))
 
 proc overwrite*(highlight: Highlight, colorSegment: ColorSegment): Highlight =
   ## Overwrite `highlight` with colorSegment
@@ -67,17 +118,58 @@ proc overwrite*(highlight: Highlight, colorSegment: ColorSegment): Highlight =
     let cs = highlight.colorSegments[i]
     result.colorSegments.add(cs.overwrite(colorSegment))
 
+iterator parseReservedWord(buffer: string,
+                           color: EditorColorPair): (string, EditorColorPair) =
+  var
+    buffer = buffer
+  while true:
+    var
+      found: bool
+      pos = int.high
+      reservedWord: ReservedWord
+
+    # search minimum pos
+    for r in reservedWords:
+      let p = buffer.find(r.word)
+      if p < 0: continue
+      if p <= pos:
+        pos = p
+        reservedWord = r
+      found = true
+    if not found:
+      yield (buffer[0 ..^ 1], color)
+      break
+
+    const
+      first = 0
+    let
+      last = pos + reservedWord.word.len
+    yield (buffer[first ..< pos], color)
+    yield (buffer[pos ..< last], reservedWord.color)
+    buffer = buffer[last ..^ 1]
+
 proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
   var currentRow, currentColumn: int
 
   template splitByNewline(str, c: typed) =
     const newline = Rune('\n')
     var
-      cs = ColorSegment(firstRow: currentRow, firstColumn: currentColumn, lastRow: currentRow, lastColumn: currentColumn, color: c)
+      cs = ColorSegment(firstRow: currentRow,
+                        firstColumn: currentColumn,
+                        lastRow: currentRow,
+                        lastColumn: currentColumn,
+                        color: c)
       empty = true
     for r in runes(str):
       if r == newline:
-        if empty: result.colorSegments.add(ColorSegment(firstRow: currentRow, firstColumn: currentColumn, lastRow: currentRow, lastColumn: currentColumn-1, color: EditorColorPair.defaultChar)) # push an empty segment
+        # push an empty segment
+        if empty:
+          let color = EditorColorPair.defaultChar
+          result.colorSegments.add(ColorSegment(firstRow: currentRow,
+                                                firstColumn: currentColumn,
+                                                lastRow: currentRow,
+                                                lastColumn: currentColumn - 1,
+                                                color: color))
         else: result.colorSegments.add(cs)
         inc(currentRow)
         currentColumn = 0
@@ -98,8 +190,6 @@ proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
 
   var token = GeneralTokenizer()
   token.initGeneralTokenizer(buffer)
-
-  # `highlite.initGeneralTokenizer' skips initial whitespace (including newline('0x0A')), so we parse it by ourselves.
   var pad: string
   if buffer.parseWhile(pad, {' ', '\x09'..'\x0D'}) > 0:
     splitByNewline(pad, EditorColorPair.defaultChar)
@@ -125,20 +215,34 @@ proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
         of gtLongComment: EditorColorPair.longComment
         of gtWhitespace: EditorColorPair.defaultChar
         else: EditorColorPair.defaultChar
+
+    if token.kind == gtComment:
+      for r in buffer[first..last].parseReservedWord(color):
+        if r[0] == "": continue
+        splitByNewline(r[0], r[1])
+      continue
+
     splitByNewline(buffer[first..last], color)
 
 proc indexOf*(highlight: Highlight, row, column: int): int =
   ## calculate the index of the color segment which the pair (row, column) belongs to
 
-  doAssert((row, column) >= (highlight[0].firstRow, highlight[0].firstColumn), fmt"row = {row}, column = {column}, highlight[0].firstRow = {highlight[0].firstRow}, hightlihgt[0].firstColumn = {highlight[0].firstColumn}")
-  doAssert((row, column) <= (highlight[^1].lastRow, highlight[^1].lastColumn), fmt"row = {row}, column = {column}, highlight[^1].lastRow = {highlight[^1].lastRow}, hightlihgt[^1].lastColumn = {highlight[^1].lastColumn}, highlight = {highlight}")
+  block:
+    let mess = fmt"row = {row}, column = {column}, highlight[0].firstRow = {highlight[0].firstRow}, hightlihgt[0].firstColumn = {highlight[0].firstColumn}"
+    doAssert((row, column) >= (highlight[0].firstRow, highlight[0].firstColumn),
+             mess)
+  block:
+    let mess = fmt"row = {row}, column = {column}, highlight[^1].lastRow = {highlight[^1].lastRow}, hightlihgt[^1].lastColumn = {highlight[^1].lastColumn}, highlight = {highlight}"
+    doAssert((row, column) <= (highlight[^1].lastRow, highlight[^1].lastColumn),
+             mess)
 
   var
     lb = 0
     ub = highlight.len
   while ub-lb > 1:
     let mid = (lb+ub) div 2
-    if (row, column) >= (highlight[mid].firstRow, highlight[mid].firstColumn): lb = mid
+    if (row, column) >= (highlight[mid].firstRow, highlight[mid].firstColumn):
+      lb = mid
     else: ub = mid
 
   return lb

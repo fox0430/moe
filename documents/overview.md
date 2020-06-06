@@ -28,5 +28,32 @@ If you are running Linux Ubuntu, or a distribution based on Ubuntu, you will lik
 
 ```
 $ sudo apt install libncurses5-dev libncursesw5-dev
-$ sudo ln -s /lib/x86_64-linux-gnu/libncursesw.so.5 /lib/x86_64-linux-gnu/libncursesw.so
+$ nimble install moe
+```
+
+Fedora
+
+```
+$ sudo dnf install ncurses-devel
+$ nimble install moe
+```
+
+# Test
+
+## Unit test
+```
+nimble test
+```
+
+## Integration test
+
+### Requires
+
+[abduco](https://github.com/martanne/abduco)
+
+[shpec](https://github.com/rylnd/shpec)
+
+### Run integration test
+```
+shpec ./shpec.sh
 ```

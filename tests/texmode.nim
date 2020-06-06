@@ -43,7 +43,7 @@ test "Change prev buffer command":
   var status = initEditorStatus()
   for i in 0 ..< 2: status.addNewBuffer("")
 
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex = 1
+  status.workSpace[0].currentMainWindowNode.bufferIndex = 1
   const command = @[ru"bprev"]
   for i in 0 ..< 3: status.exModeCommand(command)
 
@@ -67,26 +67,28 @@ test "Change to first buffer command":
   var status = initEditorStatus()
   for i in 0 ..< 3: status.addNewBuffer("")
 
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex = 2
+  status.workSpace[0].currentMainWindowNode.bufferIndex = 2
   const command = @[ru"bfirst"]
   status.exModeCommand(command)
   
-  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex == 0)
+  check(status.workSpace[0].currentMainWindowNode.bufferIndex == 0)
 
 test "Change to last buffer command":
   var status = initEditorStatus()
   for i in 0 ..< 3: status.addNewBuffer("")
 
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex = 0
+  status.workSpace[0].currentMainWindowNode.bufferIndex = 0
   const command = @[ru"blast"]
   status.exModeCommand(command)
-  check(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex == 2)
+  check(status.workSpace[0].currentMainWindowNode.bufferIndex == 2)
 
 test "Replace buffer command":
   var status = initEditorStatus()
   status.addNewBuffer("")
 
-  status.bufStatus[0].buffer = initGapBuffer(@[ru"xyz", ru"abcdefghijk", ru"Hello"])
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"xyz",
+                                               ru"abcdefghijk",
+                                               ru"Hello"])
   const command = @[ru"%s/efg/zzzzzz"]
   status.exModeCommand(command)
   check(status.bufStatus[0].buffer[1] == ru"abcdzzzzzzhijk")
@@ -208,7 +210,7 @@ test "Split window command":
 
   const command = @[ru"vs"]
   status.exModeCommand(command)
-  check(status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow == 2)
+  check(status.workSpace[0].numOfMainWindow == 2)
 
 test "Live reload of configuration file setting command":
   var status = initEditorStatus()
@@ -281,7 +283,6 @@ test "Highlight pair of paren settig command":
     const command = @[ru"highlightparen", ru"off"]
     status.exModeCommand(command)
     check(status.settings.highlightPairOfParen == false)
-
   block:
     const command = @[ru"highlightparen", ru"on"]
     status.exModeCommand(command)
@@ -472,3 +473,21 @@ test "Open buffer by number command 2":
   status.exModeCommand(command)
 
   check(status.bufferIndexInCurrentWindow == 1)
+
+test "Open help command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.resize(100, 100)
+  status.update
+
+  const command = @[ru"help"]
+  status.exModeCommand(command)
+
+  status.resize(100, 100)
+  status.update
+
+  check(status.workSpace[0].numOfMainWindow == 2)
+  check(status.bufferIndexInCurrentWindow == 1)
+
+  check(status.bufStatus[1].mode == Mode.help)
