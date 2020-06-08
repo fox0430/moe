@@ -82,6 +82,10 @@ multipleStatusBar = true
 
 useBar = false
 
+[Filer]
+
+showIcons = true
+
 [Theme]
 
 baseTheme = "dark"
