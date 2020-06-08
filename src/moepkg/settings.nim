@@ -8,6 +8,9 @@ when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
 
 import ui, color, unicodeext, editorview, build
 
+type FilerSettings = object
+  showIcons*: bool
+
 type WorkSpaceSettings = object
   useBar*: bool
 
@@ -56,6 +59,10 @@ type EditorSettings* = object
   highlightFullWidthSpace*: bool
   buildOnSaveSettings*: BuildOnSaveSettings
   workSpace*: WorkSpaceSettings
+  filerSettings*: FilerSettings
+
+proc initFilerSettings(): FilerSettings =
+  result.showIcons = true
 
 proc initTabBarSettings*(): TabLineSettings =
   result.useTab = true
@@ -101,6 +108,7 @@ proc initEditorSettings*(): EditorSettings =
   result.highlightFullWidthSpace = true
   result.buildOnSaveSettings = BuildOnSaveSettings()
   result.workSpace= initWorkSpaceSettings()
+  result.filerSettings = initFilerSettings()
 
 proc getCursorType(cursorType, mode: string): CursorType =
   case cursorType
@@ -590,6 +598,10 @@ proc parseSettingsFile*(filename: string): EditorSettings =
   if settings.contains("WorkSpace"):
     if settings["WorkSpace"].contains("useBar"):
         result.workSpace.useBar = settings["WorkSpace"]["useBar"].getbool()
+
+  if settings.contains("Filer"):
+    if settings["Filer"].contains("showIcons"):
+      result.filerSettings.showIcons = settings["Filer"]["showIcons"].getbool()
 
   if not vscodeTheme and settings.contains("Theme"):
     if settings["Theme"].contains("baseTheme"):
