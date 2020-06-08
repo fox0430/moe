@@ -237,6 +237,22 @@ Override commands executed at build (string)
 command
 ```
 
+### WorkSpace table
+
+Enable/Disable workspace bar (bool)  
+default is false
+```
+useBar
+```
+
+### Filer table
+
+Show/hidden unicode icons (bool)  
+default is true
+```
+showIcons
+```
+
 ### Color and theme
 -- Available colors --
 
