@@ -680,3 +680,27 @@ test "Change current buffer":
 
   status.resize(100, 100)
   status.update
+
+# Fix #693
+test "Change create workspace":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.resize(100, 100)
+  status.update
+
+  status.verticalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  status.createWrokSpace
+  status.resize(100, 100)
+  status.update
+
+  status.changeCurrentWorkSpace(0)
+  status.resize(100, 100)
+  status.update
+
+  status.changeCurrentWorkSpace(1)
+  status.resize(100, 100)
+  status.update

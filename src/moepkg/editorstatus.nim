@@ -26,7 +26,6 @@ type EditorStatus* = object
   currentDir: seq[Rune]
   messageLog*: seq[seq[Rune]]
   debugMode: int
-  statusBar*: seq[StatusBar]
   commandWindow*: Window
   tabWindow*: Window
   popUpWindow*: Window
@@ -43,16 +42,6 @@ proc initPlatform(): Platform =
 proc initRegisters(): Registers =
   result.yankedLines = @[]
   result.yankedStr = @[]
-
-proc initStatusBar(): StatusBar =
-  const
-    h = 1
-    w = 1
-    t = 1
-    l = 1
-    color = EditorColorPair.defaultChar
-
-  result.window = initWindow(h, w, t, l, color)
 
 proc initEditorStatus*(): EditorStatus =
   result.platform = initPlatform()
@@ -83,9 +72,6 @@ proc initEditorStatus*(): EditorStatus =
       w = terminalWidth()
     result.tabWindow = initWindow(h, w, t, l, color)
 
-  if result.settings.statusBar.useBar:
-    result.statusBar = @[initStatusBar()]
-
   block:
     const
       t = 0
@@ -108,9 +94,9 @@ proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
     status.workSpace[workspaceIndex].currentMainWindowNode.expandedColumn = 0
 
     let node = status.workSpace[workspaceIndex].currentMainWindowNode
-    for i in 0 ..< status.statusbar.len:
-      if status.statusbar[i].windowIndex == node.windowIndex:
-        status.statusbar[i].bufferIndex = bufferIndex
+    for i in 0 ..< status.workSpace[workspaceIndex].statusbar.len:
+      if status.workSpace[workspaceIndex].statusbar[i].windowIndex == node.windowIndex:
+        status.workSpace[workspaceIndex].statusbar[i].bufferIndex = bufferIndex
 
 proc bufferIndexInCurrentWindow*(status: Editorstatus): int =
   let workspaceIndex = status.currentWorkSpaceIndex
@@ -267,12 +253,17 @@ proc resize*(status: var EditorStatus, height, width: int) =
           x = if node.x > 0 and
                  node.parent.splitType == SplitType.vertical: node.x + 1
               else: node.x
-        status.statusBar[statusBarIndex].window.resize(height, width, y, x)
-        status.statusBar[statusBarIndex].window.refresh
+        status.workSpace[workspaceIndex].statusBar[statusBarIndex].window.resize(height,
+                                                                                 width,
+                                                                                 y,
+                                                                                 x)
+        status.workSpace[workspaceIndex].statusBar[statusBarIndex].window.refresh
 
         # Update status bar info
-        status.statusbar[statusBarIndex].bufferIndex = node.bufferIndex
-        status.statusbar[statusBarIndex].windowIndex = node.windowIndex
+        status.workSpace[workspaceIndex].statusbar[statusBarIndex].bufferIndex =
+          node.bufferIndex
+        status.workSpace[workspaceIndex].statusbar[statusBarIndex].windowIndex =
+          node.windowIndex
         inc(statusBarIndex)
 
       if node.child.len > 0:
@@ -286,7 +277,10 @@ proc resize*(status: var EditorStatus, height, width: int) =
       x = 0
     let 
       y = max(height, 4) - 2
-    status.statusBar[0].window.resize(statusBarHeight, width, y, x)
+    status.workSpace[workspaceIndex].statusBar[0].window.resize(statusBarHeight,
+                                                                width,
+                                                                y,
+                                                                x)
 
   ## Resize work space info window
   if status.settings.workSpace.useBar:
@@ -323,18 +317,18 @@ proc updateStatusBar(status: var Editorstatus) =
   let workspaceIndex = status.currentWorkSpaceIndex
 
   if not status.settings.statusBar.multipleStatusBar:
-    let index = status.statusBar[0].bufferIndex
-    status.bufStatus[index].writeStatusBar(status.statusBar[0],
+    let index = status.workSpace[workspaceIndex].statusBar[0].bufferIndex
+    status.bufStatus[index].writeStatusBar(status.workSpace[workspaceIndex].statusBar[0],
                                            status.workspace[workspaceIndex].currentMainWindowNode,
                                            status.settings)
   else:
-    for i in 0 ..< status.statusBar.len:
+    for i in 0 ..< status.workSpace[workspaceIndex].statusBar.len:
       let
-        bufferIndex = status.statusBar[i].bufferIndex
-        index = status.statusBar[i].windowIndex
+        bufferIndex = status.workSpace[workspaceIndex].statusBar[i].bufferIndex
+        index = status.workSpace[workspaceIndex].statusBar[i].windowIndex
         windowNode =
           status.workspace[workspaceIndex].mainWindowNode.searchByWindowIndex(index)
-      status.bufStatus[bufferIndex].writeStatusBar(status.statusBar[i],
+      status.bufStatus[bufferIndex].writeStatusBar(status.workSpace[workspaceIndex].statusBar[i],
                                                    windowNode,
                                                    status.settings)
 
@@ -483,7 +477,7 @@ proc verticalSplitWindow*(status: var EditorStatus) =
     status.workSpace[workspaceIndex].currentMainWindowNode.verticalSplit(buffer)
   inc(status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow)
 
-  status.statusBar.add(initStatusBar())
+  status.workSpace[workspaceIndex].statusBar.add(initStatusBar())
 
 proc horizontalSplitWindow*(status: var Editorstatus) =
   let 
@@ -495,7 +489,7 @@ proc horizontalSplitWindow*(status: var Editorstatus) =
     status.workSpace[workspaceIndex].currentMainWindowNode.horizontalSplit(buffer)
   inc(status.workSpace[workspaceIndex].numOfMainWindow)
 
-  status.statusBar.add(initStatusBar())
+  status.workSpace[workspaceIndex].statusBar.add(initStatusBar())
 
 proc closeWindow*(status: var EditorStatus, node: WindowNode) =
   let workspaceIndex = status.currentWorkSpaceIndex
@@ -508,7 +502,8 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
 
   if parent.child.len == 1:
     if status.settings.statusBar.multipleStatusBar:
-      status.statusBar.delete(status.statusBar.high)
+      let statusBarHigh = status.workSpace[workspaceIndex].statusBar.high
+      status.workSpace[workspaceIndex].statusBar.delete(statusBarHigh)
 
     parent.parent.child.delete(parent.index)
     dec(status.workSpace[workspaceIndex].numOfMainWindow)
@@ -524,7 +519,8 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
     status.workSpace[workspaceIndex].currentMainWindowNode = node
   else:
     if status.settings.statusBar.multipleStatusBar:
-      status.statusBar.delete(status.statusBar.high)
+      let statusBarHigh = status.workSpace[workspaceIndex].statusBar.high
+      status.workSpace[workspaceIndex].statusBar.delete(statusBarHigh)
 
     parent.child.delete(node.index)
     dec(status.workSpace[workspaceIndex].numOfMainWindow)
