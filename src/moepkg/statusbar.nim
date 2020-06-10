@@ -6,6 +6,16 @@ type StatusBar* = object
   windowIndex*: int
   bufferIndex*: int
 
+proc initStatusBar*(): StatusBar =
+  const
+    h = 1
+    w = 1
+    t = 1
+    l = 1
+    color = EditorColorPair.defaultChar
+
+  result.window = initWindow(h, w, t, l, color)
+
 proc writeStatusBarNormalModeInfo(bufStatus: var BufferStatus,
                                   statusBar: var StatusBar,
                                   statusBarBuffer: var seq[Rune],
