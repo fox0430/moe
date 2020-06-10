@@ -694,6 +694,13 @@ test "Change create workspace":
   status.update
 
   status.createWrokSpace
+  status.resize(100, 100)
+  status.update
 
   status.changeCurrentWorkSpace(0)
+  status.resize(100, 100)
+  status.update
+
   status.changeCurrentWorkSpace(1)
+  status.resize(100, 100)
+  status.update
