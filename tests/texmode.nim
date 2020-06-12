@@ -571,3 +571,22 @@ test "Create new empty buffer 2":
   check status.bufStatus.len == 1
 
   check status.bufferIndexInCurrentWindow == 0
+
+test "New empty buffer in split window":
+  var status = initEditorStatus()
+  status.addNewBuffer("a")
+
+  status.resize(100, 100)
+  status.update
+
+  const command = @[ru"new"]
+  status.exModeCommand(command)
+
+  check status.bufStatus.len == 2
+
+  check status.bufferIndexInCurrentWindow == 1
+
+  check status.bufStatus[0].filename == ru"a"
+  check status.bufStatus[1].filename == ru""
+
+  check status.workspace[0].numOfMainWindow == 2
