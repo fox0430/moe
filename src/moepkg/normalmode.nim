@@ -406,6 +406,12 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
         status.bufStatus[currentBufferIndex],
         status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode,
         status.settings.tabStop)
+  elif key == ord('='):
+    let key = getAnotherKey()
+    if key == ord('='):
+      status.bufStatus[currentBufferIndex].autoIndentCurrentLine(
+        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+      )
   elif key == ord('J'):
     joinLine(status.bufStatus[currentBufferIndex],
              status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)

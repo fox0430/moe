@@ -276,7 +276,7 @@ proc yankString*(status: var EditorStatus, length: int) =
 
   if status.settings.systemClipboard: status.registers.sendToClipboad(status.platform)
 
-  block: 
+  block:
     let strLen = status.registers.yankedStr.len
     status.commandWindow.writeMessageYankedCharactor(strLen, status.messageLog)
 
@@ -389,6 +389,40 @@ proc deleteIndent*(bufStatus: var BufferStatus,
       var newLine = bufStatus.buffer[windowNode.currentLine]
       newLine.delete(0, 0)
       if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
+  inc(bufStatus.countChange)
+
+proc autoIndentCurrentLine*(bufStatus: var BufferStatus,
+                            windowNode: var WindowNode) =
+
+  let currentLine = windowNode.currentLine
+
+  if currentLine == 0 or bufStatus.buffer[currentLine].len == 0: return
+
+  # Check prev line indent
+  var prevLineIndent = 0
+  for r in bufStatus.buffer[currentLine - 1]:
+    if r == ru' ': inc(prevLineIndent)
+    else: break
+
+  # Set indent in current line
+  let
+    indent = ru' '.repeat(prevLineIndent)
+    oldLine = bufStatus.buffer[currentLine]
+  var newLine = bufStatus.buffer[currentLine]
+
+  # Delete current indent
+  for i in 0 ..< oldLine.len:
+    if oldLine[i] == ru' ':
+      newLine.delete(0, 0)
+    else: break
+
+  newLine.insert(indent, 0)
+
+  if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
+
+  # Update colmn in current line
+  windowNode.currentColumn = prevLineIndent
+
   inc(bufStatus.countChange)
 
 proc joinLine*(bufStatus: var BufferStatus, windowNode: WindowNode) =
