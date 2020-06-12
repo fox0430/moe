@@ -192,6 +192,9 @@ proc isDeleteCurrentWorkSpaceCommand(command: seq[seq[Rune]]): bool =
 proc isChangeCurrentWorkSpace(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"ws" and isDigit(command[1])
 
+proc isCreateNewEmptyBufferCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"ene"
+
 proc openHelp(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
@@ -807,6 +810,20 @@ proc deleteCurrentWorkSpaceCommand*(status: var Editorstatus) =
 
     status.deleteWorkSpace(index)
 
+proc createNewEmptyBufferCommand*(status: var Editorstatus) =
+  let
+    workspaceIndex = status.currentWorkSpaceIndex
+    currentBufferIndex = status.bufferIndexInCurrentWindow
+
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
+  if status.bufStatus[currentBufferIndex].countChange == 0 or
+     status.workSpace[workspaceIndex].mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
+    status.addNewBuffer("")
+    status.changeCurrentBuffer(status.bufStatus.high)
+  else:
+    status.commandWindow.writeNoWriteError(status.messageLog)
+
 proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
@@ -919,6 +936,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     deleteCurrentWorkSpaceCommand(status)
   elif isOpenHelpCommand(command):
     status.openHelp
+  elif isCreateNewEmptyBufferCommand(command):
+    status.createNewEmptyBufferCommand
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
