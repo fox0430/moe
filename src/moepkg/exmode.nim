@@ -195,6 +195,9 @@ proc isChangeCurrentWorkSpace(command: seq[seq[Rune]]): bool =
 proc isCreateNewEmptyBufferCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"ene"
 
+proc isNewEmptyBufferInSplitWindow(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"new"
+
 proc openHelp(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
@@ -824,6 +827,18 @@ proc createNewEmptyBufferCommand*(status: var Editorstatus) =
   else:
     status.commandWindow.writeNoWriteError(status.messageLog)
 
+proc newEmptyBufferInSplitWindow*(status: var Editorstatus) =
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
+  status.horizontalSplitWindow
+  status.resize(terminalHeight(), terminalWidth())
+
+  status.addNewBuffer("")
+
+  status.changeCurrentBuffer(status.bufStatus.high)
+
 proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
@@ -938,6 +953,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     status.openHelp
   elif isCreateNewEmptyBufferCommand(command):
     status.createNewEmptyBufferCommand
+  elif isNewEmptyBufferInSplitWindow(command):
+    status.newEmptyBufferInSplitWindow
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
