@@ -202,6 +202,7 @@ proc isControlU*(key: Rune): bool = int(key) == 21
 proc isControlD*(key: Rune): bool = int(key) == 4
 proc isControlV*(key: Rune): bool = int(key) == 22
 proc isControlH*(key: Rune): bool = int(key) == 263
+proc isControlW*(key: Rune): bool = int(key) == 23
 proc isControlSquareBracketsRight*(key: Rune): bool = int(key) == 27  # Ctrl - [
 proc isShiftTab*(key: Rune): bool = int(key) == 353
 proc isBackspaceKey*(key: Rune): bool =
