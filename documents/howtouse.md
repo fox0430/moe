@@ -131,6 +131,7 @@ Check command bar
 ```!``` shell command - Shell command execution  
 
 ```e``` filename - Open file  
+```ene``` - Create new empty buffer  
 
 ```/keyword``` - Search text, file or directory  
 

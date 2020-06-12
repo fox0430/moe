@@ -523,3 +523,51 @@ test "Open in vertical split window":
 
   check(status.workSpace[0].numOfMainWindow == 2)
   check(status.bufStatus.len == 2)
+
+test "Create new empty buffer":
+  var status = initEditorStatus()
+  status.addNewBuffer("a")
+
+  status.resize(100, 100)
+  status.update
+
+  const command = @[ru"ene"]
+  status.exModeCommand(command)
+
+  check status.bufStatus.len == 2
+
+  check status.bufStatus[0].filename == ru"a"
+  check status.bufStatus[1].filename == ru""
+
+test "Create new empty buffer":
+  var status = initEditorStatus()
+  status.addNewBuffer("a")
+
+  status.resize(100, 100)
+  status.update
+
+  const command = @[ru"ene"]
+  status.exModeCommand(command)
+
+  check status.bufStatus.len == 2
+
+  check status.bufferIndexInCurrentWindow == 1
+
+  check status.bufStatus[0].filename == ru"a"
+  check status.bufStatus[1].filename == ru""
+
+test "Create new empty buffer 2":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.bufStatus[0].countChange = 1
+
+  status.resize(100, 100)
+  status.update
+
+  const command = @[ru"ene"]
+  status.exModeCommand(command)
+
+  check status.bufStatus.len == 1
+
+  check status.bufferIndexInCurrentWindow == 0
