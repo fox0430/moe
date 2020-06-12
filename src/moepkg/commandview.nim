@@ -43,6 +43,7 @@ const exCommandList = [
   ru"realtimesearch",
   ru"scrollspeed",
   ru"smoothscroll",
+  ru"sp",
   ru"statusbar",
   ru"syntax",
   ru"tab",
@@ -306,9 +307,9 @@ proc getKeyword*(status: var EditorStatus, prompt: string): (seq[Rune], bool) =
 
   return (exStatus.buffer, cancelSearch)
 
-proc suggestFilePath(status: var Editorstatus, exStatus: var ExModeViewStatus, key: var Rune) =
+proc suggestFilePath(status: var Editorstatus, exStatus: var ExModeViewStatus, command: string, key: var Rune) =
   var suggestlist: seq[seq[Rune]] = @[]
-  let inputPath = ($exStatus.buffer).substr(2)
+  let inputPath = ($exStatus.buffer).substr(command.len + 1)
   if inputPath.len == 0 or not inputPath.contains("/"):
     suggestlist.add(ru"")
     for kind, path in walkDir("./"):
@@ -328,9 +329,9 @@ proc suggestFilePath(status: var Editorstatus, exStatus: var ExModeViewStatus, k
     y = terminalHeight() - 1
 
   while (isTabkey(key) or isShiftTab(key)) and suggestlist.len > 1:
-    exStatus.buffer = ru"e "
-    exStatus.currentPosition = 2
-    exStatus.cursorX = 3
+    exStatus.buffer = (command & " ").toRunes
+    exStatus.currentPosition = command.len + 1
+    exStatus.cursorX = command.len + 2
 
     if isTabkey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
     elif isShiftTab(key) and suggestIndex > 0: dec(suggestIndex)
@@ -390,8 +391,9 @@ proc suggestExCommandOption(status: var Editorstatus, exStatus: var ExModeViewSt
       argList = @["on", "off"]
     of "theme":
       argList= @["vivid", "dark", "light", "config"]
-    of "e":
-      suggestFilePath(status, exStatus, key)
+    of "e",
+       "sp":
+      status.suggestFilePath(exStatus, command, key)
     else: discard
 
   let  arg = if (strutils.splitWhitespace($exStatus.buffer)).len > 1: (strutils.splitWhitespace($exStatus.buffer))[1] else: ""

@@ -491,3 +491,19 @@ test "Open help command":
   check(status.bufferIndexInCurrentWindow == 1)
 
   check(status.bufStatus[1].mode == Mode.help)
+
+test "Open in horizontal split window":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.resize(100, 100)
+  status.update
+
+  const command = @[ru"sp", ru"newfile"]
+  status.exModeCommand(command)
+
+  status.resize(100, 100)
+  status.update
+
+  check(status.workSpace[0].numOfMainWindow == 2)
+  check(status.bufStatus.len == 2)
