@@ -269,7 +269,19 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     except:
       windowNode.currentColumn  = currentColumnBefore
       windowNode.expandedColumn = expandedColumnBefore
-  
+
+  template closeWindow() =
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+    let workspaceIndex = status.currentWorkSpaceIndex
+
+    if status.workspace[workspaceIndex].numOfMainWindow == 1: return
+
+    if status.bufStatus[currentBufferIndex].countChange == 0 or
+       status.workSpace[workspaceIndex].mainWindowNode.countReferencedWindow(
+         currentBufferIndex
+       ) > 1:
+        status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
+
   template getAnotherKey(): Rune =
     getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
 
@@ -472,6 +484,9 @@ proc normalCommand(status: var EditorStatus, key: Rune) =
     let key = getAnotherKey()
     if  key == ord('Z'): writeFileAndExit(status)
     elif key == ord('Q'): forceExit(status)
+  elif isControlW(key):
+    let key = getAnotherKey()
+    if key == ord('c'): closeWindow()
   else:
     discard
 
