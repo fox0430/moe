@@ -1,6 +1,8 @@
 # How to use
 
+
 ## Exiting
+
 Check command bar  
 
 ```:w``` - Write file  
@@ -11,7 +13,9 @@ Check command bar
 ```:wqa``` - Write and quit all window  
 ```:qa!``` - Force quit all window  
 
+
 ## Normal mode
+
 ```h``` - ←  
 ```j``` or ```+``` - ↓  
 ```k``` or ```-``` - ↑  
@@ -80,7 +84,9 @@ Check command bar
 ```/``` - Search text  
 ```:``` - Start ex mode  
 
+
 ## Visual (block) mode
+
 ```d ```or ```x``` - Delete(cut) text  
 ```y``` - Copy text  
 ```r``` - Replace character  
@@ -99,19 +105,27 @@ Check command bar
 
 ```Esc``` - Start normal mode  
 
+
 ## Replace mode
+
 ```Esc``` - Start normal mode  
+
 
 ## Insert mode
+
 ```Esc``` - Start normal mode  
 
+
 ## Filer mode
+
 ```D``` - Delete file  
 ```g``` - Go to top of list  
 ```G``` - Go to last of list  
 ```i``` - Detail information  
 
+
 ## Ex mode
+
 ```number``` - Jump to line number : Exmaple ```:10```  
 ```!``` shell command - Shell command execution  
 

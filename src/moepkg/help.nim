@@ -1,12 +1,17 @@
-import editorstatus, bufferstatus, ui, movement, unicodeext, gapbuffer
-include helpsentence
+import editorstatus, bufferstatus, ui, movement, unicodeext, gapbuffer,
+       strutils, os
 import terminal
+
+proc staticReadHowToUseDocument: string {.compileTime.} =
+  let doc = staticRead(currentSourcePath.parentDir() / "../../documents/howtouse.md")
+  result = doc.multiReplace(@[("```", ""), ("  ", "")])
 
 proc initHelpModeBuffer(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.bufStatus[currentBufferIndex].filename = ru"help"
 
   var line = ""
+  let helpsentences = staticReadHowToUseDocument()
   for ch in helpSentences:
     if ch == '\n':
       status.bufStatus[currentBufferIndex].buffer.add(line.toRunes)
