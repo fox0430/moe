@@ -156,6 +156,9 @@ proc isEditCommand(command: seq[seq[Rune]]): bool =
 proc isOpenInHorizontalSplitWindowCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"sp"
 
+proc isOpenInVerticalSplitWindowCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"vs"
+
 proc isWriteCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   return command.len in {1, 2} and
@@ -562,6 +565,12 @@ proc openInHorizontalSplitWindow(status: var Editorstatus, filename: seq[Rune]) 
 
   status.editCommand(filename)
 
+proc openInVerticalSplitWindowCommand(status: var Editorstatus, filename: seq[Rune]) =
+  status.verticalSplitWindow
+  status.resize(terminalHeight(), terminalWidth())
+
+  status.editCommand(filename)
+
 proc execCmdResultToMessageLog*(output: TaintedString,
                                 messageLog: var seq[seq[Rune]])=
 
@@ -813,6 +822,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     editCommand(status, command[1].normalizePath)
   elif isOpenInHorizontalSplitWindowCommand(command):
     status.openInHorizontalSplitWindow(command[1].normalizePath)
+  elif isOpenInVerticalSplitWindowCommand(command):
+    status.openInVerticalSplitWindowCommand(command[1])
   elif isWriteCommand(status, command):
     writeCommand(status, if command.len < 2:
       status.bufStatus[currentBufferIndex].filename else: command[1])

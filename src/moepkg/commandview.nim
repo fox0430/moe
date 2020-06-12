@@ -392,7 +392,8 @@ proc suggestExCommandOption(status: var Editorstatus, exStatus: var ExModeViewSt
     of "theme":
       argList= @["vivid", "dark", "light", "config"]
     of "e",
-       "sp":
+       "sp",
+       "vs":
       status.suggestFilePath(exStatus, command, key)
     else: discard
 
