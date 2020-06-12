@@ -45,7 +45,7 @@ Check command bar
 ```I``` - Same as 0a  
 
 ```>``` - Indent  
-```<``` - Unindent
+```<``` - Unindent  
 ```==``` Auto indent
 
 ```dd``` - Delete(cut) a line  
