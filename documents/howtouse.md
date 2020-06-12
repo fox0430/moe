@@ -84,6 +84,7 @@ Check command bar
 ```/``` - Search text  
 ```:``` - Start ex mode  
 
+```Ctrl-w, c``` - Close current window  
 
 ## Visual (block) mode
 
