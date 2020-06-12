@@ -46,6 +46,7 @@ Check command bar
 
 ```>``` - Indent  
 ```<``` - Unindent
+```==``` Auto indent
 
 ```dd``` - Delete(cut) a line  
 ```d$``` or ```D``` -  Delete the characters under the cursor until the end of the line  
@@ -129,7 +130,9 @@ Check command bar
 ```buf``` - Open buffer manager  
 
 ```vs``` - Vertical split window  
+```vs filename``` - Open in vertical split window  
 ```sv``` - Horizontal split window  
+```sp filename``` - Open in horizontal split window  
 
 ```cws``` - Create new work space  
 ```ws number``` - Change current work space : Example ```ws 2```  
