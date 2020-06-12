@@ -195,8 +195,11 @@ proc isChangeCurrentWorkSpace(command: seq[seq[Rune]]): bool =
 proc isCreateNewEmptyBufferCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"ene"
 
-proc isNewEmptyBufferInSplitWindow(command: seq[seq[Rune]]): bool =
+proc isNewEmptyBufferInSplitWindowHorizontally(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"new"
+
+proc isNewEmptyBufferInSplitWindowVertically(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"vnew"
 
 proc openHelp(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -827,12 +830,24 @@ proc createNewEmptyBufferCommand*(status: var Editorstatus) =
   else:
     status.commandWindow.writeNoWriteError(status.messageLog)
 
-proc newEmptyBufferInSplitWindow*(status: var Editorstatus) =
+proc newEmptyBufferInSplitWindowHorizontally*(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
   status.horizontalSplitWindow
+  status.resize(terminalHeight(), terminalWidth())
+
+  status.addNewBuffer("")
+
+  status.changeCurrentBuffer(status.bufStatus.high)
+
+proc newEmptyBufferInSplitWindowVertically*(status: var Editorstatus) =
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
+  status.verticalSplitWindow
   status.resize(terminalHeight(), terminalWidth())
 
   status.addNewBuffer("")
@@ -953,8 +968,10 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     status.openHelp
   elif isCreateNewEmptyBufferCommand(command):
     status.createNewEmptyBufferCommand
-  elif isNewEmptyBufferInSplitWindow(command):
-    status.newEmptyBufferInSplitWindow
+  elif isNewEmptyBufferInSplitWindowHorizontally(command):
+    status.newEmptyBufferInSplitWindowHorizontally
+  elif isNewEmptyBufferInSplitWindowVertically(command):
+    status.newEmptyBufferInSplitWindowVertically
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
