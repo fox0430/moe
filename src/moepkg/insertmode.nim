@@ -238,6 +238,17 @@ proc insertCharacterAboveCursor(bufStatus: var BufferStatus,
     bufStatus.buffer[currentLine] = newLine
     inc windowNode.currentColumn
 
+proc deleteWordBeforeCursor(bufStatus: var BufferStatus,
+                            windowNode: var WindowNode) =
+
+  if windowNode.currentLine == 0 and windowNode.currentColumn == 0: return
+
+  if windowNode.currentColumn == 0:
+    bufStatus.keyBackspace(windowNode, false)
+  else:
+    bufStatus.moveToBackwardWord(windowNode)
+    bufStatus.deleteWord(windowNode)
+
 proc isInsertMode(status: EditorStatus): bool =
   let
     workspaceIndex = status.currentWorkSpaceIndex
@@ -318,6 +329,10 @@ proc insertMode*(status: var EditorStatus) =
       )
     elif isControlY(key):
       status.bufStatus[currentBufferIndex].insertCharacterAboveCursor(
+        status.workSpace[workspaceIndex].currentMainWindowNode
+      )
+    elif isControlW(key):
+      status.bufStatus[currentBufferIndex].deleteWordBeforeCursor(
         status.workSpace[workspaceIndex].currentMainWindowNode
       )
     else:
