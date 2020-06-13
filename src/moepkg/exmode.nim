@@ -57,6 +57,9 @@ proc isVerticalSplitWindowCommand(command: seq[seq[Rune]]): bool =
 proc isHorizontalSplitWindowCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"sv"
 
+proc isFilerIconSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"icon"
+
 proc isLiveReloadOfConfSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"livereload"
 
@@ -252,6 +255,15 @@ proc verticalSplitWindowCommand(status: var EditorStatus) =
 
 proc horizontalSplitWindowCommand(status: var Editorstatus) =
   status.horizontalSplitWindow
+
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
+proc filerIconSettingCommand(status: var Editorstatus, command: seq[Rune]) =
+  if command == ru "on": status.settings.filerSettings.showIcons = true
+  elif command == ru"off": status.settings.filerSettings.showIcons = false
+
+  status.commandWindow.erase
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
@@ -972,6 +984,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     status.newEmptyBufferInSplitWindowHorizontally
   elif isNewEmptyBufferInSplitWindowVertically(command):
     status.newEmptyBufferInSplitWindowVertically
+  elif isFilerIconSettingCommand(command):
+    status.filerIconSettingCommand(command[1])
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
