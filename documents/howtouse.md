@@ -116,6 +116,7 @@ Check command bar
 
 ```Ctrl-e``` Insert the character which is below the cursor  
 ```Ctrl-y``` Insert the character which is above the cursor  
+```Ctrl-i``` Insert a tab  
 
 ```Ctrl-w``` Delete the word before the cursor  
 ```Ctrl-u``` Delete characters before the cursor in current line  
