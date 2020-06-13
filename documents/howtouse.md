@@ -114,7 +114,9 @@ Check command bar
 
 ## Insert mode
 
-```Esc``` - Start normal mode  
+```Ctrl-e``` Insert the character which is below the cursor  
+
+```Esc``` or ```Ctrl-[``` - Start normal mode  
 
 
 ## Filer mode
