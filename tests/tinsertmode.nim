@@ -111,3 +111,46 @@ suite "Insert mode":
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
     check(buffer[0] == ru"a")
+
+  test "Delete the word before the cursor":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc def"])
+
+    status.workspace[0].currentMainWindowNode.currentColumn = 4
+
+    status.bufStatus[0].deleteWordBeforeCursor(
+      status.workSpace[0].currentMainWindowNode
+    )
+
+    let buffer = status.bufStatus[0].buffer
+    check(buffer.len == 1)
+    check(buffer[0] == ru"def")
+
+  test "Delete the word before the cursor 2":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
+
+    status.bufStatus[0].deleteWordBeforeCursor(
+      status.workSpace[0].currentMainWindowNode
+    )
+
+    let buffer = status.bufStatus[0].buffer
+    check(buffer.len == 1)
+    check(buffer[0] == ru"abc")
+
+  test "Delete the word before the cursor 3":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def"])
+
+    status.workspace[0].currentMainWindowNode.currentLine = 1
+
+    status.bufStatus[0].deleteWordBeforeCursor(
+      status.workSpace[0].currentMainWindowNode
+    )
+
+    let buffer = status.bufStatus[0].buffer
+    check(buffer.len == 1)
+    check(buffer[0] == ru"abcdef")

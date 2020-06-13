@@ -117,6 +117,8 @@ Check command bar
 ```Ctrl-e``` Insert the character which is below the cursor  
 ```Ctrl-y``` Insert the character which is above the cursor  
 
+```Ctrl-w``` Delete the word before the cursor  
+
 ```Esc``` or ```Ctrl-[``` - Start normal mode  
 
 
