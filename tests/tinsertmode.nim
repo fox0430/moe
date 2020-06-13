@@ -1,22 +1,67 @@
 import unittest
 import moepkg/editorstatus, moepkg/gapbuffer, moepkg/unicodeext,
-       moepkg/highlight, moepkg/insertmode
+       moepkg/highlight
+include moepkg/insertmode
 
-test "Issue #474":
-  var status = initEditorStatus()
-  status.addNewBuffer("")
-  status.bufStatus[0].buffer = initGapBuffer(@[ru""])
+suite "Insert mode":
+  test "Issue #474":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru""])
 
-  status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
-    $status.bufStatus[0].buffer,
-    status.bufStatus[0].language)
+    status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+      $status.bufStatus[0].buffer,
+      status.bufStatus[0].language)
 
-  status.resize(10, 10)
+    status.resize(10, 10)
 
-  for i in 0..<100:
-    insertCharacter(status.bufStatus[0],
-                    status.workSpace[0].currentMainWindowNode,
-                    status.settings.autoCloseParen,
-                    ru'a')
+    for i in 0..<100:
+      insertCharacter(status.bufStatus[0],
+                      status.workSpace[0].currentMainWindowNode,
+                      status.settings.autoCloseParen,
+                      ru'a')
 
-  status.update
+    status.update
+
+  test "Insert the character which is below the cursor":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b"])
+
+    status.bufStatus[0].insertCharacterBelowCursor(
+      status.workSpace[0].currentMainWindowNode
+    )
+
+    let buffer = status.bufStatus[0].buffer
+    check(buffer.len == 2)
+    check(buffer[0] == ru"ba")
+    check(buffer[1] == ru"b")
+
+  test "Insert the character which is below the cursor 2":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
+
+    status.bufStatus[0].insertCharacterBelowCursor(
+      status.workSpace[0].currentMainWindowNode
+    )
+
+    let buffer = status.bufStatus[0].buffer
+    check(buffer.len == 1)
+    check(buffer[0] == ru"abc")
+
+  test "Insert the character which is below the cursor 3":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"e"])
+
+    status.workspace[0].currentMainWindowNode.currentColumn = 2
+
+    status.bufStatus[0].insertCharacterBelowCursor(
+      status.workSpace[0].currentMainWindowNode
+    )
+
+    let buffer = status.bufStatus[0].buffer
+    check(buffer.len == 2)
+    check(buffer[0] == ru"abc")
+    check(buffer[1] == ru"e")

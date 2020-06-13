@@ -111,7 +111,7 @@ proc deleteBeforeCursorToFirstNonBlank*(bufStatus: var BufferStatus,
                                         windowNode: WindowNode  ) =
   if windowNode.currentColumn == 0:
     return
-  let firstNonBlank = getFirstNonBlankOfLineOrFirstColumn(bufStatus, windowNode) 
+  let firstNonBlank = getFirstNonBlankOfLineOrFirstColumn(bufStatus, windowNode)
   
   for _ in firstNonBlank..max(0, windowNode.currentColumn-1):
     currentLineDeleteCharacterBeforeCursor(bufStatus, windowNode, false)
@@ -196,6 +196,27 @@ proc insertTab(bufStatus: var BufferStatus,
   for i in 0 ..< tabStop:
     insertCharacter(bufStatus, windowNode, autoCloseParen, ru' ')
 
+proc insertCharacterBelowCursor(bufStatus: var BufferStatus,
+                              windowNode: WindowNode) =
+
+  let
+    currentLine = windowNode.currentLine
+    currentColumn = windowNode.currentColumn
+    buffer = bufStatus.buffer
+
+  if currentLine == bufStatus.buffer.high: return
+  if currentColumn > buffer[currentLine + 1].high: return
+
+  let
+    copyRune = buffer[currentLine + 1][currentColumn]
+    oldLine = buffer[currentLine]
+  var newLine = buffer[currentLine]
+
+  newLine.insert(copyRune, currentColumn)
+  if newLine != oldLine:
+    bufStatus.buffer[currentLine] = newLine
+    inc windowNode.currentColumn
+
 proc isInsertMode(status: EditorStatus): bool =
   let
     workspaceIndex = status.currentWorkSpaceIndex
@@ -270,6 +291,10 @@ proc insertMode*(status: var EditorStatus) =
                 status.workSpace[workspaceIndex].currentMainWindowNode,
                 status.settings.tabStop,
                 status.settings.autoCloseParen)
+    elif isControlE(key):
+      status.bufStatus[currentBufferIndex].insertCharacterBelowCursor(
+        status.workSpace[workspaceIndex].currentMainWindowNode
+      )
     else:
       insertCharacter(status.bufStatus[currentBufferIndex],
                       status.workSpace[workspaceIndex].currentMainWindowNode,
