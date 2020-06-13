@@ -249,6 +249,21 @@ proc deleteWordBeforeCursor(bufStatus: var BufferStatus,
     bufStatus.moveToBackwardWord(windowNode)
     bufStatus.deleteWord(windowNode)
 
+proc deleteCharactersBeforeCursorInCurrentLine(bufStatus: var BufferStatus,
+                                               windowNode: var WindowNode) =
+
+  if windowNode.currentColumn == 0: return
+
+  let
+    currentLine = windowNode.currentLine
+    currentColumn = windowNode.currentColumn
+    oldLine = bufStatus.buffer[currentLine]
+  var newLine = bufStatus.buffer[currentLine]
+
+  newLine.delete(0, currentColumn - 1)
+
+  if newLine != oldLine: bufStatus.buffer[currentLine] = newLine
+
 proc isInsertMode(status: EditorStatus): bool =
   let
     workspaceIndex = status.currentWorkSpaceIndex
@@ -333,6 +348,10 @@ proc insertMode*(status: var EditorStatus) =
       )
     elif isControlW(key):
       status.bufStatus[currentBufferIndex].deleteWordBeforeCursor(
+        status.workSpace[workspaceIndex].currentMainWindowNode
+      )
+    elif isControlU(key):
+      status.bufStatus[currentBufferIndex].deleteCharactersBeforeCursorInCurrentLine(
         status.workSpace[workspaceIndex].currentMainWindowNode
       )
     else:
