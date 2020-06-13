@@ -182,6 +182,7 @@ Check command bar
 ```buildonsave on``` or ```buildonsave off``` - Change setting to build on save  
 ```indentationlines on ``` or ```indentationlines off``` - Change setting to indentation lines  
 ```noh``` - Turn off highlights  
+```icon``` - Setting show/hidden icons in filer mode  
 
 ```log``` - Open messages log viwer  
 
