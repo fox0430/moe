@@ -115,6 +115,7 @@ Check command bar
 ## Insert mode
 
 ```Ctrl-e``` Insert the character which is below the cursor  
+```Ctrl-y``` Insert the character which is above the cursor  
 
 ```Esc``` or ```Ctrl-[``` - Start normal mode  
 

@@ -217,6 +217,27 @@ proc insertCharacterBelowCursor(bufStatus: var BufferStatus,
     bufStatus.buffer[currentLine] = newLine
     inc windowNode.currentColumn
 
+proc insertCharacterAboveCursor(bufStatus: var BufferStatus,
+                              windowNode: WindowNode) =
+
+  let
+    currentLine = windowNode.currentLine
+    currentColumn = windowNode.currentColumn
+    buffer = bufStatus.buffer
+
+  if currentLine == 0: return
+  if currentColumn > buffer[currentLine - 1].high: return
+
+  let
+    copyRune = buffer[currentLine - 1][currentColumn]
+    oldLine = buffer[currentLine]
+  var newLine = buffer[currentLine]
+
+  newLine.insert(copyRune, currentColumn)
+  if newLine != oldLine:
+    bufStatus.buffer[currentLine] = newLine
+    inc windowNode.currentColumn
+
 proc isInsertMode(status: EditorStatus): bool =
   let
     workspaceIndex = status.currentWorkSpaceIndex
@@ -293,6 +314,10 @@ proc insertMode*(status: var EditorStatus) =
                 status.settings.autoCloseParen)
     elif isControlE(key):
       status.bufStatus[currentBufferIndex].insertCharacterBelowCursor(
+        status.workSpace[workspaceIndex].currentMainWindowNode
+      )
+    elif isControlY(key):
+      status.bufStatus[currentBufferIndex].insertCharacterAboveCursor(
         status.workSpace[workspaceIndex].currentMainWindowNode
       )
     else:
