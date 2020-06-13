@@ -132,6 +132,8 @@ Check command bar
 
 ```e``` filename - Open file  
 ```ene``` - Create new empty buffer  
+```new``` - Create new empty buffer in split window horizontally  
+```vnew``` - Create new empty buffer in split window vertically  
 
 ```/keyword``` - Search text, file or directory  
 
