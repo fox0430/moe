@@ -704,3 +704,66 @@ test "Change create workspace":
   status.changeCurrentWorkSpace(1)
   status.resize(100, 100)
   status.update
+
+test "Highlight trailing spaces":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.settings.highlightOtherUsesCurrentWord = false
+  
+  status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+    $status.bufStatus[0].buffer,
+    status.bufStatus[0].language)
+
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
+  status.updateHighlight(status.workSpace[0].currentMainWindowNode)
+  status.update
+
+  let node = status.workSpace[0].currentMainWindowNode
+  check(node.highlight[0].color == EditorColorPair.defaultChar)
+  check(node.highlight[0].firstColumn == 0)
+  check(node.highlight[0].lastColumn == 2)
+
+test "Highlight trailing spaces 2":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.settings.highlightOtherUsesCurrentWord = false
+  
+  status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+    $status.bufStatus[0].buffer,
+    status.bufStatus[0].language)
+
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"abc  "])
+  status.updateHighlight(status.workSpace[0].currentMainWindowNode)
+  status.update
+
+  let node = status.workSpace[0].currentMainWindowNode
+
+  check(node.highlight[0].color == EditorColorPair.defaultChar)
+  check(node.highlight[0].firstColumn == 0)
+  check(node.highlight[0].lastColumn == 2)
+
+  check(node.highlight[1].color == EditorColorPair.highlightTrailingSpaces)
+  check(node.highlight[1].firstColumn == 3)
+  check(node.highlight[1].lastColumn == 4)
+
+test "Highlight trailing spaces 3":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.settings.highlightOtherUsesCurrentWord = false
+  
+  status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+    $status.bufStatus[0].buffer,
+    status.bufStatus[0].language)
+
+  status.bufStatus[0].buffer = initGapBuffer(@[ru" "])
+  status.updateHighlight(status.workSpace[0].currentMainWindowNode)
+  status.update
+
+  let node = status.workSpace[0].currentMainWindowNode
+
+  check(node.highlight[0].color == EditorColorPair.highlightTrailingSpaces)
+  check(node.highlight[0].firstColumn == 0)
+  check(node.highlight[0].lastColumn == 0)

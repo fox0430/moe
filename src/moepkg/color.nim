@@ -495,6 +495,10 @@ type EditorColor* = object
   highlightFullWidthSpace*: Color
   highlightFullWidthSpaceBg*: Color
 
+  # highlight trailing spaces
+  highlightTrailingSpaces*: Color
+  highlightTrailingSpacesBg*: Color
+
   # work space bar
   workSpaceBar*: Color
   workSpaceBarBg*: Color
@@ -560,9 +564,11 @@ type EditorColorPair* = enum
   currentWord = 42
   # highlight full width space
   highlightFullWidthSpace = 43
+  # highlight trailing spaces
+  highlightTrailingSpaces = 44
   # work space bar
-  workSpaceBar = 44
-  todo = 45
+  workSpaceBar = 45
+  todo = 46
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -649,6 +655,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight full width space
     highlightFullWidthSpace: red,
     highlightFullWidthSpaceBg: red,
+    # highlight trailing spaces
+    highlightTrailingSpaces: red,
+    highlightTrailingSpacesBg: red,
     # work space bar
     workSpaceBar: white,
     workSpaceBarBg: blue,
@@ -739,6 +748,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight full width space
     highlightFullWidthSpace: red,
     highlightFullWidthSpaceBg: red,
+    # highlight trailing spaces
+    highlightTrailingSpaces: red,
+    highlightTrailingSpacesBg: red,
     # work space bar
     workSpaceBar: white,
     workSpaceBarBg: blue,
@@ -829,6 +841,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight full width space
     highlightFullWidthSpace: red,
     highlightFullWidthSpaceBg: red,
+    # highlight trailing spaces
+    highlightTrailingSpaces: red,
+    highlightTrailingSpacesBg: red,
     # work space bar
     workSpaceBar: blue,
     workSpaceBarBg: gray54,
@@ -919,6 +934,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight full width space
     highlightFullWidthSpace: red,
     highlightFullWidthSpaceBg: red,
+    # highlight trailing spaces
+    highlightTrailingSpaces: red,
+    highlightTrailingSpacesBg: red,
     # work space bar
     workSpaceBar: black,
     workSpaceBarBg: deepPink1_1,
@@ -996,6 +1014,9 @@ proc setCursesColor*(editorColor: EditorColor) =
 
   # highlight full width space
   setColorPair(EditorColorPair.highlightFullWidthSpace, editorColor.highlightFullWidthSpace, editorColor.highlightFullWidthSpace)
+
+  # highlight trailing spaces
+  setColorPair(EditorColorPair.highlightTrailingSpaces, editorColor.highlightTrailingSpaces, editorColor.highlightTrailingSpacesBg)
 
   # work space bar
   setColorPair(EditorColorPair.workSpaceBar, editorColor.workSpaceBar, editorColor.workSpaceBarBg)
@@ -1077,6 +1098,8 @@ proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Co
     return (editorColor.popUpWinCurrentLine, editorColor.popUpWinCurrentLineBg)
   of EditorColorPair.replaceText:
     return (editorColor.replaceText, editorColor.replaceTextBg)
+  of EditorColorPair.highlightTrailingSpaces:
+    return (editorColor.highlightTrailingSpaces, editorColor.highlightTrailingSpacesBg)
   of EditorColorPair.workSpaceBar:
     return (editorColor.workSpaceBar, editorColor.workSpaceBarBg)
   of EditorColorPair.todo:
