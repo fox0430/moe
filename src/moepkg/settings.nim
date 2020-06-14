@@ -6,7 +6,7 @@ when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
   from strutils import nimIdentNormalize
   export strutils.nimIdentNormalize
 
-import ui, color, unicodeext, editorview, build
+import ui, color, unicodeext, build
 
 type FilerSettings = object
   showIcons*: bool
@@ -30,6 +30,13 @@ type StatusBarSettings* = object
 type TabLineSettings* = object
   useTab*: bool
   allbuffer*: bool
+
+type EditorViewSettings* = object
+  lineNumber*: bool
+  currentLineNumber*: bool
+  cursorLine*: bool
+  indentationLines*: bool
+  tabStop*: int
 
 type EditorSettings* = object
   editorColorTheme*: ColorTheme
@@ -82,6 +89,12 @@ proc initStatusBarSettings*(): StatusBarSettings =
 
 proc initWorkSpaceSettings(): WorkSpaceSettings =
   result.useBar = false
+
+proc initEditorViewSettings*(): EditorViewSettings =
+  result.lineNumber = true
+  result.currentLineNumber = true
+  result.indentationLines = true
+  result.tabStop = 2
 
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = ColorTheme.vivid
