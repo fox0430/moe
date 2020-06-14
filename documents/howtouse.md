@@ -121,6 +121,8 @@ Check command bar
 ```Ctrl-t``` Add indent in current line  
 ```Ctrl-d``` Delete indent in current line  
 
+```Backspace``` or ```Ctrl-h``` Delete the character before the cursor  
+
 ```Ctrl-w``` Delete the word before the cursor  
 ```Ctrl-u``` Delete characters before the cursor in current line  
 

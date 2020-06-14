@@ -344,7 +344,7 @@ proc insertMode*(status: var EditorStatus) =
       status.bufStatus[currentBufferIndex].deleteCurrentCharacter(
         status.workSpace[workspaceIndex].currentMainWindowNode,
         status.settings.autoDeleteParen)
-    elif isBackspaceKey(key):
+    elif isBackspaceKey(key) or isControlH(key):
       status.bufStatus[currentBufferIndex].keyBackspace(
         status.workSpace[workspaceIndex].currentMainWindowNode,
         status.settings.autoDeleteParen)
