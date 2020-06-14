@@ -609,3 +609,21 @@ test "New empty buffer in split window vertically":
   check status.bufStatus[1].filename == ru""
 
   check status.workspace[0].numOfMainWindow == 2
+
+test "Filer icon setting command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  const command = @[ru"icon", ru"on"]
+  status.exModeCommand(command)
+
+  check status.settings.filerSettings.showIcons
+
+test "Filer icon setting command 2":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  const command = @[ru"icon", ru"off"]
+  status.exModeCommand(command)
+
+  check status.settings.filerSettings.showIcons == false
