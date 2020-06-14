@@ -271,6 +271,18 @@ proc addIndentInCurrentLine(bufStatus: var BufferStatus,
   bufStatus.addIndent(windowNode, tabStop)
   windowNode.currentColumn += tabStop
 
+proc deleteIndentInCurrentLine(bufStatus: var BufferStatus,
+                            windowNode: WindowNode,
+                            tabStop: int) =
+  
+  let oldLine = bufStatus.buffer[windowNode.currentLine]
+
+  bufStatus.deleteIndent(windowNode, tabStop)
+
+  if oldLine != bufStatus.buffer[windowNode.currentLine] and
+     windowNode.currentColumn > tabStop:
+    windowNode.currentColumn -= tabStop
+
 proc isInsertMode(status: EditorStatus): bool =
   let
     workspaceIndex = status.currentWorkSpaceIndex
@@ -363,6 +375,11 @@ proc insertMode*(status: var EditorStatus) =
       )
     elif isControlT(key):
       status.bufStatus[currentBufferIndex].addIndentInCurrentLine(
+        status.workSpace[workspaceIndex].currentMainWindowNode,
+        status.settings.view.tabStop
+      )
+    elif isControlD(key):
+      status.bufStatus[currentBufferIndex].deleteIndentInCurrentLine(
         status.workSpace[workspaceIndex].currentMainWindowNode,
         status.settings.view.tabStop
       )
