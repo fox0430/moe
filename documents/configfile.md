@@ -157,6 +157,12 @@ default is true
 highlightFullWidthSpace
 ```
 
+Highlight trailing spaces (bool)  
+default is true
+```
+highlightTrailingSpaces
+```
+
 ### TabLine table
 Show all bufer in tab line (bool)  
 default is false  
@@ -850,6 +856,16 @@ highlightFullWidthSpace
 Full width space background color
 ```
 highlightFullWidthSpaceBg
+```
+
+Trailing space color
+```
+highlightTrailingSpaces
+```
+
+Trailing space background color
+```
+highlightTrailingSpacesBg
 ```
 
 Workspace bar text color

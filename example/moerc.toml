@@ -48,6 +48,8 @@ systemClipboard = true
 
 highlightFullWidthSpace = true
 
+highlightTrailingSpaces = true
+
 [BuildOnSaveSettings]
 
 buildOnSave = false
@@ -227,6 +229,10 @@ currentWordBg = "gray"
 highlightFullWidthSpace =  "red"
 
 highlightFullWidthSpaceBg = "red"
+
+highlightTrailingSpaces = "red"
+
+highlightTrailingSpacesBg = "red"
 
 workSpaceBar = "white"
 

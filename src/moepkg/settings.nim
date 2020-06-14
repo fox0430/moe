@@ -64,6 +64,7 @@ type EditorSettings* = object
   highlightOtherUsesCurrentWord*: bool
   systemClipboard*: bool
   highlightFullWidthSpace*: bool
+  highlightTrailingSpaces*: bool
   buildOnSaveSettings*: BuildOnSaveSettings
   workSpace*: WorkSpaceSettings
   filerSettings*: FilerSettings
@@ -119,6 +120,7 @@ proc initEditorSettings*(): EditorSettings =
   result.highlightOtherUsesCurrentWord = true
   result.systemClipboard = true
   result.highlightFullWidthSpace = true
+  result.highlightTrailingSpaces = true
   result.buildOnSaveSettings = BuildOnSaveSettings()
   result.workSpace= initWorkSpaceSettings()
   result.filerSettings = initFilerSettings()
@@ -447,6 +449,12 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         colorFromNode(jsonNode{"colors", "tab.activeBorder"})
       background:
         colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+    # highlight trailing spaces
+    setEditorColor highlightTrailingSpaces:
+      foreground:
+        colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+      background:
+        colorFromNode(jsonNode{"colors", "tab.activeBorder"})
     # work space bar
     setEditorColor workSpaceBar:
       foreground:
@@ -562,6 +570,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["Standard"].contains("highlightFullWidthSpace"):
       result.highlightFullWidthSpace = settings["Standard"]["highlightFullWidthSpace"].getbool()
+
+    if settings["Standard"].contains("highlightTrailingSpaces"):
+      result.highlightTrailingSpaces = settings["Standard"]["highlightTrailingSpaces"].getbool()
     
     if settings["Standard"].contains("indentationLines"):
       result.view.indentationLines= settings["Standard"]["indentationLines"].getbool()
@@ -831,6 +842,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["Theme"].contains("highlightFullWidthSpaceBg"):
       ColorThemeTable[ColorTheme.config].highlightFullWidthSpaceBg = color("highlightFullWidthSpaceBg")
+
+    if settings["Theme"].contains("highlightTrailingSpaces"):
+      ColorThemeTable[ColorTheme.config].highlightTrailingSpaces = color("highlightTrailingSpaces")
+
+    if settings["Theme"].contains("highlightTrailingSpacesBg"):
+      ColorThemeTable[ColorTheme.config].highlightTrailingSpacesBg = color("highlightTrailingSpacesBg")
 
     if settings["Theme"].contains("workSpaceBar"):
       ColorThemeTable[ColorTheme.config].workSpaceBar = color("wrokSpaceBar")

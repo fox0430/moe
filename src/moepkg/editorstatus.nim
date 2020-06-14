@@ -908,6 +908,43 @@ proc highlightOtherUsesCurrentWord(status: var Editorstatus) =
             status.workSpace[workspaceIndex].currentMainWindowNode.highlight =
               status.workSpace[workspaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
 
+proc highlightTrailingSpaces(status: var Editorstatus) =
+  let
+    currentBufferIndex = status.bufferIndexInCurrentWindow
+    bufStatus = status.bufStatus[currentBufferIndex]
+    buffer = bufStatus.buffer
+    workspaceIndex = status.currentWorkSpaceIndex
+
+    color = EditorColorPair.highlightTrailingSpaces
+
+    range =
+      status.workSpace[workspaceIndex].currentMainWindowNode.view.rangeOfOriginalLineInView
+    startLine = range[0]
+    endLine = if bufStatus.buffer.len > range[1] + 1: range[1] + 2
+              elif bufStatus.buffer.len > range[1]: range[1] + 1
+              else: range[1]
+
+  var colorSegments: seq[ColorSegment] = @[]
+  for i in startLine ..< endLine:
+    let line = buffer[i]
+    if line.len > 0:
+      var countSpaces = 0
+      for j in countdown(line.high, 0):
+        if line[j] == ru' ': inc countSpaces
+        else: break
+
+      if countSpaces > 0:
+        let firstColumn = line.len - countSpaces
+        colorSegments.add(ColorSegment(firstRow: i,
+                                       firstColumn: firstColumn,
+                                       lastRow: i,
+                                       lastColumn: line.high,
+                                       color: color))
+
+  for colorSegment in colorSegments:
+    status.workSpace[workspaceIndex].currentMainWindowNode.highlight =
+      status.workSpace[workspaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
+
 from searchmode import searchAllOccurrence
 proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
   let bufStatus = status.bufStatus[windowNode.bufferIndex]
@@ -923,6 +960,9 @@ proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
               else: range[1]
   var bufferInView = initGapBuffer[seq[Rune]]()
   for i in startLine ..< endLine: bufferInView.add(bufStatus.buffer[i])
+
+  # highlight trailing spaces
+  if status.settings.highlightTrailingSpaces: status.highlightTrailingSpaces
 
   # highlight full width space
   if status.settings.highlightFullWidthSpace:
