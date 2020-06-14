@@ -188,6 +188,7 @@ Check command bar
 ```indentationlines on ``` or ```indentationlines off``` - Change setting to indentation lines  
 ```noh``` - Turn off highlights  
 ```icon``` - Setting show/hidden icons in filer mode  
+```deleteTrailingSpaces``` - Delete trailing spaces  
 
 ```log``` - Open messages log viwer  
 
