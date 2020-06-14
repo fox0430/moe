@@ -1,7 +1,7 @@
 import sequtils, strutils, os, terminal, packages/docutils/highlite, times
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
         unicodeext, independentutils, searchmode, highlight, commandview,
-        window, movement, color, build, bufferstatus
+        window, movement, color, build, bufferstatus, editor
 
 type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
 
@@ -26,6 +26,9 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
     replaceWord.add(command[i])
 
   return (searhWord: searchWord, replaceWord: replaceWord)
+
+proc isDeleteTrailingSpacesCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"deleteTrailingSpaces"
 
 proc isOpenHelpCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"help"
@@ -203,6 +206,12 @@ proc isNewEmptyBufferInSplitWindowHorizontally(command: seq[seq[Rune]]): bool =
 
 proc isNewEmptyBufferInSplitWindowVertically(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"vnew"
+
+proc deleteTrailingSpacesCommand(status: var Editorstatus) =
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.bufStatus[currentBufferIndex].deleteTrailingSpaces
+
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
 proc openHelp(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -986,6 +995,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     status.newEmptyBufferInSplitWindowVertically
   elif isFilerIconSettingCommand(command):
     status.filerIconSettingCommand(command[1])
+  elif isDeleteTrailingSpacesCommand(command):
+    status.deleteTrailingSpacesCommand
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
