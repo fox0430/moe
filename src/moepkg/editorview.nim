@@ -1,12 +1,5 @@
 import deques, strutils, math, strformat
-import gapbuffer, ui, unicodeext, highlight, independentutils, color
-
-type EditorViewSettings* = object
-  lineNumber*: bool
-  currentLineNumber*: bool
-  cursorLine*: bool
-  indentationLines*: bool
-  tabStop*: int
+import gapbuffer, ui, unicodeext, highlight, independentutils, color, settings
 
 type EditorView* = object
   height*, width*, widthOfLineNum*: int
@@ -17,12 +10,6 @@ type EditorView* = object
 type ViewLine = object
   line: seq[Rune]
   originalLine, start, length: int
-
-proc initEditorViewSettings*(): EditorViewSettings =
-  result.lineNumber = true
-  result.currentLineNumber = true
-  result.indentationLines = true
-  result.tabStop = 2
 
 proc loadSingleViewLine[T](view: EditorView,
                            buffer: T,
