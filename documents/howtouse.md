@@ -118,6 +118,9 @@ Check command bar
 ```Ctrl-y``` Insert the character which is above the cursor  
 ```Ctrl-i``` Insert a tab  
 
+```Ctrl-t``` Add indent in current line  
+```Ctrl-d``` Delete indent in current line  
+
 ```Ctrl-w``` Delete the word before the cursor  
 ```Ctrl-u``` Delete characters before the cursor in current line  
 
