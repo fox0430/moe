@@ -772,6 +772,7 @@ proc highlightSelectedArea(status: var Editorstatus) =
        prevMode == Mode.visualBlock):
     status.workSpace[workspaceIndex].currentMainWindowNode.highlight.overwriteColorSegmentBlock(status.bufStatus[currentBufferIndex].selectArea,
                                                                                                 status.bufStatus[currentBufferIndex].buffer)
+
 proc highlightPairOfParen(status: var Editorstatus) =
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -933,8 +934,7 @@ proc highlightTrailingSpaces(status: var Editorstatus) =
         else: break
 
       if countSpaces > 0:
-        let
-          firstColumn = line.len - countSpaces
+        let firstColumn = line.len - countSpaces
         colorSegments.add(ColorSegment(firstRow: i,
                                        firstColumn: firstColumn,
                                        lastRow: i,
