@@ -58,3 +58,18 @@ suite "editor.nim":
     )
 
     check(status.bufStatus[0].buffer[0] == ru"")
+
+  test "Delete trailing spaces":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+  
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc",
+                                                 ru"d  ",
+                                                 ru"efg"])
+
+    status.bufStatus[0].deleteTrailingSpaces
+
+    check status.bufStatus[0].buffer.len == 3
+    check status.bufStatus[0].buffer[0] == ru"abc"
+    check status.bufStatus[0].buffer[1] == ru"d"
+    check status.bufStatus[0].buffer[2] == ru"efg"

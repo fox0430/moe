@@ -21,6 +21,7 @@ const exCommandList = [
   ru"clipboard",
   ru"cursorLine",
   ru"cws",
+  ru"deleteTrailingSpaces",
   ru"dws",
   ru"e",
   ru"ene",
