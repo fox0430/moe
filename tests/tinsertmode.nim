@@ -182,3 +182,48 @@ suite "Insert mode":
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
     check(buffer[0] == ru"a")
+
+  test "Add indent in current line":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
+
+    status.bufStatus[0].addIndentInCurrentLine(
+      status.workSpace[0].currentMainWindowNode,
+      status.settings.view.tabStop
+    )
+
+    let buffer = status.bufStatus[0].buffer
+    check(buffer[0] == ru"  abc")
+
+    check(status.workSpace[0].currentMainWindowNode.currentColumn == 2)
+
+  test "Delete indent in current line":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc"])
+
+    status.bufStatus[0].deleteIndentInCurrentLine(
+      status.workSpace[0].currentMainWindowNode,
+      status.settings.view.tabStop
+    )
+
+    let buffer = status.bufStatus[0].buffer
+    check(buffer[0] == ru"abc")
+
+    check(status.workSpace[0].currentMainWindowNode.currentColumn == 0)
+
+  test "Delete indent in current line 2":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
+
+    status.bufStatus[0].deleteIndentInCurrentLine(
+      status.workSpace[0].currentMainWindowNode,
+      status.settings.view.tabStop
+    )
+
+    let buffer = status.bufStatus[0].buffer
+    check(buffer[0] == ru"abc")
+
+    check(status.workSpace[0].currentMainWindowNode.currentColumn == 0)

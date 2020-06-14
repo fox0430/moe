@@ -346,24 +346,6 @@ proc pasteBeforeCursor*(status: var EditorStatus) =
   elif status.registers.yankedStr.len > 0:
     pasteString(status)
 
-from insertmode import keyEnter
-
-proc replaceCurrentCharacter*(bufStatus: var BufferStatus,
-                              windowNode: WindowNode,
-                              autoIndent, autoDeleteParen: bool,
-                              character: Rune) =
-
-  if isEnterKey(character):
-    bufStatus.deleteCurrentCharacter(windowNode, autoDeleteParen)
-    keyEnter(bufStatus, windowNode, autoIndent)
-  else:
-    let oldLine = bufStatus.buffer[windowNode.currentLine]
-    var newLine = bufStatus.buffer[windowNode.currentLine]
-    newLine[windowNode.currentColumn] = character
-    if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
-
-    inc(bufStatus.countChange)
-
 proc addIndent*(bufStatus: var BufferStatus,
                 windowNode: WindowNode,
                 tabStop: int) =
@@ -390,6 +372,24 @@ proc deleteIndent*(bufStatus: var BufferStatus,
       newLine.delete(0, 0)
       if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
   inc(bufStatus.countChange)
+
+from insertmode import keyEnter
+
+proc replaceCurrentCharacter*(bufStatus: var BufferStatus,
+                              windowNode: WindowNode,
+                              autoIndent, autoDeleteParen: bool,
+                              character: Rune) =
+
+  if isEnterKey(character):
+    bufStatus.deleteCurrentCharacter(windowNode, autoDeleteParen)
+    keyEnter(bufStatus, windowNode, autoIndent)
+  else:
+    let oldLine = bufStatus.buffer[windowNode.currentLine]
+    var newLine = bufStatus.buffer[windowNode.currentLine]
+    newLine[windowNode.currentColumn] = character
+    if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
+
+    inc(bufStatus.countChange)
 
 proc autoIndentCurrentLine*(bufStatus: var BufferStatus,
                             windowNode: var WindowNode) =

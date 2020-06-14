@@ -264,6 +264,25 @@ proc deleteCharactersBeforeCursorInCurrentLine(bufStatus: var BufferStatus,
 
   if newLine != oldLine: bufStatus.buffer[currentLine] = newLine
 
+proc addIndentInCurrentLine(bufStatus: var BufferStatus,
+                            windowNode: WindowNode,
+                            tabStop: int) =
+  
+  bufStatus.addIndent(windowNode, tabStop)
+  windowNode.currentColumn += tabStop
+
+proc deleteIndentInCurrentLine(bufStatus: var BufferStatus,
+                            windowNode: WindowNode,
+                            tabStop: int) =
+  
+  let oldLine = bufStatus.buffer[windowNode.currentLine]
+
+  bufStatus.deleteIndent(windowNode, tabStop)
+
+  if oldLine != bufStatus.buffer[windowNode.currentLine] and
+     windowNode.currentColumn > tabStop:
+    windowNode.currentColumn -= tabStop
+
 proc isInsertMode(status: EditorStatus): bool =
   let
     workspaceIndex = status.currentWorkSpaceIndex
@@ -353,6 +372,16 @@ proc insertMode*(status: var EditorStatus) =
     elif isControlU(key):
       status.bufStatus[currentBufferIndex].deleteCharactersBeforeCursorInCurrentLine(
         status.workSpace[workspaceIndex].currentMainWindowNode
+      )
+    elif isControlT(key):
+      status.bufStatus[currentBufferIndex].addIndentInCurrentLine(
+        status.workSpace[workspaceIndex].currentMainWindowNode,
+        status.settings.view.tabStop
+      )
+    elif isControlD(key):
+      status.bufStatus[currentBufferIndex].deleteIndentInCurrentLine(
+        status.workSpace[workspaceIndex].currentMainWindowNode,
+        status.settings.view.tabStop
       )
     else:
       insertCharacter(status.bufStatus[currentBufferIndex],
