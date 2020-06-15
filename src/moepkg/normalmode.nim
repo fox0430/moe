@@ -1,7 +1,7 @@
 from strutils import parseInt
 import strformat, terminal
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, commandview,
-       undoredostack, window, movement, editor, searchmode, color,
+       undoredostack, window, movement, editor, search, color,
        bufferstatus, insertmode
 
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
