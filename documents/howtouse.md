@@ -86,6 +86,9 @@ Check command bar
 
 ```Ctrl-w c``` - Close current window  
 
+```/keyword``` - Search forward  
+```?keyword``` - Search backward  
+
 ## Visual (block) mode
 
 ```d ```or ```x``` - Delete(cut) text  
@@ -146,8 +149,6 @@ Check command bar
 ```ene``` - Create new empty buffer  
 ```new``` - Create new empty buffer in split window horizontally  
 ```vnew``` - Create new empty buffer in split window vertically  
-
-```/keyword``` - Search text, file or directory  
 
 ```%s/keyword1/keyword2/``` - Replace text (normal mode only)  
 
