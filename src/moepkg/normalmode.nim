@@ -536,7 +536,9 @@ proc normalMode*(status: var EditorStatus) =
       status.resize(terminalHeight(), terminalWidth())
       status.commandWindow.erase
     elif key == ord('/'):
-      status.changeMode(Mode.search)
+      status.searchFordwards
+    elif key == ord('?'):
+      status.searchBackwards
     elif key == ord(':'):
       status.changeMode(Mode.ex)
     elif isDigit(key):
