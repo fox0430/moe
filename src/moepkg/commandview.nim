@@ -268,6 +268,13 @@ proc moveEnd(exStatus: var ExModeViewStatus) =
     exStatus.startPosition = 0
     exStatus.cursorX = exStatus.prompt.len + exStatus.buffer.len - 1
 
+proc clearCommandBuffer(exStatus: var ExModeViewStatus) =
+  exStatus.buffer = ru""
+  exStatus.cursorY = 0
+  exStatus.cursorX = 1
+  exStatus.currentPosition = 0
+  exStatus.startPosition = 0
+
 proc deleteCommandBuffer(exStatus: var ExModeViewStatus) =
   if exStatus.buffer.len > 0:
     if exStatus.buffer.len < terminalWidth(): dec(exStatus.cursorX)
@@ -279,16 +286,34 @@ proc deleteCommandBufferCurrentPosition(exStatus: var ExModeViewStatus) =
     exStatus.buffer.delete(exStatus.cursorX - 1, exStatus.cursorX - 1)
     if exStatus.currentPosition > exStatus.buffer.len: dec(exStatus.currentPosition)
 
-proc insertCommandBuffer(exStatus: var ExModeViewStatus, c: Rune) =
-  exStatus.buffer.insert(c, exStatus.currentPosition)
+proc insertCommandBuffer(exStatus: var ExModeViewStatus, r: Rune) =
+  exStatus.buffer.insert(r, exStatus.currentPosition)
   inc(exStatus.currentPosition)
   if exStatus.cursorX < terminalWidth() - 1: inc(exStatus.cursorX)
   else: inc(exStatus.startPosition)
+
+proc insertCommandBuffer(exStatus: var ExModeViewStatus, runes: seq[Rune]) =
+  for r in runes:
+    exStatus.insertCommandBuffer(r)
 
 proc getKeyword*(status: var EditorStatus, prompt: string): (seq[Rune], bool) =
   var
     exStatus = initExModeViewStatus(prompt)
     cancelSearch = false
+    searchHistoryIndex = status.searchHistory.high
+
+  template setPrevSearchHistory() =
+    if searchHistoryIndex > 0:
+      exStatus.clearCommandBuffer
+      dec searchHistoryIndex
+      exStatus.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
+
+  template setNextSearchHistory() =
+    if searchHistoryIndex < status.searchHistory.high:
+      exStatus.clearCommandBuffer
+      inc searchHistoryIndex
+      exStatus.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
+
   while true:
     writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
 
@@ -303,6 +328,8 @@ proc getKeyword*(status: var EditorStatus, prompt: string): (seq[Rune], bool) =
       status.update
     elif isLeftKey(key): moveLeft(status.commandWindow, exStatus)
     elif isRightkey(key): moveRight(exStatus)
+    elif isUpKey(key): setPrevSearchHistory()
+    elif isDownKey(key): setNextSearchHistory()
     elif isHomeKey(key): moveTop(exStatus)
     elif isEndKey(key): moveEnd(exStatus)
     elif isBackspaceKey(key): deleteCommandBuffer(exStatus)
@@ -490,22 +517,36 @@ proc getKeyOnceAndWriteCommandView*(status: var Editorstatus,
                                     prompt: string,
                                     buffer: seq[Rune],
                                     isSuggest: bool): (seq[Rune], bool, bool) =
+
   var
     exStatus = initExModeViewStatus(prompt)
     exitSearch = false
     cancelSearch = false
+    searchHistoryIndex = status.searchHistory.high
   for rune in buffer: exStatus.insertCommandBuffer(rune)
 
+  template setPrevSearchHistory() =
+    if searchHistoryIndex > 0:
+      exStatus.clearCommandBuffer
+      dec searchHistoryIndex
+      exStatus.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
+
+  template setNextSearchHistory() =
+    if searchHistoryIndex < status.searchHistory.high:
+      exStatus.clearCommandBuffer
+      inc searchHistoryIndex
+      exStatus.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
+
   while true:
-    writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
+    status.commandWindow.writeExModeView(exStatus, EditorColorPair.commandBar)
 
     var key = getKey(status.commandWindow)
 
     # Suggestion mode
     if isTabkey(key) or isShiftTab(key):
-      suggestMode(status, exStatus, key)
+      status.suggestMode(exStatus, key)
       if status.settings.popUpWindowInExmode and isEnterKey(key):
-        moveCursor(status.commandWindow, exStatus.cursorY, exStatus.cursorX)
+        status.commandWindow.moveCursor(exStatus.cursorY, exStatus.cursorX)
 
     if isEnterKey(key):
       exitSearch = true
@@ -516,18 +557,20 @@ proc getKeyOnceAndWriteCommandView*(status: var Editorstatus,
     elif isResizeKey(key):
       status.resize(terminalHeight(), terminalWidth())
       status.update
-    elif isLeftKey(key): moveLeft(status.commandWindow, exStatus)
-    elif isRightkey(key): moveRight(exStatus)
-    elif isHomeKey(key): moveTop(exStatus)
-    elif isEndKey(key): moveEnd(exStatus)
+    elif isLeftKey(key): status.commandWindow.moveLeft(exStatus)
+    elif isRightkey(key): exStatus.moveRight
+    elif isUpKey(key): setPrevSearchHistory()
+    elif isDownKey(key): setNextSearchHistory()
+    elif isHomeKey(key): exStatus.moveTop
+    elif isEndKey(key): exStatus.moveEnd
     elif isBackspaceKey(key):
-      deleteCommandBuffer(exStatus)
+      exStatus.deleteCommandBuffer
       break
     elif isDcKey(key):
-      deleteCommandBufferCurrentPosition(exStatus)
+      exStatus.deleteCommandBufferCurrentPosition
       break
     else:
-      insertCommandBuffer(exStatus, key)
+      exStatus.insertCommandBuffer(key)
       break
 
   writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
