@@ -1,6 +1,6 @@
 import sequtils, strutils, os, terminal, packages/docutils/highlite, times
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
-        unicodeext, independentutils, searchmode, highlight, commandview,
+        unicodeext, independentutils, search, highlight, commandview,
         window, movement, color, build, bufferstatus, editor
 
 type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]

@@ -9,7 +9,6 @@ type Mode* = enum
   replace,
   ex,
   filer,
-  search,
   bufManager,
   logViewer,
   help

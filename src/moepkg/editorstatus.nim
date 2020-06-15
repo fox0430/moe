@@ -945,7 +945,7 @@ proc highlightTrailingSpaces(status: var Editorstatus) =
     status.workSpace[workspaceIndex].currentMainWindowNode.highlight =
       status.workSpace[workspaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
 
-from searchmode import searchAllOccurrence
+from search import searchAllOccurrence
 proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
   let bufStatus = status.bufStatus[windowNode.bufferIndex]
   if (bufStatus.mode == Mode.filer) or

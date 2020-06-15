@@ -1,7 +1,7 @@
 from strutils import parseInt
 import strformat, terminal
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, commandview,
-       undoredostack, window, movement, editor, searchmode, color,
+       undoredostack, window, movement, editor, search, color,
        bufferstatus, insertmode
 
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
@@ -536,7 +536,9 @@ proc normalMode*(status: var EditorStatus) =
       status.resize(terminalHeight(), terminalWidth())
       status.commandWindow.erase
     elif key == ord('/'):
-      status.changeMode(Mode.search)
+      status.searchFordwards
+    elif key == ord('?'):
+      status.searchBackwards
     elif key == ord(':'):
       status.changeMode(Mode.ex)
     elif isDigit(key):

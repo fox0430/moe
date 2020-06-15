@@ -7,7 +7,6 @@ import moepkg/visualmode
 import moepkg/replacemode
 import moepkg/filermode
 import moepkg/exmode
-import moepkg/searchmode
 import moepkg/buffermanager
 import moepkg/logviewer
 import moepkg/cmdlineoption
@@ -56,7 +55,6 @@ proc main() =
     of Mode.replace: status.replaceMode
     of Mode.ex: status.exMode
     of Mode.filer: status.filerMode
-    of Mode.search: status.searchMode
     of Mode.bufManager: status.bufferManager
     of Mode.logViewer: status.messageLogViewer
     of Mode.help: status.helpMode
