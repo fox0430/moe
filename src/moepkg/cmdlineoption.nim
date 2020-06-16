@@ -10,8 +10,13 @@ proc staticReadVersionFromNimble: string {.compileTime.} =
   assert captures.len == 1
   return captures[0]
 
+proc checkReleaseBuild: string {.compileTime.} =
+  if defined(release): return "Release"
+  else: return "Debug"
+
 proc writeVersion() =
-  echo staticReadVersionFromNimble()
+  echo "moe v" & staticReadVersionFromNimble()
+  echo "Build type: " & checkReleaseBuild()
   quit()
 
 proc writeHelp() =
