@@ -110,8 +110,10 @@ proc realtimeSearch(status: var Editorstatus, direction: Direction) =
     currentColumn = status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.currentColumn
 
   while exitSearch == false:
-    const isSuggest = false
-    let returnWord = status.getKeyOnceAndWriteCommandView(prompt, keyword, isSuggest)
+    const
+      isSuggest = false
+      isSearch = true
+    let returnWord = status.getKeyOnceAndWriteCommandView(prompt, keyword, isSuggest, isSearch)
 
     keyword = returnWord[0]
     exitSearch = returnWord[1]

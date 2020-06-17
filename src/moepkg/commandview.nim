@@ -516,7 +516,7 @@ proc suggestMode(
 proc getKeyOnceAndWriteCommandView*(status: var Editorstatus,
                                     prompt: string,
                                     buffer: seq[Rune],
-                                    isSuggest: bool): (seq[Rune], bool, bool) =
+                                    isSuggest, isSearch : bool): (seq[Rune], bool, bool) =
 
   var
     exStatus = initExModeViewStatus(prompt)
@@ -559,8 +559,8 @@ proc getKeyOnceAndWriteCommandView*(status: var Editorstatus,
       status.update
     elif isLeftKey(key): status.commandWindow.moveLeft(exStatus)
     elif isRightkey(key): exStatus.moveRight
-    elif isUpKey(key): setPrevSearchHistory()
-    elif isDownKey(key): setNextSearchHistory()
+    elif isUpKey(key) and isSearch: setPrevSearchHistory()
+    elif isDownKey(key) and isSearch: setNextSearchHistory()
     elif isHomeKey(key): exStatus.moveTop
     elif isEndKey(key): exStatus.moveEnd
     elif isBackspaceKey(key):

@@ -1002,7 +1002,9 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
 proc exMode*(status: var EditorStatus) =
-  const prompt = ":"
+  const
+    prompt = ":"
+    isSearch = false
   var
     command = ru""
     exitInput = false
@@ -1016,7 +1018,8 @@ proc exMode*(status: var EditorStatus) =
   while exitInput == false:
     let returnWord = status.getKeyOnceAndWriteCommandView(prompt,
                                                           command,
-                                                          isSuggest)
+                                                          isSuggest,
+                                                          isSearch)
 
     command = returnWord[0]
     exitInput = returnWord[1]
