@@ -296,7 +296,10 @@ proc insertCommandBuffer(exStatus: var ExModeViewStatus, runes: seq[Rune]) =
   for r in runes:
     exStatus.insertCommandBuffer(r)
 
-proc getKeyword*(status: var EditorStatus, prompt: string): (seq[Rune], bool) =
+proc getKeyword*(status: var EditorStatus,
+                 prompt: string,
+                 isSearch: bool): (seq[Rune], bool) =
+
   var
     exStatus = initExModeViewStatus(prompt)
     cancelSearch = false
@@ -315,7 +318,7 @@ proc getKeyword*(status: var EditorStatus, prompt: string): (seq[Rune], bool) =
       exStatus.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
 
   while true:
-    writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
+    status.commandWindow.writeExModeView(exStatus, EditorColorPair.commandBar)
 
     var key = getKey(status.commandWindow)
 
@@ -326,15 +329,15 @@ proc getKeyword*(status: var EditorStatus, prompt: string): (seq[Rune], bool) =
     elif isResizeKey(key):
       status.resize(terminalHeight(), terminalWidth())
       status.update
-    elif isLeftKey(key): moveLeft(status.commandWindow, exStatus)
-    elif isRightkey(key): moveRight(exStatus)
-    elif isUpKey(key): setPrevSearchHistory()
-    elif isDownKey(key): setNextSearchHistory()
-    elif isHomeKey(key): moveTop(exStatus)
-    elif isEndKey(key): moveEnd(exStatus)
-    elif isBackspaceKey(key): deleteCommandBuffer(exStatus)
-    elif isDcKey(key): deleteCommandBufferCurrentPosition(exStatus)
-    else: insertCommandBuffer(exStatus, key)
+    elif isLeftKey(key): status.commandWindow.moveLeft(exStatus)
+    elif isRightkey(key): exStatus.moveRight
+    elif isUpKey(key) and isSearch: setPrevSearchHistory()
+    elif isDownKey(key) and isSearch: setNextSearchHistory()
+    elif isHomeKey(key): exStatus.moveTop
+    elif isEndKey(key): exStatus.moveEnd
+    elif isBackspaceKey(key): exStatus.deleteCommandBuffer
+    elif isDcKey(key): exStatus.deleteCommandBufferCurrentPosition
+    else: exStatus.insertCommandBuffer(key)
 
   return (exStatus.buffer, cancelSearch)
 

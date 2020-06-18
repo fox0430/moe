@@ -78,23 +78,38 @@ proc jumpToSearchBackwordResults(status: var Editorstatus, keyword: seq[Rune]) =
       status.bufStatus[currentBufferIndex].keyRight(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
 proc searchFirstOccurrence(status: var EditorStatus) =
-  const prompt = "/"
-  let
-    returnWord = getKeyword(status, prompt)
+  var 
+    exitSearch = false
+    cancelSearch = false
+    keyword = ru""
+
+  status.searchHistory.add(ru"")
+
+  const
+    prompt = "/"
+    isSuggest = false
+    isSearch = true
+
+  while exitSearch == false:
+    let returnWord = status.getKeyOnceAndWriteCommandView(prompt, keyword, isSuggest, isSearch)
+
     keyword = returnWord[0]
-    isCancel = returnWord[1]
+    exitSearch = returnWord[1]
+    cancelSearch = returnWord[2]
+    if keyword.len > 0: status.searchHistory[status.searchHistory.high] = keyword
 
-  if keyword.len == 0 or isCancel:
-    status.commandWindow.erase
-    status.commandWindow.refresh
-    return
+    if exitSearch or cancelSearch: break
 
-  status.searchHistory.add(keyword)
-  let bufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
-  status.bufStatus[bufferIndex].isHighlight = true
-  status.jumpToSearchForwardResults(keyword)
+  if cancelSearch:
+    status.searchHistory.delete(status.searchHistory.high)
 
-  status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+    status.bufStatus[currentBufferIndex].isHighlight = false
+
+  else:
+    if keyword.len > 0:
+      status.bufStatus[status.bufferIndexInCurrentWindow].isHighlight = true
+      status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
 proc realtimeSearch(status: var Editorstatus, direction: Direction) =
   let prompt = if direction == Direction.forward: "/" else: "?"
