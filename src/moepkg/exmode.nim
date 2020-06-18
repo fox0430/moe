@@ -1012,6 +1012,7 @@ proc exMode*(status: var EditorStatus) =
     isSuggest = true
 
   status.searchHistory.add(ru"")
+  status.commandHistory.add(ru"")
 
   let workspaceIndex = status.currentWorkSpaceIndex
 
@@ -1024,7 +1025,6 @@ proc exMode*(status: var EditorStatus) =
     command = returnWord[0]
     exitInput = returnWord[1]
     cancelInput = returnWord[2]
-
 
     if cancelInput or exitInput: break
     elif status.settings.replaceTextHighlight and
@@ -1039,6 +1039,8 @@ proc exMode*(status: var EditorStatus) =
         status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
       status.bufStatus[bufferIndex].isHighlight = true
     else:
+      if command.len > 0:
+        status.commandHistory[status.commandHistory.high] = command
       let bufferIndex =
         status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
       status.bufStatus[bufferIndex].isHighlight = false
@@ -1048,6 +1050,10 @@ proc exMode*(status: var EditorStatus) =
     status.update
 
   status.searchHistory.delete(status.searchHistory.high)
+
+  if status.commandHistory[status.commandHistory.high] == ru"":
+    status.commandHistory.delete(status.commandHistory.high)
+
   let bufferIndex =
     status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
   status.bufStatus[bufferIndex].isHighlight = false
@@ -1061,4 +1067,4 @@ proc exMode*(status: var EditorStatus) =
     status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
     status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(status.workSpace[workspaceIndex].currentMainWindowNode)
 
-    exModeCommand(status, splitCommand($command))
+    status.exModeCommand(splitCommand($command))
