@@ -523,6 +523,7 @@ proc getKeyOnceAndWriteCommandView*(status: var Editorstatus,
     exitSearch = false
     cancelSearch = false
     searchHistoryIndex = status.searchHistory.high
+    commandHistoryIndex = status.commandHistory.high
   for rune in buffer: exStatus.insertCommandBuffer(rune)
 
   template setPrevSearchHistory() =
@@ -536,6 +537,18 @@ proc getKeyOnceAndWriteCommandView*(status: var Editorstatus,
       exStatus.clearCommandBuffer
       inc searchHistoryIndex
       exStatus.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
+
+  template setNextCommandHistory() =
+    if commandHistoryIndex < status.commandHistory.high:
+      exStatus.clearCommandBuffer
+      inc commandHistoryIndex
+      exStatus.insertCommandBuffer(status.commandHistory[commandHistoryIndex])
+
+  template setPrevCommandHistory() =
+    if commandHistoryIndex > 0:
+      exStatus.clearCommandBuffer
+      dec commandHistoryIndex
+      exStatus.insertCommandBuffer(status.commandHistory[commandHistoryIndex])
 
   while true:
     status.commandWindow.writeExModeView(exStatus, EditorColorPair.commandBar)
@@ -557,12 +570,20 @@ proc getKeyOnceAndWriteCommandView*(status: var Editorstatus,
     elif isResizeKey(key):
       status.resize(terminalHeight(), terminalWidth())
       status.update
-    elif isLeftKey(key): status.commandWindow.moveLeft(exStatus)
-    elif isRightkey(key): exStatus.moveRight
-    elif isUpKey(key) and isSearch: setPrevSearchHistory()
-    elif isDownKey(key) and isSearch: setNextSearchHistory()
-    elif isHomeKey(key): exStatus.moveTop
-    elif isEndKey(key): exStatus.moveEnd
+    elif isLeftKey(key):
+      status.commandWindow.moveLeft(exStatus)
+    elif isRightkey(key):
+      exStatus.moveRight
+    elif isUpKey(key):
+      if isSearch: setPrevSearchHistory()
+      else: setPrevCommandHistory()
+    elif isDownKey(key):
+      if isSearch: setNextSearchHistory()
+      else: setNextCommandHistory()
+    elif isHomeKey(key):
+      exStatus.moveTop
+    elif isEndKey(key):
+      exStatus.moveEnd
     elif isBackspaceKey(key):
       exStatus.deleteCommandBuffer
       break

@@ -16,6 +16,7 @@ type EditorStatus* = object
   platform*: Platform
   bufStatus*: seq[BufferStatus]
   searchHistory*: seq[seq[Rune]]
+  commandHistory*: seq[seq[Rune]]
   registers*: Registers
   settings*: EditorSettings
   workSpace*: seq[WorkSpace]
