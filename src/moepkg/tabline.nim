@@ -5,6 +5,7 @@ proc writeTab*(tabWin: var Window,
               start, tabWidth: int,
               filename: string,
               color: EditorColorPair) =
+
   let
     title = if filename == "": "New file" else: filename
     buffer = if filename.len < tabWidth:
@@ -12,11 +13,12 @@ proc writeTab*(tabWin: var Window,
              else: " " & (title).substr(0, tabWidth - 3) & "~"
   tabWin.write(0, start, buffer, color)
 
-proc writeTabLine*(tabWin: var Window,
+proc writeTabLineBuffer*(tabWin: var Window,
                   allBufStatus: seq[BufferStatus],
                   currentBufferIndex: int,
                   workspace: WorkSpace,
                   isAllbuffer: bool) =
+
   let
     isAllBuffer = isAllbuffer
     defaultColor = EditorColorPair.tab
@@ -57,5 +59,24 @@ proc writeTabLine*(tabWin: var Window,
           workSpace.mainWindowNode.getAllBufferIndex.len
         tabWidth = numOfbuffer.calcTabWidth(terminalWidth())
       tabWin.writeTab(index * tabWidth, tabWidth, filename, color)
+
+  tabWin.refresh
+
+proc writeTabLineWorkSpace*(tabWin: var Window,
+                            workSpaceLen: int,
+                            currentWorkSpaceIndex: int) =
+
+  tabWin.erase
+
+  let
+    defaultColor = EditorColorPair.tab
+    currentTabColor = EditorColorPair.currentTab
+
+  for i in 0 ..< workSpaceLen:
+    let
+      color = if i == currentWorkSpaceIndex: currentTabColor else: defaultColor
+      tabWidth = workSpaceLen.calcTabWidth(terminalWidth())
+      buffer = "WorkSpace: " & $i
+    tabWin.writeTab(i * tabWidth, tabWidth, buffer, color)
 
   tabWin.refresh

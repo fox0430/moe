@@ -30,7 +30,7 @@ type EditorStatus* = object
   commandWindow*: Window
   tabWindow*: Window
   popUpWindow*: Window
-  workSpaceInfoWindow*: Window
+  workSpaceTabWindow*: Window
 
 proc initPlatform(): Platform =
   if defined linux:
@@ -58,7 +58,7 @@ proc initEditorStatus*(): EditorStatus =
       color = EditorColorPair.defaultChar
     let
       w = terminalWidth()
-    result.workSpaceInfoWindow = initWindow(h, w, t, l, color)
+    result.workSpaceTabWindow = initWindow(h, w, t, l, color)
 
   var newWorkSpace = initWorkSpace()
   result.workSpace = @[newWorkSpace]
@@ -124,23 +124,6 @@ proc exitEditor*(settings: EditorSettings) =
   executeOnExit(settings)
   exitUi()
   quit()
-
-proc writeWorkSpaceInfoWindow(status: var Editorstatus) =
-  status.workSpaceInfoWindow.erase
-  let
-    width = status.workSpaceInfoWindow.width
-    workspaceInfoStr = $(status.currentWorkSpaceIndex + 1) &
-                       "/" & $status.workspace.len
-    textStartPosition = int(width / 2) - int(ceil(workspaceInfoStr.len / 2))
-    buffer = " ".repeat(textStartPosition) &
-             workspaceInfoStr &
-             " ".repeat(width - int(width / 2) - int(workspaceInfoStr.len / 2))
-
-  block:
-    let color = EditorColorPair.statusBarNormalMode
-    status.workSpaceInfoWindow.write(0, 0, buffer, color)
-    
-  status.workSpaceInfoWindow.refresh
 
 proc resizeMainWindowNode(status: var EditorStatus, height, width: int) =
   let
@@ -232,7 +215,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
       workSpaceBarHeight = 1
       x = 0
       y = 0
-    status.workSpaceInfoWindow.resize(workSpaceBarHeight, width, y, x)
+    status.workSpaceTabWindow.resize(workSpaceBarHeight, width, y, x)
 
   ## Resize tab line window
   if status.settings.tabLine.useTab:
@@ -305,10 +288,12 @@ proc updateLogViewer(status: var Editorstatus, bufferIndex: int) =
 proc update*(status: var EditorStatus) =
   setCursor(false)
 
-  if status.settings.workSpace.useBar: status.writeWorkSpaceInfoWindow
+  if status.settings.workSpace.useBar:
+   status.workSpaceTabWindow.writeTabLineWorkSpace(status.workspace.len,
+                                                   status.currentWorkSpaceIndex)
 
   if status.settings.tabLine.useTab:
-    status.tabWindow.writeTabLine(status.bufStatus,
+    status.tabWindow.writeTabLineBuffer(status.bufStatus,
                                   status.bufferIndexInCurrentWindow,
                                   status.workspace[status.currentWorkSpaceIndex],
                                   status.settings.tabline.allBuffer
