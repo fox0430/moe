@@ -25,7 +25,8 @@ type Window* = ref object
   top, left, height*, width*: int
   y*, x*: int
 
-proc setIbeamCursor*() = discard execShellCmd("printf '\\033[6 q'")
+#proc setIbeamCursor*() = discard execShellCmd("printf '\\033[6 q'")
+proc setIbeamCursor*() = discard execShellCmd("printf \"\x1b[\x35 q\"")
 
 proc setBlockCursor*() = discard execShellCmd("printf '\e[0 q'")
 
