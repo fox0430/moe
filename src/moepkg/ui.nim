@@ -17,23 +17,30 @@ type Attributes* = enum
   #chartext = A_CHAR_TEXT
 
 type CursorType* = enum
-  blockMode = 0
-  ibeamMode = 1
+  blinkBlockMode = 0
+  noneBlinkBlockMode = 1
+  blinkIbeamMode = 2
+  noneBlinkIbeamMode = 3
 
 type Window* = ref object
   cursesWindow*: ptr window
   top, left, height*, width*: int
   y*, x*: int
 
-#proc setIbeamCursor*() = discard execShellCmd("printf '\\033[6 q'")
-proc setIbeamCursor*() = discard execShellCmd("printf \"\x1b[\x35 q\"")
+proc setBkinkingIbeamCursor*() = discard execShellCmd("printf \"\x1b[\x35 q\"")
 
-proc setBlockCursor*() = discard execShellCmd("printf '\e[0 q'")
+proc setNoneBlinkingIbeamCursor*() = discard execShellCmd("printf '\\033[6 q'")
+
+proc setBlinkingBlockCursor*() = discard execShellCmd("printf '\e[0 q'")
+
+proc setNoneBlinkingBlockCursor*() = discard execShellCmd("printf '\x1b[\x32 q'")
 
 proc changeCursorType*(cursorType: CursorType) =
   case cursorType
-  of blockMode: setBlockCursor()
-  of ibeamMode: setIbeamCursor()
+  of blinkBlockMode: setBlinkingBlockCursor()
+  of noneBlinkBlockMode: setNoneBlinkingBlockCursor()
+  of blinkIbeamMode: setBkinkingIbeamCursor()
+  of noneBlinkIbeamMode: setNoneBlinkingIbeamCursor()
 
 proc disableControlC*() = setControlCHook(proc() {.noconv.} = discard)
 

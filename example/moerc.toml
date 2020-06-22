@@ -22,11 +22,11 @@ autoCloseParen = true
 
 autoIndent = true
 
-defaultCursor = "block"
+#defaultCursor = "blinkBlock"
 
-normalModeCursor = "block"
+normalModeCursor = "blinkBlock"
 
-insertModeCursor = "ibeam"
+insertModeCursor = "blinkIbeam"
 
 autoSave = false
 
