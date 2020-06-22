@@ -1,9 +1,9 @@
 import strutils, terminal, os, strformat, tables, times, osproc, heapqueue, math,
        deques
 import packages/docutils/highlite
-import gapbuffer, editorview, ui, unicodeext, highlight, independentutils,
+import gapbuffer, editorview, ui, unicodeext, highlight,
        fileutils, undoredostack, window, color, workspace, statusbar, settings,
-       bufferstatus, cursor
+       bufferstatus, cursor, tabline
 
 type Platform* = enum
   linux, wsl, mac, other
@@ -141,63 +141,6 @@ proc writeWorkSpaceInfoWindow(status: var Editorstatus) =
     status.workSpaceInfoWindow.write(0, 0, buffer, color)
     
   status.workSpaceInfoWindow.refresh
-
-proc writeTab(tabWin: var Window,
-              start, tabWidth: int,
-              filename: string,
-              color: EditorColorPair) =
-  let
-    title = if filename == "": "New file" else: filename
-    buffer = if filename.len < tabWidth:
-               " " & title & " ".repeat(tabWidth - title.len)
-             else: " " & (title).substr(0, tabWidth - 3) & "~"
-  tabWin.write(0, start, buffer, color)
-
-proc writeTabLine(status: var EditorStatus) =
-  let
-    isAllBuffer = status.settings.tabLine.allbuffer
-    defaultColor = EditorColorPair.tab
-    currentTabColor = EditorColorPair.currentTab
-    currentWindowBuffer = status.bufferIndexInCurrentWindow
-    workspaceIndex = status.currentWorkSpaceIndex
-
-  status.tabWindow.erase
-
-  if isAllBuffer:
-    ## Display all buffer
-    for index, bufStatus in status.bufStatus:
-      let
-        color = if currentWindowBuffer == index: currentTabColor
-                else: defaultColor
-        currentMode = bufStatus.mode
-        prevMode = bufStatus.prevMode
-        filename = if (currentMode == Mode.filer) or
-                      (prevMode == Mode.filer and
-                      currentMode == Mode.ex): getCurrentDir()
-                   else: $bufStatus.filename
-        tabWidth = status.bufStatus.len.calcTabWidth(terminalWidth())
-      status.tabWindow.writeTab(index * tabWidth, tabWidth, filename, color)
-  else:
-    ## Displays only the buffer currently displayed in the window
-    let allBufferIndex =
-      status.workSpace[workspaceIndex].mainWindowNode.getAllBufferIndex
-    for index, bufIndex in allBufferIndex:
-      let
-        color = if currentWindowBuffer == bufIndex: currentTabColor
-                else: defaultColor
-        bufStatus = status.bufStatus[bufIndex]
-        currentMode = bufStatus.mode
-        prevMode = bufStatus.prevMode
-        filename = if (currentMode == Mode.filer) or
-                      (prevMode == Mode.filer and
-                      currentMode == Mode.ex): getCurrentDir()
-                   else: $bufStatus.filename
-        numOfbuffer =
-          status.workSpace[workspaceIndex].mainWindowNode.getAllBufferIndex.len
-        tabWidth = numOfbuffer.calcTabWidth(terminalWidth())
-      status.tabWindow.writeTab(index * tabWidth, tabWidth, filename, color)
-
-  status.tabWindow.refresh
 
 proc resizeMainWindowNode(status: var EditorStatus, height, width: int) =
   let
@@ -364,7 +307,12 @@ proc update*(status: var EditorStatus) =
 
   if status.settings.workSpace.useBar: status.writeWorkSpaceInfoWindow
 
-  if status.settings.tabLine.useTab: status.writeTabLine
+  if status.settings.tabLine.useTab:
+    status.tabWindow.writeTabLine(status.bufStatus,
+                                  status.bufferIndexInCurrentWindow,
+                                  status.workspace[status.currentWorkSpaceIndex],
+                                  status.settings.tabline.allBuffer
+                                  )
 
   let workspaceIndex = status.currentWorkSpaceIndex
 
