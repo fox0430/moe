@@ -106,9 +106,9 @@ proc initEditorSettings*(): EditorSettings =
   result.autoCloseParen = true
   result.autoIndent = true
   result.tabStop = 2
-  result.defaultCursor = CursorType.blockMode   # Terminal default curosr shape
-  result.normalModeCursor = CursorType.blockMode
-  result.insertModeCursor = CursorType.ibeamMode
+  result.defaultCursor = CursorType.blinkBlockMode # Terminal default curosr shape
+  result.normalModeCursor = CursorType.blinkBlockMode
+  result.insertModeCursor = CursorType.blinkIbeamMode
   result.autoSaveInterval = 5
   result.realtimeSearch = true
   result.popUpWindowInExmode = true
@@ -127,13 +127,15 @@ proc initEditorSettings*(): EditorSettings =
 
 proc getCursorType(cursorType, mode: string): CursorType =
   case cursorType
-  of "block": return CursorType.blockMode
-  of "ibeam": return CursorType.ibeamMode
+  of "blinkBlock": return CursorType.blinkBlockMode
+  of "noneBlinkBlock": return CursorType.noneBlinkBlockMode
+  of "blinkIbeam": return CursorType.blinkIbeamMode
+  of "noneBlinkIbeam": return CursorType.noneBlinkIbeamMode
   else:
     case mode
-    of "default": return CursorType.blockMode
-    of "normal": return CursorType.blockMode
-    of "insert": return CursorType.ibeamMode
+    of "default": return CursorType.blinkBlockMode
+    of "normal": return CursorType.blinkBlockMode
+    of "insert": return CursorType.blinkIbeamMode
 
 proc getTheme(theme: string): ColorTheme =
   if theme == "dark": return ColorTheme.dark
