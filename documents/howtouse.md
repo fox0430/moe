@@ -194,3 +194,5 @@ Check command bar
 ```log``` - Open messages log viwer  
 
 ```help``` - Open help
+
+```putConfigFile``` - Put a sample configuration file in ~/.config/moe
