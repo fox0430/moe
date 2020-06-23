@@ -40,6 +40,7 @@ const exCommandList = [
   ru"new",
   ru"noh",
   ru"paren",
+  ru"putConfigFile",
   ru"q",
   ru"q!",
   ru"qa",
@@ -186,6 +187,14 @@ proc writeNoBufferDeletedError*(cmdWin: var Window, messageLog: var seq[seq[Rune
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
 
+proc writePutConfigFileError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+  const mess = "Error: Failed to put configuration file"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  messageLog.add(mess.toRunes)
+
+proc writePutConfigFileAlreadyExistError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+  const mess = "Error: Already exist configuration file"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
 
 proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
   for i in 0 .. r.high:
