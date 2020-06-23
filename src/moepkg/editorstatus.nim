@@ -598,13 +598,13 @@ proc deleteBuffer*(status: var Editorstatus, deleteIndex: int) =
 
 proc createWrokSpace*(status: var Editorstatus) =
   let
-    workspaceIndex = status.currentWorkSpaceIndex
+    newWorkSpaceIndex = status.currentWorkSpaceIndex + 1
   var newWorkSpace = initWorkSpace()
 
-  status.workSpace.insert(newWorkSpace, status.currentWorkSpaceIndex + 1)
+  status.workSpace.insert(newWorkSpace, newWorkSpaceIndex)
   status.currentWorkSpaceIndex += 1
   status.addNewBuffer("")
-  status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex =
+  status.workSpace[newWorkSpaceIndex].currentMainWindowNode.bufferIndex =
     status.bufStatus.high
 
 proc deleteWorkSpace*(status: var Editorstatus, index: int) =
