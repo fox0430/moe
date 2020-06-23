@@ -27,6 +27,9 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
 
   return (searhWord: searchWord, replaceWord: replaceWord)
 
+proc isPutConfigFileCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"putConfigFile"
+
 proc isDeleteTrailingSpacesCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"deleteTrailingSpaces"
 
@@ -206,6 +209,38 @@ proc isNewEmptyBufferInSplitWindowHorizontally(command: seq[seq[Rune]]): bool =
 
 proc isNewEmptyBufferInSplitWindowVertically(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"vnew"
+
+proc staticReadVersionFromConfigFileExample(): string {.compileTime.} =
+  staticRead(currentSourcePath.parentDir() / "../../example/moerc.toml")
+
+proc putConfigFileCommand(status: var Editorstatus) =
+  let
+    homeDir = getHomeDir()
+    currentBufferIndex = status.bufferIndexInCurrentWindow
+
+  if not existsDir(homeDir / ".config"):
+    try: createDir(homeDir / ".config")
+    except OSError:
+      status.commandWindow.writePutConfigFileError(status.messageLog)
+      status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+      return
+  if not existsDir(homeDir / ".config" / "moe"):
+    try: createDir(homeDir / ".config" / "moe")
+    except OSError:
+      status.commandWindow.writePutConfigFileError(status.messageLog)
+      status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+      return
+
+  if existsFile(getHomeDir() / ".config" / "moe" / "moerc.toml"):
+    status.commandWindow.writePutConfigFileAlreadyExistError(status.messageLog)
+    status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+    return
+
+  let path = homeDir / ".config" / "moe" / "moerc.toml"
+  const configExample = staticReadVersionFromConfigFileExample()
+  writeFile(path, configExample)
+
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
 proc deleteTrailingSpacesCommand(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -997,6 +1032,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     status.filerIconSettingCommand(command[1])
   elif isDeleteTrailingSpacesCommand(command):
     status.deleteTrailingSpacesCommand
+  elif isPutConfigFileCommand(command):
+    status.putConfigFileCommand
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)

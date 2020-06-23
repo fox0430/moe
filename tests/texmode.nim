@@ -1,4 +1,4 @@
-import unittest
+import unittest, os
 import moepkg/[ui, editorstatus, gapbuffer, exmode, unicodeext, bufferstatus]
 
 test "Edit command":
@@ -627,3 +627,12 @@ test "Filer icon setting command 2":
   status.exModeCommand(command)
 
   check status.settings.filerSettings.showIcons == false
+
+test "Put config file command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  const command = @[ru"putConfigFile"]
+  status.exModeCommand(command)
+
+  check existsFile(getHomeDir() / ".config" / "moe" / "moerc.toml")
