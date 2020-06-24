@@ -209,7 +209,9 @@ proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
     
     let color = case token.kind:
         of gtKeyword: EditorColorPair.keyword
-        of gtStringLit: EditorColorPair.stringLit
+        of gtStringLit:
+          if language == SourceLanguage.langYaml: EditorColorPair.defaultChar
+          else: EditorColorPair.stringLit
         of gtDecNumber: EditorColorPair.decNumber
         of gtComment: EditorColorPair.comment
         of gtLongComment: EditorColorPair.longComment
