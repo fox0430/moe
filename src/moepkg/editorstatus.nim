@@ -1,8 +1,8 @@
 import strutils, terminal, os, strformat, tables, times, osproc, heapqueue, math,
        deques
 import packages/docutils/highlite
-import gapbuffer, editorview, ui, unicodeext, highlight,
-       fileutils, undoredostack, window, color, workspace, statusbar, settings,
+import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
+       undoredostack, window, color, workspace, statusbar, settings,
        bufferstatus, cursor, tabline
 
 type Platform* = enum
@@ -16,7 +16,7 @@ type EditorStatus* = object
   platform*: Platform
   bufStatus*: seq[BufferStatus]
   searchHistory*: seq[seq[Rune]]
-  commandHistory*: seq[seq[Rune]]
+  exCommandHistory*: seq[seq[Rune]]
   registers*: Registers
   settings*: EditorSettings
   workSpace*: seq[WorkSpace]

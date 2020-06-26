@@ -1049,7 +1049,7 @@ proc exMode*(status: var EditorStatus) =
     isSuggest = true
 
   status.searchHistory.add(ru"")
-  status.commandHistory.add(ru"")
+  status.exCommandHistory.add(ru"")
 
   let workspaceIndex = status.currentWorkSpaceIndex
 
@@ -1077,7 +1077,7 @@ proc exMode*(status: var EditorStatus) =
       status.bufStatus[bufferIndex].isHighlight = true
     else:
       if command.len > 0:
-        status.commandHistory[status.commandHistory.high] = command
+        status.exCommandHistory[status.exCommandHistory.high] = command
       let bufferIndex =
         status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
       status.bufStatus[bufferIndex].isHighlight = false
@@ -1088,8 +1088,8 @@ proc exMode*(status: var EditorStatus) =
 
   status.searchHistory.delete(status.searchHistory.high)
 
-  if status.commandHistory[status.commandHistory.high] == ru"":
-    status.commandHistory.delete(status.commandHistory.high)
+  if status.exCommandHistory[status.exCommandHistory.high] == ru"":
+    status.exCommandHistory.delete(status.exCommandHistory.high)
 
   let bufferIndex =
     status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
