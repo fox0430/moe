@@ -352,7 +352,9 @@ proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
 
   let workspaceIndex = status.currentWorkSpaceIndex
   status.workSpace[workspaceIndex].currentMainWindowNode.highlight =
-    initHighlight($status.bufStatus[currentBufferIndex].buffer, sourceLang)
+    initHighlight($status.bufStatus[currentBufferIndex].buffer,
+                  status.settings.reservedWords,
+                  sourceLang)
 
   status.commandWindow.erase
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)

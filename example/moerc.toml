@@ -84,6 +84,10 @@ multipleStatusBar = true
 
 useBar = false
 
+[Highlight]
+
+reservedWord = ["TODO", "WIP", "NOTE"]
+
 [Filer]
 
 showIcons = true
@@ -237,3 +241,7 @@ highlightTrailingSpacesBg = "red"
 workSpaceBar = "white"
 
 workSpaceBarBg = "blue"
+
+reservedWord = "deepPink1_1" 
+
+reservedWordBg = "black" 

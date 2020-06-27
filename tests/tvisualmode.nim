@@ -10,6 +10,7 @@ test "Visual mode: Delete buffer 1":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.changeMode(Mode.visual)
@@ -35,6 +36,7 @@ test "Visual mode: Delete buffer 2":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.changeMode(Mode.visual)
@@ -61,6 +63,7 @@ test "Visual mode: Delete buffer 3":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.changeMode(Mode.visual)
@@ -94,6 +97,7 @@ test "Visual mode: Delete buffer 4":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -135,6 +139,7 @@ test "Visual mode: Delete buffer 5":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -169,6 +174,7 @@ test "Visual mode: Yank buffer (Disable clipboard) 1":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -207,6 +213,7 @@ test "Visual mode: Yank buffer (Disable clipboard) 2":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -251,6 +258,7 @@ test "Visual block mode: Yank buffer (Disable clipboard) 1":
 
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -287,6 +295,7 @@ test "Visual block mode: Yank buffer (Disable clipboard) 2":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -331,6 +340,7 @@ test "Visual block mode: Delete buffer (Disable clipboard) 1":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -369,6 +379,7 @@ test "Visual mode: Yank buffer (Enable clipboard) 1":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -407,6 +418,7 @@ test "Visual mode: Yank buffer (Enable clipboard) 2":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -453,6 +465,7 @@ test "Visual block mode: Yank buffer (Enable clipboard) 1":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -491,6 +504,7 @@ test "Visual block mode: Yank buffer (Enable clipboard) 2":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -537,6 +551,7 @@ test "Visual block mode: Delete buffer (Enable clipboard) 1":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -575,6 +590,7 @@ test "Visual mode: Join lines":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -611,6 +627,7 @@ test "Visual block mode: Join lines":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -647,6 +664,7 @@ test "Visual mode: Add indent":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -681,6 +699,7 @@ test "Visual block mode: Add indent":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -714,6 +733,7 @@ test "Visual mode: Delete indent":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -749,6 +769,7 @@ test "Visual block mode: Delete indent":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -784,6 +805,7 @@ test "Visual mode: Converts string into lower-case string":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -814,6 +836,7 @@ test "Visual mode: Converts string into lower-case string 2":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -844,6 +867,7 @@ test "Visual mode: Converts string into lower-case string 3":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -873,7 +897,9 @@ test "Visual mode: Converts string into lower-case string 4":
   status.addNewBuffer("")
   status.bufStatus[0].buffer = initGapBuffer(@[ru"ABC", ru"", ru"DEF", ru""])
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight($status.bufStatus[0].buffer,
-                                                                      status.bufStatus[0].language)
+    status.settings.reservedWords,
+    status.bufStatus[0].language)
+
   status.resize(100, 100)
 
   status.changeMode(Mode.visual)
@@ -899,6 +925,7 @@ test "Visual block mode: Converts string into lower-case string":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -929,6 +956,7 @@ test "Visual block mode: Converts string into lower-case string 2":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -967,6 +995,7 @@ test "Visual mode: Converts string into upper-case string":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -998,6 +1027,7 @@ test "Visual mode: Converts string into upper-case string 2":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -1029,6 +1059,7 @@ test "Visual mode: Converts string into upper-case string 3":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -1056,8 +1087,11 @@ test "Visual mode: Converts string into upper-case string 4":
   var status = initEditorStatus()
   status.addNewBuffer("")
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"", ru"def", ru""])
-  status.workSpace[0].currentMainWindowNode.highlight = initHighlight($status.bufStatus[0].buffer,
-                                                                      status.bufStatus[0].language)
+  status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+    $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
+    status.bufStatus[0].language)
+
   status.resize(100, 100)
 
   status.changeMode(Mode.visual)
@@ -1084,6 +1118,7 @@ test "Visual block mode: Converts string into upper-case string":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
@@ -1115,6 +1150,7 @@ test "Visual block mode: Converts string into upper-case string 2":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.resize(100, 100)
