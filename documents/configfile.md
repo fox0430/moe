@@ -251,6 +251,19 @@ default is false
 useBar
 ```
 
+### Highlight table
+
+Highlighting any word (array)  
+defaut
+```
+["TODO", "WIP", "NOTE"]
+
+```
+
+```
+reservedWord
+```
+
 ### Filer table
 
 Show/hidden unicode icons (bool)  
@@ -878,12 +891,12 @@ Workspace bar background color
 workSpaceBarBg
 ```
 
-TODO highlight text color
+Reserved word text color
 ```
-todo
+reservedWord
 ```
 
-TODO highlight background color
+Reserved word background color
 ```
-todoBg
+reservedWordBg
 ```
