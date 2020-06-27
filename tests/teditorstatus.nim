@@ -29,6 +29,7 @@ test "resize 1":
   
   status.workSpace[0].currentMainWindowNode.highlight =
     initHighlight($status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
     
   status.workSpace[0].currentMainWindowNode.view =
@@ -44,6 +45,7 @@ test "resize 2":
   
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
     
   status.workSpace[0].currentMainWindowNode.view =
@@ -65,6 +67,7 @@ test "Highlight of a pair of paren 1":
   
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   block:
@@ -120,6 +123,7 @@ test "Highlight of a pair of paren 2":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"(())"])
@@ -138,6 +142,7 @@ test "Highlight of a pair of paren 3":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"(", ru")"])
@@ -158,6 +163,7 @@ test "Highlight of a pair of paren 4":
   status.addNewBuffer("")
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"(", ru")"])
@@ -178,6 +184,7 @@ test "Highlight of a pair of paren 5":
   status.resize(100, 100)
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"a)"])
@@ -713,6 +720,7 @@ test "Highlight trailing spaces":
   
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
@@ -732,6 +740,7 @@ test "Highlight trailing spaces 2":
   
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc  "])
@@ -756,6 +765,7 @@ test "Highlight trailing spaces 3":
   
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru" "])

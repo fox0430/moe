@@ -6,7 +6,7 @@ when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
   from strutils import nimIdentNormalize
   export strutils.nimIdentNormalize
 
-import ui, color, unicodeext, build
+import ui, color, unicodeext, build, highlight
 
 type FilerSettings = object
   showIcons*: bool
@@ -68,6 +68,7 @@ type EditorSettings* = object
   buildOnSaveSettings*: BuildOnSaveSettings
   workSpace*: WorkSpaceSettings
   filerSettings*: FilerSettings
+  reservedWords*: seq[ReservedWord]
 
 proc initFilerSettings(): FilerSettings =
   result.showIcons = true
@@ -97,6 +98,13 @@ proc initEditorViewSettings*(): EditorViewSettings =
   result.indentationLines = true
   result.tabStop = 2
 
+proc initReservedWords*(): seq[ReservedWord] =
+  result = @[
+    ReservedWord(word: "TODO", color: EditorColorPair.reservedWord),
+    ReservedWord(word: "WIP", color: EditorColorPair.reservedWord),
+    ReservedWord(word: "NOTE", color: EditorColorPair.reservedWord),
+  ]
+
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = ColorTheme.vivid
   result.statusBar = initStatusBarSettings()
@@ -124,6 +132,7 @@ proc initEditorSettings*(): EditorSettings =
   result.buildOnSaveSettings = BuildOnSaveSettings()
   result.workSpace= initWorkSpaceSettings()
   result.filerSettings = initFilerSettings()
+  result.reservedWords = initReservedWords()
 
 proc getCursorType(cursorType, mode: string): CursorType =
   case cursorType
@@ -464,7 +473,7 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         colorFromNode(jsonNode{"colors", "activityBar.background"})
-    setEditorColor todo:
+    setEditorColor reservedWord:
       foreground:
         adjust: ReadableVsBackground
       background:
@@ -624,6 +633,15 @@ proc parseSettingsFile*(filename: string): EditorSettings =
   if settings.contains("WorkSpace"):
     if settings["WorkSpace"].contains("useBar"):
         result.workSpace.useBar = settings["WorkSpace"]["useBar"].getbool()
+
+  if settings["Highlight"].contains("reservedWord"):
+    if settings["Highlight"].contains("reservedWord"):
+      let reservedWords = settings["Highlight"]["reservedWord"]
+      for i in 0 ..< reservedWords.len:
+        let
+          word = reservedWords[i].getStr
+          reservedWord = ReservedWord(word: word, color: EditorColorPair.reservedWord)
+        result.reservedWords.add(reservedWord)
 
   if settings.contains("Filer"):
     if settings["Filer"].contains("showIcons"):
@@ -856,6 +874,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["Theme"].contains("workSpaceBarBg"):
       ColorThemeTable[ColorTheme.config].workSpaceBarBg = color("wrokSpaceBarBg")
+
+    if settings["Theme"].contains("reservedWord"):
+      ColorThemeTable[ColorTheme.config].reservedWord = color("reservedWord")
+
+    if settings["Theme"].contains("reservedWordBg"):
+      ColorThemeTable[ColorTheme.config].reservedWordBg = color("reservedWordBg")
 
     result.editorColorTheme = ColorTheme.config
   if vscodeTheme:

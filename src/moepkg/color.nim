@@ -503,9 +503,9 @@ type EditorColor* = object
   workSpaceBar*: Color
   workSpaceBarBg*: Color
 
-  # reserved word
-  todo*: Color
-  todoBg*: Color
+  # highlight reserved words
+  reservedWord*: Color
+  reservedWordBg*: Color
 
 type EditorColorPair* = enum
   lineNum = 1
@@ -568,7 +568,8 @@ type EditorColorPair* = enum
   highlightTrailingSpaces = 44
   # work space bar
   workSpaceBar = 45
-  todo = 46
+  # highlight reserved words
+  reservedWord = 46
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -661,8 +662,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # work space bar
     workSpaceBar: white,
     workSpaceBarBg: blue,
-    todo: white,
-    todoBg: gray,
+    # highlight reserved words
+    reservedWord: white,
+    reservedWordBg: gray,
   ),
   dark: EditorColor(
     editorBg: default,
@@ -754,8 +756,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # work space bar
     workSpaceBar: white,
     workSpaceBarBg: blue,
-    todo: white,
-    todoBg: gray,
+    # highlight reserved words
+    reservedWord: white,
+    reservedWordBg: gray,
   ),
   light: EditorColor(
     editorBg: default,
@@ -847,8 +850,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # work space bar
     workSpaceBar: blue,
     workSpaceBarBg: gray54,
-    todo: white,
-    todoBg: gray,
+    # highlight reserved words
+    reservedWord: white,
+    reservedWordBg: gray,
   ),
   vivid: EditorColor(
     editorBg: default,
@@ -940,8 +944,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # work space bar
     workSpaceBar: black,
     workSpaceBarBg: deepPink1_1,
-    todo: deepPink1_1,
-    todoBg: black,
+    # highlight reserved words
+    reservedWord: deepPink1_1,
+    reservedWordBg: black,
   ),
 ]
 
@@ -1021,8 +1026,8 @@ proc setCursesColor*(editorColor: EditorColor) =
   # work space bar
   setColorPair(EditorColorPair.workSpaceBar, editorColor.workSpaceBar, editorColor.workSpaceBarBg)
 
-  # TODO words
-  setColorPair(EditorColorPair.todo, editorColor.todo, editorColor.todoBg)
+  # highlight reserved words
+  setColorPair(EditorColorPair.reservedWord, editorColor.reservedWord, editorColor.reservedWordBg)
 
 proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Color, Color) =
   let editorColor = ColorThemeTable[theme]
@@ -1102,7 +1107,7 @@ proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Co
     return (editorColor.highlightTrailingSpaces, editorColor.highlightTrailingSpacesBg)
   of EditorColorPair.workSpaceBar:
     return (editorColor.workSpaceBar, editorColor.workSpaceBarBg)
-  of EditorColorPair.todo:
-    return (editorColor.todo, editorColor.todoBg)
+  of EditorColorPair.reservedWord:
+    return (editorColor.reservedWord, editorColor.reservedWordBg)
   else:
     return (editorColor.parenText, editorColor.parenTextBg)

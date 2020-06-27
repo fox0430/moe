@@ -10,16 +10,9 @@ type Highlight* = object
   colorSegments*: seq[ColorSegment]
 
 type
-  ReservedWord = object
-    word: string
-    color: EditorColorPair
-
-const
-  reservedWords = @[
-    ReservedWord(word: "TODO", color: EditorColorPair.todo),
-    ReservedWord(word: "WIP", color: EditorColorPair.todo),
-    ReservedWord(word: "NOTE", color: EditorColorPair.todo),
-  ]
+  ReservedWord* = object
+    word*: string
+    color*: EditorColorPair
 
 proc len*(highlight: Highlight): int = highlight.colorSegments.len
 
@@ -118,8 +111,11 @@ proc overwrite*(highlight: Highlight, colorSegment: ColorSegment): Highlight =
     let cs = highlight.colorSegments[i]
     result.colorSegments.add(cs.overwrite(colorSegment))
 
-iterator parseReservedWord(buffer: string,
-                           color: EditorColorPair): (string, EditorColorPair) =
+iterator parseReservedWord(
+  buffer: string,
+  reservedWords: seq[ReservedWord],
+  color: EditorColorPair): (string, EditorColorPair) =
+
   var
     buffer = buffer
   while true:
@@ -148,7 +144,10 @@ iterator parseReservedWord(buffer: string,
     yield (buffer[pos ..< last], reservedWord.color)
     buffer = buffer[last ..^ 1]
 
-proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
+proc initHighlight*(buffer: string,
+                    reservedWords: seq[ReservedWord],
+                    language: SourceLanguage): Highlight =
+
   var currentRow, currentColumn: int
 
   template splitByNewline(str, c: typed) =
@@ -219,7 +218,7 @@ proc initHighlight*(buffer: string, language: SourceLanguage): Highlight =
         else: EditorColorPair.defaultChar
 
     if token.kind == gtComment:
-      for r in buffer[first..last].parseReservedWord(color):
+      for r in buffer[first..last].parseReservedWord(reservedWords, color):
         if r[0] == "": continue
         splitByNewline(r[0], r[1])
       continue

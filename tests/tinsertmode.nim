@@ -11,6 +11,7 @@ suite "Insert mode":
 
     status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
       $status.bufStatus[0].buffer,
+      status.settings.reservedWords,
       status.bufStatus[0].language)
 
     status.resize(10, 10)

@@ -261,6 +261,7 @@ proc updateStatusBar(status: var Editorstatus) =
 
 proc initSyntaxHighlight(windowNode: var WindowNode,
                          bufStatus: seq[BufferStatus],
+                         reservedWords: seq[ReservedWord],
                          isSyntaxHighlight: bool) =
                          
   var queue = initHeapQueue[WindowNode]()
@@ -275,7 +276,7 @@ proc initSyntaxHighlight(windowNode: var WindowNode,
            bufStatus.prevMode == Mode.filer):
           let lang = if isSyntaxHighlight: bufStatus.language
                      else: SourceLanguage.langNone
-          node.highlight = ($bufStatus.buffer).initHighlight(lang)
+          node.highlight = ($bufStatus.buffer).initHighlight(reservedWords, lang)
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)
@@ -302,6 +303,7 @@ proc update*(status: var EditorStatus) =
   let workspaceIndex = status.currentWorkSpaceIndex
 
   status.workspace[workspaceIndex].mainWindowNode.initSyntaxHighlight(status.bufStatus,
+                                                                      status.settings.reservedWords,
                                                                       status.settings.syntax)
 
   var queue = initHeapQueue[WindowNode]()

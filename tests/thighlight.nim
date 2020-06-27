@@ -1,11 +1,17 @@
 import unittest, packages/docutils/highlite, strutils
 import moepkg/[highlight, color]
 
+const reservedWords = @[
+  ReservedWord(word: "WIP", color: EditorColorPair.reservedWord)
+]
+
 test "initHighlight: start with newline":
   let
     code = "\x0Aproc test =\x0A  echo \"Hello, world!\""
     buffer = split(code, '\n')
-    highlight = initHighlight(code, SourceLanguage.langNim)
+    highlight = initHighlight(code,
+                              reservedWords,
+                              SourceLanguage.langNim)
   
   # unite segments
   var unitedStr: string
@@ -23,21 +29,27 @@ test "initHighlight: start with newline":
 test "indexOf: basic":
   let
     code = "proc test =\x0A  echo \"Hello, world!\""
-    highlight = initHighlight(code, SourceLanguage.langNim)
+    highlight = initHighlight(code,
+                              reservedWords,
+                              SourceLanguage.langNim)
   
   check(highlight.indexOf(0, 0) == 0)
 
 test "indexOf: start with newline":
   let
     code = "\x0Aproc test =\x0A  echo \"Hello, world!\""
-    highlight = initHighlight(code, SourceLanguage.langNim)
+    highlight = initHighlight(code,
+                              reservedWords,
+                              SourceLanguage.langNim)
   
   check(highlight.indexOf(0, 0) == 0)
 
 test "over write":
   let
     code = "　"
-    highlight = initHighlight(code, SourceLanguage.langNone)
+    highlight = initHighlight(code,
+                              reservedWords,
+                              SourceLanguage.langNone)
     colorSegment = ColorSegment(firstRow: 0,
                                 firstColumn: 0,
                                 lastRow: 0,
