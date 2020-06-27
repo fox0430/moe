@@ -63,19 +63,19 @@ autoIndent
 ```
 
 Set cursor shape of the terminal emulator you are using (String) ```"blinkBlock"``` or ```"blinkIbeam"``` or ```noneBlinkBlock``` or ```noneBlinkIbeam```  
-default is block
+default is ```"blinkBlock"```
 ```
 defaultCursor
 ```
 
 Set cursor shape in normal mode (String) ```"blinkBlock"``` or ```"blinkIbeam"``` or ```noneBlinkBlock``` or ```noneBlinkIbeam```  
-default is block
+default is ```"blinkBlock"```
 ```
 normalModeCursor
 ```
 
 Set cursor shape in insert mode (String) ```"blinkBlock"``` or ```"blinkIbeam"``` or ```noneBlinkBlock``` or ```noneBlinkIbeam```  
-default is ibeam
+default is ```"blinkIbeam"```
 
 ```
 insertModeCursor
