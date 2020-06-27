@@ -254,10 +254,10 @@ useBar
 ### Highlight table
 
 Highlighting any word (array)  
+
 defaut
 ```
 ["TODO", "WIP", "NOTE"]
-
 ```
 
 ```
