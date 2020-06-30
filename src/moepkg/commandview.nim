@@ -3,9 +3,10 @@ import editorstatus, ui, unicodeext, fileutils, color
 
 type
   ExModeViewStatus = tuple[
-                           buffer: seq[Rune],
-                           prompt: string,
-                           cursorY, cursorX, currentPosition, startPosition: int]
+    buffer: seq[Rune],
+    prompt: string,
+    cursorY, cursorX, currentPosition, startPosition: int
+  ]
 
 const exCommandList = [
   ru"!",
@@ -350,26 +351,47 @@ proc getKeyword*(status: var EditorStatus,
 
   return (exStatus.buffer, cancelSearch)
 
-proc suggestFilePath(status: var Editorstatus, exStatus: var ExModeViewStatus, command: string, key: var Rune) =
-  var suggestlist: seq[seq[Rune]] = @[]
-  let inputPath = ($exStatus.buffer).substr(command.len + 1)
-  if inputPath.len == 0 or not inputPath.contains("/"):
-    suggestlist.add(ru"")
+proc calcPopUpWindowSize(buffer: seq[seq[Rune]]): (int, int) =
+  var maxBufferLen = 0
+  for runes in buffer:
+    if maxBufferLen < runes.len: maxBufferLen = runes.len
+  let
+    height = if buffer.len > terminalHeight() - 1: terminalHeight() - 1
+        else: buffer.len
+    width = maxBufferLen + 2
+
+  return (height, width)
+
+proc suggestFilePath(status: var Editorstatus,
+                     exStatus: var ExModeViewStatus,
+                     command: string,
+                     key: var Rune) =
+
+  let inputPath = exStatus.buffer.substr(command.len + 1)
+  var suggestlist = @[inputPath]
+  if inputPath.len == 0 or not inputPath.contains(ru'/'):
     for kind, path in walkDir("./"):
-      if ($path.toRunes.normalizePath).startsWith(inputPath):
+      if path.toRunes.normalizePath.startsWith(inputPath):
         suggestlist.add(path.toRunes.normalizePath)
-  elif ($inputPath).contains("/"):
-    suggestlist.add(($inputPath).substr(0, ($inputPath).rfind("/")).toRunes)
-    for kind, path in walkDir(($inputPath).substr(0, ($inputPath).rfind("/"))):
-      if ($path.toRunes.normalizePath).startsWith(inputPath):
+  elif inputPath.contains(ru'/'):
+    let path = inputPath.substr(0, inputPath.rfind(ru'/'))
+    for kind, path in walkDir($path):
+      if path.toRunes.normalizePath.startsWith(inputPath):
         suggestlist.add(path.toRunes.normalizePath)
 
-  var suggestIndex = 0
-
-  # Pop up window position
   var
-    x = exStatus.cursorX
+    suggestIndex = 0
+    # Pop up window initial size/position
+    h = 1
+    w = 1
+    # Pop up window position
+    positionInInputPath = if inputPath.rfind(ru"/") > 0: inputPath.rfind(ru"/")
+                          else: 0
+    # +2 is pronpt and space
+    x = command.len + 2 + positionInInputPath
     y = terminalHeight() - 1
+
+    popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
 
   while (isTabkey(key) or isShiftTab(key)) and suggestlist.len > 1:
     exStatus.buffer = (command & " ").toRunes
@@ -385,12 +407,14 @@ proc suggestFilePath(status: var Editorstatus, exStatus: var ExModeViewStatus, c
       let currentLine = if suggestIndex == 0: -1 else: suggestIndex - 1
 
       var displayBuffer: seq[seq[Rune]] = @[]
-      if ($suggestlist[1]).contains("/"):
+      if suggestlist[1].contains(ru'/'):
         for i in 1 ..< suggestlist.len:
-          displayBuffer.add(suggestlist[i][($suggestlist[i]).rfind("/") + 1 ..< suggestlist[i].len])
+          let path = suggestlist[i]
+          displayBuffer.add(path[path.rfind(ru'/') + 1 ..< path.len])
       else: displayBuffer = suggestlist[1 ..< suggestlist.len]
 
-      status.writePopUpWindow(x, y, currentLine, displayBuffer)
+      var (h, w) = displayBuffer.calcPopUpWindowSize
+      popUpWindow.writePopUpWindow(h, w, y, x, currentLine, displayBuffer)
 
     for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
     if suggestlist.len == 1:
@@ -410,11 +434,14 @@ proc isExCommand(exBuffer: seq[Rune]): bool =
       result = true
       break
 
-proc suggestExCommandOption(status: var Editorstatus, exStatus: var ExModeViewStatus, key: var Rune) =
-  var argList: seq[string] = @[]
-  let command = (strutils.splitWhitespace($exStatus.buffer))[0]
+proc suggestExCommandOption(status: var Editorstatus,
+                            exStatus: var ExModeViewStatus,
+                            key: var Rune) =
 
-  case command:
+  var argList: seq[string] = @[]
+  let command = (splitWhitespace(exStatus.buffer))[0]
+
+  case $command:
     of "cursorLine",
        "highlightparen",
        "indent",
@@ -438,21 +465,27 @@ proc suggestExCommandOption(status: var Editorstatus, exStatus: var ExModeViewSt
     of "e",
        "sp",
        "vs":
-      status.suggestFilePath(exStatus, command, key)
+      status.suggestFilePath(exStatus, $command, key)
     else: discard
 
-  let  arg = if (strutils.splitWhitespace($exStatus.buffer)).len > 1: (strutils.splitWhitespace($exStatus.buffer))[1] else: ""
-  var suggestlist: seq[seq[Rune]] = @[arg.toRunes]
+  let  arg = if (splitWhitespace(exStatus.buffer)).len > 1:
+               (splitWhitespace(exStatus.buffer))[1]
+             else: ru""
+  var suggestlist: seq[seq[Rune]] = @[arg]
 
   for i in 0 ..< argList.len:
-    if argList[i].startsWith(arg): suggestlist.add(argList[i].toRunes)
+    if argList[i].startsWith($arg): suggestlist.add(argList[i].toRunes)
 
-  var suggestIndex = 0
-
-  # Pop up window position
   var
-    x = exStatus.cursorX
+    suggestIndex = 0
+    # Pop up window initial size/position
+    h = 1
+    w = 1
+    # +1 is space
+    x = command.len + 1
     y = terminalHeight() - 1
+
+    popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
 
   while (isTabkey(key) or isShiftTab(key)) and suggestlist.len > 1:
     exStatus.currentPosition = 0
@@ -465,10 +498,15 @@ proc suggestExCommandOption(status: var Editorstatus, exStatus: var ExModeViewSt
     else: suggestIndex = 0
 
     if status.settings.popUpWindowInExmode:
-      let currentLine = if suggestIndex == 0: -1 else: suggestIndex - 1
-      status.writePopUpWindow(x, y, currentLine, suggestlist[1 .. suggestlist.high])
+      let
+        currentLine = if suggestIndex == 0: -1 else: suggestIndex - 1
+        displayBuffer = suggestlist[1 ..< suggestlist.len]
+      # Pop up window size
+      var (h, w) = displayBuffer.calcPopUpWindowSize
 
-    for rune in command.toRunes & ru' ': exStatus.insertCommandBuffer(rune)
+      popUpWindow.writePopUpWindow(h, w, y, x, currentLine, displayBuffer)
+
+    for rune in command & ru' ': exStatus.insertCommandBuffer(rune)
     for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
 
     status.commandWindow.writeExModeView(exStatus, EditorColorPair.commandBar)
@@ -484,12 +522,15 @@ proc suggestExCommand(status: var Editorstatus,
     if runes.len >= exStatus.buffer.len and
        exStatus.buffer.startsWith(runes): suggestlist.add(runes)
 
-  var suggestIndex = 0
-
-  # Pop up window position
   var
-    x = exStatus.cursorX
+    suggestIndex = 0
+    # Pop up window initial size/position
+    h = 1
+    w = 1
+    x = 0
     y = terminalHeight() - 1
+
+    popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
 
   while (isTabkey(key) or isShiftTab(key)) and suggestlist.len > 1:
     exStatus.buffer = ru""
@@ -502,8 +543,13 @@ proc suggestExCommand(status: var Editorstatus,
     else: suggestIndex = 0
 
     if status.settings.popUpWindowInExmode:
-      let currentLine = if suggestIndex == 0: -1 else: suggestIndex - 1
-      status.writePopUpWindow(x, y, currentLine, suggestlist[1 .. suggestlist.high])
+      let
+        currentLine = if suggestIndex == 0: -1 else: suggestIndex - 1
+        displayBuffer = suggestlist[1 ..< suggestlist.len]
+      # Pop up window size
+      var (h, w) = displayBuffer.calcPopUpWindowSize
+
+      popUpWindow.writePopUpWindow(h, w, y, x, currentLine, displayBuffer)
 
     for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
 
@@ -511,8 +557,7 @@ proc suggestExCommand(status: var Editorstatus,
 
     key = getKey(status.commandWindow)
 
-proc suggestMode(
-                 status: var Editorstatus,
+proc suggestMode(status: var Editorstatus,
                  exStatus: var ExModeViewStatus,
                  key: var Rune) =
 

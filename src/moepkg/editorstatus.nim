@@ -495,25 +495,18 @@ proc movePrevWindow*(status: var EditorStatus) =
       status.workSpace[workspaceIndex].currentMainWindowNode.windowIndex - 1
   status.moveCurrentMainWindow(index)
 
-proc writePopUpWindow*(status: var Editorstatus,
-                       x, y: var int,
+proc writePopUpWindow*(popUpWindow: var Window,
+                       h, w, y, x: var int,
                        currentLine: int,
                        buffer: seq[seq[Rune]]) =
-                       
-  # Pop up window size
-  var maxBufferLen = 0
-  for runes in buffer:
-    if maxBufferLen < runes.len: maxBufferLen = runes.len
-  let
-    h = if buffer.len > terminalHeight() - 1: terminalHeight() - 1
-        else: buffer.len
-    w = maxBufferLen + 2
+
+  popUpWindow.erase
 
   # Pop up window position
   if y == terminalHeight() - 1: y = y - h
   if w > terminalHeight() - x: x = terminalHeight() - w
 
-  status.popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
+  popUpWindow.resize(h, w, y, x)
 
   let startLine = if currentLine == -1: 0
                   elif currentLine - h + 1 > 0: currentLine - h + 1
@@ -521,12 +514,12 @@ proc writePopUpWindow*(status: var Editorstatus,
   for i in 0 ..< h:
     if currentLine != -1 and i + startLine == currentLine:
       let color = EditorColorPair.popUpWinCurrentLine
-      status.popUpWindow.write(i, 1, buffer[i + startLine], color)
+      popUpWindow.write(i, 1, buffer[i + startLine], color)
     else:
       let color = EditorColorPair.popUpWindow
-      status.popUpWindow.write(i, 1, buffer[i + startLine], color)
+      popUpWindow.write(i, 1, buffer[i + startLine], color)
 
-  status.popUpWindow.refresh
+  popUpWindow.refresh
 
 proc deletePopUpWindow*(status: var Editorstatus) =
   if status.popUpWindow != nil:
