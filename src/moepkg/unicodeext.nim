@@ -244,6 +244,10 @@ proc startsWith*(runes1, runes2: seq[Rune]): bool =
       result = false
       break
 
+proc startsWith*(runes1: seq[Rune], r: Rune): bool =
+  if runes1[0] == r: return true
+  else: false
+
 proc `$`*(seqRunes: seq[seq[Rune]]): string =
   for runes in seqRunes: result = result & $runes
 
@@ -300,7 +304,11 @@ proc substr*(runes: seq[Rune], first = 0): seq[Rune] =
   result = substr(runes, first, high(runes))
 
 proc contains*(runes, runes2: seq[Rune]): bool =
-  return find(runes, runes2) >= 0
+  find(runes, runes2) >= 0
 
 proc contains*(runes: seq[Rune], r: Rune): bool =
-  return find(runes, r) >= 0
+  find(runes, r) >= 0
+
+proc splitWhitespace*(runes: seq[Rune]): seq[seq[Rune]] =
+  let strings = strutils.splitWhitespace($runes)
+  for str in strings: result.add(str.toRunes)
