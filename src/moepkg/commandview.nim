@@ -3,9 +3,10 @@ import editorstatus, ui, unicodeext, fileutils, color
 
 type
   ExModeViewStatus = tuple[
-                           buffer: seq[Rune],
-                           prompt: string,
-                           cursorY, cursorX, currentPosition, startPosition: int]
+    buffer: seq[Rune],
+    prompt: string,
+    cursorY, cursorX, currentPosition, startPosition: int
+  ]
 
 const exCommandList = [
   ru"!",
