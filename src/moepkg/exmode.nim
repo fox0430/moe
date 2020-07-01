@@ -1079,6 +1079,8 @@ proc exMode*(status: var EditorStatus) =
       let bufferIndex =
         status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
       status.bufStatus[bufferIndex].isSearchHighlight = true
+
+      status.jumpToSearchForwardResults(keyword)
     else:
       if command.len > 0:
         status.commandHistory[status.commandHistory.high] = command
