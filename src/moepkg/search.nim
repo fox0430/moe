@@ -53,6 +53,8 @@ proc searchBufferReversely*(status: var EditorStatus, keyword: seq[Rune]): Searc
     if position > -1:  return (line, position)
 
 proc searchAllOccurrence*(buffer: GapBuffer[seq[Rune]], keyword: seq[Rune]): seq[SearchResult] =
+  if keyword.len < 1: return
+
   for line in 0 ..< buffer.len:
     var begin = 0
     while begin < buffer[line].len:
@@ -104,11 +106,11 @@ proc searchFirstOccurrence(status: var EditorStatus) =
     status.searchHistory.delete(status.searchHistory.high)
 
     let currentBufferIndex = status.bufferIndexInCurrentWindow
-    status.bufStatus[currentBufferIndex].isHighlight = false
+    status.bufStatus[currentBufferIndex].isSearchHighlight = false
 
   else:
     if keyword.len > 0:
-      status.bufStatus[status.bufferIndexInCurrentWindow].isHighlight = true
+      status.bufStatus[status.bufferIndexInCurrentWindow].isSearchHighlight = true
       status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
 proc realtimeSearch(status: var Editorstatus, direction: Direction) =
@@ -139,14 +141,14 @@ proc realtimeSearch(status: var Editorstatus, direction: Direction) =
 
     let bufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
     if keyword.len > 0:
-      status.bufStatus[bufferIndex].isHighlight = true
+      status.bufStatus[bufferIndex].isSearchHighlight = true
 
       if direction == Direction.forward: status.jumpToSearchForwardResults(keyword)
       else:
         status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine = currentLine
         status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.currentColumn = currentColumn
         status.jumpToSearchBackwordResults(keyword)
-    else: status.bufStatus[bufferIndex].isHighlight = false
+    else: status.bufStatus[bufferIndex].isSearchHighlight = false
 
     status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
     status.resize(terminalHeight(), terminalWidth())
@@ -156,7 +158,7 @@ proc realtimeSearch(status: var Editorstatus, direction: Direction) =
     status.searchHistory.delete(status.searchHistory.high)
 
     let currentBufferIndex = status.bufferIndexInCurrentWindow
-    status.bufStatus[currentBufferIndex].isHighlight = false
+    status.bufStatus[currentBufferIndex].isSearchHighlight = false
     status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     status.commandWindow.erase
