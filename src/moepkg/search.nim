@@ -63,7 +63,7 @@ proc searchAllOccurrence*(buffer: GapBuffer[seq[Rune]], keyword: seq[Rune]): seq
       result.add((line, begin + position))
       begin += position + keyword.len
 
-proc jumpToSearchForwardResults(status: var Editorstatus, keyword: seq[Rune]) =
+proc jumpToSearchForwardResults*(status: var Editorstatus, keyword: seq[Rune]) =
   let searchResult = status.searchBuffer(keyword)
   if searchResult.line > -1:
     status.jumpLine(searchResult.line)
