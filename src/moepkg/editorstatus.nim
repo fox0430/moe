@@ -1,8 +1,8 @@
-import strutils, terminal, os, strformat, tables, times, osproc, heapqueue, math,
+import strutils, terminal, os, strformat, tables, times, osproc, heapqueue,
        deques
 import packages/docutils/highlite
-import gapbuffer, editorview, ui, unicodeext, highlight,
-       fileutils, undoredostack, window, color, workspace, statusbar, settings,
+import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
+       undoredostack, window, color, workspace, statusbar, settings,
        bufferstatus, cursor, tabline
 
 type Platform* = enum
