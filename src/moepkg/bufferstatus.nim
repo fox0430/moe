@@ -23,7 +23,7 @@ type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
   language*: SourceLanguage
   selectArea*: SelectArea
-  isHighlight*: bool
+  isSearchHighlight*: bool
   filename*: seq[Rune]
   openDir: seq[Rune]
   positionRecord*: Table[int, tuple[line, column, expandedColumn: int]]

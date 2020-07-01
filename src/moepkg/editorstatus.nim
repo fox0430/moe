@@ -1,8 +1,8 @@
-import strutils, terminal, os, strformat, tables, times, osproc, heapqueue, math,
+import strutils, terminal, os, strformat, tables, times, osproc, heapqueue,
        deques
 import packages/docutils/highlite
-import gapbuffer, editorview, ui, unicodeext, highlight,
-       fileutils, undoredostack, window, color, workspace, statusbar, settings,
+import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
+       undoredostack, window, color, workspace, statusbar, settings,
        bufferstatus, cursor, tabline
 
 type Platform* = enum
@@ -22,8 +22,6 @@ type EditorStatus* = object
   workSpace*: seq[WorkSpace]
   currentWorkSpaceIndex*: int
   timeConfFileLastReloaded*: DateTime
-  isSearchHighlight*: bool
-  isReplaceTextHighlight*: bool
   currentDir: seq[Rune]
   messageLog*: seq[seq[Rune]]
   debugMode: int
@@ -908,13 +906,13 @@ proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
       windowNode.highlight = windowNode.highlight.overwrite(colorSegment)
 
   # highlight search results
-  if status.bufStatus[windowNode.bufferIndex].isHighlight and
-     status.searchHistory.len > 0:
+  if bufStatus.isSearchHighlight and status.searchHistory.len > 0:
     let
       keyword = status.searchHistory[^1]
       allOccurrence = searchAllOccurrence(bufferInView, keyword)
-      color = if status.isSearchHighlight: EditorColorPair.searchResult
-              else: EditorColorPair.replaceText
+      color = if bufStatus.isSearchHighlight: EditorColorPair.searchResult
+              else:
+                EditorColorPair.replaceText
     for pos in allOccurrence:
       let colorSegment = ColorSegment(firstRow: range[0] + pos.line,
                                       firstColumn: pos.column,
