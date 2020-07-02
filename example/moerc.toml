@@ -22,7 +22,7 @@ autoCloseParen = true
 
 autoIndent = true
 
-#defaultCursor = "blinkBlock"
+defaultCursor = "blinkBlock"
 
 normalModeCursor = "blinkBlock"
 
@@ -49,6 +49,8 @@ systemClipboard = true
 highlightFullWidthSpace = true
 
 highlightTrailingSpaces = true
+
+highlightCurrentWord = true
 
 [BuildOnSaveSettings]
 
