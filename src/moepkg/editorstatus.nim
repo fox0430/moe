@@ -800,6 +800,10 @@ proc highlightOtherUsesCurrentWord(status: var Editorstatus) =
               elif bufStatus.buffer.len > range[1]: range[1] + 1
               else: range[1]
 
+  proc isWordAtCursor(highlightWordLen, i, j: int): bool =
+    result = i == windowNode.currentLine and
+             (j >= startCol and j <= endCol)
+
   for i in startLine ..< endLine:
     let line = bufStatus.buffer[i]
     for j in 0 .. (line.len - highlightWord.len):
@@ -815,25 +819,28 @@ proc highlightOtherUsesCurrentWord(status: var Editorstatus) =
              ((line[j + highlightWord.len] != '_' and
              unicodeext.isPunct(line[j + highlightWord.len])) or
              line[j + highlightWord.len].isSpace):
-            # Set color
-            let
-              originalColorPair =
-                status.workSpace[workspaceIndex].currentMainWindowNode.highlight.getColorPair(i, j)
-              theme = status.settings.editorColorTheme
-              colors = theme.getColorFromEditorColorPair(originalColorPair)
-            setColorPair(EditorColorPair.currentWord,
-                         colors[0],
-                         ColorThemeTable[theme].currentWordBg)
 
-            let
-              color = EditorColorPair.currentWord
-              colorSegment = ColorSegment(firstRow: i,
-                                          firstColumn: j,
-                                          lastRow: i,
-                                          lastColumn: j + highlightWord.high,
-                                          color: color)
-            status.workSpace[workspaceIndex].currentMainWindowNode.highlight =
-              status.workSpace[workspaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
+            # Do not highlight current word on the cursor
+            if not isWordAtCursor(highlightWord.len, i, j):
+              # Set color
+              let
+                originalColorPair =
+                  status.workSpace[workspaceIndex].currentMainWindowNode.highlight.getColorPair(i, j)
+                theme = status.settings.editorColorTheme
+                colors = theme.getColorFromEditorColorPair(originalColorPair)
+              setColorPair(EditorColorPair.currentWord,
+                           colors[0],
+                           ColorThemeTable[theme].currentWordBg)
+
+              let
+                color = EditorColorPair.currentWord
+                colorSegment = ColorSegment(firstRow: i,
+                                            firstColumn: j,
+                                            lastRow: i,
+                                            lastColumn: j + highlightWord.high,
+                                            color: color)
+              status.workSpace[workspaceIndex].currentMainWindowNode.highlight =
+                status.workSpace[workspaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
 
 proc highlightTrailingSpaces(status: var Editorstatus) =
   let
