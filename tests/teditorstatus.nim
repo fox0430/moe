@@ -432,8 +432,8 @@ test "Highlight current word 1":
   status.update
 
   let node = status.workSpace[0].currentMainWindowNode
-  check(node.highlight[0].color == EditorColorPair.currentWord)
-  check(node.highlight[2].color == EditorColorPair.currentWord)
+  check(node.highlight[0].color == EditorColorPair.defaultChar)
+  check(node.highlight[1].color == EditorColorPair.currentWord)
 
 test "Highlight current word 2":
   var status = initEditorStatus()
@@ -444,7 +444,7 @@ test "Highlight current word 2":
   status.update
 
   let node = status.workSpace[0].currentMainWindowNode
-  check(node.highlight[0].color == EditorColorPair.currentWord)
+  check(node.highlight[0].color == EditorColorPair.defaultChar)
   check(node.highlight[1].color == EditorColorPair.currentWord)
 
 test "Highlight current word 3":
@@ -457,8 +457,8 @@ test "Highlight current word 3":
   status.update
 
   let node = status.workSpace[0].currentMainWindowNode
+  check(node.highlight[0].color == EditorColorPair.defaultChar)
   check(node.highlight[1].color == EditorColorPair.currentWord)
-  check(node.highlight[3].color == EditorColorPair.currentWord)
 
 test "Highlight full width space 1":
   var status = initEditorStatus()
