@@ -194,7 +194,10 @@ proc initHighlight*(buffer: string,
     splitByNewline(pad, EditorColorPair.defaultChar)
 
   while true:
-    token.getNextToken(language)
+    try:
+      token.getNextToken(language)
+    except AssertionError:
+      discard
 
     if token.kind == gtEof: break
 
