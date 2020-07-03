@@ -63,3 +63,10 @@ test "over write":
   check(h[0].lastRow == 0)
   check(h[0].lastColumn == 0)
   check(h[0].color == EditorColorPair.highlightFullWidthSpace)
+
+# Fix #733
+test """Highlight "echo \"""":
+  const code = """echo "\""""
+  discard initHighlight(code,
+                        reservedWords,
+                        SourceLanguage.langNim)
