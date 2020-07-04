@@ -308,6 +308,12 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         colorFromNode(jsonNode{"colors", "statusBar.background"})
+    setEditorColor statusBarNormalModeInactive:
+      foreground:
+        colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "editor.background"})
     setEditorColor statusBarInsertMode:
       foreground:
         adjust: ReadableVsBackground
@@ -318,6 +324,11 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         white
+    setEditorColor statusBarInsertModeInactive:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "statusBar.background"})
     setEditorColor statusBarVisualMode:
       foreground:
         adjust: ReadableVsBackground
@@ -328,6 +339,11 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         white
+    setEditorColor statusBarVisualModeInactive:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "statusBar.background"})
     setEditorColor statusBarReplaceMode:
       foreground:
         adjust: ReadableVsBackground
@@ -338,6 +354,11 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         white
+    setEditorColor statusBarReplaceModeInactive:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "statusBar.background"})
     setEditorColor statusBarFilerMode:
       foreground:
         adjust: ReadableVsBackground
@@ -348,6 +369,11 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         white
+    setEditorColor statusBarFilerModeInactive:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "statusBar.background"})
     setEditorColor statusBarExMode:
       foreground:
         adjust: ReadableVsBackground
@@ -358,6 +384,11 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         white
+    setEditorColor statusBarExModeInactive:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "statusBar.background"})
     # command  bar
     setEditorColor commandBar:
       foreground:
