@@ -485,3 +485,77 @@ test "Normal mode: Move last of line and enter insert mode":
 
   check(status.bufStatus[0].mode == Mode.insert)
   check(status.workspace[0].currentMainWindowNode.currentColumn == 3)
+
+test "Normal mode: Repeat last command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
+
+  status.resize(100, 100)
+  status.update
+
+  block:
+    const key = ru'x'
+    let commands = status.isNormalModeCommand(key)
+    status.normalCommand(commands)
+    status.update
+
+  block:
+    const key = @[ru'.']
+    status.normalCommand(key)
+    status.update
+
+  check(status.bufStatus[0].buffer.len == 1)
+  check(status.bufStatus[0].buffer[0].len == 1)
+
+test "Normal mode: Repeat last command 2":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
+
+  status.resize(100, 100)
+  status.update
+
+  block:
+    const key = ru'>'
+    let commands = status.isNormalModeCommand(key)
+    status.normalCommand(commands)
+    status.update
+
+  status.workspace[0].currentMainWindowNode.currentColumn = 0
+
+  block:
+    const key = ru'x'
+    let commands = status.isNormalModeCommand(key)
+    status.normalCommand(commands)
+    status.update
+
+  block:
+    const key = @[ru'.']
+    status.normalCommand(key)
+    status.update
+
+  check(status.bufStatus[0].buffer.len == 1)
+  check(status.bufStatus[0].buffer[0] == ru"abc")
+
+test "Normal mode: Repeat last command 3":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
+
+  status.resize(100, 100)
+  status.update
+
+  block:
+    const key = ru'j'
+    let commands = status.isNormalModeCommand(key)
+    status.normalCommand(commands)
+    status.update
+
+  block:
+    const key = @[ru'.']
+    status.normalCommand(key)
+    status.update
+
+  check(status.workspace[0].currentMainWindowNode.currentLine == 1)
+
