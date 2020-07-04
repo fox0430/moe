@@ -580,6 +580,16 @@ Background color of mode text in the status bar in normal mode
 statusBarModeNormalModeBg
 ```
 
+Character color of Status bar in normal mode when inactive  
+```
+statusBarNormalModeInactive
+```
+
+Status bar base color in normal mode when inactive  
+```
+statusBarNormalModeInactiveBg
+```
+
 Character color of Status bar in insert mode
 ```
 statusBarInsertMode
@@ -598,6 +608,16 @@ statusBarModeInsertMode
 Background color of mode text in the status bar in insert mode
 ```
 statusBarModeInsertModeBg
+```
+
+Character color of Status bar in insert mode when inactive
+```
+statusBarInsertModeInactive
+```
+
+Status bar base color in insert mode when inactive
+```
+statusBarInsertModeInactiveBg
 ```
 
 Character color of Status bar in visual mode
@@ -620,6 +640,16 @@ Background color of mode text in the status bar in visual mode
 statusBarModeVisualModeBg
 ```
 
+Character color of Status bar in visual mode when inactive
+```
+statusBarVisualModeInactive
+```
+
+Status bar base color in visual mode when inactive
+```
+statusBarVisualModeInactiveBg
+```
+
 Character color of Status bar replace in mode
 ```
 statusBarReplaceMode
@@ -638,6 +668,16 @@ statusBarModeReplaceMode
 Background color of mode text in the status bar in replace mode
 ```
 statusBarModeReplaceModeBg
+```
+
+Character color of Status bar replace in mode when inactive
+```
+statusBarReplaceModeInactive
+```
+
+Status bar base color in replace mode when inactive
+```
+statusBarReplaceModeInactiveBg
 ```
 
 Character color of Status bar in filer mode
@@ -660,6 +700,16 @@ Background color of mode text in the status bar in filer mode
 statusBarModeFilerModeBg
 ```
 
+Character color of Status bar in filer mode when inactive
+```
+statusBarFilerModeInactive
+```
+
+Status bar base color in filer mode when inactive
+```
+statusBarFilerModeInactiveBg
+```
+
 Character color of Status bar in ex mode
 ```
 statusBarExMode
@@ -678,6 +728,16 @@ statusBarExModeBg
 Background color of mode text in the status bar in ex mode
 ```
 statusBarModeExModeBg
+```
+
+Character color of Status bar in ex mode when inactive
+```
+statusBarExModeInactive
+```
+
+Status bar base color in ex mode when inactive
+```
+statusBarExModeInactiveBg
 ```
 
 Current git branch text color
