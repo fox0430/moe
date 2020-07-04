@@ -701,6 +701,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Theme"].contains("statusBarVisualMode"):
       ColorThemeTable[ColorTheme.config].statusBarVisualMode = color("statusBarVisualMode")
 
+    if settings["Theme"].contains("statusBarVisualModeBg"):
+      ColorThemeTable[ColorTheme.config].statusBarVisualModeBg = color("statusBarVisualModeBg")
+
     if settings["Theme"].contains("statusBarModeVisualMode"):
       ColorThemeTable[ColorTheme.config].statusBarModeVisualMode = color("statusBarModeVisualMode")
 
