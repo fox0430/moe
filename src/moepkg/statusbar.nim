@@ -117,7 +117,8 @@ proc writeStatusLogViewerModeInfo(bufStatus: var BufferStatus,
   statusBar.window.write(0, statusBarWidth - info.len - 1, info, color)
 
 proc writeStatusBarCurrentGitBranchName(statusBar: var StatusBar,
-                                        statusBarBuffer: var seq[Rune]) =
+                                        statusBarBuffer: var seq[Rune],
+                                        isActiveWindow: bool) =
 
   # Get current git branch name
   let cmdResult = execCmdEx("git rev-parse --abbrev-ref HEAD")
@@ -127,7 +128,8 @@ proc writeStatusBarCurrentGitBranchName(statusBar: var StatusBar,
     branchName = cmdResult.output
     ## Add symbol and delete newline
     buffer = ru"  " & branchName[0 .. branchName.high - 1].toRunes
-    color = EditorColorPair.statusBarNormalMode
+    color = if isActiveWindow: EditorColorPair.statusBarNormalMode
+            else: EditorColorPair.statusBarNormalModeInactive
 
   statusBarBuffer.add(buffer)
   statusBar.window.append(buffer, color)
@@ -185,7 +187,7 @@ proc writeStatusBar*(bufStatus: var BufferStatus,
     statusBar.window.write(0, 0, statusBarBuffer, color)
 
   if isShowGitBranchName(currentMode, prevMode, settings):
-    statusBar.writeStatusBarCurrentGitBranchName(statusBarBuffer)
+    statusBar.writeStatusBarCurrentGitBranchName(statusBarBuffer, isActiveWindow)
 
   if currentMode == Mode.ex and prevMode == Mode.filer:
     bufStatus.writeStatusBarFilerModeInfo(statusBar,
