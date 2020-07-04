@@ -580,7 +580,7 @@ proc getKeyOnceAndWriteCommandView*(status: var Editorstatus,
     exitSearch = false
     cancelSearch = false
     searchHistoryIndex = status.searchHistory.high
-    commandHistoryIndex = status.commandHistory.high
+    commandHistoryIndex = status.exCommandHistory.high
   for rune in buffer: exStatus.insertCommandBuffer(rune)
 
   template setPrevSearchHistory() =
@@ -596,16 +596,16 @@ proc getKeyOnceAndWriteCommandView*(status: var Editorstatus,
       exStatus.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
 
   template setNextCommandHistory() =
-    if commandHistoryIndex < status.commandHistory.high:
+    if commandHistoryIndex < status.exCommandHistory.high:
       exStatus.clearCommandBuffer
       inc commandHistoryIndex
-      exStatus.insertCommandBuffer(status.commandHistory[commandHistoryIndex])
+      exStatus.insertCommandBuffer(status.exCommandHistory[commandHistoryIndex])
 
   template setPrevCommandHistory() =
     if commandHistoryIndex > 0:
       exStatus.clearCommandBuffer
       dec commandHistoryIndex
-      exStatus.insertCommandBuffer(status.commandHistory[commandHistoryIndex])
+      exStatus.insertCommandBuffer(status.exCommandHistory[commandHistoryIndex])
 
   while true:
     status.commandWindow.writeExModeView(exStatus, EditorColorPair.commandBar)

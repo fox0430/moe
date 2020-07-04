@@ -1051,7 +1051,7 @@ proc exMode*(status: var EditorStatus) =
     isSuggest = true
     isReplaceCommand = false
 
-  status.commandHistory.add(ru"")
+  status.exCommandHistory.add(ru"")
 
   let workspaceIndex = status.currentWorkSpaceIndex
 
@@ -1083,7 +1083,7 @@ proc exMode*(status: var EditorStatus) =
       status.jumpToSearchForwardResults(keyword)
     else:
       if command.len > 0:
-        status.commandHistory[status.commandHistory.high] = command
+        status.exCommandHistory[status.exCommandHistory.high] = command
         if isReplaceCommand:
           isReplaceCommand = false
           status.searchHistory.delete(status.searchHistory.high)
@@ -1092,8 +1092,8 @@ proc exMode*(status: var EditorStatus) =
     status.resize(terminalHeight(), terminalWidth())
     status.update
 
-  if status.commandHistory[status.commandHistory.high] == ru"":
-    status.commandHistory.delete(status.commandHistory.high)
+  if status.exCommandHistory[status.exCommandHistory.high] == ru"":
+    status.exCommandHistory.delete(status.exCommandHistory.high)
 
   if isReplaceCommand: status.searchHistory.delete(status.searchHistory.high)
 
