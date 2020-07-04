@@ -124,6 +124,10 @@ statusBarModeNormalMode = "black"
 
 statusBarModeNormalModeBg = "white"
 
+statusBarNormalModeInactive = "blue"
+
+statusBarNormalModeInactiveBg = "white"
+
 statusBarInserMode = "white"
 
 statusBarInserModeBg = "blue"
@@ -131,6 +135,10 @@ statusBarInserModeBg = "blue"
 statusBarModeInserMode = "black"
 
 statusBarModeInserModeBg = "white"
+
+statusBarInsertModeInactive = "blue"
+
+statusBarInsertModeInactiveBg = "white"
 
 statusBarVisualMode = "white"
 
@@ -140,6 +148,10 @@ statusBarModeVisualMode = "black"
 
 statusBarModeVisualModeBg = "white"
 
+statusBarVisualModeInactive = "blue"
+
+statusBarVisualModeInactiveBg = "white"
+
 statusBarReplaceMode = "white"
 
 statusBarReplaceModeBg = "blue"
@@ -147,6 +159,10 @@ statusBarReplaceModeBg = "blue"
 statusBarModeReplaceMode = "black"
 
 statusBarModeReplaceModeBg = "white"
+
+statusBarReplaceModeInactive =  "blue"
+
+statusBarReplaceModeInactiveBg = "white"
 
 statusBarFilerMode = "white"
 
@@ -156,6 +172,10 @@ statusBarModeFilerMode = "black"
 
 statusBarModeFilerModeBg = "white"
 
+statusBarFilerModeInactive = "blue"
+
+statusBarFilerModeInactiveBg = "white"
+
 statusBarExMode = "black"
 
 statusBarExModeBg = "white"
@@ -163,6 +183,10 @@ statusBarExModeBg = "white"
 statusBarModeExMode = "black"
 
 statusBarModeExModeBg = "white"
+
+statusBarExModeInactive = "blue"
+
+statusBarExModeInactiveBg = "white"
 
 tab = "white"
 

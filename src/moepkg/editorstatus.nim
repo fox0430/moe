@@ -243,9 +243,11 @@ proc updateStatusBar(status: var Editorstatus) =
   let workspaceIndex = status.currentWorkSpaceIndex
 
   if not status.settings.statusBar.multipleStatusBar:
+    const isActiveWindow = true
     let index = status.workSpace[workspaceIndex].statusBar[0].bufferIndex
     status.bufStatus[index].writeStatusBar(status.workSpace[workspaceIndex].statusBar[0],
                                            status.workspace[workspaceIndex].currentMainWindowNode,
+                                           isActiveWindow,
                                            status.settings)
   else:
     for i in 0 ..< status.workSpace[workspaceIndex].statusBar.len:
@@ -254,8 +256,10 @@ proc updateStatusBar(status: var Editorstatus) =
         index = status.workSpace[workspaceIndex].statusBar[i].windowIndex
         windowNode =
           status.workspace[workspaceIndex].mainWindowNode.searchByWindowIndex(index)
+        isActiveWindow = index == status.workSpace[workspaceIndex].currentMainWindowNode.index
       status.bufStatus[bufferIndex].writeStatusBar(status.workSpace[workspaceIndex].statusBar[i],
                                                    windowNode,
+                                                   isActiveWindow,
                                                    status.settings)
 
 proc initSyntaxHighlight(windowNode: var WindowNode,

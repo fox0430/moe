@@ -308,6 +308,12 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         colorFromNode(jsonNode{"colors", "statusBar.background"})
+    setEditorColor statusBarNormalModeInactive:
+      foreground:
+        colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "editor.background"})
     setEditorColor statusBarInsertMode:
       foreground:
         adjust: ReadableVsBackground
@@ -318,6 +324,11 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         white
+    setEditorColor statusBarInsertModeInactive:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "statusBar.background"})
     setEditorColor statusBarVisualMode:
       foreground:
         adjust: ReadableVsBackground
@@ -328,6 +339,11 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         white
+    setEditorColor statusBarVisualModeInactive:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "statusBar.background"})
     setEditorColor statusBarReplaceMode:
       foreground:
         adjust: ReadableVsBackground
@@ -338,6 +354,11 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         white
+    setEditorColor statusBarReplaceModeInactive:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "statusBar.background"})
     setEditorColor statusBarFilerMode:
       foreground:
         adjust: ReadableVsBackground
@@ -348,6 +369,11 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         white
+    setEditorColor statusBarFilerModeInactive:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "statusBar.background"})
     setEditorColor statusBarExMode:
       foreground:
         adjust: ReadableVsBackground
@@ -358,6 +384,11 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         white
+    setEditorColor statusBarExModeInactive:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "statusBar.background"})
     # command  bar
     setEditorColor commandBar:
       foreground:
@@ -686,6 +717,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Theme"].contains("statusBarModeNormalModeBg"):
       ColorThemeTable[ColorTheme.config].statusBarModeNormalModeBg = color("statusBarModeNormalModeBg")
 
+    if settings["Theme"].contains("statusBarNormalModeInactive"):
+      ColorThemeTable[ColorTheme.config].statusBarNormalModeInactive = color("statusBarNormalModeInactive")
+
+    if settings["Theme"].contains("statusBarNormalModeInactiveBg"):
+      ColorThemeTable[ColorTheme.config].statusBarNormalModeInactiveBg = color("statusBarNormalModeInactiveBg")
+
     if settings["Theme"].contains("statusBarInsertMode"):
       ColorThemeTable[ColorTheme.config].statusBarInsertMode = color("statusBarInsertMode")
 
@@ -697,6 +734,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["Theme"].contains("statusBarModeInsertModeBg"):
       ColorThemeTable[ColorTheme.config].statusBarModeInsertModeBg = color("statusBarModeInsertModeBg")
+
+    if settings["Theme"].contains("statusBarInsertModeInactive"):
+      ColorThemeTable[ColorTheme.config].statusBarInsertModeInactive = color("statusBarInsertModeInactive")
+
+    if settings["Theme"].contains("statusBarInsertModeInactiveBg"):
+      ColorThemeTable[ColorTheme.config].statusBarInsertModeInactiveBg = color("statusBarInsertModeInactiveBg")
 
     if settings["Theme"].contains("statusBarVisualMode"):
       ColorThemeTable[ColorTheme.config].statusBarVisualMode = color("statusBarVisualMode")
@@ -710,6 +753,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Theme"].contains("statusBarModeVisualModeBg"):
       ColorThemeTable[ColorTheme.config].statusBarModeVisualModeBg = color("statusBarModeVisualModeBg")
 
+    if settings["Theme"].contains("statusBarVisualModeInactive"):
+      ColorThemeTable[ColorTheme.config].statusBarVisualModeInactive = color("statusBarVisualModeInactive")
+ 
+    if settings["Theme"].contains("statusBarVisualModeInactiveBg"):
+      ColorThemeTable[ColorTheme.config].statusBarVisualModeInactiveBg = color("statusBarVisualModeInactiveBg")
+
     if settings["Theme"].contains("statusBarReplaceMode"):
       ColorThemeTable[ColorTheme.config].statusBarReplaceMode = color("statusBarReplaceMode")
 
@@ -721,6 +770,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["Theme"].contains("statusBarModeReplaceModeBg"):
       ColorThemeTable[ColorTheme.config].statusBarModeReplaceModeBg = color("statusBarModeReplaceModeBg")
+
+    if settings["Theme"].contains("statusBarReplaceModeInactive"):
+      ColorThemeTable[ColorTheme.config].statusBarReplaceModeInactive = color("statusBarReplaceModeInactive")
+
+    if settings["Theme"].contains("statusBarReplaceModeInactiveBg"):
+      ColorThemeTable[ColorTheme.config].statusBarReplaceModeInactiveBg = color("statusBarReplaceModeInactiveBg")
 
     if settings["Theme"].contains("statusBarFilerMode"):
       ColorThemeTable[ColorTheme.config].statusBarFilerMode = color("statusBarFilerMode")
@@ -734,6 +789,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Theme"].contains("statusBarModeFilerModeBg"):
       ColorThemeTable[ColorTheme.config].statusBarModeFilerModeBg = color("statusBarModeFilerModeBg")
 
+    if settings["Theme"].contains("statusBarFilerModeInactive"):
+      ColorThemeTable[ColorTheme.config].statusBarFilerModeInactive = color("statusBarFilerModeInactive")
+
+    if settings["Theme"].contains("statusBarFilerModeInactiveBg"):
+      ColorThemeTable[ColorTheme.config].statusBarFilerModeInactiveBg = color("statusBarFilerModeInactiveBg")
+
     if settings["Theme"].contains("statusBarExMode"):
       ColorThemeTable[ColorTheme.config].statusBarExMode = color("statusBarExMode")
 
@@ -745,6 +806,12 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["Theme"].contains("statusBarModeExModeBg"):
       ColorThemeTable[ColorTheme.config].statusBarModeExModeBg = color("statusBarModeExModeBg")
+
+    if settings["Theme"].contains("statusBarExModeInactive"):
+      ColorThemeTable[ColorTheme.config].statusBarExModeInactive = color("statusBarExModeInactive")
+
+    if settings["Theme"].contains("statusBarExModeInactiveBg"):
+      ColorThemeTable[ColorTheme.config].statusBarExModeInactiveBg = color("statusBarExModeInactiveBg")
 
     if settings["Theme"].contains("statusBarGitBranch"):
       ColorThemeTable[ColorTheme.config].statusBarGitBranch = color("statusBarGitBranch")
