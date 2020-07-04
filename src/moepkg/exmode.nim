@@ -352,7 +352,9 @@ proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
 
   let workspaceIndex = status.currentWorkSpaceIndex
   status.workSpace[workspaceIndex].currentMainWindowNode.highlight =
-    initHighlight($status.bufStatus[currentBufferIndex].buffer, sourceLang)
+    initHighlight($status.bufStatus[currentBufferIndex].buffer,
+                  status.settings.reservedWords,
+                  sourceLang)
 
   status.commandWindow.erase
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
@@ -1047,8 +1049,8 @@ proc exMode*(status: var EditorStatus) =
     exitInput = false
     cancelInput = false
     isSuggest = true
+    isReplaceCommand = false
 
-  status.searchHistory.add(ru"")
   status.exCommandHistory.add(ru"")
 
   let workspaceIndex = status.currentWorkSpaceIndex
@@ -1063,10 +1065,12 @@ proc exMode*(status: var EditorStatus) =
     exitInput = returnWord[1]
     cancelInput = returnWord[2]
 
+    if command.len > 3 and command.startsWith(ru"%s/"):
+      isReplaceCommand = true
+      status.searchHistory.add(ru"")
+
     if cancelInput or exitInput: break
-    elif status.settings.replaceTextHighlight and
-         command.len > 3 and
-         command.startsWith(ru"%s/"):
+    elif isReplaceCommand and status.settings.replaceTextHighlight:
       var keyword = ru""
       for i in 3 ..< command.len :
           if command[i] == ru'/': break
@@ -1074,26 +1078,25 @@ proc exMode*(status: var EditorStatus) =
       status.searchHistory[status.searchHistory.high] = keyword
       let bufferIndex =
         status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
-      status.bufStatus[bufferIndex].isHighlight = true
+      status.bufStatus[bufferIndex].isSearchHighlight = true
+
+      status.jumpToSearchForwardResults(keyword)
     else:
       if command.len > 0:
         status.exCommandHistory[status.exCommandHistory.high] = command
-      let bufferIndex =
-        status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
-      status.bufStatus[bufferIndex].isHighlight = false
+        if isReplaceCommand:
+          isReplaceCommand = false
+          status.searchHistory.delete(status.searchHistory.high)
 
     status.updatehighlight(status.workspace[workspaceIndex].currentMainWindowNode)
     status.resize(terminalHeight(), terminalWidth())
     status.update
 
-  status.searchHistory.delete(status.searchHistory.high)
-
   if status.exCommandHistory[status.exCommandHistory.high] == ru"":
     status.exCommandHistory.delete(status.exCommandHistory.high)
 
-  let bufferIndex =
-    status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
-  status.bufStatus[bufferIndex].isHighlight = false
+  if isReplaceCommand: status.searchHistory.delete(status.searchHistory.high)
+
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.updatehighlight(status.workspace[workspaceIndex].currentMainWindowNode)
 

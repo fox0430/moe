@@ -244,6 +244,10 @@ proc startsWith*(runes1, runes2: seq[Rune]): bool =
       result = false
       break
 
+proc startsWith*(runes1: seq[Rune], r: Rune): bool =
+  if runes1[0] == r: return true
+  else: false
+
 proc `$`*(seqRunes: seq[seq[Rune]]): string =
   for runes in seqRunes: result = result & $runes
 
@@ -278,3 +282,33 @@ proc isCloseParen*(r: Rune): bool =
 proc isParen*(r: Rune): bool =
   if r.isOpenParen or r.isCloseParen: return true
   else: return false
+
+proc find*(runes: seq[Rune], r: Rune, start: Natural = 0, last = 0): int =
+  find($runes, ($r)[0], start, last)
+
+proc find*(runes, runes2: seq[Rune], start: Natural = 0, last = 0): int =
+  find($runes, $runes2, start, last)
+
+proc rfind*(runes: seq[Rune], r: Rune, start: Natural = 0, last = -1): int =
+  rfind($runes, ($r)[0], start, last)
+  
+
+proc rfind*(runes, runes2: seq[Rune], start: Natural = 0, last = -1): int =
+  rfind($runes, $runes2, start, last)
+
+proc substr*(runes: seq[Rune], first, last: int): seq[Rune] =
+  let str = substr($runes, first, last)
+  return str.toRunes
+
+proc substr*(runes: seq[Rune], first = 0): seq[Rune] =
+  result = substr(runes, first, high(runes))
+
+proc contains*(runes, runes2: seq[Rune]): bool =
+  find(runes, runes2) >= 0
+
+proc contains*(runes: seq[Rune], r: Rune): bool =
+  find(runes, r) >= 0
+
+proc splitWhitespace*(runes: seq[Rune]): seq[seq[Rune]] =
+  let strings = strutils.splitWhitespace($runes)
+  for str in strings: result.add(str.toRunes)

@@ -22,7 +22,7 @@ autoCloseParen = true
 
 autoIndent = true
 
-#defaultCursor = "blinkBlock"
+defaultCursor = "blinkBlock"
 
 normalModeCursor = "blinkBlock"
 
@@ -49,6 +49,8 @@ systemClipboard = true
 highlightFullWidthSpace = true
 
 highlightTrailingSpaces = true
+
+highlightCurrentWord = true
 
 [BuildOnSaveSettings]
 
@@ -83,6 +85,10 @@ multipleStatusBar = true
 [WorkSpace]
 
 useBar = false
+
+[Highlight]
+
+reservedWord = ["TODO", "WIP", "NOTE"]
 
 [Filer]
 
@@ -237,3 +243,7 @@ highlightTrailingSpacesBg = "red"
 workSpaceBar = "white"
 
 workSpaceBarBg = "blue"
+
+reservedWord = "deepPink1_1" 
+
+reservedWordBg = "black" 

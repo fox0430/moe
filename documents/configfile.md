@@ -63,19 +63,19 @@ autoIndent
 ```
 
 Set cursor shape of the terminal emulator you are using (String) ```"blinkBlock"``` or ```"blinkIbeam"``` or ```noneBlinkBlock``` or ```noneBlinkIbeam```  
-default is block
+default is ```"blinkBlock"```
 ```
 defaultCursor
 ```
 
 Set cursor shape in normal mode (String) ```"blinkBlock"``` or ```"blinkIbeam"``` or ```noneBlinkBlock``` or ```noneBlinkIbeam```  
-default is block
+default is ```"blinkBlock"```
 ```
 normalModeCursor
 ```
 
 Set cursor shape in insert mode (String) ```"blinkBlock"``` or ```"blinkIbeam"``` or ```noneBlinkBlock``` or ```noneBlinkIbeam```  
-default is ibeam
+default is ```"blinkIbeam"```
 
 ```
 insertModeCursor
@@ -249,6 +249,19 @@ Enable/Disable workspace bar (bool)
 default is false
 ```
 useBar
+```
+
+### Highlight table
+
+Highlighting any word (array)  
+
+defaut
+```
+["TODO", "WIP", "NOTE"]
+```
+
+```
+reservedWord
 ```
 
 ### Filer table
@@ -878,12 +891,12 @@ Workspace bar background color
 workSpaceBarBg
 ```
 
-TODO highlight text color
+Reserved word text color
 ```
-todo
+reservedWord
 ```
 
-TODO highlight background color
+Reserved word background color
 ```
-todoBg
+reservedWordBg
 ```

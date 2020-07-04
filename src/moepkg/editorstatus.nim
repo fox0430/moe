@@ -1,4 +1,4 @@
-import strutils, terminal, os, strformat, tables, times, osproc, heapqueue, math,
+import strutils, terminal, os, strformat, tables, times, osproc, heapqueue,
        deques
 import packages/docutils/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
@@ -23,8 +23,6 @@ type EditorStatus* = object
   workSpace*: seq[WorkSpace]
   currentWorkSpaceIndex*: int
   timeConfFileLastReloaded*: DateTime
-  isSearchHighlight*: bool
-  isReplaceTextHighlight*: bool
   currentDir: seq[Rune]
   messageLog*: seq[seq[Rune]]
   debugMode: int
@@ -262,6 +260,7 @@ proc updateStatusBar(status: var Editorstatus) =
 
 proc initSyntaxHighlight(windowNode: var WindowNode,
                          bufStatus: seq[BufferStatus],
+                         reservedWords: seq[ReservedWord],
                          isSyntaxHighlight: bool) =
                          
   var queue = initHeapQueue[WindowNode]()
@@ -276,7 +275,7 @@ proc initSyntaxHighlight(windowNode: var WindowNode,
            bufStatus.prevMode == Mode.filer):
           let lang = if isSyntaxHighlight: bufStatus.language
                      else: SourceLanguage.langNone
-          node.highlight = ($bufStatus.buffer).initHighlight(lang)
+          node.highlight = ($bufStatus.buffer).initHighlight(reservedWords, lang)
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)
@@ -303,6 +302,7 @@ proc update*(status: var EditorStatus) =
   let workspaceIndex = status.currentWorkSpaceIndex
 
   status.workspace[workspaceIndex].mainWindowNode.initSyntaxHighlight(status.bufStatus,
+                                                                      status.settings.reservedWords,
                                                                       status.settings.syntax)
 
   var queue = initHeapQueue[WindowNode]()
@@ -494,25 +494,18 @@ proc movePrevWindow*(status: var EditorStatus) =
       status.workSpace[workspaceIndex].currentMainWindowNode.windowIndex - 1
   status.moveCurrentMainWindow(index)
 
-proc writePopUpWindow*(status: var Editorstatus,
-                       x, y: var int,
+proc writePopUpWindow*(popUpWindow: var Window,
+                       h, w, y, x: var int,
                        currentLine: int,
                        buffer: seq[seq[Rune]]) =
-                       
-  # Pop up window size
-  var maxBufferLen = 0
-  for runes in buffer:
-    if maxBufferLen < runes.len: maxBufferLen = runes.len
-  let
-    h = if buffer.len > terminalHeight() - 1: terminalHeight() - 1
-        else: buffer.len
-    w = maxBufferLen + 2
+
+  popUpWindow.erase
 
   # Pop up window position
   if y == terminalHeight() - 1: y = y - h
   if w > terminalHeight() - x: x = terminalHeight() - w
 
-  status.popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
+  popUpWindow.resize(h, w, y, x)
 
   let startLine = if currentLine == -1: 0
                   elif currentLine - h + 1 > 0: currentLine - h + 1
@@ -520,12 +513,12 @@ proc writePopUpWindow*(status: var Editorstatus,
   for i in 0 ..< h:
     if currentLine != -1 and i + startLine == currentLine:
       let color = EditorColorPair.popUpWinCurrentLine
-      status.popUpWindow.write(i, 1, buffer[i + startLine], color)
+      popUpWindow.write(i, 1, buffer[i + startLine], color)
     else:
       let color = EditorColorPair.popUpWindow
-      status.popUpWindow.write(i, 1, buffer[i + startLine], color)
+      popUpWindow.write(i, 1, buffer[i + startLine], color)
 
-  status.popUpWindow.refresh
+  popUpWindow.refresh
 
 proc deletePopUpWindow*(status: var Editorstatus) =
   if status.popUpWindow != nil:
@@ -914,13 +907,13 @@ proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
       windowNode.highlight = windowNode.highlight.overwrite(colorSegment)
 
   # highlight search results
-  if status.bufStatus[windowNode.bufferIndex].isHighlight and
-     status.searchHistory.len > 0:
+  if bufStatus.isSearchHighlight and status.searchHistory.len > 0:
     let
       keyword = status.searchHistory[^1]
       allOccurrence = searchAllOccurrence(bufferInView, keyword)
-      color = if status.isSearchHighlight: EditorColorPair.searchResult
-              else: EditorColorPair.replaceText
+      color = if bufStatus.isSearchHighlight: EditorColorPair.searchResult
+              else:
+                EditorColorPair.replaceText
     for pos in allOccurrence:
       let colorSegment = ColorSegment(firstRow: range[0] + pos.line,
                                       firstColumn: pos.column,
