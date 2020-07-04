@@ -412,31 +412,43 @@ type EditorColor* = object
   statusBarNormalModeBg*: Color
   statusBarModeNormalMode*: Color
   statusBarModeNormalModeBg*: Color
+  statusBarNormalModeInactive*: Color
+  statusBarNormalModeInactiveBg*: Color
 
   statusBarInsertMode*: Color
   statusBarInsertModeBg*: Color
   statusBarModeInsertMode*: Color
   statusBarModeInsertModeBg*: Color
+  statusBarInsertModeInactive*: Color
+  statusBarInsertModeInactiveBg*: Color
 
   statusBarVisualMode*: Color
   statusBarVisualModeBg*: Color
   statusBarModeVisualMode*: Color
   statusBarModeVisualModeBg*: Color
+  statusBarVisualModeInactive*: Color
+  statusBarVisualModeInactiveBg*: Color
 
   statusBarReplaceMode*: Color
   statusBarReplaceModeBg*: Color
   statusBarModeReplaceMode*: Color
   statusBarModeReplaceModeBg*: Color
+  statusBarReplaceModeInactive*: Color
+  statusBarReplaceModeInactiveBg*: Color
 
   statusBarFilerMode*: Color
   statusBarFilerModeBg*: Color
   statusBarModeFilerMode*: Color
   statusBarModeFilerModeBg*: Color
+  statusBarFilerModeInactive*: Color
+  statusBarFilerModeInactiveBg*: Color
 
   statusBarExMode*: Color
   statusBarExModeBg*: Color
   statusBarModeExMode*: Color
   statusBarModeExModeBg*: Color
+  statusBarExModeInactive*: Color
+  statusBarExModeInactiveBg*: Color
 
   statusBarGitBranch*: Color
   statusBarGitBranchBg*: Color
@@ -513,63 +525,69 @@ type EditorColorPair* = enum
   # status bar
   statusBarNormalMode = 3
   statusBarModeNormalMode = 4
-  statusBarInsertMode = 5
-  statusBarModeInsertMode = 6
-  statusBarVisualMode = 7
-  statusBarModeVisualMode = 8
-  statusBarReplaceMode = 9
-  statusBarModeReplaceMode = 10
-  statusBarFilerMode = 12
-  statusBarModeFilerMode = 13
-  statusBarExMode = 14
-  statusBarModeExMode = 15
-  statusBarGitBranch = 16
+  statusBarNormalModeInactive = 5
+  statusBarInsertMode = 6
+  statusBarModeInsertMode = 7
+  statusBarInsertModeInactive = 8
+  statusBarVisualMode = 9
+  statusBarModeVisualMode = 10
+  statusBarVisualModeInactive = 11
+  statusBarReplaceMode = 12
+  statusBarModeReplaceMode = 13
+  statusBarReplaceModeInactive = 14
+  statusBarFilerMode = 15
+  statusBarModeFilerMode = 16
+  statusBarFilerModeInactive = 17
+  statusBarExMode = 18
+  statusBarModeExMode = 19
+  statusBarExModeInactive = 20
+  statusBarGitBranch = 21
   # tab lnie
-  tab = 17
+  tab = 22
   # tab line
-  currentTab = 18
+  currentTab = 23
   # command bar
-  commandBar = 19
+  commandBar = 24
   # error message
-  errorMessage = 20
+  errorMessage = 25
   # search result highlighting
-  searchResult = 21
+  searchResult = 26
   # selected area in visual mode
-  visualMode = 22
+  visualMode = 27
   # color scheme
-  defaultChar = 23
-  keyword = 24
-  stringLit = 25
-  decNumber = 26
-  comment = 27
-  longComment = 28
-  whitespace = 29
+  defaultChar = 28
+  keyword = 29
+  stringLit = 30
+  decNumber = 31
+  comment = 32
+  longComment = 33
+  whitespace = 34
   # filer mode
-  currentFile = 30
-  currentFileBg = 31
-  file = 32
-  fileBg = 33
-  dir = 34
-  dirBg = 35
-  pcLink = 36
-  pcLinkBg = 37
+  currentFile = 35
+  currentFileBg = 36
+  file = 37
+  fileBg = 38
+  dir = 39
+  dirBg = 40
+  pcLink = 41
+  pcLinkBg = 42
   # pop up window
-  popUpWindow = 38
-  popUpWinCurrentLine = 39
+  popUpWindow = 43
+  popUpWinCurrentLine = 44
   # replace text highlighting
-  replaceText = 40
+  replaceText = 45
   # pair of paren highlighting
-  parenText = 41
+  parenText = 46
   # highlight other uses current word
-  currentWord = 42
+  currentWord = 47
   # highlight full width space
-  highlightFullWidthSpace = 43
+  highlightFullWidthSpace = 48
   # highlight trailing spaces
-  highlightTrailingSpaces = 44
+  highlightTrailingSpaces = 49
   # work space bar
-  workSpaceBar = 45
+  workSpaceBar = 50
   # highlight reserved words
-  reservedWord = 46
+  reservedWord = 51
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -583,26 +601,44 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     statusBarNormalModeBg: blue,
     statusBarModeNormalMode: black,
     statusBarModeNormalModeBg: white,
+    statusBarNormalModeInactive: white,
+    statusBarNormalModeInactiveBg: blue,
+
     statusBarInsertMode: white,
     statusBarInsertModeBg: blue,
     statusBarModeInsertMode: black,
     statusBarModeInsertModeBg: white,
+    statusBarInsertModeInactive: white,
+    statusBarInsertModeInactiveBg: blue,
+
     statusBarVisualMode: white,
     statusBarVisualModeBg: blue,
     statusBarModeVisualMode: black,
     statusBarModeVisualModeBg: white,
+    statusBarVisualModeInactive: white,
+    statusBarVisualModeInactiveBg: blue,
+
     statusBarReplaceMode: white,
     statusBarReplaceModeBg: blue,
     statusBarModeReplaceMode: black,
     statusBarModeReplaceModeBg: white,
+    statusBarReplaceModeInactive: white,
+    statusBarReplaceModeInactiveBg: blue,
+
     statusBarFilerMode: white,
     statusBarFilerModeBg: blue,
     statusBarModeFilerMode: black,
     statusBarModeFilerModeBg: white,
+    statusBarFilerModeInactive: white,
+    statusBarFilerModeInactiveBg: blue,
+
     statusBarExMode: white,
     statusBarExModeBg: blue,
     statusBarModeExMode: black,
     statusBarModeExModeBg: white,
+    statusBarExModeInactive: white,
+    statusBarExModeInactiveBg: blue,
+
     statusBarGitBranch: white,
     statusBarGitBranchBg: blue,
     # tab line
@@ -677,26 +713,44 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     statusBarNormalModeBg: blue,
     statusBarModeNormalMode: black,
     statusBarModeNormalModeBg: white,
+    statusBarNormalModeInactive: white,
+    statusBarNormalModeInactiveBg: blue,
+
     statusBarInsertMode: white,
     statusBarInsertModeBg: blue,
     statusBarModeInsertMode: black,
     statusBarModeInsertModeBg: white,
+    statusBarInsertModeInactive: white,
+    statusBarInsertModeInactiveBg: blue,
+
     statusBarVisualMode: white,
     statusBarVisualModeBg: blue,
     statusBarModeVisualMode: black,
     statusBarModeVisualModeBg: white,
+    statusBarVisualModeInactive: white,
+    statusBarVisualModeInactiveBg: blue,
+
     statusBarReplaceMode: white,
     statusBarReplaceModeBg: blue,
     statusBarModeReplaceMode: black,
     statusBarModeReplaceModeBg: white,
+    statusBarReplaceModeInactive: white,
+    statusBarReplaceModeInactiveBg: blue,
+
     statusBarFilerMode: white,
     statusBarFilerModeBg: blue,
     statusBarModeFilerMode: black,
     statusBarModeFilerModeBg: white,
+    statusBarFilerModeInactive: white,
+    statusBarFilerModeInactiveBg: blue,
+
     statusBarExMode: white,
     statusBarExModeBg: blue,
     statusBarModeExMode: black,
     statusBarModeExModeBg: white,
+    statusBarExModeInactive: white,
+    statusBarExModeInactiveBg: blue,
+
     statusBarGitBranch: white,
     statusBarGitBranchBg: blue,
     # tab line
@@ -771,26 +825,44 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     statusBarNormalModeBg: gray54,
     statusBarModeNormalMode: white,
     statusBarModeNormalModeBg: teal,
+    statusBarNormalModeInactive: blue,
+    statusBarNormalModeInactiveBg: gray54,
+
     statusBarInsertMode: blue,
     statusBarInsertModeBg: gray54,
     statusBarModeInsertMode: white,
     statusBarModeInsertModeBg: teal,
+    statusBarInsertModeInactive: blue,
+    statusBarInsertModeInactiveBg: gray54,
+
     statusBarVisualMode: blue,
     statusBarVisualModeBg: gray54,
     statusBarModeVisualMode: white,
     statusBarModeVisualModeBg: teal,
+    statusBarVisualModeInactive: blue,
+    statusBarVisualModeInactiveBg: gray54,
+
     statusBarReplaceMode: blue,
     statusBarReplaceModeBg: gray54,
     statusBarModeReplaceMode: white,
     statusBarModeReplaceModeBg: teal,
+    statusBarReplaceModeInactive: blue,
+    statusBarReplaceModeInactiveBg: gray54,
+
     statusBarFilerMode: blue,
     statusBarFilerModeBg: gray54,
     statusBarModeFilerMode: white,
     statusBarModeFilerModeBg: teal,
+    statusBarFilerModeInactive: blue,
+    statusBarFilerModeInactiveBg: gray54,
+
     statusBarExMode: blue,
     statusBarExModeBg: gray54,
     statusBarModeExMode: white,
     statusBarModeExModeBg: teal,
+    statusBarExModeInactive: blue,
+    statusBarExModeInactiveBg: gray54,
+
     statusBarGitBranch: blue,
     statusBarGitBranchBg: gray54,
     # tab line
@@ -865,26 +937,44 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     statusBarNormalModeBg: deepPink1_1,
     statusBarModeNormalMode: black,
     statusBarModeNormalModeBg: gray100,
+    statusBarNormalModeInactive: black,
+    statusBarNormalModeInactiveBg: deepPink1_1,
+
     statusBarInsertMode: black,
     statusBarInsertModeBg: deepPink1_1,
     statusBarModeInsertMode: black,
     statusBarModeInsertModeBg: gray100,
+    statusBarInsertModeInactive: black,
+    statusBarInsertModeInactiveBg: deepPink1_1,
+
     statusBarVisualMode: black,
     statusBarVisualModeBg: deepPink1_1,
     statusBarModeVisualMode: black,
     statusBarModeVisualModeBg: gray100,
+    statusBarVisualModeInactive: black,
+    statusBarVisualModeInactiveBg: deepPink1_1,
+
     statusBarReplaceMode: black,
     statusBarReplaceModeBg: deepPink1_1,
     statusBarModeReplaceMode: black,
     statusBarModeReplaceModeBg: gray100,
+    statusBarReplaceModeInactive: black,
+    statusBarReplaceModeInactiveBg: deepPink1_1,
+
     statusBarFilerMode: black,
     statusBarFilerModeBg: deepPink1_1,
     statusBarModeFilerMode: black,
     statusBarModeFilerModeBg: gray100,
+    statusBarFilerModeInactive: black,
+    statusBarFilerModeInactiveBg: deepPink1_1,
+
     statusBarExMode: black,
     statusBarExModeBg: deepPink1_1,
     statusBarModeExMode: black,
     statusBarModeExModeBg: gray100,
+    statusBarExModeInactive: black,
+    statusBarExModeInactiveBg: deepPink1_1,
+
     statusBarGitBranch: black,
     statusBarGitBranchBg: deepPink1_1,
     # tab line
@@ -962,21 +1052,27 @@ proc setCursesColor*(editorColor: EditorColor) =
   # status bar
   setColorPair(EditorColorPair.statusBarNormalMode, editorColor.statusBarNormalMode, editorColor.statusBarNormalModeBg)
   setColorPair(EditorColorPair.statusBarModeNormalMode, editorColor.statusBarModeNormalMode, editorColor.statusBarModeNormalModeBg)
+  setColorPair(EditorColorPair.statusBarNormalModeInactive, editorColor.statusBarNormalModeInactive, editorColor.statusBarNormalModeInactiveBg)
 
   setColorPair(EditorColorPair.statusBarInsertMode, editorColor.statusBarInsertMode, editorColor.statusBarInsertModeBg)
   setColorPair(EditorColorPair.statusBarModeInsertMode, editorColor.statusBarModeInsertMode, editorColor.statusBarModeInsertModeBg)
+  setColorPair(EditorColorPair.statusBarInsertModeInactive, editorColor.statusBarInsertModeInactive, editorColor.statusBarInsertModeInactiveBg)
 
   setColorPair(EditorColorPair.statusBarVisualMode, editorColor.statusBarVisualMode, editorColor.statusBarVisualModeBg)
   setColorPair(EditorColorPair.statusBarModeVisualMode, editorColor.statusBarModeVisualMode, editorColor.statusBarModeVisualModeBg)
+  setColorPair(EditorColorPair.statusBarVisualModeInactive, editorColor.statusBarVisualModeInactive, editorColor.statusBarVisualModeInactiveBg)
 
   setColorPair(EditorColorPair.statusBarReplaceMode, editorColor.statusBarReplaceMode, editorColor.statusBarReplaceModeBg)
   setColorPair(EditorColorPair.statusBarModeReplaceMode, editorColor.statusBarModeReplaceMode, editorColor.statusBarModeReplaceModeBg)
+  setColorPair(EditorColorPair.statusBarReplaceModeInactive, editorColor.statusBarReplaceModeInactive, editorColor.statusBarReplaceModeInactiveBg)
 
   setColorPair(EditorColorPair.statusBarExMode, editorColor.statusBarExMode, editorColor.statusBarExModeBg)
   setColorPair(EditorColorPair.statusBarModeExMode, editorColor.statusBarModeExMode, editorColor.statusBarModeExModeBg)
+  setColorPair(EditorColorPair.statusBarExModeInactive, editorColor.statusBarExModeInactive, editorColor.statusBarExModeInactiveBg)
 
   setColorPair(EditorColorPair.statusBarFilerMode, editorColor.statusBarFilerMode, editorColor.statusBarFilerModeBg)
   setColorPair(EditorColorPair.statusBarModeFilerMode, editorColor.statusBarModeFilerMode, editorColor.statusBarModeFilerModeBg)
+  setColorPair(EditorColorPair.statusBarFilerModeInactive, editorColor.statusBarFilerModeInactive, editorColor.statusBarFilerModeInactiveBg)
 
   setColorPair(EditorColorPair.statusBarGitBranch, editorColor.statusBarGitBranch, editorColor.statusBarGitBranchBg)
 
@@ -1041,26 +1137,38 @@ proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Co
     return (editorColor.statusBarNormalMode, editorColor.statusBarNormalModeBg)
   of EditorColorPair.statusBarModeNormalMode:
     return (editorColor.statusBarModeNormalMode, editorColor.statusBarModeNormalModeBg)
+  of EditorColorPair.statusBarNormalModeInactive:
+    return (editorColor.statusBarNormalModeInactive, editorColor.statusBarNormalModeInactiveBg)
   of EditorColorPair.statusBarInsertMode:
     return (editorColor.statusBarInsertMode, editorColor.statusBarInsertModeBg)
   of EditorColorPair.statusBarModeInsertMode:
     return (editorColor.statusBarModeInsertMode, editorColor.statusBarModeInsertModeBg)
+  of EditorColorPair.statusBarInsertModeInactive:
+    return (editorColor.statusBarInsertModeInactive, editorColor.statusBarInsertModeInactiveBg)
   of EditorColorPair.statusBarVisualMode:
     return (editorColor.statusBarVisualMode, editorColor.statusBarVisualModeBg)
   of EditorColorPair.statusBarModeVisualMode:
     return (editorColor.statusBarModeVisualMode, editorColor.statusBarModeVisualModeBg)
+  of EditorColorPair.statusBarVisualModeInactive:
+    return (editorColor.statusBarVisualModeInactive, editorColor.statusBarVisualModeInactiveBg)
   of EditorColorPair.statusBarReplaceMode:
     return (editorColor.statusBarReplaceMode, editorColor.statusBarReplaceModeBg)
   of EditorColorPair.statusBarModeReplaceMode:
     return (editorColor.statusBarModeReplaceMode, editorColor.statusBarModeReplaceModeBg)
+  of EditorColorPair.statusBarReplaceModeInactive:
+    return (editorColor.statusBarReplaceModeInactive, editorColor.statusBarReplaceModeInactiveBg)
   of EditorColorPair.statusBarExMode:
     return (editorColor.statusBarExMode, editorColor.statusBarExModeBg)
   of EditorColorPair.statusBarModeExMode:
     return (editorColor.statusBarModeExMode, editorColor.statusBarModeExModeBg)
+  of EditorColorPair.statusBarExModeInactive:
+    return (editorColor.statusBarExModeInactive, editorColor.statusBarExModeInactiveBg)
   of EditorColorPair.statusBarFilerMode:
     return (editorColor.statusBarFilerMode, editorColor.statusBarFilerModeBg)
   of EditorColorPair.statusBarModeFilerMode:
     return (editorColor.statusBarModeFilerMode, editorColor.statusBarModeFilerModeBg)
+  of EditorColorPair.statusBarFilerModeInactive:
+    return (editorColor.statusBarFilerModeInactive, editorColor.statusBarFilerModeInactiveBg)
   of EditorColorPair.statusBarGitBranch:
     return (editorColor.statusBarGitBranch, editorColor.statusBarGitBranchBg)
   of EditorColorPair.tab:
