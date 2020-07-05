@@ -183,19 +183,38 @@ proc writeMessageSaveFile*(cmdWin: var Window,
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
   messageLog.add(mess.toRunes)
 
-proc writeNoBufferDeletedError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+proc writeNoBufferDeletedError*(cmdWin: var Window,
+                                messageLog: var seq[seq[Rune]]) =
+
   let mess = "Error: No buffers were deleted"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
 
-proc writePutConfigFileError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+proc writePutConfigFileError*(cmdWin: var Window,
+                              messageLog: var seq[seq[Rune]]) =
+
   const mess = "Error: Failed to put configuration file"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
 
-proc writePutConfigFileAlreadyExistError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+proc writePutConfigFileAlreadyExistError*(cmdWin: var Window,
+                                          messageLog: var seq[seq[Rune]]) =
+
   const mess = "Error: Already exist configuration file"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+
+proc askCreateDirPrompt*(cmdWin: var Window,
+                         messageLog: var seq[seq[Rune]],
+                         path: string): bool =
+
+  let mess = fmt"{path} does not exists. Create it now?: y/n"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  messageLog.add(mess.toRunes)
+
+  let key = getKey(cmdWin)
+
+  if key == ord('y'): result = true
+  else: result = false
 
 proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
   for i in 0 .. r.high:
@@ -686,3 +705,5 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
     else: insertCommandBuffer(exStatus, key)
 
   return splitCommand($exStatus.buffer)
+
+

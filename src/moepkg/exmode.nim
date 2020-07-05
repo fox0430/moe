@@ -665,10 +665,30 @@ proc buildOnSave(status: var Editorstatus) =
     status.commandWindow.writeMessageFailedBuildOnSave(status.messageLog)
   else: status.commandWindow.writeMessageSuccessBuildOnSave(status.messageLog)
 
+proc checkAndCreateDir(cmdWin: var Window,
+                       messageLog: var seq[seq[Rune]],
+                       filename: seq[Rune]): bool =
+
+  let
+    pathSplit = splitPath($filename)
+    isCreateDir = cmdWin.askCreateDirPrompt(messageLog, pathSplit.head)
+
+  result = true
+  if isCreateDir:
+    try: createDir(pathSplit.head)
+    except OSError: result = false
+  else: result = false
+
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   if filename.len == 0:
     status.commandWindow.writeNoFileNameError(status.messageLog)
     status.changeMode(Mode.normal)
+    return
+
+  ## Ask if you want to create a directory that does not exist
+  if not status.commandWindow.checkAndCreateDir(status.messageLog, filename):
+    status.changeMode(Mode.normal)
+    status.commandWindow.writeSaveError(status.messageLog)
     return
 
   try:
@@ -676,8 +696,9 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
     saveFile(filename,
              status.bufStatus[currentBufferIndex].buffer.toRunes,
              status.settings.characterEncoding)
-    let workspaceIndex = status.currentWorkSpaceIndex
-    let bufferIndex = status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
+    let
+      workspaceIndex = status.currentWorkSpaceIndex
+      bufferIndex = status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
     status.bufStatus[bufferIndex].filename = filename
     status.bufStatus[currentBufferIndex].countChange = 0
 
