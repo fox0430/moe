@@ -7,6 +7,7 @@ type
     prompt: string,
     cursorY, cursorX, currentPosition, startPosition: int
   ]
+
 const exCommandList = [
   ru"!",
   ru"deleteparen",
