@@ -126,6 +126,9 @@ proc isMultipleStatusBarSettingCommand(command: seq[seq[Rune]]): bool =
 proc isBuildOnSaveSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"buildonsave"
 
+proc isShowGitInInactiveSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"showGitInactive"
+
 proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"noh"
 
@@ -536,6 +539,17 @@ proc multipleStatusBarSettingCommand(status: var Editorstatus,
 
   if command == ru"on": status.settings.statusBar.multipleStatusBar = true
   elif command == ru"off": status.settings.statusBar.multipleStatusBar = false
+
+  status.commandWindow.erase
+
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
+proc showGitInInactiveSettingCommand(status: var EditorStatus,
+                                     command: seq[Rune]) =
+
+  if command == ru"on": status.settings.statusBar.showGitInactive = true
+  elif command == ru"off": status.settings.statusBar.showGitInactive = false
 
   status.commandWindow.erase
 
@@ -1036,6 +1050,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     status.deleteTrailingSpacesCommand
   elif isPutConfigFileCommand(command):
     status.putConfigFileCommand
+  elif isShowGitInInactiveSettingCommand(command):
+    status.showGitInInactiveSettingCommand(command[1])
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)

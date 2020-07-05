@@ -7,7 +7,6 @@ type
     prompt: string,
     cursorY, cursorX, currentPosition, startPosition: int
   ]
-
 const exCommandList = [
   ru"!",
   ru"deleteparen",
@@ -48,6 +47,7 @@ const exCommandList = [
   ru"qa!",
   ru"realtimesearch",
   ru"scrollspeed",
+  ru"showGitInactive",
   ru"smoothscroll",
   ru"sp",
   ru"statusbar",
@@ -458,7 +458,8 @@ proc suggestExCommandOption(status: var Editorstatus,
        "multiplestatusbar",
        "buildonsave",
        "indentationlines",
-       "icon":
+       "icon",
+       "showGitInactive":
       argList = @["on", "off"]
     of "theme":
       argList= @["vivid", "dark", "light", "config"]

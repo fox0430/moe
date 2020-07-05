@@ -154,8 +154,15 @@ proc setModeStrColor(mode: Mode): EditorColorPair =
     of Mode.ex: return EditorColorPair.statusBarModeExMode
     else: return EditorColorPair.statusBarModeNormalMode
 
-proc isShowGitBranchName(mode, prevMode: Mode, settings: EditorSettings): bool =
-  if settings.statusBar.gitbranchName: result = true
+proc isShowGitBranchName(mode, prevMode: Mode,
+                         isActiveWindow: bool,
+                         settings: EditorSettings): bool =
+
+  if settings.statusBar.gitbranchName:
+    let showGitInactive = settings.statusBar.showGitInactive
+
+    if showGitInactive or
+    (not showGitInactive and isActiveWindow): result = true
 
   if mode == Mode.filer: return false
   elif mode == Mode.ex and prevMode == Mode.filer: return false
@@ -186,7 +193,7 @@ proc writeStatusBar*(bufStatus: var BufferStatus,
   if settings.statusBar.mode:
     statusBar.window.write(0, 0, statusBarBuffer, color)
 
-  if isShowGitBranchName(currentMode, prevMode, settings):
+  if isShowGitBranchName(currentMode, prevMode, isActiveWindow, settings):
     statusBar.writeStatusBarCurrentGitBranchName(statusBarBuffer, isActiveWindow)
 
   if currentMode == Mode.ex and prevMode == Mode.filer:
