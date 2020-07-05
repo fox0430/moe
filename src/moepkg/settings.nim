@@ -669,7 +669,7 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["WorkSpace"].contains("useBar"):
         result.workSpace.useBar = settings["WorkSpace"]["useBar"].getbool()
 
-  if settings["Highlight"].contains("reservedWord"):
+  if settings.contains("Highlight"):
     if settings["Highlight"].contains("reservedWord"):
       let reservedWords = settings["Highlight"]["reservedWord"]
       for i in 0 ..< reservedWords.len:
