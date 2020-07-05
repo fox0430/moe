@@ -636,3 +636,17 @@ test "Put config file command":
   status.exModeCommand(command)
 
   check existsFile(getHomeDir() / ".config" / "moe" / "moerc.toml")
+
+test "Ex mode: Show/Hide git branch name in status bar when inactive window":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  block:
+    const command = @[ru"showGitInactive", ru"off"]
+    status.exModeCommand(command)
+    check not status.settings.statusBar.showGitInactive
+
+  block:
+    const command = @[ru"showGitInactive", ru"on"]
+    status.exModeCommand(command)
+    check status.settings.statusBar.showGitInactive

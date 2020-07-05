@@ -187,6 +187,7 @@ Check command bar
 ```highlightfullspace on``` or ```highlightfullspace off``` - Change setting to highlight full width space  
 ```buildonsave on``` or ```buildonsave off``` - Change setting to build on save  
 ```indentationlines on ``` or ```indentationlines off``` - Change setting to indentation lines  
+```showGitInactive on``` or ```showGitInactive off``` - Change status bar setting to show/hide git branch name in inactive window  
 ```noh``` - Turn off highlights  
 ```icon``` - Setting show/hidden icons in filer mode  
 ```deleteTrailingSpaces``` - Delete trailing spaces  

@@ -82,6 +82,10 @@ directory = true
 
 multipleStatusBar = true
 
+gitbranchName = true
+
+showGitInactive = false
+
 [WorkSpace]
 
 useBar = false
