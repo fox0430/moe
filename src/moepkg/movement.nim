@@ -72,7 +72,12 @@ proc moveToFirstOfLine*(windowNode: var WindowNode) =
   windowNode.expandedColumn = windowNode.currentColumn
 
 proc moveToLastOfLine*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
-  windowNode.currentColumn = max(bufStatus.buffer[windowNode.currentLine].len - 1, 0)
+  let destination = if bufStatus.mode == Mode.insert:
+                      bufStatus.buffer[windowNode.currentLine].len
+                    else:
+                      bufStatus.buffer[windowNode.currentLine].high
+
+  windowNode.currentColumn = max(destination, 0)
   windowNode.expandedColumn = windowNode.currentColumn
 
 proc moveToFirstOfPreviousLine*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
