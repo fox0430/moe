@@ -228,3 +228,13 @@ suite "Insert mode":
     check(buffer[0] == ru"abc")
 
     check(status.workSpace[0].currentMainWindowNode.currentColumn == 0)
+
+  test "Move to last of line":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
+    status.bufStatus[0].mode = Mode.insert
+
+    status.bufStatus[0].moveToLastOfLine(status.workspace[0].currentMainWindowNode)
+
+    check status.workspace[0].currentMainWindowNode.currentColumn == 3
