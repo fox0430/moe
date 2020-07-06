@@ -679,10 +679,30 @@ proc buildOnSave(status: var Editorstatus) =
     status.commandWindow.writeMessageFailedBuildOnSave(status.messageLog)
   else: status.commandWindow.writeMessageSuccessBuildOnSave(status.messageLog)
 
+proc checkAndCreateDir(cmdWin: var Window,
+                       messageLog: var seq[seq[Rune]],
+                       filename: seq[Rune]): bool =
+
+  let
+    pathSplit = splitPath($filename)
+    isCreateDir = cmdWin.askCreateDirPrompt(messageLog, pathSplit.head)
+
+  result = true
+  if isCreateDir:
+    try: createDir(pathSplit.head)
+    except OSError: result = false
+  else: result = false
+
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   if filename.len == 0:
     status.commandWindow.writeNoFileNameError(status.messageLog)
     status.changeMode(Mode.normal)
+    return
+
+  ## Ask if you want to create a directory that does not exist
+  if not status.commandWindow.checkAndCreateDir(status.messageLog, filename):
+    status.changeMode(Mode.normal)
+    status.commandWindow.writeSaveError(status.messageLog)
     return
 
   try:
@@ -690,8 +710,9 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
     saveFile(filename,
              status.bufStatus[currentBufferIndex].buffer.toRunes,
              status.settings.characterEncoding)
-    let workspaceIndex = status.currentWorkSpaceIndex
-    let bufferIndex = status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
+    let
+      workspaceIndex = status.currentWorkSpaceIndex
+      bufferIndex = status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
     status.bufStatus[bufferIndex].filename = filename
     status.bufStatus[currentBufferIndex].countChange = 0
 
@@ -716,14 +737,23 @@ proc quitCommand(status: var EditorStatus) =
 
   status.changeMode(Mode.normal)
 proc writeAndQuitCommand(status: var EditorStatus) =
+  let
+    currentBufferIndex = status.bufferIndexInCurrentWindow
+    workspaceIndex = status.currentWorkSpaceIndex
+    filename = status.bufStatus[currentBufferIndex].filename
+
+  ## Ask if you want to create a directory that does not exist
+  if not status.commandWindow.checkAndCreateDir(status.messageLog, filename):
+    status.changeMode(Mode.normal)
+    status.commandWindow.writeSaveError(status.messageLog)
+    return
+
   try:
-    let currentBufferIndex = status.bufferIndexInCurrentWindow
-    let workspaceIndex = status.currentWorkSpaceIndex
     status.bufStatus[currentBufferIndex].countChange = 0
-    saveFile(
-             status.bufStatus[currentBufferIndex].filename,
+    saveFile(filename,
              status.bufStatus[currentBufferIndex].buffer.toRunes,
              status.settings.characterEncoding)
+
     status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
   except IOError:
     status.commandWindow.writeSaveError(status.messageLog)
@@ -750,9 +780,17 @@ proc forceAllBufferQuitCommand(status: var EditorStatus) = exitEditor(status.set
 
 proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
   for bufStatus in status.bufStatus:
-    try: saveFile(bufStatus.filename,
-                  bufStatus.buffer.toRunes,
-                  status.settings.characterEncoding)
+    let filename = bufStatus.filename
+    ## Ask if you want to create a directory that does not exist
+    if not status.commandWindow.checkAndCreateDir(status.messageLog, filename):
+      status.changeMode(Mode.normal)
+      status.commandWindow.writeSaveError(status.messageLog)
+      return
+
+    try:
+      saveFile(filename,
+               bufStatus.buffer.toRunes,
+               status.settings.characterEncoding)
     except IOError:
       status.commandWindow.writeSaveError(status.messageLog)
       status.changeMode(Mode.normal)
