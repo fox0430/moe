@@ -13,7 +13,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/master/example/mo
 
 ### Standard table
 Color theme (String)
-```"vivid"``` or ```"dark"``` or ```"light"``` or ```"vscode"```
+```"vivid"``` or ```"dark"``` or ```"light"``` or ```"vscode"```  
 default is ```"dark"```.
 ```
 theme
