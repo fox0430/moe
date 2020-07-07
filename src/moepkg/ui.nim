@@ -68,8 +68,8 @@ proc startUi*() =
   setCursor(true)
 
   if can_change_color():
-    ## default is vivid
-    setCursesColor(ColorThemeTable[ColorTheme.vivid])
+    ## default is dark
+    setCursesColor(ColorThemeTable[ColorTheme.dark])
 
   erase()
   keyEcho(false)

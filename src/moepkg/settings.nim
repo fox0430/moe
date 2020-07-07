@@ -107,7 +107,7 @@ proc initReservedWords*(): seq[ReservedWord] =
   ]
 
 proc initEditorSettings*(): EditorSettings =
-  result.editorColorTheme = ColorTheme.vivid
+  result.editorColorTheme = ColorTheme.dark
   result.statusBar = initStatusBarSettings()
   result.tabLine = initTabBarSettings()
   result.view = initEditorViewSettings()
@@ -148,11 +148,11 @@ proc getCursorType(cursorType, mode: string): CursorType =
     of "insert": return CursorType.blinkIbeamMode
 
 proc getTheme(theme: string): ColorTheme =
-  if theme == "dark": return ColorTheme.dark
+  if theme == "vivid": return ColorTheme.vivid
   elif theme == "light": return ColorTheme.light
   elif theme == "config": return ColorTheme.config
   elif theme == "vscode": return ColorTheme.config
-  else: return ColorTheme.vivid
+  else: return ColorTheme.dark
 
 # This macro takes statement lists for the foreground and
 # background colors of a foreground/background color setting.
@@ -960,7 +960,7 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     # search for the vscode theme that is set in the current preferences of
     # vscode/vscodium. Vscodium takes precedence, since you can assume that,
     # people that install VScodium prefer it over Vscode for privacy reasons.
-    # If no vscode theme can be found, this defaults to the vivid theme.
+    # If no vscode theme can be found, this defaults to the dark theme.
     # The first implementation is for finding the VsCode/VsCodium config and
     # extension folders on Linux. Hopefully other contributors will come and
     # add support for Windows, and other systems.
@@ -1016,7 +1016,7 @@ proc parseSettingsFile*(filename: string): EditorSettings =
           makeColorThemeFromVSCodeThemeFile(vsCodeThemeFile)
         vsCodeThemeLoaded = true
     if not vsCodeThemeLoaded:
-      result.editorColorTheme = ColorTheme.vivid
+      result.editorColorTheme = ColorTheme.dark
 
 proc loadSettingFile*(settings: var EditorSettings) =
   try: settings = parseSettingsFile(getConfigDir() / "moe" / "moerc.toml")
