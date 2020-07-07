@@ -4,10 +4,9 @@ import ui, editorstatus, gapbuffer, commandview, movement
 type
   SearchResult* = tuple[line: int, column: int]
 
-proc searchBuffer*(status: var EditorStatus, keyword: seq[Rune]): SearchResult
-proc searchBufferReversely*(status: var EditorStatus, keyword: seq[Rune]): SearchResult
-
-import normalmode
+type Direction = enum
+  forward = 0
+  backward = 1
 
 proc searchLine(line: seq[Rune], keyword: seq[Rune]): int =
   result = -1
@@ -16,7 +15,14 @@ proc searchLine(line: seq[Rune], keyword: seq[Rune]): int =
     if line[startPostion ..< endPosition] == keyword:
       return startPostion
 
-proc searchBuffer(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
+proc searchLineReversely(line: seq[Rune], keyword: seq[Rune]): int =
+  result = -1
+  for startPostion in countdown((line.len - keyword.len), 0):
+    let endPosition = startPostion + keyword.len
+    if line[startPostion ..< endPosition] == keyword:
+      return startPostion
+
+proc searchBuffer*(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
   result = (-1, -1)
   var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
   let
@@ -30,14 +36,7 @@ proc searchBuffer(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
                             keyword)
     if position > -1:  return (line, begin + position)
 
-proc searchLineReversely(line: seq[Rune], keyword: seq[Rune]): int =
-  result = -1
-  for startPostion in countdown((line.len - keyword.len), 0):
-    let endPosition = startPostion + keyword.len
-    if line[startPostion ..< endPosition] == keyword:
-      return startPostion
-
-proc searchBufferReversely(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
+proc searchBufferReversely*(status: var EditorStatus, keyword: seq[Rune]): SearchResult =
   result = (-1, -1)
   var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
   let
@@ -54,6 +53,8 @@ proc searchBufferReversely(status: var EditorStatus, keyword: seq[Rune]): Search
     if position > -1:  return (line, position)
 
 proc searchAllOccurrence*(buffer: GapBuffer[seq[Rune]], keyword: seq[Rune]): seq[SearchResult] =
+  if keyword.len < 1: return
+
   for line in 0 ..< buffer.len:
     var begin = 0
     while begin < buffer[line].len:
@@ -62,44 +63,74 @@ proc searchAllOccurrence*(buffer: GapBuffer[seq[Rune]], keyword: seq[Rune]): seq
       result.add((line, begin + position))
       begin += position + keyword.len
 
-proc jumpToSearchResults(status: var Editorstatus, keyword: seq[Rune]) =
-  let searchResult = searchBuffer(status, keyword)
+proc jumpToSearchForwardResults*(status: var Editorstatus, keyword: seq[Rune]) =
+  let searchResult = status.searchBuffer(keyword)
   if searchResult.line > -1:
-    jumpLine(status, searchResult.line)
+    status.jumpLine(searchResult.line)
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+    for column in 0 ..< searchResult.column:
+      status.bufStatus[currentBufferIndex].keyRight(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+
+proc jumpToSearchBackwordResults(status: var Editorstatus, keyword: seq[Rune]) =
+  let searchResult = status.searchBufferReversely(keyword)
+  if searchResult.line > -1:
+    status.jumpLine(searchResult.line)
     let currentBufferIndex = status.bufferIndexInCurrentWindow
     for column in 0 ..< searchResult.column:
       status.bufStatus[currentBufferIndex].keyRight(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
 proc searchFirstOccurrence(status: var EditorStatus) =
-  const prompt = "/"
-  let
-    returnWord = getKeyword(status, prompt)
+  var 
+    exitSearch = false
+    cancelSearch = false
+    keyword = ru""
+
+  status.searchHistory.add(ru"")
+
+  const
+    prompt = "/"
+    isSuggest = false
+    isSearch = true
+
+  while exitSearch == false:
+    let returnWord = status.getKeyOnceAndWriteCommandView(prompt, keyword, isSuggest, isSearch)
+
     keyword = returnWord[0]
-    isCancel = returnWord[1]
+    exitSearch = returnWord[1]
+    cancelSearch = returnWord[2]
+    if keyword.len > 0: status.searchHistory[status.searchHistory.high] = keyword
 
-  if keyword.len == 0 or isCancel:
-    status.commandWindow.erase
-    status.commandWindow.refresh
-    return
+    if exitSearch or cancelSearch: break
 
-  status.searchHistory.add(keyword)
-  let bufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
-  status.bufStatus[bufferIndex].isHighlight = true
-  status.jumpToSearchResults(keyword)
+  if cancelSearch:
+    status.searchHistory.delete(status.searchHistory.high)
 
-  status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+    status.bufStatus[currentBufferIndex].isSearchHighlight = false
 
-proc realtimeSearch(status: var Editorstatus) =
-  const prompt = "/"
+  else:
+    if keyword.len > 0:
+      status.bufStatus[status.bufferIndexInCurrentWindow].isSearchHighlight = true
+      status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
+
+proc realtimeSearch(status: var Editorstatus, direction: Direction) =
+  let prompt = if direction == Direction.forward: "/" else: "?"
   var
     keyword = ru""
     exitSearch = false
     cancelSearch = false
   status.searchHistory.add(ru"")
 
+  # For jumpToSearchBackwordResults
+  let
+    currentLine = status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine
+    currentColumn = status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.currentColumn
+
   while exitSearch == false:
-    const isSuggest = false
-    let returnWord = getKeyOnceAndWriteCommandView(status, prompt, keyword, isSuggest)
+    const
+      isSuggest = false
+      isSearch = true
+    let returnWord = status.getKeyOnceAndWriteCommandView(prompt, keyword, isSuggest, isSearch)
 
     keyword = returnWord[0]
     exitSearch = returnWord[1]
@@ -110,9 +141,14 @@ proc realtimeSearch(status: var Editorstatus) =
 
     let bufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
     if keyword.len > 0:
-      status.bufStatus[bufferIndex].isHighlight = true
-      status.jumpToSearchResults(keyword)
-    else: status.bufStatus[bufferIndex].isHighlight = false
+      status.bufStatus[bufferIndex].isSearchHighlight = true
+
+      if direction == Direction.forward: status.jumpToSearchForwardResults(keyword)
+      else:
+        status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.currentLine = currentLine
+        status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.currentColumn = currentColumn
+        status.jumpToSearchBackwordResults(keyword)
+    else: status.bufStatus[bufferIndex].isSearchHighlight = false
 
     status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
     status.resize(terminalHeight(), terminalWidth())
@@ -122,14 +158,15 @@ proc realtimeSearch(status: var Editorstatus) =
     status.searchHistory.delete(status.searchHistory.high)
 
     let currentBufferIndex = status.bufferIndexInCurrentWindow
-    status.bufStatus[currentBufferIndex].isHighlight = false
+    status.bufStatus[currentBufferIndex].isSearchHighlight = false
     status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     status.commandWindow.erase
 
-proc searchMode*(status: var EditorStatus) =
-  if status.settings.realtimeSearch: realtimeSearch(status)
+proc searchFordwards*(status: var EditorStatus) =
+  if status.settings.realtimeSearch: status.realtimeSearch(Direction.forward)
   else: searchFirstOccurrence(status)
 
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+proc searchBackwards*(status: var EditorStatus) =
+  if status.settings.realtimeSearch: status.realtimeSearch(Direction.backward)
+  else: searchFirstOccurrence(status)

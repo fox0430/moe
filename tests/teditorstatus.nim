@@ -29,6 +29,7 @@ test "resize 1":
   
   status.workSpace[0].currentMainWindowNode.highlight =
     initHighlight($status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
     
   status.workSpace[0].currentMainWindowNode.view =
@@ -44,6 +45,7 @@ test "resize 2":
   
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
     
   status.workSpace[0].currentMainWindowNode.view =
@@ -65,6 +67,7 @@ test "Highlight of a pair of paren 1":
   
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   block:
@@ -120,6 +123,7 @@ test "Highlight of a pair of paren 2":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"(())"])
@@ -138,6 +142,7 @@ test "Highlight of a pair of paren 3":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"(", ru")"])
@@ -158,6 +163,7 @@ test "Highlight of a pair of paren 4":
   status.addNewBuffer("")
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"(", ru")"])
@@ -178,6 +184,7 @@ test "Highlight of a pair of paren 5":
   status.resize(100, 100)
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
     status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"a)"])
@@ -425,8 +432,8 @@ test "Highlight current word 1":
   status.update
 
   let node = status.workSpace[0].currentMainWindowNode
-  check(node.highlight[0].color == EditorColorPair.currentWord)
-  check(node.highlight[2].color == EditorColorPair.currentWord)
+  check(node.highlight[0].color == EditorColorPair.defaultChar)
+  check(node.highlight[1].color == EditorColorPair.currentWord)
 
 test "Highlight current word 2":
   var status = initEditorStatus()
@@ -437,7 +444,7 @@ test "Highlight current word 2":
   status.update
 
   let node = status.workSpace[0].currentMainWindowNode
-  check(node.highlight[0].color == EditorColorPair.currentWord)
+  check(node.highlight[0].color == EditorColorPair.defaultChar)
   check(node.highlight[1].color == EditorColorPair.currentWord)
 
 test "Highlight current word 3":
@@ -450,8 +457,8 @@ test "Highlight current word 3":
   status.update
 
   let node = status.workSpace[0].currentMainWindowNode
+  check(node.highlight[0].color == EditorColorPair.defaultChar)
   check(node.highlight[1].color == EditorColorPair.currentWord)
-  check(node.highlight[3].color == EditorColorPair.currentWord)
 
 test "Highlight full width space 1":
   var status = initEditorStatus()
@@ -680,3 +687,93 @@ test "Change current buffer":
 
   status.resize(100, 100)
   status.update
+
+# Fix #693
+test "Change create workspace":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.resize(100, 100)
+  status.update
+
+  status.verticalSplitWindow
+  status.resize(100, 100)
+  status.update
+
+  status.createWrokSpace
+  status.resize(100, 100)
+  status.update
+
+  status.changeCurrentWorkSpace(0)
+  status.resize(100, 100)
+  status.update
+
+  status.changeCurrentWorkSpace(1)
+  status.resize(100, 100)
+  status.update
+
+test "Highlight trailing spaces":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.settings.highlightOtherUsesCurrentWord = false
+  
+  status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+    $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
+    status.bufStatus[0].language)
+
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
+  status.updateHighlight(status.workSpace[0].currentMainWindowNode)
+  status.update
+
+  let node = status.workSpace[0].currentMainWindowNode
+  check(node.highlight[0].color == EditorColorPair.defaultChar)
+  check(node.highlight[0].firstColumn == 0)
+  check(node.highlight[0].lastColumn == 2)
+
+test "Highlight trailing spaces 2":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.settings.highlightOtherUsesCurrentWord = false
+  
+  status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+    $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
+    status.bufStatus[0].language)
+
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"abc  "])
+  status.updateHighlight(status.workSpace[0].currentMainWindowNode)
+  status.update
+
+  let node = status.workSpace[0].currentMainWindowNode
+
+  check(node.highlight[0].color == EditorColorPair.defaultChar)
+  check(node.highlight[0].firstColumn == 0)
+  check(node.highlight[0].lastColumn == 2)
+
+  check(node.highlight[1].color == EditorColorPair.highlightTrailingSpaces)
+  check(node.highlight[1].firstColumn == 3)
+  check(node.highlight[1].lastColumn == 4)
+
+test "Highlight trailing spaces 3":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.settings.highlightOtherUsesCurrentWord = false
+  
+  status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+    $status.bufStatus[0].buffer,
+    status.settings.reservedWords,
+    status.bufStatus[0].language)
+
+  status.bufStatus[0].buffer = initGapBuffer(@[ru" "])
+  status.updateHighlight(status.workSpace[0].currentMainWindowNode)
+  status.update
+
+  let node = status.workSpace[0].currentMainWindowNode
+
+  check(node.highlight[0].color == EditorColorPair.highlightTrailingSpaces)
+  check(node.highlight[0].firstColumn == 0)
+  check(node.highlight[0].lastColumn == 0)

@@ -13,7 +13,8 @@ You can use the example -> https://github.com/fox0430/moe/blob/master/example/mo
 
 ### Standard table
 Color theme (String)
-default is ```"vivid"```. ```"vivid"``` or ```"dark"``` or ```"light"``` or ```"vscode"```
+```"vivid"``` or ```"dark"``` or ```"light"``` or ```"vscode"```  
+default is ```"dark"```.
 ```
 theme
 ```
@@ -62,20 +63,20 @@ default is true
 autoIndent
 ```
 
-Set cursor shape of the terminal emulator you are using (String) ```"block"``` or ```"ibeam"```  
-default is block
+Set cursor shape of the terminal emulator you are using (String) ```"blinkBlock"``` or ```"blinkIbeam"``` or ```noneBlinkBlock``` or ```noneBlinkIbeam```  
+default is ```"blinkBlock"```
 ```
 defaultCursor
 ```
 
-Set cursor shape in normal mode (String) ```"block"``` or ```"ibeam"```  
-default is block
+Set cursor shape in normal mode (String) ```"blinkBlock"``` or ```"blinkIbeam"``` or ```noneBlinkBlock``` or ```noneBlinkIbeam```  
+default is ```"blinkBlock"```
 ```
 normalModeCursor
 ```
 
-Set cursor shape in insert mode (String) ```"block"``` or ```"ibeam"```  
-default is ibeam
+Set cursor shape in insert mode (String) ```"blinkBlock"``` or ```"blinkIbeam"``` or ```noneBlinkBlock``` or ```noneBlinkIbeam```  
+default is ```"blinkIbeam"```
 
 ```
 insertModeCursor
@@ -157,6 +158,12 @@ default is true
 highlightFullWidthSpace
 ```
 
+Highlight trailing spaces (bool)  
+default is true
+```
+highlightTrailingSpaces
+```
+
 ### TabLine table
 Show all bufer in tab line (bool)  
 default is false  
@@ -219,6 +226,12 @@ default is true
 gitbranchName
 ```
 
+Show/Hide git branch name in status bar in inactive window (bool)  
+default is false
+```
+showGitInactive
+```
+
 ### BuildOnSave table
 
 Enable/Disable build on save (bool)  
@@ -235,6 +248,35 @@ workspaceRoot
 Override commands executed at build (string)  
 ```
 command
+```
+
+### WorkSpace table
+
+Enable/Disable workspace bar (bool)  
+default is false
+```
+useBar
+```
+
+### Highlight table
+
+Highlighting any word (array)  
+
+defaut
+```
+["TODO", "WIP", "NOTE"]
+```
+
+```
+reservedWord
+```
+
+### Filer table
+
+Show/hidden unicode icons (bool)  
+default is true
+```
+showIcons
 ```
 
 ### Color and theme
@@ -545,6 +587,16 @@ Background color of mode text in the status bar in normal mode
 statusBarModeNormalModeBg
 ```
 
+Character color of Status bar in normal mode when inactive  
+```
+statusBarNormalModeInactive
+```
+
+Status bar base color in normal mode when inactive  
+```
+statusBarNormalModeInactiveBg
+```
+
 Character color of Status bar in insert mode
 ```
 statusBarInsertMode
@@ -563,6 +615,16 @@ statusBarModeInsertMode
 Background color of mode text in the status bar in insert mode
 ```
 statusBarModeInsertModeBg
+```
+
+Character color of Status bar in insert mode when inactive
+```
+statusBarInsertModeInactive
+```
+
+Status bar base color in insert mode when inactive
+```
+statusBarInsertModeInactiveBg
 ```
 
 Character color of Status bar in visual mode
@@ -585,6 +647,16 @@ Background color of mode text in the status bar in visual mode
 statusBarModeVisualModeBg
 ```
 
+Character color of Status bar in visual mode when inactive
+```
+statusBarVisualModeInactive
+```
+
+Status bar base color in visual mode when inactive
+```
+statusBarVisualModeInactiveBg
+```
+
 Character color of Status bar replace in mode
 ```
 statusBarReplaceMode
@@ -603,6 +675,16 @@ statusBarModeReplaceMode
 Background color of mode text in the status bar in replace mode
 ```
 statusBarModeReplaceModeBg
+```
+
+Character color of Status bar replace in mode when inactive
+```
+statusBarReplaceModeInactive
+```
+
+Status bar base color in replace mode when inactive
+```
+statusBarReplaceModeInactiveBg
 ```
 
 Character color of Status bar in filer mode
@@ -625,6 +707,16 @@ Background color of mode text in the status bar in filer mode
 statusBarModeFilerModeBg
 ```
 
+Character color of Status bar in filer mode when inactive
+```
+statusBarFilerModeInactive
+```
+
+Status bar base color in filer mode when inactive
+```
+statusBarFilerModeInactiveBg
+```
+
 Character color of Status bar in ex mode
 ```
 statusBarExMode
@@ -643,6 +735,16 @@ statusBarExModeBg
 Background color of mode text in the status bar in ex mode
 ```
 statusBarModeExModeBg
+```
+
+Character color of Status bar in ex mode when inactive
+```
+statusBarExModeInactive
+```
+
+Status bar base color in ex mode when inactive
+```
+statusBarExModeInactiveBg
 ```
 
 Current git branch text color
@@ -836,6 +938,16 @@ Full width space background color
 highlightFullWidthSpaceBg
 ```
 
+Trailing space color
+```
+highlightTrailingSpaces
+```
+
+Trailing space background color
+```
+highlightTrailingSpacesBg
+```
+
 Workspace bar text color
 ```
 workSpaceBar
@@ -846,12 +958,12 @@ Workspace bar background color
 workSpaceBarBg
 ```
 
-TODO highlight text color
+Reserved word text color
 ```
-todo
+reservedWord
 ```
 
-TODO highlight background color
+Reserved word background color
 ```
-todoBg
+reservedWordBg
 ```

@@ -3,19 +3,28 @@ import moepkg/[editorstatus, gapbuffer, unicodeext, movement, window, bufferstat
 
 include moepkg/help
 
-test "Display Help":
-  var status = initEditorStatus()
-  status.addNewBuffer("")
+suite "Help":
+  test "Check buffer":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
 
-  status.resize(100, 100)
-  status.update
+    status.resize(100, 100)
+    status.update
 
-  status.initHelpModeBuffer
-  status.update
+    status.initHelpModeBuffer
+    status.update
 
-  let seqHelpSentences = helpSentences.splitlines
+    check(status.bufStatus[0].filename == ru"help")
 
-  check(status.bufStatus[0].filename == ru"help")
+    let buffer = status.bufStatus[0].buffer
+    var
+      line = 1
+      f = open(currentSourcePath.parentDir() / "../documents/howtouse.md",
+               FileMode.fmRead)
 
-  for i in 0 ..< status.bufStatus[0].buffer.len:
-    if i > 1: check(status.bufStatus[0].buffer[i] == seqHelpSentences[i - 1].toRunes)
+    while not f.endOfFile:
+      let
+        markDownLine = f.readLine()
+        bufferLine = $buffer[line][0 .. buffer[line].high]
+      check bufferLine == markDownLine.multiReplace(@[("```", ""), ("  ", "")])
+      inc line

@@ -1,6 +1,8 @@
 # How to use
 
+
 ## Exiting
+
 Check command bar  
 
 ```:w``` - Write file  
@@ -11,7 +13,9 @@ Check command bar
 ```:wqa``` - Write and quit all window  
 ```:qa!``` - Force quit all window  
 
+
 ## Normal mode
+
 ```h``` - ←  
 ```j``` or ```+``` - ↓  
 ```k``` or ```-``` - ↑  
@@ -45,7 +49,8 @@ Check command bar
 ```I``` - Same as 0a  
 
 ```>``` - Indent  
-```<``` - Unindent
+```<``` - Unindent  
+```==``` Auto indent
 
 ```dd``` - Delete(cut) a line  
 ```d$``` or ```D``` -  Delete the characters under the cursor until the end of the line  
@@ -79,7 +84,13 @@ Check command bar
 ```/``` - Search text  
 ```:``` - Start ex mode  
 
+```Ctrl-w c``` - Close current window  
+
+```/keyword``` - Search forward  
+```?keyword``` - Search backward  
+
 ## Visual (block) mode
+
 ```d ```or ```x``` - Delete(cut) text  
 ```y``` - Copy text  
 ```r``` - Replace character  
@@ -98,25 +109,46 @@ Check command bar
 
 ```Esc``` - Start normal mode  
 
+
 ## Replace mode
+
 ```Esc``` - Start normal mode  
+
 
 ## Insert mode
-```Esc``` - Start normal mode  
+
+```Ctrl-e``` Insert the character which is below the cursor  
+```Ctrl-y``` Insert the character which is above the cursor  
+```Ctrl-i``` Insert a tab  
+
+```Ctrl-t``` Add indent in current line  
+```Ctrl-d``` Delete indent in current line  
+
+```Backspace``` or ```Ctrl-h``` Delete the character before the cursor  
+
+```Ctrl-w``` Delete the word before the cursor  
+```Ctrl-u``` Delete characters before the cursor in current line  
+
+```Esc``` or ```Ctrl-[``` - Start normal mode  
+
 
 ## Filer mode
+
 ```D``` - Delete file  
 ```g``` - Go to top of list  
 ```G``` - Go to last of list  
 ```i``` - Detail information  
 
+
 ## Ex mode
+
 ```number``` - Jump to line number : Exmaple ```:10```  
 ```!``` shell command - Shell command execution  
 
 ```e``` filename - Open file  
-
-```/keyword``` - Search text, file or directory  
+```ene``` - Create new empty buffer  
+```new``` - Create new empty buffer in split window horizontally  
+```vnew``` - Create new empty buffer in split window vertically  
 
 ```%s/keyword1/keyword2/``` - Replace text (normal mode only)  
 
@@ -129,7 +161,9 @@ Check command bar
 ```buf``` - Open buffer manager  
 
 ```vs``` - Vertical split window  
+```vs filename``` - Open in vertical split window  
 ```sv``` - Horizontal split window  
+```sp filename``` - Open in horizontal split window  
 
 ```cws``` - Create new work space  
 ```ws number``` - Change current work space : Example ```ws 2```  
@@ -153,8 +187,13 @@ Check command bar
 ```highlightfullspace on``` or ```highlightfullspace off``` - Change setting to highlight full width space  
 ```buildonsave on``` or ```buildonsave off``` - Change setting to build on save  
 ```indentationlines on ``` or ```indentationlines off``` - Change setting to indentation lines  
+```showGitInactive on``` or ```showGitInactive off``` - Change status bar setting to show/hide git branch name in inactive window  
 ```noh``` - Turn off highlights  
+```icon``` - Setting show/hidden icons in filer mode  
+```deleteTrailingSpaces``` - Delete trailing spaces  
 
 ```log``` - Open messages log viwer  
 
 ```help``` - Open help
+
+```putConfigFile``` - Put a sample configuration file in ~/.config/moe

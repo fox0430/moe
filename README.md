@@ -8,7 +8,7 @@ A command line based editor inspired by vi/vim written in Nim.
 This project's goal is a very customizable, high productivity, high performance and funny animation editor.
 
 
-![moe](https://user-images.githubusercontent.com/15966436/83775986-96ace180-a6c2-11ea-878c-63632fa8888a.png)
+![moe](https://user-images.githubusercontent.com/15966436/86624198-df2b2800-bffd-11ea-9a37-c3caea2a3ccc.png)
 
 ## Features
 

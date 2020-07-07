@@ -1,4 +1,4 @@
-import unittest
+import unittest, os
 import moepkg/[ui, editorstatus, gapbuffer, exmode, unicodeext, bufferstatus]
 
 test "Edit command":
@@ -491,3 +491,162 @@ test "Open help command":
   check(status.bufferIndexInCurrentWindow == 1)
 
   check(status.bufStatus[1].mode == Mode.help)
+
+test "Open in horizontal split window":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.resize(100, 100)
+  status.update
+
+  const command = @[ru"sp", ru"newfile"]
+  status.exModeCommand(command)
+
+  status.resize(100, 100)
+  status.update
+
+  check(status.workSpace[0].numOfMainWindow == 2)
+  check(status.bufStatus.len == 2)
+
+test "Open in vertical split window":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.resize(100, 100)
+  status.update
+
+  const command = @[ru"vs", ru"newfile"]
+  status.exModeCommand(command)
+
+  status.resize(100, 100)
+  status.update
+
+  check(status.workSpace[0].numOfMainWindow == 2)
+  check(status.bufStatus.len == 2)
+
+test "Create new empty buffer":
+  var status = initEditorStatus()
+  status.addNewBuffer("a")
+
+  status.resize(100, 100)
+  status.update
+
+  const command = @[ru"ene"]
+  status.exModeCommand(command)
+
+  check status.bufStatus.len == 2
+
+  check status.bufStatus[0].filename == ru"a"
+  check status.bufStatus[1].filename == ru""
+
+test "Create new empty buffer":
+  var status = initEditorStatus()
+  status.addNewBuffer("a")
+
+  status.resize(100, 100)
+  status.update
+
+  const command = @[ru"ene"]
+  status.exModeCommand(command)
+
+  check status.bufStatus.len == 2
+
+  check status.bufferIndexInCurrentWindow == 1
+
+  check status.bufStatus[0].filename == ru"a"
+  check status.bufStatus[1].filename == ru""
+
+test "Create new empty buffer 2":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  status.bufStatus[0].countChange = 1
+
+  status.resize(100, 100)
+  status.update
+
+  const command = @[ru"ene"]
+  status.exModeCommand(command)
+
+  check status.bufStatus.len == 1
+
+  check status.bufferIndexInCurrentWindow == 0
+
+test "New empty buffer in split window horizontally":
+  var status = initEditorStatus()
+  status.addNewBuffer("a")
+
+  status.resize(100, 100)
+  status.update
+
+  const command = @[ru"new"]
+  status.exModeCommand(command)
+
+  check status.bufStatus.len == 2
+
+  check status.bufferIndexInCurrentWindow == 1
+
+  check status.bufStatus[0].filename == ru"a"
+  check status.bufStatus[1].filename == ru""
+
+  check status.workspace[0].numOfMainWindow == 2
+
+test "New empty buffer in split window vertically":
+  var status = initEditorStatus()
+  status.addNewBuffer("a")
+
+  status.resize(100, 100)
+  status.update
+
+  const command = @[ru"vnew"]
+  status.exModeCommand(command)
+
+  check status.bufStatus.len == 2
+
+  check status.bufferIndexInCurrentWindow == 1
+
+  check status.bufStatus[0].filename == ru"a"
+  check status.bufStatus[1].filename == ru""
+
+  check status.workspace[0].numOfMainWindow == 2
+
+test "Filer icon setting command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  const command = @[ru"icon", ru"on"]
+  status.exModeCommand(command)
+
+  check status.settings.filerSettings.showIcons
+
+test "Filer icon setting command 2":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  const command = @[ru"icon", ru"off"]
+  status.exModeCommand(command)
+
+  check status.settings.filerSettings.showIcons == false
+
+test "Put config file command":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  const command = @[ru"putConfigFile"]
+  status.exModeCommand(command)
+
+  check existsFile(getHomeDir() / ".config" / "moe" / "moerc.toml")
+
+test "Ex mode: Show/Hide git branch name in status bar when inactive window":
+  var status = initEditorStatus()
+  status.addNewBuffer("")
+
+  block:
+    const command = @[ru"showGitInactive", ru"off"]
+    status.exModeCommand(command)
+    check not status.settings.statusBar.showGitInactive
+
+  block:
+    const command = @[ru"showGitInactive", ru"on"]
+    status.exModeCommand(command)
+    check status.settings.statusBar.showGitInactive

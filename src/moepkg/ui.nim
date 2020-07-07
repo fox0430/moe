@@ -17,22 +17,30 @@ type Attributes* = enum
   #chartext = A_CHAR_TEXT
 
 type CursorType* = enum
-  blockMode = 0
-  ibeamMode = 1
+  blinkBlockMode = 0
+  noneBlinkBlockMode = 1
+  blinkIbeamMode = 2
+  noneBlinkIbeamMode = 3
 
 type Window* = ref object
   cursesWindow*: ptr window
   top, left, height*, width*: int
   y*, x*: int
 
-proc setIbeamCursor*() = discard execShellCmd("printf '\\033[6 q'")
+proc setBkinkingIbeamCursor*() = discard execShellCmd("printf \"\x1b[\x35 q\"")
 
-proc setBlockCursor*() = discard execShellCmd("printf '\e[0 q'")
+proc setNoneBlinkingIbeamCursor*() = discard execShellCmd("printf '\\033[6 q'")
+
+proc setBlinkingBlockCursor*() = discard execShellCmd("printf '\e[0 q'")
+
+proc setNoneBlinkingBlockCursor*() = discard execShellCmd("printf '\x1b[\x32 q'")
 
 proc changeCursorType*(cursorType: CursorType) =
   case cursorType
-  of blockMode: setBlockCursor()
-  of ibeamMode: setIbeamCursor()
+  of blinkBlockMode: setBlinkingBlockCursor()
+  of noneBlinkBlockMode: setNoneBlinkingBlockCursor()
+  of blinkIbeamMode: setBkinkingIbeamCursor()
+  of noneBlinkIbeamMode: setNoneBlinkingIbeamCursor()
 
 proc disableControlC*() = setControlCHook(proc() {.noconv.} = discard)
 
@@ -60,8 +68,8 @@ proc startUi*() =
   setCursor(true)
 
   if can_change_color():
-    ## default is vivid
-    setCursesColor(ColorThemeTable[ColorTheme.vivid])
+    ## default is dark
+    setCursesColor(ColorThemeTable[ColorTheme.dark])
 
   erase()
   keyEcho(false)
@@ -202,6 +210,11 @@ proc isControlU*(key: Rune): bool = int(key) == 21
 proc isControlD*(key: Rune): bool = int(key) == 4
 proc isControlV*(key: Rune): bool = int(key) == 22
 proc isControlH*(key: Rune): bool = int(key) == 263
+proc isControlW*(key: Rune): bool = int(key) == 23
+proc isControlE*(key: Rune): bool = int(key) == 5
+proc isControlY*(key: Rune): bool = int(key) == 25
+proc isControlI*(key: Rune): bool = int(key) == 9
+proc isControlT*(key: Rune): bool = int(key) == 20
 proc isControlSquareBracketsRight*(key: Rune): bool = int(key) == 27  # Ctrl - [
 proc isShiftTab*(key: Rune): bool = int(key) == 353
 proc isBackspaceKey*(key: Rune): bool =

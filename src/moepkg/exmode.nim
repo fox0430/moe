@@ -1,7 +1,7 @@
 import sequtils, strutils, os, terminal, packages/docutils/highlite, times
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
-        unicodeext, independentutils, searchmode, highlight, commandview,
-        window, movement, color, build, bufferstatus
+        unicodeext, independentutils, search, highlight, commandview,
+        window, movement, color, build, bufferstatus, editor
 
 type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
 
@@ -26,6 +26,12 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
     replaceWord.add(command[i])
 
   return (searhWord: searchWord, replaceWord: replaceWord)
+
+proc isPutConfigFileCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"putConfigFile"
+
+proc isDeleteTrailingSpacesCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"deleteTrailingSpaces"
 
 proc isOpenHelpCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"help"
@@ -56,6 +62,9 @@ proc isVerticalSplitWindowCommand(command: seq[seq[Rune]]): bool =
 
 proc isHorizontalSplitWindowCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"sv"
+
+proc isFilerIconSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"icon"
 
 proc isLiveReloadOfConfSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"livereload"
@@ -117,6 +126,9 @@ proc isMultipleStatusBarSettingCommand(command: seq[seq[Rune]]): bool =
 proc isBuildOnSaveSettingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"buildonsave"
 
+proc isShowGitInInactiveSettingCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"showGitInactive"
+
 proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"noh"
 
@@ -153,6 +165,12 @@ proc isJumpCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
 proc isEditCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"e"
 
+proc isOpenInHorizontalSplitWindowCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"sp"
+
+proc isOpenInVerticalSplitWindowCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 2 and command[0] == ru"vs"
+
 proc isWriteCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   return command.len in {1, 2} and
@@ -185,6 +203,53 @@ proc isDeleteCurrentWorkSpaceCommand(command: seq[seq[Rune]]): bool =
 
 proc isChangeCurrentWorkSpace(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"ws" and isDigit(command[1])
+
+proc isCreateNewEmptyBufferCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"ene"
+
+proc isNewEmptyBufferInSplitWindowHorizontally(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"new"
+
+proc isNewEmptyBufferInSplitWindowVertically(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"vnew"
+
+proc staticReadVersionFromConfigFileExample(): string {.compileTime.} =
+  staticRead(currentSourcePath.parentDir() / "../../example/moerc.toml")
+
+proc putConfigFileCommand(status: var Editorstatus) =
+  let
+    homeDir = getHomeDir()
+    currentBufferIndex = status.bufferIndexInCurrentWindow
+
+  if not existsDir(homeDir / ".config"):
+    try: createDir(homeDir / ".config")
+    except OSError:
+      status.commandWindow.writePutConfigFileError(status.messageLog)
+      status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+      return
+  if not existsDir(homeDir / ".config" / "moe"):
+    try: createDir(homeDir / ".config" / "moe")
+    except OSError:
+      status.commandWindow.writePutConfigFileError(status.messageLog)
+      status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+      return
+
+  if existsFile(getHomeDir() / ".config" / "moe" / "moerc.toml"):
+    status.commandWindow.writePutConfigFileAlreadyExistError(status.messageLog)
+    status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+    return
+
+  let path = homeDir / ".config" / "moe" / "moerc.toml"
+  const configExample = staticReadVersionFromConfigFileExample()
+  writeFile(path, configExample)
+
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
+proc deleteTrailingSpacesCommand(status: var Editorstatus) =
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.bufStatus[currentBufferIndex].deleteTrailingSpaces
+
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
 proc openHelp(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -241,6 +306,15 @@ proc horizontalSplitWindowCommand(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
+proc filerIconSettingCommand(status: var Editorstatus, command: seq[Rune]) =
+  if command == ru "on": status.settings.filerSettings.showIcons = true
+  elif command == ru"off": status.settings.filerSettings.showIcons = false
+
+  status.commandWindow.erase
+
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
 proc liveReloadOfConfSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru "on": status.settings.liveReloadOfConf = true
   elif command == ru"off": status.settings.liveReloadOfConf = false
@@ -281,7 +355,9 @@ proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
 
   let workspaceIndex = status.currentWorkSpaceIndex
   status.workSpace[workspaceIndex].currentMainWindowNode.highlight =
-    initHighlight($status.bufStatus[currentBufferIndex].buffer, sourceLang)
+    initHighlight($status.bufStatus[currentBufferIndex].buffer,
+                  status.settings.reservedWords,
+                  sourceLang)
 
   status.commandWindow.erase
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
@@ -469,6 +545,17 @@ proc multipleStatusBarSettingCommand(status: var Editorstatus,
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
+proc showGitInInactiveSettingCommand(status: var EditorStatus,
+                                     command: seq[Rune]) =
+
+  if command == ru"on": status.settings.statusBar.showGitInactive = true
+  elif command == ru"off": status.settings.statusBar.showGitInactive = false
+
+  status.commandWindow.erase
+
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
 proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
   if index < 0 or index > status.bufStatus.high:
     status.commandWindow.writeNoBufferDeletedError(status.messageLog)
@@ -553,6 +640,18 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
 
     status.changeCurrentBuffer(status.bufStatus.high)
 
+proc openInHorizontalSplitWindow(status: var Editorstatus, filename: seq[Rune]) =
+  status.horizontalSplitWindow
+  status.resize(terminalHeight(), terminalWidth())
+
+  status.editCommand(filename)
+
+proc openInVerticalSplitWindowCommand(status: var Editorstatus, filename: seq[Rune]) =
+  status.verticalSplitWindow
+  status.resize(terminalHeight(), terminalWidth())
+
+  status.editCommand(filename)
+
 proc execCmdResultToMessageLog*(output: TaintedString,
                                 messageLog: var seq[seq[Rune]])=
 
@@ -580,10 +679,30 @@ proc buildOnSave(status: var Editorstatus) =
     status.commandWindow.writeMessageFailedBuildOnSave(status.messageLog)
   else: status.commandWindow.writeMessageSuccessBuildOnSave(status.messageLog)
 
+proc checkAndCreateDir(cmdWin: var Window,
+                       messageLog: var seq[seq[Rune]],
+                       filename: seq[Rune]): bool =
+
+  let
+    pathSplit = splitPath($filename)
+    isCreateDir = cmdWin.askCreateDirPrompt(messageLog, pathSplit.head)
+
+  result = true
+  if isCreateDir:
+    try: createDir(pathSplit.head)
+    except OSError: result = false
+  else: result = false
+
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   if filename.len == 0:
     status.commandWindow.writeNoFileNameError(status.messageLog)
     status.changeMode(Mode.normal)
+    return
+
+  ## Ask if you want to create a directory that does not exist
+  if not status.commandWindow.checkAndCreateDir(status.messageLog, filename):
+    status.changeMode(Mode.normal)
+    status.commandWindow.writeSaveError(status.messageLog)
     return
 
   try:
@@ -591,8 +710,9 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
     saveFile(filename,
              status.bufStatus[currentBufferIndex].buffer.toRunes,
              status.settings.characterEncoding)
-    let workspaceIndex = status.currentWorkSpaceIndex
-    let bufferIndex = status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
+    let
+      workspaceIndex = status.currentWorkSpaceIndex
+      bufferIndex = status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
     status.bufStatus[bufferIndex].filename = filename
     status.bufStatus[currentBufferIndex].countChange = 0
 
@@ -617,14 +737,23 @@ proc quitCommand(status: var EditorStatus) =
 
   status.changeMode(Mode.normal)
 proc writeAndQuitCommand(status: var EditorStatus) =
+  let
+    currentBufferIndex = status.bufferIndexInCurrentWindow
+    workspaceIndex = status.currentWorkSpaceIndex
+    filename = status.bufStatus[currentBufferIndex].filename
+
+  ## Ask if you want to create a directory that does not exist
+  if not status.commandWindow.checkAndCreateDir(status.messageLog, filename):
+    status.changeMode(Mode.normal)
+    status.commandWindow.writeSaveError(status.messageLog)
+    return
+
   try:
-    let currentBufferIndex = status.bufferIndexInCurrentWindow
-    let workspaceIndex = status.currentWorkSpaceIndex
     status.bufStatus[currentBufferIndex].countChange = 0
-    saveFile(
-             status.bufStatus[currentBufferIndex].filename,
+    saveFile(filename,
              status.bufStatus[currentBufferIndex].buffer.toRunes,
              status.settings.characterEncoding)
+
     status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
   except IOError:
     status.commandWindow.writeSaveError(status.messageLog)
@@ -651,9 +780,17 @@ proc forceAllBufferQuitCommand(status: var EditorStatus) = exitEditor(status.set
 
 proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
   for bufStatus in status.bufStatus:
-    try: saveFile(bufStatus.filename,
-                  bufStatus.buffer.toRunes,
-                  status.settings.characterEncoding)
+    let filename = bufStatus.filename
+    ## Ask if you want to create a directory that does not exist
+    if not status.commandWindow.checkAndCreateDir(status.messageLog, filename):
+      status.changeMode(Mode.normal)
+      status.commandWindow.writeSaveError(status.messageLog)
+      return
+
+    try:
+      saveFile(filename,
+               bufStatus.buffer.toRunes,
+               status.settings.characterEncoding)
     except IOError:
       status.commandWindow.writeSaveError(status.messageLog)
       status.changeMode(Mode.normal)
@@ -789,6 +926,44 @@ proc deleteCurrentWorkSpaceCommand*(status: var Editorstatus) =
 
     status.deleteWorkSpace(index)
 
+proc createNewEmptyBufferCommand*(status: var Editorstatus) =
+  let
+    workspaceIndex = status.currentWorkSpaceIndex
+    currentBufferIndex = status.bufferIndexInCurrentWindow
+
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
+  if status.bufStatus[currentBufferIndex].countChange == 0 or
+     status.workSpace[workspaceIndex].mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
+    status.addNewBuffer("")
+    status.changeCurrentBuffer(status.bufStatus.high)
+  else:
+    status.commandWindow.writeNoWriteError(status.messageLog)
+
+proc newEmptyBufferInSplitWindowHorizontally*(status: var Editorstatus) =
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
+  status.horizontalSplitWindow
+  status.resize(terminalHeight(), terminalWidth())
+
+  status.addNewBuffer("")
+
+  status.changeCurrentBuffer(status.bufStatus.high)
+
+proc newEmptyBufferInSplitWindowVertically*(status: var Editorstatus) =
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
+  status.verticalSplitWindow
+  status.resize(terminalHeight(), terminalWidth())
+
+  status.addNewBuffer("")
+
+  status.changeCurrentBuffer(status.bufStatus.high)
+
 proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
@@ -802,6 +977,10 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     jumpCommand(status, line)
   elif isEditCommand(command):
     editCommand(status, command[1].normalizePath)
+  elif isOpenInHorizontalSplitWindowCommand(command):
+    status.openInHorizontalSplitWindow(command[1].normalizePath)
+  elif isOpenInVerticalSplitWindowCommand(command):
+    status.openInVerticalSplitWindowCommand(command[1])
   elif isWriteCommand(status, command):
     writeCommand(status, if command.len < 2:
       status.bufStatus[currentBufferIndex].filename else: command[1])
@@ -897,36 +1076,55 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     deleteCurrentWorkSpaceCommand(status)
   elif isOpenHelpCommand(command):
     status.openHelp
+  elif isCreateNewEmptyBufferCommand(command):
+    status.createNewEmptyBufferCommand
+  elif isNewEmptyBufferInSplitWindowHorizontally(command):
+    status.newEmptyBufferInSplitWindowHorizontally
+  elif isNewEmptyBufferInSplitWindowVertically(command):
+    status.newEmptyBufferInSplitWindowVertically
+  elif isFilerIconSettingCommand(command):
+    status.filerIconSettingCommand(command[1])
+  elif isDeleteTrailingSpacesCommand(command):
+    status.deleteTrailingSpacesCommand
+  elif isPutConfigFileCommand(command):
+    status.putConfigFileCommand
+  elif isShowGitInInactiveSettingCommand(command):
+    status.showGitInInactiveSettingCommand(command[1])
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
 proc exMode*(status: var EditorStatus) =
-  const prompt = ":"
+  const
+    prompt = ":"
+    isSearch = false
   var
     command = ru""
     exitInput = false
     cancelInput = false
     isSuggest = true
+    isReplaceCommand = false
 
-  status.searchHistory.add(ru"")
+  status.exCommandHistory.add(ru"")
 
   let workspaceIndex = status.currentWorkSpaceIndex
 
   while exitInput == false:
     let returnWord = status.getKeyOnceAndWriteCommandView(prompt,
                                                           command,
-                                                          isSuggest)
+                                                          isSuggest,
+                                                          isSearch)
 
     command = returnWord[0]
     exitInput = returnWord[1]
     cancelInput = returnWord[2]
 
+    if command.len > 3 and command.startsWith(ru"%s/"):
+      isReplaceCommand = true
+      status.searchHistory.add(ru"")
 
     if cancelInput or exitInput: break
-    elif status.settings.replaceTextHighlight and
-         command.len > 3 and
-         command.startsWith(ru"%s/"):
+    elif isReplaceCommand and status.settings.replaceTextHighlight:
       var keyword = ru""
       for i in 3 ..< command.len :
           if command[i] == ru'/': break
@@ -934,20 +1132,25 @@ proc exMode*(status: var EditorStatus) =
       status.searchHistory[status.searchHistory.high] = keyword
       let bufferIndex =
         status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
-      status.bufStatus[bufferIndex].isHighlight = true
+      status.bufStatus[bufferIndex].isSearchHighlight = true
+
+      status.jumpToSearchForwardResults(keyword)
     else:
-      let bufferIndex =
-        status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
-      status.bufStatus[bufferIndex].isHighlight = false
+      if command.len > 0:
+        status.exCommandHistory[status.exCommandHistory.high] = command
+        if isReplaceCommand:
+          isReplaceCommand = false
+          status.searchHistory.delete(status.searchHistory.high)
 
     status.updatehighlight(status.workspace[workspaceIndex].currentMainWindowNode)
     status.resize(terminalHeight(), terminalWidth())
     status.update
 
-  status.searchHistory.delete(status.searchHistory.high)
-  let bufferIndex =
-    status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
-  status.bufStatus[bufferIndex].isHighlight = false
+  if status.exCommandHistory[status.exCommandHistory.high] == ru"":
+    status.exCommandHistory.delete(status.exCommandHistory.high)
+
+  if isReplaceCommand: status.searchHistory.delete(status.searchHistory.high)
+
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.updatehighlight(status.workspace[workspaceIndex].currentMainWindowNode)
 
@@ -958,4 +1161,4 @@ proc exMode*(status: var EditorStatus) =
     status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
     status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(status.workSpace[workspaceIndex].currentMainWindowNode)
 
-    exModeCommand(status, splitCommand($command))
+    status.exModeCommand(splitCommand($command))

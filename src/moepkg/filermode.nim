@@ -325,7 +325,11 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus,
       newLine.add(ru"@ -> " & expandsymLink(filename).toRunes)
     elif kind == pcLinkToDir:
       newLine.add(ru"@ -> " & expandsymLink(filename).toRunes & ru"/")
-    newLine = pathToIcon(filename)
+
+    # Set icons
+    if settings.filerSettings.showIcons: newLine = pathToIcon(filename)
+    else: newLine = ru""
+
     newLine.add oldLine
     bufStatus.buffer[index] = newLine
   
