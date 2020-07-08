@@ -683,15 +683,17 @@ proc checkAndCreateDir(cmdWin: var Window,
                        messageLog: var seq[seq[Rune]],
                        filename: seq[Rune]): bool =
 
-  let
-    pathSplit = splitPath($filename)
-    isCreateDir = cmdWin.askCreateDirPrompt(messageLog, pathSplit.head)
+  ## Not include directory
+  if not filename.contains(ru"/"): return true
+
+  let pathSplit = splitPath($filename)
 
   result = true
-  if isCreateDir:
-    try: createDir(pathSplit.head)
-    except OSError: result = false
-  else: result = false
+  if not existsDir(pathSplit.head):
+    let isCreateDir = cmdWin.askCreateDirPrompt(messageLog, pathSplit.head)
+    if isCreateDir:
+      try: createDir(pathSplit.head)
+      except OSError: result = false
 
 proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   if filename.len == 0:
