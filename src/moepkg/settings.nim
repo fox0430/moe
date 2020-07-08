@@ -529,7 +529,7 @@ proc parseSettingsFile*(filename: string): EditorSettings =
   var vscodeTheme = false
   var settings: TomlValueRef
   try: settings = parsetoml.parseFile(filename)
-  except IOError: return
+  except IOError, TomlError: return
 
   if settings.contains("Standard"):
     if settings["Standard"].contains("theme"):
