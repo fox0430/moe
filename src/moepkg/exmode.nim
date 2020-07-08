@@ -683,7 +683,7 @@ proc checkAndCreateDir(cmdWin: var Window,
                        messageLog: var seq[seq[Rune]],
                        filename: seq[Rune]): bool =
 
-  ## Not include dicretory
+  ## Not include directory
   if not filename.contains(ru"/"): return true
 
   let pathSplit = splitPath($filename)
