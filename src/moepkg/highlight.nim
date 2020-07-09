@@ -231,15 +231,16 @@ proc initHighlight*(buffer: string,
 proc indexOf*(highlight: Highlight, row, column: int): int =
   ## calculate the index of the color segment which the pair (row, column) belongs to
 
-  block:
-    let mess = fmt"row = {row}, column = {column}, highlight[0].firstRow = {highlight[0].firstRow}, hightlihgt[0].firstColumn = {highlight[0].firstColumn}"
-    doAssert((row, column) >= (highlight[0].firstRow, highlight[0].firstColumn),
-             mess)
-  block:
-    let mess = fmt"row = {row}, column = {column}, highlight[^1].lastRow = {highlight[^1].lastRow}, hightlihgt[^1].lastColumn = {highlight[^1].lastColumn}, highlight = {highlight}"
-    doAssert((row, column) <= (highlight[^1].lastRow, highlight[^1].lastColumn),
-             mess)
-
+  # Because the following assertion is sluggish, it is disabled in release builds.
+  when not defined(release):
+    block:
+      let mess = fmt"row = {row}, column = {column}, highlight[0].firstRow = {highlight[0].firstRow}, hightlihgt[0].firstColumn = {highlight[0].firstColumn}"
+      doAssert((row, column) >= (highlight[0].firstRow, highlight[0].firstColumn),
+               mess)
+    block:
+      let mess = fmt"row = {row}, column = {column}, highlight[^1].lastRow = {highlight[^1].lastRow}, hightlihgt[^1].lastColumn = {highlight[^1].lastColumn}, highlight = {highlight}"
+      doAssert((row, column) <= (highlight[^1].lastRow, highlight[^1].lastColumn),
+               mess)
   var
     lb = 0
     ub = highlight.len
