@@ -1,5 +1,5 @@
 import terminal
-import editorstatus, ui, unicodeext, movement, editor, bufferstatus
+import editorstatus, ui, unicodeext, movement, editor, bufferstatus, gapbuffer
 
 proc isReplaceMode(status: EditorStatus): bool =
   let
@@ -12,6 +12,17 @@ proc replaceMode*(status: var EditorStatus) =
     bufferChanged = false
     windowNode =
       status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+
+  template replaceCurrentCharacter() =
+    let
+      workspaceIndex = status.currentWorkSpaceIndex
+      windowNode = status.workSpace[workSpaceIndex].currentMainWindowNode
+      buffer = status.bufStatus[currentBufferIndex].buffer
+
+    if windowNode.currentColumn < buffer[windowNode.currentLine].len:
+      status.bufStatus[currentBufferIndex].replaceCurrentCharacter(
+        status.workSpace[workspaceIndex].currentMainWindowNode,
+        status.settings.autoIndent, status.settings.autoDeleteParen, key)
 
   while status.isReplaceMode:
     let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -43,9 +54,7 @@ proc replaceMode*(status: var EditorStatus) =
       status.bufStatus[currentBufferIndex].keyDown(windowNode)
  
     else:
-      status.bufStatus[currentBufferIndex].replaceCurrentCharacter(
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode,
-        status.settings.autoIndent, status.settings.autoDeleteParen, key)
+      replaceCurrentCharacter()
 
       status.bufStatus[currentBufferIndex].keyRight(windowNode)
       bufferChanged = true
