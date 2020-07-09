@@ -486,3 +486,22 @@ suite "Normal mode: Repeat last command":
       status.update
 
     check(status.workspace[0].currentMainWindowNode.currentLine == 1)
+
+suite "Normal mode: Delete the line from current line to last line":
+  test "Delete the line from current line to last line":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
+    status.workspace[0].currentMainWindowNode.currentLine = 1
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'd', ru'G']
+    status.normalCommand(commands)
+    status.update
+
+    let buffer = status.bufStatus[0].buffer
+    check buffer.len == 1 and buffer[0] == ru"a"
+
+    check status.registers.yankedLines == @[ru"b", ru"c", ru"d"]

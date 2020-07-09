@@ -399,6 +399,13 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
       status.bufStatus[currentBufferIndex].deleteCharacterBeginningOfLine(
         status.settings.autoDeleteParen,
         windowNode)
+    # Delete the line from current line to last line
+    elif secondKey == ord('G'):
+      let lastLine = status.bufStatus[currentBufferIndex].buffer.high
+      status.yankLines(windowNode.currentLine, lastLine)
+      let loop = status.bufStatus[currentBufferIndex].buffer.len - windowNode.currentLine
+      for i in 0 ..< loop:
+        status.bufStatus[currentBufferIndex].deleteLine(windowNode, windowNode.currentLine)
   elif key == ord('D'):
      deleteCharactersUntilEndOfLine()
   elif key == ord('S'):
@@ -571,10 +578,9 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
     let secondKey = getAnotherKey()
     if secondKey == ord('d') or
        secondKey == ord('w') or
-       secondKey == ('$') or
-       isEndKey(secondKey) or
-       secondKey== ('0') or
-       isHomeKey(secondKey): result = @[key, secondKey]
+       secondKey == ord('$') or isEndKey(secondKey) or
+       secondKey == ord('0') or isHomeKey(secondKey) or
+       secondKey == ord('G'): result = @[key, secondKey]
   elif key == ord('y'):
     let secondKey = getAnotherKey()
     if key == ord('y') or key == ord('w'):
