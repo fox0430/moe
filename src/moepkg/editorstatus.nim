@@ -853,6 +853,8 @@ proc highlightTrailingSpaces(status: var Editorstatus) =
     bufStatus = status.bufStatus[currentBufferIndex]
     buffer = bufStatus.buffer
     workspaceIndex = status.currentWorkSpaceIndex
+    windowNode = status.workspace[workspaceIndex].currentMainWindowNode
+    currentLine = windowNode.currentLine
 
     color = EditorColorPair.highlightTrailingSpaces
 
@@ -866,7 +868,7 @@ proc highlightTrailingSpaces(status: var Editorstatus) =
   var colorSegments: seq[ColorSegment] = @[]
   for i in startLine ..< endLine:
     let line = buffer[i]
-    if line.len > 0:
+    if line.len > 0 and i != currentLine:
       var countSpaces = 0
       for j in countdown(line.high, 0):
         if line[j] == ru' ': inc countSpaces
