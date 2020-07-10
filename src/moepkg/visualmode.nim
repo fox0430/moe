@@ -410,5 +410,5 @@ proc visualMode*(status: var EditorStatus) =
     else:
       if isBlockMode: status.visualBlockCommand(status.bufStatus[currentBufferIndex].selectArea, key)
       else: status.visualCommand(status.bufStatus[currentBufferIndex].selectArea, key)
-      status.updatehighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
+      status.update
       status.changeMode(Mode.normal)
