@@ -291,6 +291,16 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
        ) > 1:
         status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
 
+  template deleteLineFromFirstLineToCurrentLine() =
+    let currentLine = windowNode.currentLine
+    status.yankLines(0, currentLine)
+    status.moveToFirstLine
+    for i in 0 ..< currentLine + 1:
+      status.bufStatus[currentBufferIndex].deleteLine(
+        windowNode,
+        windowNode.currentLine
+      )
+
   let key = commands[0]
 
   if isControlK(key):
@@ -406,6 +416,11 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
       let loop = status.bufStatus[currentBufferIndex].buffer.len - windowNode.currentLine
       for i in 0 ..< loop:
         status.bufStatus[currentBufferIndex].deleteLine(windowNode, windowNode.currentLine)
+    # Delete the line from first line to current line
+    elif secondKey == ord('g'):
+      let thirdKey = commands[2]
+      if thirdKey == ord('g'):
+        deleteLineFromFirstLineToCurrentLine()
   elif key == ord('D'):
      deleteCharactersUntilEndOfLine()
   elif key == ord('S'):
@@ -581,6 +596,9 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
        secondKey == ord('$') or isEndKey(secondKey) or
        secondKey == ord('0') or isHomeKey(secondKey) or
        secondKey == ord('G'): result = @[key, secondKey]
+    elif secondKey == ord('g'):
+      let thirdKey = getAnotherKey()
+      if thirdKey == ord('g'): result = @[key, secondKey, thirdKey]
   elif key == ord('y'):
     let secondKey = getAnotherKey()
     if key == ord('y') or key == ord('w'):

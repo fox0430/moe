@@ -505,3 +505,22 @@ suite "Normal mode: Delete the line from current line to last line":
     check buffer.len == 1 and buffer[0] == ru"a"
 
     check status.registers.yankedLines == @[ru"b", ru"c", ru"d"]
+
+suite "Normal mode: Delete the line from first line to current line":
+  test "Delete the line from first line to current line":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
+    status.workspace[0].currentMainWindowNode.currentLine = 2
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'd', ru'g', ru'g']
+    status.normalCommand(commands)
+    status.update
+
+    let buffer = status.bufStatus[0].buffer
+    check buffer.len == 1 and buffer[0] == ru"d"
+
+    check status.registers.yankedLines == @[ru"a", ru"b", ru"c"]
