@@ -199,3 +199,5 @@ Check command bar
 ```help``` - Open help
 
 ```putConfigFile``` - Put a sample configuration file in ~/.config/moe
+
+```run``` - Quick run
