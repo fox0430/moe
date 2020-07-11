@@ -89,6 +89,8 @@ Check command bar
 ```/keyword``` - Search forward  
 ```?keyword``` - Search backward  
 
+```\r``` - Quick run  
+
 ## Visual (block) mode
 
 ```d ```or ```x``` - Delete(cut) text  

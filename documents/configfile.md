@@ -164,6 +164,12 @@ default is true
 highlightTrailingSpaces
 ```
 
+Setting commands to be executed by quick run (string)  
+default is ""
+```
+quickRunCommand
+```
+
 ### TabLine table
 Show all bufer in tab line (bool)  
 default is false  
