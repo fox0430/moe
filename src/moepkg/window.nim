@@ -65,7 +65,7 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
                         bufferIndex: n.bufferIndex,
                         h: 1,
                         w: 1)
-    parent.child.add(node)
+    parent.child.insert(node, n.index + 1)
     return n
   else:
     var
