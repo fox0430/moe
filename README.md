@@ -101,10 +101,13 @@ This project's goal is a very customizable, high productivity, high performance 
 ## Install
 
 ```sh
+# Latest released version
 nimble install moe
+# Latest developmental state inside Github repository
+nimble install moe@#head
 ```
-Check [detail](https://github.com/fox0430/moe/blob/develop/documents/overview.md)
 
+Check [detail](https://github.com/fox0430/moe/blob/develop/documents/overview.md)
 ## Usage
 [Documents](https://github.com/fox0430/moe/blob/develop/documents/index.md)
 
