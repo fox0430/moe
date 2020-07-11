@@ -200,4 +200,4 @@ Check command bar
 
 ```putConfigFile``` - Put a sample configuration file in ~/.config/moe
 
-```run``` - Qucik run
+```run``` - Quick run
