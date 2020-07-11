@@ -47,6 +47,7 @@ const exCommandList = [
   ru"qa",
   ru"qa!",
   ru"realtimesearch",
+  ru"run",
   ru"scrollspeed",
   ru"showGitInactive",
   ru"smoothscroll",

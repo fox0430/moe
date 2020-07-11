@@ -2,7 +2,7 @@ from strutils import parseInt
 import strformat, terminal
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, commandview,
        undoredostack, window, movement, editor, search, color,
-       bufferstatus
+       bufferstatus, quickrun
 
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.erase
@@ -148,6 +148,27 @@ proc toggleCase(ch: Rune): Rune =
   elif result.isLower():
     result = result.toUpper()
   return result
+
+proc runQuickRunCommand(status: var Editorstatus) =
+  let
+    workspaceIndex = status.currentWorkSpaceIndex
+    windowNode = status.workspace[workspaceIndex].currentMainWindowNode
+    bufStatus = status.bufStatus[windowNode.bufferIndex]
+
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
+  status.verticalSplitWindow
+  status.resize(terminalHeight(), terminalWidth())
+  status.moveNextWindow
+
+  status.addNewBuffer("")
+  let buffer = runQuickRun(bufStatus.filename,
+                           bufStatus.language,
+                           status.settings)
+  status.bufStatus[^1].buffer = initGapBuffer(buffer)
+
+  status.changeCurrentBuffer(status.bufStatus.high)
 
 proc normalCommand(status: var EditorStatus, commands: seq[Rune])
 proc repeatNormalModeCommand(status: var Editorstatus) =
@@ -497,6 +518,10 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
     if secondKey == ord('c'): closeWindow()
   elif key == ord('.'):
     status.repeatNormalModeCommand
+  elif key == ord('\\'):
+    let secondKey = commands[1]
+    if secondKey == ord('r'):
+      status.runQuickRunCommand
   else:
     discard
 
@@ -555,6 +580,7 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
      isControlR(key) or
      key == ord('.'): result = @[key]
   # Multiple key commands
+  # TODO: Refactor
   elif key == ord('g'):
       let secondKey = getAnotherKey()
       if secondKey == ord('g') or secondKey == ord('_'):
@@ -599,7 +625,10 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
   elif isControlW(key):
     let secondKey = getAnotherKey()
     if secondKey == ord('c'):
-      result =  @[key, secondKey]
+      result = @[key, secondKey]
+  elif key == ('\\'):
+    let secondKey = getAnotherKey()
+    if secondKey == ord('r'): result = @[key, secondKey]
   else: discard
 
   proc isMovementKey(key: Rune): bool =
