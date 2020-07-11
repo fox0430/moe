@@ -52,6 +52,8 @@ highlightTrailingSpaces = true
 
 highlightCurrentWord = true
 
+# quickRunCommand = "nimble build"
+
 [BuildOnSaveSettings]
 
 buildOnSave = false

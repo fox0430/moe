@@ -70,6 +70,7 @@ type EditorSettings* = object
   workSpace*: WorkSpaceSettings
   filerSettings*: FilerSettings
   reservedWords*: seq[ReservedWord]
+  quickRunCommand*: string
 
 proc initFilerSettings(): FilerSettings =
   result.showIcons = true
@@ -618,7 +619,10 @@ proc parseSettingsFile*(filename: string): EditorSettings =
       result.highlightTrailingSpaces = settings["Standard"]["highlightTrailingSpaces"].getbool()
     
     if settings["Standard"].contains("indentationLines"):
-      result.view.indentationLines= settings["Standard"]["indentationLines"].getbool()
+      result.view.indentationLines = settings["Standard"]["indentationLines"].getbool()
+
+    if settings["Standard"].contains("quickRunCommand"):
+      result.quickRunCommand = settings["Standard"]["quickRunCommand"].getStr()
 
   if settings.contains("TabLine"):
     if settings["TabLine"].contains("allBuffer"):

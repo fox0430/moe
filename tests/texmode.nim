@@ -679,3 +679,11 @@ suite "Ex mode: Show/Hide git branch name in status bar when inactive window":
       const command = @[ru"showGitInactive", ru"on"]
       status.exModeCommand(command)
       check status.settings.statusBar.showGitInactive
+
+suite "Ex mode: Quick run command":
+  test "Quick run command":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+
+    const command = @[ru"run"]
+    status.exModeCommand(command)

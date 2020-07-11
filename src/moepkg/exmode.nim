@@ -1,7 +1,8 @@
 import sequtils, strutils, os, terminal, packages/docutils/highlite, times
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
         unicodeext, independentutils, search, highlight, commandview,
-        window, movement, color, build, bufferstatus, editor
+        window, movement, color, build, bufferstatus, editor,
+        settings, quickrun
 
 type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
 
@@ -212,6 +213,30 @@ proc isNewEmptyBufferInSplitWindowHorizontally(command: seq[seq[Rune]]): bool =
 
 proc isNewEmptyBufferInSplitWindowVertically(command: seq[seq[Rune]]): bool =
   return command.len == 1 and command[0] == ru"vnew"
+
+proc isQuickRunCommand(command: seq[seq[Rune]]): bool =
+  return command.len == 1 and command[0] == ru"run"
+
+proc runQuickRunCommand(status: var Editorstatus) =
+  let
+    workspaceIndex = status.currentWorkSpaceIndex
+    windowNode = status.workspace[workspaceIndex].currentMainWindowNode
+    bufStatus = status.bufStatus[windowNode.bufferIndex]
+
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
+  status.verticalSplitWindow
+  status.resize(terminalHeight(), terminalWidth())
+  status.moveNextWindow
+
+  status.addNewBuffer("")
+  let buffer = runQuickRun(bufStatus.filename,
+                           bufStatus.language,
+                           status.settings)
+  status.bufStatus[^1].buffer = initGapBuffer(buffer)
+
+  status.changeCurrentBuffer(status.bufStatus.high)
 
 proc staticReadVersionFromConfigFileExample(): string {.compileTime.} =
   staticRead(currentSourcePath.parentDir() / "../../example/moerc.toml")
@@ -1092,6 +1117,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     status.putConfigFileCommand
   elif isShowGitInInactiveSettingCommand(command):
     status.showGitInInactiveSettingCommand(command[1])
+  elif isQuickRunCommand(command):
+    status.runQuickRunCommand
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
