@@ -134,16 +134,18 @@ proc writeStatusBarCurrentGitBranchName(statusBar: var StatusBar,
   statusBarBuffer.add(buffer)
   statusBar.window.append(buffer, color)
 
-proc setModeStr(mode: Mode): string =
-  case mode:
-  of Mode.insert: result = " INSERT "
-  of Mode.visual, Mode.visualBlock: result = " VISUAL "
-  of Mode.replace: result = " REPLACE "
-  of Mode.filer: result = " FILER "
-  of Mode.bufManager: result = " BUFFER "
-  of Mode.ex: result = " EX "
-  of Mode.logViewer: result = " LOG "
-  else: result = " NORMAL "
+proc setModeStr(mode: Mode, isActiveWindow, showModeInactive: bool): string =
+  if not isActiveWindow and not showModeInactive: result = ""
+  else:
+    case mode:
+    of Mode.insert: result = " INSERT "
+    of Mode.visual, Mode.visualBlock: result = " VISUAL "
+    of Mode.replace: result = " REPLACE "
+    of Mode.filer: result = " FILER "
+    of Mode.bufManager: result = " BUFFER "
+    of Mode.ex: result = " EX "
+    of Mode.logViewer: result = " LOG "
+    else: result = " NORMAL "
 
 proc setModeStrColor(mode: Mode): EditorColorPair =
   case mode
@@ -185,7 +187,9 @@ proc writeStatusBar*(bufStatus: var BufferStatus,
     currentMode = bufStatus.mode
     prevMode = bufStatus.prevMode
     color = setModeStrColor(currentMode)
-    modeStr = setModeStr(currentMode)
+    modeStr = setModeStr(currentMode,
+                         isActiveWindow,
+                         settings.statusBar.showModeInactive)
 
   var statusBarBuffer = modeStr.toRunes
 

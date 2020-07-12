@@ -27,6 +27,7 @@ type StatusBarSettings* = object
   multipleStatusBar*: bool
   gitbranchName*: bool
   showGitInactive*: bool
+  showModeInactive*: bool
 
 type TabLineSettings* = object
   useTab*: bool
@@ -658,6 +659,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["StatusBar"].contains("showGitInactive"):
         result.statusBar.showGitInactive = settings["StatusBar"]["showGitInactive"].getbool()
+
+    if settings["StatusBar"].contains("showModeInactive"):
+        result.statusBar.showModeInactive = settings["StatusBar"]["showModeInactive"].getbool()
 
   if settings.contains("BuildOnSave"):
     if settings["BuildOnSave"].contains("buildOnSave"):
