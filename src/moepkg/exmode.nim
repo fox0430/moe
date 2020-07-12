@@ -648,9 +648,9 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
   let workspaceIndex = status.currentWorkSpaceIndex
-  if status.bufStatus[currentBufferIndex].countChange > 0 or
+  if status.bufStatus[currentBufferIndex].countChange > 0 and
      countReferencedWindow(status.workSpace[workspaceIndex].mainWindowNode,
-                           currentBufferIndex) == 0:
+                           currentBufferIndex) == 1:
     status.commandWindow.writeNoWriteError(status.messageLog)
   else:
     if existsDir($filename):
