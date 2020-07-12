@@ -232,10 +232,16 @@ default is true
 gitbranchName
 ```
 
-Show/Hide git branch name in status bar in inactive window (bool)  
+Show/Hide git branch name in status bar when window is inactive (bool)  
 default is false
 ```
 showGitInactive
+```
+
+Show/Hide mode string in status bar when window is inactive (bool)  
+default is false
+```
+showModeInactive
 ```
 
 ### BuildOnSave table
