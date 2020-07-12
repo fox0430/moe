@@ -88,6 +88,8 @@ gitbranchName = true
 
 showGitInactive = false
 
+showModeInactive = false
+
 [WorkSpace]
 
 useBar = false
