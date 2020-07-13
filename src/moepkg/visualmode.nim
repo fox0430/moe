@@ -12,7 +12,7 @@ proc updateSelectArea(area: var SelectArea, currentLine, currentColumn: int) =
   area.endLine = currentLine
   area.endColumn = currentColumn
 
-proc swapSlectArea(area: var SelectArea) =
+proc swapSelectArea(area: var SelectArea) =
   if area.startLine == area.endLine:
     if area.endColumn < area.startColumn: swap(area.startColumn, area.endColumn)
   elif area.endLine < area.startLine:
@@ -167,7 +167,7 @@ proc insertIndent(bufStatus: var BufferStatus, area: SelectArea, tabStop: int) =
                    bufStatus.buffer[i].high))
     if oldLine != newLine: bufStatus.buffer[i] = newLine
 
-proc replaceCharactor(bufStatus: var BufferStatus, area: SelectArea, ch: Rune) =
+proc replaceCharacter(bufStatus: var BufferStatus, area: SelectArea, ch: Rune) =
   for i in area.startLine .. area.endLine:
     let oldLine = bufStatus.buffer[i]
     var newLine = bufStatus.buffer[i]
@@ -183,7 +183,7 @@ proc replaceCharactor(bufStatus: var BufferStatus, area: SelectArea, ch: Rune) =
 
   inc(bufStatus.countChange)
 
-proc replaceCharactorBlock(bufStatus: var BufferStatus,
+proc replaceCharacterBlock(bufStatus: var BufferStatus,
                            area: SelectArea,
                            ch: Rune) =
 
@@ -256,7 +256,7 @@ proc toUpperStringBlock(bufStatus: var BufferStatus, area: SelectArea) =
     if oldLine != newLine: bufStatus.buffer[i] = newLine
 
 proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
-  area.swapSlectArea
+  area.swapSelectArea
 
   let
     clipboard = status.settings.systemClipboard
@@ -295,11 +295,11 @@ proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   elif key == ord('r'):
     let ch = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.getKey
     if not isEscKey(ch):
-      status.bufStatus[currentBufferIndex].replaceCharactor(area, ch)
+      status.bufStatus[currentBufferIndex].replaceCharacter(area, ch)
   else: discard
 
 proc visualBlockCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
-  area.swapSlectArea
+  area.swapSelectArea
 
   let
     clipboard = status.settings.systemClipboard
@@ -335,7 +335,7 @@ proc visualBlockCommand(status: var EditorStatus, area: var SelectArea, key: Run
     status.bufStatus[currentBufferIndex].toUpperStringBlock(area)
   elif key == ord('r'):
     let ch = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.getKey
-    if not isEscKey(ch): status.bufStatus[currentBufferIndex].replaceCharactorBlock(area, ch)
+    if not isEscKey(ch): status.bufStatus[currentBufferIndex].replaceCharacterBlock(area, ch)
   else: discard
 
 proc visualMode*(status: var EditorStatus) =
