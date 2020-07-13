@@ -62,6 +62,8 @@ proc recentFileMode*(status: var Editorstatus) =
     elif key == ord('j') or isDownKey(key): status.bufStatus[currentBufferIndex].keyDown(windowNode)
     elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key): windowNode.keyLeft
     elif key == ord('l') or isRightKey(key): status.bufStatus[currentBufferIndex].keyRight(windowNode)
+    elif key == ord('G'): status.moveToLastLine
+    elif key == ord('g') and getKey(windowNode.window) == ord('g'): status.moveToFirstLine
     elif isEnterKey(key): status.openSelectedBuffer
 
   # Delete buffer of recent used file list
