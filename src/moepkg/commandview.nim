@@ -213,8 +213,9 @@ proc writeOpenRecentlyUsedXbelError*(cmdWin: var Window,
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
 
 proc writeFileNotFoundError*(cmdWin: var Window,
-                         filename: seq[Rune],
-                         messageLog: var seq[seq[Rune]]) =
+                             filename: seq[Rune],
+                             messageLog: var seq[seq[Rune]]) =
+
   let mess = "Error: " & $filename & " not found"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
 
