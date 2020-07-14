@@ -24,6 +24,9 @@ proc initRecentFileModeBuffer(bufStatus: var BufferStatus) =
     if index == 0: bufStatus.buffer[0] = str.toRunes
     else: bufStatus.buffer.add(str.toRunes)
 
+proc isRecentFileMode(bufStatus: BufferStatus): bool =
+  bufStatus.mode == Mode.recentFile
+
 proc recentFileMode*(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
 
@@ -33,7 +36,7 @@ proc recentFileMode*(status: var Editorstatus) =
 
   status.bufStatus[currentBufferIndex].initRecentFileModeBuffer
 
-  while bufStatus.mode == Mode.recentFile and
+  while status.bufStatus[currentBufferIndex].isRecentFileMode and
         currentWorkSpace == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
 

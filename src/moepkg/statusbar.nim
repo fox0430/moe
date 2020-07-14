@@ -145,6 +145,7 @@ proc setModeStr(mode: Mode, isActiveWindow, showModeInactive: bool): string =
     of Mode.bufManager: result = " BUFFER "
     of Mode.ex: result = " EX "
     of Mode.logViewer: result = " LOG "
+    of Mode.recentFile: result = " RECENT "
     else: result = " NORMAL "
 
 proc setModeStrColor(mode: Mode): EditorColorPair =
@@ -174,6 +175,8 @@ proc isShowGitBranchName(mode, prevMode: Mode,
   elif mode == Mode.ex and prevMode == Mode.bufManager: return false
   elif mode == Mode.help: return false
   elif mode == Mode.ex and prevMode == Mode.help: return false
+  elif mode == Mode.recentFile: return false
+  elif mode == Mode.ex and prevMode == Mode.recentFile: return false
 
 proc writeStatusBar*(bufStatus: var BufferStatus,
                      statusBar: var StatusBar,
