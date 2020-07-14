@@ -14,6 +14,7 @@ import moepkg/settings
 import moepkg/commandview
 import moepkg/bufferstatus
 import moepkg/help
+import moepkg/recentfilemode
 
 proc main() =
   let parsedList = parseCommandLineOption(commandLineParams())
@@ -58,6 +59,7 @@ proc main() =
     of Mode.bufManager: status.bufferManager
     of Mode.logViewer: status.messageLogViewer
     of Mode.help: status.helpMode
+    of Mode.recentFile: status.recentFileMode
 
   status.settings.exitEditor
 

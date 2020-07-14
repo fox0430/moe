@@ -47,6 +47,7 @@ const exCommandList = [
   ru"qa",
   ru"qa!",
   ru"realtimesearch",
+  ru"recent",
   ru"run",
   ru"scrollspeed",
   ru"showGitInactive",
@@ -203,6 +204,19 @@ proc writePutConfigFileAlreadyExistError*(cmdWin: var Window,
                                           messageLog: var seq[seq[Rune]]) =
 
   const mess = "Error: Configuration file already exists"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+
+proc writeOpenRecentlyUsedXbelError*(cmdWin: var Window,
+                                     messageLog: var seq[seq[Rune]]) =
+
+  const mess = "Error: " & getHomeDir() / ".local/share/recently-used.xbel" & " Not found"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+
+proc writeFileNotFoundError*(cmdWin: var Window,
+                             filename: seq[Rune],
+                             messageLog: var seq[seq[Rune]]) =
+
+  let mess = "Error: " & $filename & " not found"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
 
 proc askCreateDirPrompt*(cmdWin: var Window,

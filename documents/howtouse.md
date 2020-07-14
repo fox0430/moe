@@ -201,3 +201,5 @@ Check command bar
 ```putConfigFile``` - Put a sample configuration file in ~/.config/moe
 
 ```run``` - Quick run
+
+```recent``` - Open recent file selection mode (Only supported on Linux)  
