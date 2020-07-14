@@ -773,7 +773,8 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
 proc quitCommand(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   let workspaceIndex = status.currentWorkSpaceIndex
-  if status.bufStatus[currentBufferIndex].prevMode == Mode.filer:
+  if status.bufStatus[currentBufferIndex].prevMode == Mode.filer or
+      status.bufStatus[currentBufferIndex].prevMode == Mode.recentFile:
     status.deleteBuffer(currentBufferIndex)
   else:
     if status.bufStatus[currentBufferIndex].countChange == 0 or
@@ -783,6 +784,7 @@ proc quitCommand(status: var EditorStatus) =
       status.commandWindow.writeNoWriteError(status.messageLog)
 
   status.changeMode(Mode.normal)
+
 proc writeAndQuitCommand(status: var EditorStatus) =
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow

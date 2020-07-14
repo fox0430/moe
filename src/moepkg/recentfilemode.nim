@@ -24,10 +24,6 @@ proc initRecentFileModeBuffer(bufStatus: var BufferStatus) =
     if index == 0: bufStatus.buffer[0] = str.toRunes
     else: bufStatus.buffer.add(str.toRunes)
 
-proc isRecentFileMode(bufStatus: BufferStatus): bool =
-  result = (bufStatus.mode == Mode.recentFile) or
-           (bufStatus.mode == Mode.ex and bufStatus.prevMode == Mode.recentFile)
-
 proc recentFileMode*(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
 
@@ -37,7 +33,7 @@ proc recentFileMode*(status: var Editorstatus) =
 
   status.bufStatus[currentBufferIndex].initRecentFileModeBuffer
 
-  while status.bufStatus[currentBufferIndex].isRecentFileMode and
+  while bufStatus.mode == Mode.recentFile and
         currentWorkSpace == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
 
@@ -65,6 +61,3 @@ proc recentFileMode*(status: var Editorstatus) =
     elif key == ord('G'): status.moveToLastLine
     elif key == ord('g') and getKey(windowNode.window) == ord('g'): status.moveToFirstLine
     elif isEnterKey(key): status.openSelectedBuffer
-
-  # Delete buffer of recent used file list
-  status.deleteBuffer(currentBufferIndex)
