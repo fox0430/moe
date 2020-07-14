@@ -50,7 +50,7 @@ proc isOpenBufferManager(command: seq[seq[Rune]]): bool =
 
 proc isChangeCursorLineCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
-  return command.len == 2 and cmd == "cursorLine"
+  return command.len == 2 and cmd == "cursorline"
 
 proc isListAllBufferCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
