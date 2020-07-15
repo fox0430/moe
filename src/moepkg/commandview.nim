@@ -9,59 +9,59 @@ type
   ]
 
 const exCommandList = [
-  ru"!",
-  ru"deleteparen",
-  ru"b",
-  ru"bd",
-  ru"bfirst",
-  ru"blast",
-  ru"bnext",
-  ru"bprev",
-  ru"buildonsave",
-  ru"buf",
-  ru"clipboard",
-  ru"cursorLine",
-  ru"cws",
-  ru"deleteTrailingSpaces",
-  ru"dws",
-  ru"e",
-  ru"ene",
-  ru"help",
-  ru"highlightcurrentword",
-  ru"highlightfullspace",
-  ru"highlightparen",
-  ru"icon",
-  ru"indent",
-  ru"indentationlines",
-  ru"linenum",
-  ru"livereload",
-  ru"log",
-  ru"ls",
-  ru"multiplestatusbar",
-  ru"new",
-  ru"noh",
-  ru"paren",
-  ru"putConfigFile",
-  ru"q",
-  ru"q!",
-  ru"qa",
-  ru"qa!",
-  ru"realtimesearch",
-  ru"recent",
-  ru"run",
-  ru"scrollspeed",
-  ru"showGitInactive",
-  ru"smoothscroll",
-  ru"sp",
-  ru"statusbar",
-  ru"syntax",
-  ru"tab",
-  ru"tabstop",
-  ru"theme",
-  ru"vs",
-  ru"ws",
-  ru"wq",
-  ru"wqa",
+  "!",
+  "deleteParen",
+  "b",
+  "bd",
+  "bfirst",
+  "blast",
+  "bnext",
+  "bprev",
+  "buildOnSave",
+  "buf",
+  "clipboard",
+  "cursorLine",
+  "cws",
+  "deleteTrailingSpaces",
+  "dws",
+  "e",
+  "ene",
+  "help",
+  "highlightCurrentWord",
+  "highlightFullSpace",
+  "highlightParen",
+  "icon",
+  "indent",
+  "indentationLines",
+  "linenum",
+  "liveReload",
+  "log",
+  "ls",
+  "multipleStatusbar",
+  "new",
+  "noh",
+  "paren",
+  "putConfigFile",
+  "q",
+  "q!",
+  "qa",
+  "qa!",
+  "realtimeSearch",
+  "recent",
+  "run",
+  "scrollSpeed",
+  "showGitInactive",
+  "smoothScroll",
+  "sp",
+  "statusbar",
+  "syntax",
+  "tab",
+  "tabstop",
+  "theme",
+  "vs",
+  "ws",
+  "wq",
+  "wqa",
 ]
 
 proc writeMessageOnCommandWindow(cmdWin: var Window,
@@ -476,7 +476,7 @@ proc suggestExCommandOption(status: var Editorstatus,
   var argList: seq[string] = @[]
   let command = (splitWhitespace(exStatus.buffer))[0]
 
-  case $command:
+  case toLowerAscii($command):
     of "cursorLine",
        "highlightparen",
        "indent",
@@ -494,7 +494,7 @@ proc suggestExCommandOption(status: var Editorstatus,
        "buildonsave",
        "indentationlines",
        "icon",
-       "showGitInactive":
+       "showgitinactive":
       argList = @["on", "off"]
     of "theme":
       argList= @["vivid", "dark", "light", "config"]
@@ -554,9 +554,10 @@ proc suggestExCommand(status: var Editorstatus,
                       key: var Rune) =
                       
   var suggestlist: seq[seq[Rune]] = @[exStatus.buffer]
-  for runes in exCommandList:
-    if runes.len >= exStatus.buffer.len and
-       exStatus.buffer.startsWith(runes): suggestlist.add(runes)
+  let buffer = toLowerAscii($exStatus.buffer)
+  for str in exCommandList:
+    if str.len >= buffer.len and
+       str.startsWith(buffer): suggestlist.add(str.toRunes)
 
   var
     suggestIndex = 0
