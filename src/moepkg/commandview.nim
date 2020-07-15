@@ -43,6 +43,7 @@ const exCommandList = [
   "paren",
   "putConfigFile",
   "q",
+  "Q",
   "q!",
   "qa",
   "qa!",
