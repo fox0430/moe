@@ -270,7 +270,7 @@ proc isNewEmptyBufferInSplitWindowVertically(command: seq[seq[Rune]]): bool =
 
 proc isQuickRunCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
-  return command.len == 1 and cmd == "run"
+  return command.len == 1 and (cmd == "run" or command[0] == ru"Q")
 
 proc isRecentFileModeCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
