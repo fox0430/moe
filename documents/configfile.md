@@ -283,6 +283,35 @@ defaut
 reservedWord
 ```
 
+### AutoBackup table
+
+Enable/Disable automatic backups (bool)  
+default is ture  
+```
+enable
+```
+
+Start backup when there is no operation for the set number of seconds (int)  
+default is 10 (10 second)  
+```
+idolTime
+```
+
+Backup interval (int)  
+default is 5 (5 minute)    
+```
+interval
+```
+
+Directory to save backup files (string)  
+
+Save to same directory as original file if not set.  
+
+default is "" (None)  
+```
+backupDir
+```
+
 ### Filer table
 
 Show/hidden unicode icons (bool)  
