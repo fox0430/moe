@@ -305,7 +305,7 @@ interval
 
 Directory to save backup files (string)  
 
-Save to same directory as original file if not set.  
+If not set, it will be saved in .hisotry in the same directory as the original file.  
 
 default is "" (None)  
 ```
