@@ -161,8 +161,13 @@ proc writeStartAutoBackupMessage*(cmdWin: var Window,
 
   const mess = "Start automatic backup..."
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+
 proc writeAutoBackupSuccessMessage*(cmdWin: var Window,
                                   messageLog: var seq[seq[Rune]]) =
 
   const mess = "Automatic backup successful"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+
+proc writeRunQuickRunMessage*(cmdWin: var Window) =
+  const mess = "Quick run..."
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)

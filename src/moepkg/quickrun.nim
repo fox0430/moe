@@ -1,5 +1,5 @@
 import osproc, packages/docutils/highlite
-import unicodeext, settings, bufferstatus, gapbuffer
+import unicodeext, settings, bufferstatus, gapbuffer, messages, ui
 
 type Language = enum
   None = 0
@@ -23,6 +23,7 @@ proc generateCommand(bufStatus: BufferStatus, language: Language): string =
     result = ""
 
 proc runQuickRun*(bufStatus: BufferStatus,
+                  cmdWin: var Window,
                   settings: EditorSettings): seq[seq[Rune]] =
 
   let
@@ -39,9 +40,12 @@ proc runQuickRun*(bufStatus: BufferStatus,
     command = bufStatus.generateCommand(language)
   if command == "": return @[ru""]
 
-  let   cmdResult = execCmdEx(command)
+  cmdWin.writeRunQuickRunMessage
+  let cmdResult = execCmdEx(command)
+  cmdWin.erase
 
   result = @[ru""]
   for i in 0 ..< cmdResult.output.len:
     if cmdResult.output[i] == '\n': result.add(@[ru""])
     else: result[^1].add(toRunes($cmdResult.output[i])[0])
+
