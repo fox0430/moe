@@ -38,30 +38,16 @@ proc checkAndCreateBackupDir(path: seq[Rune],
     except OSError: result = @[]
 
 proc diffWithBackup(path: seq[Rune], buffer: string): bool =
-  var
-    filename = ru""
-    dir = ru""
-  let slashPosition = path.rfind(ru"/")
-  if  slashPosition > 0:
-    filename = path[slashPosition + 1 .. ^1]
-    dir = path[0 .. slashPosition]
-  else:
-    filename = filename
-
-  let dotPosi = filename.rfind(ru".")
-  if dotPosi > 0:
-    filename = filename[0 ..< dotPosi] & ru"_*"  & filename[dotPosi .. ^1]
-  else:
-    filename &= ru"_*"
-
-  # filename including timestamp
-  let patern = re".*_[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+[0-9]{2}:[0-9]{2}.*"
+  let
+    # filename including timestamp
+    patern = re".*_[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+[0-9]{2}:[0-9]{2}.*"
+    splitPath = splitPath($path)
   var
     filePath = ""
     timeStamp: DateTime
 
   # Get most recently backup file
-  for kind, path in walkDir($dir):
+  for kind, path in walkDir($splitPath.head):
     if kind == PathComponent.pcFile:
       let splitPath = path.splitPath
       if splitPath.tail.match(patern):
