@@ -62,6 +62,8 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Quick run
 
+- Automatic backups
+
 ## Planned features
 
 - Configuration mode

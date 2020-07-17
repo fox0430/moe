@@ -1,6 +1,6 @@
 import os, terminal, strutils, unicodeext, times, algorithm
 import editorstatus, ui, fileutils, editorview, gapbuffer, highlight,
-       commandview, highlight, window, color, bufferstatus, settings
+       commandview, highlight, window, color, bufferstatus, settings, messages
 
 type PathInfo = tuple[kind: PathComponent,
                       path: string,
@@ -462,7 +462,14 @@ proc filerMode*(status: var EditorStatus) =
     if filerStatus.viewUpdate: updateFilerView(status, filerStatus)
 
     setCursor(false)
-    let key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+
+    var key: Rune = ru'\0'
+    while key == ru'\0':
+      status.eventLoopTask
+      key = getKey(
+        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+
+    status.lastOperatingTime = now()
 
     status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
     status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(windowNode)

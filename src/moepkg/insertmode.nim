@@ -1,4 +1,4 @@
-import deques, strutils, strformat, sequtils, terminal, macros
+import deques, strutils, strformat, sequtils, terminal, macros, times
 from os import execShellCmd
 import ui, editorstatus, gapbuffer, unicodeext, undoredostack, window,
        movement, editor, bufferstatus
@@ -28,6 +28,8 @@ proc insertMode*(status: var EditorStatus) =
       status.eventLoopTask
       key =
         getKey(status.workSpace[workspaceIndex].currentMainWindowNode.window)
+
+    status.lastOperatingTime = now()
 
     var windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
 

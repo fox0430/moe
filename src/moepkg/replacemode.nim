@@ -1,4 +1,4 @@
-import terminal
+import terminal, times
 import editorstatus, ui, unicodeext, movement, editor, bufferstatus, gapbuffer
 
 proc isReplaceMode(status: EditorStatus): bool =
@@ -37,6 +37,8 @@ proc replaceMode*(status: var EditorStatus) =
     while key == Rune('\0'):
       status.eventLoopTask
       key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+
+    status.lastOperatingTime = now()
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())

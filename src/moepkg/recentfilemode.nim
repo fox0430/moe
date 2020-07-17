@@ -1,6 +1,6 @@
 import os, re, terminal
 import editorstatus, ui, unicodeext, bufferstatus, movement, gapbuffer,
-       commandview
+       messages
 
 proc openSelectedBuffer(status: var Editorstatus) =
   let
@@ -46,7 +46,10 @@ proc recentFileMode*(status: var Editorstatus) =
 
     var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
 
-    let key = getKey(windowNode.window)
+    var key: Rune = ru'\0'
+    while key == ru'\0':
+      status.eventLoopTask
+      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())

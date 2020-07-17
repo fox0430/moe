@@ -98,6 +98,18 @@ useBar = false
 
 reservedWord = ["TODO", "WIP", "NOTE"]
 
+[AutoBackup]
+
+enable = true
+
+# 10 second
+idolTime = 10
+
+# 5 minute
+interval = 5
+
+# backupDir = "/home/fox/Nim"
+
 [Filer]
 
 showIcons = true
