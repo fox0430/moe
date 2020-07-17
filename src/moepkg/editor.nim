@@ -1,6 +1,6 @@
-import strutils, sequtils, os, osproc, random
-import editorstatus, ui, gapbuffer, unicodeext, commandview, undoredostack,
-       window, bufferstatus, movement, strformat
+import strutils, sequtils, os, osproc, random, strformat
+import editorstatus, ui, gapbuffer, unicodeext, undoredostack,
+       window, bufferstatus, movement, messages
 
 proc correspondingCloseParen(c: char): char =
   case c

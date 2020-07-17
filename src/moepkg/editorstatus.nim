@@ -1,9 +1,9 @@
 import strutils, terminal, os, strformat, tables, times, osproc, heapqueue,
-       deques
+       deques, times
 import packages/docutils/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        undoredostack, window, color, workspace, statusbar, settings,
-       bufferstatus, cursor, tabline
+       bufferstatus, cursor, tabline, backup, messages
 
 type Platform* = enum
   linux, wsl, mac, other
@@ -30,6 +30,8 @@ type EditorStatus* = object
   tabWindow*: Window
   popUpWindow*: Window
   workSpaceTabWindow*: Window
+  lastOperatingTime*: DateTime
+  autoBackupStatus*: AutoBackupStatus
 
 proc initPlatform(): Platform =
   if defined linux:
@@ -48,6 +50,8 @@ proc initEditorStatus*(): EditorStatus =
   result.currentDir = getCurrentDir().toRunes
   result.registers = initRegisters()
   result.settings = initEditorSettings()
+  result.lastOperatingTime = now()
+  result.autoBackupStatus = initAutoBackupStatus()
 
   if result.settings.workSpace.useBar:
     const
@@ -530,7 +534,6 @@ proc deletePopUpWindow*(status: var Editorstatus) =
     status.update
 
 proc addNewBuffer*(status: var EditorStatus, filename: string)
-from commandview import writeFileOpenError
 
 proc addNewBuffer*(status: var EditorStatus, filename: string) =
   status.bufStatus.add(BufferStatus(filename: filename.toRunes,
@@ -938,7 +941,6 @@ proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
 proc changeTheme*(status: var EditorStatus) =
   setCursesColor(ColorThemeTable[status.settings.editorColorTheme])
 
-from commandview import writeMessageAutoSave
 proc autoSave(status: var Editorstatus) =
   let interval = status.settings.autoSaveInterval.minutes
   for index, bufStatus in status.bufStatus:
@@ -952,7 +954,10 @@ proc autoSave(status: var Editorstatus) =
 
 from settings import loadSettingFile
 proc eventLoopTask(status: var Editorstatus) =
+  # Auto save
   if status.settings.autoSave: status.autoSave
+
+  # Live reload of configuration file
   if status.settings.liveReloadOfConf and
      status.timeConfFileLastReloaded + 1.seconds < now():
     let beforeTheme = status.settings.editorColorTheme
@@ -961,3 +966,36 @@ proc eventLoopTask(status: var Editorstatus) =
     if beforeTheme != status.settings.editorColorTheme:
       changeTheme(status)
       status.resize(terminalHeight(), terminalWidth())
+
+  # Automatic backup
+  let
+    lastBackupTime = status.autoBackupStatus.lastBackupTime
+    interval = status.settings.autoBackupSettings.interval
+    idolTime = status.settings.autoBackupSettings.idolTime
+
+  if status.settings.autoBackupSettings.enable and
+     lastBackupTime + interval.minutes < now() and
+     status.lastOperatingTime + idolTime.seconds < now():
+    for bufStatus in status.bufStatus:
+      let
+        mode = bufStatus.mode
+        prevMode = bufStatus.prevMode
+
+      if (mode == Mode.normal or
+          mode == Mode.insert or
+          mode == Mode.visual or
+          mode == Mode.visualBlock or
+          mode == Mode.replace) or
+          (mode == Mode.ex and
+          (prevMode == Mode.normal or
+           prevMode == Mode.insert or
+           prevMode == Mode.visual or
+           prevMode == Mode.visualBlock or
+           prevMode == Mode.replace)):
+
+        bufStatus.backupBuffer(status.settings.characterEncoding,
+                               status.settings.autoBackupSettings,
+                               status.commandwindow,
+                               status.messageLog)
+
+        status.autoBackupStatus.lastBackupTime = now()

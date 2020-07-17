@@ -1,8 +1,8 @@
 from strutils import parseInt
-import strformat, terminal
-import editorstatus, ui, gapbuffer, unicodeext, fileutils, commandview,
-       undoredostack, window, movement, editor, search, color,
-       bufferstatus, quickrun
+import strformat, terminal, times
+import editorstatus, ui, gapbuffer, unicodeext, fileutils, undoredostack,
+       window, movement, editor, search, color, bufferstatus, quickrun,
+       messages
 
 proc writeDebugInfo(status: var EditorStatus, str: string = "") =
   status.commandWindow.erase
@@ -720,6 +720,8 @@ proc normalMode*(status: var EditorStatus) =
       status.eventLoopTask
       key = getKey(
         status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+
+    status.lastOperatingTime = now()
 
     status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
     status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(

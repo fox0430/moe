@@ -1,4 +1,4 @@
-import parsetoml, os, json, macros
+import parsetoml, os, json, macros, times
 from strutils import parseEnum, endsWith
 
 when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
@@ -7,6 +7,12 @@ when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
   export strutils.nimIdentNormalize
 
 import ui, color, unicodeext, build, highlight
+
+type AutoBackupSettings* = object
+  enable*: bool
+  idolTime*: int # seconds
+  interval*: int # minutes
+  backupDir*: seq[Rune]
 
 type FilerSettings = object
   showIcons*: bool
@@ -72,6 +78,12 @@ type EditorSettings* = object
   filerSettings*: FilerSettings
   reservedWords*: seq[ReservedWord]
   quickRunCommand*: string
+  autoBackupSettings*: AutoBackupSettings
+
+proc initAutoBackupSettings(): AutoBackupSettings =
+  result.enable = true
+  result.interval = 5 # 5 minutes
+  result.idolTime = 10 # 10 seconds
 
 proc initFilerSettings(): FilerSettings =
   result.showIcons = true
@@ -136,6 +148,7 @@ proc initEditorSettings*(): EditorSettings =
   result.workSpace= initWorkSpaceSettings()
   result.filerSettings = initFilerSettings()
   result.reservedWords = initReservedWords()
+  result.autoBackupSettings = initAutoBackupSettings()
 
 proc getCursorType(cursorType, mode: string): CursorType =
   case cursorType
@@ -675,7 +688,7 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
   if settings.contains("WorkSpace"):
     if settings["WorkSpace"].contains("useBar"):
-        result.workSpace.useBar = settings["WorkSpace"]["useBar"].getbool()
+      result.workSpace.useBar = settings["WorkSpace"]["useBar"].getbool()
 
   if settings.contains("Highlight"):
     if settings["Highlight"].contains("reservedWord"):
@@ -685,6 +698,20 @@ proc parseSettingsFile*(filename: string): EditorSettings =
           word = reservedWords[i].getStr
           reservedWord = ReservedWord(word: word, color: EditorColorPair.reservedWord)
         result.reservedWords.add(reservedWord)
+
+  if settings.contains("AutoBackup"):
+    if settings["AutoBackup"].contains("enable"):
+      result.autoBackupSettings.enable = settings["AutoBackup"]["enable"].getbool()
+
+    if settings["AutoBackup"].contains("idolTime"):
+      result.autoBackupSettings.idolTime = settings["AutoBackup"]["idolTime"].getInt()
+
+    if settings["AutoBackup"].contains("interval"):
+      result.autoBackupSettings.interval = settings["AutoBackup"]["interval"].getInt()
+
+    if settings["AutoBackup"].contains("backupDir"):
+      let dir = settings["AutoBackup"]["backupDir"].getStr()
+      result.autoBackupSettings.backupDir = dir.toRunes
 
   if settings.contains("Filer"):
     if settings["Filer"].contains("showIcons"):

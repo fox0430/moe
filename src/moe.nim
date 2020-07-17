@@ -11,10 +11,10 @@ import moepkg/buffermanager
 import moepkg/logviewer
 import moepkg/cmdlineoption
 import moepkg/settings
-import moepkg/commandview
 import moepkg/bufferstatus
 import moepkg/help
 import moepkg/recentfilemode
+import moepkg/messages
 
 proc main() =
   let parsedList = parseCommandLineOption(commandLineParams())
@@ -46,7 +46,8 @@ proc main() =
 
   disableControlC()
 
-  while status.workSpace.len > 0 and status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow > 0:
+  while status.workSpace.len > 0 and
+        status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow > 0:
 
     let currentBufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
     case status.bufStatus[currentBufferIndex].mode:

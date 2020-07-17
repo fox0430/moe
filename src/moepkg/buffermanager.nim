@@ -1,4 +1,4 @@
-import terminal, os, heapqueue
+import terminal, os, heapqueue, times
 import gapbuffer, ui, editorstatus, unicodeext, highlight, window, movement,
        color, bufferstatus
 
@@ -131,7 +131,13 @@ proc bufferManager*(status: var Editorstatus) =
     status.updateBufferManagerHighlight
     status.update
     setCursor(false)
-    let key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+
+    var key: Rune = ru'\0'
+    while key == ru'\0':
+      status.eventLoopTask
+      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+
+    status.lastOperatingTime = now()
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())

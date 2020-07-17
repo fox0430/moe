@@ -312,3 +312,6 @@ proc contains*(runes: seq[Rune], r: Rune): bool =
 proc splitWhitespace*(runes: seq[Rune]): seq[seq[Rune]] =
   let strings = strutils.splitWhitespace($runes)
   for str in strings: result.add(str.toRunes)
+
+proc `/`*(runes1, runes2: seq[Rune]): seq[Rune] =
+  result = runes1 & ru"/" & runes2

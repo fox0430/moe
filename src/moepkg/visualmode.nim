@@ -1,4 +1,4 @@
-import terminal, strutils, sequtils
+import terminal, strutils, sequtils, times
 import editorstatus, ui, gapbuffer, unicodeext, window, movement, editor,
        bufferstatus
 
@@ -363,6 +363,8 @@ proc visualMode*(status: var EditorStatus) =
     while key == Rune('\0'):
       status.eventLoopTask
       key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+
+    status.lastOperatingTime = now()
 
     status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
     status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(windowNode)

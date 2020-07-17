@@ -1,4 +1,4 @@
-import terminal
+import terminal, times
 import ui, editorstatus, unicodeext, movement, bufferstatus
 
 proc initMessageLog*(status: var Editorstatus) =
@@ -35,7 +35,13 @@ proc messageLogViewer*(status: var Editorstatus) =
     var windowNode =
       status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
 
-    let key = getKey(windowNode.window)
+    var key: Rune = ru'\0'
+    while key == ru'\0':
+      status.eventLoopTask
+      key = getKey(
+        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+
+    status.lastOperatingTime = now()
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
