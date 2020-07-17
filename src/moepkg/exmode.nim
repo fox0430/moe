@@ -309,7 +309,7 @@ proc runQuickRunCommand(status: var Editorstatus) =
   status.moveNextWindow
 
   status.addNewBuffer("")
-  let buffer = runQuickRun(bufStatus, status.settings)
+  let buffer = runQuickRun(bufStatus, status.commandwindow, status.settings)
   status.bufStatus[^1].buffer = initGapBuffer(buffer)
 
   status.changeCurrentBuffer(status.bufStatus.high)
