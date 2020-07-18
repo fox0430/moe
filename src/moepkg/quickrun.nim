@@ -5,7 +5,8 @@ type Language = enum
   None = 0
   Nim = 1
   C = 2
-  Shell = 3
+  Cpp = 3
+  Shell = 4
 
 proc generateCommand(bufStatus: BufferStatus, language: Language): string =
   let filename = $bufStatus.filename
@@ -14,6 +15,8 @@ proc generateCommand(bufStatus: BufferStatus, language: Language): string =
     result = "nim c -r " & filename
   elif language == Language.C:
     result = "gcc " & filename & " && ./a.out"
+  elif language == Language.Cpp:
+    result = "g++ " & filename & " && ./a.out"
   elif language == Language.Shell:
     if bufStatus.buffer[0] == ru"#!/bin/bash":
       result = "bash " & filename
@@ -31,6 +34,7 @@ proc runQuickRun*(bufStatus: BufferStatus,
     sourceLang = bufStatus.language
     language = if sourceLang == SourceLanguage.langNim: Language.Nim
                elif sourceLang == SourceLanguage.langC: Language.C
+               elif sourceLang == SourceLanguage.langCpp: Language.Cpp
                elif filename.len > 3 and
                     filename[filename.len - 3 .. filename.high] == ru".sh":
                       Language.Shell
