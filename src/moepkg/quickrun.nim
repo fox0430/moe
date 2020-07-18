@@ -15,7 +15,10 @@ proc generateCommand(bufStatus: BufferStatus,
   let filename = $bufStatus.filename
 
   if language == Language.Nim:
-    result = "nim c -r " & settings.NimOptions & " " & filename
+    let
+      advancedCommand = settings.nimAdvancedCommand
+      options = settings.NimOptions
+    result = "nim " & advancedCommand & " -r " & options & " " & filename
   elif language == Language.C:
     result = "gcc " & settings.ClangOptions & " " & filename & " && ./a.out"
   elif language == Language.Cpp:

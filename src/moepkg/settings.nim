@@ -10,6 +10,7 @@ import ui, color, unicodeext, build, highlight
 
 type QuickRunSettings* = object
   command*: string
+  nimAdvancedCommand*: string
   ClangOptions*: string
   CppOptions*: string
   NimOptions*: string
@@ -721,6 +722,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
   if settings.contains("QuickRun"):
     if settings["QuickRun"].contains("command"):
       result.quickRunSettings.command = settings["QuickRun"]["command"].getStr()
+
+    if settings["QuickRun"].contains("nimAdvancedCommand"):
+      result.quickRunSettings.nimAdvancedCommand = settings["QuickRun"]["nimAdvancedCommand"].getStr()
 
     if settings["QuickRun"].contains("ClangOptions"):
       result.quickRunSettings.ClangOptions = settings["QuickRun"]["ClangOptions"].getStr()

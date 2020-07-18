@@ -112,6 +112,8 @@ interval = 5
 
 # command = "nimble build"
 
+# nimAdvancedCommand = "js"
+
 # ClangOptions = "-Wall"
 
 # CppOptions = "-Wall"
