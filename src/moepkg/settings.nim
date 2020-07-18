@@ -89,6 +89,9 @@ type EditorSettings* = object
   autoBackupSettings*: AutoBackupSettings
   quickRunSettings*: QuickRunSettings
 
+proc initQuickRunSettings(): QuickRunSettings =
+  result.nimAdvancedCommand = "c"
+
 proc initAutoBackupSettings(): AutoBackupSettings =
   result.enable = true
   result.interval = 5 # 5 minutes
@@ -158,6 +161,7 @@ proc initEditorSettings*(): EditorSettings =
   result.filerSettings = initFilerSettings()
   result.reservedWords = initReservedWords()
   result.autoBackupSettings = initAutoBackupSettings()
+  result.quickRunSettings = initQuickRunSettings()
 
 proc getCursorType(cursorType, mode: string): CursorType =
   case cursorType
