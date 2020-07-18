@@ -8,6 +8,15 @@ when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
 
 import ui, color, unicodeext, build, highlight
 
+type QuickRunSettings* = object
+  command*: string
+  nimAdvancedCommand*: string
+  ClangOptions*: string
+  CppOptions*: string
+  NimOptions*: string
+  shOptions*: string
+  bashOptions*: string
+
 type AutoBackupSettings* = object
   enable*: bool
   idolTime*: int # seconds
@@ -77,8 +86,11 @@ type EditorSettings* = object
   workSpace*: WorkSpaceSettings
   filerSettings*: FilerSettings
   reservedWords*: seq[ReservedWord]
-  quickRunCommand*: string
   autoBackupSettings*: AutoBackupSettings
+  quickRunSettings*: QuickRunSettings
+
+proc initQuickRunSettings(): QuickRunSettings =
+  result.nimAdvancedCommand = "c"
 
 proc initAutoBackupSettings(): AutoBackupSettings =
   result.enable = true
@@ -149,6 +161,7 @@ proc initEditorSettings*(): EditorSettings =
   result.filerSettings = initFilerSettings()
   result.reservedWords = initReservedWords()
   result.autoBackupSettings = initAutoBackupSettings()
+  result.quickRunSettings = initQuickRunSettings()
 
 proc getCursorType(cursorType, mode: string): CursorType =
   case cursorType
@@ -635,9 +648,6 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("indentationLines"):
       result.view.indentationLines = settings["Standard"]["indentationLines"].getbool()
 
-    if settings["Standard"].contains("quickRunCommand"):
-      result.quickRunCommand = settings["Standard"]["quickRunCommand"].getStr()
-
   if settings.contains("TabLine"):
     if settings["TabLine"].contains("allBuffer"):
         result.tabLine.allBuffer= settings["TabLine"]["allBuffer"].getbool()
@@ -712,6 +722,28 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["AutoBackup"].contains("backupDir"):
       let dir = settings["AutoBackup"]["backupDir"].getStr()
       result.autoBackupSettings.backupDir = dir.toRunes
+
+  if settings.contains("QuickRun"):
+    if settings["QuickRun"].contains("command"):
+      result.quickRunSettings.command = settings["QuickRun"]["command"].getStr()
+
+    if settings["QuickRun"].contains("nimAdvancedCommand"):
+      result.quickRunSettings.nimAdvancedCommand = settings["QuickRun"]["nimAdvancedCommand"].getStr()
+
+    if settings["QuickRun"].contains("ClangOptions"):
+      result.quickRunSettings.ClangOptions = settings["QuickRun"]["ClangOptions"].getStr()
+
+    if settings["QuickRun"].contains("CppOptions"):
+      result.quickRunSettings.CppOptions = settings["QuickRun"]["CppOptions"].getStr()
+
+    if settings["QuickRun"].contains("NimOptions"):
+      result.quickRunSettings.NimOptions = settings["QuickRun"]["NimOptions"].getStr()
+
+    if settings["QuickRun"].contains("shOptions"):
+      result.quickRunSettings.shOptions = settings["QuickRun"]["shOptions"].getStr()
+
+    if settings["QuickRun"].contains("bashOptions"):
+      result.quickRunSettings.bashOptions = settings["QuickRun"]["bashOptions"].getStr()
 
   if settings.contains("Filer"):
     if settings["Filer"].contains("showIcons"):

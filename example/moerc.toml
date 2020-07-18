@@ -52,8 +52,6 @@ highlightTrailingSpaces = true
 
 highlightCurrentWord = true
 
-# quickRunCommand = "nimble build"
-
 [BuildOnSaveSettings]
 
 buildOnSave = false
@@ -109,6 +107,22 @@ idolTime = 10
 interval = 5
 
 # backupDir = "/home/fox/Nim"
+
+[QuickRun]
+
+# command = "nimble build"
+
+# nimAdvancedCommand = "js"
+
+# ClangOptions = "-Wall"
+
+# CppOptions = "-Wall"
+
+# NimOptions = "--debugger:native"
+
+# shOptions = "-c"
+
+# bashOptions = "-c"
 
 [Filer]
 

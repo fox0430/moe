@@ -8,20 +8,26 @@ type Language = enum
   Cpp = 3
   Shell = 4
 
-proc generateCommand(bufStatus: BufferStatus, language: Language): string =
+proc generateCommand(bufStatus: BufferStatus,
+                     language: Language,
+                     settings: QuickRunSettings): string =
+
   let filename = $bufStatus.filename
 
   if language == Language.Nim:
-    result = "nim c -r " & filename
+    let
+      advancedCommand = settings.nimAdvancedCommand
+      options = settings.NimOptions
+    result = "nim " & advancedCommand & " -r " & options & " " & filename
   elif language == Language.C:
-    result = "gcc " & filename & " && ./a.out"
+    result = "gcc " & settings.ClangOptions & " " & filename & " && ./a.out"
   elif language == Language.Cpp:
-    result = "g++ " & filename & " && ./a.out"
+    result = "g++ " & settings.CppOptions & " " & filename & " && ./a.out"
   elif language == Language.Shell:
     if bufStatus.buffer[0] == ru"#!/bin/bash":
-      result = "bash " & filename
+      result = "bash " & settings.bashOptions & " " & filename
     else:
-      result = "sh " & filename
+      result = "sh " & settings.shOptions & " "  & filename
   else:
     result = ""
 
@@ -41,7 +47,7 @@ proc runQuickRun*(bufStatus: BufferStatus,
                else: Language.None
 
   let
-    command = bufStatus.generateCommand(language)
+    command = bufStatus.generateCommand(language, settings.quickRunSettings)
   if command == "": return @[ru""]
 
   cmdWin.writeRunQuickRunMessage
