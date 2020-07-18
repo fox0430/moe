@@ -164,12 +164,6 @@ default is true
 highlightTrailingSpaces
 ```
 
-Setting commands to be executed by quick run (string)  
-default is ""
-```
-quickRunCommand
-```
-
 ### TabLine table
 Show all bufer in tab line (bool)  
 default is false  
@@ -310,6 +304,50 @@ If not set, it will be saved in .hisotry in the same directory as the original f
 default is "" (None)  
 ```
 backupDir
+```
+
+### QuickRun table
+
+Setting commands to be executed by quick run (string)  
+default is "" (None)
+```
+command
+```
+
+Nim compiler advanced command setting (string)  
+default is "c"
+```
+nimAdvancedCommand
+```
+
+gcc compileer option setting (string)  
+default is "" (None)
+```
+ClangOptions
+```
+
+g++ compiler option setting (string)  
+default is "" (None)
+```
+CppOptions
+```
+
+Nim compiler option setting (string)  
+default is "" (None)
+```
+NimOptions
+```
+
+sh option setting (string)  
+default is "" (None)
+```
+shOptions
+```
+
+bash option setting (string)  
+default is "" (None)
+```
+bashOptions
 ```
 
 ### Filer table
