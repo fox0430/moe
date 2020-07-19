@@ -12,7 +12,8 @@ type Mode* = enum
   bufManager,
   logViewer,
   help,
-  recentFile
+  recentFile,
+  quickRun
 
 type SelectArea* = object
   startLine*: int

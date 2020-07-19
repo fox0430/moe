@@ -304,15 +304,25 @@ proc runQuickRunCommand(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
-  status.verticalSplitWindow
-  status.resize(terminalHeight(), terminalWidth())
-  status.moveNextWindow
+  let
+    buffer = runQuickRun(bufStatus, status.commandwindow, status.settings)
 
-  status.addNewBuffer("")
-  let buffer = runQuickRun(bufStatus, status.commandwindow, status.settings)
-  status.bufStatus[^1].buffer = initGapBuffer(buffer)
+    workspace = status.workspace[workspaceIndex]
+    quickRunWindowIndex = status.bufStatus.getQuickRunBufferIndex(workspace)
 
-  status.changeCurrentBuffer(status.bufStatus.high)
+  if quickRunWindowIndex == -1:
+    status.verticalSplitWindow
+    status.resize(terminalHeight(), terminalWidth())
+    status.moveNextWindow
+
+    status.addNewBuffer("")
+    status.bufStatus[^1].buffer = initGapBuffer(buffer)
+
+    status.changeCurrentBuffer(status.bufStatus.high)
+
+    status.changeMode(Mode.quickRun)
+  else:
+    status.bufStatus[quickRunWindowIndex].buffer = initGapBuffer(buffer)
 
 proc staticReadVersionFromConfigFileExample(): string {.compileTime.} =
   staticRead(currentSourcePath.parentDir() / "../../example/moerc.toml")

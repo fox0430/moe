@@ -15,6 +15,7 @@ import moepkg/bufferstatus
 import moepkg/help
 import moepkg/recentfilemode
 import moepkg/messages
+import moepkg/quickrun
 
 proc main() =
   let parsedList = parseCommandLineOption(commandLineParams())
@@ -61,6 +62,7 @@ proc main() =
     of Mode.logViewer: status.messageLogViewer
     of Mode.help: status.helpMode
     of Mode.recentFile: status.recentFileMode
+    of Mode.quickRun: status.quickRunMode
 
   status.settings.exitEditor
 

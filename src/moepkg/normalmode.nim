@@ -155,18 +155,23 @@ proc runQuickRunCommand(status: var Editorstatus) =
     windowNode = status.workspace[workspaceIndex].currentMainWindowNode
     bufStatus = status.bufStatus[windowNode.bufferIndex]
 
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+    buffer = runQuickRun(bufStatus, status.commandwindow, status.settings)
+    workspace = status.workspace[workspaceIndex]
+    quickRunWindowIndex = status.bufStatus.getQuickRunBufferIndex(workspace)
 
-  status.verticalSplitWindow
-  status.resize(terminalHeight(), terminalWidth())
-  status.moveNextWindow
+  if quickRunWindowIndex == -1:
+    status.verticalSplitWindow
+    status.resize(terminalHeight(), terminalWidth())
+    status.moveNextWindow
 
-  status.addNewBuffer("")
-  let buffer = runQuickRun(bufStatus, status.commandwindow, status.settings)
-  status.bufStatus[^1].buffer = initGapBuffer(buffer)
+    status.addNewBuffer("")
+    status.bufStatus[^1].buffer = initGapBuffer(buffer)
 
-  status.changeCurrentBuffer(status.bufStatus.high)
+    status.changeCurrentBuffer(status.bufStatus.high)
+
+    status.changeMode(Mode.quickRun)
+  else:
+    status.bufStatus[quickRunWindowIndex].buffer = initGapBuffer(buffer)
 
 proc normalCommand(status: var EditorStatus, commands: seq[Rune])
 proc repeatNormalModeCommand(status: var Editorstatus) =

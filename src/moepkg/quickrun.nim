@@ -1,5 +1,6 @@
-import osproc, packages/docutils/highlite
-import unicodeext, settings, bufferstatus, gapbuffer, messages, ui
+import osproc, packages/docutils/highlite, terminal, times
+import unicodeext, settings, bufferstatus, gapbuffer, messages, ui,
+       editorstatus, movement, window, workspace
 
 type Language = enum
   None = 0
@@ -31,6 +32,14 @@ proc generateCommand(bufStatus: BufferStatus,
   else:
     result = ""
 
+proc getQuickRunBufferIndex*(bufStatus: seq[BufferStatus],
+                             workspace: WorkSpace): int =
+
+  result = -1
+  let allBufferIndex = workspace.mainWindowNode.getAllBufferIndex
+  for index in allBufferIndex:
+    if bufStatus[index].mode == Mode.quickRun: return index
+
 proc runQuickRun*(bufStatus: BufferStatus,
                   cmdWin: var Window,
                   settings: EditorSettings): seq[seq[Rune]] =
@@ -59,3 +68,46 @@ proc runQuickRun*(bufStatus: BufferStatus,
     if cmdResult.output[i] == '\n': result.add(@[ru""])
     else: result[^1].add(toRunes($cmdResult.output[i])[0])
 
+proc isQuickRunMode(status: Editorstatus): bool =
+  let
+    workspaceIndex = status.currentWorkSpaceIndex
+    index = status.workspace[workspaceIndex].currentMainWindowNode.bufferIndex
+
+  return status.bufStatus[index].mode == Mode.quickRun
+
+proc quickRunMode*(status: var Editorstatus) =
+  let
+    currentBufferIndex = status.bufferIndexInCurrentWindow
+    currentWorkSpace = status.currentWorkSpaceIndex
+
+  status.resize(terminalHeight(), terminalWidth())
+
+  while status.isQuickRunMode and
+        currentWorkSpace == status.currentWorkSpaceIndex and
+        currentBufferIndex == status.bufferIndexInCurrentWindow:
+        
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+    status.update
+
+    var key: Rune = ru'\0'
+    while key == ru'\0':
+      status.eventLoopTask
+      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+
+    status.lastOperatingTime = now()
+
+    if isResizekey(key):
+      status.resize(terminalHeight(), terminalWidth())
+      status.commandWindow.erase
+    elif isControlK(key): status.moveNextWindow
+    elif isControlJ(key): status.movePrevWindow
+    elif key == ord(':'):
+      status.changeMode(Mode.ex)
+    elif key == ord('k') or isUpKey(key):
+      status.bufStatus[currentBufferIndex].keyUp(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+    elif key == ord('j') or isDownKey(key):
+      status.bufStatus[currentBufferIndex].keyDown(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+    elif key == ord('g'):
+      if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window) == 'g':
+        status.moveToFirstLine
+    elif key == ord('G'): status.moveToLastLine
