@@ -99,7 +99,7 @@ proc writeStatusBarBufferManagerModeInfo(bufStatus: var BufferStatus,
                                         color)
   statusBar.window.write(0, statusBarWidth - info.len - 1, info, color)
 
-proc writeStatusLogViewerModeInfo(bufStatus: var BufferStatus,
+proc writeStatusBarLogViewerModeInfo(bufStatus: var BufferStatus,
                                   statusBar: var StatusBar,
                                   statusBarBuffer: var seq[Rune],
                                   windowNode: WindowNode,
@@ -146,6 +146,7 @@ proc setModeStr(mode: Mode, isActiveWindow, showModeInactive: bool): string =
     of Mode.ex: result = " EX "
     of Mode.logViewer: result = " LOG "
     of Mode.recentFile: result = " RECENT "
+    of Mode.quickRun: result = " QUICKRUN "
     else: result = " NORMAL "
 
 proc setModeStrColor(mode: Mode): EditorColorPair =
@@ -177,6 +178,8 @@ proc isShowGitBranchName(mode, prevMode: Mode,
   elif mode == Mode.ex and prevMode == Mode.help: return false
   elif mode == Mode.recentFile: return false
   elif mode == Mode.ex and prevMode == Mode.recentFile: return false
+  elif mode == Mode.quickRun: return false
+  elif mode == Mode.ex and prevMode == Mode.quickRun: return false
 
 proc writeStatusBar*(bufStatus: var BufferStatus,
                      statusBar: var StatusBar,
@@ -240,7 +243,7 @@ proc writeStatusBar*(bufStatus: var BufferStatus,
                                                   isActiveWindow,
                                                   settings)
   elif currentMode == Mode.logViewer:
-    bufStatus.writeStatusLogViewerModeInfo(statusBar,
+    bufStatus.writeStatusBarLogViewerModeInfo(statusBar,
                                            statusBarBuffer,
                                            windowNode,
                                            isActiveWindow,
