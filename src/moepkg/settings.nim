@@ -10,6 +10,7 @@ import ui, color, unicodeext, build, highlight
 
 type QuickRunSettings* = object
   command*: string
+  timeout*: int # seconds
   nimAdvancedCommand*: string
   ClangOptions*: string
   CppOptions*: string
@@ -92,6 +93,7 @@ type EditorSettings* = object
 
 proc initQuickRunSettings(): QuickRunSettings =
   result.nimAdvancedCommand = "c"
+  result.timeout = 30
 
 proc initAutoBackupSettings(): AutoBackupSettings =
   result.enable = true
@@ -730,6 +732,10 @@ proc parseSettingsFile*(filename: string): EditorSettings =
   if settings.contains("QuickRun"):
     if settings["QuickRun"].contains("command"):
       result.quickRunSettings.command = settings["QuickRun"]["command"].getStr()
+
+
+    if settings["QuickRun"].contains("timeout"):
+      result.quickRunSettings.timeout = settings["QuickRun"]["timeout"].getInt()
 
     if settings["QuickRun"].contains("nimAdvancedCommand"):
       result.quickRunSettings.nimAdvancedCommand = settings["QuickRun"]["nimAdvancedCommand"].getStr()
