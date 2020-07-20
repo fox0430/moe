@@ -121,7 +121,7 @@ proc changeCurrentWin*(status:var EditorStatus, index: int) =
     status.workSpace[workspaceIndex].currentMainWindowNode = node
 
 proc executeOnExit(settings: EditorSettings) =
-  if not settings.disableChangeCurosr:
+  if not settings.disableChangeCursor:
     changeCursorType(settings.defaultCursor)
 
 proc exitEditor*(settings: EditorSettings) =
