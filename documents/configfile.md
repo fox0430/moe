@@ -320,6 +320,12 @@ default is "" (None)
 command
 ```
 
+Command timeout (int)  
+default is 30 (30 second)
+```
+timeout
+```
+
 Nim compiler advanced command setting (string)  
 default is "c"
 ```
