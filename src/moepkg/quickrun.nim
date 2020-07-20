@@ -15,20 +15,21 @@ proc generateCommand(bufStatus: BufferStatus,
 
   let filename = $bufStatus.filename
 
+  result = "timeout " & $settings.timeout & " "
   if language == Language.Nim:
     let
       advancedCommand = settings.nimAdvancedCommand
       options = settings.NimOptions
-    result = "nim " & advancedCommand & " -r " & options & " " & filename
+    result &= "nim " & advancedCommand & " -r " & options & " " & filename
   elif language == Language.C:
-    result = "gcc " & settings.ClangOptions & " " & filename & " && ./a.out"
+    result &= "gcc " & settings.ClangOptions & " " & filename & " && ./a.out"
   elif language == Language.Cpp:
-    result = "g++ " & settings.CppOptions & " " & filename & " && ./a.out"
+    result &= "g++ " & settings.CppOptions & " " & filename & " && ./a.out"
   elif language == Language.Shell:
     if bufStatus.buffer[0] == ru"#!/bin/bash":
-      result = "bash " & settings.bashOptions & " " & filename
+      result &= "bash " & settings.bashOptions & " " & filename
     else:
-      result = "sh " & settings.shOptions & " "  & filename
+      result &= "sh " & settings.shOptions & " "  & filename
   else:
     result = ""
 
@@ -64,9 +65,16 @@ proc runQuickRun*(bufStatus: BufferStatus,
   cmdWin.erase
 
   result = @[ru""]
-  for i in 0 ..< cmdResult.output.len:
-    if cmdResult.output[i] == '\n': result.add(@[ru""])
-    else: result[^1].add(toRunes($cmdResult.output[i])[0])
+
+  case cmdResult.exitCode:
+    of 0:
+      for i in 0 ..< cmdResult.output.len:
+        if cmdResult.output[i] == '\n': result.add(@[ru""])
+        else: result[^1].add(toRunes($cmdResult.output[i])[0])
+    of 124:
+      cmdWin.writeRunQuickRunTimeoutMessage
+    else:
+      cmdWin.writeRunQuickRunFailedMessage
 
 proc isQuickRunMode(status: Editorstatus): bool =
   let

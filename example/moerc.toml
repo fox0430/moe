@@ -114,6 +114,9 @@ interval = 5
 
 # command = "nimble build"
 
+# 30 second
+timeout = 30
+
 # nimAdvancedCommand = "js"
 
 # ClangOptions = "-Wall"

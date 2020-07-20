@@ -171,3 +171,11 @@ proc writeAutoBackupSuccessMessage*(cmdWin: var Window,
 proc writeRunQuickRunMessage*(cmdWin: var Window) =
   const mess = "Quick run..."
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+
+proc writeRunQuickRunTimeoutMessage*(cmdWin: var Window) =
+  const mess = "Quick run timeout"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+
+proc writeRunQuickRunFailedMessage*(cmdWin: var Window) =
+  const mess = "Quick run failed"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
