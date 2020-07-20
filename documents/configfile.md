@@ -63,6 +63,12 @@ default is true
 autoIndent
 ```
 
+Disable change of the cursor shape (bool)  
+default is false
+```
+disableChangeCurosr
+```
+
 Set cursor shape of the terminal emulator you are using (String) ```"blinkBlock"``` or ```"blinkIbeam"``` or ```noneBlinkBlock``` or ```noneBlinkIbeam```  
 default is ```"blinkBlock"```
 ```
