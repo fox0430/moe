@@ -12,7 +12,8 @@ proc isInsertMode(status: EditorStatus): bool =
   return mode == Mode.insert
 
 proc insertMode*(status: var EditorStatus) =
-  changeCursorType(status.settings.insertModeCursor)
+  if not status.settings.disableChangeCurosr:
+    changeCursorType(status.settings.insertModeCursor)
 
   status.resize(terminalHeight(), terminalWidth())
 
@@ -109,5 +110,3 @@ proc insertMode*(status: var EditorStatus) =
       insertCharacter(status.bufStatus[currentBufferIndex],
                       status.workSpace[workspaceIndex].currentMainWindowNode,
                       status.settings.autoCloseParen, key)
-
-  stdout.write "\x1b[2 q"

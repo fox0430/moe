@@ -65,6 +65,7 @@ type EditorSettings* = object
   autoIndent*: bool
   tabStop*: int
   characterEncoding*: CharacterEncoding # TODO: move to EditorStatus ...?
+  disableChangeCurosr*: bool
   defaultCursor*: CursorType
   normalModeCursor*: CursorType
   insertModeCursor*: CursorType
@@ -593,6 +594,9 @@ proc parseSettingsFile*(filename: string): EditorSettings =
 
     if settings["Standard"].contains("autoIndent"):
       result.autoIndent = settings["Standard"]["autoIndent"].getbool()
+
+    if settings["Standard"].contains("disableChangeCurosr"):
+      result.disableChangeCurosr = settings["Standard"]["disableChangeCurosr"].getbool()
 
     if settings["Standard"].contains("defaultCursor"):
       result.defaultCursor = getCursorType(settings["Standard"]["defaultCursor"].getStr(), "default")

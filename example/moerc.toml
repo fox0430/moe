@@ -22,6 +22,8 @@ autoCloseParen = true
 
 autoIndent = true
 
+disableChangeCurosr = false
+
 defaultCursor = "blinkBlock"
 
 normalModeCursor = "blinkBlock"
