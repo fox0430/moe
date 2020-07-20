@@ -12,7 +12,7 @@ proc isInsertMode(status: EditorStatus): bool =
   return mode == Mode.insert
 
 proc insertMode*(status: var EditorStatus) =
-  if not status.settings.disableChangeCurosr:
+  if not status.settings.disableChangeCursor:
     changeCursorType(status.settings.insertModeCursor)
 
   status.resize(terminalHeight(), terminalWidth())

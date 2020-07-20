@@ -702,7 +702,7 @@ proc isNormalMode(status: Editorstatus): bool =
   status.bufStatus[index].mode == Mode.normal
 
 proc normalMode*(status: var EditorStatus) =
-  if not status.settings.disableChangeCurosr:
+  if not status.settings.disableChangeCursor:
     changeCursorType(status.settings.normalModeCursor)
 
   status.resize(terminalHeight(), terminalWidth())

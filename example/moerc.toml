@@ -22,7 +22,7 @@ autoCloseParen = true
 
 autoIndent = true
 
-disableChangeCurosr = false
+disableChangeCursor = false
 
 defaultCursor = "blinkBlock"
 
