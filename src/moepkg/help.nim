@@ -8,7 +8,7 @@ proc staticReadHowToUseDocument: string {.compileTime.} =
 
 proc initHelpModeBuffer(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.bufStatus[currentBufferIndex].filename = ru"help"
+  status.bufStatus[currentBufferIndex].path = ru"help"
 
   var line = ""
   let helpsentences = staticReadHowToUseDocument()

@@ -32,7 +32,7 @@ proc writeStatusBarNormalModeInfo(bufStatus: var BufferStatus,
   statusBar.window.append(ru" ", color)
 
   if settings.statusBar.filename:
-    var filename = if bufStatus.filename.len > 0: bufStatus.filename
+    var filename = if bufStatus.path.len > 0: bufStatus.path
                    else: ru"No name"
     let homeDir = ru(getHomeDir())
     if (filename.len() >= homeDir.len() and

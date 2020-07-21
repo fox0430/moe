@@ -13,7 +13,7 @@ proc generateCommand(bufStatus: BufferStatus,
                      language: Language,
                      settings: QuickRunSettings): string =
 
-  let filename = $bufStatus.filename
+  let filename = $bufStatus.path
 
   result = "timeout " & $settings.timeout & " "
   if language == Language.Nim:
@@ -46,7 +46,7 @@ proc runQuickRun*(bufStatus: BufferStatus,
                   settings: EditorSettings): seq[seq[Rune]] =
 
   let
-    filename = bufStatus.filename
+    filename = bufStatus.path
     sourceLang = bufStatus.language
     language = if sourceLang == SourceLanguage.langNim: Language.Nim
                elif sourceLang == SourceLanguage.langC: Language.C

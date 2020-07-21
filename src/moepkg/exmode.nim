@@ -778,7 +778,7 @@ proc buildOnSave(status: var Editorstatus) =
 
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
-    filename = status.bufStatus[currentBufferIndex].filename
+    filename = status.bufStatus[currentBufferIndex].path
     workspaceRoot = status.settings.buildOnSaveSettings.workspaceRoot
     command = status.settings.buildOnSaveSettings.command
     language = status.bufStatus[currentBufferIndex].language
@@ -826,7 +826,7 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
     let
       workspaceIndex = status.currentWorkSpaceIndex
       bufferIndex = status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
-    status.bufStatus[bufferIndex].filename = filename
+    status.bufStatus[bufferIndex].path = filename
     status.bufStatus[currentBufferIndex].countChange = 0
 
     if status.settings.buildOnSaveSettings.buildOnSave: status.buildOnSave
@@ -855,7 +855,7 @@ proc writeAndQuitCommand(status: var EditorStatus) =
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     workspaceIndex = status.currentWorkSpaceIndex
-    filename = status.bufStatus[currentBufferIndex].filename
+    filename = status.bufStatus[currentBufferIndex].path
 
   ## Ask if you want to create a directory that does not exist
   if not status.commandWindow.checkAndCreateDir(status.messageLog, filename):
@@ -895,7 +895,7 @@ proc forceAllBufferQuitCommand(status: var EditorStatus) = exitEditor(status.set
 
 proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
   for bufStatus in status.bufStatus:
-    let filename = bufStatus.filename
+    let filename = bufStatus.path
     ## Ask if you want to create a directory that does not exist
     if not status.commandWindow.checkAndCreateDir(status.messageLog, filename):
       status.changeMode(Mode.normal)
@@ -941,7 +941,7 @@ proc listAllBufferCommand(status: var Editorstatus) =
        (currentMode == Mode.ex and
        prevMode == Mode.filer): line = getCurrentDir().toRunes
     else:
-      let filename = status.bufStatus[i].filename
+      let filename = status.bufStatus[i].path
       line = filename & ru"  line " & ($status.bufStatus[i].buffer.len).toRunes
 
     let currentBufferIndex =
@@ -1098,7 +1098,7 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     status.openInVerticalSplitWindowCommand(command[1])
   elif isWriteCommand(status, command):
     writeCommand(status, if command.len < 2:
-      status.bufStatus[currentBufferIndex].filename else: command[1])
+      status.bufStatus[currentBufferIndex].path else: command[1])
   elif isQuitCommand(command):
     quitCommand(status)
   elif isWriteAndQuitCommand(status, command):

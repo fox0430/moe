@@ -667,7 +667,7 @@ test "Change current buffer":
   var status = initEditorStatus()
 
   status.addNewBuffer("")
-  status.bufStatus[0].filename =  ru"test"
+  status.bufStatus[0].path = ru"test"
   status.bufStatus[0].buffer = initGapBuffer(@[ru"", ru"abc"])
 
   status.resize(100, 100)
@@ -680,7 +680,7 @@ test "Change current buffer":
   status.workspace[0].currentMainWindowNode.currentColumn = currentColumn
 
   status.addNewBuffer("")
-  status.bufStatus[0].filename =  ru"test2"
+  status.bufStatus[0].path = ru"test2"
   status.bufStatus[0].buffer =  initGapBuffer(@[ru""])
 
   status.changeCurrentBuffer(1)

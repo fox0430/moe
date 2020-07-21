@@ -124,12 +124,12 @@ proc redo(bufStatus: var BufferStatus, windowNode: WindowNode) =
 
 proc writeFileAndExit(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
-  if status.bufStatus[currentBufferIndex].filename.len == 0:
+  if status.bufStatus[currentBufferIndex].path.len == 0:
     status.commandwindow.writeNoFileNameError(status.messageLog)
     status.changeMode(Mode.normal)
   else:
     try:
-      saveFile(status.bufStatus[currentBufferIndex].filename,
+      saveFile(status.bufStatus[currentBufferIndex].path,
                status.bufStatus[currentBufferIndex].buffer.toRunes,
                status.settings.characterEncoding)
       let workspaceIndex = status.currentWorkSpaceIndex

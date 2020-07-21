@@ -1,4 +1,4 @@
-import deques, strutils, strformat, sequtils, terminal, macros, times
+import terminal, times
 from os import execShellCmd
 import ui, editorstatus, gapbuffer, unicodeext, undoredostack, window,
        movement, editor, bufferstatus

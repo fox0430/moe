@@ -14,7 +14,7 @@ suite "Help":
     status.initHelpModeBuffer
     status.update
 
-    check(status.bufStatus[0].filename == ru"help")
+    check(status.bufStatus[0].path == ru"help")
 
     let buffer = status.bufStatus[0].buffer
     var

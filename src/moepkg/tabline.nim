@@ -37,7 +37,7 @@ proc writeTabLineBuffer*(tabWin: var Window,
         filename = if (currentMode == Mode.filer) or
                       (prevMode == Mode.filer and
                       currentMode == Mode.ex): getCurrentDir()
-                   else: $bufStatus.filename
+                   else: $bufStatus.path
         tabWidth = allBufStatus.len.calcTabWidth(terminalWidth())
       tabWin.writeTab(index * tabWidth, tabWidth, filename, color)
   else:
@@ -54,7 +54,7 @@ proc writeTabLineBuffer*(tabWin: var Window,
         filename = if (currentMode == Mode.filer) or
                       (prevMode == Mode.filer and
                       currentMode == Mode.ex): getCurrentDir()
-                   else: $bufStatus.filename
+                   else: $bufStatus.path
         numOfbuffer =
           workSpace.mainWindowNode.getAllBufferIndex.len
         tabWidth = numOfbuffer.calcTabWidth(terminalWidth())
