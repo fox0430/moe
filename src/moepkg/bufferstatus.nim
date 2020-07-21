@@ -26,7 +26,7 @@ type BufferStatus* = object
   language*: SourceLanguage
   selectArea*: SelectArea
   isSearchHighlight*: bool
-  filename*: seq[Rune]
+  path*: seq[Rune]
   openDir: seq[Rune]
   positionRecord*: Table[int, tuple[line, column, expandedColumn: int]]
   countChange*: int

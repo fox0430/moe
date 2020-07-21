@@ -1,4 +1,4 @@
-import os, times, strutils, re
+import os, times, re
 import settings, unicodeext, fileutils, bufferstatus, ui, gapbuffer, messages
 
 type AutoBackupStatus* = object
@@ -71,11 +71,11 @@ proc backupBuffer*(bufStatus: BufferStatus,
                    cmdWin: var Window,
                    messageLog: var seq[seq[Rune]]) =
 
-  if bufStatus.filename.len == 0: return
+  if bufStatus.path.len == 0: return
 
   let
-    backupFilename = bufStatus.filename.generateFilename(now())
-    dir = bufStatus.filename.checkAndCreateBackupDir(settings.backupDir)
+    backupFilename = bufStatus.path.generateFilename(now())
+    dir = bufStatus.path.checkAndCreateBackupDir(settings.backupDir)
 
   if dir.len > 0:
     let

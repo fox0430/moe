@@ -534,10 +534,8 @@ proc deletePopUpWindow*(status: var Editorstatus) =
     status.popUpWindow.deleteWindow
     status.update
 
-proc addNewBuffer*(status: var EditorStatus, filename: string)
-
 proc addNewBuffer*(status: var EditorStatus, filename: string) =
-  status.bufStatus.add(BufferStatus(filename: filename.toRunes,
+  status.bufStatus.add(BufferStatus(path: filename.toRunes,
                        lastSaveTime: now()))
   let index = status.bufStatus.high
 
@@ -945,11 +943,11 @@ proc changeTheme*(status: var EditorStatus) =
 proc autoSave(status: var Editorstatus) =
   let interval = status.settings.autoSaveInterval.minutes
   for index, bufStatus in status.bufStatus:
-    if bufStatus.filename != ru"" and now() > bufStatus.lastSaveTime + interval:
-      saveFile(bufStatus.filename,
+    if bufStatus.path != ru"" and now() > bufStatus.lastSaveTime + interval:
+      saveFile(bufStatus.path,
                bufStatus.buffer.toRunes,
                status.settings.characterEncoding)
-      status.commandWindow.writeMessageAutoSave(bufStatus.filename,
+      status.commandWindow.writeMessageAutoSave(bufStatus.path,
                                                 status.messageLog)
       status.bufStatus[index].lastSaveTime = now()
 

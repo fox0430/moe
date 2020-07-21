@@ -30,7 +30,7 @@ suite "Ex mode: Write command":
     status.addNewBuffer("")
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
-    status.bufStatus[0].filename = ru"test.txt"
+    status.bufStatus[0].path = ru"test.txt"
     const command = @[ru"w"]
     status.exModeCommand(command)
 
@@ -577,8 +577,8 @@ suite "Ex mode: Create new empty buffer":
 
     check status.bufStatus.len == 2
 
-    check status.bufStatus[0].filename == ru"a"
-    check status.bufStatus[1].filename == ru""
+    check status.bufStatus[0].path == ru"a"
+    check status.bufStatus[1].path == ru""
 
   test "Create new empty buffer 2":
     var status = initEditorStatus()
@@ -611,8 +611,8 @@ suite "Ex mode: New empty buffer in split window horizontally":
 
     check status.bufferIndexInCurrentWindow == 1
 
-    check status.bufStatus[0].filename == ru"a"
-    check status.bufStatus[1].filename == ru""
+    check status.bufStatus[0].path == ru"a"
+    check status.bufStatus[1].path == ru""
 
     check status.workspace[0].numOfMainWindow == 2
 
@@ -631,8 +631,8 @@ suite "Ex mode: New empty buffer in split window vertically":
 
     check status.bufferIndexInCurrentWindow == 1
 
-    check status.bufStatus[0].filename == ru"a"
-    check status.bufStatus[1].filename == ru""
+    check status.bufStatus[0].path == ru"a"
+    check status.bufStatus[1].path == ru""
 
     check status.workspace[0].numOfMainWindow == 2
 

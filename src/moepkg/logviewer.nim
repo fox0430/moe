@@ -3,7 +3,7 @@ import ui, editorstatus, unicodeext, movement, bufferstatus
 
 proc initMessageLog*(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.bufStatus[currentBufferIndex].filename = ru"Log viewer"
+  status.bufStatus[currentBufferIndex].path = ru"Log viewer"
 
 proc exitLogViewer*(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
