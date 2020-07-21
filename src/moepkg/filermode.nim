@@ -103,11 +103,12 @@ proc refreshDirList(sortBy: Sort): seq[PathInfo] =
                 list.path,
                 0.int64,
                 getLastModificationTime(list.path))
-    item.path = $(item.path.toRunes.normalizePath)
-    if list.kind in {pcLinkToDir, pcDir}:
-      dirList.add item
-    else:
-      fileList.add item
+    if item.path.len > 0:
+      item.path = $(item.path.toRunes.normalizePath)
+      if list.kind in {pcLinkToDir, pcDir}:
+        dirList.add item
+      else:
+        fileList.add item
   return @[(pcDir,
             "../",
             0.int64,
