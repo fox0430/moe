@@ -61,19 +61,22 @@ proc setTimeout*(win: var Window) = win.cursesWindow.wtimeout(cint(1000)) # 500m
 proc setTimeout*(win: var Window, time: int) = win.cursesWindow.wtimeout(cint(time))
 
 proc startUi*() =
-  discard setLocale(LC_ALL, "")   # enable UTF-8
-  initscr()   ## start terminal control
-  cbreak()    ## enable cbreak mode
-  nonl();     ## exit new line mode and improve move cursor performance
-  setCursor(true)
+  # Not start when running unit tests
+  when not defined unitTest:
+    discard setLocale(LC_ALL, "")   # enable UTF-8
 
-  if can_change_color():
-    ## default is dark
-    setCursesColor(ColorThemeTable[ColorTheme.dark])
+    initscr()   ## start terminal control
+    cbreak()    ## enable cbreak mode
+    nonl();     ## exit new line mode and improve move cursor performance
+    setCursor(true)
 
-  erase()
-  keyEcho(false)
-  set_escdelay(25)
+    if can_change_color():
+      ## default is dark
+      setCursesColor(ColorThemeTable[ColorTheme.dark])
+
+    erase()
+    keyEcho(false)
+    set_escdelay(25)
 
 proc exitUi*() = endwin()
 
@@ -93,35 +96,46 @@ proc write*(win: var Window,
             color: EditorColorPair = EditorColorPair.defaultChar,
             storeX: bool = true) =
   
-  win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
-  mvwaddstr(win.cursesWindow, cint(y), cint(x), str)
-  if storeX:
-    win.y = y
-    win.x = x+str.toRunes.width
+  # Not write when running unit tests
+  when not defined unitTest:
+    win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
+    mvwaddstr(win.cursesWindow, cint(y), cint(x), str)
+
+    if storeX:
+      win.y = y
+      win.x = x+str.toRunes.width
 
 proc write*(win: var Window,
             y, x: int, str: seq[Rune],
             color: EditorColorPair = EditorColorPair.defaultChar,
             storeX: bool = true) =
   
-  write(win, y, x, $str, color, false)
-  if storeX:
-    win.y = y
-    win.x = x+str.width
+  # Not write when running unit tests
+  when not defined unitTest:
+    write(win, y, x, $str, color, false)
+
+    if storeX:
+      win.y = y
+      win.x = x+str.width
 
 proc append*(win: var Window,
               str: string,
               color: EditorColorPair = EditorColorPair.defaultChar) =
   
-  win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
-  mvwaddstr(win.cursesWindow, cint(win.y), cint(win.x), $str)
-  win.x += str.toRunes.width
+  # Not write when running unit tests
+  when not defined unitTest:
+    win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
+    mvwaddstr(win.cursesWindow, cint(win.y), cint(win.x), $str)
+
+    win.x += str.toRunes.width
 
 proc append*(win: var Window,
             str: seq[Rune],
             color: EditorColorPair = EditorColorPair.defaultChar) =
   
-  append(win, $str, color)
+  # Not write when running unit tests
+  when not defined unitTest:
+    append(win, $str, color)
 
 proc erase*(win: var Window) =
   werase(win.cursesWindow)
