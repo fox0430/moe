@@ -280,6 +280,7 @@ proc deleteWord*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   if bufStatus.buffer.len == 1 and
      bufStatus.buffer[windowNode.currentLine].len < 1: return
   elif bufStatus.buffer.len > 1 and
+       windowNode.currentLine < bufStatus.buffer.high and
        bufStatus.buffer[windowNode.currentLine].len < 1:
     bufStatus.buffer.delete(windowNode.currentLine, windowNode.currentLine + 1)
     if windowNode.currentLine > bufStatus.buffer.high:

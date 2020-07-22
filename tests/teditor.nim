@@ -106,3 +106,14 @@ suite "Editor: Send to clipboad":
     let (output, exitCode) = execCmdEx("xclip -o")
 
     check exitCode == 0 and output[0 .. output.high - 1] == "$Clipboard test"
+
+suite "Delete word":
+  test "Fix #842":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"block:", ru"  "])
+    status.workspace[0].currentMainWindowNode.currentLine = 1
+
+    for i in 0 ..< 2:
+      status.bufStatus[0].deleteWord(status.workspace[0].currentMainWindowNode)
