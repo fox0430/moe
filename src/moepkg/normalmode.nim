@@ -47,7 +47,7 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     workspaceIndex = status.currentWorkSpaceIndex
-  
+
   status.bufStatus[currentBufferIndex].isSearchHighlight = true
 
   status.updateHighlight(status.workspace[workspaceIndex].currentMainWindowNode)
@@ -92,7 +92,7 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) =
   if status.searchHistory.len < 1: return
 
   let keyword = status.searchHistory[status.searchHistory.high]
-  
+
   searchNextOccurrenceReversely(status, keyword)
 
 
@@ -197,7 +197,7 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
     let line = status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine]
     if line.len() <= windowNode.currentColumn:
       return
-    
+
     let atCursorRune = line[windowNode.currentColumn]
     if not atCursorRune.isAlpha() and not (char(atCursorRune) in '0'..'9'):
       return
@@ -221,7 +221,7 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
     let line = status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine]
     if line.len() <= windowNode.currentColumn:
       return
-      
+
     line[windowNode.currentColumn]
 
   template insertAfterCursor() =
@@ -230,28 +230,28 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
     elif lineWidth == windowNode.currentColumn: discard
     else: inc(windowNode.currentColumn)
     status.changeMode(Mode.insert)
-  
+
   template insertCharacter(rune: Rune) =
     insertCharacter(
       status.bufStatus[currentBufferIndex],
       windowNode,
       status.settings.autoCloseParen,
       rune)
-  
+
   template deleteCharactersUntilEndOfLine() =
     status.bufStatus[currentBufferIndex].deleteCharacterUntilEndOfLine(
       status.settings.autoDeleteParen, windowNode)
-  
+
   template deleteCharactersOfLine() =
     status.bufStatus[currentBufferIndex].deleteCharactersOfLine(
       status.settings.autoDeleteParen,
       windowNode)
-  
+
   template deleteCurrentCharacter() =
     status.bufStatus[currentBufferIndex].deleteCurrentCharacter(
       windowNode,
       status.settings.autoDeleteParen)
-  
+
   template replaceCurrentCharacter(newCharacter: Rune) =
     status.bufStatus[currentBufferIndex].replaceCurrentCharacter(
       status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode,
@@ -288,14 +288,14 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
       windowNode.expandedColumn = windowNode.currentColumn
       for _ in 1..len(theWord):
         deleteCurrentCharacter()
-      
+
       # change the word to the new number
       theWord = toRunes($num)
 
       # insert the new number
       for i in 0..len(theWord)-1:
         insertCharacter(theWord[i])
-      
+
       # put the cursor on the last character of the number
       windowNode.currentColumn  = beginCol + len(theWord)-1
       windowNode.expandedColumn = windowNode.currentColumn
@@ -362,7 +362,7 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
   elif key == ord('g'):
     let secondKey = commands[1]
     if secondKey == ord('g'):
-      moveToFirstLine(status)
+      status.jumpLine(cmdLoop - 1)
     elif secondKey == ord('_'):
       status.bufStatus[currentBufferIndex].moveToLastNonBlankOfLine(windowNode)
   elif key == ord('G'):
