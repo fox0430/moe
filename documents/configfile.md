@@ -40,7 +40,7 @@ syntax
 ```
 
 Enable/Disable indentation lines (bool)  
-default is false
+default is true
 ```
 indentationLines
 ```
