@@ -1044,86 +1044,88 @@ proc setColorPair*(colorPair: EditorColorPair, character, background: Color) =
   init_pair(cshort(ord(colorPair)), cshort(ord(character)), cshort(ord(background)))
 
 proc setCursesColor*(editorColor: EditorColor) =
-  start_color()   # enable color
-  use_default_colors()    # set terminal default color
+  # Not set when running unit tests
+  when not defined unitTest:
+    start_color()   # enable color
+    use_default_colors()    # set terminal default color
 
-  setColorPair(EditorColorPair.lineNum , editorColor.lineNum, editorColor.lineNumBg)
-  setColorPair(EditorColorPair.currentLineNum, editorColor.currentLineNum, editorColor.currentLineNumBg)
-  # status bar
-  setColorPair(EditorColorPair.statusBarNormalMode, editorColor.statusBarNormalMode, editorColor.statusBarNormalModeBg)
-  setColorPair(EditorColorPair.statusBarModeNormalMode, editorColor.statusBarModeNormalMode, editorColor.statusBarModeNormalModeBg)
-  setColorPair(EditorColorPair.statusBarNormalModeInactive, editorColor.statusBarNormalModeInactive, editorColor.statusBarNormalModeInactiveBg)
+    setColorPair(EditorColorPair.lineNum , editorColor.lineNum, editorColor.lineNumBg)
+    setColorPair(EditorColorPair.currentLineNum, editorColor.currentLineNum, editorColor.currentLineNumBg)
+    # status bar
+    setColorPair(EditorColorPair.statusBarNormalMode, editorColor.statusBarNormalMode, editorColor.statusBarNormalModeBg)
+    setColorPair(EditorColorPair.statusBarModeNormalMode, editorColor.statusBarModeNormalMode, editorColor.statusBarModeNormalModeBg)
+    setColorPair(EditorColorPair.statusBarNormalModeInactive, editorColor.statusBarNormalModeInactive, editorColor.statusBarNormalModeInactiveBg)
 
-  setColorPair(EditorColorPair.statusBarInsertMode, editorColor.statusBarInsertMode, editorColor.statusBarInsertModeBg)
-  setColorPair(EditorColorPair.statusBarModeInsertMode, editorColor.statusBarModeInsertMode, editorColor.statusBarModeInsertModeBg)
-  setColorPair(EditorColorPair.statusBarInsertModeInactive, editorColor.statusBarInsertModeInactive, editorColor.statusBarInsertModeInactiveBg)
+    setColorPair(EditorColorPair.statusBarInsertMode, editorColor.statusBarInsertMode, editorColor.statusBarInsertModeBg)
+    setColorPair(EditorColorPair.statusBarModeInsertMode, editorColor.statusBarModeInsertMode, editorColor.statusBarModeInsertModeBg)
+    setColorPair(EditorColorPair.statusBarInsertModeInactive, editorColor.statusBarInsertModeInactive, editorColor.statusBarInsertModeInactiveBg)
 
-  setColorPair(EditorColorPair.statusBarVisualMode, editorColor.statusBarVisualMode, editorColor.statusBarVisualModeBg)
-  setColorPair(EditorColorPair.statusBarModeVisualMode, editorColor.statusBarModeVisualMode, editorColor.statusBarModeVisualModeBg)
-  setColorPair(EditorColorPair.statusBarVisualModeInactive, editorColor.statusBarVisualModeInactive, editorColor.statusBarVisualModeInactiveBg)
+    setColorPair(EditorColorPair.statusBarVisualMode, editorColor.statusBarVisualMode, editorColor.statusBarVisualModeBg)
+    setColorPair(EditorColorPair.statusBarModeVisualMode, editorColor.statusBarModeVisualMode, editorColor.statusBarModeVisualModeBg)
+    setColorPair(EditorColorPair.statusBarVisualModeInactive, editorColor.statusBarVisualModeInactive, editorColor.statusBarVisualModeInactiveBg)
 
-  setColorPair(EditorColorPair.statusBarReplaceMode, editorColor.statusBarReplaceMode, editorColor.statusBarReplaceModeBg)
-  setColorPair(EditorColorPair.statusBarModeReplaceMode, editorColor.statusBarModeReplaceMode, editorColor.statusBarModeReplaceModeBg)
-  setColorPair(EditorColorPair.statusBarReplaceModeInactive, editorColor.statusBarReplaceModeInactive, editorColor.statusBarReplaceModeInactiveBg)
+    setColorPair(EditorColorPair.statusBarReplaceMode, editorColor.statusBarReplaceMode, editorColor.statusBarReplaceModeBg)
+    setColorPair(EditorColorPair.statusBarModeReplaceMode, editorColor.statusBarModeReplaceMode, editorColor.statusBarModeReplaceModeBg)
+    setColorPair(EditorColorPair.statusBarReplaceModeInactive, editorColor.statusBarReplaceModeInactive, editorColor.statusBarReplaceModeInactiveBg)
 
-  setColorPair(EditorColorPair.statusBarExMode, editorColor.statusBarExMode, editorColor.statusBarExModeBg)
-  setColorPair(EditorColorPair.statusBarModeExMode, editorColor.statusBarModeExMode, editorColor.statusBarModeExModeBg)
-  setColorPair(EditorColorPair.statusBarExModeInactive, editorColor.statusBarExModeInactive, editorColor.statusBarExModeInactiveBg)
+    setColorPair(EditorColorPair.statusBarExMode, editorColor.statusBarExMode, editorColor.statusBarExModeBg)
+    setColorPair(EditorColorPair.statusBarModeExMode, editorColor.statusBarModeExMode, editorColor.statusBarModeExModeBg)
+    setColorPair(EditorColorPair.statusBarExModeInactive, editorColor.statusBarExModeInactive, editorColor.statusBarExModeInactiveBg)
 
-  setColorPair(EditorColorPair.statusBarFilerMode, editorColor.statusBarFilerMode, editorColor.statusBarFilerModeBg)
-  setColorPair(EditorColorPair.statusBarModeFilerMode, editorColor.statusBarModeFilerMode, editorColor.statusBarModeFilerModeBg)
-  setColorPair(EditorColorPair.statusBarFilerModeInactive, editorColor.statusBarFilerModeInactive, editorColor.statusBarFilerModeInactiveBg)
+    setColorPair(EditorColorPair.statusBarFilerMode, editorColor.statusBarFilerMode, editorColor.statusBarFilerModeBg)
+    setColorPair(EditorColorPair.statusBarModeFilerMode, editorColor.statusBarModeFilerMode, editorColor.statusBarModeFilerModeBg)
+    setColorPair(EditorColorPair.statusBarFilerModeInactive, editorColor.statusBarFilerModeInactive, editorColor.statusBarFilerModeInactiveBg)
 
-  setColorPair(EditorColorPair.statusBarGitBranch, editorColor.statusBarGitBranch, editorColor.statusBarGitBranchBg)
+    setColorPair(EditorColorPair.statusBarGitBranch, editorColor.statusBarGitBranch, editorColor.statusBarGitBranchBg)
 
-  # tab line
-  setColorPair(EditorColorPair.tab, editorColor.tab, editorColor.tabBg)
-  setColorPair(EditorColorPair.currentTab, editorColor.currentTab, editorColor.currentTabBg)
-  # command bar
-  setColorPair(EditorColorPair.commandBar, editorColor.commandBar, editorColor.commandBarBg)
-  # error message
-  setColorPair(EditorColorPair.errorMessage, editorColor.errorMessage, editorColor.errorMessageBg)
-  # search result highlighting
-  setColorPair(EditorColorPair.searchResult, editorColor.searchResult, editorColor.searchResultBg)
-  # selected area in visual mode
-  setColorPair(EditorColorPair.visualMode, editorColor.visualMode, editorColor.visualModeBg)
-  # color scheme
-  setColorPair(EditorColorPair.defaultChar, editorColor.defaultChar, Color.default)
-  setColorPair(EditorColorPair.keyword, editorColor.gtKeyword, Color.default)
-  setColorPair(EditorColorPair.stringLit, editorColor.gtStringLit, Color.default)
-  setColorPair(EditorColorPair.decNumber, editorColor.gtDecNumber, Color.default)
-  setColorPair(EditorColorPair.comment, editorColor.gtComment, Color.default)
-  setColorPair(EditorColorPair.longComment, editorColor.gtLongComment, Color.default)
-  setColorPair(EditorColorPair.whitespace, editorColor.gtWhitespace, Color.default)
-  # filer
-  setColorPair(EditorColorPair.currentFile, editorColor.currentFile, editorColor.currentFileBg)
-  setColorPair(EditorColorPair.file, editorColor.file, editorColor.fileBg)
-  setColorPair(EditorColorPair.dir, editorColor.dir, editorColor.dirBg)
-  setColorPair(EditorColorPair.pcLink, editorColor.pcLink, editorColor.pcLinkBg)
-  # pop up window
-  setColorPair(EditorColorPair.popUpWindow, editorColor.popUpWindow, editorColor.popUpWindowBg)
-  setColorPair(EditorColorPair.popUpWinCurrentLine, editorColor.popUpWinCurrentLine, editorColor.popUpWinCurrentLineBg)
+    # tab line
+    setColorPair(EditorColorPair.tab, editorColor.tab, editorColor.tabBg)
+    setColorPair(EditorColorPair.currentTab, editorColor.currentTab, editorColor.currentTabBg)
+    # command bar
+    setColorPair(EditorColorPair.commandBar, editorColor.commandBar, editorColor.commandBarBg)
+    # error message
+    setColorPair(EditorColorPair.errorMessage, editorColor.errorMessage, editorColor.errorMessageBg)
+    # search result highlighting
+    setColorPair(EditorColorPair.searchResult, editorColor.searchResult, editorColor.searchResultBg)
+    # selected area in visual mode
+    setColorPair(EditorColorPair.visualMode, editorColor.visualMode, editorColor.visualModeBg)
+    # color scheme
+    setColorPair(EditorColorPair.defaultChar, editorColor.defaultChar, Color.default)
+    setColorPair(EditorColorPair.keyword, editorColor.gtKeyword, Color.default)
+    setColorPair(EditorColorPair.stringLit, editorColor.gtStringLit, Color.default)
+    setColorPair(EditorColorPair.decNumber, editorColor.gtDecNumber, Color.default)
+    setColorPair(EditorColorPair.comment, editorColor.gtComment, Color.default)
+    setColorPair(EditorColorPair.longComment, editorColor.gtLongComment, Color.default)
+    setColorPair(EditorColorPair.whitespace, editorColor.gtWhitespace, Color.default)
+    # filer
+    setColorPair(EditorColorPair.currentFile, editorColor.currentFile, editorColor.currentFileBg)
+    setColorPair(EditorColorPair.file, editorColor.file, editorColor.fileBg)
+    setColorPair(EditorColorPair.dir, editorColor.dir, editorColor.dirBg)
+    setColorPair(EditorColorPair.pcLink, editorColor.pcLink, editorColor.pcLinkBg)
+    # pop up window
+    setColorPair(EditorColorPair.popUpWindow, editorColor.popUpWindow, editorColor.popUpWindowBg)
+    setColorPair(EditorColorPair.popUpWinCurrentLine, editorColor.popUpWinCurrentLine, editorColor.popUpWinCurrentLineBg)
 
-  # replace text highlighting
-  setColorPair(EditorColorPair.replaceText, editorColor.replaceText, editorColor.replaceTextBg)
+    # replace text highlighting
+    setColorPair(EditorColorPair.replaceText, editorColor.replaceText, editorColor.replaceTextBg)
 
-  # pair of paren highlighting
-  setColorPair(EditorColorPair.parenText, editorColor.parenText, editorColor.parenTextBg)
+    # pair of paren highlighting
+    setColorPair(EditorColorPair.parenText, editorColor.parenText, editorColor.parenTextBg)
 
-  # highlight other uses current word
-  setColorPair(EditorColorPair.currentWord, editorColor.currentWord, editorColor.currentWordBg)
+    # highlight other uses current word
+    setColorPair(EditorColorPair.currentWord, editorColor.currentWord, editorColor.currentWordBg)
 
-  # highlight full width space
-  setColorPair(EditorColorPair.highlightFullWidthSpace, editorColor.highlightFullWidthSpace, editorColor.highlightFullWidthSpace)
+    # highlight full width space
+    setColorPair(EditorColorPair.highlightFullWidthSpace, editorColor.highlightFullWidthSpace, editorColor.highlightFullWidthSpace)
 
-  # highlight trailing spaces
-  setColorPair(EditorColorPair.highlightTrailingSpaces, editorColor.highlightTrailingSpaces, editorColor.highlightTrailingSpacesBg)
+    # highlight trailing spaces
+    setColorPair(EditorColorPair.highlightTrailingSpaces, editorColor.highlightTrailingSpaces, editorColor.highlightTrailingSpacesBg)
 
-  # work space bar
-  setColorPair(EditorColorPair.workSpaceBar, editorColor.workSpaceBar, editorColor.workSpaceBarBg)
+    # work space bar
+    setColorPair(EditorColorPair.workSpaceBar, editorColor.workSpaceBar, editorColor.workSpaceBarBg)
 
-  # highlight reserved words
-  setColorPair(EditorColorPair.reservedWord, editorColor.reservedWord, editorColor.reservedWordBg)
+    # highlight reserved words
+    setColorPair(EditorColorPair.reservedWord, editorColor.reservedWord, editorColor.reservedWordBg)
 
 proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Color, Color) =
   let editorColor = ColorThemeTable[theme]
