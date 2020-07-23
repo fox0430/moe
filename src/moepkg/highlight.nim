@@ -1,4 +1,4 @@
-import packages/docutils/highlite, sequtils, os, strformat, parseutils
+import highlite, sequtils, os, strformat, parseutils
 import unicodeext, ui, color
 from strutils import find
 
@@ -268,5 +268,7 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langJava
   of ".yaml":
     return SourceLanguage.langYaml
+  of ".py":
+    return SourceLanguage.langPython
   else:
     return SourceLanguage.langNone

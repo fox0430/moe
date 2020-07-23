@@ -1,4 +1,4 @@
-import packages/docutils/highlite, tables, times
+import highlite, tables, times
 import gapbuffer, unicodeext
 
 type Mode* = enum
