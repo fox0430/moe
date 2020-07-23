@@ -1,4 +1,4 @@
-import osproc, packages/docutils/highlite, terminal, times
+import osproc, highlite, terminal, times
 import unicodeext, settings, bufferstatus, gapbuffer, messages, ui,
        editorstatus, movement, window, workspace
 

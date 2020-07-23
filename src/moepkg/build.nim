@@ -1,4 +1,4 @@
-import os, osproc, strformat, packages/docutils/highlite
+import os, osproc, strformat, highlite
 import unicodeext
 
 type BuildOnSaveSettings* = object

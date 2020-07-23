@@ -1,4 +1,4 @@
-import ui, strutils, strformat, packages/docutils/highlite, os, osproc
+import ui, strutils, strformat, highlite, os, osproc
 import bufferstatus, color, unicodeext, settings, window, gapbuffer
 
 type StatusBar* = object
