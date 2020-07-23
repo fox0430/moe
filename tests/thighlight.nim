@@ -1,5 +1,5 @@
-import unittest, packages/docutils/highlite, strutils
-import moepkg/[highlight, color]
+import unittest, strutils
+import moepkg/[highlight, highlite, color]
 
 const reservedWords = @[
   ReservedWord(word: "WIP", color: EditorColorPair.reservedWord)
