@@ -145,9 +145,8 @@ proc writeStatusBarCurrentGitBranchName(statusBar: var StatusBar,
   let
     branchName = cmdResult.output
     ## Add symbol and delete newline
-    buffer = ru"  " & branchName[0 .. branchName.high - 1].toRunes
-    color = if isActiveWindow: EditorColorPair.statusBarNormalMode
-            else: EditorColorPair.statusBarNormalModeInactive
+    buffer = ru"  " & branchName[0 .. branchName.high - 1].toRunes & ru" "
+    color = EditorColorPair.statusBarGitBranch
 
   statusBarBuffer.add(buffer)
   statusBar.window.append(buffer, color)
