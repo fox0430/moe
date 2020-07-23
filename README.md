@@ -24,7 +24,7 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Infinite undo/redo
 
-- Syntax highlighting (Nim, C, C++, C#, Java, Yaml)
+- Syntax highlighting (Nim, C, C++, C#, Java, Yaml, JavaScript, Python)
 
 - Configuration file
 
