@@ -80,10 +80,13 @@ proc sortDirList(dirList: seq[PathInfo], sortBy: Sort): seq[PathInfo] =
     result.add dirList.sortedByIt(it.lastWriteTime)
 
 proc refreshDirList(sortBy: Sort): seq[PathInfo] =
-  var dirList  : seq[PathInfo]
-  var fileList : seq[PathInfo]
-  var item     : PathInfo
+  var
+    dirList  : seq[PathInfo]
+    fileList : seq[PathInfo]
+
   for list in walkDir("./"):
+    var item: PathInfo
+
     if list.kind == pcLinkToFile or list.kind == pcLinkToDir:
       if tryExpandSymlink(list.path) != "":
         item = (list.kind,
@@ -103,15 +106,20 @@ proc refreshDirList(sortBy: Sort): seq[PathInfo] =
                 list.path,
                 0.int64,
                 getLastModificationTime(list.path))
-    item.path = $(item.path.toRunes.normalizePath)
+    if item.path.len > 0:
+      item.path = $(item.path.toRunes.normalizePath)
+    else:
+      item.path = ""
     if list.kind in {pcLinkToDir, pcDir}:
       dirList.add item
     else:
       fileList.add item
-  return @[(pcDir,
-            "../",
-            0.int64,
-            getLastModificationTime(getCurrentDir()))] &
+
+  return @[(
+    pcDir,
+    "../",
+    0.int64,
+    getLastModificationTime(getCurrentDir()))] &
     sortDirList(dirList, sortBy) & sortDirList(fileList, sortBy)
 
 proc initFileRegister(): FileRegister =
