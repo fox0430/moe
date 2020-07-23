@@ -892,7 +892,11 @@ proc yamlNextToken(g: var GeneralTokenizer) =
 
 proc pythonNextToken(g: var GeneralTokenizer) =
   const
-    keywords: array[0..25, string] = ["None", "and", "break", "class", "continue", "def", "dict", "elif", "else", "except", "finally", "float", "for", "from", "if", "import", "in", "int", "is", "list", "or", "raise", "return", "str", "try", "while"]
+    keywords: array[0..34, string] = ["False", "None", "True", "and", "as",
+      "assert", "async", "await", "break", "class", "continue", "def", "del",
+      "elif", "else", "except", "finally", "for", "from", "global", "if",
+      "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise",
+      "return", "try", "while", "with", "yield"]
   clikeNextToken(g, keywords, {})
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
