@@ -557,8 +557,9 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
 proc parseSettingsFile*(filename: string): EditorSettings =
   result = initEditorSettings()
 
-  var vscodeTheme = false
-  var settings: TomlValueRef
+  var
+    vscodeTheme = false
+    settings: TomlValueRef
   try: settings = parsetoml.parseFile(filename)
   except IOError, TomlError: return
 
@@ -1021,10 +1022,10 @@ proc parseSettingsFile*(filename: string): EditorSettings =
       ColorThemeTable[ColorTheme.config].highlightTrailingSpacesBg = color("highlightTrailingSpacesBg")
 
     if settings["Theme"].contains("workSpaceBar"):
-      ColorThemeTable[ColorTheme.config].workSpaceBar = color("wrokSpaceBar")
+      ColorThemeTable[ColorTheme.config].workSpaceBar = color("workSpaceBar")
 
     if settings["Theme"].contains("workSpaceBarBg"):
-      ColorThemeTable[ColorTheme.config].workSpaceBarBg = color("wrokSpaceBarBg")
+      ColorThemeTable[ColorTheme.config].workSpaceBarBg = color("workSpaceBarBg")
 
     if settings["Theme"].contains("reservedWord"):
       ColorThemeTable[ColorTheme.config].reservedWord = color("reservedWord")
