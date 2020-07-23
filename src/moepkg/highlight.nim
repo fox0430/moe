@@ -270,5 +270,7 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langYaml
   of ".py":
     return SourceLanguage.langPython
+  of ".js":
+    return SourceLanguage.langJavaScript
   else:
     return SourceLanguage.langNone
