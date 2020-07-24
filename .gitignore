@@ -4,3 +4,6 @@ tests/*
 !tests/*.*
 moe
 test.txt
+.history
+src/.history
+src/moepkg/.history

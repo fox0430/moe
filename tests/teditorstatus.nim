@@ -58,7 +58,8 @@ test "resize 2":
   
   for i in 0 ..< 10:
     status.bufStatus[0].keyEnter(status.workSpace[0].currentMainWindowNode,
-                                 status.settings.autoCloseParen)
+                                 status.settings.autoCloseParen,
+                                 status.settings.tabStop)
     status.update
 
 test "Highlight of a pair of paren 1":
@@ -174,7 +175,8 @@ test "Highlight of a pair of paren 4":
   status.changeMode(Mode.insert)
   
   status.bufStatus[0].keyEnter(status.workSpace[0].currentMainWindowNode,
-                               status.settings.autoIndent)
+                               status.settings.autoIndent,
+                               status.settings.tabStop)
 
   status.update
 
