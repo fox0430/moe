@@ -937,26 +937,26 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Theme"].contains("visualModeBg"):
       ColorThemeTable[ColorTheme.config].visualModeBg = color("visualModeBg")
 
-    if settings["Theme"].contains("defaultCharactorColor"):
-      ColorThemeTable[ColorTheme.config].defaultChar = color("defaultCharactorColor")
+    if settings["Theme"].contains("defaultChar"):
+      ColorThemeTable[ColorTheme.config].defaultChar = color("defaultChar")
 
-    if settings["Theme"].contains("gtKeywordColor"):
-      ColorThemeTable[ColorTheme.config].gtKeyword = color("gtKeywordColor")
+    if settings["Theme"].contains("gtKeyword"):
+      ColorThemeTable[ColorTheme.config].gtKeyword = color("gtKeyword")
 
-    if settings["Theme"].contains("gtStringLitColor"):
-      ColorThemeTable[ColorTheme.config].gtStringLit = color("gtStringLitColor")
+    if settings["Theme"].contains("gtStringLit"):
+      ColorThemeTable[ColorTheme.config].gtStringLit = color("gtStringLit")
 
-    if settings["Theme"].contains("gtDecNumberColor"):
-      ColorThemeTable[ColorTheme.config].gtDecNumber = color("gtDecNumberColor")
+    if settings["Theme"].contains("gtDecNumber"):
+      ColorThemeTable[ColorTheme.config].gtDecNumber = color("gtDecNumber")
 
-    if settings["Theme"].contains("gtCommentColor"):
-      ColorThemeTable[ColorTheme.config].gtComment = color("gtCommentColor")
+    if settings["Theme"].contains("gtComment"):
+      ColorThemeTable[ColorTheme.config].gtComment = color("gtComment")
 
-    if settings["Theme"].contains("gtLongCommentColor"):
-      ColorThemeTable[ColorTheme.config].gtLongComment = color("gtLongCommentColor")
+    if settings["Theme"].contains("gtLongComment"):
+      ColorThemeTable[ColorTheme.config].gtLongComment = color("gtLongComment")
 
-    if settings["Theme"].contains("gtWhitespaceColor"):
-      ColorThemeTable[ColorTheme.config].gtLongComment = color("gtWhitespaceColor")
+    if settings["Theme"].contains("gtWhitespace"):
+      ColorThemeTable[ColorTheme.config].gtLongComment = color("gtWhitespace")
 
     if settings["Theme"].contains("currentFile"):
       ColorThemeTable[ColorTheme.config].currentFile = color("currentFile")
