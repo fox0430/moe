@@ -154,16 +154,26 @@ proc deleteBeforeCursorToFirstNonBlank*(bufStatus: var BufferStatus,
   for _ in firstNonBlank..max(0, windowNode.currentColumn-1):
     currentLineDeleteCharacterBeforeCursor(bufStatus, windowNode, false)
 
-proc insertIndent(bufStatus: var BufferStatus, windowNode: WindowNode) =
-  let indent = min(countRepeat(bufStatus.buffer[windowNode.currentLine], Whitespace, 0),
-                   windowNode.currentColumn)
+proc insertIndent(bufStatus: var BufferStatus, windowNode: WindowNode, tabStop: int) =
+  # Auto indent if finish a previous line with ':'
+  if bufStatus.buffer[windowNode.currentLine].len > 0 and
+     bufStatus.buffer[windowNode.currentLine][^1] == ru':':
+    let oldLine = bufStatus.buffer[windowNode.currentLine + 1]
+    var newLine = bufStatus.buffer[windowNode.currentLine + 1]
+    newLine &= repeat(' ', tabStop).toRunes
+    if oldLine != newLine: bufStatus.buffer[windowNode.currentLine + 1] = newLine
+   
+  else:
+    let
+      count = countRepeat(bufStatus.buffer[windowNode.currentLine], Whitespace, 0)
+      indent = min(count, windowNode.currentColumn)
 
-  let oldLine = bufStatus.buffer[windowNode.currentLine + 1]
-  var newLine = bufStatus.buffer[windowNode.currentLine + 1]
-  newLine &= repeat(' ', indent).toRunes
-  if oldLine != newLine: bufStatus.buffer[windowNode.currentLine + 1] = newLine
+    let oldLine = bufStatus.buffer[windowNode.currentLine + 1]
+    var newLine = bufStatus.buffer[windowNode.currentLine + 1]
+    newLine &= repeat(' ', indent).toRunes
+    if oldLine != newLine: bufStatus.buffer[windowNode.currentLine + 1] = newLine
 
-proc keyEnter*(bufStatus: var BufferStatus, windowNode: WindowNode, autoIndent: bool) =
+proc keyEnter*(bufStatus: var BufferStatus, windowNode: WindowNode, autoIndent: bool, tabStop: int) =
   proc isWhiteSpaceLine(line: seq[Rune]): bool =
     result = true
     for r in line:
@@ -175,7 +185,7 @@ proc keyEnter*(bufStatus: var BufferStatus, windowNode: WindowNode, autoIndent: 
   bufStatus.buffer.insert(ru"", windowNode.currentLine + 1)
 
   if autoIndent:
-    bufStatus.insertIndent(windowNode)
+    bufStatus.insertIndent(windowNode, tabStop)
 
     var startOfCopy = max(
       countRepeat(bufStatus.buffer[windowNode.currentLine], Whitespace, 0),
@@ -676,11 +686,12 @@ proc pasteBeforeCursor*(status: var EditorStatus) =
 proc replaceCurrentCharacter*(bufStatus: var BufferStatus,
                               windowNode: WindowNode,
                               autoIndent, autoDeleteParen: bool,
+                              tabStop: int,
                               character: Rune) =
 
   if isEnterKey(character):
-    bufStatus.deleteCurrentCharacter(windowNode, autoDeleteParen)
-    keyEnter(bufStatus, windowNode, autoIndent)
+      bufStatus.deleteCurrentCharacter(windowNode, autoDeleteParen)
+      keyEnter(bufStatus, windowNode, autoIndent, tabStop)
   else:
     let oldLine = bufStatus.buffer[windowNode.currentLine]
     var newLine = bufStatus.buffer[windowNode.currentLine]

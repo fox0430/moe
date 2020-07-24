@@ -22,7 +22,8 @@ proc replaceMode*(status: var EditorStatus) =
     if windowNode.currentColumn < buffer[windowNode.currentLine].len:
       status.bufStatus[currentBufferIndex].replaceCurrentCharacter(
         status.workSpace[workspaceIndex].currentMainWindowNode,
-        status.settings.autoIndent, status.settings.autoDeleteParen, key)
+        status.settings.autoIndent, status.settings.autoDeleteParen,
+        status.settings.tabStop, key)
 
   while status.isReplaceMode:
     let currentBufferIndex = status.bufferIndexInCurrentWindow

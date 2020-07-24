@@ -257,6 +257,7 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
       status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode,
       status.settings.autoIndent,
       status.settings.autoDeleteParen,
+      status.settings.tabStop,
       newCharacter)
 
   template modifyWordUnderCursor(amount: int) =

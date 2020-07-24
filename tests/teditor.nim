@@ -131,24 +131,43 @@ suite "Editor: keyEnter":
     const isAutoIndent = true
     for i in 0 ..< 2:
       status.bufStatus[0].keyEnter(status.workspace[0].currentMainWindowNode,
-                                   isAutoIndent)
+                                   isAutoIndent,
+                                   status.settings.tabStop)
     
     check status.bufStatus[0].buffer[0] == ru"block:"
     check status.bufStatus[0].buffer[1] == ru""
     check status.bufStatus[0].buffer[2] == ru""
     check status.bufStatus[0].buffer[3] == ru"  "
 
+  test "Auto indent if finish a previous line with ':'":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"block:"])
+    status.bufStatus[0].mode = Mode.insert
+    status.workspace[0].currentMainWindowNode.currentColumn = 6
+
+    const isAutoIndent = true
+    status.bufStatus[0].keyEnter(status.workspace[0].currentMainWindowNode,
+                                 isAutoIndent,
+                                 status.settings.tabStop)
+
+
+    check status.bufStatus[0].buffer[0] == ru"block:"
+    check status.bufStatus[0].buffer[1] == ru"  "
+
   test "New line":
-      var status = initEditorStatus()
-      status.addNewBuffer("")
+    var status = initEditorStatus()
+    status.addNewBuffer("")
 
-      status.bufStatus[0].buffer = initGapBuffer(@[ru"test "])
-      status.bufStatus[0].mode = Mode.insert
-      status.workspace[0].currentMainWindowNode.currentColumn = 5
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"test "])
+    status.bufStatus[0].mode = Mode.insert
+    status.workspace[0].currentMainWindowNode.currentColumn = 5
 
-      const isAutoIndent = true
-      status.bufStatus[0].keyEnter(status.workspace[0].currentMainWindowNode,
-                                   isAutoIndent)
+    const isAutoIndent = true
+    status.bufStatus[0].keyEnter(status.workspace[0].currentMainWindowNode,
+                                 isAutoIndent,
+                                 status.settings.tabStop)
 
-      check status.bufStatus[0].buffer[0] == ru"test "
-      check status.bufStatus[0].buffer[1] == ru""
+    check status.bufStatus[0].buffer[0] == ru"test "
+    check status.bufStatus[0].buffer[1] == ru""

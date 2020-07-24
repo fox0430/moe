@@ -74,7 +74,8 @@ proc insertMode*(status: var EditorStatus) =
     elif isEnterKey(key):
       keyEnter(status.bufStatus[currentBufferIndex],
                status.workSpace[workspaceIndex].currentMainWindowNode,
-               status.settings.autoIndent)
+               status.settings.autoIndent,
+               status.settings.tabStop)
     elif key == ord('\t') or isControlI(key):
       insertTab(status.bufStatus[currentBufferIndex],
                 status.workSpace[workspaceIndex].currentMainWindowNode,
