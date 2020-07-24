@@ -1228,6 +1228,8 @@ proc exMode*(status: var EditorStatus) =
 
   let workspaceIndex = status.currentWorkSpaceIndex
 
+  status.update
+
   while exitInput == false:
     let returnWord = status.getKeyOnceAndWriteCommandView(prompt,
                                                           command,
