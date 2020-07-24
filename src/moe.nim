@@ -25,7 +25,7 @@ proc main() =
   startUi()
 
   var status = initEditorStatus()
-  status.settings.loadSettingFile
+  status.settings = loadSettingFile()
   status.timeConfFileLastReloaded = now()
   status.changeTheme
 

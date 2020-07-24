@@ -960,7 +960,7 @@ proc eventLoopTask(status: var Editorstatus) =
   if status.settings.liveReloadOfConf and
      status.timeConfFileLastReloaded + 1.seconds < now():
     let beforeTheme = status.settings.editorColorTheme
-    status.settings.loadSettingFile
+    status.settings = loadSettingFile()
     status.timeConfFileLastReloaded = now()
     if beforeTheme != status.settings.editorColorTheme:
       changeTheme(status)

@@ -554,14 +554,14 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
       background:
         colorFromNode(jsonNode{"colors", "tab.activeBorder"})
 
-proc parseSettingsFile*(filename: string): EditorSettings =
+proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
   result = initEditorSettings()
 
   var
     vscodeTheme = false
-    settings: TomlValueRef
-  try: settings = parsetoml.parseFile(filename)
-  except IOError, TomlError: return
+    #settings: TomlValueRef
+  #try: settings = parsetoml.parseFile(filename)
+  #except IOError, TomlError: return
 
   if settings.contains("Standard"):
     if settings["Standard"].contains("theme"):
@@ -1096,6 +1096,11 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if not vsCodeThemeLoaded:
       result.editorColorTheme = ColorTheme.dark
 
-proc loadSettingFile*(settings: var EditorSettings) =
-  try: settings = parseSettingsFile(getConfigDir() / "moe" / "moerc.toml")
-  except ValueError: return
+proc loadSettingFile*(): EditorSettings =
+  let filename = getConfigDir() / "moe" / "moerc.toml"
+  var toml: TomlValueRef
+
+  try: toml = parsetoml.parseFile(filename)
+  except IOError, TomlError: return
+
+  result = parseSettingsFile(toml)
