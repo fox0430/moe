@@ -664,7 +664,10 @@ proc parseSettingsFile*(filename: string): EditorSettings =
         result.statusBar.mode= settings["StatusBar"]["mode"].getbool()
 
     if settings["StatusBar"].contains("filename"):
-        result.statusBar.filename = settings["StatusBar"]["chanedMark"].getbool()
+        result.statusBar.filename = settings["StatusBar"]["filename"].getbool()
+
+    if settings["StatusBar"].contains("chanedMark"):
+        result.statusBar.chanedMark = settings["StatusBar"]["chanedMark"].getbool()
 
     if settings["StatusBar"].contains("line"):
         result.statusBar.line = settings["StatusBar"]["line"].getbool()
