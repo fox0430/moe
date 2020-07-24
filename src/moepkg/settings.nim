@@ -622,7 +622,7 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("realtimeSearch"):
       result.realtimeSearch = settings["Standard"]["realtimeSearch"].getbool()
 
-    if settings["Standard"].contains("popUpWindowInExmode "):
+    if settings["Standard"].contains("popUpWindowInExmode"):
       result.popUpWindowInExmode = settings["Standard"]["popUpWindowInExmode"].getbool()
 
     if settings["Standard"].contains("replaceTextHighlight"):
