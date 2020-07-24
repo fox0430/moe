@@ -70,6 +70,8 @@ allBuffer = false
 
 mode = true
 
+filename = true
+
 chanedMark = true
 
 line = true
