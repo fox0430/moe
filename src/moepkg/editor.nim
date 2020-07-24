@@ -165,7 +165,9 @@ proc insertIndent(bufStatus: var BufferStatus, windowNode: WindowNode) =
 
 proc keyEnter*(bufStatus: var BufferStatus, windowNode: WindowNode, autoIndent: bool) =
   proc isWhiteSpaceLine(line: seq[Rune]): bool =
-    for r in line: result = isWhiteSpace(r)
+    result = true
+    for r in line:
+      if not isWhiteSpace(r): return false
 
   proc deleteAllCharInLine(line: var seq[Rune]) =
     for i in 0 ..< line.len: line.delete(0)
