@@ -107,7 +107,7 @@ suite "Editor: Send to clipboad":
 
     check exitCode == 0 and output[0 .. output.high - 1] == "$Clipboard test"
 
-suite "Delete word":
+suite "Editor: Delete word":
   test "Fix #842":
     var status = initEditorStatus()
     status.addNewBuffer("")
@@ -117,3 +117,23 @@ suite "Delete word":
 
     for i in 0 ..< 2:
       status.bufStatus[0].deleteWord(status.workspace[0].currentMainWindowNode)
+
+suite "Editor: keyEnter":
+  test "Delete all characters in the previous line if only whitespaces":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"block:", ru"  "])
+    status.bufStatus[0].mode = Mode.insert
+    status.workspace[0].currentMainWindowNode.currentLine = 1
+    status.workspace[0].currentMainWindowNode.currentColumn = 2
+
+    const isAutoIndent = true
+    for i in 0 ..< 2:
+      status.bufStatus[0].keyEnter(status.workspace[0].currentMainWindowNode,
+                                   isAutoIndent)
+    
+    check status.bufStatus[0].buffer[0] == ru"block:"
+    check status.bufStatus[0].buffer[1] == ru""
+    check status.bufStatus[0].buffer[2] == ru""
+    check status.bufStatus[0].buffer[3] == ru"  "

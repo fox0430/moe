@@ -164,6 +164,12 @@ proc insertIndent(bufStatus: var BufferStatus, windowNode: WindowNode) =
   if oldLine != newLine: bufStatus.buffer[windowNode.currentLine + 1] = newLine
 
 proc keyEnter*(bufStatus: var BufferStatus, windowNode: WindowNode, autoIndent: bool) =
+  proc isWhiteSpaceLine(line: seq[Rune]): bool =
+    for r in line: result = isWhiteSpace(r)
+
+  proc deleteAllCharInLine(line: var seq[Rune]) =
+    for i in 0 ..< line.len: line.delete(0)
+
   bufStatus.buffer.insert(ru"", windowNode.currentLine + 1)
 
   if autoIndent:
@@ -200,6 +206,16 @@ proc keyEnter*(bufStatus: var BufferStatus, windowNode: WindowNode, autoIndent: 
     inc(windowNode.currentLine)
     windowNode.currentColumn =
       countRepeat(bufStatus.buffer[windowNode.currentLine], Whitespace, 0)
+
+    # Delete all characters in the previous line if only whitespaces.
+    if windowNode.currentLine > 0 and
+       isWhiteSpaceLine(bufStatus.buffer[windowNode.currentLine - 1]):
+
+      let oldLine = bufStatus.buffer[windowNode.currentLine - 1]
+      var newLine = bufStatus.buffer[windowNode.currentLine - 1]
+      newLine.deleteAllCharInLine
+      if newLine != oldLine:
+        bufStatus.buffer[windowNode.currentLine - 1] = newLine
   else:
     block:
       let oldLine = bufStatus.buffer[windowNode.currentLine + 1]
