@@ -1,4 +1,4 @@
-import os, terminal, strutils, unicodeext, times, algorithm
+import os, terminal, strutils, unicodeext, times, algorithm, sequtils
 import editorstatus, ui, fileutils, editorview, gapbuffer, highlight,
        commandview, highlight, window, color, bufferstatus, settings, messages
 
@@ -84,7 +84,7 @@ proc refreshDirList(sortBy: Sort): seq[PathInfo] =
     dirList  : seq[PathInfo]
     fileList : seq[PathInfo]
 
-  for list in walkDir("./"):
+  for list in walkDir($CurDir):
     var item: PathInfo
 
     if list.kind == pcLinkToFile or list.kind == pcLinkToDir:
@@ -117,7 +117,7 @@ proc refreshDirList(sortBy: Sort): seq[PathInfo] =
 
   return @[(
     pcDir,
-    "../",
+    ParDir,
     0.int64,
     getLastModificationTime(getCurrentDir()))] &
     sortDirList(dirList, sortBy) & sortDirList(fileList, sortBy)
@@ -325,21 +325,19 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus,
       kind = dir.kind
     bufStatus.buffer.add(filename.toRunes)
 
-    let oldLine =  bufStatus.buffer[index]
     var newLine =  bufStatus.buffer[index]
-    if kind == pcDir and 0 < index:
-      newLine.add(ru"/")
+    if kind == pcDir:
+      newLine.add(ru DirSep)
     elif kind == pcLinkToFile:
-      newLine.add(ru"@ -> " & expandsymLink(filename).toRunes)
+      newLine.add(ru"@ -> " & expandSymLink(filename).toRunes)
     elif kind == pcLinkToDir:
-      newLine.add(ru"@ -> " & expandsymLink(filename).toRunes & ru"/")
+      newLine.add(ru"@ -> " & toRunes(expandSymLink(filename) / $DirSep))
 
     # Set icons
-    if settings.filerSettings.showIcons: newLine = pathToIcon(filename)
-    else: newLine = ru""
+    if settings.filerSettings.showIcons: newLine.insert(pathToIcon(filename), 0)
 
-    newLine.add oldLine
     bufStatus.buffer[index] = newLine
+
   
   let useStatusBar = if settings.statusBar.useBar: 1 else: 0
   let numOfFile = filerStatus.dirList.len
