@@ -622,7 +622,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Standard"].contains("realtimeSearch"):
       result.realtimeSearch = settings["Standard"]["realtimeSearch"].getbool()
 
-    if settings["Standard"].contains("popUpWindowInExmode "):
+    if settings["Standard"].contains("popUpWindowInExmode"):
       result.popUpWindowInExmode = settings["Standard"]["popUpWindowInExmode"].getbool()
 
     if settings["Standard"].contains("replaceTextHighlight"):
@@ -664,7 +664,10 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
         result.statusBar.mode= settings["StatusBar"]["mode"].getbool()
 
     if settings["StatusBar"].contains("filename"):
-        result.statusBar.filename = settings["StatusBar"]["chanedMark"].getbool()
+        result.statusBar.filename = settings["StatusBar"]["filename"].getbool()
+
+    if settings["StatusBar"].contains("chanedMark"):
+        result.statusBar.chanedMark = settings["StatusBar"]["chanedMark"].getbool()
 
     if settings["StatusBar"].contains("line"):
         result.statusBar.line = settings["StatusBar"]["line"].getbool()
@@ -937,26 +940,26 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("visualModeBg"):
       ColorThemeTable[ColorTheme.config].visualModeBg = color("visualModeBg")
 
-    if settings["Theme"].contains("defaultCharactorColor"):
-      ColorThemeTable[ColorTheme.config].defaultChar = color("defaultCharactorColor")
+    if settings["Theme"].contains("defaultChar"):
+      ColorThemeTable[ColorTheme.config].defaultChar = color("defaultChar")
 
-    if settings["Theme"].contains("gtKeywordColor"):
-      ColorThemeTable[ColorTheme.config].gtKeyword = color("gtKeywordColor")
+    if settings["Theme"].contains("gtKeyword"):
+      ColorThemeTable[ColorTheme.config].gtKeyword = color("gtKeyword")
 
-    if settings["Theme"].contains("gtStringLitColor"):
-      ColorThemeTable[ColorTheme.config].gtStringLit = color("gtStringLitColor")
+    if settings["Theme"].contains("gtStringLit"):
+      ColorThemeTable[ColorTheme.config].gtStringLit = color("gtStringLit")
 
-    if settings["Theme"].contains("gtDecNumberColor"):
-      ColorThemeTable[ColorTheme.config].gtDecNumber = color("gtDecNumberColor")
+    if settings["Theme"].contains("gtDecNumber"):
+      ColorThemeTable[ColorTheme.config].gtDecNumber = color("gtDecNumber")
 
-    if settings["Theme"].contains("gtCommentColor"):
-      ColorThemeTable[ColorTheme.config].gtComment = color("gtCommentColor")
+    if settings["Theme"].contains("gtComment"):
+      ColorThemeTable[ColorTheme.config].gtComment = color("gtComment")
 
-    if settings["Theme"].contains("gtLongCommentColor"):
-      ColorThemeTable[ColorTheme.config].gtLongComment = color("gtLongCommentColor")
+    if settings["Theme"].contains("gtLongComment"):
+      ColorThemeTable[ColorTheme.config].gtLongComment = color("gtLongComment")
 
-    if settings["Theme"].contains("gtWhitespaceColor"):
-      ColorThemeTable[ColorTheme.config].gtLongComment = color("gtWhitespaceColor")
+    if settings["Theme"].contains("gtWhitespace"):
+      ColorThemeTable[ColorTheme.config].gtLongComment = color("gtWhitespace")
 
     if settings["Theme"].contains("currentFile"):
       ColorThemeTable[ColorTheme.config].currentFile = color("currentFile")
