@@ -108,6 +108,8 @@ Check command bar
 
 ```~``` - Toggle case of the character under the cursor  
 
+```I``` - Insert character multiple lines  
+
 
 ```Esc``` - Start normal mode  
 
