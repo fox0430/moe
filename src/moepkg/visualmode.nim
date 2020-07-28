@@ -120,8 +120,8 @@ proc deleteBufferBlock(bufStatus: var BufferStatus,
 
   var currentLine = area.startLine
   for i in area.startLine .. area.endLine:
-    if bufStatus.buffer[currentLine].len < 1:
-      bufStatus.buffer.delete(currentLine, currentLine + 1)
+    if bufStatus.buffer[i].len < 1:
+      bufStatus.buffer.delete(i, i + 1)
     else:
       let oldLine = bufStatus.buffer[i]
       var newLine = bufStatus.buffer[i]
