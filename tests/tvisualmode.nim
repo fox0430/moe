@@ -544,44 +544,87 @@ test "Visual block mode: Yank buffer (Enable clipboard) 2":
   let (output, exitCode) = execCmdEx("xclip -o")
   check(exitCode == 0 and output[0 .. output.high - 1] == "a\nd")
 
-test "Visual block mode: Delete buffer (Enable clipboard) 1":
-  var status = initEditorStatus()
-  status.addNewBuffer("")
-  status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def"])
+suite "Visual block mode: Delete buffer":
+  test "Delete buffer (Enable clipboard) 1":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def"])
+  
+    status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+      $status.bufStatus[0].buffer,
+      status.settings.reservedWords,
+      status.bufStatus[0].language)
+  
+    status.resize(100, 100)
+  
+    status.changeMode(Mode.visualBlock)
+  
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+    status.bufStatus[0].selectArea = initSelectArea(
+      status.workSpace[0].currentMainWindowNode.currentLine,
+      status.workSpace[0].currentMainWindowNode.currentColumn)
+  
+    status.bufStatus[0].keyDown(status.workSpace[0].currentMainWindowNode)
+  
+    status.bufStatus[0].selectArea.updateSelectArea(
+      status.workSpace[0].currentMainWindowNode.currentLine,
+      status.workSpace[0].currentMainWindowNode.currentColumn)
+  
+    status.update
+  
+    let
+      area = status.bufStatus[0].selectArea
+      clipboard = true
+    status.bufStatus[currentBufferIndex].deleteBufferBlock(status.registers,
+                                                           status.workSpace[0].currentMainWindowNode,
+                                                           area,
+                                                           status.platform,
+                                                           clipboard)
+  
+    let (output, exitCode) = execCmdEx("xclip -o")
+    check(exitCode == 0 and output[0 .. output.high - 1] == "a\nd")
 
-  status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
-    $status.bufStatus[0].buffer,
-    status.settings.reservedWords,
-    status.bufStatus[0].language)
+  test "Fix #885":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"de", ru"fgh"])
+  
+    status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+      $status.bufStatus[0].buffer,
+      status.settings.reservedWords,
+      status.bufStatus[0].language)
+  
+    status.resize(100, 100)
+  
+    status.changeMode(Mode.visualBlock)
+  
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+    status.bufStatus[0].selectArea = initSelectArea(
+      status.workSpace[0].currentMainWindowNode.currentLine,
+      status.workSpace[0].currentMainWindowNode.currentColumn)
+  
+    status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
+    for i in 0 ..< 2:
+      status.bufStatus[0].keyDown(status.workSpace[0].currentMainWindowNode)
+  
+    status.bufStatus[0].selectArea.updateSelectArea(
+      status.workSpace[0].currentMainWindowNode.currentLine,
+      status.workSpace[0].currentMainWindowNode.currentColumn)
+  
+    status.update
+  
+    let
+      area = status.bufStatus[0].selectArea
+      clipboard = false
+    status.bufStatus[0].deleteBufferBlock(status.registers,
+      status.workSpace[0].currentMainWindowNode,
+      area,
+      status.platform,
+      clipboard)
 
-  status.resize(100, 100)
-
-  status.changeMode(Mode.visualBlock)
-
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.bufStatus[0].selectArea = initSelectArea(
-    status.workSpace[0].currentMainWindowNode.currentLine,
-    status.workSpace[0].currentMainWindowNode.currentColumn)
-
-  status.bufStatus[0].keyDown(status.workSpace[0].currentMainWindowNode)
-
-  status.bufStatus[0].selectArea.updateSelectArea(
-    status.workSpace[0].currentMainWindowNode.currentLine,
-    status.workSpace[0].currentMainWindowNode.currentColumn)
-
-  status.update
-
-  let
-    area = status.bufStatus[0].selectArea
-    clipboard = true
-  status.bufStatus[currentBufferIndex].deleteBufferBlock(status.registers,
-                                                         status.workSpace[0].currentMainWindowNode,
-                                                         area,
-                                                         status.platform,
-                                                         clipboard)
-
-  let (output, exitCode) = execCmdEx("xclip -o")
-  check(exitCode == 0 and output[0 .. output.high - 1] == "a\nd")
+    check status.bufStatus[0].buffer[0] == ru"c"
+    check status.bufStatus[0].buffer[1] == ru""
+    check status.bufStatus[0].buffer[2] == ru"h"
 
 test "Visual mode: Join lines":
   var status = initEditorStatus()
