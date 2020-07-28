@@ -271,6 +271,19 @@ proc getInsertBuffer(status: var Editorstatus): seq[Rune] =
 
     if isEscKey(key):
       break
+    if isResizekey(key):
+      status.resize(terminalHeight(), terminalWidth())
+      status.commandWindow.erase
+    elif isEnterKey(key):
+      status.bufStatus[bufferIndex].keyEnter(windowNode,
+        status.settings.autoIndent,
+        status.settings.tabStop)
+      break
+    elif isDcKey(key):
+      status.bufStatus[bufferIndex].deleteCurrentCharacter(
+        status.workSpace[workspaceIndex].currentMainWindowNode,
+        status.settings.autoDeleteParen)
+      break
     else:
       result.add(key)
       status.bufStatus[bufferIndex].insertCharacter(windowNode,
@@ -349,6 +362,19 @@ proc visualBlockCommand(status: var EditorStatus, area: var SelectArea, key: Run
     currentBufferIndex = status.bufferIndexInCurrentWindow
   var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
 
+  template insertCharacterMultipleLines() =
+    status.changeMode(Mode.insert)
+
+    windowNode.currentLine = area.startLine
+    windowNode.currentColumn = area.startColumn
+    let insertBuffer = status.getInsertBuffer
+
+    if insertBuffer.len > 0:
+      status.bufStatus[currentBufferIndex].insertCharBlock(insertBuffer, area)
+    else:
+      windowNode.currentLine = area.startLine
+      windowNode.currentColumn = area.startColumn
+
   if key == ord('y') or isDcKey(key):
     status.bufStatus[currentBufferIndex].yankBufferBlock(status.registers,
                                                          windowNode,
@@ -380,12 +406,7 @@ proc visualBlockCommand(status: var EditorStatus, area: var SelectArea, key: Run
     let ch = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.getKey
     if not isEscKey(ch): status.bufStatus[currentBufferIndex].replaceCharacterBlock(area, ch)
   elif key == ord('I'):
-    status.changeMode(Mode.insert)
-
-    windowNode.currentLine = area.startLine
-    windowNode.currentColumn = area.startColumn
-    let insertBuffer = status.getInsertBuffer
-    status.bufStatus[currentBufferIndex].insertCharBlock(insertBuffer, area)
+    insertCharacterMultipleLines()
   else: discard
 
 proc visualMode*(status: var EditorStatus) =
