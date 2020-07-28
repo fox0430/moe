@@ -83,7 +83,8 @@ suite "Normal mode: Delete current character":
     status.normalCommand(key)
     status.update
 
-    check(status.bufStatus[0].buffer[0] == ru"c")
+    check status.bufStatus[0].buffer[0] == ru"c"
+    check status.registers.yankedStr == ru"ab"
 
 suite "Normal mode: Move to last of line":
   test "Move to last of line":
