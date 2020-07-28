@@ -189,24 +189,30 @@ statusBarExModeInactiveBg = "white"
 
 statusBarGitBranch = "white"
 statusBarGitBranchBg = "blue"
+
 # tab line
 tab = "white"
 tabBg = "default"
 currentTab = "white"
 currentTabBg = "blue"
+
 # command  bar
 commandBar = "gray100"
 commandBarBg = "default"
+
 # error message
 errorMessage = "red"
 errorMessageBg = "default"
+
 # search result highlighting
 searchResult = "default"
 searchResultBg = "red"
+
 # selected area in visual mode
 visualMode = "gray100"
 visualModeBg = "purple_1"
 # color scheme
+
 defaultChar = "gray100"
 gtKeyword = "seaGreen1_2"
 gtStringLit = "purple_1"
@@ -214,6 +220,8 @@ gtDecNumber = "aqua"
 gtComment = "gray"
 gtLongComment = "gray"
 gtWhitespace = "gray"
+gtPreprocessor = "green"
+
 # filer mode
 currentFile = "gray100"
 currentFileBg = "teal"
@@ -223,29 +231,37 @@ dir = "blue"
 dirBg = "default"
 pcLink = "teal"
 pcLinkBg = "default"
+
 # pop up window
 popUpWindow = "gray100"
 popUpWindowBg = "black"
 popUpWinCurrentLine = "blue"
 popUpWinCurrentLineBg = "black"
+
 # replace text highlighting
 replaceText = "default"
 replaceTextBg = "red"
+
 # pair of paren highlighting
 parenText = "default"
 parenTextBg = "white"
+
 # highlight other uses current word
 currentWord = "default"
 currentWordBg = "gray"
+
 # highlight full width space
 highlightFullWidthSpace = "red"
 highlightFullWidthSpaceBg = "red"
+
 # highlight trailing spaces
 highlightTrailingSpaces = "red"
 highlightTrailingSpacesBg = "red"
+
 # work space bar
 workSpaceBar = "white"
 workSpaceBarBg = "blue"
+
 # highlight reserved words
 reservedWord = "white"
 reservedWordBg = "gray"
