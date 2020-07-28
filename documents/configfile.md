@@ -945,6 +945,11 @@ Syntax highlighting color
 gtWhitespaceColor
 ```
 
+Syntax highlighting color
+```
+gtPreprocessor
+```
+
 Character color of current file name in filer mode
 ```
 currentFile

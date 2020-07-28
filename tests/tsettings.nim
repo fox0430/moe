@@ -150,6 +150,7 @@ suite "Parse configuration file":
       gtComment = "pink1"
       gtLongComment = "pink1"
       gtWhitespace = "pink1"
+      gtPreprocessor = "pink1"
       currentFile = "pink1"
       currentFileBg = "pink1"
       file = "pink1"
@@ -309,6 +310,7 @@ suite "Parse configuration file":
     check ColorThemeTable[theme].gtComment == Color.pink1
     check ColorThemeTable[theme].gtLongComment == Color.pink1
     check ColorThemeTable[theme].gtWhitespace == Color.pink1
+    check ColorThemeTable[theme].gtPreprocessor == Color.pink1
     check ColorThemeTable[theme].currentFile == Color.pink1
     check ColorThemeTable[theme].currentFileBg == Color.pink1
     check ColorThemeTable[theme].file == Color.pink1
