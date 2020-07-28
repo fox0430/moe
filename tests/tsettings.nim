@@ -149,7 +149,7 @@ suite "Parse configuration file":
       gtDecNumber = "pink1"
       gtComment = "pink1"
       gtLongComment = "pink1"
-      gtpink1space = "pink1"
+      gtWhitespace = "pink1"
       currentFile = "pink1"
       currentFileBg = "pink1"
       file = "pink1"
@@ -308,7 +308,7 @@ suite "Parse configuration file":
     check ColorThemeTable[theme].gtDecNumber == Color.pink1
     check ColorThemeTable[theme].gtComment == Color.pink1
     check ColorThemeTable[theme].gtLongComment == Color.pink1
-    check ColorThemeTable[theme].gtLongComment == Color.pink1
+    check ColorThemeTable[theme].gtWhitespace == Color.pink1
     check ColorThemeTable[theme].currentFile == Color.pink1
     check ColorThemeTable[theme].currentFileBg == Color.pink1
     check ColorThemeTable[theme].file == Color.pink1
