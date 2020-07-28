@@ -34,6 +34,9 @@ suite "Ex mode: Write command":
     const command = @[ru"w"]
     status.exModeCommand(command)
 
+    if existsFile("test.txt"):
+      removeFile("test.txt")
+
 suite "Ex mode: Change next buffer command":
  test "Change next buffer command":
    var status = initEditorStatus()
