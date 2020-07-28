@@ -961,6 +961,9 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("gtWhitespace"):
       ColorThemeTable[ColorTheme.config].gtLongComment = color("gtWhitespace")
 
+    if settings["Theme"].contains("gtPreprocessor"):
+      ColorThemeTable[ColorTheme.config].gtPreprocessor = color("gtPreprocessor")
+
     if settings["Theme"].contains("currentFile"):
       ColorThemeTable[ColorTheme.config].currentFile = color("currentFile")
 

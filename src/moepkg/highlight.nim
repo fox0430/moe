@@ -217,6 +217,7 @@ proc initHighlight*(buffer: string,
         of gtDecNumber: EditorColorPair.decNumber
         of gtComment: EditorColorPair.comment
         of gtLongComment: EditorColorPair.longComment
+        of gtPreprocessor: EditorColorPair.preprocessor
         of gtWhitespace: EditorColorPair.defaultChar
         else: EditorColorPair.defaultChar
 
