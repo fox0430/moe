@@ -607,8 +607,12 @@ proc yankString*(status: var EditorStatus, length: int) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   var windowNode =
     status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
-  for i in windowNode.currentColumn ..< length:
-    let r = status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine][i]
+
+  for i in 0 ..< length:
+    let
+      col = windowNode.currentColumn + i
+      line = windowNode.currentLine
+      r = status.bufStatus[currentBufferIndex].buffer[line][col]
     status.registers.yankedStr.add(r)
 
   if status.settings.systemClipboard: status.registers.sendToClipboad(status.platform)
