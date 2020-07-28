@@ -565,7 +565,7 @@ proc clikeNextToken(g: var GeneralTokenizer, keywords: openArray[string],
 
 proc cNextToken(g: var GeneralTokenizer) =
   const
-    keywords: array[0..37, string] = ["_Bool", "_Complex", "_Imaginary", "#define", "auto",
+    keywords: array[0..37, string] = ["_Bool", "_Complex", "_Imaginary", "auto",
       "break", "case", "char", "const", "continue", "default", "do", "double",
       "else", "enum", "extern", "float", "for", "goto", "if", "inline", "int",
       "long", "register", "restrict", "return", "short", "signed", "sizeof",
