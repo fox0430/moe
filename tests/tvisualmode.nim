@@ -3,169 +3,200 @@ import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, movement, buffers
 
 include moepkg/visualmode
 
-test "Visual mode: Delete buffer 1":
-  var status = initEditorStatus()
-  status.addNewBuffer("")
-  status.bufStatus[0].buffer = initGapBuffer(@[ru"abcd"])
-
-  status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
-    $status.bufStatus[0].buffer,
-    status.settings.reservedWords,
-    status.bufStatus[0].language)
-
-  status.changeMode(Mode.visual)
-  status.resize(100, 100)
-
-  for i in 0 ..< 2:
+suite "Visual mode: Delete buffer":
+  test "Delete buffer 1":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"abcd"])
+  
+    status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+      $status.bufStatus[0].buffer,
+      status.settings.reservedWords,
+      status.bufStatus[0].language)
+  
+    status.changeMode(Mode.visual)
+    status.resize(100, 100)
+  
+    for i in 0 ..< 2:
+      status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
+  
+      status.bufStatus[0].selectArea.updateSelectArea(
+        status.workSpace[0].currentMainWindowNode.currentLine,
+        status.workSpace[0].currentMainWindowNode.currentColumn)
+  
+      status.update
+  
+    status.visualCommand(status.bufStatus[0].selectArea, ru'x')
+  
+    check(status.bufStatus[0].buffer[0] == ru"d")
+  
+  test "Delete buffer 2":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b", ru"c"])
+  
+    status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+      $status.bufStatus[0].buffer,
+      status.settings.reservedWords,
+      status.bufStatus[0].language)
+  
+    status.changeMode(Mode.visual)
+    status.resize(100, 100)
+  
+    for i in 0 ..< 2:
+      status.bufStatus[0].keyDown(status.workSpace[0].currentMainWindowNode)
+  
+      status.bufStatus[0].selectArea.updateSelectArea(
+        status.workSpace[0].currentMainWindowNode.currentLine,
+        status.workSpace[0].currentMainWindowNode.currentColumn)
+  
+      status.update
+  
+    status.visualCommand(status.bufStatus[0].selectArea, ru'x')
+  
+    check(status.bufStatus[0].buffer.len == 1)
+    check(status.bufStatus[0].buffer[0] == ru"")
+  
+  test "Delete buffer 3":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"ab", ru"cdef"])
+  
+    status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+      $status.bufStatus[0].buffer,
+      status.settings.reservedWords,
+      status.bufStatus[0].language)
+  
+    status.changeMode(Mode.visual)
+    status.resize(100, 100)
+  
+    status.bufStatus[0].keyDown(status.workSpace[0].currentMainWindowNode)
+  
+    status.bufStatus[0].selectArea.updateSelectArea(
+      status.workSpace[0].currentMainWindowNode.currentLine,
+      status.workSpace[0].currentMainWindowNode.currentColumn)
+  
+    status.update
+  
     status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
-
+  
     status.bufStatus[0].selectArea.updateSelectArea(
       status.workSpace[0].currentMainWindowNode.currentLine,
       status.workSpace[0].currentMainWindowNode.currentColumn)
-
+  
     status.update
-
-  status.visualCommand(status.bufStatus[0].selectArea, ru'x')
-
-  check(status.bufStatus[0].buffer[0] == ru"d")
-
-test "Visual mode: Delete buffer 2":
-  var status = initEditorStatus()
-  status.addNewBuffer("")
-  status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b", ru"c"])
-
-  status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
-    $status.bufStatus[0].buffer,
-    status.settings.reservedWords,
-    status.bufStatus[0].language)
-
-  status.changeMode(Mode.visual)
-  status.resize(100, 100)
-
-  for i in 0 ..< 2:
+  
+    status.visualCommand(status.bufStatus[0].selectArea, ru'x')
+  
+    check(status.bufStatus[0].buffer.len == 1)
+    check(status.bufStatus[0].buffer[0] == ru"ef")
+  
+  test "Delete buffer 4":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"defg"])
+  
+    status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+      $status.bufStatus[0].buffer,
+      status.settings.reservedWords,
+      status.bufStatus[0].language)
+  
+    status.resize(100, 100)
+  
+    status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
+    status.update
+  
+    status.changeMode(Mode.visual)
+    status.bufStatus[0].selectArea = initSelectArea(
+      status.workSpace[0].currentMainWindowNode.currentLine,
+      status.workSpace[0].currentMainWindowNode.currentColumn)
+  
     status.bufStatus[0].keyDown(status.workSpace[0].currentMainWindowNode)
-
+  
     status.bufStatus[0].selectArea.updateSelectArea(
       status.workSpace[0].currentMainWindowNode.currentLine,
       status.workSpace[0].currentMainWindowNode.currentColumn)
-
+  
     status.update
+  
+    status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
+  
+    status.bufStatus[0].selectArea.updateSelectArea(
+      status.workSpace[0].currentMainWindowNode.currentLine,
+      status.workSpace[0].currentMainWindowNode.currentColumn)
+  
+    status.update
+  
+    status.visualCommand(status.bufStatus[0].selectArea, ru'x')
+  
+    check(status.bufStatus[0].buffer.len == 2)
+    check(status.bufStatus[0].buffer[0] == ru"a")
+    check(status.bufStatus[0].buffer[1] == ru"g")
+  
+  test "Delete buffer 5":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
+  
+    status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+      $status.bufStatus[0].buffer,
+      status.settings.reservedWords,
+      status.bufStatus[0].language)
+  
+    status.resize(100, 100)
+  
+    status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
+    status.update
+  
+    status.changeMode(Mode.visual)
+    status.bufStatus[0].selectArea = initSelectArea(
+      status.workSpace[0].currentMainWindowNode.currentLine,
+      status.workSpace[0].currentMainWindowNode.currentColumn)
+  
+    for i in 0 ..< 2:
+      status.bufStatus[0].keyDown(status.workSpace[0].currentMainWindowNode)
+  
+      status.bufStatus[0].selectArea.updateSelectArea(
+        status.workSpace[0].currentMainWindowNode.currentLine,
+        status.workSpace[0].currentMainWindowNode.currentColumn)
+  
+      status.update
+  
+    status.visualCommand(status.bufStatus[0].selectArea, ru'x')
+  
+    check(status.bufStatus[0].buffer.len == 2)
+    check(status.bufStatus[0].buffer[0] == ru"a")
+    check(status.bufStatus[0].buffer[1] == ru"i")
 
-  status.visualCommand(status.bufStatus[0].selectArea, ru'x')
+  test "Fix #890":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"", ru"a"])
+  
+    status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+      $status.bufStatus[0].buffer,
+      status.settings.reservedWords,
+      status.bufStatus[0].language)
+  
+    status.resize(100, 100)
 
-  check(status.bufStatus[0].buffer.len == 1)
-  check(status.bufStatus[0].buffer[0] == ru"")
-
-test "Visual mode: Delete buffer 3":
-  var status = initEditorStatus()
-  status.addNewBuffer("")
-  status.bufStatus[0].buffer = initGapBuffer(@[ru"ab", ru"cdef"])
-
-  status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
-    $status.bufStatus[0].buffer,
-    status.settings.reservedWords,
-    status.bufStatus[0].language)
-
-  status.changeMode(Mode.visual)
-  status.resize(100, 100)
-
-  status.bufStatus[0].keyDown(status.workSpace[0].currentMainWindowNode)
-
-  status.bufStatus[0].selectArea.updateSelectArea(
-    status.workSpace[0].currentMainWindowNode.currentLine,
-    status.workSpace[0].currentMainWindowNode.currentColumn)
-
-  status.update
-
-  status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
-
-  status.bufStatus[0].selectArea.updateSelectArea(
-    status.workSpace[0].currentMainWindowNode.currentLine,
-    status.workSpace[0].currentMainWindowNode.currentColumn)
-
-  status.update
-
-  status.visualCommand(status.bufStatus[0].selectArea, ru'x')
-
-  check(status.bufStatus[0].buffer.len == 1)
-  check(status.bufStatus[0].buffer[0] == ru"ef")
-
-test "Visual mode: Delete buffer 4":
-  var status = initEditorStatus()
-  status.addNewBuffer("")
-  status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"defg"])
-
-  status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
-    $status.bufStatus[0].buffer,
-    status.settings.reservedWords,
-    status.bufStatus[0].language)
-
-  status.resize(100, 100)
-
-  status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
-  status.update
-
-  status.changeMode(Mode.visual)
-  status.bufStatus[0].selectArea = initSelectArea(
-    status.workSpace[0].currentMainWindowNode.currentLine,
-    status.workSpace[0].currentMainWindowNode.currentColumn)
-
-  status.bufStatus[0].keyDown(status.workSpace[0].currentMainWindowNode)
-
-  status.bufStatus[0].selectArea.updateSelectArea(
-    status.workSpace[0].currentMainWindowNode.currentLine,
-    status.workSpace[0].currentMainWindowNode.currentColumn)
-
-  status.update
-
-  status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
-
-  status.bufStatus[0].selectArea.updateSelectArea(
-    status.workSpace[0].currentMainWindowNode.currentLine,
-    status.workSpace[0].currentMainWindowNode.currentColumn)
-
-  status.update
-
-  status.visualCommand(status.bufStatus[0].selectArea, ru'x')
-
-  check(status.bufStatus[0].buffer.len == 2)
-  check(status.bufStatus[0].buffer[0] == ru"a")
-  check(status.bufStatus[0].buffer[1] == ru"g")
-
-test "Visual mode: Delete buffer 5":
-  var status = initEditorStatus()
-  status.addNewBuffer("")
-  status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
-
-  status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
-    $status.bufStatus[0].buffer,
-    status.settings.reservedWords,
-    status.bufStatus[0].language)
-
-  status.resize(100, 100)
-
-  status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
-  status.update
-
-  status.changeMode(Mode.visual)
-  status.bufStatus[0].selectArea = initSelectArea(
-    status.workSpace[0].currentMainWindowNode.currentLine,
-    status.workSpace[0].currentMainWindowNode.currentColumn)
-
-  for i in 0 ..< 2:
     status.bufStatus[0].keyDown(status.workSpace[0].currentMainWindowNode)
-
-    status.bufStatus[0].selectArea.updateSelectArea(
+  
+    status.update
+  
+    status.changeMode(Mode.visual)
+    status.bufStatus[0].selectArea = initSelectArea(
       status.workSpace[0].currentMainWindowNode.currentLine,
       status.workSpace[0].currentMainWindowNode.currentColumn)
 
     status.update
+  
+    status.visualCommand(status.bufStatus[0].selectArea, ru'x')
 
-  status.visualCommand(status.bufStatus[0].selectArea, ru'x')
-
-  check(status.bufStatus[0].buffer.len == 2)
-  check(status.bufStatus[0].buffer[0] == ru"a")
-  check(status.bufStatus[0].buffer[1] == ru"i")
+    check status.bufStatus[0].buffer.len == 2
+    check status.bufStatus[0].buffer[0] == ru"a" 
+    check status.bufStatus[0].buffer[1] == ru"a" 
+ 
 
 test "Visual mode: Yank buffer (Disable clipboard) 1":
   var status = initEditorStatus()
