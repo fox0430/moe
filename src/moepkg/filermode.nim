@@ -329,9 +329,15 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus,
     if kind == pcDir:
       newLine.add(ru DirSep)
     elif kind == pcLinkToFile:
-      newLine.add(ru"@ -> " & expandSymLink(filename).toRunes)
+      try:
+        newLine.add(ru"@ -> " & expandSymLink(filename).toRunes)
+      except OSError:
+        discard
     elif kind == pcLinkToDir:
-      newLine.add(ru"@ -> " & toRunes(expandSymLink(filename) / $DirSep))
+      try:
+        newLine.add(ru"@ -> " & toRunes(expandSymLink(filename) / $DirSep))
+      except OSError:
+        discard
 
     # Set icons
     if settings.filerSettings.showIcons: newLine.insert(pathToIcon(filename), 0)
