@@ -26,10 +26,6 @@ type FilerStatus = object
   dirList: seq[PathInfo]
   sortBy: Sort
 
-proc tryExpandSymlink(symlinkPath: string): string =
-  try: return expandSymlink(symlinkPath)
-  except OSError: return ""
-
 proc searchFiles(status: var EditorStatus, dirList: seq[PathInfo]): seq[PathInfo] =
   setCursor(true)
   let command = getCommand(status, "/")
@@ -85,27 +81,31 @@ proc refreshDirList(sortBy: Sort): seq[PathInfo] =
     fileList : seq[PathInfo]
 
   for list in walkDir($CurDir):
+    proc getLastModificationTimeOrDefault(file: string): times.Time =
+      try: getLastModificationTime(file)
+      except OSError: initTime(0,0)
+
     var item: PathInfo
 
-    if list.kind == pcLinkToFile or list.kind == pcLinkToDir:
-      if tryExpandSymlink(list.path) != "":
-        item = (list.kind,
-                list.path,
-                0.int64,
-                getLastModificationTime(getCurrentDir()))
+    case list.kind
+    of pcLinkToFile, pcLinkToDir:
+      item = (list.kind,
+              list.path,
+              0.int64,
+              getLastModificationTimeOrDefault(getCurrentDir()))
+    of pcFile:
+      let fileSize = try: getFileSize(list.path)
+                     except IOError, OSError: 0.int64
+      item = (list.kind,
+              list.path,
+              fileSize,
+              getLastModificationTimeOrDefault(list.path))
     else:
-      if list.kind == pcFile:
-        try:
-          item = (list.kind,
-                  list.path,
-                  getFileSize(list.path),
-                  getLastModificationTime(list.path))
-        except OSError, IOError: discard
-      else:
-        item = (list.kind,
-                list.path,
-                0.int64,
-                getLastModificationTime(list.path))
+      item = (list.kind,
+              list.path,
+              0.int64,
+              getLastModificationTimeOrDefault(list.path))
+
     if item.path.len > 0:
       item.path = $(item.path.toRunes.normalizePath)
     else:
@@ -320,31 +320,27 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus,
   bufStatus.buffer = initGapBuffer[seq[Rune]]()
 
   for index, dir in filerStatus.dirList:
+    proc expandSymLinkOrFilename(filename: string): string =
+      try: expandSymLink(filename)
+      except OSError: filename
+
     let
       filename = dir.path
       kind = dir.kind
-    bufStatus.buffer.add(filename.toRunes)
 
-    var newLine =  bufStatus.buffer[index]
+    var newLine =  filename.toRunes
     if kind == pcDir:
       newLine.add(ru DirSep)
     elif kind == pcLinkToFile:
-      try:
-        newLine.add(ru"@ -> " & expandSymLink(filename).toRunes)
-      except OSError:
-        discard
+      newLine.add(ru"@ -> " & expandSymLinkOrFilename(filename).toRunes)
     elif kind == pcLinkToDir:
-      try:
-        newLine.add(ru"@ -> " & toRunes(expandSymLink(filename) / $DirSep))
-      except OSError:
-        discard
+      newLine.add(ru"@ -> " & toRunes(expandSymLinkOrFilename(filename) / $DirSep))
 
     # Set icons
     if settings.filerSettings.showIcons: newLine.insert(pathToIcon(filename), 0)
 
-    bufStatus.buffer[index] = newLine
+    bufStatus.buffer.add(newLine)
 
-  
   let useStatusBar = if settings.statusBar.useBar: 1 else: 0
   let numOfFile = filerStatus.dirList.len
   windowNode.highlight = initFilelistHighlight(filerStatus.dirList, bufStatus.buffer, windowNode.currentLine)
