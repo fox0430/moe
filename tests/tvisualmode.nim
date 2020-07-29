@@ -615,6 +615,43 @@ suite "Visual block mode: Delete buffer":
     let (output, exitCode) = execCmdEx("xclip -o")
     check(exitCode == 0 and output[0 .. output.high - 1] == "a\nd")
 
+  test "Delete buffer (Enable clipboard) 2":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"", ru"edf"])
+  
+    status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+      $status.bufStatus[0].buffer,
+      status.settings.reservedWords,
+      status.bufStatus[0].language)
+  
+    status.resize(100, 100)
+  
+    status.changeMode(Mode.visualBlock)
+  
+    let currentBufferIndex = status.bufferIndexInCurrentWindow
+    status.bufStatus[0].selectArea = initSelectArea(
+      status.workSpace[0].currentMainWindowNode.currentLine,
+      status.workSpace[0].currentMainWindowNode.currentColumn)
+  
+    for i in 0 ..< 2:
+      status.bufStatus[0].keyDown(status.workSpace[0].currentMainWindowNode)
+  
+      status.bufStatus[0].selectArea.updateSelectArea(
+        status.workSpace[0].currentMainWindowNode.currentLine,
+        status.workSpace[0].currentMainWindowNode.currentColumn)
+  
+      status.update
+  
+    let
+      area = status.bufStatus[0].selectArea
+      clipboard = true
+    status.bufStatus[currentBufferIndex].deleteBufferBlock(status.registers,
+                                                           status.workSpace[0].currentMainWindowNode,
+                                                           area,
+                                                           status.platform,
+                                                           clipboard)
+
   test "Fix #885":
     var status = initEditorStatus()
     status.addNewBuffer("")
