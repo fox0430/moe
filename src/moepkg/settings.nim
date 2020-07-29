@@ -421,6 +421,11 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         colorFromNode(jsonNode{"colors", "statusBar.background"})
+    setEditorColor statusBarGitBranch:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "statusBar.background"})
     # command  bar
     setEditorColor commandBar:
       foreground:
