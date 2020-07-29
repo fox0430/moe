@@ -121,11 +121,11 @@ proc deleteBufferBlock(bufStatus: var BufferStatus,
      bufStatus.buffer[windowNode.currentLine].len < 1: return
   bufStatus.yankBufferBlock(registers, windowNode, area, platform, clipboard)
 
-  var currentLine = area.startLine
-  for i in area.startLine .. area.endLine:
-    if bufStatus.buffer[i].len < 1:
-      bufStatus.buffer.delete(i, i + 1)
-    else:
+  if area.startLine == area.endLine and bufStatus.buffer[area.startLine].len < 1:
+    bufStatus.buffer.delete(area.startLine, area.startLine + 1)
+  else:
+    var currentLine = area.startLine
+    for i in area.startLine .. area.endLine:
       let oldLine = bufStatus.buffer[i]
       var newLine = bufStatus.buffer[i]
       for j in area.startColumn.. min(area.endColumn, bufStatus.buffer[i].high):
