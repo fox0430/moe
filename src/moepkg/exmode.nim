@@ -826,7 +826,11 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
     let
       workspaceIndex = status.currentWorkSpaceIndex
       bufferIndex = status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
-    status.bufStatus[bufferIndex].path = filename
+
+    if status.bufStatus[bufferIndex].path != filename:
+      status.bufStatus[bufferIndex].path = filename
+      status.bufStatus[bufferIndex].language = detectLanguage($filename)
+
     status.bufStatus[currentBufferIndex].countChange = 0
 
     if status.settings.buildOnSaveSettings.buildOnSave: status.buildOnSave
