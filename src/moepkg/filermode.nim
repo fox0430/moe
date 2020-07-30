@@ -108,8 +108,7 @@ proc refreshDirList(sortBy: Sort): seq[PathInfo] =
 
     if item.path.len > 0:
       item.path = $(item.path.toRunes.normalizePath)
-    else:
-      item.path = ""
+
     if list.kind in {pcLinkToDir, pcDir}:
       dirList.add item
     else:
