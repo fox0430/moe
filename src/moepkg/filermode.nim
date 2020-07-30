@@ -75,6 +75,14 @@ proc sortDirList(dirList: seq[PathInfo], sortBy: Sort): seq[PathInfo] =
   of time:
     result.add dirList.sortedByIt(it.lastWriteTime)
 
+when defined(posix):
+  from posix import nil
+  from posix_utils import nil
+
+  proc isFifo(file: string): bool = posix.S_ISFIFO(posix_utils.stat(file).st_mode)
+else:
+  proc isFifo(file: string): bool = false
+
 proc refreshDirList(sortBy: Sort): seq[PathInfo] =
   var
     dirList  : seq[PathInfo]
@@ -85,6 +93,14 @@ proc refreshDirList(sortBy: Sort): seq[PathInfo] =
       try: getLastModificationTime(file)
       except OSError: initTime(0,0)
 
+    proc getFileSizeOrDefault(file: string): int64 =
+      try:
+        # `getFileSize` opens files internally. So if `file` is a named pipe, we don't call `getFileSize` to avoid opening named pipes.
+        if isFifo(file): return 0.int64
+
+        getFileSize(file)
+      except IOError, OSError: 0.int64
+
     var item: PathInfo
 
     case list.kind
@@ -94,11 +110,9 @@ proc refreshDirList(sortBy: Sort): seq[PathInfo] =
               0.int64,
               getLastModificationTimeOrDefault(list.path))
     of pcFile:
-      let fileSize = try: getFileSize(list.path)
-                     except IOError, OSError: 0.int64
       item = (list.kind,
               list.path,
-              fileSize,
+              getFileSizeOrDefault(list.path),
               getLastModificationTimeOrDefault(list.path))
     else:
       item = (list.kind,
@@ -328,11 +342,14 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus,
       kind = dir.kind
 
     var newLine =  filename.toRunes
-    if kind == pcDir:
+    case kind
+    of pcFile:
+      if isFifo(filename): newLine.add(ru '|')
+    of pcDir:
       newLine.add(ru DirSep)
-    elif kind == pcLinkToFile:
+    of pcLinkToFile:
       newLine.add(ru"@ -> " & expandSymLinkOrFilename(filename).toRunes)
-    elif kind == pcLinkToDir:
+    of pcLinkToDir:
       newLine.add(ru"@ -> " & toRunes(expandSymLinkOrFilename(filename) / $DirSep))
 
     # Set icons
