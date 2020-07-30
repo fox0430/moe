@@ -92,7 +92,7 @@ proc refreshDirList(sortBy: Sort): seq[PathInfo] =
       item = (list.kind,
               list.path,
               0.int64,
-              getLastModificationTimeOrDefault(getCurrentDir()))
+              getLastModificationTimeOrDefault(list.path))
     of pcFile:
       let fileSize = try: getFileSize(list.path)
                      except IOError, OSError: 0.int64
