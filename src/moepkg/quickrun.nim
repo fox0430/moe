@@ -1,6 +1,6 @@
 import osproc, highlite, terminal, times
 import unicodeext, settings, bufferstatus, gapbuffer, messages, ui,
-       editorstatus, movement, window, workspace
+       editorstatus, movement, window, workspace, fileutils
 
 type Language = enum
   None = 0
@@ -45,6 +45,8 @@ proc runQuickRun*(bufStatus: BufferStatus,
                   cmdWin: var Window,
                   settings: EditorSettings): seq[seq[Rune]] =
 
+  if bufStatus.path.len == 0: return @[ru""]
+
   let
     filename = bufStatus.path
     sourceLang = bufStatus.language
@@ -55,6 +57,10 @@ proc runQuickRun*(bufStatus: BufferStatus,
                     filename[filename.len - 3 .. filename.high] == ru".sh":
                       Language.Shell
                else: Language.None
+
+
+  if settings.quickRunSettings.saveBufferWhenQuickRun:
+    saveFile(filename, bufStatus.buffer.toRunes, settings.characterEncoding)
 
   let
     command = bufStatus.generateCommand(language, settings.quickRunSettings)

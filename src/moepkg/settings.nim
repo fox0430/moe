@@ -9,6 +9,7 @@ when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
 import ui, color, unicodeext, build, highlight
 
 type QuickRunSettings* = object
+  saveBufferWhenQuickRun*: bool
   command*: string
   timeout*: int # seconds
   nimAdvancedCommand*: string
@@ -92,6 +93,7 @@ type EditorSettings* = object
   quickRunSettings*: QuickRunSettings
 
 proc initQuickRunSettings(): QuickRunSettings =
+  result.saveBufferWhenQuickRun = true
   result.nimAdvancedCommand = "c"
   result.timeout = 30
 
@@ -739,6 +741,9 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       result.autoBackupSettings.backupDir = dir.toRunes
 
   if settings.contains("QuickRun"):
+    if settings["QuickRun"].contains("saveBufferWhenQuickRun"):
+      result.quickRunSettings.saveBufferWhenQuickRun = settings["QuickRun"]["saveBufferWhenQuickRun"].getBool()
+
     if settings["QuickRun"].contains("command"):
       result.quickRunSettings.command = settings["QuickRun"]["command"].getStr()
 
