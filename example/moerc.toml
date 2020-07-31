@@ -104,6 +104,8 @@ reservedWord = ["TODO", "WIP", "NOTE"]
 
 enable = true
 
+showMessages = true
+
 # 10 second
 idolTime = 10
 
