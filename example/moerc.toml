@@ -114,6 +114,8 @@ interval = 5
 
 [QuickRun]
 
+saveBufferWhenQuickRun = true
+
 # command = "nimble build"
 
 # 30 second
