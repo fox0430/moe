@@ -210,7 +210,7 @@ proc isEditCommand(command: seq[seq[Rune]]): bool =
 
 proc isOpenInHorizontalSplitWindowCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
-  return command.len == 2 and cmd == "sp"
+  return command.len > 0 and command.len < 3 and cmd == "sp"
 
 proc isOpenInVerticalSplitWindowCommand(command: seq[seq[Rune]]): bool =
   return command.len == 2 and command[0] == ru"vs"
@@ -1097,7 +1097,10 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
   elif isEditCommand(command):
     editCommand(status, command[1].normalizePath)
   elif isOpenInHorizontalSplitWindowCommand(command):
-    status.openInHorizontalSplitWindow(command[1].normalizePath)
+    let path = if command.len == 2:
+      command[1].normalizePath
+    else: status.bufStatus[currentBufferIndex].path
+    status.openInHorizontalSplitWindow(path)
   elif isOpenInVerticalSplitWindowCommand(command):
     status.openInVerticalSplitWindowCommand(command[1])
   elif isWriteCommand(status, command):
