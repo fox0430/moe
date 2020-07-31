@@ -550,6 +550,22 @@ suite "Ex mode: Open in horizontal split window":
     check(status.workSpace[0].numOfMainWindow == 2)
     check(status.bufStatus.len == 2)
 
+  test "Open in horizontal split window 2":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+
+    status.resize(100, 100)
+    status.update
+
+    const command = @[ru"sp"]
+    status.exModeCommand(command)
+
+    status.resize(100, 100)
+    status.update
+
+    check(status.workSpace[0].numOfMainWindow == 2)
+    check(status.bufStatus.len == 2)
+
 suite "Ex mode: Open in vertical split window":
   test "Open in vertical split window":
     var status = initEditorStatus()
