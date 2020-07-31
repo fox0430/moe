@@ -18,7 +18,9 @@ proc isLogViewerMode(status: Editorstatus): bool =
 
 proc messageLogViewer*(status: var Editorstatus) =
   status.initMessageLog
+
   status.resize(terminalHeight(), terminalWidth())
+  status.update
 
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
