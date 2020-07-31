@@ -142,12 +142,14 @@ proc writePutConfigFileAlreadyExistError*(cmdWin: var Window,
 
   const mess = "Error: Configuration file already exists"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  messageLog.add(mess.toRunes)
 
 proc writeOpenRecentlyUsedXbelError*(cmdWin: var Window,
                                      messageLog: var seq[seq[Rune]]) =
 
   const mess = "Error: " & getHomeDir() / ".local/share/recently-used.xbel" & " Not found"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  messageLog.add(mess.toRunes)
 
 proc writeFileNotFoundError*(cmdWin: var Window,
                              filename: seq[Rune],
@@ -155,18 +157,19 @@ proc writeFileNotFoundError*(cmdWin: var Window,
 
   let mess = "Error: " & $filename & " not found"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  messageLog.add(mess.toRunes)
 
 proc writeStartAutoBackupMessage*(cmdWin: var Window,
                                   messageLog: var seq[seq[Rune]]) =
 
   const mess = "Start automatic backup..."
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  messageLog.add(mess.toRunes)
 
 proc writeAutoBackupSuccessMessage*(cmdWin: var Window,
-                                  messageLog: var seq[seq[Rune]]) =
+                                    message: string) =
 
-  const mess = "Automatic backup successful"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  cmdWin.writeMessageOnCommandWindow(message, EditorColorPair.commandBar)
 
 proc writeRunQuickRunMessage*(cmdWin: var Window) =
   const mess = "Quick run..."
