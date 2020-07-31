@@ -314,6 +314,12 @@ backupDir
 
 ### QuickRun table
 
+Save buffer when run QuickRun (bool)  
+default is true
+```
+saveBufferWhenQuickRun
+```
+
 Setting commands to be executed by quick run (string)  
 default is "" (None)
 ```
