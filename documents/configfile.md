@@ -291,6 +291,12 @@ default is ture
 enable
 ```
 
+Show/Hide automatic backups successful messages (bool)  
+default is ture  
+```
+showMessages
+```
+
 Start backup when there is no operation for the set number of seconds (int)  
 default is 10 (10 second)  
 ```
