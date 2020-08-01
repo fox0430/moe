@@ -965,8 +965,7 @@ proc eventLoopTask(status: var Editorstatus) =
     if success:
       status.settings = newSettings
     else:
-      exitUi()
-      echo "error"
+      status.commandwindow.writeLoadConfigError
 
     status.timeConfFileLastReloaded = now()
     if beforeTheme != status.settings.editorColorTheme:
