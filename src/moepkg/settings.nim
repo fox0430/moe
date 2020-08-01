@@ -1271,10 +1271,12 @@ proc validateTomlConfig(toml: TomlValueRef): (bool, string) =
           var correctKey = false
           for field, val in editorColors.fieldPairs:
             if item.key == field and
-               item.val["type"].getStr == "string" and
-               item.val["value"].getStr == $val:
-              correctKey = true
-              break
+               item.val["type"].getStr == "string":
+              for color in Color:
+                if item.val["value"].getStr == $color:
+                  correctKey = true
+                  break
+              if correctKey: break
           if not correctKey:
             return (false, $item)
 
