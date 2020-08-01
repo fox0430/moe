@@ -182,3 +182,7 @@ proc writeRunQuickRunTimeoutMessage*(cmdWin: var Window) =
 proc writeRunQuickRunFailedMessage*(cmdWin: var Window) =
   const mess = "Quick run failed"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+
+proc writeLoadConfigError*(cmdWin: var Window) =
+  const mess = "Error: Failed to load configuration file"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)

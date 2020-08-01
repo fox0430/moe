@@ -1,5 +1,5 @@
 import parsetoml, os, json, macros, times
-from strutils import parseEnum, endsWith
+from strutils import parseEnum, endsWith, parseInt
 
 when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
   # This addresses a breaking change in https://github.com/nim-lang/Nim/pull/14046.
@@ -566,11 +566,7 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
 proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
   result = initEditorSettings()
 
-  var
-    vscodeTheme = false
-    #settings: TomlValueRef
-  #try: settings = parsetoml.parseFile(filename)
-  #except IOError, TomlError: return
+  var vscodeTheme = false
 
   if settings.contains("Standard"):
     if settings["Standard"].contains("theme"):
@@ -1116,11 +1112,195 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if not vsCodeThemeLoaded:
       result.editorColorTheme = ColorTheme.dark
 
-proc loadSettingFile*(): EditorSettings =
+proc validateTomlConfig(toml: TomlValueRef): bool =
+  template validateStandardTable() =
+    for item in json["Standard"].pairs:
+      case item.key:
+        of "theme":
+          var correctValue = false
+          for theme in ColorTheme:
+            if $theme == item.val["value"].getStr:
+              correctValue = true
+
+          if not correctValue:
+            return false
+        of "number",
+           "currentNumber",
+           "cursorLine",
+           "statusBar",
+           "tabLine",
+           "syntax",
+           "indentationLines",
+           "autoIndent",
+           "disableChangeCursor",
+           "autoSave",
+           "liveReloadOfConf",
+           "realtimeSearch",
+           "popUpWindowInExmode",
+           "replaceTextHighlight",
+           "highlightPairOfParen",
+           "autoDeleteParen",
+           "highlightTrailingSpaces",
+           "highlightCurrentWord":
+          if not (item.val["type"].getStr == "bool"):
+            return false
+        of "tabStop":
+          if not (item.val["type"].getStr == "integer" and
+                  parseInt(item.val["value"].getStr) > 0): return false
+        of "defaultCursor",
+           "normalModeCursor",
+           "insertModeCursor":
+          let val = item.val["value"].getStr
+          if not (val == "blinkBlock" or
+                  val == "blinkIbeam" or
+                  val == "noneBlinkBlock" or
+                  val == "blinkBlock"): return false
+        else:
+          return false
+
+  template validateTabLineTable() =
+    for item in json["TabLine"].pairs:
+      case item.key:
+        of "allBuffer",
+           "mode",
+           "chanedMark",
+           "line",
+           "column",
+           "encoding",
+           "language",
+           "directory",
+           "gitbranchName",
+           "showGitInactive",
+           "showModeInactive":
+          if not (item.val["type"].getStr == "bool"):
+            return false
+        else:
+          return false
+
+  template validateBuildOnSaveTable() =
+    for item in json["BuildOnSave"].pairs:
+      case item.key:
+        of "buildOnSave":
+          if not (item.val["type"].getStr == "bool"):
+            return false
+        of "workspaceRoot",
+           "command":
+          if not (item.val["type"].getStr == "string"):
+            return false
+        else:
+          return false
+
+  template validateHighlightTable() =
+    for item in json["Highlight"].pairs:
+      case item.key:
+        of "reservedWord":
+          if item.val["type"].getStr == "array":
+            for word in item.val["value"]:
+              if word["type"].getStr != "string":
+                return false
+        else:
+          return false
+
+  template validateAutoBackupTable() =
+    for item in json["AutoBackup"].pairs:
+      case item.key:
+        of "enable", "showMessages":
+          if item.val["type"].getStr != "bool":
+            return false
+        of "idolTime",
+           "interval":
+          if item.val["type"].getStr != "integer":
+            return false
+        of "backupDir":
+          if item.val["type"].getStr != "string":
+            return false
+        else:
+          return false
+
+  template validateQuickRunTable() =
+    for item in json["QuickRun"].pairs:
+      case item.key:
+        of "saveBufferWhenQuickRun":
+          if item.val["type"].getStr != "bool":
+            return false
+        of "command",
+           "nimAdvancedCommand",
+           "ClangOptions",
+           "CppOptions",
+           "NimOptions",
+           "shOptions",
+           "bashOptions":
+          if item.val["type"].getStr != "string":
+            return false
+        of "timeout":
+          if item.val["type"].getStr != "integer":
+            return false
+        else:
+          return false
+
+  template validateFilerTable() =
+    for item in json["Filer"].pairs:
+      case item.key:
+        of "showIcons":
+          if item.val["type"].getStr != "bool":
+            return false
+        else:
+          return false
+
+  template validateThemeTable() =
+    let editorColors = ColorThemeTable[ColorTheme.config].EditorColor
+    for item in json["Theme"].pairs:
+      case item.key:
+        of "baseTheme":
+          var correctKey = false
+          for theme in ColorTheme:
+            if $theme == item.val["value"].getStr:
+              correctKey = true
+          if not correctKey: return false 
+        else:
+          # Check color names
+          var correctKey = false
+          for field, val in editorColors.fieldPairs:
+            if item.key == field and
+               item.val["type"].getStr == "string" and
+               item.val["value"].getStr == $val:
+              correctKey = true
+              break
+          if not correctKey:
+            return false
+
+  let json = toml.toJson
+
+  for table in json.keys:
+    case table:
+      of "Standard":
+        validateStandardTable()
+      of "BuildOnSave":
+        validateBuildOnSaveTable()
+      of "Highlight":
+        validateHighlightTable()
+      of "AutoBackup":
+        validateAutoBackupTable()
+      of "QuickRun":
+        validateQuickRunTable()
+      of "Filer":
+        validateFilerTable()
+      of "Theme":
+        validateThemeTable()
+      else: discard
+
+  return true
+
+proc loadSettingFile*(): (bool, EditorSettings) =
   let filename = getConfigDir() / "moe" / "moerc.toml"
   var toml: TomlValueRef
 
   try: toml = parsetoml.parseFile(filename)
   except IOError, TomlError: return
 
-  result = parseSettingsFile(toml)
+  let isValid = toml.validateTomlConfig
+
+  if isValid:
+    result = (true, parseSettingsFile(toml))
+  else:
+    result = (false, initEditorSettings())
