@@ -1151,10 +1151,14 @@ proc validateTomlConfig(toml: TomlValueRef): bool =
            "normalModeCursor",
            "insertModeCursor":
           let val = item.val["value"].getStr
-          if not (val == "blinkBlock" or
-                  val == "blinkIbeam" or
-                  val == "noneBlinkBlock" or
-                  val == "blinkBlock"): return false
+          var correctValue = false
+          for cursorType in CursorType:
+            if val == $cursorType:
+              correctValue = true
+              break
+
+          if not correctValue:
+            return false
         else:
           return false
 
