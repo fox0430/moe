@@ -65,6 +65,7 @@ suite "Parse configuration file":
       backupDir = "/tmp"
       
       [QuickRun]
+      saveBufferWhenQuickRun = false
       command = "nimble build"
       timeout = 1
       nimAdvancedCommand = "js"
@@ -236,6 +237,7 @@ suite "Parse configuration file":
     check settings.autoBackupSettings.interval == 1
     check settings.autoBackupSettings.backupDir == ru"/tmp"
 
+    check not settings.quickRunSettings.saveBufferWhenQuickRun
     check settings.quickRunSettings.command == "nimble build"
     check settings.quickRunSettings.timeout == 1
     check settings.quickRunSettings.nimAdvancedCommand == "js"
