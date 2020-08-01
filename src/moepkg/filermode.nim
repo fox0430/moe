@@ -344,7 +344,10 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus,
     var newLine =  filename.toRunes
     case kind
     of pcFile:
-      if isFifo(filename): newLine.add(ru '|')
+      try:
+        if isFifo(filename): newLine.add(ru '|')
+      except OSError:
+        discard
     of pcDir:
       newLine.add(ru DirSep)
     of pcLinkToFile:
