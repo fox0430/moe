@@ -148,9 +148,10 @@ proc initEditorSettings*(): EditorSettings =
   result.autoCloseParen = true
   result.autoIndent = true
   result.tabStop = 2
-  result.defaultCursor = CursorType.blinkBlockMode # Terminal default curosr shape
-  result.normalModeCursor = CursorType.blinkBlockMode
-  result.insertModeCursor = CursorType.blinkIbeamMode
+  # defaultCursor is terminal default curosr shape
+  result.defaultCursor = CursorType.blinkBlock
+  result.normalModeCursor = CursorType.blinkBlock
+  result.insertModeCursor = CursorType.blinkIbeam
   result.autoSaveInterval = 5
   result.realtimeSearch = true
   result.popUpWindowInExmode = true
@@ -170,17 +171,18 @@ proc initEditorSettings*(): EditorSettings =
   result.autoBackupSettings = initAutoBackupSettings()
   result.quickRunSettings = initQuickRunSettings()
 
+#TODO: Delete. use parseEnum
 proc getCursorType(cursorType, mode: string): CursorType =
   case cursorType
-  of "blinkBlock": return CursorType.blinkBlockMode
-  of "noneBlinkBlock": return CursorType.noneBlinkBlockMode
-  of "blinkIbeam": return CursorType.blinkIbeamMode
-  of "noneBlinkIbeam": return CursorType.noneBlinkIbeamMode
+  of "blinkBlock": return CursorType.blinkBlock
+  of "noneBlinkBlock": return CursorType.noneBlinkBlock
+  of "blinkIbeam": return CursorType.blinkIbeam
+  of "noneBlinkIbeam": return CursorType.noneBlinkIbeam
   else:
     case mode
-    of "default": return CursorType.blinkBlockMode
-    of "normal": return CursorType.blinkBlockMode
-    of "insert": return CursorType.blinkIbeamMode
+    of "default": return CursorType.blinkBlock
+    of "normal": return CursorType.blinkBlock
+    of "insert": return CursorType.blinkIbeam
 
 proc getTheme(theme: string): ColorTheme =
   if theme == "vivid": return ColorTheme.vivid
@@ -1112,7 +1114,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if not vsCodeThemeLoaded:
       result.editorColorTheme = ColorTheme.dark
 
-proc validateTomlConfig(toml: TomlValueRef): bool =
+proc validateTomlConfig(toml: TomlValueRef): (bool, string) =
   template validateStandardTable() =
     for item in json["Standard"].pairs:
       case item.key:
@@ -1123,7 +1125,7 @@ proc validateTomlConfig(toml: TomlValueRef): bool =
               correctValue = true
 
           if not correctValue:
-            return false
+            return (false, $item)
         of "number",
            "currentNumber",
            "cursorLine",
@@ -1131,6 +1133,7 @@ proc validateTomlConfig(toml: TomlValueRef): bool =
            "tabLine",
            "syntax",
            "indentationLines",
+           "autoCloseParen",
            "autoIndent",
            "disableChangeCursor",
            "autoSave",
@@ -1140,13 +1143,15 @@ proc validateTomlConfig(toml: TomlValueRef): bool =
            "replaceTextHighlight",
            "highlightPairOfParen",
            "autoDeleteParen",
+           "systemClipboard",
+           "highlightFullWidthSpace",
            "highlightTrailingSpaces",
            "highlightCurrentWord":
           if not (item.val["type"].getStr == "bool"):
-            return false
-        of "tabStop":
+            return (false, $item)
+        of "tabStop", "autoSaveInterval":
           if not (item.val["type"].getStr == "integer" and
-                  parseInt(item.val["value"].getStr) > 0): return false
+                  parseInt(item.val["value"].getStr) > 0): return (false, $item)
         of "defaultCursor",
            "normalModeCursor",
            "insertModeCursor":
@@ -1158,9 +1163,9 @@ proc validateTomlConfig(toml: TomlValueRef): bool =
               break
 
           if not correctValue:
-            return false
+            return (false, $item)
         else:
-          return false
+          return (false, $item)
 
   template validateTabLineTable() =
     for item in json["TabLine"].pairs:
@@ -1177,22 +1182,22 @@ proc validateTomlConfig(toml: TomlValueRef): bool =
            "showGitInactive",
            "showModeInactive":
           if not (item.val["type"].getStr == "bool"):
-            return false
+            return (false, $item)
         else:
-          return false
+          return (false, $item)
 
   template validateBuildOnSaveTable() =
     for item in json["BuildOnSave"].pairs:
       case item.key:
         of "buildOnSave":
           if not (item.val["type"].getStr == "bool"):
-            return false
+            return (false, $item)
         of "workspaceRoot",
            "command":
           if not (item.val["type"].getStr == "string"):
-            return false
+            return (false, $item)
         else:
-          return false
+          return (false, $item)
 
   template validateHighlightTable() =
     for item in json["Highlight"].pairs:
@@ -1201,32 +1206,32 @@ proc validateTomlConfig(toml: TomlValueRef): bool =
           if item.val["type"].getStr == "array":
             for word in item.val["value"]:
               if word["type"].getStr != "string":
-                return false
+                return (false, $item)
         else:
-          return false
+          return (false, $item)
 
   template validateAutoBackupTable() =
     for item in json["AutoBackup"].pairs:
       case item.key:
         of "enable", "showMessages":
           if item.val["type"].getStr != "bool":
-            return false
+            return (false, $item)
         of "idolTime",
            "interval":
           if item.val["type"].getStr != "integer":
-            return false
+            return (false, $item)
         of "backupDir":
           if item.val["type"].getStr != "string":
-            return false
+            return (false, $item)
         else:
-          return false
+          return (false, $item)
 
   template validateQuickRunTable() =
     for item in json["QuickRun"].pairs:
       case item.key:
         of "saveBufferWhenQuickRun":
           if item.val["type"].getStr != "bool":
-            return false
+            return (false, $item)
         of "command",
            "nimAdvancedCommand",
            "ClangOptions",
@@ -1235,21 +1240,21 @@ proc validateTomlConfig(toml: TomlValueRef): bool =
            "shOptions",
            "bashOptions":
           if item.val["type"].getStr != "string":
-            return false
+            return (false, $item)
         of "timeout":
           if item.val["type"].getStr != "integer":
-            return false
+            return (false, $item)
         else:
-          return false
+          return (false, $item)
 
   template validateFilerTable() =
     for item in json["Filer"].pairs:
       case item.key:
         of "showIcons":
           if item.val["type"].getStr != "bool":
-            return false
+            return (false, $item)
         else:
-          return false
+          return (false, $item)
 
   template validateThemeTable() =
     let editorColors = ColorThemeTable[ColorTheme.config].EditorColor
@@ -1260,7 +1265,7 @@ proc validateTomlConfig(toml: TomlValueRef): bool =
           for theme in ColorTheme:
             if $theme == item.val["value"].getStr:
               correctKey = true
-          if not correctKey: return false 
+          if not correctKey: return (false, $item)
         else:
           # Check color names
           var correctKey = false
@@ -1271,7 +1276,7 @@ proc validateTomlConfig(toml: TomlValueRef): bool =
               correctKey = true
               break
           if not correctKey:
-            return false
+            return (false, $item)
 
   let json = toml.toJson
 
@@ -1293,7 +1298,7 @@ proc validateTomlConfig(toml: TomlValueRef): bool =
         validateThemeTable()
       else: discard
 
-  return true
+  return (true, "")
 
 proc loadSettingFile*(): (bool, EditorSettings) =
   let filename = getConfigDir() / "moe" / "moerc.toml"
@@ -1302,7 +1307,7 @@ proc loadSettingFile*(): (bool, EditorSettings) =
   try: toml = parsetoml.parseFile(filename)
   except IOError, TomlError: return
 
-  let isValid = toml.validateTomlConfig
+  let (isValid, error) = toml.validateTomlConfig
 
   if isValid:
     result = (true, parseSettingsFile(toml))
