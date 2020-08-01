@@ -959,13 +959,15 @@ proc eventLoopTask(status: var Editorstatus) =
   # Live reload of configuration file
   if status.settings.liveReloadOfConf and
      status.timeConfFileLastReloaded + 1.seconds < now():
-    let
-      beforeTheme = status.settings.editorColorTheme
-      (success, newSettings) = loadSettingFile()
-    if success:
-      status.settings = newSettings
-    else:
-      status.commandwindow.writeLoadConfigError
+    let beforeTheme = status.settings.editorColorTheme
+
+    # Load configuration file
+    try:
+      status.settings = loadSettingFile()
+    except:
+      let invalidItem = getCurrentExceptionMsg()
+      status.commandwindow.writeLoadConfigError(invalidItem)
+      status.settings = initEditorSettings()
 
     status.timeConfFileLastReloaded = now()
     if beforeTheme != status.settings.editorColorTheme:

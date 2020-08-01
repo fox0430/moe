@@ -27,11 +27,12 @@ proc main() =
   var status = initEditorStatus()
 
   ## Load configuration file
-  let (success, settings) = loadSettingFile()
-  if success:
-    status.settings = settings
-  else:
-    status.commandwindow.writeLoadConfigError
+  try:
+    status.settings = loadSettingFile()
+  except:
+    let invalidItem = getCurrentExceptionMsg()
+    status.commandwindow.writeLoadConfigError(invalidItem)
+    status.settings = initEditorSettings()
 
   status.timeConfFileLastReloaded = now()
   status.changeTheme

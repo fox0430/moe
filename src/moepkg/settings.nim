@@ -6,7 +6,7 @@ when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
   from strutils import nimIdentNormalize
   export strutils.nimIdentNormalize
 
-import ui, color, unicodeext, build, highlight
+import ui, color, unicodeext, build, highlight, error
 
 type QuickRunSettings* = object
   saveBufferWhenQuickRun*: bool
@@ -1300,16 +1300,16 @@ proc validateTomlConfig(toml: TomlValueRef): (bool, string) =
 
   return (true, "")
 
-proc loadSettingFile*(): (bool, EditorSettings) =
+proc loadSettingFile*(): EditorSettings =
   let filename = getConfigDir() / "moe" / "moerc.toml"
   var toml: TomlValueRef
 
   try: toml = parsetoml.parseFile(filename)
   except IOError, TomlError: return
 
-  let (isValid, error) = toml.validateTomlConfig
+  let (isValid, invalidItem) = toml.validateTomlConfig
 
   if isValid:
-    result = (true, parseSettingsFile(toml))
+    result = parseSettingsFile(toml)
   else:
-    result = (false, initEditorSettings())
+    exception(invalidItem)
