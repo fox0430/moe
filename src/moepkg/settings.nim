@@ -24,6 +24,7 @@ type AutoBackupSettings* = object
   idolTime*: int # seconds
   interval*: int # minutes
   backupDir*: seq[Rune]
+  showMessages*: bool
 
 type FilerSettings = object
   showIcons*: bool
@@ -101,6 +102,7 @@ proc initAutoBackupSettings(): AutoBackupSettings =
   result.enable = true
   result.interval = 5 # 5 minutes
   result.idolTime = 10 # 10 seconds
+  result.showMessages = true
 
 proc initFilerSettings(): FilerSettings =
   result.showIcons = true
@@ -730,6 +732,9 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["AutoBackup"].contains("enable"):
       result.autoBackupSettings.enable = settings["AutoBackup"]["enable"].getbool()
 
+    if settings["AutoBackup"].contains("showMessages"):
+      result.autoBackupSettings.showMessages = settings["AutoBackup"]["showMessages"].getBool()
+
     if settings["AutoBackup"].contains("idolTime"):
       result.autoBackupSettings.idolTime = settings["AutoBackup"]["idolTime"].getInt()
 
@@ -746,7 +751,6 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
     if settings["QuickRun"].contains("command"):
       result.quickRunSettings.command = settings["QuickRun"]["command"].getStr()
-
 
     if settings["QuickRun"].contains("timeout"):
       result.quickRunSettings.timeout = settings["QuickRun"]["timeout"].getInt()

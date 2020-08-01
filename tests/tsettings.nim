@@ -60,6 +60,7 @@ suite "Parse configuration file":
       
       [AutoBackup]
       enable = false
+      showMessages = false
       idolTime = 1
       interval = 1
       backupDir = "/tmp"
@@ -233,6 +234,7 @@ suite "Parse configuration file":
     check settings.reservedWords[4].word == "TEST2"
 
     check not settings.autoBackupSettings.enable
+    check not settings.autoBackupSettings.showMessages
     check settings.autoBackupSettings.idolTime == 1
     check settings.autoBackupSettings.interval == 1
     check settings.autoBackupSettings.backupDir == ru"/tmp"
