@@ -196,9 +196,9 @@ suite "Parse configuration file":
     check not settings.autoCloseParen
     check not settings.autoIndent
     check settings.disableChangeCursor
-    check settings.defaultCursor == CursorType.blinkIbeamMode
-    check settings.normalModeCursor == CursorType.blinkIbeamMode
-    check settings.insertModeCursor == CursorType.blinkBlockMode
+    check settings.defaultCursor == CursorType.blinkIbeam
+    check settings.normalModeCursor == CursorType.blinkIbeam
+    check settings.insertModeCursor == CursorType.blinkBlock
     check settings.autoSave
     check settings.autoSaveInterval == 1
     check settings.liveReloadOfConf
