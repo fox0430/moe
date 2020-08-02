@@ -1,4 +1,4 @@
-import unittest
+import unittest, options
 import moepkg/[color, ui, highlight, unicodeext]
 
 include moepkg/settings
@@ -348,4 +348,4 @@ suite "Validate toml config":
     let toml = parsetoml.parseString(tomlStr)
     let result = toml.validateTomlConfig
 
-    check result[0]
+    check result == none(string)
