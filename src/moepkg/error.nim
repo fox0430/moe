@@ -1,4 +1,4 @@
 type Error = object of Exception
 
-proc exception*(message: string) =
+proc InvalidItemError*(message: string) =
   raise newException(Error, message)

@@ -1314,4 +1314,4 @@ proc loadSettingFile*(): EditorSettings =
   if isValid:
     result = parseSettingsFile(toml)
   else:
-    exception(invalidItem)
+    InvalidItemError(invalidItem)
