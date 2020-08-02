@@ -171,19 +171,6 @@ proc initEditorSettings*(): EditorSettings =
   result.autoBackupSettings = initAutoBackupSettings()
   result.quickRunSettings = initQuickRunSettings()
 
-#TODO: Delete. use parseEnum
-proc getCursorType(cursorType, mode: string): CursorType =
-  case cursorType
-  of "blinkBlock": return CursorType.blinkBlock
-  of "noneBlinkBlock": return CursorType.noneBlinkBlock
-  of "blinkIbeam": return CursorType.blinkIbeam
-  of "noneBlinkIbeam": return CursorType.noneBlinkIbeam
-  else:
-    case mode
-    of "default": return CursorType.blinkBlock
-    of "normal": return CursorType.blinkBlock
-    of "insert": return CursorType.blinkIbeam
-
 proc getTheme(theme: string): ColorTheme =
   if theme == "vivid": return ColorTheme.vivid
   elif theme == "light": return ColorTheme.light
@@ -571,6 +558,9 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
   var vscodeTheme = false
 
   if settings.contains("Standard"):
+    template cursorType(str: string): untyped =
+      parseEnum[CursorType](str)
+
     if settings["Standard"].contains("theme"):
       let themeString = settings["Standard"]["theme"].getStr()
       result.editorColorTheme = getTheme(themeString)
@@ -590,7 +580,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       result.statusBar.useBar = settings["Standard"]["statusBar"].getbool()
 
     if settings["Standard"].contains("tabLine"):
-      result.tabLine.useTab= settings["Standard"]["tabLine"].getbool()
+      result.tabLine.useTab = settings["Standard"]["tabLine"].getbool()
 
     if settings["Standard"].contains("syntax"):
       result.syntax = settings["Standard"]["syntax"].getbool()
@@ -609,13 +599,16 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       result.disableChangeCursor = settings["Standard"]["disableChangeCursor"].getbool()
 
     if settings["Standard"].contains("defaultCursor"):
-      result.defaultCursor = getCursorType(settings["Standard"]["defaultCursor"].getStr(), "default")
+      let str = settings["Standard"]["defaultCursor"].getStr()
+      result.defaultCursor = cursorType(str)
 
     if settings["Standard"].contains("normalModeCursor"):
-      result.normalModeCursor = getCursorType(settings["Standard"]["normalModeCursor"].getStr(), "normal")
+      let str = settings["Standard"]["normalModeCursor"].getStr()
+      result.normalModeCursor = cursorType(str)
 
     if settings["Standard"].contains("insertModeCursor"):
-      result.insertModeCursor = getCursorType(settings["Standard"]["insertModeCursor"].getStr(), "insert")
+      let str = settings["Standard"]["insertModeCursor"].getStr()
+      result.insertModeCursor = cursorType(str)
 
     if settings["Standard"].contains("autoSave"):
       result.autoSave = settings["Standard"]["autoSave"].getbool()
@@ -645,7 +638,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       result.smoothScroll =  settings["Standard"]["smoothScroll"].getbool()
 
     if settings["Standard"].contains("smoothScrollSpeed"):
-      result.smoothScrollSpeed =  settings["Standard"]["smoothScrollSpeed"].getint()
+      result.smoothScrollSpeed = settings["Standard"]["smoothScrollSpeed"].getint()
 
     if settings["Standard"].contains("highlightCurrentWord"):
       result.highlightOtherUsesCurrentWord = settings["Standard"]["highlightCurrentWord"].getbool()
