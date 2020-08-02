@@ -25,7 +25,15 @@ proc main() =
   startUi()
 
   var status = initEditorStatus()
-  status.settings = loadSettingFile()
+
+  ## Load configuration file
+  try:
+    status.settings = loadSettingFile()
+  except:
+    let invalidItem = getCurrentExceptionMsg()
+    status.commandwindow.writeLoadConfigError(invalidItem)
+    status.settings = initEditorSettings()
+
   status.timeConfFileLastReloaded = now()
   status.changeTheme
 

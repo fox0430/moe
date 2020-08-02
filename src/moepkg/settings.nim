@@ -1,12 +1,12 @@
-import parsetoml, os, json, macros, times
-from strutils import parseEnum, endsWith
+import parsetoml, os, json, macros, times, options
+from strutils import parseEnum, endsWith, parseInt
 
 when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
   # This addresses a breaking change in https://github.com/nim-lang/Nim/pull/14046.
   from strutils import nimIdentNormalize
   export strutils.nimIdentNormalize
 
-import ui, color, unicodeext, build, highlight
+import ui, color, unicodeext, build, highlight, error
 
 type QuickRunSettings* = object
   saveBufferWhenQuickRun*: bool
@@ -148,9 +148,10 @@ proc initEditorSettings*(): EditorSettings =
   result.autoCloseParen = true
   result.autoIndent = true
   result.tabStop = 2
-  result.defaultCursor = CursorType.blinkBlockMode # Terminal default curosr shape
-  result.normalModeCursor = CursorType.blinkBlockMode
-  result.insertModeCursor = CursorType.blinkIbeamMode
+  # defaultCursor is terminal default curosr shape
+  result.defaultCursor = CursorType.blinkBlock
+  result.normalModeCursor = CursorType.blinkBlock
+  result.insertModeCursor = CursorType.blinkIbeam
   result.autoSaveInterval = 5
   result.realtimeSearch = true
   result.popUpWindowInExmode = true
@@ -169,18 +170,6 @@ proc initEditorSettings*(): EditorSettings =
   result.reservedWords = initReservedWords()
   result.autoBackupSettings = initAutoBackupSettings()
   result.quickRunSettings = initQuickRunSettings()
-
-proc getCursorType(cursorType, mode: string): CursorType =
-  case cursorType
-  of "blinkBlock": return CursorType.blinkBlockMode
-  of "noneBlinkBlock": return CursorType.noneBlinkBlockMode
-  of "blinkIbeam": return CursorType.blinkIbeamMode
-  of "noneBlinkIbeam": return CursorType.noneBlinkIbeamMode
-  else:
-    case mode
-    of "default": return CursorType.blinkBlockMode
-    of "normal": return CursorType.blinkBlockMode
-    of "insert": return CursorType.blinkIbeamMode
 
 proc getTheme(theme: string): ColorTheme =
   if theme == "vivid": return ColorTheme.vivid
@@ -566,13 +555,12 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
 proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
   result = initEditorSettings()
 
-  var
-    vscodeTheme = false
-    #settings: TomlValueRef
-  #try: settings = parsetoml.parseFile(filename)
-  #except IOError, TomlError: return
+  var vscodeTheme = false
 
   if settings.contains("Standard"):
+    template cursorType(str: string): untyped =
+      parseEnum[CursorType](str)
+
     if settings["Standard"].contains("theme"):
       let themeString = settings["Standard"]["theme"].getStr()
       result.editorColorTheme = getTheme(themeString)
@@ -592,7 +580,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       result.statusBar.useBar = settings["Standard"]["statusBar"].getbool()
 
     if settings["Standard"].contains("tabLine"):
-      result.tabLine.useTab= settings["Standard"]["tabLine"].getbool()
+      result.tabLine.useTab = settings["Standard"]["tabLine"].getbool()
 
     if settings["Standard"].contains("syntax"):
       result.syntax = settings["Standard"]["syntax"].getbool()
@@ -611,13 +599,16 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       result.disableChangeCursor = settings["Standard"]["disableChangeCursor"].getbool()
 
     if settings["Standard"].contains("defaultCursor"):
-      result.defaultCursor = getCursorType(settings["Standard"]["defaultCursor"].getStr(), "default")
+      let str = settings["Standard"]["defaultCursor"].getStr()
+      result.defaultCursor = cursorType(str)
 
     if settings["Standard"].contains("normalModeCursor"):
-      result.normalModeCursor = getCursorType(settings["Standard"]["normalModeCursor"].getStr(), "normal")
+      let str = settings["Standard"]["normalModeCursor"].getStr()
+      result.normalModeCursor = cursorType(str)
 
     if settings["Standard"].contains("insertModeCursor"):
-      result.insertModeCursor = getCursorType(settings["Standard"]["insertModeCursor"].getStr(), "insert")
+      let str = settings["Standard"]["insertModeCursor"].getStr()
+      result.insertModeCursor = cursorType(str)
 
     if settings["Standard"].contains("autoSave"):
       result.autoSave = settings["Standard"]["autoSave"].getbool()
@@ -647,7 +638,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       result.smoothScroll =  settings["Standard"]["smoothScroll"].getbool()
 
     if settings["Standard"].contains("smoothScrollSpeed"):
-      result.smoothScrollSpeed =  settings["Standard"]["smoothScrollSpeed"].getint()
+      result.smoothScrollSpeed = settings["Standard"]["smoothScrollSpeed"].getint()
 
     if settings["Standard"].contains("highlightCurrentWord"):
       result.highlightOtherUsesCurrentWord = settings["Standard"]["highlightCurrentWord"].getbool()
@@ -1116,6 +1107,194 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if not vsCodeThemeLoaded:
       result.editorColorTheme = ColorTheme.dark
 
+proc validateTomlConfig(toml: TomlValueRef): Option[string] =
+  template validateStandardTable() =
+    for item in json["Standard"].pairs:
+      case item.key:
+        of "theme":
+          var correctValue = false
+          for theme in ColorTheme:
+            if $theme == item.val["value"].getStr:
+              correctValue = true
+
+          if not correctValue:
+            return some($item)
+        of "number",
+           "currentNumber",
+           "cursorLine",
+           "statusBar",
+           "tabLine",
+           "syntax",
+           "indentationLines",
+           "autoCloseParen",
+           "autoIndent",
+           "disableChangeCursor",
+           "autoSave",
+           "liveReloadOfConf",
+           "realtimeSearch",
+           "popUpWindowInExmode",
+           "replaceTextHighlight",
+           "highlightPairOfParen",
+           "autoDeleteParen",
+           "systemClipboard",
+           "highlightFullWidthSpace",
+           "highlightTrailingSpaces",
+           "highlightCurrentWord":
+          if not (item.val["type"].getStr == "bool"):
+            return some($item)
+        of "tabStop", "autoSaveInterval":
+          if not (item.val["type"].getStr == "integer" and
+                  parseInt(item.val["value"].getStr) > 0): return some($item)
+        of "defaultCursor",
+           "normalModeCursor",
+           "insertModeCursor":
+          let val = item.val["value"].getStr
+          var correctValue = false
+          for cursorType in CursorType:
+            if val == $cursorType:
+              correctValue = true
+              break
+
+          if not correctValue:
+            return some($item)
+        else:
+          return some($item)
+
+  template validateTabLineTable() =
+    for item in json["TabLine"].pairs:
+      case item.key:
+        of "allBuffer",
+           "mode",
+           "chanedMark",
+           "line",
+           "column",
+           "encoding",
+           "language",
+           "directory",
+           "gitbranchName",
+           "showGitInactive",
+           "showModeInactive":
+          if not (item.val["type"].getStr == "bool"):
+            return some($item)
+        else:
+          return some($item)
+
+  template validateBuildOnSaveTable() =
+    for item in json["BuildOnSave"].pairs:
+      case item.key:
+        of "buildOnSave":
+          if not (item.val["type"].getStr == "bool"):
+            return some($item)
+        of "workspaceRoot",
+           "command":
+          if not (item.val["type"].getStr == "string"):
+            return some($item)
+        else:
+            return some($item)
+
+  template validateHighlightTable() =
+    for item in json["Highlight"].pairs:
+      case item.key:
+        of "reservedWord":
+          if item.val["type"].getStr == "array":
+            for word in item.val["value"]:
+              if word["type"].getStr != "string":
+                return some($item)
+        else:
+          return some($item)
+
+  template validateAutoBackupTable() =
+    for item in json["AutoBackup"].pairs:
+      case item.key:
+        of "enable", "showMessages":
+          if item.val["type"].getStr != "bool":
+            return some($item)
+        of "idolTime",
+           "interval":
+          if item.val["type"].getStr != "integer":
+            return some($item)
+        of "backupDir":
+          if item.val["type"].getStr != "string":
+            return some($item)
+        else:
+          return some($item)
+
+  template validateQuickRunTable() =
+    for item in json["QuickRun"].pairs:
+      case item.key:
+        of "saveBufferWhenQuickRun":
+          if item.val["type"].getStr != "bool":
+            return some($item)
+        of "command",
+           "nimAdvancedCommand",
+           "ClangOptions",
+           "CppOptions",
+           "NimOptions",
+           "shOptions",
+           "bashOptions":
+          if item.val["type"].getStr != "string":
+            return some($item)
+        of "timeout":
+          if item.val["type"].getStr != "integer":
+            return some($item)
+        else:
+          return some($item)
+
+  template validateFilerTable() =
+    for item in json["Filer"].pairs:
+      case item.key:
+        of "showIcons":
+          if item.val["type"].getStr != "bool":
+            return some($item)
+        else:
+          return some($item)
+
+  template validateThemeTable() =
+    let editorColors = ColorThemeTable[ColorTheme.config].EditorColor
+    for item in json["Theme"].pairs:
+      case item.key:
+        of "baseTheme":
+          var correctKey = false
+          for theme in ColorTheme:
+            if $theme == item.val["value"].getStr:
+              correctKey = true
+          if not correctKey: return some($item)
+        else:
+          # Check color names
+          var correctKey = false
+          for field, val in editorColors.fieldPairs:
+            if item.key == field and
+               item.val["type"].getStr == "string":
+              for color in Color:
+                if item.val["value"].getStr == $color:
+                  correctKey = true
+                  break
+              if correctKey: break
+          if not correctKey:
+            return some($item)
+
+  let json = toml.toJson
+
+  for table in json.keys:
+    case table:
+      of "Standard":
+        validateStandardTable()
+      of "BuildOnSave":
+        validateBuildOnSaveTable()
+      of "Highlight":
+        validateHighlightTable()
+      of "AutoBackup":
+        validateAutoBackupTable()
+      of "QuickRun":
+        validateQuickRunTable()
+      of "Filer":
+        validateFilerTable()
+      of "Theme":
+        validateThemeTable()
+      else: discard
+
+  return none(string)
+
 proc loadSettingFile*(): EditorSettings =
   let filename = getConfigDir() / "moe" / "moerc.toml"
   var toml: TomlValueRef
@@ -1123,4 +1302,9 @@ proc loadSettingFile*(): EditorSettings =
   try: toml = parsetoml.parseFile(filename)
   except IOError, TomlError: return
 
-  result = parseSettingsFile(toml)
+  let invalidItem = toml.validateTomlConfig
+
+  if invalidItem != none(string):
+    InvalidItemError($invalidItem)
+  else:
+    result = parseSettingsFile(toml)
