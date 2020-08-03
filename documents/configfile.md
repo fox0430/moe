@@ -291,12 +291,6 @@ default is ture
 enable
 ```
 
-Show/Hide automatic backups successful messages (bool)  
-default is ture  
-```
-showMessages
-```
-
 Start backup when there is no operation for the set number of seconds (int)  
 default is 10 (10 second)  
 ```
@@ -372,6 +366,128 @@ bash option setting (string)
 default is "" (None)
 ```
 bashOptions
+```
+
+### Notification table
+
+Enable/disable all messages/notifitions in status bar (bool)  
+default is true
+```
+screenNotifications
+```
+
+Enable/disable all messages/notifitions in log (bool)  
+default is true
+```
+logNotifications
+```
+
+Enable/disable auto backups messages/notifitions in status bar (bool)  
+default is true
+```
+autoBackupScreenNotify
+```
+
+Enable/disable auto backups messages/notifitions in log (bool)  
+default is true
+```
+autoBackupLogNotify
+```
+
+Enable/disable auto save messages/notifitions in status bar (bool)  
+default is true
+```
+autoSaveScreenNotify
+```
+
+Enable/disable auto save messages/notifitions in log (bool)  
+default is true
+```
+autoSaveLogNotify
+```
+
+Enable/disable yank messages/notifitions in status bar (bool)  
+default is true
+```
+yankScreenNotify
+```
+
+Enable/disable yank messages/notifitions in log (bool)  
+default is true
+```
+yankLogNotify
+```
+
+Enable/disable delete buffer messages/notifitions in status bar (bool)  
+default is true
+```
+deleteScreenNotify
+```
+
+Enable/disable delete buffer messages/notifitions in log (bool)  
+default is true
+```
+deleteLogNotify
+```
+
+Enable/disable save messages/notifitions in status bar (bool)  
+default is true
+```
+saveScreenNotify
+```
+
+Enable/disable save messages/notifitions in log (bool)  
+default is true
+```
+saveLogNotify
+```
+
+Enable/disable workspace (create, delete, etc...) messages/notifitions in status bar (bool)  
+default is true
+```
+workspaceScreenNotify
+```
+
+Enable/disable workspace (create, delete, etc...) messages/notifitions in status bar (bool)  
+default is true
+```
+workspaceLogNotify
+```
+
+Enable/disable QuickRun messages/notifitions in status bar (bool)  
+default is true
+```
+quickRunScreenNotify
+```
+
+Enable/disable QuickRun messages/notifitions in log (bool)  
+default is true
+```
+quickRunLogNotify
+```
+
+Enable/disable build on save messages/notifitions in status bar (bool)  
+default is true
+```
+buildOnSaveScreenNotify
+```
+
+Enable/disable build on save messages/notifitions in log (bool)  
+default is true
+```
+buildOnSaveLogNotify
+```
+
+Enable/disable filer messages/notifitions in status bar (bool)  
+default is true
+```
+filerScreenNotify
+```
+
+Enable/disable filer messages/notifitions in log (bool)  
+default is true
+```
+filerLogNotify
 ```
 
 ### Filer table
