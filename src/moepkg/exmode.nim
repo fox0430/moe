@@ -841,10 +841,10 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
   status.changeMode(Mode.normal)
 
 proc quitCommand(status: var EditorStatus) =
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  let workspaceIndex = status.currentWorkSpaceIndex
-  if status.bufStatus[currentBufferIndex].prevMode == Mode.filer or
-      status.bufStatus[currentBufferIndex].prevMode == Mode.recentFile:
+  let
+    currentBufferIndex = status.bufferIndexInCurrentWindow
+    workspaceIndex = status.currentWorkSpaceIndex
+  if status.bufStatus[currentBufferIndex].prevMode != Mode.normal:
     status.deleteBuffer(currentBufferIndex)
   else:
     if status.bufStatus[currentBufferIndex].countChange == 0 or
