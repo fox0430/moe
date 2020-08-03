@@ -73,14 +73,12 @@ proc runQuickRun*(bufStatus: BufferStatus,
   result = @[ru""]
 
   case cmdResult.exitCode:
-    of 0:
-      for i in 0 ..< cmdResult.output.len:
-        if cmdResult.output[i] == '\n': result.add(@[ru""])
-        else: result[^1].add(toRunes($cmdResult.output[i])[0])
     of 124:
       cmdWin.writeRunQuickRunTimeoutMessage
     else:
-      cmdWin.writeRunQuickRunFailedMessage
+      for i in 0 ..< cmdResult.output.len:
+        if cmdResult.output[i] == '\n': result.add(@[ru""])
+        else: result[^1].add(toRunes($cmdResult.output[i])[0])
 
 proc isQuickRunMode(status: Editorstatus): bool =
   let
