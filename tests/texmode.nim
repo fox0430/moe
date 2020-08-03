@@ -706,3 +706,11 @@ suite "Ex mode: Quick run command":
 
     const command = @[ru"run"]
     status.exModeCommand(command)
+
+suite "Ex mode: Workspace list command":
+  test "Workspace list command":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+
+    const command = @[ru"lsw"]
+    status.exModeCommand(command)

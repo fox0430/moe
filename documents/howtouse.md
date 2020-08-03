@@ -172,6 +172,7 @@ Check command bar
 ```cws``` - Create new work space  
 ```ws number``` - Change current work space : Example ```ws 2```  
 ```dws``` - Delete current work space  
+```lsw``` - Show workspace list in status bar  
 
 ```livereload on``` or ```livereload on``` - Change setting of live reload of configuration file  
 ```theme themeName``` - Change color theme : Example ```theme dark```  

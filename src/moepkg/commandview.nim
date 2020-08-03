@@ -37,6 +37,7 @@ const exCommandList = [
   "liveReload",
   "log",
   "ls",
+  "lsw",
   "multipleStatusbar",
   "new",
   "noh",
