@@ -1113,10 +1113,12 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
       case item.key:
         of "theme":
           var correctValue = false
-          for theme in ColorTheme:
-            if $theme == item.val["value"].getStr:
-              correctValue = true
-
+          if item.val["value"].getStr == "vscode":
+            correctValue = true
+          else:
+            for theme in ColorTheme:
+              if $theme == item.val["value"].getStr:
+                correctValue = true
           if not correctValue:
             return some($item)
         of "number",
