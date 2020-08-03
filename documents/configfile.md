@@ -370,121 +370,121 @@ bashOptions
 
 ### Notification table
 
-Enable/disable all messages/notifitions in status bar (bool)  
+Enable/disable all messages/notifications in status bar (bool)  
 default is true
 ```
 screenNotifications
 ```
 
-Enable/disable all messages/notifitions in log (bool)  
+Enable/disable all messages/notifications in log (bool)  
 default is true
 ```
 logNotifications
 ```
 
-Enable/disable auto backups messages/notifitions in status bar (bool)  
+Enable/disable auto backups messages/notifications in status bar (bool)  
 default is true
 ```
 autoBackupScreenNotify
 ```
 
-Enable/disable auto backups messages/notifitions in log (bool)  
+Enable/disable auto backups messages/notifications in log (bool)  
 default is true
 ```
 autoBackupLogNotify
 ```
 
-Enable/disable auto save messages/notifitions in status bar (bool)  
+Enable/disable auto save messages/notifications in status bar (bool)  
 default is true
 ```
 autoSaveScreenNotify
 ```
 
-Enable/disable auto save messages/notifitions in log (bool)  
+Enable/disable auto save messages/notifications in log (bool)  
 default is true
 ```
 autoSaveLogNotify
 ```
 
-Enable/disable yank messages/notifitions in status bar (bool)  
+Enable/disable yank messages/notifications in status bar (bool)  
 default is true
 ```
 yankScreenNotify
 ```
 
-Enable/disable yank messages/notifitions in log (bool)  
+Enable/disable yank messages/notifications in log (bool)  
 default is true
 ```
 yankLogNotify
 ```
 
-Enable/disable delete buffer messages/notifitions in status bar (bool)  
+Enable/disable delete buffer messages/notifications in status bar (bool)  
 default is true
 ```
 deleteScreenNotify
 ```
 
-Enable/disable delete buffer messages/notifitions in log (bool)  
+Enable/disable delete buffer messages/notifications in log (bool)  
 default is true
 ```
 deleteLogNotify
 ```
 
-Enable/disable save messages/notifitions in status bar (bool)  
+Enable/disable save messages/notifications in status bar (bool)  
 default is true
 ```
 saveScreenNotify
 ```
 
-Enable/disable save messages/notifitions in log (bool)  
+Enable/disable save messages/notifications in log (bool)  
 default is true
 ```
 saveLogNotify
 ```
 
-Enable/disable workspace (create, delete, etc...) messages/notifitions in status bar (bool)  
+Enable/disable workspace (create, delete, etc...) messages/notifications in status bar (bool)  
 default is true
 ```
 workspaceScreenNotify
 ```
 
-Enable/disable workspace (create, delete, etc...) messages/notifitions in status bar (bool)  
+Enable/disable workspace (create, delete, etc...) messages/notifications in status bar (bool)  
 default is true
 ```
 workspaceLogNotify
 ```
 
-Enable/disable QuickRun messages/notifitions in status bar (bool)  
+Enable/disable QuickRun messages/notifications in status bar (bool)  
 default is true
 ```
 quickRunScreenNotify
 ```
 
-Enable/disable QuickRun messages/notifitions in log (bool)  
+Enable/disable QuickRun messages/notifications in log (bool)  
 default is true
 ```
 quickRunLogNotify
 ```
 
-Enable/disable build on save messages/notifitions in status bar (bool)  
+Enable/disable build on save messages/notifications in status bar (bool)  
 default is true
 ```
 buildOnSaveScreenNotify
 ```
 
-Enable/disable build on save messages/notifitions in log (bool)  
+Enable/disable build on save messages/notifications in log (bool)  
 default is true
 ```
 buildOnSaveLogNotify
 ```
 
-Enable/disable filer messages/notifitions in status bar (bool)  
+Enable/disable filer messages/notifications in status bar (bool)  
 default is true
 ```
 filerScreenNotify
 ```
 
-Enable/disable filer messages/notifitions in log (bool)  
+Enable/disable filer messages/notifications in log (bool)  
 default is true
 ```
 filerLogNotify
