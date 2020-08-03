@@ -58,7 +58,6 @@ const tomlStr = """
 
   [AutoBackup]
   enable = false
-  showMessages = false
   idolTime = 1
   interval = 1
   backupDir = "/tmp"
@@ -73,6 +72,28 @@ const tomlStr = """
   NimOptions = "--debugger:native"
   shOptions = "-c"
   bashOptions = "-c"
+
+  [Notification]
+  screenNotifications = false
+  logNotifications = false
+  autoBackupScreenNotify = false
+  autoBackupLogNotify = false
+  autoSaveScreenNotify = false
+  autoSaveLogNotify = false
+  yankScreenNotify = false
+  yankLogNotify = false
+  deleteScreenNotify = false
+  deleteLogNotify = false
+  saveScreenNotify = false
+  saveLogNotify = false
+  workspaceScreenNotify = false
+  workspaceLogNotify = false
+  quickRunScreenNotify = false
+  quickRunLogNotify = false
+  buildOnSaveScreenNotify = false
+  buildOnSaveLogNotify = false
+  filerScreenNotify = false
+  filerLogNotify = false
 
   [Filer]
   showIcons = false
@@ -236,7 +257,6 @@ suite "Parse configuration file":
     check settings.reservedWords[4].word == "TEST2"
 
     check not settings.autoBackupSettings.enable
-    check not settings.autoBackupSettings.showMessages
     check settings.autoBackupSettings.idolTime == 1
     check settings.autoBackupSettings.interval == 1
     check settings.autoBackupSettings.backupDir == ru"/tmp"
@@ -250,6 +270,27 @@ suite "Parse configuration file":
     check settings.quickRunSettings.NimOptions == "--debugger:native"
     check settings.quickRunSettings.shOptions == "-c"
     check settings.quickRunSettings.bashOptions == "-c"
+
+    check not settings.notificationSettings.screenNotifications
+    check not settings.notificationSettings.logNotifications
+    check not settings.notificationSettings.autoBackupScreenNotify
+    check not settings.notificationSettings.autoBackupLogNotify
+    check not settings.notificationSettings.autoSaveScreenNotify
+    check not settings.notificationSettings.autoSaveLogNotify
+    check not settings.notificationSettings.yankScreenNotify
+    check not settings.notificationSettings.yankLogNotify
+    check not settings.notificationSettings.deleteScreenNotify
+    check not settings.notificationSettings.deleteLogNotify
+    check not settings.notificationSettings.saveScreenNotify
+    check not settings.notificationSettings.saveLogNotify
+    check not settings.notificationSettings.workspaceScreenNotify
+    check not settings.notificationSettings.workspaceLogNotify
+    check not settings.notificationSettings.quickRunScreenNotify
+    check not settings.notificationSettings.quickRunLogNotify
+    check not settings.notificationSettings.buildOnSaveScreenNotify
+    check not settings.notificationSettings.buildOnSaveLogNotify
+    check not settings.notificationSettings.filerScreenNotify
+    check not settings.notificationSettings.filerLogNotify
 
     check not settings.filerSettings.showIcons
 

@@ -305,7 +305,10 @@ proc runQuickRunCommand(status: var Editorstatus) =
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
   let
-    buffer = runQuickRun(bufStatus, status.commandwindow, status.settings)
+    buffer = runQuickRun(bufStatus,
+                         status.commandwindow,
+                         status.messageLog,
+                         status.settings)
 
     workspace = status.workspace[workspaceIndex]
     quickRunWindowIndex = status.bufStatus.getQuickRunBufferIndex(workspace)
@@ -774,7 +777,8 @@ proc execCmdResultToMessageLog*(output: TaintedString,
     else: line.add(ch)
 
 proc buildOnSave(status: var Editorstatus) =
-  status.commandWindow.writeMessageBuildOnSave(status.messageLog)
+  status.commandWindow.writeMessageBuildOnSave(status.settings.notificationSettings,
+                                               status.messageLog)
 
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -788,7 +792,9 @@ proc buildOnSave(status: var Editorstatus) =
 
   if cmdResult.exitCode != 0:
     status.commandWindow.writeMessageFailedBuildOnSave(status.messageLog)
-  else: status.commandWindow.writeMessageSuccessBuildOnSave(status.messageLog)
+  else:
+    status.commandWindow.writeMessageSuccessBuildOnSave(status.settings.notificationSettings,
+                                                        status.messageLog)
 
 proc checkAndCreateDir(cmdWin: var Window,
                        messageLog: var seq[seq[Rune]],
@@ -834,7 +840,10 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
     status.bufStatus[currentBufferIndex].countChange = 0
 
     if status.settings.buildOnSaveSettings.buildOnSave: status.buildOnSave
-    else: status.commandWindow.writeMessageSaveFile(filename, status.messageLog)
+    else:
+      status.commandWindow.writeMessageSaveFile(filename,
+                                                status.settings.notificationSettings,
+                                                status.messageLog)
   except IOError:
     status.commandWindow.writeSaveError(status.messageLog)
 

@@ -67,7 +67,8 @@ proc diffWithBackup(path: seq[Rune], buffer: string): bool =
 
 proc backupBuffer*(bufStatus: BufferStatus,
                    encoding: CharacterEncoding,
-                   settings: AutoBackupSettings,
+                   autoBackupSettings: AutoBackupSettings,
+                   notificationSettings: NotificationSettings,
                    cmdWin: var Window,
                    messageLog: var seq[seq[Rune]]) =
 
@@ -75,19 +76,16 @@ proc backupBuffer*(bufStatus: BufferStatus,
 
   let
     backupFilename = bufStatus.path.generateFilename(now())
-    dir = bufStatus.path.checkAndCreateBackupDir(settings.backupDir)
+    dir = bufStatus.path.checkAndCreateBackupDir(autoBackupSettings.backupDir)
 
   if dir.len > 0:
     let
       path = dir / backupFilename
       isSame = diffWithBackup(path, $bufStatus.buffer)
     if not isSame:
-      if settings.showMessages:
-        cmdWin.writeStartAutoBackupMessage(messageLog)
+      cmdWin.writeStartAutoBackupMessage(notificationSettings, messageLog)
 
       saveFile(path, bufStatus.buffer.toRunes, encoding)
 
       let message = "Automatic backup successful: " & $path
-      if settings.showMessages:
-        cmdWin.writeAutoBackupSuccessMessage(message)
-      messageLog.add(message.toRunes)
+      cmdWin.writeAutoBackupSuccessMessage(message, notificationSettings, messageLog)

@@ -956,6 +956,7 @@ proc autoSave(status: var Editorstatus) =
                bufStatus.buffer.toRunes,
                status.settings.characterEncoding)
       status.commandWindow.writeMessageAutoSave(bufStatus.path,
+                                                status.settings.notificationSettings,
                                                 status.messageLog)
       status.bufStatus[index].lastSaveTime = now()
 
@@ -974,7 +975,7 @@ proc eventLoopTask(status: var Editorstatus) =
       status.settings = loadSettingFile()
     except:
       let invalidItem = getCurrentExceptionMsg()
-      status.commandwindow.writeLoadConfigError(invalidItem)
+      status.commandwindow.writeLoadConfigError(invalidItem, status.messageLog)
       status.settings = initEditorSettings()
 
     status.timeConfFileLastReloaded = now()
@@ -1010,6 +1011,7 @@ proc eventLoopTask(status: var Editorstatus) =
 
         bufStatus.backupBuffer(status.settings.characterEncoding,
                                status.settings.autoBackupSettings,
+                               status.settings.notificationSettings,
                                status.commandwindow,
                                status.messageLog)
 
