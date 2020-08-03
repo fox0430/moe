@@ -612,7 +612,9 @@ proc createWrokSpace*(status: var Editorstatus) =
     status.bufStatus.high
 
 proc deleteWorkSpace*(status: var Editorstatus, index: int) =
-  if 0 <= index and index <= status.workSpace.len:
+  if 0 > index and index > status.workSpace.high:
+    status.commandwindow.writeNotExistWorkspaceError(index, status.messageLog)
+  else:
     status.workspace.delete(index)
 
     if status.workspace.len == 0: status.settings.exitEditor
@@ -623,6 +625,8 @@ proc deleteWorkSpace*(status: var Editorstatus, index: int) =
 proc changeCurrentWorkSpace*(status: var Editorstatus, index: int) =
   if 0 < index and index <= status.workSpace.len:
     status.currentWorkSpaceIndex = index - 1
+  else:
+    status.commandwindow.writeNotExistWorkspaceError(index, status.messageLog)
 
 proc tryRecordCurrentPosition*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   bufStatus.positionRecord[bufStatus.buffer.lastSuitId] = (windowNode.currentLine,

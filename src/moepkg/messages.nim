@@ -187,3 +187,10 @@ proc writeLoadConfigError*(cmdWin: var Window, message: string) =
   let mess = "Error: Failed to load configuration file: Invalid item: " &
              message
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+
+proc writeNotExistWorkspaceError*(cmdWin: var Window,
+                                  workspaceIndex: int,
+                                  messageLog: var seq[seq[Rune]]) =
+
+  let mess = "Error: Workspace " & $workspaceIndex & " not exist" 
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
