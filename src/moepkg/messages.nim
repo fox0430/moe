@@ -194,3 +194,7 @@ proc writeNotExistWorkspaceError*(cmdWin: var Window,
 
   let mess = "Error: Workspace " & $workspaceIndex & " not exist" 
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+
+proc writeWorkspaceList*(cmdWin: var Window, buffer: string) =
+  cmdWin.writeMessageOnCommandWindow(buffer, EditorColorPair.commandBar)
+  

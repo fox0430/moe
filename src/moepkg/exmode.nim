@@ -244,6 +244,10 @@ proc isShellCommand(command: seq[seq[Rune]]): bool =
 proc isReplaceCommand(command: seq[seq[Rune]]): bool =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
 
+proc isWorkspaceListCommand(command: seq[seq[Rune]]): bool =
+  let cmd = toLowerAscii($command[0])
+  return command.len == 1 and cmd == "lsw"
+
 proc isCreateWorkSpaceCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "cws"
@@ -1025,6 +1029,19 @@ proc createWrokSpaceCommand(status: var Editorstatus) =
 
   status.createWrokSpace
 
+proc workspaceListCommand(status: var Editorstatus) =
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
+  var buffer = "workspaces: "
+  for i in 0 ..< status.workspace.len:
+    if i == status.currentWorkSpaceIndex:
+      buffer &= "*" & $i & " "
+    else:
+      buffer &= $i & " "
+
+  status.commandwindow.writeWorkspaceList(buffer)
+
 proc changeCurrentWorkSpaceCommand(status: var Editorstatus, index: int) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
@@ -1216,6 +1233,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     status.runQuickRunCommand
   elif isRecentFileModeCommand(command):
     status.startRecentFileMode
+  elif isWorkspaceListCommand(command):
+    status.workspaceListCommand
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
