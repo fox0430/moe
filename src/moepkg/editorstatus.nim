@@ -435,16 +435,20 @@ proc horizontalSplitWindow*(status: var Editorstatus) =
 
   status.workSpace[workspaceIndex].statusBar.add(initStatusBar())
 
+proc deleteWorkSpace*(status: var Editorstatus, index: int)
 proc closeWindow*(status: var EditorStatus, node: WindowNode) =
   let workspaceIndex = status.currentWorkSpaceIndex
 
-  if status.workSpace[workspaceIndex].numOfMainWindow == 1:
+  if status.workSpace.len == 1 and
+     status.workSpace[workspaceIndex].numOfMainWindow == 1:
     exitEditor(status.settings)
 
   let deleteWindowIndex = node.windowIndex
   var parent = node.parent
 
-  if parent.child.len == 1:
+  if status.workspace[workspaceIndex].numOfMainWindow == 1:
+    status.deleteWorkSpace(workspaceIndex)
+  elif parent.child.len == 1:
     if status.settings.statusBar.multipleStatusBar:
       let statusBarHigh = status.workSpace[workspaceIndex].statusBar.high
       status.workSpace[workspaceIndex].statusBar.delete(statusBarHigh)
@@ -608,7 +612,7 @@ proc createWrokSpace*(status: var Editorstatus) =
     status.bufStatus.high
 
 proc deleteWorkSpace*(status: var Editorstatus, index: int) =
-  if 0 < index and index <= status.workSpace.len:
+  if 0 <= index and index <= status.workSpace.len:
     status.workspace.delete(index)
 
     if status.workspace.len == 0: status.settings.exitEditor
