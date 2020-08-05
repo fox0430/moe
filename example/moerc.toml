@@ -54,9 +54,9 @@ highlightTrailingSpaces = true
 
 highlightCurrentWord = true
 
-[BuildOnSaveSettings]
+[BuildOnSave]
 
-buildOnSave = false
+enable = false
 
 # workspaceRoot = "/home/fox/git/moe"
 
