@@ -55,6 +55,7 @@ proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
         removeDir(filerStatus.dirList[windowNode.currentLine].path)
         status.commandWindow.writeMessageDeletedFile(
           filerStatus.dirList[windowNode.currentLine].path,
+          status.settings.notificationSettings,
           status.messageLog)
       except OSError:
         status.commandWindow.writeRemoveDirError(status.messageLog)
@@ -62,6 +63,7 @@ proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
       if tryRemoveFile(filerStatus.dirList[windowNode.currentLine].path):
         status.commandWindow.writeMessageDeletedFile(
           filerStatus.dirList[windowNode.currentLine].path,
+          status.settings.notificationSettings,
           status.messageLog)
       else:
         status.commandWindow.writeRemoveFileError(status.messageLog)

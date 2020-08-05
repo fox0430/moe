@@ -1,5 +1,5 @@
 import strformat, os
-import ui, color, unicodeext
+import ui, color, unicodeext, settings
 
 proc writeMessageOnCommandWindow*(cmdWin: var Window,
                                  message: string,
@@ -43,64 +43,81 @@ proc writeFileOpenError*(cmdWin: var Window,
   messageLog.add(mess.toRunes)
 
 proc writeCreateDirError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
-  let mess = "Error: Can not create directory"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  const mess = "Error: Can not create directory"
   messageLog.add(mess.toRunes)
 
 proc writeMessageDeletedFile*(cmdWin: var Window,
                               filename: string,
+                              settings: NotificationSettings,
                               messageLog: var seq[seq[Rune]]) =
                               
   let mess = "Deleted: " & filename
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
-  messageLog.add(mess.toRunes)
+  if settings.screenNotifications and settings.filerScreenNotify:
+    cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  if settings.logNotifications and settings.filerLogNotify:
+    messageLog.add(mess.toRunes)
 
 proc writeNoFileNameError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+
   let mess = "Error: No file name"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
 
 proc writeMessageYankedLine*(cmdWin: var Window,
                              numOfLine: int,
+                             settings: NotificationSettings,
                              messageLog: var seq[seq[Rune]]) =
                              
   let mess = fmt"{numOfLine} line(s) yanked"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
-  messageLog.add(mess.toRunes)
+  if settings.screenNotifications and settings.yankScreenNotify:
+    cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  if settings.logNotifications and settings.yankLogNotify:
+    messageLog.add(mess.toRunes)
 
 proc writeMessageYankedCharactor*(cmdWin: var Window,
                                   numOfChar: int,
+                                  settings: NotificationSettings,
                                   messageLog: var seq[seq[Rune]]) =
                                   
   let mess = fmt"{numOfChar} character(s) yanked"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
-  messageLog.add(mess.toRunes)
+  if settings.screenNotifications and settings.yankScreenNotify:
+    cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  if settings.yankLogNotify:
+    messageLog.add(mess.toRunes)
 
 proc writeMessageAutoSave*(cmdWin: var Window,
                            filename: seq[Rune],
+                           settings: NotificationSettings,
                            messageLog: var seq[seq[Rune]]) =
-                           
+
   let mess = fmt"Auto saved {filename}"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
-  messageLog.add(mess.toRunes)
+  if settings.screenNotifications and settings.autoSaveScreenNotify:
+    let mess = fmt"Auto saved {filename}"
+    cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  if settings.logNotifications and settings.autoSaveLogNotify:
+    messageLog.add(mess.toRunes)
 
 proc writeMessageBuildOnSave*(cmdWin: var Window,
+                              settings: NotificationSettings,
                               messageLog: var seq[seq[Rune]]) =
                               
   const mess = "Build on save..."
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
-  messageLog.add(mess.toRunes)
+  if settings.screenNotifications and settings.buildOnSaveScreenNotify:
+    cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  if settings.logNotifications and settings.buildOnSaveLogNotify:
+    messageLog.add(mess.toRunes)
 
 proc writeMessageSuccessBuildOnSave*(cmdWin: var Window,
+                                     settings: NotificationSettings,
                                      messageLog: var seq[seq[Rune]]) =
                                      
   const mess = "Build successful, file saved"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
-  messageLog.add(mess.toRunes)
+  if settings.screenNotifications and settings.buildOnSaveScreenNotify:
+    cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  if settings.logNotifications and settings.buildOnSaveLogNotify:
+    messageLog.add(mess.toRunes)
 
-proc writeMessageFailedBuildOnSave*(cmdWin: var Window,
-                                    messageLog: var seq[seq[Rune]]) =
-                                    
+proc writeMessageFailedBuildOnSave*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
   const mess = "Build failed"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
   messageLog.add(mess.toRunes)
@@ -117,11 +134,15 @@ proc writeNotEditorCommandError*(cmdWin: var Window,
 
 proc writeMessageSaveFile*(cmdWin: var Window,
                            filename: seq[Rune],
+                           settings: NotificationSettings,
                            messageLog: var seq[seq[Rune]]) =
-                           
+
+  
   let mess = fmt"Saved {filename}"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
-  messageLog.add(mess.toRunes)
+  if settings.screenNotifications and settings.saveScreenNotify:
+    cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  if settings.logNotifications and settings.saveLogNotify:
+    messageLog.add(mess.toRunes)
 
 proc writeNoBufferDeletedError*(cmdWin: var Window,
                                 messageLog: var seq[seq[Rune]]) =
@@ -160,33 +181,53 @@ proc writeFileNotFoundError*(cmdWin: var Window,
   messageLog.add(mess.toRunes)
 
 proc writeStartAutoBackupMessage*(cmdWin: var Window,
+                                  settings: NotificationSettings,
                                   messageLog: var seq[seq[Rune]]) =
 
   const mess = "Start automatic backup..."
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
-  messageLog.add(mess.toRunes)
+  if settings.screenNotifications and settings.autoBackupScreenNotify:
+    cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  if settings.logNotifications and settings.autoBackupLogNotify:
+    messageLog.add(mess.toRunes)
 
 proc writeAutoBackupSuccessMessage*(cmdWin: var Window,
-                                    message: string) =
+                                    message: string,
+                                    settings: NotificationSettings,
+                                    messageLog: var seq[seq[Rune]]) =
 
-  cmdWin.writeMessageOnCommandWindow(message, EditorColorPair.commandBar)
+  if settings.screenNotifications and settings.autoBackupScreenNotify:
+    cmdWin.writeMessageOnCommandWindow(message, EditorColorPair.commandBar)
+  if settings.logNotifications and settings.autoBackupLogNotify:
+    messageLog.add(message.toRunes)
 
-proc writeRunQuickRunMessage*(cmdWin: var Window) =
+proc writeRunQuickRunMessage*(cmdWin: var Window,
+                              settings: NotificationSettings,
+                              messageLog: var seq[seq[Rune]]) =
+
   const mess = "Quick run..."
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  if settings.quickRunScreenNotify:
+    cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
 
-proc writeRunQuickRunTimeoutMessage*(cmdWin: var Window) =
+proc writeRunQuickRunTimeoutMessage*(cmdWin: var Window,
+                                     messageLog: var seq[seq[Rune]]) =
+
   const mess = "Quick run timeout"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  messageLog.add(mess.toRunes)
 
-proc writeRunQuickRunFailedMessage*(cmdWin: var Window) =
+proc writeRunQuickRunFailedMessage*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
   const mess = "Quick run failed"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  messageLog.add(mess.toRunes)
 
-proc writeLoadConfigError*(cmdWin: var Window, message: string) =
+proc writeLoadConfigError*(cmdWin: var Window,
+                           message: string,
+                           messageLog: var seq[seq[Rune]]) =
+ 
   let mess = "Error: Failed to load configuration file: Invalid item: " &
              message
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  messageLog.add(message.toRunes)
 
 proc writeNotExistWorkspaceError*(cmdWin: var Window,
                                   workspaceIndex: int,
