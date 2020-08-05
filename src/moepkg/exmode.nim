@@ -637,9 +637,9 @@ proc highlightFullWidthSpaceSettingCommand(status: var Editorstatus,
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
 proc buildOnSaveSettingCommand(status: var Editorstatus, command: seq[Rune]) =
-  if command == ru"on": status.settings.buildOnSaveSettings.buildOnSave = true
+  if command == ru"on": status.settings.buildOnSave.enable = true
   elif command == ru"off":
-    status.settings.buildOnSaveSettings.buildOnSave = false
+    status.settings.buildOnSave.enable = false
 
   status.commandWindow.erase
 
@@ -787,8 +787,8 @@ proc buildOnSave(status: var Editorstatus) =
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     filename = status.bufStatus[currentBufferIndex].path
-    workspaceRoot = status.settings.buildOnSaveSettings.workspaceRoot
-    command = status.settings.buildOnSaveSettings.command
+    workspaceRoot = status.settings.buildOnSave.workspaceRoot
+    command = status.settings.buildOnSave.command
     language = status.bufStatus[currentBufferIndex].language
     cmdResult = build(filename, workspaceRoot, command, language)
 
@@ -843,11 +843,12 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
 
     status.bufStatus[currentBufferIndex].countChange = 0
 
-    if status.settings.buildOnSaveSettings.buildOnSave: status.buildOnSave
+    if status.settings.buildOnSave.enable: status.buildOnSave
     else:
       status.commandWindow.writeMessageSaveFile(filename,
                                                 status.settings.notificationSettings,
                                                 status.messageLog)
+
   except IOError:
     status.commandWindow.writeSaveError(status.messageLog)
 

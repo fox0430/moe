@@ -107,7 +107,7 @@ type EditorSettings* = object
   systemClipboard*: bool
   highlightFullWidthSpace*: bool
   highlightTrailingSpaces*: bool
-  buildOnSaveSettings*: BuildOnSaveSettings
+  buildOnSave*: BuildOnSaveSettings
   workSpace*: WorkSpaceSettings
   filerSettings*: FilerSettings
   reservedWords*: seq[ReservedWord]
@@ -199,7 +199,7 @@ proc initEditorSettings*(): EditorSettings =
   result.systemClipboard = true
   result.highlightFullWidthSpace = true
   result.highlightTrailingSpaces = true
-  result.buildOnSaveSettings = BuildOnSaveSettings()
+  result.buildOnSave = BuildOnSaveSettings()
   result.workSpace= initWorkSpaceSettings()
   result.filerSettings = initFilerSettings()
   result.reservedWords = initReservedWords()
@@ -732,14 +732,14 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
         result.statusBar.showModeInactive = settings["StatusBar"]["showModeInactive"].getbool()
 
   if settings.contains("BuildOnSave"):
-    if settings["BuildOnSave"].contains("buildOnSave"):
-      result.buildOnSaveSettings.buildOnSave = settings["BuildOnSave"]["buildOnSave"].getbool()
+    if settings["BuildOnSave"].contains("enable"):
+      result.buildOnSave.enable = settings["BuildOnSave"]["enable"].getbool()
 
     if settings["BuildOnSave"].contains("workspaceRoot"):
-      result.buildOnSaveSettings.workspaceRoot = settings["BuildOnSave"]["workspaceRoot"].getStr().toRunes
+      result.buildOnSave.workspaceRoot = settings["BuildOnSave"]["workspaceRoot"].getStr().toRunes
 
     if settings["BuildOnSave"].contains("command"):
-      result.buildOnSaveSettings.workspaceRoot = settings["BuildOnSave"]["command"].getStr().toRunes
+      result.buildOnSave.command = settings["BuildOnSave"]["command"].getStr().toRunes
 
   if settings.contains("WorkSpace"):
     if settings["WorkSpace"].contains("useBar"):
@@ -1277,7 +1277,7 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
   template validateBuildOnSaveTable() =
     for item in json["BuildOnSave"].pairs:
       case item.key:
-        of "buildOnSave":
+        of "enable":
           if not (item.val["type"].getStr == "bool"):
             return some($item)
         of "workspaceRoot",

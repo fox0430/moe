@@ -33,6 +33,11 @@ const tomlStr = """
   highlightTrailingSpaces = false
   highlightCurrentWord = false
 
+  [BuildOnSave]
+  enable = true
+  workspaceRoot = "/home/fox/git/moe"
+  command = "cd /home/fox/git/moe && nimble build"
+
   [TabLine]
   allBuffer = true
 
@@ -234,6 +239,10 @@ suite "Parse configuration file":
     check not settings.highlightFullWidthSpace
     check not settings.highlightTrailingSpaces
     check not settings.highlightOtherUsesCurrentWord
+
+    check settings.buildOnSave.enable
+    check settings.buildOnSave.workspaceRoot == ru"/home/fox/git/moe"
+    check settings.buildOnSave.command == ru"cd /home/fox/git/moe && nimble build"
 
     check settings.tabLine.allbuffer
 
