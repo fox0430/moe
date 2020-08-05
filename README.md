@@ -64,6 +64,8 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Automatic backups
 
+- Highlighting current words
+
 ## Planned features
 
 - Configuration mode
@@ -103,6 +105,12 @@ This project's goal is a very customizable, high productivity, high performance 
 - Funny animation...
 
 ## Install
+
+### Requires
+
+- Nim 1.2.2 or higher
+
+- ncurses (ncursesw)
 
 ```sh
 # Latest released version
