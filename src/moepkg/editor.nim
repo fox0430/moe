@@ -766,3 +766,31 @@ proc deleteTrailingSpaces*(bufStatus: var BufferStatus) =
       isChanged = true
 
   if isChanged: inc(bufStatus.countChange)
+
+proc undo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
+  if not bufStatus.buffer.canUndo: return
+  bufStatus.buffer.undo
+  bufStatus.revertPosition(windowNode, bufStatus.buffer.lastSuitId)
+
+  # if replace mode or insert mode
+  if (bufStatus.mode == Mode.insert or bufStatus.mode == Mode.replace) and
+     windowNode.currentColumn > bufStatus.buffer[windowNode.currentLine].len and
+     windowNode.currentColumn > 0:
+    (windowNode.currentLine, windowNode.currentColumn) =
+      bufStatus.buffer.prev(windowNode.currentLine,
+      windowNode.currentColumn + 1)
+  # if Other than replace mode and insert mode
+  elif (bufStatus.mode != Mode.insert and bufStatus.mode != Mode.replace) and
+       windowNode.currentColumn == bufStatus.buffer[windowNode.currentLine].len and
+       windowNode.currentColumn > 0:
+    (windowNode.currentLine, windowNode.currentColumn) =
+      bufStatus.buffer.prev(windowNode.currentLine,
+      windowNode.currentColumn)
+
+  inc(bufStatus.countChange)
+
+proc redo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
+  if not bufStatus.buffer.canRedo: return
+  bufStatus.buffer.redo
+  bufStatus.revertPosition(windowNode, bufStatus.buffer.lastSuitId)
+  inc(bufStatus.countChange)

@@ -8,7 +8,11 @@ proc keyLeft*(windowNode: var WindowNode) =
   windowNode.expandedColumn = windowNode.currentColumn
 
 proc keyRight*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
-  if windowNode.currentColumn + 1 >= bufStatus.buffer[windowNode.currentLine].len + (if bufStatus.mode == Mode.insert: 1 else: 0): return
+  let mode = bufStatus.mode
+  if windowNode.currentColumn + 1 >=
+     bufStatus.buffer[windowNode.currentLine].len + (if mode == Mode.insert or mode == Mode.replace: 1 else: 0):
+    return
+
   inc(windowNode.currentColumn)
   windowNode.expandedColumn = windowNode.currentColumn
 
