@@ -31,7 +31,7 @@ proc main() =
     status.settings = loadSettingFile()
   except:
     let invalidItem = getCurrentExceptionMsg()
-    status.commandwindow.writeLoadConfigError(invalidItem)
+    status.commandwindow.writeLoadConfigError(invalidItem, status.messageLog)
     status.settings = initEditorSettings()
 
   status.timeConfFileLastReloaded = now()

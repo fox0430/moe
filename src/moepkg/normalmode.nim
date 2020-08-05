@@ -155,7 +155,11 @@ proc runQuickRunCommand(status: var Editorstatus) =
     windowNode = status.workspace[workspaceIndex].currentMainWindowNode
     bufStatus = status.bufStatus[windowNode.bufferIndex]
 
-    buffer = runQuickRun(bufStatus, status.commandwindow, status.settings)
+    buffer = runQuickRun(bufStatus,
+                         status.commandwindow,
+                         status.messageLog,
+                         status.settings)
+
     workspace = status.workspace[workspaceIndex]
     quickRunWindowIndex = status.bufStatus.getQuickRunBufferIndex(workspace)
 

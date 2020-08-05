@@ -104,8 +104,6 @@ reservedWord = ["TODO", "WIP", "NOTE"]
 
 enable = true
 
-showMessages = true
-
 # 10 second
 idolTime = 10
 
@@ -134,6 +132,48 @@ timeout = 30
 # shOptions = "-c"
 
 # bashOptions = "-c"
+
+[Notification]
+
+screenNotifications = true
+
+logNotifications = true
+
+autoBackupScreenNotify = true
+
+autoBackupLogNotify = true
+
+autoSaveScreenNotify = true
+
+autoSaveLogNotify = true
+
+yankScreenNotify = true
+
+yankLogNotify = true
+
+deleteScreenNotify = true
+
+deleteLogNotify = true
+
+saveScreenNotify = true
+
+saveLogNotify = true
+
+workspaceScreenNotify = true
+
+workspaceLogNotify = true
+
+quickRunScreenNotify = true
+
+quickRunLogNotify = true
+
+buildOnSaveScreenNotify = true
+
+buildOnSaveLogNotify = true
+
+filerScreenNotify = true
+
+filerLogNotify = true
 
 [Filer]
 

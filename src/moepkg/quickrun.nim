@@ -43,6 +43,7 @@ proc getQuickRunBufferIndex*(bufStatus: seq[BufferStatus],
 
 proc runQuickRun*(bufStatus: BufferStatus,
                   cmdWin: var Window,
+                  messageLog: var seq[seq[Rune]],
                   settings: EditorSettings): seq[seq[Rune]] =
 
   if bufStatus.path.len == 0: return @[ru""]
@@ -66,7 +67,7 @@ proc runQuickRun*(bufStatus: BufferStatus,
     command = bufStatus.generateCommand(language, settings.quickRunSettings)
   if command == "": return @[ru""]
 
-  cmdWin.writeRunQuickRunMessage
+  cmdWin.writeRunQuickRunMessage(settings.notificationSettings, messageLog)
   let cmdResult = execCmdEx(command)
   cmdWin.erase
 
@@ -74,7 +75,7 @@ proc runQuickRun*(bufStatus: BufferStatus,
 
   case cmdResult.exitCode:
     of 124:
-      cmdWin.writeRunQuickRunTimeoutMessage
+      cmdWin.writeRunQuickRunTimeoutMessage(messageLog)
     else:
       for i in 0 ..< cmdResult.output.len:
         if cmdResult.output[i] == '\n': result.add(@[ru""])

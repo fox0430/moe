@@ -8,6 +8,28 @@ when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
 
 import ui, color, unicodeext, build, highlight, error
 
+type NotificationSettings* = object
+  screenNotifications*: bool
+  logNotifications*: bool
+  autoBackupScreenNotify*: bool
+  autoBackupLogNotify*: bool
+  autoSaveScreenNotify*: bool
+  autoSaveLogNotify*: bool
+  yankScreenNotify*: bool
+  yankLogNotify*: bool
+  deleteScreenNotify*: bool
+  deleteLogNotify*: bool
+  saveScreenNotify*: bool
+  saveLogNotify*: bool
+  workspaceScreenNotify*: bool
+  workspaceLogNotify*: bool
+  quickRunScreenNotify*: bool
+  quickRunLogNotify*: bool
+  buildOnSaveScreenNotify*: bool
+  buildOnSaveLogNotify*: bool
+  filerScreenNotify*: bool
+  filerLogNotify*: bool
+
 type QuickRunSettings* = object
   saveBufferWhenQuickRun*: bool
   command*: string
@@ -24,7 +46,6 @@ type AutoBackupSettings* = object
   idolTime*: int # seconds
   interval*: int # minutes
   backupDir*: seq[Rune]
-  showMessages*: bool
 
 type FilerSettings = object
   showIcons*: bool
@@ -92,6 +113,21 @@ type EditorSettings* = object
   reservedWords*: seq[ReservedWord]
   autoBackupSettings*: AutoBackupSettings
   quickRunSettings*: QuickRunSettings
+  notificationSettings*: NotificationSettings
+
+proc initNotificationSettings(): NotificationSettings =
+  result.screenNotifications = true
+  result.logNotifications = true
+  result.autoBackupScreenNotify = true
+  result.autoBackupLogNotify = true
+  result.yankScreenNotify = true
+  result.yankLogNotify = true
+  result.deleteScreenNotify = true
+  result.deleteLogNotify = true
+  result.workspaceScreenNotify = true
+  result.workspaceLogNotify = true
+  result.quickRunScreenNotify = true
+  result.quickRunLogNotify = true
 
 proc initQuickRunSettings(): QuickRunSettings =
   result.saveBufferWhenQuickRun = true
@@ -102,7 +138,6 @@ proc initAutoBackupSettings(): AutoBackupSettings =
   result.enable = true
   result.interval = 5 # 5 minutes
   result.idolTime = 10 # 10 seconds
-  result.showMessages = true
 
 proc initFilerSettings(): FilerSettings =
   result.showIcons = true
@@ -723,9 +758,6 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["AutoBackup"].contains("enable"):
       result.autoBackupSettings.enable = settings["AutoBackup"]["enable"].getbool()
 
-    if settings["AutoBackup"].contains("showMessages"):
-      result.autoBackupSettings.showMessages = settings["AutoBackup"]["showMessages"].getBool()
-
     if settings["AutoBackup"].contains("idolTime"):
       result.autoBackupSettings.idolTime = settings["AutoBackup"]["idolTime"].getInt()
 
@@ -763,6 +795,67 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
     if settings["QuickRun"].contains("bashOptions"):
       result.quickRunSettings.bashOptions = settings["QuickRun"]["bashOptions"].getStr()
+
+  if settings.contains("Notification"):
+    if settings["Notification"].contains("screenNotifications"):
+      result.notificationSettings.screenNotifications = settings["Notification"]["screenNotifications"].getBool
+
+    if settings["Notification"].contains("logNotifications"):
+      result.notificationSettings.logNotifications = settings["Notification"]["logNotifications"].getBool
+
+    if settings["Notification"].contains("autoBackupScreenNotify"):
+      result.notificationSettings.autoBackupScreenNotify = settings["Notification"]["autoBackupScreenNotify"].getBool
+
+    if settings["Notification"].contains("autoBackupLogNotify"):
+      result.notificationSettings.autoBackupLogNotify = settings["Notification"]["autoBackupLogNotify"].getBool
+
+    if settings["Notification"].contains("autoSaveScreenNotify"):
+      result.notificationSettings.autoSaveScreenNotify = settings["Notification"]["autoSaveScreenNotify"].getBool
+
+    if settings["Notification"].contains("autoSaveLogNotify"):
+      result.notificationSettings.autoSaveLogNotify = settings["Notification"]["autoSaveLogNotify"].getBool
+
+    if settings["Notification"].contains("yankScreenNotify"):
+      result.notificationSettings.yankScreenNotify = settings["Notification"]["yankScreenNotify"].getBool
+
+    if settings["Notification"].contains("yankLogNotify"):
+      result.notificationSettings.yankLogNotify = settings["Notification"]["yankLogNotify"].getBool
+
+    if settings["Notification"].contains("deleteScreenNotify"):
+      result.notificationSettings.deleteScreenNotify = settings["Notification"]["deleteScreenNotify"].getBool
+
+    if settings["Notification"].contains("deleteLogNotify"):
+      result.notificationSettings.deleteLogNotify = settings["Notification"]["deleteLogNotify"].getBool
+
+    if settings["Notification"].contains("saveScreenNotify"):
+      result.notificationSettings.saveScreenNotify = settings["Notification"]["saveScreenNotify"].getBool
+
+    if settings["Notification"].contains("saveLogNotify"):
+      result.notificationSettings.saveLogNotify = settings["Notification"]["saveLogNotify"].getBool
+
+    if settings["Notification"].contains("workspaceScreenNotify"):
+      result.notificationSettings.workspaceScreenNotify = settings["Notification"]["workspaceScreenNotify"].getBool
+
+    if settings["Notification"].contains("workspaceLogNotify"):
+      result.notificationSettings.workspaceLogNotify = settings["Notification"]["workspaceLogNotify"].getBool
+
+    if settings["Notification"].contains("quickRunScreenNotify"):
+      result.notificationSettings.quickRunScreenNotify = settings["Notification"]["quickRunScreenNotify"].getBool
+
+    if settings["Notification"].contains("quickRunLogNotify"):
+      result.notificationSettings.quickRunLogNotify = settings["Notification"]["quickRunLogNotify"].getBool
+
+    if settings["Notification"].contains("buildOnSaveScreenNotify"):
+      result.notificationSettings.buildOnSaveScreenNotify = settings["Notification"]["buildOnSaveScreenNotify"].getBool
+
+    if settings["Notification"].contains("buildOnSaveLogNotify"):
+      result.notificationSettings.buildOnSaveLogNotify = settings["Notification"]["buildOnSaveLogNotify"].getBool
+
+    if settings["Notification"].contains("filerScreenNotify"):
+      result.notificationSettings.filerScreenNotify = settings["Notification"]["filerScreenNotify"].getBool
+
+    if settings["Notification"].contains("filerLogNotify"):
+      result.notificationSettings.filerLogNotify = settings["Notification"]["filerLogNotify"].getBool
 
   if settings.contains("Filer"):
     if settings["Filer"].contains("showIcons"):
@@ -1113,10 +1206,12 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
       case item.key:
         of "theme":
           var correctValue = false
-          for theme in ColorTheme:
-            if $theme == item.val["value"].getStr:
-              correctValue = true
-
+          if item.val["value"].getStr == "vscode":
+            correctValue = true
+          else:
+            for theme in ColorTheme:
+              if $theme == item.val["value"].getStr:
+                correctValue = true
           if not correctValue:
             return some($item)
         of "number",
@@ -1240,6 +1335,34 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         else:
           return some($item)
 
+  template validateNotificationTable() =
+    for item in json["Notification"].pairs:
+      case item.key:
+        of "screenNotifications",
+           "logNotifications",
+           "autoBackupScreenNotify",
+           "autoBackupLogNotify",
+           "autoSaveScreenNotify",
+           "autoSaveLogNotify",
+           "yankScreenNotify",
+           "yankLogNotify",
+           "deleteScreenNotify",
+           "deleteLogNotify",
+           "saveScreenNotify",
+           "saveLogNotify",
+           "workspaceScreenNotify",
+           "workspaceLogNotify",
+           "quickRunScreenNotify",
+           "quickRunLogNotify",
+           "buildOnSaveScreenNotify",
+           "buildOnSaveLogNotify",
+           "filerScreenNotify",
+           "filerLogNotify":
+          if item.val["type"].getStr != "bool":
+            return some($item)
+        else:
+          return some($item)
+
   template validateFilerTable() =
     for item in json["Filer"].pairs:
       case item.key:
@@ -1287,6 +1410,8 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         validateAutoBackupTable()
       of "QuickRun":
         validateQuickRunTable()
+      of "Notification":
+        validateNotificationTable()
       of "Filer":
         validateFilerTable()
       of "Theme":
