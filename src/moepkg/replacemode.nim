@@ -50,9 +50,9 @@ proc replaceMode*(status: var EditorStatus) =
         # Move to left once
         windowNode.keyLeft
 
-  var isMoved = false
-  let
-    bufferIndex = status.bufferIndexInCurrentWindow
+  let bufferIndex = status.bufferIndexInCurrentWindow
+  var
+    isMoved = false
     undoLastSuitId = status.bufStatus[bufferIndex].buffer.lastSuitId
 
   while status.isReplaceMode:
@@ -81,18 +81,23 @@ proc replaceMode*(status: var EditorStatus) =
     elif isEscKey(key) or isControlSquareBracketsRight(key):
       status.changeMode(Mode.normal)
       isMoved = true
+      undoLastSuitId = status.bufStatus[bufferIndex].buffer.lastSuitId
     elif isRightKey(key):
       status.bufStatus[currentBufferIndex].keyRight(windowNode)
       isMoved = true
+      undoLastSuitId = status.bufStatus[bufferIndex].buffer.lastSuitId
     elif isLeftKey(key):
       windowNode.keyLeft
       isMoved = true
+      undoLastSuitId = status.bufStatus[bufferIndex].buffer.lastSuitId
     elif isUpKey(key):
       status.bufStatus[currentBufferIndex].keyUp(windowNode)
       isMoved = true
+      undoLastSuitId = status.bufStatus[bufferIndex].buffer.lastSuitId
     elif isDownKey(key):
       status.bufStatus[currentBufferIndex].keyDown(windowNode)
       isMoved = true
+      undoLastSuitId = status.bufStatus[bufferIndex].buffer.lastSuitId
     elif isEnterKey(key):
       status.bufStatus[currentBufferIndex].keyEnter(windowNode,
                                                     status.settings.autoIndent,
