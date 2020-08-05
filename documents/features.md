@@ -19,7 +19,7 @@ Of course, you can set an interval to execute backups.
 
 QuickRun is like vim-quickrun.
 
-You can use ```\ + r``` in normal mode. And ```run``` or ```:Q``` command in ex mode.  
+You can use ```\ + r``` in normal mode. And ```run``` or ```Q``` command in ex mode.  
 Currently QuickRun supports these languages by default and runs the following command internally.
 
 - Nim ```nim c -r filename```
