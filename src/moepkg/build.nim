@@ -2,12 +2,11 @@ import os, osproc, strformat, highlite
 import unicodeext
 
 type BuildOnSaveSettings* = object
-  buildOnSave*: bool
+  enable*: bool
   workspaceRoot*: seq[Rune]
   command*: seq[Rune]
 
-proc build*(
-            filename, workspaceRoot,
+proc build*(filename, workspaceRoot,
             command: seq[Rune],
             language: SourceLanguage): tuple[output: TaintedString, exitCode: int] =
 
