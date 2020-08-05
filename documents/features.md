@@ -25,8 +25,8 @@ Currently QuickRun supports these languages by default and runs the following co
 - Nim ```nim c -r filename```
 - C ```gcc filename && ./a.out```
 - C++ ```g++ filename && ./a.out```
-- bash ``bash filename```
-- sh ``sh filename```
+- bash ```bash filename```
+- sh ```sh filename```
 
 You can overwrite the command to be executed in the setting. That way you can use other compilers and languages.
 
