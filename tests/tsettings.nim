@@ -349,3 +349,13 @@ suite "Validate toml config":
     let result = toml.validateTomlConfig
 
     check result == none(string)
+
+  test "Validate vscode theme":
+    const tomlThemeConfig ="""
+      [Standard]
+      theme = "vscode"
+    """
+    let toml = parsetoml.parseString(tomlThemeConfig)
+    let result = toml.validateTomlConfig
+
+    check result == none(string)
