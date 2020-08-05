@@ -35,7 +35,7 @@ proc replaceMode*(status: var EditorStatus) =
       workspaceIndex = status.currentWorkSpaceIndex
 
     # Can undo until you enter Replace mode
-    # Do not undo if the cursor is moved
+    # Do not undo if the cursor is moved and re-enable undo if the character is replaced
     if not isMoved and
        status.bufStatus[currentBufferIndex].buffer.lastSuitId > undoLastSuitId:
       undo(status.bufStatus[currentBufferIndex],
@@ -104,3 +104,4 @@ proc replaceMode*(status: var EditorStatus) =
 
       status.bufStatus[currentBufferIndex].keyRight(windowNode)
       bufferChanged = true
+      isMoved = false
