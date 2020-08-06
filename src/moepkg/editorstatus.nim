@@ -330,6 +330,7 @@ proc update*(status: var EditorStatus) =
         if bufStatus.buffer.high < node.currentLine:
           node.currentLine = bufStatus.buffer.high
         if currentMode != Mode.insert and
+           currentMode != Mode.replace and
            bufStatus.buffer[node.currentLine].len > 0 and
            bufStatus.buffer[node.currentLine].high < node.currentColumn:
           node.currentColumn = bufStatus.buffer[node.currentLine].high

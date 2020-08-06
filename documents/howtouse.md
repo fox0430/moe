@@ -89,7 +89,7 @@ Check command bar
 ```/keyword``` - Search forward  
 ```?keyword``` - Search backward  
 
-```\r``` - Quick run  
+```\-r``` - Quick run  
 
 ## Visual (block) mode
 
@@ -117,7 +117,7 @@ Check command bar
 ## Replace mode
 
 ```Esc``` - Start normal mode  
-
+```Backspace``` - undo
 
 ## Insert mode
 

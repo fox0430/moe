@@ -104,24 +104,6 @@ proc turnOffHighlighting*(status: var EditorStatus) =
   status.bufStatus[currentBufferIndex].isSearchHighlight = false
   status.updateHighlight(status.workspace[workspaceIndex].currentMainWindowNode)
 
-proc undo(bufStatus: var BufferStatus, windowNode: WindowNode) =
-  if not bufStatus.buffer.canUndo: return
-  bufStatus.buffer.undo
-  bufStatus.revertPosition(windowNode, bufStatus.buffer.lastSuitId)
-  if windowNode.currentColumn == bufStatus.buffer[windowNode.currentLine].len and
-     windowNode.currentColumn > 0:
-    (windowNode.currentLine, windowNode.currentColumn) =
-      bufStatus.buffer.prev(windowNode.currentLine,
-      windowNode.currentColumn)
-
-  inc(bufStatus.countChange)
-
-proc redo(bufStatus: var BufferStatus, windowNode: WindowNode) =
-  if not bufStatus.buffer.canRedo: return
-  bufStatus.buffer.redo
-  bufStatus.revertPosition(windowNode, bufStatus.buffer.lastSuitId)
-  inc(bufStatus.countChange)
-
 proc writeFileAndExit(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   if status.bufStatus[currentBufferIndex].path.len == 0:
