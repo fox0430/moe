@@ -36,7 +36,7 @@ autoSaveInterval = 5
 
 liveReloadOfConf = false
 
-realtimeSearch = true
+incrementalSearch = true
 
 popUpWindowInExmode = true
 

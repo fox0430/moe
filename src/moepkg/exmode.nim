@@ -120,9 +120,9 @@ proc isStatusBarSettingCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "statusbar"
 
-proc isRealtimeSearchSettingCommand(command: seq[seq[Rune]]): bool =
+proc isIncrementalSearchSettingCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
-  return command.len == 2 and cmd == "realtimesearch"
+  return command.len == 2 and cmd == "incrementalsearch"
 
 proc isHighlightPairOfParenSettigCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
@@ -555,9 +555,11 @@ proc statusBarSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
-proc realtimeSearchSettingCommand(status: var Editorstatus, command: seq[Rune]) =
-  if command == ru"on": status.settings.realtimeSearch= true
-  elif command == ru"off": status.settings.realtimeSearch = false
+proc incrementalSearchSettingCommand(status: var Editorstatus, command: seq[Rune]) =
+  exitUi()
+  echo "ok"
+  if command == ru"on": status.settings.incrementalSearch = true
+  elif command == ru"off": status.settings.incrementalSearch = false
 
   status.commandWindow.erase
 
@@ -1195,8 +1197,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     openBufferManager(status)
   elif isLiveReloadOfConfSettingCommand(command):
     liveReloadOfConfSettingCommand(status, command[1])
-  elif isRealtimeSearchSettingCommand(command):
-    realtimeSearchSettingCommand(status, command[1])
+  elif isIncrementalSearchSettingCommand(command):
+    incrementalSearchSettingCommand(status, command[1])
   elif isOpenMessageLogViweer(command):
     openMessageLogViewer(status)
   elif isHighlightPairOfParenSettigCommand(command):

@@ -44,7 +44,7 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Simple auto indent
 
-- Real time search
+- Incremental search
 
 - Auto save
 

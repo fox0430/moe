@@ -96,7 +96,7 @@ type EditorSettings* = object
   autoSave*: bool
   autoSaveInterval*: int # minutes
   liveReloadOfConf*: bool
-  realtimeSearch*: bool
+  incrementalSearch*: bool
   popUpWindowInExmode*: bool
   replaceTextHighlight*: bool
   highlightPairOfParen*: bool
@@ -188,7 +188,7 @@ proc initEditorSettings*(): EditorSettings =
   result.normalModeCursor = CursorType.blinkBlock
   result.insertModeCursor = CursorType.blinkIbeam
   result.autoSaveInterval = 5
-  result.realtimeSearch = true
+  result.incrementalSearch = true
   result.popUpWindowInExmode = true
   result.replaceTextHighlight = true
   result.highlightPairOfParen = true
@@ -654,8 +654,8 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Standard"].contains("liveReloadOfConf"):
       result.liveReloadOfConf = settings["Standard"]["liveReloadOfConf"].getbool()
 
-    if settings["Standard"].contains("realtimeSearch"):
-      result.realtimeSearch = settings["Standard"]["realtimeSearch"].getbool()
+    if settings["Standard"].contains("incrementalSearch"):
+      result.incrementalSearch = settings["Standard"]["incrementalSearch"].getbool()
 
     if settings["Standard"].contains("popUpWindowInExmode"):
       result.popUpWindowInExmode = settings["Standard"]["popUpWindowInExmode"].getbool()
@@ -1226,7 +1226,7 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
            "disableChangeCursor",
            "autoSave",
            "liveReloadOfConf",
-           "realtimeSearch",
+           "incrementalSearch",
            "popUpWindowInExmode",
            "replaceTextHighlight",
            "highlightPairOfParen",
