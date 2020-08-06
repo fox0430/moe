@@ -82,34 +82,33 @@ proc replaceCurrentCharacter(bufStatus: var BufferStatus,
   bufStatus.keyRight(windowNode)
   isMoved = false
 
-proc replaceMode*(status: var EditorStatus) =
-  var windowNode =
-    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+proc undoOrMoveCursor(bufStatus: var BufferStatus,
+                      windowNode: var WindowNode,
+                      isMoved: bool,
+                      undoLastSuitId: int) =
 
-  template undoOrMoveCursor() =
-    let
-      workspaceIndex = status.currentWorkSpaceIndex
-
-    # Can undo until you enter Replace mode
-    # Do not undo if the cursor is moved and re-enable undo if the character is replaced
-    if not isMoved and
-       status.bufStatus[currentBufferIndex].buffer.lastSuitId > undoLastSuitId:
-      undo(status.bufStatus[currentBufferIndex],
-           status.workSpace[workSpaceIndex].currentMainWindowNode)
+  # Can undo until you enter Replace mode
+  # Do not undo if the cursor is moved and re-enable undo if the character is replaced
+  if not isMoved and
+     bufStatus.buffer.lastSuitId > undoLastSuitId:
+    undo(bufStatus, windowNode)
+  else:
+    if windowNode.currentColumn == 0 and
+       windowNode.currentLine > 0:
+      # Jump to the end of the above line
+      bufStatus.keyUp(windowNode)
+      bufStatus.moveToLastOfLine(windowNode)
     else:
-      if windowNode.currentColumn == 0 and
-         windowNode.currentLine > 0:
-        # Jump to the end of the above line
-        status.bufStatus[currentBufferIndex].keyUp(windowNode)
-        status.bufStatus[currentBufferIndex].moveToLastOfLine(windowNode)
-      else:
-        # Move to left once
-        windowNode.keyLeft
+      # Move to left once
+      windowNode.keyLeft
 
+proc replaceMode*(status: var EditorStatus) =
   var
     isMoved = false
     undoLastSuitId =
       status.bufStatus[status.bufferIndexInCurrentWindow].buffer.lastSuitId
+    windowNode =
+      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
 
   while status.isReplaceMode:
     let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -124,8 +123,7 @@ proc replaceMode*(status: var EditorStatus) =
     status.lastOperatingTime = now()
 
     status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
-    status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(
-      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+    status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(windowNode)
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
@@ -149,7 +147,9 @@ proc replaceMode*(status: var EditorStatus) =
                                                     status.settings.autoIndent,
                                                     status.settings.tabStop)
     elif isBackspaceKey(key):
-      undoOrMoveCursor()
+      status.bufStatus[currentBufferIndex].undoOrMoveCursor(windowNode,
+                                                            isMoved,
+                                                            undoLastSuitId)
     else:
       status.bufStatus[currentBufferIndex].replaceCurrentCharacter(
         windowNode,
