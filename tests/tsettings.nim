@@ -23,7 +23,7 @@ const tomlStr = """
   autoSave = true
   autoSaveInterval = 1
   liveReloadOfConf = true
-  realtimeSearch = false
+  incrementalSearch = false
   popUpWindowInExmode = false
   replaceTextHighlight = false
   highlightPairOfParen = false
@@ -230,7 +230,7 @@ suite "Parse configuration file":
     check settings.autoSave
     check settings.autoSaveInterval == 1
     check settings.liveReloadOfConf
-    check not settings.realtimeSearch
+    check not settings.incrementalSearch
     check not settings.popUpWindowInExmode
     check not settings.replaceTextHighlight
     check not settings.highlightPairOfParen

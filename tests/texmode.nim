@@ -247,19 +247,19 @@ suite "Ex mode: Live reload of configuration file setting command":
       status.exModeCommand(command)
     check(status.settings.liveReloadOfConf == false)
 
-suite "Ex mode: Real time search setting command":
-  test "Real time search setting command":
+suite "Ex mode: Incremental search setting command":
+  test "Incremental search setting command":
     var status = initEditorStatus()
     status.addNewBuffer("")
 
     block:
-      const command = @[ru"realtimesearch", ru"off"]
+      const command = @[ru"incrementalSearch", ru"off"]
       status.exModeCommand(command)
-    check(status.settings.realtimeSearch == false)
+    check not status.settings.incrementalSearch
     block:
-      const command = @[ru"realtimesearch", ru"on"]
+      const command = @[ru"incrementalSearch", ru"on"]
       status.exModeCommand(command)
-    check(status.settings.realtimeSearch == true)
+    check status.settings.incrementalSearch
 
 suite "Ex mode: Change theme command":
   test "Change theme command":
