@@ -106,10 +106,10 @@ default is false
 liveReloadOfConf
 ```
 
-Realtime search (bool)  
+Incremental search (bool)  
 default is true
 ```
-realtimeSearch
+incrementalSearch
 ```
 
 Pop-up window in ex mode (bool)  
