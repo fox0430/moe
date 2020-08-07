@@ -1,5 +1,5 @@
 import unicode, strutils, sequtils, strutils, strformat
-import unicodedb/[widths, types]
+import unicodedb/widths
 import gapbuffer
 export unicode
 
