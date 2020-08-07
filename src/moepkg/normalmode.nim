@@ -135,9 +135,8 @@ proc runQuickRunCommand(status: var Editorstatus) =
   let
     workspaceIndex = status.currentWorkSpaceIndex
     windowNode = status.workspace[workspaceIndex].currentMainWindowNode
-    bufStatus = status.bufStatus[windowNode.bufferIndex]
 
-    buffer = runQuickRun(bufStatus,
+    buffer = runQuickRun(status.bufStatus[windowNode.bufferIndex],
                          status.commandwindow,
                          status.messageLog,
                          status.settings)

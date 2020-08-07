@@ -41,7 +41,7 @@ proc getQuickRunBufferIndex*(bufStatus: seq[BufferStatus],
   for index in allBufferIndex:
     if bufStatus[index].mode == Mode.quickRun: return index
 
-proc runQuickRun*(bufStatus: BufferStatus,
+proc runQuickRun*(bufStatus: var BufferStatus,
                   cmdWin: var Window,
                   messageLog: var seq[seq[Rune]],
                   settings: EditorSettings): seq[seq[Rune]] =
@@ -62,6 +62,7 @@ proc runQuickRun*(bufStatus: BufferStatus,
 
   if settings.quickRunSettings.saveBufferWhenQuickRun:
     saveFile(filename, bufStatus.buffer.toRunes, settings.characterEncoding)
+    bufStatus.countChange = 0
 
   let
     command = bufStatus.generateCommand(language, settings.quickRunSettings)
