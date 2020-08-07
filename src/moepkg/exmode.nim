@@ -309,7 +309,7 @@ proc runQuickRunCommand(status: var Editorstatus) =
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
   let
-    buffer = runQuickRun(bufStatus,
+    buffer = runQuickRun(status.bufStatus[windowNode.bufferIndex],
                          status.commandwindow,
                          status.messageLog,
                          status.settings)
