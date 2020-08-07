@@ -19,6 +19,14 @@ suite "Backup: Generate filename":
 
     check backupFilename == ru"test_" & ($time).toRunes & ru".nim"
 
+  test "The path contains non-US-ASCII characters (issue #936)":
+    let
+      time = now()
+      filename = ru"/tmp/ディレクトリ/test.nim"
+      backupFilename = generateFilename(filename, time)
+
+    check backupFilename == ru"test_" & ($time).toRunes & ru".nim"
+
 suite "Backup: Generate backup dir":
   test "The same path that opened the editor":
     let
