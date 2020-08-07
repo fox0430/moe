@@ -246,26 +246,31 @@ test "detectCharacterEncoding: UTF-32LE":
   ec.close
 
 test "findRune":
-  check find(runes = ru"あaa", r = ru'a') == 1
+  check find( ru"あaa", ru'a') == 1
+  check find( ru"あaa", ru'b') == -1
 
 test "findRunes":
   check find(runes = ru"あいういう", sub = ru"いう") == 1
+  check find(runes = ru"あいういういう", sub = ru"いう", start = 2, last = 4) == 3
+  check find(runes = ru"あいういう", sub = ru"いうう") == -1
 
 test "rfindRune":
   check rfind(ru"あaa", ru'a') == 2
+  check rfind(ru"あaa", ru'b') == -1
 
 test "rfindRunes":
   check rfind(ru"あいういう", ru"いう") == 3
+  check rfind(ru"あいういう", ru"いう", start = 1, last = 3) == 1
 
 test "substrWithLast":
   check substr(ru"あいうえお", first = 1, last = 3) == ru"いうえ"
 
 test "substr":
-  check substr(ru"あいう", first = 1) == ru"い"
+  check substr(ru"あいう", first = 1) == ru"いう"
 
 test "splitWhitespace":
-  const s = ru"\u1680\u2000foo\u2028\u202Fbar \t baz  \u3000"
-  check splitWhitespace(s) == @[ru"foo", ru"bar", ru"baz"]
+  const s = "this\lis an\texample"
+  check splitWhitespace(s.ru) == @[ru"this", ru"is", ru"an", ru"example"]
 
 from os import `/`
 test "/":
