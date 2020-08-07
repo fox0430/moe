@@ -245,3 +245,36 @@ test "detectCharacterEncoding: UTF-32LE":
   check(converted.detectCharacterEncoding == CharacterEncoding.utf32Le)
   ec.close
 
+test "findRune":
+  check find(runes = ru"あaa", r = ru'a') == 1
+
+test "findRunes":
+  check find(runes = ru"あいういう", sub = ru"いう") == 1
+
+test "rfindRune":
+  check rfind(ru"あaa", ru'a') == 2
+
+test "rfindRunes":
+  check rfind(ru"あいういう", ru"いう") == 3
+
+test "substrWithLast":
+  check substr(ru"あいうえお", first = 1, last = 3) == ru"いうえ"
+
+test "substr":
+  check substr(ru"あいう", first = 1) == ru"い"
+
+test "splitWhitespace":
+  const s = ru"\u1680\u2000foo\u2028\u202Fbar \t baz  \u3000"
+  check splitWhitespace(s) == @[ru"foo", ru"bar", ru"baz"]
+
+from os import `/`
+test "/":
+  proc checkJoinPath(head, tail: string) =
+    check head.ru / tail.ru == (head / tail).ru
+
+  checkJoinPath("usr", "")
+  checkJoinPath("", "lib")
+  checkJoinPath("", "/lib")
+  checkJoinPath("usr", "/lib")
+  checkJoinPath("usr/", "/lib/")
+  check ru"usr" / ru"lib" / ru"../bin" == ru"usr/bin"

@@ -1,5 +1,5 @@
 import unicode, strutils, sequtils, strutils, strformat
-import unicodedb/widths
+import unicodedb/[widths, types]
 import gapbuffer
 export unicode
 
@@ -286,15 +286,15 @@ proc isParen*(r: Rune): bool =
 proc find*(runes: seq[Rune], r: Rune, start: Natural = 0, last = 0): int =
   find($runes, ($r)[0], start, last)
 
-proc find*(runes, runes2: seq[Rune], start: Natural = 0, last = 0): int =
-  find($runes, $runes2, start, last)
+proc find*(runes, sub: seq[Rune], start: Natural = 0, last = 0): int =
+  find($runes, $sub, start, last)
 
 proc rfind*(runes: seq[Rune], r: Rune, start: Natural = 0, last = -1): int =
   rfind($runes, ($r)[0], start, last)
   
 
-proc rfind*(runes, runes2: seq[Rune], start: Natural = 0, last = -1): int =
-  rfind($runes, $runes2, start, last)
+proc rfind*(runes, sub: seq[Rune], start: Natural = 0, last = -1): int =
+  rfind($runes, $sub, start, last)
 
 proc substr*(runes: seq[Rune], first, last: int): seq[Rune] =
   let str = substr($runes, first, last)
@@ -303,8 +303,8 @@ proc substr*(runes: seq[Rune], first, last: int): seq[Rune] =
 proc substr*(runes: seq[Rune], first = 0): seq[Rune] =
   result = substr(runes, first, high(runes))
 
-proc contains*(runes, runes2: seq[Rune]): bool =
-  find(runes, runes2) >= 0
+proc contains*(runes, sub: seq[Rune]): bool =
+  find(runes, sub) >= 0
 
 proc contains*(runes: seq[Rune], r: Rune): bool =
   find(runes, r) >= 0
