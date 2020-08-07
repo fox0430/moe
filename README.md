@@ -60,7 +60,7 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Multiple status bar
 
-- Quick run
+- QuickRun
 
 - Automatic backups
 
