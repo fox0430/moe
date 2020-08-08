@@ -1,5 +1,5 @@
 import terminal, strutils, sequtils, strformat, os
-import editorstatus, ui, unicodeext, fileutils, color
+import ui, unicodeext, fileutils, color, messages
 
 type
   ExModeViewStatus = tuple[
@@ -9,200 +9,62 @@ type
   ]
 
 const exCommandList = [
-  ru"!",
-  ru"deleteparen",
-  ru"b",
-  ru"bd",
-  ru"bfirst",
-  ru"blast",
-  ru"bnext",
-  ru"bprev",
-  ru"buildonsave",
-  ru"buf",
-  ru"clipboard",
-  ru"cursorLine",
-  ru"cws",
-  ru"deleteTrailingSpaces",
-  ru"dws",
-  ru"e",
-  ru"ene",
-  ru"help",
-  ru"highlightcurrentword",
-  ru"highlightfullspace",
-  ru"highlightparen",
-  ru"icon",
-  ru"indent",
-  ru"indentationlines",
-  ru"linenum",
-  ru"livereload",
-  ru"log",
-  ru"ls",
-  ru"multiplestatusbar",
-  ru"new",
-  ru"noh",
-  ru"paren",
-  ru"putConfigFile",
-  ru"q",
-  ru"q!",
-  ru"qa",
-  ru"qa!",
-  ru"realtimesearch",
-  ru"scrollspeed",
-  ru"showGitInactive",
-  ru"smoothscroll",
-  ru"sp",
-  ru"statusbar",
-  ru"syntax",
-  ru"tab",
-  ru"tabstop",
-  ru"theme",
-  ru"vs",
-  ru"ws",
-  ru"wq",
-  ru"wqa",
+  "!",
+  "deleteParen",
+  "b",
+  "bd",
+  "bfirst",
+  "blast",
+  "bnext",
+  "bprev",
+  "buildOnSave",
+  "buf",
+  "clipboard",
+  "cursorLine",
+  "cws",
+  "deleteTrailingSpaces",
+  "dws",
+  "e",
+  "ene",
+  "help",
+  "highlightCurrentWord",
+  "highlightFullSpace",
+  "highlightParen",
+  "icon",
+  "incrementalSearch",
+  "indent",
+  "indentationLines",
+  "linenum",
+  "liveReload",
+  "log",
+  "ls",
+  "lsw",
+  "multipleStatusbar",
+  "new",
+  "noh",
+  "paren",
+  "putConfigFile",
+  "q",
+  "Q",
+  "q!",
+  "qa",
+  "qa!",
+  "recent",
+  "run",
+  "scrollSpeed",
+  "showGitInactive",
+  "smoothScroll",
+  "sp",
+  "statusbar",
+  "syntax",
+  "tab",
+  "tabstop",
+  "theme",
+  "vs",
+  "ws",
+  "wq",
+  "wqa",
 ]
-
-proc writeMessageOnCommandWindow(cmdWin: var Window,
-                                 message: string,
-                                 color: EditorColorPair) =
-
-  cmdWin.erase
-  cmdWin.write(0, 0, message, color)
-  cmdWin.refresh
-
-proc writeNoWriteError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
-  let mess = "Error: No write since last change"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
-  messageLog.add(mess.toRunes)
-
-proc writeSaveError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
-  let mess = "Error: Failed to save the file"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
-  messageLog.add(mess.toRunes)
-
-proc writeRemoveFileError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
-  let mess = "Error: can not remove file"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
-  messageLog.add(mess.toRunes)
-
-proc writeRemoveDirError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
-  let mess = "Error: can not remove directory"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
-  messageLog.add(mess.toRunes)
-
-proc writeCopyFileError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
-  let mess = "Error: can not copy file"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
-  messageLog.add(mess.toRunes)
-
-proc writeFileOpenError*(cmdWin: var Window,
-                         fileName: string,
-                         messageLog: var seq[seq[Rune]]) =
-                         
-  let mess = "Error: can not open: " & fileName
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
-  messageLog.add(mess.toRunes)
-
-proc writeCreateDirError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
-  let mess = "Error: : can not create direcotry"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
-  messageLog.add(mess.toRunes)
-
-proc writeMessageDeletedFile*(cmdWin: var Window,
-                              filename: string,
-                              messageLog: var seq[seq[Rune]]) =
-                              
-  let mess = "Deleted: " & filename
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
-  messageLog.add(mess.toRunes)
-
-proc writeNoFileNameError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
-  let mess = "Error: No file name"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
-  messageLog.add(mess.toRunes)
-
-proc writeMessageYankedLine*(cmdWin: var Window,
-                             numOfLine: int,
-                             messageLog: var seq[seq[Rune]]) =
-                             
-  let mess = fmt"{numOfLine} line yanked"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
-  messageLog.add(mess.toRunes)
-
-proc writeMessageYankedCharactor*(cmdWin: var Window,
-                                  numOfChar: int,
-                                  messageLog: var seq[seq[Rune]]) =
-                                  
-  let mess = fmt"{numOfChar} charactor yanked"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
-  messageLog.add(mess.toRunes)
-
-proc writeMessageAutoSave*(cmdWin: var Window,
-                           filename: seq[Rune],
-                           messageLog: var seq[seq[Rune]]) =
-                           
-  let mess = fmt"Auto saved {filename}"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
-  messageLog.add(mess.toRunes)
-
-proc writeMessageBuildOnSave*(cmdWin: var Window,
-                              messageLog: var seq[seq[Rune]]) =
-                              
-  const mess = "Build on save..."
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
-  messageLog.add(mess.toRunes)
-
-proc writeMessageSuccessBuildOnSave*(cmdWin: var Window,
-                                     messageLog: var seq[seq[Rune]]) =
-                                     
-  const mess = "Success save and build"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
-  messageLog.add(mess.toRunes)
-
-proc writeMessageFailedBuildOnSave*(cmdWin: var Window,
-                                    messageLog: var seq[seq[Rune]]) =
-                                    
-  const mess = "Build failed"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
-  messageLog.add(mess.toRunes)
-
-proc writeNotEditorCommandError*(cmdWin: var Window,
-                                 command: seq[seq[Rune]],
-                                 messageLog: var seq[seq[Rune]]) =
-                                 
-  var cmd = ""
-  for i in 0 ..< command.len: cmd = cmd & $command[i] & " "
-  let mess = fmt"Error: Not an editor command: {cmd}"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
-  messageLog.add(mess.toRunes)
-
-proc writeMessageSaveFile*(cmdWin: var Window,
-                           filename: seq[Rune],
-                           messageLog: var seq[seq[Rune]]) =
-                           
-  let mess = fmt"Saved {filename}"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
-  messageLog.add(mess.toRunes)
-
-proc writeNoBufferDeletedError*(cmdWin: var Window,
-                                messageLog: var seq[seq[Rune]]) =
-
-  let mess = "Error: No buffers were deleted"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
-  messageLog.add(mess.toRunes)
-
-proc writePutConfigFileError*(cmdWin: var Window,
-                              messageLog: var seq[seq[Rune]]) =
-
-  const mess = "Error: Failed to put configuration file"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
-  messageLog.add(mess.toRunes)
-
-proc writePutConfigFileAlreadyExistError*(cmdWin: var Window,
-                                          messageLog: var seq[seq[Rune]]) =
-
-  const mess = "Error: Already exist configuration file"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
 
 proc askCreateDirPrompt*(cmdWin: var Window,
                          messageLog: var seq[seq[Rune]],
@@ -326,6 +188,7 @@ proc insertCommandBuffer(exStatus: var ExModeViewStatus, runes: seq[Rune]) =
   for r in runes:
     exStatus.insertCommandBuffer(r)
 
+import editorstatus
 proc getKeyword*(status: var EditorStatus,
                  prompt: string,
                  isSearch: bool): (seq[Rune], bool) =
@@ -461,7 +324,7 @@ proc suggestExCommandOption(status: var Editorstatus,
   var argList: seq[string] = @[]
   let command = (splitWhitespace(exStatus.buffer))[0]
 
-  case $command:
+  case toLowerAscii($command):
     of "cursorLine",
        "highlightparen",
        "indent",
@@ -479,7 +342,7 @@ proc suggestExCommandOption(status: var Editorstatus,
        "buildonsave",
        "indentationlines",
        "icon",
-       "showGitInactive":
+       "showgitinactive":
       argList = @["on", "off"]
     of "theme":
       argList= @["vivid", "dark", "light", "config"]
@@ -539,9 +402,10 @@ proc suggestExCommand(status: var Editorstatus,
                       key: var Rune) =
                       
   var suggestlist: seq[seq[Rune]] = @[exStatus.buffer]
-  for runes in exCommandList:
-    if runes.len >= exStatus.buffer.len and
-       exStatus.buffer.startsWith(runes): suggestlist.add(runes)
+  let buffer = toLowerAscii($exStatus.buffer)
+  for str in exCommandList:
+    if str.len >= buffer.len and
+       str.startsWith(buffer): suggestlist.add(str.toRunes)
 
   var
     suggestIndex = 0

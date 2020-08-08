@@ -283,32 +283,70 @@ proc isParen*(r: Rune): bool =
   if r.isOpenParen or r.isCloseParen: return true
   else: return false
 
-proc find*(runes: seq[Rune], r: Rune, start: Natural = 0, last = 0): int =
-  find($runes, ($r)[0], start, last)
+proc find*(runes, sub: seq[Rune], start: Natural = 0, last = 0): int =
+  ## If `last` is unspecified, it defaults to `runes.high`(the last element).
+  ## If `sub` is no in `runes`, -1 is returned. Otherwise the index is returned.
 
-proc find*(runes, runes2: seq[Rune], start: Natural = 0, last = 0): int =
-  find($runes, $runes2, start, last)
+  let last = if last == 0: runes.high else: last
+
+  var startAsUtf8, lastAsUtf8: Natural
+  for i, r in runes:
+    let s = $r
+    if i < start: startAsUtf8 += s.len
+    if i <= last: lastAsUtf8 += s.len
+    else: break
+
+  let
+    str = $runes
+    i = find(str, $sub, startAsUtf8, lastAsUtf8)
+
+  if i == -1: return -1
+  else: return runeLen(str[0..<i])
 
 proc rfind*(runes: seq[Rune], r: Rune, start: Natural = 0, last = -1): int =
-  rfind($runes, ($r)[0], start, last)
-  
+  ## If `last` is unspecified, it defaults to `runes.high`(the last element).
+  ## If `r` is no in `runes`, -1 is returned. Otherwise the index is returned.
 
-proc rfind*(runes, runes2: seq[Rune], start: Natural = 0, last = -1): int =
-  rfind($runes, $runes2, start, last)
+  let last = if last == -1: runes.high else: last
+
+  for i in countdown(last, start):
+    if runes[i] == r: return i
+
+  return -1
+
+proc rfind*(runes, sub: seq[Rune], start: Natural = 0, last = -1): int =
+  ## If `last` is unspecified, it defaults to `runes.high`(the last element).
+  ## If `sub` is no in `runes`, -1 is returned. Otherwise the index is returned.
+
+  if sub.len == 0: return -1
+
+  let last = if last == -1: runes.high else: last
+
+  for i in countdown(last - sub.len + 1, start):
+    result = i
+    for j in 0 ..< sub.len:
+      if runes[i+j] != sub[j]:
+        result = -1
+        break
+    if result != -1: return
+  return -1
 
 proc substr*(runes: seq[Rune], first, last: int): seq[Rune] =
-  let str = substr($runes, first, last)
-  return str.toRunes
+  runes[first .. last]
 
 proc substr*(runes: seq[Rune], first = 0): seq[Rune] =
-  result = substr(runes, first, high(runes))
+  substr(runes, first, runes.high)
 
-proc contains*(runes, runes2: seq[Rune]): bool =
-  find(runes, runes2) >= 0
+proc contains*(runes, sub: seq[Rune]): bool =
+  find(runes, sub) >= 0
 
 proc contains*(runes: seq[Rune], r: Rune): bool =
   find(runes, r) >= 0
 
 proc splitWhitespace*(runes: seq[Rune]): seq[seq[Rune]] =
-  let strings = strutils.splitWhitespace($runes)
-  for str in strings: result.add(str.toRunes)
+  for s in unicode.split($runes):
+    result.add(s.toRunes)
+
+from os import `/`
+proc `/`*(runes1, runes2: seq[Rune]): seq[Rune] =
+  toRunes($runes1 / $runes2)

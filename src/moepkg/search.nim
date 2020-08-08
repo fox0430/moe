@@ -113,7 +113,7 @@ proc searchFirstOccurrence(status: var EditorStatus) =
       status.bufStatus[status.bufferIndexInCurrentWindow].isSearchHighlight = true
       status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
-proc realtimeSearch(status: var Editorstatus, direction: Direction) =
+proc incrementalSearch(status: var Editorstatus, direction: Direction) =
   let prompt = if direction == Direction.forward: "/" else: "?"
   var
     keyword = ru""
@@ -164,9 +164,9 @@ proc realtimeSearch(status: var Editorstatus, direction: Direction) =
     status.commandWindow.erase
 
 proc searchFordwards*(status: var EditorStatus) =
-  if status.settings.realtimeSearch: status.realtimeSearch(Direction.forward)
+  if status.settings.incrementalSearch: status.incrementalSearch(Direction.forward)
   else: searchFirstOccurrence(status)
 
 proc searchBackwards*(status: var EditorStatus) =
-  if status.settings.realtimeSearch: status.realtimeSearch(Direction.backward)
+  if status.settings.incrementalSearch: status.incrementalSearch(Direction.backward)
   else: searchFirstOccurrence(status)

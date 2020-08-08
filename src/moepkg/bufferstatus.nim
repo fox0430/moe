@@ -1,4 +1,4 @@
-import packages/docutils/highlite, tables, times
+import highlite, tables, times
 import gapbuffer, unicodeext
 
 type Mode* = enum
@@ -11,7 +11,9 @@ type Mode* = enum
   filer,
   bufManager,
   logViewer,
-  help
+  help,
+  recentFile,
+  quickRun
 
 type SelectArea* = object
   startLine*: int
@@ -24,7 +26,7 @@ type BufferStatus* = object
   language*: SourceLanguage
   selectArea*: SelectArea
   isSearchHighlight*: bool
-  filename*: seq[Rune]
+  path*: seq[Rune]
   openDir: seq[Rune]
   positionRecord*: Table[int, tuple[line, column, expandedColumn: int]]
   countChange*: int

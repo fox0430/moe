@@ -30,9 +30,12 @@ suite "Ex mode: Write command":
     status.addNewBuffer("")
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
-    status.bufStatus[0].filename = ru"test.txt"
+    status.bufStatus[0].path = ru"test.txt"
     const command = @[ru"w"]
     status.exModeCommand(command)
+
+    if existsFile("test.txt"):
+      removeFile("test.txt")
 
 suite "Ex mode: Change next buffer command":
  test "Change next buffer command":
@@ -244,19 +247,19 @@ suite "Ex mode: Live reload of configuration file setting command":
       status.exModeCommand(command)
     check(status.settings.liveReloadOfConf == false)
 
-suite "Ex mode: Real time search setting command":
-  test "Real time search setting command":
+suite "Ex mode: Incremental search setting command":
+  test "Incremental search setting command":
     var status = initEditorStatus()
     status.addNewBuffer("")
 
     block:
-      const command = @[ru"realtimesearch", ru"off"]
+      const command = @[ru"incrementalSearch", ru"off"]
       status.exModeCommand(command)
-    check(status.settings.realtimeSearch == false)
+    check not status.settings.incrementalSearch
     block:
-      const command = @[ru"realtimesearch", ru"on"]
+      const command = @[ru"incrementalSearch", ru"on"]
       status.exModeCommand(command)
-    check(status.settings.realtimeSearch == true)
+    check status.settings.incrementalSearch
 
 suite "Ex mode: Change theme command":
   test "Change theme command":
@@ -547,6 +550,22 @@ suite "Ex mode: Open in horizontal split window":
     check(status.workSpace[0].numOfMainWindow == 2)
     check(status.bufStatus.len == 2)
 
+  test "Open in horizontal split window 2":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+
+    status.resize(100, 100)
+    status.update
+
+    const command = @[ru"sp"]
+    status.exModeCommand(command)
+
+    status.resize(100, 100)
+    status.update
+
+    check(status.workSpace[0].numOfMainWindow == 2)
+    check(status.bufStatus.len == 2)
+
 suite "Ex mode: Open in vertical split window":
   test "Open in vertical split window":
     var status = initEditorStatus()
@@ -577,8 +596,8 @@ suite "Ex mode: Create new empty buffer":
 
     check status.bufStatus.len == 2
 
-    check status.bufStatus[0].filename == ru"a"
-    check status.bufStatus[1].filename == ru""
+    check status.bufStatus[0].path == ru"a"
+    check status.bufStatus[1].path == ru""
 
   test "Create new empty buffer 2":
     var status = initEditorStatus()
@@ -611,8 +630,8 @@ suite "Ex mode: New empty buffer in split window horizontally":
 
     check status.bufferIndexInCurrentWindow == 1
 
-    check status.bufStatus[0].filename == ru"a"
-    check status.bufStatus[1].filename == ru""
+    check status.bufStatus[0].path == ru"a"
+    check status.bufStatus[1].path == ru""
 
     check status.workspace[0].numOfMainWindow == 2
 
@@ -631,8 +650,8 @@ suite "Ex mode: New empty buffer in split window vertically":
 
     check status.bufferIndexInCurrentWindow == 1
 
-    check status.bufStatus[0].filename == ru"a"
-    check status.bufStatus[1].filename == ru""
+    check status.bufStatus[0].path == ru"a"
+    check status.bufStatus[1].path == ru""
 
     check status.workspace[0].numOfMainWindow == 2
 
@@ -679,3 +698,19 @@ suite "Ex mode: Show/Hide git branch name in status bar when inactive window":
       const command = @[ru"showGitInactive", ru"on"]
       status.exModeCommand(command)
       check status.settings.statusBar.showGitInactive
+
+suite "Ex mode: Quick run command":
+  test "Quick run command":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+
+    const command = @[ru"run"]
+    status.exModeCommand(command)
+
+suite "Ex mode: Workspace list command":
+  test "Workspace list command":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+
+    const command = @[ru"lsw"]
+    status.exModeCommand(command)

@@ -5,7 +5,7 @@
 
 A command line based editor inspired by vi/vim written in Nim.
  
-This project's goal is a very customizable, high productivity, high performance and funny animation editor.
+This project's goal is a very customizable, high productivity, user friendly, high performance and funny animation editor.
 
 
 ![moe](https://user-images.githubusercontent.com/15966436/86624198-df2b2800-bffd-11ea-9a37-c3caea2a3ccc.png)
@@ -24,9 +24,9 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Infinite undo/redo
 
-- Syntax highlighting (Nim, C, C++, C#, Java, Yaml)
+- Syntax highlighting (Nim, C, C++, C#, Java, Yaml, JavaScript, Python)
 
-- Configuration file
+- Configuration file (TOML)
 
 - Live reload of configuration file
 
@@ -44,7 +44,7 @@ This project's goal is a very customizable, high productivity, high performance 
 
 - Simple auto indent
 
-- Real time search
+- Incremental search
 
 - Auto save
 
@@ -59,6 +59,12 @@ This project's goal is a very customizable, high productivity, high performance 
 - Work space
 
 - Multiple status bar
+
+- QuickRun
+
+- Automatic backups
+
+- Highlighting current words
 
 ## Planned features
 
@@ -100,11 +106,20 @@ This project's goal is a very customizable, high productivity, high performance 
 
 ## Install
 
-```sh
-nimble install moe
-```
-Check [detail](https://github.com/fox0430/moe/blob/develop/documents/overview.md)
+### Requires
 
+- Nim 1.2.2 or higher
+
+- ncurses (ncursesw)
+
+```sh
+# Latest released version
+nimble install moe
+# Latest developmental state inside Github repository
+nimble install moe@#head
+```
+
+Check [detail](https://github.com/fox0430/moe/blob/develop/documents/overview.md)
 ## Usage
 [Documents](https://github.com/fox0430/moe/blob/develop/documents/index.md)
 

@@ -40,7 +40,7 @@ syntax
 ```
 
 Enable/Disable indentation lines (bool)  
-default is false
+default is true
 ```
 indentationLines
 ```
@@ -61,6 +61,12 @@ Automatic indentation (bool)
 default is true
 ```
 autoIndent
+```
+
+Disable change of the cursor shape (bool)  
+default is false
+```
+disableChangeCursor
 ```
 
 Set cursor shape of the terminal emulator you are using (String) ```"blinkBlock"``` or ```"blinkIbeam"``` or ```noneBlinkBlock``` or ```noneBlinkIbeam```  
@@ -100,10 +106,10 @@ default is false
 liveReloadOfConf
 ```
 
-Realtime search (bool)  
+Incremental search (bool)  
 default is true
 ```
-realtimeSearch
+incrementalSearch
 ```
 
 Pop-up window in ex mode (bool)  
@@ -226,10 +232,16 @@ default is true
 gitbranchName
 ```
 
-Show/Hide git branch name in status bar in inactive window (bool)  
+Show/Hide git branch name in status bar when window is inactive (bool)  
 default is false
 ```
 showGitInactive
+```
+
+Show/Hide mode string in status bar when window is inactive (bool)  
+default is false
+```
+showModeInactive
 ```
 
 ### BuildOnSave table
@@ -255,7 +267,7 @@ command
 Enable/Disable workspace bar (bool)  
 default is false
 ```
-useBar
+workSpaceLine
 ```
 
 ### Highlight table
@@ -269,6 +281,213 @@ defaut
 
 ```
 reservedWord
+```
+
+### AutoBackup table
+
+Enable/Disable automatic backups (bool)  
+default is ture  
+```
+enable
+```
+
+Start backup when there is no operation for the set number of seconds (int)  
+default is 10 (10 second)  
+```
+idolTime
+```
+
+Backup interval (int)  
+default is 5 (5 minute)    
+```
+interval
+```
+
+Directory to save backup files (string)  
+
+If not set, it will be saved in .hisotry in the same directory as the original file.  
+
+default is "" (None)  
+```
+backupDir
+```
+
+### QuickRun table
+
+Save buffer when run QuickRun (bool)  
+default is true
+```
+saveBufferWhenQuickRun
+```
+
+Setting commands to be executed by quick run (string)  
+default is "" (None)
+```
+command
+```
+
+Command timeout (int)  
+default is 30 (30 second)
+```
+timeout
+```
+
+Nim compiler advanced command setting (string)  
+default is "c"
+```
+nimAdvancedCommand
+```
+
+gcc compileer option setting (string)  
+default is "" (None)
+```
+ClangOptions
+```
+
+g++ compiler option setting (string)  
+default is "" (None)
+```
+CppOptions
+```
+
+Nim compiler option setting (string)  
+default is "" (None)
+```
+NimOptions
+```
+
+sh option setting (string)  
+default is "" (None)
+```
+shOptions
+```
+
+bash option setting (string)  
+default is "" (None)
+```
+bashOptions
+```
+
+### Notification table
+
+Enable/disable all messages/notifications in status bar (bool)  
+default is true
+```
+screenNotifications
+```
+
+Enable/disable all messages/notifications in log (bool)  
+default is true
+```
+logNotifications
+```
+
+Enable/disable auto backups messages/notifications in status bar (bool)  
+default is true
+```
+autoBackupScreenNotify
+```
+
+Enable/disable auto backups messages/notifications in log (bool)  
+default is true
+```
+autoBackupLogNotify
+```
+
+Enable/disable auto save messages/notifications in status bar (bool)  
+default is true
+```
+autoSaveScreenNotify
+```
+
+Enable/disable auto save messages/notifications in log (bool)  
+default is true
+```
+autoSaveLogNotify
+```
+
+Enable/disable yank messages/notifications in status bar (bool)  
+default is true
+```
+yankScreenNotify
+```
+
+Enable/disable yank messages/notifications in log (bool)  
+default is true
+```
+yankLogNotify
+```
+
+Enable/disable delete buffer messages/notifications in status bar (bool)  
+default is true
+```
+deleteScreenNotify
+```
+
+Enable/disable delete buffer messages/notifications in log (bool)  
+default is true
+```
+deleteLogNotify
+```
+
+Enable/disable save messages/notifications in status bar (bool)  
+default is true
+```
+saveScreenNotify
+```
+
+Enable/disable save messages/notifications in log (bool)  
+default is true
+```
+saveLogNotify
+```
+
+Enable/disable workspace (create, delete, etc...) messages/notifications in status bar (bool)  
+default is true
+```
+workspaceScreenNotify
+```
+
+Enable/disable workspace (create, delete, etc...) messages/notifications in status bar (bool)  
+default is true
+```
+workspaceLogNotify
+```
+
+Enable/disable QuickRun messages/notifications in status bar (bool)  
+default is true
+```
+quickRunScreenNotify
+```
+
+Enable/disable QuickRun messages/notifications in log (bool)  
+default is true
+```
+quickRunLogNotify
+```
+
+Enable/disable build on save messages/notifications in status bar (bool)  
+default is true
+```
+buildOnSaveScreenNotify
+```
+
+Enable/disable build on save messages/notifications in log (bool)  
+default is true
+```
+buildOnSaveLogNotify
+```
+
+Enable/disable filer messages/notifications in status bar (bool)  
+default is true
+```
+filerScreenNotify
+```
+
+Enable/disable filer messages/notifications in log (bool)  
+default is true
+```
+filerLogNotify
 ```
 
 ### Filer table
@@ -852,6 +1071,11 @@ gtLongCommentColor
 Syntax highlighting color
 ```
 gtWhitespaceColor
+```
+
+Syntax highlighting color
+```
+gtPreprocessor
 ```
 
 Character color of current file name in filer mode

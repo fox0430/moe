@@ -1,6 +1,6 @@
-import os, terminal, strutils, unicodeext, times, algorithm
+import os, terminal, strutils, unicodeext, times, algorithm, sequtils
 import editorstatus, ui, fileutils, editorview, gapbuffer, highlight,
-       commandview, highlight, window, color, bufferstatus, settings
+       commandview, highlight, window, color, bufferstatus, settings, messages
 
 type PathInfo = tuple[kind: PathComponent,
                       path: string,
@@ -25,10 +25,6 @@ type FilerStatus = object
   dirlistUpdate: bool
   dirList: seq[PathInfo]
   sortBy: Sort
-
-proc tryExpandSymlink(symlinkPath: string): string =
-  try: return expandSymlink(symlinkPath)
-  except OSError: return ""
 
 proc searchFiles(status: var EditorStatus, dirList: seq[PathInfo]): seq[PathInfo] =
   setCursor(true)
@@ -59,6 +55,7 @@ proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
         removeDir(filerStatus.dirList[windowNode.currentLine].path)
         status.commandWindow.writeMessageDeletedFile(
           filerStatus.dirList[windowNode.currentLine].path,
+          status.settings.notificationSettings,
           status.messageLog)
       except OSError:
         status.commandWindow.writeRemoveDirError(status.messageLog)
@@ -66,6 +63,7 @@ proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
       if tryRemoveFile(filerStatus.dirList[windowNode.currentLine].path):
         status.commandWindow.writeMessageDeletedFile(
           filerStatus.dirList[windowNode.currentLine].path,
+          status.settings.notificationSettings,
           status.messageLog)
       else:
         status.commandWindow.writeRemoveFileError(status.messageLog)
@@ -79,39 +77,64 @@ proc sortDirList(dirList: seq[PathInfo], sortBy: Sort): seq[PathInfo] =
   of time:
     result.add dirList.sortedByIt(it.lastWriteTime)
 
+when defined(posix):
+  from posix import nil
+  from posix_utils import nil
+
+  proc isFifo(file: string): bool = posix.S_ISFIFO(posix_utils.stat(file).st_mode)
+else:
+  proc isFifo(file: string): bool = false
+
 proc refreshDirList(sortBy: Sort): seq[PathInfo] =
-  var dirList  : seq[PathInfo]
-  var fileList : seq[PathInfo]
-  var item     : PathInfo
-  for list in walkDir("./"):
-    if list.kind == pcLinkToFile or list.kind == pcLinkToDir:
-      if tryExpandSymlink(list.path) != "":
-        item = (list.kind,
-                list.path,
-                0.int64,
-                getLastModificationTime(getCurrentDir()))
+  var
+    dirList  : seq[PathInfo]
+    fileList : seq[PathInfo]
+
+  for list in walkDir($CurDir):
+    proc getLastModificationTimeOrDefault(file: string): times.Time =
+      try: getLastModificationTime(file)
+      except OSError: initTime(0,0)
+
+    proc getFileSizeOrDefault(file: string): int64 =
+      try:
+        # `getFileSize` opens files internally. So if `file` is a named pipe, we don't call `getFileSize` to avoid opening named pipes.
+        if isFifo(file): return 0.int64
+
+        getFileSize(file)
+      except IOError, OSError: 0.int64
+
+    var item: PathInfo
+
+    case list.kind
+    of pcLinkToFile, pcLinkToDir:
+      item = (list.kind,
+              list.path,
+              0.int64,
+              getLastModificationTimeOrDefault(list.path))
+    of pcFile:
+      item = (list.kind,
+              list.path,
+              getFileSizeOrDefault(list.path),
+              getLastModificationTimeOrDefault(list.path))
     else:
-      if list.kind == pcFile:
-        try:
-          item = (list.kind,
-                  list.path,
-                  getFileSize(list.path),
-                  getLastModificationTime(list.path))
-        except OSError, IOError: discard
-      else:
-        item = (list.kind,
-                list.path,
-                0.int64,
-                getLastModificationTime(list.path))
-    item.path = $(item.path.toRunes.normalizePath)
+      item = (list.kind,
+              list.path,
+              0.int64,
+              getLastModificationTimeOrDefault(list.path))
+
+    if item.path.len > 0:
+      item.path = $(item.path.toRunes.normalizePath)
+
     if list.kind in {pcLinkToDir, pcDir}:
       dirList.add item
     else:
       fileList.add item
-  return @[(pcDir,
-            "../",
-            0.int64,
-            getLastModificationTime(getCurrentDir()))] &
+
+  return @[(
+    pcDir,
+    ParDir,
+    0.int64,
+    getLastModificationTime(getCurrentDir()))] &
     sortDirList(dirList, sortBy) & sortDirList(fileList, sortBy)
 
 proc initFileRegister(): FileRegister =
@@ -312,27 +335,33 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus,
   bufStatus.buffer = initGapBuffer[seq[Rune]]()
 
   for index, dir in filerStatus.dirList:
+    proc expandSymLinkOrFilename(filename: string): string =
+      try: expandSymLink(filename)
+      except OSError: filename
+
     let
       filename = dir.path
       kind = dir.kind
-    bufStatus.buffer.add(filename.toRunes)
 
-    let oldLine =  bufStatus.buffer[index]
-    var newLine =  bufStatus.buffer[index]
-    if kind == pcDir and 0 < index:
-      newLine.add(ru"/")
-    elif kind == pcLinkToFile:
-      newLine.add(ru"@ -> " & expandsymLink(filename).toRunes)
-    elif kind == pcLinkToDir:
-      newLine.add(ru"@ -> " & expandsymLink(filename).toRunes & ru"/")
+    var newLine =  filename.toRunes
+    case kind
+    of pcFile:
+      try:
+        if isFifo(filename): newLine.add(ru '|')
+      except OSError:
+        discard
+    of pcDir:
+      newLine.add(ru DirSep)
+    of pcLinkToFile:
+      newLine.add(ru"@ -> " & expandSymLinkOrFilename(filename).toRunes)
+    of pcLinkToDir:
+      newLine.add(ru"@ -> " & toRunes(expandSymLinkOrFilename(filename) / $DirSep))
 
     # Set icons
-    if settings.filerSettings.showIcons: newLine = pathToIcon(filename)
-    else: newLine = ru""
+    if settings.filerSettings.showIcons: newLine.insert(pathToIcon(filename), 0)
 
-    newLine.add oldLine
-    bufStatus.buffer[index] = newLine
-  
+    bufStatus.buffer.add(newLine)
+
   let useStatusBar = if settings.statusBar.useBar: 1 else: 0
   let numOfFile = filerStatus.dirList.len
   windowNode.highlight = initFilelistHighlight(filerStatus.dirList, bufStatus.buffer, windowNode.currentLine)
@@ -462,7 +491,14 @@ proc filerMode*(status: var EditorStatus) =
     if filerStatus.viewUpdate: updateFilerView(status, filerStatus)
 
     setCursor(false)
-    let key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+
+    var key: Rune = ru'\0'
+    while key == ru'\0':
+      status.eventLoopTask
+      key = getKey(
+        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+
+    status.lastOperatingTime = now()
 
     status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
     status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(windowNode)

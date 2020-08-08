@@ -1,6 +1,9 @@
 src/nimcache
 src/moe
 tests/*
-!tests/*.nim
+!tests/*.*
 moe
 test.txt
+.history
+src/.history
+src/moepkg/.history

@@ -89,6 +89,8 @@ Check command bar
 ```/keyword``` - Search forward  
 ```?keyword``` - Search backward  
 
+```\-r``` - Quick run  
+
 ## Visual (block) mode
 
 ```d ```or ```x``` - Delete(cut) text  
@@ -106,6 +108,8 @@ Check command bar
 
 ```~``` - Toggle case of the character under the cursor  
 
+```I``` - Insert character multiple lines  
+
 
 ```Esc``` - Start normal mode  
 
@@ -113,7 +117,7 @@ Check command bar
 ## Replace mode
 
 ```Esc``` - Start normal mode  
-
+```Backspace``` - undo
 
 ## Insert mode
 
@@ -168,11 +172,12 @@ Check command bar
 ```cws``` - Create new work space  
 ```ws number``` - Change current work space : Example ```ws 2```  
 ```dws``` - Delete current work space  
+```lsw``` - Show workspace list in status bar  
 
 ```livereload on``` or ```livereload on``` - Change setting of live reload of configuration file  
 ```theme themeName``` - Change color theme : Example ```theme dark```  
 ```tab on``` or ```tab off``` - Change setting to tab line  
-```synatx on``` or ```syntax off``` - Change setting to syntax highlighting  
+```syntax on``` or ```syntax off``` - Change setting to syntax highlighting  
 ```tabstop number``` - Change setting to tabStop : Exmaple ```tabstop 2```  
 ```paren on``` or ```paren off``` - Change setting to auto close paren  
 ```indent on``` or ```indent off``` - Chnage sestting to auto indent  
@@ -197,3 +202,7 @@ Check command bar
 ```help``` - Open help
 
 ```putConfigFile``` - Put a sample configuration file in ~/.config/moe
+
+```run``` or ```Q``` - Quick run
+
+```recent``` - Open recent file selection mode (Only supported on Linux)  

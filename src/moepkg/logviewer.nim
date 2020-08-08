@@ -1,9 +1,9 @@
-import terminal
+import terminal, times
 import ui, editorstatus, unicodeext, movement, bufferstatus
 
 proc initMessageLog*(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.bufStatus[currentBufferIndex].filename = ru"Log viewer"
+  status.bufStatus[currentBufferIndex].path = ru"Log viewer"
 
 proc exitLogViewer*(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -18,7 +18,9 @@ proc isLogViewerMode(status: Editorstatus): bool =
 
 proc messageLogViewer*(status: var Editorstatus) =
   status.initMessageLog
+
   status.resize(terminalHeight(), terminalWidth())
+  status.update
 
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -35,7 +37,13 @@ proc messageLogViewer*(status: var Editorstatus) =
     var windowNode =
       status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
 
-    let key = getKey(windowNode.window)
+    var key: Rune = ru'\0'
+    while key == ru'\0':
+      status.eventLoopTask
+      key = getKey(
+        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+
+    status.lastOperatingTime = now()
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())

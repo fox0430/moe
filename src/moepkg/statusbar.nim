@@ -1,4 +1,4 @@
-import ui, strutils, strformat, packages/docutils/highlite, os, osproc
+import ui, strutils, strformat, highlite, os, osproc
 import bufferstatus, color, unicodeext, settings, window, gapbuffer
 
 type StatusBar* = object
@@ -23,16 +23,34 @@ proc writeStatusBarNormalModeInfo(bufStatus: var BufferStatus,
                                   isActiveWindow: bool,
                                   settings: EditorSettings) =
 
+  proc setStatusBarColor(mode: Mode): EditorColorPair =
+    case mode:
+      of Mode.insert:
+        if isActiveWindow: return EditorColorPair.statusBarInsertMode
+        else: return EditorColorPair.statusBarInsertModeInactive
+      of Mode.visual:
+        if isActiveWindow: return EditorColorPair.statusBarVisualMode
+        else: return EditorColorPair.statusBarVisualModeInactive
+      of Mode.replace:
+        if isActiveWindow: return EditorColorPair.statusBarReplaceMode
+        else: return EditorColorPair.statusBarReplaceModeInactive
+      of Mode.ex:
+        if isActiveWindow: return EditorColorPair.statusBarExMode
+        else: return EditorColorPair.statusBarExModeInactive
+      else:
+        if isActiveWindow: return EditorColorPair.statusBarNormalMode
+        else: return EditorColorPair.statusBarNormalModeInactive
+
   let
-    color = if isActiveWindow: EditorColorPair.statusBarNormalMode
-            else: EditorColorPair.statusBarNormalModeInactive
+    mode = bufStatus.mode
+    color = setStatusBarColor(mode)
     statusBarWidth = statusBar.window.width
 
   statusBarBuffer.add(ru" ")
   statusBar.window.append(ru" ", color)
 
   if settings.statusBar.filename:
-    var filename = if bufStatus.filename.len > 0: bufStatus.filename
+    var filename = if bufStatus.path.len > 0: bufStatus.path
                    else: ru"No name"
     let homeDir = ru(getHomeDir())
     if (filename.len() >= homeDir.len() and
@@ -99,7 +117,7 @@ proc writeStatusBarBufferManagerModeInfo(bufStatus: var BufferStatus,
                                         color)
   statusBar.window.write(0, statusBarWidth - info.len - 1, info, color)
 
-proc writeStatusLogViewerModeInfo(bufStatus: var BufferStatus,
+proc writeStatusBarLogViewerModeInfo(bufStatus: var BufferStatus,
                                   statusBar: var StatusBar,
                                   statusBarBuffer: var seq[Rune],
                                   windowNode: WindowNode,
@@ -127,23 +145,26 @@ proc writeStatusBarCurrentGitBranchName(statusBar: var StatusBar,
   let
     branchName = cmdResult.output
     ## Add symbol and delete newline
-    buffer = ru"  " & branchName[0 .. branchName.high - 1].toRunes
-    color = if isActiveWindow: EditorColorPair.statusBarNormalMode
-            else: EditorColorPair.statusBarNormalModeInactive
+    buffer = ru"  " & branchName[0 .. branchName.high - 1].toRunes & ru" "
+    color = EditorColorPair.statusBarGitBranch
 
   statusBarBuffer.add(buffer)
   statusBar.window.append(buffer, color)
 
-proc setModeStr(mode: Mode): string =
-  case mode:
-  of Mode.insert: result = " INSERT "
-  of Mode.visual, Mode.visualBlock: result = " VISUAL "
-  of Mode.replace: result = " REPLACE "
-  of Mode.filer: result = " FILER "
-  of Mode.bufManager: result = " BUFFER "
-  of Mode.ex: result = " EX "
-  of Mode.logViewer: result = " LOG "
-  else: result = " NORMAL "
+proc setModeStr(mode: Mode, isActiveWindow, showModeInactive: bool): string =
+  if not isActiveWindow and not showModeInactive: result = ""
+  else:
+    case mode:
+    of Mode.insert: result = " INSERT "
+    of Mode.visual, Mode.visualBlock: result = " VISUAL "
+    of Mode.replace: result = " REPLACE "
+    of Mode.filer: result = " FILER "
+    of Mode.bufManager: result = " BUFFER "
+    of Mode.ex: result = " EX "
+    of Mode.logViewer: result = " LOG "
+    of Mode.recentFile: result = " RECENT "
+    of Mode.quickRun: result = " QUICKRUN "
+    else: result = " NORMAL "
 
 proc setModeStrColor(mode: Mode): EditorColorPair =
   case mode
@@ -172,6 +193,10 @@ proc isShowGitBranchName(mode, prevMode: Mode,
   elif mode == Mode.ex and prevMode == Mode.bufManager: return false
   elif mode == Mode.help: return false
   elif mode == Mode.ex and prevMode == Mode.help: return false
+  elif mode == Mode.recentFile: return false
+  elif mode == Mode.ex and prevMode == Mode.recentFile: return false
+  elif mode == Mode.quickRun: return false
+  elif mode == Mode.ex and prevMode == Mode.quickRun: return false
 
 proc writeStatusBar*(bufStatus: var BufferStatus,
                      statusBar: var StatusBar,
@@ -185,7 +210,9 @@ proc writeStatusBar*(bufStatus: var BufferStatus,
     currentMode = bufStatus.mode
     prevMode = bufStatus.prevMode
     color = setModeStrColor(currentMode)
-    modeStr = setModeStr(currentMode)
+    modeStr = setModeStr(currentMode,
+                         isActiveWindow,
+                         settings.statusBar.showModeInactive)
 
   var statusBarBuffer = modeStr.toRunes
 
@@ -196,35 +223,12 @@ proc writeStatusBar*(bufStatus: var BufferStatus,
   if isShowGitBranchName(currentMode, prevMode, isActiveWindow, settings):
     statusBar.writeStatusBarCurrentGitBranchName(statusBarBuffer, isActiveWindow)
 
-  if currentMode == Mode.ex and prevMode == Mode.filer:
+  if currentMode == Mode.filer or
+     (currentMode == Mode.ex and prevMode == Mode.filer):
     bufStatus.writeStatusBarFilerModeInfo(statusBar,
                                           statusBarBuffer,
                                           windowNode,
                                           isActiveWindow,
-                                          settings)
-  elif currentMode == Mode.ex:
-    bufStatus.writeStatusBarNormalModeInfo(statusBar,
-                                           statusBarBuffer,
-                                           windowNode,
-                                           isActiveWindow,
-                                           settings)
-  elif currentMode == Mode.visual or currentMode == Mode.visualBlock:
-    bufStatus.writeStatusBarNormalModeInfo(statusBar,
-                                           statusBarBuffer,
-                                           windowNode,
-                                           isActiveWindow,
-                                           settings)
-  elif currentMode == Mode.replace:
-    bufStatus.writeStatusBarNormalModeInfo(statusBar,
-                                           statusBarBuffer,
-                                           windowNode,
-                                           isActiveWindow,
-                                           settings)
-  elif currentMode == Mode.filer:
-    bufStatus.writeStatusBarFilerModeInfo(statusBar,
-                                          statusBarBuffer,
-                                          windowNode,
-                                           isActiveWindow,
                                           settings)
   elif currentMode == Mode.bufManager:
     bufStatus.writeStatusBarBufferManagerModeInfo(statusBar,
@@ -233,7 +237,7 @@ proc writeStatusBar*(bufStatus: var BufferStatus,
                                                   isActiveWindow,
                                                   settings)
   elif currentMode == Mode.logViewer:
-    bufStatus.writeStatusLogViewerModeInfo(statusBar,
+    bufStatus.writeStatusBarLogViewerModeInfo(statusBar,
                                            statusBarBuffer,
                                            windowNode,
                                            isActiveWindow,

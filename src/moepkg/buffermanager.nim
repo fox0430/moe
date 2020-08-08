@@ -1,4 +1,4 @@
-import terminal, os, heapqueue
+import terminal, os, heapqueue, times
 import gapbuffer, ui, editorstatus, unicodeext, highlight, window, movement,
        color, bufferstatus
 
@@ -23,7 +23,7 @@ proc initFilelistHighlight[T](buffer: T,
 proc setBufferList(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
-  status.bufStatus[currentBufferIndex].filename = ru"Buffer manager"
+  status.bufStatus[currentBufferIndex].path = ru"Buffer manager"
   status.bufStatus[currentBufferIndex].buffer = initGapBuffer[seq[Rune]]()
 
   for i in 0 ..< status.bufStatus.len:
@@ -35,7 +35,7 @@ proc setBufferList(status: var Editorstatus) =
           if (currentMode == Mode.filer) or
             (prevMode == Mode.filer and
             currentMode == Mode.ex): getCurrentDir().toRunes
-          else: status.bufStatus[i].filename
+          else: status.bufStatus[i].path
           
       status.bufStatus[currentBufferIndex].buffer.add(line)
 
@@ -131,7 +131,13 @@ proc bufferManager*(status: var Editorstatus) =
     status.updateBufferManagerHighlight
     status.update
     setCursor(false)
-    let key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+
+    var key: Rune = ru'\0'
+    while key == ru'\0':
+      status.eventLoopTask
+      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+
+    status.lastOperatingTime = now()
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())

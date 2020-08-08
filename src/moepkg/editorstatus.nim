@@ -1,9 +1,9 @@
 import strutils, terminal, os, strformat, tables, times, osproc, heapqueue,
-       deques
-import packages/docutils/highlite
+       deques, times
+import highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        undoredostack, window, color, workspace, statusbar, settings,
-       bufferstatus, cursor, tabline
+       bufferstatus, cursor, tabline, backup, messages
 
 type Platform* = enum
   linux, wsl, mac, other
@@ -30,6 +30,8 @@ type EditorStatus* = object
   tabWindow*: Window
   popUpWindow*: Window
   workSpaceTabWindow*: Window
+  lastOperatingTime*: DateTime
+  autoBackupStatus*: AutoBackupStatus
 
 proc initPlatform(): Platform =
   if defined linux:
@@ -48,8 +50,10 @@ proc initEditorStatus*(): EditorStatus =
   result.currentDir = getCurrentDir().toRunes
   result.registers = initRegisters()
   result.settings = initEditorSettings()
+  result.lastOperatingTime = now()
+  result.autoBackupStatus = initAutoBackupStatus()
 
-  if result.settings.workSpace.useBar:
+  if result.settings.workSpace.workSpaceLine:
     const
       h = 1
       t = 0
@@ -117,7 +121,8 @@ proc changeCurrentWin*(status:var EditorStatus, index: int) =
     status.workSpace[workspaceIndex].currentMainWindowNode = node
 
 proc executeOnExit(settings: EditorSettings) =
-  changeCursorType(settings.defaultCursor)
+  if not settings.disableChangeCursor:
+    changeCursorType(settings.defaultCursor)
 
 proc exitEditor*(settings: EditorSettings) =
   executeOnExit(settings)
@@ -128,7 +133,7 @@ proc resizeMainWindowNode(status: var EditorStatus, height, width: int) =
   let
     useTab = if status.settings.tabLine.useTab: 1 else: 0
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-    useWorkSpaceBar = if status.settings.workSpace.useBar: 1 else: 0
+    useWorkSpaceBar = if status.settings.workSpace.workSpaceLine: 1 else: 0
     workspaceIndex = status.currentWorkSpaceIndex
 
   const x = 0
@@ -209,7 +214,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
                                                                 x)
 
   ## Resize work space info window
-  if status.settings.workSpace.useBar:
+  if status.settings.workSpace.workSpaceLine:
     const
       workSpaceBarHeight = 1
       x = 0
@@ -221,7 +226,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
     const
       tabLineHeight = 1
       x = 0
-    let y = if status.settings.workSpace.useBar: 1 else: 0
+    let y = if status.settings.workSpace.workSpaceLine: 1 else: 0
     status.tabWindow.resize(tabLineHeight, width, y, x)
 
   ## Resize command window
@@ -292,7 +297,7 @@ proc updateLogViewer(status: var Editorstatus, bufferIndex: int) =
 proc update*(status: var EditorStatus) =
   setCursor(false)
 
-  if status.settings.workSpace.useBar:
+  if status.settings.workSpace.workSpaceLine:
    status.workSpaceTabWindow.writeTabLineWorkSpace(status.workspace.len,
                                                    status.currentWorkSpaceIndex)
 
@@ -325,6 +330,7 @@ proc update*(status: var EditorStatus) =
         if bufStatus.buffer.high < node.currentLine:
           node.currentLine = bufStatus.buffer.high
         if currentMode != Mode.insert and
+           currentMode != Mode.replace and
            bufStatus.buffer[node.currentLine].len > 0 and
            bufStatus.buffer[node.currentLine].high < node.currentColumn:
           node.currentColumn = bufStatus.buffer[node.currentLine].high
@@ -430,16 +436,20 @@ proc horizontalSplitWindow*(status: var Editorstatus) =
 
   status.workSpace[workspaceIndex].statusBar.add(initStatusBar())
 
+proc deleteWorkSpace*(status: var Editorstatus, index: int)
 proc closeWindow*(status: var EditorStatus, node: WindowNode) =
   let workspaceIndex = status.currentWorkSpaceIndex
 
-  if status.workSpace[workspaceIndex].numOfMainWindow == 1:
+  if status.workSpace.len == 1 and
+     status.workSpace[workspaceIndex].numOfMainWindow == 1:
     exitEditor(status.settings)
 
   let deleteWindowIndex = node.windowIndex
   var parent = node.parent
 
-  if parent.child.len == 1:
+  if status.workspace[workspaceIndex].numOfMainWindow == 1:
+    status.deleteWorkSpace(workspaceIndex)
+  elif parent.child.len == 1:
     if status.settings.statusBar.multipleStatusBar:
       let statusBarHigh = status.workSpace[workspaceIndex].statusBar.high
       status.workSpace[workspaceIndex].statusBar.delete(statusBarHigh)
@@ -529,11 +539,8 @@ proc deletePopUpWindow*(status: var Editorstatus) =
     status.popUpWindow.deleteWindow
     status.update
 
-proc addNewBuffer*(status: var EditorStatus, filename: string)
-from commandview import writeFileOpenError
-
 proc addNewBuffer*(status: var EditorStatus, filename: string) =
-  status.bufStatus.add(BufferStatus(filename: filename.toRunes,
+  status.bufStatus.add(BufferStatus(path: filename.toRunes,
                        lastSaveTime: now()))
   let index = status.bufStatus.high
 
@@ -606,7 +613,9 @@ proc createWrokSpace*(status: var Editorstatus) =
     status.bufStatus.high
 
 proc deleteWorkSpace*(status: var Editorstatus, index: int) =
-  if 0 < index and index <= status.workSpace.len:
+  if 0 > index and index > status.workSpace.high:
+    status.commandwindow.writeNotExistWorkspaceError(index, status.messageLog)
+  else:
     status.workspace.delete(index)
 
     if status.workspace.len == 0: status.settings.exitEditor
@@ -617,6 +626,8 @@ proc deleteWorkSpace*(status: var Editorstatus, index: int) =
 proc changeCurrentWorkSpace*(status: var Editorstatus, index: int) =
   if 0 < index and index <= status.workSpace.len:
     status.currentWorkSpaceIndex = index - 1
+  else:
+    status.commandwindow.writeNotExistWorkspaceError(index, status.messageLog)
 
 proc tryRecordCurrentPosition*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   bufStatus.positionRecord[bufStatus.buffer.lastSuitId] = (windowNode.currentLine,
@@ -650,13 +661,16 @@ proc overwriteColorSegmentBlock[T](highlight: var Highlight,
   var
     startLine = area.startLine
     endLine = area.endLine
+    startColumn = area.startColumn
+    endColumn = area.endColumn
   if startLine > endLine: swap(startLine, endLine)
+  if startColumn > endColumn: swap(startColumn, endColumn)
 
   for i in startLine .. endLine:
     let colorSegment = ColorSegment(firstRow: i,
-                                    firstColumn: area.startColumn,
+                                    firstColumn: startColumn,
                                     lastRow: i,
-                                    lastColumn: min(area.endColumn, buffer[i].high),
+                                    lastColumn: min(endColumn, buffer[i].high),
                                     color: EditorColorPair.visualMode)
     highlight = highlight.overwrite(colorSegment)
 
@@ -853,6 +867,8 @@ proc highlightTrailingSpaces(status: var Editorstatus) =
     bufStatus = status.bufStatus[currentBufferIndex]
     buffer = bufStatus.buffer
     workspaceIndex = status.currentWorkSpaceIndex
+    windowNode = status.workspace[workspaceIndex].currentMainWindowNode
+    currentLine = windowNode.currentLine
 
     color = EditorColorPair.highlightTrailingSpaces
 
@@ -866,7 +882,7 @@ proc highlightTrailingSpaces(status: var Editorstatus) =
   var colorSegments: seq[ColorSegment] = @[]
   for i in startLine ..< endLine:
     let line = buffer[i]
-    if line.len > 0:
+    if line.len > 0 and i != currentLine:
       var countSpaces = 0
       for j in countdown(line.high, 0):
         if line[j] == ru' ': inc countSpaces
@@ -936,26 +952,71 @@ proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
 proc changeTheme*(status: var EditorStatus) =
   setCursesColor(ColorThemeTable[status.settings.editorColorTheme])
 
-from commandview import writeMessageAutoSave
 proc autoSave(status: var Editorstatus) =
   let interval = status.settings.autoSaveInterval.minutes
   for index, bufStatus in status.bufStatus:
-    if bufStatus.filename != ru"" and now() > bufStatus.lastSaveTime + interval:
-      saveFile(bufStatus.filename,
+    if bufStatus.path != ru"" and now() > bufStatus.lastSaveTime + interval:
+      saveFile(bufStatus.path,
                bufStatus.buffer.toRunes,
                status.settings.characterEncoding)
-      status.commandWindow.writeMessageAutoSave(bufStatus.filename,
+      status.commandWindow.writeMessageAutoSave(bufStatus.path,
+                                                status.settings.notificationSettings,
                                                 status.messageLog)
       status.bufStatus[index].lastSaveTime = now()
 
 from settings import loadSettingFile
 proc eventLoopTask(status: var Editorstatus) =
+  # Auto save
   if status.settings.autoSave: status.autoSave
+
+  # Live reload of configuration file
   if status.settings.liveReloadOfConf and
      status.timeConfFileLastReloaded + 1.seconds < now():
     let beforeTheme = status.settings.editorColorTheme
-    status.settings.loadSettingFile
+
+    # Load configuration file
+    try:
+      status.settings = loadSettingFile()
+    except:
+      let invalidItem = getCurrentExceptionMsg()
+      status.commandwindow.writeLoadConfigError(invalidItem, status.messageLog)
+      status.settings = initEditorSettings()
+
     status.timeConfFileLastReloaded = now()
     if beforeTheme != status.settings.editorColorTheme:
       changeTheme(status)
       status.resize(terminalHeight(), terminalWidth())
+
+  # Automatic backup
+  let
+    lastBackupTime = status.autoBackupStatus.lastBackupTime
+    interval = status.settings.autoBackupSettings.interval
+    idolTime = status.settings.autoBackupSettings.idolTime
+
+  if status.settings.autoBackupSettings.enable and
+     lastBackupTime + interval.minutes < now() and
+     status.lastOperatingTime + idolTime.seconds < now():
+    for bufStatus in status.bufStatus:
+      let
+        mode = bufStatus.mode
+        prevMode = bufStatus.prevMode
+
+      if (mode == Mode.normal or
+          mode == Mode.insert or
+          mode == Mode.visual or
+          mode == Mode.visualBlock or
+          mode == Mode.replace) or
+          (mode == Mode.ex and
+          (prevMode == Mode.normal or
+           prevMode == Mode.insert or
+           prevMode == Mode.visual or
+           prevMode == Mode.visualBlock or
+           prevMode == Mode.replace)):
+
+        bufStatus.backupBuffer(status.settings.characterEncoding,
+                               status.settings.autoBackupSettings,
+                               status.settings.notificationSettings,
+                               status.commandwindow,
+                               status.messageLog)
+
+        status.autoBackupStatus.lastBackupTime = now()

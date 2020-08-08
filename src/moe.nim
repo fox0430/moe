@@ -11,9 +11,11 @@ import moepkg/buffermanager
 import moepkg/logviewer
 import moepkg/cmdlineoption
 import moepkg/settings
-import moepkg/commandview
 import moepkg/bufferstatus
 import moepkg/help
+import moepkg/recentfilemode
+import moepkg/messages
+import moepkg/quickrun
 
 proc main() =
   let parsedList = parseCommandLineOption(commandLineParams())
@@ -23,7 +25,15 @@ proc main() =
   startUi()
 
   var status = initEditorStatus()
-  status.settings.loadSettingFile
+
+  ## Load configuration file
+  try:
+    status.settings = loadSettingFile()
+  except:
+    let invalidItem = getCurrentExceptionMsg()
+    status.commandwindow.writeLoadConfigError(invalidItem, status.messageLog)
+    status.settings = initEditorSettings()
+
   status.timeConfFileLastReloaded = now()
   status.changeTheme
 
@@ -45,7 +55,8 @@ proc main() =
 
   disableControlC()
 
-  while status.workSpace.len > 0 and status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow > 0:
+  while status.workSpace.len > 0 and
+        status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow > 0:
 
     let currentBufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
     case status.bufStatus[currentBufferIndex].mode:
@@ -58,6 +69,8 @@ proc main() =
     of Mode.bufManager: status.bufferManager
     of Mode.logViewer: status.messageLogViewer
     of Mode.help: status.helpMode
+    of Mode.recentFile: status.recentFileMode
+    of Mode.quickRun: status.quickRunMode
 
   status.settings.exitEditor
 

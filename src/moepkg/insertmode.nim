@@ -1,4 +1,4 @@
-import deques, strutils, strformat, sequtils, terminal, macros
+import terminal, times
 from os import execShellCmd
 import ui, editorstatus, gapbuffer, unicodeext, undoredostack, window,
        movement, editor, bufferstatus
@@ -12,7 +12,8 @@ proc isInsertMode(status: EditorStatus): bool =
   return mode == Mode.insert
 
 proc insertMode*(status: var EditorStatus) =
-  changeCursorType(status.settings.insertModeCursor)
+  if not status.settings.disableChangeCursor:
+    changeCursorType(status.settings.insertModeCursor)
 
   status.resize(terminalHeight(), terminalWidth())
 
@@ -28,6 +29,8 @@ proc insertMode*(status: var EditorStatus) =
       status.eventLoopTask
       key =
         getKey(status.workSpace[workspaceIndex].currentMainWindowNode.window)
+
+    status.lastOperatingTime = now()
 
     var windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
 
@@ -71,7 +74,8 @@ proc insertMode*(status: var EditorStatus) =
     elif isEnterKey(key):
       keyEnter(status.bufStatus[currentBufferIndex],
                status.workSpace[workspaceIndex].currentMainWindowNode,
-               status.settings.autoIndent)
+               status.settings.autoIndent,
+               status.settings.tabStop)
     elif key == ord('\t') or isControlI(key):
       insertTab(status.bufStatus[currentBufferIndex],
                 status.workSpace[workspaceIndex].currentMainWindowNode,
@@ -107,5 +111,3 @@ proc insertMode*(status: var EditorStatus) =
       insertCharacter(status.bufStatus[currentBufferIndex],
                       status.workSpace[workspaceIndex].currentMainWindowNode,
                       status.settings.autoCloseParen, key)
-
-  stdout.write "\x1b[2 q"

@@ -1,18 +1,57 @@
-import parsetoml, os, json, macros
-from strutils import parseEnum, endsWith
+import parsetoml, os, json, macros, times, options
+from strutils import parseEnum, endsWith, parseInt
 
 when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
   # This addresses a breaking change in https://github.com/nim-lang/Nim/pull/14046.
   from strutils import nimIdentNormalize
   export strutils.nimIdentNormalize
 
-import ui, color, unicodeext, build, highlight
+import ui, color, unicodeext, build, highlight, error
+
+type NotificationSettings* = object
+  screenNotifications*: bool
+  logNotifications*: bool
+  autoBackupScreenNotify*: bool
+  autoBackupLogNotify*: bool
+  autoSaveScreenNotify*: bool
+  autoSaveLogNotify*: bool
+  yankScreenNotify*: bool
+  yankLogNotify*: bool
+  deleteScreenNotify*: bool
+  deleteLogNotify*: bool
+  saveScreenNotify*: bool
+  saveLogNotify*: bool
+  workspaceScreenNotify*: bool
+  workspaceLogNotify*: bool
+  quickRunScreenNotify*: bool
+  quickRunLogNotify*: bool
+  buildOnSaveScreenNotify*: bool
+  buildOnSaveLogNotify*: bool
+  filerScreenNotify*: bool
+  filerLogNotify*: bool
+
+type QuickRunSettings* = object
+  saveBufferWhenQuickRun*: bool
+  command*: string
+  timeout*: int # seconds
+  nimAdvancedCommand*: string
+  ClangOptions*: string
+  CppOptions*: string
+  NimOptions*: string
+  shOptions*: string
+  bashOptions*: string
+
+type AutoBackupSettings* = object
+  enable*: bool
+  idolTime*: int # seconds
+  interval*: int # minutes
+  backupDir*: seq[Rune]
 
 type FilerSettings = object
   showIcons*: bool
 
 type WorkSpaceSettings = object
-  useBar*: bool
+  workSpaceLine*: bool
 
 type StatusBarSettings* = object
   useBar*: bool
@@ -27,6 +66,7 @@ type StatusBarSettings* = object
   multipleStatusBar*: bool
   gitbranchName*: bool
   showGitInactive*: bool
+  showModeInactive*: bool
 
 type TabLineSettings* = object
   useTab*: bool
@@ -49,13 +89,14 @@ type EditorSettings* = object
   autoIndent*: bool
   tabStop*: int
   characterEncoding*: CharacterEncoding # TODO: move to EditorStatus ...?
+  disableChangeCursor*: bool
   defaultCursor*: CursorType
   normalModeCursor*: CursorType
   insertModeCursor*: CursorType
   autoSave*: bool
   autoSaveInterval*: int # minutes
   liveReloadOfConf*: bool
-  realtimeSearch*: bool
+  incrementalSearch*: bool
   popUpWindowInExmode*: bool
   replaceTextHighlight*: bool
   highlightPairOfParen*: bool
@@ -66,10 +107,37 @@ type EditorSettings* = object
   systemClipboard*: bool
   highlightFullWidthSpace*: bool
   highlightTrailingSpaces*: bool
-  buildOnSaveSettings*: BuildOnSaveSettings
+  buildOnSave*: BuildOnSaveSettings
   workSpace*: WorkSpaceSettings
   filerSettings*: FilerSettings
   reservedWords*: seq[ReservedWord]
+  autoBackupSettings*: AutoBackupSettings
+  quickRunSettings*: QuickRunSettings
+  notificationSettings*: NotificationSettings
+
+proc initNotificationSettings(): NotificationSettings =
+  result.screenNotifications = true
+  result.logNotifications = true
+  result.autoBackupScreenNotify = true
+  result.autoBackupLogNotify = true
+  result.yankScreenNotify = true
+  result.yankLogNotify = true
+  result.deleteScreenNotify = true
+  result.deleteLogNotify = true
+  result.workspaceScreenNotify = true
+  result.workspaceLogNotify = true
+  result.quickRunScreenNotify = true
+  result.quickRunLogNotify = true
+
+proc initQuickRunSettings(): QuickRunSettings =
+  result.saveBufferWhenQuickRun = true
+  result.nimAdvancedCommand = "c"
+  result.timeout = 30
+
+proc initAutoBackupSettings(): AutoBackupSettings =
+  result.enable = true
+  result.interval = 5 # 5 minutes
+  result.idolTime = 10 # 10 seconds
 
 proc initFilerSettings(): FilerSettings =
   result.showIcons = true
@@ -91,7 +159,7 @@ proc initStatusBarSettings*(): StatusBarSettings =
   result.gitbranchName = true
 
 proc initWorkSpaceSettings(): WorkSpaceSettings =
-  result.useBar = false
+  result.workSpaceLine = false
 
 proc initEditorViewSettings*(): EditorViewSettings =
   result.lineNumber = true
@@ -115,11 +183,12 @@ proc initEditorSettings*(): EditorSettings =
   result.autoCloseParen = true
   result.autoIndent = true
   result.tabStop = 2
-  result.defaultCursor = CursorType.blinkBlockMode # Terminal default curosr shape
-  result.normalModeCursor = CursorType.blinkBlockMode
-  result.insertModeCursor = CursorType.blinkIbeamMode
+  # defaultCursor is terminal default curosr shape
+  result.defaultCursor = CursorType.blinkBlock
+  result.normalModeCursor = CursorType.blinkBlock
+  result.insertModeCursor = CursorType.blinkIbeam
   result.autoSaveInterval = 5
-  result.realtimeSearch = true
+  result.incrementalSearch = true
   result.popUpWindowInExmode = true
   result.replaceTextHighlight = true
   result.highlightPairOfParen = true
@@ -130,22 +199,12 @@ proc initEditorSettings*(): EditorSettings =
   result.systemClipboard = true
   result.highlightFullWidthSpace = true
   result.highlightTrailingSpaces = true
-  result.buildOnSaveSettings = BuildOnSaveSettings()
+  result.buildOnSave = BuildOnSaveSettings()
   result.workSpace= initWorkSpaceSettings()
   result.filerSettings = initFilerSettings()
   result.reservedWords = initReservedWords()
-
-proc getCursorType(cursorType, mode: string): CursorType =
-  case cursorType
-  of "blinkBlock": return CursorType.blinkBlockMode
-  of "noneBlinkBlock": return CursorType.noneBlinkBlockMode
-  of "blinkIbeam": return CursorType.blinkIbeamMode
-  of "noneBlinkIbeam": return CursorType.noneBlinkIbeamMode
-  else:
-    case mode
-    of "default": return CursorType.blinkBlockMode
-    of "normal": return CursorType.blinkBlockMode
-    of "insert": return CursorType.blinkIbeamMode
+  result.autoBackupSettings = initAutoBackupSettings()
+  result.quickRunSettings = initQuickRunSettings()
 
 proc getTheme(theme: string): ColorTheme =
   if theme == "vivid": return ColorTheme.vivid
@@ -390,6 +449,11 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         colorFromNode(jsonNode{"colors", "statusBar.background"})
+    setEditorColor statusBarGitBranch:
+      foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "statusBar.background"})
     # command  bar
     setEditorColor commandBar:
       foreground:
@@ -523,15 +587,15 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
       background:
         colorFromNode(jsonNode{"colors", "tab.activeBorder"})
 
-proc parseSettingsFile*(filename: string): EditorSettings =
+proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
   result = initEditorSettings()
 
   var vscodeTheme = false
-  var settings: TomlValueRef
-  try: settings = parsetoml.parseFile(filename)
-  except IOError, TomlError: return
 
   if settings.contains("Standard"):
+    template cursorType(str: string): untyped =
+      parseEnum[CursorType](str)
+
     if settings["Standard"].contains("theme"):
       let themeString = settings["Standard"]["theme"].getStr()
       result.editorColorTheme = getTheme(themeString)
@@ -551,7 +615,7 @@ proc parseSettingsFile*(filename: string): EditorSettings =
       result.statusBar.useBar = settings["Standard"]["statusBar"].getbool()
 
     if settings["Standard"].contains("tabLine"):
-      result.tabLine.useTab= settings["Standard"]["tabLine"].getbool()
+      result.tabLine.useTab = settings["Standard"]["tabLine"].getbool()
 
     if settings["Standard"].contains("syntax"):
       result.syntax = settings["Standard"]["syntax"].getbool()
@@ -566,14 +630,20 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("autoIndent"):
       result.autoIndent = settings["Standard"]["autoIndent"].getbool()
 
+    if settings["Standard"].contains("disableChangeCursor"):
+      result.disableChangeCursor = settings["Standard"]["disableChangeCursor"].getbool()
+
     if settings["Standard"].contains("defaultCursor"):
-      result.defaultCursor = getCursorType(settings["Standard"]["defaultCursor"].getStr(), "default")
+      let str = settings["Standard"]["defaultCursor"].getStr()
+      result.defaultCursor = cursorType(str)
 
     if settings["Standard"].contains("normalModeCursor"):
-      result.normalModeCursor = getCursorType(settings["Standard"]["normalModeCursor"].getStr(), "normal")
+      let str = settings["Standard"]["normalModeCursor"].getStr()
+      result.normalModeCursor = cursorType(str)
 
     if settings["Standard"].contains("insertModeCursor"):
-      result.insertModeCursor = getCursorType(settings["Standard"]["insertModeCursor"].getStr(), "insert")
+      let str = settings["Standard"]["insertModeCursor"].getStr()
+      result.insertModeCursor = cursorType(str)
 
     if settings["Standard"].contains("autoSave"):
       result.autoSave = settings["Standard"]["autoSave"].getbool()
@@ -584,10 +654,10 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Standard"].contains("liveReloadOfConf"):
       result.liveReloadOfConf = settings["Standard"]["liveReloadOfConf"].getbool()
 
-    if settings["Standard"].contains("realtimeSearch"):
-      result.realtimeSearch = settings["Standard"]["realtimeSearch"].getbool()
+    if settings["Standard"].contains("incrementalSearch"):
+      result.incrementalSearch = settings["Standard"]["incrementalSearch"].getbool()
 
-    if settings["Standard"].contains("popUpWindowInExmode "):
+    if settings["Standard"].contains("popUpWindowInExmode"):
       result.popUpWindowInExmode = settings["Standard"]["popUpWindowInExmode"].getbool()
 
     if settings["Standard"].contains("replaceTextHighlight"):
@@ -603,7 +673,7 @@ proc parseSettingsFile*(filename: string): EditorSettings =
       result.smoothScroll =  settings["Standard"]["smoothScroll"].getbool()
 
     if settings["Standard"].contains("smoothScrollSpeed"):
-      result.smoothScrollSpeed =  settings["Standard"]["smoothScrollSpeed"].getint()
+      result.smoothScrollSpeed = settings["Standard"]["smoothScrollSpeed"].getint()
 
     if settings["Standard"].contains("highlightCurrentWord"):
       result.highlightOtherUsesCurrentWord = settings["Standard"]["highlightCurrentWord"].getbool()
@@ -618,7 +688,7 @@ proc parseSettingsFile*(filename: string): EditorSettings =
       result.highlightTrailingSpaces = settings["Standard"]["highlightTrailingSpaces"].getbool()
     
     if settings["Standard"].contains("indentationLines"):
-      result.view.indentationLines= settings["Standard"]["indentationLines"].getbool()
+      result.view.indentationLines = settings["Standard"]["indentationLines"].getbool()
 
   if settings.contains("TabLine"):
     if settings["TabLine"].contains("allBuffer"):
@@ -629,7 +699,10 @@ proc parseSettingsFile*(filename: string): EditorSettings =
         result.statusBar.mode= settings["StatusBar"]["mode"].getbool()
 
     if settings["StatusBar"].contains("filename"):
-        result.statusBar.filename = settings["StatusBar"]["chanedMark"].getbool()
+        result.statusBar.filename = settings["StatusBar"]["filename"].getbool()
+
+    if settings["StatusBar"].contains("chanedMark"):
+        result.statusBar.chanedMark = settings["StatusBar"]["chanedMark"].getbool()
 
     if settings["StatusBar"].contains("line"):
         result.statusBar.line = settings["StatusBar"]["line"].getbool()
@@ -655,19 +728,22 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["StatusBar"].contains("showGitInactive"):
         result.statusBar.showGitInactive = settings["StatusBar"]["showGitInactive"].getbool()
 
+    if settings["StatusBar"].contains("showModeInactive"):
+        result.statusBar.showModeInactive = settings["StatusBar"]["showModeInactive"].getbool()
+
   if settings.contains("BuildOnSave"):
-    if settings["BuildOnSave"].contains("buildOnSave"):
-      result.buildOnSaveSettings.buildOnSave = settings["BuildOnSave"]["buildOnSave"].getbool()
+    if settings["BuildOnSave"].contains("enable"):
+      result.buildOnSave.enable = settings["BuildOnSave"]["enable"].getbool()
 
     if settings["BuildOnSave"].contains("workspaceRoot"):
-      result.buildOnSaveSettings.workspaceRoot = settings["BuildOnSave"]["workspaceRoot"].getStr().toRunes
+      result.buildOnSave.workspaceRoot = settings["BuildOnSave"]["workspaceRoot"].getStr().toRunes
 
     if settings["BuildOnSave"].contains("command"):
-      result.buildOnSaveSettings.workspaceRoot = settings["BuildOnSave"]["command"].getStr().toRunes
+      result.buildOnSave.command = settings["BuildOnSave"]["command"].getStr().toRunes
 
   if settings.contains("WorkSpace"):
-    if settings["WorkSpace"].contains("useBar"):
-        result.workSpace.useBar = settings["WorkSpace"]["useBar"].getbool()
+    if settings["WorkSpace"].contains("workSpaceLine"):
+      result.workSpace.workSpaceLine = settings["WorkSpace"]["workSpaceLine"].getbool()
 
   if settings.contains("Highlight"):
     if settings["Highlight"].contains("reservedWord"):
@@ -677,6 +753,109 @@ proc parseSettingsFile*(filename: string): EditorSettings =
           word = reservedWords[i].getStr
           reservedWord = ReservedWord(word: word, color: EditorColorPair.reservedWord)
         result.reservedWords.add(reservedWord)
+
+  if settings.contains("AutoBackup"):
+    if settings["AutoBackup"].contains("enable"):
+      result.autoBackupSettings.enable = settings["AutoBackup"]["enable"].getbool()
+
+    if settings["AutoBackup"].contains("idolTime"):
+      result.autoBackupSettings.idolTime = settings["AutoBackup"]["idolTime"].getInt()
+
+    if settings["AutoBackup"].contains("interval"):
+      result.autoBackupSettings.interval = settings["AutoBackup"]["interval"].getInt()
+
+    if settings["AutoBackup"].contains("backupDir"):
+      let dir = settings["AutoBackup"]["backupDir"].getStr()
+      result.autoBackupSettings.backupDir = dir.toRunes
+
+  if settings.contains("QuickRun"):
+    if settings["QuickRun"].contains("saveBufferWhenQuickRun"):
+      result.quickRunSettings.saveBufferWhenQuickRun = settings["QuickRun"]["saveBufferWhenQuickRun"].getBool()
+
+    if settings["QuickRun"].contains("command"):
+      result.quickRunSettings.command = settings["QuickRun"]["command"].getStr()
+
+    if settings["QuickRun"].contains("timeout"):
+      result.quickRunSettings.timeout = settings["QuickRun"]["timeout"].getInt()
+
+    if settings["QuickRun"].contains("nimAdvancedCommand"):
+      result.quickRunSettings.nimAdvancedCommand = settings["QuickRun"]["nimAdvancedCommand"].getStr()
+
+    if settings["QuickRun"].contains("ClangOptions"):
+      result.quickRunSettings.ClangOptions = settings["QuickRun"]["ClangOptions"].getStr()
+
+    if settings["QuickRun"].contains("CppOptions"):
+      result.quickRunSettings.CppOptions = settings["QuickRun"]["CppOptions"].getStr()
+
+    if settings["QuickRun"].contains("NimOptions"):
+      result.quickRunSettings.NimOptions = settings["QuickRun"]["NimOptions"].getStr()
+
+    if settings["QuickRun"].contains("shOptions"):
+      result.quickRunSettings.shOptions = settings["QuickRun"]["shOptions"].getStr()
+
+    if settings["QuickRun"].contains("bashOptions"):
+      result.quickRunSettings.bashOptions = settings["QuickRun"]["bashOptions"].getStr()
+
+  if settings.contains("Notification"):
+    if settings["Notification"].contains("screenNotifications"):
+      result.notificationSettings.screenNotifications = settings["Notification"]["screenNotifications"].getBool
+
+    if settings["Notification"].contains("logNotifications"):
+      result.notificationSettings.logNotifications = settings["Notification"]["logNotifications"].getBool
+
+    if settings["Notification"].contains("autoBackupScreenNotify"):
+      result.notificationSettings.autoBackupScreenNotify = settings["Notification"]["autoBackupScreenNotify"].getBool
+
+    if settings["Notification"].contains("autoBackupLogNotify"):
+      result.notificationSettings.autoBackupLogNotify = settings["Notification"]["autoBackupLogNotify"].getBool
+
+    if settings["Notification"].contains("autoSaveScreenNotify"):
+      result.notificationSettings.autoSaveScreenNotify = settings["Notification"]["autoSaveScreenNotify"].getBool
+
+    if settings["Notification"].contains("autoSaveLogNotify"):
+      result.notificationSettings.autoSaveLogNotify = settings["Notification"]["autoSaveLogNotify"].getBool
+
+    if settings["Notification"].contains("yankScreenNotify"):
+      result.notificationSettings.yankScreenNotify = settings["Notification"]["yankScreenNotify"].getBool
+
+    if settings["Notification"].contains("yankLogNotify"):
+      result.notificationSettings.yankLogNotify = settings["Notification"]["yankLogNotify"].getBool
+
+    if settings["Notification"].contains("deleteScreenNotify"):
+      result.notificationSettings.deleteScreenNotify = settings["Notification"]["deleteScreenNotify"].getBool
+
+    if settings["Notification"].contains("deleteLogNotify"):
+      result.notificationSettings.deleteLogNotify = settings["Notification"]["deleteLogNotify"].getBool
+
+    if settings["Notification"].contains("saveScreenNotify"):
+      result.notificationSettings.saveScreenNotify = settings["Notification"]["saveScreenNotify"].getBool
+
+    if settings["Notification"].contains("saveLogNotify"):
+      result.notificationSettings.saveLogNotify = settings["Notification"]["saveLogNotify"].getBool
+
+    if settings["Notification"].contains("workspaceScreenNotify"):
+      result.notificationSettings.workspaceScreenNotify = settings["Notification"]["workspaceScreenNotify"].getBool
+
+    if settings["Notification"].contains("workspaceLogNotify"):
+      result.notificationSettings.workspaceLogNotify = settings["Notification"]["workspaceLogNotify"].getBool
+
+    if settings["Notification"].contains("quickRunScreenNotify"):
+      result.notificationSettings.quickRunScreenNotify = settings["Notification"]["quickRunScreenNotify"].getBool
+
+    if settings["Notification"].contains("quickRunLogNotify"):
+      result.notificationSettings.quickRunLogNotify = settings["Notification"]["quickRunLogNotify"].getBool
+
+    if settings["Notification"].contains("buildOnSaveScreenNotify"):
+      result.notificationSettings.buildOnSaveScreenNotify = settings["Notification"]["buildOnSaveScreenNotify"].getBool
+
+    if settings["Notification"].contains("buildOnSaveLogNotify"):
+      result.notificationSettings.buildOnSaveLogNotify = settings["Notification"]["buildOnSaveLogNotify"].getBool
+
+    if settings["Notification"].contains("filerScreenNotify"):
+      result.notificationSettings.filerScreenNotify = settings["Notification"]["filerScreenNotify"].getBool
+
+    if settings["Notification"].contains("filerLogNotify"):
+      result.notificationSettings.filerLogNotify = settings["Notification"]["filerLogNotify"].getBool
 
   if settings.contains("Filer"):
     if settings["Filer"].contains("showIcons"):
@@ -859,26 +1038,29 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if settings["Theme"].contains("visualModeBg"):
       ColorThemeTable[ColorTheme.config].visualModeBg = color("visualModeBg")
 
-    if settings["Theme"].contains("defaultCharactorColor"):
-      ColorThemeTable[ColorTheme.config].defaultChar = color("defaultCharactorColor")
+    if settings["Theme"].contains("defaultChar"):
+      ColorThemeTable[ColorTheme.config].defaultChar = color("defaultChar")
 
-    if settings["Theme"].contains("gtKeywordColor"):
-      ColorThemeTable[ColorTheme.config].gtKeyword = color("gtKeywordColor")
+    if settings["Theme"].contains("gtKeyword"):
+      ColorThemeTable[ColorTheme.config].gtKeyword = color("gtKeyword")
 
-    if settings["Theme"].contains("gtStringLitColor"):
-      ColorThemeTable[ColorTheme.config].gtStringLit = color("gtStringLitColor")
+    if settings["Theme"].contains("gtStringLit"):
+      ColorThemeTable[ColorTheme.config].gtStringLit = color("gtStringLit")
 
-    if settings["Theme"].contains("gtDecNumberColor"):
-      ColorThemeTable[ColorTheme.config].gtDecNumber = color("gtDecNumberColor")
+    if settings["Theme"].contains("gtDecNumber"):
+      ColorThemeTable[ColorTheme.config].gtDecNumber = color("gtDecNumber")
 
-    if settings["Theme"].contains("gtCommentColor"):
-      ColorThemeTable[ColorTheme.config].gtComment = color("gtCommentColor")
+    if settings["Theme"].contains("gtComment"):
+      ColorThemeTable[ColorTheme.config].gtComment = color("gtComment")
 
-    if settings["Theme"].contains("gtLongCommentColor"):
-      ColorThemeTable[ColorTheme.config].gtLongComment = color("gtLongCommentColor")
+    if settings["Theme"].contains("gtLongComment"):
+      ColorThemeTable[ColorTheme.config].gtLongComment = color("gtLongComment")
 
-    if settings["Theme"].contains("gtWhitespaceColor"):
-      ColorThemeTable[ColorTheme.config].gtLongComment = color("gtWhitespaceColor")
+    if settings["Theme"].contains("gtWhitespace"):
+      ColorThemeTable[ColorTheme.config].gtWhitespace = color("gtWhitespace")
+
+    if settings["Theme"].contains("gtPreprocessor"):
+      ColorThemeTable[ColorTheme.config].gtPreprocessor = color("gtPreprocessor")
 
     if settings["Theme"].contains("currentFile"):
       ColorThemeTable[ColorTheme.config].currentFile = color("currentFile")
@@ -944,10 +1126,10 @@ proc parseSettingsFile*(filename: string): EditorSettings =
       ColorThemeTable[ColorTheme.config].highlightTrailingSpacesBg = color("highlightTrailingSpacesBg")
 
     if settings["Theme"].contains("workSpaceBar"):
-      ColorThemeTable[ColorTheme.config].workSpaceBar = color("wrokSpaceBar")
+      ColorThemeTable[ColorTheme.config].workSpaceBar = color("workSpaceBar")
 
     if settings["Theme"].contains("workSpaceBarBg"):
-      ColorThemeTable[ColorTheme.config].workSpaceBarBg = color("wrokSpaceBarBg")
+      ColorThemeTable[ColorTheme.config].workSpaceBarBg = color("workSpaceBarBg")
 
     if settings["Theme"].contains("reservedWord"):
       ColorThemeTable[ColorTheme.config].reservedWord = color("reservedWord")
@@ -1018,6 +1200,247 @@ proc parseSettingsFile*(filename: string): EditorSettings =
     if not vsCodeThemeLoaded:
       result.editorColorTheme = ColorTheme.dark
 
-proc loadSettingFile*(settings: var EditorSettings) =
-  try: settings = parseSettingsFile(getConfigDir() / "moe" / "moerc.toml")
-  except ValueError: return
+proc validateTomlConfig(toml: TomlValueRef): Option[string] =
+  template validateStandardTable() =
+    for item in json["Standard"].pairs:
+      case item.key:
+        of "theme":
+          var correctValue = false
+          if item.val["value"].getStr == "vscode":
+            correctValue = true
+          else:
+            for theme in ColorTheme:
+              if $theme == item.val["value"].getStr:
+                correctValue = true
+          if not correctValue:
+            return some($item)
+        of "number",
+           "currentNumber",
+           "cursorLine",
+           "statusBar",
+           "tabLine",
+           "syntax",
+           "indentationLines",
+           "autoCloseParen",
+           "autoIndent",
+           "disableChangeCursor",
+           "autoSave",
+           "liveReloadOfConf",
+           "incrementalSearch",
+           "popUpWindowInExmode",
+           "replaceTextHighlight",
+           "highlightPairOfParen",
+           "autoDeleteParen",
+           "systemClipboard",
+           "highlightFullWidthSpace",
+           "highlightTrailingSpaces",
+           "highlightCurrentWord":
+          if not (item.val["type"].getStr == "bool"):
+            return some($item)
+        of "tabStop", "autoSaveInterval":
+          if not (item.val["type"].getStr == "integer" and
+                  parseInt(item.val["value"].getStr) > 0): return some($item)
+        of "defaultCursor",
+           "normalModeCursor",
+           "insertModeCursor":
+          let val = item.val["value"].getStr
+          var correctValue = false
+          for cursorType in CursorType:
+            if val == $cursorType:
+              correctValue = true
+              break
+
+          if not correctValue:
+            return some($item)
+        else:
+          return some($item)
+
+  template validateTabLineTable() =
+    for item in json["TabLine"].pairs:
+      case item.key:
+        of "allBuffer",
+           "mode",
+           "chanedMark",
+           "line",
+           "column",
+           "encoding",
+           "language",
+           "directory",
+           "gitbranchName",
+           "showGitInactive",
+           "showModeInactive":
+          if not (item.val["type"].getStr == "bool"):
+            return some($item)
+        else:
+          return some($item)
+
+  template validateBuildOnSaveTable() =
+    for item in json["BuildOnSave"].pairs:
+      case item.key:
+        of "enable":
+          if not (item.val["type"].getStr == "bool"):
+            return some($item)
+        of "workspaceRoot",
+           "command":
+          if not (item.val["type"].getStr == "string"):
+            return some($item)
+        else:
+            return some($item)
+
+  template validateWorkSpaceTable() =
+    for item in json["WorkSpace"].pairs:
+      case item.key:
+        of "workSpaceLine":
+          if not (item.val["type"].getStr == "bool"):
+            return some($item)
+        else:
+            return some($item)
+
+  template validateHighlightTable() =
+    for item in json["Highlight"].pairs:
+      case item.key:
+        of "reservedWord":
+          if item.val["type"].getStr == "array":
+            for word in item.val["value"]:
+              if word["type"].getStr != "string":
+                return some($item)
+        else:
+          return some($item)
+
+  template validateAutoBackupTable() =
+    for item in json["AutoBackup"].pairs:
+      case item.key:
+        of "enable", "showMessages":
+          if item.val["type"].getStr != "bool":
+            return some($item)
+        of "idolTime",
+           "interval":
+          if item.val["type"].getStr != "integer":
+            return some($item)
+        of "backupDir":
+          if item.val["type"].getStr != "string":
+            return some($item)
+        else:
+          return some($item)
+
+  template validateQuickRunTable() =
+    for item in json["QuickRun"].pairs:
+      case item.key:
+        of "saveBufferWhenQuickRun":
+          if item.val["type"].getStr != "bool":
+            return some($item)
+        of "command",
+           "nimAdvancedCommand",
+           "ClangOptions",
+           "CppOptions",
+           "NimOptions",
+           "shOptions",
+           "bashOptions":
+          if item.val["type"].getStr != "string":
+            return some($item)
+        of "timeout":
+          if item.val["type"].getStr != "integer":
+            return some($item)
+        else:
+          return some($item)
+
+  template validateNotificationTable() =
+    for item in json["Notification"].pairs:
+      case item.key:
+        of "screenNotifications",
+           "logNotifications",
+           "autoBackupScreenNotify",
+           "autoBackupLogNotify",
+           "autoSaveScreenNotify",
+           "autoSaveLogNotify",
+           "yankScreenNotify",
+           "yankLogNotify",
+           "deleteScreenNotify",
+           "deleteLogNotify",
+           "saveScreenNotify",
+           "saveLogNotify",
+           "workspaceScreenNotify",
+           "workspaceLogNotify",
+           "quickRunScreenNotify",
+           "quickRunLogNotify",
+           "buildOnSaveScreenNotify",
+           "buildOnSaveLogNotify",
+           "filerScreenNotify",
+           "filerLogNotify":
+          if item.val["type"].getStr != "bool":
+            return some($item)
+        else:
+          return some($item)
+
+  template validateFilerTable() =
+    for item in json["Filer"].pairs:
+      case item.key:
+        of "showIcons":
+          if item.val["type"].getStr != "bool":
+            return some($item)
+        else:
+          return some($item)
+
+  template validateThemeTable() =
+    let editorColors = ColorThemeTable[ColorTheme.config].EditorColor
+    for item in json["Theme"].pairs:
+      case item.key:
+        of "baseTheme":
+          var correctKey = false
+          for theme in ColorTheme:
+            if $theme == item.val["value"].getStr:
+              correctKey = true
+          if not correctKey: return some($item)
+        else:
+          # Check color names
+          var correctKey = false
+          for field, val in editorColors.fieldPairs:
+            if item.key == field and
+               item.val["type"].getStr == "string":
+              for color in Color:
+                if item.val["value"].getStr == $color:
+                  correctKey = true
+                  break
+              if correctKey: break
+          if not correctKey:
+            return some($item)
+
+  let json = toml.toJson
+
+  for table in json.keys:
+    case table:
+      of "Standard":
+        validateStandardTable()
+      of "BuildOnSave":
+        validateBuildOnSaveTable()
+      of "WorkSpace":
+        validateWorkSpaceTable
+      of "Highlight":
+        validateHighlightTable()
+      of "AutoBackup":
+        validateAutoBackupTable()
+      of "QuickRun":
+        validateQuickRunTable()
+      of "Notification":
+        validateNotificationTable()
+      of "Filer":
+        validateFilerTable()
+      of "Theme":
+        validateThemeTable()
+      else: discard
+
+  return none(string)
+
+proc loadSettingFile*(): EditorSettings =
+  let filename = getConfigDir() / "moe" / "moerc.toml"
+  var toml: TomlValueRef
+
+  try: toml = parsetoml.parseFile(filename)
+  except IOError, TomlError: return
+
+  let invalidItem = toml.validateTomlConfig
+
+  if invalidItem != none(string):
+    InvalidItemError($invalidItem)
+  else:
+    result = parseSettingsFile(toml)

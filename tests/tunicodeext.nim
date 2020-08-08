@@ -245,3 +245,41 @@ test "detectCharacterEncoding: UTF-32LE":
   check(converted.detectCharacterEncoding == CharacterEncoding.utf32Le)
   ec.close
 
+test "findRune":
+  check find( ru"あaa", ru'a') == 1
+  check find( ru"あaa", ru'b') == -1
+
+test "findRunes":
+  check find(runes = ru"あいういう", sub = ru"いう") == 1
+  check find(runes = ru"あいういういう", sub = ru"いう", start = 2, last = 4) == 3
+  check find(runes = ru"あいういう", sub = ru"いうう") == -1
+
+test "rfindRune":
+  check rfind(ru"あaa", ru'a') == 2
+  check rfind(ru"あaa", ru'b') == -1
+
+test "rfindRunes":
+  check rfind(ru"あいういう", ru"いう") == 3
+  check rfind(ru"あいういう", ru"いう", start = 1, last = 3) == 1
+
+test "substrWithLast":
+  check substr(ru"あいうえお", first = 1, last = 3) == ru"いうえ"
+
+test "substr":
+  check substr(ru"あいう", first = 1) == ru"いう"
+
+test "splitWhitespace":
+  const s = "this\lis an\texample"
+  check splitWhitespace(s.ru) == @[ru"this", ru"is", ru"an", ru"example"]
+
+from os import `/`
+test "/":
+  proc checkJoinPath(head, tail: string) =
+    check head.ru / tail.ru == (head / tail).ru
+
+  checkJoinPath("usr", "")
+  checkJoinPath("", "lib")
+  checkJoinPath("", "/lib")
+  checkJoinPath("usr", "/lib")
+  checkJoinPath("usr/", "/lib/")
+  check ru"usr" / ru"lib" / ru"../bin" == ru"usr/bin"
