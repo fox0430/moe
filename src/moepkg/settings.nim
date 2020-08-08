@@ -51,7 +51,7 @@ type FilerSettings = object
   showIcons*: bool
 
 type WorkSpaceSettings = object
-  useBar*: bool
+  enable*: bool
 
 type StatusBarSettings* = object
   useBar*: bool
@@ -159,7 +159,7 @@ proc initStatusBarSettings*(): StatusBarSettings =
   result.gitbranchName = true
 
 proc initWorkSpaceSettings(): WorkSpaceSettings =
-  result.useBar = false
+  result.enable = false
 
 proc initEditorViewSettings*(): EditorViewSettings =
   result.lineNumber = true
@@ -742,8 +742,8 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       result.buildOnSave.command = settings["BuildOnSave"]["command"].getStr().toRunes
 
   if settings.contains("WorkSpace"):
-    if settings["WorkSpace"].contains("useBar"):
-      result.workSpace.useBar = settings["WorkSpace"]["useBar"].getbool()
+    if settings["WorkSpace"].contains("enable"):
+      result.workSpace.enable = settings["WorkSpace"]["enable"].getbool()
 
   if settings.contains("Highlight"):
     if settings["Highlight"].contains("reservedWord"):
@@ -1287,6 +1287,15 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         else:
             return some($item)
 
+  template validateWorkSpaceTable() =
+    for item in json["WorkSpace"].pairs:
+      case item.key:
+        of "enable":
+          if not (item.val["type"].getStr == "bool"):
+            return some($item)
+        else:
+            return some($item)
+
   template validateHighlightTable() =
     for item in json["Highlight"].pairs:
       case item.key:
@@ -1404,6 +1413,8 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         validateStandardTable()
       of "BuildOnSave":
         validateBuildOnSaveTable()
+      of "WorkSpace":
+        validateWorkSpaceTable
       of "Highlight":
         validateHighlightTable()
       of "AutoBackup":

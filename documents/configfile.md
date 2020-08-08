@@ -267,7 +267,7 @@ command
 Enable/Disable workspace bar (bool)  
 default is false
 ```
-useBar
+enable
 ```
 
 ### Highlight table
