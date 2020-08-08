@@ -53,7 +53,7 @@ proc initEditorStatus*(): EditorStatus =
   result.lastOperatingTime = now()
   result.autoBackupStatus = initAutoBackupStatus()
 
-  if result.settings.workSpace.enable:
+  if result.settings.workSpace.workSpaceLine:
     const
       h = 1
       t = 0
@@ -133,7 +133,7 @@ proc resizeMainWindowNode(status: var EditorStatus, height, width: int) =
   let
     useTab = if status.settings.tabLine.useTab: 1 else: 0
     useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
-    useWorkSpaceBar = if status.settings.workSpace.enable: 1 else: 0
+    useWorkSpaceBar = if status.settings.workSpace.workSpaceLine: 1 else: 0
     workspaceIndex = status.currentWorkSpaceIndex
 
   const x = 0
@@ -214,7 +214,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
                                                                 x)
 
   ## Resize work space info window
-  if status.settings.workSpace.enable:
+  if status.settings.workSpace.workSpaceLine:
     const
       workSpaceBarHeight = 1
       x = 0
@@ -226,7 +226,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
     const
       tabLineHeight = 1
       x = 0
-    let y = if status.settings.workSpace.enable: 1 else: 0
+    let y = if status.settings.workSpace.workSpaceLine: 1 else: 0
     status.tabWindow.resize(tabLineHeight, width, y, x)
 
   ## Resize command window
@@ -297,7 +297,7 @@ proc updateLogViewer(status: var Editorstatus, bufferIndex: int) =
 proc update*(status: var EditorStatus) =
   setCursor(false)
 
-  if status.settings.workSpace.enable:
+  if status.settings.workSpace.workSpaceLine:
    status.workSpaceTabWindow.writeTabLineWorkSpace(status.workspace.len,
                                                    status.currentWorkSpaceIndex)
 

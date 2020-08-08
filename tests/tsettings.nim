@@ -56,7 +56,7 @@ const tomlStr = """
   showModeInactive = true
 
   [WorkSpace]
-  enable = true
+  workSpaceLine = true
 
   [Highlight]
   reservedWord = ["TEST", "TEST2"]
@@ -260,7 +260,7 @@ suite "Parse configuration file":
     check settings.statusBar.showGitInactive
     check settings.statusBar.showModeInactive
 
-    check settings.workSpace.enable
+    check settings.workSpace.workSpaceLine
 
     check settings.reservedWords[3].word == "TEST"
     check settings.reservedWords[4].word == "TEST2"

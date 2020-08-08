@@ -94,7 +94,7 @@ showModeInactive = false
 
 [WorkSpace]
 
-enable = false
+workSpaceLine = false
 
 [Highlight]
 
