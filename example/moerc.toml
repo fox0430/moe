@@ -94,7 +94,7 @@ showModeInactive = false
 
 [WorkSpace]
 
-useBar = false
+enable = false
 
 [Highlight]
 
