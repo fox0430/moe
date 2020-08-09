@@ -1,12 +1,13 @@
 import parsetoml, os, json, macros, times, options
 from strutils import parseEnum, endsWith, parseInt
+export TomlError
 
 when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
   # This addresses a breaking change in https://github.com/nim-lang/Nim/pull/14046.
   from strutils import nimIdentNormalize
   export strutils.nimIdentNormalize
 
-import ui, color, unicodeext, build, highlight, error
+import ui, color, unicodeext, build, highlight
 
 type NotificationSettings* = object
   screenNotifications*: bool
@@ -114,6 +115,8 @@ type EditorSettings* = object
   autoBackupSettings*: AutoBackupSettings
   quickRunSettings*: QuickRunSettings
   notificationSettings*: NotificationSettings
+
+type InvalidItemError* = object of Exception
 
 proc initNotificationSettings(): NotificationSettings =
   result.screenNotifications = true
@@ -1432,15 +1435,12 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
   return none(string)
 
 proc loadSettingFile*(): EditorSettings =
-  let filename = getConfigDir() / "moe" / "moerc.toml"
-  var toml: TomlValueRef
-
-  try: toml = parsetoml.parseFile(filename)
-  except IOError, TomlError: return
-
-  let invalidItem = toml.validateTomlConfig
+  let
+    filename = getConfigDir() / "moe" / "moerc.toml"
+    toml = parsetoml.parseFile(filename)
+    invalidItem = toml.validateTomlConfig
 
   if invalidItem != none(string):
-    InvalidItemError($invalidItem)
+    raise newException(InvalidItemError, $invalidItem)
   else:
-    result = parseSettingsFile(toml)
+    return parseSettingsFile(toml)
