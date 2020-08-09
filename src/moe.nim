@@ -1,4 +1,5 @@
 import os, unicode, times
+from parseToml import TomlError
 import moepkg/ui
 import moepkg/editorstatus
 import moepkg/normalmode
@@ -29,9 +30,11 @@ proc main() =
   ## Load configuration file
   try:
     status.settings = loadSettingFile()
-  except:
+  except InvalidItemError:
     let invalidItem = getCurrentExceptionMsg()
     status.commandwindow.writeLoadConfigError(invalidItem, status.messageLog)
+    status.settings = initEditorSettings()
+  except IOError, TomlError:
     status.settings = initEditorSettings()
 
   status.timeConfFileLastReloaded = now()
