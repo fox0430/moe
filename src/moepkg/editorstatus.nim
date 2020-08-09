@@ -964,7 +964,21 @@ proc autoSave(status: var Editorstatus) =
                                                 status.messageLog)
       status.bufStatus[index].lastSaveTime = now()
 
-from settings import loadSettingFile
+from settings import TomlError, loadSettingFile
+
+proc loadConfigurationFile*(status: var EditorStatus) =
+  status.settings =
+    try:
+      loadSettingFile()
+    except InvalidItemError:
+      let invalidItem = getCurrentExceptionMsg()
+      status.commandwindow.writeInvalidItemInConfigurationFileError(invalidItem, status.messageLog)
+      initEditorSettings()
+    except IOError, TomlError:
+      let failureCause = getCurrentExceptionMsg()
+      status.commandwindow.writeFailedToLoadConfigurationFileError(failureCause, status.messageLog)
+      initEditorSettings()
+
 proc eventLoopTask(status: var Editorstatus) =
   # Auto save
   if status.settings.autoSave: status.autoSave
@@ -974,13 +988,7 @@ proc eventLoopTask(status: var Editorstatus) =
      status.timeConfFileLastReloaded + 1.seconds < now():
     let beforeTheme = status.settings.editorColorTheme
 
-    # Load configuration file
-    try:
-      status.settings = loadSettingFile()
-    except:
-      let invalidItem = getCurrentExceptionMsg()
-      status.commandwindow.writeLoadConfigError(invalidItem, status.messageLog)
-      status.settings = initEditorSettings()
+    status.loadConfigurationFile
 
     status.timeConfFileLastReloaded = now()
     if beforeTheme != status.settings.editorColorTheme:

@@ -1,5 +1,6 @@
 import parsetoml, os, json, macros, times, options
 from strutils import parseEnum, endsWith, parseInt
+export TomlError
 
 when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
   # This addresses a breaking change in https://github.com/nim-lang/Nim/pull/14046.

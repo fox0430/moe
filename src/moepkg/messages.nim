@@ -220,12 +220,19 @@ proc writeRunQuickRunFailedMessage*(cmdWin: var Window, messageLog: var seq[seq[
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
 
-proc writeLoadConfigError*(cmdWin: var Window,
+proc writeInvalidItemInConfigurationFileError*(cmdWin: var Window,
                            message: string,
                            messageLog: var seq[seq[Rune]]) =
  
   let mess = "Error: Failed to load configuration file: Invalid item: " &
              message
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  messageLog.add(message.toRunes)
+
+proc writeFailedToLoadConfigurationFileError*(cmdWin: var Window,
+                           message: string,
+                           messageLog: var seq[seq[Rune]]) =
+  let mess = fmt"Error: Failed to load configuration file: {message}"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(message.toRunes)
 
