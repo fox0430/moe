@@ -116,8 +116,7 @@ proc splitCommand*(command: string): seq[seq[Rune]] =
   else:
     return strutils.splitWhitespace(command).map(proc(s: string): seq[Rune] = toRunes(s))
 
-proc writeExModeView(
-                     commandWindow: var Window,
+proc writeExModeView(commandWindow: var Window,
                      exStatus: ExModeViewStatus,
                      color: EditorColorPair) =
                      
@@ -250,17 +249,29 @@ proc suggestFilePath(status: var Editorstatus,
                      command: string,
                      key: var Rune) =
 
-  let inputPath = exStatus.buffer.substr(command.len + 1)
+  let inputPath = if (exStatus.buffer.substr(command.len + 1)) == ru"~":
+                    getHomeDir().toRunes
+                  else:
+                    exStatus.buffer.substr(command.len + 1)
   var suggestlist = @[inputPath]
   if inputPath.len == 0 or not inputPath.contains(ru'/'):
     for kind, path in walkDir("./"):
       if path.toRunes.normalizePath.startsWith(inputPath):
         suggestlist.add(path.toRunes.normalizePath)
   elif inputPath.contains(ru'/'):
-    let path = inputPath.substr(0, inputPath.rfind(ru'/'))
-    for kind, path in walkDir($path):
-      if path.toRunes.normalizePath.startsWith(inputPath):
-        suggestlist.add(path.toRunes.normalizePath)
+    let
+      normalizedInput = normalizePath(inputPath)
+      normalizedPath = normalizePath(inputPath.substr(0, inputPath.rfind(ru'/')))
+    for kind, path in walkDir($normalizedPath):
+      if path.toRunes.startsWith(normalizedInput):
+        if inputPath[0] == ru'~':
+          let
+            pathLen = path.toRunes.high
+            hoemeDirLen = (getHomeDir()).high
+            addPath = ru"~" & path.toRunes.substr(hoemeDirLen, pathLen)
+          suggestlist.add(addPath)
+        else:
+          suggestlist.add(path.toRunes)
 
   var
     suggestIndex = 0

@@ -3,8 +3,10 @@ import gapbuffer, unicodeext
 
 proc normalizePath*(path: seq[Rune]): seq[Rune] =
   if path[0] == ru'~':
-    result = getHomeDir().toRunes
-    result.add(path[1..path.high])
+    if path == ru"~" or path == ru"~/":
+      result = getHomeDir().toRunes
+    else:
+      result = getHomeDir().toRunes & path[2..path.high]
   elif path == ru"./":
     return path
   elif path.len > 1 and path[0 .. 1] == ru"./":
