@@ -20,13 +20,16 @@ type FileRegister = object
 
 type FilerStatus = object
   register: FileRegister
+  currentPath: seq[Rune]
   searchMode: bool
   viewUpdate: bool
   dirlistUpdate: bool
   dirList: seq[PathInfo]
   sortBy: Sort
 
-proc searchFiles(status: var EditorStatus, dirList: seq[PathInfo]): seq[PathInfo] =
+proc searchFiles(status: var EditorStatus,
+                 dirList: seq[PathInfo]): seq[PathInfo] =
+
   setCursor(true)
   let command = getCommand(status, "/")
 
@@ -81,23 +84,25 @@ when defined(posix):
   from posix import nil
   from posix_utils import nil
 
-  proc isFifo(file: string): bool = posix.S_ISFIFO(posix_utils.stat(file).st_mode)
+  proc isFifo(file: string): bool =
+    posix.S_ISFIFO(posix_utils.stat(file).st_mode)
 else:
   proc isFifo(file: string): bool = false
 
-proc refreshDirList(sortBy: Sort): seq[PathInfo] =
+proc refreshDirList(path: seq[Rune], sortBy: Sort): seq[PathInfo] =
   var
     dirList  : seq[PathInfo]
     fileList : seq[PathInfo]
 
-  for list in walkDir($CurDir):
+  for list in walkDir($path):
     proc getLastModificationTimeOrDefault(file: string): times.Time =
       try: getLastModificationTime(file)
       except OSError: initTime(0,0)
 
     proc getFileSizeOrDefault(file: string): int64 =
       try:
-        # `getFileSize` opens files internally. So if `file` is a named pipe, we don't call `getFileSize` to avoid opening named pipes.
+        # `getFileSize` opens files internally. So if `file` is a named pipe,
+        # we don't call `getFileSize` to avoid opening named pipes.
         if isFifo(file): return 0.int64
 
         getFileSize(file)
@@ -145,6 +150,7 @@ proc initFileRegister(): FileRegister =
 
 proc initFilerStatus*(): FilerStatus =
   result.register = initFileRegister()
+  result.currentPath = getCurrentDir().toRunes
   result.viewUpdate = true
   result.dirlistUpdate = true
   result.dirList = newSeq[PathInfo]()
@@ -153,7 +159,8 @@ proc initFilerStatus*(): FilerStatus =
 
 proc updateDirList*(filerStatus: var FilerStatus): FilerStatus =
   filerStatus.dirList = @[]
-  filerStatus.dirList.add refreshDirList(filerStatus.sortBy)
+  filerStatus.dirList.add(refreshDirList(filerStatus.currentPath,
+                                         filerStatus.sortBy))
   filerStatus.viewUpdate = true
   filerStatus.dirlistUpdate = false
   return filerStatus
@@ -229,11 +236,15 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
     addNewBuffer(status, path)
   of pcDir, pcLinkToDir:
     try:
-      setCurrentDir(path)
+      #setCurrentDir(path)
+      filerStatus.currentPath = path.toRunes
       filerStatus.dirlistUpdate = true
-    except OSError: status.commandWindow.writeFileOpenError(path, status.messageLog)
+    except OSError:
+      status.commandWindow.writeFileOpenError(path, status.messageLog)
 
-proc setDirListColor(kind: PathComponent, isCurrentLine: bool): EditorColorPair =
+proc setDirListColor(kind: PathComponent,
+                     isCurrentLine: bool): EditorColorPair =
+
   if isCurrentLine: result = EditorColorPair.currentFile
   else:
     case kind
@@ -241,7 +252,10 @@ proc setDirListColor(kind: PathComponent, isCurrentLine: bool): EditorColorPair 
     of pcDir: result = EditorColorPair.dir
     of pcLinkToDir, pcLinkToFile: result = EditorColorPair.pcLink
 
-proc initFilelistHighlight[T](dirList: seq[PathInfo], buffer: T, currentLine: int): Highlight =
+proc initFilelistHighlight[T](dirList: seq[PathInfo],
+                              buffer: T,
+                              currentLine: int): Highlight =
+
   for index, dir in dirList:
     let color = setDirListColor(dir.kind, index == currentLine)
     result.colorSegments.add(ColorSegment(firstRow: index,
@@ -364,8 +378,12 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus,
 
   let useStatusBar = if settings.statusBar.useBar: 1 else: 0
   let numOfFile = filerStatus.dirList.len
-  windowNode.highlight = initFilelistHighlight(filerStatus.dirList, bufStatus.buffer, windowNode.currentLine)
-  windowNode.view = initEditorView(bufStatus.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
+  windowNode.highlight = initFilelistHighlight(filerStatus.dirList,
+                                               bufStatus.buffer,
+                                               windowNode.currentLine)
+  windowNode.view = initEditorView(bufStatus.buffer,
+                                   terminalHeight() - useStatusBar - 1,
+                                   terminalWidth() - numOfFile)
 
 proc updateFilerView*(status: var EditorStatus, filerStatus: var FilerStatus) =
   let
