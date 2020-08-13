@@ -280,6 +280,27 @@ proc isRecentFileModeCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "recent"
 
+proc isHistoryManagerCommand(command: seq[seq[Rune]]): bool =
+  let cmd = toLowerAscii($command[0])
+  return command.len == 1 and cmd == "history"
+
+proc startHistoryManager(status: var Editorstatus) =
+  let bufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[bufferIndex].prevMode)
+  status.prevBufferIndex = bufferIndex
+
+  if status.bufStatus[bufferIndex].mode != Mode.normal: return
+  for bufStatus in status.bufStatus:
+    if bufStatus.mode == Mode.history: return
+
+  status.verticalSplitWindow
+  status.resize(terminalHeight(), terminalWidth())
+  status.moveNextWindow
+
+  status.addNewBuffer("")
+  status.changeCurrentBuffer(status.bufStatus.high)
+  status.changeMode(Mode.history)
+
 proc startRecentFileMode(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
@@ -869,8 +890,6 @@ proc quitCommand(status: var EditorStatus) =
     else:
       status.commandWindow.writeNoWriteError(status.messageLog)
 
-  status.changeMode(Mode.normal)
-
 proc writeAndQuitCommand(status: var EditorStatus) =
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -1247,6 +1266,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     status.startRecentFileMode
   elif isWorkspaceListCommand(command):
     status.workspaceListCommand
+  elif isHistoryManagerCommand(command):
+    status.startHistoryManager
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)

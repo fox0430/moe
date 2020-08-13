@@ -16,6 +16,8 @@ import moepkg/help
 import moepkg/recentfilemode
 import moepkg/messages
 import moepkg/quickrun
+import moepkg/historymanager
+import moepkg/diffviewer
 
 proc main() =
   let parsedList = parseCommandLineOption(commandLineParams())
@@ -71,6 +73,8 @@ proc main() =
     of Mode.help: status.helpMode
     of Mode.recentFile: status.recentFileMode
     of Mode.quickRun: status.quickRunMode
+    of Mode.history: status.historyManager
+    of Mode.diff: status.diffViewer
 
   status.settings.exitEditor
 

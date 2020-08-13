@@ -13,7 +13,9 @@ type Mode* = enum
   logViewer,
   help,
   recentFile,
-  quickRun
+  quickRun,
+  history,
+  diff
 
 type SelectArea* = object
   startLine*: int

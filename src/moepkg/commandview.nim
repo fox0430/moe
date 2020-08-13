@@ -30,6 +30,7 @@ const exCommandList = [
   "highlightCurrentWord",
   "highlightFullSpace",
   "highlightParen",
+  "history",
   "icon",
   "incrementalSearch",
   "indent",

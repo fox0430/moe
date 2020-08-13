@@ -164,6 +164,8 @@ proc setModeStr(mode: Mode, isActiveWindow, showModeInactive: bool): string =
     of Mode.logViewer: result = " LOG "
     of Mode.recentFile: result = " RECENT "
     of Mode.quickRun: result = " QUICKRUN "
+    of Mode.history: result = " HISTORY "
+    of Mode.diff: result = "DIFF "
     else: result = " NORMAL "
 
 proc setModeStrColor(mode: Mode): EditorColorPair =
@@ -185,18 +187,17 @@ proc isShowGitBranchName(mode, prevMode: Mode,
     if showGitInactive or
     (not showGitInactive and isActiveWindow): result = true
 
-  if mode == Mode.filer: return false
-  elif mode == Mode.ex and prevMode == Mode.filer: return false
-  elif mode == Mode.logViewer: return false
-  elif mode == Mode.ex and prevMode == Mode.logViewer: return false
-  elif mode == Mode.bufManager: return false
-  elif mode == Mode.ex and prevMode == Mode.bufManager: return false
-  elif mode == Mode.help: return false
-  elif mode == Mode.ex and prevMode == Mode.help: return false
-  elif mode == Mode.recentFile: return false
-  elif mode == Mode.ex and prevMode == Mode.recentFile: return false
-  elif mode == Mode.quickRun: return false
-  elif mode == Mode.ex and prevMode == Mode.quickRun: return false
+  if mode == Mode.normal or
+     mode == Mode.insert or
+     mode == Mode.visual or
+     mode == Mode.replace: result = true
+  elif mode == Mode.ex:
+    if prevMode == Mode.normal or
+       prevMode == Mode.insert or
+       prevMode == Mode.visual or
+       prevMode == Mode.replace: result = true
+  else:
+    result = false
 
 proc writeStatusBar*(bufStatus: var BufferStatus,
                      statusBar: var StatusBar,
