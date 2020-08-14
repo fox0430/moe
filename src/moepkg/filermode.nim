@@ -139,7 +139,7 @@ proc refreshDirList(path: seq[Rune], sortBy: Sort): seq[PathInfo] =
     pcDir,
     ParDir,
     0.int64,
-    getLastModificationTime(getCurrentDir()))] &
+    getLastModificationTime($path))] &
     sortDirList(dirList, sortBy) & sortDirList(fileList, sortBy)
 
 proc initFileRegister(): FileRegister =
@@ -188,14 +188,14 @@ proc copyFile(filerStatus: var FilerStatus, currentLine: int) =
   filerStatus.register.cut = false
   filerStatus.register.filename = filerStatus.dirList[currentLine].path
   let path = filerStatus.dirList[currentLine].path
-  filerStatus.register.originPath = getCurrentDir() / path
+  filerStatus.register.originPath = $filerStatus.currentPath / path
 
 proc cutFile(filerStatus: var FilerStatus, currentLine: int) =
   filerStatus.register.copy = false
   filerStatus.register.cut = true
   let path = filerStatus.dirList[currentLine].path
   filerStatus.register.filename = path
-  filerStatus.register.originPath = getCurrentDir() / path
+  filerStatus.register.originPath = $filerStatus.currentPath / path
 
 proc pasteFile(commandWindow: var Window,
                filerStatus: var FilerStatus,
@@ -203,7 +203,7 @@ proc pasteFile(commandWindow: var Window,
 
   try:
     let filename = filerStatus.register.filename
-    copyFile(filerStatus.register.originPath, getCurrentDir() / filename)
+    copyFile(filerStatus.register.originPath, $filerStatus.currentPath / filename)
     filerStatus.dirlistUpdate = true
     filerStatus.viewUpdate = true
   except OSError:
@@ -236,8 +236,12 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
     addNewBuffer(status, path)
   of pcDir, pcLinkToDir:
     try:
-      #setCurrentDir(path)
-      filerStatus.currentPath = path.toRunes
+      let currentPath = filerStatus.currentPath
+      if path == "..":
+        if not isRootDir($currentPath):
+          filerStatus.currentPath = parentDir($currentPath).toRunes
+      else:
+        filerStatus.currentPath = path.toRunes
       filerStatus.dirlistUpdate = true
     except OSError:
       status.commandWindow.writeFileOpenError(path, status.messageLog)
@@ -357,7 +361,10 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus,
       filename = dir.path
       kind = dir.kind
 
-    var newLine =  filename.toRunes
+    var newLine = if kind == pcLinkToFile or kind == pcLinkToDir:
+                    filename.toRunes
+                  else:
+                    toRunes(splitPath(filename).tail)
     case kind
     of pcFile:
       try:
