@@ -520,6 +520,16 @@ type EditorColor* = object
   reservedWord*: Color
   reservedWordBg*: Color
 
+  # highlight history manager
+  currentHistory*: Color
+  currentHistoryBg*: Color
+
+  # highlight diff
+  addedLine*: Color
+  addedLineBg*: Color
+  deletedLine*: Color
+  deletedLineBg*: Color
+
 type EditorColorPair* = enum
   lineNum = 1
   currentLineNum = 2
@@ -590,6 +600,11 @@ type EditorColorPair* = enum
   workSpaceBar = 51
   # highlight reserved words
   reservedWord = 52
+  # highlight history manager
+  currentHistory = 53
+  # highlight diff
+  addedLine = 54
+  deletedLine = 55
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -704,6 +719,14 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight reserved words
     reservedWord: white,
     reservedWordBg: gray,
+    # highlight history manager
+    currentHistory: gray100,
+    currentHistoryBg: teal,
+    # highlight diff
+    addedLine: green,
+    addedLineBg: default,
+    deletedLine: red,
+    deletedLineBg: default,
   ),
   dark: EditorColor(
     editorBg: default,
@@ -817,6 +840,14 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight reserved words
     reservedWord: white,
     reservedWordBg: gray,
+    # highlight history manager
+    currentHistory: gray100,
+    currentHistoryBg: teal,
+    # highlight diff
+    addedLine: green,
+    addedLineBg: default,
+    deletedLine: red,
+    deletedLineBg: default,
   ),
   light: EditorColor(
     editorBg: default,
@@ -930,6 +961,14 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight reserved words
     reservedWord: white,
     reservedWordBg: gray,
+    # highlight history manager
+    currentHistory: black,
+    currentHistoryBg: deepPink1_1,
+    # highlight diff
+    addedLine: green,
+    addedLineBg: default,
+    deletedLine: red,
+    deletedLineBg: default,
   ),
   vivid: EditorColor(
     editorBg: default,
@@ -1043,6 +1082,14 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight reserved words
     reservedWord: deepPink1_1,
     reservedWordBg: black,
+    # highlight history manager
+    currentHistory: gray100,
+    currentHistoryBg: deepPink1_1,
+    # highlight diff
+    addedLine: green,
+    addedLineBg: default,
+    deletedLine: red,
+    deletedLineBg: default,
   ),
 ]
 
@@ -1133,6 +1180,13 @@ proc setCursesColor*(editorColor: EditorColor) =
 
     # highlight reserved words
     setColorPair(EditorColorPair.reservedWord, editorColor.reservedWord, editorColor.reservedWordBg)
+
+    # highlight history manager
+    setColorPair(EditorColorPair.currentHistory, editorColor.currentHistory, editorColor.currentHistoryBg)
+
+    # highlight diff
+    setColorPair(EditorColorPair.addedLine, editorColor.addedLine, editorColor.addedLineBg)
+    setColorPair(EditorColorPair.deletedLine, editorColor.deletedLine, editorColor.deletedLineBg)
 
 proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Color, Color) =
   let editorColor = ColorThemeTable[theme]
@@ -1228,5 +1282,11 @@ proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Co
     return (editorColor.workSpaceBar, editorColor.workSpaceBarBg)
   of EditorColorPair.reservedWord:
     return (editorColor.reservedWord, editorColor.reservedWordBg)
+  of EditorColorPair.addedLine:
+    return (editorColor.addedLine, editorColor.addedLineBg)
+  of EditorColorPair.deletedLine:
+    return (editorColor.deletedLine, editorColor.deletedLineBg)
+  of EditorColorPair.currentHistory:
+    return (editorColor.currentHistory, editorColor.currentHistoryBg)
   else:
     return (editorColor.parenText, editorColor.parenTextBg)

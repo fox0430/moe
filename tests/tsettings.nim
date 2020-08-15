@@ -203,6 +203,12 @@ const tomlStr = """
   workSpaceBarBg = "pink1"
   reservedWord = "pink1"
   reservedWordBg = "pink1"
+  currentHistory = "pink1"
+  currentHistoryBg = "pink1"
+  addedLine = "pink1"
+  addedLineBg = "pink1"
+  deletedLine = "pink1"
+  deletedLineBg = "pink1"
 """
 
 
@@ -392,6 +398,12 @@ suite "Parse configuration file":
     check ColorThemeTable[theme].workSpaceBarBg == Color.pink1
     check ColorThemeTable[theme].reservedWord == Color.pink1
     check ColorThemeTable[theme].reservedWordBg == Color.pink1
+    check ColorThemeTable[theme].currentHistory == Color.pink1
+    check ColorThemeTable[theme].currentHistoryBg == Color.pink1
+    check ColorThemeTable[theme].addedLine == Color.pink1
+    check ColorThemeTable[theme].addedLineBg == Color.pink1
+    check ColorThemeTable[theme].deletedLine == Color.pink1
+    check ColorThemeTable[theme].deletedLineBg == Color.pink1
 
 suite "Validate toml config":
   test "Except for success":

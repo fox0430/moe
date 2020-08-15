@@ -284,9 +284,9 @@ proc initSyntaxHighlight(windowNode: var WindowNode,
       var node = queue.pop
       if node.window != nil:
         let bufStatus = bufStatus[node.bufferIndex]
-        if (bufStatus.mode != Mode.filer) and
-           not (bufStatus.mode == Mode.ex and
-           bufStatus.prevMode == Mode.filer):
+        if not isFilerMode(bufStatus.mode, bufStatus.prevMode) and
+           not isHistoryManagerMode(bufStatus.mode, bufStatus.prevMode) and
+           not isDiffViewerMode(bufStatus.mode, bufStatus.prevMode):
           let lang = if isSyntaxHighlight: bufStatus.language
                      else: SourceLanguage.langNone
           node.highlight = ($bufStatus.buffer).initHighlight(reservedWords, lang)
@@ -301,9 +301,6 @@ proc updateLogViewer(status: var Editorstatus, bufferIndex: int) =
   status.bufStatus[bufferIndex].buffer = initGapBuffer(@[ru""])
   for i in 0 ..< status.messageLog.len:
     status.bufStatus[bufferIndex].buffer.insert(status.messageLog[i], i)
-
-proc isDiffViewerMode(mode, prevMode: Mode): bool =
-  (mode == diff) or (mode == ex and prevMode == diff)
 
 proc update*(status: var EditorStatus) =
   setCursor(false)
@@ -368,17 +365,20 @@ proc update*(status: var EditorStatus) =
 
         ## Update highlight
         ## TODO: Refactor and fix
-        if isLogViewerMode(currentMode, prevMode):
-          status.updateLogViewer(node.bufferIndex)
-          status.updateHighlight(node)
-        elif (currentMode != Mode.filer) and
-             not (currentMode == Mode.ex and
-             prevMode == Mode.filer):
-          if isCurrentMainWin:
+        if not isFilerMode(currentMode, prevMode) and
+             not isHistoryManagerMode(currentMode, prevMode) and
+             not isDiffViewerMode(currentMode, prevMode):
+
+          if isLogViewerMode(currentMode, prevMode):
+            status.updateLogViewer(node.bufferIndex)
+          elif isCurrentMainWin:
             if status.settings.highlightOtherUsesCurrentWord:
               status.highlightOtherUsesCurrentWord
-            if isVisualMode or isVisualBlockMode: status.highlightSelectedArea
-            if status.settings.highlightPairOfParen: status.highlightPairOfParen
+            if isVisualMode or isVisualBlockMode:
+              status.highlightSelectedArea
+            if status.settings.highlightPairOfParen:
+              status.highlightPairOfParen
+
           status.updateHighlight(node)
 
         let
@@ -911,19 +911,12 @@ proc highlightTrailingSpaces(status: var Editorstatus) =
     status.workSpace[workspaceIndex].currentMainWindowNode.highlight =
       status.workSpace[workspaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
 
-proc isFilerMode(bufStatus: BufferStatus): bool =
-  (bufStatus.mode == Mode.filer) or
-  (bufStatus.mode == Mode.ex and bufStatus.prevMode == Mode.filer)
-
 from search import searchAllOccurrence
 proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
-  let bufStatus = status.bufStatus[windowNode.bufferIndex]
-  if isFilerMode(bufStatus) or
-     isDiffViewerMode(bufStatus.mode, bufStatus.prevMode): return
-
   let
     range = windowNode.view.rangeOfOriginalLineInView
     startLine = range[0]
+    bufStatus = status.bufStatus[windowNode.bufferIndex]
     endLine = if bufStatus.buffer.len > range[1] + 1: range[1] + 2
               elif bufStatus.buffer.len > range[1]: range[1] + 1
               else: range[1]

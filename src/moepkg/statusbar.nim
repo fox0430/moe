@@ -43,6 +43,7 @@ proc writeStatusBarNormalModeInfo(bufStatus: var BufferStatus,
 
   let
     mode = bufStatus.mode
+    prevMode = bufStatus.prevMode
     color = setStatusBarColor(mode)
     statusBarWidth = statusBar.window.width
 
@@ -51,6 +52,7 @@ proc writeStatusBarNormalModeInfo(bufStatus: var BufferStatus,
 
   if settings.statusBar.filename:
     var filename = if bufStatus.path.len > 0: bufStatus.path
+                   elif isHistoryManagerMode(mode, prevMode): ru""
                    else: ru"No name"
     let homeDir = ru(getHomeDir())
     if (filename.len() >= homeDir.len() and
@@ -224,8 +226,7 @@ proc writeStatusBar*(bufStatus: var BufferStatus,
   if isShowGitBranchName(currentMode, prevMode, isActiveWindow, settings):
     statusBar.writeStatusBarCurrentGitBranchName(statusBarBuffer, isActiveWindow)
 
-  if currentMode == Mode.filer or
-     (currentMode == Mode.ex and prevMode == Mode.filer):
+  if isFilerMode(currentMode, prevMode):
     bufStatus.writeStatusBarFilerModeInfo(statusBar,
                                           statusBarBuffer,
                                           windowNode,

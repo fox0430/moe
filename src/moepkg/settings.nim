@@ -1137,6 +1137,24 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("reservedWordBg"):
       ColorThemeTable[ColorTheme.config].reservedWordBg = color("reservedWordBg")
 
+    if settings["Theme"].contains("currentHistory"):
+      ColorThemeTable[ColorTheme.config].currentHistory = color("currentHistory")
+
+    if settings["Theme"].contains("currentHistoryBg"):
+      ColorThemeTable[ColorTheme.config].currentHistoryBg = color("currentHistoryBg")
+
+    if settings["Theme"].contains("addedLine"):
+      ColorThemeTable[ColorTheme.config].addedLine = color("addedLine")
+
+    if settings["Theme"].contains("addedLineBg"):
+      ColorThemeTable[ColorTheme.config].addedLineBg = color("addedLineBg")
+
+    if settings["Theme"].contains("deletedLine"):
+      ColorThemeTable[ColorTheme.config].deletedLine = color("deletedLine")
+
+    if settings["Theme"].contains("deletedLineBg"):
+      ColorThemeTable[ColorTheme.config].deletedLineBg = color("deletedLineBg")
+
     result.editorColorTheme = ColorTheme.config
   if vscodeTheme:
     # search for the vscode theme that is set in the current preferences of

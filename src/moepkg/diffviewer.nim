@@ -8,29 +8,40 @@ proc isDiffViewerMode(status: Editorstatus): bool =
     index = status.workspace[workspaceIndex].currentMainWindowNode.bufferIndex
   status.bufStatus[index].mode == Mode.diff
 
-proc updateDiffHighlight(bufStatus: BufferStatus, highlight: var Highlight) =
+proc initDiffHighlight(bufStatus: BufferStatus): Highlight =
   for i in 0 ..< bufStatus.buffer.len:
-    let color = if bufStatus.buffer[i].len > 0 and bufStatus.buffer[i][0] == ru'+':
-                  EditorColorPair.errorMessage
+    let
+      line = bufStatus.buffer[i]
+      color = if line.len > 0 and line[0] == ru'+':
+                  EditorColorPair.addedLine
+                elif line.len > 0 and line[0] == ru'-':
+                  EditorColorPair.deletedLine
                 else:
                   EditorColorPair.defaultChar
 
-    highlight.colorSegments.add(ColorSegment(
+    result.colorSegments.add(ColorSegment(
       firstRow: i,
       firstColumn: 0,
       lastRow: i,
-      lastColumn: bufStatus.buffer[i].high,
+      lastColumn: line.high,
       color: color))
 
 proc diffViewer*(status: var Editorstatus) =
-  while status.isDiffViewerMode:
+  status.resize(terminalHeight(), terminalWidth())
 
+  while status.isDiffViewerMode:
     let
       bufferIndex = status.bufferIndexInCurrentWindow
       workspaceIndex = status.currentWorkSpaceIndex
 
+    block:
+      let
+        bufferIndex = status.bufferIndexInCurrentWindow
+        bufStatus = status.bufStatus[bufferIndex]
+        workspaceIndex = status.currentWorkSpaceIndex
+      status.workspace[workspaceIndex].currentMainWindowNode.highlight = initDiffHighlight(bufStatus)
+
     status.update
-    status.bufStatus[bufferIndex].updateDiffHighlight(status.workspace[workspaceIndex].currentMainWindowNode.highlight)
 
     var key: Rune = ru'\0'
     while key == ru'\0':
@@ -47,9 +58,6 @@ proc diffViewer*(status: var Editorstatus) =
     elif isControlJ(key):
       status.movePrevWindow
     elif key == ord(':'):
-      exitUi()
-      for bufStatus in status.bufStatus:
-        echo bufStatus.mode
       status.changeMode(Mode.ex)
     elif key == ord('k') or isUpKey(key):
       status.bufStatus[bufferIndex].keyUp(status.workSpace[workspaceIndex].currentMainWindowNode)

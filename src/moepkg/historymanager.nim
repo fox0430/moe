@@ -50,6 +50,22 @@ proc initHistoryManagerBuffer(status: var Editorstatus, sourcePath: seq[Rune]) =
   for name in list:
     status.bufStatus[bufferIndex].buffer.add(name)
 
+proc initHistoryManagerHighlight(bufStatus: BufferStatus,
+                                 currentLine: int): Highlight =
+
+  for i in 0 ..< bufStatus.buffer.len:
+    let
+      line = bufStatus.buffer[i]
+      color = if i == currentLine: EditorColorPair.currentHistory
+              else: EditorColorPair.defaultChar
+
+    result.colorSegments.add(ColorSegment(
+      firstRow: i,
+      firstColumn: 0,
+      lastRow: i,
+      lastColumn: bufStatus.buffer[i].high,
+      color: color))
+
 proc isHistoryManagerMode(status: var Editorstatus): bool =
   let index = status.bufferIndexInCurrentWindow
   status.bufStatus[index].mode == Mode.history
@@ -82,18 +98,24 @@ proc openDiffViewer(status: var Editorstatus, path: seq[Rune]) =
   status.changeCurrentBuffer(status.bufStatus.high)
   status.changeMode(Mode.diff)
 
+  status.bufStatus[status.bufStatus.high].path = backupPath
   status.bufStatus[status.bufStatus.high].buffer = initGapBuffer(buffer)
 
 proc historyManager*(status: var EditorStatus) =
-  let
-    bufferIndex = status.bufferIndexInCurrentWindow
-    sourcePath = status.bufStatus[status.prevBufferIndex].path
-    workspaceIndex = status.currentWorkSpaceIndex
+  let sourcePath = status.bufStatus[status.prevBufferIndex].path
 
   status.initHistoryManagerBuffer(sourcePath)
 
   while status.isHistoryManagerMode:
+    let
+      bufferIndex = status.bufferIndexInCurrentWindow
+      workspaceIndex = status.currentWorkSpaceIndex
 
+    block:
+      let
+        bufStatus = status.bufStatus[bufferIndex]
+        currentLine = status.workSpace[workspaceIndex].currentMainWindowNode.currentLine
+      status.workspace[workspaceIndex].currentMainWindowNode.highlight = bufStatus.initHistoryManagerHighlight(currentLine)
     status.update
     setCursor(false)
 

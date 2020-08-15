@@ -36,3 +36,12 @@ type BufferStatus* = object
   mode* : Mode
   prevMode* : Mode
   lastSaveTime*: DateTime
+
+proc isFilerMode*(mode, prevMode: Mode): bool =
+  (mode == Mode.filer) or (mode == Mode.ex and prevMode == Mode.filer)
+
+proc isHistoryManagerMode*(mode, prevMode: Mode): bool =
+  (mode == Mode.history) or (mode == Mode.ex and prevMode == Mode.history)
+
+proc isDiffViewerMode*(mode, prevMode: Mode): bool =
+  (mode == Mode.diff) or (mode == ex and prevMode == Mode.diff)

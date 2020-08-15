@@ -14,10 +14,10 @@ proc writeTab*(tabWin: var Window,
   tabWin.write(0, start, buffer, color)
 
 proc writeTabLineBuffer*(tabWin: var Window,
-                  allBufStatus: seq[BufferStatus],
-                  currentBufferIndex: int,
-                  workspace: WorkSpace,
-                  isAllbuffer: bool) =
+                         allBufStatus: seq[BufferStatus],
+                         currentBufferIndex: int,
+                         workspace: WorkSpace,
+                         isAllbuffer: bool) =
 
   let
     isAllBuffer = isAllbuffer
@@ -34,9 +34,8 @@ proc writeTabLineBuffer*(tabWin: var Window,
                 else: defaultColor
         currentMode = bufStatus.mode
         prevMode = bufStatus.prevMode
-        filename = if (currentMode == Mode.filer) or
-                      (prevMode == Mode.filer and
-                      currentMode == Mode.ex): getCurrentDir()
+        filename = if isFilerMode(currentMode, prevMode): getCurrentDir()
+                   elif isHistoryManagerMode(currentMode, prevMode): "HISOTY"
                    else: $bufStatus.path
         tabWidth = allBufStatus.len.calcTabWidth(terminalWidth())
       tabWin.writeTab(index * tabWidth, tabWidth, filename, color)
@@ -51,12 +50,10 @@ proc writeTabLineBuffer*(tabWin: var Window,
         bufStatus = allBufStatus[bufIndex]
         currentMode = bufStatus.mode
         prevMode = bufStatus.prevMode
-        filename = if (currentMode == Mode.filer) or
-                      (prevMode == Mode.filer and
-                      currentMode == Mode.ex): getCurrentDir()
+        filename = if isFilerMode(currentMode, prevMode): getCurrentDir()
+                   elif isHistoryManagerMode(currentMode, prevMode): "HISOTY"
                    else: $bufStatus.path
-        numOfbuffer =
-          workSpace.mainWindowNode.getAllBufferIndex.len
+        numOfbuffer = workSpace.mainWindowNode.getAllBufferIndex.len
         tabWidth = numOfbuffer.calcTabWidth(terminalWidth())
       tabWin.writeTab(index * tabWidth, tabWidth, filename, color)
 
