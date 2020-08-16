@@ -2,30 +2,22 @@ import osproc, highlite, terminal, times
 import unicodeext, settings, bufferstatus, gapbuffer, messages, ui,
        editorstatus, movement, window, workspace, fileutils
 
-type Language = enum
-  None = 0
-  Nim = 1
-  C = 2
-  Cpp = 3
-  Shell = 4
-
 proc generateCommand(bufStatus: BufferStatus,
-                     language: Language,
                      settings: QuickRunSettings): string =
 
   let filename = $bufStatus.path
 
   result = "timeout " & $settings.timeout & " "
-  if language == Language.Nim:
+  if bufStatus.language == SourceLanguage.langNim:
     let
       advancedCommand = settings.nimAdvancedCommand
       options = settings.NimOptions
     result &= "nim " & advancedCommand & " -r " & options & " " & filename
-  elif language == Language.C:
+  elif bufStatus.language == SourceLanguage.langC:
     result &= "gcc " & settings.ClangOptions & " " & filename & " && ./a.out"
-  elif language == Language.Cpp:
+  elif bufStatus.language == SourceLanguage.langCpp:
     result &= "g++ " & settings.CppOptions & " " & filename & " && ./a.out"
-  elif language == Language.Shell:
+  elif bufStatus.language == SourceLanguage.langShell:
     if bufStatus.buffer[0] == ru"#!/bin/bash":
       result &= "bash " & settings.bashOptions & " " & filename
     else:
@@ -48,24 +40,13 @@ proc runQuickRun*(bufStatus: var BufferStatus,
 
   if bufStatus.path.len == 0: return @[ru""]
 
-  let
-    filename = bufStatus.path
-    sourceLang = bufStatus.language
-    language = if sourceLang == SourceLanguage.langNim: Language.Nim
-               elif sourceLang == SourceLanguage.langC: Language.C
-               elif sourceLang == SourceLanguage.langCpp: Language.Cpp
-               elif filename.len > 3 and
-                    filename[filename.len - 3 .. filename.high] == ru".sh":
-                      Language.Shell
-               else: Language.None
-
+  let filename = bufStatus.path
 
   if settings.quickRunSettings.saveBufferWhenQuickRun:
     saveFile(filename, bufStatus.buffer.toRunes, settings.characterEncoding)
     bufStatus.countChange = 0
 
-  let
-    command = bufStatus.generateCommand(language, settings.quickRunSettings)
+  let command = bufStatus.generateCommand(settings.quickRunSettings)
   if command == "": return @[ru""]
 
   cmdWin.writeRunQuickRunMessage(settings.notificationSettings, messageLog)
