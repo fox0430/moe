@@ -2,7 +2,7 @@
 
 import re, os, times, terminal, osproc
 import editorstatus, bufferstatus, unicodeext, ui, movement, gapbuffer,
-       highlight, color
+       highlight, color, settings
 
 proc generateFilenamePatern(path: seq[Rune]): seq[Rune] =
   let splitPath = splitPath($path)
@@ -15,33 +15,48 @@ proc generateFilenamePatern(path: seq[Rune]): seq[Rune] =
   else:
     result &= ru"_[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+[0-9]{2}:[0-9]{2}" 
 
-proc getBackupFiles(path: seq[Rune]): seq[seq[Rune]] =
+proc getBackupFiles(path: seq[Rune],
+                    settings: AutoBackupSettings): seq[seq[Rune]] =
   let
     splitPath = splitPath($path)
     patern = generateFilenamePatern(splitPath.tail.toRunes)
-  for kind, path in walkDir(splitPath.head / ".history"):
+    backupPath = if settings.backupDir.len > 0: $settings.backupDir
+                 else: splitPath.head / ".history"
+  for kind, path in walkDir(backupPath):
     if kind == PathComponent.pcFile:
       let splitPath = path.splitPath
       if splitPath.tail.match(re($patern)):
         let splitPath = splitPath(path)
         result.add(splitPath.tail.toRunes)
 
-proc generateBackUpFilePath(path: seq[Rune]): seq[Rune] =
+proc generateBackUpFilePath(path: seq[Rune],
+                            settings: AutoBackupSettings): seq[Rune] =
+
   if path.len == 0: return
 
   let slashPosition = path.rfind(ru"/")
-  if  slashPosition > 0:
-    result = path[0 ..< slashPosition] /
-             ru".history" /
-             path[slashPosition + 1 ..< ^1]
+
+  if settings.backupDir.len > 0:
+    if not existsDir($settings.backupDir): return ru""
+    if slashPosition > 0:
+      result = path[0 ..< slashPosition] /
+               settings.backupDir /
+               path[slashPosition + 1 ..< ^1]
+    else:
+      result = settings.backupDir / path
   else:
-    result = ru".history" / path
+    if slashPosition > 0:
+      result = path[0 ..< slashPosition] /
+               ru".history" /
+               path[slashPosition + 1 ..< ^1]
+    else:
+      result = ru".history" / path
 
 proc initHistoryManagerBuffer(status: var Editorstatus, sourcePath: seq[Rune]) =
   let
     bufferIndex = status.bufferIndexInCurrentWindow
     path = sourcePath
-    list = getBackupFiles(path)
+    list = getBackupFiles(path, status.settings.autoBackupSettings)
 
   if list.len == 0: return 
 
@@ -82,7 +97,8 @@ proc openDiffViewer(status: var Editorstatus, path: seq[Rune]) =
   # Setup backup file path and excute diff command
   let
     backupFilename = status.bufStatus[bufferIndex].buffer[currentLine]
-    backupPath = generateBackUpFilePath(backupFilename)
+    settings = status.settings.autoBackupSettings
+    backupPath = generateBackUpFilePath(backupFilename, settings)
     cmdOut = execCmdEx("diff -u " & $path & " " & $backupPath)
   var buffer: seq[seq[Rune]] = @[ru""]
   for r in toRunes(cmdOut.output):
