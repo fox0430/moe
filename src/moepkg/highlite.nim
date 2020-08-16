@@ -86,11 +86,11 @@ type
 
   SourceLanguage* = enum
     langNone, langNim, langCpp, langCsharp, langC, langJava,
-    langYaml, langPython, langJavaScript
+    langYaml, langPython, langJavaScript, langShell
 
 const
   sourceLanguageToStr*: array[SourceLanguage, string] = ["none",
-    "Nim", "C++", "C#", "C", "Java", "Yaml", "Python", "JavaScript"]
+    "Nim", "C++", "C#", "C", "Java", "Yaml", "Python", "JavaScript", "Shell"]
   tokenClassToStr*: array[TokenClass, string] = ["Eof", "None", "Whitespace",
     "DecNumber", "BinNumber", "HexNumber", "OctNumber", "FloatNumber",
     "Identifier", "Keyword", "StringLit", "LongStringLit", "CharLit",
@@ -1095,6 +1095,7 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langYaml: yamlNextToken(g)
   of langPython: pythonNextToken(g)
   of langJavaScript: javaScriptNextToken(g)
+  else: discard
 
 when isMainModule:
   var keywords: seq[string]
