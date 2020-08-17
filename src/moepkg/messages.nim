@@ -239,3 +239,6 @@ proc writeNotExistWorkspaceError*(cmdWin: var Window,
 proc writeWorkspaceList*(cmdWin: var Window, buffer: string) =
   cmdWin.writeMessageOnCommandWindow(buffer, EditorColorPair.commandBar)
   
+proc writeBackupRestoreError*(cmdWin: var Window) =
+  const mess = "Error: Restore failed"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)

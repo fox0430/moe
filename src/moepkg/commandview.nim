@@ -80,6 +80,19 @@ proc askCreateDirPrompt*(cmdWin: var Window,
   if key == ord('y'): result = true
   else: result = false
 
+proc askBackupRestorePrompt*(cmdWin: var Window,
+                             messageLog: var seq[seq[Rune]],
+                             filename: seq[Rune]): bool =
+
+  let mess = fmt"Restore {filename}?: y/n"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  messageLog.add(mess.toRunes)
+
+  let key = getKey(cmdWin)
+
+  if key == ord('y'): result = true
+  else: result = false
+
 proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
   for i in 0 .. r.high:
     var string = $r[i]

@@ -2,7 +2,7 @@
 
 import re, os, times, terminal, osproc
 import editorstatus, bufferstatus, unicodeext, ui, movement, gapbuffer,
-       highlight, color, settings
+       highlight, color, settings, messages, backup, commandview
 
 proc generateFilenamePatern(path: seq[Rune]): seq[Rune] =
   let splitPath = splitPath($path)
@@ -78,7 +78,7 @@ proc initHistoryManagerHighlight(bufStatus: BufferStatus,
       firstRow: i,
       firstColumn: 0,
       lastRow: i,
-      lastColumn: bufStatus.buffer[i].high,
+      lastColumn: line.high,
       color: color))
 
 proc isHistoryManagerMode(status: var Editorstatus): bool =
@@ -101,7 +101,7 @@ proc openDiffViewer(status: var Editorstatus, path: seq[Rune]) =
     backupPath = generateBackUpFilePath(backupFilename, settings)
     cmdOut = execCmdEx("diff -u " & $path & " " & $backupPath)
   var buffer: seq[seq[Rune]] = @[ru""]
-  for r in toRunes(cmdOut.output):
+  for r in ru(cmdOut.output):
     if r == '\n': buffer.add(ru"")
     else: buffer[^1].add(r)
 
@@ -116,6 +116,44 @@ proc openDiffViewer(status: var Editorstatus, path: seq[Rune]) =
 
   status.bufStatus[status.bufStatus.high].path = backupPath
   status.bufStatus[status.bufStatus.high].buffer = initGapBuffer(buffer)
+
+proc getBackupDir(sourcePath: seq[Rune],
+                  settings: AutoBackupSettings): seq[Rune] =
+
+  if settings.backupDir.len > 0:
+    result = settings.backupDir
+  else:
+    let slashPosition = sourcePath.rfind(ru"/")
+    if slashPosition > 0:
+      result = sourcePath[0 ..< slashPosition]
+    else:
+      result = getCurrentDir().ru
+
+proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
+  let
+    workspaceIndex = status.currentWorkSpaceIndex
+    windowNode = status.workspace[workspaceIndex].currentMainWindowNode
+    bufferIndex = windowNode.bufferIndex
+    bufStatus = status.bufStatus[bufferIndex]
+    backupFilename = bufStatus.buffer[windowNode.currentLine]
+    backupDir = getBackupDir(sourcePath, status.settings.autoBackupSettings)
+    backupFilePath = backupDir / backupFilename
+
+  let isRestore = status.commandWindow.askBackupRestorePrompt(status.messageLog,
+                                                              backupFilename)
+  if not isRestore: return
+
+  bufStatus.backupBuffer(status.settings.characterEncoding,
+                         status.settings.autoBackupSettings,
+                         status.settings.notificationSettings,
+                         status.commandwindow,
+                         status.messageLog)
+
+  try:
+    copyFile($backupFilePath, $sourcePath)
+  except OSError:
+    status.commandWindow.writeBackupRestoreError
+    return
 
 proc historyManager*(status: var EditorStatus) =
   let sourcePath = status.bufStatus[status.prevBufferIndex].path
@@ -157,3 +195,5 @@ proc historyManager*(status: var EditorStatus) =
       status.bufStatus[bufferIndex].keyDown(status.workSpace[workspaceIndex].currentMainWindowNode)
     elif isEnterKey(key):
       status.openDiffViewer(sourcePath)
+    elif key == ord('R'):
+      status.restoreBackupFile(sourcePath)
