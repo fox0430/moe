@@ -125,9 +125,9 @@ proc getBackupDir(sourcePath: seq[Rune],
   else:
     let slashPosition = sourcePath.rfind(ru"/")
     if slashPosition > 0:
-      result = sourcePath[0 ..< slashPosition]
+      result = sourcePath[0 ..< slashPosition] / ru".history"
     else:
-      result = getCurrentDir().ru
+      result = getCurrentDir().ru / ru".history"
 
 proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
   let
