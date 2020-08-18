@@ -2,7 +2,8 @@
 
 import re, os, times, terminal, osproc
 import editorstatus, bufferstatus, unicodeext, ui, movement, gapbuffer,
-       highlight, color, settings, messages, backup, commandview
+       highlight, color, settings, messages, backup, commandview, fileutils,
+       editorview
 
 proc generateFilenamePatern(path: seq[Rune]): seq[Rune] =
   let splitPath = splitPath($path)
@@ -13,7 +14,7 @@ proc generateFilenamePatern(path: seq[Rune]): seq[Rune] =
              ru"_[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+[0-9]{2}:[0-9]{2}" &
              result[dotPosi .. ^1]
   else:
-    result &= ru"_[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+[0-9]{2}:[0-9]{2}" 
+    result &= ru"_[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+[0-9]{2}:[0-9]{2}"
 
 proc getBackupFiles(path: seq[Rune],
                     settings: AutoBackupSettings): seq[seq[Rune]] =
@@ -58,7 +59,7 @@ proc initHistoryManagerBuffer(status: var Editorstatus, sourcePath: seq[Rune]) =
     path = sourcePath
     list = getBackupFiles(path, status.settings.autoBackupSettings)
 
-  if list.len == 0: return 
+  if list.len == 0: return
 
   status.bufStatus[bufferIndex].buffer = initGapBuffer[seq[Rune]]()
 
@@ -143,6 +144,7 @@ proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
                                                               backupFilename)
   if not isRestore: return
 
+  # Backup files before restore
   bufStatus.backupBuffer(status.settings.characterEncoding,
                          status.settings.autoBackupSettings,
                          status.settings.notificationSettings,
@@ -154,7 +156,26 @@ proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
   except OSError:
     status.commandWindow.writeBackupRestoreError
     return
+
+  # Update restore buffer
+  for i in 0 ..< status.bufStatus.len:
+    if status.bufStatus[i].path == sourcePath:
+      let lang = status.bufStatus[i].language
+      status.bufStatus[i] = BufferStatus(path: sourcePath,
+                                         mode: Mode.normal,
+                                         language: lang,
+                                         lastSaveTime: now())
+      let textAndEncoding = openFile(sourcePath)
+      status.bufStatus[i].buffer = textAndEncoding.text.toGapBuffer
+      status.settings.characterEncoding = textAndEncoding.encoding
+
+      let workspaceIndex = status.currentWorkSpaceIndex
+      status.workSpace[workspaceIndex].currentMainWindowNode.view =
+        status.bufStatus[i].buffer.initEditorView(terminalHeight(),
+                                                  terminalWidth())
   
+  status.resize(terminalHeight(), terminalWidth())
+
   let settings = status.settings.notificationSettings
   status.commandwindow.writeRestoreFileSuccessMessage(backupFilename,
                                                       settings,
