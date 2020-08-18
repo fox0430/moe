@@ -29,6 +29,8 @@ type NotificationSettings* = object
   buildOnSaveLogNotify*: bool
   filerScreenNotify*: bool
   filerLogNotify*: bool
+  restoreScreenNotify*: bool
+  restoreLogNotify*: bool
 
 type QuickRunSettings* = object
   saveBufferWhenQuickRun*: bool
@@ -128,6 +130,12 @@ proc initNotificationSettings(): NotificationSettings =
   result.workspaceLogNotify = true
   result.quickRunScreenNotify = true
   result.quickRunLogNotify = true
+  result.buildOnSaveScreenNotify = true
+  result.buildOnSaveLogNotify = true
+  result.filerScreenNotify = true
+  result.filerLogNotify = true
+  result.restoreScreenNotify = true
+  result.restoreLogNotify = true
 
 proc initQuickRunSettings(): QuickRunSettings =
   result.saveBufferWhenQuickRun = true
@@ -857,6 +865,12 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Notification"].contains("filerLogNotify"):
       result.notificationSettings.filerLogNotify = settings["Notification"]["filerLogNotify"].getBool
 
+    if settings["Notification"].contains("restoreScreenNotify"):
+      result.notificationSettings.restoreScreenNotify = settings["Notification"]["restoreScreenNotify"].getBool
+
+    if settings["Notification"].contains("restoreLogNotify"):
+      result.notificationSettings.restoreLogNotify = settings["Notification"]["restoreLogNotify"].getBool
+
   if settings.contains("Filer"):
     if settings["Filer"].contains("showIcons"):
       result.filerSettings.showIcons = settings["Filer"]["showIcons"].getbool()
@@ -1384,7 +1398,9 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
            "buildOnSaveScreenNotify",
            "buildOnSaveLogNotify",
            "filerScreenNotify",
-           "filerLogNotify":
+           "filerLogNotify",
+           "restoreScreenNotify",
+           "restoreLogNotify":
           if item.val["type"].getStr != "bool":
             return some($item)
         else:

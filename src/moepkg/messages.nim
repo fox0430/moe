@@ -242,3 +242,14 @@ proc writeWorkspaceList*(cmdWin: var Window, buffer: string) =
 proc writeBackupRestoreError*(cmdWin: var Window) =
   const mess = "Error: Restore failed"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+
+proc writeRestoreFileSuccessMessage*(cmdWin: var Window,
+                                     filename: seq[Rune],
+                                     settings: NotificationSettings,
+                                     messageLog: var seq[seq[Rune]]) =
+
+  let message = fmt"Restore successful {filename}"
+  if settings.screenNotifications and settings.restoreScreenNotify:
+    cmdWin.writeMessageOnCommandWindow(message, EditorColorPair.commandBar)
+  if settings.logNotifications and settings.restoreLogNotify:
+    messageLog.add(message.toRunes)

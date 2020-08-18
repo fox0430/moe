@@ -154,6 +154,11 @@ proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
   except OSError:
     status.commandWindow.writeBackupRestoreError
     return
+  
+  let settings = status.settings.notificationSettings
+  status.commandwindow.writeRestoreFileSuccessMessage(backupFilename,
+                                                      settings,
+                                                      status.messageLog)
 
 proc historyManager*(status: var EditorStatus) =
   let sourcePath = status.bufStatus[status.prevBufferIndex].path
