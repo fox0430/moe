@@ -246,6 +246,31 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
     except OSError:
       status.commandWindow.writeFileOpenError(path, status.messageLog)
 
+proc openNewWinAndOpenFilerOrDir(status: var EditorStatus,
+                                 filerStatus: var FilerStatus) =
+
+  let
+    workspaceIndex = status.currentWorkSpaceIndex
+    currentBufferIndex = status.bufferIndexInCurrentWindow
+    windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
+    path = filerStatus.dirList[windowNode.currentLine].path
+
+  status.verticalSplitWindow
+  status.resize(terminalHeight(), terminalWidth())
+  status.moveNextWindow
+
+  if existsDir($path):
+    try:
+      setCurrentDir($path)
+    except OSError:
+      status.commandWindow.writeFileOpenError($path, status.messageLog)
+      status.addNewBuffer("")
+    status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSaveTime: now()))
+  else:
+    status.addNewBuffer($path)
+
+    status.changeCurrentBuffer(status.bufStatus.high)
+
 proc setDirListColor(kind: PathComponent,
                      isCurrentLine: bool): EditorColorPair =
 
@@ -566,6 +591,8 @@ proc filerMode*(status: var EditorStatus) =
       filerStatus.changeSortBy
     elif key == ord('N'):
       status.createDir(filerStatus)
+    elif key == ord('v'):
+      status.openNewWinAndOpenFilerOrDir(filerStatus)
     elif isControlJ(key):
       status.movePrevWindow
     elif isControlK(key):
