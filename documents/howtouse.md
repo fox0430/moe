@@ -142,6 +142,7 @@ Check command bar
 ```g``` - Go to top of list  
 ```G``` - Go to last of list  
 ```i``` - Detail information  
+```v``` - Split window and open file or directory  
 
 
 ## Ex mode
