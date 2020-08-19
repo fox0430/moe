@@ -60,6 +60,19 @@ proc diffViewer*(status: var Editorstatus) =
     elif key == ord(':'):
       status.changeMode(Mode.ex)
     elif key == ord('k') or isUpKey(key):
-      status.bufStatus[bufferIndex].keyUp(status.workSpace[workspaceIndex].currentMainWindowNode)
+      status.bufStatus[bufferIndex].keyUp(
+        status.workSpace[workspaceIndex].currentMainWindowNode)
     elif key == ord('j') or isDownKey(key):
-      status.bufStatus[bufferIndex].keyDown(status.workSpace[workspaceIndex].currentMainWindowNode)
+      status.bufStatus[bufferIndex].keyDown(
+        status.workSpace[workspaceIndex].currentMainWindowNode)
+    elif key == ord('g'):
+      let secondKey = getKey(
+        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+      if  secondKey == ord('g'):
+        status.moveToFirstLine
+      else:
+        discard
+    elif key == ord('G'):
+      status.moveToLastLine
+    else:
+      discard
