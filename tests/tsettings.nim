@@ -99,6 +99,8 @@ const tomlStr = """
   buildOnSaveLogNotify = false
   filerScreenNotify = false
   filerLogNotify = false
+  restoreScreenNotify = false
+  restoreLogNotify = false
 
   [Filer]
   showIcons = false
@@ -306,6 +308,8 @@ suite "Parse configuration file":
     check not settings.notificationSettings.buildOnSaveLogNotify
     check not settings.notificationSettings.filerScreenNotify
     check not settings.notificationSettings.filerLogNotify
+    check not settings.notificationSettings.restoreScreenNotify
+    check not settings.notificationSettings.restoreLogNotify
 
     check not settings.filerSettings.showIcons
 
