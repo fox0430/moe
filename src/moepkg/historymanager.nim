@@ -157,7 +157,7 @@ proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
     status.commandWindow.writeBackupRestoreError
     return
 
-  # Update restore buffer
+  # Update restored buffer
   for i in 0 ..< status.bufStatus.len:
     if status.bufStatus[i].path == sourcePath:
       let lang = status.bufStatus[i].language
@@ -180,6 +180,32 @@ proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
   status.commandwindow.writeRestoreFileSuccessMessage(backupFilename,
                                                       settings,
                                                       status.messageLog)
+
+proc deleteBackupFiles(status: var EditorStatus, sourcePath: seq[Rune]) =
+  let
+    workspaceIndex = status.currentWorkSpaceIndex
+    windowNode = status.workspace[workspaceIndex].currentMainWindowNode
+    bufferIndex = windowNode.bufferIndex
+    bufStatus = status.bufStatus[bufferIndex]
+    backupFilename = bufStatus.buffer[windowNode.currentLine]
+    backupDir = getBackupDir(sourcePath, status.settings.autoBackupSettings)
+    backupFilePath = backupDir / backupFilename
+
+  let isDelete = status.commandWindow.askDeleteBackupPrompt(status.messageLog,
+                                                            backupFilename)
+
+  if not isDelete: return
+
+  try:
+    removeFile($backupFilePath)
+  except OSError:
+    status.commandwindow.writeDeleteBackupError
+    return
+
+  let settings = status.settings.notificationSettings
+  status.commandwindow.writeMessageDeletedFile($backupFilename,
+                                              settings,
+                                              status.messageLog)
 
 proc historyManager*(status: var EditorStatus) =
   let sourcePath = status.bufStatus[status.prevBufferIndex].path
@@ -216,10 +242,17 @@ proc historyManager*(status: var EditorStatus) =
     elif key == ord(':'):
       status.changeMode(Mode.ex)
     elif key == ord('k') or isUpKey(key):
-      status.bufStatus[bufferIndex].keyUp(status.workSpace[workspaceIndex].currentMainWindowNode)
+      status.bufStatus[bufferIndex].keyUp(
+        status.workSpace[workspaceIndex].currentMainWindowNode)
     elif key == ord('j') or isDownKey(key):
-      status.bufStatus[bufferIndex].keyDown(status.workSpace[workspaceIndex].currentMainWindowNode)
+      status.bufStatus[bufferIndex].keyDown(
+        status.workSpace[workspaceIndex].currentMainWindowNode)
     elif isEnterKey(key):
       status.openDiffViewer(sourcePath)
     elif key == ord('R'):
       status.restoreBackupFile(sourcePath)
+    elif key == ord('D'):
+      status.deleteBackupFiles(sourcePath)
+      status.initHistoryManagerBuffer(sourcePath)
+    else:
+      discard

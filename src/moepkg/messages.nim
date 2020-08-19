@@ -253,3 +253,7 @@ proc writeRestoreFileSuccessMessage*(cmdWin: var Window,
     cmdWin.writeMessageOnCommandWindow(message, EditorColorPair.commandBar)
   if settings.logNotifications and settings.restoreLogNotify:
     messageLog.add(message.toRunes)
+
+proc writeDeleteBackupError*(cmdWin: var Window) =
+  const mess = "Error: Delete backup file failed"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
