@@ -490,6 +490,19 @@ default is true
 filerLogNotify
 ```
 
+Enable/disable restore messages/notifications in status bar (bool)  
+default is true
+```
+restoreScreenNotify
+```
+
+Enable/disable restore messages/notifications in log (bool)  
+default is true
+```
+restoreLogNotify
+```
+
+
 ### Filer table
 
 Show/hidden unicode icons (bool)  
