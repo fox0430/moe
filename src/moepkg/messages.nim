@@ -246,3 +246,21 @@ proc writeNotExistWorkspaceError*(cmdWin: var Window,
 proc writeWorkspaceList*(cmdWin: var Window, buffer: string) =
   cmdWin.writeMessageOnCommandWindow(buffer, EditorColorPair.commandBar)
   
+proc writeBackupRestoreError*(cmdWin: var Window) =
+  const mess = "Error: Restore failed"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+
+proc writeRestoreFileSuccessMessage*(cmdWin: var Window,
+                                     filename: seq[Rune],
+                                     settings: NotificationSettings,
+                                     messageLog: var seq[seq[Rune]]) =
+
+  let message = fmt"Restore successful {filename}"
+  if settings.screenNotifications and settings.restoreScreenNotify:
+    cmdWin.writeMessageOnCommandWindow(message, EditorColorPair.commandBar)
+  if settings.logNotifications and settings.restoreLogNotify:
+    messageLog.add(message.toRunes)
+
+proc writeDeleteBackupError*(cmdWin: var Window) =
+  const mess = "Error: Delete backup file failed"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)

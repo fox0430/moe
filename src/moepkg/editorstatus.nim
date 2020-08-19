@@ -15,6 +15,7 @@ type Registers* = object
 type EditorStatus* = object
   platform*: Platform
   bufStatus*: seq[BufferStatus]
+  prevBufferIndex*: int
   searchHistory*: seq[seq[Rune]]
   exCommandHistory*: seq[seq[Rune]]
   normalCommandHistory*: seq[seq[Rune]]
@@ -184,10 +185,11 @@ proc resize*(status: var EditorStatus, height, width: int) =
           x = if node.x > 0 and
                  node.parent.splitType == SplitType.vertical: node.x + 1
               else: node.x
-        status.workSpace[workspaceIndex].statusBar[statusBarIndex].window.resize(height,
-                                                                                 width,
-                                                                                 y,
-                                                                                 x)
+        status.workSpace[workspaceIndex].statusBar[statusBarIndex].window.resize(
+          height,
+          width,
+          y,
+          x)
         status.workSpace[workspaceIndex].statusBar[statusBarIndex].window.refresh
 
         # Update status bar info
@@ -208,10 +210,11 @@ proc resize*(status: var EditorStatus, height, width: int) =
       x = 0
     let 
       y = max(height, 4) - 2
-    status.workSpace[workspaceIndex].statusBar[0].window.resize(statusBarHeight,
-                                                                width,
-                                                                y,
-                                                                x)
+    status.workSpace[workspaceIndex].statusBar[0].window.resize(
+      statusBarHeight,
+      width,
+      y,
+      x)
 
   ## Resize work space info window
   if status.settings.workSpace.workSpaceLine:
@@ -250,10 +253,11 @@ proc updateStatusBar(status: var Editorstatus) =
   if not status.settings.statusBar.multipleStatusBar:
     const isActiveWindow = true
     let index = status.workSpace[workspaceIndex].statusBar[0].bufferIndex
-    status.bufStatus[index].writeStatusBar(status.workSpace[workspaceIndex].statusBar[0],
-                                           status.workspace[workspaceIndex].currentMainWindowNode,
-                                           isActiveWindow,
-                                           status.settings)
+    status.bufStatus[index].writeStatusBar(
+      status.workSpace[workspaceIndex].statusBar[0],
+      status.workspace[workspaceIndex].currentMainWindowNode,
+      isActiveWindow,
+      status.settings)
   else:
     for i in 0 ..< status.workSpace[workspaceIndex].statusBar.len:
       let
@@ -262,10 +266,11 @@ proc updateStatusBar(status: var Editorstatus) =
         windowNode =
           status.workspace[workspaceIndex].mainWindowNode.searchByWindowIndex(index)
         isActiveWindow = index == status.workSpace[workspaceIndex].currentMainWindowNode.index
-      status.bufStatus[bufferIndex].writeStatusBar(status.workSpace[workspaceIndex].statusBar[i],
-                                                   windowNode,
-                                                   isActiveWindow,
-                                                   status.settings)
+      status.bufStatus[bufferIndex].writeStatusBar(
+        status.workSpace[workspaceIndex].statusBar[i],
+        windowNode,
+        isActiveWindow,
+        status.settings)
 
 proc initSyntaxHighlight(windowNode: var WindowNode,
                          bufStatus: seq[BufferStatus],
@@ -279,15 +284,18 @@ proc initSyntaxHighlight(windowNode: var WindowNode,
       var node = queue.pop
       if node.window != nil:
         let bufStatus = bufStatus[node.bufferIndex]
-        if (bufStatus.mode != Mode.filer) and
-           not (bufStatus.mode == Mode.ex and
-           bufStatus.prevMode == Mode.filer):
+        if not isFilerMode(bufStatus.mode, bufStatus.prevMode) and
+           not isHistoryManagerMode(bufStatus.mode, bufStatus.prevMode) and
+           not isDiffViewerMode(bufStatus.mode, bufStatus.prevMode):
           let lang = if isSyntaxHighlight: bufStatus.language
                      else: SourceLanguage.langNone
           node.highlight = ($bufStatus.buffer).initHighlight(reservedWords, lang)
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)
+
+proc isLogViewerMode(mode, prevMode: Mode): bool =
+  (mode == logViewer) or (mode == ex and prevMode == logViewer)
 
 proc updateLogViewer(status: var Editorstatus, bufferIndex: int) =
   status.bufStatus[bufferIndex].buffer = initGapBuffer(@[ru""])
@@ -298,21 +306,23 @@ proc update*(status: var EditorStatus) =
   setCursor(false)
 
   if status.settings.workSpace.workSpaceLine:
-   status.workSpaceTabWindow.writeTabLineWorkSpace(status.workspace.len,
-                                                   status.currentWorkSpaceIndex)
+    status.workSpaceTabWindow.writeTabLineWorkSpace(
+      status.workspace.len,
+      status.currentWorkSpaceIndex)
 
   if status.settings.tabLine.useTab:
-    status.tabWindow.writeTabLineBuffer(status.bufStatus,
-                                  status.bufferIndexInCurrentWindow,
-                                  status.workspace[status.currentWorkSpaceIndex],
-                                  status.settings.tabline.allBuffer
-                                  )
+    status.tabWindow.writeTabLineBuffer(
+      status.bufStatus,
+      status.bufferIndexInCurrentWindow,
+      status.workspace[status.currentWorkSpaceIndex],
+      status.settings.tabline.allBuffer)
 
   let workspaceIndex = status.currentWorkSpaceIndex
 
-  status.workspace[workspaceIndex].mainWindowNode.initSyntaxHighlight(status.bufStatus,
-                                                                      status.settings.reservedWords,
-                                                                      status.settings.syntax)
+  status.workspace[workspaceIndex].mainWindowNode.initSyntaxHighlight(
+    status.bufStatus,
+    status.settings.reservedWords,
+    status.settings.syntax)
 
   var queue = initHeapQueue[WindowNode]()
   for node in status.workSpace[workspaceIndex].mainWindowNode.child:
@@ -355,19 +365,20 @@ proc update*(status: var EditorStatus) =
 
         ## Update highlight
         ## TODO: Refactor and fix
-        if (currentMode == logViewer) or
-           (currentMode == ex and
-           prevMode == logViewer):
-          status.updateLogViewer(node.bufferIndex)
-          status.updateHighlight(node)
-        elif (currentMode != Mode.filer) and
-             not (currentMode == Mode.ex and
-             prevMode == Mode.filer):
-          if isCurrentMainWin:
+        if not isFilerMode(currentMode, prevMode) and
+             not isHistoryManagerMode(currentMode, prevMode) and
+             not isDiffViewerMode(currentMode, prevMode):
+
+          if isLogViewerMode(currentMode, prevMode):
+            status.updateLogViewer(node.bufferIndex)
+          elif isCurrentMainWin:
             if status.settings.highlightOtherUsesCurrentWord:
               status.highlightOtherUsesCurrentWord
-            if isVisualMode or isVisualBlockMode: status.highlightSelectedArea
-            if status.settings.highlightPairOfParen: status.highlightPairOfParen
+            if isVisualMode or isVisualBlockMode:
+              status.highlightSelectedArea
+            if status.settings.highlightPairOfParen:
+              status.highlightPairOfParen
+
           status.updateHighlight(node)
 
         let
@@ -902,14 +913,10 @@ proc highlightTrailingSpaces(status: var Editorstatus) =
 
 from search import searchAllOccurrence
 proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
-  let bufStatus = status.bufStatus[windowNode.bufferIndex]
-  if (bufStatus.mode == Mode.filer) or
-     (bufStatus.mode == Mode.ex and
-     bufStatus.prevMode == Mode.filer): return
-
   let
     range = windowNode.view.rangeOfOriginalLineInView
     startLine = range[0]
+    bufStatus = status.bufStatus[windowNode.bufferIndex]
     endLine = if bufStatus.buffer.len > range[1] + 1: range[1] + 2
               elif bufStatus.buffer.len > range[1]: range[1] + 1
               else: range[1]

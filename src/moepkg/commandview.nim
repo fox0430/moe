@@ -30,6 +30,7 @@ const exCommandList = [
   "highlightCurrentWord",
   "highlightFullSpace",
   "highlightParen",
+  "history",
   "icon",
   "incrementalSearch",
   "indent",
@@ -71,6 +72,32 @@ proc askCreateDirPrompt*(cmdWin: var Window,
                          path: string): bool =
 
   let mess = fmt"{path} does not exists. Create it now?: y/n"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  messageLog.add(mess.toRunes)
+
+  let key = getKey(cmdWin)
+
+  if key == ord('y'): result = true
+  else: result = false
+
+proc askBackupRestorePrompt*(cmdWin: var Window,
+                             messageLog: var seq[seq[Rune]],
+                             filename: seq[Rune]): bool =
+
+  let mess = fmt"Restore {filename}?: y/n"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  messageLog.add(mess.toRunes)
+
+  let key = getKey(cmdWin)
+
+  if key == ord('y'): result = true
+  else: result = false
+
+proc askDeleteBackupPrompt*(cmdWin: var Window,
+                            messageLog: var seq[seq[Rune]],
+                            filename: seq[Rune]): bool =
+
+  let mess = fmt"Delete {filename}?: y/n"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
   messageLog.add(mess.toRunes)
 

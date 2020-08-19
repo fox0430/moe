@@ -43,6 +43,7 @@ proc writeStatusBarNormalModeInfo(bufStatus: var BufferStatus,
 
   let
     mode = bufStatus.mode
+    prevMode = bufStatus.prevMode
     color = setStatusBarColor(mode)
     statusBarWidth = statusBar.window.width
 
@@ -51,6 +52,7 @@ proc writeStatusBarNormalModeInfo(bufStatus: var BufferStatus,
 
   if settings.statusBar.filename:
     var filename = if bufStatus.path.len > 0: bufStatus.path
+                   elif isHistoryManagerMode(mode, prevMode): ru""
                    else: ru"No name"
     let homeDir = ru(getHomeDir())
     if (filename.len() >= homeDir.len() and
@@ -164,6 +166,8 @@ proc setModeStr(mode: Mode, isActiveWindow, showModeInactive: bool): string =
     of Mode.logViewer: result = " LOG "
     of Mode.recentFile: result = " RECENT "
     of Mode.quickRun: result = " QUICKRUN "
+    of Mode.history: result = " HISTORY "
+    of Mode.diff: result = "DIFF "
     else: result = " NORMAL "
 
 proc setModeStrColor(mode: Mode): EditorColorPair =
@@ -185,18 +189,17 @@ proc isShowGitBranchName(mode, prevMode: Mode,
     if showGitInactive or
     (not showGitInactive and isActiveWindow): result = true
 
-  if mode == Mode.filer: return false
-  elif mode == Mode.ex and prevMode == Mode.filer: return false
-  elif mode == Mode.logViewer: return false
-  elif mode == Mode.ex and prevMode == Mode.logViewer: return false
-  elif mode == Mode.bufManager: return false
-  elif mode == Mode.ex and prevMode == Mode.bufManager: return false
-  elif mode == Mode.help: return false
-  elif mode == Mode.ex and prevMode == Mode.help: return false
-  elif mode == Mode.recentFile: return false
-  elif mode == Mode.ex and prevMode == Mode.recentFile: return false
-  elif mode == Mode.quickRun: return false
-  elif mode == Mode.ex and prevMode == Mode.quickRun: return false
+  if mode == Mode.normal or
+     mode == Mode.insert or
+     mode == Mode.visual or
+     mode == Mode.replace: result = true
+  elif mode == Mode.ex:
+    if prevMode == Mode.normal or
+       prevMode == Mode.insert or
+       prevMode == Mode.visual or
+       prevMode == Mode.replace: result = true
+  else:
+    result = false
 
 proc writeStatusBar*(bufStatus: var BufferStatus,
                      statusBar: var StatusBar,
@@ -223,8 +226,7 @@ proc writeStatusBar*(bufStatus: var BufferStatus,
   if isShowGitBranchName(currentMode, prevMode, isActiveWindow, settings):
     statusBar.writeStatusBarCurrentGitBranchName(statusBarBuffer, isActiveWindow)
 
-  if currentMode == Mode.filer or
-     (currentMode == Mode.ex and prevMode == Mode.filer):
+  if isFilerMode(currentMode, prevMode):
     bufStatus.writeStatusBarFilerModeInfo(statusBar,
                                           statusBarBuffer,
                                           windowNode,

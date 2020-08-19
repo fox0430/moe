@@ -136,6 +136,26 @@ Check command bar
 ```Esc``` or ```Ctrl-[``` - Start normal mode  
 
 
+## Hitory mode (Backup file manager)  
+
+```j``` - ↓  
+```k``` - ↑  
+```Enter``` - Open diff viewer  
+```R``` - Restore from backup file  
+```D``` - Delete backup file  
+```r``` - Reload backup files  
+```gg``` - Move to the first line  
+```G``` - Move to the last line  
+
+
+## Diff mode (Diff viewer)    
+
+```j``` - ↓  
+```k``` - ↑  
+```gg``` - Move to the first line  
+```G``` - Move to the last line  
+
+
 ## Filer mode
 
 ```D``` - Delete file  
@@ -207,3 +227,5 @@ Check command bar
 ```run``` or ```Q``` - Quick run
 
 ```recent``` - Open recent file selection mode (Only supported on Linux)  
+
+```history``` - Open backup file manager  

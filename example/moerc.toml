@@ -175,6 +175,10 @@ filerScreenNotify = true
 
 filerLogNotify = true
 
+restoreScreenNotify = true
+
+restoreLogNotify = true
+
 [Filer]
 
 showIcons = true

@@ -30,6 +30,8 @@ type NotificationSettings* = object
   buildOnSaveLogNotify*: bool
   filerScreenNotify*: bool
   filerLogNotify*: bool
+  restoreScreenNotify*: bool
+  restoreLogNotify*: bool
 
 type QuickRunSettings* = object
   saveBufferWhenQuickRun*: bool
@@ -131,6 +133,12 @@ proc initNotificationSettings(): NotificationSettings =
   result.workspaceLogNotify = true
   result.quickRunScreenNotify = true
   result.quickRunLogNotify = true
+  result.buildOnSaveScreenNotify = true
+  result.buildOnSaveLogNotify = true
+  result.filerScreenNotify = true
+  result.filerLogNotify = true
+  result.restoreScreenNotify = true
+  result.restoreLogNotify = true
 
 proc initQuickRunSettings(): QuickRunSettings =
   result.saveBufferWhenQuickRun = true
@@ -860,6 +868,12 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Notification"].contains("filerLogNotify"):
       result.notificationSettings.filerLogNotify = settings["Notification"]["filerLogNotify"].getBool
 
+    if settings["Notification"].contains("restoreScreenNotify"):
+      result.notificationSettings.restoreScreenNotify = settings["Notification"]["restoreScreenNotify"].getBool
+
+    if settings["Notification"].contains("restoreLogNotify"):
+      result.notificationSettings.restoreLogNotify = settings["Notification"]["restoreLogNotify"].getBool
+
   if settings.contains("Filer"):
     if settings["Filer"].contains("showIcons"):
       result.filerSettings.showIcons = settings["Filer"]["showIcons"].getbool()
@@ -1140,6 +1154,24 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("reservedWordBg"):
       ColorThemeTable[ColorTheme.config].reservedWordBg = color("reservedWordBg")
 
+    if settings["Theme"].contains("currentHistory"):
+      ColorThemeTable[ColorTheme.config].currentHistory = color("currentHistory")
+
+    if settings["Theme"].contains("currentHistoryBg"):
+      ColorThemeTable[ColorTheme.config].currentHistoryBg = color("currentHistoryBg")
+
+    if settings["Theme"].contains("addedLine"):
+      ColorThemeTable[ColorTheme.config].addedLine = color("addedLine")
+
+    if settings["Theme"].contains("addedLineBg"):
+      ColorThemeTable[ColorTheme.config].addedLineBg = color("addedLineBg")
+
+    if settings["Theme"].contains("deletedLine"):
+      ColorThemeTable[ColorTheme.config].deletedLine = color("deletedLine")
+
+    if settings["Theme"].contains("deletedLineBg"):
+      ColorThemeTable[ColorTheme.config].deletedLineBg = color("deletedLineBg")
+
     result.editorColorTheme = ColorTheme.config
   if vscodeTheme:
     # search for the vscode theme that is set in the current preferences of
@@ -1369,7 +1401,9 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
            "buildOnSaveScreenNotify",
            "buildOnSaveLogNotify",
            "filerScreenNotify",
-           "filerLogNotify":
+           "filerLogNotify",
+           "restoreScreenNotify",
+           "restoreLogNotify":
           if item.val["type"].getStr != "bool":
             return some($item)
         else:
