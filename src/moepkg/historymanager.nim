@@ -254,5 +254,8 @@ proc historyManager*(status: var EditorStatus) =
     elif key == ord('D'):
       status.deleteBackupFiles(sourcePath)
       status.initHistoryManagerBuffer(sourcePath)
+    elif key == ord('r'):
+      # Reload backup files
+      status.initHistoryManagerBuffer(sourcePath)
     else:
       discard
