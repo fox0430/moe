@@ -1309,6 +1309,26 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         else:
           return some($item)
 
+  template validateStatusBarTable() =
+    for item in json["StatusBar"].pairs:
+      case item.key:
+        of "mode",
+           "filename",
+           "chanedMark",
+           "line",
+           "column",
+           "encoding",
+           "language",
+           "directory",
+           "multipleStatusBar",
+           "gitbranchName",
+           "showGitInactive",
+           "showModeInactive":
+          if not (item.val["type"].getStr == "bool"):
+            return some($item)
+        else:
+          return some($item)
+
   template validateBuildOnSaveTable() =
     for item in json["BuildOnSave"].pairs:
       case item.key:
@@ -1448,6 +1468,10 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
     case table:
       of "Standard":
         validateStandardTable()
+      of "TabLine":
+        validateTabLineTable()
+      of "StatusBar":
+        validateStatusBarTable()
       of "BuildOnSave":
         validateBuildOnSaveTable()
       of "WorkSpace":
