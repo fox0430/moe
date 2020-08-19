@@ -257,5 +257,14 @@ proc historyManager*(status: var EditorStatus) =
     elif key == ord('r'):
       # Reload backup files
       status.initHistoryManagerBuffer(sourcePath)
+    elif key == ord('g'):
+      let secondKey = getKey(
+        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+      if  secondKey == ord('g'):
+        status.moveToFirstLine
+      else:
+        discard
+    elif key == ord('G'):
+      status.moveToLastLine
     else:
       discard
