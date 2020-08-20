@@ -1,4 +1,4 @@
-import strutils, sequtils, os, osproc, random, strformat, math
+import strutils, sequtils, os, osproc, random, strformat
 import editorstatus, ui, gapbuffer, unicodeext, undoredostack,
        window, bufferstatus, movement, messages
 
