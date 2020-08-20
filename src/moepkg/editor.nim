@@ -136,14 +136,34 @@ proc currentLineDeleteLineBreakBeforeCursor*(bufStatus: var BufferStatus,
   
   inc(bufStatus.countChange)
 
+proc countSpaceBeginOfLine(line: seq[Rune], tabStop: int): int =
+  for r in line:
+    if isWhiteSpace(r): result.inc
+    else: break
+
 proc keyBackspace*(bufStatus: var BufferStatus,
                    windowNode: WindowNode,
-                   autoDeleteParen: bool) =
+                   autoDeleteParen: bool,
+                   tabStop: int) =
 
   if windowNode.currentColumn == 0:
-    currentLineDeleteLineBreakBeforeCursor(bufStatus, windowNode, autoDeleteParen)
+    currentLineDeleteLineBreakBeforeCursor(bufStatus,
+                                           windowNode,
+                                           autoDeleteParen)
   else:
-    currentLineDeleteCharacterBeforeCursor(bufStatus, windowNode, autoDeleteParen)
+    let
+      line = bufStatus.buffer[windowNode.currentLine]
+      numOfSpsce = line.countSpaceBeginOfLine(tabStop)
+      numOfDelete = if numOfSpsce == 0: 1
+                    elif numOfSpsce mod tabStop != 0:
+                      numOfSpsce mod tabStop
+                    else:
+                      tabStop
+
+    for i in 0 ..< numOfDelete:
+      currentLineDeleteCharacterBeforeCursor(bufStatus,
+                                             windowNode,
+                                             autoDeleteParen)
 
 proc deleteBeforeCursorToFirstNonBlank*(bufStatus: var BufferStatus,
                                         windowNode: WindowNode  ) =
@@ -361,12 +381,14 @@ proc deleteWord*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   inc(bufStatus.countChange)
 
 proc deleteWordBeforeCursor*(bufStatus: var BufferStatus,
-                            windowNode: var WindowNode) =
+                            windowNode: var WindowNode,
+                            tabStop: int) =
 
   if windowNode.currentLine == 0 and windowNode.currentColumn == 0: return
 
   if windowNode.currentColumn == 0:
-    bufStatus.keyBackspace(windowNode, false)
+    let isAutoDeleteParen = false
+    bufStatus.keyBackspace(windowNode, isAutoDeleteParen, tabStop)
   else:
     bufStatus.moveToBackwardWord(windowNode)
     bufStatus.deleteWord(windowNode)
