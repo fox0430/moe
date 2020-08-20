@@ -378,7 +378,8 @@ test "Auto delete paren 5":
     status.changeMode(Mode.insert)
     status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
     status.bufStatus[0].keyBackspace(status.workSpace[0].currentMainWindowNode,
-                                     status.settings.autoDeleteParen)
+                                     status.settings.autoDeleteParen,
+                                     status.settings.tabStop)
 
     check(status.bufStatus[0].buffer[0] == ru"")
 
@@ -390,7 +391,8 @@ test "Auto delete paren 5":
     for i in 0 ..< 2:
       status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
     status.bufStatus[0].keyBackspace(status.workSpace[0].currentMainWindowNode,
-                                     status.settings.autoDeleteParen)
+                                     status.settings.autoDeleteParen,
+                                     status.settings.tabStop)
 
     check(status.bufStatus[0].buffer[0] == ru"")
 
@@ -406,7 +408,8 @@ test "Auto delete paren 6":
       status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
       
     status.bufStatus[0].keyBackspace(status.workSpace[0].currentMainWindowNode,
-                                     status.settings.autoDeleteParen)
+                                     status.settings.autoDeleteParen,
+                                     status.settings.tabStop)
 
     check(status.bufStatus[0].buffer[0] == ru"(aa)")
 
@@ -421,7 +424,8 @@ test "Auto delete paren 6":
       status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
       
     status.bufStatus[0].keyBackspace(status.workSpace[0].currentMainWindowNode,
-                                     status.settings.autoDeleteParen)
+                                     status.settings.autoDeleteParen,
+                                     status.settings.tabStop)
 
     check(status.bufStatus[0].buffer[0] == ru"a(a)")
 

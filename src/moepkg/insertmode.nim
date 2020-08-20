@@ -70,7 +70,8 @@ proc insertMode*(status: var EditorStatus) =
     elif isBackspaceKey(key) or isControlH(key):
       status.bufStatus[currentBufferIndex].keyBackspace(
         status.workSpace[workspaceIndex].currentMainWindowNode,
-        status.settings.autoDeleteParen)
+        status.settings.autoDeleteParen,
+        status.settings.tabStop)
     elif isEnterKey(key):
       keyEnter(status.bufStatus[currentBufferIndex],
                status.workSpace[workspaceIndex].currentMainWindowNode,
@@ -91,8 +92,8 @@ proc insertMode*(status: var EditorStatus) =
       )
     elif isControlW(key):
       status.bufStatus[currentBufferIndex].deleteWordBeforeCursor(
-        status.workSpace[workspaceIndex].currentMainWindowNode
-      )
+        status.workSpace[workspaceIndex].currentMainWindowNode,
+        status.settings.tabStop)
     elif isControlU(key):
       status.bufStatus[currentBufferIndex].deleteCharactersBeforeCursorInCurrentLine(
         status.workSpace[workspaceIndex].currentMainWindowNode
