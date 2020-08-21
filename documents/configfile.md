@@ -312,6 +312,16 @@ default is "" (None)
 backupDir
 ```
 
+Exclude settings for where you don't want to produce automatic backups (array)  
+default
+```
+["/etc"]
+```
+
+```
+dirToExclude
+```
+
 ### QuickRun table
 
 Save buffer when run QuickRun (bool)  
