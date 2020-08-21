@@ -75,6 +75,7 @@ proc backupBuffer*(bufStatus: BufferStatus,
   if bufStatus.path.len == 0: return
 
   let
+    sourceFilePath = absolutePath($bufStatus.path)
     sourceFileDir = (sourceFilePath.splitPath).head
     dirToExclude = autoBackupSettings.dirToExclude
   if dirToExclude.contains(ru sourceFileDir): return
@@ -82,7 +83,6 @@ proc backupBuffer*(bufStatus: BufferStatus,
   let
     backupFilename = bufStatus.path.generateFilename(now())
     dir = bufStatus.path.checkAndCreateBackupDir(autoBackupSettings.backupDir)
-    sourceFilePath = absolutePath($bufStatus.path)
 
   if dir.len > 0:
     let
