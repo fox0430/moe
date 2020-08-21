@@ -66,6 +66,7 @@ const tomlStr = """
   idolTime = 1
   interval = 1
   backupDir = "/tmp"
+  dirToExclude = ["/tmp"]
 
   [QuickRun]
   saveBufferWhenQuickRun = false
@@ -277,6 +278,7 @@ suite "Parse configuration file":
     check settings.autoBackupSettings.idolTime == 1
     check settings.autoBackupSettings.interval == 1
     check settings.autoBackupSettings.backupDir == ru"/tmp"
+    check settings.autoBackupSettings.dirToExclude  == @[ru"/tmp"]
 
     check not settings.quickRunSettings.saveBufferWhenQuickRun
     check settings.quickRunSettings.command == "nimble build"

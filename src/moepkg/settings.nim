@@ -49,6 +49,7 @@ type AutoBackupSettings* = object
   idolTime*: int # seconds
   interval*: int # minutes
   backupDir*: seq[Rune]
+  dirToExclude*: seq[seq[Rune]]
 
 type FilerSettings = object
   showIcons*: bool
@@ -149,6 +150,7 @@ proc initAutoBackupSettings(): AutoBackupSettings =
   result.enable = true
   result.interval = 5 # 5 minutes
   result.idolTime = 10 # 10 seconds
+  result.dirToExclude = @[ru"/etc"]
 
 proc initFilerSettings(): FilerSettings =
   result.showIcons = true
@@ -779,9 +781,16 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       let dir = settings["AutoBackup"]["backupDir"].getStr()
       result.autoBackupSettings.backupDir = dir.toRunes
 
+    if settings["AutoBackup"].contains("dirToExclude"):
+      result.autoBackupSettings.dirToExclude = @[]
+      let dirs = settings["AutoBackup"]["dirToExclude"]
+      for i in 0 ..< dirs.len:
+        result.autoBackupSettings.dirToExclude.add(ru dirs[i].getStr)
+
   if settings.contains("QuickRun"):
     if settings["QuickRun"].contains("saveBufferWhenQuickRun"):
-      result.quickRunSettings.saveBufferWhenQuickRun = settings["QuickRun"]["saveBufferWhenQuickRun"].getBool()
+      let saveBufferWhenQuickRun = settings["QuickRun"]["saveBufferWhenQuickRun"].getBool()
+      result.quickRunSettings.saveBufferWhenQuickRun = saveBufferWhenQuickRun
 
     if settings["QuickRun"].contains("command"):
       result.quickRunSettings.command = settings["QuickRun"]["command"].getStr()
@@ -1375,6 +1384,11 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         of "backupDir":
           if item.val["type"].getStr != "string":
             return some($item)
+        of "dirToExclude":
+          if item.val["type"].getStr == "array":
+            for word in item.val["value"]:
+              if word["type"].getStr != "string":
+                return some($item)
         else:
           return some($item)
 

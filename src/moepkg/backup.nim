@@ -1,4 +1,4 @@
-import os, times, re
+import os, times, re, sequtils
 import settings, unicodeext, fileutils, bufferstatus, ui, gapbuffer, messages
 
 type AutoBackupStatus* = object
@@ -73,6 +73,12 @@ proc backupBuffer*(bufStatus: BufferStatus,
                    messageLog: var seq[seq[Rune]]) =
 
   if bufStatus.path.len == 0: return
+
+  let
+    sourceFilePath = absolutePath($bufStatus.path)
+    sourceFileDir = (sourceFilePath.splitPath).head
+    dirToExclude = autoBackupSettings.dirToExclude
+  if dirToExclude.contains(ru sourceFileDir): return
 
   let
     backupFilename = bufStatus.path.generateFilename(now())
