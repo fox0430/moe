@@ -200,6 +200,17 @@ proc writeAutoBackupSuccessMessage*(cmdWin: var Window,
   if settings.logNotifications and settings.autoBackupLogNotify:
     messageLog.add(message.toRunes)
 
+proc writeAutoBackupFailedMessage*(cmdWin: var Window,
+                                   filename: seq[Rune],
+                                   settings: NotificationSettings,
+                                   messageLog: var seq[seq[Rune]]) =
+
+  let message = fmt"Error: Automatic backups failed: {$filename}"
+  if settings.screenNotifications and settings.autoBackupScreenNotify:
+    cmdWin.writeMessageOnCommandWindow(message, EditorColorPair.errorMessage)
+  if settings.logNotifications and settings.autoBackupLogNotify:
+    messageLog.add(message.toRunes)
+
 proc writeRunQuickRunMessage*(cmdWin: var Window,
                               settings: NotificationSettings,
                               messageLog: var seq[seq[Rune]]) =

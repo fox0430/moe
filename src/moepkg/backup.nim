@@ -83,15 +83,19 @@ proc backupBuffer*(bufStatus: BufferStatus,
   let
     backupFilename = bufStatus.path.generateFilename(now())
     dir = bufStatus.path.checkAndCreateBackupDir(autoBackupSettings.backupDir)
+  if dir.len == 0:
+    cmdWin.writeAutoBackupFailedMessage(backupFilename,
+                                        notificationSettings,
+                                        messageLog)
+    return
 
-  if dir.len > 0:
-    let
-      path = dir / backupFilename
-      isSame = diffWithBackup(path, $bufStatus.buffer)
-    if not isSame:
-      cmdWin.writeStartAutoBackupMessage(notificationSettings, messageLog)
+  let
+    path = dir / backupFilename
+    isSame = diffWithBackup(path, $bufStatus.buffer)
+  if not isSame:
+    cmdWin.writeStartAutoBackupMessage(notificationSettings, messageLog)
 
-      saveFile(path, bufStatus.buffer.toRunes, encoding)
+    saveFile(path, bufStatus.buffer.toRunes, encoding)
 
-      let message = "Automatic backup successful: " & $path
-      cmdWin.writeAutoBackupSuccessMessage(message, notificationSettings, messageLog)
+    let message = "Automatic backup successful: " & $path
+    cmdWin.writeAutoBackupSuccessMessage(message, notificationSettings, messageLog)
