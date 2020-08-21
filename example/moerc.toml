@@ -112,6 +112,8 @@ interval = 5
 
 # backupDir = "/home/fox/Nim"
 
+dirToExclude = ["/etc"]
+
 [QuickRun]
 
 saveBufferWhenQuickRun = true
