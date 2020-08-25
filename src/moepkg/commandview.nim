@@ -20,6 +20,7 @@ const exCommandList = [
   "buildOnSave",
   "buf",
   "clipboard",
+  "conf",
   "cursorLine",
   "cws",
   "deleteTrailingSpaces",

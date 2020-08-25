@@ -366,8 +366,9 @@ proc update*(status: var EditorStatus) =
         ## Update highlight
         ## TODO: Refactor and fix
         if not isFilerMode(currentMode, prevMode) and
-             not isHistoryManagerMode(currentMode, prevMode) and
-             not isDiffViewerMode(currentMode, prevMode):
+           not isHistoryManagerMode(currentMode, prevMode) and
+           not isDiffViewerMode(currentMode, prevMode) and
+           not isConfigMode(currentMode, prevMode):
 
           if isLogViewerMode(currentMode, prevMode):
             status.updateLogViewer(node.bufferIndex)
@@ -550,6 +551,7 @@ proc deletePopUpWindow*(status: var Editorstatus) =
     status.popUpWindow.deleteWindow
     status.update
 
+
 proc addNewBuffer*(status: var EditorStatus, filename: string) =
   status.bufStatus.add(BufferStatus(path: filename.toRunes,
                        lastSaveTime: now()))
@@ -573,6 +575,8 @@ proc addNewBuffer*(status: var EditorStatus, filename: string) =
 
   status.changeCurrentBuffer(index)
   status.changeMode(Mode.normal)
+
+proc addNewBuffer*(status: var EditorStatus) = status.addNewBuffer("")
 
 proc deleteBuffer*(status: var Editorstatus, deleteIndex: int) =
   let

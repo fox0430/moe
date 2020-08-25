@@ -168,6 +168,7 @@ proc setModeStr(mode: Mode, isActiveWindow, showModeInactive: bool): string =
     of Mode.quickRun: result = " QUICKRUN "
     of Mode.history: result = " HISTORY "
     of Mode.diff: result = "DIFF "
+    of Mode.config: result = " CONFIG "
     else: result = " NORMAL "
 
 proc setModeStrColor(mode: Mode): EditorColorPair =
