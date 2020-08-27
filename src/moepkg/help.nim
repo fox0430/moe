@@ -18,10 +18,6 @@ proc initHelpModeBuffer(status: var Editorstatus) =
       line = ""
     else: line.add(ch)
 
-proc exitHelpMode(status: var Editorstatus) =
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.deleteBuffer(currentBufferIndex)
-
 proc isHelpMode(status: Editorstatus): bool =
   let
     currentMode = status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode
