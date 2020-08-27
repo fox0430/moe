@@ -2,306 +2,601 @@ import terminal, times, typetraits, strutils, strformat
 import gapbuffer, ui, editorstatus, unicodeext, window, movement, settings,
        bufferstatus, color
 
+const
+  # Settings names
+  standardTableNames = [
+    "theme",
+    "number",
+    "currentNumber",
+    "cursorLine",
+    "statusBar",
+    "tabLine",
+    "syntax",
+    "indentationLines",
+    "tabStop",
+    "autoCloseParen",
+    "autoIndent",
+    "disableChangeCursor",
+    "defaultCursor",
+    "normalModeCursor",
+    "insertModeCursor",
+    "autoSave",
+    "autoSaveInterval",
+    "liveReloadOfConf",
+    "incrementalSearch",
+    "popUpWindowInExmode",
+    "replaceTextHighlight",
+    "highlightPairOfParen",
+    "autoDeleteParen",
+    "systemClipboard",
+    "highlightFullWidthSpace",
+    "highlightTrailingSpaces",
+    "highlightCurrentWord"
+  ]
+  buildOnSaveTableNames = [
+    "enable",
+    "workspaceRoot",
+    "command"
+  ]
+  tabLineTableNames = [
+    "allBuffer"
+  ]
+  statusBarTableNames = [
+    "mode",
+    "filename",
+    "chanedMark",
+    "line",
+    "column",
+    "encoding",
+    "language",
+    "directory",
+    "multipleStatusBar",
+    "gitbranchName",
+    "showGitInactive",
+    "showModeInactive"
+  ]
+  workSpaceTableNames = [
+    "workSpaceLine"
+  ]
+  highlightTableNames = [
+    "reservedWord"
+  ]
+  autoBackupTableNames = [
+    "enable",
+    "idolTime",
+    "interval",
+    "backupDir",
+    "dirToExclude"
+  ]
+  quickRunTableNames = [
+    "saveBufferWhenQuickRun",
+    "command",
+    "timeout",
+    "nimAdvancedCommand",
+    "ClangOptions",
+    "CppOptions",
+    "NimOptions",
+    "shOptions",
+    "bashOptions"
+  ]
+  notificationTableNames = [
+    "screenNotifications",
+    "logNotifications",
+    "autoBackupScreenNotify",
+    "autoBackupLogNotify",
+    "autoSaveScreenNotify",
+    "autoSaveLogNotify",
+    "yankScreenNotify",
+    "yankLogNotify",
+    "deleteScreenNotify",
+    "deleteLogNotify",
+    "saveScreenNotify",
+    "saveLogNotify",
+    "workspaceScreenNotify",
+    "workspaceLogNotify",
+    "quickRunScreenNotify",
+    "quickRunLogNotify",
+    "buildOnSaveScreenNotify",
+    "buildOnSaveLogNotify",
+    "filerScreenNotify",
+    "filerLogNotify",
+    "restoreScreenNotify",
+    "restoreLogNotify"
+  ]
+  filerTableNames = [
+    "showIcons"
+  ]
+  themeTableNames = [
+    "lineNum",
+    "currentLineNum",
+    "statusBarNormalMode",
+    "statusBarModeNormalMode",
+    "statusBarNormalModeInactive",
+    "statusBarInsertMode",
+    "statusBarModeInsertMode",
+    "statusBarInsertModeInactive",
+    "statusBarVisualMode",
+    "statusBarModeVisualMode",
+    "statusBarVisualModeInactive",
+    "statusBarReplaceMode",
+    "statusBarModeReplaceMode",
+    "statusBarReplaceModeInactive",
+    "statusBarFilerMode",
+    "statusBarModeFilerMode",
+    "statusBarFilerModeInactive",
+    "statusBarExMode",
+    "statusBarModeExMode",
+    "statusBarExModeInactive",
+    "statusBarGitBranch",
+    "tab",
+    "currentTab",
+    "commandBar",
+    "errorMessage",
+    "searchResult",
+    "visualMode",
+    "defaultChar",
+    "gtKeyword",
+    "gtStringLit",
+    "gtDecNumber",
+    "gtComment",
+    "gtLongComment",
+    "gtWhitespace",
+    "gtPreprocessor",
+    "currentFile",
+    "file",
+    "dir",
+    "pcLink",
+    "popUpWindow",
+    "popUpWinCurrentLine",
+    "replaceText",
+    "parenText",
+    "currentWord",
+    "highlightFullWidthSpace",
+    "highlightTrailingSpaces",
+    "workSpaceBar",
+    "reservedWord"
+  ]
+
+proc calcPositionOfSettingValue(): int {.compileTime.} =
+  var names: seq[string]
+
+  for name in standardTableNames: names.add(name)
+  for name in buildOnSaveTableNames: names.add(name)
+  for name in tabLineTableNames: names.add(name)
+  for name in workSpaceTableNames: names.add(name)
+  for name in highlightTableNames: names.add(name)
+  for name in autoBackupTableNames: names.add(name)
+  for name in quickRunTableNames: names.add(name)
+  for name in notificationTableNames: names.add(name)
+  for name in filerTableNames: names.add(name)
+  for name in themeTableNames: names.add(name)
+
+  for name in names:
+    if result < name.len: result = name.len
+
+  const numOfIndent = 2
+  result += numOfIndent
+
+const
+  positionOfSetVal = calcPositionOfSettingValue()
+  indent = "  "
+
 proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"Standard")
-  result.add(ru"  theme " & ($settings.editorColorTheme).ru)
-  result.add(ru"  number " & ($settings.view.lineNumber).ru)
-  result.add(ru"  currentNumber " & ($settings.view.currentLineNumber).ru)
-  result.add(ru"  cursorLine " & ($settings.view.cursorLine).ru)
-  result.add(ru"  statusBar " & ($settings.statusBar.useBar).ru)
-  result.add(ru"  tabLine " & ($settings.tabLine.useTab).ru)
-  result.add(ru"  syntax " & ($settings.syntax).ru)
-  result.add(ru"  indentationLines " & ($settings.view.indentationLines).ru)
-  result.add(ru"  tabStop " & ($settings.view.tabStop).ru)
-  result.add(ru"  autoCloseParen " & ($settings.autoCloseParen).ru)
-  result.add(ru"  autoIndent " & ($settings.autoIndent).ru)
-  result.add(ru"  disableChangeCursor " & ($settings.disableChangeCursor).ru)
-  result.add(ru"  defaultCursor " & ($settings.defaultCursor).ru)
-  result.add(ru"  normalModeCursor " & ($settings.normalModeCursor).ru)
-  result.add(ru"  insertModeCursor " & ($settings.insertModeCursor).ru)
-  result.add(ru"  autoSave " & ($settings.autoSave).ru)
-  result.add(ru"  autoSaveInterval " & ($settings.autoSaveInterval).ru)
-  result.add(ru"  liveReloadOfConf " & ($settings.liveReloadOfConf).ru)
-  result.add(ru"  incrementalSearch " & ($settings.incrementalSearch).ru)
-  result.add(ru"  popUpWindowInExmode " & ($settings.popUpWindowInExmode).ru)
-  result.add(ru"  replaceTextHighlight " & ($settings.replaceTextHighlight).ru)
-  result.add(ru"  highlightPairOfParen " & ($settings.highlightPairOfParen).ru)
-  result.add(ru"  autoDeleteParen " & ($settings.autoDeleteParen).ru)
-  result.add(ru"  systemClipboard " & ($settings.systemClipboard).ru)
-  result.add(ru"  highlightFullWidthSpace " &
-               ($settings.highlightFullWidthSpace).ru)
-  result.add(ru"  highlightTrailingSpaces " &
-               ($settings.highlightTrailingSpaces).ru)
-  result.add(ru"  highlightCurrentWord " &
-               ($settings.highlightOtherUsesCurrentWord).ru)
+
+  for name in standardTableNames:
+    let
+      nameStr = indent & name
+      space = " ".repeat(positionOfSetVal - name.len)
+    case name:
+      of "theme":
+        result.add(ru nameStr & space & $settings.editorColorTheme)
+      of "number":
+        result.add(ru nameStr & space & $settings.view.lineNumber)
+      of "currentNumber":
+        result.add(ru nameStr & space & $settings.view.currentLineNumber)
+      of "cursorLine":
+        result.add(ru nameStr & space & $settings.view.cursorLine)
+      of "statusBar":
+        result.add(ru nameStr & space & $settings.statusBar.useBar)
+      of "tabLine":
+        result.add(ru nameStr & space & $settings.tabLine.useTab)
+      of "syntax":
+        result.add(ru nameStr & space & $settings.syntax)
+      of "indentationLines":
+        result.add(ru nameStr & space & $settings.view.indentationLines)
+      of "tabStop":
+        result.add(ru nameStr & space & $settings.view.tabStop)
+      of "autoCloseParen":
+        result.add(ru nameStr & space & $settings.autoCloseParen)
+      of "autoIndent":
+        result.add(ru nameStr & space & $settings.autoIndent)
+      of "disableChangeCursor":
+        result.add(ru nameStr & space & $settings.disableChangeCursor)
+      of "defaultCursor":
+        result.add(ru nameStr & space & $settings.defaultCursor)
+      of "normalModeCursor":
+        result.add(ru nameStr & space & $settings.normalModeCursor)
+      of "insertModeCursor":
+        result.add(ru nameStr & space & $settings.insertModeCursor)
+      of "autoSave":
+        result.add(ru nameStr & space & $settings.autoSave)
+      of "autoSaveInterval":
+        result.add(ru nameStr & space & $settings.autoSaveInterval)
+      of "liveReloadOfConf":
+        result.add(ru nameStr & space & $settings.liveReloadOfConf)
+      of "incrementalSearch":
+        result.add(ru nameStr & space & $settings.incrementalSearch)
+      of "popUpWindowInExmode":
+        result.add(ru nameStr & space & $settings.popUpWindowInExmode)
+      of "replaceTextHighlight":
+        result.add(ru nameStr & space & $settings.replaceTextHighlight)
+      of "highlightPairOfParen":
+        result.add(ru nameStr & space & $settings.highlightPairOfParen)
+      of "autoDeleteParen":
+        result.add(ru nameStr & space & $settings.autoDeleteParen)
+      of "systemClipboard":
+        result.add(ru nameStr & space & $settings.systemClipboard)
+      of "highlightFullWidthSpace":
+        result.add(ru nameStr & space & $settings.highlightFullWidthSpace)
+      of "highlightTrailingSpaces":
+        result.add(ru nameStr & space & $settings.highlightTrailingSpaces)
+      of "highlightCurrentWord":
+        result.add(ru nameStr & space & $settings.highlightOtherUsesCurrentWord)
 
 proc initBuildOnSaveTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"BuildOnSave")
-  result.add(ru"  enable " & ($settings.buildOnSave.enable).ru)
-  result.add(ru"  workspaceRoot " & ($settings.buildOnSave.workspaceRoot).ru)
-  result.add(ru"  command " & ($settings.buildOnSave.command).ru)
+
+  for name in buildOnSaveTableNames:
+    let
+      nameStr = indent & name
+      space = " ".repeat(positionOfSetVal - name.len)
+    case name:
+      of "enable":
+        result.add(ru nameStr & space & $settings.buildOnSave.enable)
+      of "workspaceRoot":
+        result.add(ru nameStr & space & $settings.buildOnSave.workspaceRoot)
+      of "command":
+        result.add(ru nameStr & space & $settings.buildOnSave.command)
 
 proc initTabLineTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"TabLine")
-  result.add(ru"  allBuffer " & ($settings.tabLine.allBuffer).ru)
+
+  for name in tabLineTableNames:
+    let
+      nameStr = indent & name
+      space = " ".repeat(positionOfSetVal - name.len)
+    case name:
+      of "allBuffer":
+        result.add(ru nameStr & space & $settings.tabLine.allBuffer)
 
 proc initStatusBarTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"StatusBar")
-  result.add(ru"  mode " & ($settings.statusBar.mode).ru)
-  result.add(ru"  filename " & ($settings.statusBar.filename).ru)
-  result.add(ru"  chanedMark " & ($settings.statusBar.chanedMark).ru)
-  result.add(ru"  line " & ($settings.statusBar.line).ru)
-  result.add(ru"  column " & ($settings.statusBar.column).ru)
-  result.add(ru"  encoding " & ($settings.statusBar.characterEncoding).ru)
-  result.add(ru"  language " & ($settings.statusBar.language).ru)
-  result.add(ru"  directory " & ($settings.statusBar.directory).ru)
-  result.add(ru"  multipleStatusBar " & ($settings.statusBar.multipleStatusBar).ru)
-  result.add(ru"  gitbranchName " & ($settings.statusBar.gitbranchName).ru)
-  result.add(ru"  showGitInactive " & ($settings.statusBar.showGitInactive).ru)
-  result.add(ru"  showModeInactive " & ($settings.statusBar.showModeInactive ).ru)
+
+  for name in statusBarTableNames:
+    let
+      nameStr = indent & name
+      space = " ".repeat(positionOfSetVal - name.len)
+    case name:
+      of "mode":
+        result.add(ru nameStr & space & $settings.statusBar.mode)
+      of "filename":
+        result.add(ru nameStr & space & $settings.statusBar.filename)
+      of "chanedMark":
+        result.add(ru nameStr & space & $settings.statusBar.chanedMark)
+      of "line":
+        result.add(ru nameStr & space & $settings.statusBar.line)
+      of "column":
+        result.add(ru nameStr & space & $settings.statusBar.column)
+      of "encoding":
+        result.add(ru nameStr & space & $settings.statusBar.characterEncoding)
+      of "language":
+        result.add(ru nameStr & space & $settings.statusBar.language)
+      of "directory":
+        result.add(ru nameStr & space & $settings.statusBar.directory)
+      of "multipleStatusBar":
+        result.add(ru nameStr & space & $settings.statusBar.multipleStatusBar)
+      of "gitbranchName":
+        result.add(ru nameStr & space & $settings.statusBar.gitbranchName)
+      of "showGitInactive":
+        result.add(ru nameStr & space & $settings.statusBar.showGitInactive)
+      of "showModeInactive":
+        result.add(ru nameStr & space & $settings.statusBar.showModeInactive)
 
 proc initWorkspaceTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"WorkSpace")
-  result.add(ru"  workSpaceLine " & ($settings.workSpace.workSpaceLine).ru)
+
+  for name in workSpaceTableNames:
+    let
+      nameStr = indent & name
+      space = " ".repeat(positionOfSetVal - name.len)
+    case name:
+      of "workSpaceLine":
+        result.add(ru nameStr & space & $settings.workSpace.workSpaceLine)
 
 proc initHighlightTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"Highlight")
-  result.add(ru"  reservedWord " & ($settings.reservedWords).ru)
+
+  for name in highlightTableNames:
+    case name:
+      of "reservedWord":
+        result.add(ru indent & name)
+        let space = " ".repeat(positionOfSetVal)
+        for reservedWord in settings.reservedWords:
+          result.add(ru indent & space & reservedWord.word)
 
 proc initAutoBackupTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"AutoBackup")
-  result.add(ru"  enable " & ($settings.autoBackupSettings.enable).ru)
-  result.add(ru"  idolTime " & ($settings.autoBackupSettings.idolTime).ru)
-  result.add(ru"  interval " & ($settings.autoBackupSettings.interval).ru)
-  result.add(ru"  backupDir " & ($settings.autoBackupSettings.backupDir).ru)
-  result.add(ru"  dirToExclude " &
-               ($settings.autoBackupSettings.dirToExclude).ru)
+
+  for name in autoBackupTableNames:
+    let
+      nameStr = indent & name
+      space = " ".repeat(positionOfSetVal - name.len)
+    case name:
+      of "enable":
+        result.add(ru nameStr & space & $settings.autoBackupSettings.enable)
+      of "idolTime":
+        result.add(ru nameStr & space & $settings.autoBackupSettings.idolTime)
+      of "interval":
+        result.add(ru nameStr & space & $settings.autoBackupSettings.interval)
+      of "backupDir":
+        result.add(ru nameStr & space & $settings.autoBackupSettings.backupDir)
+      of "dirToExclude":
+        result.add(ru nameStr & space & $settings.autoBackupSettings.dirToExclude)
 
 proc initQuickRunTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"QuickRun")
-  result.add(ru"  saveBufferWhenQuickRun " &
-               ($settings.quickRunSettings.saveBufferWhenQuickRun).ru)
-  result.add(ru"  command " & ($settings.quickRunSettings.command).ru)
-  result.add(ru"  timeout " & ($settings.quickRunSettings.timeout).ru)
-  result.add(ru"  nimAdvancedCommand " &
-               ($settings.quickRunSettings.nimAdvancedCommand).ru)
-  result.add(ru"  ClangOptions " & ($settings.quickRunSettings.ClangOptions).ru)
-  result.add(ru"  CppOptions " & ($settings.quickRunSettings.CppOptions).ru)
-  result.add(ru"  NimOptions " & ($settings.quickRunSettings.NimOptions).ru)
-  result.add(ru"  shOptions " & ($settings.quickRunSettings.shOptions).ru)
-  result.add(ru"  bashOptions " & ($settings.quickRunSettings.bashOptions).ru)
+
+  let quickRunSettings = settings.quickRunSettings
+  for name in quickRunTableNames:
+    let
+      nameStr = indent & name
+      space = " ".repeat(positionOfSetVal - name.len)
+    case name:
+      of "saveBufferWhenQuickRun":
+        result.add(ru nameStr & space & $quickRunSettings.saveBufferWhenQuickRun)
+      of "command":
+        result.add(ru nameStr & space & $quickRunSettings.command)
+      of "timeout":
+        result.add(ru nameStr & space & $quickRunSettings.timeout)
+      of "nimAdvancedCommand":
+        result.add(ru nameStr & space & $quickRunSettings.nimAdvancedCommand)
+      of "ClangOptions":
+        result.add(ru nameStr & space & $quickRunSettings.ClangOptions)
+      of "CppOptions":
+        result.add(ru nameStr & space & $quickRunSettings.CppOptions)
+      of "NimOptions":
+        result.add(ru nameStr & space & $quickRunSettings.NimOptions)
+      of "shOptions":
+        result.add(ru nameStr & space & $quickRunSettings.shOptions)
+      of "bashOptions":
+        result.add(ru nameStr & space & $quickRunSettings.bashOptions)
 
 proc initNotificationTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"Notification")
-  result.add(ru"  screenNotifications " & ($settings.notificationSettings.screenNotifications).ru)
-  result.add(ru"  logNotifications " & ($settings.notificationSettings.logNotifications).ru)
-  result.add(ru"  autoBackupScreenNotify " & ($settings.notificationSettings.autoBackupScreenNotify).ru)
-  result.add(ru"  autoBackupLogNotify " & ($settings.notificationSettings.autoBackupLogNotify).ru)
-  result.add(ru"  autoSaveScreenNotify " & ($settings.notificationSettings.autoSaveScreenNotify).ru)
-  result.add(ru"  autoSaveLogNotify " & ($settings.notificationSettings.autoSaveLogNotify).ru)
-  result.add(ru"  yankScreenNotify " & ($settings.notificationSettings.yankScreenNotify).ru)
-  result.add(ru"  yankLogNotify " & ($settings.notificationSettings.yankLogNotify).ru)
-  result.add(ru"  deleteScreenNotify " & ($settings.notificationSettings.deleteScreenNotify).ru)
-  result.add(ru"  deleteLogNotify " & ($settings.notificationSettings.deleteLogNotify).ru)
-  result.add(ru"  saveScreenNotify " & ($settings.notificationSettings.saveScreenNotify).ru)
-  result.add(ru"  saveLogNotify " & ($settings.notificationSettings.saveLogNotify).ru)
-  result.add(ru"  workspaceScreenNotify " & ($settings.notificationSettings.workspaceScreenNotify).ru)
-  result.add(ru"  workspaceLogNotify " & ($settings.notificationSettings.workspaceLogNotify).ru)
-  result.add(ru"  quickRunScreenNotify " & ($settings.notificationSettings.quickRunScreenNotify).ru)
-  result.add(ru"  quickRunLogNotify " & ($settings.notificationSettings.quickRunLogNotify).ru)
-  result.add(ru"  buildOnSaveScreenNotify " & ($settings.notificationSettings.buildOnSaveScreenNotify).ru)
-  result.add(ru"  buildOnSaveLogNotify " & ($settings.notificationSettings.buildOnSaveLogNotify).ru)
-  result.add(ru"  filerScreenNotify " & ($settings.notificationSettings.filerScreenNotify).ru)
-  result.add(ru"  filerLogNotify " & ($settings.notificationSettings.filerLogNotify).ru)
-  result.add(ru"  restoreScreenNotify " & ($settings.notificationSettings.restoreScreenNotify).ru)
-  result.add(ru"  restoreLogNotify " & ($settings.notificationSettings.restoreLogNotify).ru)
+
+  let notificationSettings = settings.notificationSettings
+  for name in notificationTableNames:
+    let
+      nameStr = indent & name
+      space = " ".repeat(positionOfSetVal - name.len)
+    case name:
+      of "screenNotifications":
+        result.add(ru nameStr & space & $notificationSettings.screenNotifications)
+      of "logNotifications":
+        result.add(ru nameStr & space & $notificationSettings.logNotifications)
+      of "autoBackupScreenNotify":
+        result.add(ru nameStr & space & $notificationSettings.autoBackupScreenNotify)
+      of "autoBackupLogNotify":
+        result.add(ru nameStr & space & $notificationSettings.autoBackupLogNotify)
+      of "autoSaveScreenNotify":
+        result.add(ru nameStr & space & $notificationSettings.autoSaveScreenNotify)
+      of "autoSaveLogNotify":
+        result.add(ru nameStr & space & $notificationSettings.autoSaveLogNotify)
+      of "yankScreenNotify":
+        result.add(ru nameStr & space & $notificationSettings.yankScreenNotify)
+      of "yankLogNotify":
+        result.add(ru nameStr & space & $notificationSettings.yankLogNotify)
+      of "deleteScreenNotify":
+        result.add(ru nameStr & space & $notificationSettings.deleteScreenNotify)
+      of "deleteLogNotify":
+        result.add(ru nameStr & space & $notificationSettings.deleteLogNotify)
+      of "saveScreenNotify":
+        result.add(ru nameStr & space & $notificationSettings.saveScreenNotify)
+      of "saveLogNotify":
+        result.add(ru nameStr & space & $notificationSettings.saveLogNotify)
+      of "workspaceScreenNotify":
+        result.add(ru nameStr & space & $notificationSettings.workspaceScreenNotify)
+      of "workspaceLogNotify":
+        result.add(ru nameStr & space & $notificationSettings.workspaceLogNotify)
+      of "quickRunScreenNotify":
+        result.add(ru nameStr & space & $notificationSettings.quickRunScreenNotify)
+      of "quickRunLogNotify":
+        result.add(ru nameStr & space & $notificationSettings.quickRunLogNotify)
+      of "buildOnSaveScreenNotify":
+        result.add(ru nameStr & space & $notificationSettings.buildOnSaveScreenNotify)
+      of "buildOnSaveLogNotify":
+        result.add(ru nameStr & space & $notificationSettings.buildOnSaveLogNotify)
+      of "filerScreenNotify":
+        result.add(ru nameStr & space & $notificationSettings.filerScreenNotify)
+      of "filerLogNotify":
+        result.add(ru nameStr & space & $notificationSettings.filerLogNotify)
+      of "restoreScreenNotify":
+        result.add(ru nameStr & space & $notificationSettings.restoreScreenNotify)
+      of "restoreLogNotify":
+        result.add(ru nameStr & space & $notificationSettings.restoreLogNotify)
 
 proc initFilerTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"Filer")
-  result.add(ru"  showIcons " & ($settings.filerSettings.showIcons).ru)
 
-proc initThemeTableBuffer*(settings: EditorSettings): seq[Rune] =
-  let theme = settings.editorColorTheme
+  for name in filerTableNames:
+    let
+      nameStr = indent & name
+      space = " ".repeat(positionOfSetVal - name.len)
+    case name:
+      of "showIcons":
+        result.add(ru nameStr & space & $settings.filerSettings.showIcons)
 
+proc initThemeTableBuffer*(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"Theme")
-  #block:
-  #  let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.editorBg)
-  #  buffer.add(ru fmt"  lineNum {$colorPair[0]}")
 
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.lineNum)
-    result.add(ru fmt"  lineNum {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.currentLineNum)
-    result.add(ru fmt"  currentLineNum {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarNormalMode)
-    result.add(ru fmt"  statusBarNormalMode {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarModeNormalMode)
-    result.add(ru fmt"  statusBarModeNormalMode {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarNormalModeInactive)
-    result.add(ru fmt"  statusBarNormalModeInactive {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarInsertMode)
-    result.add(ru fmt"  statusBarInsertMode {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarModeInsertMode)
-    result.add(ru fmt"  statusBarModeInsertMode {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarInsertModeInactive)
-    result.add(ru fmt"  statusBarInsertModeInactive {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarVisualMode)
-    result.add(ru fmt"  statusBarVisualMode {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarModeVisualMode)
-    result.add(ru fmt"  statusBarModeVisualMode {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarVisualModeInactive)
-    result.add(ru fmt"  statusBarVisualModeInactive {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarReplaceMode)
-    result.add(ru fmt"  statusBarReplaceMode {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarModeReplaceMode)
-    result.add(ru fmt"  statusBarModeReplaceMode {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarReplaceModeInactive)
-    result.add(ru fmt"  statusBarReplaceModeInactive {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarFilerMode)
-    result.add(ru fmt"  statusBarFilerMode {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarModeFilerMode)
-    result.add(ru fmt"  statusBarModeFilerMode {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarFilerModeInactive)
-    result.add(ru fmt"  statusBarFilerModeInactive {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarExMode)
-    result.add(ru fmt"  statusBarExMode {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarModeExMode)
-    result.add(ru fmt"  statusBarModeExMode {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarExModeInactive)
-    result.add(ru fmt"  statusBarExModeInactive {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarGitBranch)
-    result.add(ru fmt"  statusBarGitBranch {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.tab)
-    result.add(ru fmt"  tab {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.currentTab)
-    result.add(ru fmt"  currentTab {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.commandBar)
-    result.add(ru fmt"  commandBar {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.errorMessage)
-    result.add(ru fmt"  errorMessage {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.searchResult)
-    result.add(ru fmt"  searchResult {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.visualMode)
-    result.add(ru fmt"  visualMode {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.defaultChar)
-    result.add(ru fmt"  defaultChar {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.keyword)
-    result.add(ru fmt"  gtKeyword {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.stringLit)
-    result.add(ru fmt"  gtStringLit {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.decNumber)
-    result.add(ru fmt"  gtDecNumber {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.comment)
-    result.add(ru fmt"  gtComment {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.longComment)
-    result.add(ru fmt"  gtLongComment {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.whitespace)
-    result.add(ru fmt"  gtWhitespace {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.preprocessor)
-    result.add(ru fmt"  gtPreprocessor {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.currentFile)
-    result.add(ru fmt"  currentFile {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.file)
-    result.add(ru fmt" file  {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.dir)
-    result.add(ru fmt"  dir {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.pcLink)
-    result.add(ru fmt"  pcLink {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.popUpWindow)
-    result.add(ru fmt"  popUpWindow {$colorPair[0]} {$colorPair[1]}")
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.popUpWinCurrentLine)
-    result.add(ru fmt"  popUpWinCurrentLine {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.replaceText)
-    result.add(ru fmt"  replaceText {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.parenText)
-    result.add(ru fmt"  parenText {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.currentWord)
-    result.add(ru fmt"  currentWord {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.highlightFullWidthSpace)
-    result.add(ru fmt"  highlightFullWidthSpace {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.highlightTrailingSpaces)
-    result.add(ru fmt"  highlightTrailingSpaces {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.workSpaceBar)
-    result.add(ru fmt"  workSpaceBar {$colorPair[0]} {$colorPair[1]}")
-
-  block:
-    let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.reservedWord)
-    result.add(ru fmt"  reservedWord {$colorPair[0]} {$colorPair[1]}")
+  let theme = settings.editorColorTheme
+  for name in themeTableNames:
+    let
+      nameStr = indent & name
+      space = " ".repeat(positionOfSetVal - name.len)
+    case name:
+      #of "editorBg":
+      #  let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.editorBg)
+      #  result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "lineNum":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.lineNum)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "currentLineNum":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.currentLineNum)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "statusBarNormalMode":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarNormalMode)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "statusBarModeNormalMode":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarModeNormalMode)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "statusBarNormalModeInactive":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarNormalModeInactive)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "statusBarInsertMode":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarInsertMode)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "statusBarModeInsertMode":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarModeInsertMode)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "statusBarInsertModeInactive":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarInsertModeInactive)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "statusBarVisualMode":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarVisualMode)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "statusBarModeVisualMode":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarModeVisualMode)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "statusBarVisualModeInactive":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarVisualModeInactive)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "statusBarReplaceMode":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarReplaceMode)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "statusBarModeReplaceMode":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarModeReplaceMode)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "statusBarReplaceModeInactive":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarReplaceModeInactive)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "statusBarFilerMode":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarFilerMode)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "statusBarModeFilerMode":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarModeFilerMode)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "statusBarFilerModeInactive":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarFilerModeInactive)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "statusBarExMode":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarExMode)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "statusBarModeExMode":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarModeExMode)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "statusBarExModeInactive":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarExModeInactive)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "statusBarGitBranch":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarGitBranch)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "tab":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.tab)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "currentTab":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.currentTab)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "commandBar":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.commandBar)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "errorMessage":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.errorMessage)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "searchResult":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.searchResult)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "visualMode":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.visualMode)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "defaultChar":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.defaultChar)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "keyword":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.keyword)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "stringLit":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.stringLit)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "decNumber":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.decNumber)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "comment":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.comment)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "longComment":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.longComment)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "whitespace":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.whitespace)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "preprocessor":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.preprocessor)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "currentFile":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.currentFile)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "file":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.file)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "dir":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.dir)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "pcLink":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.pcLink)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "popUpWindow":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.popUpWindow)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "popUpWinCurrentLine":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.popUpWinCurrentLine)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "replaceText":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.replaceText)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "parenText":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.parenText)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "currentWord":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.currentWord)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "highlightFullWidthSpace":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.highlightFullWidthSpace)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "highlightTrailingSpaces":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.highlightTrailingSpaces)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "workSpaceBar":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.workSpaceBar)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "reservedWord":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.reservedWord)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
 
 proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
   var buffer: seq[seq[Rune]]
   buffer.add(initStandardTableBuffer(settings))
-
-  buffer.add(ru"")
-  buffer.add(initnotificationTableBuffer(settings))
 
   buffer.add(ru"")
   buffer.add(initTabLineTableBuffer(settings))
