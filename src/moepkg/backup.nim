@@ -1,4 +1,4 @@
-import os, times, re, sequtils
+import os, times, re
 import settings, unicodeext, fileutils, bufferstatus, ui, gapbuffer, messages
 
 type AutoBackupStatus* = object
