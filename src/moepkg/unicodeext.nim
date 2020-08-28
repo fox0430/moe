@@ -340,12 +340,6 @@ proc substr*(runes: seq[Rune], first = 0): seq[Rune] =
 proc contains*(runes, sub: seq[Rune]): bool =
   find(runes, sub) >= 0
 
-proc contains*(runes: seq[Rune], r: Rune): bool =
-  find(runes, r) >= 0
-
-proc contains*(list: seq[seq[Rune]], runes: seq[Rune]): bool =
-  find(list, runes) >= 0
-
 proc splitWhitespace*(runes: seq[Rune]): seq[seq[Rune]] =
   for s in unicode.split($runes):
     result.add(s.toRunes)
