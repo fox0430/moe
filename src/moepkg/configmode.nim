@@ -107,6 +107,7 @@ const
     "showIcons"
   ]
   themeTableNames = [
+    "editorBg",
     "lineNum",
     "currentLineNum",
     "statusBarNormalMode",
@@ -463,9 +464,9 @@ proc initThemeTableBuffer*(settings: EditorSettings): seq[seq[Rune]] =
       nameStr = indent & name
       space = " ".repeat(positionOfSetVal - name.len)
     case name:
-      #of "editorBg":
-      #  let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.editorBg)
-      #  result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "editorBg":
+        let editorColor = ColorThemeTable[theme]
+        result.add(ru nameStr & space & $editorColor.editorBg)
       of "lineNum":
         let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.lineNum)
         result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
