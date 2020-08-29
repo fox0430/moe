@@ -1,6 +1,6 @@
 import terminal, times, typetraits, strutils, strformat
 import gapbuffer, ui, editorstatus, unicodeext, window, movement, settings,
-       bufferstatus, color, highlight
+       bufferstatus, color, highlight, build
 
 const
   # Settings names
@@ -262,7 +262,7 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       of "highlightCurrentWord":
         result.add(ru nameStr & space & $settings.highlightOtherUsesCurrentWord)
 
-proc initBuildOnSaveTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
+proc initBuildOnSaveTableBuffer(settings: BuildOnSaveSettings): seq[seq[Rune]] =
   result.add(ru"BuildOnSave")
 
   for name in buildOnSaveTableNames:
@@ -271,11 +271,11 @@ proc initBuildOnSaveTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       space = " ".repeat(positionOfSetVal - name.len)
     case name:
       of "enable":
-        result.add(ru nameStr & space & $settings.buildOnSave.enable)
+        result.add(ru nameStr & space & $settings.enable)
       of "workspaceRoot":
-        result.add(ru nameStr & space & $settings.buildOnSave.workspaceRoot)
+        result.add(ru nameStr & space & $settings.workspaceRoot)
       of "command":
-        result.add(ru nameStr & space & $settings.buildOnSave.command)
+        result.add(ru nameStr & space & $settings.command)
 
 proc initTabLineTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"TabLine")
@@ -288,7 +288,7 @@ proc initTabLineTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       of "allBuffer":
         result.add(ru nameStr & space & $settings.tabLine.allBuffer)
 
-proc initStatusBarTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
+proc initStatusBarTableBuffer(settings: StatusBarSettings): seq[seq[Rune]] =
   result.add(ru"StatusBar")
 
   for name in statusBarTableNames:
@@ -297,29 +297,29 @@ proc initStatusBarTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       space = " ".repeat(positionOfSetVal - name.len)
     case name:
       of "mode":
-        result.add(ru nameStr & space & $settings.statusBar.mode)
+        result.add(ru nameStr & space & $settings.mode)
       of "filename":
-        result.add(ru nameStr & space & $settings.statusBar.filename)
+        result.add(ru nameStr & space & $settings.filename)
       of "chanedMark":
-        result.add(ru nameStr & space & $settings.statusBar.chanedMark)
+        result.add(ru nameStr & space & $settings.chanedMark)
       of "line":
-        result.add(ru nameStr & space & $settings.statusBar.line)
+        result.add(ru nameStr & space & $settings.line)
       of "column":
-        result.add(ru nameStr & space & $settings.statusBar.column)
+        result.add(ru nameStr & space & $settings.column)
       of "encoding":
-        result.add(ru nameStr & space & $settings.statusBar.characterEncoding)
+        result.add(ru nameStr & space & $settings.characterEncoding)
       of "language":
-        result.add(ru nameStr & space & $settings.statusBar.language)
+        result.add(ru nameStr & space & $settings.language)
       of "directory":
-        result.add(ru nameStr & space & $settings.statusBar.directory)
+        result.add(ru nameStr & space & $settings.directory)
       of "multipleStatusBar":
-        result.add(ru nameStr & space & $settings.statusBar.multipleStatusBar)
+        result.add(ru nameStr & space & $settings.multipleStatusBar)
       of "gitbranchName":
-        result.add(ru nameStr & space & $settings.statusBar.gitbranchName)
+        result.add(ru nameStr & space & $settings.gitbranchName)
       of "showGitInactive":
-        result.add(ru nameStr & space & $settings.statusBar.showGitInactive)
+        result.add(ru nameStr & space & $settings.showGitInactive)
       of "showModeInactive":
-        result.add(ru nameStr & space & $settings.statusBar.showModeInactive)
+        result.add(ru nameStr & space & $settings.showModeInactive)
 
 proc initWorkspaceTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"WorkSpace")
@@ -343,7 +343,7 @@ proc initHighlightTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
         for reservedWord in settings.reservedWords:
           result.add(ru indent & space & reservedWord.word)
 
-proc initAutoBackupTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
+proc initAutoBackupTableBuffer(settings: AutoBackupSettings): seq[seq[Rune]] =
   result.add(ru"AutoBackup")
 
   for name in autoBackupTableNames:
@@ -352,97 +352,95 @@ proc initAutoBackupTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       space = " ".repeat(positionOfSetVal - name.len)
     case name:
       of "enable":
-        result.add(ru nameStr & space & $settings.autoBackupSettings.enable)
+        result.add(ru nameStr & space & $settings.enable)
       of "idolTime":
-        result.add(ru nameStr & space & $settings.autoBackupSettings.idolTime)
+        result.add(ru nameStr & space & $settings.idolTime)
       of "interval":
-        result.add(ru nameStr & space & $settings.autoBackupSettings.interval)
+        result.add(ru nameStr & space & $settings.interval)
       of "backupDir":
-        result.add(ru nameStr & space & $settings.autoBackupSettings.backupDir)
+        result.add(ru nameStr & space & $settings.backupDir)
       of "dirToExclude":
-        result.add(ru nameStr & space & $settings.autoBackupSettings.dirToExclude)
+        result.add(ru nameStr & space & $settings.dirToExclude)
 
-proc initQuickRunTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
+proc initQuickRunTableBuffer(settings: QuickRunSettings): seq[seq[Rune]] =
   result.add(ru"QuickRun")
 
-  let quickRunSettings = settings.quickRunSettings
   for name in quickRunTableNames:
     let
       nameStr = indent & name
       space = " ".repeat(positionOfSetVal - name.len)
     case name:
       of "saveBufferWhenQuickRun":
-        result.add(ru nameStr & space & $quickRunSettings.saveBufferWhenQuickRun)
+        result.add(ru nameStr & space & $settings.saveBufferWhenQuickRun)
       of "command":
-        result.add(ru nameStr & space & $quickRunSettings.command)
+        result.add(ru nameStr & space & $settings.command)
       of "timeout":
-        result.add(ru nameStr & space & $quickRunSettings.timeout)
+        result.add(ru nameStr & space & $settings.timeout)
       of "nimAdvancedCommand":
-        result.add(ru nameStr & space & $quickRunSettings.nimAdvancedCommand)
+        result.add(ru nameStr & space & $settings.nimAdvancedCommand)
       of "ClangOptions":
-        result.add(ru nameStr & space & $quickRunSettings.ClangOptions)
+        result.add(ru nameStr & space & $settings.ClangOptions)
       of "CppOptions":
-        result.add(ru nameStr & space & $quickRunSettings.CppOptions)
+        result.add(ru nameStr & space & $settings.CppOptions)
       of "NimOptions":
-        result.add(ru nameStr & space & $quickRunSettings.NimOptions)
+        result.add(ru nameStr & space & $settings.NimOptions)
       of "shOptions":
-        result.add(ru nameStr & space & $quickRunSettings.shOptions)
+        result.add(ru nameStr & space & $settings.shOptions)
       of "bashOptions":
-        result.add(ru nameStr & space & $quickRunSettings.bashOptions)
+        result.add(ru nameStr & space & $settings.bashOptions)
 
-proc initNotificationTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
+proc initNotificationTableBuffer(settings: NotificationSettings): seq[seq[Rune]] =
   result.add(ru"Notification")
 
-  let notificationSettings = settings.notificationSettings
   for name in notificationTableNames:
     let
       nameStr = indent & name
       space = " ".repeat(positionOfSetVal - name.len)
     case name:
       of "screenNotifications":
-        result.add(ru nameStr & space & $notificationSettings.screenNotifications)
+        result.add(ru nameStr & space & $settings.screenNotifications)
       of "logNotifications":
-        result.add(ru nameStr & space & $notificationSettings.logNotifications)
+        result.add(ru nameStr & space & $settings.logNotifications)
       of "autoBackupScreenNotify":
-        result.add(ru nameStr & space & $notificationSettings.autoBackupScreenNotify)
+        result.add(ru nameStr & space & $settings.autoBackupScreenNotify)
       of "autoBackupLogNotify":
-        result.add(ru nameStr & space & $notificationSettings.autoBackupLogNotify)
+        result.add(ru nameStr & space & $settings.autoBackupLogNotify)
       of "autoSaveScreenNotify":
-        result.add(ru nameStr & space & $notificationSettings.autoSaveScreenNotify)
+        result.add(ru nameStr & space & $settings.autoSaveScreenNotify)
       of "autoSaveLogNotify":
-        result.add(ru nameStr & space & $notificationSettings.autoSaveLogNotify)
+        result.add(ru nameStr & space & $settings.autoSaveLogNotify)
       of "yankScreenNotify":
-        result.add(ru nameStr & space & $notificationSettings.yankScreenNotify)
+        result.add(ru nameStr & space & $settings.yankScreenNotify)
       of "yankLogNotify":
-        result.add(ru nameStr & space & $notificationSettings.yankLogNotify)
+        result.add(ru nameStr & space & $settings.yankLogNotify)
       of "deleteScreenNotify":
-        result.add(ru nameStr & space & $notificationSettings.deleteScreenNotify)
+        result.add(ru nameStr & space & $settings.deleteScreenNotify)
       of "deleteLogNotify":
-        result.add(ru nameStr & space & $notificationSettings.deleteLogNotify)
+        result.add(ru nameStr & space & $settings.deleteLogNotify)
       of "saveScreenNotify":
-        result.add(ru nameStr & space & $notificationSettings.saveScreenNotify)
+        result.add(ru nameStr & space & $settings.saveScreenNotify)
       of "saveLogNotify":
-        result.add(ru nameStr & space & $notificationSettings.saveLogNotify)
+        result.add(ru nameStr & space & $settings.saveLogNotify)
       of "workspaceScreenNotify":
-        result.add(ru nameStr & space & $notificationSettings.workspaceScreenNotify)
+        result.add(ru nameStr & space & $settings.workspaceScreenNotify)
       of "workspaceLogNotify":
-        result.add(ru nameStr & space & $notificationSettings.workspaceLogNotify)
+        result.add(ru nameStr & space & $settings.workspaceLogNotify)
       of "quickRunScreenNotify":
-        result.add(ru nameStr & space & $notificationSettings.quickRunScreenNotify)
+        result.add(ru nameStr & space & $settings.quickRunScreenNotify)
       of "quickRunLogNotify":
-        result.add(ru nameStr & space & $notificationSettings.quickRunLogNotify)
+        result.add(ru nameStr & space & $settings.quickRunLogNotify)
       of "buildOnSaveScreenNotify":
-        result.add(ru nameStr & space & $notificationSettings.buildOnSaveScreenNotify)
+        result.add(ru nameStr & space & $settings.buildOnSaveScreenNotify)
       of "buildOnSaveLogNotify":
-        result.add(ru nameStr & space & $notificationSettings.buildOnSaveLogNotify)
+        result.add(ru nameStr & space & $settings.buildOnSaveLogNotify)
       of "filerScreenNotify":
-        result.add(ru nameStr & space & $notificationSettings.filerScreenNotify)
+        result.add(ru nameStr & space & $settings.filerScreenNotify)
       of "filerLogNotify":
-        result.add(ru nameStr & space & $notificationSettings.filerLogNotify)
+        result.add(ru nameStr & space & $settings.filerLogNotify)
       of "restoreScreenNotify":
-        result.add(ru nameStr & space & $notificationSettings.restoreScreenNotify)
+        result.add(ru nameStr & space & $settings.restoreScreenNotify)
       of "restoreLogNotify":
-        result.add(ru nameStr & space & $notificationSettings.restoreLogNotify)
+        result.add(ru nameStr & space & $settings.restoreLogNotify)
 
 proc initFilerTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"Filer")
@@ -480,298 +478,347 @@ proc initThemeTableBuffer*(settings: EditorSettings): seq[seq[Rune]] =
         result.add(ru nameStr & space & $editorColor.editorBg)
       of "lineNum":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.lineNum)
+          colorPair = EditorColorPair.lineNum
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "currentLineNum":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.currentLineNum)
+          colorPair = EditorColorPair.currentLineNum
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "statusBarNormalMode":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarNormalMode)
+          colorPair = EditorColorPair.statusBarNormalMode
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "statusBarModeNormalMode":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarModeNormalMode)
+          colorPair = EditorColorPair.statusBarModeNormalMode
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "statusBarNormalModeInactive":
         let
-          colorPair = getColorFromEditorColorPair(theme,EditorColorPair.statusBarNormalModeInactive)
+          colorPair = EditorColorPair.statusBarNormalModeInactive
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "statusBarInsertMode":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarInsertMode)
+          colorPair = EditorColorPair.statusBarInsertMode
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "statusBarModeInsertMode":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarModeInsertMode)
+          colorPair = EditorColorPair.statusBarModeInsertMode
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "statusBarInsertModeInactive":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarInsertModeInactive)
+          colorPair = EditorColorPair.statusBarInsertModeInactive
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "statusBarVisualMode":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarVisualMode)
+          colorPair = EditorColorPair.statusBarVisualMode
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "statusBarModeVisualMode":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarModeVisualMode)
+          colorPair = EditorColorPair.statusBarModeVisualMode
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "statusBarVisualModeInactive":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarVisualModeInactive)
+          colorPair = EditorColorPair.statusBarVisualModeInactive
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "statusBarReplaceMode":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarReplaceMode)
+          colorPair = EditorColorPair.statusBarReplaceMode
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "statusBarModeReplaceMode":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarModeReplaceMode)
+          colorPair = EditorColorPair.statusBarModeReplaceMode
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "statusBarReplaceModeInactive":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarReplaceModeInactive)
+          colorPair = EditorColorPair.statusBarReplaceModeInactive
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "statusBarFilerMode":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarFilerMode)
+          colorPair = EditorColorPair.statusBarFilerMode
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "statusBarModeFilerMode":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarModeFilerMode)
+          colorPair = EditorColorPair.statusBarModeFilerMode
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "statusBarFilerModeInactive":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarFilerModeInactive)
+          colorPair = EditorColorPair.statusBarFilerModeInactive
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "statusBarExMode":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarExMode)
+          colorPair = EditorColorPair.statusBarExMode
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "statusBarModeExMode":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarModeExMode)
+          colorPair = EditorColorPair.statusBarModeExMode
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "statusBarExModeInactive":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarExModeInactive)
+          colorPair = EditorColorPair.statusBarExModeInactive
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "statusBarGitBranch":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.statusBarGitBranch)
+          colorPair = EditorColorPair.statusBarGitBranch
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "tab":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.tab)
+          colorPair = EditorColorPair.tab
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "currentTab":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.currentTab)
+          colorPair = EditorColorPair.currentTab
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "commandBar":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.commandBar)
+          colorPair = EditorColorPair.commandBar
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "errorMessage":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.errorMessage)
+          colorPair = EditorColorPair.errorMessage
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "searchResult":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.searchResult)
+          colorPair = EditorColorPair.searchResult
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "visualMode":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.visualMode)
+          colorPair = EditorColorPair.visualMode
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "defaultChar":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.defaultChar)
+          colorPair = EditorColorPair.defaultChar
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "keyword":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.keyword)
+          colorPair = EditorColorPair.keyword
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "stringLit":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.stringLit)
+          colorPair = EditorColorPair.stringLit
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "decNumber":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.decNumber)
+          colorPair = EditorColorPair.decNumber
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "comment":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.comment)
+          colorPair = EditorColorPair.comment
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "longComment":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.longComment)
+          colorPair = EditorColorPair.longComment
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "whitespace":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.whitespace)
+          colorPair = EditorColorPair.whitespace
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "preprocessor":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.preprocessor)
+          colorPair = EditorColorPair.preprocessor
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "currentFile":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.currentFile)
+          colorPair = EditorColorPair.currentFile
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "file":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.file)
+          colorPair = EditorColorPair.file
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "dir":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.dir)
+          colorPair = EditorColorPair.dir
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "pcLink":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.pcLink)
+          colorPair = EditorColorPair.pcLink
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "popUpWindow":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.popUpWindow)
+          colorPair = EditorColorPair.popUpWindow
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "popUpWinCurrentLine":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.popUpWinCurrentLine)
+          colorPair = EditorColorPair.popUpWinCurrentLine
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "replaceText":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.replaceText)
+          colorPair = EditorColorPair.replaceText
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "parenText":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.parenText)
+          colorPair = EditorColorPair.parenText
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "currentWord":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.currentWord)
+          colorPair = EditorColorPair.currentWord
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "highlightFullWidthSpace":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.highlightFullWidthSpace)
+          colorPair = EditorColorPair.highlightFullWidthSpace
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "highlightTrailingSpaces":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.highlightTrailingSpaces)
+          colorPair = EditorColorPair.highlightTrailingSpaces
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "workSpaceBar":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.workSpaceBar)
+          colorPair = EditorColorPair.workSpaceBar
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "reservedWord":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.reservedWord)
+          colorPair = EditorColorPair.reservedWord
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
       of "currentSetting":
         let
-          colorPair = getColorFromEditorColorPair(theme, EditorColorPair.currentSetting)
+          colorPair = EditorColorPair.currentSetting
+          colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
-          secondSpace = " ".repeat(secondSpaceLen - ($colorPair[0]).len)
-        result.add(ru nameStr & space & $colorPair[0] & secondSpace & $colorPair[1])
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
 
 proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
   var buffer: seq[seq[Rune]]
@@ -781,7 +828,7 @@ proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
   buffer.add(initTabLineTableBuffer(settings))
 
   buffer.add(ru"")
-  buffer.add(initStatusBarTableBuffer(settings))
+  buffer.add(initStatusBarTableBuffer(settings.statusBar))
 
   buffer.add(ru"")
   buffer.add(initWorkspaceTableBuffer(settings))
@@ -790,13 +837,13 @@ proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
   buffer.add(initHighlightTableBuffer(settings))
 
   buffer.add(ru"")
-  buffer.add(initAutoBackupTableBuffer(settings))
+  buffer.add(initAutoBackupTableBuffer(settings.autoBackupSettings))
 
   buffer.add(ru"")
-  buffer.add(initQuickRunTableBuffer(settings))
+  buffer.add(initQuickRunTableBuffer(settings.quickRunSettings))
 
   buffer.add(ru"")
-  buffer.add(initNotificationTableBuffer(settings))
+  buffer.add(initNotificationTableBuffer(settings.notificationSettings))
 
   buffer.add(ru"")
   buffer.add(initFilerTableBuffer(settings))
@@ -831,8 +878,9 @@ proc configMode*(status: var Editorstatus) =
     let
       currentBufferIndex = status.bufferIndexInCurrentWindow
       workspaceIndex = status.currentWorkSpaceIndex
-      currentLine = status.workspace[workspaceIndex].currentMainWindowNode.currentLine
-      highlight = status.bufStatus[currentBufferIndex].buffer.initConfigModeHighlight(currentLine)
+      node = status.workspace[workspaceIndex].currentMainWindowNode
+      buffer = status.bufStatus[currentBufferIndex].buffer
+      highlight = buffer.initConfigModeHighlight(node.currentLine)
 
     status.workspace[workspaceIndex].currentMainWindowNode.highlight = highlight
 
@@ -861,6 +909,9 @@ proc configMode*(status: var Editorstatus) =
       status.bufStatus[currentBufferIndex].keyDown(
         status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
     elif key == ord('g'):
-      if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window) == 'g':
-        status.moveToFirstLine
+      let
+        index = status.currentWorkSpaceIndex
+        secondKey = getKey(
+          status.workSpace[index].currentMainWindowNode.window)
+      if secondKey == 'g': status.moveToFirstLine
     elif key == ord('G'): status.moveToLastLine
