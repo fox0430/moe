@@ -229,3 +229,5 @@ Check command bar
 ```recent``` - Open recent file selection mode (Only supported on Linux)  
 
 ```history``` - Open backup file manager  
+
+```conf``` - Open configuration mode

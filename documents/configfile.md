@@ -1214,3 +1214,13 @@ Reserved word background color
 ```
 reservedWordBg
 ```
+
+Current line color in configuration mode
+```
+currentSetting
+```
+
+Current line background color in configuration mode
+```
+currentSettingBg
+```
