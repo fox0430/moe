@@ -530,6 +530,10 @@ type EditorColor* = object
   deletedLine*: Color
   deletedLineBg*: Color
 
+  # configuration mode
+  currentSetting*: Color
+  currentSettingBg*: Color
+
 type EditorColorPair* = enum
   lineNum = 1
   currentLineNum = 2
@@ -605,6 +609,8 @@ type EditorColorPair* = enum
   # highlight diff
   addedLine = 54
   deletedLine = 55
+  # configuration mode
+  currentSetting = 56
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -727,6 +733,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     addedLineBg: default,
     deletedLine: red,
     deletedLineBg: default,
+    # configuration mode
+    currentSetting: gray100,
+    currentSettingBg: teal
   ),
   dark: EditorColor(
     editorBg: default,
@@ -848,6 +857,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     addedLineBg: default,
     deletedLine: red,
     deletedLineBg: default,
+    # configuration mode
+    currentSetting: gray100,
+    currentSettingBg: teal
   ),
   light: EditorColor(
     editorBg: default,
@@ -969,6 +981,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     addedLineBg: default,
     deletedLine: red,
     deletedLineBg: default,
+    # configuration mode
+    currentSetting: black,
+    currentSettingBg: deepPink1_1
   ),
   vivid: EditorColor(
     editorBg: default,
@@ -1090,6 +1105,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     addedLineBg: default,
     deletedLine: red,
     deletedLineBg: default,
+    # configuration mode
+    currentSetting: gray100,
+    currentSettingBg: deepPink1_1
   ),
 ]
 
@@ -1187,6 +1205,9 @@ proc setCursesColor*(editorColor: EditorColor) =
     # highlight diff
     setColorPair(EditorColorPair.addedLine, editorColor.addedLine, editorColor.addedLineBg)
     setColorPair(EditorColorPair.deletedLine, editorColor.deletedLine, editorColor.deletedLineBg)
+
+    # configuration mode
+    setColorPair(EditorColorPair.currentSetting, editorColor.currentSetting, editorColor.currentSettingBg)
 
 proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Color, Color) =
   let editorColor = ColorThemeTable[theme]
@@ -1288,5 +1309,7 @@ proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Co
     return (editorColor.deletedLine, editorColor.deletedLineBg)
   of EditorColorPair.currentHistory:
     return (editorColor.currentHistory, editorColor.currentHistoryBg)
+  of EditorColorPair.currentSetting:
+    return (editorColor.currentSetting, editorColor.currentSettingBg)
   else:
     return (editorColor.parenText, editorColor.parenTextBg)

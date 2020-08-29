@@ -286,7 +286,8 @@ proc initSyntaxHighlight(windowNode: var WindowNode,
         let bufStatus = bufStatus[node.bufferIndex]
         if not isFilerMode(bufStatus.mode, bufStatus.prevMode) and
            not isHistoryManagerMode(bufStatus.mode, bufStatus.prevMode) and
-           not isDiffViewerMode(bufStatus.mode, bufStatus.prevMode):
+           not isDiffViewerMode(bufStatus.mode, bufStatus.prevMode) and
+           not isConfigMode(bufStatus.mode, bufStatus.prevMode):
           let lang = if isSyntaxHighlight: bufStatus.language
                      else: SourceLanguage.langNone
           node.highlight = ($bufStatus.buffer).initHighlight(reservedWords, lang)
@@ -354,14 +355,7 @@ proc update*(status: var EditorStatus) =
             status.workSpace[workspaceIndex].currentMainWindowNode.windowIndex
           isCurrentMainWin = if node.windowIndex == currentWindowIndex: true
                              else: false
-          isVisualMode = if (currentMode == Mode.visual) or
-                            (prevMode == Mode.visual and
-                            currentMode == Mode.ex): true
-                         else: false
-          isVisualBlockMode = if (currentMode == Mode.visualBlock) or
-                                 (prevMode == Mode.visualBlock and
-                                 currentMode == Mode.ex): true
-                              else: false
+          isVisualMode = isVisualMode(bufStatus.mode)
 
         ## Update highlight
         ## TODO: Refactor and fix
@@ -375,7 +369,7 @@ proc update*(status: var EditorStatus) =
           elif isCurrentMainWin:
             if status.settings.highlightOtherUsesCurrentWord:
               status.highlightOtherUsesCurrentWord
-            if isVisualMode or isVisualBlockMode:
+            if isVisualMode:
               status.highlightSelectedArea
             if status.settings.highlightPairOfParen:
               status.highlightPairOfParen
@@ -389,10 +383,12 @@ proc update*(status: var EditorStatus) =
         node.view.seekCursor(bufStatus.buffer,
                              node.currentLine,
                              node.currentColumn)
+
         node.view.update(node.window,
                          status.settings.view,
                          isCurrentMainWin,
-                         isVisualMode,
+                         currentMode,
+                         prevMode,
                          bufStatus.buffer,
                          node.highlight,
                          node.currentLine,
@@ -552,9 +548,10 @@ proc deletePopUpWindow*(status: var Editorstatus) =
     status.update
 
 
-proc addNewBuffer*(status: var EditorStatus, filename: string) =
+proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode) =
   status.bufStatus.add(BufferStatus(path: filename.toRunes,
-                       lastSaveTime: now()))
+                                    mode: mode,
+                                    lastSaveTime: now()))
   let index = status.bufStatus.high
 
   if existsFile(filename) == false: status.bufStatus[index].buffer = newFile()
@@ -574,9 +571,16 @@ proc addNewBuffer*(status: var EditorStatus, filename: string) =
                                                   terminalWidth())
 
   status.changeCurrentBuffer(index)
-  status.changeMode(Mode.normal)
+  #status.changeMode(Mode.normal)
 
-proc addNewBuffer*(status: var EditorStatus) = status.addNewBuffer("")
+proc addNewBuffer*(status: var EditorStatus, mode: Mode) =
+  status.addNewBuffer("", mode)
+
+proc addNewBuffer*(status: var EditorStatus, filename: string) =
+  status.addNewBuffer(filename, Mode.normal)
+
+proc addNewBuffer*(status: var EditorStatus) =
+  status.addNewBuffer("")
 
 proc deleteBuffer*(status: var Editorstatus, deleteIndex: int) =
   let
@@ -880,6 +884,10 @@ proc highlightTrailingSpaces(status: var Editorstatus) =
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     bufStatus = status.bufStatus[currentBufferIndex]
+
+  if isConfigMode(bufStatus.mode, bufStatus.prevMode): return
+
+  let
     buffer = bufStatus.buffer
     workspaceIndex = status.currentWorkSpaceIndex
     windowNode = status.workspace[workspaceIndex].currentMainWindowNode
@@ -924,6 +932,7 @@ proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
     endLine = if bufStatus.buffer.len > range[1] + 1: range[1] + 2
               elif bufStatus.buffer.len > range[1]: range[1] + 1
               else: range[1]
+
   var bufferInView = initGapBuffer[seq[Rune]]()
   for i in startLine ..< endLine: bufferInView.add(bufStatus.buffer[i])
 

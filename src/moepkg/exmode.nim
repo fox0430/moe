@@ -296,9 +296,9 @@ proc startConfigMode(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
 
-  status.addNewBuffer
+  status.addNewBuffer(Mode.config)
   status.changeCurrentBuffer(status.bufStatus.high)
-  status.changeMode(Mode.config)
+  #status.changeMode(Mode.config)
 
 proc startHistoryManager(status: var Editorstatus) =
   let bufferIndex = status.bufferIndexInCurrentWindow

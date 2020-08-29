@@ -1181,6 +1181,12 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("deletedLineBg"):
       ColorThemeTable[ColorTheme.config].deletedLineBg = color("deletedLineBg")
 
+    if settings["Theme"].contains("currentSetting"):
+      ColorThemeTable[ColorTheme.config].currentSetting = color("currentSetting")
+
+    if settings["Theme"].contains("currentSettingBg"):
+      ColorThemeTable[ColorTheme.config].currentSettingBg = color("currentSettingBg")
+
     result.editorColorTheme = ColorTheme.config
   if vscodeTheme:
     # search for the vscode theme that is set in the current preferences of

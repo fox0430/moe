@@ -1,6 +1,6 @@
 import terminal, times, typetraits, strutils, strformat
 import gapbuffer, ui, editorstatus, unicodeext, window, movement, settings,
-       bufferstatus, color
+       bufferstatus, color, highlight
 
 const
   # Settings names
@@ -156,6 +156,22 @@ const
     "workSpaceBar",
     "reservedWord"
   ]
+
+proc initConfigModeHighlight[T](buffer: T, currentLine: int): Highlight =
+
+  for i in 0 ..< buffer.len:
+    let color =
+      if i == currentLine: EditorColorPair.currentSetting
+      else: EditorColorPair.defaultChar
+
+    let colorSegment = ColorSegment(
+      firstRow: i,
+      firstColumn: 0,
+      lastRow: i,
+      lastColumn: buffer[i].len,
+      color: color)
+
+    result.colorSegments.add(colorSegment)
 
 proc calcPositionOfSettingValue(): int {.compileTime.} =
   var names: seq[string]
@@ -593,6 +609,9 @@ proc initThemeTableBuffer*(settings: EditorSettings): seq[seq[Rune]] =
       of "reservedWord":
         let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.reservedWord)
         result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
+      of "currentSetting":
+        let colorPair = getColorFromEditorColorPair(theme, EditorColorPair.currentSetting)
+        result.add(ru nameStr & space & $colorPair[0] & " " & $colorPair[1])
 
 proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
   var buffer: seq[seq[Rune]]
@@ -631,7 +650,9 @@ proc isConfigMode(status: Editorstatus): bool =
   let
     workspaceIndex = status.currentWorkSpaceIndex
     index = status.workspace[workspaceIndex].currentMainWindowNode.bufferIndex
-  status.bufStatus[index].mode == Mode.config
+    mode = status.bufStatus[index].mode
+    prevMode = status.bufStatus[index].prevMode
+  (mode == Mode.config) or (prevMode == Mode.ex and mode == Mode.config)
 
 proc configMode*(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
@@ -647,7 +668,14 @@ proc configMode*(status: var Editorstatus) =
         currentWorkSpace == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
         
-    let currentBufferIndex = status.bufferIndexInCurrentWindow
+    let
+      currentBufferIndex = status.bufferIndexInCurrentWindow
+      workspaceIndex = status.currentWorkSpaceIndex
+      currentLine = status.workspace[workspaceIndex].currentMainWindowNode.currentLine
+      highlight = status.bufStatus[currentBufferIndex].buffer.initConfigModeHighlight(currentLine)
+
+    status.workspace[workspaceIndex].currentMainWindowNode.highlight = highlight
+
     status.update
     setCursor(false)
 
