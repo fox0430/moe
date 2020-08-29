@@ -154,7 +154,8 @@ const
     "highlightFullWidthSpace",
     "highlightTrailingSpaces",
     "workSpaceBar",
-    "reservedWord"
+    "reservedWord",
+    "currentSetting"
   ]
 
 proc initConfigModeHighlight[T](buffer: T, currentLine: int): Highlight =
