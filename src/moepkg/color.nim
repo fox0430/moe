@@ -1161,14 +1161,14 @@ proc setCursesColor*(editorColor: EditorColor) =
     # selected area in visual mode
     setColorPair(EditorColorPair.visualMode, editorColor.visualMode, editorColor.visualModeBg)
     # color scheme
-    setColorPair(EditorColorPair.defaultChar, editorColor.defaultChar, Color.default)
-    setColorPair(EditorColorPair.keyword, editorColor.gtKeyword, Color.default)
-    setColorPair(EditorColorPair.stringLit, editorColor.gtStringLit, Color.default)
-    setColorPair(EditorColorPair.decNumber, editorColor.gtDecNumber, Color.default)
-    setColorPair(EditorColorPair.comment, editorColor.gtComment, Color.default)
-    setColorPair(EditorColorPair.longComment, editorColor.gtLongComment, Color.default)
-    setColorPair(EditorColorPair.whitespace, editorColor.gtWhitespace, Color.default)
-    setColorPair(EditorColorPair.preprocessor, editorColor.gtPreprocessor, Color.default)
+    setColorPair(EditorColorPair.defaultChar, editorColor.defaultChar, editorColor.editorBg)
+    setColorPair(EditorColorPair.keyword, editorColor.gtKeyword, editorColor.editorBg)
+    setColorPair(EditorColorPair.stringLit, editorColor.gtStringLit, editorColor.editorBg)
+    setColorPair(EditorColorPair.decNumber, editorColor.gtDecNumber, editorColor.editorBg)
+    setColorPair(EditorColorPair.comment, editorColor.gtComment, editorColor.editorBg)
+    setColorPair(EditorColorPair.longComment, editorColor.gtLongComment, editorColor.editorBg)
+    setColorPair(EditorColorPair.whitespace, editorColor.gtWhitespace, editorColor.editorBg)
+    setColorPair(EditorColorPair.preprocessor, editorColor.gtPreprocessor, editorColor.editorBg)
     # filer
     setColorPair(EditorColorPair.currentFile, editorColor.currentFile, editorColor.currentFileBg)
     setColorPair(EditorColorPair.file, editorColor.file, editorColor.fileBg)
@@ -1268,21 +1268,21 @@ proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Co
   of EditorColorPair.visualMode:
     return (editorColor.visualMode, editorColor.visualModeBg)
   of EditorColorPair.defaultChar:
-    return (editorColor.defaultChar, Color.default)
+    return (editorColor.defaultChar, editorColor.editorBg)
   of EditorColorPair.keyword:
-    return (editorColor.gtKeyword, Color.default)
+    return (editorColor.gtKeyword, editorColor.editorBg)
   of EditorColorPair.stringLit:
-    return (editorColor.gtStringLit, Color.default)
+    return (editorColor.gtStringLit, editorColor.editorBg)
   of EditorColorPair.decNumber:
-    return (editorColor.gtDecNumber, Color.default)
+    return (editorColor.gtDecNumber, editorColor.editorBg)
   of EditorColorPair.comment:
-    return (editorColor.gtComment, Color.default)
+    return (editorColor.gtComment, editorColor.editorBg)
   of EditorColorPair.longComment:
-    return (editorColor.gtLongComment, Color.default)
+    return (editorColor.gtLongComment, editorColor.editorBg)
   of EditorColorPair.whitespace:
-    return (editorColor.gtWhitespace, Color.default)
+    return (editorColor.gtWhitespace, editorColor.editorBg)
   of EditorColorPair.preprocessor:
-    return (editorColor.gtPreprocessor, Color.default)
+    return (editorColor.gtPreprocessor, editorColor.editorBg)
   of EditorColorPair.currentFile:
     return (editorColor.currentFile, editorColor.currentFileBg)
   of EditorColorPair.file:
