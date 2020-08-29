@@ -622,7 +622,7 @@ proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
   buffer.add(initTabLineTableBuffer(settings))
 
   buffer.add(ru"")
-  buffer.add(initStandardTableBuffer(settings))
+  buffer.add(initStatusBarTableBuffer(settings))
 
   buffer.add(ru"")
   buffer.add(initWorkspaceTableBuffer(settings))
