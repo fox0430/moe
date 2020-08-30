@@ -33,6 +33,11 @@ type NotificationSettings* = object
   restoreScreenNotify*: bool
   restoreLogNotify*: bool
 
+type BuildOnSaveSettings* = object
+  enable*: bool
+  workspaceRoot*: seq[Rune]
+  command*: seq[Rune]
+
 type QuickRunSettings* = object
   saveBufferWhenQuickRun*: bool
   command*: string

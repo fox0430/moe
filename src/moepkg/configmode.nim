@@ -1,6 +1,6 @@
-import terminal, times, typetraits, strutils, strformat
+import terminal, times, typetraits, strutils
 import gapbuffer, ui, editorstatus, unicodeext, window, movement, settings,
-       bufferstatus, color, highlight, build
+       bufferstatus, color, highlight
 
 const
   # Settings names
@@ -452,8 +452,6 @@ proc initFilerTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
         result.add(ru nameStr & space & $settings.filerSettings.showIcons)
 
 proc calcPositionOfThemeSettingValue(theme: ColorTheme): int =
-  let editorColor = ColorThemeTable[theme]
-
   for colorPair in EditorColorPair:
     let
       colors = getColorFromEditorColorPair(theme, colorPair)

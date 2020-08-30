@@ -1,10 +1,5 @@
 import os, osproc, strformat, highlite
-import unicodeext
-
-type BuildOnSaveSettings* = object
-  enable*: bool
-  workspaceRoot*: seq[Rune]
-  command*: seq[Rune]
+import unicodeext, settings
 
 proc build*(filename, workspaceRoot,
             command: seq[Rune],
