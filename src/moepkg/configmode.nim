@@ -160,11 +160,9 @@ const
   ]
 
 proc initConfigModeHighlight[T](buffer: T, currentLine: int): Highlight =
-
   for i in 0 ..< buffer.len:
-    let color =
-      if i == currentLine: EditorColorPair.currentSetting
-      else: EditorColorPair.defaultChar
+    let color = if i == currentLine: EditorColorPair.currentSetting
+                else: EditorColorPair.defaultChar
 
     let colorSegment = ColorSegment(
       firstRow: i,

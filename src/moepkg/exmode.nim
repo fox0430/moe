@@ -298,7 +298,6 @@ proc startConfigMode(status: var Editorstatus) =
 
   status.addNewBuffer(Mode.config)
   status.changeCurrentBuffer(status.bufStatus.high)
-  #status.changeMode(Mode.config)
 
 proc startHistoryManager(status: var Editorstatus) =
   let bufferIndex = status.bufferIndexInCurrentWindow
