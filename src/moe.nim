@@ -10,7 +10,6 @@ import moepkg/exmode
 import moepkg/buffermanager
 import moepkg/logviewer
 import moepkg/cmdlineoption
-import moepkg/settings
 import moepkg/bufferstatus
 import moepkg/help
 import moepkg/recentfilemode
