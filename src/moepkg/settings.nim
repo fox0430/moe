@@ -1507,8 +1507,12 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
   return none(string)
 
 proc loadSettingFile*(): EditorSettings =
+  let filename = getConfigDir() / "moe" / "moerc.toml"
+
+  if not existsFile(filename):
+    return initEditorSettings()
+  
   let
-    filename = getConfigDir() / "moe" / "moerc.toml"
     toml = parsetoml.parseFile(filename)
     invalidItem = toml.validateTomlConfig
 
