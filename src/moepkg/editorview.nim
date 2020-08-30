@@ -309,7 +309,6 @@ proc update*[T](view: var EditorView,
                 view.width + view.widthOfLineNum - widthOfLineNum,
                 widthOfLineNum)
 
-  let isVisualMode = isVisualMode(mode)
   view.writeAllLines(win,
                      viewSettings,
                      isCurrentWin,

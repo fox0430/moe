@@ -1,5 +1,5 @@
 import os, osproc, strformat, highlite
-import unicodeext, settings
+import unicodeext
 
 proc build*(filename, workspaceRoot,
             command: seq[Rune],
