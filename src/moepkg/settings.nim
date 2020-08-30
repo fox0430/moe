@@ -218,6 +218,7 @@ proc initEditorSettings*(): EditorSettings =
   result.reservedWords = initReservedWords()
   result.autoBackupSettings = initAutoBackupSettings()
   result.quickRunSettings = initQuickRunSettings()
+  result.notificationSettings = initNotificationSettings()
 
 proc getTheme(theme: string): ColorTheme =
   if theme == "vivid": return ColorTheme.vivid
