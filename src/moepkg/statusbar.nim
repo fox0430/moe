@@ -79,7 +79,7 @@ proc writeStatusBarNormalModeInfo(bufStatus: var BufferStatus,
     column = if settings.statusBar.column:
                fmt"{windowNode.currentColumn + 1}/{bufStatus.buffer[windowNode.currentLine].len}"
              else: ""
-    encoding = if settings.statusBar.characterEncoding: $settings.characterEncoding
+    encoding = if settings.statusBar.characterEncoding: $bufStatus.characterEncoding
                else: ""
     language = if bufStatus.language == SourceLanguage.langNone: "Plain"
                else: sourceLanguageToStr[bufStatus.language]

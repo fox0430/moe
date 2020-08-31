@@ -145,7 +145,7 @@ proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
   if not isRestore: return
 
   # Backup files before restore
-  bufStatus.backupBuffer(status.settings.characterEncoding,
+  bufStatus.backupBuffer(bufStatus.characterEncoding,
                          status.settings.autoBackupSettings,
                          status.settings.notificationSettings,
                          status.commandwindow,
@@ -167,7 +167,7 @@ proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
                                          lastSaveTime: now())
       let textAndEncoding = openFile(sourcePath)
       status.bufStatus[i].buffer = textAndEncoding.text.toGapBuffer
-      status.settings.characterEncoding = textAndEncoding.encoding
+      status.bufStatus[i].characterEncoding = textAndEncoding.encoding
 
       let workspaceIndex = status.currentWorkSpaceIndex
       status.workSpace[workspaceIndex].currentMainWindowNode.view =

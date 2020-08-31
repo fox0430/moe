@@ -560,7 +560,7 @@ proc addNewBuffer*(status: var EditorStatus, filename: string) =
     try:
       let textAndEncoding = openFile(filename.toRunes)
       status.bufStatus[index].buffer = textAndEncoding.text.toGapBuffer
-      status.settings.characterEncoding = textAndEncoding.encoding
+      status.bufStatus[index].characterEncoding = textAndEncoding.encoding
     except IOError:
       status.commandWindow.writeFileOpenError(filename, status.messageLog)
       return
@@ -965,7 +965,7 @@ proc autoSave(status: var Editorstatus) =
     if bufStatus.path != ru"" and now() > bufStatus.lastSaveTime + interval:
       saveFile(bufStatus.path,
                bufStatus.buffer.toRunes,
-               status.settings.characterEncoding)
+               bufStatus.characterEncoding)
       status.commandWindow.writeMessageAutoSave(bufStatus.path,
                                                 status.settings.notificationSettings,
                                                 status.messageLog)
@@ -1028,7 +1028,7 @@ proc eventLoopTask(status: var Editorstatus) =
            prevMode == Mode.visualBlock or
            prevMode == Mode.replace)):
 
-        bufStatus.backupBuffer(status.settings.characterEncoding,
+        bufStatus.backupBuffer(bufStatus.characterEncoding,
                                status.settings.autoBackupSettings,
                                status.settings.notificationSettings,
                                status.commandwindow,
