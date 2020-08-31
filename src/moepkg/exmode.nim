@@ -855,7 +855,7 @@ proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
     let currentBufferIndex = status.bufferIndexInCurrentWindow
     saveFile(filename,
              status.bufStatus[currentBufferIndex].buffer.toRunes,
-             status.settings.characterEncoding)
+             status.bufStatus[currentBufferIndex].characterEncoding)
     let
       workspaceIndex = status.currentWorkSpaceIndex
       bufferIndex = status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
@@ -906,7 +906,7 @@ proc writeAndQuitCommand(status: var EditorStatus) =
     status.bufStatus[currentBufferIndex].countChange = 0
     saveFile(filename,
              status.bufStatus[currentBufferIndex].buffer.toRunes,
-             status.settings.characterEncoding)
+             status.bufStatus[currentBufferIndex].characterEncoding)
 
     status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
   except IOError:
@@ -944,7 +944,7 @@ proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
     try:
       saveFile(filename,
                bufStatus.buffer.toRunes,
-               status.settings.characterEncoding)
+               bufStatus.characterEncoding)
     except IOError:
       status.commandWindow.writeSaveError(status.messageLog)
       status.changeMode(Mode.normal)

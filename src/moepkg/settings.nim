@@ -92,7 +92,6 @@ type EditorSettings* = object
   autoCloseParen*: bool
   autoIndent*: bool
   tabStop*: int
-  characterEncoding*: CharacterEncoding # TODO: move to EditorStatus ...?
   disableChangeCursor*: bool
   defaultCursor*: CursorType
   normalModeCursor*: CursorType

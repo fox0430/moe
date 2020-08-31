@@ -43,7 +43,7 @@ proc runQuickRun*(bufStatus: var BufferStatus,
   let filename = bufStatus.path
 
   if settings.quickRunSettings.saveBufferWhenQuickRun:
-    saveFile(filename, bufStatus.buffer.toRunes, settings.characterEncoding)
+    saveFile(filename, bufStatus.buffer.toRunes, bufStatus.characterEncoding)
     bufStatus.countChange = 0
 
   let command = bufStatus.generateCommand(settings.quickRunSettings)
