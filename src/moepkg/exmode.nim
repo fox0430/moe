@@ -312,9 +312,8 @@ proc startHistoryManager(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
 
-  status.addNewBuffer("")
+  status.addNewBuffer(Mode.history)
   status.changeCurrentBuffer(status.bufStatus.high)
-  status.changeMode(Mode.history)
 
 proc startRecentFileMode(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow

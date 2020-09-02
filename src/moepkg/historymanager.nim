@@ -208,14 +208,20 @@ proc deleteBackupFiles(status: var EditorStatus, sourcePath: seq[Rune]) =
                                               status.messageLog)
 
 proc historyManager*(status: var EditorStatus) =
-  let sourcePath = status.bufStatus[status.prevBufferIndex].path
+  # BufferStatus.path is the path of the backup source file
+  block:
+    let bufferIndex = status.bufferIndexInCurrentWindow
+    if status.bufStatus[bufferIndex].path.len == 0:
+      let sourcePath = status.bufStatus[status.prevBufferIndex].path
+      status.bufStatus[bufferIndex].path = sourcePath
 
-  status.initHistoryManagerBuffer(sourcePath)
+  status.initHistoryManagerBuffer(status.bufStatus[bufferIndex].path)
 
   while status.isHistoryManagerMode:
     let
       bufferIndex = status.bufferIndexInCurrentWindow
       workspaceIndex = status.currentWorkSpaceIndex
+      sourcePath = status.bufStatus[bufferIndex].path
 
     block:
       let
