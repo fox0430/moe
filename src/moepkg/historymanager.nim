@@ -215,7 +215,9 @@ proc historyManager*(status: var EditorStatus) =
       let sourcePath = status.bufStatus[status.prevBufferIndex].path
       status.bufStatus[bufferIndex].path = sourcePath
 
-  status.initHistoryManagerBuffer(status.bufStatus[bufferIndex].path)
+  block:
+    let bufferIndex = status.bufferIndexInCurrentWindow
+    status.initHistoryManagerBuffer(status.bufStatus[bufferIndex].path)
 
   while status.isHistoryManagerMode:
     let
