@@ -228,7 +228,7 @@ proc getTheme(theme: string): ColorTheme =
   if theme == "vivid": return ColorTheme.vivid
   elif theme == "light": return ColorTheme.light
   elif theme == "config": return ColorTheme.config
-  elif theme == "vscode": return ColorTheme.config
+  elif theme == "vscode": return ColorTheme.vscode
   else: return ColorTheme.dark
 
 # This macro takes statement lists for the foreground and
@@ -617,7 +617,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Standard"].contains("theme"):
       let themeString = settings["Standard"]["theme"].getStr()
       result.editorColorTheme = getTheme(themeString)
-      if themeString == "vscode":
+      if result.editorColorTheme == ColorTheme.vscode:
         vscodeTheme = true
 
     if settings["Standard"].contains("number"):
@@ -1248,8 +1248,8 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
             break
       
       if fileExists(vsCodeThemeFile):
-        result.editorColorTheme = ColorTheme.config
-        ColorThemeTable[ColorTheme.config] =
+        result.editorColorTheme = ColorTheme.vscode
+        ColorThemeTable[ColorTheme.vscode] =
           makeColorThemeFromVSCodeThemeFile(vsCodeThemeFile)
         vsCodeThemeLoaded = true
     if not vsCodeThemeLoaded:
