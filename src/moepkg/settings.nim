@@ -97,7 +97,6 @@ type EditorSettings* = object
   autoCloseParen*: bool
   autoIndent*: bool
   tabStop*: int
-  characterEncoding*: CharacterEncoding # TODO: move to EditorStatus ...?
   disableChangeCursor*: bool
   defaultCursor*: CursorType
   normalModeCursor*: CursorType
@@ -223,6 +222,7 @@ proc initEditorSettings*(): EditorSettings =
   result.reservedWords = initReservedWords()
   result.autoBackupSettings = initAutoBackupSettings()
   result.quickRunSettings = initQuickRunSettings()
+  result.notificationSettings = initNotificationSettings()
 
 proc getTheme(theme: string): ColorTheme =
   if theme == "vivid": return ColorTheme.vivid
@@ -1518,8 +1518,12 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
   return none(string)
 
 proc loadSettingFile*(): EditorSettings =
+  let filename = getConfigDir() / "moe" / "moerc.toml"
+
+  if not existsFile(filename):
+    return initEditorSettings()
+  
   let
-    filename = getConfigDir() / "moe" / "moerc.toml"
     toml = parsetoml.parseFile(filename)
     invalidItem = toml.validateTomlConfig
 

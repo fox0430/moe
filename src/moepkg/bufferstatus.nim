@@ -26,6 +26,7 @@ type SelectArea* = object
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
+  characterEncoding*: CharacterEncoding
   language*: SourceLanguage
   selectArea*: SelectArea
   isSearchHighlight*: bool
