@@ -539,6 +539,12 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         colorFromNode(jsonNode{"colors", "sideBar.background"})
+    setEditorColor popUpWinCurrentLine:
+      foreground:
+        colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "sideBar.background"})
 
     # pair of paren highlighting
     setEditorColor parenText:
@@ -555,6 +561,7 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
       background:
         colorFromNode(jsonNode{"colors",
           "gitDecoration.conflictingResourceForeground"})
+
     # filer mode
     setEditorColor currentFile:
       foreground:
@@ -572,18 +579,33 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         Color.default
+
     # highlight full width space
     setEditorColor highlightFullWidthSpace:
       foreground:
         colorFromNode(jsonNode{"colors", "tab.activeBorder"})
       background:
         colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+
     # highlight trailing spaces
     setEditorColor highlightTrailingSpaces:
       foreground:
         colorFromNode(jsonNode{"colors", "tab.activeBorder"})
       background:
         colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+
+    # highlight diff
+    setEditorColor addedLine:
+      foreground:
+        colorFromNode(jsonNode{"colors", "diff.inserted"})
+      background:
+        colorFromNode(jsonNode{"colors", "editor.background"})
+    setEditorColor deletedLine:
+      foreground:
+        colorFromNode(jsonNode{"colors", "diff.deleted"})
+      background:
+        colorFromNode(jsonNode{"colors", "editor.background"})
+
     # work space bar
     setEditorColor workSpaceBar:
       foreground:
@@ -596,18 +618,36 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         colorFromNode(jsonNode{"colors", "activityBarBadge.background"})
+
     # search result highlighting
     setEditorColor searchResult:
       foreground:
         adjust: ReadableVsBackground
       background:
         colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+
     # selected area in visual mode
     setEditorColor visualMode:
       foreground:
         adjust: ReadableVsBackground
       background:
         colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+
+    # History manager
+    setEditorColor currentHistory:
+      foreground:
+        colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "editor.background"})
+
+  # Configuration mode
+    setEditorColor currentSetting:
+      foreground:
+        colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "editor.background"})
 
 proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
   result = initEditorSettings()
