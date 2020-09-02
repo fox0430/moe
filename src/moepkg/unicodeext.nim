@@ -344,6 +344,16 @@ proc splitWhitespace*(runes: seq[Rune]): seq[seq[Rune]] =
   for s in unicode.split($runes):
     result.add(s.toRunes)
 
+iterator split*(runes: seq[Rune], isSep: proc (r: Rune): bool, removeEmptyEntries: bool = false): seq[Rune] =
+  var first = 0
+  while first <= runes.len:
+    var last = first
+    while last < runes.len and not isSep(runes[last]):
+      inc(last)
+    if not removeEmptyEntries or first < last:
+      yield runes[first ..< last]
+    first = last + 1
+
 from os import `/`
 proc `/`*(runes1, runes2: seq[Rune]): seq[Rune] =
   toRunes($runes1 / $runes2)
