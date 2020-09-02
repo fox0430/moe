@@ -144,6 +144,41 @@ iterator parseReservedWord(
     yield (buffer[pos ..< last], reservedWord.color)
     buffer = buffer[last ..^ 1]
 
+proc getEditorColorPairInNim(kind: TokenClass,
+                             isProcName: bool): EditorColorPair =
+
+  case kind:
+    of gtStringLit: EditorColorPair.stringLit
+    of gtDecNumber: EditorColorPair.decNumber
+    of gtComment: EditorColorPair.comment
+    of gtLongComment: EditorColorPair.longComment
+    of gtPreprocessor: EditorColorPair.preprocessor
+    of gtWhitespace, gtPunctuation: EditorColorPair.defaultChar
+
+    of TokenClass.nimKeyword: EditorColorPair.nimKeyword
+    of TokenClass.nimBoolean: EditorColorPair.nimBoolean
+    of TokenClass.nimSpecialVar: EditorColorPair.nimSpecialVar
+    of TokenClass.nimBuiltin: EditorColorPair.nimBuiltin
+
+    else:
+      if isProcName: EditorColorPair.nimProcName
+      else: EditorColorPair.defaultChar
+
+proc getEditorColorPair(kind: TokenClass,
+                        language: SourceLanguage): EditorColorPair =
+
+  case kind:
+    of gtKeyword: EditorColorPair.keyword
+    of gtStringLit:
+      if language == SourceLanguage.langYaml: EditorColorPair.defaultChar
+      else: EditorColorPair.stringLit
+    of gtDecNumber: EditorColorPair.decNumber
+    of gtComment: EditorColorPair.comment
+    of gtLongComment: EditorColorPair.longComment
+    of gtPreprocessor: EditorColorPair.preprocessor
+    of gtWhitespace: EditorColorPair.defaultChar
+    else: EditorColorPair.defaultChar
+
 proc initHighlight*(buffer: string,
                     reservedWords: seq[ReservedWord],
                     language: SourceLanguage): Highlight =
@@ -193,6 +228,9 @@ proc initHighlight*(buffer: string,
   if buffer.parseWhile(pad, {' ', '\x09'..'\x0D'}) > 0:
     splitByNewline(pad, EditorColorPair.defaultChar)
 
+  # Only use in nim
+  var isProcName = false
+
   while true:
     try:
       token.getNextToken(language)
@@ -208,18 +246,18 @@ proc initHighlight*(buffer: string,
       currentRow += last - first + 1
       currentColumn = 0
       continue
-    
-    let color = case token.kind:
-        of gtKeyword: EditorColorPair.keyword
-        of gtStringLit:
-          if language == SourceLanguage.langYaml: EditorColorPair.defaultChar
-          else: EditorColorPair.stringLit
-        of gtDecNumber: EditorColorPair.decNumber
-        of gtComment: EditorColorPair.comment
-        of gtLongComment: EditorColorPair.longComment
-        of gtPreprocessor: EditorColorPair.preprocessor
-        of gtWhitespace: EditorColorPair.defaultChar
-        else: EditorColorPair.defaultChar
+
+    let color = if language == SourceLanguage.langNim:
+                  getEditorColorPairInNim(token.kind, isProcName)
+                else:
+                  getEditorColorPair(token.kind, language)
+
+    isProcName = if language == SourceLanguage.langNim and
+                   buffer[first.. last] == "proc": true
+                  elif language == SourceLanguage.langNim and
+                       isProcName and
+                       token.kind == gtWhitespace: true
+                 else: false
 
     if token.kind == gtComment:
       for r in buffer[first..last].parseReservedWord(reservedWords, color):

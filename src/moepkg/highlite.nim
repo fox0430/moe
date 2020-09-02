@@ -76,7 +76,11 @@ type
     gtOperator, gtPunctuation, gtComment, gtLongComment, gtRegularExpression,
     gtTagStart, gtTagEnd, gtKey, gtValue, gtRawData, gtAssembler,
     gtPreprocessor, gtDirective, gtCommand, gtRule, gtHyperlink, gtLabel,
-    gtReference, gtOther
+    gtReference, gtOther,
+    nimKeyword, nimBoolean, nimRepeat, nimLabel, nimConditional, nimDefine,
+    nimException, nimMacro, nimPreCondit, nimStorage, nimStorageClass,
+    nimTypedef, nimOperator, nimSpecialVar nimBuiltin
+
   GeneralTokenizer* = object of RootObj
     kind*: TokenClass
     start*, length*: int
@@ -91,27 +95,53 @@ type
 const
   sourceLanguageToStr*: array[SourceLanguage, string] = ["none",
     "Nim", "C++", "C#", "C", "Java", "Yaml", "Python", "JavaScript", "Shell"]
-  tokenClassToStr*: array[TokenClass, string] = ["Eof", "None", "Whitespace",
-    "DecNumber", "BinNumber", "HexNumber", "OctNumber", "FloatNumber",
-    "Identifier", "Keyword", "StringLit", "LongStringLit", "CharLit",
-    "EscapeSequence", "Operator", "Punctuation", "Comment", "LongComment",
-    "RegularExpression", "TagStart", "TagEnd", "Key", "Value", "RawData",
-    "Assembler", "Preprocessor", "Directive", "Command", "Rule", "Hyperlink",
-    "Label", "Reference", "Other"]
+
+  ## tokenClassToStr Unused
+  #tokenClassToStr*: array[TokenClass, string] = ["Eof", "None", "Whitespace",
+  #  "DecNumber", "BinNumber", "HexNumber", "OctNumber", "FloatNumber",
+  #  "Identifier", "Keyword", "StringLit", "LongStringLit", "CharLit",
+  #  "EscapeSequence", "Operator", "Punctuation", "Comment", "LongComment",
+  #  "RegularExpression", "TagStart", "TagEnd", "Key", "Value", "RawData",
+  #  "Assembler", "Preprocessor", "Directive", "Command", "Rule", "Hyperlink",
+  #  "Label", "Reference", "Other"]
 
   # The following list comes from doc/keywords.txt, make sure it is
   # synchronized with this array by running the module itself as a test case.
-  nimKeywords = ["addr", "and", "as", "asm", "bind", "block",
-    "break", "case", "cast", "concept", "const", "continue", "converter",
-    "defer", "discard", "distinct", "div", "do",
-    "elif", "else", "end", "enum", "except", "export",
-    "finally", "for", "from", "func",
-    "if", "import", "in", "include",
-    "interface", "is", "isnot", "iterator", "let", "macro", "method",
-    "mixin", "mod", "nil", "not", "notin", "object", "of", "or", "out", "proc",
-    "ptr", "raise", "ref", "return", "shl", "shr", "static",
-    "template", "try", "tuple", "type", "using", "var", "when", "while",
-    "xor", "yield"]
+  nimKeywords = ["addr", "and", "as", "asm", "bind", "block", "break", "case",
+    "cast", "concept", "const", "continue", "converter", "defer", "discard",
+    "distinct", "div", "do", "elif", "else", "end", "enum", "except", "export",
+    "finally", "for", "from", "func", "if", "import", "in", "include",
+    "interface", "is", "isnot", "iterator", "let", "macro", "method", "mixin",
+    "mod", "nil", "not", "notin", "object", "of", "or", "or", "out", "proc",
+    "ptr", "raise", "ref", "return", "shl", "shr", "static", "template", "try",
+    "tuple", "type", "using", "var", "when", "while", "xor", "xor", "yield"]
+  nimBooleans = ["true", "false"]
+  nimSpecialVars = ["result"]
+  # Builtin types, objects, and exceptions
+  nimBuiltins = ["AccessViolationError", "AlignType", "ArithmeticError",
+    "AssertionError", "BiggestFloat", "BiggestInt", "ByteAddress",
+    "DeadThreadError", "DivByZeroError", "Endianness", "Exception",
+    "ExecIOEffect", "FieldError", "File", "FileModeFileHandle",
+    "FloatDivByZeroError", "FloatInexactError", "FloatInvalidOpError",
+    "FloatOverflowError", "FloatUnderflowError", "FloatingPointError",
+    "GC_Strategy", "IOEffect", "IOError", "IndexError", "KeyError", "LibHandle",
+    "LibraryError", "Natural", "NimNode", "OSError", "ObjectAssignmentError",
+    "ObjectConversionError", "Ordinal", "OutOfMemError", "OverflowError",
+    "PFloat32", "PFloat64", "PFrame", "PInt32", "PInt64", "Positive",
+    "ProcAddr", "RangeError", "ReadIOEffect", "RefCount", "ReraiseError",
+    "ResourceExhaustedError", "RootEffect", "RootObjRootRef", "Slice",
+    "SomeInteger", "SomeNumber", "SomeOrdinal", "SomeReal", "SomeSignedInt",
+    "SomeUnsignedInt", "StackOverflowError", "SystemError", "TFrame",
+    "THINSTANCE", "TResult", "TaintedString", "TimeEffect", "Utf16Char",
+    "ValueError", "WideCString", "WriteIOEffect", "array", "autoany", "bool",
+    "byte", "cchar", "cdouble", "cfloat", "char", "cint", "clong",
+    "clongdouble", "clonglong", "cscharcshort", "csize", "cstring",
+    "cstringArray", "cuchar", "cuint", "culong", "culonglong", "cushort",
+    "expr", "float", "float64", "guarded", "int", "int16", "int32int64", "int8",
+    "loat32f", "openArray", "pointer", "ptr", "range", "ref", "seq", "set",
+    "shared", "stmt", "string", "typed", "typedesc", "uint", "uint16",
+    "uint32uint64", "uint8", "untyped", "varargs", "void"
+  ]
 
 proc getSourceLanguage*(name: string): SourceLanguage =
   for i in countup(succ(low(SourceLanguage)), high(SourceLanguage)):
@@ -137,8 +167,15 @@ proc deinitGeneralTokenizer*(g: var GeneralTokenizer) =
 
 proc nimGetKeyword(id: string): TokenClass =
   for k in nimKeywords:
-    if cmpIgnoreStyle(id, k) == 0: return gtKeyword
+    if cmpIgnoreStyle(id, k) == 0: return nimKeyword
+  for k in nimBooleans:
+    if cmpIgnoreStyle(id, k) == 0: return nimBoolean
+  for k in nimSpecialVars:
+    if cmpIgnoreStyle(id, k) == 0: return nimSpecialVar
+  for k in nimBuiltins:
+    if cmpIgnoreStyle(id, k) == 0: return nimBuiltin
   result = gtIdentifier
+
   when false:
     var i = getIdent(id)
     if (i.id >= ord(tokKeywordLow) - ord(tkSymbol)) and

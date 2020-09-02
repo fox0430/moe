@@ -479,6 +479,13 @@ type EditorColor* = object
   gtLongComment*: Color
   gtWhitespace*: Color
   gtPreprocessor*: Color
+
+  nimKeyword*: Color
+  nimBoolean*: Color
+  nimSpecialVar*: Color
+  nimBuiltin*: Color
+  nimProcName*: Color
+
   # filer mode
   currentFile*: Color
   currentFileBg*: Color
@@ -579,39 +586,46 @@ type EditorColorPair* = enum
   longComment = 33
   whitespace = 34
   preprocessor = 35
+
+  nimKeyword = 36
+  nimBoolean = 38
+  nimSpecialVar = 39
+  nimBuiltin = 40
+  nimProcName = 41
+
   # filer mode
-  currentFile = 36
-  currentFileBg = 37
-  file = 38
-  fileBg = 39
-  dir = 40
-  dirBg = 41
-  pcLink = 42
-  pcLinkBg = 43
+  currentFile = 42
+  currentFileBg = 43
+  file = 44
+  fileBg = 45
+  dir = 46
+  dirBg = 47
+  pcLink = 48
+  pcLinkBg = 49
   # pop up window
-  popUpWindow = 44
-  popUpWinCurrentLine = 45
+  popUpWindow = 50
+  popUpWinCurrentLine = 51
   # replace text highlighting
-  replaceText = 46
+  replaceText = 52
   # pair of paren highlighting
-  parenText = 47
+  parenText = 53
   # highlight other uses current word
-  currentWord = 48
+  currentWord = 54
   # highlight full width space
-  highlightFullWidthSpace = 49
+  highlightFullWidthSpace = 55
   # highlight trailing spaces
-  highlightTrailingSpaces = 50
+  highlightTrailingSpaces = 56
   # work space bar
-  workSpaceBar = 51
+  workSpaceBar = 57
   # highlight reserved words
-  reservedWord = 52
+  reservedWord = 58
   # highlight history manager
-  currentHistory = 53
+  currentHistory = 59
   # highlight diff
-  addedLine = 54
-  deletedLine = 55
+  addedLine = 60
+  deletedLine = 61
   # configuration mode
-  currentSetting = 56
+  currentSetting = 62
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -691,6 +705,13 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
+
+    nimKeyword: aqua,
+    nimBoolean: yellow,
+    nimSpecialVar: green,
+    nimBuiltin: yellow,
+    nimProcName: yellow,
+
     # filer mode
     currentFile: gray100,
     currentFileBg: teal,
@@ -815,6 +836,13 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
+
+    nimKeyword: aqua,
+    nimBoolean: yellow,
+    nimSpecialVar: green,
+    nimBuiltin: yellow,
+    nimProcName: yellow,
+
     # filer mode
     currentFile: gray100,
     currentFileBg: teal,
@@ -939,6 +967,13 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
+
+    nimKeyword: aqua,
+    nimBoolean: yellow,
+    nimSpecialVar: green,
+    nimBuiltin: yellow,
+    nimProcName: yellow,
+
     # filer mode
     currentFile: gray100,
     currentFileBg: teal,
@@ -1063,6 +1098,13 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
+
+    nimKeyword: aqua,
+    nimBoolean: yellow,
+    nimSpecialVar: green,
+    nimBuiltin: yellow,
+    nimProcName: yellow,
+
     # filer mode
     currentFile: black,
     currentFileBg: deepPink1_1,
@@ -1187,6 +1229,13 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtLongComment: purple_1,
     gtWhitespace: gray,
     gtPreprocessor: green,
+
+    nimKeyword: aqua,
+    nimBoolean: yellow,
+    nimSpecialVar: green,
+    nimBuiltin: yellow,
+    nimProcName: yellow,
+
     # filer mode
     currentFile: gray100,
     currentFileBg: deepPink1_1,
@@ -1294,6 +1343,13 @@ proc setCursesColor*(editorColor: EditorColor) =
     setColorPair(EditorColorPair.longComment, editorColor.gtLongComment, editorColor.editorBg)
     setColorPair(EditorColorPair.whitespace, editorColor.gtWhitespace, editorColor.editorBg)
     setColorPair(EditorColorPair.preprocessor, editorColor.gtPreprocessor, editorColor.editorBg)
+
+    setColorPair(EditorColorPair.nimKeyword, editorColor.nimKeyword, editorColor.editorBg)
+    setColorPair(EditorColorPair.nimBoolean, editorColor.nimBoolean, editorColor.editorBg)
+    setColorPair(EditorColorPair.nimSpecialVar, editorColor.nimSpecialVar, editorColor.editorBg)
+    setColorPair(EditorColorPair.nimBuiltin, editorColor.nimBuiltin, editorColor.editorBg)
+    setColorPair(EditorColorPair.nimProcName, editorColor.nimProcName, editorColor.editorBg)
+
     # filer
     setColorPair(EditorColorPair.currentFile, editorColor.currentFile, editorColor.currentFileBg)
     setColorPair(EditorColorPair.file, editorColor.file, editorColor.fileBg)
