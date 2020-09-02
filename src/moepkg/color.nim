@@ -397,9 +397,10 @@ proc readableOnBackground*(col: Color, background: Color): Color =
 
 type ColorTheme* = enum
   config  = 0
-  dark    = 1
-  light   = 2
-  vivid   = 3
+  vscode  = 1
+  dark    = 2
+  light   = 3
+  vivid   = 4
 
 type EditorColor* = object
   editorBg*: Color
@@ -530,6 +531,10 @@ type EditorColor* = object
   deletedLine*: Color
   deletedLineBg*: Color
 
+  # configuration mode
+  currentSetting*: Color
+  currentSettingBg*: Color
+
 type EditorColorPair* = enum
   lineNum = 1
   currentLineNum = 2
@@ -605,6 +610,8 @@ type EditorColorPair* = enum
   # highlight diff
   addedLine = 54
   deletedLine = 55
+  # configuration mode
+  currentSetting = 56
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -727,6 +734,133 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     addedLineBg: default,
     deletedLine: red,
     deletedLineBg: default,
+    # configuration mode
+    currentSetting: gray100,
+    currentSettingBg: teal
+  ),
+  vscode: EditorColor(
+    editorBg: default,
+    lineNum: gray54,
+    lineNumBg: default,
+    currentLineNum: teal,
+    currentLineNumBg: default,
+    # statsu bar
+    statusBarNormalMode: white,
+    statusBarNormalModeBg: blue,
+    statusBarModeNormalMode: black,
+    statusBarModeNormalModeBg: white,
+    statusBarNormalModeInactive: blue,
+    statusBarNormalModeInactiveBg: white,
+
+    statusBarInsertMode: white,
+    statusBarInsertModeBg: blue,
+    statusBarModeInsertMode: black,
+    statusBarModeInsertModeBg: white,
+    statusBarInsertModeInactive: blue,
+    statusBarInsertModeInactiveBg: white,
+
+    statusBarVisualMode: white,
+    statusBarVisualModeBg: blue,
+    statusBarModeVisualMode: black,
+    statusBarModeVisualModeBg: white,
+    statusBarVisualModeInactive: blue,
+    statusBarVisualModeInactiveBg: white,
+
+    statusBarReplaceMode: white,
+    statusBarReplaceModeBg: blue,
+    statusBarModeReplaceMode: black,
+    statusBarModeReplaceModeBg: white,
+    statusBarReplaceModeInactive: blue,
+    statusBarReplaceModeInactiveBg: white,
+
+    statusBarFilerMode: white,
+    statusBarFilerModeBg: blue,
+    statusBarModeFilerMode: black,
+    statusBarModeFilerModeBg: white,
+    statusBarFilerModeInactive: blue,
+    statusBarFilerModeInactiveBg: white,
+
+    statusBarExMode: white,
+    statusBarExModeBg: blue,
+    statusBarModeExMode: black,
+    statusBarModeExModeBg: white,
+    statusBarExModeInactive: blue,
+    statusBarExModeInactiveBg: white,
+
+    statusBarGitBranch: white,
+    statusBarGitBranchBg: blue,
+    # tab line
+    tab: white,
+    tabBg: default,
+    currentTab: white,
+    currentTabBg: blue,
+    # command  bar
+    commandBar: gray100,
+    commandBarBg: default,
+    # error message
+    errorMessage: red,
+    errorMessageBg: default,
+    # search result highlighting
+    searchResult: default,
+    searchResultBg: red,
+    # selected area in visual mode
+    visualMode: gray100,
+    visualModeBg: purple_1,
+    # color scheme
+    defaultChar: gray100,
+    gtKeyword: seaGreen1_2,
+    gtStringLit: purple_1,
+    gtDecNumber: aqua,
+    gtComment: gray,
+    gtLongComment: gray,
+    gtWhitespace: gray,
+    gtPreprocessor: green,
+    # filer mode
+    currentFile: gray100,
+    currentFileBg: teal,
+    file: gray100,
+    fileBg: default,
+    dir: blue,
+    dirBg: default,
+    pcLink: teal,
+    pcLinkBg: default,
+    # pop up window
+    popUpWindow: gray100,
+    popUpWindowBg: black,
+    popUpWinCurrentLine: blue,
+    popUpWinCurrentLineBg: black,
+    # replace text highlighting
+    replaceText: default,
+    replaceTextBg: red,
+    # pair of paren highlighting
+    parenText: default,
+    parenTextBg: white,
+    # highlight other uses current word
+    currentWord: default,
+    currentWordBg: gray,
+    # highlight full width space
+    highlightFullWidthSpace: red,
+    highlightFullWidthSpaceBg: red,
+    # highlight trailing spaces
+    highlightTrailingSpaces: red,
+    highlightTrailingSpacesBg: red,
+    # work space bar
+    workSpaceBar: white,
+    workSpaceBarBg: blue,
+    # highlight reserved words
+    reservedWord: white,
+    reservedWordBg: gray,
+    # highlight history manager
+    currentHistory: gray100,
+    currentHistoryBg: teal,
+    # highlight diff
+    addedLine: green,
+    addedLineBg: default,
+    deletedLine: red,
+    deletedLineBg: default,
+    # configuration mode
+    currentSetting: gray100,
+    currentSettingBg: teal
   ),
   dark: EditorColor(
     editorBg: default,
@@ -848,6 +982,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     addedLineBg: default,
     deletedLine: red,
     deletedLineBg: default,
+    # configuration mode
+    currentSetting: gray100,
+    currentSettingBg: teal
   ),
   light: EditorColor(
     editorBg: default,
@@ -969,6 +1106,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     addedLineBg: default,
     deletedLine: red,
     deletedLineBg: default,
+    # configuration mode
+    currentSetting: black,
+    currentSettingBg: deepPink1_1
   ),
   vivid: EditorColor(
     editorBg: default,
@@ -1090,6 +1230,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     addedLineBg: default,
     deletedLine: red,
     deletedLineBg: default,
+    # configuration mode
+    currentSetting: gray100,
+    currentSettingBg: deepPink1_1
   ),
 ]
 
@@ -1187,6 +1330,9 @@ proc setCursesColor*(editorColor: EditorColor) =
     # highlight diff
     setColorPair(EditorColorPair.addedLine, editorColor.addedLine, editorColor.addedLineBg)
     setColorPair(EditorColorPair.deletedLine, editorColor.deletedLine, editorColor.deletedLineBg)
+
+    # configuration mode
+    setColorPair(EditorColorPair.currentSetting, editorColor.currentSetting, editorColor.currentSettingBg)
 
 proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Color, Color) =
   let editorColor = ColorThemeTable[theme]
@@ -1288,5 +1434,7 @@ proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Co
     return (editorColor.deletedLine, editorColor.deletedLineBg)
   of EditorColorPair.currentHistory:
     return (editorColor.currentHistory, editorColor.currentHistoryBg)
+  of EditorColorPair.currentSetting:
+    return (editorColor.currentSetting, editorColor.currentSettingBg)
   else:
     return (editorColor.parenText, editorColor.parenTextBg)

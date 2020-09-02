@@ -7,7 +7,7 @@ when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
   from strutils import nimIdentNormalize
   export strutils.nimIdentNormalize
 
-import ui, color, unicodeext, build, highlight
+import ui, color, unicodeext, highlight
 
 type NotificationSettings* = object
   screenNotifications*: bool
@@ -32,6 +32,11 @@ type NotificationSettings* = object
   filerLogNotify*: bool
   restoreScreenNotify*: bool
   restoreLogNotify*: bool
+
+type BuildOnSaveSettings* = object
+  enable*: bool
+  workspaceRoot*: seq[Rune]
+  command*: seq[Rune]
 
 type QuickRunSettings* = object
   saveBufferWhenQuickRun*: bool
@@ -125,10 +130,14 @@ proc initNotificationSettings(): NotificationSettings =
   result.logNotifications = true
   result.autoBackupScreenNotify = true
   result.autoBackupLogNotify = true
+  result.autoSaveScreenNotify = true
+  result.autoSaveLogNotify = true
   result.yankScreenNotify = true
   result.yankLogNotify = true
   result.deleteScreenNotify = true
   result.deleteLogNotify = true
+  result.saveScreenNotify = true
+  result.saveLogNotify = true
   result.workspaceScreenNotify = true
   result.workspaceLogNotify = true
   result.quickRunScreenNotify = true
@@ -223,7 +232,7 @@ proc getTheme(theme: string): ColorTheme =
   if theme == "vivid": return ColorTheme.vivid
   elif theme == "light": return ColorTheme.light
   elif theme == "config": return ColorTheme.config
-  elif theme == "vscode": return ColorTheme.config
+  elif theme == "vscode": return ColorTheme.vscode
   else: return ColorTheme.dark
 
 # This macro takes statement lists for the foreground and
@@ -612,7 +621,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Standard"].contains("theme"):
       let themeString = settings["Standard"]["theme"].getStr()
       result.editorColorTheme = getTheme(themeString)
-      if themeString == "vscode":
+      if result.editorColorTheme == ColorTheme.vscode:
         vscodeTheme = true
 
     if settings["Standard"].contains("number"):
@@ -1181,6 +1190,12 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("deletedLineBg"):
       ColorThemeTable[ColorTheme.config].deletedLineBg = color("deletedLineBg")
 
+    if settings["Theme"].contains("currentSetting"):
+      ColorThemeTable[ColorTheme.config].currentSetting = color("currentSetting")
+
+    if settings["Theme"].contains("currentSettingBg"):
+      ColorThemeTable[ColorTheme.config].currentSettingBg = color("currentSettingBg")
+
     result.editorColorTheme = ColorTheme.config
   if vscodeTheme:
     # search for the vscode theme that is set in the current preferences of
@@ -1237,8 +1252,8 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
             break
       
       if fileExists(vsCodeThemeFile):
-        result.editorColorTheme = ColorTheme.config
-        ColorThemeTable[ColorTheme.config] =
+        result.editorColorTheme = ColorTheme.vscode
+        ColorThemeTable[ColorTheme.vscode] =
           makeColorThemeFromVSCodeThemeFile(vsCodeThemeFile)
         vsCodeThemeLoaded = true
     if not vsCodeThemeLoaded:

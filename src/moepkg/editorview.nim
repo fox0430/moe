@@ -1,5 +1,6 @@
 import deques, strutils, math, strformat
-import gapbuffer, ui, unicodeext, highlight, independentutils, color, settings
+import gapbuffer, ui, unicodeext, highlight, independentutils, color, settings,
+       bufferstatus
 
 type EditorView* = object
   height*, width*, widthOfLineNum*: int
@@ -191,7 +192,8 @@ proc write(view: EditorView,
 proc writeAllLines*[T](view: var EditorView,
                        win: var Window,
                        viewSettings: EditorViewSettings,
-                       isCurrentWin, isVisualMode: bool,
+                       isCurrentWin: bool,
+                       mode, prevMode: Mode,
                        buffer: T,
                        highlight: Highlight,
                        currentLine, startSelectedLine, endSelectedLine: int) =
@@ -223,7 +225,7 @@ proc writeAllLines*[T](view: var EditorView,
 
     var x = view.widthOfLineNum
     if view.length[y] == 0:
-      if isVisualMode and
+      if isVisualMode(mode) and
          (view.originalLine[y] >= startSelectedLine and
          endSelectedLine >= view.originalLine[y]):
         view.write(win, y, x, ru" ", EditorColorPair.visualMode)
@@ -231,10 +233,12 @@ proc writeAllLines*[T](view: var EditorView,
         view.write(win, y, x, view.lines[y], EditorColorPair.defaultChar)
       continue
 
-    if viewSettings.indentationLines:
+    if viewSettings.indentationLines and not isConfigMode(mode, prevMode):
       let currentOriginalLine = view.originalLine[y]
       if currentOriginalLine != lastOriginalLine:
-        let line = if buffer.len() > currentOriginalLine: buffer[currentOriginalLine] else: ru""
+        let line = if buffer.len() > currentOriginalLine:
+                     buffer[currentOriginalLine]
+                   else: ru""
         lineStart = x
         var numSpaces = 0
         for i in 0..<line.len:
@@ -292,7 +296,8 @@ proc writeAllLines*[T](view: var EditorView,
 proc update*[T](view: var EditorView,
                 win: var Window,
                 viewSettings: EditorViewSettings,
-                isCurrentWin, isVisualMode: bool,
+                isCurrentWin: bool,
+                mode, prevMode: Mode,
                 buffer: T,
                 highlight: Highlight,
                 currentLine, startSelectedLine, endSelectedLine: int) =
@@ -307,7 +312,8 @@ proc update*[T](view: var EditorView,
   view.writeAllLines(win,
                      viewSettings,
                      isCurrentWin,
-                     isVisualMode,
+                     mode,
+                     prevMode,
                      buffer,
                      highlight,
                      currentLine,

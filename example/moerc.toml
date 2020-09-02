@@ -315,3 +315,7 @@ workSpaceBarBg = "blue"
 # highlight reserved words
 reservedWord = "white"
 reservedWordBg = "gray"
+
+# configuration mode
+currentSetting = "gray100"
+currentSettingBg = "teal"

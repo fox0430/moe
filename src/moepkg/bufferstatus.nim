@@ -15,7 +15,8 @@ type Mode* = enum
   recentFile,
   quickRun,
   history,
-  diff
+  diff,
+  config
 
 type SelectArea* = object
   startLine*: int
@@ -38,6 +39,9 @@ type BufferStatus* = object
   prevMode* : Mode
   lastSaveTime*: DateTime
 
+proc isVisualMode*(mode: Mode): bool =
+  mode == Mode.visual or mode == Mode.visualBlock
+
 proc isFilerMode*(mode, prevMode: Mode): bool =
   (mode == Mode.filer) or (mode == Mode.ex and prevMode == Mode.filer)
 
@@ -45,4 +49,7 @@ proc isHistoryManagerMode*(mode, prevMode: Mode): bool =
   (mode == Mode.history) or (mode == Mode.ex and prevMode == Mode.history)
 
 proc isDiffViewerMode*(mode, prevMode: Mode): bool =
-  (mode == Mode.diff) or (mode == ex and prevMode == Mode.diff)
+  (mode == Mode.diff) or (mode == Mode.ex and prevMode == Mode.diff)
+
+proc isConfigMode*(mode, prevMode: Mode): bool =
+  (mode == Mode.config) or (mode == Mode.ex and prevMode == Mode.config)

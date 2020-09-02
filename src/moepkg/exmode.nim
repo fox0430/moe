@@ -284,6 +284,21 @@ proc isHistoryManagerCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "history"
 
+proc isStartConfigMode(command: seq[seq[Rune]]): bool =
+  let cmd = toLowerAscii($command[0])
+  return command.len == 1 and cmd == "conf"
+
+proc startConfigMode(status: var Editorstatus) =
+  let bufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[bufferIndex].prevMode)
+
+  status.verticalSplitWindow
+  status.resize(terminalHeight(), terminalWidth())
+  status.moveNextWindow
+
+  status.addNewBuffer(Mode.config)
+  status.changeCurrentBuffer(status.bufStatus.high)
+
 proc startHistoryManager(status: var Editorstatus) =
   let bufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[bufferIndex].prevMode)
@@ -1268,6 +1283,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     status.workspaceListCommand
   elif isHistoryManagerCommand(command):
     status.startHistoryManager
+  elif isStartConfigMode(command):
+    status.startConfigMode
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
