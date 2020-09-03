@@ -76,10 +76,7 @@ type
     gtOperator, gtPunctuation, gtComment, gtLongComment, gtRegularExpression,
     gtTagStart, gtTagEnd, gtKey, gtValue, gtRawData, gtAssembler,
     gtPreprocessor, gtDirective, gtCommand, gtRule, gtHyperlink, gtLabel,
-    gtReference, gtOther,
-    nimKeyword, nimBoolean, nimRepeat, nimLabel, nimConditional, nimDefine,
-    nimException, nimMacro, nimPreCondit, nimStorage, nimStorageClass,
-    nimTypedef, nimOperator, nimSpecialVar nimBuiltin
+    gtReference, gtOther, gtBoolean, gtSpecialVar, gtBuiltin
 
   GeneralTokenizer* = object of RootObj
     kind*: TokenClass
@@ -107,41 +104,65 @@ const
 
   # The following list comes from doc/keywords.txt, make sure it is
   # synchronized with this array by running the module itself as a test case.
-  nimKeywords = ["addr", "and", "as", "asm", "bind", "block", "break", "case",
-    "cast", "concept", "const", "continue", "converter", "defer", "discard",
-    "distinct", "div", "do", "elif", "else", "end", "enum", "except", "export",
-    "finally", "for", "from", "func", "if", "import", "in", "include",
-    "interface", "is", "isnot", "iterator", "let", "macro", "method", "mixin",
-    "mod", "nil", "not", "notin", "object", "of", "or", "or", "out", "proc",
-    "ptr", "raise", "ref", "return", "shl", "shr", "static", "template", "try",
-    "tuple", "type", "using", "var", "when", "while", "xor", "xor", "yield"]
+  nimKeywords = ["addr", "and", "as", "asm", "bind", "block",
+    "break", "case", "cast", "concept", "const", "continue", "converter",
+    "defer", "discard", "distinct", "div", "do",
+    "elif", "else", "end", "enum", "except", "export",
+    "finally", "for", "from", "func",
+    "if", "import", "in", "include",
+    "interface", "is", "isnot", "iterator", "let", "macro", "method",
+    "mixin", "mod", "nil", "not", "notin", "object", "of", "or", "out", "proc",
+    "ptr", "raise", "ref", "return", "shl", "shr", "static",
+    "template", "try", "tuple", "type", "using", "var", "when", "while",
+    "xor", "yield"]
   nimBooleans = ["true", "false"]
   nimSpecialVars = ["result"]
   # Builtin types, objects, and exceptions
   nimBuiltins = ["AccessViolationError", "AlignType", "ArithmeticError",
-    "AssertionError", "BiggestFloat", "BiggestInt", "ByteAddress",
-    "DeadThreadError", "DivByZeroError", "Endianness", "Exception",
-    "ExecIOEffect", "FieldError", "File", "FileModeFileHandle",
+    "AssertionError", "BiggestFloat", "BiggestInt", "Byte", "ByteAddress",
+    "CloseFile", "CompileDate", "CompileTime", "Conversion", "DeadThreadError",
+    "DivByZeroError", "EndOfFile", "Endianness", "Exception", "ExecIOEffect",
+    "FieldError", "File", "FileHandle", "FileMode", "FileModeFileHandle",
     "FloatDivByZeroError", "FloatInexactError", "FloatInvalidOpError",
     "FloatOverflowError", "FloatUnderflowError", "FloatingPointError",
-    "GC_Strategy", "IOEffect", "IOError", "IndexError", "KeyError", "LibHandle",
-    "LibraryError", "Natural", "NimNode", "OSError", "ObjectAssignmentError",
-    "ObjectConversionError", "Ordinal", "OutOfMemError", "OverflowError",
-    "PFloat32", "PFloat64", "PFrame", "PInt32", "PInt64", "Positive",
-    "ProcAddr", "RangeError", "ReadIOEffect", "RefCount", "ReraiseError",
-    "ResourceExhaustedError", "RootEffect", "RootObjRootRef", "Slice",
-    "SomeInteger", "SomeNumber", "SomeOrdinal", "SomeReal", "SomeSignedInt",
-    "SomeUnsignedInt", "StackOverflowError", "SystemError", "TFrame",
-    "THINSTANCE", "TResult", "TaintedString", "TimeEffect", "Utf16Char",
-    "ValueError", "WideCString", "WriteIOEffect", "array", "autoany", "bool",
-    "byte", "cchar", "cdouble", "cfloat", "char", "cint", "clong",
-    "clongdouble", "clonglong", "cscharcshort", "csize", "cstring",
-    "cstringArray", "cuchar", "cuint", "culong", "culonglong", "cushort",
-    "expr", "float", "float64", "guarded", "int", "int16", "int32int64", "int8",
-    "loat32f", "openArray", "pointer", "ptr", "range", "ref", "seq", "set",
-    "shared", "stmt", "string", "typed", "typedesc", "uint", "uint16",
-    "uint32uint64", "uint8", "untyped", "varargs", "void"
-  ]
+    "FlushFile", "GC_Strategy", "GC_disable", "GC_disableMarkAnd", "GC_enable",
+    "GC_enableMarkAndSweep", "GC_fullCollect", "GC_getStatistics", "GC_ref",
+    "GC_setStrategy","GC_unref", "IOEffect", "IOError", "IndexError",
+    "KeyError", "LibHandle", "LibraryError", "Msg", "Natural", "NimNode",
+    "OSError", "ObjectAssignmentError", "ObjectConversionError", "OpenFile",
+    "Ordinal", "OutOfMemError", "OverflowError", "PFloat32", "PFloat64",
+    "PFrame", "PInt32", "PInt64", "Positive", "ProcAddr", "QuitFailure",
+    "QuitSuccess", "RangeError", "ReadBytes", "ReadChars", "ReadIOEffect",
+    "RefCount", "ReraiseError", "ResourceExhaustedError", "RootEffect",
+    "RootObj", "RootObjRootRef", "Slice", "SomeInteger", "SomeNumber",
+    "SomeOrdinal", "SomeReal", "SomeSignedInt", "SomeUnsignedInt",
+    "StackOverflowError", "Sweep", "SystemError", "TFrame", "THINSTANCE",
+    "TResult", "TaintedString", "TimeEffect", "Utf16Char", "ValueError",
+    "WideCString", "WriteIOEffect", "abs", "add", "addQuitProc", "alloc",
+    "alloc0", "array", "assert", "autoany", "bool", "byte", "card","cchar",
+    "cdouble", "cfloat", "char", "chr", "cint", "clong", "clongdouble",
+    "clonglong", "copy", "copyMem", "countdown", "countup", "cpuEndian",
+    "cschar", "cshort", "csize", "cstring", "cstringArray", "cuchar", "cuint",
+    "culong", "culonglong", "cushort", "dbgLineHook", "dealloc", "dec",
+    "defined", "echo", "equalMem", "equalmem", "excl", "expr", "fileHandle",
+    "find", "float", "float32", "float64", "getCurrentException", "getFilePos",
+    "getFileSize", "getFreeMem", "getOccupiedMem", "getRefcount","getTotalMem",
+    "guarded","high", "hostCPU", "hostOS", "inc", "incl", "inf", "int", "int16",
+    "int32", "int64", "int8", "isNil", "items", "len", "lines", "low", "max",
+    "min", "moveMem", "movemem", "nan", "neginf", "new", "newSeq", "newString",
+    "newseq", "newstring", "nimMajor", "nimMinor", "nimPatch", "nimVersion",
+    "nimmajor", "nimminor", "nimpatch", "nimversion", "openArray", "openarray",
+    "ord", "pointer", "pop", "pred", "ptr", "quit", "range", "readBuffer",
+    "readChar", "readFile", "readLine", "readbuffer", "readfile", "readline",
+    "realloc", "ref", "repr", "seq", "seqToPtr", "seqtoptr", "set",
+    "setFilePos", "setLen", "setfilepos", "setlen", "shared", "sizeof",
+    "stderr", "stdin", "stdout", "stmt", "string", "succ", "swap",
+    "toBiggestFloat", "toBiggestInt", "toFloat", "toInt", "toU16", "toU32",
+    "toU8", "tobiggestfloat", "tobiggestint", "tofloat", "toint", "tou16",
+    "tou32", "tou8", "typed", "typedesc", "uint", "uint16", "uint32",
+    "uint32uint64", "uint64", "uint8", "untyped", "varArgs", "void", "write",
+    "writeBuffer", "writeBytes", "writeChars", "writeLine", "writeLn", "ze",
+    "ze64", "zeroMem"]
 
 proc getSourceLanguage*(name: string): SourceLanguage =
   for i in countup(succ(low(SourceLanguage)), high(SourceLanguage)):
@@ -167,13 +188,10 @@ proc deinitGeneralTokenizer*(g: var GeneralTokenizer) =
 
 proc nimGetKeyword(id: string): TokenClass =
   for k in nimKeywords:
-    if cmpIgnoreStyle(id, k) == 0: return nimKeyword
-  for k in nimBooleans:
-    if cmpIgnoreStyle(id, k) == 0: return nimBoolean
-  for k in nimSpecialVars:
-    if cmpIgnoreStyle(id, k) == 0: return nimSpecialVar
-  for k in nimBuiltins:
-    if cmpIgnoreStyle(id, k) == 0: return nimBuiltin
+    if cmpIgnoreStyle(id, k) == 0: return gtKeyword
+  if binarySearch(nimBooleans, id) > -1: return gtBoolean
+  if binarySearch(nimSpecialVars, id) > -1: return gtSpecialVar
+  if binarySearch(nimBuiltins, id) > -1: return gtBuiltin
   result = gtIdentifier
 
   when false:

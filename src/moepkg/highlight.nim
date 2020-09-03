@@ -148,20 +148,18 @@ proc getEditorColorPairInNim(kind: TokenClass,
                              isProcName: bool): EditorColorPair =
 
   case kind:
+    of gtKeyword: EditorColorPair.keyword
+    of gtBoolean: EditorColorPair.boolean
+    of gtSpecialVar: EditorColorPair.specialVar
+    of gtBuiltin: EditorColorPair.builtin
     of gtStringLit: EditorColorPair.stringLit
     of gtDecNumber: EditorColorPair.decNumber
     of gtComment: EditorColorPair.comment
     of gtLongComment: EditorColorPair.longComment
     of gtPreprocessor: EditorColorPair.preprocessor
     of gtWhitespace, gtPunctuation: EditorColorPair.defaultChar
-
-    of TokenClass.nimKeyword: EditorColorPair.nimKeyword
-    of TokenClass.nimBoolean: EditorColorPair.nimBoolean
-    of TokenClass.nimSpecialVar: EditorColorPair.nimSpecialVar
-    of TokenClass.nimBuiltin: EditorColorPair.nimBuiltin
-
     else:
-      if isProcName: EditorColorPair.nimProcName
+      if isProcName: EditorColorPair.functionName
       else: EditorColorPair.defaultChar
 
 proc getEditorColorPair(kind: TokenClass,
@@ -169,6 +167,9 @@ proc getEditorColorPair(kind: TokenClass,
 
   case kind:
     of gtKeyword: EditorColorPair.keyword
+    of gtBoolean: EditorColorPair.boolean
+    of gtSpecialVar: EditorColorPair.specialVar
+    of gtBuiltin: EditorColorPair.builtin
     of gtStringLit:
       if language == SourceLanguage.langYaml: EditorColorPair.defaultChar
       else: EditorColorPair.stringLit
@@ -252,8 +253,11 @@ proc initHighlight*(buffer: string,
                 else:
                   getEditorColorPair(token.kind, language)
 
-    isProcName = if language == SourceLanguage.langNim and
-                   buffer[first.. last] == "proc": true
+    isProcName = if (language == SourceLanguage.langNim) and
+                   (buffer[first.. last] == "proc" or
+                   buffer[first.. last] == "macro" or
+                   buffer[first.. last] == "template" or
+                   buffer[first.. last] == "func"): true
                   elif language == SourceLanguage.langNim and
                        isProcName and
                        token.kind == gtWhitespace: true

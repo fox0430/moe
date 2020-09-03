@@ -470,21 +470,20 @@ type EditorColor* = object
   # selected area in visual mode
   visualMode*: Color
   visualModeBg*: Color
+
   # color scheme
   defaultChar*: Color
   gtKeyword*: Color
+  gtFunctionName*: Color
+  gtBoolean*: Color
   gtStringLit*: Color
+  gtSpecialVar*: Color
+  gtBuiltin*: Color
   gtDecNumber*: Color
   gtComment*: Color
   gtLongComment*: Color
   gtWhitespace*: Color
   gtPreprocessor*: Color
-
-  nimKeyword*: Color
-  nimBoolean*: Color
-  nimSpecialVar*: Color
-  nimBuiltin*: Color
-  nimProcName*: Color
 
   # filer mode
   currentFile*: Color
@@ -577,55 +576,54 @@ type EditorColorPair* = enum
   searchResult = 26
   # selected area in visual mode
   visualMode = 27
+
   # color scheme
   defaultChar = 28
   keyword = 29
-  stringLit = 30
-  decNumber = 31
-  comment = 32
-  longComment = 33
-  whitespace = 34
-  preprocessor = 35
-
-  nimKeyword = 36
-  nimBoolean = 38
-  nimSpecialVar = 39
-  nimBuiltin = 40
-  nimProcName = 41
+  functionName = 30
+  boolean = 31
+  specialVar = 32
+  builtin = 33
+  stringLit = 34
+  decNumber = 35
+  comment = 36
+  longComment = 37
+  whitespace = 38
+  preprocessor = 39
 
   # filer mode
-  currentFile = 42
-  currentFileBg = 43
-  file = 44
-  fileBg = 45
-  dir = 46
-  dirBg = 47
-  pcLink = 48
-  pcLinkBg = 49
+  currentFile = 46
+  currentFileBg = 47
+  file = 48
+  fileBg = 49
+  dir = 50
+  dirBg = 51
+  pcLink = 52
+  pcLinkBg = 53
   # pop up window
-  popUpWindow = 50
-  popUpWinCurrentLine = 51
+  popUpWindow = 54
+  popUpWinCurrentLine = 55
   # replace text highlighting
-  replaceText = 52
+  replaceText = 56
   # pair of paren highlighting
-  parenText = 53
+  parenText = 57
   # highlight other uses current word
-  currentWord = 54
+  currentWord = 58
   # highlight full width space
-  highlightFullWidthSpace = 55
+  highlightFullWidthSpace = 59
   # highlight trailing spaces
-  highlightTrailingSpaces = 56
+  highlightTrailingSpaces = 60
   # work space bar
-  workSpaceBar = 57
+  workSpaceBar = 61
   # highlight reserved words
-  reservedWord = 58
+  reservedWord = 62
   # highlight history manager
-  currentHistory = 59
+  currentHistory = 63
   # highlight diff
-  addedLine = 60
-  deletedLine = 61
+  addedLine = 64
+  deletedLine = 65
   # configuration mode
-  currentSetting = 62
+  currentSetting = 66
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -696,21 +694,20 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # selected area in visual mode
     visualMode: gray100,
     visualModeBg: purple_1,
+
     # color scheme
     defaultChar: gray100,
     gtKeyword: seaGreen1_2,
+    gtFunctionName: yellow,
+    gtBoolean: yellow,
     gtStringLit: purple_1,
+    gtSpecialVar: green,
+    gtBuiltin: yellow,
     gtDecNumber: aqua,
     gtComment: gray,
     gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
-
-    nimKeyword: aqua,
-    nimBoolean: yellow,
-    nimSpecialVar: green,
-    nimBuiltin: yellow,
-    nimProcName: yellow,
 
     # filer mode
     currentFile: gray100,
@@ -827,21 +824,20 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # selected area in visual mode
     visualMode: gray100,
     visualModeBg: purple_1,
+
     # color scheme
     defaultChar: gray100,
     gtKeyword: seaGreen1_2,
+    gtFunctionName: yellow,
+    gtBoolean: yellow,
     gtStringLit: purple_1,
+    gtSpecialVar: green,
+    gtBuiltin: yellow,
     gtDecNumber: aqua,
     gtComment: gray,
     gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
-
-    nimKeyword: aqua,
-    nimBoolean: yellow,
-    nimSpecialVar: green,
-    nimBuiltin: yellow,
-    nimProcName: yellow,
 
     # filer mode
     currentFile: gray100,
@@ -958,21 +954,20 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # selected area in visual mode
     visualMode: gray100,
     visualModeBg: purple_1,
+
     # color scheme
     defaultChar: gray100,
-    gtKeyword: cyan1,
+    gtKeyword: seaGreen1_2,
+    gtFunctionName: yellow,
+    gtBoolean: yellow,
     gtStringLit: purple_1,
+    gtSpecialVar: green,
+    gtBuiltin: yellow,
     gtDecNumber: aqua,
     gtComment: gray,
     gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
-
-    nimKeyword: aqua,
-    nimBoolean: yellow,
-    nimSpecialVar: green,
-    nimBuiltin: yellow,
-    nimProcName: yellow,
 
     # filer mode
     currentFile: gray100,
@@ -1089,21 +1084,20 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # selected area in visual mode
     visualMode: black,
     visualModeBg: purple_1,
+
     # color scheme
-    defaultChar: black,
-    gtKeyword: blue,
+    defaultChar: gray100,
+    gtKeyword: seaGreen1_2,
+    gtFunctionName: yellow,
+    gtBoolean: yellow,
     gtStringLit: purple_1,
-    gtDecNumber: orange1,
+    gtSpecialVar: green,
+    gtBuiltin: yellow,
+    gtDecNumber: aqua,
     gtComment: gray,
     gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
-
-    nimKeyword: aqua,
-    nimBoolean: yellow,
-    nimSpecialVar: green,
-    nimBuiltin: yellow,
-    nimProcName: yellow,
 
     # filer mode
     currentFile: black,
@@ -1220,21 +1214,20 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # selected area in visual mode
     visualMode: gray100,
     visualModeBg: purple_1,
+
     # color scheme
     defaultChar: gray100,
-    gtKeyword: deepPink1_1,
-    gtStringLit: cyan1,
-    gtDecNumber: green1,
-    gtComment: purple_1,
-    gtLongComment: purple_1,
+    gtKeyword: seaGreen1_2,
+    gtFunctionName: yellow,
+    gtBoolean: yellow,
+    gtStringLit: purple_1,
+    gtSpecialVar: green,
+    gtBuiltin: yellow,
+    gtDecNumber: aqua,
+    gtComment: gray,
+    gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
-
-    nimKeyword: aqua,
-    nimBoolean: yellow,
-    nimSpecialVar: green,
-    nimBuiltin: yellow,
-    nimProcName: yellow,
 
     # filer mode
     currentFile: gray100,
@@ -1334,21 +1327,20 @@ proc setCursesColor*(editorColor: EditorColor) =
     setColorPair(EditorColorPair.searchResult, editorColor.searchResult, editorColor.searchResultBg)
     # selected area in visual mode
     setColorPair(EditorColorPair.visualMode, editorColor.visualMode, editorColor.visualModeBg)
+
     # color scheme
     setColorPair(EditorColorPair.defaultChar, editorColor.defaultChar, editorColor.editorBg)
     setColorPair(EditorColorPair.keyword, editorColor.gtKeyword, editorColor.editorBg)
+    setColorPair(EditorColorPair.functionName, editorColor.gtFunctionName, editorColor.editorBg)
+    setColorPair(EditorColorPair.boolean, editorColor.gtBoolean, editorColor.editorBg)
+    setColorPair(EditorColorPair.specialVar, editorColor.gtSpecialVar, editorColor.editorBg)
+    setColorPair(EditorColorPair.builtin, editorColor.gtBuiltin, editorColor.editorBg)
     setColorPair(EditorColorPair.stringLit, editorColor.gtStringLit, editorColor.editorBg)
     setColorPair(EditorColorPair.decNumber, editorColor.gtDecNumber, editorColor.editorBg)
     setColorPair(EditorColorPair.comment, editorColor.gtComment, editorColor.editorBg)
     setColorPair(EditorColorPair.longComment, editorColor.gtLongComment, editorColor.editorBg)
     setColorPair(EditorColorPair.whitespace, editorColor.gtWhitespace, editorColor.editorBg)
     setColorPair(EditorColorPair.preprocessor, editorColor.gtPreprocessor, editorColor.editorBg)
-
-    setColorPair(EditorColorPair.nimKeyword, editorColor.nimKeyword, editorColor.editorBg)
-    setColorPair(EditorColorPair.nimBoolean, editorColor.nimBoolean, editorColor.editorBg)
-    setColorPair(EditorColorPair.nimSpecialVar, editorColor.nimSpecialVar, editorColor.editorBg)
-    setColorPair(EditorColorPair.nimBuiltin, editorColor.nimBuiltin, editorColor.editorBg)
-    setColorPair(EditorColorPair.nimProcName, editorColor.nimProcName, editorColor.editorBg)
 
     # filer
     setColorPair(EditorColorPair.currentFile, editorColor.currentFile, editorColor.currentFileBg)
@@ -1452,6 +1444,14 @@ proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Co
     return (editorColor.defaultChar, editorColor.editorBg)
   of EditorColorPair.keyword:
     return (editorColor.gtKeyword, editorColor.editorBg)
+  of EditorColorPair.functionName:
+    return (editorColor.gtFunctionName, editorColor.editorBg)
+  of EditorColorPair.boolean:
+    return (editorColor.gtBoolean, editorColor.editorBg)
+  of EditorColorPair.specialVar:
+    return (editorColor.gtSpecialVar, editorColor.editorBg)
+  of EditorColorPair.builtin:
+    return (editorColor.gtBuiltin, editorColor.editorBg)
   of EditorColorPair.stringLit:
     return (editorColor.gtStringLit, editorColor.editorBg)
   of EditorColorPair.decNumber:
