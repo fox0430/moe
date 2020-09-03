@@ -357,12 +357,26 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
     setEditorColor editorBg:
       background:
         colorFromNode(jsonNode{"colors", "editor.background"})
+    
+    # Color scheme
     setEditorColor defaultChar:
       foreground:
         colorFromNode(jsonNode{"colors", "editor.foreground"})
     setEditorColor gtKeyword:
       foreground:
         colorFromNode(getScope("keyword"){"foreground"})
+    setEditorColor gtFunctionName:
+      foreground:
+        colorFromNode(getScope("entity"){"foreground"})
+    setEditorColor gtBoolean:
+      foreground:
+        colorFromNode(getScope("entity"){"foreground"})
+    setEditorColor gtSpecialVar:
+      foreground:
+        colorFromNode(getScope("variable"){"foreground"})
+    setEditorColor gtBuiltin:
+      foreground:
+        colorFromNode(getScope("entity"){"foreground"})
     setEditorColor gtStringLit:
       foreground:
         colorFromNode(getScope("string"){"foreground"})
@@ -378,6 +392,7 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
     setEditorColor gtWhitespace:
       foreground:
         colorFromNode(jsonNode{"colors", "editorWhitespace.foreground"})
+
     # status bar
     setEditorColor statusBarNormalMode:
       foreground:
