@@ -697,10 +697,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
 
     # color scheme
     defaultChar: gray100,
-    gtKeyword: seaGreen1_2,
-    gtFunctionName: yellow,
+    gtKeyword: skyBlue1,
+    gtFunctionName: gold1,
     gtBoolean: yellow,
-    gtStringLit: purple_1,
+    gtStringLit: yellow,
     gtSpecialVar: green,
     gtBuiltin: yellow,
     gtDecNumber: aqua,
@@ -827,10 +827,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
 
     # color scheme
     defaultChar: gray100,
-    gtKeyword: seaGreen1_2,
-    gtFunctionName: yellow,
+    gtKeyword: skyBlue1,
+    gtFunctionName: gold1,
     gtBoolean: yellow,
-    gtStringLit: purple_1,
+    gtStringLit: yellow,
     gtSpecialVar: green,
     gtBuiltin: yellow,
     gtDecNumber: aqua,
@@ -957,10 +957,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
 
     # color scheme
     defaultChar: gray100,
-    gtKeyword: seaGreen1_2,
-    gtFunctionName: yellow,
+    gtKeyword: skyBlue1,
+    gtFunctionName: gold1,
     gtBoolean: yellow,
-    gtStringLit: purple_1,
+    gtStringLit: yellow,
     gtSpecialVar: green,
     gtBuiltin: yellow,
     gtDecNumber: aqua,
@@ -1088,7 +1088,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # color scheme
     defaultChar: gray100,
     gtKeyword: seaGreen1_2,
-    gtFunctionName: yellow,
+    gtFunctionName: gold1,
     gtBoolean: yellow,
     gtStringLit: purple_1,
     gtSpecialVar: green,
@@ -1217,12 +1217,12 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
 
     # color scheme
     defaultChar: gray100,
-    gtKeyword: seaGreen1_2,
-    gtFunctionName: yellow,
+    gtKeyword: deepPink1_1,
+    gtFunctionName: gold1,
     gtBoolean: yellow,
     gtStringLit: purple_1,
     gtSpecialVar: green,
-    gtBuiltin: yellow,
+    gtBuiltin: aqua,
     gtDecNumber: aqua,
     gtComment: gray,
     gtLongComment: gray,
