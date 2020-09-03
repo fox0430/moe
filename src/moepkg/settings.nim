@@ -357,12 +357,26 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
     setEditorColor editorBg:
       background:
         colorFromNode(jsonNode{"colors", "editor.background"})
+    
+    # Color scheme
     setEditorColor defaultChar:
       foreground:
         colorFromNode(jsonNode{"colors", "editor.foreground"})
     setEditorColor gtKeyword:
       foreground:
         colorFromNode(getScope("keyword"){"foreground"})
+    setEditorColor gtFunctionName:
+      foreground:
+        colorFromNode(getScope("entity"){"foreground"})
+    setEditorColor gtBoolean:
+      foreground:
+        colorFromNode(getScope("entity"){"foreground"})
+    setEditorColor gtSpecialVar:
+      foreground:
+        colorFromNode(getScope("variable"){"foreground"})
+    setEditorColor gtBuiltin:
+      foreground:
+        colorFromNode(getScope("entity"){"foreground"})
     setEditorColor gtStringLit:
       foreground:
         colorFromNode(getScope("string"){"foreground"})
@@ -378,6 +392,7 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
     setEditorColor gtWhitespace:
       foreground:
         colorFromNode(jsonNode{"colors", "editorWhitespace.foreground"})
+
     # status bar
     setEditorColor statusBarNormalMode:
       foreground:
@@ -1118,6 +1133,18 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
     if settings["Theme"].contains("gtKeyword"):
       ColorThemeTable[ColorTheme.config].gtKeyword = color("gtKeyword")
+
+    if settings["Theme"].contains("gtFunctionName"):
+      ColorThemeTable[ColorTheme.config].gtFunctionName = color("gtFunctionName")
+
+    if settings["Theme"].contains("gtBoolean"):
+      ColorThemeTable[ColorTheme.config].gtBoolean = color("gtBoolean")
+
+    if settings["Theme"].contains("gtSpecialVar"):
+      ColorThemeTable[ColorTheme.config].gtSpecialVar = color("gtSpecialVar")
+
+    if settings["Theme"].contains("gtBuiltin"):
+      ColorThemeTable[ColorTheme.config].gtBuiltin = color("gtBuiltin")
 
     if settings["Theme"].contains("gtStringLit"):
       ColorThemeTable[ColorTheme.config].gtStringLit = color("gtStringLit")
