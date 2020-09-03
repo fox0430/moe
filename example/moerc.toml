@@ -261,16 +261,20 @@ searchResultBg = "red"
 # selected area in visual mode
 visualMode = "gray100"
 visualModeBg = "purple_1"
-# color scheme
 
-defaultChar = "gray100"
-gtKeyword = "seaGreen1_2"
-gtStringLit = "purple_1"
-gtDecNumber = "aqua"
-gtComment = "gray"
-gtLongComment = "gray"
-gtWhitespace = "gray"
-gtPreprocessor = "green"
+# color scheme
+defaultChar = gray100
+gtKeyword = skyBlue1
+gtFunctionName = gold1
+gtBoolean = yellow
+gtStringLit = yellow
+gtSpecialVar = green
+gtBuiltin = yellow
+gtDecNumber = aqua
+gtComment = gray
+gtLongComment = gray
+gtWhitespace = gray
+gtPreprocessor = green
 
 # filer mode
 currentFile = "gray100"
