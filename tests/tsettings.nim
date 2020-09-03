@@ -174,6 +174,10 @@ const tomlStr = """
   visualModeBg = "pink1"
   defaultChar = "pink1"
   gtKeyword = "pink1"
+  gtFunctionName = "pink1"
+  gtBoolean = "pink1"
+  gtSpecialVar = "pink1"
+  gtBuiltin = "pink1"
   gtStringLit = "pink1"
   gtDecNumber = "pink1"
   gtComment = "pink1"
@@ -375,6 +379,10 @@ suite "Parse configuration file":
     check ColorThemeTable[theme].visualModeBg == Color.pink1
     check ColorThemeTable[theme].defaultChar == Color.pink1
     check ColorThemeTable[theme].gtKeyword == Color.pink1
+    check ColorThemeTable[theme].gtFunctionName == Color.pink1
+    check ColorThemeTable[theme].gtBoolean == Color.pink1
+    check ColorThemeTable[theme].gtSpecialVar == Color.pink1
+    check ColorThemeTable[theme].gtBuiltin == Color.pink1
     check ColorThemeTable[theme].gtStringLit == Color.pink1
     check ColorThemeTable[theme].gtDecNumber == Color.pink1
     check ColorThemeTable[theme].gtComment == Color.pink1
