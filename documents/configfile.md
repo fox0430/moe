@@ -1068,32 +1068,52 @@ defaultCharactorColor
 
 Syntax highlighting color
 ```
-gtKeywordColor
+gtKeyword
 ```
 
 Syntax highlighting color
 ```
-gtStringLitColor
+gtFunctionName
 ```
 
 Syntax highlighting color
 ```
-gtDecNumberColor
+gtBoolean
 ```
 
 Syntax highlighting color
 ```
-gtCommentColor
+gtSpecialVar
 ```
 
 Syntax highlighting color
 ```
-gtLongCommentColor
+gtBuiltin
 ```
 
 Syntax highlighting color
 ```
-gtWhitespaceColor
+gtStringLit
+```
+
+Syntax highlighting color
+```
+gtDecNumber
+```
+
+Syntax highlighting color
+```
+gtComment
+```
+
+Syntax highlighting color
+```
+gtLongComment
+```
+
+Syntax highlighting color
+```
+gtWhitespace
 ```
 
 Syntax highlighting color
