@@ -136,13 +136,17 @@ const
     "searchResult",
     "visualMode",
     "defaultChar",
-    "gtKeyword",
-    "gtStringLit",
-    "gtDecNumber",
-    "gtComment",
-    "gtLongComment",
-    "gtWhitespace",
-    "gtPreprocessor",
+    "keyword",
+    "functionName",
+    "boolean",
+    "specialVar",
+    "builtin",
+    "stringLit",
+    "decNumber",
+    "comment",
+    "longComment",
+    "whitespace",
+    "preprocessor",
     "currentFile",
     "file",
     "dir",
@@ -457,7 +461,7 @@ proc calcPositionOfThemeSettingValue(theme: ColorTheme): int =
       colors = getColorFromEditorColorPair(theme, colorPair)
       color = $colors[0]
 
-    if result < color.len: result = color.len
+    if result < color.len: result = color.len + 1
 
 proc initThemeTableBuffer*(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"Theme")
@@ -671,6 +675,34 @@ proc initThemeTableBuffer*(settings: EditorSettings): seq[seq[Rune]] =
       of "keyword":
         let
           colorPair = EditorColorPair.keyword
+          colors = getColorFromEditorColorPair(theme, colorPair)
+          secondSpaceLen = calcPositionOfThemeSettingValue(theme)
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
+      of "functionName":
+        let
+          colorPair = EditorColorPair.functionName
+          colors = getColorFromEditorColorPair(theme, colorPair)
+          secondSpaceLen = calcPositionOfThemeSettingValue(theme)
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
+      of "boolean":
+        let
+          colorPair = EditorColorPair.boolean
+          colors = getColorFromEditorColorPair(theme, colorPair)
+          secondSpaceLen = calcPositionOfThemeSettingValue(theme)
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
+      of "specialVar":
+        let
+          colorPair = EditorColorPair.specialVar
+          colors = getColorFromEditorColorPair(theme, colorPair)
+          secondSpaceLen = calcPositionOfThemeSettingValue(theme)
+          secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
+        result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
+      of "builtin":
+        let
+          colorPair = EditorColorPair.builtin
           colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
