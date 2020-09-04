@@ -184,6 +184,12 @@ default is true
 multipleStatusBar 
 ```
 
+Enable/Disable merging status bar with command line (bool)  
+default is true
+```
+merge
+```
+
 Show current mode (bool)  
 default is true
 ```
