@@ -231,7 +231,7 @@ suite "Parse configuration file":
     check not settings.view.lineNumber
     check not settings.view.currentLineNumber
     check settings.view.cursorLine
-    check not settings.statusBar.useBar
+    check not settings.statusBar.enable
     check not settings.tabLine.useTab
     check not settings.syntax
     check not settings.view.indentationLines
@@ -261,7 +261,6 @@ suite "Parse configuration file":
 
     check settings.tabLine.allbuffer
 
-    check not settings.statusBar.useBar
     check not settings.statusBar.mode
     check not settings.statusBar.filename
     check not settings.statusBar.chanedMark

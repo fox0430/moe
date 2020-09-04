@@ -63,7 +63,7 @@ type WorkSpaceSettings = object
   workSpaceLine*: bool
 
 type StatusBarSettings* = object
-  useBar*: bool
+  enable*: bool
   mode*: bool
   filename*: bool
   chanedMark*: bool
@@ -167,7 +167,7 @@ proc initTabBarSettings*(): TabLineSettings =
   result.useTab = true
 
 proc initStatusBarSettings*(): StatusBarSettings =
-  result.useBar = true
+  result.enable = true
   result.mode = true
   result.filename = true
   result.chanedMark = true
@@ -689,7 +689,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       result.view.cursorLine = settings["Standard"]["cursorLine"].getbool()
 
     if settings["Standard"].contains("statusBar"):
-      result.statusBar.useBar = settings["Standard"]["statusBar"].getbool()
+      result.statusBar.enable = settings["Standard"]["statusBar"].getbool()
 
     if settings["Standard"].contains("tabLine"):
       result.tabLine.useTab = settings["Standard"]["tabLine"].getbool()

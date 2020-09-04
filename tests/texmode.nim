@@ -133,11 +133,11 @@ suite "Ex mode: StatusBar setting command":
     block:
       const command = @[ru"statusbar", ru"off"]
       status.exModeCommand(command)
-    check(status.settings.statusBar.useBar == false)
+    check(status.settings.statusBar.enable == false)
     block:
       const command = @[ru"statusbar", ru"on"]
       status.exModeCommand(command)
-    check(status.settings.statusBar.useBar == true)
+    check(status.settings.statusBar.enable == true)
 
 suite "Ex mode: Line number setting command":
   test "Line number setting command":

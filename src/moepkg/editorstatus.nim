@@ -133,7 +133,7 @@ proc exitEditor*(settings: EditorSettings) =
 proc resizeMainWindowNode(status: var EditorStatus, height, width: int) =
   let
     useTab = if status.settings.tabLine.useTab: 1 else: 0
-    useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+    useStatusBar = if status.settings.statusBar.enable: 1 else: 0
     useWorkSpaceBar = if status.settings.workSpace.workSpaceLine: 1 else: 0
     workspaceIndex = status.currentWorkSpaceIndex
 
@@ -203,7 +203,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
         for node in node.child: queue.push(node)
 
   ## Resize status bar window
-  if status.settings.statusBar.useBar and
+  if status.settings.statusBar.enable and
      not status.settings.statusBar.multipleStatusBar:
     const
       statusBarHeight = 1
@@ -416,7 +416,7 @@ proc update*(status: var EditorStatus) =
       x = currentMainWindowNode.view.widthOfLineNum + currentMainWindowNode.cursor.x
     currentMainWindowNode.window.moveCursor(y, x)
 
-  if status.settings.statusBar.useBar: status.updateStatusBar
+  if status.settings.statusBar.enable: status.updateStatusBar
 
   setCursor(true)
 

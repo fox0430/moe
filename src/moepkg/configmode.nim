@@ -218,7 +218,7 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       of "cursorLine":
         result.add(ru nameStr & space & $settings.view.cursorLine)
       of "statusBar":
-        result.add(ru nameStr & space & $settings.statusBar.useBar)
+        result.add(ru nameStr & space & $settings.statusBar.enable)
       of "tabLine":
         result.add(ru nameStr & space & $settings.tabLine.useTab)
       of "syntax":
