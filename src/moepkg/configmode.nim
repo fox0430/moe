@@ -42,6 +42,8 @@ const
     "allBuffer"
   ]
   statusBarTableNames = [
+    "multipleStatusBar",
+    "merge",
     "mode",
     "filename",
     "chanedMark",
@@ -50,7 +52,6 @@ const
     "encoding",
     "language",
     "directory",
-    "multipleStatusBar",
     "gitbranchName",
     "showGitInactive",
     "showModeInactive"
@@ -298,6 +299,10 @@ proc initStatusBarTableBuffer(settings: StatusBarSettings): seq[seq[Rune]] =
       nameStr = indent & name
       space = " ".repeat(positionOfSetVal - name.len)
     case name:
+      of "multipleStatusBar":
+        result.add(ru nameStr & space & $settings.multipleStatusBar)
+      of "merge":
+        result.add(ru nameStr & space & $settings.merge)
       of "mode":
         result.add(ru nameStr & space & $settings.mode)
       of "filename":
@@ -314,8 +319,6 @@ proc initStatusBarTableBuffer(settings: StatusBarSettings): seq[seq[Rune]] =
         result.add(ru nameStr & space & $settings.language)
       of "directory":
         result.add(ru nameStr & space & $settings.directory)
-      of "multipleStatusBar":
-        result.add(ru nameStr & space & $settings.multipleStatusBar)
       of "gitbranchName":
         result.add(ru nameStr & space & $settings.gitbranchName)
       of "showGitInactive":

@@ -42,6 +42,8 @@ const tomlStr = """
   allBuffer = true
 
   [StatusBar]
+  multipleStatusBar = false
+  merge = true
   mode = false
   filename = false
   chanedMark = false
@@ -50,7 +52,6 @@ const tomlStr = """
   encoding = false
   language = false
   directory = false
-  multipleStatusBar = false
   gitbranchName = false
   showGitInactive = true
   showModeInactive = true
@@ -261,6 +262,8 @@ suite "Parse configuration file":
 
     check settings.tabLine.allbuffer
 
+    check not settings.statusBar.multipleStatusBar
+    check settings.statusBar.merge
     check not settings.statusBar.mode
     check not settings.statusBar.filename
     check not settings.statusBar.chanedMark
@@ -269,7 +272,6 @@ suite "Parse configuration file":
     check not settings.statusBar.characterEncoding
     check not settings.statusBar.language
     check not settings.statusBar.directory
-    check not settings.statusBar.multipleStatusBar
     check not settings.statusBar.gitbranchName
     check settings.statusBar.showGitInactive
     check settings.statusBar.showModeInactive
