@@ -68,6 +68,10 @@ allBuffer = false
 
 [StatusBar]
 
+multipleStatusBar = true
+
+merge = false
+
 mode = true
 
 filename = true
@@ -83,8 +87,6 @@ encoding = true
 language = true
 
 directory = true
-
-multipleStatusBar = true
 
 gitbranchName = true
 
