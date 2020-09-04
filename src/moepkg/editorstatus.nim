@@ -283,12 +283,13 @@ proc updateStatusBar(status: var Editorstatus) =
       let
         bufferIndex = status.workSpace[workspaceIndex].statusBar[i].bufferIndex
         index = status.workSpace[workspaceIndex].statusBar[i].windowIndex
-        windowNode =
+        node =
           status.workspace[workspaceIndex].mainWindowNode.searchByWindowIndex(index)
-        isActiveWindow = index == status.workSpace[workspaceIndex].currentMainWindowNode.index
+        currentNode = status.workSpace[workspaceIndex].currentMainWindowNode
+        isActiveWindow = index == currentNode.windowIndex
       status.bufStatus[bufferIndex].writeStatusBar(
         status.workSpace[workspaceIndex].statusBar[i],
-        windowNode,
+        node,
         isActiveWindow,
         status.settings)
 
