@@ -557,7 +557,7 @@ proc lineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   let numberOfDigitsLen = if status.settings.view.lineNumber:
                             numberOfDigits(status.bufStatus[0].buffer.len) - 2
                           else: 0
-  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+  let useStatusBar = if status.settings.statusBar.enable: 1 else: 0
   let workspaceIndex = status.currentWorkSpaceIndex
 
   status.workSpace[workspaceIndex].currentMainWindowNode.view =
@@ -571,13 +571,13 @@ proc lineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
 proc statusBarSettingCommand(status: var EditorStatus, command: seq[Rune]) =
-  if command == ru"on": status.settings.statusBar.useBar = true
-  elif command == ru"off": status.settings.statusBar.useBar = false
+  if command == ru"on": status.settings.statusBar.enable = true
+  elif command == ru"off": status.settings.statusBar.enable = false
 
   let numberOfDigitsLen = if status.settings.view.lineNumber:
                             numberOfDigits(status.bufStatus[0].buffer.len) - 2
                           else: 0
-  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+  let useStatusBar = if status.settings.statusBar.enable : 1 else: 0
   let workspaceIndex = status.currentWorkSpaceIndex
 
   status.workSpace[workspaceIndex].currentMainWindowNode.view =
@@ -1003,7 +1003,7 @@ proc listAllBufferCommand(status: var Editorstatus) =
     else: status.bufStatus[currentBufferIndex].buffer.insert(line, i)
 
   let
-    useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+    useStatusBar = if status.settings.statusBar.enable: 1 else: 0
     useTab = if status.settings.tabLine.useTab: 1 else: 0
     swapCurrentLineNumStting = status.settings.view.currentLineNumber
     currentBufferIndex =
