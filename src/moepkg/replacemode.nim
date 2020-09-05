@@ -115,8 +115,8 @@ proc replaceMode*(status: var EditorStatus) =
 
     status.update
 
-    var key: Rune = Rune('\0')
-    while key == Rune('\0'):
+    var key = errorKey
+    while key == errorKey:
       status.eventLoopTask
       key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
 

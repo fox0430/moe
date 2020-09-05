@@ -520,17 +520,18 @@ proc movePrevWindow*(status: var EditorStatus) =
   status.moveCurrentMainWindow(index)
 
 proc writePopUpWindow*(popUpWindow: var Window,
-                       h, w, y, x: var int,
+                       h, w, y, x: int,
                        currentLine: int,
                        buffer: seq[seq[Rune]]) =
 
   popUpWindow.erase
 
   # Pop up window position
-  if y == terminalHeight() - 1: y = y - h
-  if w > terminalHeight() - x: x = terminalHeight() - w
+  let
+    actualY = y.clamp(0, terminalHeight() - h)
+    actualX = x.clamp(0, terminalWidth() - w)
 
-  popUpWindow.resize(h, w, y, x)
+  popUpWindow.resize(h, w, actualY, actualX)
 
   let startLine = if currentLine == -1: 0
                   elif currentLine - h + 1 > 0: currentLine - h + 1

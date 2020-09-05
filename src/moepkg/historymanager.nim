@@ -225,8 +225,8 @@ proc historyManager*(status: var EditorStatus) =
     status.update
     setCursor(false)
 
-    var key: Rune = ru'\0'
-    while key == ru'\0':
+    var key = errorKey
+    while key == errorKey:
       status.eventLoopTask
       key = getKey(status.workSpace[workspaceIndex].currentMainWindowNode.window)
 

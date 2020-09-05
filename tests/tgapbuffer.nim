@@ -184,3 +184,21 @@ test "undo/redo(assign)":
   check($buffer == "1\n")
 
   check(not buffer.canRedo)
+
+test "calcIndexInEntireBuffer (without containing newlines)":
+  let buffer = initGapBuffer[string](@["0", "12", "345"])
+  check buffer.calcIndexInEntireBuffer(0, 0, false) == 0
+  check buffer.calcIndexInEntireBuffer(1, 0, false) == 1
+  check buffer.calcIndexInEntireBuffer(1, 1, false) == 2
+  check buffer.calcIndexInEntireBuffer(2, 0, false) == 3
+  check buffer.calcIndexInEntireBuffer(2, 1, false) == 4
+  check buffer.calcIndexInEntireBuffer(2, 2, false) == 5
+
+test "calcIndexInEntireBuffer (with containing newlines)":
+  let buffer = initGapBuffer[string](@["0", "12", "345"])
+  check buffer.calcIndexInEntireBuffer(0, 0, true) == 0
+  check buffer.calcIndexInEntireBuffer(1, 0, true) == 2
+  check buffer.calcIndexInEntireBuffer(1, 1, true) == 3
+  check buffer.calcIndexInEntireBuffer(2, 0, true) == 5
+  check buffer.calcIndexInEntireBuffer(2, 1, true) == 6
+  check buffer.calcIndexInEntireBuffer(2, 2, true) == 7

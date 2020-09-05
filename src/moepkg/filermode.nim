@@ -542,8 +542,8 @@ proc filerMode*(status: var EditorStatus) =
 
     setCursor(false)
 
-    var key: Rune = ru'\0'
-    while key == ru'\0':
+    var key = errorKey
+    while key == errorKey:
       status.eventLoopTask
       key = getKey(
         status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)

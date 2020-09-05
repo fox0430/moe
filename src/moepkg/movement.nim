@@ -139,9 +139,9 @@ proc scrollUpNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
       status.bufStatus[currentBufferIndex].keyUp(windowNode)
       status.update
       status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.setTimeout(status.settings.smoothScrollSpeed)
-      var key: Rune = ru'\0'
+      var key = errorKey
       key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
-      if key != ru'\0': break
+      if key != errorKey: break
 
     ## Set default time out setting
     status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.setTimeout
@@ -171,9 +171,9 @@ proc scrollDownNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
       status.bufStatus[currentBufferIndex].keyDown(windowNode)
       status.update
       status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.setTimeout(status.settings.smoothScrollSpeed)
-      var key: Rune = ru'\0'
+      var key = errorKey
       key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
-      if key != ru'\0': break
+      if key != errorKey: break
 
     ## Set default time out setting
     status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.setTimeout

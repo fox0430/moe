@@ -1,4 +1,4 @@
-import sugar, critbits
+import sugar, critbits, options
 import unicodedb, unicodedb/properties
 import unicodeext
 
@@ -22,8 +22,8 @@ proc makeIdentifierDictionary*(runes: seq[Rune]): CritBitTree[void] =
   for identifier in enumerateIdentifiers(runes):
     result.incl($identifier)
 
-proc extractNeighborWord*(runes: seq[Rune], pos: int): seq[Rune] =
-  if runes[pos].unicodeCategory notin succeedingCharacter: return
+proc extractNeighborWord*(runes: seq[Rune], pos: int): Option[tuple[word: seq[Rune], first, last: int]] =
+  if runes.len == 0 or runes[pos].unicodeCategory notin succeedingCharacter: return
 
   var
     first = pos
@@ -34,4 +34,12 @@ proc extractNeighborWord*(runes: seq[Rune], pos: int): seq[Rune] =
   while last+1 <= runes.high and runes[last+1].unicodeCategory in succeedingCharacter:
     inc(last)
 
-  return runes[first..last]
+  return some((runes[first..last], first, last))
+
+proc isCharacterInIdentifier*(r: Rune): bool =
+  r.unicodeCategory in succeedingCharacter
+
+proc collectSuggestions*(idetifierDictionary: CritBitTree[void], word: seq[Rune]): seq[seq[Rune]] =
+  collect(newSeq):
+    for item in itemsWithPrefix(idetifierDictionary, $word):
+      item.toRunes

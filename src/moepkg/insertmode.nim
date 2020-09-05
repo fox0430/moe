@@ -1,15 +1,230 @@
-import terminal, times
+import terminal, times, sugar, critbits, sequtils, options
 from os import execShellCmd
 import ui, editorstatus, gapbuffer, unicodeext, undoredostack, window,
-       movement, editor, bufferstatus
+       movement, editor, bufferstatus, generalautocomplete, color
+
+type SuggestionWindow = object
+  identifierDictionary: CritBitTree[void]
+  inputWord: seq[Rune]
+  firstColumn, lastColumn: int
+  suggestoins: seq[seq[Rune]]
+  popUpWindow: Window
+  currentSuggestion: int
+  isClosed: bool
+  oldLine: seq[Rune]
+
+template currentBufStatus: var BufferStatus =
+  mixin status
+  status.bufStatus[status.bufferIndexInCurrentWindow]
+
+template currentMainWindow: var WindowNode =
+  mixin status
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
 
 proc isInsertMode(status: EditorStatus): bool =
   let
-    workspaceIndex = status.currentWorkSpaceIndex
+    workSpaceIndex = status.currentWorkSpaceIndex
     bufferIndex =
-      status.workspace[workspaceIndex].currentMainWindowNode.bufferIndex
+      status.workspace[workSpaceIndex].currentMainWindowNode.bufferIndex
     mode = status.bufStatus[bufferIndex].mode
   return mode == Mode.insert
+
+proc extractNeighborWord(bufStatus: BufferStatus, windowNode: WindowNode): Option[tuple[word: seq[Rune], first, last: int]] =
+  extractNeighborWord(bufStatus.buffer[windowNode.currentLine], max(windowNode.currentColumn-1, 0))
+
+proc selectedWordOrInputWord(suggestionWindow: SuggestionWindow): seq[Rune] =
+  if suggestionWindow.currentSuggestion == -1:
+    suggestionWindow.inputWord
+  else:
+    suggestionWindow.suggestoins[suggestionWindow.currentSuggestion]
+
+proc newLine(suggestionWindow: SuggestionWindow): seq[Rune] =
+  suggestionWindow.oldLine.dup(proc (r: var seq[Rune]) = r[suggestionWindow.firstColumn .. suggestionWindow.lastColumn] = suggestionWindow.selectedWordOrInputWord)
+
+proc shouldTryOpenSuggestionWindow(bufStatus: BufferStatus, windowNode: WindowNode): bool =
+  extractNeighborWord(bufStatus, windowNode).get.word.len > 0
+
+proc initSuggestionWindow(text, word, currentLineText: seq[Rune], firstColumn, lastColumn: int, y, x: int): Option[SuggestionWindow] =
+  var suggestionWindow: SuggestionWindow
+
+  suggestionwindow.identifierDictionary = makeIdentifierDictionary(text)
+  suggestionwindow.inputWord = word
+  suggestionwindow.firstColumn = firstColumn
+  suggestionwindow.lastColumn = lastColumn
+  suggestionwindow.suggestoins = collectSuggestions(suggestionwindow.identifierDictionary, word)
+
+  if suggestionwindow.suggestoins.len == 0: return none(SuggestionWindow)
+
+  let
+    height = suggestionwindow.suggestoins.len
+    width = suggestionwindow.suggestoins.map(item => item.len).max + 2
+  suggestionwindow.popUpWindow = initWindow(height, width, y, x, EditorColorPair.popUpWindow)
+
+  suggestionwindow.currentSuggestion = -1
+  suggestionwindow.oldLine = currentLineText
+  
+  return some(suggestionWindow)
+
+proc close(suggestionWindow: var SuggestionWindow) =
+  doAssert(suggestionWindow.isClosed)
+  suggestionWindow.popUpWindow.deleteWindow
+
+proc writeSuggestionWindow(suggestionWindow: SuggestionWindow) =
+  var popUpWindow = suggestionWindow.popUpWindow
+  popUpWindow.writePopUpWindow(popUpWindow.height, popUpWindow.width, popUpWindow.y, popUpWindow.x, suggestionWindow.currentSuggestion, suggestionWindow.suggestoins)
+
+proc isChangingSelectoinKey(key: Rune): bool =
+  isTabKey(key) or isShiftTab(key)
+
+proc isUpdatingWordKey(key: Rune): bool =
+  not isChangingSelectoinKey(key) and (isBackspaceKey(key) or isControlH(key) or isCharacterInIdentifier(key))
+
+proc isQuittingSuggestoinKey(key: Rune): bool =
+  isEscKey(key)
+
+proc handleKeyInSuggestionWindow(suggestionWindow: var SuggestionWindow, status: var EditorStatus, key: Rune) =
+  doAssert(not suggestionWindow.isClosed)
+
+  if isChangingSelectoinKey(key):
+    # Check whether the selected suggestion is changed.
+    let prevSuggestion = suggestionWindow.currentSuggestion
+
+    if isTabKey(key):
+      inc(suggestionWindow.currentSuggestion)
+    elif isShiftTab(key):
+      dec(suggestionWindow.currentSuggestion)
+    
+    suggestionWindow.currentSuggestion = suggestionWindow.currentSuggestion.clamp(0, suggestionWindow.suggestoins.high)
+
+    if suggestionWindow.currentSuggestion != prevSuggestion:
+      # The selected suggestoin is changed.
+      # Update the buffer without recording the change.
+      currentBufStatus.buffer.assign(suggestionWindow.newLine, currentMainWindow.currentLine, false)
+
+  if isUpdatingWordKey(key):
+    # Update the input word.
+    if isBackspaceKey(key) or isControlH(key):
+      currentBufStatus.keyBackspace(
+        currentMainWindow,
+        status.settings.autoDeleteParen,
+        status.settings.tabStop)
+    elif isCharacterInIdentifier(key):
+      insertCharacter(currentBufStatus,
+                      currentMainWindow,
+                      status.settings.autoCloseParen, key)
+
+    let word = extractNeighborWord(currentBufStatus, currentMainWindow).map(x => x.word)
+
+    if word.isSome:
+      suggestionWindow.inputWord = word.get
+      suggestionWindow.suggestoins = collectSuggestions(suggestionWindow.identifierDictionary, word.get)
+      suggestionWindow.currentSuggestion = -1
+
+      if suggestionWindow.suggestoins.len == 0:
+        suggestionWindow.isClosed = true
+    else:
+      suggestionWindow.isClosed = true
+
+  if isQuittingSuggestoinKey(key):
+    # Quit the suggestion window.
+    suggestionWindow.isClosed = true
+
+  if suggestionWindow.isClosed: return
+
+  # Update the suggestion window.
+  let
+    height = suggestionWindow.suggestoins.len
+    width = suggestionWindow.suggestoins.map(item => item.len).max + 2
+  suggestionWindow.popUpWindow.resize(height, width)
+ 
+#[
+  var
+    isInputWordUpdated = false
+    isSelectedSuggestionChanged = false
+    currentSuggestion = suggestionWindow.currentSuggestion
+
+  if isBackspaceKey(key) or isControlH(key):
+    currentBufStatus.keyBackspace(
+      currentMainWindow,
+      status.settings.autoDeleteParen,
+      status.settings.tabStop)
+    isInputWordUpdated = true
+  elif isCharacterInIdentifier(key):
+    insertCharacter(currentBufStatus,
+                    currentMainWindow,
+                    status.settings.autoCloseParen, key)
+    isInputWordUpdated = true
+  elif isControlK(key):
+    dec(currentSuggestion)
+  elif isControlJ(key):
+    inc(currentSuggestion)
+  else:
+    suggestionWindow.isClosed = true
+
+  if currentSuggestion != suggestionWindow.currentSuggestion:
+    currentSuggestion = currentSuggestion.clamp(0, suggestionWindow.suggestoins.high)
+    if currentSuggestion != suggestionWindow.currentSuggestion:
+      # The selected suggestoin is changed.
+      suggestionWindow.currentSuggestion = currentSuggestion
+
+      # Update the buffer without recording the change.
+      currentBufStatus.buffer.assign(suggestionWindow.newLine, currentMainWindow.currentLine, false)
+
+      isSelectedSuggestionChanged = true
+
+  if isInputWordUpdated or isSelectedSuggestionChanged:
+    # Update the suggestoins.
+    let word =
+      if isInputWordUpdated:
+         extractNeighborWord(currentBufStatus, currentMainWindow).map(x => x.word)
+      else:
+        some(suggestionWindow.inputWord)
+
+    if isInputWordUpdated:
+      let word = extractNeighborWord(currentBufStatus, currentMainWindow).map(x => x.word)
+      if word.isSome:
+        suggestionWindow.inputWord = word.get
+      else:
+        suggestionWindow.isClosed = true
+
+
+    if word.isSome:
+      suggestionWindow.inputWord = 
+      suggestionWindow.suggestoins = collectSuggestions(suggestionWindow.identifierDictionary, word.get)
+    else:
+      suggestionWindow.isClosed = true
+
+    suggestionWindow.isClosed = suggestionWindow.isClosed or suggestionWindow.suggestoins.len == 0
+    if suggestionWindow.isClosed: return
+
+    let
+      height = suggestionWindow.suggestoins.len
+      width = suggestionWindow.suggestoins.map(item => item.len).max + 2
+    suggestionWindow.popUpWindow.resize(height, width)
+    ]#
+
+proc getCursorY(windowNode: WindowNode): int =
+  windowNode.y + windowNode.cursor.y
+
+proc getCursorX(windowNode: WindowNode): int =
+  windowNode.x + windowNode.cursor.x + windowNode.view.widthOfLineNum
+
+proc buildSuggestionWindow*(status: var EditorStatus): Option[SuggestionWindow] =
+  let (word, firstColumn, lastColumn) = extractNeighborWord(currentBufStatus, currentMainWindow).get
+
+  # Eliminate the word on the cursor.
+  let
+    line = currentMainWindow.currentLine
+    column = currentMainWindow.currentColumn - 1
+    lastDeletedIndex = currentBufStatus.buffer.calcIndexInEntireBuffer(line, column, true)
+    firstDeletedIndex = lastDeletedIndex - word.len + 1
+    text = currentBufStatus.buffer.toRunes.dup(delete(firstDeletedIndex, lastDeletedIndex))
+
+  let
+    y = getCursorY(currentMainWindow) + 1
+    x = getCursorX(currentMainWindow) - word.len
+
+  initSuggestionWindow(text, word, currentBufStatus.buffer[currentMainWindow.currentLine], firstColumn, lastColumn, y, x)
 
 proc insertMode*(status: var EditorStatus) =
   if not status.settings.disableChangeCursor:
@@ -17,25 +232,39 @@ proc insertMode*(status: var EditorStatus) =
 
   status.resize(terminalHeight(), terminalWidth())
 
+  var suggestionWindow = none(SuggestionWindow)
+
   while status.isInsertMode:
     let
       currentBufferIndex = status.bufferIndexInCurrentWindow
-      workspaceIndex = status.currentWorkSpaceIndex
+      workSpaceIndex = status.currentWorkSpaceIndex
 
     status.update
+    if suggestionWindow.isSome:
+      suggestionWindow.get.writeSuggestionWindow
 
-    var key: Rune = Rune('\0')
-    while key == Rune('\0'):
+    var key = errorKey
+    while key == errorKey:
       status.eventLoopTask
-      key =
-        getKey(status.workSpace[workspaceIndex].currentMainWindowNode.window)
+      key = getKey(currentMainWindow.window)
 
     status.lastOperatingTime = now()
 
-    var windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
+    var windowNode = currentMainWindow
 
-    status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
-    status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(windowNode)
+    currentBufStatus.buffer.beginNewSuitIfNeeded
+    currentBufStatus.tryRecordCurrentPosition(windowNode)
+
+    if suggestionWindow.isSome:
+      suggestionWindow.get.handleKeyInSuggestionWindow(status, key)
+
+      if suggestionWindow.get.isClosed:
+        if suggestionWindow.get.oldLine != suggestionWindow.get.newLine:
+          currentBufStatus.buffer[windowNode.currentLine] = suggestionWindow.get.newLine
+        suggestionWindow.get.close
+        suggestionWindow = none(SuggestionWindow)
+
+      continue
     
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
@@ -45,16 +274,16 @@ proc insertMode*(status: var EditorStatus) =
       windowNode.expandedColumn = windowNode.currentColumn
       status.changeMode(Mode.normal)
     elif isControlU(key):
-      status.bufStatus[currentBufferIndex].deleteBeforeCursorToFirstNonBlank(
-        status.workSpace[workspaceIndex].currentMainWindowNode)
+      currentBufStatus.deleteBeforeCursorToFirstNonBlank(
+        currentMainWindow)
     elif isLeftKey(key):
       windowNode.keyLeft
     elif isRightkey(key):
-      status.bufStatus[currentBufferIndex].keyRight(windowNode)
+      currentBufStatus.keyRight(windowNode)
     elif isUpKey(key):
-      status.bufStatus[currentBufferIndex].keyUp(windowNode)
+      currentBufStatus.keyUp(windowNode)
     elif isDownKey(key):
-      status.bufStatus[currentBufferIndex].keyDown(windowNode)
+      currentBufStatus.keyDown(windowNode)
     elif isPageUpKey(key):
       pageUp(status)
     elif isPageDownKey(key):
@@ -62,53 +291,55 @@ proc insertMode*(status: var EditorStatus) =
     elif isHomeKey(key):
       windowNode.moveToFirstOfLine
     elif isEndKey(key):
-      status.bufStatus[currentBufferIndex].moveToLastOfLine(windowNode)
+      currentBufStatus.moveToLastOfLine(windowNode)
     elif isDcKey(key):
-      status.bufStatus[currentBufferIndex].deleteCurrentCharacter(
-        status.workSpace[workspaceIndex].currentMainWindowNode,
+      currentBufStatus.deleteCurrentCharacter(
+        currentMainWindow,
         status.settings.autoDeleteParen)
     elif isBackspaceKey(key) or isControlH(key):
-      status.bufStatus[currentBufferIndex].keyBackspace(
-        status.workSpace[workspaceIndex].currentMainWindowNode,
+      currentBufStatus.keyBackspace(
+        currentMainWindow,
         status.settings.autoDeleteParen,
         status.settings.tabStop)
     elif isEnterKey(key):
-      keyEnter(status.bufStatus[currentBufferIndex],
-               status.workSpace[workspaceIndex].currentMainWindowNode,
+      keyEnter(currentBufStatus,
+               currentMainWindow,
                status.settings.autoIndent,
                status.settings.tabStop)
     elif key == ord('\t') or isControlI(key):
-      insertTab(status.bufStatus[currentBufferIndex],
-                status.workSpace[workspaceIndex].currentMainWindowNode,
+      insertTab(currentBufStatus,
+                currentMainWindow,
                 status.settings.tabStop,
                 status.settings.autoCloseParen)
     elif isControlE(key):
-      status.bufStatus[currentBufferIndex].insertCharacterBelowCursor(
-        status.workSpace[workspaceIndex].currentMainWindowNode
+      currentBufStatus.insertCharacterBelowCursor(
+        currentMainWindow
       )
     elif isControlY(key):
-      status.bufStatus[currentBufferIndex].insertCharacterAboveCursor(
-        status.workSpace[workspaceIndex].currentMainWindowNode
+      currentBufStatus.insertCharacterAboveCursor(
+        currentMainWindow
       )
     elif isControlW(key):
-      status.bufStatus[currentBufferIndex].deleteWordBeforeCursor(
-        status.workSpace[workspaceIndex].currentMainWindowNode,
+      currentBufStatus.deleteWordBeforeCursor(
+        currentMainWindow,
         status.settings.tabStop)
     elif isControlU(key):
-      status.bufStatus[currentBufferIndex].deleteCharactersBeforeCursorInCurrentLine(
-        status.workSpace[workspaceIndex].currentMainWindowNode
+      currentBufStatus.deleteCharactersBeforeCursorInCurrentLine(
+        currentMainWindow
       )
     elif isControlT(key):
-      status.bufStatus[currentBufferIndex].addIndentInCurrentLine(
-        status.workSpace[workspaceIndex].currentMainWindowNode,
+      currentBufStatus.addIndentInCurrentLine(
+        currentMainWindow,
         status.settings.view.tabStop
       )
     elif isControlD(key):
-      status.bufStatus[currentBufferIndex].deleteIndentInCurrentLine(
-        status.workSpace[workspaceIndex].currentMainWindowNode,
+      currentBufStatus.deleteIndentInCurrentLine(
+        currentMainWindow,
         status.settings.view.tabStop
       )
     else:
-      insertCharacter(status.bufStatus[currentBufferIndex],
-                      status.workSpace[workspaceIndex].currentMainWindowNode,
+      insertCharacter(currentBufStatus,
+                      currentMainWindow,
                       status.settings.autoCloseParen, key)
+      if shouldTryOpenSuggestionWindow(currentBufStatus, currentMainWindow):
+        suggestionWindow = some(status.buildSuggestionWindow).flatten

@@ -1,4 +1,4 @@
-import macros
+import macros, strformat
 import undoredostack
 export undoredostack
 
@@ -193,3 +193,11 @@ proc isFirst*(gapBuffer: GapBuffer, line, column: int): bool =
 proc isLast*(gapBuffer: GapBuffer, line, column: int): bool =
   line == gapBuffer.len-1 and column >= gapBuffer[gapBuffer.len-1].len-1
 
+proc calcIndexInEntireBuffer*[T: array | seq | string](gapBuffer: GapBuffer[T], line, column: int, containNewline: bool): int =
+  doAssert(0 <= line and line < gapBuffer.len, fmt"GapBuffer: The line is less than 0 or exceeds the length of the buffer. line = {line}, gapBuffer.len = {gapBuffer.len}.")
+  doAssert(0 <= column and column < gapBuffer[line].len, fmt"GapBuffer: The column is less than 0 or exceeds the length of the buffer[line]. column = {column}, gapBuffer[line].len = {gapBuffer[line].len}.")
+
+  for i in 0 ..< line:
+    result += gapBuffer[i].len
+    if containNewline: inc(result)
+  result += column
