@@ -39,13 +39,9 @@ proc main() =
   if parsedList.len > 0:
     for p in parsedList:
       if existsDir(p.filename):
-        try: setCurrentDir(p.filename)
-        except OSError:
-          status.commandWindow.writeFileOpenError(p.filename, status.messageLog)
-          status.addNewBuffer("")
-        status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSavetime: now()))
+        status.addNewBuffer(p.filename, Mode.filer)
       else: status.addNewBuffer(p.filename)
-  else: status.addNewBuffer("")
+  else: status.addNewBuffer
 
   disableControlC()
 

@@ -110,10 +110,15 @@ proc bufferIndexInCurrentWindow*(status: Editorstatus): int =
   status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
 
 proc changeMode*(status: var EditorStatus, mode: Mode) =
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.bufStatus[currentBufferIndex].prevMode =
-    status.bufStatus[currentBufferIndex].mode
+  let
+    currentBufferIndex = status.bufferIndexInCurrentWindow
+    currentMode = status.bufStatus[currentBufferIndex].mode
+  status.bufStatus[currentBufferIndex].prevMode = currentMode
   status.bufStatus[currentBufferIndex].mode = mode
+
+proc changeMode*(bufStatus: var BufferStatus, mode: Mode) =
+  bufStatus.prevMode = bufStatus.mode
+  bufStatus.mode = mode
 
 proc changeCurrentWin*(status:var EditorStatus, index: int) =
   let workspaceIndex = status.currentWorkSpaceIndex
@@ -353,9 +358,8 @@ proc update*(status: var EditorStatus) =
     for i in  0 ..< queue.len:
       var node = queue.pop
       if node.window != nil:
-        let bufStatus = status.bufStatus[node.bufferIndex]
-
         let
+          bufStatus = status.bufStatus[node.bufferIndex]
           currentMode = bufStatus.mode
           prevMode = bufStatus.prevMode
 
@@ -441,6 +445,7 @@ proc update*(status: var EditorStatus) =
 
   setCursor(true)
 
+proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode)
 proc verticalSplitWindow*(status: var EditorStatus) =
   let 
     currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -450,6 +455,15 @@ proc verticalSplitWindow*(status: var EditorStatus) =
   status.workSpace[workspaceIndex].currentMainWindowNode =
     status.workSpace[workspaceIndex].currentMainWindowNode.verticalSplit(buffer)
   inc(status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow)
+
+  let
+    mode = status.bufStatus[currentBufferIndex].mode
+    prevMode = status.bufStatus[currentBufferIndex].prevMode
+  if isFilerMode(mode, prevMode):
+    status.bufStatus.add(status.bufStatus[currentBufferIndex])
+    status.bufStatus[currentBufferIndex].changeMode(Mode.filer)
+    status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex =
+      status.bufStatus.high
 
   status.workSpace[workspaceIndex].statusBar.add(initStatusBar())
 
@@ -462,6 +476,15 @@ proc horizontalSplitWindow*(status: var Editorstatus) =
   status.workSpace[workspaceIndex].currentMainWindowNode =
     status.workSpace[workspaceIndex].currentMainWindowNode.horizontalSplit(buffer)
   inc(status.workSpace[workspaceIndex].numOfMainWindow)
+
+  let
+    mode = status.bufStatus[currentBufferIndex].mode
+    prevMode = status.bufStatus[currentBufferIndex].prevMode
+  if isFilerMode(mode, prevMode):
+    status.bufStatus.add(status.bufStatus[currentBufferIndex])
+    status.bufStatus[currentBufferIndex].changeMode(Mode.filer)
+    status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex =
+      status.bufStatus.high
 
   status.workSpace[workspaceIndex].statusBar.add(initStatusBar())
 
@@ -568,31 +591,33 @@ proc deletePopUpWindow*(status: var Editorstatus) =
     status.popUpWindow.deleteWindow
     status.update
 
-
 proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode) =
-  status.bufStatus.add(BufferStatus(path: filename.toRunes,
+  let path = if mode == Mode.filer: absolutePath(filename) else: filename
+
+  status.bufStatus.add(BufferStatus(path: path.toRunes,
                                     mode: mode,
                                     lastSaveTime: now()))
+
   let index = status.bufStatus.high
 
-  if existsFile(filename) == false: status.bufStatus[index].buffer = newFile()
-  else:
-    try:
-      let textAndEncoding = openFile(filename.toRunes)
-      status.bufStatus[index].buffer = textAndEncoding.text.toGapBuffer
-      status.bufStatus[index].characterEncoding = textAndEncoding.encoding
-    except IOError:
-      status.commandWindow.writeFileOpenError(filename, status.messageLog)
-      return
+  if mode != Mode.filer:
+    if not existsFile(filename): status.bufStatus[index].buffer = newFile()
+    else:
+      try:
+        let textAndEncoding = openFile(filename.toRunes)
+        status.bufStatus[index].buffer = textAndEncoding.text.toGapBuffer
+        status.bufStatus[index].characterEncoding = textAndEncoding.encoding
+      except IOError:
+        status.commandWindow.writeFileOpenError(filename, status.messageLog)
+        return
 
-  if filename != "": status.bufStatus[index].language = detectLanguage(filename)
+    if filename != "": status.bufStatus[index].language = detectLanguage(filename)
 
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view =
     status.bufStatus[index].buffer.initEditorView(terminalHeight(),
                                                   terminalWidth())
 
   status.changeCurrentBuffer(index)
-  #status.changeMode(Mode.normal)
 
 proc addNewBuffer*(status: var EditorStatus, mode: Mode) =
   status.addNewBuffer("", mode)
