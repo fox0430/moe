@@ -173,7 +173,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
           widthOfLineNum = node.view.widthOfLineNum
           h = node.h - statusBarHeight
           adjustedHeight = max(h, 4)
-          adjustedWidth = max(node.w - widthOfLineNum - 1, 4)
+          adjustedWidth = max(node.w - widthOfLineNum, 4)
 
         node.view.resize(
           status.bufStatus[bufIndex].buffer,
@@ -198,11 +198,11 @@ proc resize*(status: var EditorStatus, height, width: int) =
           const statusLineHeight = 1
           let
             width = if node.x > 0 and node.parent.splitType == SplitType.vertical:
-                      node.w - 1
+                      node.w - 2
                     else: node.w
             y = node.y + adjustedHeight
             x = if node.x > 0 and
-                   node.parent.splitType == SplitType.vertical: node.x + 1
+                   node.parent.splitType == SplitType.vertical: node.x + 2
                 else: node.x
           status.workSpace[workspaceIndex].statusBar[statusBarIndex].window.resize(
             statusLineHeight,
