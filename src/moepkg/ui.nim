@@ -95,7 +95,8 @@ proc write*(win: var Window,
             str: string,
             color: EditorColorPair = EditorColorPair.defaultChar,
             storeX: bool = true) =
-  
+  # WARNING: If `storeX` is true, this procedure will change the window position. Should we remove the default parameter?
+  #
   # Not write when running unit tests
   when not defined unitTest:
     win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
@@ -109,7 +110,8 @@ proc write*(win: var Window,
             y, x: int, str: seq[Rune],
             color: EditorColorPair = EditorColorPair.defaultChar,
             storeX: bool = true) =
-  
+  # WARNING: If `storeX` is true, this procedure will change the window position. Should we remove the default parameter?
+  #
   # Not write when running unit tests
   when not defined unitTest:
     write(win, y, x, $str, color, false)
