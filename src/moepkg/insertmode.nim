@@ -100,6 +100,7 @@ proc handleKeyInSuggestionWindow(suggestionWindow: var SuggestionWindow, status:
       # The selected suggestoin is changed.
       # Update the buffer without recording the change.
       currentBufStatus.buffer.assign(suggestionWindow.newLine, currentMainWindow.currentLine, false)
+      currentMainWindow.currentColumn = suggestionWindow.firstColumn + suggestionWindow.selectedWordOrInputWord.len
 
   if isUpdatingWordKey(key):
     # Update the input word.
