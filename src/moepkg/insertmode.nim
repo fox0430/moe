@@ -276,5 +276,5 @@ proc insertMode*(status: var EditorStatus) =
       insertCharacter(currentBufStatus,
                       currentMainWindow,
                       status.settings.autoCloseParen, key)
-      if shouldTryOpenSuggestionWindow(currentBufStatus, currentMainWindow):
+      if isCharacterInIdentifier(key) and shouldTryOpenSuggestionWindow(currentBufStatus, currentMainWindow):
         suggestionWindow = some(status.buildSuggestionWindow).flatten
