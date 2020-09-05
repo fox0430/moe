@@ -20,7 +20,6 @@ type FileRegister = object
 
 type FilerStatus = object
   register: FileRegister
-  currentPath: seq[Rune]
   searchMode: bool
   viewUpdate: bool
   dirlistUpdate: bool
@@ -150,17 +149,19 @@ proc initFileRegister(): FileRegister =
 
 proc initFilerStatus*(): FilerStatus =
   result.register = initFileRegister()
-  result.currentPath = getCurrentDir().toRunes
+  #result.currentPath = getCurrentDir().toRunes
   result.viewUpdate = true
   result.dirlistUpdate = true
   result.dirList = newSeq[PathInfo]()
   result.sortBy = name
   result.searchMode = false
 
-proc updateDirList*(filerStatus: var FilerStatus): FilerStatus =
+proc updateDirList*(filerStatus: var FilerStatus,
+                    path: seq[Rune]): FilerStatus =
+
   filerStatus.dirList = @[]
-  filerStatus.dirList.add(refreshDirList(filerStatus.currentPath,
-                                         filerStatus.sortBy))
+  filerStatus.dirList.add(refreshDirList(path, filerStatus.sortBy))
+
   filerStatus.viewUpdate = true
   filerStatus.dirlistUpdate = false
   return filerStatus
@@ -183,27 +184,34 @@ proc moveToLastOfList(filerStatus: var FilerStatus, currentLine: var int) =
   currentLine = filerStatus.dirList.high
   filerStatus.viewUpdate = true
 
-proc copyFile(filerStatus: var FilerStatus, currentLine: int) =
+proc copyFile(filerStatus: var FilerStatus,
+              currentLine: int,
+              currentPath: seq[Rune]) =
+
   filerStatus.register.copy = true
   filerStatus.register.cut = false
   filerStatus.register.filename = filerStatus.dirList[currentLine].path
   let path = filerStatus.dirList[currentLine].path
-  filerStatus.register.originPath = $filerStatus.currentPath / path
+  filerStatus.register.originPath = $currentPath / path
 
-proc cutFile(filerStatus: var FilerStatus, currentLine: int) =
+proc cutFile(filerStatus: var FilerStatus,
+             currentLine: int,
+             currentPath: seq[Rune]) =
+
   filerStatus.register.copy = false
   filerStatus.register.cut = true
   let path = filerStatus.dirList[currentLine].path
   filerStatus.register.filename = path
-  filerStatus.register.originPath = $filerStatus.currentPath / path
+  filerStatus.register.originPath = $currentPath / path
 
 proc pasteFile(commandWindow: var Window,
                filerStatus: var FilerStatus,
+               currentPath: seq[Rune],
                messageLog: var seq[seq[Rune]]) =
 
   try:
     let filename = filerStatus.register.filename
-    copyFile(filerStatus.register.originPath, $filerStatus.currentPath / filename)
+    copyFile(filerStatus.register.originPath, $currentPath / filename)
     filerStatus.dirlistUpdate = true
     filerStatus.viewUpdate = true
   except OSError:
@@ -230,21 +238,21 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   let
     kind = filerStatus.dirList[windowNode.currentLine].kind
     path = filerStatus.dirList[windowNode.currentLine].path
+    bufferIndex = windowNode.bufferIndex
 
   case kind
-  of pcFile, pcLinkToFile:
-    addNewBuffer(status, path)
-  of pcDir, pcLinkToDir:
-    try:
-      let currentPath = filerStatus.currentPath
+    of pcFile, pcLinkToFile:
+      addNewBuffer(status, path)
+    of pcDir, pcLinkToDir:
+      let currentPath = status.bufStatus[bufferIndex].path
       if path == "..":
         if not isRootDir($currentPath):
-          filerStatus.currentPath = parentDir($currentPath).toRunes
+          let parentDir = parentDir($currentPath).toRunes
+          status.bufStatus[bufferIndex].path = parentDir
       else:
-        filerStatus.currentPath = path.toRunes
+        status.bufStatus[bufferIndex].path = path.toRunes
+
       filerStatus.dirlistUpdate = true
-    except OSError:
-      status.commandWindow.writeFileOpenError(path, status.messageLog)
 
 proc openNewWinAndOpenFilerOrDir(status: var EditorStatus,
                                  filerStatus: var FilerStatus) =
@@ -532,13 +540,20 @@ proc filerMode*(status: var EditorStatus) =
 
     let currentBufferIndex = status.bufferIndexInCurrentWindow
 
-    var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+    var windowNode =
+        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
 
     if filerStatus.dirlistUpdate:
-      filerStatus = updateDirList(filerStatus)
-      windowNode.currentLine = 0
+      let
+        bufStatus = status.bufStatus[currentBufferIndex]
+        path = bufStatus.path
 
-    if filerStatus.viewUpdate: updateFilerView(status, filerStatus)
+      filerStatus = filerStatus.updateDirList(path)
+
+      if windowNode.currentLine > filerStatus.dirList.high:
+        windowNode.currentLine = filerStatus.dirList.high 
+
+    if filerStatus.viewUpdate: status.updateFilerView(filerStatus)
 
     setCursor(false)
 
@@ -552,6 +567,8 @@ proc filerMode*(status: var EditorStatus) =
 
     status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
     status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(windowNode)
+
+    let currentPath = status.bufStatus[currentBufferIndex].path
     
     if key == ord(':'): status.changeMode(Mode.ex)
 
@@ -582,11 +599,14 @@ proc filerMode*(status: var EditorStatus) =
     elif key == ord('G'):
       filerStatus.moveToLastOfList(windowNode.currentLine)
     elif key == ord('y'):
-      filerStatus.copyFile(windowNode.currentLine)
+      filerStatus.copyFile(windowNode.currentLine, currentPath)
     elif key == ord('C'):
-      filerStatus.cutFile(windowNode.currentLine)
+      filerStatus.cutFile(windowNode.currentLine, currentPath)
     elif key == ord('p'):
-      status.commandWindow.pasteFile(filerStatus, status.messageLog)
+      status.commandWindow.pasteFile(
+        filerStatus,
+        currentPath,
+        status.messageLog)
     elif key == ord('s'):
       filerStatus.changeSortBy
     elif key == ord('N'):
