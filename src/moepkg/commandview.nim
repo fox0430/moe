@@ -384,7 +384,7 @@ proc suggestExCommandOption(status: var Editorstatus,
        "showgitinactive":
       argList = @["on", "off"]
     of "theme":
-      argList= @["vivid", "dark", "light", "config"]
+      argList= @["vivid", "dark", "light", "config", "vscode"]
     of "e",
        "sp",
        "vs":

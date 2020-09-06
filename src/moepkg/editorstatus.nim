@@ -1016,6 +1016,9 @@ proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
       windowNode.highlight = windowNode.highlight.overwrite(colorSegment)
 
 proc changeTheme*(status: var EditorStatus) =
+  if status.settings.editorColorTheme == ColorTheme.vscode:
+    status.settings.editorColorTheme = loadVSCodeTheme()
+
   setCursesColor(ColorThemeTable[status.settings.editorColorTheme])
 
 proc autoSave(status: var Editorstatus) =

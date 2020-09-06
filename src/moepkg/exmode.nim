@@ -482,8 +482,9 @@ proc changeThemeSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   elif command == ru"light": status.settings.editorColorTheme = ColorTheme.light
   elif command == ru"vivid": status.settings.editorColorTheme = ColorTheme.vivid
   elif command == ru"config": status.settings.editorColorTheme = ColorTheme.config
+  elif command == ru"vscode": status.settings.editorColorTheme = ColorTheme.vscode
 
-  changeTheme(status)
+  status.changeTheme
   status.resize(terminalHeight(), terminalWidth())
   status.commandWindow.erase
 

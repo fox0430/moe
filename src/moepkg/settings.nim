@@ -665,6 +665,68 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
       background:
         colorFromNode(jsonNode{"colors", "editor.background"})
 
+proc loadVSCodeTheme*(): ColorTheme =
+  # search for the vscode theme that is set in the current preferences of
+  # vscode/vscodium. Vscodium takes precedence, since you can assume that,
+  # people that install VScodium prefer it over Vscode for privacy reasons.
+  # If no vscode theme can be found, this defaults to the dark theme.
+  # The first implementation is for finding the VsCode/VsCodium config and
+  # extension folders on Linux. Hopefully other contributors will come and
+  # add support for Windows, and other systems.
+  var vsCodeThemeLoaded = false
+  block vsCodeThemeLoading:
+    let homeDir = getHomeDir()
+    var vsCodeSettingsFile = homeDir & "/.config/VSCodium/User/settings.json"
+    var vsCodeThemeFile = ""
+    var vsCodeExtensionsDir = homeDir & "/.vscode-oss/extensions/"
+    var vsCodeThemeSetting = ""
+    if not existsFile(vsCodeSettingsFile):
+      vsCodeSettingsFile = homeDir & "/.config/Code/User/settings.json"
+    if existsFile(vsCodeSettingsFile):
+      let vsCodeSettingsJson = json.parseFile(vsCodeSettingsFile)
+      vsCodeThemeSetting = vsCodeSettingsJson{"workbench.colorTheme"}.getStr()
+      if vsCodeThemeSetting == "":
+        break vsCodeThemeLoading
+
+    else:
+      break vsCodeThemeLoading
+
+    if not existsDir(vsCodeExtensionsDir):
+      vsCodeExtensionsDir = homeDir & "/.vscode/extensions/"
+      if not existsDir(vsCodeExtensionsDir):
+        break vsCodeThemeLoading
+
+    # Note: walkDirRec was first used to solve this, however
+    #       the performance at runtime was much worse
+    for file in walkPattern(vsCodeExtensionsDir & "/*/package.json"):
+      if file.endsWith("/package.json"):
+        var vsCodePackageJson: JsonNode
+        try:
+          vsCodePackageJson = json.parseFile(file)
+        except:
+          break vsCodeThemeLoading
+        let displayName = vsCodePackageJson{"displayName"}
+        if displayName == nil: continue
+
+        if displayName.getStr() == vsCodeThemeSetting:
+          let themesJson = vsCodePackageJson{"contributes", "themes"}
+          if themesJson != nil and themesJson.len() > 0:
+            let theTheme = themesJson[0]
+            let theThemePath = theTheme{"path"}
+            if theThemePath != nil and theThemePath.kind == JString:
+              vsCodeThemeFile = parentDir(file) / theThemePath.getStr()
+          else:
+            break vsCodeThemeLoading
+          break
+
+    if fileExists(vsCodeThemeFile):
+      result = ColorTheme.vscode
+      ColorThemeTable[ColorTheme.vscode] =
+        makeColorThemeFromVSCodeThemeFile(vsCodeThemeFile)
+      vsCodeThemeLoaded = true
+  if not vsCodeThemeLoaded:
+    result = ColorTheme.dark
+
 proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
   result = initEditorSettings()
 
@@ -1268,67 +1330,9 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       ColorThemeTable[ColorTheme.config].currentSettingBg = color("currentSettingBg")
 
     result.editorColorTheme = ColorTheme.config
+
   if vscodeTheme:
-    # search for the vscode theme that is set in the current preferences of
-    # vscode/vscodium. Vscodium takes precedence, since you can assume that,
-    # people that install VScodium prefer it over Vscode for privacy reasons.
-    # If no vscode theme can be found, this defaults to the dark theme.
-    # The first implementation is for finding the VsCode/VsCodium config and
-    # extension folders on Linux. Hopefully other contributors will come and
-    # add support for Windows, and other systems.
-    var vsCodeThemeLoaded = false
-    block vsCodeThemeLoading:
-      let homeDir = getHomeDir()
-      var vsCodeSettingsFile = homeDir & "/.config/VSCodium/User/settings.json"
-      var vsCodeThemeFile = ""
-      var vsCodeExtensionsDir = homeDir & "/.vscode-oss/extensions/"
-      var vsCodeThemeSetting = ""
-      if not existsFile(vsCodeSettingsFile):
-        vsCodeSettingsFile = homeDir & "/.config/Code/User/settings.json"
-      if existsFile(vsCodeSettingsFile):
-        let vsCodeSettingsJson = json.parseFile(vsCodeSettingsFile)
-        vsCodeThemeSetting = vsCodeSettingsJson{"workbench.colorTheme"}.getStr()
-        if vsCodeThemeSetting == "":
-          break vsCodeThemeLoading
-
-      else:
-        break vsCodeThemeLoading
-      
-      if not existsDir(vsCodeExtensionsDir):
-        vsCodeExtensionsDir = homeDir & "/.vscode/extensions/"
-        if not existsDir(vsCodeExtensionsDir):
-          break vsCodeThemeLoading
-      
-      # Note: walkDirRec was first used to solve this, however
-      #       the performance at runtime was much worse
-      for file in walkPattern(vsCodeExtensionsDir & "/*/package.json"):
-        if file.endsWith("/package.json"):
-          var vsCodePackageJson: JsonNode
-          try:
-            vsCodePackageJson = json.parseFile(file)
-          except:
-            break vsCodeThemeLoading
-          let displayName = vsCodePackageJson{"displayName"}
-          if displayName == nil: continue
-
-          if displayName.getStr() == vsCodeThemeSetting:
-            let themesJson = vsCodePackageJson{"contributes", "themes"}
-            if themesJson != nil and themesJson.len() > 0:
-              let theTheme = themesJson[0]
-              let theThemePath = theTheme{"path"}
-              if theThemePath != nil and theThemePath.kind == JString:
-                vsCodeThemeFile = parentDir(file) / theThemePath.getStr()
-            else:
-              break vsCodeThemeLoading
-            break
-      
-      if fileExists(vsCodeThemeFile):
-        result.editorColorTheme = ColorTheme.vscode
-        ColorThemeTable[ColorTheme.vscode] =
-          makeColorThemeFromVSCodeThemeFile(vsCodeThemeFile)
-        vsCodeThemeLoaded = true
-    if not vsCodeThemeLoaded:
-      result.editorColorTheme = ColorTheme.dark
+    result.editorColorTheme = loadVSCodeTheme()
 
 proc validateTomlConfig(toml: TomlValueRef): Option[string] =
   template validateStandardTable() =
