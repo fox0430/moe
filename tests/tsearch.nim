@@ -5,29 +5,52 @@ include moepkg/search
 
 suite "search.nim: searchLine":
   test "searchLine":
-    let line = ru"abc efg hijkl"
-    let position = line.searchLine(ru"ijk")
+    let
+      line = ru"abc efg hijkl"
+      ignorecase = true
+      position = line.searchLine(ru"ijk", ignorecase)
 
     check(position == 9)
 
   test "searchLine 2":
-      let line = ru"abc efg hijkl"
-      let position = line.searchLine(ru"xyz")
+    let
+      line = ru"abc efg hijkl"
+      ignorecase = true
+      position = line.searchLine(ru"xyz", ignorecase)
+
+    check(position == -1)
+
+  test "Enable ignorecase":
+    let
+      line = ru"Editor"
+      ignorecase = true
+      position = line.searchLine(ru"editor", ignorecase)
+
+    check(position == 0)
+
+  test "Disable ignorecase":
+    let
+      line = ru"Editor"
+      ignorecase = false
+      position = line.searchLine(ru"editor", ignorecase)
   
-      check(position == -1)
+    check(position == -1)
   
 suite "search.nim: searchLineReversely":
   test "searchLineReversely":
-      let line = ru"abc efg hijkl"
-      let position = line.searchLineReversely(ru"ijk")
+    let
+      line = ru"abc efg hijkl"
+      ignorecase = true
+      position = line.searchLineReversely(ru"ijk", ignorecase)
   
-      check(position == 9)
+    check(position == 9)
   
   test "searchLineReversely 2":
       let
         line = ru"abc efg hijkl"
         keyword = ru"xyz"
-        position = line.searchLineReversely(keyword)
+        ignorecase = true
+        position = line.searchLineReversely(keyword, ignorecase)
   
       check(position == -1)
 
@@ -44,7 +67,8 @@ suite "search.nim: searchBuffer":
 
     let
       keyword = ru"i j"
-      searchResult = status.searchBuffer(keyword)
+      ignorecase = true
+      searchResult = status.searchBuffer(keyword, ignorecase)
 
     check(searchResult.line == 1)
     check(searchResult.column == 2)
@@ -61,7 +85,8 @@ suite "search.nim: searchBuffer":
 
     let
       keyword = ru"xyz"
-      searchResult = status.searchBuffer(keyword)
+      ignorecase = true
+      searchResult = status.searchBuffer(keyword, ignorecase)
 
     check(searchResult.line == -1)
     check(searchResult.column == -1)
@@ -79,7 +104,8 @@ suite "search.nim: searchBufferReversely":
 
     let
       keyword = ru"i j"
-      searchResult = status.searchBufferReversely(keyword)
+      ignorecase = true
+      searchResult = status.searchBufferReversely(keyword, ignorecase)
 
     check(searchResult.line == 1)
     check(searchResult.column == 2)
@@ -96,7 +122,8 @@ suite "search.nim: searchBufferReversely":
 
     let
       keyword = ru"xyz"
-      searchResult = status.searchBufferReversely(keyword)
+      ignorecase = true
+      searchResult = status.searchBufferReversely(keyword, ignorecase)
 
     check(searchResult.line == -1)
     check(searchResult.column == -1)
@@ -115,7 +142,8 @@ suite "search.nim: searchAllOccurrence":
     let
       keyword = ru"abc"
       buffer = status.bufStatus[0].buffer
-      searchResult = buffer.searchAllOccurrence(keyword)
+      ignorecase = true
+      searchResult = buffer.searchAllOccurrence(keyword, ignorecase)
 
     check(searchResult.len == 3)
 
@@ -141,7 +169,8 @@ suite "search.nim: searchAllOccurrence":
     let
       keyword = ru"xyz"
       buffer = status.bufStatus[0].buffer
-      searchResult = buffer.searchAllOccurrence(keyword)
+      ignorecase = true
+      searchResult = buffer.searchAllOccurrence(keyword, ignorecase)
 
     check(searchResult.len == 0)
 

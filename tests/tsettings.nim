@@ -16,6 +16,7 @@ const tomlStr = """
   tabStop = 4
   autoCloseParen = false
   autoIndent = false
+  ignorecase = false
   disableChangeCursor = true
   defaultCursor = "blinkIbeam"
   normalModeCursor = "blinkIbeam"
@@ -239,6 +240,7 @@ suite "Parse configuration file":
     check settings.view.tabStop == 4
     check not settings.autoCloseParen
     check not settings.autoIndent
+    check not settings.ignorecase
     check settings.disableChangeCursor
     check settings.defaultCursor == CursorType.blinkIbeam
     check settings.normalModeCursor == CursorType.blinkIbeam

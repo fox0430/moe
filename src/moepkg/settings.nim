@@ -98,6 +98,7 @@ type EditorSettings* = object
   autoCloseParen*: bool
   autoIndent*: bool
   tabStop*: int
+  ignorecase*: bool
   disableChangeCursor*: bool
   defaultCursor*: CursorType
   normalModeCursor*: CursorType
@@ -205,6 +206,7 @@ proc initEditorSettings*(): EditorSettings =
   result.autoCloseParen = true
   result.autoIndent = true
   result.tabStop = 2
+  result.ignorecase = true
   # defaultCursor is terminal default curosr shape
   result.defaultCursor = CursorType.blinkBlock
   result.normalModeCursor = CursorType.blinkBlock
@@ -769,6 +771,9 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
     if settings["Standard"].contains("autoIndent"):
       result.autoIndent = settings["Standard"]["autoIndent"].getbool()
+
+    if settings["Standard"].contains("ignorecase"):
+      result.ignorecase = settings["Standard"]["ignorecase"].getbool()
 
     if settings["Standard"].contains("disableChangeCursor"):
       result.disableChangeCursor = settings["Standard"]["disableChangeCursor"].getbool()
@@ -1357,6 +1362,7 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
            "indentationLines",
            "autoCloseParen",
            "autoIndent",
+           "ignorecase",
            "disableChangeCursor",
            "autoSave",
            "liveReloadOfConf",

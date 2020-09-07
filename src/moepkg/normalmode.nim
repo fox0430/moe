@@ -55,7 +55,9 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
   var windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
 
   status.bufStatus[currentBufferIndex].keyRight(windowNode)
-  let searchResult = status.searchBuffer(keyword)
+  let
+    ignorecase = status.settings.ignorecase
+    searchResult = status.searchBuffer(keyword, ignorecase)
   if searchResult.line > -1:
     status.jumpLine(searchResult.line)
     for column in 0 ..< searchResult.column:
@@ -67,7 +69,7 @@ proc searchNextOccurrence(status: var EditorStatus) =
 
   let keyword = status.searchHistory[status.searchHistory.high]
 
-  searchNextOccurrence(status, keyword)
+  status.searchNextOccurrence(keyword)
 
 proc searchNextOccurrenceReversely(status: var EditorStatus, keyword: seq[Rune]) =
   let
@@ -80,7 +82,9 @@ proc searchNextOccurrenceReversely(status: var EditorStatus, keyword: seq[Rune])
   var windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
 
   windowNode.keyLeft
-  let searchResult = status.searchBufferReversely(keyword)
+  let
+    ignorecase = status.settings.ignorecase
+    searchResult = status.searchBufferReversely(keyword, ignorecase)
   if searchResult.line > -1:
     status.jumpLine(searchResult.line)
     for column in 0 ..< searchResult.column:
@@ -94,7 +98,6 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) =
   let keyword = status.searchHistory[status.searchHistory.high]
 
   searchNextOccurrenceReversely(status, keyword)
-
 
 proc turnOffHighlighting*(status: var EditorStatus) =
   let
