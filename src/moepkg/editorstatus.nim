@@ -202,13 +202,9 @@ proc resize*(status: var EditorStatus, height, width: int) =
 
           const statusLineHeight = 1
           let
-            width = if node.x > 0 and node.parent.splitType == SplitType.vertical:
-                      node.w - 2
-                    else: node.w
+            width = node.w
             y = node.y + adjustedHeight
-            x = if node.x > 0 and
-                   node.parent.splitType == SplitType.vertical: node.x + 2
-                else: node.x
+            x = node.x
           status.workSpace[workspaceIndex].statusBar[statusBarIndex].window.resize(
             statusLineHeight,
             width,

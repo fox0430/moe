@@ -222,7 +222,8 @@ proc writeStatusBar*(bufStatus: var BufferStatus,
                          isActiveWindow,
                          settings.statusBar.showModeInactive)
 
-  var statusBarBuffer = modeStr.toRunes
+  var statusBarBuffer = if windowNode.x > 0: ru" " & modeStr.toRunes
+                        else: modeStr.toRunes
 
   ## Write current mode
   if settings.statusBar.mode:
