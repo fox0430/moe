@@ -214,7 +214,7 @@ proc isEndKey*(key: Rune): bool = key == KEY_END
 proc isDcKey*(key: Rune): bool = key == KEY_DC
 proc isPageUpKey*(key: Rune): bool = key == KEY_PPAGE or key == 2
 proc isPageDownkey*(key: Rune): bool = key == KEY_NPAGE or key == 6
-proc isTabkey*(key: Rune): bool = key == ord('\t') or key == 9
+proc isTabKey*(key: Rune): bool = key == ord('\t') or key == 9
 proc isControlA*(key: Rune): bool = key == 1
 proc isControlX*(key: Rune): bool = key == 24
 proc isControlR*(key: Rune): bool = key == 18

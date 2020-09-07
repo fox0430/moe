@@ -241,7 +241,7 @@ proc insertMode*(status: var EditorStatus) =
                currentMainWindow,
                status.settings.autoIndent,
                status.settings.tabStop)
-    elif key == ord('\t') or isControlI(key):
+    elif isTabKey(key) or isControlI(key):
       insertTab(currentBufStatus,
                 currentMainWindow,
                 status.settings.tabStop,

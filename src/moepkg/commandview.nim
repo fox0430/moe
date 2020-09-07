@@ -314,12 +314,12 @@ proc suggestFilePath(status: var Editorstatus,
 
     popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
 
-  while (isTabkey(key) or isShiftTab(key)) and suggestlist.len > 1:
+  while (isTabKey(key) or isShiftTab(key)) and suggestlist.len > 1:
     exStatus.buffer = (command & " ").toRunes
     exStatus.currentPosition = command.len + 1
     exStatus.cursorX = command.len + 2
 
-    if isTabkey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
+    if isTabKey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
     elif isShiftTab(key) and suggestIndex > 0: dec(suggestIndex)
     elif isShiftTab(key) and suggestIndex == 0: suggestIndex = suggestlist.high
     else: suggestIndex = 0
@@ -409,12 +409,12 @@ proc suggestExCommandOption(status: var Editorstatus,
 
     popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
 
-  while (isTabkey(key) or isShiftTab(key)) and suggestlist.len > 1:
+  while (isTabKey(key) or isShiftTab(key)) and suggestlist.len > 1:
     exStatus.currentPosition = 0
     exStatus.cursorX = 1
     exStatus.buffer = ru""
 
-    if isTabkey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
+    if isTabKey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
     elif isShiftTab(key) and suggestIndex > 0: dec(suggestIndex)
     elif isShiftTab(key) and suggestIndex == 0: suggestIndex = suggestlist.high
     else: suggestIndex = 0
@@ -455,12 +455,12 @@ proc suggestExCommand(status: var Editorstatus,
 
     popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
 
-  while (isTabkey(key) or isShiftTab(key)) and suggestlist.len > 1:
+  while (isTabKey(key) or isShiftTab(key)) and suggestlist.len > 1:
     exStatus.buffer = ru""
     exStatus.currentPosition = 0
     exStatus.cursorX = 1
 
-    if isTabkey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
+    if isTabKey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
     elif isShiftTab(key) and suggestIndex > 0: dec(suggestIndex)
     elif isShiftTab(key) and suggestIndex == 0: suggestIndex = suggestlist.high
     else: suggestIndex = 0
@@ -491,7 +491,7 @@ proc suggestMode(status: var Editorstatus,
   status.commandWindow.moveCursor(exStatus.cursorY, exStatus.cursorX)
   if status.settings.popUpWindowInExmode: status.deletePopUpWindow
 
-  while isTabkey(key) or isShiftTab(key): key = getKey(status.commandWindow)
+  while isTabKey(key) or isShiftTab(key): key = getKey(status.commandWindow)
 
 proc getKeyOnceAndWriteCommandView*(status: var Editorstatus,
                                     prompt: string,
@@ -536,7 +536,7 @@ proc getKeyOnceAndWriteCommandView*(status: var Editorstatus,
     var key = getKey(status.commandWindow)
 
     # Suggestion mode
-    if isTabkey(key) or isShiftTab(key):
+    if isTabKey(key) or isShiftTab(key):
       status.suggestMode(exStatus, key)
       if status.settings.popUpWindowInExmode and isEnterKey(key):
         status.commandWindow.moveCursor(exStatus.cursorY, exStatus.cursorX)
@@ -587,7 +587,7 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
     var key = getKey(status.commandWindow)
 
     # Suggestion mode
-    if isTabkey(key) or isShiftTab(key):
+    if isTabKey(key) or isShiftTab(key):
       suggestMode(status, exStatus, key)
       if status.settings.popUpWindowInExmode and isEnterKey(key):
           moveCursor(status.commandWindow, exStatus.cursorY, exStatus.cursorX)
