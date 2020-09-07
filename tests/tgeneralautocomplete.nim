@@ -29,10 +29,17 @@ test "makeIdentifierDictionary":
 test "extractNeighborWord":
   const text = ru"This is a sample text."
 
-  check extractNeighborWord(text, 0) == ru"This"
-  check extractNeighborWord(text, 3) == ru"This"
-  check extractNeighborWord(text, 4) == ru""
-  check extractNeighborWord(text, 7) == ru""
-  check extractNeighborWord(text, 8) == ru"a"
-  check extractNeighborWord(text, 20) == ru"text"
-  check extractNeighborWord(text, 21) == ru""
+  proc validate(pos: int, expected: string) =
+    let wordFirstLast = extractNeighborWord(text, pos)
+    if expected.len > 0:
+      check wordFirstLast.get.word == expected.ru
+    else:
+      check wordFirstLast.isNone
+
+  validate(0, "This")
+  validate(3, "This")
+  validate(4, "")
+  validate(7, "")
+  validate(8, "a")
+  validate(20, "text")
+  validate(21, "")
