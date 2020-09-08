@@ -164,6 +164,14 @@ proc isShowGitInInactiveSettingCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "showgitinactive"
 
+proc isIgnorecaseSettingCommand(command: seq[seq[Rune]]): bool =
+  let cmd = toLowerAscii($command[0])
+  return command.len == 2 and cmd == "ignorecase"
+
+proc isSmartcaseSettingCommand(command: seq[seq[Rune]]): bool =
+  let cmd = toLowerAscii($command[0])
+  return command.len == 2 and cmd == "smartcase"
+
 proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "noh"
@@ -712,6 +720,20 @@ proc showGitInInactiveSettingCommand(status: var EditorStatus,
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
+proc ignorecaseSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru "on": status.settings.ignorecase = true
+  elif command == ru "off": status.settings.ignorecase = false
+
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
+proc smartcaseSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru "on": status.settings.smartcase = true
+  elif command == ru "off": status.settings.smartcase = false
+
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
 proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
   if index < 0 or index > status.bufStatus.high:
     status.commandWindow.writeNoBufferDeletedError(status.messageLog)
@@ -1054,8 +1076,11 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
       status.bufStatus[currentBufferIndex].buffer.delete(startLine + 1,
                                                          startLine + 1)
   else:
+    let
+      ignorecase = status.settings.ignorecase
+      smartcase = status.settings.smartcase
     for i in 0 .. status.bufStatus[currentBufferIndex].buffer.high:
-      let searchResult = searchBuffer(status, replaceInfo.searhWord)
+      let searchResult = status.searchBuffer(replaceInfo.searhWord, ignorecase, smartcase)
       if searchResult.line > -1:
         let oldLine = status.bufStatus[currentBufferIndex].buffer[searchResult.line]
         var newLine = status.bufStatus[currentBufferIndex].buffer[searchResult.line]
@@ -1285,6 +1310,10 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     status.startHistoryManager
   elif isStartConfigMode(command):
     status.startConfigMode
+  elif isIgnorecaseSettingCommand(command):
+    status.ignorecaseSettingCommand(command[1])
+  elif isSmartcaseSettingCommand(command):
+    status.smartcaseSettingCommand(command[1])
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
