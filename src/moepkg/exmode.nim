@@ -1054,9 +1054,11 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
       status.bufStatus[currentBufferIndex].buffer.delete(startLine + 1,
                                                          startLine + 1)
   else:
-    let ignorecase = status.settings.ignorecase
+    let
+      ignorecase = status.settings.ignorecase
+      smartcase = status.settings.smartcase
     for i in 0 .. status.bufStatus[currentBufferIndex].buffer.high:
-      let searchResult = searchBuffer(status, replaceInfo.searhWord, ignorecase)
+      let searchResult = status.searchBuffer(replaceInfo.searhWord, ignorecase, smartcase)
       if searchResult.line > -1:
         let oldLine = status.bufStatus[currentBufferIndex].buffer[searchResult.line]
         var newLine = status.bufStatus[currentBufferIndex].buffer[searchResult.line]

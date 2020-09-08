@@ -17,6 +17,7 @@ const tomlStr = """
   autoCloseParen = false
   autoIndent = false
   ignorecase = false
+  smartcase = false
   disableChangeCursor = true
   defaultCursor = "blinkIbeam"
   normalModeCursor = "blinkIbeam"
@@ -241,6 +242,7 @@ suite "Parse configuration file":
     check not settings.autoCloseParen
     check not settings.autoIndent
     check not settings.ignorecase
+    check not settings.smartcase
     check settings.disableChangeCursor
     check settings.defaultCursor == CursorType.blinkIbeam
     check settings.normalModeCursor == CursorType.blinkIbeam

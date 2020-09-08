@@ -8,40 +8,49 @@ type Direction = enum
   forward = 0
   backward = 1
 
-proc searchLine(line: seq[Rune], keyword: seq[Rune], ignorecase: bool): int =
+proc compare(rune, sub: seq[Rune], ignorecase, smartcase: bool): bool =
+  proc isContainUpper(sub: seq[Rune]): bool =
+    for r in sub:
+      let ch = ($r)[0]
+      if isUpperAscii(ch): return true
+
+  if ignorecase and not smartcase:
+    if cmpIgnoreCase($rune, $sub) == 0: return true
+  elif smartcase and ignorecase:
+    if isContainUpper(sub):
+      return rune == sub
+    else:
+      if cmpIgnoreCase($rune, $sub) == 0: return true
+  else:
+    return rune == sub
+
+proc searchLine(line: seq[Rune],
+                keyword: seq[Rune],
+                ignorecase, smartcase: bool): int =
+
   result = -1
   for startPostion in 0 .. (line.len - keyword.len):
-    let endPosition = startPostion + keyword.len
-    if ignorecase:
-      let
-        str = $line[startPostion ..< endPosition]
-        sub = ($keyword).toLowerAscii
-      if str.toLowerAscii == sub:
-        return startPostion
-    else:
-      if line[startPostion ..< endPosition] == keyword:
-        return startPostion
+    let
+      endPosition = startPostion + keyword.len
+      rune = line[startPostion ..< endPosition]
+
+    if compare(rune, keyword, ignorecase, smartcase): return startPostion
 
 proc searchLineReversely(line: seq[Rune],
                          keyword: seq[Rune],
-                         ignorecase: bool): int =
+                         ignorecase, smartcase: bool): int =
 
   result = -1
   for startPostion in countdown((line.len - keyword.len), 0):
-    let endPosition = startPostion + keyword.len
-    if ignorecase:
-      let
-        str = $line[startPostion ..< endPosition]
-        sub = ($keyword).toLowerAscii
-      if str.toLowerAscii == sub:
-        return startPostion
-    else:
-      if line[startPostion ..< endPosition] == keyword:
-        return startPostion
+    let
+      endPosition = startPostion + keyword.len
+      rune = line[startPostion ..< endPosition]
+
+    if compare(rune, keyword, ignorecase, smartcase): return startPostion
 
 proc searchBuffer*(status: var EditorStatus,
                    keyword: seq[Rune],
-                   ignorecase: bool): SearchResult =
+                   ignorecase, smartcase: bool): SearchResult =
 
   result = (-1, -1)
   let workSpaceIndex = status.currentWorkSpaceIndex
@@ -57,12 +66,12 @@ proc searchBuffer*(status: var EditorStatus,
               else: 0
       `end` = buffer[lineNumber].len
       line = buffer[lineNumber]
-      position = searchLine(line[begin ..< `end`], keyword, ignorecase)
+      position = searchLine(line[begin ..< `end`], keyword, ignorecase, smartcase)
     if position > -1:  return (lineNumber, begin + position)
 
 proc searchBufferReversely*(status: var EditorStatus,
                             keyword: seq[Rune],
-                            ignorecase: bool): SearchResult =
+                            ignorecase, smartcase: bool): SearchResult =
 
   result = (-1, -1)
   let workSpaceIndex = status.currentWorkSpaceIndex
@@ -81,13 +90,14 @@ proc searchBufferReversely*(status: var EditorStatus,
                       buffer[lineNumber].len 
       position = searchLineReversely(buffer[lineNumber][0 ..< endPosition],
                                      keyword,
-                                     ignorecase)
+                                     ignorecase,
+                                     smartcase)
 
     if position > -1:  return (lineNumber, position)
 
 proc searchAllOccurrence*(buffer: GapBuffer[seq[Rune]],
                           keyword: seq[Rune],
-                          ignorecase: bool): seq[SearchResult] =
+                          ignorecase, smartcase: bool): seq[SearchResult] =
 
   if keyword.len < 1: return
 
@@ -97,7 +107,7 @@ proc searchAllOccurrence*(buffer: GapBuffer[seq[Rune]],
       let
         `end` = buffer[lineNumber].len
         line = buffer[lineNumber]
-        position = searchLine(line[begin ..< `end`], keyword, ignorecase)
+        position = searchLine(line[begin ..< `end`], keyword, ignorecase, smartcase)
       if position == -1: break
       result.add((lineNumber, begin + position))
       begin += position + keyword.len
@@ -105,7 +115,8 @@ proc searchAllOccurrence*(buffer: GapBuffer[seq[Rune]],
 proc jumpToSearchForwardResults*(status: var Editorstatus, keyword: seq[Rune]) =
   let
     ignorecase = status.settings.ignorecase
-    searchResult = status.searchBuffer(keyword, ignorecase)
+    smartcase = status.settings.smartcase
+    searchResult = status.searchBuffer(keyword, ignorecase, smartcase)
   if searchResult.line > -1:
     status.jumpLine(searchResult.line)
     let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -116,7 +127,8 @@ proc jumpToSearchForwardResults*(status: var Editorstatus, keyword: seq[Rune]) =
 proc jumpToSearchBackwordResults(status: var Editorstatus, keyword: seq[Rune]) =
   let
     ignorecase = status.settings.ignorecase
-    searchResult = status.searchBufferReversely(keyword, ignorecase)
+    smartcase = status.settings.smartcase
+    searchResult = status.searchBufferReversely(keyword, ignorecase, smartcase)
   if searchResult.line > -1:
     status.jumpLine(searchResult.line)
     let currentBufferIndex = status.bufferIndexInCurrentWindow

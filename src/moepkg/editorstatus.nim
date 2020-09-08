@@ -986,7 +986,11 @@ proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
     const fullWidthSpace = ru"　"
     let
       ignorecase = false
-      allOccurrence = bufferInView.searchAllOccurrence(fullWidthSpace, ignorecase)
+      smartcase = false
+      allOccurrence = bufferInView.searchAllOccurrence(
+        fullWidthSpace,
+        ignorecase,
+        smartcase)
       color = EditorColorPair.highlightFullWidthSpace
     for pos in allOccurrence:
       let colorSegment = ColorSegment(firstRow: range[0] + pos.line,
@@ -1001,7 +1005,12 @@ proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
     let
       keyword = status.searchHistory[^1]
       ignorecase = status.settings.ignorecase
-      allOccurrence = searchAllOccurrence(bufferInView, keyword, ignorecase)
+      smartcase = status.settings.smartcase
+      allOccurrence = searchAllOccurrence(
+        bufferInView,
+        keyword,
+        ignorecase,
+        smartcase)
       color = if bufStatus.isSearchHighlight: EditorColorPair.searchResult
               else:
                 EditorColorPair.replaceText

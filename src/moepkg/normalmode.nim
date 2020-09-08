@@ -57,7 +57,8 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
   status.bufStatus[currentBufferIndex].keyRight(windowNode)
   let
     ignorecase = status.settings.ignorecase
-    searchResult = status.searchBuffer(keyword, ignorecase)
+    smartcase = status.settings.smartcase
+    searchResult = status.searchBuffer(keyword, ignorecase, smartcase)
   if searchResult.line > -1:
     status.jumpLine(searchResult.line)
     for column in 0 ..< searchResult.column:
@@ -84,7 +85,8 @@ proc searchNextOccurrenceReversely(status: var EditorStatus, keyword: seq[Rune])
   windowNode.keyLeft
   let
     ignorecase = status.settings.ignorecase
-    searchResult = status.searchBufferReversely(keyword, ignorecase)
+    smartcase = status.settings.smartcase
+    searchResult = status.searchBufferReversely(keyword, ignorecase, smartcase)
   if searchResult.line > -1:
     status.jumpLine(searchResult.line)
     for column in 0 ..< searchResult.column:
