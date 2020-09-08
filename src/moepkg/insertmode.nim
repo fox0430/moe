@@ -1,7 +1,6 @@
-import terminal, times, sugar, critbits, sequtils, options
-from os import execShellCmd
+import terminal, times, sugar, critbits, sequtils, options, strformat
 import ui, editorstatus, gapbuffer, unicodeext, undoredostack, window,
-       movement, editor, bufferstatus, generalautocomplete, color
+       movement, editor, bufferstatus, generalautocomplete, color, cursor
 
 type SuggestionWindow = object
   identifierDictionary: CritBitTree[void]
@@ -29,8 +28,14 @@ proc isInsertMode(status: EditorStatus): bool =
     mode = status.bufStatus[bufferIndex].mode
   return mode == Mode.insert
 
+proc getCursorY(windowNode: WindowNode): int =
+  windowNode.y + windowNode.cursor.y
+
 proc extractNeighborWord(bufStatus: BufferStatus, windowNode: WindowNode): Option[tuple[word: seq[Rune], first, last: int]] =
   extractNeighborWord(bufStatus.buffer[windowNode.currentLine], max(windowNode.currentColumn-1, 0))
+
+proc calcFirstColumnOfNeighborWord(bufStatus: BufferStatus, windowNode: WindowNode): int =
+  extractNeighborWord(bufStatus, windowNode).get.first
 
 proc selectedWordOrInputWord(suggestionWindow: SuggestionWindow): seq[Rune] =
   if suggestionWindow.currentSuggestion == -1:
@@ -44,7 +49,7 @@ proc newLine(suggestionWindow: SuggestionWindow): seq[Rune] =
 proc shouldTryOpenSuggestionWindow(bufStatus: BufferStatus, windowNode: WindowNode): bool =
   extractNeighborWord(bufStatus, windowNode).get.word.len > 0
 
-proc initSuggestionWindow(text, word, currentLineText: seq[Rune], firstColumn, lastColumn: int, y, x: int): Option[SuggestionWindow] =
+proc initSuggestionWindow(text, word, currentLineText: seq[Rune], firstColumn, lastColumn: int): Option[SuggestionWindow] =
   var suggestionWindow: SuggestionWindow
 
   suggestionwindow.identifierDictionary = makeIdentifierDictionary(text)
@@ -55,23 +60,14 @@ proc initSuggestionWindow(text, word, currentLineText: seq[Rune], firstColumn, l
 
   if suggestionwindow.suggestoins.len == 0: return none(SuggestionWindow)
 
-  let
-    height = suggestionwindow.suggestoins.len
-    width = suggestionwindow.suggestoins.map(item => item.len).max + 2
-  suggestionwindow.popUpWindow = initWindow(height, width, y, x, EditorColorPair.popUpWindow)
-
   suggestionwindow.currentSuggestion = -1
   suggestionwindow.oldLine = currentLineText
-  
+
   return some(suggestionWindow)
 
 proc close(suggestionWindow: var SuggestionWindow) =
   doAssert(suggestionWindow.isClosed)
   suggestionWindow.popUpWindow.deleteWindow
-
-proc writeSuggestionWindow(suggestionWindow: SuggestionWindow) =
-  var popUpWindow = suggestionWindow.popUpWindow
-  popUpWindow.writePopUpWindow(popUpWindow.height, popUpWindow.width, popUpWindow.y, popUpWindow.x, suggestionWindow.currentSuggestion, suggestionWindow.suggestoins)
 
 proc isChangingSelectoinKey(key: Rune): bool =
   isTabKey(key) or isShiftTab(key) or isUpKey(key) or isDownKey(key) or isPageUpKey(key) or isPageDownKey(key)
@@ -127,13 +123,17 @@ proc handleKeyInSuggestionWindow(suggestionWindow: var SuggestionWindow, status:
     currentBufStatus.deleteCharactersBeforeCursorInCurrentLine(currentMainWindow)
     suggestionWindow.isClosed = true
   elif isControlT(key):
-    # TODO: Since the cursor position will be changed, we should also update the suggestion window position.
     currentBufStatus.addIndentInCurrentLine(currentMainWindow,
                                             status.settings.view.tabStop)
+    suggestionWindow.oldLine = currentBufStatus.buffer[currentMainWindow.currentLine]
+    suggestionWindow.firstColumn = calcFirstColumnOfNeighborWord(currentBufStatus, currentMainWindow)
+    suggestionWindow.lastColumn = suggestionwindow.firstColumn + suggestionWindow.selectedWordOrInputWord.len - 1
   elif isControlD(key):
-    # TODO: Since the cursor position will be changed, we should also update the suggestion window position.
     currentBufStatus.deleteIndentInCurrentLine(currentMainWindow,
                                                status.settings.view.tabStop)
+    suggestionWindow.oldLine = currentBufStatus.buffer[currentMainWindow.currentLine]
+    suggestionWindow.firstColumn = calcFirstColumnOfNeighborWord(currentBufStatus, currentMainWindow)
+    suggestionWindow.lastColumn = suggestionwindow.firstColumn + suggestionWindow.selectedWordOrInputWord.len - 1
   elif isChangingSelectoinKey(key):
     # Check whether the selected suggestion is changed.
     let prevSuggestion = suggestionWindow.currentSuggestion
@@ -189,12 +189,6 @@ proc handleKeyInSuggestionWindow(suggestionWindow: var SuggestionWindow, status:
     width = suggestionWindow.suggestoins.map(item => item.len).max + 2
   suggestionWindow.popUpWindow.resize(height, width)
  
-proc getCursorY(windowNode: WindowNode): int =
-  windowNode.y + windowNode.cursor.y
-
-proc getCursorX(windowNode: WindowNode): int =
-  windowNode.x + windowNode.cursor.x + windowNode.view.widthOfLineNum
-
 proc buildSuggestionWindow*(status: var EditorStatus): Option[SuggestionWindow] =
   let (word, firstColumn, lastColumn) = extractNeighborWord(currentBufStatus, currentMainWindow).get
 
@@ -206,11 +200,24 @@ proc buildSuggestionWindow*(status: var EditorStatus): Option[SuggestionWindow] 
     firstDeletedIndex = lastDeletedIndex - word.len + 1
     text = currentBufStatus.buffer.toRunes.dup(delete(firstDeletedIndex, lastDeletedIndex))
 
-  let
-    y = getCursorY(currentMainWindow) + 1
-    x = getCursorX(currentMainWindow) - word.len
+  initSuggestionWindow(text, word, currentBufStatus.buffer[currentMainWindow.currentLine], firstColumn, lastColumn)
 
-  initSuggestionWindow(text, word, currentBufStatus.buffer[currentMainWindow.currentLine], firstColumn, lastColumn, y, x)
+
+proc writeSuggestionWindow(suggestionWindow: var SuggestionWindow, y, x: int) =
+  let
+    height = suggestionwindow.suggestoins.len
+    width = suggestionwindow.suggestoins.map(item => item.len).max + 2
+
+  if suggestionwindow.popUpWindow == nil:
+    suggestionwindow.popUpWindow = initWindow(height, width, y, x, EditorColorPair.popUpWindow)
+  else:
+    suggestionwindow.popUpWindow.height = height
+    suggestionwindow.popUpWindow.width = width
+    suggestionwindow.popUpWindow.y = y
+    suggestionwindow.popUpWindow.x = x
+
+  var popUpWindow = suggestionWindow.popUpWindow
+  popUpWindow.writePopUpWindow(popUpWindow.height, popUpWindow.width, popUpWindow.y, popUpWindow.x, suggestionWindow.currentSuggestion, suggestionWindow.suggestoins)
 
 proc insertMode*(status: var EditorStatus) =
   if not status.settings.disableChangeCursor:
@@ -221,13 +228,15 @@ proc insertMode*(status: var EditorStatus) =
   var suggestionWindow = none(SuggestionWindow)
 
   while status.isInsertMode:
-    let
-      currentBufferIndex = status.bufferIndexInCurrentWindow
-      workSpaceIndex = status.currentWorkSpaceIndex
-
     status.update
     if suggestionWindow.isSome:
-      suggestionWindow.get.writeSuggestionWindow
+      # TODO: Clean up the below code, which calculates the position of the suggestion window.
+      let
+        line = currentMainWindow.currentLine
+        column = suggestionWindow.get.firstColumn
+        y = currentMainWindow.getCursorY + 1
+        x = currentMainWindow.x + currentMainWindow.view.findCursorPosition(line, column).x + currentMainWindow.view.widthOfLineNum - 1
+      suggestionWindow.get.writeSuggestionWindow(y, x)
 
     var key = errorKey
     while key == errorKey:
