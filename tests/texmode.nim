@@ -714,3 +714,45 @@ suite "Ex mode: Workspace list command":
 
     const command = @[ru"lsw"]
     status.exModeCommand(command)
+
+suite "Ex mode: Change ignorecase setting command":
+  test "Enable ignorecase": 
+    var status = initEditorStatus()
+    status.addNewBuffer
+    status.settings.ignorecase = false
+
+    const command = @[ru"ignorecase", ru"on"]
+    status.exModeCommand(command)
+
+    check status.settings.ignorecase
+
+  test "Disale ignorecase": 
+    var status = initEditorStatus()
+    status.addNewBuffer
+    status.settings.ignorecase = true
+
+    const command = @[ru"ignorecase", ru"off"]
+    status.exModeCommand(command)
+
+    check not status.settings.ignorecase
+
+suite "Ex mode: Change smartcase setting command":
+  test "Enable smartcase": 
+    var status = initEditorStatus()
+    status.addNewBuffer
+    status.settings.smartcase = false
+
+    const command = @[ru"smartcase", ru"on"]
+    status.exModeCommand(command)
+
+    check status.settings.ignorecase
+
+  test "Disale smartcase": 
+    var status = initEditorStatus()
+    status.addNewBuffer
+    status.settings.smartcase = true
+
+    const command = @[ru"smartcase", ru"off"]
+    status.exModeCommand(command)
+
+    check not status.settings.smartcase
