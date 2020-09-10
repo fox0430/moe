@@ -925,6 +925,7 @@ proc quitCommand(status: var EditorStatus) =
       status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
     else:
       status.commandWindow.writeNoWriteError(status.messageLog)
+      status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
 proc writeAndQuitCommand(status: var EditorStatus) =
   let
