@@ -16,6 +16,8 @@ const
     "tabStop",
     "autoCloseParen",
     "autoIndent",
+    "ignorecase",
+    "smartcase",
     "disableChangeCursor",
     "defaultCursor",
     "normalModeCursor",
@@ -232,6 +234,10 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
         result.add(ru nameStr & space & $settings.autoCloseParen)
       of "autoIndent":
         result.add(ru nameStr & space & $settings.autoIndent)
+      of "ignorecase":
+        result.add(ru nameStr & space & $settings.ignorecase)
+      of "smartcase":
+        result.add(ru nameStr & space & $settings.smartcase)
       of "disableChangeCursor":
         result.add(ru nameStr & space & $settings.disableChangeCursor)
       of "defaultCursor":

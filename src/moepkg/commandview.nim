@@ -33,6 +33,7 @@ const exCommandList = [
   "highlightParen",
   "history",
   "icon",
+  "ignorecase",
   "incrementalSearch",
   "indent",
   "indentationLines",
@@ -55,6 +56,7 @@ const exCommandList = [
   "run",
   "scrollSpeed",
   "showGitInactive",
+  "smartcase",
   "smoothScroll",
   "sp",
   "statusbar",
@@ -381,7 +383,9 @@ proc suggestExCommandOption(status: var Editorstatus,
        "buildonsave",
        "indentationlines",
        "icon",
-       "showgitinactive":
+       "showgitinactive",
+       "ignorecase",
+       "smartcase":
       argList = @["on", "off"]
     of "theme":
       argList= @["vivid", "dark", "light", "config", "vscode"]

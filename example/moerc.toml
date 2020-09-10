@@ -22,6 +22,10 @@ autoCloseParen = true
 
 autoIndent = true
 
+ignorecase = true
+
+smartcase = true
+
 disableChangeCursor = false
 
 defaultCursor = "blinkBlock"
