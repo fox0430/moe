@@ -338,7 +338,6 @@ proc runQuickRunCommand(status: var Editorstatus) =
   let
     workspaceIndex = status.currentWorkSpaceIndex
     windowNode = status.workspace[workspaceIndex].currentMainWindowNode
-    bufStatus = status.bufStatus[windowNode.bufferIndex]
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)

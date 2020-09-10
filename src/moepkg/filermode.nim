@@ -259,7 +259,6 @@ proc openNewWinAndOpenFilerOrDir(status: var EditorStatus,
 
   let
     workspaceIndex = status.currentWorkSpaceIndex
-    currentBufferIndex = status.bufferIndexInCurrentWindow
     windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
     path = filerStatus.dirList[windowNode.currentLine].path
 
