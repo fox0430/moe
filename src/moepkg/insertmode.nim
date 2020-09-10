@@ -180,14 +180,6 @@ proc handleKeyInSuggestionWindow(suggestionWindow: var SuggestionWindow, status:
   elif isQuittingSuggestoinKey(key):
     # Quit the suggestion window.
     suggestionWindow.isClosed = true
-
-  if suggestionWindow.isClosed: return
-
-  # Update the suggestion window.
-  let
-    height = suggestionWindow.suggestoins.len
-    width = suggestionWindow.suggestoins.map(item => item.len).max + 2
-  suggestionWindow.popUpWindow.resize(height, width)
  
 proc buildSuggestionWindow*(status: var EditorStatus): Option[SuggestionWindow] =
   let (word, firstColumn, lastColumn) = extractNeighborWord(currentBufStatus, currentMainWindow).get
