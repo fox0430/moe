@@ -58,6 +58,10 @@ highlightTrailingSpaces = true
 
 highlightCurrentWord = true
 
+smoothScroll = true
+
+smoothScrollSpeed = 15
+
 [BuildOnSave]
 
 enable = false
