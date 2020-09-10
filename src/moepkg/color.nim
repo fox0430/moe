@@ -696,7 +696,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     visualModeBg: purple_1,
 
     # color scheme
-    defaultChar: gray100,
+    defaultChar: white,
     gtKeyword: skyBlue1,
     gtFunctionName: gold1,
     gtBoolean: yellow,
@@ -826,7 +826,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     visualModeBg: purple_1,
 
     # color scheme
-    defaultChar: gray100,
+    defaultChar: white,
     gtKeyword: skyBlue1,
     gtFunctionName: gold1,
     gtBoolean: yellow,
@@ -956,7 +956,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     visualModeBg: purple_1,
 
     # color scheme
-    defaultChar: gray100,
+    defaultChar: white,
     gtKeyword: skyBlue1,
     gtFunctionName: gold1,
     gtBoolean: yellow,
