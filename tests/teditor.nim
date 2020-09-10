@@ -191,6 +191,24 @@ suite "Delete character before cursor":
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru"tes"
 
+  test "Delete one character 2":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"  test test2"])
+    status.bufStatus[0].mode = Mode.insert
+    status.workspace[0].currentMainWindowNode.currentColumn = 7
+
+    const
+      autoCloseParen = true
+      tabStop = 2
+    status.bufStatus[0].keyBackspace(status.workspace[0].currentMainWindowNode,
+                                     autoCloseParen,
+                                     tabStop)
+
+    check status.bufStatus[0].buffer.len == 1
+    check status.bufStatus[0].buffer[0] == ru"  testtest2"
+
   test "Delete current Line":
     var status = initEditorStatus()
     status.addNewBuffer("")
