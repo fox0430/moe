@@ -208,7 +208,7 @@ proc initEditorSettings*(): EditorSettings =
   result.autoIndent = true
   result.tabStop = 2
   result.ignorecase = true
-  result.smartcase = true 
+  result.smartcase = true
   # defaultCursor is terminal default curosr shape
   result.defaultCursor = CursorType.blinkBlock
   result.normalModeCursor = CursorType.blinkBlock
@@ -220,7 +220,7 @@ proc initEditorSettings*(): EditorSettings =
   result.highlightPairOfParen = true
   result.autoDeleteParen = true
   result.smoothScroll = true
-  result.smoothScrollSpeed = 17
+  result.smoothScrollSpeed = 15
   result.highlightOtherUsesCurrentWord = true
   result.systemClipboard = true
   result.highlightFullWidthSpace = true
