@@ -152,9 +152,13 @@ proc keyBackspace*(bufStatus: var BufferStatus,
                                            autoDeleteParen)
   else:
     let
-      line = bufStatus.buffer[windowNode.currentLine]
-      numOfSpsce = line.countSpaceBeginOfLine(tabStop, windowNode.currentColumn)
-      numOfDelete = if numOfSpsce == 0: 1
+      currentLine = windowNode.currentLine
+      currentColumn = windowNode.currentColumn
+      deleteChar = bufStatus.buffer[currentLine][currentColumn - 1]
+
+      line = bufStatus.buffer[currentLine]
+      numOfSpsce = line.countSpaceBeginOfLine(tabStop, currentColumn)
+      numOfDelete = if numOfSpsce == 0 or not isWhiteSpace(deleteChar): 1
                     elif numOfSpsce mod tabStop != 0:
                       numOfSpsce mod tabStop
                     else:
