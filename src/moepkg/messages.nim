@@ -10,7 +10,7 @@ proc writeMessageOnCommandWindow*(cmdWin: var Window,
   cmdWin.refresh
 
 proc writeNoWriteError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
-  let mess = "Error: No changes since last write"
+  let mess = "Error: No write since last change"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
 
