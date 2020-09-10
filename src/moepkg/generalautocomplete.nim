@@ -23,7 +23,7 @@ proc makeIdentifierDictionary*(runes: seq[Rune]): CritBitTree[void] =
     result.incl($identifier)
 
 proc extractNeighborWord*(runes: seq[Rune], pos: int): Option[tuple[word: seq[Rune], first, last: int]] =
-  if runes.len == 0 or runes[pos].unicodeCategory notin succeedingCharacter: return
+  if runes.len == 0 or pos notin runes.low .. runes.high or runes[pos].unicodeCategory notin succeedingCharacter: return
 
   var
     first = pos
