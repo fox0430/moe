@@ -439,6 +439,8 @@ proc update*(status: var EditorStatus) =
 
   if status.settings.statusBar.enable: status.updateStatusBar
 
+  status.commandWindow.refresh
+
   setCursor(true)
 
 proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode)
