@@ -51,7 +51,7 @@ proc newWindow(): Window =
 
 proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
   var parent = n.parent
-  
+
   if parent.splitType == SplitType.vertical:
     var
       view = initEditorView(buffer, 1, 1)
@@ -158,7 +158,7 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
     qeue = initHeapQueue[WindowNode]()
     windowIndex = 0
   const statusBarLineHeight = 1
- 
+
   for index, node in root.child:
     if root.splitType == SplitType.vertical:
       ## Vertical split

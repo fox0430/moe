@@ -137,7 +137,7 @@ proc jumpToSearchBackwordResults(status: var Editorstatus, keyword: seq[Rune]) =
         status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
 proc searchFirstOccurrence(status: var EditorStatus) =
-  var 
+  var
     exitSearch = false
     cancelSearch = false
     keyword = ru""

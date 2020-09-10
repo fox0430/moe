@@ -173,7 +173,7 @@ proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
       status.workSpace[workspaceIndex].currentMainWindowNode.view =
         status.bufStatus[i].buffer.initEditorView(terminalHeight(),
                                                   terminalWidth())
-  
+
   status.resize(terminalHeight(), terminalWidth())
 
   let settings = status.settings.notificationSettings

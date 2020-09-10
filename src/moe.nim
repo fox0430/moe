@@ -13,7 +13,6 @@ import moepkg/cmdlineoption
 import moepkg/bufferstatus
 import moepkg/help
 import moepkg/recentfilemode
-import moepkg/messages
 import moepkg/quickrun
 import moepkg/historymanager
 import moepkg/diffviewer

@@ -5,7 +5,7 @@ type
     insert,
     delete,
     assign
-  
+
   Command*[T] = ref CommandObj[T]
   CommandObj*[T] = object
     case kind*: CommandKind
@@ -86,7 +86,7 @@ type
     commands: seq[Command[T]]
     locked: bool
     id: int
-  
+
   UndoRedoStack*[T] = object
     undoSuits, redoSuits: seq[CommandSuit[T]]
     currentSuit: CommandSuit[T]
@@ -127,7 +127,7 @@ proc beginNewSuitIfNeeded*[T](undoRedoStack: var UndoRedoStack[T]) =
 
 proc push*[T](undoRedoStack: var UndoRedoStack[T], command: Command[T]) =
   if  undoRedoStack.redoSuits.len > 0: undoRedoStack.redoSuits = @[]
-  
+
   doAssert(not undoRedoStack.currentSuit.locked)
   undoRedoStack.currentSuit.add(command)
 
@@ -139,7 +139,7 @@ proc undo*[T, U](undoRedoStack: var UndoRedoStack[T], buffer: var U) =
       undoRedoStack.undoSuits[undoRedoStack.undoSuits.high][^i]),
       buffer,
       false)
-  
+
   undoRedoStack.redoSuits.add(undoRedoStack.undoSuits.pop)
 
 proc redo*[T, U](undoRedoStack: var UndoRedoStack[T], buffer: var U) =
@@ -148,7 +148,7 @@ proc redo*[T, U](undoRedoStack: var UndoRedoStack[T], buffer: var U) =
   for i in 0..<undoRedoStack.redoSuits[undoRedoStack.redoSuits.high].len:
     let command = undoRedoStack.redoSuits[undoRedoStack.redoSuits.high][i]
     doCommand[T, U](command, buffer, false)
-  
+
   undoRedoStack.undoSuits.add(undoRedoStack.redoSuits.pop)
 
 proc canUndo*[T](undoRedoStack: UndoRedoStack[T]): bool =

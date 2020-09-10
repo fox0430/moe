@@ -91,7 +91,7 @@ proc isChangeThemeSettingCommand(command: seq[seq[Rune]]): bool =
 proc isTabLineSettingCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "tab"
-  
+
 proc isSyntaxSettingCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "syntax"
@@ -346,7 +346,6 @@ proc runQuickRunCommand(status: var Editorstatus) =
   let
     workspaceIndex = status.currentWorkSpaceIndex
     windowNode = status.workspace[workspaceIndex].currentMainWindowNode
-    bufStatus = status.bufStatus[windowNode.bufferIndex]
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
@@ -449,7 +448,7 @@ proc openBufferManager(status: var Editorstatus) =
   status.changeMode(Mode.bufManager)
 
 proc changeCursorLineCommand(status: var Editorstatus, command: seq[Rune]) =
-  if command == ru"on" : status.settings.view.cursorLine = true 
+  if command == ru"on" : status.settings.view.cursorLine = true
   elif command == ru"off": status.settings.view.cursorLine = false
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -612,10 +611,10 @@ proc incrementalSearchSettingCommand(status: var Editorstatus, command: seq[Rune
 
 proc highlightPairOfParenSettigCommand(status: var Editorstatus,
                                        command: seq[Rune]) =
-                                       
+
   if command == ru"on": status.settings.highlightPairOfParen = true
   elif command == ru"off": status.settings.highlightPairOfParen = false
- 
+
   status.commandWindow.erase
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -623,7 +622,7 @@ proc highlightPairOfParenSettigCommand(status: var Editorstatus,
 
 proc autoDeleteParenSettingCommand(status: var EditorStatus,
                                    command: seq[Rune]) =
-                                   
+
   if command == ru"on": status.settings.autoDeleteParen = true
   elif command == ru"off": status.settings.autoDeleteParen = false
 
@@ -648,13 +647,13 @@ proc smoothScrollSpeedSettingCommand(status: var Editorstatus, speed: int) =
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
-  
+
 proc highlightCurrentWordSettingCommand(status: var Editorstatus,
                                         command: seq[Rune]) =
-                                        
+
   if command == ru"on": status.settings.highlightOtherUsesCurrentWord = true
   if command == ru"off": status.settings.highlightOtherUsesCurrentWord = false
-  
+
   status.commandWindow.erase
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -746,7 +745,7 @@ proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
   elif status.bufferIndexInCurrentWindow > status.bufStatus.high:
     let workspaceIndex = status.currentWorkSpaceIndex
     status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex =
-      status.bufStatus.high 
+      status.bufStatus.high
 
   if status.bufStatus[status.bufferIndexInCurrentWindow].mode == Mode.ex:
     let prevMode = status.bufStatus[status.bufferIndexInCurrentWindow].prevMode
@@ -1031,7 +1030,7 @@ proc listAllBufferCommand(status: var Editorstatus) =
     swapCurrentLineNumStting = status.settings.view.currentLineNumber
     currentBufferIndex =
       status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
-  
+
   status.settings.view.currentLineNumber = false
   status.workSpace[workspaceIndex].currentMainWindowNode.view =
     status.bufStatus[currentBufferIndex].buffer.initEditorView(terminalHeight() - useStatusBar - useTab - 1,

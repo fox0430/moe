@@ -36,7 +36,7 @@ proc insertMode*(status: var EditorStatus) =
 
     status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
     status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(windowNode)
-    
+
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
       status.commandWindow.erase
@@ -84,30 +84,25 @@ proc insertMode*(status: var EditorStatus) =
                 status.settings.autoCloseParen)
     elif isControlE(key):
       status.bufStatus[currentBufferIndex].insertCharacterBelowCursor(
-        status.workSpace[workspaceIndex].currentMainWindowNode
-      )
+        status.workSpace[workspaceIndex].currentMainWindowNode)
     elif isControlY(key):
       status.bufStatus[currentBufferIndex].insertCharacterAboveCursor(
-        status.workSpace[workspaceIndex].currentMainWindowNode
-      )
+        status.workSpace[workspaceIndex].currentMainWindowNode)
     elif isControlW(key):
       status.bufStatus[currentBufferIndex].deleteWordBeforeCursor(
         status.workSpace[workspaceIndex].currentMainWindowNode,
         status.settings.tabStop)
     elif isControlU(key):
       status.bufStatus[currentBufferIndex].deleteCharactersBeforeCursorInCurrentLine(
-        status.workSpace[workspaceIndex].currentMainWindowNode
-      )
+        status.workSpace[workspaceIndex].currentMainWindowNode)
     elif isControlT(key):
       status.bufStatus[currentBufferIndex].addIndentInCurrentLine(
         status.workSpace[workspaceIndex].currentMainWindowNode,
-        status.settings.view.tabStop
-      )
+        status.settings.view.tabStop)
     elif isControlD(key):
       status.bufStatus[currentBufferIndex].deleteIndentInCurrentLine(
         status.workSpace[workspaceIndex].currentMainWindowNode,
-        status.settings.view.tabStop
-      )
+        status.settings.view.tabStop)
     else:
       insertCharacter(status.bufStatus[currentBufferIndex],
                       status.workSpace[workspaceIndex].currentMainWindowNode,

@@ -37,7 +37,7 @@ proc writeCopyFileError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
 proc writeFileOpenError*(cmdWin: var Window,
                          fileName: string,
                          messageLog: var seq[seq[Rune]]) =
-                         
+
   let mess = "Error: Can not open: " & fileName
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
@@ -50,7 +50,7 @@ proc writeMessageDeletedFile*(cmdWin: var Window,
                               filename: string,
                               settings: NotificationSettings,
                               messageLog: var seq[seq[Rune]]) =
-                              
+
   let mess = "Deleted: " & filename
   if settings.screenNotifications and settings.filerScreenNotify:
     cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
@@ -67,7 +67,7 @@ proc writeMessageYankedLine*(cmdWin: var Window,
                              numOfLine: int,
                              settings: NotificationSettings,
                              messageLog: var seq[seq[Rune]]) =
-                             
+
   let mess = fmt"{numOfLine} line(s) yanked"
   if settings.screenNotifications and settings.yankScreenNotify:
     cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
@@ -78,7 +78,7 @@ proc writeMessageYankedCharactor*(cmdWin: var Window,
                                   numOfChar: int,
                                   settings: NotificationSettings,
                                   messageLog: var seq[seq[Rune]]) =
-                                  
+
   let mess = fmt"{numOfChar} character(s) yanked"
   if settings.screenNotifications and settings.yankScreenNotify:
     cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
@@ -100,7 +100,7 @@ proc writeMessageAutoSave*(cmdWin: var Window,
 proc writeMessageBuildOnSave*(cmdWin: var Window,
                               settings: NotificationSettings,
                               messageLog: var seq[seq[Rune]]) =
-                              
+
   const mess = "Build on save..."
   if settings.screenNotifications and settings.buildOnSaveScreenNotify:
     cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
@@ -110,7 +110,7 @@ proc writeMessageBuildOnSave*(cmdWin: var Window,
 proc writeMessageSuccessBuildOnSave*(cmdWin: var Window,
                                      settings: NotificationSettings,
                                      messageLog: var seq[seq[Rune]]) =
-                                     
+
   const mess = "Build successful, file saved"
   if settings.screenNotifications and settings.buildOnSaveScreenNotify:
     cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
@@ -125,7 +125,7 @@ proc writeMessageFailedBuildOnSave*(cmdWin: var Window, messageLog: var seq[seq[
 proc writeNotEditorCommandError*(cmdWin: var Window,
                                  command: seq[seq[Rune]],
                                  messageLog: var seq[seq[Rune]]) =
-                                 
+
   var cmd = ""
   for i in 0 ..< command.len: cmd = cmd & $command[i] & " "
   let mess = fmt"Error: Not an editor command: {cmd}"
@@ -137,7 +137,7 @@ proc writeMessageSaveFile*(cmdWin: var Window,
                            settings: NotificationSettings,
                            messageLog: var seq[seq[Rune]]) =
 
-  
+
   let mess = fmt"Saved {filename}"
   if settings.screenNotifications and settings.saveScreenNotify:
     cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
@@ -234,7 +234,7 @@ proc writeRunQuickRunFailedMessage*(cmdWin: var Window, messageLog: var seq[seq[
 proc writeInvalidItemInConfigurationFileError*(cmdWin: var Window,
                            message: string,
                            messageLog: var seq[seq[Rune]]) =
- 
+
   let mess = "Error: Failed to load configuration file: Invalid item: " &
              message
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
@@ -251,12 +251,12 @@ proc writeNotExistWorkspaceError*(cmdWin: var Window,
                                   workspaceIndex: int,
                                   messageLog: var seq[seq[Rune]]) =
 
-  let mess = "Error: Workspace " & $workspaceIndex & " not exist" 
+  let mess = "Error: Workspace " & $workspaceIndex & " not exist"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
 
 proc writeWorkspaceList*(cmdWin: var Window, buffer: string) =
   cmdWin.writeMessageOnCommandWindow(buffer, EditorColorPair.commandBar)
-  
+
 proc writeBackupRestoreError*(cmdWin: var Window) =
   const mess = "Error: Restore failed"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
