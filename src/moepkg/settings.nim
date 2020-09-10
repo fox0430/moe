@@ -1380,10 +1380,11 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
            "systemClipboard",
            "highlightFullWidthSpace",
            "highlightTrailingSpaces",
-           "highlightCurrentWord":
+           "highlightCurrentWord",
+           "smoothScroll":
           if not (item.val["type"].getStr == "bool"):
             return some($item)
-        of "tabStop", "autoSaveInterval":
+        of "tabStop", "autoSaveInterval", "smoothScrollSpeed":
           if not (item.val["type"].getStr == "integer" and
                   parseInt(item.val["value"].getStr) > 0): return some($item)
         of "defaultCursor",
