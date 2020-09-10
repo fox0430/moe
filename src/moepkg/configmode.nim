@@ -33,7 +33,9 @@ const
     "systemClipboard",
     "highlightFullWidthSpace",
     "highlightTrailingSpaces",
-    "highlightCurrentWord"
+    "highlightCurrentWord",
+    "smoothScroll",
+    "smoothScrollSpeed",
   ]
   buildOnSaveTableNames = [
     "enable",
@@ -270,6 +272,10 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
         result.add(ru nameStr & space & $settings.highlightTrailingSpaces)
       of "highlightCurrentWord":
         result.add(ru nameStr & space & $settings.highlightOtherUsesCurrentWord)
+      of "smoothScroll":
+        result.add(ru nameStr & space & $settings.smoothScroll)
+      of "smoothScrollSpeed":
+        result.add(ru nameStr & space & $settings.smoothScrollSpeed)
 
 proc initBuildOnSaveTableBuffer(settings: BuildOnSaveSettings): seq[seq[Rune]] =
   result.add(ru"BuildOnSave")
