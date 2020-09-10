@@ -231,7 +231,7 @@ proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
     createDir($dirname[0])
     filerStatus.dirlistUpdate = true
   except OSError: status.commandWindow.writeCreateDirError(status.messageLog)
-   
+
 proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   let workspaceIndex = status.currentWorkSpaceIndex
   var windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
@@ -550,7 +550,7 @@ proc filerMode*(status: var EditorStatus) =
       filerStatus = filerStatus.updateDirList(path)
 
       if windowNode.currentLine > filerStatus.dirList.high:
-        windowNode.currentLine = filerStatus.dirList.high 
+        windowNode.currentLine = filerStatus.dirList.high
 
     if filerStatus.viewUpdate: status.updateFilerView(filerStatus)
 
@@ -568,7 +568,7 @@ proc filerMode*(status: var EditorStatus) =
     status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(windowNode)
 
     let currentPath = status.bufStatus[currentBufferIndex].path
-    
+
     if key == ord(':'): status.changeMode(Mode.ex)
 
     elif isResizekey(key):

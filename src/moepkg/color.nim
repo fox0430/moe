@@ -38,7 +38,7 @@ macro mapAnnotationToTable(args: varargs[untyped]): untyped =
         `tableIdent`[`hexCode`]       = `intLit`
         `tableReverseIdent`[`intLit`] = `hexCode`
         `tableRGBIdent`[`intLit`]     = (`red`, `green`, `blue`)
-  
+
   # emit source code
   return quote do:
     var `tableIdent`        = initTable[string, int]()

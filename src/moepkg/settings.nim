@@ -358,7 +358,7 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
     setEditorColor editorBg:
       background:
         colorFromNode(jsonNode{"colors", "editor.background"})
-    
+
     # Color scheme
     setEditorColor defaultChar:
       foreground:
@@ -515,14 +515,14 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         colorFromNode(jsonNode{"colors", "tab.foreground"})
       background:
         colorFromNode(jsonNode{"colors", "tab.inactiveBackground"})
-    
+
     setEditorColor lineNum:
       foreground:
         colorFromNode(jsonNode{"colors", "editorLineNumber.foreground"})
         adjust: InverseBackground
       background:
         colorFromNode(jsonNode{"colors", "editorLineNumber.background"})
-    
+
     setEditorColor currentLineNum:
       foreground:
         colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
@@ -535,20 +535,20 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         Color.default
-    
+
     # highlight other uses current word
     setEditorColor currentWord:
       foreground:
         adjust: ReadableVsBackground
       background:
         colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
-    
+
     setEditorColor popUpWinCurrentLine:
       foreground:
         colorFromNode(jsonNode{"colors", "sideBarTitle.forground"})
       background:
         colorFromNode(jsonNode{"colors", "sideBarSectionHeader.background"})
-        
+
     # pop up window
     setEditorColor popUpWindow:
       foreground:
@@ -826,7 +826,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
     if settings["Standard"].contains("highlightTrailingSpaces"):
       result.highlightTrailingSpaces = settings["Standard"]["highlightTrailingSpaces"].getbool()
-    
+
     if settings["Standard"].contains("indentationLines"):
       result.view.indentationLines = settings["Standard"]["indentationLines"].getbool()
 
@@ -1094,7 +1094,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
     if settings["Theme"].contains("statusBarVisualModeInactive"):
       ColorThemeTable[ColorTheme.config].statusBarVisualModeInactive = color("statusBarVisualModeInactive")
- 
+
     if settings["Theme"].contains("statusBarVisualModeInactiveBg"):
       ColorThemeTable[ColorTheme.config].statusBarVisualModeInactiveBg = color("statusBarVisualModeInactiveBg")
 
@@ -1602,7 +1602,7 @@ proc loadSettingFile*(): EditorSettings =
 
   if not existsFile(filename):
     return initEditorSettings()
-  
+
   let
     toml = parsetoml.parseFile(filename)
     invalidItem = toml.validateTomlConfig

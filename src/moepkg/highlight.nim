@@ -45,7 +45,7 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
 
   proc prev(pos: Position): Position =
     if pos.column > 0: (pos.row, pos.column-1) else: (pos.row-1, high(int))
-  
+
   proc next(pos: Position): Position =
     (pos.row, pos.column+1)
 
@@ -57,7 +57,7 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
                           lastRow: s.lastRow,
                           lastColumn: s.lastColumn,
                           color: t.color)]
-  
+
   if s.contains(t):
     if (s.firstRow, s.firstColumn) < (t.firstRow, t.firstColumn):
       let last = prev((t.firstRow, t.firstColumn))
@@ -66,7 +66,7 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
                               lastRow: last.row,
                               lastColumn: last.column,
                               color: s.color))
-    
+
     result.add(t)
 
     if (t.lastRow, t.lastColumn) < (s.lastRow, s.lastColumn):
@@ -76,9 +76,9 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
                               lastRow: s.lastRow,
                               lastColumn: s.lastColumn,
                               color: s.color))
-    
+
     return result
-  
+
   if (t.firstRow, t.firstColumn) < (s.firstRow, s.firstColumn):
     let first = next((t.lastRow, t.lastColumn))
     result.add(ColorSegment(firstRow: s.firstRow,
@@ -294,7 +294,7 @@ proc indexOf*(highlight: Highlight, row, column: int): int =
     else: ub = mid
 
   return lb
- 
+
 proc detectLanguage*(filename: string): SourceLanguage =
   # TODO: use settings file
   let extention = filename.splitFile.ext

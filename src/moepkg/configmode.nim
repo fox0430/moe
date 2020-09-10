@@ -908,7 +908,7 @@ proc configMode*(status: var Editorstatus) =
   while status.isConfigMode and
         currentWorkSpace == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
-        
+
     let
       currentBufferIndex = status.bufferIndexInCurrentWindow
       workspaceIndex = status.currentWorkSpaceIndex

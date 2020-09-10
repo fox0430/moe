@@ -56,7 +56,7 @@ proc searchBufferReversely*(status: var EditorStatus,
       endPosition = if lineNumber == startLine and i == 0:
                       windowNode.currentColumn
                     else:
-                      buffer[lineNumber].len 
+                      buffer[lineNumber].len
       position = searchLineReversely(buffer[lineNumber][0 ..< endPosition], keyword)
     if position > -1:  return (lineNumber, position)
 
@@ -94,7 +94,7 @@ proc jumpToSearchBackwordResults(status: var Editorstatus, keyword: seq[Rune]) =
         status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
 proc searchFirstOccurrence(status: var EditorStatus) =
-  var 
+  var
     exitSearch = false
     cancelSearch = false
     keyword = ru""

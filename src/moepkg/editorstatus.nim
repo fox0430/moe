@@ -92,7 +92,7 @@ proc initEditorStatus*(): EditorStatus =
 proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
   if 0 <= bufferIndex and bufferIndex < status.bufStatus.len:
     let workspaceIndex = status.currentWorkSpaceIndex
-    
+
     status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex =
       bufferIndex
 
@@ -122,7 +122,7 @@ proc changeMode*(bufStatus: var BufferStatus, mode: Mode) =
 
 proc changeCurrentWin*(status:var EditorStatus, index: int) =
   let workspaceIndex = status.currentWorkSpaceIndex
-  
+
   if index < status.workSpace[workspaceIndex].numOfMainWindow and index > 0:
     var node =
       status.workSpace[workspaceIndex].mainWindowNode.searchByWindowIndex(index)
@@ -228,7 +228,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
     const
       statusBarHeight = 1
       x = 0
-    let 
+    let
       y = max(height, 4) - 1 - (if status.settings.statusBar.merge: 0 else: 1)
     status.workSpace[workspaceIndex].statusBar[0].window.resize(
       statusBarHeight,
@@ -298,7 +298,7 @@ proc initSyntaxHighlight(windowNode: var WindowNode,
                          bufStatus: seq[BufferStatus],
                          reservedWords: seq[ReservedWord],
                          isSyntaxHighlight: bool) =
-                         
+
   var queue = initHeapQueue[WindowNode]()
   for node in windowNode.child: queue.push(node)
   while queue.len > 0:
@@ -443,7 +443,7 @@ proc update*(status: var EditorStatus) =
 
 proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode)
 proc verticalSplitWindow*(status: var EditorStatus) =
-  let 
+  let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     buffer = status.bufStatus[currentBufferIndex].buffer
     workspaceIndex = status.currentWorkSpaceIndex
@@ -464,7 +464,7 @@ proc verticalSplitWindow*(status: var EditorStatus) =
   status.workSpace[workspaceIndex].statusBar.add(initStatusBar())
 
 proc horizontalSplitWindow*(status: var Editorstatus) =
-  let 
+  let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     buffer = status.bufStatus[currentBufferIndex].buffer
     workspaceIndex = status.currentWorkSpaceIndex
@@ -537,7 +537,7 @@ proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
   let workspaceIndex = status.currentWorkSpaceIndex
   if index < 0 or
      status.workSpace[workspaceIndex].numOfMainWindow <= index: return
- 
+
   var node =
     status.workSpace[workspaceIndex].mainWindowNode.searchByWindowIndex(index)
   status.workSpace[workspaceIndex].currentMainWindowNode = node
@@ -698,7 +698,7 @@ proc tryRecordCurrentPosition*(bufStatus: var BufferStatus, windowNode: WindowNo
 proc revertPosition*(bufStatus: var BufferStatus,
                      windowNode: WindowNode,
                      id: int) =
-                     
+
   let mess = fmt"The id not recorded was requested. [bufStatus.positionRecord = {bufStatus.positionRecord}, id = {id}]"
   doAssert(bufStatus.positionRecord.contains(id), mess)
 
@@ -718,7 +718,7 @@ proc initSelectedAreaColorSegment(startLine, startColumn: int): ColorSegment =
 proc overwriteColorSegmentBlock[T](highlight: var Highlight,
                                    area: SelectArea,
                                    buffer: T) =
-                                   
+
   var
     startLine = area.startLine
     endLine = area.endLine
@@ -816,7 +816,7 @@ proc highlightPairOfParen(status: var Editorstatus) =
           status.workSpace[workspaceIndex].currentMainWindowNode.highlight =
             status.workSpace[workspaceIndex].currentMainWindowNode.highlight.overwrite(colorSegment)
           return
-          
+
   elif isCloseParen(buffer[currentLine][currentColumn]):
     var depth = 0
     let

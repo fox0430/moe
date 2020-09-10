@@ -80,7 +80,7 @@ proc quickRunMode*(status: var Editorstatus) =
   while status.isQuickRunMode and
         currentWorkSpace == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
-        
+
     let currentBufferIndex = status.bufferIndexInCurrentWindow
     status.update
 

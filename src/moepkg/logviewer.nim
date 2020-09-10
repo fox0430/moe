@@ -31,7 +31,7 @@ proc messageLogViewer*(status: var Editorstatus) =
         currentBufferIndex == status.bufferIndexInCurrentWindow:
 
     let currentBufferIndex = status.bufferIndexInCurrentWindow
-    
+
     status.update
 
     var windowNode =

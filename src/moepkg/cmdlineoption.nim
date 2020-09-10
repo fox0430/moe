@@ -22,7 +22,7 @@ proc writeVersion() =
 proc writeHelp() =
   echo """
   moe [file]    edit file
- 
+
   -v    Print version
   --version    Print version
   """

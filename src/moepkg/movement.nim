@@ -197,7 +197,7 @@ proc pageDown*(status: var EditorStatus) =
 proc halfPageDown*(status: var EditorStatus) =
   var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
   scrollDownNumberOfLines(status, Natural(windowNode.view.height / 2))
-  
+
 proc moveToForwardWord*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   let
     currentLine = windowNode.currentLine
@@ -247,7 +247,7 @@ proc moveToBackwardWord*(bufStatus: var BufferStatus, windowNode: var WindowNode
     let
       currentLine = windowNode.currentLine
       currentColumn = windowNode.currentColumn
-      
+
     if bufStatus.buffer[windowNode.currentLine].len == 0 or bufStatus.buffer.isFirst(currentLine, currentColumn): break
 
     let curr = bufStatus.buffer[currentLine][currentColumn]
