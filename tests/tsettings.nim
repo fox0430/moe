@@ -34,6 +34,8 @@ const tomlStr = """
   highlightFullWidthSpace = false
   highlightTrailingSpaces = false
   highlightCurrentWord = false
+  smoothScroll = false
+  smoothScrollSpeed = 1
 
   [BuildOnSave]
   enable = true
@@ -259,6 +261,8 @@ suite "Parse configuration file":
     check not settings.highlightFullWidthSpace
     check not settings.highlightTrailingSpaces
     check not settings.highlightOtherUsesCurrentWord
+    check not settings.smoothScroll
+    check settings.smoothScrollSpeed == 1
 
     check settings.buildOnSave.enable
     check settings.buildOnSave.workspaceRoot == ru"/home/fox/git/moe"
