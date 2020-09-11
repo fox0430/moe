@@ -523,6 +523,7 @@ proc writePopUpWindow*(popUpWindow: var Window,
                        h, w, y, x: int,
                        currentLine: int,
                        buffer: seq[seq[Rune]]) =
+  # TODO: Probably, the parameter `y` means the bottom of the window, but it should change to the top of the window for consistency.
 
   popUpWindow.erase
 

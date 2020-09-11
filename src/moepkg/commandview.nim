@@ -311,8 +311,9 @@ proc suggestFilePath(status: var Editorstatus,
     # +2 is pronpt and space
     x = command.len + 2 + positionInInputPath
     y = terminalHeight() - 1
-
     popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
+
+  # TODO: I don't know why yet, but there is a bug which is related to scrolling of the pup-up window.
 
   while (isTabKey(key) or isShiftTab(key)) and suggestlist.len > 1:
     exStatus.buffer = (command & " ").toRunes
