@@ -195,6 +195,10 @@ restoreLogNotify = true
 
 showIcons = true
 
+[Autocomplete]
+
+enable = true
+
 [Theme]
 
 baseTheme = "dark"

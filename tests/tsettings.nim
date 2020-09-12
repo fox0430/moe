@@ -111,6 +111,9 @@ const tomlStr = """
   [Filer]
   showIcons = false
 
+  [Autocomplete]
+  enable = true
+
   [Theme]
 
   baseTheme = "dark"
@@ -329,6 +332,8 @@ suite "Parse configuration file":
     check not settings.notificationSettings.restoreLogNotify
 
     check not settings.filerSettings.showIcons
+
+    check settings.autocompleteSettings.enable
 
     let theme = ColorTheme.config
     check ColorThemeTable[theme].editorBg == Color.pink1
