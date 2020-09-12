@@ -1,20 +1,25 @@
 import unittest
-import moepkg/[filermode, editorstatus, highlight, color, bufferstatus]
+import moepkg/[filermode, editorstatus, highlight, color, bufferstatus,
+               unicodeext]
 
 test "Update directory list":
   var status = initEditorStatus()
-  status.addNewBuffer("")
-  status.bufStatus[0].mode = Mode.filer
+
+  const path = "./"
+  status.addNewBuffer(path, Mode.filer)
+
   var filerStatus = initFilerStatus()
-  filerStatus = filerStatus.updateDirList
+  filerStatus = filerStatus.updateDirList(ru path)
   status.updateFilerView(filerStatus)
 
 test "Check highlight in filer mode":
   var status = initEditorStatus()
-  status.addNewBuffer("")
-  status.bufStatus[0].mode = Mode.filer
+
+  const path = "./"
+  status.addNewBuffer("./", Mode.filer)
+
   var filerStatus = initFilerStatus()
-  filerStatus = filerStatus.updateDirList
+  filerStatus = filerStatus.updateDirList(ru path)
   status.updateFilerView(filerStatus)
 
   let node = status.workSpace[0].currentMainWindowNode

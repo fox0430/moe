@@ -173,7 +173,7 @@ proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
       status.workSpace[workspaceIndex].currentMainWindowNode.view =
         status.bufStatus[i].buffer.initEditorView(terminalHeight(),
                                                   terminalWidth())
-  
+
   status.resize(terminalHeight(), terminalWidth())
 
   let settings = status.settings.notificationSettings
@@ -208,14 +208,22 @@ proc deleteBackupFiles(status: var EditorStatus, sourcePath: seq[Rune]) =
                                               status.messageLog)
 
 proc historyManager*(status: var EditorStatus) =
-  let sourcePath = status.bufStatus[status.prevBufferIndex].path
+  # BufferStatus.path is the path of the backup source file
+  block:
+    let bufferIndex = status.bufferIndexInCurrentWindow
+    if status.bufStatus[bufferIndex].path.len == 0:
+      let sourcePath = status.bufStatus[status.prevBufferIndex].path
+      status.bufStatus[bufferIndex].path = sourcePath
 
-  status.initHistoryManagerBuffer(sourcePath)
+  block:
+    let bufferIndex = status.bufferIndexInCurrentWindow
+    status.initHistoryManagerBuffer(status.bufStatus[bufferIndex].path)
 
   while status.isHistoryManagerMode:
     let
       bufferIndex = status.bufferIndexInCurrentWindow
       workspaceIndex = status.currentWorkSpaceIndex
+      sourcePath = status.bufStatus[bufferIndex].path
 
     block:
       let

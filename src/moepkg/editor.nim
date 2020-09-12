@@ -83,7 +83,7 @@ proc deleteParen*(bufStatus: var BufferStatus,
       openParen = correspondingOpenParen(closeParen)
     for i in countdown(currentLine, 0):
       let startColumn = if i == currentLine: currentColumn - 1
-                        else: buffer[i].high 
+                        else: buffer[i].high
       for j in countdown(startColumn, 0):
         if buffer[i][j] == closeParen: inc(depth)
         elif buffer[i][j] == openParen: dec(depth)
@@ -115,9 +115,9 @@ proc currentLineDeleteCharacterBeforeCursor(bufStatus: var BufferStatus,
   if(bufStatus.mode == Mode.insert and
      windowNode.currentColumn > bufStatus.buffer[windowNode.currentLine].len):
     windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].len
-  
+
   inc(bufStatus.countChange)
-     
+
 proc currentLineDeleteLineBreakBeforeCursor*(bufStatus: var BufferStatus,
                                              windowNode: WindowNode,
                                              autoDeleteParen : bool) =
@@ -133,12 +133,12 @@ proc currentLineDeleteLineBreakBeforeCursor*(bufStatus: var BufferStatus,
   if oldLine != newLine: bufStatus.buffer[windowNode.currentLine - 1] = newLine
 
   dec(windowNode.currentLine)
-  
+
   inc(bufStatus.countChange)
 
-proc countSpaceBeginOfLine(line: seq[Rune], tabStop: int): int =
-  for r in line:
-    if isWhiteSpace(r): result.inc
+proc countSpaceBeginOfLine(line: seq[Rune], tabStop, currentColumn: int): int =
+  for i in 0 ..< min(line.len, currentColumn):
+    if isWhiteSpace(line[i]): result.inc
     else: break
 
 proc keyBackspace*(bufStatus: var BufferStatus,
@@ -152,9 +152,12 @@ proc keyBackspace*(bufStatus: var BufferStatus,
                                            autoDeleteParen)
   else:
     let
-      line = bufStatus.buffer[windowNode.currentLine]
-      numOfSpsce = line.countSpaceBeginOfLine(tabStop)
-      numOfDelete = if numOfSpsce == 0: 1
+      currentLine = windowNode.currentLine
+      currentColumn = windowNode.currentColumn
+
+      line = bufStatus.buffer[currentLine]
+      numOfSpsce = line.countSpaceBeginOfLine(tabStop, currentColumn)
+      numOfDelete = if numOfSpsce == 0 or currentColumn > numOfSpsce: 1
                     elif numOfSpsce mod tabStop != 0:
                       numOfSpsce mod tabStop
                     else:
@@ -166,34 +169,46 @@ proc keyBackspace*(bufStatus: var BufferStatus,
                                              autoDeleteParen)
 
 proc deleteBeforeCursorToFirstNonBlank*(bufStatus: var BufferStatus,
-                                        windowNode: WindowNode  ) =
-  if windowNode.currentColumn == 0:
-    return
+                                        windowNode: WindowNode) =
+
+  if windowNode.currentColumn == 0: return
   let firstNonBlank = getFirstNonBlankOfLineOrFirstColumn(bufStatus, windowNode)
-  
+
   for _ in firstNonBlank..max(0, windowNode.currentColumn-1):
     currentLineDeleteCharacterBeforeCursor(bufStatus, windowNode, false)
 
-proc insertIndent(bufStatus: var BufferStatus, windowNode: WindowNode, tabStop: int) =
+proc insertIndent(bufStatus: var BufferStatus,
+                  windowNode: WindowNode,
+                  tabStop: int) =
+
   # Auto indent if finish a previous line with ':'
   if bufStatus.buffer[windowNode.currentLine].len > 0 and
      bufStatus.buffer[windowNode.currentLine][^1] == ru':':
     let oldLine = bufStatus.buffer[windowNode.currentLine + 1]
     var newLine = bufStatus.buffer[windowNode.currentLine + 1]
     newLine &= repeat(' ', tabStop).toRunes
-    if oldLine != newLine: bufStatus.buffer[windowNode.currentLine + 1] = newLine
-   
+    if oldLine != newLine:
+      bufStatus.buffer[windowNode.currentLine + 1] = newLine
+
   else:
     let
-      count = countRepeat(bufStatus.buffer[windowNode.currentLine], Whitespace, 0)
+      count = countRepeat(
+        bufStatus.buffer[windowNode.currentLine],
+        Whitespace,
+        0)
       indent = min(count, windowNode.currentColumn)
 
     let oldLine = bufStatus.buffer[windowNode.currentLine + 1]
     var newLine = bufStatus.buffer[windowNode.currentLine + 1]
     newLine &= repeat(' ', indent).toRunes
-    if oldLine != newLine: bufStatus.buffer[windowNode.currentLine + 1] = newLine
+    if oldLine != newLine:
+      bufStatus.buffer[windowNode.currentLine + 1] = newLine
 
-proc keyEnter*(bufStatus: var BufferStatus, windowNode: WindowNode, autoIndent: bool, tabStop: int) =
+proc keyEnter*(bufStatus: var BufferStatus,
+               windowNode: WindowNode,
+               autoIndent: bool,
+               tabStop: int) =
+
   proc isWhiteSpaceLine(line: seq[Rune]): bool =
     result = true
     for r in line:
@@ -223,8 +238,9 @@ proc keyEnter*(bufStatus: var BufferStatus, windowNode: WindowNode, autoIndent: 
         endCol = bufStatus.buffer[windowNode.currentLine].len
       newLine &= bufStatus.buffer[line][startCol ..< endCol]
 
-      if oldLine != newLine: bufStatus.buffer[windowNode.currentLine + 1] = newLine
-    
+      if oldLine != newLine:
+        bufStatus.buffer[windowNode.currentLine + 1] = newLine
+
     block:
       let
         first = windowNode.currentColumn
@@ -233,7 +249,8 @@ proc keyEnter*(bufStatus: var BufferStatus, windowNode: WindowNode, autoIndent: 
         let oldLine = bufStatus.buffer[windowNode.currentLine]
         var newLine = bufStatus.buffer[windowNode.currentLine]
         newLine.delete(first, last)
-        if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
+        if oldLine != newLine:
+          bufStatus.buffer[windowNode.currentLine] = newLine
 
     inc(windowNode.currentLine)
     windowNode.currentColumn =
@@ -259,7 +276,8 @@ proc keyEnter*(bufStatus: var BufferStatus, windowNode: WindowNode, autoIndent: 
         endCol = bufStatus.buffer[windowNode.currentLine].len
       newLine &= bufStatus.buffer[line][startCol ..< endCol]
 
-      if oldLine != newLine: bufStatus.buffer[windowNode.currentLine + 1] = newLine
+      if oldLine != newLine:
+        bufStatus.buffer[windowNode.currentLine + 1] = newLine
 
     block:
       let oldLine = bufStatus.buffer[windowNode.currentLine]
@@ -396,7 +414,7 @@ proc deleteWordBeforeCursor*(bufStatus: var BufferStatus,
 proc addIndent*(bufStatus: var BufferStatus,
                 windowNode: WindowNode,
                 tabStop: int) =
-                
+
   let oldLine = bufStatus.buffer[windowNode.currentLine]
   var newLine = bufStatus.buffer[windowNode.currentLine]
   newLine.insert(newSeqWith(tabStop, ru' '))
@@ -407,7 +425,7 @@ proc addIndent*(bufStatus: var BufferStatus,
 proc deleteIndent*(bufStatus: var BufferStatus,
                    windowNode: WindowNode,
                    tabStop: int) =
-                   
+
   if bufStatus.buffer.len == 0: return
 
   if bufStatus.buffer[windowNode.currentLine][0] == ru' ':
@@ -438,14 +456,14 @@ proc deleteCharactersBeforeCursorInCurrentLine*(bufStatus: var BufferStatus,
 proc addIndentInCurrentLine*(bufStatus: var BufferStatus,
                             windowNode: WindowNode,
                             tabStop: int) =
-  
+
   bufStatus.addIndent(windowNode, tabStop)
   windowNode.currentColumn += tabStop
 
 proc deleteIndentInCurrentLine*(bufStatus: var BufferStatus,
                             windowNode: WindowNode,
                             tabStop: int) =
-  
+
   let oldLine = bufStatus.buffer[windowNode.currentLine]
 
   bufStatus.deleteIndent(windowNode, tabStop)
@@ -464,7 +482,7 @@ proc deleteCurrentCharacter*(bufStatus: var BufferStatus,
     currentMode = bufStatus.mode
 
   if currentLine >= bufStatus.buffer.high and
-     currentColumn > bufStatus.buffer[currentLine].high: return 
+     currentColumn > bufStatus.buffer[currentLine].high: return
 
   if currentColumn == bufStatus.buffer[currentLine].len:
     let oldLine = bufStatus.buffer[windowNode.currentLine]
@@ -524,7 +542,7 @@ proc openBlankLineAbove*(bufStatus: var BufferStatus, windowNode: WindowNode) =
 proc deleteLine*(bufStatus: var BufferStatus,
                  windowNode: WindowNode,
                  line: int) =
-                 
+
   bufStatus.buffer.delete(line, line)
 
   if bufStatus.buffer.len == 0: bufStatus.buffer.insert(ru"", 0)
@@ -532,7 +550,7 @@ proc deleteLine*(bufStatus: var BufferStatus,
   if line < windowNode.currentLine: dec(windowNode.currentLine)
   if windowNode.currentLine >= bufStatus.buffer.len:
     windowNode.currentLine = bufStatus.buffer.high
-  
+
   windowNode.currentColumn = 0
   windowNode.expandedColumn = 0
 
@@ -541,7 +559,7 @@ proc deleteLine*(bufStatus: var BufferStatus,
 proc deleteCharacterUntilEndOfLine*(bufStatus: var BufferStatus,
                                     autoDeleteParen: bool,
                                     windowNode: WindowNode) =
-                                    
+
   let
     currentLine = windowNode.currentLine
     startColumn = windowNode.currentColumn
@@ -551,7 +569,7 @@ proc deleteCharacterUntilEndOfLine*(bufStatus: var BufferStatus,
 proc deleteCharacterBeginningOfLine*(bufStatus: var BufferStatus,
                                      autoDeleteParen: bool,
                                      windowNode: WindowNode) =
-                                     
+
   let beforColumn = windowNode.currentColumn
   windowNode.currentColumn = 0
   windowNode.expandedColumn = 0
@@ -561,7 +579,7 @@ proc deleteCharacterBeginningOfLine*(bufStatus: var BufferStatus,
 proc deleteCharactersOfLine*(bufStatus: var BufferStatus,
                              autoDeleteParen: bool,
                              windowNode: WindowNode) =
-                             
+
   let
     currentLine = windowNode.currentLine
     firstNonBlank = getFirstNonBlankOfLineOrFirstColumn(bufStatus, windowNode)

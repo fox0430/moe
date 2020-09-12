@@ -91,7 +91,7 @@ proc isChangeThemeSettingCommand(command: seq[seq[Rune]]): bool =
 proc isTabLineSettingCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "tab"
-  
+
 proc isSyntaxSettingCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "syntax"
@@ -163,6 +163,14 @@ proc isBuildOnSaveSettingCommand(command: seq[seq[Rune]]): bool =
 proc isShowGitInInactiveSettingCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "showgitinactive"
+
+proc isIgnorecaseSettingCommand(command: seq[seq[Rune]]): bool =
+  let cmd = toLowerAscii($command[0])
+  return command.len == 2 and cmd == "ignorecase"
+
+proc isSmartcaseSettingCommand(command: seq[seq[Rune]]): bool =
+  let cmd = toLowerAscii($command[0])
+  return command.len == 2 and cmd == "smartcase"
 
 proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
@@ -284,6 +292,21 @@ proc isHistoryManagerCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "history"
 
+proc isStartConfigMode(command: seq[seq[Rune]]): bool =
+  let cmd = toLowerAscii($command[0])
+  return command.len == 1 and cmd == "conf"
+
+proc startConfigMode(status: var Editorstatus) =
+  let bufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[bufferIndex].prevMode)
+
+  status.verticalSplitWindow
+  status.resize(terminalHeight(), terminalWidth())
+  status.moveNextWindow
+
+  status.addNewBuffer(Mode.config)
+  status.changeCurrentBuffer(status.bufStatus.high)
+
 proc startHistoryManager(status: var Editorstatus) =
   let bufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[bufferIndex].prevMode)
@@ -297,9 +320,8 @@ proc startHistoryManager(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
 
-  status.addNewBuffer("")
+  status.addNewBuffer(Mode.history)
   status.changeCurrentBuffer(status.bufStatus.high)
-  status.changeMode(Mode.history)
 
 proc startRecentFileMode(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -324,7 +346,6 @@ proc runQuickRunCommand(status: var Editorstatus) =
   let
     workspaceIndex = status.currentWorkSpaceIndex
     windowNode = status.workspace[workspaceIndex].currentMainWindowNode
-    bufStatus = status.bufStatus[windowNode.bufferIndex]
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
@@ -427,7 +448,7 @@ proc openBufferManager(status: var Editorstatus) =
   status.changeMode(Mode.bufManager)
 
 proc changeCursorLineCommand(status: var Editorstatus, command: seq[Rune]) =
-  if command == ru"on" : status.settings.view.cursorLine = true 
+  if command == ru"on" : status.settings.view.cursorLine = true
   elif command == ru"off": status.settings.view.cursorLine = false
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -468,8 +489,9 @@ proc changeThemeSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   elif command == ru"light": status.settings.editorColorTheme = ColorTheme.light
   elif command == ru"vivid": status.settings.editorColorTheme = ColorTheme.vivid
   elif command == ru"config": status.settings.editorColorTheme = ColorTheme.config
+  elif command == ru"vscode": status.settings.editorColorTheme = ColorTheme.vscode
 
-  changeTheme(status)
+  status.changeTheme
   status.resize(terminalHeight(), terminalWidth())
   status.commandWindow.erase
 
@@ -543,7 +565,7 @@ proc lineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   let numberOfDigitsLen = if status.settings.view.lineNumber:
                             numberOfDigits(status.bufStatus[0].buffer.len) - 2
                           else: 0
-  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+  let useStatusBar = if status.settings.statusBar.enable: 1 else: 0
   let workspaceIndex = status.currentWorkSpaceIndex
 
   status.workSpace[workspaceIndex].currentMainWindowNode.view =
@@ -557,13 +579,13 @@ proc lineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
 proc statusBarSettingCommand(status: var EditorStatus, command: seq[Rune]) =
-  if command == ru"on": status.settings.statusBar.useBar = true
-  elif command == ru"off": status.settings.statusBar.useBar = false
+  if command == ru"on": status.settings.statusBar.enable = true
+  elif command == ru"off": status.settings.statusBar.enable = false
 
   let numberOfDigitsLen = if status.settings.view.lineNumber:
                             numberOfDigits(status.bufStatus[0].buffer.len) - 2
                           else: 0
-  let useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+  let useStatusBar = if status.settings.statusBar.enable : 1 else: 0
   let workspaceIndex = status.currentWorkSpaceIndex
 
   status.workSpace[workspaceIndex].currentMainWindowNode.view =
@@ -589,10 +611,10 @@ proc incrementalSearchSettingCommand(status: var Editorstatus, command: seq[Rune
 
 proc highlightPairOfParenSettigCommand(status: var Editorstatus,
                                        command: seq[Rune]) =
-                                       
+
   if command == ru"on": status.settings.highlightPairOfParen = true
   elif command == ru"off": status.settings.highlightPairOfParen = false
- 
+
   status.commandWindow.erase
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -600,7 +622,7 @@ proc highlightPairOfParenSettigCommand(status: var Editorstatus,
 
 proc autoDeleteParenSettingCommand(status: var EditorStatus,
                                    command: seq[Rune]) =
-                                   
+
   if command == ru"on": status.settings.autoDeleteParen = true
   elif command == ru"off": status.settings.autoDeleteParen = false
 
@@ -625,13 +647,13 @@ proc smoothScrollSpeedSettingCommand(status: var Editorstatus, speed: int) =
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
-  
+
 proc highlightCurrentWordSettingCommand(status: var Editorstatus,
                                         command: seq[Rune]) =
-                                        
+
   if command == ru"on": status.settings.highlightOtherUsesCurrentWord = true
   if command == ru"off": status.settings.highlightOtherUsesCurrentWord = false
-  
+
   status.commandWindow.erase
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -697,6 +719,20 @@ proc showGitInInactiveSettingCommand(status: var EditorStatus,
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
+proc ignorecaseSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru "on": status.settings.ignorecase = true
+  elif command == ru "off": status.settings.ignorecase = false
+
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
+proc smartcaseSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru "on": status.settings.smartcase = true
+  elif command == ru "off": status.settings.smartcase = false
+
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+
 proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
   if index < 0 or index > status.bufStatus.high:
     status.commandWindow.writeNoBufferDeletedError(status.messageLog)
@@ -709,7 +745,7 @@ proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
   elif status.bufferIndexInCurrentWindow > status.bufStatus.high:
     let workspaceIndex = status.currentWorkSpaceIndex
     status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex =
-      status.bufStatus.high 
+      status.bufStatus.high
 
   if status.bufStatus[status.bufferIndexInCurrentWindow].mode == Mode.ex:
     let prevMode = status.bufStatus[status.bufferIndexInCurrentWindow].prevMode
@@ -889,6 +925,7 @@ proc quitCommand(status: var EditorStatus) =
       status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
     else:
       status.commandWindow.writeNoWriteError(status.messageLog)
+      status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
 proc writeAndQuitCommand(status: var EditorStatus) =
   let
@@ -989,12 +1026,12 @@ proc listAllBufferCommand(status: var Editorstatus) =
     else: status.bufStatus[currentBufferIndex].buffer.insert(line, i)
 
   let
-    useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+    useStatusBar = if status.settings.statusBar.enable: 1 else: 0
     useTab = if status.settings.tabLine.useTab: 1 else: 0
     swapCurrentLineNumStting = status.settings.view.currentLineNumber
     currentBufferIndex =
       status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
-  
+
   status.settings.view.currentLineNumber = false
   status.workSpace[workspaceIndex].currentMainWindowNode.view =
     status.bufStatus[currentBufferIndex].buffer.initEditorView(terminalHeight() - useStatusBar - useTab - 1,
@@ -1039,8 +1076,11 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
       status.bufStatus[currentBufferIndex].buffer.delete(startLine + 1,
                                                          startLine + 1)
   else:
+    let
+      ignorecase = status.settings.ignorecase
+      smartcase = status.settings.smartcase
     for i in 0 .. status.bufStatus[currentBufferIndex].buffer.high:
-      let searchResult = searchBuffer(status, replaceInfo.searhWord)
+      let searchResult = status.searchBuffer(replaceInfo.searhWord, ignorecase, smartcase)
       if searchResult.line > -1:
         let oldLine = status.bufStatus[currentBufferIndex].buffer[searchResult.line]
         var newLine = status.bufStatus[currentBufferIndex].buffer[searchResult.line]
@@ -1268,6 +1308,12 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     status.workspaceListCommand
   elif isHistoryManagerCommand(command):
     status.startHistoryManager
+  elif isStartConfigMode(command):
+    status.startConfigMode
+  elif isIgnorecaseSettingCommand(command):
+    status.ignorecaseSettingCommand(command[1])
+  elif isSmartcaseSettingCommand(command):
+    status.smartcaseSettingCommand(command[1])
   else:
     status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)

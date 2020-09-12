@@ -123,7 +123,7 @@ proc write*(win: var Window,
 proc append*(win: var Window,
               str: string,
               color: EditorColorPair = EditorColorPair.defaultChar) =
-  
+
   # Not write when running unit tests
   when not defined unitTest:
     win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
@@ -134,7 +134,7 @@ proc append*(win: var Window,
 proc append*(win: var Window,
             str: seq[Rune],
             color: EditorColorPair = EditorColorPair.defaultChar) =
-  
+
   # Not write when running unit tests
   when not defined unitTest:
     append(win, $str, color)

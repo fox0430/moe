@@ -217,6 +217,8 @@ Check command bar
 ```noh``` - Turn off highlights  
 ```icon``` - Setting show/hidden icons in filer mode  
 ```deleteTrailingSpaces``` - Delete trailing spaces  
+```ignorecase``` - Change setting to ignorecase  
+```smartcase``` - Change setting to smartcase  
 
 ```log``` - Open messages log viwer  
 
@@ -229,3 +231,5 @@ Check command bar
 ```recent``` - Open recent file selection mode (Only supported on Linux)  
 
 ```history``` - Open backup file manager  
+
+```conf``` - Open configuration mode

@@ -51,6 +51,18 @@ default is 2
 tabStop
 ```
 
+Enable/Disable ignorecase (bool)  
+default is true
+```
+ignorecase
+```
+
+Enable/Disable smartcase (bool)  
+default is true
+```
+smartcase
+```
+
 Automatic closing brackets (bool)  
 default is true
 ```
@@ -182,6 +194,12 @@ Multiple status bar (bool)
 default is true
 ```
 multipleStatusBar 
+```
+
+Enable/Disable merging status bar with command line (bool)  
+default is true
+```
+merge
 ```
 
 Show current mode (bool)  
@@ -1068,32 +1086,52 @@ defaultCharactorColor
 
 Syntax highlighting color
 ```
-gtKeywordColor
+gtKeyword
 ```
 
 Syntax highlighting color
 ```
-gtStringLitColor
+gtFunctionName
 ```
 
 Syntax highlighting color
 ```
-gtDecNumberColor
+gtBoolean
 ```
 
 Syntax highlighting color
 ```
-gtCommentColor
+gtSpecialVar
 ```
 
 Syntax highlighting color
 ```
-gtLongCommentColor
+gtBuiltin
 ```
 
 Syntax highlighting color
 ```
-gtWhitespaceColor
+gtStringLit
+```
+
+Syntax highlighting color
+```
+gtDecNumber
+```
+
+Syntax highlighting color
+```
+gtComment
+```
+
+Syntax highlighting color
+```
+gtLongComment
+```
+
+Syntax highlighting color
+```
+gtWhitespace
 ```
 
 Syntax highlighting color
@@ -1213,4 +1251,14 @@ reservedWord
 Reserved word background color
 ```
 reservedWordBg
+```
+
+Current line color in configuration mode
+```
+currentSetting
+```
+
+Current line background color in configuration mode
+```
+currentSettingBg
 ```

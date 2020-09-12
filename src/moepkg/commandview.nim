@@ -20,6 +20,7 @@ const exCommandList = [
   "buildOnSave",
   "buf",
   "clipboard",
+  "conf",
   "cursorLine",
   "cws",
   "deleteTrailingSpaces",
@@ -32,6 +33,7 @@ const exCommandList = [
   "highlightParen",
   "history",
   "icon",
+  "ignorecase",
   "incrementalSearch",
   "indent",
   "indentationLines",
@@ -54,6 +56,7 @@ const exCommandList = [
   "run",
   "scrollSpeed",
   "showGitInactive",
+  "smartcase",
   "smoothScroll",
   "sp",
   "statusbar",
@@ -146,7 +149,7 @@ proc splitCommand*(command: string): seq[seq[Rune]] =
 proc writeExModeView(commandWindow: var Window,
                      exStatus: ExModeViewStatus,
                      color: EditorColorPair) =
-                     
+
   let buffer = ($exStatus.buffer).substr(exStatus.startPosition, exStatus.buffer.len)
 
   commandWindow.erase
@@ -381,10 +384,12 @@ proc suggestExCommandOption(status: var Editorstatus,
        "buildonsave",
        "indentationlines",
        "icon",
-       "showgitinactive":
+       "showgitinactive",
+       "ignorecase",
+       "smartcase":
       argList = @["on", "off"]
     of "theme":
-      argList= @["vivid", "dark", "light", "config"]
+      argList= @["vivid", "dark", "light", "config", "vscode"]
     of "e",
        "sp",
        "vs":
@@ -439,7 +444,7 @@ proc suggestExCommandOption(status: var Editorstatus,
 proc suggestExCommand(status: var Editorstatus,
                       exStatus: var ExModeViewStatus,
                       key: var Rune) =
-                      
+
   var suggestlist: seq[seq[Rune]] = @[exStatus.buffer]
   let buffer = toLowerAscii($exStatus.buffer)
   for str in exCommandList:
@@ -610,5 +615,3 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
     else: insertCommandBuffer(exStatus, key)
 
   return splitCommand($exStatus.buffer)
-
-

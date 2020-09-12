@@ -38,7 +38,7 @@ macro mapAnnotationToTable(args: varargs[untyped]): untyped =
         `tableIdent`[`hexCode`]       = `intLit`
         `tableReverseIdent`[`intLit`] = `hexCode`
         `tableRGBIdent`[`intLit`]     = (`red`, `green`, `blue`)
-  
+
   # emit source code
   return quote do:
     var `tableIdent`        = initTable[string, int]()
@@ -397,9 +397,10 @@ proc readableOnBackground*(col: Color, background: Color): Color =
 
 type ColorTheme* = enum
   config  = 0
-  dark    = 1
-  light   = 2
-  vivid   = 3
+  vscode  = 1
+  dark    = 2
+  light   = 3
+  vivid   = 4
 
 type EditorColor* = object
   editorBg*: Color
@@ -469,15 +470,21 @@ type EditorColor* = object
   # selected area in visual mode
   visualMode*: Color
   visualModeBg*: Color
+
   # color scheme
   defaultChar*: Color
   gtKeyword*: Color
+  gtFunctionName*: Color
+  gtBoolean*: Color
   gtStringLit*: Color
+  gtSpecialVar*: Color
+  gtBuiltin*: Color
   gtDecNumber*: Color
   gtComment*: Color
   gtLongComment*: Color
   gtWhitespace*: Color
   gtPreprocessor*: Color
+
   # filer mode
   currentFile*: Color
   currentFileBg*: Color
@@ -530,6 +537,10 @@ type EditorColor* = object
   deletedLine*: Color
   deletedLineBg*: Color
 
+  # configuration mode
+  currentSetting*: Color
+  currentSettingBg*: Color
+
 type EditorColorPair* = enum
   lineNum = 1
   currentLineNum = 2
@@ -565,46 +576,54 @@ type EditorColorPair* = enum
   searchResult = 26
   # selected area in visual mode
   visualMode = 27
+
   # color scheme
   defaultChar = 28
   keyword = 29
-  stringLit = 30
-  decNumber = 31
-  comment = 32
-  longComment = 33
-  whitespace = 34
-  preprocessor = 35
+  functionName = 30
+  boolean = 31
+  specialVar = 32
+  builtin = 33
+  stringLit = 34
+  decNumber = 35
+  comment = 36
+  longComment = 37
+  whitespace = 38
+  preprocessor = 39
+
   # filer mode
-  currentFile = 36
-  currentFileBg = 37
-  file = 38
-  fileBg = 39
-  dir = 40
-  dirBg = 41
-  pcLink = 42
-  pcLinkBg = 43
+  currentFile = 46
+  currentFileBg = 47
+  file = 48
+  fileBg = 49
+  dir = 50
+  dirBg = 51
+  pcLink = 52
+  pcLinkBg = 53
   # pop up window
-  popUpWindow = 44
-  popUpWinCurrentLine = 45
+  popUpWindow = 54
+  popUpWinCurrentLine = 55
   # replace text highlighting
-  replaceText = 46
+  replaceText = 56
   # pair of paren highlighting
-  parenText = 47
+  parenText = 57
   # highlight other uses current word
-  currentWord = 48
+  currentWord = 58
   # highlight full width space
-  highlightFullWidthSpace = 49
+  highlightFullWidthSpace = 59
   # highlight trailing spaces
-  highlightTrailingSpaces = 50
+  highlightTrailingSpaces = 60
   # work space bar
-  workSpaceBar = 51
+  workSpaceBar = 61
   # highlight reserved words
-  reservedWord = 52
+  reservedWord = 62
   # highlight history manager
-  currentHistory = 53
+  currentHistory = 63
   # highlight diff
-  addedLine = 54
-  deletedLine = 55
+  addedLine = 64
+  deletedLine = 65
+  # configuration mode
+  currentSetting = 66
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -675,15 +694,21 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # selected area in visual mode
     visualMode: gray100,
     visualModeBg: purple_1,
+
     # color scheme
-    defaultChar: gray100,
-    gtKeyword: seaGreen1_2,
-    gtStringLit: purple_1,
+    defaultChar: white,
+    gtKeyword: skyBlue1,
+    gtFunctionName: gold1,
+    gtBoolean: yellow,
+    gtStringLit: yellow,
+    gtSpecialVar: green,
+    gtBuiltin: yellow,
     gtDecNumber: aqua,
     gtComment: gray,
     gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
+
     # filer mode
     currentFile: gray100,
     currentFileBg: teal,
@@ -727,6 +752,139 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     addedLineBg: default,
     deletedLine: red,
     deletedLineBg: default,
+    # configuration mode
+    currentSetting: gray100,
+    currentSettingBg: teal
+  ),
+  vscode: EditorColor(
+    editorBg: default,
+    lineNum: gray54,
+    lineNumBg: default,
+    currentLineNum: teal,
+    currentLineNumBg: default,
+    # statsu bar
+    statusBarNormalMode: white,
+    statusBarNormalModeBg: blue,
+    statusBarModeNormalMode: black,
+    statusBarModeNormalModeBg: white,
+    statusBarNormalModeInactive: blue,
+    statusBarNormalModeInactiveBg: white,
+
+    statusBarInsertMode: white,
+    statusBarInsertModeBg: blue,
+    statusBarModeInsertMode: black,
+    statusBarModeInsertModeBg: white,
+    statusBarInsertModeInactive: blue,
+    statusBarInsertModeInactiveBg: white,
+
+    statusBarVisualMode: white,
+    statusBarVisualModeBg: blue,
+    statusBarModeVisualMode: black,
+    statusBarModeVisualModeBg: white,
+    statusBarVisualModeInactive: blue,
+    statusBarVisualModeInactiveBg: white,
+
+    statusBarReplaceMode: white,
+    statusBarReplaceModeBg: blue,
+    statusBarModeReplaceMode: black,
+    statusBarModeReplaceModeBg: white,
+    statusBarReplaceModeInactive: blue,
+    statusBarReplaceModeInactiveBg: white,
+
+    statusBarFilerMode: white,
+    statusBarFilerModeBg: blue,
+    statusBarModeFilerMode: black,
+    statusBarModeFilerModeBg: white,
+    statusBarFilerModeInactive: blue,
+    statusBarFilerModeInactiveBg: white,
+
+    statusBarExMode: white,
+    statusBarExModeBg: blue,
+    statusBarModeExMode: black,
+    statusBarModeExModeBg: white,
+    statusBarExModeInactive: blue,
+    statusBarExModeInactiveBg: white,
+
+    statusBarGitBranch: white,
+    statusBarGitBranchBg: blue,
+    # tab line
+    tab: white,
+    tabBg: default,
+    currentTab: white,
+    currentTabBg: blue,
+    # command  bar
+    commandBar: gray100,
+    commandBarBg: default,
+    # error message
+    errorMessage: red,
+    errorMessageBg: default,
+    # search result highlighting
+    searchResult: default,
+    searchResultBg: red,
+    # selected area in visual mode
+    visualMode: gray100,
+    visualModeBg: purple_1,
+
+    # color scheme
+    defaultChar: white,
+    gtKeyword: skyBlue1,
+    gtFunctionName: gold1,
+    gtBoolean: yellow,
+    gtStringLit: yellow,
+    gtSpecialVar: green,
+    gtBuiltin: yellow,
+    gtDecNumber: aqua,
+    gtComment: gray,
+    gtLongComment: gray,
+    gtWhitespace: gray,
+    gtPreprocessor: green,
+
+    # filer mode
+    currentFile: gray100,
+    currentFileBg: teal,
+    file: gray100,
+    fileBg: default,
+    dir: blue,
+    dirBg: default,
+    pcLink: teal,
+    pcLinkBg: default,
+    # pop up window
+    popUpWindow: gray100,
+    popUpWindowBg: black,
+    popUpWinCurrentLine: blue,
+    popUpWinCurrentLineBg: black,
+    # replace text highlighting
+    replaceText: default,
+    replaceTextBg: red,
+    # pair of paren highlighting
+    parenText: default,
+    parenTextBg: white,
+    # highlight other uses current word
+    currentWord: default,
+    currentWordBg: gray,
+    # highlight full width space
+    highlightFullWidthSpace: red,
+    highlightFullWidthSpaceBg: red,
+    # highlight trailing spaces
+    highlightTrailingSpaces: red,
+    highlightTrailingSpacesBg: red,
+    # work space bar
+    workSpaceBar: white,
+    workSpaceBarBg: blue,
+    # highlight reserved words
+    reservedWord: white,
+    reservedWordBg: gray,
+    # highlight history manager
+    currentHistory: gray100,
+    currentHistoryBg: teal,
+    # highlight diff
+    addedLine: green,
+    addedLineBg: default,
+    deletedLine: red,
+    deletedLineBg: default,
+    # configuration mode
+    currentSetting: gray100,
+    currentSettingBg: teal
   ),
   dark: EditorColor(
     editorBg: default,
@@ -796,15 +954,21 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # selected area in visual mode
     visualMode: gray100,
     visualModeBg: purple_1,
+
     # color scheme
-    defaultChar: gray100,
-    gtKeyword: cyan1,
-    gtStringLit: purple_1,
+    defaultChar: white,
+    gtKeyword: skyBlue1,
+    gtFunctionName: gold1,
+    gtBoolean: yellow,
+    gtStringLit: yellow,
+    gtSpecialVar: green,
+    gtBuiltin: yellow,
     gtDecNumber: aqua,
     gtComment: gray,
     gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
+
     # filer mode
     currentFile: gray100,
     currentFileBg: teal,
@@ -848,6 +1012,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     addedLineBg: default,
     deletedLine: red,
     deletedLineBg: default,
+    # configuration mode
+    currentSetting: gray100,
+    currentSettingBg: teal
   ),
   light: EditorColor(
     editorBg: default,
@@ -917,15 +1084,21 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # selected area in visual mode
     visualMode: black,
     visualModeBg: purple_1,
+
     # color scheme
-    defaultChar: black,
-    gtKeyword: blue,
+    defaultChar: gray100,
+    gtKeyword: seaGreen1_2,
+    gtFunctionName: gold1,
+    gtBoolean: yellow,
     gtStringLit: purple_1,
-    gtDecNumber: orange1,
+    gtSpecialVar: green,
+    gtBuiltin: yellow,
+    gtDecNumber: aqua,
     gtComment: gray,
     gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
+
     # filer mode
     currentFile: black,
     currentFileBg: deepPink1_1,
@@ -969,6 +1142,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     addedLineBg: default,
     deletedLine: red,
     deletedLineBg: default,
+    # configuration mode
+    currentSetting: black,
+    currentSettingBg: deepPink1_1
   ),
   vivid: EditorColor(
     editorBg: default,
@@ -1038,15 +1214,21 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # selected area in visual mode
     visualMode: gray100,
     visualModeBg: purple_1,
+
     # color scheme
     defaultChar: gray100,
     gtKeyword: deepPink1_1,
-    gtStringLit: cyan1,
-    gtDecNumber: green1,
-    gtComment: purple_1,
-    gtLongComment: purple_1,
+    gtFunctionName: gold1,
+    gtBoolean: yellow,
+    gtStringLit: purple_1,
+    gtSpecialVar: green,
+    gtBuiltin: aqua,
+    gtDecNumber: aqua,
+    gtComment: gray,
+    gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
+
     # filer mode
     currentFile: gray100,
     currentFileBg: deepPink1_1,
@@ -1090,6 +1272,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     addedLineBg: default,
     deletedLine: red,
     deletedLineBg: default,
+    # configuration mode
+    currentSetting: gray100,
+    currentSettingBg: deepPink1_1
   ),
 ]
 
@@ -1142,15 +1327,21 @@ proc setCursesColor*(editorColor: EditorColor) =
     setColorPair(EditorColorPair.searchResult, editorColor.searchResult, editorColor.searchResultBg)
     # selected area in visual mode
     setColorPair(EditorColorPair.visualMode, editorColor.visualMode, editorColor.visualModeBg)
+
     # color scheme
     setColorPair(EditorColorPair.defaultChar, editorColor.defaultChar, editorColor.editorBg)
     setColorPair(EditorColorPair.keyword, editorColor.gtKeyword, editorColor.editorBg)
+    setColorPair(EditorColorPair.functionName, editorColor.gtFunctionName, editorColor.editorBg)
+    setColorPair(EditorColorPair.boolean, editorColor.gtBoolean, editorColor.editorBg)
+    setColorPair(EditorColorPair.specialVar, editorColor.gtSpecialVar, editorColor.editorBg)
+    setColorPair(EditorColorPair.builtin, editorColor.gtBuiltin, editorColor.editorBg)
     setColorPair(EditorColorPair.stringLit, editorColor.gtStringLit, editorColor.editorBg)
     setColorPair(EditorColorPair.decNumber, editorColor.gtDecNumber, editorColor.editorBg)
     setColorPair(EditorColorPair.comment, editorColor.gtComment, editorColor.editorBg)
     setColorPair(EditorColorPair.longComment, editorColor.gtLongComment, editorColor.editorBg)
     setColorPair(EditorColorPair.whitespace, editorColor.gtWhitespace, editorColor.editorBg)
     setColorPair(EditorColorPair.preprocessor, editorColor.gtPreprocessor, editorColor.editorBg)
+
     # filer
     setColorPair(EditorColorPair.currentFile, editorColor.currentFile, editorColor.currentFileBg)
     setColorPair(EditorColorPair.file, editorColor.file, editorColor.fileBg)
@@ -1187,6 +1378,9 @@ proc setCursesColor*(editorColor: EditorColor) =
     # highlight diff
     setColorPair(EditorColorPair.addedLine, editorColor.addedLine, editorColor.addedLineBg)
     setColorPair(EditorColorPair.deletedLine, editorColor.deletedLine, editorColor.deletedLineBg)
+
+    # configuration mode
+    setColorPair(EditorColorPair.currentSetting, editorColor.currentSetting, editorColor.currentSettingBg)
 
 proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Color, Color) =
   let editorColor = ColorThemeTable[theme]
@@ -1250,6 +1444,14 @@ proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Co
     return (editorColor.defaultChar, editorColor.editorBg)
   of EditorColorPair.keyword:
     return (editorColor.gtKeyword, editorColor.editorBg)
+  of EditorColorPair.functionName:
+    return (editorColor.gtFunctionName, editorColor.editorBg)
+  of EditorColorPair.boolean:
+    return (editorColor.gtBoolean, editorColor.editorBg)
+  of EditorColorPair.specialVar:
+    return (editorColor.gtSpecialVar, editorColor.editorBg)
+  of EditorColorPair.builtin:
+    return (editorColor.gtBuiltin, editorColor.editorBg)
   of EditorColorPair.stringLit:
     return (editorColor.gtStringLit, editorColor.editorBg)
   of EditorColorPair.decNumber:
@@ -1288,5 +1490,7 @@ proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Co
     return (editorColor.deletedLine, editorColor.deletedLineBg)
   of EditorColorPair.currentHistory:
     return (editorColor.currentHistory, editorColor.currentHistoryBg)
+  of EditorColorPair.currentSetting:
+    return (editorColor.currentSetting, editorColor.currentSettingBg)
   else:
     return (editorColor.parenText, editorColor.parenTextBg)

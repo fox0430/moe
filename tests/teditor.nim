@@ -133,7 +133,7 @@ suite "Editor: keyEnter":
       status.bufStatus[0].keyEnter(status.workspace[0].currentMainWindowNode,
                                    isAutoIndent,
                                    status.settings.tabStop)
-    
+
     check status.bufStatus[0].buffer[0] == ru"block:"
     check status.bufStatus[0].buffer[1] == ru""
     check status.bufStatus[0].buffer[2] == ru""
@@ -190,6 +190,24 @@ suite "Delete character before cursor":
 
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru"tes"
+
+  test "Delete one character 2":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"  test test2"])
+    status.bufStatus[0].mode = Mode.insert
+    status.workspace[0].currentMainWindowNode.currentColumn = 7
+
+    const
+      autoCloseParen = true
+      tabStop = 2
+    status.bufStatus[0].keyBackspace(status.workspace[0].currentMainWindowNode,
+                                     autoCloseParen,
+                                     tabStop)
+
+    check status.bufStatus[0].buffer.len == 1
+    check status.bufStatus[0].buffer[0] == ru"  testtest2"
 
   test "Delete current Line":
     var status = initEditorStatus()
@@ -263,3 +281,39 @@ suite "Delete character before cursor":
 
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru"  test"
+
+  test "Delete tab 4":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
+    status.bufStatus[0].mode = Mode.insert
+    status.workspace[0].currentMainWindowNode.currentColumn = 1
+
+    const
+      autoCloseParen = true
+      tabStop = 2
+    status.bufStatus[0].keyBackspace(status.workspace[0].currentMainWindowNode,
+                                     autoCloseParen,
+                                     tabStop)
+
+    check status.bufStatus[0].buffer.len == 1
+    check status.bufStatus[0].buffer[0] == ru" test"
+
+  test "Delete tab 5":
+    var status = initEditorStatus()
+    status.addNewBuffer("")
+
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
+    status.bufStatus[0].mode = Mode.insert
+    status.workspace[0].currentMainWindowNode.currentColumn = 4
+
+    const
+      autoCloseParen = true
+      tabStop = 2
+    status.bufStatus[0].keyBackspace(status.workspace[0].currentMainWindowNode,
+                                     autoCloseParen,
+                                     tabStop)
+
+    check status.bufStatus[0].buffer.len == 1
+    check status.bufStatus[0].buffer[0] == ru"  tst"

@@ -16,6 +16,8 @@ const tomlStr = """
   tabStop = 4
   autoCloseParen = false
   autoIndent = false
+  ignorecase = false
+  smartcase = false
   disableChangeCursor = true
   defaultCursor = "blinkIbeam"
   normalModeCursor = "blinkIbeam"
@@ -32,6 +34,8 @@ const tomlStr = """
   highlightFullWidthSpace = false
   highlightTrailingSpaces = false
   highlightCurrentWord = false
+  smoothScroll = false
+  smoothScrollSpeed = 1
 
   [BuildOnSave]
   enable = true
@@ -42,6 +46,8 @@ const tomlStr = """
   allBuffer = true
 
   [StatusBar]
+  multipleStatusBar = false
+  merge = true
   mode = false
   filename = false
   chanedMark = false
@@ -50,7 +56,6 @@ const tomlStr = """
   encoding = false
   language = false
   directory = false
-  multipleStatusBar = false
   gitbranchName = false
   showGitInactive = true
   showModeInactive = true
@@ -174,6 +179,10 @@ const tomlStr = """
   visualModeBg = "pink1"
   defaultChar = "pink1"
   gtKeyword = "pink1"
+  gtFunctionName = "pink1"
+  gtBoolean = "pink1"
+  gtSpecialVar = "pink1"
+  gtBuiltin = "pink1"
   gtStringLit = "pink1"
   gtDecNumber = "pink1"
   gtComment = "pink1"
@@ -212,6 +221,8 @@ const tomlStr = """
   addedLineBg = "pink1"
   deletedLine = "pink1"
   deletedLineBg = "pink1"
+  currentSetting = "pink1"
+  currentSettingBg = "pink1"
 """
 
 
@@ -225,13 +236,15 @@ suite "Parse configuration file":
     check not settings.view.lineNumber
     check not settings.view.currentLineNumber
     check settings.view.cursorLine
-    check not settings.statusBar.useBar
+    check not settings.statusBar.enable
     check not settings.tabLine.useTab
     check not settings.syntax
     check not settings.view.indentationLines
     check settings.view.tabStop == 4
     check not settings.autoCloseParen
     check not settings.autoIndent
+    check not settings.ignorecase
+    check not settings.smartcase
     check settings.disableChangeCursor
     check settings.defaultCursor == CursorType.blinkIbeam
     check settings.normalModeCursor == CursorType.blinkIbeam
@@ -248,6 +261,8 @@ suite "Parse configuration file":
     check not settings.highlightFullWidthSpace
     check not settings.highlightTrailingSpaces
     check not settings.highlightOtherUsesCurrentWord
+    check not settings.smoothScroll
+    check settings.smoothScrollSpeed == 1
 
     check settings.buildOnSave.enable
     check settings.buildOnSave.workspaceRoot == ru"/home/fox/git/moe"
@@ -255,7 +270,8 @@ suite "Parse configuration file":
 
     check settings.tabLine.allbuffer
 
-    check not settings.statusBar.useBar
+    check not settings.statusBar.multipleStatusBar
+    check settings.statusBar.merge
     check not settings.statusBar.mode
     check not settings.statusBar.filename
     check not settings.statusBar.chanedMark
@@ -264,7 +280,6 @@ suite "Parse configuration file":
     check not settings.statusBar.characterEncoding
     check not settings.statusBar.language
     check not settings.statusBar.directory
-    check not settings.statusBar.multipleStatusBar
     check not settings.statusBar.gitbranchName
     check settings.statusBar.showGitInactive
     check settings.statusBar.showModeInactive
@@ -373,6 +388,10 @@ suite "Parse configuration file":
     check ColorThemeTable[theme].visualModeBg == Color.pink1
     check ColorThemeTable[theme].defaultChar == Color.pink1
     check ColorThemeTable[theme].gtKeyword == Color.pink1
+    check ColorThemeTable[theme].gtFunctionName == Color.pink1
+    check ColorThemeTable[theme].gtBoolean == Color.pink1
+    check ColorThemeTable[theme].gtSpecialVar == Color.pink1
+    check ColorThemeTable[theme].gtBuiltin == Color.pink1
     check ColorThemeTable[theme].gtStringLit == Color.pink1
     check ColorThemeTable[theme].gtDecNumber == Color.pink1
     check ColorThemeTable[theme].gtComment == Color.pink1
@@ -410,6 +429,8 @@ suite "Parse configuration file":
     check ColorThemeTable[theme].addedLineBg == Color.pink1
     check ColorThemeTable[theme].deletedLine == Color.pink1
     check ColorThemeTable[theme].deletedLineBg == Color.pink1
+    check ColorThemeTable[theme].currentSetting == Color.pink1
+    check ColorThemeTable[theme].currentSettingBg == Color.pink1
 
 suite "Validate toml config":
   test "Except for success":
