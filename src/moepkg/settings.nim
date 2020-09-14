@@ -353,7 +353,7 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
     if tokenNodes.hasKey(key):
       return tokenNodes[key]
     else:
-      JsonNode.default()
+      return JsonNode.default()
 
   # This is currently optimized and tested for the Forest Focus theme
   # and even for that theme it only produces a partial and imperfect
