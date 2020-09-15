@@ -23,37 +23,6 @@ Check command bar
 
 ## Normal mode
 
-|                               |                             |                               |                             |
-|:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
-| <kbd>**h**</kbd> Go Left :arrow_left: | <kbd>**j**</kbd> Go Down :arrow_down: | <kbd>**k**</kbd> Go Up :arrow_up: | <kbd>**l**</kbd> Go Rigth :arrow_right: |
-| <kbd>**w**</kbd> Go forwards to the start of a word :arrow_right: | <kbd>**e**</kbd> Go forwards to the end of a word :arrow_right: | <kbd>**b**</kbd> Go backwards to the start of a word :arrow_left: |  |
-| <kbd>**Page Up**</kbd> Page Up :arrow_up: | <kbd>**Page Down**</kbd> Page Down :arrow_down: | <kbd>**g**</kbd> <kbd>**g**</kbd> Go to the first line :arrow_up: | <kbd>**g**</kbd> <kbd>**_**</kbd> Go to the last non-blank character of the line :arrow_right: |
-| <kbd>**G**</kbd> Go to the last line :arrow_down: | <kbd>**0**</kbd> Go to the first line :arrow_up: | <kbd>**$**</kbd> Go to the end of the line :arrow_right: | <kbd>**^**</kbd> Go to the non-blank character start of line :arrow_left: |
-| <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> Half Page Down :arrow_down: | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> Half Page Up :arrow_up: | <kbd>****</kbd>  | <kbd>****</kbd>  |
-| <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  |
-| <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  |
-| <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  |
-| <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  |
-| <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  |
-| <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  |
-| <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  |
-| <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  |
-| <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  |
- 
-```Page Up``` - Page up  
-```Page Down``` - Page down  
-```gg``` - Move to the first line  
-```g_``` - Move to the last non-blank character of the line  
-```G``` - Move to the last line  
-```0``` - (zero) First of the line  
-```$``` - End of the line  
-```^``` or ```_``` -  Move to beginning of non-blank characters in a line  
-
-```Ctrl-u``` - Half page down  
-```Ctrl-d``` - Half page up  
-
-```u``` - Undo  
-```Ctrl-r``` - Redo  
 
 ```v``` - Start visual mode  
 ```Ctrl-v``` - Start visual block mode  
@@ -65,48 +34,23 @@ Check command bar
 ```A``` - Same as $a  
 ```I``` - Same as 0a  
 
-```>``` - Indent  
-```<``` - Unindent  
-```==``` Auto indent
+|                               |                             |                               |                             |
+|:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
+| <kbd>**h**</kbd> Go Left :arrow_left: | <kbd>**j**</kbd> Go Down :arrow_down: | <kbd>**k**</kbd> Go Up :arrow_up: | <kbd>**l**</kbd> Go Rigth :arrow_right: |
+| <kbd>**w**</kbd> Go forwards to the start of a word :arrow_right: | <kbd>**e**</kbd> Go forwards to the end of a word :arrow_right: | <kbd>**b**</kbd> Go backwards to the start of a word :arrow_left: |  |
+| <kbd>**Page Up**</kbd> Page Up :arrow_up: | <kbd>**Page Down**</kbd> Page Down :arrow_down: | <kbd>**g**</kbd> <kbd>**g**</kbd> Go to the first line :arrow_up: | <kbd>**g**</kbd> <kbd>**_**</kbd> Go to the last non-blank character of the line :arrow_right: |
+| <kbd>**G**</kbd> Go to the last line :arrow_down: | <kbd>**0**</kbd> Go to the first line :arrow_up: | <kbd>**$**</kbd> Go to the end of the line :arrow_right: | <kbd>**^**</kbd> Go to the non-blank character start of line :arrow_left: |
+| <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> Half Page Down :arrow_down: | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> Half Page Up :arrow_up: | <kbd>****</kbd>  | <kbd>****</kbd>  |
+| <kbd>**u**</kbd> Undo | <kbd>**Ctrl**</kbd> <kbd>**r**</kbd> Redo | <kbd>**>**</kbd> Indent | <kbd>**<**</kbd> Unindent |
+| <kbd>**=**</kbd> <kbd>**=**<kbd> Auto Indent | <kbd>**d**</kbd> <kbd>**d**</kbd> Delete a line | <kbd>**x**</kbd> Delete current character | <kbd>**S**</kbd> OR <kbd>**c**</kbd> <kbd>**c**</kbd> Delete the characters in current line and start insert mode |
+| <kbd>**d**</kbd> <kbd>**$**</kbd> OR  <kbd>**D**</kbd> Delete until the end of the line |  | <kbd>****</kbd>  | <kbd>****</kbd>  |
+| <kbd>**y**</kbd> <kbd>**y**</kbd> Copy a line | <kbd>**p**</kbd> Paste the clipboard | <kbd>**n**</kbd> Search forwards | <kbd>**N**</kbd> Search backwards |
+| <kbd>*</kbd> Search forwards for the word under cursor | <kbd>**#**</kbd> Search backwards for the word under cursor | <kbd>**f**</kbd> Jump to next occurrence | <kbd>**F**</kbd> Jump to previous occurence |
+| <kbd>**Ctrl**</kbd> <kbd>**k**</kbd> Move next window | <kbd>**Ctrl**</kbd> <kbd>**j**</kbd> Move prev window  | <kbd>**z**</kbd> <kbd>**t**</kbd> Scroll the screen so the cursor is at the top | <kbd>**z**</kbd> <kbd>**b**</kbd> Scroll the screen so the cursor is at the bottom |
+| <kbd>**z**</kbd> <kbd>**.**</kbd> Center the screen on the cursor | <kbd>**Z**</kbd> <kbd>**Z**</kbd> Write current file and exit | <kbd>**Z**</kbd> <kbd>**Q**</kbd> Same as `:q!` | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**c**</kbd> Close current window |
+| <kbd>**/**</kbd> Search text | <kbd>**:**</kbd> Start Ex mode | <kbd>**\**</kbd> <kbd>**r**</kbd> Quick Run | <kbd>**/**</kbd> `keyword` Search forwards |
+| <kbd>**?**</kbd> `keyword` Search backwards  |  |  |  |
 
-```dd``` - Delete(cut) a line  
-```d$``` or ```D``` -  Delete the characters under the cursor until the end of the line  
-
-```x``` - Delete(cut) current character  
-
-```S``` or ```cc``` - Delete the characters in current line and start insert mode  
-
-```yy``` - Copy a line  
-```p``` - Paste the clipboard  
-
-```n``` - Repeat search in same direction  
-```N``` - Repeat search in opposite direction  
-
-```*``` - Search forward for the word in under the cursor  
-```#``` - Search backward for the word in under the cursor  
-
-```f``` - Jump to next occurrence  
-```F``` - Jump to previous occurence  
-
-```Ctrl-k``` - Move next window  
-```Ctrl-j``` - Move prev window  
-
-```z.``` - Center the screen on the cursor  
-```zt``` - Scroll the screen so the cursor is at the top  
-```zb``` - Scroll the screen so the cursor is at the bottom  
-
-```ZZ``` - Write current file and exit  
-```ZQ``` - Same as ":q!"  
-
-```/``` - Search text  
-```:``` - Start ex mode  
-
-```Ctrl-w c``` - Close current window  
-
-```/keyword``` - Search forward  
-```?keyword``` - Search backward  
-
-```\-r``` - Quick run  
 
 ## Visual (block) mode
 
