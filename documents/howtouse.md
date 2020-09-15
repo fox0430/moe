@@ -5,7 +5,7 @@
 |                               |                             |                               |                             |                                   |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|:---------------------------------:|
 | [Normal Mode](#normal-mode)   | [Visual Mode](#visual-block-mode) | [Replace Mode](#replace-mode) | [Insert Mode](#insert-mode) | [History Mode](#history-mode)     |
-| [Ex Mode](#insert-mode)       | [Diff Mode](#diff-mode)     | [Filer Mode](#filer-mode)     | [Exiting](#exiting)         | [Changing Modes](#changing-modes) |
+| [Ex Mode](#ex-mode)       | [Diff Mode](#diff-mode)     | [Filer Mode](#filer-mode)     | [Exiting](#exiting)         | [Changing Modes](#changing-modes) |
 
 
 ## Exiting
@@ -15,7 +15,7 @@
 
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
-| <kbd>**:**</kbd> <kbd>**w**</kbd> Write file | <kbd>**:**</kbd> <kbd>**q**</kbd> Quit | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> Write and Quit | <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**!**</kbd> Force Quit |
+| <kbd style="background:limegreen">**:**</kbd> <kbd>**w**</kbd> Write file | <kbd>**:**</kbd> <kbd>**q**</kbd> Quit | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> Write and Quit | <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**!**</kbd> Force Quit |
 | <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> Quit All Windows | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> Write and Quit All Window | <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> <kbd>**!**</kbd> Force Quit All Window | |
 
 </details>
