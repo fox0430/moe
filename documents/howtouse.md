@@ -28,8 +28,7 @@
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
 | <kbd>**v**</kbd> Visual mode  | <kbd>**Ctrl**</kbd> <kbd>**v**</kbd> Visual Block mode | <kbd>**r**</kbd> Replace mode | <kbd>**i**</kbd> Insert mode |
-| <kbd>**o**</kbd> Insert a new line and start insert mode | <kbd>**a**</kbd> Append after the cursor and start insert mode | <kbd>**r**</kbd> Replace a character at the cursor | <kbd>**A**</kbd> Same as <kbd>**$**</kbd> <kbd>**a**</kbd> |
-| <kbd>**I**</kbd> Same as <kbd>**0**</kbd> <kbd>**a**</kbd> | |                              |                             |
+| <kbd>**o**</kbd> Insert a new line and start insert mode | <kbd>**a**</kbd> Append after the cursor and start insert mode | <kbd>**I**</kbd> Same as <kbd>**0**</kbd> <kbd>**a**</kbd> | <kbd>**A**</kbd> Same as <kbd>**$**</kbd> <kbd>**a**</kbd> |
 
 
 ## Normal mode
@@ -37,7 +36,7 @@
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
 | <kbd>**h**</kbd> Go Left :arrow_left: | <kbd>**j**</kbd> Go Down :arrow_down: | <kbd>**k**</kbd> Go Up :arrow_up: | <kbd>**l**</kbd> Go Rigth :arrow_right: |
-| <kbd>**w**</kbd> Go forwards to the start of a word :arrow_right: | <kbd>**e**</kbd> Go forwards to the end of a word :arrow_right: | <kbd>**b**</kbd> Go backwards to the start of a word :arrow_left: |  |
+| <kbd>**w**</kbd> Go forwards to the start of a word :arrow_right: | <kbd>**e**</kbd> Go forwards to the end of a word :arrow_right: | <kbd>**b**</kbd> Go backwards to the start of a word :arrow_left: | <kbd>**r**</kbd> Replace a character at the cursor |
 | <kbd>**Page Up**</kbd> Page Up :arrow_up: | <kbd>**Page Down**</kbd> Page Down :arrow_down: | <kbd>**g**</kbd> <kbd>**g**</kbd> Go to the first line :arrow_up: | <kbd>**g**</kbd> <kbd>**_**</kbd> Go to the last non-blank character of the line :arrow_right: |
 | <kbd>**G**</kbd> Go to the last line :arrow_down: | <kbd>**0**</kbd> Go to the first line :arrow_up: | <kbd>**$**</kbd> Go to the end of the line :arrow_right: | <kbd>**^**</kbd> Go to the non-blank character start of line :arrow_left: |
 | <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> Half Page Down :arrow_down: | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> Half Page Up :arrow_up: | <kbd>**d**</kbd> <kbd>**$**</kbd> OR  <kbd>**D**</kbd> Delete until the end of the line | <kbd>**:**</kbd> Start Ex mode |
