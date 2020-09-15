@@ -57,7 +57,7 @@
 </details>
 
 
-## Visual (block) mode
+## Visual block mode
 
 <details open>
   <summary>Visual Selection</summary>
@@ -87,24 +87,29 @@
 | <kbd>**Esc**</kbd> Go to Normal mode |  |  |  |
 
 
-## Hitory mode (Backup file manager)  
+## History mode
 
-```j``` - ↓  
-```k``` - ↑  
-```Enter``` - Open diff viewer  
-```R``` - Restore from backup file  
-```D``` - Delete backup file  
-```r``` - Reload backup files  
-```gg``` - Move to the first line  
-```G``` - Move to the last line  
+<details open>
+  <summary>Backup File Manager</summary>
+
+|                               |                             |                               |                             |
+|:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
+| <kbd>**j**</kbd> Go Down :arrow_down: | <kbd>**k**</kbd> Go Up :arrow_up: | <kbd>**Enter**</kbd> Open Diff | <kbd>**R**</kbd> Restore Backup file |
+| <kbd>**D**</kbd> Delete Backup file | <kbd>**r**</kbd> Reload Backup file | <kbd>**g**</kbd> <kbd>**g**</kbd> Go to the first line | <kbd>**g**</kbd> Go to the last line |
+
+</details>
 
 
-## Diff mode (Diff viewer)    
+## Diff mode
 
-```j``` - ↓  
-```k``` - ↑  
-```gg``` - Move to the first line  
-```G``` - Move to the last line  
+<details open>
+  <summary>Diff viewer</summary>
+
+|                               |                             |                               |                             |
+|:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
+| <kbd>**j**</kbd> Go Down :arrow_down: | <kbd>**k**</kbd> Go Up :arrow_up: | <kbd>**g**</kbd> <kbd>**g**</kbd> Go to the first line | <kbd>**g**</kbd> Go to the last line |
+
+</details>
 
 
 ## Filer mode
