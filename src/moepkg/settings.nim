@@ -124,7 +124,7 @@ type EditorSettings* = object
   quickRunSettings*: QuickRunSettings
   notificationSettings*: NotificationSettings
 
-type InvalidItemError* = object of Exception
+type InvalidItemError* = object of ValueError # Warning: inherit from a more precise exception type like ValueError, IOError or OSError. If these don't suit, inherit from CatchableError or Defect. [InheritFromException]
 
 proc initNotificationSettings(): NotificationSettings =
   result.screenNotifications = true
@@ -358,7 +358,7 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
     setEditorColor editorBg:
       background:
         colorFromNode(jsonNode{"colors", "editor.background"})
-    
+
     # Color scheme
     setEditorColor defaultChar:
       foreground:
@@ -515,14 +515,14 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         colorFromNode(jsonNode{"colors", "tab.foreground"})
       background:
         colorFromNode(jsonNode{"colors", "tab.inactiveBackground"})
-    
+
     setEditorColor lineNum:
       foreground:
         colorFromNode(jsonNode{"colors", "editorLineNumber.foreground"})
         adjust: InverseBackground
       background:
         colorFromNode(jsonNode{"colors", "editorLineNumber.background"})
-    
+
     setEditorColor currentLineNum:
       foreground:
         colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
@@ -535,20 +535,20 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         Color.default
-    
+
     # highlight other uses current word
     setEditorColor currentWord:
       foreground:
         adjust: ReadableVsBackground
       background:
         colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
-    
+
     setEditorColor popUpWinCurrentLine:
       foreground:
         colorFromNode(jsonNode{"colors", "sideBarTitle.forground"})
       background:
         colorFromNode(jsonNode{"colors", "sideBarSectionHeader.background"})
-        
+
     # pop up window
     setEditorColor popUpWindow:
       foreground:
@@ -680,9 +680,9 @@ proc loadVSCodeTheme*(): ColorTheme =
     var vsCodeThemeFile = ""
     var vsCodeExtensionsDir = homeDir & "/.vscode-oss/extensions/"
     var vsCodeThemeSetting = ""
-    if not existsFile(vsCodeSettingsFile):
+    if not fileExists(vsCodeSettingsFile):
       vsCodeSettingsFile = homeDir & "/.config/Code/User/settings.json"
-    if existsFile(vsCodeSettingsFile):
+    if fileExists(vsCodeSettingsFile):
       let vsCodeSettingsJson = json.parseFile(vsCodeSettingsFile)
       vsCodeThemeSetting = vsCodeSettingsJson{"workbench.colorTheme"}.getStr()
       if vsCodeThemeSetting == "":
@@ -691,9 +691,9 @@ proc loadVSCodeTheme*(): ColorTheme =
     else:
       break vsCodeThemeLoading
 
-    if not existsDir(vsCodeExtensionsDir):
+    if not dirExists(vsCodeExtensionsDir):
       vsCodeExtensionsDir = homeDir & "/.vscode/extensions/"
-      if not existsDir(vsCodeExtensionsDir):
+      if not dirExists(vsCodeExtensionsDir):
         break vsCodeThemeLoading
 
     # Note: walkDirRec was first used to solve this, however
@@ -826,7 +826,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
     if settings["Standard"].contains("highlightTrailingSpaces"):
       result.highlightTrailingSpaces = settings["Standard"]["highlightTrailingSpaces"].getbool()
-    
+
     if settings["Standard"].contains("indentationLines"):
       result.view.indentationLines = settings["Standard"]["indentationLines"].getbool()
 
@@ -1094,7 +1094,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
     if settings["Theme"].contains("statusBarVisualModeInactive"):
       ColorThemeTable[ColorTheme.config].statusBarVisualModeInactive = color("statusBarVisualModeInactive")
- 
+
     if settings["Theme"].contains("statusBarVisualModeInactiveBg"):
       ColorThemeTable[ColorTheme.config].statusBarVisualModeInactiveBg = color("statusBarVisualModeInactiveBg")
 
@@ -1600,9 +1600,9 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
 proc loadSettingFile*(): EditorSettings =
   let filename = getConfigDir() / "moe" / "moerc.toml"
 
-  if not existsFile(filename):
+  if not fileExists(filename):
     return initEditorSettings()
-  
+
   let
     toml = parsetoml.parseFile(filename)
     invalidItem = toml.validateTomlConfig
