@@ -41,7 +41,7 @@
 
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
-| <kbd><h1>h</h1></kbd><br>Go Left :arrow_left: | <kbd>**j**</kbd><br> Go Down :arrow_down: | <kbd>**k**</kbd><br> Go Up :arrow_up: | <kbd>**l**</kbd><br> Go Rigth :arrow_right: |
+| <kbd><big>h</big></kbd><br>Go Left :arrow_left: | <kbd>**j**</kbd><br> Go Down :arrow_down: | <kbd>**k**</kbd><br> Go Up :arrow_up: | <kbd>**l**</kbd><br> Go Rigth :arrow_right: |
 | <kbd>**w**</kbd><br>Go forwards to the start of a word :arrow_right: | <kbd>**e**</kbd><br> Go forwards to the end of a word :arrow_right: | <kbd>**b**</kbd><br> Go backwards to the start of a word :arrow_left: | <kbd>**r**</kbd><br> Replace a character at the cursor |
 | <kbd>**Page Up**</kbd><br>Page Up :arrow_up: | <kbd>**Page Down**</kbd><br> Page Down :arrow_down: | <kbd>**g**</kbd> <kbd>**g**</kbd><br> Go to the first line :arrow_up: | <kbd>**g**</kbd> <kbd>**_**</kbd><br> Go to the last non-blank character of the line :arrow_right: |
 | <kbd>**G**</kbd><br>Go to the last line :arrow_down: | <kbd>**0**</kbd><br> Go to the first line :arrow_up: | <kbd>**$**</kbd><br> Go to the end of the line :arrow_right: | <kbd>**^**</kbd><br> Go to the non-blank character start of line :arrow_left: |
