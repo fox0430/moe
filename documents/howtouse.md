@@ -25,12 +25,12 @@ Check command bar
 
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
-| <kbd> h </kbd> Go Left        | <kbd> j </kbd> Go Down      | <kbd> k </kbd> Go Up          | <kbd> l </kbd> Go Rigth     |
-| <kbd> w </kbd> Go forwards to the start of a word | <kbd> e </kbd> Go forwards to the end of a word | <kbd> b </kbd> Go backwards to the start of a word |  |
-| <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  |
-| <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  |
-| <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  |
-| <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  |
+| <kbd> h </kbd> Go Left :arrow_left: | <kbd> j </kbd> Go Down :arrow_down: | <kbd> k </kbd> Go Up :arrow_up: | <kbd> l </kbd> Go Rigth :arrow_right: |
+| <kbd> w </kbd> Go forwards to the start of a word :arrow_right: | <kbd> e </kbd> Go forwards to the end of a word :arrow_right: | <kbd> b </kbd> Go backwards to the start of a word :arrow_left: |  |
+| <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd> |
+| <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd> |
+| <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd> |
+| <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd> |
 
 
 
