@@ -38,7 +38,7 @@ proc main() =
 
   if parsedList.len > 0:
     for p in parsedList:
-      if existsDir(p.filename):
+      if dirExists(p.filename):
         status.addNewBuffer(p.filename, Mode.filer)
       else: status.addNewBuffer(p.filename)
   else: status.addNewBuffer
