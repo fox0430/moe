@@ -46,7 +46,7 @@
 | <kbd>*</kbd> Search forwards for the word under cursor | <kbd>**#**</kbd> Search backwards for the word under cursor | <kbd>**f**</kbd> Jump to next occurrence | <kbd>**F**</kbd> Jump to previous occurence |
 | <kbd>**Ctrl**</kbd> <kbd>**k**</kbd> Move next window | <kbd>**Ctrl**</kbd> <kbd>**j**</kbd> Move prev window  | <kbd>**z**</kbd> <kbd>**t**</kbd> Scroll the screen so the cursor is at the top | <kbd>**z**</kbd> <kbd>**b**</kbd> Scroll the screen so the cursor is at the bottom |
 | <kbd>**z**</kbd> <kbd>**.**</kbd> Center the screen on the cursor | <kbd>**Z**</kbd> <kbd>**Z**</kbd> Write current file and exit | <kbd>**Z**</kbd> <kbd>**Q**</kbd> Same as `:q!` | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**c**</kbd> Close current window |
-| <kbd>**/**</kbd> Search text | <kbd>**?**</kbd> `keyword` Search backwards | <kbd>**\**</kbd> <kbd>**r**</kbd> Quick Run | <kbd>**/**</kbd> `keyword` Search forwards |
+| <kbd>**/**</kbd> Search text | <kbd>**?**</kbd> `keyword` Search backwards | <kbd>**\\**</kbd> <kbd>**r**</kbd> Quick Run | <kbd>**/**</kbd> `keyword` Search forwards |
 
 
 ## Visual (block) mode
