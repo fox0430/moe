@@ -80,19 +80,11 @@
 
 ## Insert mode
 
-```Ctrl-e``` Insert the character which is below the cursor  
-```Ctrl-y``` Insert the character which is above the cursor  
-```Ctrl-i``` Insert a tab  
-
-```Ctrl-t``` Add indent in current line  
-```Ctrl-d``` Delete indent in current line  
-
-```Backspace``` or ```Ctrl-h``` Delete the character before the cursor  
-
-```Ctrl-w``` Delete the word before the cursor  
-```Ctrl-u``` Delete characters before the cursor in current line  
-
-```Esc``` or ```Ctrl-[``` - Start normal mode  
+|                               |                             |                               |                             |
+|:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
+| <kbd>**Ctrl**</kbd> <kbd>**e**</kbd> Insert the character which is below the cursor | <kbd>**Ctrl**</kbd> <kbd>**y**</kbd> Insert the character which is above the cursor | <kbd>**Ctrl**</kbd> <kbd>**i**</kbd> Insert a Tab | <kbd>**Ctrl**</kbd> <kbd>**h**</kbd> OR <kbd>**Backspace**</kbd> Delete the character before the cursor |
+| <kbd>**Ctrl**</kbd> <kbd>**t**</kbd> Add indent in current line | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> Remove indent in current line | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> Delete the word before the cursor | <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> Delete characters before the cursor in current line |
+| <kbd>**Esc**</kbd> Go to Normal mode | |  |  |
 
 
 ## Hitory mode (Backup file manager)  
