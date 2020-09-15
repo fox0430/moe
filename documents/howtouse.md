@@ -6,7 +6,7 @@
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
 | [Normal Mode](#normal-mode)   | [Visual Mode](#visual-mode) | [Replace Mode](#replace-mode) | [Insert Mode](#insert-mode) |
 | [History Mode](#history-mode) | [Diff Mode](#diff-mode)     | [Filer Mode](#filer-mode)     | [Ex Mode](#insert-mode)     |
-| [Exiting](#exiting)           | [Changing Modes](#changing-modes) |                         |                             |
+| [Exiting](#exiting)           | [Changing Modes](#changing-modes) | [Go To Bottom](#~) |                             |
 
 ## Exiting
 
@@ -194,3 +194,7 @@
 ```history``` - Open backup file manager  
 
 ```conf``` - Open configuration mode
+
+
+[Go To Top](#table-of-contents)
+#### ~
