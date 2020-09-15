@@ -10,7 +10,7 @@
 
 ## Exiting
 
-<details>
+<details open >
   <summary>Check the command bar</summary>
 
 |                               |                             |                               |                             |
@@ -23,8 +23,8 @@
 
 ## Changing Modes
 
-<details>
-  <summary>In **Normal Mode**</summary>
+<details open>
+  <summary>In Normal Mode</summary>
 
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
