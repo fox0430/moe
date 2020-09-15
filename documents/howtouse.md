@@ -84,7 +84,7 @@
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
 | <kbd>**Ctrl**</kbd> <kbd>**e**</kbd> Insert the character which is below the cursor | <kbd>**Ctrl**</kbd> <kbd>**y**</kbd> Insert the character which is above the cursor | <kbd>**Ctrl**</kbd> <kbd>**i**</kbd> Insert a Tab | <kbd>**Ctrl**</kbd> <kbd>**h**</kbd> OR <kbd>**Backspace**</kbd> Delete the character before the cursor |
 | <kbd>**Ctrl**</kbd> <kbd>**t**</kbd> Add indent in current line | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> Remove indent in current line | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> Delete the word before the cursor | <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> Delete characters before the cursor in current line |
-| <kbd>**Esc**</kbd> Go to Normal mode | |  |  |
+| <kbd>**Esc**</kbd> Go to Normal mode |  |  |  |
 
 
 ## Hitory mode (Backup file manager)  
