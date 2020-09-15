@@ -36,6 +36,9 @@
 
 ## Normal mode
 
+<details open>
+  <summary>The Default Mode</summary>
+
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
 | <kbd>**h**</kbd> Go Left :arrow_left: | <kbd>**j**</kbd> Go Down :arrow_down: | <kbd>**k**</kbd> Go Up :arrow_up: | <kbd>**l**</kbd> Go Rigth :arrow_right: |
@@ -51,28 +54,16 @@
 | <kbd>**z**</kbd> <kbd>**.**</kbd> Center the screen on the cursor | <kbd>**Z**</kbd> <kbd>**Z**</kbd> Write current file and exit | <kbd>**Z**</kbd> <kbd>**Q**</kbd> Same as `:q!` | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**c**</kbd> Close current window |
 | <kbd>**/**</kbd> Search text | <kbd>**?**</kbd> `keyword` Search backwards | <kbd>**\\**</kbd> <kbd>**r**</kbd> Quick Run | <kbd>**/**</kbd> `keyword` Search forwards |
 
+</details>
+
 
 ## Visual (block) mode
 
-```d ```or ```x``` - Delete(cut) text  
-```y``` - Copy text  
-```r``` - Replace character  
-```J``` - Join lines  
-```u``` - Convert string to lowercase  
-```U``` - Convert string to uppercase  
-
-```>``` - Indent  
-```<``` - Unindent  
-
-```Ctrl-a``` - Increas number under the cursor  
-```Ctrl-x``` - Decreas number under the cursor  
-
-```~``` - Toggle case of the character under the cursor  
-
-```I``` - Insert character multiple lines  
-
-
-```Esc``` - Start normal mode  
+|                               |                             |                               |                             |                                   |
+|:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|:---------------------------------:|
+| <kbd>**d**</kbd> OR <kbd>**x**</kbd> Delete text | <kbd>**y**</kbd> Copy text | <kbd>**r**</kbd> Replace character | <kbd>**J**</kbd> Join lines | <kbd>**J**</kbd> Join lines |
+| <kbd>**u**</kbd> Convert to Lowercase | <kbd>**U**</kbd> Convert to Uppercase | <kbd>**>**</kbd> Indent | <kbd>**<**</kbd> Unindent | <kbd>**~**</kbd> Toggle case of character under cursor |
+| <kbd>**Ctrl**</kbd> <kbd>**a**</kbd> Increase number under cursor | <kbd>**Ctrl**</kbd> <kbd>**x**</kbd> Decrease number under cursor | <kbd>**I**</kbd> Insert character, multiple lines | <kbd>**Esc**</kbd> Go to Normal modeo |  |
 
 
 ## Replace mode
