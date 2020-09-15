@@ -6,11 +6,11 @@
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
 | [Normal Mode](#normal-mode)   | [Visual Mode](#visual-mode) | [Replace Mode](#replace-mode) | [Insert Mode](#insert-mode) |
 | [History Mode](#history-mode) | [Diff Mode](#diff-mode)     | [Filer Mode](#filer-mode)     | [Ex Mode](#insert-mode)     |
-
+| [Exiting](#exiting)           | [Changing Modes](#changing-modes) |                         |                             |
 
 ## Exiting
 
-Check command bar  
+- Check the command bar...
 
 ```:w``` - Write file  
 ```:q``` - Quit  
@@ -21,18 +21,18 @@ Check command bar
 ```:qa!``` - Force quit all window  
 
 
+## Changing Modes
+
+- In **Normal Mode**
+
+|                               |                             |                               |                             |
+|:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
+| <kbd>**v**</kbd> Visual mode  | <kbd>**Ctrl**</kbd> <kbd>**v**</kbd> Visual Block mode | <kbd>**r**</kbd> Replace mode | <kbd>**i**</kbd> Insert mode |
+| <kbd>**o**</kbd> Insert a new line and start insert mode | <kbd>**a**</kbd> Append after the cursor and start insert mode | <kbd>**r**</kbd> Replace a character at the cursor | <kbd>**A**</kbd> Same as <kbd>**$**</kbd> <kbd>**a**</kbd> |
+| <kbd>**I**</kbd> Same as <kbd>**0**</kbd> <kbd>**a**</kbd> | |                              |                             |
+
+
 ## Normal mode
-
-
-```v``` - Start visual mode  
-```Ctrl-v``` - Start visual block mode  
-```r``` - Start replace mode  
-```i``` - Start insert mode  
-```o``` - Insert a new line and start insert mode  
-```a``` - Append after the cursor and start insert mode  
-```r``` - Replace a character at the cursor  
-```A``` - Same as $a  
-```I``` - Same as 0a  
 
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
@@ -40,9 +40,9 @@ Check command bar
 | <kbd>**w**</kbd> Go forwards to the start of a word :arrow_right: | <kbd>**e**</kbd> Go forwards to the end of a word :arrow_right: | <kbd>**b**</kbd> Go backwards to the start of a word :arrow_left: |  |
 | <kbd>**Page Up**</kbd> Page Up :arrow_up: | <kbd>**Page Down**</kbd> Page Down :arrow_down: | <kbd>**g**</kbd> <kbd>**g**</kbd> Go to the first line :arrow_up: | <kbd>**g**</kbd> <kbd>**_**</kbd> Go to the last non-blank character of the line :arrow_right: |
 | <kbd>**G**</kbd> Go to the last line :arrow_down: | <kbd>**0**</kbd> Go to the first line :arrow_up: | <kbd>**$**</kbd> Go to the end of the line :arrow_right: | <kbd>**^**</kbd> Go to the non-blank character start of line :arrow_left: |
-| <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> Half Page Down :arrow_down: | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> Half Page Up :arrow_up: | <kbd>****</kbd>  | <kbd>****</kbd>  |
+| <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> Half Page Down :arrow_down: | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> Half Page Up :arrow_up: |  |  |
 | <kbd>**u**</kbd> Undo | <kbd>**Ctrl**</kbd> <kbd>**r**</kbd> Redo | <kbd>**>**</kbd> Indent | <kbd>**<**</kbd> Unindent |
-| <kbd>**=**</kbd> <kbd>**=**<kbd> Auto Indent | <kbd>**d**</kbd> <kbd>**d**</kbd> Delete a line | <kbd>**x**</kbd> Delete current character | <kbd>**S**</kbd> OR <kbd>**c**</kbd> <kbd>**c**</kbd> Delete the characters in current line and start insert mode |
+| <kbd>**=**</kbd> <kbd>**=**</kbd> Auto Indent | <kbd>**d**</kbd> <kbd>**d**</kbd> Delete a line | <kbd>**x**</kbd> Delete current character | <kbd>**S**</kbd> OR <kbd>**c**</kbd> <kbd>**c**</kbd> Delete the characters in current line and start insert mode |
 | <kbd>**d**</kbd> <kbd>**$**</kbd> OR  <kbd>**D**</kbd> Delete until the end of the line |  | <kbd>****</kbd>  | <kbd>****</kbd>  |
 | <kbd>**y**</kbd> <kbd>**y**</kbd> Copy a line | <kbd>**p**</kbd> Paste the clipboard | <kbd>**n**</kbd> Search forwards | <kbd>**N**</kbd> Search backwards |
 | <kbd>*</kbd> Search forwards for the word under cursor | <kbd>**#**</kbd> Search backwards for the word under cursor | <kbd>**f**</kbd> Jump to next occurrence | <kbd>**F**</kbd> Jump to previous occurence |
