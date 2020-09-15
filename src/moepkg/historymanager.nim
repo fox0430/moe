@@ -38,7 +38,7 @@ proc generateBackUpFilePath(path: seq[Rune],
   let slashPosition = path.rfind(ru"/")
 
   if settings.backupDir.len > 0:
-    if not existsDir($settings.backupDir): return ru""
+    if not dirExists($settings.backupDir): return ru""
     if slashPosition > 0:
       result = path[0 ..< slashPosition] /
                settings.backupDir /
@@ -173,7 +173,7 @@ proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
       status.workSpace[workspaceIndex].currentMainWindowNode.view =
         status.bufStatus[i].buffer.initEditorView(terminalHeight(),
                                                   terminalWidth())
-  
+
   status.resize(terminalHeight(), terminalWidth())
 
   let settings = status.settings.notificationSettings
