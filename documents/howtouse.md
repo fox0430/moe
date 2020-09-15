@@ -25,12 +25,20 @@ Check command bar
 
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
-| <kbd> **h** </kbd> Go Left :arrow_left: | <kbd> j </kbd> Go Down :arrow_down: | <kbd> k </kbd> Go Up :arrow_up: | <kbd> l </kbd> Go Rigth :arrow_right: |
-| <kbd> w </kbd> Go forwards to the start of a word :arrow_right: | <kbd> e </kbd> Go forwards to the end of a word :arrow_right: | <kbd> b </kbd> Go backwards to the start of a word :arrow_left: |  |
-| <kbd> Page Up </kbd> :arrow_up: | <kbd> Page Down </kbd> Page Down :arrow_down: | <kbd> g </kbd><kbd> g </kbd> Move to the first line | <kbd> g </kbd><kbd> _ </kbd> Move to the last non-blank characater of the line |
-| <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd> |
-| <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd> |
-| <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd> |
+| <kbd>**h**</kbd> Go Left :arrow_left: | <kbd>**j**</kbd> Go Down :arrow_down: | <kbd>**k**</kbd> Go Up :arrow_up: | <kbd>**l**</kbd> Go Rigth :arrow_right: |
+| <kbd>**w**</kbd> Go forwards to the start of a word :arrow_right: | <kbd>**e**</kbd> Go forwards to the end of a word :arrow_right: | <kbd>**b**</kbd> Go backwards to the start of a word :arrow_left: |  |
+| <kbd>**Page Up**</kbd> Page Up :arrow_up: | <kbd>**Page Down**</kbd> Page Down :arrow_down: | <kbd>**g**</kbd> <kbd>**g**</kbd> Go to the first line :arrow_up: | <kbd>**g**</kbd> <kbd>**_**</kbd> Go to the last non-blank character of the line :arrow_right: |
+| <kbd>**G**</kbd> Go to the last line :arrow_down: | <kbd>**0**</kbd> Go to the first line :arrow_up: | <kbd>**$**</kbd> Go to the end of the line :arrow_right: | <kbd>**^**</kbd> Go to the non-blank character start of line :arrow_left: |
+| <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> Half Page Down :arrow_down: | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> Half Page Up :arrow_up: | <kbd>****</kbd>  | <kbd>****</kbd>  |
+| <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  |
+| <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  |
+| <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  |
+| <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  |
+| <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  |
+| <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  |
+| <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  |
+| <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  |
+| <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  | <kbd>****</kbd>  |
  
 ```Page Up``` - Page up  
 ```Page Down``` - Page down  
