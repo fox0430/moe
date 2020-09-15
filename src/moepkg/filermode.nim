@@ -231,7 +231,7 @@ proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
     createDir($dirname[0])
     filerStatus.dirlistUpdate = true
   except OSError: status.commandWindow.writeCreateDirError(status.messageLog)
-   
+
 proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   let workspaceIndex = status.currentWorkSpaceIndex
   var windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
@@ -267,7 +267,7 @@ proc openNewWinAndOpenFilerOrDir(status: var EditorStatus,
   status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
 
-  if existsDir($path):
+  if dirExists($path):
     try:
       setCurrentDir($path)
     except OSError:
@@ -302,7 +302,7 @@ proc initFilelistHighlight[T](dirList: seq[PathInfo],
                                           color: color))
 
 proc pathToIcon(path: string): seq[Rune] =
-  if existsDir(path):
+  if dirExists(path):
     return ru"📁 "
 
   # Not sure if this is a perfect solution,
@@ -551,7 +551,7 @@ proc filerMode*(status: var EditorStatus) =
       filerStatus = filerStatus.updateDirList(path)
 
       if windowNode.currentLine > filerStatus.dirList.high:
-        windowNode.currentLine = filerStatus.dirList.high 
+        windowNode.currentLine = filerStatus.dirList.high
 
     if filerStatus.viewUpdate: status.updateFilerView(filerStatus)
 
@@ -569,7 +569,7 @@ proc filerMode*(status: var EditorStatus) =
     status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(windowNode)
 
     let currentPath = status.bufStatus[currentBufferIndex].path
-    
+
     if key == ord(':'): status.changeMode(Mode.ex)
 
     elif isResizekey(key):
