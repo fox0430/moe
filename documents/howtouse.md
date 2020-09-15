@@ -41,18 +41,18 @@
 
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
-| <kbd>**h**</kbd> Go Left :arrow_left: | <kbd>**j**</kbd> Go Down :arrow_down: | <kbd>**k**</kbd> Go Up :arrow_up: | <kbd>**l**</kbd> Go Rigth :arrow_right: |
-| <kbd>**w**</kbd> Go forwards to the start of a word :arrow_right: | <kbd>**e**</kbd> Go forwards to the end of a word :arrow_right: | <kbd>**b**</kbd> Go backwards to the start of a word :arrow_left: | <kbd>**r**</kbd> Replace a character at the cursor |
-| <kbd>**Page Up**</kbd> Page Up :arrow_up: | <kbd>**Page Down**</kbd> Page Down :arrow_down: | <kbd>**g**</kbd> <kbd>**g**</kbd> Go to the first line :arrow_up: | <kbd>**g**</kbd> <kbd>**_**</kbd> Go to the last non-blank character of the line :arrow_right: |
-| <kbd>**G**</kbd> Go to the last line :arrow_down: | <kbd>**0**</kbd> Go to the first line :arrow_up: | <kbd>**$**</kbd> Go to the end of the line :arrow_right: | <kbd>**^**</kbd> Go to the non-blank character start of line :arrow_left: |
-| <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> Half Page Down :arrow_down: | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> Half Page Up :arrow_up: | <kbd>**d**</kbd> <kbd>**$**</kbd> OR  <kbd>**D**</kbd> Delete until the end of the line | <kbd>**:**</kbd> Start Ex mode |
-| <kbd>**u**</kbd> Undo | <kbd>**Ctrl**</kbd> <kbd>**r**</kbd> Redo | <kbd>**>**</kbd> Indent | <kbd>**<**</kbd> Unindent |
-| <kbd>**=**</kbd> <kbd>**=**</kbd> Auto Indent | <kbd>**d**</kbd> <kbd>**d**</kbd> Delete a line | <kbd>**x**</kbd> Delete current character | <kbd>**S**</kbd> OR <kbd>**c**</kbd> <kbd>**c**</kbd> Delete the characters in current line and start insert mode |
-| <kbd>**y**</kbd> <kbd>**y**</kbd> Copy a line | <kbd>**p**</kbd> Paste the clipboard | <kbd>**n**</kbd> Search forwards | <kbd>**N**</kbd> Search backwards |
-| <kbd>*</kbd> Search forwards for the word under cursor | <kbd>**#**</kbd> Search backwards for the word under cursor | <kbd>**f**</kbd> Jump to next occurrence | <kbd>**F**</kbd> Jump to previous occurence |
-| <kbd>**Ctrl**</kbd> <kbd>**k**</kbd> Move next window | <kbd>**Ctrl**</kbd> <kbd>**j**</kbd> Move prev window  | <kbd>**z**</kbd> <kbd>**t**</kbd> Scroll the screen so the cursor is at the top | <kbd>**z**</kbd> <kbd>**b**</kbd> Scroll the screen so the cursor is at the bottom |
-| <kbd>**z**</kbd> <kbd>**.**</kbd> Center the screen on the cursor | <kbd>**Z**</kbd> <kbd>**Z**</kbd> Write current file and exit | <kbd>**Z**</kbd> <kbd>**Q**</kbd> Same as `:q!` | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**c**</kbd> Close current window |
-| <kbd>**/**</kbd> Search text | <kbd>**?**</kbd> `keyword` Search backwards | <kbd>**\\**</kbd> <kbd>**r**</kbd> Quick Run | <kbd>**/**</kbd> `keyword` Search forwards |
+| <kbd>**h**</kbd><br>Go Left :arrow_left: | <kbd>**j**</kbd><br> Go Down :arrow_down: | <kbd>**k**</kbd><br> Go Up :arrow_up: | <kbd>**l**</kbd><br> Go Rigth :arrow_right: |
+| <kbd>**w**</kbd><br>Go forwards to the start of a word :arrow_right: | <kbd>**e**</kbd><br> Go forwards to the end of a word :arrow_right: | <kbd>**b**</kbd><br> Go backwards to the start of a word :arrow_left: | <kbd>**r**</kbd><br> Replace a character at the cursor |
+| <kbd>**Page Up**</kbd><br>Page Up :arrow_up: | <kbd>**Page Down**</kbd><br> Page Down :arrow_down: | <kbd>**g**</kbd> <kbd>**g**</kbd><br> Go to the first line :arrow_up: | <kbd>**g**</kbd> <kbd>**_**</kbd><br> Go to the last non-blank character of the line :arrow_right: |
+| <kbd>**G**</kbd><br>Go to the last line :arrow_down: | <kbd>**0**</kbd><br> Go to the first line :arrow_up: | <kbd>**$**</kbd><br> Go to the end of the line :arrow_right: | <kbd>**^**</kbd><br> Go to the non-blank character start of line :arrow_left: |
+| <kbd>**Ctrl**</kbd> <kbd>**u**</kbd><br>Half Page Down :arrow_down: | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd><br> Half Page Up :arrow_up: | <kbd>**d**</kbd> <kbd>**$**</kbd> OR  <kbd>**D**</kbd><br> Delete until the end of the line | <kbd>**:**</kbd><br> Start Ex mode |
+| <kbd>**u**</kbd><br>Undo | <kbd>**Ctrl**</kbd> <kbd>**r**</kbd><br> Redo | <kbd>**>**</kbd><br> Indent | <kbd>**<**</kbd><br> Unindent |
+| <kbd>**=**</kbd> <kbd>**=**</kbd><br>Auto Indent | <kbd>**d**</kbd> <kbd>**d**</kbd><br> Delete a line | <kbd>**x**</kbd><br> Delete current character | <kbd>**S**</kbd> OR <kbd>**c**</kbd> <kbd>**c**</kbd><br> Delete the characters in current line and start insert mode |
+| <kbd>**y**</kbd> <kbd>**y**</kbd><br>Copy a line | <kbd>**p**</kbd><br> Paste the clipboard | <kbd>**n**</kbd><br> Search forwards | <kbd>**N**</kbd><br> Search backwards |
+| <kbd>*</kbd> Search forwards for the word under cursor | <kbd>**#**</kbd><br>Search backwards for the word under cursor | <kbd>**f**</kbd><br>Jump to next occurrence | <kbd>**F**</kbd><br>Jump to previous occurence |
+| <kbd>**Ctrl**</kbd> <kbd>**k**</kbd><br>Move next window | <kbd>**Ctrl**</kbd> <kbd>**j**</kbd><br>Move prev window  | <kbd>**z**</kbd> <kbd>**t**</kbd><br>Scroll the screen so the cursor is at the top | <kbd>**z**</kbd> <kbd>**b**</kbd><br>Scroll the screen so the cursor is at the bottom |
+| <kbd>**z**</kbd> <kbd>**.**</kbd><br>Center the screen on the cursor | <kbd>**Z**</kbd> <kbd>**Z**</kbd><br>Write current file and exit | <kbd>**Z**</kbd> <kbd>**Q**</kbd><br>Same as `:q!` | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**c**</kbd><br>Close current window |
+| <kbd>**/**</kbd><br>Search text | <kbd>**?**</kbd><br>`keyword` Search backwards | <kbd>**\\**</kbd> <kbd>**r**</kbd><br>Quick Run | <kbd>**/**</kbd><br>`keyword` Search forwards |
 
 </details>
 
