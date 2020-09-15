@@ -51,6 +51,18 @@ default is 2
 tabStop
 ```
 
+Enable/Disable ignorecase (bool)  
+default is true
+```
+ignorecase
+```
+
+Enable/Disable smartcase (bool)  
+default is true
+```
+smartcase
+```
+
 Automatic closing brackets (bool)  
 default is true
 ```
@@ -142,7 +154,7 @@ smoothScroll
 ```
 
 Smooth scroll speed (int)  
-default is 16
+default is 15
 ```
 smoothScrollSpeed
 ```

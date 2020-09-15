@@ -10,7 +10,7 @@ proc writeMessageOnCommandWindow*(cmdWin: var Window,
   cmdWin.refresh
 
 proc writeNoWriteError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
-  let mess = "Error: No changes since last write"
+  let mess = "Error: No write since last change"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
 
@@ -257,7 +257,11 @@ proc writeNotExistWorkspaceError*(cmdWin: var Window,
 proc writeWorkspaceList*(cmdWin: var Window, buffer: string) {.inline.} =
   cmdWin.writeMessageOnCommandWindow(buffer, EditorColorPair.commandBar)
 
+<<<<<<< HEAD
 proc writeBackupRestoreError*(cmdWin: var Window) {.inline.} =
+=======
+proc writeBackupRestoreError*(cmdWin: var Window) =
+>>>>>>> ed2e9526d41a3062ed1edd5797c8ffcb990885e2
   const mess = "Error: Restore failed"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
 

@@ -592,38 +592,38 @@ type EditorColorPair* = enum
   preprocessor = 39
 
   # filer mode
-  currentFile = 46
-  currentFileBg = 47
-  file = 48
-  fileBg = 49
-  dir = 50
-  dirBg = 51
-  pcLink = 52
-  pcLinkBg = 53
+  currentFile = 40
+  currentFileBg = 41
+  file = 42
+  fileBg = 43
+  dir = 44
+  dirBg = 45
+  pcLink = 46
+  pcLinkBg = 47
   # pop up window
-  popUpWindow = 54
-  popUpWinCurrentLine = 55
+  popUpWindow = 48
+  popUpWinCurrentLine = 49
   # replace text highlighting
-  replaceText = 56
+  replaceText = 50
   # pair of paren highlighting
-  parenText = 57
+  parenText = 51
   # highlight other uses current word
-  currentWord = 58
+  currentWord = 52
   # highlight full width space
-  highlightFullWidthSpace = 59
+  highlightFullWidthSpace = 53
   # highlight trailing spaces
-  highlightTrailingSpaces = 60
+  highlightTrailingSpaces = 54
   # work space bar
-  workSpaceBar = 61
+  workSpaceBar = 55
   # highlight reserved words
-  reservedWord = 62
+  reservedWord = 56
   # highlight history manager
-  currentHistory = 63
+  currentHistory = 57
   # highlight diff
-  addedLine = 64
-  deletedLine = 65
+  addedLine = 58
+  deletedLine = 59
   # configuration mode
-  currentSetting = 66
+  currentSetting = 60
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -696,7 +696,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     visualModeBg: purple_1,
 
     # color scheme
-    defaultChar: gray100,
+    defaultChar: white,
     gtKeyword: skyBlue1,
     gtFunctionName: gold1,
     gtBoolean: yellow,
@@ -826,7 +826,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     visualModeBg: purple_1,
 
     # color scheme
-    defaultChar: gray100,
+    defaultChar: white,
     gtKeyword: skyBlue1,
     gtFunctionName: gold1,
     gtBoolean: yellow,
@@ -956,7 +956,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     visualModeBg: purple_1,
 
     # color scheme
-    defaultChar: gray100,
+    defaultChar: white,
     gtKeyword: skyBlue1,
     gtFunctionName: gold1,
     gtBoolean: yellow,

@@ -244,9 +244,7 @@ proc startsWith*(runes1, runes2: seq[Rune]): bool =
       result = false
       break
 
-proc startsWith*(runes1: seq[Rune], r: Rune): bool =
-  if runes1[0] == r: return true
-  else: false
+proc startsWith*(runes1: seq[Rune], r: Rune): bool {.inline.} = runes1[0] == r
 
 proc `$`*(seqRunes: seq[seq[Rune]]): string =
   for runes in seqRunes: result = result & $runes

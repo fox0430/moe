@@ -16,6 +16,8 @@ const
     "tabStop",
     "autoCloseParen",
     "autoIndent",
+    "ignorecase",
+    "smartcase",
     "disableChangeCursor",
     "defaultCursor",
     "normalModeCursor",
@@ -31,7 +33,9 @@ const
     "systemClipboard",
     "highlightFullWidthSpace",
     "highlightTrailingSpaces",
-    "highlightCurrentWord"
+    "highlightCurrentWord",
+    "smoothScroll",
+    "smoothScrollSpeed",
   ]
   buildOnSaveTableNames = [
     "enable",
@@ -232,6 +236,10 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
         result.add(ru nameStr & space & $settings.autoCloseParen)
       of "autoIndent":
         result.add(ru nameStr & space & $settings.autoIndent)
+      of "ignorecase":
+        result.add(ru nameStr & space & $settings.ignorecase)
+      of "smartcase":
+        result.add(ru nameStr & space & $settings.smartcase)
       of "disableChangeCursor":
         result.add(ru nameStr & space & $settings.disableChangeCursor)
       of "defaultCursor":
@@ -264,6 +272,10 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
         result.add(ru nameStr & space & $settings.highlightTrailingSpaces)
       of "highlightCurrentWord":
         result.add(ru nameStr & space & $settings.highlightOtherUsesCurrentWord)
+      of "smoothScroll":
+        result.add(ru nameStr & space & $settings.smoothScroll)
+      of "smoothScrollSpeed":
+        result.add(ru nameStr & space & $settings.smoothScrollSpeed)
 
 proc initBuildOnSaveTableBuffer(settings: BuildOnSaveSettings): seq[seq[Rune]] =
   result.add(ru"BuildOnSave")
@@ -908,7 +920,7 @@ proc configMode*(status: var Editorstatus) =
   while status.isConfigMode and
         currentWorkSpace == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
-        
+
     let
       currentBufferIndex = status.bufferIndexInCurrentWindow
       workspaceIndex = status.currentWorkSpaceIndex

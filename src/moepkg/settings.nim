@@ -98,6 +98,8 @@ type EditorSettings* = object
   autoCloseParen*: bool
   autoIndent*: bool
   tabStop*: int
+  ignorecase*: bool
+  smartcase*: bool
   disableChangeCursor*: bool
   defaultCursor*: CursorType
   normalModeCursor*: CursorType
@@ -205,6 +207,8 @@ proc initEditorSettings*(): EditorSettings =
   result.autoCloseParen = true
   result.autoIndent = true
   result.tabStop = 2
+  result.ignorecase = true
+  result.smartcase = true
   # defaultCursor is terminal default curosr shape
   result.defaultCursor = CursorType.blinkBlock
   result.normalModeCursor = CursorType.blinkBlock
@@ -216,7 +220,7 @@ proc initEditorSettings*(): EditorSettings =
   result.highlightPairOfParen = true
   result.autoDeleteParen = true
   result.smoothScroll = true
-  result.smoothScrollSpeed = 17
+  result.smoothScrollSpeed = 15
   result.highlightOtherUsesCurrentWord = true
   result.systemClipboard = true
   result.highlightFullWidthSpace = true
@@ -349,7 +353,7 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
     if tokenNodes.hasKey(key):
       return tokenNodes[key]
     else:
-      JsonNode.default()
+      return JsonNode.default()
 
   # This is currently optimized and tested for the Forest Focus theme
   # and even for that theme it only produces a partial and imperfect
@@ -769,6 +773,12 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
     if settings["Standard"].contains("autoIndent"):
       result.autoIndent = settings["Standard"]["autoIndent"].getbool()
+
+    if settings["Standard"].contains("ignorecase"):
+      result.ignorecase = settings["Standard"]["ignorecase"].getbool()
+
+    if settings["Standard"].contains("smartcase"):
+      result.smartcase = settings["Standard"]["smartcase"].getbool()
 
     if settings["Standard"].contains("disableChangeCursor"):
       result.disableChangeCursor = settings["Standard"]["disableChangeCursor"].getbool()
@@ -1357,6 +1367,8 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
            "indentationLines",
            "autoCloseParen",
            "autoIndent",
+           "ignorecase",
+           "smartcase",
            "disableChangeCursor",
            "autoSave",
            "liveReloadOfConf",
@@ -1368,10 +1380,11 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
            "systemClipboard",
            "highlightFullWidthSpace",
            "highlightTrailingSpaces",
-           "highlightCurrentWord":
+           "highlightCurrentWord",
+           "smoothScroll":
           if not (item.val["type"].getStr == "bool"):
             return some($item)
-        of "tabStop", "autoSaveInterval":
+        of "tabStop", "autoSaveInterval", "smoothScrollSpeed":
           if not (item.val["type"].getStr == "integer" and
                   parseInt(item.val["value"].getStr) > 0): return some($item)
         of "defaultCursor",

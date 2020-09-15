@@ -16,6 +16,8 @@ const tomlStr = """
   tabStop = 4
   autoCloseParen = false
   autoIndent = false
+  ignorecase = false
+  smartcase = false
   disableChangeCursor = true
   defaultCursor = "blinkIbeam"
   normalModeCursor = "blinkIbeam"
@@ -32,6 +34,8 @@ const tomlStr = """
   highlightFullWidthSpace = false
   highlightTrailingSpaces = false
   highlightCurrentWord = false
+  smoothScroll = false
+  smoothScrollSpeed = 1
 
   [BuildOnSave]
   enable = true
@@ -239,6 +243,8 @@ suite "Parse configuration file":
     check settings.view.tabStop == 4
     check not settings.autoCloseParen
     check not settings.autoIndent
+    check not settings.ignorecase
+    check not settings.smartcase
     check settings.disableChangeCursor
     check settings.defaultCursor == CursorType.blinkIbeam
     check settings.normalModeCursor == CursorType.blinkIbeam
@@ -255,6 +261,8 @@ suite "Parse configuration file":
     check not settings.highlightFullWidthSpace
     check not settings.highlightTrailingSpaces
     check not settings.highlightOtherUsesCurrentWord
+    check not settings.smoothScroll
+    check settings.smoothScrollSpeed == 1
 
     check settings.buildOnSave.enable
     check settings.buildOnSave.workspaceRoot == ru"/home/fox/git/moe"
