@@ -9,7 +9,7 @@ type GapBuffer*[T] = object
   gapBegin, gapEnd: int # 半開区間[gapBegin,gapEnd)を隙間とする
   undoRedoStack: UndoRedoStack[T]
 
-proc gapLen(gapBuffer: GapBuffer): int = gapBuffer.gapEnd - gapBuffer.gapBegin
+proc gapLen(gapBuffer: GapBuffer): int {.inline.} = gapBuffer.gapEnd - gapBuffer.gapBegin
 
 proc makeGap(gapBuffer: var GapBuffer, gapBegin: int) =
   ## Create a gap starting with gapBegin
@@ -60,7 +60,7 @@ proc insert*[T](gapBuffer: var GapBuffer,
   inc(gapBuffer.gapBegin)
   inc(gapBuffer.size)
 
-proc add*[T](gapBuffer: var GapBuffer[T], val: T, pushToStack: bool = true) =
+proc add*[T](gapBuffer: var GapBuffer[T], val: T, pushToStack: bool = true) {.inline.} =
   gapBuffer.insert(val, gapBuffer.len, pushToStack)
 
 proc initGapBuffer*[T](): GapBuffer[T] =
@@ -145,24 +145,24 @@ proc `[]`*[T](gapBuffer: GapBuffer[T], index: int): T =
   if index < gapBuffer.gapBegin: return gapBuffer.buffer[index]
   return gapBuffer.buffer[gapBuffer.gapEnd+(index-gapBuffer.gapBegin)]
 
-proc lastSuitId*(gapBuffer: GapBuffer): int = gapBuffer.undoRedoStack.lastSuitId
+proc lastSuitId*(gapBuffer: GapBuffer): int {.inline.} = gapBuffer.undoRedoStack.lastSuitId
 
-proc beginNewSuitIfNeeded*(gapBuffer: var GapBuffer) =
+proc beginNewSuitIfNeeded*(gapBuffer: var GapBuffer) {.inline.} =
   gapBuffer.undoRedoStack.beginNewSuitIfNeeded
 
-proc canUndo*(gapBuffer: GapBuffer): bool = gapBuffer.undoRedoStack.canUndo
+proc canUndo*(gapBuffer: GapBuffer): bool {.inline.} = gapBuffer.undoRedoStack.canUndo
 
-proc canRedo*(gapBuffer: GapBuffer): bool = gapBuffer.undoRedoStack.canRedo
+proc canRedo*(gapBuffer: GapBuffer): bool {.inline.} = gapBuffer.undoRedoStack.canRedo
 
-proc undo*(gapBuffer: var GapBuffer) = gapBuffer.undoRedoStack.undo(gapBuffer)
+proc undo*(gapBuffer: var GapBuffer) {.inline.} = gapBuffer.undoRedoStack.undo(gapBuffer)
 
-proc redo*(gapBuffer: var GapBuffer) = gapBuffer.undoRedoStack.redo(gapBuffer)
+proc redo*(gapBuffer: var GapBuffer) {.inline.} = gapBuffer.undoRedoStack.redo(gapBuffer)
 
-proc len*(gapBuffer: GapBuffer): int = gapBuffer.size
+proc len*(gapBuffer: GapBuffer): int {.inline.} = gapBuffer.size
 
-proc high*(gapBuffer: GapBuffer): int = gapBuffer.len-1
+proc high*(gapBuffer: GapBuffer): int {.inline.} = gapBuffer.len-1
 
-proc empty*(gapBuffer: GapBuffer): bool = return gapBuffer.len == 0
+proc empty*(gapBuffer: GapBuffer): bool {.inline.} = return gapBuffer.len == 0
 
 proc `$`*(gapBuffer: GapBuffer): string =
   result = ""
@@ -187,9 +187,8 @@ proc prev*(gapBuffer: GapBuffer, line, column: int): (int, int) =
     dec(result[0])
     result[1] = max(gapBuffer[result[0]].len-1, 0)
 
-proc isFirst*(gapBuffer: GapBuffer, line, column: int): bool =
+proc isFirst*(gapBuffer: GapBuffer, line, column: int): bool {.inline.} =
   line == 0 and column == 0
 
-proc isLast*(gapBuffer: GapBuffer, line, column: int): bool =
+proc isLast*(gapBuffer: GapBuffer, line, column: int): bool {.inline.} =
   line == gapBuffer.len-1 and column >= gapBuffer[gapBuffer.len-1].len-1
-

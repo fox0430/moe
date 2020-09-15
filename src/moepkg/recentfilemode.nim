@@ -24,7 +24,7 @@ proc initRecentFileModeBuffer(bufStatus: var BufferStatus) =
     if index == 0: bufStatus.buffer[0] = str.toRunes
     else: bufStatus.buffer.add(str.toRunes)
 
-proc isRecentFileMode(bufStatus: BufferStatus): bool =
+proc isRecentFileMode(bufStatus: BufferStatus): bool {.inline.} =
   bufStatus.mode == Mode.recentFile
 
 proc recentFileMode*(status: var Editorstatus) =

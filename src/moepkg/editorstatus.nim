@@ -42,7 +42,7 @@ proc initPlatform(): Platform =
   elif defined macosx: result = Platform.mac
   else: result = Platform.other
 
-proc initRegisters(): Registers =
+proc initRegisters(): Registers {.inline.} =
   result.yankedLines = @[]
   result.yankedStr = @[]
 
@@ -105,7 +105,7 @@ proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
       if status.workSpace[workspaceIndex].statusbar[i].windowIndex == node.windowIndex:
         status.workSpace[workspaceIndex].statusbar[i].bufferIndex = bufferIndex
 
-proc bufferIndexInCurrentWindow*(status: Editorstatus): int =
+proc bufferIndexInCurrentWindow*(status: Editorstatus): int {.inline.} =
   let workspaceIndex = status.currentWorkSpaceIndex
   status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
 
@@ -116,7 +116,7 @@ proc changeMode*(status: var EditorStatus, mode: Mode) =
   status.bufStatus[currentBufferIndex].prevMode = currentMode
   status.bufStatus[currentBufferIndex].mode = mode
 
-proc changeMode*(bufStatus: var BufferStatus, mode: Mode) =
+proc changeMode*(bufStatus: var BufferStatus, mode: Mode) {.inline.} =
   bufStatus.prevMode = bufStatus.mode
   bufStatus.mode = mode
 
@@ -128,7 +128,7 @@ proc changeCurrentWin*(status:var EditorStatus, index: int) =
       status.workSpace[workspaceIndex].mainWindowNode.searchByWindowIndex(index)
     status.workSpace[workspaceIndex].currentMainWindowNode = node
 
-proc executeOnExit(settings: EditorSettings) =
+proc executeOnExit(settings: EditorSettings) {.inline.} =
   if not settings.disableChangeCursor:
     changeCursorType(settings.defaultCursor)
 
@@ -317,7 +317,7 @@ proc initSyntaxHighlight(windowNode: var WindowNode,
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
-proc isLogViewerMode(mode, prevMode: Mode): bool =
+proc isLogViewerMode(mode, prevMode: Mode): bool {.inline.} =
   (mode == logViewer) or (mode == ex and prevMode == logViewer)
 
 proc updateLogViewer(status: var Editorstatus, bufferIndex: int) =
@@ -615,13 +615,13 @@ proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode) =
 
   status.changeCurrentBuffer(index)
 
-proc addNewBuffer*(status: var EditorStatus, mode: Mode) =
+proc addNewBuffer*(status: var EditorStatus, mode: Mode) {.inline.} =
   status.addNewBuffer("", mode)
 
-proc addNewBuffer*(status: var EditorStatus, filename: string) =
+proc addNewBuffer*(status: var EditorStatus, filename: string) {.inline.} =
   status.addNewBuffer(filename, Mode.normal)
 
-proc addNewBuffer*(status: var EditorStatus) =
+proc addNewBuffer*(status: var EditorStatus) {.inline.} =
   status.addNewBuffer("")
 
 proc deleteBuffer*(status: var Editorstatus, deleteIndex: int) =
@@ -690,7 +690,7 @@ proc changeCurrentWorkSpace*(status: var Editorstatus, index: int) =
   else:
     status.commandwindow.writeNotExistWorkspaceError(index, status.messageLog)
 
-proc tryRecordCurrentPosition*(bufStatus: var BufferStatus, windowNode: WindowNode) =
+proc tryRecordCurrentPosition*(bufStatus: var BufferStatus, windowNode: WindowNode) {.inline.} =
   bufStatus.positionRecord[bufStatus.buffer.lastSuitId] = (windowNode.currentLine,
                                                            windowNode.currentColumn,
                                                            windowNode.expandedColumn)

@@ -6,7 +6,7 @@ type StatusBar* = object
   windowIndex*: int
   bufferIndex*: int
 
-proc initStatusBar*(): StatusBar =
+proc initStatusBar*(): StatusBar {.inline.} =
   const
     h = 1
     w = 1
@@ -16,7 +16,7 @@ proc initStatusBar*(): StatusBar =
 
   result.window = initWindow(h, w, t, l, color)
 
-proc showFilename(mode, prevMode: Mode): bool =
+proc showFilename(mode, prevMode: Mode): bool {.inline.} =
   not isHistoryManagerMode(mode, prevMode) and
   not isConfigMode(mode, prevMode)
 

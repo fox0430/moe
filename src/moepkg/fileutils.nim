@@ -28,7 +28,7 @@ proc openFile*(filename: seq[Rune]): tuple[text: seq[Rune],
       convert(raw, "UTF-8", $encoding).toRunes
   return (text, encoding)
 
-proc newFile*(): GapBuffer[seq[Rune]] =
+proc newFile*(): GapBuffer[seq[Rune]] {.inline.} =
   result = initGapBuffer[seq[Rune]]()
   result.add(ru"", false)
 

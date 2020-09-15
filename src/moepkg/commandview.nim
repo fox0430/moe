@@ -147,7 +147,7 @@ proc splitCommand*(command: string): seq[seq[Rune]] =
 proc writeExModeView(commandWindow: var Window,
                      exStatus: ExModeViewStatus,
                      color: EditorColorPair) =
-                     
+
   let buffer = ($exStatus.buffer).substr(exStatus.startPosition, exStatus.buffer.len)
 
   commandWindow.erase
@@ -211,7 +211,7 @@ proc insertCommandBuffer(exStatus: var ExModeViewStatus, r: Rune) =
   if exStatus.cursorX < terminalWidth() - 1: inc(exStatus.cursorX)
   else: inc(exStatus.startPosition)
 
-proc insertCommandBuffer(exStatus: var ExModeViewStatus, runes: seq[Rune]) =
+proc insertCommandBuffer(exStatus: var ExModeViewStatus, runes: seq[Rune]) {.inline.} =
   for r in runes:
     exStatus.insertCommandBuffer(r)
 
@@ -439,7 +439,7 @@ proc suggestExCommandOption(status: var Editorstatus,
 proc suggestExCommand(status: var Editorstatus,
                       exStatus: var ExModeViewStatus,
                       key: var Rune) =
-                      
+
   var suggestlist: seq[seq[Rune]] = @[exStatus.buffer]
   let buffer = toLowerAscii($exStatus.buffer)
   for str in exCommandList:

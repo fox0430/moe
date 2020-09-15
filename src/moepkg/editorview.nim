@@ -176,14 +176,14 @@ proc scrollDown*[T](view: var EditorView, buffer: T) =
     view.start.addLast(singleLine.start)
     view.length.addLast(singleLine.length)
 
-proc writeLineNum(view: EditorView, win: var Window, y, line: int, colorPair: EditorColorPair) =
+proc writeLineNum(view: EditorView, win: var Window, y, line: int, colorPair: EditorColorPair) {.inline.} =
   win.write(y, 0, strutils.align($(line+1), view.widthOfLineNum-1), colorPair, false)
 
 proc write(view: EditorView,
            win: var Window,
            y, x: int,
            str: seq[Rune],
-           color: EditorColorPair) =
+           color: EditorColorPair) {.inline.} =
 
   # TODO: use settings file
   const tab = "    "
@@ -256,7 +256,7 @@ proc writeAllLines*[T](view: var EditorView,
     while i < highlight.len and highlight[i].firstRow == view.originalLine[y]:
       if (highlight[i].firstRow, highlight[i].firstColumn) > (highlight[i].lastRow, highlight[i].lastColumn):
         # skip an empty segment
-        break 
+        break
       let
         first = max(highlight[i].firstColumn-view.start[y], 0)
         last = min(highlight[i].lastColumn-view.start[y], view.lines[y].high)
@@ -282,7 +282,7 @@ proc writeAllLines*[T](view: var EditorView,
       x += width(str)
       if last == highlight[i].lastColumn - view.start[y]: inc(i) # consumed a whole segment
       else: break
-    
+
     if viewSettings.indentationLines:
       for i in 0..<indents:
         view.write(win,

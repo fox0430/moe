@@ -38,7 +38,7 @@ macro mapAnnotationToTable(args: varargs[untyped]): untyped =
         `tableIdent`[`hexCode`]       = `intLit`
         `tableReverseIdent`[`intLit`] = `hexCode`
         `tableRGBIdent`[`intLit`]     = (`red`, `green`, `blue`)
-  
+
   # emit source code
   return quote do:
     var `tableIdent`        = initTable[string, int]()
@@ -1278,7 +1278,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   ),
 ]
 
-proc setColorPair*(colorPair: EditorColorPair, character, background: Color) =
+proc setColorPair*(colorPair: EditorColorPair, character, background: Color) {.inline.} =
   init_pair(cshort(ord(colorPair)), cshort(ord(character)), cshort(ord(background)))
 
 proc setCursesColor*(editorColor: EditorColor) =
