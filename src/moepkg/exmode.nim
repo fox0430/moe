@@ -91,7 +91,7 @@ proc isChangeThemeSettingCommand(command: seq[seq[Rune]]): bool =
 proc isTabLineSettingCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "tab"
-  
+
 proc isSyntaxSettingCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "syntax"
@@ -322,7 +322,7 @@ proc startRecentFileMode(status: var Editorstatus) =
   # :recent is only supported on GNU/Linux
   if status.platform != Platform.linux: return
 
-  if not existsFile(getHomeDir() / ".local/share/recently-used.xbel"):
+  if not fileExists(getHomeDir() / ".local/share/recently-used.xbel"):
     status.commandWindow.writeOpenRecentlyUsedXbelError(status.messageLog)
     return
 
@@ -374,20 +374,20 @@ proc putConfigFileCommand(status: var Editorstatus) =
     homeDir = getHomeDir()
     currentBufferIndex = status.bufferIndexInCurrentWindow
 
-  if not existsDir(homeDir / ".config"):
+  if not dirExists(homeDir / ".config"):
     try: createDir(homeDir / ".config")
     except OSError:
       status.commandWindow.writePutConfigFileError(status.messageLog)
       status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
       return
-  if not existsDir(homeDir / ".config" / "moe"):
+  if not dirExists(homeDir / ".config" / "moe"):
     try: createDir(homeDir / ".config" / "moe")
     except OSError:
       status.commandWindow.writePutConfigFileError(status.messageLog)
       status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
       return
 
-  if existsFile(getHomeDir() / ".config" / "moe" / "moerc.toml"):
+  if fileExists(getHomeDir() / ".config" / "moe" / "moerc.toml"):
     status.commandWindow.writePutConfigFileAlreadyExistError(status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
     return
@@ -441,7 +441,7 @@ proc openBufferManager(status: var Editorstatus) =
   status.changeMode(Mode.bufManager)
 
 proc changeCursorLineCommand(status: var Editorstatus, command: seq[Rune]) =
-  if command == ru"on" : status.settings.view.cursorLine = true 
+  if command == ru"on" : status.settings.view.cursorLine = true
   elif command == ru"off": status.settings.view.cursorLine = false
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -604,10 +604,10 @@ proc incrementalSearchSettingCommand(status: var Editorstatus, command: seq[Rune
 
 proc highlightPairOfParenSettigCommand(status: var Editorstatus,
                                        command: seq[Rune]) =
-                                       
+
   if command == ru"on": status.settings.highlightPairOfParen = true
   elif command == ru"off": status.settings.highlightPairOfParen = false
- 
+
   status.commandWindow.erase
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -615,7 +615,7 @@ proc highlightPairOfParenSettigCommand(status: var Editorstatus,
 
 proc autoDeleteParenSettingCommand(status: var EditorStatus,
                                    command: seq[Rune]) =
-                                   
+
   if command == ru"on": status.settings.autoDeleteParen = true
   elif command == ru"off": status.settings.autoDeleteParen = false
 
@@ -640,13 +640,13 @@ proc smoothScrollSpeedSettingCommand(status: var Editorstatus, speed: int) =
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
-  
+
 proc highlightCurrentWordSettingCommand(status: var Editorstatus,
                                         command: seq[Rune]) =
-                                        
+
   if command == ru"on": status.settings.highlightOtherUsesCurrentWord = true
   if command == ru"off": status.settings.highlightOtherUsesCurrentWord = false
-  
+
   status.commandWindow.erase
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -724,7 +724,7 @@ proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
   elif status.bufferIndexInCurrentWindow > status.bufStatus.high:
     let workspaceIndex = status.currentWorkSpaceIndex
     status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex =
-      status.bufStatus.high 
+      status.bufStatus.high
 
   if status.bufStatus[status.bufferIndexInCurrentWindow].mode == Mode.ex:
     let prevMode = status.bufStatus[status.bufferIndexInCurrentWindow].prevMode
@@ -786,7 +786,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
                            currentBufferIndex) == 1:
     status.commandWindow.writeNoWriteError(status.messageLog)
   else:
-    if existsDir($filename):
+    if dirExists($filename):
       try: setCurrentDir($filename)
       except OSError:
         status.commandWindow.writeFileOpenError($filename, status.messageLog)
@@ -848,7 +848,7 @@ proc checkAndCreateDir(cmdWin: var Window,
   let pathSplit = splitPath($filename)
 
   result = true
-  if not existsDir(pathSplit.head):
+  if not dirExists(pathSplit.head):
     let isCreateDir = cmdWin.askCreateDirPrompt(messageLog, pathSplit.head)
     if isCreateDir:
       try: createDir(pathSplit.head)
@@ -1009,7 +1009,7 @@ proc listAllBufferCommand(status: var Editorstatus) =
     swapCurrentLineNumStting = status.settings.view.currentLineNumber
     currentBufferIndex =
       status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
-  
+
   status.settings.view.currentLineNumber = false
   status.workSpace[workspaceIndex].currentMainWindowNode.view =
     status.bufStatus[currentBufferIndex].buffer.initEditorView(terminalHeight() - useStatusBar - useTab - 1,
