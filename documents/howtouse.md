@@ -6,19 +6,16 @@
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
 | [Normal Mode](#normal-mode)   | [Visual Mode](#visual-mode) | [Replace Mode](#replace-mode) | [Insert Mode](#insert-mode) |
 | [History Mode](#history-mode) | [Diff Mode](#diff-mode)     | [Filer Mode](#filer-mode)     | [Ex Mode](#insert-mode)     |
-| [Exiting](#exiting)           | [Changing Modes](#changing-modes) | [Go To Bottom](#x) |                             |
+| [Exiting](#exiting)           | [Changing Modes](#changing-modes) | [Go To Bottom](#x)      |                             |
 
 ## Exiting
 
 - Check the command bar...
 
-```:w``` - Write file  
-```:q``` - Quit  
-```:wq``` - Write file and quit  
-```:q!``` - Force quit  
-```:qa``` - Quit all window  
-```:wqa``` - Write and quit all window  
-```:qa!``` - Force quit all window  
+|                               |                             |                               |                             |
+|:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
+| <kbd>**:**</kbd> <kbd>**w**</kbd> Write file | <kbd>**:**</kbd> <kbd>**q**</kbd> Quit | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> Write and Quit | <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**!**</kbd> Force Quit |
+| <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> Quit All Windows | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> Write and Quit All Window | <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> <kbd>**!**</kbd> Force Quit All Window | |
 
 
 ## Changing Modes
