@@ -64,9 +64,9 @@
 
 |                               |                             |                               |                             |                                   |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|:---------------------------------:|
-| <kbd>**d**</kbd> OR <kbd>**x**</kbd> Delete text | <kbd>**y**</kbd> Copy text | <kbd>**r**</kbd> Replace character | <kbd>**J**</kbd> Join lines | <kbd>**J**</kbd> Join lines |
-| <kbd>**u**</kbd> Convert to Lowercase | <kbd>**U**</kbd> Convert to Uppercase | <kbd>**>**</kbd> Indent | <kbd>**<**</kbd> Unindent | <kbd>**~**</kbd> Toggle case of character under cursor |
-| <kbd>**Ctrl**</kbd> <kbd>**a**</kbd> Increase number under cursor | <kbd>**Ctrl**</kbd> <kbd>**x**</kbd> Decrease number under cursor | <kbd>**I**</kbd> Insert character, multiple lines | <kbd>**Esc**</kbd> Go to Normal mode |  |
+| <kbd>**d**</kbd> OR <kbd>**x**</kbd><br> Delete text | <kbd>**y**</kbd><br> Copy text | <kbd>**r**</kbd><br> Replace character | <kbd>**J**</kbd><br> Join lines | <kbd>**J**</kbd><br> Join lines |
+| <kbd>**u**</kbd><br> Convert to Lowercase | <kbd>**U**</kbd><br> Convert to Uppercase | <kbd>**>**</kbd><br> Indent | <kbd>**<**</kbd><br> Unindent | <kbd>**~**</kbd><br> Toggle case of character under cursor |
+| <kbd>**Ctrl**</kbd> <kbd>**a**</kbd><br> Increase number under cursor | <kbd>**Ctrl**</kbd> <kbd>**x**</kbd><br> Decrease number under cursor | <kbd>**I**</kbd><br> Insert character, multiple lines | <kbd>**Esc**</kbd><br> Go to Normal mode |  |
 
 </details>
 
@@ -82,9 +82,9 @@
 
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
-| <kbd>**Ctrl**</kbd> <kbd>**e**</kbd> Insert the character which is below the cursor | <kbd>**Ctrl**</kbd> <kbd>**y**</kbd> Insert the character which is above the cursor | <kbd>**Ctrl**</kbd> <kbd>**i**</kbd> Insert a Tab | <kbd>**Ctrl**</kbd> <kbd>**h**</kbd> OR <kbd>**Backspace**</kbd> Delete the character before the cursor |
-| <kbd>**Ctrl**</kbd> <kbd>**t**</kbd> Add indent in current line | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> Remove indent in current line | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> Delete the word before the cursor | <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> Delete characters before the cursor in current line |
-| <kbd>**Esc**</kbd> Go to Normal mode |  |  |  |
+| <kbd>**Ctrl**</kbd> <kbd>**e**</kbd><br> Insert the character which is below the cursor | <kbd>**Ctrl**</kbd> <kbd>**y**</kbd><br> Insert the character which is above the cursor | <kbd>**Ctrl**</kbd> <kbd>**i**</kbd><br>Insert a Tab | <kbd>**Ctrl**</kbd> <kbd>**h**</kbd> OR <kbd>**Backspace**</kbd><br>Delete the character before the cursor |
+| <kbd>**Ctrl**</kbd> <kbd>**t**</kbd><br> Add indent in current line | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd><br> Remove indent in current line | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd><br>Delete the word before the cursor | <kbd>**Ctrl**</kbd> <kbd>**u**</kbd><br> Delete characters before the cursor in current line |
+| <kbd>**Esc**</kbd><br> Go to Normal mode |  |  |  |
 
 
 ## History mode
@@ -94,8 +94,8 @@
 
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
-| <kbd>**j**</kbd> Go Down :arrow_down: | <kbd>**k**</kbd> Go Up :arrow_up: | <kbd>**Enter**</kbd> Open Diff | <kbd>**R**</kbd> Restore Backup file |
-| <kbd>**D**</kbd> Delete Backup file | <kbd>**r**</kbd> Reload Backup file | <kbd>**g**</kbd> <kbd>**g**</kbd> Go to the first line :arrow_up: | <kbd>**g**</kbd> Go to the last line :arrow_down: |
+| <kbd>**j**</kbd><br> Go Down :arrow_down: | <kbd>**k**</kbd><br> Go Up :arrow_up: | <kbd>**Enter**</kbd><br> Open Diff | <kbd>**R**</kbd><br> Restore Backup file |
+| <kbd>**D**</kbd><br> Delete Backup file | <kbd>**r**</kbd><br> Reload Backup file | <kbd>**g**</kbd> <kbd>**g**</kbd><br> Go to the first line :arrow_up: | <kbd>**g**</kbd><br> Go to the last line :arrow_down: |
 
 </details>
 
@@ -107,7 +107,7 @@
 
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
-| <kbd>**j**</kbd> Go Down :arrow_down: | <kbd>**k**</kbd> Go Up :arrow_up: | <kbd>**g**</kbd> <kbd>**g**</kbd> Go to the first line :arrow_up: | <kbd>**g**</kbd> Go to the last line :arrow_down: |
+| <kbd>**j**</kbd><br> Go Down :arrow_down: | <kbd>**k**</kbd><br> Go Up :arrow_up: | <kbd>**g**</kbd> <kbd>**g**</kbd><br> Go to the first line :arrow_up: | <kbd>**g**</kbd><br> Go to the last line :arrow_down: |
 
 </details>
 
@@ -116,8 +116,8 @@
 
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
-| <kbd>**D**</kbd> Delete file | <kbd>**k**</kbd> Go Up :arrow_up: | <kbd>**g**</kbd> Go to top of list :arrow_up: | <kbd>**G**</kbd> Go to the bottom of list :arrow_down: |
-| <kbd>**i**</kbd> Detail Information | <kbd>**v**</kbd> Split window and open file or directory |  |  |
+| <kbd>**D**</kbd><br> Delete file | <kbd>**k**</kbd><br> Go Up :arrow_up: | <kbd>**g**</kbd><br> Go to top of list :arrow_up: | <kbd>**G**</kbd><br> Go to the bottom of list :arrow_down: |
+| <kbd>**i**</kbd><br> Detail Information | <kbd>**v**</kbd><br> Split window and open file or directory |  |  |
 
 
 ## Ex mode
