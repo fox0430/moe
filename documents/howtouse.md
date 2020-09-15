@@ -1,5 +1,12 @@
 # How to use
 
+# Table of Contents
+
+|                               |                             |                               |                             |
+|:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
+| [Normal Mode](#normal-mode)   | [Visual Mode](#visual-mode) | [Replace Mode](#replace-mode) | [Insert Mode](#insert-mode) |
+| [History Mode](#history-mode) | [Diff Mode](#diff-mode)     | [Filer Mode](#filer-mode)     | [Ex Mode](#insert-mode)     |
+
 
 ## Exiting
 
@@ -15,6 +22,15 @@ Check command bar
 
 
 ## Normal mode
+
+| <kbd> h </kbd> :arrow_right: Go Left | <kbd> j </kbd> :arrow_right: Go Down | <kbd> k </kbd> :arrow_right: Go Up  | <kbd> l </kbd> :arrow_right: Go Rigth |
+| <kbd> w </kbd> :arrow_right: Go forwards to the start of a word | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  |
+| <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  |
+| <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  |
+| <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  |
+| <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  |
+
+
 
 ```h``` - ←  
 ```j``` or ```+``` - ↓  
