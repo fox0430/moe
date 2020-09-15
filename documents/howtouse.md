@@ -140,7 +140,7 @@
 <details open>
   <summary>Ex mode</summary>
 
-```number``` - Jump to line number : Exmaple ```:10```  
+```number``` - Jump to line number : Example ```:10```  
 ```!``` shell command - Shell command execution  
 
 ```e``` filename - Open file  
