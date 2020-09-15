@@ -73,18 +73,28 @@
 
 ## Replace mode
 
+<details open>
+  <summary>Replace Text</summary>
+  
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
 | <kbd>**Esc**</kbd> Go to Normal mode | <kbd>**Backspace**</kbd> Undo |  |  |
 
+</details>
+
 
 ## Insert mode
+
+<details open>
+  <summary>Insert Text</summary>
 
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
 | <kbd>**Ctrl**</kbd> <kbd>**e**</kbd><br> Insert the character which is below the cursor | <kbd>**Ctrl**</kbd> <kbd>**y**</kbd><br> Insert the character which is above the cursor | <kbd>**Ctrl**</kbd> <kbd>**i**</kbd><br>Insert a Tab | <kbd>**Ctrl**</kbd> <kbd>**h**</kbd> OR <kbd>**Backspace**</kbd><br>Delete the character before the cursor |
 | <kbd>**Ctrl**</kbd> <kbd>**t**</kbd><br> Add indent in current line | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd><br> Remove indent in current line | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd><br>Delete the word before the cursor | <kbd>**Ctrl**</kbd> <kbd>**u**</kbd><br> Delete characters before the cursor in current line |
 | <kbd>**Esc**</kbd><br> Go to Normal mode |  |  |  |
+
+</details>
 
 
 ## History mode
@@ -114,10 +124,15 @@
 
 ## Filer mode
 
+<details open>
+  <summary>File Manager</summary>
+
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
 | <kbd>**D**</kbd><br> Delete file | <kbd>**k**</kbd><br> Go Up :arrow_up: | <kbd>**g**</kbd><br> Go to top of list :arrow_up: | <kbd>**G**</kbd><br> Go to the bottom of list :arrow_down: |
 | <kbd>**i**</kbd><br> Detail Information | <kbd>**v**</kbd><br> Split window and open file or directory |  |  |
+
+</details>
 
 
 ## Ex mode
