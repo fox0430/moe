@@ -6,7 +6,7 @@
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
 | [Normal Mode](#normal-mode)   | [Visual Mode](#visual-mode) | [Replace Mode](#replace-mode) | [Insert Mode](#insert-mode) |
 | [History Mode](#history-mode) | [Diff Mode](#diff-mode)     | [Filer Mode](#filer-mode)     | [Ex Mode](#insert-mode)     |
-| [Exiting](#exiting)           | [Changing Modes](#changing-modes) | [Go To Bottom](#~) |                             |
+| [Exiting](#exiting)           | [Changing Modes](#changing-modes) | [Go To Bottom](#x) |                             |
 
 ## Exiting
 
@@ -23,7 +23,7 @@
 
 ## Changing Modes
 
-- In **Normal Mode**
+- In **Normal Mode**...
 
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
@@ -43,7 +43,7 @@
 | <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> Half Page Down :arrow_down: | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> Half Page Up :arrow_up: |  |  |
 | <kbd>**u**</kbd> Undo | <kbd>**Ctrl**</kbd> <kbd>**r**</kbd> Redo | <kbd>**>**</kbd> Indent | <kbd>**<**</kbd> Unindent |
 | <kbd>**=**</kbd> <kbd>**=**</kbd> Auto Indent | <kbd>**d**</kbd> <kbd>**d**</kbd> Delete a line | <kbd>**x**</kbd> Delete current character | <kbd>**S**</kbd> OR <kbd>**c**</kbd> <kbd>**c**</kbd> Delete the characters in current line and start insert mode |
-| <kbd>**d**</kbd> <kbd>**$**</kbd> OR  <kbd>**D**</kbd> Delete until the end of the line |  | <kbd>****</kbd>  | <kbd>****</kbd>  |
+| <kbd>**d**</kbd> <kbd>**$**</kbd> OR  <kbd>**D**</kbd> Delete until the end of the line |  |  |  |
 | <kbd>**y**</kbd> <kbd>**y**</kbd> Copy a line | <kbd>**p**</kbd> Paste the clipboard | <kbd>**n**</kbd> Search forwards | <kbd>**N**</kbd> Search backwards |
 | <kbd>*</kbd> Search forwards for the word under cursor | <kbd>**#**</kbd> Search backwards for the word under cursor | <kbd>**f**</kbd> Jump to next occurrence | <kbd>**F**</kbd> Jump to previous occurence |
 | <kbd>**Ctrl**</kbd> <kbd>**k**</kbd> Move next window | <kbd>**Ctrl**</kbd> <kbd>**j**</kbd> Move prev window  | <kbd>**z**</kbd> <kbd>**t**</kbd> Scroll the screen so the cursor is at the top | <kbd>**z**</kbd> <kbd>**b**</kbd> Scroll the screen so the cursor is at the bottom |
@@ -197,4 +197,4 @@
 
 
 [Go To Top](#table-of-contents)
-#### ~
+#### x
