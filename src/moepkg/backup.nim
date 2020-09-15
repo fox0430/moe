@@ -33,7 +33,7 @@ proc checkAndCreateBackupDir(path: seq[Rune],
     else:
       result = ru".history"
 
-  if not existsDir($result):
+  if not dirExists($result):
     try: createDir($result)
     except OSError: result = @[]
 
