@@ -28,179 +28,179 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
 
   return (searhWord: searchWord, replaceWord: replaceWord)
 
-proc isPutConfigFileCommand(command: seq[seq[Rune]]): bool =
+proc isPutConfigFileCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "putconfigfile"
 
-proc isDeleteTrailingSpacesCommand(command: seq[seq[Rune]]): bool =
+proc isDeleteTrailingSpacesCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "deletetrailingspaces"
 
-proc isOpenHelpCommand(command: seq[seq[Rune]]): bool =
+proc isOpenHelpCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "help"
 
-proc isOpenMessageLogViweer(command: seq[seq[Rune]]): bool =
+proc isOpenMessageLogViweer(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "log"
 
-proc isOpenBufferManager(command: seq[seq[Rune]]): bool =
+proc isOpenBufferManager(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "buf"
 
-proc isChangeCursorLineCommand(command: seq[seq[Rune]]): bool =
+proc isChangeCursorLineCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "cursorline"
 
-proc isListAllBufferCommand(command: seq[seq[Rune]]): bool =
+proc isListAllBufferCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "ls"
 
-proc isWriteAndQuitAllBufferCommand(command: seq[seq[Rune]]): bool =
+proc isWriteAndQuitAllBufferCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "wqa"
 
-proc isForceAllBufferQuitCommand(command: seq[seq[Rune]]): bool =
+proc isForceAllBufferQuitCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "qa!"
 
-proc isAllBufferQuitCommand(command: seq[seq[Rune]]): bool =
+proc isAllBufferQuitCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "qa"
 
-proc isVerticalSplitWindowCommand(command: seq[seq[Rune]]): bool =
+proc isVerticalSplitWindowCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "vs"
 
-proc isHorizontalSplitWindowCommand(command: seq[seq[Rune]]): bool =
+proc isHorizontalSplitWindowCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "sv"
 
-proc isFilerIconSettingCommand(command: seq[seq[Rune]]): bool =
+proc isFilerIconSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "icon"
 
-proc isLiveReloadOfConfSettingCommand(command: seq[seq[Rune]]): bool =
+proc isLiveReloadOfConfSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "livereload"
 
-proc isChangeThemeSettingCommand(command: seq[seq[Rune]]): bool =
+proc isChangeThemeSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "theme"
 
-proc isTabLineSettingCommand(command: seq[seq[Rune]]): bool =
+proc isTabLineSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "tab"
 
-proc isSyntaxSettingCommand(command: seq[seq[Rune]]): bool =
+proc isSyntaxSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "syntax"
 
-proc isTabStopSettingCommand(command: seq[seq[Rune]]): bool =
+proc isTabStopSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "tabstop" and isDigit(command[1])
 
-proc isAutoCloseParenSettingCommand(command: seq[seq[Rune]]): bool =
+proc isAutoCloseParenSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "paren"
 
-proc isAutoIndentSettingCommand(command: seq[seq[Rune]]): bool =
+proc isAutoIndentSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "indent"
 
-proc isIndentationLinesSettingCommand(command: seq[seq[Rune]]): bool =
+proc isIndentationLinesSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "indentationlines"
 
-proc isLineNumberSettingCommand(command: seq[seq[Rune]]): bool =
+proc isLineNumberSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "linenum"
 
-proc isStatusBarSettingCommand(command: seq[seq[Rune]]): bool =
+proc isStatusBarSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "statusbar"
 
-proc isIncrementalSearchSettingCommand(command: seq[seq[Rune]]): bool =
+proc isIncrementalSearchSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "incrementalsearch"
 
-proc isHighlightPairOfParenSettigCommand(command: seq[seq[Rune]]): bool =
+proc isHighlightPairOfParenSettigCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "highlightparen"
 
-proc isAutoDeleteParenSettingCommand(command: seq[seq[Rune]]): bool =
+proc isAutoDeleteParenSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "deleteparen"
 
-proc isSmoothScrollSettingCommand(command: seq[seq[Rune]]): bool =
+proc isSmoothScrollSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "smoothscroll"
 
-proc isSmoothScrollSpeedSettingCommand(command: seq[seq[Rune]]): bool =
+proc isSmoothScrollSpeedSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "scrollspeed" and isDigit(command[1])
 
-proc isHighlightCurrentWordSettingCommand(command: seq[seq[Rune]]): bool =
+proc isHighlightCurrentWordSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "highlightcurrentword"
 
-proc isSystemClipboardSettingCommand(command: seq[seq[RUne]]): bool =
+proc isSystemClipboardSettingCommand(command: seq[seq[RUne]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "clipboard"
 
-proc isHighlightFullWidthSpaceSettingCommand(command: seq[seq[RUne]]): bool =
+proc isHighlightFullWidthSpaceSettingCommand(command: seq[seq[RUne]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "highlightfullspace"
 
-proc isMultipleStatusBarSettingCommand(command: seq[seq[Rune]]): bool =
+proc isMultipleStatusBarSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "multiplestatusbar"
 
-proc isBuildOnSaveSettingCommand(command: seq[seq[Rune]]): bool =
+proc isBuildOnSaveSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "buildonsave"
 
-proc isShowGitInInactiveSettingCommand(command: seq[seq[Rune]]): bool =
+proc isShowGitInInactiveSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "showgitinactive"
 
-proc isIgnorecaseSettingCommand(command: seq[seq[Rune]]): bool =
+proc isIgnorecaseSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "ignorecase"
 
-proc isSmartcaseSettingCommand(command: seq[seq[Rune]]): bool =
+proc isSmartcaseSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "smartcase"
 
-proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool =
+proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "noh"
 
-proc isDeleteCurrentBufferStatusCommand(command: seq[seq[Rune]]): bool =
+proc isDeleteCurrentBufferStatusCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "bd"
 
-proc isDeleteBufferStatusCommand(command: seq[seq[Rune]]): bool =
+proc isDeleteBufferStatusCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "bd" and isDigit(command[1])
 
-proc isChangeFirstBufferCommand(command: seq[seq[Rune]]): bool =
+proc isChangeFirstBufferCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "bfirst"
 
-proc isChangeLastBufferCommand(command: seq[seq[Rune]]): bool =
+proc isChangeLastBufferCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "blast"
 
-proc isOpenBufferByNumber(command: seq[seq[Rune]]): bool =
+proc isOpenBufferByNumber(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "b" and isDigit(command[1])
 
-proc isChangeNextBufferCommand(command: seq[seq[Rune]]): bool =
+proc isChangeNextBufferCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "bnext"
 
-proc isChangePreveBufferCommand(command: seq[seq[Rune]]): bool =
+proc isChangePreveBufferCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "bprev"
 
@@ -213,14 +213,14 @@ proc isJumpCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
          (prevMode == Mode.normal or
          prevMode == Mode.logviewer)
 
-proc isEditCommand(command: seq[seq[Rune]]): bool =
+proc isEditCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 2 and command[0] == ru"e"
 
 proc isOpenInHorizontalSplitWindowCommand(command: seq[seq[Rune]]): bool =
   let cmd = toLowerAscii($command[0])
   return command.len > 0 and command.len < 3 and cmd == "sp"
 
-proc isOpenInVerticalSplitWindowCommand(command: seq[seq[Rune]]): bool =
+proc isOpenInVerticalSplitWindowCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 2 and command[0] == ru"vs"
 
 proc isWriteCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
@@ -231,7 +231,7 @@ proc isWriteCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
          cmd == "w" and
          status.bufStatus[currentBufferIndex].prevMode == Mode.normal
 
-proc isQuitCommand(command: seq[seq[Rune]]): bool =
+proc isQuitCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 1 and command[0] == ru"q"
 
 proc isWriteAndQuitCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
@@ -242,57 +242,57 @@ proc isWriteAndQuitCommand(status: EditorStatus, command: seq[seq[Rune]]): bool 
          cmd == "wq" and
          status.bufStatus[currentBufferIndex].prevMode == Mode.normal
 
-proc isForceQuitCommand(command: seq[seq[Rune]]): bool =
+proc isForceQuitCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "q!"
 
-proc isShellCommand(command: seq[seq[Rune]]): bool =
+proc isShellCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len >= 1 and command[0][0] == ru'!'
 
-proc isReplaceCommand(command: seq[seq[Rune]]): bool =
+proc isReplaceCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len >= 1  and command[0].len > 4 and command[0][0 .. 2] == ru"%s/"
 
-proc isWorkspaceListCommand(command: seq[seq[Rune]]): bool =
+proc isWorkspaceListCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "lsw"
 
-proc isCreateWorkSpaceCommand(command: seq[seq[Rune]]): bool =
+proc isCreateWorkSpaceCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "cws"
 
-proc isDeleteCurrentWorkSpaceCommand(command: seq[seq[Rune]]): bool =
+proc isDeleteCurrentWorkSpaceCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "dws"
 
-proc isChangeCurrentWorkSpace(command: seq[seq[Rune]]): bool =
+proc isChangeCurrentWorkSpace(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmd == "ws" and isDigit(command[1])
 
-proc isCreateNewEmptyBufferCommand(command: seq[seq[Rune]]): bool =
+proc isCreateNewEmptyBufferCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "ene"
 
-proc isNewEmptyBufferInSplitWindowHorizontally(command: seq[seq[Rune]]): bool =
+proc isNewEmptyBufferInSplitWindowHorizontally(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "new"
 
-proc isNewEmptyBufferInSplitWindowVertically(command: seq[seq[Rune]]): bool =
+proc isNewEmptyBufferInSplitWindowVertically(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "vnew"
 
-proc isQuickRunCommand(command: seq[seq[Rune]]): bool =
+proc isQuickRunCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and (cmd == "run" or command[0] == ru"Q")
 
-proc isRecentFileModeCommand(command: seq[seq[Rune]]): bool =
+proc isRecentFileModeCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "recent"
 
-proc isHistoryManagerCommand(command: seq[seq[Rune]]): bool =
+proc isHistoryManagerCommand(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "history"
 
-proc isStartConfigMode(command: seq[seq[Rune]]): bool =
+proc isStartConfigMode(command: seq[seq[Rune]]): bool {.inline.} =
   let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmd == "conf"
 
@@ -967,7 +967,7 @@ proc allBufferQuitCommand(status: var EditorStatus) =
 
   exitEditor(status.settings)
 
-proc forceAllBufferQuitCommand(status: var EditorStatus) = exitEditor(status.settings)
+proc forceAllBufferQuitCommand(status: var EditorStatus) {.inline.} = exitEditor(status.settings)
 
 proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
   for bufStatus in status.bufStatus:

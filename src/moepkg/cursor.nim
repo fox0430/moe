@@ -32,5 +32,5 @@ proc updatePosition(cursor: var CursorPosition,
   (success, cursor.y, cursor.x) = findCursorPosition(view, line, column)
   doAssert(success, mess)
 
-proc update*(cursor: var CursorPosition, view: EditorView, line, column: int) =
+proc update*(cursor: var CursorPosition, view: EditorView, line, column: int) {.inline.} =
   cursor.updatePosition(view, line, column)

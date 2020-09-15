@@ -163,10 +163,10 @@ proc initAutoBackupSettings(): AutoBackupSettings =
   result.idolTime = 10 # 10 seconds
   result.dirToExclude = @[ru"/etc"]
 
-proc initFilerSettings(): FilerSettings =
+proc initFilerSettings(): FilerSettings {.inline.} =
   result.showIcons = true
 
-proc initTabBarSettings*(): TabLineSettings =
+proc initTabBarSettings*(): TabLineSettings {.inline.} =
   result.useTab = true
 
 proc initStatusBarSettings*(): StatusBarSettings =
@@ -182,7 +182,7 @@ proc initStatusBarSettings*(): StatusBarSettings =
   result.multipleStatusBar = true
   result.gitbranchName = true
 
-proc initWorkSpaceSettings(): WorkSpaceSettings =
+proc initWorkSpaceSettings(): WorkSpaceSettings {.inline.} =
   result.workSpaceLine = false
 
 proc initEditorViewSettings*(): EditorViewSettings =

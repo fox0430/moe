@@ -4,7 +4,7 @@ import settings, unicodeext, fileutils, bufferstatus, ui, gapbuffer, messages
 type AutoBackupStatus* = object
   lastBackupTime*: DateTime
 
-proc initAutoBackupStatus*(): AutoBackupStatus =
+proc initAutoBackupStatus*(): AutoBackupStatus {.inline.} =
   result.lastBackupTime = now()
 
 proc generateFilename(filename: seq[Rune], time: DateTime): seq[Rune] =

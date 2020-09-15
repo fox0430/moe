@@ -45,7 +45,7 @@ proc initWindowNode*(): WindowNode =
   node.window.setTimeout()
   return root
 
-proc newWindow(): Window =
+proc newWindow(): Window {.inline.} =
   result = initWindow(1, 1, 0, 0, EditorColorPair.defaultChar)
   result.setTimeout()
 

@@ -116,7 +116,7 @@ proc jumpLine*(status: var EditorStatus, destination: int) =
 
     windowNode.view.reload(status.bufStatus[currentBufferIndex].buffer, startOfPrintedLines)
 
-proc moveToFirstLine*(status: var EditorStatus) = status.jumpLine(0)
+proc moveToFirstLine*(status: var EditorStatus) {.inline.} = status.jumpLine(0)
 
 proc moveToLastLine*(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -317,7 +317,7 @@ proc moveCenterScreen*(bufStatus: var BufferStatus, windowNode: WindowNode) =
       let numOfTime = int(windowNode.view.height / 2) - windowNode.cursor.y
       for i in 0 ..< numOfTime: scrollUp(windowNode.view, bufStatus.buffer)
 
-proc scrollScreenTop*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
+proc scrollScreenTop*(bufStatus: var BufferStatus, windowNode: var WindowNode) {.inline.} =
   windowNode.view.reload(bufStatus.buffer, windowNode.view.originalLine[windowNode.cursor.y])
 
 proc scrollScreenBottom*(bufStatus: var BufferStatus, windowNode: WindowNode) =

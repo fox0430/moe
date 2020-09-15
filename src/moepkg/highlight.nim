@@ -14,14 +14,14 @@ type
     word*: string
     color*: EditorColorPair
 
-proc len*(highlight: Highlight): int = highlight.colorSegments.len
+proc len*(highlight: Highlight): int {.inline.} = highlight.colorSegments.len
 
-proc high*(highlight: Highlight): int = highlight.colorSegments.high
+proc high*(highlight: Highlight): int {.inline.} = highlight.colorSegments.high
 
-proc `[]`*(highlight: Highlight, i: int): ColorSegment =
+proc `[]`*(highlight: Highlight, i: int): ColorSegment {.inline.} =
   highlight.colorSegments[i]
 
-proc `[]`*(highlight: Highlight, i: BackwardsIndex): ColorSegment =
+proc `[]`*(highlight: Highlight, i: BackwardsIndex): ColorSegment {.inline.} =
   highlight.colorSegments[highlight.colorSegments.len - int(i)]
 
 proc getColorPair*(highlight: Highlight, line, col: int): EditorColorPair =

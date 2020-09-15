@@ -8,7 +8,7 @@ proc initSelectArea(startLine, startColumn: int): SelectArea =
   result.endLine = startLine
   result.endColumn = startColumn
 
-proc updateSelectArea(area: var SelectArea, currentLine, currentColumn: int) =
+proc updateSelectArea(area: var SelectArea, currentLine, currentColumn: int) {.inline.} =
   area.endLine = currentLine
   area.endColumn = currentColumn
 
