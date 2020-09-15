@@ -95,7 +95,7 @@
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
 | <kbd>**j**</kbd> Go Down :arrow_down: | <kbd>**k**</kbd> Go Up :arrow_up: | <kbd>**Enter**</kbd> Open Diff | <kbd>**R**</kbd> Restore Backup file |
-| <kbd>**D**</kbd> Delete Backup file | <kbd>**r**</kbd> Reload Backup file | <kbd>**g**</kbd> <kbd>**g**</kbd> Go to the first line | <kbd>**g**</kbd> Go to the last line |
+| <kbd>**D**</kbd> Delete Backup file | <kbd>**r**</kbd> Reload Backup file | <kbd>**g**</kbd> <kbd>**g**</kbd> Go to the first line :arrow_up: | <kbd>**g**</kbd> Go to the last line :arrow_down: |
 
 </details>
 
@@ -107,18 +107,17 @@
 
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
-| <kbd>**j**</kbd> Go Down :arrow_down: | <kbd>**k**</kbd> Go Up :arrow_up: | <kbd>**g**</kbd> <kbd>**g**</kbd> Go to the first line | <kbd>**g**</kbd> Go to the last line |
+| <kbd>**j**</kbd> Go Down :arrow_down: | <kbd>**k**</kbd> Go Up :arrow_up: | <kbd>**g**</kbd> <kbd>**g**</kbd> Go to the first line :arrow_up: | <kbd>**g**</kbd> Go to the last line :arrow_down: |
 
 </details>
 
 
 ## Filer mode
 
-```D``` - Delete file  
-```g``` - Go to top of list  
-```G``` - Go to last of list  
-```i``` - Detail information  
-```v``` - Split window and open file or directory  
+|                               |                             |                               |                             |
+|:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
+| <kbd>**D**</kbd> Delete file | <kbd>**k**</kbd> Go Up :arrow_up: | <kbd>**g**</kbd> Go to top of list :arrow_up: | <kbd>**G**</kbd> Go to the bottom of list :arrow_down: |
+| <kbd>**i**</kbd> Detail Information | <kbd>**v**</kbd> Split window and open file or directory |  |  |
 
 
 ## Ex mode
