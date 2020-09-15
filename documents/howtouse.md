@@ -25,22 +25,13 @@ Check command bar
 
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
-| <kbd> h </kbd> Go Left :arrow_left: | <kbd> j </kbd> Go Down :arrow_down: | <kbd> k </kbd> Go Up :arrow_up: | <kbd> l </kbd> Go Rigth :arrow_right: |
+| <kbd> **h** </kbd> Go Left :arrow_left: | <kbd> j </kbd> Go Down :arrow_down: | <kbd> k </kbd> Go Up :arrow_up: | <kbd> l </kbd> Go Rigth :arrow_right: |
 | <kbd> w </kbd> Go forwards to the start of a word :arrow_right: | <kbd> e </kbd> Go forwards to the end of a word :arrow_right: | <kbd> b </kbd> Go backwards to the start of a word :arrow_left: |  |
+| <kbd> Page Up </kbd> :arrow_up: | <kbd> Page Down </kbd> Page Down :arrow_down: | <kbd> g </kbd><kbd> g </kbd> Move to the first line | <kbd> g </kbd><kbd> _ </kbd> Move to the last non-blank characater of the line |
 | <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd> |
 | <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd> |
 | <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd> |
-| <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd>  | <kbd>  </kbd> |
-
-
-
-```h``` - ←  
-```j``` or ```+``` - ↓  
-```k``` or ```-``` - ↑  
-```l``` - →  
-```w``` - Move forwards to the start of a word  
-```e``` - Move forwards to the end of a word  
-```b``` - Move backwards to the start of a word  
+ 
 ```Page Up``` - Page up  
 ```Page Down``` - Page down  
 ```gg``` - Move to the first line  
