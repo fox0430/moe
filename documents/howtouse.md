@@ -2,11 +2,11 @@
 
 # Table of Contents
 
-|                               |                             |                               |                             |
-|:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
-| [Normal Mode](#normal-mode)   | [Visual Mode](#visual-mode) | [Replace Mode](#replace-mode) | [Insert Mode](#insert-mode) |
-| [History Mode](#history-mode) | [Diff Mode](#diff-mode)     | [Filer Mode](#filer-mode)     | [Ex Mode](#insert-mode)     |
-| [Exiting](#exiting)           | [Changing Modes](#changing-modes) | [Go To Bottom](#x)      |                             |
+|                               |                             |                               |                             |                                   |
+|:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|:---------------------------------:|
+| [Normal Mode](#normal-mode)   | [Visual Mode](#visual-mode) | [Replace Mode](#replace-mode) | [Insert Mode](#insert-mode) | [History Mode](#history-mode)     |
+| [Ex Mode](#insert-mode)       | [Diff Mode](#diff-mode)     | [Filer Mode](#filer-mode)     | [Exiting](#exiting)         | [Changing Modes](#changing-modes) |
+
 
 ## Exiting
 
@@ -191,4 +191,3 @@
 
 
 [Go To Top](#table-of-contents)
-#### x
