@@ -23,6 +23,8 @@ Check command bar
 
 ## Normal mode
 
+|                               |                             |                               |                             |
+|:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
 | <kbd> h </kbd> :arrow_right: Go Left | <kbd> j </kbd> :arrow_right: Go Down | <kbd> k </kbd> :arrow_right: Go Up  | <kbd> l </kbd> :arrow_right: Go Rigth |
 | <kbd> w </kbd> :arrow_right: Go forwards to the start of a word | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  |
 | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  |
