@@ -4,7 +4,7 @@
 
 |                               |                             |                               |                             |                                   |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|:---------------------------------:|
-| [Normal Mode](#normal-mode)   | [Visual Mode](#visual-mode) | [Replace Mode](#replace-mode) | [Insert Mode](#insert-mode) | [History Mode](#history-mode)     |
+| [Normal Mode](#normal-mode)   | [Visual Mode](#visual-block-mode) | [Replace Mode](#replace-mode) | [Insert Mode](#insert-mode) | [History Mode](#history-mode)     |
 | [Ex Mode](#insert-mode)       | [Diff Mode](#diff-mode)     | [Filer Mode](#filer-mode)     | [Exiting](#exiting)         | [Changing Modes](#changing-modes) |
 
 
@@ -59,17 +59,24 @@
 
 ## Visual (block) mode
 
+<details open>
+  <summary>Visual Selection</summary>
+
 |                               |                             |                               |                             |                                   |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|:---------------------------------:|
 | <kbd>**d**</kbd> OR <kbd>**x**</kbd> Delete text | <kbd>**y**</kbd> Copy text | <kbd>**r**</kbd> Replace character | <kbd>**J**</kbd> Join lines | <kbd>**J**</kbd> Join lines |
 | <kbd>**u**</kbd> Convert to Lowercase | <kbd>**U**</kbd> Convert to Uppercase | <kbd>**>**</kbd> Indent | <kbd>**<**</kbd> Unindent | <kbd>**~**</kbd> Toggle case of character under cursor |
-| <kbd>**Ctrl**</kbd> <kbd>**a**</kbd> Increase number under cursor | <kbd>**Ctrl**</kbd> <kbd>**x**</kbd> Decrease number under cursor | <kbd>**I**</kbd> Insert character, multiple lines | <kbd>**Esc**</kbd> Go to Normal modeo |  |
+| <kbd>**Ctrl**</kbd> <kbd>**a**</kbd> Increase number under cursor | <kbd>**Ctrl**</kbd> <kbd>**x**</kbd> Decrease number under cursor | <kbd>**I**</kbd> Insert character, multiple lines | <kbd>**Esc**</kbd> Go to Normal mode |  |
+
+</details>
 
 
 ## Replace mode
 
-```Esc``` - Start normal mode  
-```Backspace``` - undo
+|                               |                             |                               |                             |
+|:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
+| <kbd>**Esc**</kbd> Go to Normal mode | <kbd>**Backspace**</kbd> Undo |  |  |
+
 
 ## Insert mode
 
