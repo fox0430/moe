@@ -10,22 +10,28 @@
 
 ## Exiting
 
-- Check the command bar...
+<details>
+  <summary>Check the command bar</summary>
 
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
 | <kbd>**:**</kbd> <kbd>**w**</kbd> Write file | <kbd>**:**</kbd> <kbd>**q**</kbd> Quit | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> Write and Quit | <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**!**</kbd> Force Quit |
 | <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> Quit All Windows | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> Write and Quit All Window | <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> <kbd>**!**</kbd> Force Quit All Window | |
 
+</details>
+
 
 ## Changing Modes
 
-- In **Normal Mode**...
+<details>
+  <summary>In **Normal Mode**</summary>
 
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
 | <kbd>**v**</kbd> Visual mode  | <kbd>**Ctrl**</kbd> <kbd>**v**</kbd> Visual Block mode | <kbd>**r**</kbd> Replace mode | <kbd>**i**</kbd> Insert mode |
 | <kbd>**o**</kbd> Insert a new line and start insert mode | <kbd>**a**</kbd> Append after the cursor and start insert mode | <kbd>**I**</kbd> Same as <kbd>**0**</kbd> <kbd>**a**</kbd> | <kbd>**A**</kbd> Same as <kbd>**$**</kbd> <kbd>**a**</kbd> |
+
+</details>
 
 
 ## Normal mode
