@@ -266,7 +266,7 @@ proc openNewWinAndOpenFilerOrDir(status: var EditorStatus,
   status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
 
-  if existsDir($path):
+  if dirExists($path):
     try:
       setCurrentDir($path)
     except OSError:
@@ -301,7 +301,7 @@ proc initFilelistHighlight[T](dirList: seq[PathInfo],
                                           color: color))
 
 proc pathToIcon(path: string): seq[Rune] =
-  if existsDir(path):
+  if dirExists(path):
     return ru"📁 "
 
   # Not sure if this is a perfect solution,

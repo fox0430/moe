@@ -126,7 +126,7 @@ type EditorSettings* = object
   quickRunSettings*: QuickRunSettings
   notificationSettings*: NotificationSettings
 
-type InvalidItemError* = object of Exception
+type InvalidItemError* = object of ValueError # Warning: inherit from a more precise exception type like ValueError, IOError or OSError. If these don't suit, inherit from CatchableError or Defect. [InheritFromException]
 
 proc initNotificationSettings(): NotificationSettings =
   result.screenNotifications = true
@@ -684,9 +684,9 @@ proc loadVSCodeTheme*(): ColorTheme =
     var vsCodeThemeFile = ""
     var vsCodeExtensionsDir = homeDir & "/.vscode-oss/extensions/"
     var vsCodeThemeSetting = ""
-    if not existsFile(vsCodeSettingsFile):
+    if not fileExists(vsCodeSettingsFile):
       vsCodeSettingsFile = homeDir & "/.config/Code/User/settings.json"
-    if existsFile(vsCodeSettingsFile):
+    if fileExists(vsCodeSettingsFile):
       let vsCodeSettingsJson = json.parseFile(vsCodeSettingsFile)
       vsCodeThemeSetting = vsCodeSettingsJson{"workbench.colorTheme"}.getStr()
       if vsCodeThemeSetting == "":
@@ -695,9 +695,9 @@ proc loadVSCodeTheme*(): ColorTheme =
     else:
       break vsCodeThemeLoading
 
-    if not existsDir(vsCodeExtensionsDir):
+    if not dirExists(vsCodeExtensionsDir):
       vsCodeExtensionsDir = homeDir & "/.vscode/extensions/"
-      if not existsDir(vsCodeExtensionsDir):
+      if not dirExists(vsCodeExtensionsDir):
         break vsCodeThemeLoading
 
     # Note: walkDirRec was first used to solve this, however
@@ -1613,7 +1613,7 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
 proc loadSettingFile*(): EditorSettings =
   let filename = getConfigDir() / "moe" / "moerc.toml"
 
-  if not existsFile(filename):
+  if not fileExists(filename):
     return initEditorSettings()
 
   let

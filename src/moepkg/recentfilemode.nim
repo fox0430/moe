@@ -9,7 +9,7 @@ proc openSelectedBuffer(status: var Editorstatus) =
     line = windowNode.currentLine
     filename = status.bufStatus[windowNode.bufferIndex].buffer[line]
 
-  if existsFile($filename):
+  if fileExists($filename):
     status.addNewBuffer($filename)
   else:
     status.commandWindow.writeFileNotFoundError(filename, status.messageLog)

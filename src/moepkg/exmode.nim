@@ -330,7 +330,7 @@ proc startRecentFileMode(status: var Editorstatus) =
   # :recent is only supported on GNU/Linux
   if status.platform != Platform.linux: return
 
-  if not existsFile(getHomeDir() / ".local/share/recently-used.xbel"):
+  if not fileExists(getHomeDir() / ".local/share/recently-used.xbel"):
     status.commandWindow.writeOpenRecentlyUsedXbelError(status.messageLog)
     return
 
@@ -381,20 +381,20 @@ proc putConfigFileCommand(status: var Editorstatus) =
     homeDir = getHomeDir()
     currentBufferIndex = status.bufferIndexInCurrentWindow
 
-  if not existsDir(homeDir / ".config"):
+  if not dirExists(homeDir / ".config"):
     try: createDir(homeDir / ".config")
     except OSError:
       status.commandWindow.writePutConfigFileError(status.messageLog)
       status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
       return
-  if not existsDir(homeDir / ".config" / "moe"):
+  if not dirExists(homeDir / ".config" / "moe"):
     try: createDir(homeDir / ".config" / "moe")
     except OSError:
       status.commandWindow.writePutConfigFileError(status.messageLog)
       status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
       return
 
-  if existsFile(getHomeDir() / ".config" / "moe" / "moerc.toml"):
+  if fileExists(getHomeDir() / ".config" / "moe" / "moerc.toml"):
     status.commandWindow.writePutConfigFileAlreadyExistError(status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
     return
@@ -807,7 +807,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
                            currentBufferIndex) == 1:
     status.commandWindow.writeNoWriteError(status.messageLog)
   else:
-    if existsDir($filename):
+    if dirExists($filename):
       try: setCurrentDir($filename)
       except OSError:
         status.commandWindow.writeFileOpenError($filename, status.messageLog)
@@ -869,7 +869,7 @@ proc checkAndCreateDir(cmdWin: var Window,
   let pathSplit = splitPath($filename)
 
   result = true
-  if not existsDir(pathSplit.head):
+  if not dirExists(pathSplit.head):
     let isCreateDir = cmdWin.askCreateDirPrompt(messageLog, pathSplit.head)
     if isCreateDir:
       try: createDir(pathSplit.head)

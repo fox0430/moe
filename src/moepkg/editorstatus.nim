@@ -599,7 +599,7 @@ proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode) =
   let index = status.bufStatus.high
 
   if mode != Mode.filer:
-    if not existsFile(filename): status.bufStatus[index].buffer = newFile()
+    if not fileExists(filename): status.bufStatus[index].buffer = newFile()
     else:
       try:
         let textAndEncoding = openFile(filename.toRunes)
