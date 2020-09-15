@@ -25,8 +25,8 @@ Check command bar
 
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
-| <kbd> h </kbd> :arrow_right: Go Left | <kbd> j </kbd> :arrow_right: Go Down | <kbd> k </kbd> :arrow_right: Go Up  | <kbd> l </kbd> :arrow_right: Go Rigth |
-| <kbd> w </kbd> :arrow_right: Go forwards to the start of a word | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  |
+| <kbd> h </kbd> Go Left        | <kbd> j </kbd> Go Down      | <kbd> k </kbd> Go Up          | <kbd> l </kbd> Go Rigth     |
+| <kbd> w </kbd> Go forwards to the start of a word | <kbd> e </kbd> Go forwards to the end of a word | <kbd> b </kbd> Go backwards to the start of a word |  |
 | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  |
 | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  |
 | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  | <kbd>  </kbd> :arrow_right:  |
