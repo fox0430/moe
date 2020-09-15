@@ -1,5 +1,4 @@
 import terminal, times
-from os import execShellCmd
 import ui, editorstatus, gapbuffer, unicodeext, undoredostack, window,
        movement, editor, bufferstatus
 
@@ -36,7 +35,7 @@ proc insertMode*(status: var EditorStatus) =
 
     status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
     status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(windowNode)
-    
+
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
       status.commandWindow.erase
