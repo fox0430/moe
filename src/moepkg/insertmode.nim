@@ -1,6 +1,6 @@
-import terminal, times, sugar, critbits, sequtils, options, strformat
+import terminal, times, critbits, options
 import ui, editorstatus, gapbuffer, unicodeext, undoredostack, window,
-       movement, editor, bufferstatus, generalautocomplete, color, cursor, suggestionwindow
+       movement, editor, bufferstatus, suggestionwindow
 
 template currentBufStatus: var BufferStatus =
   mixin status
