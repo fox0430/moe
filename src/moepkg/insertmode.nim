@@ -247,5 +247,5 @@ proc insertMode*(status: var EditorStatus) =
                       currentMainWindow,
                       status.settings.autoCloseParen, key)
 
-    if prevLineNumber == currentMainWindow.currentLine and prevLine != currentBufStatus.buffer[currentMainWindow.currentLine]:
+    if status.settings.autocompleteSettings.enable and prevLineNumber == currentMainWindow.currentLine and prevLine != currentBufStatus.buffer[currentMainWindow.currentLine]:
       suggestionWindow = tryOpenSuggestionWindow(currentBufStatus, currentMainWindow)

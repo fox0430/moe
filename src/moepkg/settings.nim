@@ -1036,7 +1036,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       result.filerSettings.showIcons = settings["Filer"]["showIcons"].getbool()
 
   if (const table = "Autocomplete"; settings.contains(table)):
-    if (const key = "enable"; settings[table].contains(table)):
+    if (const key = "enable"; settings[table].contains(key)):
       result.autocompleteSettings.enable = settings[table][key].getbool
 
   if not vscodeTheme and settings.contains("Theme"):
