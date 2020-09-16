@@ -10,7 +10,7 @@ const code = ru"""proc fibonacci(n: int): int =
  
 test "enumerateIdentifiers":
   const
-    expectedResult = @["proc", "fibonacci", "n", "int", "int", "if", "n", "return", "if", "n", "return", "return", "fibonacci", "n", "fibonacci", "n"].map(ru)
+    expectedResult = @["proc", "fibonacci", "n", "int", "int", "if", "n", "return", "if", "n", "return", "return", "fibonacci", "n", "fibonacci", "n"].map(s => s.ru)
     actualResult = collect(newSeq):
       for x in enumerateIdentifiers(code):
         x
