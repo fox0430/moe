@@ -42,7 +42,7 @@ proc writeFileOpenError*(cmdWin: var Window,
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
 
-proc writeCreateDirError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+proc writeCreateDirError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) {.inline.} =
   const mess = "Error: Can not create directory"
   messageLog.add(mess.toRunes)
 
@@ -254,10 +254,10 @@ proc writeNotExistWorkspaceError*(cmdWin: var Window,
   let mess = "Error: Workspace " & $workspaceIndex & " not exist"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
 
-proc writeWorkspaceList*(cmdWin: var Window, buffer: string) =
+proc writeWorkspaceList*(cmdWin: var Window, buffer: string) {.inline.} =
   cmdWin.writeMessageOnCommandWindow(buffer, EditorColorPair.commandBar)
 
-proc writeBackupRestoreError*(cmdWin: var Window) =
+proc writeBackupRestoreError*(cmdWin: var Window) {.inline.} =
   const mess = "Error: Restore failed"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
 
@@ -272,6 +272,6 @@ proc writeRestoreFileSuccessMessage*(cmdWin: var Window,
   if settings.logNotifications and settings.restoreLogNotify:
     messageLog.add(message.toRunes)
 
-proc writeDeleteBackupError*(cmdWin: var Window) =
+proc writeDeleteBackupError*(cmdWin: var Window) {.inline.} =
   const mess = "Error: Delete backup file failed"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)

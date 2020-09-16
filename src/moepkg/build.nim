@@ -10,7 +10,7 @@ proc build*(filename, workspaceRoot,
       currentDir = getCurrentDir()
       workspaceRoot = workspaceRoot
       cmd = if command.len > 0: $command
-            elif ($workspaceRoot).existsDir: fmt"cd {workspaceRoot} && nimble build"
+            elif ($workspaceRoot).dirExists: fmt"cd {workspaceRoot} && nimble build"
             else: fmt"nim c {filename}"
 
     result = cmd.execCmdEx

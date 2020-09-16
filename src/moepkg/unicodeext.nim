@@ -24,7 +24,7 @@ proc validateUtf16Be(s: string): bool =
   proc advance: int =
     result = 256*ord(s[i])+ord(s[i+1])
     i += 2
-    
+
   while i < s.len:
     let curr = advance()
     if curr <= 0xD7FF or (0xE000 <= curr and curr <= 0xFFFF): continue
@@ -46,7 +46,7 @@ proc validateUtf16Le(s: string): bool =
   proc advance: int =
     result = ord(s[i])+256*ord(s[i+1])
     i += 2
-    
+
   while i < s.len:
     let curr = advance()
     if curr <= 0xD7FF or (0xE000 <= curr and curr <= 0xFFFF): continue
@@ -68,7 +68,7 @@ proc validateUtf32Be(s: string): bool =
   proc advance: uint32 =
     result = 0x1000000'u32*uint32(ord(s[i]))+0x10000'u32*uint32(ord(s[i+1]))+0x100'u32*uint32(ord(s[i+2]))+uint32(ord(s[i+3]))
     i += 4
-  
+
   while i < s.len:
     let curr = advance()
     if curr > 0x10FFFF'u32: return false
@@ -82,7 +82,7 @@ proc validateUtf32Le(s: string): bool =
   proc advance: uint32 =
     result = uint32(ord(s[i]))+0x100'u32*uint32(ord(s[i+1]))+0x10000'u32*uint32(ord(s[i+2]))+0x1000000'u32*uint32(ord(s[i+3]))
     i += 4
-  
+
   while i < s.len:
     let curr = advance()
     if curr > 0x10FFFF'u32: return false
@@ -132,23 +132,23 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
 
   return CharacterEncoding.unknown
 
-proc toRune*(c: char): Rune =
+proc toRune*(c: char): Rune {.inline.} =
   doAssert(ord(c) <= 127)
   Rune(c)
 
-proc toRune*(x: int): Rune = Rune(x)
+proc toRune*(x: int): Rune {.inline.} = Rune(x)
 
-proc `==`*(c: Rune, x: int): bool = c == toRune(x)
-proc `==`*(c: Rune, x: char): bool = c == toRune(x)
+proc `==`*(c: Rune, x: int): bool {.inline.} = c == toRune(x)
+proc `==`*(c: Rune, x: char): bool {.inline.} = c == toRune(x)
 
-proc ru*(c: char): Rune = toRune(c)
+proc ru*(c: char): Rune {.inline.} = toRune(c)
 
-proc ru*(s: string): seq[Rune] = s.toRunes
+proc ru*(s: string): seq[Rune] {.inline.} = s.toRunes
 
-proc canConvertToChar*(c: Rune): bool =
+proc canConvertToChar*(c: Rune): bool {.inline.} =
   return ($c).len == 1
 
-proc toChar*(c: Rune): char =
+proc toChar*(c: Rune): char {.inline.} =
   doAssert(canConvertToChar(c), "Failed to convert Rune to char")
   return ($c)[0]
 
@@ -163,7 +163,7 @@ proc width*(c: Rune): int =
      UnicodeWidth.uwdtNeutral: 1
   else: 2
 
-proc width*(runes: seq[Rune]): int =
+proc width*(runes: seq[Rune]): int {.inline.} =
   for c in runes: result += width(c)
 
 proc numberOfBytes*(firstByte: char): int =
@@ -177,9 +177,9 @@ proc isDigit*(c: Rune): bool =
   let s = $c
   return s.len == 1 and strutils.isDigit(s[0])
 
-proc isDigit*(runes: seq[Rune]): bool = all(runes, isDigit)
+proc isDigit*(runes: seq[Rune]): bool {.inline.} = all(runes, isDigit)
 
-proc isSpace*(c: Rune): bool =
+proc isSpace*(c: Rune): bool {.inline.} =
   return unicode.isSpace($c)
 
 proc isPunct*(c: Rune): bool =
@@ -229,7 +229,7 @@ proc split*(runes: seq[Rune], sep: Rune): seq[seq[Rune]] =
     if c == sep: result.add(@[])
     else: result[result.high].add(c)
 
-proc toGapBuffer*(runes: seq[Rune]): GapBuffer[seq[Rune]] =
+proc toGapBuffer*(runes: seq[Rune]): GapBuffer[seq[Rune]] {.inline.} =
   runes.split(ru'\n').initGapBuffer
 
 proc toRunes*(buffer: GapBuffer[seq[Rune]]): seq[Rune] =
@@ -244,9 +244,7 @@ proc startsWith*(runes1, runes2: seq[Rune]): bool =
       result = false
       break
 
-proc startsWith*(runes1: seq[Rune], r: Rune): bool =
-  if runes1[0] == r: return true
-  else: false
+proc startsWith*(runes1: seq[Rune], r: Rune): bool {.inline.} = runes1[0] == r
 
 proc `$`*(seqRunes: seq[seq[Rune]]): string =
   for runes in seqRunes: result = result & $runes
@@ -331,13 +329,13 @@ proc rfind*(runes, sub: seq[Rune], start: Natural = 0, last = -1): int =
     if result != -1: return
   return -1
 
-proc substr*(runes: seq[Rune], first, last: int): seq[Rune] =
+proc substr*(runes: seq[Rune], first, last: int): seq[Rune] {.inline.} =
   runes[first .. last]
 
-proc substr*(runes: seq[Rune], first = 0): seq[Rune] =
+proc substr*(runes: seq[Rune], first = 0): seq[Rune] {.inline.} =
   substr(runes, first, runes.high)
 
-proc contains*(runes, sub: seq[Rune]): bool =
+proc contains*(runes, sub: seq[Rune]): bool {.inline.} =
   find(runes, sub) >= 0
 
 proc splitWhitespace*(runes: seq[Rune]): seq[seq[Rune]] =
@@ -355,5 +353,5 @@ iterator split*(runes: seq[Rune], isSep: proc (r: Rune): bool, removeEmptyEntrie
     first = last + 1
 
 from os import `/`
-proc `/`*(runes1, runes2: seq[Rune]): seq[Rune] =
+proc `/`*(runes1, runes2: seq[Rune]): seq[Rune] {.inline.} =
   toRunes($runes1 / $runes2)

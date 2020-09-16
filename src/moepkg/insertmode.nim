@@ -1,4 +1,4 @@
-import terminal, times, critbits, options
+import terminal, times, options
 import ui, editorstatus, gapbuffer, unicodeext, undoredostack, window,
        movement, editor, bufferstatus, suggestionwindow
 

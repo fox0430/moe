@@ -39,17 +39,17 @@ type BufferStatus* = object
   prevMode* : Mode
   lastSaveTime*: DateTime
 
-proc isVisualMode*(mode: Mode): bool =
+proc isVisualMode*(mode: Mode): bool {.inline.} =
   mode == Mode.visual or mode == Mode.visualBlock
 
-proc isFilerMode*(mode, prevMode: Mode): bool =
+proc isFilerMode*(mode, prevMode: Mode): bool {.inline.} =
   (mode == Mode.filer) or (mode == Mode.ex and prevMode == Mode.filer)
 
-proc isHistoryManagerMode*(mode, prevMode: Mode): bool =
+proc isHistoryManagerMode*(mode, prevMode: Mode): bool {.inline.} =
   (mode == Mode.history) or (mode == Mode.ex and prevMode == Mode.history)
 
-proc isDiffViewerMode*(mode, prevMode: Mode): bool =
+proc isDiffViewerMode*(mode, prevMode: Mode): bool {.inline.} =
   (mode == Mode.diff) or (mode == Mode.ex and prevMode == Mode.diff)
 
-proc isConfigMode*(mode, prevMode: Mode): bool =
+proc isConfigMode*(mode, prevMode: Mode): bool {.inline.} =
   (mode == Mode.config) or (mode == Mode.ex and prevMode == Mode.config)

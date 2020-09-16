@@ -11,9 +11,9 @@ proc correspondingCloseParen(c: char): char =
   of '\'': return '\''
   else: doAssert(false, fmt"Invalid parentheses: {c}")
 
-proc isOpenParen(ch: char): bool = ch in {'(', '{', '[', '\"', '\''}
+proc isOpenParen(ch: char): bool {.inline.} = ch in {'(', '{', '[', '\"', '\''}
 
-proc isCloseParen(ch: char): bool = ch in {')', '}', ']', '\"', '\''}
+proc isCloseParen(ch: char): bool {.inline.} = ch in {')', '}', ']', '\"', '\''}
 
 proc nextRuneIs(bufStatus: var BufferStatus,
                 windowNode: WindowNode,
@@ -295,7 +295,7 @@ proc keyEnter*(bufStatus: var BufferStatus,
 proc insertTab*(bufStatus: var BufferStatus,
                windowNode: WindowNode,
                tabStop: int,
-               autoCloseParen: bool) =
+               autoCloseParen: bool) {.inline.} =
 
   for i in 0 ..< tabStop:
     insertCharacter(bufStatus, windowNode, autoCloseParen, ru' ')

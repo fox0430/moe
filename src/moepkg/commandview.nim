@@ -213,7 +213,7 @@ proc insertCommandBuffer(exStatus: var ExModeViewStatus, r: Rune) =
   if exStatus.cursorX < terminalWidth() - 1: inc(exStatus.cursorX)
   else: inc(exStatus.startPosition)
 
-proc insertCommandBuffer(exStatus: var ExModeViewStatus, runes: seq[Rune]) =
+proc insertCommandBuffer(exStatus: var ExModeViewStatus, runes: seq[Rune]) {.inline.} =
   for r in runes:
     exStatus.insertCommandBuffer(r)
 

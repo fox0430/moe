@@ -9,7 +9,7 @@ proc openSelectedBuffer(status: var Editorstatus) =
     line = windowNode.currentLine
     filename = status.bufStatus[windowNode.bufferIndex].buffer[line]
 
-  if existsFile($filename):
+  if fileExists($filename):
     status.addNewBuffer($filename)
   else:
     status.commandWindow.writeFileNotFoundError(filename, status.messageLog)
@@ -24,7 +24,7 @@ proc initRecentFileModeBuffer(bufStatus: var BufferStatus) =
     if index == 0: bufStatus.buffer[0] = str.toRunes
     else: bufStatus.buffer.add(str.toRunes)
 
-proc isRecentFileMode(bufStatus: BufferStatus): bool =
+proc isRecentFileMode(bufStatus: BufferStatus): bool {.inline.} =
   bufStatus.mode == Mode.recentFile
 
 proc recentFileMode*(status: var Editorstatus) =

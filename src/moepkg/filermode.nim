@@ -83,10 +83,10 @@ when defined(posix):
   from posix import nil
   from posix_utils import nil
 
-  proc isFifo(file: string): bool =
+  proc isFifo(file: string): bool {.inline.} =
     posix.S_ISFIFO(posix_utils.stat(file).st_mode)
 else:
-  proc isFifo(file: string): bool = false
+  proc isFifo(file: string): bool {.inline.} = false
 
 proc refreshDirList(path: seq[Rune], sortBy: Sort): seq[PathInfo] =
   var
@@ -141,7 +141,7 @@ proc refreshDirList(path: seq[Rune], sortBy: Sort): seq[PathInfo] =
     getLastModificationTime($path))] &
     sortDirList(dirList, sortBy) & sortDirList(fileList, sortBy)
 
-proc initFileRegister(): FileRegister =
+proc initFileRegister(): FileRegister {.inline.} =
   result.copy = false
   result.cut= false
   result.originPath = ""
@@ -266,7 +266,7 @@ proc openNewWinAndOpenFilerOrDir(status: var EditorStatus,
   status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
 
-  if existsDir($path):
+  if dirExists($path):
     try:
       setCurrentDir($path)
     except OSError:
@@ -301,7 +301,7 @@ proc initFilelistHighlight[T](dirList: seq[PathInfo],
                                           color: color))
 
 proc pathToIcon(path: string): seq[Rune] =
-  if existsDir(path):
+  if dirExists(path):
     return ru"📁 "
 
   # Not sure if this is a perfect solution,

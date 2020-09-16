@@ -154,7 +154,7 @@ smoothScroll
 ```
 
 Smooth scroll speed (int)  
-default is 16
+default is 15
 ```
 smoothScrollSpeed
 ```
