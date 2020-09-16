@@ -448,3 +448,9 @@ suite "Validate toml config":
     let result = toml.validateTomlConfig
 
     check result == none(string)
+
+suite "Configuration example":
+  test "Check moerc.toml":
+    let filename = "./example/moerc.toml"
+
+    discard parsetoml.parseFile(filename)
