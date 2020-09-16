@@ -469,7 +469,7 @@ proc deleteIndentInCurrentLine*(bufStatus: var BufferStatus,
   bufStatus.deleteIndent(windowNode, tabStop)
 
   if oldLine != bufStatus.buffer[windowNode.currentLine] and
-     windowNode.currentColumn > tabStop:
+     windowNode.currentColumn >= tabStop:
     windowNode.currentColumn -= tabStop
 
 

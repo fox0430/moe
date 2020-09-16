@@ -267,8 +267,8 @@ proc getInsertBuffer(status: var Editorstatus): seq[Rune] =
       windowNode = status.workspace[workspaceIndex].currentMainWindowNode
       bufferIndex = windowNode.bufferIndex
 
-    var key = ru'\0'
-    while key == ru'\0':
+    var key = errorKey
+    while key == errorKey:
       status.eventLoopTask
       key = getKey(windowNode.window)
 
@@ -433,8 +433,8 @@ proc visualMode*(status: var EditorStatus) =
 
     status.update
 
-    var key: Rune = Rune('\0')
-    while key == Rune('\0'):
+    var key = errorKey
+    while key == errorKey:
       status.eventLoopTask
       key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
 

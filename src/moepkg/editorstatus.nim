@@ -559,17 +559,19 @@ proc movePrevWindow*(status: var EditorStatus) =
   status.moveCurrentMainWindow(index)
 
 proc writePopUpWindow*(popUpWindow: var Window,
-                       h, w, y, x: var int,
+                       h, w, y, x: int,
                        currentLine: int,
                        buffer: seq[seq[Rune]]) =
+  # TODO: Probably, the parameter `y` means the bottom of the window, but it should change to the top of the window for consistency.
 
   popUpWindow.erase
 
   # Pop up window position
-  if y == terminalHeight() - 1: y = y - h
-  if w > terminalHeight() - x: x = terminalHeight() - w
+  let
+    actualY = y.clamp(0, terminalHeight() - h)
+    actualX = x.clamp(0, terminalWidth() - w)
 
-  popUpWindow.resize(h, w, y, x)
+  popUpWindow.resize(h, w, actualY, actualX)
 
   let startLine = if currentLine == -1: 0
                   elif currentLine - h + 1 > 0: currentLine - h + 1
@@ -577,10 +579,10 @@ proc writePopUpWindow*(popUpWindow: var Window,
   for i in 0 ..< h:
     if currentLine != -1 and i + startLine == currentLine:
       let color = EditorColorPair.popUpWinCurrentLine
-      popUpWindow.write(i, 1, buffer[i + startLine], color)
+      popUpWindow.write(i, 1, buffer[i + startLine], color, false)
     else:
       let color = EditorColorPair.popUpWindow
-      popUpWindow.write(i, 1, buffer[i + startLine], color)
+      popUpWindow.write(i, 1, buffer[i + startLine], color, false)
 
   popUpWindow.refresh
 

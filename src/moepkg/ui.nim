@@ -24,7 +24,7 @@ type CursorType* = enum
 
 type Window* = ref object
   cursesWindow*: ptr window
-  top, left, height*, width*: int
+  height*, width*: int
   y*, x*: int
 
 proc setBkinkingIbeamCursor*() {.inline.} = discard execShellCmd("printf \"\x1b[\x35 q\"")
@@ -89,13 +89,13 @@ proc startUi*() =
 
 proc exitUi*() {.inline.} = endwin()
 
-proc initWindow*(height, width, top, left: int, color: EditorColorPair): Window =
+proc initWindow*(height, width, y, x: int, color: EditorColorPair): Window =
   result = Window()
-  result.top = top
-  result.left = left
+  result.y = y
+  result.x = x
   result.height = height
   result.width = width
-  result.cursesWindow = newwin(cint(height), cint(width), cint(top), cint(left))
+  result.cursesWindow = newwin(cint(height), cint(width), cint(y), cint(x))
   keypad(result.cursesWindow, true)
   discard wbkgd(result.cursesWindow, ncurses.COLOR_PAIR(color))
 
@@ -104,7 +104,8 @@ proc write*(win: var Window,
             str: string,
             color: EditorColorPair = EditorColorPair.defaultChar,
             storeX: bool = true) =
-
+  # WARNING: If `storeX` is true, this procedure will change the window position. Should we remove the default parameter?
+  #
   # Not write when running unit tests
   when not defined unitTest:
     win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
@@ -118,7 +119,8 @@ proc write*(win: var Window,
             y, x: int, str: seq[Rune],
             color: EditorColorPair = EditorColorPair.defaultChar,
             storeX: bool = true) =
-
+  # WARNING: If `storeX` is true, this procedure will change the window position. Should we remove the default parameter?
+  #
   # Not write when running unit tests
   when not defined unitTest:
     write(win, y, x, $str, color, false)
@@ -165,8 +167,6 @@ proc resize*(win: var Window, height, width, y, x: int) =
   win.resize(height, width)
   win.move(y, x)
 
-  win.top = y
-  win.left = x
   win.y = y
   win.x = x
 
@@ -194,6 +194,7 @@ var KEY_DC {.header: "<ncurses.h>", importc: "KEY_DC".}: int
 var KEY_ENTER {.header: "<ncurses.h>", importc: "KEY_ENTER".}: int
 var KEY_PPAGE {.header: "<ncurses.h>", importc: "KEY_PPAGE".}: int
 var KEY_NPAGE {.header: "<ncurses.h>", importc: "KEY_NPAGE".}: int
+const errorKey* = Rune(ERR)
 
 proc getKey*(win: Window): Rune =
   var
@@ -201,7 +202,7 @@ proc getKey*(win: Window): Rune =
     len: int
   block getfirst:
     let key = wgetch(win.cursesWindow)
-    if key == -1: return Rune('\0')
+    if Rune(key) == errorKey: return errorKey
     if not (key <= 0x7F or (0xC2 <= key and key <= 0xF0) or key == 0xF3): return Rune(key)
     s.add(char(key))
     len = numberOfBytes(char(key))
@@ -244,3 +245,4 @@ proc isBackspaceKey*(key: Rune): bool {.inline.} =
   key == KEY_BACKSPACE or key == 8 or key == 127
 proc isEnterKey*(key: Rune): bool {.inline.} =
   key == KEY_ENTER or key == ord('\n') or key == 13
+proc isError*(key: Rune): bool = key == errorKey

@@ -539,6 +539,14 @@ default is true
 showIcons
 ```
 
+### Autocomplete table
+
+Enable/Disable general-purpose autocomplete (bool).
+The default value is true.
+```
+enable
+```
+
 ### Color and theme
 -- Available colors --
 

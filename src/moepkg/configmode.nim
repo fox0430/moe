@@ -111,6 +111,9 @@ const
   filerTableNames = [
     "showIcons"
   ]
+  autocompleteTableNames = [
+    "enable"
+  ]
   themeTableNames = [
     "editorBg",
     "lineNum",
@@ -469,6 +472,17 @@ proc initFilerTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
     case name:
       of "showIcons":
         result.add(ru nameStr & space & $settings.filerSettings.showIcons)
+
+proc initAutocompleteTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
+  result.add(ru"Autocomplete")
+
+  for name in autocompleteTableNames:
+    let
+      nameStr = indent & name
+      space = " ".repeat(positionOfSetVal - name.len)
+    case name:
+      of "enable":
+        result.add(ru nameStr & space & $settings.autocompleteSettings.enable)
 
 proc calcPositionOfThemeSettingValue(theme: ColorTheme): int =
   for colorPair in EditorColorPair:
@@ -893,6 +907,9 @@ proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
 
   buffer.add(ru"")
   buffer.add(initFilerTableBuffer(settings))
+
+  buffer.add(ru"")
+  buffer.add(initAutocompleteTableBuffer(settings))
 
   buffer.add(ru"")
   buffer.add(initThemeTableBuffer(settings))

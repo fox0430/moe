@@ -89,6 +89,9 @@ type EditorViewSettings* = object
   indentationLines*: bool
   tabStop*: int
 
+type AutocompleteSettings* = object
+  enable*: bool
+
 type EditorSettings* = object
   editorColorTheme*: ColorTheme
   statusBar*: StatusBarSettings
@@ -121,6 +124,7 @@ type EditorSettings* = object
   buildOnSave*: BuildOnSaveSettings
   workSpace*: WorkSpaceSettings
   filerSettings*: FilerSettings
+  autocompleteSettings*: AutocompleteSettings
   reservedWords*: seq[ReservedWord]
   autoBackupSettings*: AutoBackupSettings
   quickRunSettings*: QuickRunSettings
@@ -165,6 +169,9 @@ proc initAutoBackupSettings(): AutoBackupSettings =
 
 proc initFilerSettings(): FilerSettings {.inline.} =
   result.showIcons = true
+
+proc initAutocompleteSettings*(): AutocompleteSettings {.inline.} =
+  result.enable = true
 
 proc initTabBarSettings*(): TabLineSettings {.inline.} =
   result.useTab = true
@@ -228,6 +235,7 @@ proc initEditorSettings*(): EditorSettings =
   result.buildOnSave = BuildOnSaveSettings()
   result.workSpace= initWorkSpaceSettings()
   result.filerSettings = initFilerSettings()
+  result.autocompleteSettings = initAutocompleteSettings()
   result.reservedWords = initReservedWords()
   result.autoBackupSettings = initAutoBackupSettings()
   result.quickRunSettings = initQuickRunSettings()
@@ -1027,6 +1035,10 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Filer"].contains("showIcons"):
       result.filerSettings.showIcons = settings["Filer"]["showIcons"].getbool()
 
+  if (const table = "Autocomplete"; settings.contains(table)):
+    if (const key = "enable"; settings[table].contains(key)):
+      result.autocompleteSettings.enable = settings[table][key].getbool
+
   if not vscodeTheme and settings.contains("Theme"):
     if settings["Theme"].contains("baseTheme"):
       let themeString = settings["Theme"]["baseTheme"].getStr()
@@ -1556,6 +1568,15 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         else:
           return some($item)
 
+  template validateAutocompleteTable() =
+    for item in json["Autocomplete"].pairs:
+      case item.key:
+      of "enable":
+        if item.val["type"].getStr != "bool":
+          return some($item)
+      else:
+        return some($item)
+
   template validateThemeTable() =
     let editorColors = ColorThemeTable[ColorTheme.config].EditorColor
     for item in json["Theme"].pairs:
@@ -1606,6 +1627,8 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         validateFilerTable()
       of "Theme":
         validateThemeTable()
+      of "Autocomplete":
+        validateAutocompleteTable()
       else: discard
 
   return none(string)
