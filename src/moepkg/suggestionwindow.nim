@@ -2,7 +2,7 @@ import critbits, unicode, sugar, options, sequtils
 import ui, window, generalautocomplete, bufferstatus, gapbuffer, unicodeext, color, editorstatus, movement
 
 type SuggestionWindow* = object
-  identifierDictionary: CritBitTree[void]
+  wordDictionary: CritBitTree[void]
   oldLine: seq[Rune]
   inputWord: seq[Rune]
   firstColumn, lastColumn: int
@@ -52,11 +52,11 @@ proc handleKeyInSuggestionWindow*(suggestionWindow: var SuggestionWindow, bufSta
 proc initSuggestionWindow*(text, word, currentLineText: seq[Rune], firstColumn, lastColumn: int): Option[SuggestionWindow] =
   var suggestionWindow: SuggestionWindow
 
-  suggestionwindow.identifierDictionary = makeIdentifierDictionary(text)
+  suggestionwindow.wordDictionary = makeWordDictionary(text)
   suggestionwindow.inputWord = word
   suggestionwindow.firstColumn = firstColumn
   suggestionwindow.lastColumn = lastColumn
-  suggestionwindow.suggestoins = collectSuggestions(suggestionwindow.identifierDictionary, word)
+  suggestionwindow.suggestoins = collectSuggestions(suggestionwindow.wordDictionary, word)
 
   if suggestionwindow.suggestoins.len == 0: return none(SuggestionWindow)
 

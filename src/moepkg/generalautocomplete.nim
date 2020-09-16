@@ -12,15 +12,14 @@ const
   firstCharacter = letterCharacter
   succeedingCharacter = letterCharacter + combiningCharacter + decimalDigitCharacter + connectingCharacter + formattingCharacter + formattingCharacter
 
-iterator enumerateIdentifiers*(runes: seq[Rune]): seq[Rune] =
-  # The name "enumerateIdentifiers" is a bit misleading because this proc also collects keywords in some programming language.
-  for identifier in split(runes, r => r.unicodeCategory notin succeedingCharacter, true):
-    if identifier[0].unicodeCategory notin firstCharacter: continue
-    yield identifier
+iterator enumerateWords*(runes: seq[Rune]): seq[Rune] =
+  for word in split(runes, r => r.unicodeCategory notin succeedingCharacter, true):
+    if word[0].unicodeCategory notin firstCharacter: continue
+    yield word
 
-proc makeIdentifierDictionary*(runes: seq[Rune]): CritBitTree[void] =
-  for identifier in enumerateIdentifiers(runes):
-    result.incl($identifier)
+proc makeWordDictionary*(runes: seq[Rune]): CritBitTree[void] =
+  for word in enumerateWords(runes):
+    result.incl($word)
 
 proc extractNeighborWord*(runes: seq[Rune], pos: int): Option[tuple[word: seq[Rune], first, last: int]] =
   if runes.len == 0 or pos notin runes.low .. runes.high or runes[pos].unicodeCategory notin succeedingCharacter: return
@@ -36,10 +35,10 @@ proc extractNeighborWord*(runes: seq[Rune], pos: int): Option[tuple[word: seq[Ru
 
   return some((runes[first..last], first, last))
 
-proc isCharacterInIdentifier*(r: Rune): bool =
+proc isCharacterInWord*(r: Rune): bool =
   r.unicodeCategory in succeedingCharacter
 
-proc collectSuggestions*(idetifierDictionary: CritBitTree[void], word: seq[Rune]): seq[seq[Rune]] =
+proc collectSuggestions*(wordDictionary: CritBitTree[void], word: seq[Rune]): seq[seq[Rune]] =
   collect(newSeq):
-    for item in itemsWithPrefix(idetifierDictionary, $word):
+    for item in itemsWithPrefix(wordDictionary, $word):
       item.toRunes

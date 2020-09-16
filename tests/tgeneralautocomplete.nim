@@ -8,23 +8,23 @@ const code = ru"""proc fibonacci(n: int): int =
   if n == 1: return 1
   return fibonacci(n - 1) + fibonacci(n - 2)"""
  
-test "enumerateIdentifiers":
+test "enumerateWords":
   const
     expectedResult = @["proc", "fibonacci", "n", "int", "int", "if", "n", "return", "if", "n", "return", "return", "fibonacci", "n", "fibonacci", "n"].map(s => s.ru)
     actualResult = collect(newSeq):
-      for x in enumerateIdentifiers(code):
+      for x in enumerateWords(code):
         x
 
   check actualResult == expectedResult
 
-test "makeIdentifierDictionary":
-  const allIdentifiers = @["proc", "fibonacci", "n", "int", "int", "if", "n", "return", "if", "n", "return", "return", "fibonacci", "n", "fibonacci", "n"].deduplicate
-  let dictionary = makeIdentifierDictionary(code)
+test "makeWordDictionary":
+  const allWords = @["proc", "fibonacci", "n", "int", "int", "if", "n", "return", "if", "n", "return", "return", "fibonacci", "n", "fibonacci", "n"].deduplicate
+  let dictionary = makeWordDictionary(code)
 
-  for x in allIdentifiers:
+  for x in allWords:
     check dictionary.contains(x)
   for x in dictionary.items:
-    check allIdentifiers.contains(x)
+    check allWords.contains(x)
 
 test "extractNeighborWord":
   const text = ru"This is a sample text."
