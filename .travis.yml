@@ -7,7 +7,6 @@ before_install:
   - sudo ln -sf /lib/x86_64-linux-gnu/libncursesw.so.5.9 /usr/lib/x86_64-linux-gnu/libncursesw.so
   - export CHOOSENIM_NO_ANALYTICS=1
   - wget -qO - https://nim-lang.org/choosenim/init.sh | sh
-  - sh init.sh -y
   - export PATH=~/.nimble/bin:$PATH
   - echo "export PATH=~/.nimble/bin:$PATH" >> ~/.profile
   - choosenim stable
