@@ -1,4 +1,4 @@
-import posix, strformat
+import posix, strformat, osproc, strutils
 from os import execShellCmd
 import ncurses
 import unicodeext, color
@@ -59,6 +59,15 @@ proc keyEcho*(keyecho: bool) =
 proc setTimeout*(win: var Window) {.inline.} = win.cursesWindow.wtimeout(cint(1000)) # 500mm sec
 
 proc setTimeout*(win: var Window, time: int) {.inline.} = win.cursesWindow.wtimeout(cint(time))
+
+# Check how many colors are supported on the terminal
+proc checkColorSupportedTerminal*(): int =
+  let (output, exitCode) = execCmdEx("tput colors")
+
+  if exitCode == 0:
+    result = (output[0 ..< output.high]).parseInt
+  else:
+    result = -1
 
 proc startUi*() =
   # Not start when running unit tests
