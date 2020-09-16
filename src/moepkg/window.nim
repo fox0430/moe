@@ -310,3 +310,8 @@ proc countReferencedWindow*(root: WindowNode, bufferIndex: int): int =
 
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
+
+proc absolutePosition*(windowNode: WindowNode, line, column: int): tuple[y, x: int] =
+  ## Calculates the absolute position of (`line`, `column`).
+  let (_, relativeY, relativeX) = windowNode.view.findCursorPosition(line, column)
+  return (windowNode.y + relativeY, windowNode.x + relativeX + windowNode.view.widthOfLineNum)
