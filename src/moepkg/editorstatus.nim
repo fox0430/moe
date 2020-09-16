@@ -1028,6 +1028,9 @@ proc changeTheme*(status: var EditorStatus) =
 
   setCursesColor(ColorThemeTable[status.settings.editorColorTheme])
 
+  if checkColorSupportedTerminal() == 8:
+    convertToConsoleEnvironmentColor(status.settings.editorColorTheme)
+
 proc autoSave(status: var Editorstatus) =
   let interval = status.settings.autoSaveInterval.minutes
   for index, bufStatus in status.bufStatus:

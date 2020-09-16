@@ -1,7 +1,5 @@
 import ncurses
-import strutils
-import tables
-import macros
+import strutils, tables, macros, strformat
 
 # maps annotations of the enum to a hexToColor table
 macro mapAnnotationToTable(args: varargs[untyped]): untyped =
@@ -1494,3 +1492,118 @@ proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Co
     return (editorColor.currentSetting, editorColor.currentSettingBg)
   else:
     return (editorColor.parenText, editorColor.parenTextBg)
+
+# Environment where only 8 colors can be used
+proc convertToConsoleEnvironmentColor*(theme: ColorTheme) =
+  macro setColor(theme, pairName: untyped, color: Color): untyped =
+    parseStmt(fmt"""
+      ColorThemeTable[{repr(theme)}].{pairName} = {repr(color)}
+    """)
+
+  proc isDefault(color: Color): bool {.inline.} = color == Color.default
+
+  proc isBlack(color: Color): bool =
+    case color:
+      of black, gray3, gray7, gray11, gray15, gray19, gray23, gray27, gray30,
+         gray35, gray39, gray42, gray46, gray50, gray54, gray58, gray62, gray66,
+         gray70, gray74, gray78: true
+      else: false
+
+  # is maroon (red)
+  proc isMaroon(color: Color): bool =
+    case color:
+      of maroon, red, darkRed_1, darkRed_2, red3_1, mediumVioletRed,
+         indianRed_1, red3_2, indianRed_2, red1, orangeRed1, indianRed1_1,
+         indianRed1_2, paleVioletRed1, deepPink4_1, deepPink4_2, deepPink4,
+         magenta3: true
+      else: false
+
+  proc isGreen(color: Color): bool =
+    case color:
+      of green, darkGreen, green4, springGreen4, green3_1, springGreen3_1,
+         lightSeaGreen, green3_2, springGreen3_3, springGreen2_1, green1,
+         springGreen2_2, springGreen1, mediumSpringGreen, darkSeaGreen4_1,
+         darkSeaGreen4_2, paleGreen3_1, seaGreen3, seaGreen2, seaGreen1_1,
+         seaGreen1_2, darkSeaGreen, darkOliveGreen3_1, paleGreen3_2,
+         darkSeaGreen3_1, lightGreen_1, lightGreen_2, paleGreen1_1,
+         darkOliveGreen3_2, darkSeaGreen3_2, darkSeaGreen2_1, greenYellow,
+         darkOliveGreen2, paleGreen1_2, darkSeaGreen2_2, darkSeaGreen1_1,
+         darkOliveGreen1_1, darkOliveGreen1_2, darkSeaGreen1_2,
+         lime, orange4_1, chartreuse4, paleTurquoise4, chartreuse3_1,
+         chartreuse3_2, chartreuse2_1, Wheat4, chartreuse2_2, chartreuse1,
+         darkGoldenrod, lightSalmon3_1, rosyBrown, gold3_1, darkKhaki,
+         navajoWhite3: true
+      else: false
+
+  # is olive (yellow)
+  proc isOlive(color: Color): bool =
+    case color:
+      of olive,
+         yellow, yellow4_1, yellow4_2, yellow3_1, yellow3_2, lightYellow3,
+         yellow2, yellow1, orange4_2, lightPink4, plum4, wheat4, darkOrange3_1,
+         darkOrange3_2, orange3, lightSalmon3_2, gold3_2, lightGoldenrod3, tan,
+         mistyRose3, khaki3, lightGoldenrod2, darkOrange, salmon1, orange1,
+         sandyBrown, lightSalmon1, gold1, lightGoldenrod2_1, lightGoldenrod2_2,
+         navajoWhite1, lightGoldenrod1, khaki1, wheat1, cornsilk1: true
+      else: false
+
+  # is navy (blue)
+  proc isNavy(color: Color): bool =
+    case color:
+      of navy,
+         blue, navyBlue, darkBlue, blue3_1, blue3_2, blue1, deepSkyBlue4_1,
+         deepSkyBlue4_2, deepSkyBlue4_3, dodgerBlue3_1, dodgerBlue3_2,
+         deepSkyBlue3_1, deepSkyBlue3_2, dodgerBlue1, deepSkyBlue2,
+         deepSkyBlue1, blueViolet, slateBlue3_1, slateBlue3_2, royalBlue1,
+         steelBlue, steelBlue3, cornflowerBlue, cadetBlue_1, cadetBlue_2,
+         skyBlue3, steelBlue1_1, steelBlue1_2, slateBlue1, lightSlateBlue,
+         lightSkyBlue3_1, lightSkyBlue3_2, skyBlue2, skyBlue1,
+         lightSteelBlue3, lightSteelBlue, lightSkyBlue1, lightSteelBlue1,
+         aqua, darkTurquoise, turquoise2, aquamarine1_1: true
+      else: false
+
+  proc isPurple(color: Color): bool =
+    case color:
+      of purple_1,
+         purple4_1, purple4_2, purple3, mediumPurple4, purple_2,
+         mediumPurple3_1, mediumPurple3_2, mediumPurple, purple,
+         mediumPurple2_1, mediumPurple2_2, mediumPurple1, fuchsia,
+         darkMagenta_1, darkMagenta_2, darkViolet_1, darkViolet_2, hotPink3_1,
+         mediumOrchid3, mediumOrchid, deepPink3_1, deepPink3_2, magenta3_1,
+         magenta3_2, magenta2_1, hotPink3_2, hotPink2, orchid, mediumOrchid1_1,
+         lightPink3, pink3, plum3, violet, thistle3, plum2, deepPink2,
+         deepPink1_1, deepPink1_2, magenta2_2, magenta1, hotPink1_1,
+         hotPink1_2, mediumOrchid1_2, lightCoral, orchid2, orchid1, lightPink1,
+         pink1, plum1, mistyRose1, thistle1: true
+      else: false
+
+  # is teal (cyan)
+  proc isTeal(color: Color): bool =
+    case color:
+      of teal, darkCyan, cyan3, cyan2, cyan1, lightCyan3, lightCyan1,
+         turquoise4, turquoise2, aquamarine3, mediumTurquoise, aquamarine1_2,
+         paleTurquoise1, honeydew2: true
+      else: false
+
+  for name, color in ColorThemeTable[theme].fieldPairs:
+    if isDefault(color):
+      setColor(theme, name, Color.default)
+    elif isBlack(color):
+      setColor(theme, name, Color.black)
+    elif isMaroon(color):
+      setColor(theme, name, Color.maroon)
+    elif isGreen(color):
+      setColor(theme, name, Color.green)
+    elif isOlive(color):
+      setColor(theme, name, Color.olive)
+    elif isNavy(color):
+      setColor(theme, name, Color.navy)
+    elif isPurple(color):
+      setColor(theme, name, Color.purple_1)
+    elif isTeal(color):
+      setColor(theme, name, Color.teal)
+    else:
+      # is silver (white)
+      setColor(theme, name, Color.silver)
+
+    setCursesColor(ColorThemeTable[theme])
