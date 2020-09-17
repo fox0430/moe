@@ -136,7 +136,8 @@ proc tryOpenSuggestionWindow*(
 
 proc calcSuggestionWindowPosition*(
   suggestionWindow: SuggestionWindow,
-  windowNode: WindowNode): tuple[y, x: int] =
+  windowNode: WindowNode,
+  mainWindowHeight: int): tuple[y, x: int] =
 
   let
     line = windowNode.currentLine
@@ -144,7 +145,17 @@ proc calcSuggestionWindowPosition*(
     (absoluteY, absoluteX) = windowNode.absolutePosition(line, column)
     diffY = 1
     leftMargin = 1
-  return (absoluteY + diffY, absoluteX - leftMargin)
+
+    # If the suggest window height is higher than the main window height under the cursor position,
+    # the suggest window  move to over the cursor position
+    suggestHigh = suggestionWindow.suggestoins.high
+    y = if suggestHigh > (mainWindowHeight - absoluteY - diffY) and
+           absoluteY > (mainWindowHeight - absoluteY):
+          max(absoluteY - suggestHigh - diffY, 0)
+        else:
+          absoluteY + diffY
+
+  return (y, absoluteX - leftMargin)
 
 proc writeSuggestionWindow*(suggestionWindow: var SuggestionWindow, y, x: int) =
   let

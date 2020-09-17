@@ -30,7 +30,11 @@ proc insertMode*(status: var EditorStatus) =
     status.update
 
     if suggestionWindow.isSome:
-      let (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(currentMainWindow)
+      let
+        mainWindowHeight = status.settings.getMainWindowHeight(terminalHeight())
+        (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
+          currentMainWindow,
+          mainWindowHeight)
       suggestionWindow.get.writeSuggestionWindow(y, x)
 
     var key = errorKey

@@ -137,6 +137,15 @@ proc exitEditor*(settings: EditorSettings) =
   exitUi()
   quit()
 
+proc getMainWindowHeight*(settings: EditorSettings, h: int): int =
+  let
+    tabHeight = if settings.tabLine.useTab: 1 else: 0
+    statusHeight = if settings.statusBar.enable: 1 else: 0
+    workSpaceHeight = if settings.workSpace.workSpaceLine: 1 else: 0
+    commandHeight = if settings.statusBar.merge: 1 else: 0
+
+  result = h - tabHeight - statusHeight - workSpaceHeight + commandHeight
+
 proc resizeMainWindowNode(status: var EditorStatus, height, width: int) =
   let
     tabLineHeight = if status.settings.tabLine.useTab: 1 else: 0
