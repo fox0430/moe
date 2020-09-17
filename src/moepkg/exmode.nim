@@ -599,8 +599,6 @@ proc statusBarSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
 proc incrementalSearchSettingCommand(status: var Editorstatus, command: seq[Rune]) =
-  exitUi()
-  echo "ok"
   if command == ru"on": status.settings.incrementalSearch = true
   elif command == ru"off": status.settings.incrementalSearch = false
 
