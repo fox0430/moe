@@ -44,7 +44,7 @@ proc insertMode*(status: var EditorStatus) =
 
     currentBufStatus.buffer.beginNewSuitIfNeeded
     currentBufStatus.tryRecordCurrentPosition(windowNode)
-   
+
     if suggestionWindow.isSome:
       if canHandleInSuggestionWindow(key):
         suggestionWindow.get.handleKeyInSuggestionWindow(currentBufStatus, currentMainWindow, key)
@@ -58,7 +58,7 @@ proc insertMode*(status: var EditorStatus) =
     let
       prevLine = currentBufStatus.buffer[currentMainWindow.currentLine]
       prevLineNumber = currentMainWindow.currentLine
-    
+
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
       status.commandWindow.erase
