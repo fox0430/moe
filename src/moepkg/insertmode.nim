@@ -51,7 +51,9 @@ proc insertMode*(status: var EditorStatus) =
 
     if suggestionWindow.isSome:
       if canHandleInSuggestionWindow(key):
-        suggestionWindow.get.handleKeyInSuggestionWindow(currentBufStatus, currentMainWindow, key)
+        suggestionWindow.get.handleKeyInSuggestionWindow(
+          currentBufStatus,
+          currentMainWindow, key)
         continue
       else:
         if suggestionWindow.get.isLineChanged:
@@ -110,34 +112,31 @@ proc insertMode*(status: var EditorStatus) =
                 status.settings.autoCloseParen)
     elif isControlE(key):
       currentBufStatus.insertCharacterBelowCursor(
-        currentMainWindow
-      )
+        currentMainWindow)
     elif isControlY(key):
       currentBufStatus.insertCharacterAboveCursor(
-        currentMainWindow
-      )
+        currentMainWindow)
     elif isControlW(key):
       currentBufStatus.deleteWordBeforeCursor(
         currentMainWindow,
         status.settings.tabStop)
     elif isControlU(key):
       currentBufStatus.deleteCharactersBeforeCursorInCurrentLine(
-        currentMainWindow
-      )
+        currentMainWindow)
     elif isControlT(key):
       currentBufStatus.addIndentInCurrentLine(
         currentMainWindow,
-        status.settings.view.tabStop
-      )
+        status.settings.view.tabStop)
     elif isControlD(key):
       currentBufStatus.deleteIndentInCurrentLine(
         currentMainWindow,
-        status.settings.view.tabStop
-      )
+        status.settings.view.tabStop)
     else:
       insertCharacter(currentBufStatus,
                       currentMainWindow,
                       status.settings.autoCloseParen, key)
 
-    if status.settings.autocompleteSettings.enable and prevLineNumber == currentMainWindow.currentLine and prevLine != currentBufStatus.buffer[currentMainWindow.currentLine]:
+    if status.settings.autocompleteSettings.enable and
+       prevLineNumber == currentMainWindow.currentLine and
+       prevLine != currentBufStatus.buffer[currentMainWindow.currentLine]:
       suggestionWindow = tryOpenSuggestionWindow(currentBufStatus, currentMainWindow)
