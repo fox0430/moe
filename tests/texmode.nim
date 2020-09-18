@@ -756,3 +756,14 @@ suite "Ex mode: Change smartcase setting command":
     status.exModeCommand(command)
 
     check not status.settings.smartcase
+
+suite "Ex mode: e command":
+  test "Open dicrecoty (#1042)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const command = @[ru"e", ru"./"]
+    status.exModeCommand(command)
+
+    check status.bufStatus[1].mode == Mode.filer
+    check status.bufStatus[1].path == (ru getCurrentDir()) & ru"/"
