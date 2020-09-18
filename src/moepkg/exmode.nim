@@ -999,6 +999,9 @@ proc shellCommand(status: var EditorStatus, shellCommand: string) =
   status.commandWindow.erase
   status.commandWindow.refresh
 
+  let bufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[bufferIndex].prevMode)
+
 proc listAllBufferCommand(status: var Editorstatus) =
   let workspaceIndex = status.currentWorkSpaceIndex
   let swapCurrentBufferIndex =
