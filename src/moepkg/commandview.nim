@@ -392,7 +392,8 @@ proc suggestExCommandOption(status: var Editorstatus,
       argList= @["vivid", "dark", "light", "config", "vscode"]
     of "e",
        "sp",
-       "vs":
+       "vs",
+       "sv":
       status.suggestFilePath(exStatus, $command, key)
     else: discard
 
