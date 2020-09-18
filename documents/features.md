@@ -40,3 +40,15 @@ moe is searching and reflects the current VSCode theme if you already installed 
 moe can build on save if you set true in BuildOnSave.enable in the configuration file.  
 By default, the ```nim c filename``` command is executed.  
 You can set workSpaceRoot and command to be executed in the configuration file.
+
+## History mode (Backup file manager)
+
+History mode is experimental feature.
+
+You can check, restore and delete backup files in this mode.  
+If you select backup file, you can check the difference from the current original file.  
+
+## General-purpose autocomplete
+
+moe can now use simple auto-complete.  
+It is possible to auto-complete a words in the currently open buffer.
