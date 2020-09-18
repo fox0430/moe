@@ -806,12 +806,9 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
     status.commandWindow.writeNoWriteError(status.messageLog)
   else:
     if dirExists($filename):
-      try: setCurrentDir($filename)
-      except OSError:
-        status.commandWindow.writeFileOpenError($filename, status.messageLog)
-        status.addNewBuffer("")
-      status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSaveTime: now()))
-    else: status.addNewBuffer($filename)
+      status.addNewBuffer($filename, Mode.filer)
+    else:
+      status.addNewBuffer($filename)
 
     status.changeCurrentBuffer(status.bufStatus.high)
 
