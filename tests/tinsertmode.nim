@@ -252,7 +252,7 @@ suite "Insert mode":
 
     suggestionWindow = tryOpenSuggestionWindow(currentBufStatus, currentMainWindow)
     let
-      mainWindowHeight = status.settings.getMainWindowHeight(terminalHeight())
+      mainWindowHeight = status.settings.getMainWindowHeight(100)
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
         currentMainWindow,
         mainWindowHeight)
@@ -288,3 +288,27 @@ suite "Insert mode":
 
     check y == 2
     check x == 1
+
+  test "General-purpose autocomplete (Fix #1032)":
+    const buffer = @[
+      ru"import os, unicode, times",
+      ru"import"]
+
+    var status = initEditorStatus()
+    status.addNewBuffer(Mode.insert)
+    status.bufStatus[0].buffer = initGapBuffer(buffer)
+    status.workspace[0].currentMainWindowNode.currentColumn = 1
+
+    var suggestionWindow = none(SuggestionWindow)
+
+    status.resize(100, 100)
+    status.update
+
+    suggestionWindow = tryOpenSuggestionWindow(currentBufStatus, currentMainWindow)
+    let
+      mainWindowHeight = status.settings.getMainWindowHeight(100)
+      (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
+        currentMainWindow,
+        mainWindowHeight)
+
+    suggestionWindow.get.writeSuggestionWindow(y, x)

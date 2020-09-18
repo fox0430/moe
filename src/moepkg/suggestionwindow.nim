@@ -105,8 +105,9 @@ proc wordExistsAfterCursor(bufStatus: BufferStatus,
 proc buildSuggestionWindow*(bufStatus: BufferStatus,
                             windowNode: WindowNode): Option[SuggestionWindow] =
 
-  let (word, firstColumn, lastColumn) = extractWordAfterCursor(bufStatus,
-                                                               windowNode).get
+  let (word, firstColumn, lastColumn) = extractWordAfterCursor(
+    bufStatus,
+    windowNode).get
 
   # Eliminate the word on the cursor.
   let
@@ -116,7 +117,7 @@ proc buildSuggestionWindow*(bufStatus: BufferStatus,
       line,
       column,
       true)
-    firstDeletedIndex = lastDeletedIndex - word.len + 1
+    firstDeletedIndex = max(lastDeletedIndex - word.len + 1, 0)
     text = bufStatus.buffer.toRunes.dup(
       delete(firstDeletedIndex, lastDeletedIndex))
 
