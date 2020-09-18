@@ -1,12 +1,13 @@
 import parsetoml, os, json, macros, times, options
 from strutils import parseEnum, endsWith, parseInt
+export TomlError
 
 when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
   # This addresses a breaking change in https://github.com/nim-lang/Nim/pull/14046.
   from strutils import nimIdentNormalize
   export strutils.nimIdentNormalize
 
-import ui, color, unicodeext, build, highlight, error
+import ui, color, unicodeext, highlight
 
 type NotificationSettings* = object
   screenNotifications*: bool
@@ -29,6 +30,13 @@ type NotificationSettings* = object
   buildOnSaveLogNotify*: bool
   filerScreenNotify*: bool
   filerLogNotify*: bool
+  restoreScreenNotify*: bool
+  restoreLogNotify*: bool
+
+type BuildOnSaveSettings* = object
+  enable*: bool
+  workspaceRoot*: seq[Rune]
+  command*: seq[Rune]
 
 type QuickRunSettings* = object
   saveBufferWhenQuickRun*: bool
@@ -46,6 +54,7 @@ type AutoBackupSettings* = object
   idolTime*: int # seconds
   interval*: int # minutes
   backupDir*: seq[Rune]
+  dirToExclude*: seq[seq[Rune]]
 
 type FilerSettings = object
   showIcons*: bool
@@ -54,7 +63,8 @@ type WorkSpaceSettings = object
   workSpaceLine*: bool
 
 type StatusBarSettings* = object
-  useBar*: bool
+  enable*: bool
+  merge*: bool
   mode*: bool
   filename*: bool
   chanedMark*: bool
@@ -79,6 +89,9 @@ type EditorViewSettings* = object
   indentationLines*: bool
   tabStop*: int
 
+type AutocompleteSettings* = object
+  enable*: bool
+
 type EditorSettings* = object
   editorColorTheme*: ColorTheme
   statusBar*: StatusBarSettings
@@ -88,7 +101,8 @@ type EditorSettings* = object
   autoCloseParen*: bool
   autoIndent*: bool
   tabStop*: int
-  characterEncoding*: CharacterEncoding # TODO: move to EditorStatus ...?
+  ignorecase*: bool
+  smartcase*: bool
   disableChangeCursor*: bool
   defaultCursor*: CursorType
   normalModeCursor*: CursorType
@@ -110,24 +124,37 @@ type EditorSettings* = object
   buildOnSave*: BuildOnSaveSettings
   workSpace*: WorkSpaceSettings
   filerSettings*: FilerSettings
+  autocompleteSettings*: AutocompleteSettings
   reservedWords*: seq[ReservedWord]
   autoBackupSettings*: AutoBackupSettings
   quickRunSettings*: QuickRunSettings
   notificationSettings*: NotificationSettings
+
+type InvalidItemError* = object of ValueError # Warning: inherit from a more precise exception type like ValueError, IOError or OSError. If these don't suit, inherit from CatchableError or Defect. [InheritFromException]
 
 proc initNotificationSettings(): NotificationSettings =
   result.screenNotifications = true
   result.logNotifications = true
   result.autoBackupScreenNotify = true
   result.autoBackupLogNotify = true
+  result.autoSaveScreenNotify = true
+  result.autoSaveLogNotify = true
   result.yankScreenNotify = true
   result.yankLogNotify = true
   result.deleteScreenNotify = true
   result.deleteLogNotify = true
+  result.saveScreenNotify = true
+  result.saveLogNotify = true
   result.workspaceScreenNotify = true
   result.workspaceLogNotify = true
   result.quickRunScreenNotify = true
   result.quickRunLogNotify = true
+  result.buildOnSaveScreenNotify = true
+  result.buildOnSaveLogNotify = true
+  result.filerScreenNotify = true
+  result.filerLogNotify = true
+  result.restoreScreenNotify = true
+  result.restoreLogNotify = true
 
 proc initQuickRunSettings(): QuickRunSettings =
   result.saveBufferWhenQuickRun = true
@@ -138,15 +165,19 @@ proc initAutoBackupSettings(): AutoBackupSettings =
   result.enable = true
   result.interval = 5 # 5 minutes
   result.idolTime = 10 # 10 seconds
+  result.dirToExclude = @[ru"/etc"]
 
-proc initFilerSettings(): FilerSettings =
+proc initFilerSettings(): FilerSettings {.inline.} =
   result.showIcons = true
 
-proc initTabBarSettings*(): TabLineSettings =
+proc initAutocompleteSettings*(): AutocompleteSettings {.inline.} =
+  result.enable = true
+
+proc initTabBarSettings*(): TabLineSettings {.inline.} =
   result.useTab = true
 
 proc initStatusBarSettings*(): StatusBarSettings =
-  result.useBar = true
+  result.enable = true
   result.mode = true
   result.filename = true
   result.chanedMark = true
@@ -158,7 +189,7 @@ proc initStatusBarSettings*(): StatusBarSettings =
   result.multipleStatusBar = true
   result.gitbranchName = true
 
-proc initWorkSpaceSettings(): WorkSpaceSettings =
+proc initWorkSpaceSettings(): WorkSpaceSettings {.inline.} =
   result.workSpaceLine = false
 
 proc initEditorViewSettings*(): EditorViewSettings =
@@ -183,6 +214,8 @@ proc initEditorSettings*(): EditorSettings =
   result.autoCloseParen = true
   result.autoIndent = true
   result.tabStop = 2
+  result.ignorecase = true
+  result.smartcase = true
   # defaultCursor is terminal default curosr shape
   result.defaultCursor = CursorType.blinkBlock
   result.normalModeCursor = CursorType.blinkBlock
@@ -194,7 +227,7 @@ proc initEditorSettings*(): EditorSettings =
   result.highlightPairOfParen = true
   result.autoDeleteParen = true
   result.smoothScroll = true
-  result.smoothScrollSpeed = 17
+  result.smoothScrollSpeed = 15
   result.highlightOtherUsesCurrentWord = true
   result.systemClipboard = true
   result.highlightFullWidthSpace = true
@@ -202,15 +235,17 @@ proc initEditorSettings*(): EditorSettings =
   result.buildOnSave = BuildOnSaveSettings()
   result.workSpace= initWorkSpaceSettings()
   result.filerSettings = initFilerSettings()
+  result.autocompleteSettings = initAutocompleteSettings()
   result.reservedWords = initReservedWords()
   result.autoBackupSettings = initAutoBackupSettings()
   result.quickRunSettings = initQuickRunSettings()
+  result.notificationSettings = initNotificationSettings()
 
 proc getTheme(theme: string): ColorTheme =
   if theme == "vivid": return ColorTheme.vivid
   elif theme == "light": return ColorTheme.light
   elif theme == "config": return ColorTheme.config
-  elif theme == "vscode": return ColorTheme.config
+  elif theme == "vscode": return ColorTheme.vscode
   else: return ColorTheme.dark
 
 # This macro takes statement lists for the foreground and
@@ -326,7 +361,7 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
     if tokenNodes.hasKey(key):
       return tokenNodes[key]
     else:
-      JsonNode.default()
+      return JsonNode.default()
 
   # This is currently optimized and tested for the Forest Focus theme
   # and even for that theme it only produces a partial and imperfect
@@ -335,12 +370,26 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
     setEditorColor editorBg:
       background:
         colorFromNode(jsonNode{"colors", "editor.background"})
+
+    # Color scheme
     setEditorColor defaultChar:
       foreground:
         colorFromNode(jsonNode{"colors", "editor.foreground"})
     setEditorColor gtKeyword:
       foreground:
         colorFromNode(getScope("keyword"){"foreground"})
+    setEditorColor gtFunctionName:
+      foreground:
+        colorFromNode(getScope("entity"){"foreground"})
+    setEditorColor gtBoolean:
+      foreground:
+        colorFromNode(getScope("entity"){"foreground"})
+    setEditorColor gtSpecialVar:
+      foreground:
+        colorFromNode(getScope("variable"){"foreground"})
+    setEditorColor gtBuiltin:
+      foreground:
+        colorFromNode(getScope("entity"){"foreground"})
     setEditorColor gtStringLit:
       foreground:
         colorFromNode(getScope("string"){"foreground"})
@@ -356,6 +405,7 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
     setEditorColor gtWhitespace:
       foreground:
         colorFromNode(jsonNode{"colors", "editorWhitespace.foreground"})
+
     # status bar
     setEditorColor statusBarNormalMode:
       foreground:
@@ -477,14 +527,14 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         colorFromNode(jsonNode{"colors", "tab.foreground"})
       background:
         colorFromNode(jsonNode{"colors", "tab.inactiveBackground"})
-    
+
     setEditorColor lineNum:
       foreground:
         colorFromNode(jsonNode{"colors", "editorLineNumber.foreground"})
         adjust: InverseBackground
       background:
         colorFromNode(jsonNode{"colors", "editorLineNumber.background"})
-    
+
     setEditorColor currentLineNum:
       foreground:
         colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
@@ -497,23 +547,29 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         Color.default
-    
+
     # highlight other uses current word
     setEditorColor currentWord:
       foreground:
         adjust: ReadableVsBackground
       background:
         colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
-    
+
     setEditorColor popUpWinCurrentLine:
       foreground:
         colorFromNode(jsonNode{"colors", "sideBarTitle.forground"})
       background:
         colorFromNode(jsonNode{"colors", "sideBarSectionHeader.background"})
-        
+
     # pop up window
     setEditorColor popUpWindow:
       foreground:
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "sideBar.background"})
+    setEditorColor popUpWinCurrentLine:
+      foreground:
+        colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
         adjust: ReadableVsBackground
       background:
         colorFromNode(jsonNode{"colors", "sideBar.background"})
@@ -533,6 +589,7 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
       background:
         colorFromNode(jsonNode{"colors",
           "gitDecoration.conflictingResourceForeground"})
+
     # filer mode
     setEditorColor currentFile:
       foreground:
@@ -550,18 +607,33 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         Color.default
+
     # highlight full width space
     setEditorColor highlightFullWidthSpace:
       foreground:
         colorFromNode(jsonNode{"colors", "tab.activeBorder"})
       background:
         colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+
     # highlight trailing spaces
     setEditorColor highlightTrailingSpaces:
       foreground:
         colorFromNode(jsonNode{"colors", "tab.activeBorder"})
       background:
         colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+
+    # highlight diff
+    setEditorColor addedLine:
+      foreground:
+        colorFromNode(jsonNode{"colors", "diff.inserted"})
+      background:
+        colorFromNode(jsonNode{"colors", "editor.background"})
+    setEditorColor deletedLine:
+      foreground:
+        colorFromNode(jsonNode{"colors", "diff.deleted"})
+      background:
+        colorFromNode(jsonNode{"colors", "editor.background"})
+
     # work space bar
     setEditorColor workSpaceBar:
       foreground:
@@ -574,18 +646,98 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
         adjust: ReadableVsBackground
       background:
         colorFromNode(jsonNode{"colors", "activityBarBadge.background"})
+
     # search result highlighting
     setEditorColor searchResult:
       foreground:
         adjust: ReadableVsBackground
       background:
         colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+
     # selected area in visual mode
     setEditorColor visualMode:
       foreground:
         adjust: ReadableVsBackground
       background:
         colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+
+    # History manager
+    setEditorColor currentHistory:
+      foreground:
+        colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "editor.background"})
+
+  # Configuration mode
+    setEditorColor currentSetting:
+      foreground:
+        colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
+        adjust: ReadableVsBackground
+      background:
+        colorFromNode(jsonNode{"colors", "editor.background"})
+
+proc loadVSCodeTheme*(): ColorTheme =
+  # search for the vscode theme that is set in the current preferences of
+  # vscode/vscodium. Vscodium takes precedence, since you can assume that,
+  # people that install VScodium prefer it over Vscode for privacy reasons.
+  # If no vscode theme can be found, this defaults to the dark theme.
+  # The first implementation is for finding the VsCode/VsCodium config and
+  # extension folders on Linux. Hopefully other contributors will come and
+  # add support for Windows, and other systems.
+  var vsCodeThemeLoaded = false
+  block vsCodeThemeLoading:
+    let homeDir = getHomeDir()
+    var vsCodeSettingsFile = homeDir & "/.config/VSCodium/User/settings.json"
+    var vsCodeThemeFile = ""
+    var vsCodeExtensionsDir = homeDir & "/.vscode-oss/extensions/"
+    var vsCodeThemeSetting = ""
+    if not fileExists(vsCodeSettingsFile):
+      vsCodeSettingsFile = homeDir & "/.config/Code/User/settings.json"
+    if fileExists(vsCodeSettingsFile):
+      let vsCodeSettingsJson = json.parseFile(vsCodeSettingsFile)
+      vsCodeThemeSetting = vsCodeSettingsJson{"workbench.colorTheme"}.getStr()
+      if vsCodeThemeSetting == "":
+        break vsCodeThemeLoading
+
+    else:
+      break vsCodeThemeLoading
+
+    if not dirExists(vsCodeExtensionsDir):
+      vsCodeExtensionsDir = homeDir & "/.vscode/extensions/"
+      if not dirExists(vsCodeExtensionsDir):
+        break vsCodeThemeLoading
+
+    # Note: walkDirRec was first used to solve this, however
+    #       the performance at runtime was much worse
+    for file in walkPattern(vsCodeExtensionsDir & "/*/package.json"):
+      if file.endsWith("/package.json"):
+        var vsCodePackageJson: JsonNode
+        try:
+          vsCodePackageJson = json.parseFile(file)
+        except:
+          break vsCodeThemeLoading
+        let displayName = vsCodePackageJson{"displayName"}
+        if displayName == nil: continue
+
+        if displayName.getStr() == vsCodeThemeSetting:
+          let themesJson = vsCodePackageJson{"contributes", "themes"}
+          if themesJson != nil and themesJson.len() > 0:
+            let theTheme = themesJson[0]
+            let theThemePath = theTheme{"path"}
+            if theThemePath != nil and theThemePath.kind == JString:
+              vsCodeThemeFile = parentDir(file) / theThemePath.getStr()
+          else:
+            break vsCodeThemeLoading
+          break
+
+    if fileExists(vsCodeThemeFile):
+      result = ColorTheme.vscode
+      ColorThemeTable[ColorTheme.vscode] =
+        makeColorThemeFromVSCodeThemeFile(vsCodeThemeFile)
+      vsCodeThemeLoaded = true
+  if not vsCodeThemeLoaded:
+    result = ColorTheme.dark
 
 proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
   result = initEditorSettings()
@@ -599,7 +751,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Standard"].contains("theme"):
       let themeString = settings["Standard"]["theme"].getStr()
       result.editorColorTheme = getTheme(themeString)
-      if themeString == "vscode":
+      if result.editorColorTheme == ColorTheme.vscode:
         vscodeTheme = true
 
     if settings["Standard"].contains("number"):
@@ -612,7 +764,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       result.view.cursorLine = settings["Standard"]["cursorLine"].getbool()
 
     if settings["Standard"].contains("statusBar"):
-      result.statusBar.useBar = settings["Standard"]["statusBar"].getbool()
+      result.statusBar.enable = settings["Standard"]["statusBar"].getbool()
 
     if settings["Standard"].contains("tabLine"):
       result.tabLine.useTab = settings["Standard"]["tabLine"].getbool()
@@ -629,6 +781,12 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
     if settings["Standard"].contains("autoIndent"):
       result.autoIndent = settings["Standard"]["autoIndent"].getbool()
+
+    if settings["Standard"].contains("ignorecase"):
+      result.ignorecase = settings["Standard"]["ignorecase"].getbool()
+
+    if settings["Standard"].contains("smartcase"):
+      result.smartcase = settings["Standard"]["smartcase"].getbool()
 
     if settings["Standard"].contains("disableChangeCursor"):
       result.disableChangeCursor = settings["Standard"]["disableChangeCursor"].getbool()
@@ -686,7 +844,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
     if settings["Standard"].contains("highlightTrailingSpaces"):
       result.highlightTrailingSpaces = settings["Standard"]["highlightTrailingSpaces"].getbool()
-    
+
     if settings["Standard"].contains("indentationLines"):
       result.view.indentationLines = settings["Standard"]["indentationLines"].getbool()
 
@@ -695,6 +853,12 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
         result.tabLine.allBuffer= settings["TabLine"]["allBuffer"].getbool()
 
   if settings.contains("StatusBar"):
+    if settings["StatusBar"].contains("multipleStatusBar"):
+        result.statusBar.multipleStatusBar = settings["StatusBar"]["multipleStatusBar"].getbool()
+
+    if settings["StatusBar"].contains("merge"):
+        result.statusBar.merge = settings["StatusBar"]["merge"].getbool()
+
     if settings["StatusBar"].contains("mode"):
         result.statusBar.mode= settings["StatusBar"]["mode"].getbool()
 
@@ -718,9 +882,6 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
     if settings["StatusBar"].contains("directory"):
         result.statusBar.directory = settings["StatusBar"]["directory"].getbool()
-
-    if settings["StatusBar"].contains("multipleStatusBar"):
-        result.statusBar.multipleStatusBar = settings["StatusBar"]["multipleStatusBar"].getbool()
 
     if settings["StatusBar"].contains("gitbranchName"):
         result.statusBar.gitbranchName = settings["StatusBar"]["gitbranchName"].getbool()
@@ -768,9 +929,16 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       let dir = settings["AutoBackup"]["backupDir"].getStr()
       result.autoBackupSettings.backupDir = dir.toRunes
 
+    if settings["AutoBackup"].contains("dirToExclude"):
+      result.autoBackupSettings.dirToExclude = @[]
+      let dirs = settings["AutoBackup"]["dirToExclude"]
+      for i in 0 ..< dirs.len:
+        result.autoBackupSettings.dirToExclude.add(ru dirs[i].getStr)
+
   if settings.contains("QuickRun"):
     if settings["QuickRun"].contains("saveBufferWhenQuickRun"):
-      result.quickRunSettings.saveBufferWhenQuickRun = settings["QuickRun"]["saveBufferWhenQuickRun"].getBool()
+      let saveBufferWhenQuickRun = settings["QuickRun"]["saveBufferWhenQuickRun"].getBool()
+      result.quickRunSettings.saveBufferWhenQuickRun = saveBufferWhenQuickRun
 
     if settings["QuickRun"].contains("command"):
       result.quickRunSettings.command = settings["QuickRun"]["command"].getStr()
@@ -857,9 +1025,19 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Notification"].contains("filerLogNotify"):
       result.notificationSettings.filerLogNotify = settings["Notification"]["filerLogNotify"].getBool
 
+    if settings["Notification"].contains("restoreScreenNotify"):
+      result.notificationSettings.restoreScreenNotify = settings["Notification"]["restoreScreenNotify"].getBool
+
+    if settings["Notification"].contains("restoreLogNotify"):
+      result.notificationSettings.restoreLogNotify = settings["Notification"]["restoreLogNotify"].getBool
+
   if settings.contains("Filer"):
     if settings["Filer"].contains("showIcons"):
       result.filerSettings.showIcons = settings["Filer"]["showIcons"].getbool()
+
+  if (const table = "Autocomplete"; settings.contains(table)):
+    if (const key = "enable"; settings[table].contains(key)):
+      result.autocompleteSettings.enable = settings[table][key].getbool
 
   if not vscodeTheme and settings.contains("Theme"):
     if settings["Theme"].contains("baseTheme"):
@@ -938,7 +1116,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
     if settings["Theme"].contains("statusBarVisualModeInactive"):
       ColorThemeTable[ColorTheme.config].statusBarVisualModeInactive = color("statusBarVisualModeInactive")
- 
+
     if settings["Theme"].contains("statusBarVisualModeInactiveBg"):
       ColorThemeTable[ColorTheme.config].statusBarVisualModeInactiveBg = color("statusBarVisualModeInactiveBg")
 
@@ -1044,6 +1222,18 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("gtKeyword"):
       ColorThemeTable[ColorTheme.config].gtKeyword = color("gtKeyword")
 
+    if settings["Theme"].contains("gtFunctionName"):
+      ColorThemeTable[ColorTheme.config].gtFunctionName = color("gtFunctionName")
+
+    if settings["Theme"].contains("gtBoolean"):
+      ColorThemeTable[ColorTheme.config].gtBoolean = color("gtBoolean")
+
+    if settings["Theme"].contains("gtSpecialVar"):
+      ColorThemeTable[ColorTheme.config].gtSpecialVar = color("gtSpecialVar")
+
+    if settings["Theme"].contains("gtBuiltin"):
+      ColorThemeTable[ColorTheme.config].gtBuiltin = color("gtBuiltin")
+
     if settings["Theme"].contains("gtStringLit"):
       ColorThemeTable[ColorTheme.config].gtStringLit = color("gtStringLit")
 
@@ -1137,68 +1327,34 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("reservedWordBg"):
       ColorThemeTable[ColorTheme.config].reservedWordBg = color("reservedWordBg")
 
+    if settings["Theme"].contains("currentHistory"):
+      ColorThemeTable[ColorTheme.config].currentHistory = color("currentHistory")
+
+    if settings["Theme"].contains("currentHistoryBg"):
+      ColorThemeTable[ColorTheme.config].currentHistoryBg = color("currentHistoryBg")
+
+    if settings["Theme"].contains("addedLine"):
+      ColorThemeTable[ColorTheme.config].addedLine = color("addedLine")
+
+    if settings["Theme"].contains("addedLineBg"):
+      ColorThemeTable[ColorTheme.config].addedLineBg = color("addedLineBg")
+
+    if settings["Theme"].contains("deletedLine"):
+      ColorThemeTable[ColorTheme.config].deletedLine = color("deletedLine")
+
+    if settings["Theme"].contains("deletedLineBg"):
+      ColorThemeTable[ColorTheme.config].deletedLineBg = color("deletedLineBg")
+
+    if settings["Theme"].contains("currentSetting"):
+      ColorThemeTable[ColorTheme.config].currentSetting = color("currentSetting")
+
+    if settings["Theme"].contains("currentSettingBg"):
+      ColorThemeTable[ColorTheme.config].currentSettingBg = color("currentSettingBg")
+
     result.editorColorTheme = ColorTheme.config
+
   if vscodeTheme:
-    # search for the vscode theme that is set in the current preferences of
-    # vscode/vscodium. Vscodium takes precedence, since you can assume that,
-    # people that install VScodium prefer it over Vscode for privacy reasons.
-    # If no vscode theme can be found, this defaults to the dark theme.
-    # The first implementation is for finding the VsCode/VsCodium config and
-    # extension folders on Linux. Hopefully other contributors will come and
-    # add support for Windows, and other systems.
-    var vsCodeThemeLoaded = false
-    block vsCodeThemeLoading:
-      let homeDir = getHomeDir()
-      var vsCodeSettingsFile = homeDir & "/.config/VSCodium/User/settings.json"
-      var vsCodeThemeFile = ""
-      var vsCodeExtensionsDir = homeDir & "/.vscode-oss/extensions/"
-      var vsCodeThemeSetting = ""
-      if not existsFile(vsCodeSettingsFile):
-        vsCodeSettingsFile = homeDir & "/.config/Code/User/settings.json"
-      if existsFile(vsCodeSettingsFile):
-        let vsCodeSettingsJson = json.parseFile(vsCodeSettingsFile)
-        vsCodeThemeSetting = vsCodeSettingsJson{"workbench.colorTheme"}.getStr()
-        if vsCodeThemeSetting == "":
-          break vsCodeThemeLoading
-
-      else:
-        break vsCodeThemeLoading
-      
-      if not existsDir(vsCodeExtensionsDir):
-        vsCodeExtensionsDir = homeDir & "/.vscode/extensions/"
-        if not existsDir(vsCodeExtensionsDir):
-          break vsCodeThemeLoading
-      
-      # Note: walkDirRec was first used to solve this, however
-      #       the performance at runtime was much worse
-      for file in walkPattern(vsCodeExtensionsDir & "/*/package.json"):
-        if file.endsWith("/package.json"):
-          var vsCodePackageJson: JsonNode
-          try:
-            vsCodePackageJson = json.parseFile(file)
-          except:
-            break vsCodeThemeLoading
-          let displayName = vsCodePackageJson{"displayName"}
-          if displayName == nil: continue
-
-          if displayName.getStr() == vsCodeThemeSetting:
-            let themesJson = vsCodePackageJson{"contributes", "themes"}
-            if themesJson != nil and themesJson.len() > 0:
-              let theTheme = themesJson[0]
-              let theThemePath = theTheme{"path"}
-              if theThemePath != nil and theThemePath.kind == JString:
-                vsCodeThemeFile = parentDir(file) / theThemePath.getStr()
-            else:
-              break vsCodeThemeLoading
-            break
-      
-      if fileExists(vsCodeThemeFile):
-        result.editorColorTheme = ColorTheme.config
-        ColorThemeTable[ColorTheme.config] =
-          makeColorThemeFromVSCodeThemeFile(vsCodeThemeFile)
-        vsCodeThemeLoaded = true
-    if not vsCodeThemeLoaded:
-      result.editorColorTheme = ColorTheme.dark
+    result.editorColorTheme = loadVSCodeTheme()
 
 proc validateTomlConfig(toml: TomlValueRef): Option[string] =
   template validateStandardTable() =
@@ -1223,6 +1379,8 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
            "indentationLines",
            "autoCloseParen",
            "autoIndent",
+           "ignorecase",
+           "smartcase",
            "disableChangeCursor",
            "autoSave",
            "liveReloadOfConf",
@@ -1234,10 +1392,11 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
            "systemClipboard",
            "highlightFullWidthSpace",
            "highlightTrailingSpaces",
-           "highlightCurrentWord":
+           "highlightCurrentWord",
+           "smoothScroll":
           if not (item.val["type"].getStr == "bool"):
             return some($item)
-        of "tabStop", "autoSaveInterval":
+        of "tabStop", "autoSaveInterval", "smoothScrollSpeed":
           if not (item.val["type"].getStr == "integer" and
                   parseInt(item.val["value"].getStr) > 0): return some($item)
         of "defaultCursor",
@@ -1260,6 +1419,27 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
       case item.key:
         of "allBuffer",
            "mode",
+           "chanedMark",
+           "line",
+           "column",
+           "encoding",
+           "language",
+           "directory",
+           "gitbranchName",
+           "showGitInactive",
+           "showModeInactive":
+          if not (item.val["type"].getStr == "bool"):
+            return some($item)
+        else:
+          return some($item)
+
+  template validateStatusBarTable() =
+    for item in json["StatusBar"].pairs:
+      case item.key:
+        of "multipleStatusBar",
+           "merge",
+           "mode",
+           "filename",
            "chanedMark",
            "line",
            "column",
@@ -1320,6 +1500,11 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         of "backupDir":
           if item.val["type"].getStr != "string":
             return some($item)
+        of "dirToExclude":
+          if item.val["type"].getStr == "array":
+            for word in item.val["value"]:
+              if word["type"].getStr != "string":
+                return some($item)
         else:
           return some($item)
 
@@ -1366,7 +1551,9 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
            "buildOnSaveScreenNotify",
            "buildOnSaveLogNotify",
            "filerScreenNotify",
-           "filerLogNotify":
+           "filerLogNotify",
+           "restoreScreenNotify",
+           "restoreLogNotify":
           if item.val["type"].getStr != "bool":
             return some($item)
         else:
@@ -1380,6 +1567,15 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
             return some($item)
         else:
           return some($item)
+
+  template validateAutocompleteTable() =
+    for item in json["Autocomplete"].pairs:
+      case item.key:
+      of "enable":
+        if item.val["type"].getStr != "bool":
+          return some($item)
+      else:
+        return some($item)
 
   template validateThemeTable() =
     let editorColors = ColorThemeTable[ColorTheme.config].EditorColor
@@ -1411,6 +1607,10 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
     case table:
       of "Standard":
         validateStandardTable()
+      of "TabLine":
+        validateTabLineTable()
+      of "StatusBar":
+        validateStatusBarTable()
       of "BuildOnSave":
         validateBuildOnSaveTable()
       of "WorkSpace":
@@ -1427,20 +1627,23 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         validateFilerTable()
       of "Theme":
         validateThemeTable()
+      of "Autocomplete":
+        validateAutocompleteTable()
       else: discard
 
   return none(string)
 
 proc loadSettingFile*(): EditorSettings =
   let filename = getConfigDir() / "moe" / "moerc.toml"
-  var toml: TomlValueRef
 
-  try: toml = parsetoml.parseFile(filename)
-  except IOError, TomlError: return
+  if not fileExists(filename):
+    return initEditorSettings()
 
-  let invalidItem = toml.validateTomlConfig
+  let
+    toml = parsetoml.parseFile(filename)
+    invalidItem = toml.validateTomlConfig
 
   if invalidItem != none(string):
-    InvalidItemError($invalidItem)
+    raise newException(InvalidItemError, $invalidItem)
   else:
-    result = parseSettingsFile(toml)
+    return parseSettingsFile(toml)

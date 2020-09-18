@@ -1,7 +1,5 @@
 import ncurses
-import strutils
-import tables
-import macros
+import strutils, tables, macros, strformat
 
 # maps annotations of the enum to a hexToColor table
 macro mapAnnotationToTable(args: varargs[untyped]): untyped =
@@ -38,7 +36,7 @@ macro mapAnnotationToTable(args: varargs[untyped]): untyped =
         `tableIdent`[`hexCode`]       = `intLit`
         `tableReverseIdent`[`intLit`] = `hexCode`
         `tableRGBIdent`[`intLit`]     = (`red`, `green`, `blue`)
-  
+
   # emit source code
   return quote do:
     var `tableIdent`        = initTable[string, int]()
@@ -397,9 +395,10 @@ proc readableOnBackground*(col: Color, background: Color): Color =
 
 type ColorTheme* = enum
   config  = 0
-  dark    = 1
-  light   = 2
-  vivid   = 3
+  vscode  = 1
+  dark    = 2
+  light   = 3
+  vivid   = 4
 
 type EditorColor* = object
   editorBg*: Color
@@ -469,15 +468,21 @@ type EditorColor* = object
   # selected area in visual mode
   visualMode*: Color
   visualModeBg*: Color
+
   # color scheme
   defaultChar*: Color
   gtKeyword*: Color
+  gtFunctionName*: Color
+  gtBoolean*: Color
   gtStringLit*: Color
+  gtSpecialVar*: Color
+  gtBuiltin*: Color
   gtDecNumber*: Color
   gtComment*: Color
   gtLongComment*: Color
   gtWhitespace*: Color
   gtPreprocessor*: Color
+
   # filer mode
   currentFile*: Color
   currentFileBg*: Color
@@ -520,6 +525,20 @@ type EditorColor* = object
   reservedWord*: Color
   reservedWordBg*: Color
 
+  # highlight history manager
+  currentHistory*: Color
+  currentHistoryBg*: Color
+
+  # highlight diff
+  addedLine*: Color
+  addedLineBg*: Color
+  deletedLine*: Color
+  deletedLineBg*: Color
+
+  # configuration mode
+  currentSetting*: Color
+  currentSettingBg*: Color
+
 type EditorColorPair* = enum
   lineNum = 1
   currentLineNum = 2
@@ -555,41 +574,54 @@ type EditorColorPair* = enum
   searchResult = 26
   # selected area in visual mode
   visualMode = 27
+
   # color scheme
   defaultChar = 28
   keyword = 29
-  stringLit = 30
-  decNumber = 31
-  comment = 32
-  longComment = 33
-  whitespace = 34
-  preprocessor = 35
+  functionName = 30
+  boolean = 31
+  specialVar = 32
+  builtin = 33
+  stringLit = 34
+  decNumber = 35
+  comment = 36
+  longComment = 37
+  whitespace = 38
+  preprocessor = 39
+
   # filer mode
-  currentFile = 36
-  currentFileBg = 37
-  file = 38
-  fileBg = 39
-  dir = 40
-  dirBg = 41
-  pcLink = 42
-  pcLinkBg = 43
+  currentFile = 40
+  currentFileBg = 41
+  file = 42
+  fileBg = 43
+  dir = 44
+  dirBg = 45
+  pcLink = 46
+  pcLinkBg = 47
   # pop up window
-  popUpWindow = 44
-  popUpWinCurrentLine = 45
+  popUpWindow = 48
+  popUpWinCurrentLine = 49
   # replace text highlighting
-  replaceText = 46
+  replaceText = 50
   # pair of paren highlighting
-  parenText = 47
+  parenText = 51
   # highlight other uses current word
-  currentWord = 48
+  currentWord = 52
   # highlight full width space
-  highlightFullWidthSpace = 49
+  highlightFullWidthSpace = 53
   # highlight trailing spaces
-  highlightTrailingSpaces = 50
+  highlightTrailingSpaces = 54
   # work space bar
-  workSpaceBar = 51
+  workSpaceBar = 55
   # highlight reserved words
-  reservedWord = 52
+  reservedWord = 56
+  # highlight history manager
+  currentHistory = 57
+  # highlight diff
+  addedLine = 58
+  deletedLine = 59
+  # configuration mode
+  currentSetting = 60
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -660,15 +692,21 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # selected area in visual mode
     visualMode: gray100,
     visualModeBg: purple_1,
+
     # color scheme
-    defaultChar: gray100,
-    gtKeyword: seaGreen1_2,
-    gtStringLit: purple_1,
+    defaultChar: white,
+    gtKeyword: skyBlue1,
+    gtFunctionName: gold1,
+    gtBoolean: yellow,
+    gtStringLit: yellow,
+    gtSpecialVar: green,
+    gtBuiltin: yellow,
     gtDecNumber: aqua,
     gtComment: gray,
     gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
+
     # filer mode
     currentFile: gray100,
     currentFileBg: teal,
@@ -704,6 +742,147 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight reserved words
     reservedWord: white,
     reservedWordBg: gray,
+    # highlight history manager
+    currentHistory: gray100,
+    currentHistoryBg: teal,
+    # highlight diff
+    addedLine: green,
+    addedLineBg: default,
+    deletedLine: red,
+    deletedLineBg: default,
+    # configuration mode
+    currentSetting: gray100,
+    currentSettingBg: teal
+  ),
+  vscode: EditorColor(
+    editorBg: default,
+    lineNum: gray54,
+    lineNumBg: default,
+    currentLineNum: teal,
+    currentLineNumBg: default,
+    # statsu bar
+    statusBarNormalMode: white,
+    statusBarNormalModeBg: blue,
+    statusBarModeNormalMode: black,
+    statusBarModeNormalModeBg: white,
+    statusBarNormalModeInactive: blue,
+    statusBarNormalModeInactiveBg: white,
+
+    statusBarInsertMode: white,
+    statusBarInsertModeBg: blue,
+    statusBarModeInsertMode: black,
+    statusBarModeInsertModeBg: white,
+    statusBarInsertModeInactive: blue,
+    statusBarInsertModeInactiveBg: white,
+
+    statusBarVisualMode: white,
+    statusBarVisualModeBg: blue,
+    statusBarModeVisualMode: black,
+    statusBarModeVisualModeBg: white,
+    statusBarVisualModeInactive: blue,
+    statusBarVisualModeInactiveBg: white,
+
+    statusBarReplaceMode: white,
+    statusBarReplaceModeBg: blue,
+    statusBarModeReplaceMode: black,
+    statusBarModeReplaceModeBg: white,
+    statusBarReplaceModeInactive: blue,
+    statusBarReplaceModeInactiveBg: white,
+
+    statusBarFilerMode: white,
+    statusBarFilerModeBg: blue,
+    statusBarModeFilerMode: black,
+    statusBarModeFilerModeBg: white,
+    statusBarFilerModeInactive: blue,
+    statusBarFilerModeInactiveBg: white,
+
+    statusBarExMode: white,
+    statusBarExModeBg: blue,
+    statusBarModeExMode: black,
+    statusBarModeExModeBg: white,
+    statusBarExModeInactive: blue,
+    statusBarExModeInactiveBg: white,
+
+    statusBarGitBranch: white,
+    statusBarGitBranchBg: blue,
+    # tab line
+    tab: white,
+    tabBg: default,
+    currentTab: white,
+    currentTabBg: blue,
+    # command  bar
+    commandBar: gray100,
+    commandBarBg: default,
+    # error message
+    errorMessage: red,
+    errorMessageBg: default,
+    # search result highlighting
+    searchResult: default,
+    searchResultBg: red,
+    # selected area in visual mode
+    visualMode: gray100,
+    visualModeBg: purple_1,
+
+    # color scheme
+    defaultChar: white,
+    gtKeyword: skyBlue1,
+    gtFunctionName: gold1,
+    gtBoolean: yellow,
+    gtStringLit: yellow,
+    gtSpecialVar: green,
+    gtBuiltin: yellow,
+    gtDecNumber: aqua,
+    gtComment: gray,
+    gtLongComment: gray,
+    gtWhitespace: gray,
+    gtPreprocessor: green,
+
+    # filer mode
+    currentFile: gray100,
+    currentFileBg: teal,
+    file: gray100,
+    fileBg: default,
+    dir: blue,
+    dirBg: default,
+    pcLink: teal,
+    pcLinkBg: default,
+    # pop up window
+    popUpWindow: gray100,
+    popUpWindowBg: black,
+    popUpWinCurrentLine: blue,
+    popUpWinCurrentLineBg: black,
+    # replace text highlighting
+    replaceText: default,
+    replaceTextBg: red,
+    # pair of paren highlighting
+    parenText: default,
+    parenTextBg: white,
+    # highlight other uses current word
+    currentWord: default,
+    currentWordBg: gray,
+    # highlight full width space
+    highlightFullWidthSpace: red,
+    highlightFullWidthSpaceBg: red,
+    # highlight trailing spaces
+    highlightTrailingSpaces: red,
+    highlightTrailingSpacesBg: red,
+    # work space bar
+    workSpaceBar: white,
+    workSpaceBarBg: blue,
+    # highlight reserved words
+    reservedWord: white,
+    reservedWordBg: gray,
+    # highlight history manager
+    currentHistory: gray100,
+    currentHistoryBg: teal,
+    # highlight diff
+    addedLine: green,
+    addedLineBg: default,
+    deletedLine: red,
+    deletedLineBg: default,
+    # configuration mode
+    currentSetting: gray100,
+    currentSettingBg: teal
   ),
   dark: EditorColor(
     editorBg: default,
@@ -773,15 +952,21 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # selected area in visual mode
     visualMode: gray100,
     visualModeBg: purple_1,
+
     # color scheme
-    defaultChar: gray100,
-    gtKeyword: cyan1,
-    gtStringLit: purple_1,
+    defaultChar: white,
+    gtKeyword: skyBlue1,
+    gtFunctionName: gold1,
+    gtBoolean: yellow,
+    gtStringLit: yellow,
+    gtSpecialVar: green,
+    gtBuiltin: yellow,
     gtDecNumber: aqua,
     gtComment: gray,
     gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
+
     # filer mode
     currentFile: gray100,
     currentFileBg: teal,
@@ -817,6 +1002,17 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight reserved words
     reservedWord: white,
     reservedWordBg: gray,
+    # highlight history manager
+    currentHistory: gray100,
+    currentHistoryBg: teal,
+    # highlight diff
+    addedLine: green,
+    addedLineBg: default,
+    deletedLine: red,
+    deletedLineBg: default,
+    # configuration mode
+    currentSetting: gray100,
+    currentSettingBg: teal
   ),
   light: EditorColor(
     editorBg: default,
@@ -886,15 +1082,21 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # selected area in visual mode
     visualMode: black,
     visualModeBg: purple_1,
+
     # color scheme
-    defaultChar: black,
-    gtKeyword: blue,
+    defaultChar: gray100,
+    gtKeyword: seaGreen1_2,
+    gtFunctionName: gold1,
+    gtBoolean: yellow,
     gtStringLit: purple_1,
-    gtDecNumber: orange1,
+    gtSpecialVar: green,
+    gtBuiltin: yellow,
+    gtDecNumber: aqua,
     gtComment: gray,
     gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
+
     # filer mode
     currentFile: black,
     currentFileBg: deepPink1_1,
@@ -930,6 +1132,17 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight reserved words
     reservedWord: white,
     reservedWordBg: gray,
+    # highlight history manager
+    currentHistory: black,
+    currentHistoryBg: deepPink1_1,
+    # highlight diff
+    addedLine: green,
+    addedLineBg: default,
+    deletedLine: red,
+    deletedLineBg: default,
+    # configuration mode
+    currentSetting: black,
+    currentSettingBg: deepPink1_1
   ),
   vivid: EditorColor(
     editorBg: default,
@@ -999,15 +1212,21 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # selected area in visual mode
     visualMode: gray100,
     visualModeBg: purple_1,
+
     # color scheme
     defaultChar: gray100,
     gtKeyword: deepPink1_1,
-    gtStringLit: cyan1,
-    gtDecNumber: green1,
-    gtComment: purple_1,
-    gtLongComment: purple_1,
+    gtFunctionName: gold1,
+    gtBoolean: yellow,
+    gtStringLit: purple_1,
+    gtSpecialVar: green,
+    gtBuiltin: aqua,
+    gtDecNumber: aqua,
+    gtComment: gray,
+    gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
+
     # filer mode
     currentFile: gray100,
     currentFileBg: deepPink1_1,
@@ -1043,10 +1262,21 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight reserved words
     reservedWord: deepPink1_1,
     reservedWordBg: black,
+    # highlight history manager
+    currentHistory: gray100,
+    currentHistoryBg: deepPink1_1,
+    # highlight diff
+    addedLine: green,
+    addedLineBg: default,
+    deletedLine: red,
+    deletedLineBg: default,
+    # configuration mode
+    currentSetting: gray100,
+    currentSettingBg: deepPink1_1
   ),
 ]
 
-proc setColorPair*(colorPair: EditorColorPair, character, background: Color) =
+proc setColorPair*(colorPair: EditorColorPair, character, background: Color) {.inline.} =
   init_pair(cshort(ord(colorPair)), cshort(ord(character)), cshort(ord(background)))
 
 proc setCursesColor*(editorColor: EditorColor) =
@@ -1095,15 +1325,21 @@ proc setCursesColor*(editorColor: EditorColor) =
     setColorPair(EditorColorPair.searchResult, editorColor.searchResult, editorColor.searchResultBg)
     # selected area in visual mode
     setColorPair(EditorColorPair.visualMode, editorColor.visualMode, editorColor.visualModeBg)
+
     # color scheme
-    setColorPair(EditorColorPair.defaultChar, editorColor.defaultChar, Color.default)
-    setColorPair(EditorColorPair.keyword, editorColor.gtKeyword, Color.default)
-    setColorPair(EditorColorPair.stringLit, editorColor.gtStringLit, Color.default)
-    setColorPair(EditorColorPair.decNumber, editorColor.gtDecNumber, Color.default)
-    setColorPair(EditorColorPair.comment, editorColor.gtComment, Color.default)
-    setColorPair(EditorColorPair.longComment, editorColor.gtLongComment, Color.default)
-    setColorPair(EditorColorPair.whitespace, editorColor.gtWhitespace, Color.default)
-    setColorPair(EditorColorPair.preprocessor, editorColor.gtPreprocessor, Color.default)
+    setColorPair(EditorColorPair.defaultChar, editorColor.defaultChar, editorColor.editorBg)
+    setColorPair(EditorColorPair.keyword, editorColor.gtKeyword, editorColor.editorBg)
+    setColorPair(EditorColorPair.functionName, editorColor.gtFunctionName, editorColor.editorBg)
+    setColorPair(EditorColorPair.boolean, editorColor.gtBoolean, editorColor.editorBg)
+    setColorPair(EditorColorPair.specialVar, editorColor.gtSpecialVar, editorColor.editorBg)
+    setColorPair(EditorColorPair.builtin, editorColor.gtBuiltin, editorColor.editorBg)
+    setColorPair(EditorColorPair.stringLit, editorColor.gtStringLit, editorColor.editorBg)
+    setColorPair(EditorColorPair.decNumber, editorColor.gtDecNumber, editorColor.editorBg)
+    setColorPair(EditorColorPair.comment, editorColor.gtComment, editorColor.editorBg)
+    setColorPair(EditorColorPair.longComment, editorColor.gtLongComment, editorColor.editorBg)
+    setColorPair(EditorColorPair.whitespace, editorColor.gtWhitespace, editorColor.editorBg)
+    setColorPair(EditorColorPair.preprocessor, editorColor.gtPreprocessor, editorColor.editorBg)
+
     # filer
     setColorPair(EditorColorPair.currentFile, editorColor.currentFile, editorColor.currentFileBg)
     setColorPair(EditorColorPair.file, editorColor.file, editorColor.fileBg)
@@ -1133,6 +1369,16 @@ proc setCursesColor*(editorColor: EditorColor) =
 
     # highlight reserved words
     setColorPair(EditorColorPair.reservedWord, editorColor.reservedWord, editorColor.reservedWordBg)
+
+    # highlight history manager
+    setColorPair(EditorColorPair.currentHistory, editorColor.currentHistory, editorColor.currentHistoryBg)
+
+    # highlight diff
+    setColorPair(EditorColorPair.addedLine, editorColor.addedLine, editorColor.addedLineBg)
+    setColorPair(EditorColorPair.deletedLine, editorColor.deletedLine, editorColor.deletedLineBg)
+
+    # configuration mode
+    setColorPair(EditorColorPair.currentSetting, editorColor.currentSetting, editorColor.currentSettingBg)
 
 proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Color, Color) =
   let editorColor = ColorThemeTable[theme]
@@ -1193,21 +1439,29 @@ proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Co
   of EditorColorPair.visualMode:
     return (editorColor.visualMode, editorColor.visualModeBg)
   of EditorColorPair.defaultChar:
-    return (editorColor.defaultChar, Color.default)
+    return (editorColor.defaultChar, editorColor.editorBg)
   of EditorColorPair.keyword:
-    return (editorColor.gtKeyword, Color.default)
+    return (editorColor.gtKeyword, editorColor.editorBg)
+  of EditorColorPair.functionName:
+    return (editorColor.gtFunctionName, editorColor.editorBg)
+  of EditorColorPair.boolean:
+    return (editorColor.gtBoolean, editorColor.editorBg)
+  of EditorColorPair.specialVar:
+    return (editorColor.gtSpecialVar, editorColor.editorBg)
+  of EditorColorPair.builtin:
+    return (editorColor.gtBuiltin, editorColor.editorBg)
   of EditorColorPair.stringLit:
-    return (editorColor.gtStringLit, Color.default)
+    return (editorColor.gtStringLit, editorColor.editorBg)
   of EditorColorPair.decNumber:
-    return (editorColor.gtDecNumber, Color.default)
+    return (editorColor.gtDecNumber, editorColor.editorBg)
   of EditorColorPair.comment:
-    return (editorColor.gtComment, Color.default)
+    return (editorColor.gtComment, editorColor.editorBg)
   of EditorColorPair.longComment:
-    return (editorColor.gtLongComment, Color.default)
+    return (editorColor.gtLongComment, editorColor.editorBg)
   of EditorColorPair.whitespace:
-    return (editorColor.gtWhitespace, Color.default)
+    return (editorColor.gtWhitespace, editorColor.editorBg)
   of EditorColorPair.preprocessor:
-    return (editorColor.gtPreprocessor, Color.default)
+    return (editorColor.gtPreprocessor, editorColor.editorBg)
   of EditorColorPair.currentFile:
     return (editorColor.currentFile, editorColor.currentFileBg)
   of EditorColorPair.file:
@@ -1228,5 +1482,128 @@ proc getColorFromEditorColorPair*(theme: ColorTheme, pair: EditorColorPair): (Co
     return (editorColor.workSpaceBar, editorColor.workSpaceBarBg)
   of EditorColorPair.reservedWord:
     return (editorColor.reservedWord, editorColor.reservedWordBg)
+  of EditorColorPair.addedLine:
+    return (editorColor.addedLine, editorColor.addedLineBg)
+  of EditorColorPair.deletedLine:
+    return (editorColor.deletedLine, editorColor.deletedLineBg)
+  of EditorColorPair.currentHistory:
+    return (editorColor.currentHistory, editorColor.currentHistoryBg)
+  of EditorColorPair.currentSetting:
+    return (editorColor.currentSetting, editorColor.currentSettingBg)
   else:
     return (editorColor.parenText, editorColor.parenTextBg)
+
+# Environment where only 8 colors can be used
+proc convertToConsoleEnvironmentColor*(theme: ColorTheme) =
+  macro setColor(theme, pairName: untyped, color: Color): untyped =
+    parseStmt(fmt"""
+      ColorThemeTable[{repr(theme)}].{pairName} = {repr(color)}
+    """)
+
+  proc isDefault(color: Color): bool {.inline.} = color == Color.default
+
+  proc isBlack(color: Color): bool =
+    case color:
+      of black, gray3, gray7, gray11, gray15, gray19, gray23, gray27, gray30,
+         gray35, gray39, gray42, gray46, gray50, gray54, gray58, gray62, gray66,
+         gray70, gray74, gray78: true
+      else: false
+
+  # is maroon (red)
+  proc isMaroon(color: Color): bool =
+    case color:
+      of maroon, red, darkRed_1, darkRed_2, red3_1, mediumVioletRed,
+         indianRed_1, red3_2, indianRed_2, red1, orangeRed1, indianRed1_1,
+         indianRed1_2, paleVioletRed1, deepPink4_1, deepPink4_2, deepPink4,
+         magenta3: true
+      else: false
+
+  proc isGreen(color: Color): bool =
+    case color:
+      of green, darkGreen, green4, springGreen4, green3_1, springGreen3_1,
+         lightSeaGreen, green3_2, springGreen3_3, springGreen2_1, green1,
+         springGreen2_2, springGreen1, mediumSpringGreen, darkSeaGreen4_1,
+         darkSeaGreen4_2, paleGreen3_1, seaGreen3, seaGreen2, seaGreen1_1,
+         seaGreen1_2, darkSeaGreen, darkOliveGreen3_1, paleGreen3_2,
+         darkSeaGreen3_1, lightGreen_1, lightGreen_2, paleGreen1_1,
+         darkOliveGreen3_2, darkSeaGreen3_2, darkSeaGreen2_1, greenYellow,
+         darkOliveGreen2, paleGreen1_2, darkSeaGreen2_2, darkSeaGreen1_1,
+         darkOliveGreen1_1, darkOliveGreen1_2, darkSeaGreen1_2,
+         lime, orange4_1, chartreuse4, paleTurquoise4, chartreuse3_1,
+         chartreuse3_2, chartreuse2_1, Wheat4, chartreuse2_2, chartreuse1,
+         darkGoldenrod, lightSalmon3_1, rosyBrown, gold3_1, darkKhaki,
+         navajoWhite3: true
+      else: false
+
+  # is olive (yellow)
+  proc isOlive(color: Color): bool =
+    case color:
+      of olive,
+         yellow, yellow4_1, yellow4_2, yellow3_1, yellow3_2, lightYellow3,
+         yellow2, yellow1, orange4_2, lightPink4, plum4, wheat4, darkOrange3_1,
+         darkOrange3_2, orange3, lightSalmon3_2, gold3_2, lightGoldenrod3, tan,
+         mistyRose3, khaki3, lightGoldenrod2, darkOrange, salmon1, orange1,
+         sandyBrown, lightSalmon1, gold1, lightGoldenrod2_1, lightGoldenrod2_2,
+         navajoWhite1, lightGoldenrod1, khaki1, wheat1, cornsilk1: true
+      else: false
+
+  # is navy (blue)
+  proc isNavy(color: Color): bool =
+    case color:
+      of navy,
+         blue, navyBlue, darkBlue, blue3_1, blue3_2, blue1, deepSkyBlue4_1,
+         deepSkyBlue4_2, deepSkyBlue4_3, dodgerBlue3_1, dodgerBlue3_2,
+         deepSkyBlue3_1, deepSkyBlue3_2, dodgerBlue1, deepSkyBlue2,
+         deepSkyBlue1, blueViolet, slateBlue3_1, slateBlue3_2, royalBlue1,
+         steelBlue, steelBlue3, cornflowerBlue, cadetBlue_1, cadetBlue_2,
+         skyBlue3, steelBlue1_1, steelBlue1_2, slateBlue1, lightSlateBlue,
+         lightSkyBlue3_1, lightSkyBlue3_2, skyBlue2, skyBlue1,
+         lightSteelBlue3, lightSteelBlue, lightSkyBlue1, lightSteelBlue1,
+         aqua, darkTurquoise, turquoise2, aquamarine1_1: true
+      else: false
+
+  proc isPurple(color: Color): bool =
+    case color:
+      of purple_1,
+         purple4_1, purple4_2, purple3, mediumPurple4, purple_2,
+         mediumPurple3_1, mediumPurple3_2, mediumPurple, purple,
+         mediumPurple2_1, mediumPurple2_2, mediumPurple1, fuchsia,
+         darkMagenta_1, darkMagenta_2, darkViolet_1, darkViolet_2, hotPink3_1,
+         mediumOrchid3, mediumOrchid, deepPink3_1, deepPink3_2, magenta3_1,
+         magenta3_2, magenta2_1, hotPink3_2, hotPink2, orchid, mediumOrchid1_1,
+         lightPink3, pink3, plum3, violet, thistle3, plum2, deepPink2,
+         deepPink1_1, deepPink1_2, magenta2_2, magenta1, hotPink1_1,
+         hotPink1_2, mediumOrchid1_2, lightCoral, orchid2, orchid1, lightPink1,
+         pink1, plum1, mistyRose1, thistle1: true
+      else: false
+
+  # is teal (cyan)
+  proc isTeal(color: Color): bool =
+    case color:
+      of teal, darkCyan, cyan3, cyan2, cyan1, lightCyan3, lightCyan1,
+         turquoise4, turquoise2, aquamarine3, mediumTurquoise, aquamarine1_2,
+         paleTurquoise1, honeydew2: true
+      else: false
+
+  for name, color in ColorThemeTable[theme].fieldPairs:
+    if isDefault(color):
+      setColor(theme, name, Color.default)
+    elif isBlack(color):
+      setColor(theme, name, Color.black)
+    elif isMaroon(color):
+      setColor(theme, name, Color.maroon)
+    elif isGreen(color):
+      setColor(theme, name, Color.green)
+    elif isOlive(color):
+      setColor(theme, name, Color.olive)
+    elif isNavy(color):
+      setColor(theme, name, Color.navy)
+    elif isPurple(color):
+      setColor(theme, name, Color.purple_1)
+    elif isTeal(color):
+      setColor(theme, name, Color.teal)
+    else:
+      # is silver (white)
+      setColor(theme, name, Color.silver)
+
+    setCursesColor(ColorThemeTable[theme])

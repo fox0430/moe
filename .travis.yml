@@ -6,10 +6,7 @@ services:
 before_install:
   - sudo ln -sf /lib/x86_64-linux-gnu/libncursesw.so.5.9 /usr/lib/x86_64-linux-gnu/libncursesw.so
   - export CHOOSENIM_NO_ANALYTICS=1
-  # Error occur => curl: (35) gnutls_handshake() failed: The TLS connection was non-properly terminated.
-  #- curl https://nim-lang.org/choosenim/init.sh -sSf > init.sh
-  - wget https://nim-lang.org/choosenim/init.sh
-  - sh init.sh -y
+  - curl https://nim-lang.org/choosenim/init.sh -sSf | sh
   - export PATH=~/.nimble/bin:$PATH
   - echo "export PATH=~/.nimble/bin:$PATH" >> ~/.profile
   - choosenim stable

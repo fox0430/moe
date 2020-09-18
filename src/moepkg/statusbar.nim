@@ -6,7 +6,7 @@ type StatusBar* = object
   windowIndex*: int
   bufferIndex*: int
 
-proc initStatusBar*(): StatusBar =
+proc initStatusBar*(): StatusBar {.inline.} =
   const
     h = 1
     w = 1
@@ -15,6 +15,10 @@ proc initStatusBar*(): StatusBar =
     color = EditorColorPair.defaultChar
 
   result.window = initWindow(h, w, t, l, color)
+
+proc showFilename(mode, prevMode: Mode): bool {.inline.} =
+  not isHistoryManagerMode(mode, prevMode) and
+  not isConfigMode(mode, prevMode)
 
 proc writeStatusBarNormalModeInfo(bufStatus: var BufferStatus,
                                   statusBar: var StatusBar,
@@ -43,6 +47,7 @@ proc writeStatusBarNormalModeInfo(bufStatus: var BufferStatus,
 
   let
     mode = bufStatus.mode
+    prevMode = bufStatus.prevMode
     color = setStatusBarColor(mode)
     statusBarWidth = statusBar.window.width
 
@@ -50,7 +55,8 @@ proc writeStatusBarNormalModeInfo(bufStatus: var BufferStatus,
   statusBar.window.append(ru" ", color)
 
   if settings.statusBar.filename:
-    var filename = if bufStatus.path.len > 0: bufStatus.path
+    var filename = if not showFilename(mode, prevMode): ru""
+                   elif bufStatus.path.len > 0: bufStatus.path
                    else: ru"No name"
     let homeDir = ru(getHomeDir())
     if (filename.len() >= homeDir.len() and
@@ -77,7 +83,7 @@ proc writeStatusBarNormalModeInfo(bufStatus: var BufferStatus,
     column = if settings.statusBar.column:
                fmt"{windowNode.currentColumn + 1}/{bufStatus.buffer[windowNode.currentLine].len}"
              else: ""
-    encoding = if settings.statusBar.characterEncoding: $settings.characterEncoding
+    encoding = if settings.statusBar.characterEncoding: $bufStatus.characterEncoding
                else: ""
     language = if bufStatus.language == SourceLanguage.langNone: "Plain"
                else: sourceLanguageToStr[bufStatus.language]
@@ -164,6 +170,9 @@ proc setModeStr(mode: Mode, isActiveWindow, showModeInactive: bool): string =
     of Mode.logViewer: result = " LOG "
     of Mode.recentFile: result = " RECENT "
     of Mode.quickRun: result = " QUICKRUN "
+    of Mode.history: result = " HISTORY "
+    of Mode.diff: result = "DIFF "
+    of Mode.config: result = " CONFIG "
     else: result = " NORMAL "
 
 proc setModeStrColor(mode: Mode): EditorColorPair =
@@ -185,18 +194,17 @@ proc isShowGitBranchName(mode, prevMode: Mode,
     if showGitInactive or
     (not showGitInactive and isActiveWindow): result = true
 
-  if mode == Mode.filer: return false
-  elif mode == Mode.ex and prevMode == Mode.filer: return false
-  elif mode == Mode.logViewer: return false
-  elif mode == Mode.ex and prevMode == Mode.logViewer: return false
-  elif mode == Mode.bufManager: return false
-  elif mode == Mode.ex and prevMode == Mode.bufManager: return false
-  elif mode == Mode.help: return false
-  elif mode == Mode.ex and prevMode == Mode.help: return false
-  elif mode == Mode.recentFile: return false
-  elif mode == Mode.ex and prevMode == Mode.recentFile: return false
-  elif mode == Mode.quickRun: return false
-  elif mode == Mode.ex and prevMode == Mode.quickRun: return false
+  if mode == Mode.normal or
+     mode == Mode.insert or
+     mode == Mode.visual or
+     mode == Mode.replace: result = true
+  elif mode == Mode.ex:
+    if prevMode == Mode.normal or
+       prevMode == Mode.insert or
+       prevMode == Mode.visual or
+       prevMode == Mode.replace: result = true
+  else:
+    result = false
 
 proc writeStatusBar*(bufStatus: var BufferStatus,
                      statusBar: var StatusBar,
@@ -214,38 +222,45 @@ proc writeStatusBar*(bufStatus: var BufferStatus,
                          isActiveWindow,
                          settings.statusBar.showModeInactive)
 
-  var statusBarBuffer = modeStr.toRunes
+  var statusBarBuffer = if windowNode.x > 0: ru" " & modeStr.toRunes
+                        else: modeStr.toRunes
 
   ## Write current mode
   if settings.statusBar.mode:
     statusBar.window.write(0, 0, statusBarBuffer, color)
 
   if isShowGitBranchName(currentMode, prevMode, isActiveWindow, settings):
-    statusBar.writeStatusBarCurrentGitBranchName(statusBarBuffer, isActiveWindow)
+    statusBar.writeStatusBarCurrentGitBranchName(
+      statusBarBuffer,
+      isActiveWindow)
 
-  if currentMode == Mode.filer or
-     (currentMode == Mode.ex and prevMode == Mode.filer):
-    bufStatus.writeStatusBarFilerModeInfo(statusBar,
-                                          statusBarBuffer,
-                                          windowNode,
-                                          isActiveWindow,
-                                          settings)
+  if isFilerMode(currentMode, prevMode):
+    bufStatus.writeStatusBarFilerModeInfo(
+      statusBar,
+      statusBarBuffer,
+      windowNode,
+      isActiveWindow,
+      settings)
   elif currentMode == Mode.bufManager:
-    bufStatus.writeStatusBarBufferManagerModeInfo(statusBar,
-                                                  statusBarBuffer,
-                                                  windowNode,
-                                                  isActiveWindow,
-                                                  settings)
+    bufStatus.writeStatusBarBufferManagerModeInfo(
+      statusBar,
+      statusBarBuffer,
+      windowNode,
+      isActiveWindow,
+      settings)
   elif currentMode == Mode.logViewer:
-    bufStatus.writeStatusBarLogViewerModeInfo(statusBar,
-                                           statusBarBuffer,
-                                           windowNode,
-                                           isActiveWindow,
-                                           settings)
-  else: bufStatus.writeStatusBarNormalModeInfo(statusBar,
-                                               statusBarBuffer,
-                                               windowNode,
-                                               isActiveWindow,
-                                               settings)
+    bufStatus.writeStatusBarLogViewerModeInfo(
+      statusBar,
+      statusBarBuffer,
+      windowNode,
+      isActiveWindow,
+      settings)
+  else:
+    bufStatus.writeStatusBarNormalModeInfo(
+      statusBar,
+      statusBarBuffer,
+      windowNode,
+      isActiveWindow,
+      settings)
 
   statusBar.window.refresh

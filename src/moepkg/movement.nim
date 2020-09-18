@@ -116,7 +116,7 @@ proc jumpLine*(status: var EditorStatus, destination: int) =
 
     windowNode.view.reload(status.bufStatus[currentBufferIndex].buffer, startOfPrintedLines)
 
-proc moveToFirstLine*(status: var EditorStatus) = status.jumpLine(0)
+proc moveToFirstLine*(status: var EditorStatus) {.inline.} = status.jumpLine(0)
 
 proc moveToLastLine*(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -139,9 +139,9 @@ proc scrollUpNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
       status.bufStatus[currentBufferIndex].keyUp(windowNode)
       status.update
       status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.setTimeout(status.settings.smoothScrollSpeed)
-      var key: Rune = ru'\0'
+      var key = errorKey
       key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
-      if key != ru'\0': break
+      if key != errorKey: break
 
     ## Set default time out setting
     status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.setTimeout
@@ -171,9 +171,9 @@ proc scrollDownNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
       status.bufStatus[currentBufferIndex].keyDown(windowNode)
       status.update
       status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.setTimeout(status.settings.smoothScrollSpeed)
-      var key: Rune = ru'\0'
+      var key = errorKey
       key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
-      if key != ru'\0': break
+      if key != errorKey: break
 
     ## Set default time out setting
     status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.setTimeout
@@ -197,7 +197,7 @@ proc pageDown*(status: var EditorStatus) =
 proc halfPageDown*(status: var EditorStatus) =
   var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
   scrollDownNumberOfLines(status, Natural(windowNode.view.height / 2))
-  
+
 proc moveToForwardWord*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   let
     currentLine = windowNode.currentLine
@@ -247,7 +247,7 @@ proc moveToBackwardWord*(bufStatus: var BufferStatus, windowNode: var WindowNode
     let
       currentLine = windowNode.currentLine
       currentColumn = windowNode.currentColumn
-      
+
     if bufStatus.buffer[windowNode.currentLine].len == 0 or bufStatus.buffer.isFirst(currentLine, currentColumn): break
 
     let curr = bufStatus.buffer[currentLine][currentColumn]
@@ -308,6 +308,10 @@ proc moveToForwardEndOfWord*(bufStatus: var BufferStatus, windowNode: var Window
 
   windowNode.expandedColumn = windowNode.currentColumn
 
+proc moveToForwardAfterWord*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
+  moveToForwardEndOfWord(bufStatus, windowNode)
+  keyRight(bufStatus, windowNode)
+
 proc moveCenterScreen*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   if windowNode.currentLine > int(windowNode.view.height / 2):
     if windowNode.cursor.y > int(windowNode.view.height / 2):
@@ -317,7 +321,7 @@ proc moveCenterScreen*(bufStatus: var BufferStatus, windowNode: WindowNode) =
       let numOfTime = int(windowNode.view.height / 2) - windowNode.cursor.y
       for i in 0 ..< numOfTime: scrollUp(windowNode.view, bufStatus.buffer)
 
-proc scrollScreenTop*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
+proc scrollScreenTop*(bufStatus: var BufferStatus, windowNode: var WindowNode) {.inline.} =
   windowNode.view.reload(bufStatus.buffer, windowNode.view.originalLine[windowNode.cursor.y])
 
 proc scrollScreenBottom*(bufStatus: var BufferStatus, windowNode: WindowNode) =

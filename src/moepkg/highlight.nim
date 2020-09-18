@@ -14,14 +14,14 @@ type
     word*: string
     color*: EditorColorPair
 
-proc len*(highlight: Highlight): int = highlight.colorSegments.len
+proc len*(highlight: Highlight): int {.inline.} = highlight.colorSegments.len
 
-proc high*(highlight: Highlight): int = highlight.colorSegments.high
+proc high*(highlight: Highlight): int {.inline.} = highlight.colorSegments.high
 
-proc `[]`*(highlight: Highlight, i: int): ColorSegment =
+proc `[]`*(highlight: Highlight, i: int): ColorSegment {.inline.} =
   highlight.colorSegments[i]
 
-proc `[]`*(highlight: Highlight, i: BackwardsIndex): ColorSegment =
+proc `[]`*(highlight: Highlight, i: BackwardsIndex): ColorSegment {.inline.} =
   highlight.colorSegments[highlight.colorSegments.len - int(i)]
 
 proc getColorPair*(highlight: Highlight, line, col: int): EditorColorPair =
@@ -45,7 +45,7 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
 
   proc prev(pos: Position): Position =
     if pos.column > 0: (pos.row, pos.column-1) else: (pos.row-1, high(int))
-  
+
   proc next(pos: Position): Position =
     (pos.row, pos.column+1)
 
@@ -57,7 +57,7 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
                           lastRow: s.lastRow,
                           lastColumn: s.lastColumn,
                           color: t.color)]
-  
+
   if s.contains(t):
     if (s.firstRow, s.firstColumn) < (t.firstRow, t.firstColumn):
       let last = prev((t.firstRow, t.firstColumn))
@@ -66,7 +66,7 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
                               lastRow: last.row,
                               lastColumn: last.column,
                               color: s.color))
-    
+
     result.add(t)
 
     if (t.lastRow, t.lastColumn) < (s.lastRow, s.lastColumn):
@@ -76,9 +76,9 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
                               lastRow: s.lastRow,
                               lastColumn: s.lastColumn,
                               color: s.color))
-    
+
     return result
-  
+
   if (t.firstRow, t.firstColumn) < (s.firstRow, s.firstColumn):
     let first = next((t.lastRow, t.lastColumn))
     result.add(ColorSegment(firstRow: s.firstRow,
@@ -144,6 +144,42 @@ iterator parseReservedWord(
     yield (buffer[pos ..< last], reservedWord.color)
     buffer = buffer[last ..^ 1]
 
+proc getEditorColorPairInNim(kind: TokenClass,
+                             isProcName: bool): EditorColorPair =
+
+  case kind:
+    of gtKeyword: EditorColorPair.keyword
+    of gtBoolean: EditorColorPair.boolean
+    of gtSpecialVar: EditorColorPair.specialVar
+    of gtBuiltin: EditorColorPair.builtin
+    of gtStringLit: EditorColorPair.stringLit
+    of gtDecNumber: EditorColorPair.decNumber
+    of gtComment: EditorColorPair.comment
+    of gtLongComment: EditorColorPair.longComment
+    of gtPreprocessor: EditorColorPair.preprocessor
+    of gtWhitespace, gtPunctuation: EditorColorPair.defaultChar
+    else:
+      if isProcName: EditorColorPair.functionName
+      else: EditorColorPair.defaultChar
+
+proc getEditorColorPair(kind: TokenClass,
+                        language: SourceLanguage): EditorColorPair =
+
+  case kind:
+    of gtKeyword: EditorColorPair.keyword
+    of gtBoolean: EditorColorPair.boolean
+    of gtSpecialVar: EditorColorPair.specialVar
+    of gtBuiltin: EditorColorPair.builtin
+    of gtStringLit:
+      if language == SourceLanguage.langYaml: EditorColorPair.defaultChar
+      else: EditorColorPair.stringLit
+    of gtDecNumber: EditorColorPair.decNumber
+    of gtComment: EditorColorPair.comment
+    of gtLongComment: EditorColorPair.longComment
+    of gtPreprocessor: EditorColorPair.preprocessor
+    of gtWhitespace: EditorColorPair.defaultChar
+    else: EditorColorPair.defaultChar
+
 proc initHighlight*(buffer: string,
                     reservedWords: seq[ReservedWord],
                     language: SourceLanguage): Highlight =
@@ -193,6 +229,9 @@ proc initHighlight*(buffer: string,
   if buffer.parseWhile(pad, {' ', '\x09'..'\x0D'}) > 0:
     splitByNewline(pad, EditorColorPair.defaultChar)
 
+  # Only use in nim
+  var isProcName = false
+
   while true:
     try:
       token.getNextToken(language)
@@ -208,18 +247,21 @@ proc initHighlight*(buffer: string,
       currentRow += last - first + 1
       currentColumn = 0
       continue
-    
-    let color = case token.kind:
-        of gtKeyword: EditorColorPair.keyword
-        of gtStringLit:
-          if language == SourceLanguage.langYaml: EditorColorPair.defaultChar
-          else: EditorColorPair.stringLit
-        of gtDecNumber: EditorColorPair.decNumber
-        of gtComment: EditorColorPair.comment
-        of gtLongComment: EditorColorPair.longComment
-        of gtPreprocessor: EditorColorPair.preprocessor
-        of gtWhitespace: EditorColorPair.defaultChar
-        else: EditorColorPair.defaultChar
+
+    let color = if language == SourceLanguage.langNim:
+                  getEditorColorPairInNim(token.kind, isProcName)
+                else:
+                  getEditorColorPair(token.kind, language)
+
+    isProcName = if (language == SourceLanguage.langNim) and
+                   (buffer[first.. last] == "proc" or
+                   buffer[first.. last] == "macro" or
+                   buffer[first.. last] == "template" or
+                   buffer[first.. last] == "func"): true
+                  elif language == SourceLanguage.langNim and
+                       isProcName and
+                       token.kind == gtWhitespace: true
+                 else: false
 
     if token.kind == gtComment:
       for r in buffer[first..last].parseReservedWord(reservedWords, color):
@@ -252,7 +294,7 @@ proc indexOf*(highlight: Highlight, row, column: int): int =
     else: ub = mid
 
   return lb
- 
+
 proc detectLanguage*(filename: string): SourceLanguage =
   # TODO: use settings file
   let extention = filename.splitFile.ext
@@ -273,5 +315,7 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langPython
   of ".js":
     return SourceLanguage.langJavaScript
+  of ".sh", ".bash":
+    return SourceLanguage.langShell
   else:
     return SourceLanguage.langNone

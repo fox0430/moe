@@ -1,13 +1,20 @@
-import terminal, times
-from os import execShellCmd
+import terminal, times, options
 import ui, editorstatus, gapbuffer, unicodeext, undoredostack, window,
-       movement, editor, bufferstatus
+       movement, editor, bufferstatus, suggestionwindow
+
+template currentBufStatus: var BufferStatus =
+  mixin status
+  status.bufStatus[status.bufferIndexInCurrentWindow]
+
+template currentMainWindow: var WindowNode =
+  mixin status
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
 
 proc isInsertMode(status: EditorStatus): bool =
   let
-    workspaceIndex = status.currentWorkSpaceIndex
+    workSpaceIndex = status.currentWorkSpaceIndex
     bufferIndex =
-      status.workspace[workspaceIndex].currentMainWindowNode.bufferIndex
+      status.workspace[workSpaceIndex].currentMainWindowNode.bufferIndex
     mode = status.bufStatus[bufferIndex].mode
   return mode == Mode.insert
 
@@ -17,26 +24,47 @@ proc insertMode*(status: var EditorStatus) =
 
   status.resize(terminalHeight(), terminalWidth())
 
-  while status.isInsertMode:
-    let
-      currentBufferIndex = status.bufferIndexInCurrentWindow
-      workspaceIndex = status.currentWorkSpaceIndex
+  var suggestionWindow = none(SuggestionWindow)
 
+  while status.isInsertMode:
     status.update
 
-    var key: Rune = Rune('\0')
-    while key == Rune('\0'):
+    if suggestionWindow.isSome:
+      let
+        mainWindowHeight = status.settings.getMainWindowHeight(terminalHeight())
+        (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
+          currentMainWindow,
+          mainWindowHeight)
+      suggestionWindow.get.writeSuggestionWindow(y, x)
+
+    var key = errorKey
+    while key == errorKey:
       status.eventLoopTask
-      key =
-        getKey(status.workSpace[workspaceIndex].currentMainWindowNode.window)
+      key = getKey(currentMainWindow.window)
 
     status.lastOperatingTime = now()
 
-    var windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
+    var windowNode = currentMainWindow
 
-    status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
-    status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(windowNode)
-    
+    currentBufStatus.buffer.beginNewSuitIfNeeded
+    currentBufStatus.tryRecordCurrentPosition(windowNode)
+
+    if suggestionWindow.isSome:
+      if canHandleInSuggestionWindow(key):
+        suggestionWindow.get.handleKeyInSuggestionWindow(
+          currentBufStatus,
+          currentMainWindow, key)
+        continue
+      else:
+        if suggestionWindow.get.isLineChanged:
+          currentBufStatus.buffer[currentMainWindow.currentLine] = suggestionWindow.get.newLine
+        suggestionWindow.get.close
+        suggestionWindow = none(SuggestionWindow)
+
+    let
+      prevLine = currentBufStatus.buffer[currentMainWindow.currentLine]
+      prevLineNumber = currentMainWindow.currentLine
+
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
       status.commandWindow.erase
@@ -45,16 +73,16 @@ proc insertMode*(status: var EditorStatus) =
       windowNode.expandedColumn = windowNode.currentColumn
       status.changeMode(Mode.normal)
     elif isControlU(key):
-      status.bufStatus[currentBufferIndex].deleteBeforeCursorToFirstNonBlank(
-        status.workSpace[workspaceIndex].currentMainWindowNode)
+      currentBufStatus.deleteBeforeCursorToFirstNonBlank(
+        currentMainWindow)
     elif isLeftKey(key):
       windowNode.keyLeft
     elif isRightkey(key):
-      status.bufStatus[currentBufferIndex].keyRight(windowNode)
+      currentBufStatus.keyRight(windowNode)
     elif isUpKey(key):
-      status.bufStatus[currentBufferIndex].keyUp(windowNode)
+      currentBufStatus.keyUp(windowNode)
     elif isDownKey(key):
-      status.bufStatus[currentBufferIndex].keyDown(windowNode)
+      currentBufStatus.keyDown(windowNode)
     elif isPageUpKey(key):
       pageUp(status)
     elif isPageDownKey(key):
@@ -62,52 +90,53 @@ proc insertMode*(status: var EditorStatus) =
     elif isHomeKey(key):
       windowNode.moveToFirstOfLine
     elif isEndKey(key):
-      status.bufStatus[currentBufferIndex].moveToLastOfLine(windowNode)
+      currentBufStatus.moveToLastOfLine(windowNode)
     elif isDcKey(key):
-      status.bufStatus[currentBufferIndex].deleteCurrentCharacter(
-        status.workSpace[workspaceIndex].currentMainWindowNode,
+      currentBufStatus.deleteCurrentCharacter(
+        currentMainWindow,
         status.settings.autoDeleteParen)
     elif isBackspaceKey(key) or isControlH(key):
-      status.bufStatus[currentBufferIndex].keyBackspace(
-        status.workSpace[workspaceIndex].currentMainWindowNode,
-        status.settings.autoDeleteParen)
+      currentBufStatus.keyBackspace(
+        currentMainWindow,
+        status.settings.autoDeleteParen,
+        status.settings.tabStop)
     elif isEnterKey(key):
-      keyEnter(status.bufStatus[currentBufferIndex],
-               status.workSpace[workspaceIndex].currentMainWindowNode,
+      keyEnter(currentBufStatus,
+               currentMainWindow,
                status.settings.autoIndent,
                status.settings.tabStop)
-    elif key == ord('\t') or isControlI(key):
-      insertTab(status.bufStatus[currentBufferIndex],
-                status.workSpace[workspaceIndex].currentMainWindowNode,
+    elif isTabKey(key) or isControlI(key):
+      insertTab(currentBufStatus,
+                currentMainWindow,
                 status.settings.tabStop,
                 status.settings.autoCloseParen)
     elif isControlE(key):
-      status.bufStatus[currentBufferIndex].insertCharacterBelowCursor(
-        status.workSpace[workspaceIndex].currentMainWindowNode
-      )
+      currentBufStatus.insertCharacterBelowCursor(
+        currentMainWindow)
     elif isControlY(key):
-      status.bufStatus[currentBufferIndex].insertCharacterAboveCursor(
-        status.workSpace[workspaceIndex].currentMainWindowNode
-      )
+      currentBufStatus.insertCharacterAboveCursor(
+        currentMainWindow)
     elif isControlW(key):
-      status.bufStatus[currentBufferIndex].deleteWordBeforeCursor(
-        status.workSpace[workspaceIndex].currentMainWindowNode
-      )
+      currentBufStatus.deleteWordBeforeCursor(
+        currentMainWindow,
+        status.settings.tabStop)
     elif isControlU(key):
-      status.bufStatus[currentBufferIndex].deleteCharactersBeforeCursorInCurrentLine(
-        status.workSpace[workspaceIndex].currentMainWindowNode
-      )
+      currentBufStatus.deleteCharactersBeforeCursorInCurrentLine(
+        currentMainWindow)
     elif isControlT(key):
-      status.bufStatus[currentBufferIndex].addIndentInCurrentLine(
-        status.workSpace[workspaceIndex].currentMainWindowNode,
-        status.settings.view.tabStop
-      )
+      currentBufStatus.addIndentInCurrentLine(
+        currentMainWindow,
+        status.settings.view.tabStop)
     elif isControlD(key):
-      status.bufStatus[currentBufferIndex].deleteIndentInCurrentLine(
-        status.workSpace[workspaceIndex].currentMainWindowNode,
-        status.settings.view.tabStop
-      )
+      currentBufStatus.deleteIndentInCurrentLine(
+        currentMainWindow,
+        status.settings.view.tabStop)
     else:
-      insertCharacter(status.bufStatus[currentBufferIndex],
-                      status.workSpace[workspaceIndex].currentMainWindowNode,
+      insertCharacter(currentBufStatus,
+                      currentMainWindow,
                       status.settings.autoCloseParen, key)
+
+    if status.settings.autocompleteSettings.enable and
+       prevLineNumber == currentMainWindow.currentLine and
+       prevLine != currentBufStatus.buffer[currentMainWindow.currentLine]:
+      suggestionWindow = tryOpenSuggestionWindow(currentBufStatus, currentMainWindow)

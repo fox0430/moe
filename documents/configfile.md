@@ -51,6 +51,18 @@ default is 2
 tabStop
 ```
 
+Enable/Disable ignorecase (bool)  
+default is true
+```
+ignorecase
+```
+
+Enable/Disable smartcase (bool)  
+default is true
+```
+smartcase
+```
+
 Automatic closing brackets (bool)  
 default is true
 ```
@@ -142,7 +154,7 @@ smoothScroll
 ```
 
 Smooth scroll speed (int)  
-default is 16
+default is 15
 ```
 smoothScrollSpeed
 ```
@@ -182,6 +194,12 @@ Multiple status bar (bool)
 default is true
 ```
 multipleStatusBar 
+```
+
+Enable/Disable merging status bar with command line (bool)  
+default is true
+```
+merge
 ```
 
 Show current mode (bool)  
@@ -310,6 +328,16 @@ If not set, it will be saved in .hisotry in the same directory as the original f
 default is "" (None)  
 ```
 backupDir
+```
+
+Exclude settings for where you don't want to produce automatic backups (array)  
+default
+```
+["/etc"]
+```
+
+```
+dirToExclude
 ```
 
 ### QuickRun table
@@ -490,12 +518,33 @@ default is true
 filerLogNotify
 ```
 
+Enable/disable restore messages/notifications in status bar (bool)  
+default is true
+```
+restoreScreenNotify
+```
+
+Enable/disable restore messages/notifications in log (bool)  
+default is true
+```
+restoreLogNotify
+```
+
+
 ### Filer table
 
 Show/hidden unicode icons (bool)  
 default is true
 ```
 showIcons
+```
+
+### Autocomplete table
+
+Enable/Disable general-purpose autocomplete (bool).
+The default value is true.
+```
+enable
 ```
 
 ### Color and theme
@@ -1045,32 +1094,52 @@ defaultCharactorColor
 
 Syntax highlighting color
 ```
-gtKeywordColor
+gtKeyword
 ```
 
 Syntax highlighting color
 ```
-gtStringLitColor
+gtFunctionName
 ```
 
 Syntax highlighting color
 ```
-gtDecNumberColor
+gtBoolean
 ```
 
 Syntax highlighting color
 ```
-gtCommentColor
+gtSpecialVar
 ```
 
 Syntax highlighting color
 ```
-gtLongCommentColor
+gtBuiltin
 ```
 
 Syntax highlighting color
 ```
-gtWhitespaceColor
+gtStringLit
+```
+
+Syntax highlighting color
+```
+gtDecNumber
+```
+
+Syntax highlighting color
+```
+gtComment
+```
+
+Syntax highlighting color
+```
+gtLongComment
+```
+
+Syntax highlighting color
+```
+gtWhitespace
 ```
 
 Syntax highlighting color
@@ -1190,4 +1259,14 @@ reservedWord
 Reserved word background color
 ```
 reservedWordBg
+```
+
+Current line color in configuration mode
+```
+currentSetting
+```
+
+Current line background color in configuration mode
+```
+currentSettingBg
 ```

@@ -1,11 +1,11 @@
 import terminal, times
 import ui, editorstatus, unicodeext, movement, bufferstatus
 
-proc initMessageLog*(status: var Editorstatus) =
+proc initMessageLog*(status: var Editorstatus) {.inline.} =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.bufStatus[currentBufferIndex].path = ru"Log viewer"
 
-proc exitLogViewer*(status: var Editorstatus) =
+proc exitLogViewer*(status: var Editorstatus) {.inline.} =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.deleteBuffer(currentBufferIndex)
 
@@ -31,14 +31,14 @@ proc messageLogViewer*(status: var Editorstatus) =
         currentBufferIndex == status.bufferIndexInCurrentWindow:
 
     let currentBufferIndex = status.bufferIndexInCurrentWindow
-    
+
     status.update
 
     var windowNode =
       status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
 
-    var key: Rune = ru'\0'
-    while key == ru'\0':
+    var key = errorKey
+    while key == errorKey:
       status.eventLoopTask
       key = getKey(
         status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)

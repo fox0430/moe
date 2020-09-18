@@ -22,6 +22,10 @@ autoCloseParen = true
 
 autoIndent = true
 
+ignorecase = true
+
+smartcase = true
+
 disableChangeCursor = false
 
 defaultCursor = "blinkBlock"
@@ -54,6 +58,10 @@ highlightTrailingSpaces = true
 
 highlightCurrentWord = true
 
+smoothScroll = true
+
+smoothScrollSpeed = 15
+
 [BuildOnSave]
 
 enable = false
@@ -67,6 +75,10 @@ enable = false
 allBuffer = false
 
 [StatusBar]
+
+multipleStatusBar = true
+
+merge = false
 
 mode = true
 
@@ -83,8 +95,6 @@ encoding = true
 language = true
 
 directory = true
-
-multipleStatusBar = true
 
 gitbranchName = true
 
@@ -111,6 +121,8 @@ idolTime = 10
 interval = 5
 
 # backupDir = "/home/fox/Nim"
+
+dirToExclude = ["/etc"]
 
 [QuickRun]
 
@@ -175,9 +187,17 @@ filerScreenNotify = true
 
 filerLogNotify = true
 
+restoreScreenNotify = true
+
+restoreLogNotify = true
+
 [Filer]
 
 showIcons = true
+
+[Autocomplete]
+
+enable = true
 
 [Theme]
 
@@ -255,11 +275,15 @@ searchResultBg = "red"
 # selected area in visual mode
 visualMode = "gray100"
 visualModeBg = "purple_1"
-# color scheme
 
-defaultChar = "gray100"
-gtKeyword = "seaGreen1_2"
-gtStringLit = "purple_1"
+# color scheme
+defaultChar = "white"
+gtKeyword = "skyBlue1"
+gtFunctionName = "gold1"
+gtBoolean = "yellow"
+gtStringLit = "yellow"
+gtSpecialVar = "green"
+gtBuiltin = "yellow"
 gtDecNumber = "aqua"
 gtComment = "gray"
 gtLongComment = "gray"
@@ -309,3 +333,7 @@ workSpaceBarBg = "blue"
 # highlight reserved words
 reservedWord = "white"
 reservedWordBg = "gray"
+
+# configuration mode
+currentSetting = "gray100"
+currentSettingBg = "teal"

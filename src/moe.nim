@@ -10,12 +10,13 @@ import moepkg/exmode
 import moepkg/buffermanager
 import moepkg/logviewer
 import moepkg/cmdlineoption
-import moepkg/settings
 import moepkg/bufferstatus
 import moepkg/help
 import moepkg/recentfilemode
-import moepkg/messages
 import moepkg/quickrun
+import moepkg/historymanager
+import moepkg/diffviewer
+import moepkg/configmode
 
 proc main() =
   let parsedList = parseCommandLineOption(commandLineParams())
@@ -25,15 +26,7 @@ proc main() =
   startUi()
 
   var status = initEditorStatus()
-
-  ## Load configuration file
-  try:
-    status.settings = loadSettingFile()
-  except:
-    let invalidItem = getCurrentExceptionMsg()
-    status.commandwindow.writeLoadConfigError(invalidItem, status.messageLog)
-    status.settings = initEditorSettings()
-
+  status.loadConfigurationFile
   status.timeConfFileLastReloaded = now()
   status.changeTheme
 
@@ -44,14 +37,10 @@ proc main() =
 
   if parsedList.len > 0:
     for p in parsedList:
-      if existsDir(p.filename):
-        try: setCurrentDir(p.filename)
-        except OSError:
-          status.commandWindow.writeFileOpenError(p.filename, status.messageLog)
-          status.addNewBuffer("")
-        status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSavetime: now()))
+      if dirExists(p.filename):
+        status.addNewBuffer(p.filename, Mode.filer)
       else: status.addNewBuffer(p.filename)
-  else: status.addNewBuffer("")
+  else: status.addNewBuffer
 
   disableControlC()
 
@@ -71,6 +60,9 @@ proc main() =
     of Mode.help: status.helpMode
     of Mode.recentFile: status.recentFileMode
     of Mode.quickRun: status.quickRunMode
+    of Mode.history: status.historyManager
+    of Mode.diff: status.diffViewer
+    of Mode.config: status.configMode
 
   status.settings.exitEditor
 

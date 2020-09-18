@@ -1,11 +1,6 @@
 import os, osproc, strformat, highlite
 import unicodeext
 
-type BuildOnSaveSettings* = object
-  enable*: bool
-  workspaceRoot*: seq[Rune]
-  command*: seq[Rune]
-
 proc build*(filename, workspaceRoot,
             command: seq[Rune],
             language: SourceLanguage): tuple[output: TaintedString, exitCode: int] =
@@ -15,7 +10,7 @@ proc build*(filename, workspaceRoot,
       currentDir = getCurrentDir()
       workspaceRoot = workspaceRoot
       cmd = if command.len > 0: $command
-            elif ($workspaceRoot).existsDir: fmt"cd {workspaceRoot} && nimble build"
+            elif ($workspaceRoot).dirExists: fmt"cd {workspaceRoot} && nimble build"
             else: fmt"nim c {filename}"
 
     result = cmd.execCmdEx

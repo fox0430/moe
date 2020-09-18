@@ -10,7 +10,7 @@ proc writeMessageOnCommandWindow*(cmdWin: var Window,
   cmdWin.refresh
 
 proc writeNoWriteError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
-  let mess = "Error: No changes since last write"
+  let mess = "Error: No write since last change"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
 
@@ -37,12 +37,12 @@ proc writeCopyFileError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
 proc writeFileOpenError*(cmdWin: var Window,
                          fileName: string,
                          messageLog: var seq[seq[Rune]]) =
-                         
+
   let mess = "Error: Can not open: " & fileName
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
 
-proc writeCreateDirError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) =
+proc writeCreateDirError*(cmdWin: var Window, messageLog: var seq[seq[Rune]]) {.inline.} =
   const mess = "Error: Can not create directory"
   messageLog.add(mess.toRunes)
 
@@ -50,7 +50,7 @@ proc writeMessageDeletedFile*(cmdWin: var Window,
                               filename: string,
                               settings: NotificationSettings,
                               messageLog: var seq[seq[Rune]]) =
-                              
+
   let mess = "Deleted: " & filename
   if settings.screenNotifications and settings.filerScreenNotify:
     cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
@@ -67,7 +67,7 @@ proc writeMessageYankedLine*(cmdWin: var Window,
                              numOfLine: int,
                              settings: NotificationSettings,
                              messageLog: var seq[seq[Rune]]) =
-                             
+
   let mess = fmt"{numOfLine} line(s) yanked"
   if settings.screenNotifications and settings.yankScreenNotify:
     cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
@@ -78,7 +78,7 @@ proc writeMessageYankedCharactor*(cmdWin: var Window,
                                   numOfChar: int,
                                   settings: NotificationSettings,
                                   messageLog: var seq[seq[Rune]]) =
-                                  
+
   let mess = fmt"{numOfChar} character(s) yanked"
   if settings.screenNotifications and settings.yankScreenNotify:
     cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
@@ -100,7 +100,7 @@ proc writeMessageAutoSave*(cmdWin: var Window,
 proc writeMessageBuildOnSave*(cmdWin: var Window,
                               settings: NotificationSettings,
                               messageLog: var seq[seq[Rune]]) =
-                              
+
   const mess = "Build on save..."
   if settings.screenNotifications and settings.buildOnSaveScreenNotify:
     cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
@@ -110,7 +110,7 @@ proc writeMessageBuildOnSave*(cmdWin: var Window,
 proc writeMessageSuccessBuildOnSave*(cmdWin: var Window,
                                      settings: NotificationSettings,
                                      messageLog: var seq[seq[Rune]]) =
-                                     
+
   const mess = "Build successful, file saved"
   if settings.screenNotifications and settings.buildOnSaveScreenNotify:
     cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
@@ -125,7 +125,7 @@ proc writeMessageFailedBuildOnSave*(cmdWin: var Window, messageLog: var seq[seq[
 proc writeNotEditorCommandError*(cmdWin: var Window,
                                  command: seq[seq[Rune]],
                                  messageLog: var seq[seq[Rune]]) =
-                                 
+
   var cmd = ""
   for i in 0 ..< command.len: cmd = cmd & $command[i] & " "
   let mess = fmt"Error: Not an editor command: {cmd}"
@@ -137,7 +137,7 @@ proc writeMessageSaveFile*(cmdWin: var Window,
                            settings: NotificationSettings,
                            messageLog: var seq[seq[Rune]]) =
 
-  
+
   let mess = fmt"Saved {filename}"
   if settings.screenNotifications and settings.saveScreenNotify:
     cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
@@ -200,6 +200,17 @@ proc writeAutoBackupSuccessMessage*(cmdWin: var Window,
   if settings.logNotifications and settings.autoBackupLogNotify:
     messageLog.add(message.toRunes)
 
+proc writeAutoBackupFailedMessage*(cmdWin: var Window,
+                                   filename: seq[Rune],
+                                   settings: NotificationSettings,
+                                   messageLog: var seq[seq[Rune]]) =
+
+  let message = fmt"Error: Automatic backups failed: {$filename}"
+  if settings.screenNotifications and settings.autoBackupScreenNotify:
+    cmdWin.writeMessageOnCommandWindow(message, EditorColorPair.errorMessage)
+  if settings.logNotifications and settings.autoBackupLogNotify:
+    messageLog.add(message.toRunes)
+
 proc writeRunQuickRunMessage*(cmdWin: var Window,
                               settings: NotificationSettings,
                               messageLog: var seq[seq[Rune]]) =
@@ -220,12 +231,19 @@ proc writeRunQuickRunFailedMessage*(cmdWin: var Window, messageLog: var seq[seq[
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
 
-proc writeLoadConfigError*(cmdWin: var Window,
+proc writeInvalidItemInConfigurationFileError*(cmdWin: var Window,
                            message: string,
                            messageLog: var seq[seq[Rune]]) =
- 
+
   let mess = "Error: Failed to load configuration file: Invalid item: " &
              message
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  messageLog.add(message.toRunes)
+
+proc writeFailedToLoadConfigurationFileError*(cmdWin: var Window,
+                           message: string,
+                           messageLog: var seq[seq[Rune]]) =
+  let mess = fmt"Error: Failed to load configuration file: {message}"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(message.toRunes)
 
@@ -233,9 +251,27 @@ proc writeNotExistWorkspaceError*(cmdWin: var Window,
                                   workspaceIndex: int,
                                   messageLog: var seq[seq[Rune]]) =
 
-  let mess = "Error: Workspace " & $workspaceIndex & " not exist" 
+  let mess = "Error: Workspace " & $workspaceIndex & " not exist"
   cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
 
-proc writeWorkspaceList*(cmdWin: var Window, buffer: string) =
+proc writeWorkspaceList*(cmdWin: var Window, buffer: string) {.inline.} =
   cmdWin.writeMessageOnCommandWindow(buffer, EditorColorPair.commandBar)
-  
+
+proc writeBackupRestoreError*(cmdWin: var Window) {.inline.} =
+  const mess = "Error: Restore failed"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+
+proc writeRestoreFileSuccessMessage*(cmdWin: var Window,
+                                     filename: seq[Rune],
+                                     settings: NotificationSettings,
+                                     messageLog: var seq[seq[Rune]]) =
+
+  let message = fmt"Restore successful {filename}"
+  if settings.screenNotifications and settings.restoreScreenNotify:
+    cmdWin.writeMessageOnCommandWindow(message, EditorColorPair.commandBar)
+  if settings.logNotifications and settings.restoreLogNotify:
+    messageLog.add(message.toRunes)
+
+proc writeDeleteBackupError*(cmdWin: var Window) {.inline.} =
+  const mess = "Error: Delete backup file failed"
+  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)

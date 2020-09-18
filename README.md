@@ -7,8 +7,7 @@ A command line based editor inspired by vi/vim written in Nim.
  
 This project's goal is a very customizable, high productivity, user friendly, high performance and funny animation editor.
 
-
-![moe](https://user-images.githubusercontent.com/15966436/86624198-df2b2800-bffd-11ea-9a37-c3caea2a3ccc.png)
+![moe](https://user-images.githubusercontent.com/15966436/93508284-5fa0ca00-f959-11ea-8282-d64f540e0c54.png)
 
 ## Features
 
@@ -26,7 +25,11 @@ This project's goal is a very customizable, high productivity, user friendly, hi
 
 - Syntax highlighting (Nim, C, C++, C#, Java, Yaml, JavaScript, Python)
 
+- Auto-complete
+
 - Configuration file (TOML)
+
+- Configuration mode (Incomplete)
 
 - Live reload of configuration file
 
@@ -68,8 +71,6 @@ This project's goal is a very customizable, high productivity, user friendly, hi
 
 ## Planned features
 
-- Configuration mode
-
 - Supports regular expression and PEG
 
 - Supports EditorConfig
@@ -77,8 +78,6 @@ This project's goal is a very customizable, high productivity, user friendly, hi
 - Window management
 
 - Syntax checker
-
-- Auto-complete
 
 - Snippets
 

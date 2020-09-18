@@ -18,10 +18,6 @@ proc initHelpModeBuffer(status: var Editorstatus) =
       line = ""
     else: line.add(ch)
 
-proc exitHelpMode(status: var Editorstatus) =
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.deleteBuffer(currentBufferIndex)
-
 proc isHelpMode(status: Editorstatus): bool =
   let
     currentMode = status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode
@@ -43,8 +39,8 @@ proc helpMode*(status: var Editorstatus) =
 
     var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
 
-    var key: Rune = ru'\0'
-    while key == ru'\0':
+    var key = errorKey
+    while key == errorKey:
       status.eventLoopTask
       key = getKey(
         status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)

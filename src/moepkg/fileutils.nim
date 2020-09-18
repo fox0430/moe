@@ -3,8 +3,10 @@ import gapbuffer, unicodeext
 
 proc normalizePath*(path: seq[Rune]): seq[Rune] =
   if path[0] == ru'~':
-    result = getHomeDir().toRunes
-    result.add(path[1..path.high])
+    if path == ru"~" or path == ru"~/":
+      result = getHomeDir().toRunes
+    else:
+      result = getHomeDir().toRunes & path[2..path.high]
   elif path == ru"./":
     return path
   elif path.len > 1 and path[0 .. 1] == ru"./":
@@ -26,7 +28,7 @@ proc openFile*(filename: seq[Rune]): tuple[text: seq[Rune],
       convert(raw, "UTF-8", $encoding).toRunes
   return (text, encoding)
 
-proc newFile*(): GapBuffer[seq[Rune]] =
+proc newFile*(): GapBuffer[seq[Rune]] {.inline.} =
   result = initGapBuffer[seq[Rune]]()
   result.add(ru"", false)
 

@@ -4,20 +4,20 @@ import gapbuffer, ui, editorstatus, unicodeext, highlight, window, movement,
 
 proc initFilelistHighlight[T](buffer: T,
                               currentLine: int): Highlight =
-  
+
   for i in 0 ..< buffer.len:
-  
+
     let color =
       if i == currentLine: EditorColorPair.currentLineNum
       else: EditorColorPair.defaultChar
-      
+
     let colorSegment = ColorSegment(
       firstRow: i,
       firstColumn: 0,
       lastRow: i,
       lastColumn: buffer[i].len,
       color: color)
-      
+
     result.colorSegments.add(colorSegment)
 
 proc setBufferList(status: var Editorstatus) =
@@ -36,7 +36,7 @@ proc setBufferList(status: var Editorstatus) =
             (prevMode == Mode.filer and
             currentMode == Mode.ex): getCurrentDir().toRunes
           else: status.bufStatus[i].path
-          
+
       status.bufStatus[currentBufferIndex].buffer.add(line)
 
 proc updateBufferManagerHighlight(status: var Editorstatus) =
@@ -98,7 +98,7 @@ proc deleteSelectedBuffer(status: var Editorstatus) =
     status.setBufferList
 
     status.resize(terminalHeight(), terminalWidth())
-  
+
 proc openSelectedBuffer(status: var Editorstatus, isNewWindow: bool) =
   let workspaceIndex = status.currentWorkSpaceIndex
   if isNewWindow:
@@ -126,14 +126,14 @@ proc bufferManager*(status: var Editorstatus) =
   while status.isBufferManagerMode and
         currentWorkSpace == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
-        
+
     let currentBufferIndex = status.bufferIndexInCurrentWindow
     status.updateBufferManagerHighlight
     status.update
     setCursor(false)
 
-    var key: Rune = ru'\0'
-    while key == ru'\0':
+    var key = errorKey
+    while key == errorKey:
       status.eventLoopTask
       key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
 

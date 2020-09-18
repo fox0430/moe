@@ -6,7 +6,7 @@ type CursorPosition* = object
 
 proc findCursorPosition*(view: EditorView,
                          line, column: int): tuple[success: bool, y, x: int] =
-                         
+
   for y in 0..view.height-1:
     if view.originalLine[y] != line: continue
     if view.start[y] <= column and column < view.start[y]+view.length[y]:
@@ -32,5 +32,5 @@ proc updatePosition(cursor: var CursorPosition,
   (success, cursor.y, cursor.x) = findCursorPosition(view, line, column)
   doAssert(success, mess)
 
-proc update*(cursor: var CursorPosition, view: EditorView, line, column: int) =
+proc update*(cursor: var CursorPosition, view: EditorView, line, column: int) {.inline.} =
   cursor.updatePosition(view, line, column)

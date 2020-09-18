@@ -10,6 +10,8 @@ Currently you can use normal mode, visual mode, replace mode, insert mode, ex mo
 - Nim 1.2.2 or higher
 - ncurses (ncursesw)
 
+### Install
+
 I recommend using nimble to install:
 
 ```
@@ -36,6 +38,18 @@ Fedora
 ```
 $ sudo dnf install ncurses-devel
 $ nimble install moe
+```
+
+### Debug build
+```
+$ cd moe
+$ nimble build
+```
+
+### Release build
+```
+$ cd moe
+$ nimble release
 ```
 
 # Test

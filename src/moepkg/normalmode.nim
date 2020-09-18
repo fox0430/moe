@@ -55,7 +55,10 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
   var windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
 
   status.bufStatus[currentBufferIndex].keyRight(windowNode)
-  let searchResult = status.searchBuffer(keyword)
+  let
+    ignorecase = status.settings.ignorecase
+    smartcase = status.settings.smartcase
+    searchResult = status.searchBuffer(keyword, ignorecase, smartcase)
   if searchResult.line > -1:
     status.jumpLine(searchResult.line)
     for column in 0 ..< searchResult.column:
@@ -67,7 +70,7 @@ proc searchNextOccurrence(status: var EditorStatus) =
 
   let keyword = status.searchHistory[status.searchHistory.high]
 
-  searchNextOccurrence(status, keyword)
+  status.searchNextOccurrence(keyword)
 
 proc searchNextOccurrenceReversely(status: var EditorStatus, keyword: seq[Rune]) =
   let
@@ -80,7 +83,10 @@ proc searchNextOccurrenceReversely(status: var EditorStatus, keyword: seq[Rune])
   var windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
 
   windowNode.keyLeft
-  let searchResult = status.searchBufferReversely(keyword)
+  let
+    ignorecase = status.settings.ignorecase
+    smartcase = status.settings.smartcase
+    searchResult = status.searchBufferReversely(keyword, ignorecase, smartcase)
   if searchResult.line > -1:
     status.jumpLine(searchResult.line)
     for column in 0 ..< searchResult.column:
@@ -94,7 +100,6 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) =
   let keyword = status.searchHistory[status.searchHistory.high]
 
   searchNextOccurrenceReversely(status, keyword)
-
 
 proc turnOffHighlighting*(status: var EditorStatus) =
   let
@@ -113,7 +118,7 @@ proc writeFileAndExit(status: var EditorStatus) =
     try:
       saveFile(status.bufStatus[currentBufferIndex].path,
                status.bufStatus[currentBufferIndex].buffer.toRunes,
-               status.settings.characterEncoding)
+               status.bufStatus[currentBufferIndex].characterEncoding)
       let workspaceIndex = status.currentWorkSpaceIndex
       status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
     except IOError:
@@ -707,8 +712,8 @@ proc normalMode*(status: var EditorStatus) =
 
     status.update
 
-    var key: Rune = ru'\0'
-    while key == ru'\0':
+    var key = errorKey
+    while key == errorKey:
       status.eventLoopTask
       key = getKey(
         status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)

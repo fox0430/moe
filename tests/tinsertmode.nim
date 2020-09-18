@@ -1,6 +1,5 @@
-import unittest
-import moepkg/editorstatus, moepkg/gapbuffer, moepkg/unicodeext,
-       moepkg/highlight
+import unittest, options
+import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, suggestionwindow]
 include moepkg/insertmode
 
 suite "Insert mode":
@@ -121,8 +120,8 @@ suite "Insert mode":
     status.workspace[0].currentMainWindowNode.currentColumn = 4
 
     status.bufStatus[0].deleteWordBeforeCursor(
-      status.workSpace[0].currentMainWindowNode
-    )
+      status.workSpace[0].currentMainWindowNode,
+      status.settings.tabStop)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
@@ -134,8 +133,8 @@ suite "Insert mode":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
     status.bufStatus[0].deleteWordBeforeCursor(
-      status.workSpace[0].currentMainWindowNode
-    )
+      status.workSpace[0].currentMainWindowNode,
+      status.settings.tabStop)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
@@ -149,8 +148,8 @@ suite "Insert mode":
     status.workspace[0].currentMainWindowNode.currentLine = 1
 
     status.bufStatus[0].deleteWordBeforeCursor(
-      status.workSpace[0].currentMainWindowNode
-    )
+      status.workSpace[0].currentMainWindowNode,
+      status.settings.tabStop)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
@@ -238,3 +237,78 @@ suite "Insert mode":
     status.bufStatus[0].moveToLastOfLine(status.workspace[0].currentMainWindowNode)
 
     check status.workspace[0].currentMainWindowNode.currentColumn == 3
+
+  test "General-purpose autocomplete window position 1":
+    const buffer = @[ru"a", ru"aba", ru"abb", ru"abc", ru"abd", ru"abe", ru"abf"]
+    var status = initEditorStatus()
+    status.addNewBuffer(Mode.insert)
+    status.bufStatus[0].buffer = initGapBuffer(buffer)
+    status.workspace[0].currentMainWindowNode.currentColumn = 1
+
+    var suggestionWindow = none(SuggestionWindow)
+
+    status.resize(100, 100)
+    status.update
+
+    suggestionWindow = tryOpenSuggestionWindow(currentBufStatus, currentMainWindow)
+    let
+      mainWindowHeight = status.settings.getMainWindowHeight(100)
+      (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
+        currentMainWindow,
+        mainWindowHeight)
+
+    suggestionWindow.get.writeSuggestionWindow(y, x)
+
+    check y == 2
+    check x == 1
+
+  test "General-purpose autocomplete window position 2":
+    const buffer = @[ru"aba", ru"abb", ru"abc", ru"abcd", ru"", ru"a"]
+    var status = initEditorStatus()
+    status.addNewBuffer(Mode.insert)
+    status.bufStatus[0].buffer = initGapBuffer(buffer)
+    status.workspace[0].currentMainWindowNode.currentLine = buffer.high
+    status.workspace[0].currentMainWindowNode.currentColumn = 1
+
+    var suggestionWindow = none(SuggestionWindow)
+
+    const terminalHeight = 10
+
+    status.resize(terminalHeight, 100)
+    status.update
+
+    suggestionWindow = tryOpenSuggestionWindow(currentBufStatus, currentMainWindow)
+    let
+      mainWindowHeight = status.settings.getMainWindowHeight(terminalHeight)
+      (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
+        currentMainWindow,
+        mainWindowHeight)
+
+    suggestionWindow.get.writeSuggestionWindow(y, x)
+
+    check y == 2
+    check x == 1
+
+  test "General-purpose autocomplete (Fix #1032)":
+    const buffer = @[
+      ru"import os, unicode, times",
+      ru"import"]
+
+    var status = initEditorStatus()
+    status.addNewBuffer(Mode.insert)
+    status.bufStatus[0].buffer = initGapBuffer(buffer)
+    status.workspace[0].currentMainWindowNode.currentColumn = 1
+
+    var suggestionWindow = none(SuggestionWindow)
+
+    status.resize(100, 100)
+    status.update
+
+    suggestionWindow = tryOpenSuggestionWindow(currentBufStatus, currentMainWindow)
+    let
+      mainWindowHeight = status.settings.getMainWindowHeight(100)
+      (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
+        currentMainWindow,
+        mainWindowHeight)
+
+    suggestionWindow.get.writeSuggestionWindow(y, x)

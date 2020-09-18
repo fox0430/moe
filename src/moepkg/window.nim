@@ -45,13 +45,13 @@ proc initWindowNode*(): WindowNode =
   node.window.setTimeout()
   return root
 
-proc newWindow(): Window =
+proc newWindow(): Window {.inline.} =
   result = initWindow(1, 1, 0, 0, EditorColorPair.defaultChar)
   result.setTimeout()
 
 proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
   var parent = n.parent
-  
+
   if parent.splitType == SplitType.vertical:
     var
       view = initEditorView(buffer, 1, 1)
@@ -154,11 +154,11 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
     return node1
 
 proc resize*(root: WindowNode, y, x, height, width: int) =
-  var qeue = initHeapQueue[WindowNode]()
-  var windowIndex = 0
- 
-  const statusBarHeight = 1
-   
+  var
+    qeue = initHeapQueue[WindowNode]()
+    windowIndex = 0
+  const statusBarLineHeight = 1
+
   for index, node in root.child:
     if root.splitType == SplitType.vertical:
       ## Vertical split
@@ -193,7 +193,7 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
 
     if node.window != nil:
       ## Resize curses window
-      node.window.resize(node.h - statusBarHeight, node.w, node.y, node.x)
+      node.window.resize(node.h - statusBarLineHeight, node.w, node.y, node.x)
       ## Set windowIndex
       node.windowIndex = windowIndex
       inc(windowIndex)
@@ -242,7 +242,11 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
 
       if child.window != nil:
         # Resize curses window
-        child.window.resize(child.h - statusBarHeight, child.w, child.y, child.x)
+        child.window.resize(
+          child.h - statusBarLineHeight,
+          child.w,
+          child.y,
+          child.x)
         # Set windowIndex
         child.windowIndex = windowIndex
         inc(windowIndex)
@@ -306,3 +310,10 @@ proc countReferencedWindow*(root: WindowNode, bufferIndex: int): int =
 
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
+
+proc absolutePosition*(windowNode: WindowNode,
+                       line, column: int): tuple[y, x: int] =
+
+  ## Calculates the absolute position of (`line`, `column`).
+  let (_, relativeY, relativeX) = windowNode.view.findCursorPosition(line, column)
+  return (windowNode.y + relativeY, windowNode.x + relativeX + windowNode.view.widthOfLineNum)

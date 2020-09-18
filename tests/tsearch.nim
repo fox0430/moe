@@ -5,36 +5,84 @@ include moepkg/search
 
 suite "search.nim: searchLine":
   test "searchLine":
-    let line = ru"abc efg hijkl"
-    let position = line.searchLine(ru"ijk")
+    let
+      line = ru"abc efg hijkl"
+      ignorecase = true
+      smartcase = true
+      position = line.searchLine(ru"ijk", ignorecase, smartcase)
 
     check(position == 9)
 
   test "searchLine 2":
-      let line = ru"abc efg hijkl"
-      let position = line.searchLine(ru"xyz")
+    let
+      line = ru"abc efg hijkl"
+      ignorecase = true
+      smartcase = true
+      position = line.searchLine(ru"xyz", ignorecase, smartcase)
+
+    check(position == -1)
+
+  test "Enable ignorecase, disable smartcase":
+    let
+      line = ru"Editor editor"
+      ignorecase = true
+      smartcase = true
+      position = line.searchLine(ru"editor", ignorecase, smartcase)
+
+    check(position == 0)
+
+  test "Enable ignorecase and smartcase":
+    block:
+      let
+        line = ru"editor Editor"
+        ignorecase = true
+        smartcase = true
+        position = line.searchLine(ru"Editor", ignorecase, smartcase)
+
+      check(position == 7)
+
+    block:
+      let
+        line = ru"editor Editor"
+        ignorecase = true
+        smartcase = true
+        position = line.searchLine(ru"editor", ignorecase, smartcase)
+
+      check(position == 0)
+
+  test "Disable ignorecase":
+    let
+      line = ru"Editor"
+      ignorecase = false
+      smartcase = false
+      position = line.searchLine(ru"editor", ignorecase, smartcase)
   
-      check(position == -1)
+    check(position == -1)
   
 suite "search.nim: searchLineReversely":
   test "searchLineReversely":
-      let line = ru"abc efg hijkl"
-      let position = line.searchLineReversely(ru"ijk")
+    let
+      line = ru"abc efg hijkl"
+      ignorecase = true
+      smartcase = true
+      position = line.searchLineReversely(ru"ijk", ignorecase, smartcase)
   
-      check(position == 9)
+    check(position == 9)
   
   test "searchLineReversely 2":
       let
         line = ru"abc efg hijkl"
         keyword = ru"xyz"
-        position = line.searchLineReversely(keyword)
+        ignorecase = true
+        smartcase = true
+        position = line.searchLineReversely(keyword, ignorecase, smartcase)
   
       check(position == -1)
 
 suite "search.nim: searchBuffer":
   test "searchBuffer":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     let
       line1 = ru"abc def"
@@ -44,14 +92,16 @@ suite "search.nim: searchBuffer":
 
     let
       keyword = ru"i j"
-      searchResult = status.searchBuffer(keyword)
+      ignorecase = true
+      smartcase = true
+      searchResult = status.searchBuffer(keyword, ignorecase, smartcase)
 
     check(searchResult.line == 1)
     check(searchResult.column == 2)
 
   test "searchBuffer 2":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     let
       line1 = ru"abc def"
@@ -61,7 +111,9 @@ suite "search.nim: searchBuffer":
 
     let
       keyword = ru"xyz"
-      searchResult = status.searchBuffer(keyword)
+      ignorecase = true
+      smartcase = true
+      searchResult = status.searchBuffer(keyword, ignorecase, smartcase)
 
     check(searchResult.line == -1)
     check(searchResult.column == -1)
@@ -69,7 +121,7 @@ suite "search.nim: searchBuffer":
 suite "search.nim: searchBufferReversely":
   test "searchBufferReversely":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     let
       line1 = ru"abc def"
@@ -79,14 +131,19 @@ suite "search.nim: searchBufferReversely":
 
     let
       keyword = ru"i j"
-      searchResult = status.searchBufferReversely(keyword)
+      ignorecase = true
+      smartcase = true
+      searchResult = status.searchBufferReversely(
+        keyword,
+        ignorecase,
+        smartcase)
 
     check(searchResult.line == 1)
     check(searchResult.column == 2)
 
   test "searchBufferReversely 2":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     let
       line1 = ru"abc def"
@@ -96,7 +153,12 @@ suite "search.nim: searchBufferReversely":
 
     let
       keyword = ru"xyz"
-      searchResult = status.searchBufferReversely(keyword)
+      ignorecase = true
+      smartcase = true
+      searchResult = status.searchBufferReversely(
+        keyword,
+        ignorecase,
+        smartcase)
 
     check(searchResult.line == -1)
     check(searchResult.column == -1)
@@ -104,7 +166,7 @@ suite "search.nim: searchBufferReversely":
 suite "search.nim: searchAllOccurrence":
   test "searchAllOccurrence":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     let
       line1 = ru"abc def"
@@ -115,7 +177,9 @@ suite "search.nim: searchAllOccurrence":
     let
       keyword = ru"abc"
       buffer = status.bufStatus[0].buffer
-      searchResult = buffer.searchAllOccurrence(keyword)
+      ignorecase = true
+      smartcase = true
+      searchResult = buffer.searchAllOccurrence(keyword, ignorecase, smartcase)
 
     check(searchResult.len == 3)
 
@@ -130,7 +194,7 @@ suite "search.nim: searchAllOccurrence":
 
   test "searchAllOccurrence 2":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     let
       line1 = ru"abc def"
@@ -141,14 +205,16 @@ suite "search.nim: searchAllOccurrence":
     let
       keyword = ru"xyz"
       buffer = status.bufStatus[0].buffer
-      searchResult = buffer.searchAllOccurrence(keyword)
+      ignorecase = true
+      smartcase = true
+      searchResult = buffer.searchAllOccurrence(keyword, ignorecase, smartcase)
 
     check(searchResult.len == 0)
 
 suite "search.nim: jumpToSearchForwardResults":
   test "jumpToSearchForwardResults":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.workspace[0].currentMainWindowNode.currentColumn = 1
 
@@ -166,7 +232,7 @@ suite "search.nim: jumpToSearchForwardResults":
 
   test "jumpToSearchForwardResults 2":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.workspace[0].currentMainWindowNode.currentColumn = 1
 
@@ -185,7 +251,7 @@ suite "search.nim: jumpToSearchForwardResults":
 suite "search.nim: jumpToSearchBackwordResults":
   test "jumpToSearchBackwordResults":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.workspace[0].currentMainWindowNode.currentLine = 1
 
@@ -203,7 +269,7 @@ suite "search.nim: jumpToSearchBackwordResults":
 
   test "jumpToSearchBackwordResults 2":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.workspace[0].currentMainWindowNode.currentColumn = 1
 

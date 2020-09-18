@@ -26,7 +26,9 @@ type FilerStatus = object
   dirList: seq[PathInfo]
   sortBy: Sort
 
-proc searchFiles(status: var EditorStatus, dirList: seq[PathInfo]): seq[PathInfo] =
+proc searchFiles(status: var EditorStatus,
+                 dirList: seq[PathInfo]): seq[PathInfo] =
+
   setCursor(true)
   let command = getCommand(status, "/")
 
@@ -81,23 +83,25 @@ when defined(posix):
   from posix import nil
   from posix_utils import nil
 
-  proc isFifo(file: string): bool = posix.S_ISFIFO(posix_utils.stat(file).st_mode)
+  proc isFifo(file: string): bool {.inline.} =
+    posix.S_ISFIFO(posix_utils.stat(file).st_mode)
 else:
-  proc isFifo(file: string): bool = false
+  proc isFifo(file: string): bool {.inline.} = false
 
-proc refreshDirList(sortBy: Sort): seq[PathInfo] =
+proc refreshDirList(path: seq[Rune], sortBy: Sort): seq[PathInfo] =
   var
     dirList  : seq[PathInfo]
     fileList : seq[PathInfo]
 
-  for list in walkDir($CurDir):
+  for list in walkDir($path):
     proc getLastModificationTimeOrDefault(file: string): times.Time =
       try: getLastModificationTime(file)
       except OSError: initTime(0,0)
 
     proc getFileSizeOrDefault(file: string): int64 =
       try:
-        # `getFileSize` opens files internally. So if `file` is a named pipe, we don't call `getFileSize` to avoid opening named pipes.
+        # `getFileSize` opens files internally. So if `file` is a named pipe,
+        # we don't call `getFileSize` to avoid opening named pipes.
         if isFifo(file): return 0.int64
 
         getFileSize(file)
@@ -134,10 +138,10 @@ proc refreshDirList(sortBy: Sort): seq[PathInfo] =
     pcDir,
     ParDir,
     0.int64,
-    getLastModificationTime(getCurrentDir()))] &
+    getLastModificationTime($path))] &
     sortDirList(dirList, sortBy) & sortDirList(fileList, sortBy)
 
-proc initFileRegister(): FileRegister =
+proc initFileRegister(): FileRegister {.inline.} =
   result.copy = false
   result.cut= false
   result.originPath = ""
@@ -145,15 +149,19 @@ proc initFileRegister(): FileRegister =
 
 proc initFilerStatus*(): FilerStatus =
   result.register = initFileRegister()
+  #result.currentPath = getCurrentDir().toRunes
   result.viewUpdate = true
   result.dirlistUpdate = true
   result.dirList = newSeq[PathInfo]()
   result.sortBy = name
   result.searchMode = false
 
-proc updateDirList*(filerStatus: var FilerStatus): FilerStatus =
+proc updateDirList*(filerStatus: var FilerStatus,
+                    path: seq[Rune]): FilerStatus =
+
   filerStatus.dirList = @[]
-  filerStatus.dirList.add refreshDirList(filerStatus.sortBy)
+  filerStatus.dirList.add(refreshDirList(path, filerStatus.sortBy))
+
   filerStatus.viewUpdate = true
   filerStatus.dirlistUpdate = false
   return filerStatus
@@ -176,27 +184,34 @@ proc moveToLastOfList(filerStatus: var FilerStatus, currentLine: var int) =
   currentLine = filerStatus.dirList.high
   filerStatus.viewUpdate = true
 
-proc copyFile(filerStatus: var FilerStatus, currentLine: int) =
+proc copyFile(filerStatus: var FilerStatus,
+              currentLine: int,
+              currentPath: seq[Rune]) =
+
   filerStatus.register.copy = true
   filerStatus.register.cut = false
   filerStatus.register.filename = filerStatus.dirList[currentLine].path
   let path = filerStatus.dirList[currentLine].path
-  filerStatus.register.originPath = getCurrentDir() / path
+  filerStatus.register.originPath = $currentPath / path
 
-proc cutFile(filerStatus: var FilerStatus, currentLine: int) =
+proc cutFile(filerStatus: var FilerStatus,
+             currentLine: int,
+             currentPath: seq[Rune]) =
+
   filerStatus.register.copy = false
   filerStatus.register.cut = true
   let path = filerStatus.dirList[currentLine].path
   filerStatus.register.filename = path
-  filerStatus.register.originPath = getCurrentDir() / path
+  filerStatus.register.originPath = $currentPath / path
 
 proc pasteFile(commandWindow: var Window,
                filerStatus: var FilerStatus,
+               currentPath: seq[Rune],
                messageLog: var seq[seq[Rune]]) =
 
   try:
     let filename = filerStatus.register.filename
-    copyFile(filerStatus.register.originPath, getCurrentDir() / filename)
+    copyFile(filerStatus.register.originPath, $currentPath / filename)
     filerStatus.dirlistUpdate = true
     filerStatus.viewUpdate = true
   except OSError:
@@ -216,24 +231,56 @@ proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
     createDir($dirname[0])
     filerStatus.dirlistUpdate = true
   except OSError: status.commandWindow.writeCreateDirError(status.messageLog)
-   
+
 proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   let workspaceIndex = status.currentWorkSpaceIndex
   var windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
   let
     kind = filerStatus.dirList[windowNode.currentLine].kind
     path = filerStatus.dirList[windowNode.currentLine].path
+    bufferIndex = windowNode.bufferIndex
 
   case kind
-  of pcFile, pcLinkToFile:
-    addNewBuffer(status, path)
-  of pcDir, pcLinkToDir:
-    try:
-      setCurrentDir(path)
-      filerStatus.dirlistUpdate = true
-    except OSError: status.commandWindow.writeFileOpenError(path, status.messageLog)
+    of pcFile, pcLinkToFile:
+      addNewBuffer(status, path)
+    of pcDir, pcLinkToDir:
+      let currentPath = status.bufStatus[bufferIndex].path
+      if path == "..":
+        if not isRootDir($currentPath):
+          let parentDir = parentDir($currentPath).toRunes
+          status.bufStatus[bufferIndex].path = parentDir
+      else:
+        status.bufStatus[bufferIndex].path = path.toRunes
 
-proc setDirListColor(kind: PathComponent, isCurrentLine: bool): EditorColorPair =
+      filerStatus.dirlistUpdate = true
+
+proc openNewWinAndOpenFilerOrDir(status: var EditorStatus,
+                                 filerStatus: var FilerStatus) =
+
+  let
+    workspaceIndex = status.currentWorkSpaceIndex
+    windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
+    path = filerStatus.dirList[windowNode.currentLine].path
+
+  status.verticalSplitWindow
+  status.resize(terminalHeight(), terminalWidth())
+  status.moveNextWindow
+
+  if dirExists($path):
+    try:
+      setCurrentDir($path)
+    except OSError:
+      status.commandWindow.writeFileOpenError($path, status.messageLog)
+      status.addNewBuffer("")
+    status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSaveTime: now()))
+  else:
+    status.addNewBuffer($path)
+
+    status.changeCurrentBuffer(status.bufStatus.high)
+
+proc setDirListColor(kind: PathComponent,
+                     isCurrentLine: bool): EditorColorPair =
+
   if isCurrentLine: result = EditorColorPair.currentFile
   else:
     case kind
@@ -241,7 +288,10 @@ proc setDirListColor(kind: PathComponent, isCurrentLine: bool): EditorColorPair 
     of pcDir: result = EditorColorPair.dir
     of pcLinkToDir, pcLinkToFile: result = EditorColorPair.pcLink
 
-proc initFilelistHighlight[T](dirList: seq[PathInfo], buffer: T, currentLine: int): Highlight =
+proc initFilelistHighlight[T](dirList: seq[PathInfo],
+                              buffer: T,
+                              currentLine: int): Highlight =
+
   for index, dir in dirList:
     let color = setDirListColor(dir.kind, index == currentLine)
     result.colorSegments.add(ColorSegment(firstRow: index,
@@ -251,7 +301,7 @@ proc initFilelistHighlight[T](dirList: seq[PathInfo], buffer: T, currentLine: in
                                           color: color))
 
 proc pathToIcon(path: string): seq[Rune] =
-  if existsDir(path):
+  if dirExists(path):
     return ru"📁 "
 
   # Not sure if this is a perfect solution,
@@ -343,7 +393,10 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus,
       filename = dir.path
       kind = dir.kind
 
-    var newLine =  filename.toRunes
+    var newLine = if kind == pcLinkToFile or kind == pcLinkToDir:
+                    filename.toRunes
+                  else:
+                    toRunes(splitPath(filename).tail)
     case kind
     of pcFile:
       try:
@@ -362,10 +415,14 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus,
 
     bufStatus.buffer.add(newLine)
 
-  let useStatusBar = if settings.statusBar.useBar: 1 else: 0
+  let useStatusBar = if settings.statusBar.enable: 1 else: 0
   let numOfFile = filerStatus.dirList.len
-  windowNode.highlight = initFilelistHighlight(filerStatus.dirList, bufStatus.buffer, windowNode.currentLine)
-  windowNode.view = initEditorView(bufStatus.buffer, terminalHeight() - useStatusBar - 1, terminalWidth() - numOfFile)
+  windowNode.highlight = initFilelistHighlight(filerStatus.dirList,
+                                               bufStatus.buffer,
+                                               windowNode.currentLine)
+  windowNode.view = initEditorView(bufStatus.buffer,
+                                   terminalHeight() - useStatusBar - 1,
+                                   terminalWidth() - numOfFile)
 
 proc updateFilerView*(status: var EditorStatus, filerStatus: var FilerStatus) =
   let
@@ -420,7 +477,7 @@ proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string)
 
   var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
   let
-    useStatusBar = if status.settings.statusBar.useBar: 1 else: 0
+    useStatusBar = if status.settings.statusBar.enable: 1 else: 0
     tmpCurrentLine = windowNode.currentLine
 
   windowNode.view = initEditorView(
@@ -482,18 +539,25 @@ proc filerMode*(status: var EditorStatus) =
 
     let currentBufferIndex = status.bufferIndexInCurrentWindow
 
-    var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+    var windowNode =
+        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
 
     if filerStatus.dirlistUpdate:
-      filerStatus = updateDirList(filerStatus)
-      windowNode.currentLine = 0
+      let
+        bufStatus = status.bufStatus[currentBufferIndex]
+        path = bufStatus.path
 
-    if filerStatus.viewUpdate: updateFilerView(status, filerStatus)
+      filerStatus = filerStatus.updateDirList(path)
+
+      if windowNode.currentLine > filerStatus.dirList.high:
+        windowNode.currentLine = filerStatus.dirList.high
+
+    if filerStatus.viewUpdate: status.updateFilerView(filerStatus)
 
     setCursor(false)
 
-    var key: Rune = ru'\0'
-    while key == ru'\0':
+    var key = errorKey
+    while key == errorKey:
       status.eventLoopTask
       key = getKey(
         status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
@@ -502,7 +566,9 @@ proc filerMode*(status: var EditorStatus) =
 
     status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
     status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(windowNode)
-    
+
+    let currentPath = status.bufStatus[currentBufferIndex].path
+
     if key == ord(':'): status.changeMode(Mode.ex)
 
     elif isResizekey(key):
@@ -532,15 +598,20 @@ proc filerMode*(status: var EditorStatus) =
     elif key == ord('G'):
       filerStatus.moveToLastOfList(windowNode.currentLine)
     elif key == ord('y'):
-      filerStatus.copyFile(windowNode.currentLine)
+      filerStatus.copyFile(windowNode.currentLine, currentPath)
     elif key == ord('C'):
-      filerStatus.cutFile(windowNode.currentLine)
+      filerStatus.cutFile(windowNode.currentLine, currentPath)
     elif key == ord('p'):
-      status.commandWindow.pasteFile(filerStatus, status.messageLog)
+      status.commandWindow.pasteFile(
+        filerStatus,
+        currentPath,
+        status.messageLog)
     elif key == ord('s'):
       filerStatus.changeSortBy
     elif key == ord('N'):
       status.createDir(filerStatus)
+    elif key == ord('v'):
+      status.openNewWinAndOpenFilerOrDir(filerStatus)
     elif isControlJ(key):
       status.movePrevWindow
     elif isControlK(key):

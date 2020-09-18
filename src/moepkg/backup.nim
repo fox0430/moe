@@ -4,7 +4,7 @@ import settings, unicodeext, fileutils, bufferstatus, ui, gapbuffer, messages
 type AutoBackupStatus* = object
   lastBackupTime*: DateTime
 
-proc initAutoBackupStatus*(): AutoBackupStatus =
+proc initAutoBackupStatus*(): AutoBackupStatus {.inline.} =
   result.lastBackupTime = now()
 
 proc generateFilename(filename: seq[Rune], time: DateTime): seq[Rune] =
@@ -33,7 +33,7 @@ proc checkAndCreateBackupDir(path: seq[Rune],
     else:
       result = ru".history"
 
-  if not existsDir($result):
+  if not dirExists($result):
     try: createDir($result)
     except OSError: result = @[]
 
@@ -75,17 +75,27 @@ proc backupBuffer*(bufStatus: BufferStatus,
   if bufStatus.path.len == 0: return
 
   let
+    sourceFilePath = absolutePath($bufStatus.path)
+    sourceFileDir = (sourceFilePath.splitPath).head
+    dirToExclude = autoBackupSettings.dirToExclude
+  if dirToExclude.contains(ru sourceFileDir): return
+
+  let
     backupFilename = bufStatus.path.generateFilename(now())
     dir = bufStatus.path.checkAndCreateBackupDir(autoBackupSettings.backupDir)
+  if dir.len == 0:
+    cmdWin.writeAutoBackupFailedMessage(backupFilename,
+                                        notificationSettings,
+                                        messageLog)
+    return
 
-  if dir.len > 0:
-    let
-      path = dir / backupFilename
-      isSame = diffWithBackup(path, $bufStatus.buffer)
-    if not isSame:
-      cmdWin.writeStartAutoBackupMessage(notificationSettings, messageLog)
+  let
+    path = dir / backupFilename
+    isSame = diffWithBackup(path, $bufStatus.buffer)
+  if not isSame:
+    cmdWin.writeStartAutoBackupMessage(notificationSettings, messageLog)
 
-      saveFile(path, bufStatus.buffer.toRunes, encoding)
+    saveFile(path, bufStatus.buffer.toRunes, encoding)
 
-      let message = "Automatic backup successful: " & $path
-      cmdWin.writeAutoBackupSuccessMessage(message, notificationSettings, messageLog)
+    let message = "Automatic backup successful: " & $path
+    cmdWin.writeAutoBackupSuccessMessage(message, notificationSettings, messageLog)

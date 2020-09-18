@@ -13,7 +13,10 @@ type Mode* = enum
   logViewer,
   help,
   recentFile,
-  quickRun
+  quickRun,
+  history,
+  diff,
+  config
 
 type SelectArea* = object
   startLine*: int
@@ -23,6 +26,7 @@ type SelectArea* = object
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
+  characterEncoding*: CharacterEncoding
   language*: SourceLanguage
   selectArea*: SelectArea
   isSearchHighlight*: bool
@@ -34,3 +38,18 @@ type BufferStatus* = object
   mode* : Mode
   prevMode* : Mode
   lastSaveTime*: DateTime
+
+proc isVisualMode*(mode: Mode): bool {.inline.} =
+  mode == Mode.visual or mode == Mode.visualBlock
+
+proc isFilerMode*(mode, prevMode: Mode): bool {.inline.} =
+  (mode == Mode.filer) or (mode == Mode.ex and prevMode == Mode.filer)
+
+proc isHistoryManagerMode*(mode, prevMode: Mode): bool {.inline.} =
+  (mode == Mode.history) or (mode == Mode.ex and prevMode == Mode.history)
+
+proc isDiffViewerMode*(mode, prevMode: Mode): bool {.inline.} =
+  (mode == Mode.diff) or (mode == Mode.ex and prevMode == Mode.diff)
+
+proc isConfigMode*(mode, prevMode: Mode): bool {.inline.} =
+  (mode == Mode.config) or (mode == Mode.ex and prevMode == Mode.config)
