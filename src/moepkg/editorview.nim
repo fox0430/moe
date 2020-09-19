@@ -39,9 +39,7 @@ proc reload*[T](view: var EditorView, buffer: T, topLine: int) =
 
   view.updated = true
 
-  let
-    height = view.height
-    width = view.width
+  let height = view.height
 
   const empty = ru""
   for x in view.originalLine.mitems: x = -1
@@ -265,7 +263,6 @@ proc writeAllLines*[T](view: var EditorView,
 
       block:
         let
-          firstStr = $first
           lastStr = $last
           lineStr = $view.lines[y]
         assert(last <= view.lines[y].high,

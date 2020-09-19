@@ -476,9 +476,6 @@ proc generalStrLit(g: var GeneralTokenizer, position: int): int =
 proc isKeyword(x: openArray[string], y: string): int =
   binarySearch(x, y)
 
-proc isKeywordIgnoreCase(x: openArray[string], y: string): int =
-  binarySearch(x, y, cmpIgnoreCase)
-
 type
   TokenizerFlag = enum
     hasPreprocessor, hasNestedComments

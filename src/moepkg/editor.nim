@@ -608,7 +608,7 @@ proc sendToClipboad*(registers: Registers, platform: Platform) =
   case platform
     of linux:
       ## Check if X server is running
-      let (output, exitCode) = execCmdEx("xset q")
+      let (_, exitCode) = execCmdEx("xset q")
       if exitCode == 0:
         let cmd = "xclip -r <<" & "'" & delimiterStr & "'" & "\n" & buffer & "\n" & delimiterStr & "\n"
         discard execShellCmd(cmd)

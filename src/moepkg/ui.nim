@@ -23,7 +23,7 @@ type CursorType* = enum
   noneBlinkIbeam = 3
 
 type Window* = ref object
-  cursesWindow*: ptr window
+  cursesWindow*: PWindow
   height*, width*: int
   y*, x*: int
 
