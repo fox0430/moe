@@ -366,316 +366,317 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
   # This is currently optimized and tested for the Forest Focus theme
   # and even for that theme it only produces a partial and imperfect
   # translation
-  expandMacros:
-    setEditorColor editorBg:
-      background:
-        colorFromNode(jsonNode{"colors", "editor.background"})
+  when defined isExpandMacros:
+    expandMacros:
+      setEditorColor editorBg:
+        background:
+          colorFromNode(jsonNode{"colors", "editor.background"})
 
-    # Color scheme
-    setEditorColor defaultChar:
-      foreground:
-        colorFromNode(jsonNode{"colors", "editor.foreground"})
-    setEditorColor gtKeyword:
-      foreground:
-        colorFromNode(getScope("keyword"){"foreground"})
-    setEditorColor gtFunctionName:
-      foreground:
-        colorFromNode(getScope("entity"){"foreground"})
-    setEditorColor gtBoolean:
-      foreground:
-        colorFromNode(getScope("entity"){"foreground"})
-    setEditorColor gtSpecialVar:
-      foreground:
-        colorFromNode(getScope("variable"){"foreground"})
-    setEditorColor gtBuiltin:
-      foreground:
-        colorFromNode(getScope("entity"){"foreground"})
-    setEditorColor gtStringLit:
-      foreground:
-        colorFromNode(getScope("string"){"foreground"})
-    setEditorColor gtDecNumber:
-      foreground:
-        colorFromNode(getScope("constant"){"foreground"})
-    setEditorColor gtComment:
-      foreground:
-        colorFromNode(getScope("comment"){"foreground"})
-    setEditorColor gtLongComment:
-      foreground:
-        colorFromNode(getScope("comment"){"foreground"})
-    setEditorColor gtWhitespace:
-      foreground:
-        colorFromNode(jsonNode{"colors", "editorWhitespace.foreground"})
+      # Color scheme
+      setEditorColor defaultChar:
+        foreground:
+          colorFromNode(jsonNode{"colors", "editor.foreground"})
+      setEditorColor gtKeyword:
+        foreground:
+          colorFromNode(getScope("keyword"){"foreground"})
+      setEditorColor gtFunctionName:
+        foreground:
+          colorFromNode(getScope("entity"){"foreground"})
+      setEditorColor gtBoolean:
+        foreground:
+          colorFromNode(getScope("entity"){"foreground"})
+      setEditorColor gtSpecialVar:
+        foreground:
+          colorFromNode(getScope("variable"){"foreground"})
+      setEditorColor gtBuiltin:
+        foreground:
+          colorFromNode(getScope("entity"){"foreground"})
+      setEditorColor gtStringLit:
+        foreground:
+          colorFromNode(getScope("string"){"foreground"})
+      setEditorColor gtDecNumber:
+        foreground:
+          colorFromNode(getScope("constant"){"foreground"})
+      setEditorColor gtComment:
+        foreground:
+          colorFromNode(getScope("comment"){"foreground"})
+      setEditorColor gtLongComment:
+        foreground:
+          colorFromNode(getScope("comment"){"foreground"})
+      setEditorColor gtWhitespace:
+        foreground:
+          colorFromNode(jsonNode{"colors", "editorWhitespace.foreground"})
 
-    # status bar
-    setEditorColor statusBarNormalMode:
-      foreground:
-        colorFromNode(jsonNode{"colors", "editor.foreground"})
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarModeNormalMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarNormalModeInactive:
-      foreground:
-        colorFromNode(jsonNode{"colors", "statusBar.foreground"})
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "editor.background"})
-    setEditorColor statusBarInsertMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarModeInsertMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        white
-    setEditorColor statusBarInsertModeInactive:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarVisualMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarModeVisualMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        white
-    setEditorColor statusBarVisualModeInactive:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarReplaceMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarModeReplaceMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        white
-    setEditorColor statusBarReplaceModeInactive:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarFilerMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarModeFilerMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        white
-    setEditorColor statusBarFilerModeInactive:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarExMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarModeExMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        white
-    setEditorColor statusBarExModeInactive:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarGitBranch:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    # command  bar
-    setEditorColor commandBar:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        Color.default
-    # error message
-    setEditorColor errorMessage:
-      foreground:
-        colorFromNode(getScope("console.error"){"foreground"})
-      background:
-        Color.default
-    setEditorColor currentTab:
-      foreground:
-        colorFromNode(jsonNode{"colors", "tab.foreground"})
-      background:
-        colorFromNode(jsonNode{"colors", "tab.activeBackground"})
+      # status bar
+      setEditorColor statusBarNormalMode:
+        foreground:
+          colorFromNode(jsonNode{"colors", "editor.foreground"})
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "statusBar.background"})
+      setEditorColor statusBarModeNormalMode:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "statusBar.background"})
+      setEditorColor statusBarNormalModeInactive:
+        foreground:
+          colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "editor.background"})
+      setEditorColor statusBarInsertMode:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "statusBar.background"})
+      setEditorColor statusBarModeInsertMode:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          white
+      setEditorColor statusBarInsertModeInactive:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "statusBar.background"})
+      setEditorColor statusBarVisualMode:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "statusBar.background"})
+      setEditorColor statusBarModeVisualMode:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          white
+      setEditorColor statusBarVisualModeInactive:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "statusBar.background"})
+      setEditorColor statusBarReplaceMode:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "statusBar.background"})
+      setEditorColor statusBarModeReplaceMode:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          white
+      setEditorColor statusBarReplaceModeInactive:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "statusBar.background"})
+      setEditorColor statusBarFilerMode:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "statusBar.background"})
+      setEditorColor statusBarModeFilerMode:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          white
+      setEditorColor statusBarFilerModeInactive:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "statusBar.background"})
+      setEditorColor statusBarExMode:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "statusBar.background"})
+      setEditorColor statusBarModeExMode:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          white
+      setEditorColor statusBarExModeInactive:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "statusBar.background"})
+      setEditorColor statusBarGitBranch:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "statusBar.background"})
+      # command  bar
+      setEditorColor commandBar:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          Color.default
+      # error message
+      setEditorColor errorMessage:
+        foreground:
+          colorFromNode(getScope("console.error"){"foreground"})
+        background:
+          Color.default
+      setEditorColor currentTab:
+        foreground:
+          colorFromNode(jsonNode{"colors", "tab.foreground"})
+        background:
+          colorFromNode(jsonNode{"colors", "tab.activeBackground"})
 
-    setEditorColor tab:
-      foreground:
-        colorFromNode(jsonNode{"colors", "tab.foreground"})
-      background:
-        colorFromNode(jsonNode{"colors", "tab.inactiveBackground"})
+      setEditorColor tab:
+        foreground:
+          colorFromNode(jsonNode{"colors", "tab.foreground"})
+        background:
+          colorFromNode(jsonNode{"colors", "tab.inactiveBackground"})
 
-    setEditorColor lineNum:
-      foreground:
-        colorFromNode(jsonNode{"colors", "editorLineNumber.foreground"})
-        adjust: InverseBackground
-      background:
-        colorFromNode(jsonNode{"colors", "editorLineNumber.background"})
+      setEditorColor lineNum:
+        foreground:
+          colorFromNode(jsonNode{"colors", "editorLineNumber.foreground"})
+          adjust: InverseBackground
+        background:
+          colorFromNode(jsonNode{"colors", "editorLineNumber.background"})
 
-    setEditorColor currentLineNum:
-      foreground:
-        colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
-      background:
-        colorFromNode(jsonNode{"colors", "editor.background"})
+      setEditorColor currentLineNum:
+        foreground:
+          colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
+        background:
+          colorFromNode(jsonNode{"colors", "editor.background"})
 
-    setEditorColor pcLink:
-      foreground:
-        colorFromNode(getScope("hyperlink"){"foreground"})
-        adjust: ReadableVsBackground
-      background:
-        Color.default
+      setEditorColor pcLink:
+        foreground:
+          colorFromNode(getScope("hyperlink"){"foreground"})
+          adjust: ReadableVsBackground
+        background:
+          Color.default
 
-    # highlight other uses current word
-    setEditorColor currentWord:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
+      # highlight other uses current word
+      setEditorColor currentWord:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
 
-    setEditorColor popUpWinCurrentLine:
-      foreground:
-        colorFromNode(jsonNode{"colors", "sideBarTitle.forground"})
-      background:
-        colorFromNode(jsonNode{"colors", "sideBarSectionHeader.background"})
+      setEditorColor popUpWinCurrentLine:
+        foreground:
+          colorFromNode(jsonNode{"colors", "sideBarTitle.forground"})
+        background:
+          colorFromNode(jsonNode{"colors", "sideBarSectionHeader.background"})
 
-    # pop up window
-    setEditorColor popUpWindow:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "sideBar.background"})
-    setEditorColor popUpWinCurrentLine:
-      foreground:
-        colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "sideBar.background"})
+      # pop up window
+      setEditorColor popUpWindow:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "sideBar.background"})
+      setEditorColor popUpWinCurrentLine:
+        foreground:
+          colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "sideBar.background"})
 
-    # pair of paren highlighting
-    setEditorColor parenText:
-      foreground:
-        colorFromNode(getScope("unnamedScope"){"bracketsForeground"})
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
+      # pair of paren highlighting
+      setEditorColor parenText:
+        foreground:
+          colorFromNode(getScope("unnamedScope"){"bracketsForeground"})
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
 
-    # replace text highlighting
-    setEditorColor replaceText:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors",
-          "gitDecoration.conflictingResourceForeground"})
+      # replace text highlighting
+      setEditorColor replaceText:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors",
+            "gitDecoration.conflictingResourceForeground"})
 
-    # filer mode
-    setEditorColor currentFile:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
-    setEditorColor file:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        Color.default
-    setEditorColor dir:
-      foreground:
-        colorFromNode(getScope("hyperlink"){"foreground"})
-        adjust: ReadableVsBackground
-      background:
-        Color.default
+      # filer mode
+      setEditorColor currentFile:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
+      setEditorColor file:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          Color.default
+      setEditorColor dir:
+        foreground:
+          colorFromNode(getScope("hyperlink"){"foreground"})
+          adjust: ReadableVsBackground
+        background:
+          Color.default
 
-    # highlight full width space
-    setEditorColor highlightFullWidthSpace:
-      foreground:
-        colorFromNode(jsonNode{"colors", "tab.activeBorder"})
-      background:
-        colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+      # highlight full width space
+      setEditorColor highlightFullWidthSpace:
+        foreground:
+          colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+        background:
+          colorFromNode(jsonNode{"colors", "tab.activeBorder"})
 
-    # highlight trailing spaces
-    setEditorColor highlightTrailingSpaces:
-      foreground:
-        colorFromNode(jsonNode{"colors", "tab.activeBorder"})
-      background:
-        colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+      # highlight trailing spaces
+      setEditorColor highlightTrailingSpaces:
+        foreground:
+          colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+        background:
+          colorFromNode(jsonNode{"colors", "tab.activeBorder"})
 
-    # highlight diff
-    setEditorColor addedLine:
-      foreground:
-        colorFromNode(jsonNode{"colors", "diff.inserted"})
-      background:
-        colorFromNode(jsonNode{"colors", "editor.background"})
-    setEditorColor deletedLine:
-      foreground:
-        colorFromNode(jsonNode{"colors", "diff.deleted"})
-      background:
-        colorFromNode(jsonNode{"colors", "editor.background"})
+      # highlight diff
+      setEditorColor addedLine:
+        foreground:
+          colorFromNode(jsonNode{"colors", "diff.inserted"})
+        background:
+          colorFromNode(jsonNode{"colors", "editor.background"})
+      setEditorColor deletedLine:
+        foreground:
+          colorFromNode(jsonNode{"colors", "diff.deleted"})
+        background:
+          colorFromNode(jsonNode{"colors", "editor.background"})
 
-    # work space bar
-    setEditorColor workSpaceBar:
-      foreground:
-        colorFromNode(jsonNode{"colors", "activityBar.foreground"})
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "activityBar.background"})
-    setEditorColor reservedWord:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "activityBarBadge.background"})
+      # work space bar
+      setEditorColor workSpaceBar:
+        foreground:
+          colorFromNode(jsonNode{"colors", "activityBar.foreground"})
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "activityBar.background"})
+      setEditorColor reservedWord:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "activityBarBadge.background"})
 
-    # search result highlighting
-    setEditorColor searchResult:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+      # search result highlighting
+      setEditorColor searchResult:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "tab.activeBorder"})
 
-    # selected area in visual mode
-    setEditorColor visualMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+      # selected area in visual mode
+      setEditorColor visualMode:
+        foreground:
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "tab.activeBorder"})
 
-    # History manager
-    setEditorColor currentHistory:
-      foreground:
-        colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "editor.background"})
+      # History manager
+      setEditorColor currentHistory:
+        foreground:
+          colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "editor.background"})
 
-  # Configuration mode
-    setEditorColor currentSetting:
-      foreground:
-        colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "editor.background"})
+    # Configuration mode
+      setEditorColor currentSetting:
+        foreground:
+          colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
+          adjust: ReadableVsBackground
+        background:
+          colorFromNode(jsonNode{"colors", "editor.background"})
 
 proc loadVSCodeTheme*(): ColorTheme =
   # search for the vscode theme that is set in the current preferences of
