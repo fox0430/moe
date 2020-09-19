@@ -168,9 +168,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
   status.resizeMainWindowNode(height, width)
 
   const statusBarHeight = 1
-  let
-    workspaceIndex = status.currentWorkSpaceIndex
-    enableCommandLine = if not status.settings.statusBar.merge: true else: false
+  let workspaceIndex = status.currentWorkSpaceIndex
   var
     statusBarIndex = 0
     queue = initHeapQueue[WindowNode]()
@@ -203,7 +201,6 @@ proc resize*(status: var EditorStatus, height, width: int) =
         let
           isMergeStatusBar = status.settings.statusBar.merge
           enableStatusBar = status.settings.statusBar.enable
-          isMultipleStatusBar = status.settings.statusBar.multipleStatusBar
           mode = status.bufStatus[bufIndex].mode
         if enableStatusBar and
            (not isMergeStatusBar or
@@ -254,8 +251,6 @@ proc resize*(status: var EditorStatus, height, width: int) =
     status.workSpaceTabWindow.resize(workSpaceBarHeight, width, y, x)
 
   ## Resize tab line window
-  let bufferIndex = status.bufferIndexInCurrentWindow
-
   if status.settings.tabLine.useTab:
     const
       tabLineHeight = 1
