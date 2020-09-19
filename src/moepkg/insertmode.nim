@@ -58,6 +58,7 @@ proc insertMode*(status: var EditorStatus) =
       else:
         if suggestionWindow.get.isLineChanged:
           currentBufStatus.buffer[currentMainWindow.currentLine] = suggestionWindow.get.newLine
+          windowNode.expandedColumn = windowNode.currentColumn
         suggestionWindow.get.close
         suggestionWindow = none(SuggestionWindow)
 

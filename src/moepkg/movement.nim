@@ -308,10 +308,6 @@ proc moveToForwardEndOfWord*(bufStatus: var BufferStatus, windowNode: var Window
 
   windowNode.expandedColumn = windowNode.currentColumn
 
-proc moveToForwardAfterWord*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
-  moveToForwardEndOfWord(bufStatus, windowNode)
-  keyRight(bufStatus, windowNode)
-
 proc moveCenterScreen*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   if windowNode.currentLine > int(windowNode.view.height / 2):
     if windowNode.cursor.y > int(windowNode.view.height / 2):

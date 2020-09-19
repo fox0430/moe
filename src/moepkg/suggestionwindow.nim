@@ -1,6 +1,6 @@
-import critbits, unicode, sugar, options, sequtils
+import critbits, unicode, sugar, options, sequtils, strformat
 import ui, window, generalautocomplete, bufferstatus, gapbuffer, unicodeext,
-       color, editorstatus, movement
+       color, editorstatus
 
 type SuggestionWindow* = object
   wordDictionary: CritBitTree[void]
@@ -60,11 +60,10 @@ proc handleKeyInSuggestionWindow*(
   if suggestionWindow.selectedSuggestion != prevSuggestion:
     # The selected suggestoin is changed.
     # Update the buffer without recording the change.
-    bufStatus.moveToBackwardWord(windowNode)
     bufStatus.buffer.assign(suggestionWindow.newLine,
                             windowNode.currentLine,
                             false)
-    bufStatus.moveToForwardAfterWord(windowNode)
+    windowNode.currentColumn = suggestionWindow.firstColumn + suggestionWindow.selectedWordOrInputWord.len
 
 proc initSuggestionWindow*(
   text, word, currentLineText: seq[Rune],
@@ -112,12 +111,12 @@ proc buildSuggestionWindow*(bufStatus: BufferStatus,
   # Eliminate the word on the cursor.
   let
     line = windowNode.currentLine
-    column = windowNode.currentColumn - 1
-    lastDeletedIndex = bufStatus.buffer.calcIndexInEntireBuffer(
+    column = firstColumn
+    firstDeletedIndex = bufStatus.buffer.calcIndexInEntireBuffer(
       line,
       column,
       true)
-    firstDeletedIndex = max(lastDeletedIndex - word.len + 1, 0)
+    lastDeletedIndex = firstDeletedIndex + word.len - 1
     text = bufStatus.buffer.toRunes.dup(
       delete(firstDeletedIndex, lastDeletedIndex))
 
