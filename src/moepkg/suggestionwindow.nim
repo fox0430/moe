@@ -87,7 +87,7 @@ proc initSuggestionWindow*(
 
   return some(suggestionWindow)
 
-proc extractWordAfterCursor(
+proc extractWordBeforeCursor(
   bufStatus: BufferStatus,
   windowNode: WindowNode): Option[tuple[word: seq[Rune], first, last: int]] =
 
@@ -95,17 +95,17 @@ proc extractWordAfterCursor(
   extractNeighborWord(bufStatus.buffer[windowNode.currentLine],
                       windowNode.currentColumn - 1)
 
-proc wordExistsAfterCursor(bufStatus: BufferStatus,
+proc wordExistsBeforeCursor(bufStatus: BufferStatus,
                            windowNode: WindowNode): bool =
 
   if windowNode.currentColumn == 0: return false
-  let wordFirstLast = extractWordAfterCursor(bufStatus, windowNode)
+  let wordFirstLast = extractWordBeforeCursor(bufStatus, windowNode)
   wordFirstLast.isSome and wordFirstLast.get.word.len > 0
 
 proc buildSuggestionWindow*(bufStatus: BufferStatus,
                             windowNode: WindowNode): Option[SuggestionWindow] =
 
-  let (word, firstColumn, lastColumn) = extractWordAfterCursor(
+  let (word, firstColumn, lastColumn) = extractWordBeforeCursor(
     bufStatus,
     windowNode).get
 
@@ -132,7 +132,7 @@ proc tryOpenSuggestionWindow*(
   bufStatus: BufferStatus,
   windowNode: WindowNode): Option[SuggestionWindow] =
 
-  if wordExistsAfterCursor(bufStatus, windowNode):
+  if wordExistsBeforeCursor(bufStatus, windowNode):
     return buildSuggestionWindow(bufStatus, windowNode)
 
 proc calcSuggestionWindowPosition*(
