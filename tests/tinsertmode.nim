@@ -312,3 +312,54 @@ suite "Insert mode":
         mainWindowHeight)
 
     suggestionWindow.get.writeSuggestionWindow(y, x)
+
+  test "General-purpose autocomplete (the cursor position): Selecting a suggestion which is length 1 when the buffer contains some lines.":
+    const buffer = @[
+      ru"",
+      ru"",
+      ru"a"]
+
+    var status = initEditorStatus()
+    status.addNewBuffer(Mode.insert)
+    status.bufStatus[0].buffer = initGapBuffer(buffer)
+
+    status.resize(100, 100)
+    status.update
+
+    insertCharacter(currentBufStatus,
+                    currentMainWindow,
+                    status.settings.autoCloseParen,
+                    ru'a')
+    var suggestionWindow = tryOpenSuggestionWindow(currentBufStatus,
+                                                   currentMainWindow)
+    status.update
+
+    suggestionWindow.get.handleKeyInSuggestionWindow(currentBufStatus,
+                                                     currentMainWindow,
+                                                     ru'\t')
+
+    check currentMainWindow.currentLine == 0
+
+  test "General-purpose autocomplete (the cursor position): Selecting a suggestion which is length 1 when the buffer contains a line.":
+    const buffer = @[ru" a"]
+
+    var status = initEditorStatus()
+    status.addNewBuffer(Mode.insert)
+    status.bufStatus[0].buffer = initGapBuffer(buffer)
+
+    status.resize(100, 100)
+    status.update
+
+    insertCharacter(currentBufStatus,
+                    currentMainWindow,
+                    status.settings.autoCloseParen,
+                    ru'a')
+    var suggestionWindow = tryOpenSuggestionWindow(currentBufStatus,
+                                                   currentMainWindow)
+    status.update
+
+    suggestionWindow.get.handleKeyInSuggestionWindow(currentBufStatus,
+                                                     currentMainWindow,
+                                                     ru'\t')
+
+    check currentMainWindow.currentColumn == 1
