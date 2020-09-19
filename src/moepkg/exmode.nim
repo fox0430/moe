@@ -1,4 +1,4 @@
-import sequtils, strutils, os, terminal, highlite, times
+import sequtils, strutils, os, terminal, highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
         unicodeext, independentutils, search, highlight, commandview,
         window, movement, color, build, bufferstatus, editor,
@@ -36,7 +36,6 @@ proc isDeleteTrailingSpacesCommand(command: seq[seq[Rune]]): bool {.inline.} =
          cmpIgnoreCase($command[0], "deletetrailingspaces") == 0
 
 proc isOpenHelpCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  let cmd = toLowerAscii($command[0])
   return command.len == 1 and cmpIgnoreCase($command[0], "help") == 0
 
 proc isOpenMessageLogViweer(command: seq[seq[Rune]]): bool {.inline.} =
@@ -46,7 +45,6 @@ proc isOpenBufferManager(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 1 and cmpIgnoreCase($command[0], "buf") == 0
 
 proc isChangeCursorLineCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  let cmd = toLowerAscii($command[0])
   return command.len == 2 and cmpIgnoreCase($command[0], "cursorline") == 0
 
 proc isListAllBufferCommand(command: seq[seq[Rune]]): bool {.inline.} =
@@ -241,7 +239,6 @@ proc isNewEmptyBufferInSplitWindowVertically(command: seq[seq[Rune]]): bool {.in
   return command.len == 1 and cmpIgnoreCase($command[0], "vnew") == 0
 
 proc isQuickRunCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  let cmd = toLowerAscii($command[0])
   return command.len == 1 and
          (cmpIgnoreCase($command[0], "run") == 0 or command[0] == ru"Q")
 
