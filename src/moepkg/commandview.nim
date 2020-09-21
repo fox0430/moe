@@ -109,6 +109,24 @@ proc askDeleteBackupPrompt*(cmdWin: var Window,
   if key == ord('y'): result = true
   else: result = false
 
+proc askFileChangedSinceReading*(cmdWin: var Window,
+                                 messageLog: var seq[seq[Rune]]): bool =
+
+  block:
+    const warnMess = "WARNING: The file has been changed since reading it!: Press any key"
+    cmdWin.writeMessageOnCommandWindow(warnMess, EditorColorPair.errorMessage)
+    messageLog.add(warnMess.toRunes)
+    discard getKey(cmdWin)
+
+  block:
+    const askMess = "Do you really want to write to it: y/n ?"
+    cmdWin.writeMessageOnCommandWindow(askMess, EditorColorPair.commandBar)
+    messageLog.add(askMess.toRunes)
+    let key = getKey(cmdWin)
+
+    if key == ord('y'): result = true
+    else: result = false
+
 proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
   for i in 0 .. r.high:
     var string = $r[i]
