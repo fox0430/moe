@@ -78,34 +78,59 @@ suite "Editor: Send to clipboad":
     const str = ru"Clipboard test"
     const registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
 
-    const platform = editorstatus.Platform.linux
+    let platform = editorstatus.Platform(initPlatform())
     sendToClipboad(registers, platform)
 
-    let (output, exitCode) = execCmdEx("xclip -o")
+    if (platform == editorstatus.Platform.linux or
+        platform == editorstatus.Platform.wsl):
+      let
+        cmd = if platform == editorstatus.Platform.linux:
+                execCmdEx("xclip -o")
+              else:
+                # On the WSL
+                execCmdEx("powershell.exe -Command Get-Clipboard")
+        (output, exitCode) = cmd
 
-    check exitCode == 0 and output[0 .. output.high - 1] == "Clipboard test"
+      check exitCode == 0 and output[0 .. output.high - 1] == "Clipboard test"
 
   test "Send string to clipboard 2":
     const str = ru"`````"
     const registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
 
-    const platform = editorstatus.Platform.linux
+    let platform = editorstatus.Platform(initPlatform())
     registers.sendToClipboad(platform)
 
-    let (output, exitCode) = execCmdEx("xclip -o")
+    if (platform == editorstatus.Platform.linux or
+        platform == editorstatus.Platform.wsl):
+      let
+        cmd = if platform == editorstatus.Platform.linux:
+                execCmdEx("xclip -o")
+              else:
+                # On the WSL
+                execCmdEx("powershell.exe -Command Get-Clipboard")
+        (output, exitCode) = cmd
 
-    check exitCode == 0 and output[0 .. output.high - 1] == "`````"
+      check exitCode == 0 and output[0 .. output.high - 1] == "`````"
 
   test "Send string to clipboard 3":
     const str = ru"$Clipboard test"
     const registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
 
-    const platform = editorstatus.Platform.linux
+    let platform = editorstatus.Platform(initPlatform())
     registers.sendToClipboad(platform)
 
-    let (output, exitCode) = execCmdEx("xclip -o")
+    if (platform == editorstatus.Platform.linux or
+        platform == editorstatus.Platform.wsl):
+      let
+        cmd = if platform == editorstatus.Platform.linux:
+                execCmdEx("xclip -o")
+              else:
 
-    check exitCode == 0 and output[0 .. output.high - 1] == "$Clipboard test"
+                # On the WSL
+                execCmdEx("powershell.exe -Command Get-Clipboard")
+        (output, exitCode) = cmd
+
+      check exitCode == 0 and output[0 .. output.high - 1] == "$Clipboard test"
 
 suite "Editor: Delete word":
   test "Fix #842":
