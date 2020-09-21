@@ -767,3 +767,18 @@ suite "Ex mode: e command":
 
     check status.bufStatus[1].mode == Mode.filer
     check status.bufStatus[1].path == (ru getCurrentDir()) & ru"/"
+
+suite "Ex mode: q command":
+  test "Run q command when opening multiple windows (#1056)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    status.resize(100, 100)
+
+    status.verticalSplitWindow
+    status.resize(100, 100)
+    status.changeMode(Mode.ex)
+
+    const command = @[ru"q"]
+    status.exModeCommand(command)
+
+    check status.bufStatus[0].mode == Mode.normal
