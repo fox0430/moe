@@ -887,9 +887,13 @@ proc quitCommand(status: var EditorStatus) =
   if status.bufStatus[currentBufferIndex].prevMode != Mode.normal:
     status.deleteBuffer(currentBufferIndex)
   else:
-    if status.bufStatus[currentBufferIndex].countChange == 0 or
-       status.workSpace[workspaceIndex].mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
+    let
+      node = status.workSpace[workspaceIndex].mainWindowNode
+      numberReferenced = node.countReferencedWindow(currentBufferIndex)
+      countChange = status.bufStatus[currentBufferIndex].countChange
+    if countChange == 0 or numberReferenced > 1:
       status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
+      status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
     else:
       status.commandWindow.writeNoWriteError(status.messageLog)
       status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
