@@ -834,15 +834,16 @@ proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
     return
 
   # Check if the file has been overwritten by another application
-  let
-    lastSaveTimeOfBuffer = status.bufStatus[bufferIndex].lastSaveTime.toTime
-    lastModificationTimeOfFile = getLastModificationTime($path)
-  if fileExists($path) and lastModificationTimeOfFile > lastSaveTimeOfBuffer:
-    if not status.commandWindow.askFileChangedSinceReading(status.messageLog):
-      # Cancel overwrite
-      status.changeMode(status.bufStatus[bufferIndex].prevMode)
-      status.commandWindow.erase
-      return
+  if fileExists($path):
+    let
+      lastSaveTimeOfBuffer = status.bufStatus[bufferIndex].lastSaveTime.toTime
+      lastModificationTimeOfFile = getLastModificationTime($path)
+    if lastModificationTimeOfFile > lastSaveTimeOfBuffer:
+      if not status.commandWindow.askFileChangedSinceReading(status.messageLog):
+        # Cancel overwrite
+        status.changeMode(status.bufStatus[bufferIndex].prevMode)
+        status.commandWindow.erase
+        return
 
   ## Ask if you want to create a directory that does not exist
   if not status.commandWindow.checkAndCreateDir(status.messageLog, path):
@@ -900,15 +901,16 @@ proc writeAndQuitCommand(status: var EditorStatus) =
     path = status.bufStatus[bufferIndex].path
 
   # Check if the file has been overwritten by another application
-  let
-    lastSaveTimeOfBuffer = status.bufStatus[bufferIndex].lastSaveTime.toTime
-    lastModificationTimeOfFile = getLastModificationTime($path)
-  if fileExists($path) and lastModificationTimeOfFile > lastSaveTimeOfBuffer:
-    if not status.commandWindow.askFileChangedSinceReading(status.messageLog):
-      # Cancel overwrite
-      status.changeMode(status.bufStatus[bufferIndex].prevMode)
-      status.commandWindow.erase
-      return
+  if fileExists($path):
+    let
+      lastSaveTimeOfBuffer = status.bufStatus[bufferIndex].lastSaveTime.toTime
+      lastModificationTimeOfFile = getLastModificationTime($path)
+    if lastModificationTimeOfFile > lastSaveTimeOfBuffer:
+      if not status.commandWindow.askFileChangedSinceReading(status.messageLog):
+        # Cancel overwrite
+        status.changeMode(status.bufStatus[bufferIndex].prevMode)
+        status.commandWindow.erase
+        return
 
   ## Ask if you want to create a directory that does not exist
   if not status.commandWindow.checkAndCreateDir(status.messageLog, path):
@@ -944,17 +946,6 @@ proc allBufferQuitCommand(status: var EditorStatus) =
       bufferIndex = node.bufferIndex
       path = status.bufStatus[bufferIndex].path
 
-    # Check if the file has been overwritten by another application
-    let
-      lastSaveTimeOfBuffer = status.bufStatus[bufferIndex].lastSaveTime.toTime
-      lastModificationTimeOfFile = getLastModificationTime($path)
-    if fileExists($path) and lastModificationTimeOfFile > lastSaveTimeOfBuffer:
-      if not status.commandWindow.askFileChangedSinceReading(status.messageLog):
-        # Cancel overwrite
-        status.changeMode(status.bufStatus[bufferIndex].prevMode)
-        status.commandWindow.erase
-        return
-
     if status.bufStatus[node.bufferIndex].countChange > 0:
       status.commandWindow.writeNoWriteError(status.messageLog)
       status.changeMode(Mode.normal)
@@ -968,15 +959,28 @@ proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
   let bufferIndex = status.bufferIndexInCurrentWindow
 
   for bufStatus in status.bufStatus:
-    let filename = bufStatus.path
+    let path = bufStatus.path
+
+    # Check if the file has been overwritten by another application
+    if fileExists($path):
+      let
+        lastSaveTimeOfBuffer = status.bufStatus[bufferIndex].lastSaveTime.toTime
+        lastModificationTimeOfFile = getLastModificationTime($path)
+      if lastModificationTimeOfFile > lastSaveTimeOfBuffer:
+        if not status.commandWindow.askFileChangedSinceReading(status.messageLog):
+          # Cancel overwrite
+          status.changeMode(status.bufStatus[bufferIndex].prevMode)
+          status.commandWindow.erase
+          return
+
     ## Ask if you want to create a directory that does not exist
-    if not status.commandWindow.checkAndCreateDir(status.messageLog, filename):
+    if not status.commandWindow.checkAndCreateDir(status.messageLog, path):
       status.changeMode(status.bufStatus[bufferIndex].prevMode)
       status.commandWindow.writeSaveError(status.messageLog)
       return
 
     try:
-      saveFile(filename,
+      saveFile(path,
                bufStatus.buffer.toRunes,
                bufStatus.characterEncoding)
     except IOError:
