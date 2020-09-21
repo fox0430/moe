@@ -596,11 +596,9 @@ proc deletePopUpWindow*(status: var Editorstatus) =
     status.update
 
 proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode) =
-  let path = if mode == Mode.filer: absolutePath(filename) else: filename
+  let path = if mode == Mode.filer: ru absolutePath(filename) else: ru filename
 
-  status.bufStatus.add(BufferStatus(path: path.toRunes,
-                                    mode: mode,
-                                    lastSaveTime: now()))
+  status.bufStatus.add(initBufferStatus(path, mode))
 
   let index = status.bufStatus.high
 

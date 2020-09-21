@@ -1,4 +1,4 @@
-import sequtils, strutils, os, terminal, highlite
+import sequtils, strutils, os, terminal, highlite, times
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
         unicodeext, independentutils, search, highlight, commandview,
         window, movement, color, build, bufferstatus, editor,
@@ -825,43 +825,60 @@ proc checkAndCreateDir(cmdWin: var Window,
       try: createDir(pathSplit.head)
       except OSError: result = false
 
-proc writeCommand(status: var EditorStatus, filename: seq[Rune]) =
-  if filename.len == 0:
+proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
+  let bufferIndex = status.bufferIndexInCurrentWindow
+
+  if path.len == 0:
     status.commandWindow.writeNoFileNameError(status.messageLog)
-    status.changeMode(Mode.normal)
+    status.changeMode(status.bufStatus[bufferIndex].prevMode)
     return
 
+  # Check if the file has been overwritten by another application
+  if fileExists($path):
+    let
+      lastSaveTimeOfBuffer = status.bufStatus[bufferIndex].lastSaveTime.toTime
+      lastModificationTimeOfFile = getLastModificationTime($path)
+    if lastModificationTimeOfFile > lastSaveTimeOfBuffer:
+      if not status.commandWindow.askFileChangedSinceReading(status.messageLog):
+        # Cancel overwrite
+        status.changeMode(status.bufStatus[bufferIndex].prevMode)
+        status.commandWindow.erase
+        return
+
   ## Ask if you want to create a directory that does not exist
-  if not status.commandWindow.checkAndCreateDir(status.messageLog, filename):
-    status.changeMode(Mode.normal)
+  if not status.commandWindow.checkAndCreateDir(status.messageLog, path):
+    status.changeMode(status.bufStatus[bufferIndex].prevMode)
     status.commandWindow.writeSaveError(status.messageLog)
     return
 
   try:
-    let currentBufferIndex = status.bufferIndexInCurrentWindow
-    saveFile(filename,
-             status.bufStatus[currentBufferIndex].buffer.toRunes,
-             status.bufStatus[currentBufferIndex].characterEncoding)
-    let
-      workspaceIndex = status.currentWorkSpaceIndex
-      bufferIndex = status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
-
-    if status.bufStatus[bufferIndex].path != filename:
-      status.bufStatus[bufferIndex].path = filename
-      status.bufStatus[bufferIndex].language = detectLanguage($filename)
-
-    status.bufStatus[currentBufferIndex].countChange = 0
-
-    if status.settings.buildOnSave.enable: status.buildOnSave
-    else:
-      status.commandWindow.writeMessageSaveFile(filename,
-                                                status.settings.notificationSettings,
-                                                status.messageLog)
-
+    saveFile(path,
+             status.bufStatus[bufferIndex].buffer.toRunes,
+             status.bufStatus[bufferIndex].characterEncoding)
   except IOError:
     status.commandWindow.writeSaveError(status.messageLog)
 
-  status.changeMode(Mode.normal)
+  let workspaceIndex = status.currentWorkSpaceIndex
+
+  if status.bufStatus[bufferIndex].path != path:
+    status.bufStatus[bufferIndex].path = path
+    status.bufStatus[bufferIndex].language = detectLanguage($path)
+
+  # Build on save
+  if status.settings.buildOnSave.enable:
+    try:
+      status.buildOnSave
+    except IOError:
+      status.commandWindow.writeSaveError(status.messageLog)
+  else:
+      status.commandWindow.writeMessageSaveFile(
+        path,
+        status.settings.notificationSettings,
+        status.messageLog)
+
+  status.bufStatus[bufferIndex].countChange = 0
+  status.bufStatus[bufferIndex].lastSaveTime = now()
+  status.changeMode(status.bufStatus[bufferIndex].prevMode)
 
 proc quitCommand(status: var EditorStatus) =
   let
@@ -879,37 +896,56 @@ proc quitCommand(status: var EditorStatus) =
 
 proc writeAndQuitCommand(status: var EditorStatus) =
   let
-    currentBufferIndex = status.bufferIndexInCurrentWindow
+    bufferIndex = status.bufferIndexInCurrentWindow
     workspaceIndex = status.currentWorkSpaceIndex
-    filename = status.bufStatus[currentBufferIndex].path
+    path = status.bufStatus[bufferIndex].path
+
+  # Check if the file has been overwritten by another application
+  if fileExists($path):
+    let
+      lastSaveTimeOfBuffer = status.bufStatus[bufferIndex].lastSaveTime.toTime
+      lastModificationTimeOfFile = getLastModificationTime($path)
+    if lastModificationTimeOfFile > lastSaveTimeOfBuffer:
+      if not status.commandWindow.askFileChangedSinceReading(status.messageLog):
+        # Cancel overwrite
+        status.changeMode(status.bufStatus[bufferIndex].prevMode)
+        status.commandWindow.erase
+        return
 
   ## Ask if you want to create a directory that does not exist
-  if not status.commandWindow.checkAndCreateDir(status.messageLog, filename):
-    status.changeMode(Mode.normal)
+  if not status.commandWindow.checkAndCreateDir(status.messageLog, path):
+    status.changeMode(status.bufStatus[bufferIndex].prevMode)
     status.commandWindow.writeSaveError(status.messageLog)
     return
 
   try:
-    status.bufStatus[currentBufferIndex].countChange = 0
-    saveFile(filename,
-             status.bufStatus[currentBufferIndex].buffer.toRunes,
-             status.bufStatus[currentBufferIndex].characterEncoding)
-
-    status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
+    saveFile(path,
+             status.bufStatus[bufferIndex].buffer.toRunes,
+             status.bufStatus[bufferIndex].characterEncoding)
   except IOError:
     status.commandWindow.writeSaveError(status.messageLog)
+    status.changeMode(status.bufStatus[bufferIndex].prevMode)
+    return
 
-  status.changeMode(Mode.normal)
+  status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
+
+  status.changeMode(status.bufStatus[bufferIndex].prevMode)
 
 proc forceQuitCommand(status: var EditorStatus) =
-  let workspaceIndex = status.currentWorkSpaceIndex
+  let
+    workspaceIndex = status.currentWorkSpaceIndex
+    bufferIndex = status.bufferIndexInCurrentWindow
   status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
-  status.changeMode(Mode.normal)
+  status.changeMode(status.bufStatus[bufferIndex].prevMode)
 
 proc allBufferQuitCommand(status: var EditorStatus) =
   let workspaceIndex = status.currentWorkSpaceIndex
   for i in 0 ..< status.workSpace[workspaceIndex].numOfMainWindow:
-    let node = status.workSpace[workspaceIndex].mainWindowNode.searchByWindowIndex(i)
+    let
+      node = status.workSpace[workspaceIndex].mainWindowNode.searchByWindowIndex(i)
+      bufferIndex = node.bufferIndex
+      path = status.bufStatus[bufferIndex].path
+
     if status.bufStatus[node.bufferIndex].countChange > 0:
       status.commandWindow.writeNoWriteError(status.messageLog)
       status.changeMode(Mode.normal)
@@ -920,21 +956,36 @@ proc allBufferQuitCommand(status: var EditorStatus) =
 proc forceAllBufferQuitCommand(status: var EditorStatus) {.inline.} = exitEditor(status.settings)
 
 proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
+  let bufferIndex = status.bufferIndexInCurrentWindow
+
   for bufStatus in status.bufStatus:
-    let filename = bufStatus.path
+    let path = bufStatus.path
+
+    # Check if the file has been overwritten by another application
+    if fileExists($path):
+      let
+        lastSaveTimeOfBuffer = status.bufStatus[bufferIndex].lastSaveTime.toTime
+        lastModificationTimeOfFile = getLastModificationTime($path)
+      if lastModificationTimeOfFile > lastSaveTimeOfBuffer:
+        if not status.commandWindow.askFileChangedSinceReading(status.messageLog):
+          # Cancel overwrite
+          status.changeMode(status.bufStatus[bufferIndex].prevMode)
+          status.commandWindow.erase
+          return
+
     ## Ask if you want to create a directory that does not exist
-    if not status.commandWindow.checkAndCreateDir(status.messageLog, filename):
-      status.changeMode(Mode.normal)
+    if not status.commandWindow.checkAndCreateDir(status.messageLog, path):
+      status.changeMode(status.bufStatus[bufferIndex].prevMode)
       status.commandWindow.writeSaveError(status.messageLog)
       return
 
     try:
-      saveFile(filename,
+      saveFile(path,
                bufStatus.buffer.toRunes,
                bufStatus.characterEncoding)
     except IOError:
       status.commandWindow.writeSaveError(status.messageLog)
-      status.changeMode(Mode.normal)
+      status.changeMode(status.bufStatus[bufferIndex].prevMode)
       return
 
   exitEditor(status.settings)
