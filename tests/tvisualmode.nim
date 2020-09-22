@@ -1,5 +1,5 @@
 import unittest, osproc
-import moepkg/[gapbuffer, unicodeext, highlight, movement, bufferstatus]
+import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, movement, bufferstatus]
 include moepkg/[visualmode]
 
 suite "Visual mode: Delete buffer":
@@ -439,10 +439,10 @@ test "Visual mode: Yank buffer (Enable clipboard) 1":
     status.platform,
     clipboard)
 
-  if (platform == editorstatus.Platform.linux or
-      platform == editorstatus.Platform.wsl):
+  if (status.platform == editorstatus.Platform.linux or
+      status.platform == editorstatus.Platform.wsl):
     let
-      cmd = if platform == editorstatus.Platform.linux:
+      cmd = if status.platform == editorstatus.Platform.linux:
               execCmdEx("xclip -o")
             else:
               # On the WSL
@@ -450,7 +450,7 @@ test "Visual mode: Yank buffer (Enable clipboard) 1":
       (output, exitCode) = cmd
 
     check exitCode == 0
-    if platform == editorstatus.Platform.linux:
+    if status.platform == editorstatus.Platform.linux:
       check output[0 .. output.high - 1] == "abc"
     else:
       # On the WSL
@@ -501,10 +501,10 @@ test "Visual mode: Yank buffer (Enable clipboard) 2":
     status.platform,
     clipboard)
 
-  if (platform == editorstatus.Platform.linux or
-      platform == editorstatus.Platform.wsl):
+  if (status.platform == editorstatus.Platform.linux or
+      status.platform == editorstatus.Platform.wsl):
     let
-      cmd = if platform == editorstatus.Platform.linux:
+      cmd = if status.platform == editorstatus.Platform.linux:
               execCmdEx("xclip -o")
             else:
               # On the WSL
@@ -512,7 +512,7 @@ test "Visual mode: Yank buffer (Enable clipboard) 2":
       (output, exitCode) = cmd
 
     check exitCode == 0
-    if platform == editorstatus.Platform.linux:
+    if status.platform == editorstatus.Platform.linux:
       check output[0 .. output.high - 1] == "abc\ndef"
     else:
       # On the WSL
@@ -555,10 +555,10 @@ test "Visual block mode: Yank buffer (Enable clipboard) 1":
     status.platform,
     clipboard)
 
-  if (platform == editorstatus.Platform.linux or
-      platform == editorstatus.Platform.wsl):
+  if (status.platform == editorstatus.Platform.linux or
+      status.platform == editorstatus.Platform.wsl):
     let
-      cmd = if platform == editorstatus.Platform.linux:
+      cmd = if status.platform == editorstatus.Platform.linux:
               execCmdEx("xclip -o")
             else:
               # On the WSL
@@ -566,7 +566,7 @@ test "Visual block mode: Yank buffer (Enable clipboard) 1":
       (output, exitCode) = cmd
 
     check exitCode == 0
-    if platform == editorstatus.Platform.linux:
+    if status.platform == editorstatus.Platform.linux:
       check output[0 .. output.high - 1] == "a\nd"
     else:
       # On the WSL
@@ -617,10 +617,10 @@ test "Visual block mode: Yank buffer (Enable clipboard) 2":
     status.platform,
     clipboard)
 
-  if (platform == editorstatus.Platform.linux or
-      platform == editorstatus.Platform.wsl):
+  if (status.platform == editorstatus.Platform.linux or
+      status.platform == editorstatus.Platform.wsl):
     let
-      cmd = if platform == editorstatus.Platform.linux:
+      cmd = if status.platform == editorstatus.Platform.linux:
               execCmdEx("xclip -o")
             else:
               # On the WSL
@@ -628,7 +628,7 @@ test "Visual block mode: Yank buffer (Enable clipboard) 2":
       (output, exitCode) = cmd
 
     check exitCode == 0
-    if platform == editorstatus.Platform.linux:
+    if status.platform == editorstatus.Platform.linux:
       check output[0 .. output.high - 1] == "a\nd"
     else:
       # On the WSL
