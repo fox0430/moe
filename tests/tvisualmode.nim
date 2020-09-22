@@ -1,7 +1,6 @@
 import unittest, osproc
-import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, movement, bufferstatus]
-
-include moepkg/visualmode
+import moepkg/[gapbuffer, unicodeext, highlight, movement, bufferstatus]
+include moepkg/[visualmode]
 
 suite "Visual mode: Delete buffer":
   test "Delete buffer 1":
@@ -433,14 +432,29 @@ test "Visual mode: Yank buffer (Enable clipboard) 1":
   let
     area = status.bufStatus[0].selectArea
     clipboard = true
-  status.bufStatus[currentBufferIndex].yankBuffer(status.registers,
-                                                  status.workSpace[0].currentMainWindowNode,
-                                                  area,
-                                                  status.platform,
-                                                  clipboard)
+  status.bufStatus[currentBufferIndex].yankBuffer(
+    status.registers,
+    status.workSpace[0].currentMainWindowNode,
+    area,
+    status.platform,
+    clipboard)
 
-  let (output, exitCode) = execCmdEx("xclip -o")
-  check(exitCode == 0 and output[0 .. output.high - 1] == "abc")
+  if (platform == editorstatus.Platform.linux or
+      platform == editorstatus.Platform.wsl):
+    let
+      cmd = if platform == editorstatus.Platform.linux:
+              execCmdEx("xclip -o")
+            else:
+              # On the WSL
+              execCmdEx("powershell.exe -Command Get-Clipboard")
+      (output, exitCode) = cmd
+
+    check exitCode == 0
+    if platform == editorstatus.Platform.linux:
+      check output[0 .. output.high - 1] == "abc"
+    else:
+      # On the WSL
+      check output[0 .. output.high - 2] == "abc"
 
 test "Visual mode: Yank buffer (Enable clipboard) 2":
   var status = initEditorStatus()
@@ -480,14 +494,29 @@ test "Visual mode: Yank buffer (Enable clipboard) 2":
   let
     area = status.bufStatus[0].selectArea
     clipboard = true
-  status.bufStatus[currentBufferIndex].yankBuffer(status.registers,
-                                                  status.workSpace[0].currentMainWindowNode,
-                                                  area,
-                                                  status.platform,
-                                                  clipboard)
+  status.bufStatus[currentBufferIndex].yankBuffer(
+    status.registers,
+    status.workSpace[0].currentMainWindowNode,
+    area,
+    status.platform,
+    clipboard)
 
-  let (output, exitCode) = execCmdEx("xclip -o")
-  check(exitCode == 0 and output[0 .. output.high - 1] == "abc\ndef")
+  if (platform == editorstatus.Platform.linux or
+      platform == editorstatus.Platform.wsl):
+    let
+      cmd = if platform == editorstatus.Platform.linux:
+              execCmdEx("xclip -o")
+            else:
+              # On the WSL
+              execCmdEx("powershell.exe -Command Get-Clipboard")
+      (output, exitCode) = cmd
+
+    check exitCode == 0
+    if platform == editorstatus.Platform.linux:
+      check output[0 .. output.high - 1] == "abc\ndef"
+    else:
+      # On the WSL
+      check output[0 .. output.high - 2] == "abc\ndef"
 
 test "Visual block mode: Yank buffer (Enable clipboard) 1":
   var status = initEditorStatus()
@@ -519,14 +548,29 @@ test "Visual block mode: Yank buffer (Enable clipboard) 1":
   let
     area = status.bufStatus[0].selectArea
     clipboard = true
-  status.bufStatus[currentBufferIndex].yankBufferBlock(status.registers,
-                                                       status.workSpace[0].currentMainWindowNode,
-                                                       area,
-                                                       status.platform,
-                                                       clipboard)
+  status.bufStatus[currentBufferIndex].yankBufferBlock(
+    status.registers,
+    status.workSpace[0].currentMainWindowNode,
+    area,
+    status.platform,
+    clipboard)
 
-  let (output, exitCode) = execCmdEx("xclip -o")
-  check(exitCode == 0 and output[0 .. output.high - 1] == "a\nd")
+  if (platform == editorstatus.Platform.linux or
+      platform == editorstatus.Platform.wsl):
+    let
+      cmd = if platform == editorstatus.Platform.linux:
+              execCmdEx("xclip -o")
+            else:
+              # On the WSL
+              execCmdEx("powershell.exe -Command Get-Clipboard")
+      (output, exitCode) = cmd
+
+    check exitCode == 0
+    if platform == editorstatus.Platform.linux:
+      check output[0 .. output.high - 1] == "a\nd"
+    else:
+      # On the WSL
+      check output[0 .. output.high - 2] == "a\nd"
 
 test "Visual block mode: Yank buffer (Enable clipboard) 2":
   var status = initEditorStatus()
@@ -566,14 +610,29 @@ test "Visual block mode: Yank buffer (Enable clipboard) 2":
   let
     area = status.bufStatus[0].selectArea
     clipboard = true
-  status.bufStatus[currentBufferIndex].yankBufferBlock(status.registers,
-                                                       status.workSpace[0].currentMainWindowNode,
-                                                       area,
-                                                       status.platform,
-                                                       clipboard)
+  status.bufStatus[currentBufferIndex].yankBufferBlock(
+    status.registers,
+    status.workSpace[0].currentMainWindowNode,
+    area,
+    status.platform,
+    clipboard)
 
-  let (output, exitCode) = execCmdEx("xclip -o")
-  check(exitCode == 0 and output[0 .. output.high - 1] == "a\nd")
+  if (platform == editorstatus.Platform.linux or
+      platform == editorstatus.Platform.wsl):
+    let
+      cmd = if platform == editorstatus.Platform.linux:
+              execCmdEx("xclip -o")
+            else:
+              # On the WSL
+              execCmdEx("powershell.exe -Command Get-Clipboard")
+      (output, exitCode) = cmd
+
+    check exitCode == 0
+    if platform == editorstatus.Platform.linux:
+      check output[0 .. output.high - 1] == "a\nd"
+    else:
+      # On the WSL
+      check output[0 .. output.high - 2] == "a\nd"
 
 suite "Visual block mode: Delete buffer":
   test "Delete buffer (Enable clipboard) 1":

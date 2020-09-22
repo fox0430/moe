@@ -91,7 +91,12 @@ suite "Editor: Send to clipboad":
                 execCmdEx("powershell.exe -Command Get-Clipboard")
         (output, exitCode) = cmd
 
-      check exitCode == 0 and output[0 .. output.high - 1] == "Clipboard test"
+      check exitCode == 0
+      if platform == editorstatus.Platform.linux:
+        check output[0 .. output.high - 1] == $str
+      else:
+        # On the WSL
+        check output[0 .. output.high - 2] == $str
 
   test "Send string to clipboard 2":
     const str = ru"`````"
@@ -110,7 +115,12 @@ suite "Editor: Send to clipboad":
                 execCmdEx("powershell.exe -Command Get-Clipboard")
         (output, exitCode) = cmd
 
-      check exitCode == 0 and output[0 .. output.high - 1] == "`````"
+      check exitCode == 0
+      if platform == editorstatus.Platform.linux:
+        check output[0 .. output.high - 1] == $str
+      else:
+        # On the WSL
+        check output[0 .. output.high - 2] == $str
 
   test "Send string to clipboard 3":
     const str = ru"$Clipboard test"
@@ -130,7 +140,12 @@ suite "Editor: Send to clipboad":
                 execCmdEx("powershell.exe -Command Get-Clipboard")
         (output, exitCode) = cmd
 
-      check exitCode == 0 and output[0 .. output.high - 1] == "$Clipboard test"
+      check exitCode == 0
+      if platform == editorstatus.Platform.linux:
+        check output[0 .. output.high - 1] == $str
+      else:
+        # On the WSL
+        check output[0 .. output.high - 2] == $str
 
 suite "Editor: Delete word":
   test "Fix #842":
