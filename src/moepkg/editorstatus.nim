@@ -528,6 +528,12 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
     parent.child.delete(node.index)
     dec(status.workSpace[workspaceIndex].numOfMainWindow)
 
+    if parent.child.len == 1 and
+       parent.splitType == SplitType.horaizontal and
+       parent.parent != nil and
+       parent.parent.splitType == SplitType.vertical:
+      parent.parent.child[parent.index] = parent.child[0]
+
     status.resize(terminalHeight(), terminalWidth())
 
     let newCurrentWinIndex =
