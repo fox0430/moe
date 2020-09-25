@@ -555,22 +555,13 @@ test "Visual block mode: Yank buffer (Enable clipboard) 1":
     status.platform,
     clipboard)
 
-  if (status.platform == editorstatus.Platform.linux or
-      status.platform == editorstatus.Platform.wsl):
+  if status.platform == editorstatus.Platform.linux:
     let
-      cmd = if status.platform == editorstatus.Platform.linux:
-              execCmdEx("xclip -o")
-            else:
-              # On the WSL
-              execCmdEx("powershell.exe -Command Get-Clipboard")
+      cmd = execCmdEx("xclip -o")
       (output, exitCode) = cmd
 
     check exitCode == 0
-    if status.platform == editorstatus.Platform.linux:
-      check output[0 .. output.high - 1] == "a\nd"
-    else:
-      # On the WSL
-      check output[0 .. output.high - 2] == "a\nd"
+    check output[0 .. output.high - 1] == "a\nd"
 
 test "Visual block mode: Yank buffer (Enable clipboard) 2":
   var status = initEditorStatus()
@@ -617,22 +608,13 @@ test "Visual block mode: Yank buffer (Enable clipboard) 2":
     status.platform,
     clipboard)
 
-  if (status.platform == editorstatus.Platform.linux or
-      status.platform == editorstatus.Platform.wsl):
+  if status.platform == editorstatus.Platform.linux:
     let
-      cmd = if status.platform == editorstatus.Platform.linux:
-              execCmdEx("xclip -o")
-            else:
-              # On the WSL
-              execCmdEx("powershell.exe -Command Get-Clipboard")
+      cmd = execCmdEx("xclip -o")
       (output, exitCode) = cmd
 
     check exitCode == 0
-    if status.platform == editorstatus.Platform.linux:
-      check output[0 .. output.high - 1] == "a\nd"
-    else:
-      # On the WSL
-      check output[0 .. output.high - 2] == "a\nd"
+    check output[0 .. output.high - 1] == "a\nd"
 
 suite "Visual block mode: Delete buffer":
   test "Delete buffer (Enable clipboard) 1":
@@ -671,8 +653,9 @@ suite "Visual block mode: Delete buffer":
                                                            status.platform,
                                                            clipboard)
   
-    let (output, exitCode) = execCmdEx("xclip -o")
-    check(exitCode == 0 and output[0 .. output.high - 1] == "a\nd")
+    if status.platform == editorstatus.Platform.linux:
+      let (output, exitCode) = execCmdEx("xclip -o")
+      check(exitCode == 0 and output[0 .. output.high - 1] == "a\nd")
 
   test "Delete buffer (Enable clipboard) 2":
     var status = initEditorStatus()
