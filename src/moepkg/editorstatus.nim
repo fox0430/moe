@@ -101,6 +101,7 @@ proc bufferIndexInCurrentWindow*(status: Editorstatus): int {.inline.} =
   status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex
 
 proc changeMode*(status: var EditorStatus, mode: Mode) =
+  status.commandLine.erase
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     currentMode = status.bufStatus[currentBufferIndex].mode
