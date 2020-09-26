@@ -1,6 +1,6 @@
 import terminal
 import editorstatus, bufferstatus, ui, movement, unicodeext, gapbuffer,
-       strutils, os, commandline
+       strutils, os
 
 proc staticReadHowToUseDocument: string {.compileTime.} =
   let doc = staticRead(currentSourcePath.parentDir() / "../../documents/howtouse.md")

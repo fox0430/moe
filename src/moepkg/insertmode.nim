@@ -1,6 +1,6 @@
 import terminal, times, options
 import ui, editorstatus, gapbuffer, unicodeext, undoredostack, window,
-       movement, editor, bufferstatus, suggestionwindow, commandline
+       movement, editor, bufferstatus, suggestionwindow
 
 template currentBufStatus: var BufferStatus =
   mixin status

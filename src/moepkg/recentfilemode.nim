@@ -1,6 +1,6 @@
 import os, re, terminal
 import editorstatus, ui, unicodeext, bufferstatus, movement, gapbuffer,
-       messages, commandline
+       messages
 
 proc openSelectedBuffer(status: var Editorstatus) =
   let

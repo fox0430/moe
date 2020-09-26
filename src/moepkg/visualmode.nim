@@ -1,6 +1,6 @@
 import terminal, strutils, sequtils, times
 import editorstatus, ui, gapbuffer, unicodeext, window, movement, editor,
-       bufferstatus, commandline
+       bufferstatus
 
 proc initSelectArea(startLine, startColumn: int): SelectArea =
   result.startLine = startLine

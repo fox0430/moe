@@ -1,5 +1,5 @@
 import terminal, times
-import ui, editorstatus, unicodeext, movement, bufferstatus, commandline
+import ui, editorstatus, unicodeext, movement, bufferstatus
 
 proc initMessageLog*(status: var Editorstatus) {.inline.} =
   let currentBufferIndex = status.bufferIndexInCurrentWindow

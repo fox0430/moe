@@ -1,6 +1,6 @@
 import times, terminal
 import editorstatus, unicodeext, bufferstatus, highlight, color, gapbuffer, ui,
-       movement, commandline
+       movement
 
 proc isDiffViewerMode(status: Editorstatus): bool =
   let

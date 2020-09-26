@@ -1,6 +1,6 @@
 import terminal, times, typetraits, strutils
 import gapbuffer, ui, editorstatus, unicodeext, window, movement, settings,
-       bufferstatus, color, highlight, commandline
+       bufferstatus, color, highlight
 
 const
   # Settings names
