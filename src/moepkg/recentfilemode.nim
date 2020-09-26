@@ -1,6 +1,6 @@
 import os, re, terminal
 import editorstatus, ui, unicodeext, bufferstatus, movement, gapbuffer,
-       messages
+       messages, commandline
 
 proc openSelectedBuffer(status: var Editorstatus) =
   let
@@ -53,7 +53,7 @@ proc recentFileMode*(status: var Editorstatus) =
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-      status.commandWindow.erase
+      status.commandLine.erase
 
     elif isControlK(key): status.moveNextWindow
     elif isControlJ(key): status.movePrevWindow

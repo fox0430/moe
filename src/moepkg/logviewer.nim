@@ -1,5 +1,5 @@
 import terminal, times
-import ui, editorstatus, unicodeext, movement, bufferstatus
+import ui, editorstatus, unicodeext, movement, bufferstatus, commandline
 
 proc initMessageLog*(status: var Editorstatus) {.inline.} =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -47,7 +47,7 @@ proc messageLogViewer*(status: var Editorstatus) =
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-      status.commandWindow.erase
+      status.commandLine.erase
 
     elif isControlK(key): status.moveNextWindow
     elif isControlJ(key): status.movePrevWindow

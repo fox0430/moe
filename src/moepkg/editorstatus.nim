@@ -28,7 +28,6 @@ type EditorStatus* = object
   messageLog*: seq[seq[Rune]]
   debugMode: int
   commandLine*: CommandLine
-  commandWindow*: Window
   tabWindow*: Window
   popUpWindow*: Window
   workSpaceTabWindow*: Window
@@ -80,16 +79,6 @@ proc initEditorStatus*(): EditorStatus =
     let
       w = terminalWidth()
     result.tabWindow = initWindow(h, w, t, l, color)
-
-  # Init command line
-  const
-    t = 0
-    l = 0
-    color = EditorColorPair.defaultChar
-  let
-    w = terminalWidth()
-    h = terminalHeight() - 1
-  result.commandWindow = initWindow(h, w, t, l, color)
 
 proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
   if 0 <= bufferIndex and bufferIndex < status.bufStatus.len:
@@ -265,7 +254,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
     commandWindowHeight = 1
     x = 0
   let y = max(height, 4) - 1
-  status.commandWindow.resize(commandWindowHeight, width, y, x)
+  status.commandLine.resize(y, x, commandWindowHeight, width)
 
   setCursor(true)
 
@@ -445,7 +434,7 @@ proc update*(status: var EditorStatus) =
 
   if status.settings.statusBar.enable: status.updateStatusBar
 
-  status.commandLine.updateCommandLineView(status.commandWindow)
+  status.commandLine.updateCommandLineView
 
   setCursor(true)
 

@@ -1,6 +1,6 @@
 import times, terminal
 import editorstatus, unicodeext, bufferstatus, highlight, color, gapbuffer, ui,
-       movement
+       movement, commandline
 
 proc isDiffViewerMode(status: Editorstatus): bool =
   let
@@ -52,7 +52,7 @@ proc diffViewer*(status: var Editorstatus) =
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-      status.commandWindow.erase
+      status.commandLine.erase
     elif isControlK(key):
       status.moveNextWindow
     elif isControlJ(key):

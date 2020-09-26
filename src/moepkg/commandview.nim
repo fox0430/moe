@@ -71,67 +71,63 @@ const exCommandList = [
 ]
 
 proc askCreateDirPrompt*(commndLine: var CommandLine,
-                         cmdWin: var Window,
                          messageLog: var seq[seq[Rune]],
                          path: string): bool =
 
   let mess = fmt"{path} does not exists. Create it now?: y/n"
   commndLine.updateCommandLineBuffer(mess)
-  commndLine.updateCommandLineView(cmdWin)
+  commndLine.updateCommandLineView
   messageLog.add(mess.toRunes)
 
-  let key = getKey(cmdWin)
+  let key = commndLine.getKey
 
   if key == ord('y'): result = true
   else: result = false
 
 proc askBackupRestorePrompt*(commndLine: var CommandLine,
-                             cmdWin: var Window,
                              messageLog: var seq[seq[Rune]],
                              filename: seq[Rune]): bool =
 
   let mess = fmt"Restore {filename}?: y/n"
   commndLine.updateCommandLineBuffer(mess)
-  commndLine.updateCommandLineView(cmdWin)
+  commndLine.updateCommandLineView
   messageLog.add(mess.toRunes)
 
-  let key = getKey(cmdWin)
+  let key = commndLine.getKey
 
   if key == ord('y'): result = true
   else: result = false
 
 proc askDeleteBackupPrompt*(commndLine: var CommandLine,
-                            cmdWin: var Window,
                             messageLog: var seq[seq[Rune]],
                             filename: seq[Rune]): bool =
 
   let mess = fmt"Delete {filename}?: y/n"
   commndLine.updateCommandLineBuffer(mess)
-  commndLine.updateCommandLineView(cmdWin)
+  commndLine.updateCommandLineView
   messageLog.add(mess.toRunes)
 
-  let key = getKey(cmdWin)
+  let key = commndLine.getKey
 
   if key == ord('y'): result = true
   else: result = false
 
 proc askFileChangedSinceReading*(commndLine: var CommandLine,
-                                 cmdWin: var Window,
                                  messageLog: var seq[seq[Rune]]): bool =
 
   block:
     const warnMess = "WARNING: The file has been changed since reading it!: Press any key"
     commndLine.updateCommandLineBuffer(warnMess)
-    commndLine.updateCommandLineView(cmdWin)
+    commndLine.updateCommandLineView
     messageLog.add(warnMess.toRunes)
-    discard getKey(cmdWin)
+    discard commndLine.getKey
 
   block:
     const askMess = "Do you really want to write to it: y/n ?"
     commndLine.updateCommandLineBuffer(askMess)
-    commndLine.updateCommandLineView(cmdWin)
+    commndLine.updateCommandLineView
     messageLog.add(askMess.toRunes)
-    let key = getKey(cmdWin)
+    let key = commndLine.getKey
 
     if key == ord('y'): result = true
     else: result = false
@@ -173,16 +169,16 @@ proc splitCommand*(command: string): seq[seq[Rune]] =
   else:
     return strutils.splitWhitespace(command).map(proc(s: string): seq[Rune] = toRunes(s))
 
-proc writeExModeView(commandWindow: var Window,
+proc writeExModeView(commandLine: var CommandLine,
                      exStatus: ExModeViewStatus,
                      color: EditorColorPair) =
 
   let buffer = ($exStatus.buffer).substr(exStatus.startPosition, exStatus.buffer.len)
 
-  commandWindow.erase
-  commandWindow.write(exStatus.cursorY, 0, fmt"{exStatus.prompt}{buffer}", color)
-  commandWindow.moveCursor(0, exStatus.cursorX)
-  commandWindow.refresh
+  commandLine.erase
+  commandLine.window.write(exStatus.cursorY, 0, fmt"{exStatus.prompt}{buffer}", color)
+  commandLine.window.moveCursor(0, exStatus.cursorX)
+  commandLine.window.refresh
 
 proc initExModeViewStatus(prompt: string): ExModeViewStatus =
   result.buffer = ru""
@@ -267,9 +263,9 @@ proc getKeyword*(status: var EditorStatus,
       exStatus.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
 
   while true:
-    status.commandWindow.writeExModeView(exStatus, EditorColorPair.commandBar)
+    status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
 
-    var key = getKey(status.commandWindow)
+    var key = status.commandLine.getKey
 
     if isEnterKey(key): break
     elif isEscKey(key):
@@ -278,7 +274,7 @@ proc getKeyword*(status: var EditorStatus,
     elif isResizeKey(key):
       status.resize(terminalHeight(), terminalWidth())
       status.update
-    elif isLeftKey(key): status.commandWindow.moveLeft(exStatus)
+    elif isLeftKey(key): status.commandLine.window.moveLeft(exStatus)
     elif isRightkey(key): exStatus.moveRight
     elif isUpKey(key) and isSearch: setPrevSearchHistory()
     elif isDownKey(key) and isSearch: setNextSearchHistory()
@@ -370,12 +366,12 @@ proc suggestFilePath(status: var Editorstatus,
 
     for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
     if suggestlist.len == 1:
-      status.commandWindow.writeExModeView(exStatus, EditorColorPair.commandBar)
+      status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
       return
 
-    writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
+    status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
 
-    key = getKey(status.commandWindow)
+    key = status.commandLine.getKey
 
 proc isExCommand(exBuffer: seq[Rune]): bool =
   if ($exBuffer).contains(" ") == false: return false
@@ -465,9 +461,9 @@ proc suggestExCommandOption(status: var Editorstatus,
     for rune in command & ru' ': exStatus.insertCommandBuffer(rune)
     for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
 
-    status.commandWindow.writeExModeView(exStatus, EditorColorPair.commandBar)
+    status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
 
-    key = getKey(status.commandWindow)
+    key = status.commandLine.getKey
 
 proc suggestExCommand(status: var Editorstatus,
                       exStatus: var ExModeViewStatus,
@@ -510,9 +506,9 @@ proc suggestExCommand(status: var Editorstatus,
 
     for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
 
-    status.commandWindow.writeExModeView(exStatus, EditorColorPair.commandBar)
+    status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
 
-    key = getKey(status.commandWindow)
+    key = status.commandLine.getKey
 
 proc suggestMode(status: var Editorstatus,
                  exStatus: var ExModeViewStatus,
@@ -521,11 +517,11 @@ proc suggestMode(status: var Editorstatus,
   if exStatus.buffer.len > 0 and exStatus.buffer.isExCommand:
     status.suggestExCommandOption(exStatus, key)
   else: suggestExCommand(status, exStatus, key)
-
-  status.commandWindow.moveCursor(exStatus.cursorY, exStatus.cursorX)
+  status.commandLine.window.moveCursor(exStatus.cursorY, exStatus.cursorX)
   if status.settings.popUpWindowInExmode: status.deletePopUpWindow
 
-  while isTabKey(key) or isShiftTab(key): key = getKey(status.commandWindow)
+  while isTabKey(key) or isShiftTab(key):
+    key = status.commandLine.getKey
 
 proc getKeyOnceAndWriteCommandView*(status: var Editorstatus,
                                     prompt: string,
@@ -565,15 +561,15 @@ proc getKeyOnceAndWriteCommandView*(status: var Editorstatus,
       exStatus.insertCommandBuffer(status.exCommandHistory[commandHistoryIndex])
 
   while true:
-    status.commandWindow.writeExModeView(exStatus, EditorColorPair.commandBar)
+    status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
 
-    var key = getKey(status.commandWindow)
+    var key = status.commandLine.getKey
 
     # Suggestion mode
     if isTabKey(key) or isShiftTab(key):
       status.suggestMode(exStatus, key)
       if status.settings.popUpWindowInExmode and isEnterKey(key):
-        status.commandWindow.moveCursor(exStatus.cursorY, exStatus.cursorX)
+        status.commandLine.window.moveCursor(exStatus.cursorY, exStatus.cursorX)
 
     if isEnterKey(key):
       exitSearch = true
@@ -585,7 +581,7 @@ proc getKeyOnceAndWriteCommandView*(status: var Editorstatus,
       status.resize(terminalHeight(), terminalWidth())
       status.update
     elif isLeftKey(key):
-      status.commandWindow.moveLeft(exStatus)
+      status.commandLine.window.moveLeft(exStatus)
     elif isRightkey(key):
       exStatus.moveRight
     elif isUpKey(key):
@@ -608,7 +604,7 @@ proc getKeyOnceAndWriteCommandView*(status: var Editorstatus,
       exStatus.insertCommandBuffer(key)
       break
 
-  writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
+  status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
   return (exStatus.buffer, exitSearch, cancelSearch)
 
 proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
@@ -616,25 +612,25 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
   status.resize(terminalHeight(), terminalWidth())
 
   while true:
-    writeExModeView(status.commandWindow, exStatus, EditorColorPair.commandBar)
+    status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
 
-    var key = getKey(status.commandWindow)
+    var key = status.commandLine.getKey
 
     # Suggestion mode
     if isTabKey(key) or isShiftTab(key):
       suggestMode(status, exStatus, key)
       if status.settings.popUpWindowInExmode and isEnterKey(key):
-          moveCursor(status.commandWindow, exStatus.cursorY, exStatus.cursorX)
-          key = getKey(status.commandWindow)
+          status.commandLine.window.moveCursor(exStatus.cursorY, exStatus.cursorX)
+          key = status.commandLine.getKey
 
     if isEnterKey(key): break
     elif isEscKey(key):
-      status.commandWindow.erase
+      status.commandLine.erase
       return @[ru""]
     elif isResizeKey(key):
       status.resize(terminalHeight(), terminalWidth())
       status.update
-    elif isLeftKey(key): moveLeft(status.commandWindow, exStatus)
+    elif isLeftKey(key): status.commandLine.window.moveLeft(exStatus)
     elif isRightkey(key): moveRight(exStatus)
     elif isHomeKey(key): moveTop(exStatus)
     elif isEndKey(key): moveEnd(exStatus)

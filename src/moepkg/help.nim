@@ -1,6 +1,6 @@
-import editorstatus, bufferstatus, ui, movement, unicodeext, gapbuffer,
-       strutils, os
 import terminal
+import editorstatus, bufferstatus, ui, movement, unicodeext, gapbuffer,
+       strutils, os, commandline
 
 proc staticReadHowToUseDocument: string {.compileTime.} =
   let doc = staticRead(currentSourcePath.parentDir() / "../../documents/howtouse.md")
@@ -47,7 +47,7 @@ proc helpMode*(status: var Editorstatus) =
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-      status.commandWindow.erase
+      status.commandLine.erase
 
     elif isControlK(key): status.moveNextWindow
     elif isControlJ(key): status.movePrevWindow

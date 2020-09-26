@@ -34,8 +34,7 @@ proc searchFiles(status: var EditorStatus,
   let command = getCommand(status, "/")
 
   if command.len == 0:
-    status.commandWindow.erase
-    status.commandWindow.refresh
+    status.commandLine.erase
     return @[]
 
   let str = command[0].join("")
@@ -48,8 +47,7 @@ proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
   let command = getCommand(status, "Delete file? 'y' or 'n': ")
 
   if command.len == 0:
-    status.commandWindow.erase
-    status.commandWindow.refresh
+    status.commandLine.erase
   elif (command[0] == ru"y" or command[0] == ru"yes") and command.len == 1:
     let workspaceIndex = status.currentWorkSpaceIndex
     var windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
@@ -516,9 +514,8 @@ proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
     windowNode.window.erase
     windowNode.window.write(0, 0, "not found", EditorColorPair.commandBar)
     windowNode.window.refresh
-    discard getKey(status.commandWindow)
-    status.commandWindow.erase
-    status.commandWindow.refresh
+    discard status.commandLine.getKey
+    status.commandLine.erase
     filerStatus.dirlistUpdate = true
 
 proc isFilerMode(status: Editorstatus): bool =
@@ -574,7 +571,7 @@ proc filerMode*(status: var EditorStatus) =
 
     elif isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-      status.commandWindow.erase
+      status.commandLine.erase
       filerStatus.viewUpdate = true
 
     elif key == ord('/'): searchFileMode(status, filerStatus)

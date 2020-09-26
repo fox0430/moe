@@ -1,6 +1,6 @@
 import terminal, times, typetraits, strutils
 import gapbuffer, ui, editorstatus, unicodeext, window, movement, settings,
-       bufferstatus, color, highlight
+       bufferstatus, color, highlight, commandline
 
 const
   # Settings names
@@ -960,7 +960,7 @@ proc configMode*(status: var Editorstatus) =
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-      status.commandWindow.erase
+      status.commandLine.erase
     elif isControlK(key): status.moveNextWindow
     elif isControlJ(key): status.movePrevWindow
     elif key == ord(':'): status.changeMode(Mode.ex)

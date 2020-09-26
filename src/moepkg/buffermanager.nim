@@ -1,6 +1,6 @@
 import terminal, os, heapqueue, times
 import gapbuffer, ui, editorstatus, unicodeext, highlight, window, movement,
-       color, bufferstatus
+       color, bufferstatus, commandline
 
 proc initFilelistHighlight[T](buffer: T,
                               currentLine: int): Highlight =
@@ -141,7 +141,7 @@ proc bufferManager*(status: var Editorstatus) =
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-      status.commandWindow.erase
+      status.commandLine.erase
     elif isControlK(key): status.moveNextWindow
     elif isControlJ(key): status.movePrevWindow
     elif key == ord(':'): status.changeMode(Mode.ex)

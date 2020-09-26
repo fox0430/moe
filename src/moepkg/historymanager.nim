@@ -141,7 +141,6 @@ proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
     backupFilePath = backupDir / backupFilename
 
   let isRestore = status.commandLine.askBackupRestorePrompt(
-    status.commandWindow,
     status.messageLog,
     backupFilename)
   if not isRestore: return
@@ -194,7 +193,6 @@ proc deleteBackupFiles(status: var EditorStatus, sourcePath: seq[Rune]) =
     backupFilePath = backupDir / backupFilename
 
   let isDelete = status.commandLine.askDeleteBackupPrompt(
-    status.commandWindow,
     status.messageLog,
     backupFilename)
 
@@ -246,7 +244,6 @@ proc historyManager*(status: var EditorStatus) =
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-      status.commandWindow.erase
     elif isControlK(key):
       status.moveNextWindow
     elif isControlJ(key):

@@ -35,7 +35,6 @@ proc getQuickRunBufferIndex*(bufStatus: seq[BufferStatus],
 
 proc runQuickRun*(bufStatus: var BufferStatus,
                   commandLine: var CommandLine,
-                  cmdWin: var Window,
                   messageLog: var seq[seq[Rune]],
                   settings: EditorSettings): seq[seq[Rune]] =
 
@@ -52,7 +51,7 @@ proc runQuickRun*(bufStatus: var BufferStatus,
 
   commandLine.writeRunQuickRunMessage(settings.notificationSettings, messageLog)
   let cmdResult = execCmdEx(command)
-  cmdWin.erase
+  commandLine.erase
 
   result = @[ru""]
 
@@ -93,8 +92,8 @@ proc quickRunMode*(status: var Editorstatus) =
     status.lastOperatingTime = now()
 
     if isResizekey(key):
+      status.commandLine.erase
       status.resize(terminalHeight(), terminalWidth())
-      status.commandWindow.erase
     elif isControlK(key): status.moveNextWindow
     elif isControlJ(key): status.movePrevWindow
     elif key == ord(':'):

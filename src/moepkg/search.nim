@@ -1,5 +1,5 @@
 import unicodeext, system, terminal, strutils
-import ui, editorstatus, gapbuffer, commandview, movement
+import editorstatus, gapbuffer, commandview, movement, commandline
 
 type
   SearchResult* = tuple[line: int, column: int]
@@ -87,7 +87,7 @@ proc searchBufferReversely*(status: var EditorStatus,
       endPosition = if lineNumber == startLine and i == 0:
                       windowNode.currentColumn
                     else:
-                      buffer[lineNumber].len 
+                      buffer[lineNumber].len
       position = searchLineReversely(buffer[lineNumber][0 ..< endPosition],
                                      keyword,
                                      ignorecase,
@@ -235,7 +235,7 @@ proc incrementalSearch(status: var Editorstatus, direction: Direction) =
     var windowNode = status.workspace[workSpaceIndex].currentMainWindowNode
     status.updateHighlight(windowNode)
 
-    status.commandWindow.erase
+    status.commandLine.erase
 
 proc searchFordwards*(status: var EditorStatus) =
   if status.settings.incrementalSearch:

@@ -1,6 +1,6 @@
 import terminal, times, options
 import ui, editorstatus, gapbuffer, unicodeext, undoredostack, window,
-       movement, editor, bufferstatus, suggestionwindow
+       movement, editor, bufferstatus, suggestionwindow, commandline
 
 template currentBufStatus: var BufferStatus =
   mixin status
@@ -68,7 +68,7 @@ proc insertMode*(status: var EditorStatus) =
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-      status.commandWindow.erase
+      status.commandLine.erase
     elif isEscKey(key) or isControlSquareBracketsRight(key):
       if windowNode.currentColumn > 0: dec(windowNode.currentColumn)
       windowNode.expandedColumn = windowNode.currentColumn
