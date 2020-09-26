@@ -3,7 +3,7 @@ import strutils, terminal, os, strformat, tables, times, osproc, heapqueue,
 import highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        undoredostack, window, color, workspace, statusbar, settings,
-       bufferstatus, cursor, tabline, backup, messages
+       bufferstatus, cursor, tabline, backup, messages, commandline
 
 type Platform* = enum
   linux, wsl, mac, other
@@ -27,6 +27,7 @@ type EditorStatus* = object
   currentDir: seq[Rune]
   messageLog*: seq[seq[Rune]]
   debugMode: int
+  commandLine*: CommandLine
   commandWindow*: Window
   tabWindow*: Window
   popUpWindow*: Window
@@ -53,6 +54,7 @@ proc initEditorStatus*(): EditorStatus =
   result.settings = initEditorSettings()
   result.lastOperatingTime = now()
   result.autoBackupStatus = initAutoBackupStatus()
+  result.commandLine = initCommandLine()
 
   # Init workspace line
   if result.settings.workSpace.workSpaceLine:
@@ -443,7 +445,7 @@ proc update*(status: var EditorStatus) =
 
   if status.settings.statusBar.enable: status.updateStatusBar
 
-  status.commandWindow.refresh
+  status.commandLine.updateCommandLineView(status.commandWindow)
 
   setCursor(true)
 
@@ -616,7 +618,7 @@ proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode) =
         status.bufStatus[index].buffer = textAndEncoding.text.toGapBuffer
         status.bufStatus[index].characterEncoding = textAndEncoding.encoding
       except IOError:
-        status.commandWindow.writeFileOpenError(filename, status.messageLog)
+        status.commandLine.writeFileOpenError(filename, status.messageLog)
         return
 
     if filename != "": status.bufStatus[index].language = detectLanguage(filename)
@@ -687,7 +689,7 @@ proc createWrokSpace*(status: var Editorstatus) =
 
 proc deleteWorkSpace*(status: var Editorstatus, index: int) =
   if 0 > index and index > status.workSpace.high:
-    status.commandwindow.writeNotExistWorkspaceError(index, status.messageLog)
+    status.commandLine.writeNotExistWorkspaceError(index, status.messageLog)
   else:
     status.workspace.delete(index)
 
@@ -700,7 +702,7 @@ proc changeCurrentWorkSpace*(status: var Editorstatus, index: int) =
   if 0 < index and index <= status.workSpace.len:
     status.currentWorkSpaceIndex = index - 1
   else:
-    status.commandwindow.writeNotExistWorkspaceError(index, status.messageLog)
+    status.commandLine.writeNotExistWorkspaceError(index, status.messageLog)
 
 proc tryRecordCurrentPosition*(bufStatus: var BufferStatus, windowNode: WindowNode) {.inline.} =
   bufStatus.positionRecord[bufStatus.buffer.lastSuitId] = (windowNode.currentLine,
@@ -1050,9 +1052,9 @@ proc autoSave(status: var Editorstatus) =
       saveFile(bufStatus.path,
                bufStatus.buffer.toRunes,
                bufStatus.characterEncoding)
-      status.commandWindow.writeMessageAutoSave(bufStatus.path,
-                                                status.settings.notificationSettings,
-                                                status.messageLog)
+      status.commandLine.writeMessageAutoSave(bufStatus.path,
+                                              status.settings.notificationSettings,
+                                              status.messageLog)
       status.bufStatus[index].lastSaveTime = now()
 
 from settings import TomlError, loadSettingFile
@@ -1063,11 +1065,15 @@ proc loadConfigurationFile*(status: var EditorStatus) =
       loadSettingFile()
     except InvalidItemError:
       let invalidItem = getCurrentExceptionMsg()
-      status.commandwindow.writeInvalidItemInConfigurationFileError(invalidItem, status.messageLog)
+      status.commandLine.writeInvalidItemInConfigurationFileError(
+        invalidItem,
+        status.messageLog)
       initEditorSettings()
     except IOError, TomlError:
       let failureCause = getCurrentExceptionMsg()
-      status.commandwindow.writeFailedToLoadConfigurationFileError(failureCause, status.messageLog)
+      status.commandLine.writeFailedToLoadConfigurationFileError(
+        failureCause,
+        status.messageLog)
       initEditorSettings()
 
 proc eventLoopTask(status: var Editorstatus) =
@@ -1115,7 +1121,7 @@ proc eventLoopTask(status: var Editorstatus) =
         bufStatus.backupBuffer(bufStatus.characterEncoding,
                                status.settings.autoBackupSettings,
                                status.settings.notificationSettings,
-                               status.commandwindow,
+                               status.commandLine,
                                status.messageLog)
 
         status.autoBackupStatus.lastBackupTime = now()

@@ -1,5 +1,5 @@
 import terminal, strutils, sequtils, strformat, os
-import ui, unicodeext, fileutils, color, messages
+import ui, unicodeext, fileutils, color, commandline
 
 type
   ExModeViewStatus = tuple[
@@ -70,12 +70,14 @@ const exCommandList = [
   "wqa",
 ]
 
-proc askCreateDirPrompt*(cmdWin: var Window,
+proc askCreateDirPrompt*(commndLine: var CommandLine,
+                         cmdWin: var Window,
                          messageLog: var seq[seq[Rune]],
                          path: string): bool =
 
   let mess = fmt"{path} does not exists. Create it now?: y/n"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  commndLine.updateCommandLineBuffer(mess)
+  commndLine.updateCommandLineView(cmdWin)
   messageLog.add(mess.toRunes)
 
   let key = getKey(cmdWin)
@@ -83,12 +85,14 @@ proc askCreateDirPrompt*(cmdWin: var Window,
   if key == ord('y'): result = true
   else: result = false
 
-proc askBackupRestorePrompt*(cmdWin: var Window,
+proc askBackupRestorePrompt*(commndLine: var CommandLine,
+                             cmdWin: var Window,
                              messageLog: var seq[seq[Rune]],
                              filename: seq[Rune]): bool =
 
   let mess = fmt"Restore {filename}?: y/n"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  commndLine.updateCommandLineBuffer(mess)
+  commndLine.updateCommandLineView(cmdWin)
   messageLog.add(mess.toRunes)
 
   let key = getKey(cmdWin)
@@ -96,12 +100,14 @@ proc askBackupRestorePrompt*(cmdWin: var Window,
   if key == ord('y'): result = true
   else: result = false
 
-proc askDeleteBackupPrompt*(cmdWin: var Window,
+proc askDeleteBackupPrompt*(commndLine: var CommandLine,
+                            cmdWin: var Window,
                             messageLog: var seq[seq[Rune]],
                             filename: seq[Rune]): bool =
 
   let mess = fmt"Delete {filename}?: y/n"
-  cmdWin.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  commndLine.updateCommandLineBuffer(mess)
+  commndLine.updateCommandLineView(cmdWin)
   messageLog.add(mess.toRunes)
 
   let key = getKey(cmdWin)
@@ -109,18 +115,21 @@ proc askDeleteBackupPrompt*(cmdWin: var Window,
   if key == ord('y'): result = true
   else: result = false
 
-proc askFileChangedSinceReading*(cmdWin: var Window,
+proc askFileChangedSinceReading*(commndLine: var CommandLine,
+                                 cmdWin: var Window,
                                  messageLog: var seq[seq[Rune]]): bool =
 
   block:
     const warnMess = "WARNING: The file has been changed since reading it!: Press any key"
-    cmdWin.writeMessageOnCommandWindow(warnMess, EditorColorPair.errorMessage)
+    commndLine.updateCommandLineBuffer(warnMess)
+    commndLine.updateCommandLineView(cmdWin)
     messageLog.add(warnMess.toRunes)
     discard getKey(cmdWin)
 
   block:
     const askMess = "Do you really want to write to it: y/n ?"
-    cmdWin.writeMessageOnCommandWindow(askMess, EditorColorPair.commandBar)
+    commndLine.updateCommandLineBuffer(askMess)
+    commndLine.updateCommandLineView(cmdWin)
     messageLog.add(askMess.toRunes)
     let key = getKey(cmdWin)
 
@@ -634,3 +643,5 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
     else: insertCommandBuffer(exStatus, key)
 
   return splitCommand($exStatus.buffer)
+
+

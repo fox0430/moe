@@ -12,7 +12,7 @@ proc openSelectedBuffer(status: var Editorstatus) =
   if fileExists($filename):
     status.addNewBuffer($filename)
   else:
-    status.commandWindow.writeFileNotFoundError(filename, status.messageLog)
+    status.commandLine.writeFileNotFoundError(filename, status.messageLog)
 
 proc initRecentFileModeBuffer(bufStatus: var BufferStatus) =
   var f = open(getHomeDir() / ".local/share/recently-used.xbel")

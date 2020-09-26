@@ -2,7 +2,7 @@ import sequtils, strutils, os, terminal, highlite, times
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
         unicodeext, independentutils, search, highlight, commandview,
         window, movement, color, build, bufferstatus, editor,
-        settings, quickrun, messages
+        settings, quickrun, messages, commandline
 
 type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
 
@@ -286,7 +286,7 @@ proc startRecentFileMode(status: var Editorstatus) =
   if status.platform != Platform.linux: return
 
   if not fileExists(getHomeDir() / ".local/share/recently-used.xbel"):
-    status.commandWindow.writeOpenRecentlyUsedXbelError(status.messageLog)
+    status.commandLine.writeOpenRecentlyUsedXbelError(status.messageLog)
     return
 
   status.verticalSplitWindow
@@ -307,6 +307,7 @@ proc runQuickRunCommand(status: var Editorstatus) =
 
   let
     buffer = runQuickRun(status.bufStatus[windowNode.bufferIndex],
+                         status.commandLine,
                          status.commandwindow,
                          status.messageLog,
                          status.settings)
@@ -339,18 +340,18 @@ proc putConfigFileCommand(status: var Editorstatus) =
   if not dirExists(homeDir / ".config"):
     try: createDir(homeDir / ".config")
     except OSError:
-      status.commandWindow.writePutConfigFileError(status.messageLog)
+      status.commandLine.writePutConfigFileError(status.messageLog)
       status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
       return
   if not dirExists(homeDir / ".config" / "moe"):
     try: createDir(homeDir / ".config" / "moe")
     except OSError:
-      status.commandWindow.writePutConfigFileError(status.messageLog)
+      status.commandLine.writePutConfigFileError(status.messageLog)
       status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
       return
 
   if fileExists(getHomeDir() / ".config" / "moe" / "moerc.toml"):
-    status.commandWindow.writePutConfigFileAlreadyExistError(status.messageLog)
+    status.commandLine.writePutConfigFileAlreadyExistError(status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
     return
 
@@ -688,7 +689,7 @@ proc smartcaseSettingCommand(status: var EditorStatus, command: seq[Rune]) =
 
 proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
   if index < 0 or index > status.bufStatus.high:
-    status.commandWindow.writeNoBufferDeletedError(status.messageLog)
+    status.commandLine.writeNoBufferDeletedError(status.messageLog)
     status.changeMode(Mode.normal)
     return
 
@@ -758,7 +759,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
   if status.bufStatus[currentBufferIndex].countChange > 0 and
      countReferencedWindow(status.workSpace[workspaceIndex].mainWindowNode,
                            currentBufferIndex) == 1:
-    status.commandWindow.writeNoWriteError(status.messageLog)
+    status.commandLine.writeNoWriteError(status.messageLog)
   else:
     if dirExists($filename):
       status.addNewBuffer($filename, Mode.filer)
@@ -790,7 +791,7 @@ proc execCmdResultToMessageLog*(output: TaintedString,
     else: line.add(ch)
 
 proc buildOnSave(status: var Editorstatus) =
-  status.commandWindow.writeMessageBuildOnSave(status.settings.notificationSettings,
+  status.commandLine.writeMessageBuildOnSave(status.settings.notificationSettings,
                                                status.messageLog)
 
   let
@@ -804,12 +805,13 @@ proc buildOnSave(status: var Editorstatus) =
   cmdResult.output.execCmdResultToMessageLog(status.messageLog)
 
   if cmdResult.exitCode != 0:
-    status.commandWindow.writeMessageFailedBuildOnSave(status.messageLog)
+    status.commandLine.writeMessageFailedBuildOnSave(status.messageLog)
   else:
-    status.commandWindow.writeMessageSuccessBuildOnSave(status.settings.notificationSettings,
+    status.commandLine.writeMessageSuccessBuildOnSave(status.settings.notificationSettings,
                                                         status.messageLog)
 
-proc checkAndCreateDir(cmdWin: var Window,
+proc checkAndCreateDir(commandLine: var CommandLine,
+                       cmdWin: var Window,
                        messageLog: var seq[seq[Rune]],
                        filename: seq[Rune]): bool =
 
@@ -820,7 +822,9 @@ proc checkAndCreateDir(cmdWin: var Window,
 
   result = true
   if not dirExists(pathSplit.head):
-    let isCreateDir = cmdWin.askCreateDirPrompt(messageLog, pathSplit.head)
+    let isCreateDir = commandLine.askCreateDirPrompt(cmdWin,
+                                                     messageLog,
+                                                     pathSplit.head)
     if isCreateDir:
       try: createDir(pathSplit.head)
       except OSError: result = false
@@ -829,7 +833,7 @@ proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
   let bufferIndex = status.bufferIndexInCurrentWindow
 
   if path.len == 0:
-    status.commandWindow.writeNoFileNameError(status.messageLog)
+    status.commandLine.writeNoFileNameError(status.messageLog)
     status.changeMode(status.bufStatus[bufferIndex].prevMode)
     return
 
@@ -839,16 +843,16 @@ proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
       lastSaveTimeOfBuffer = status.bufStatus[bufferIndex].lastSaveTime.toTime
       lastModificationTimeOfFile = getLastModificationTime($path)
     if lastModificationTimeOfFile > lastSaveTimeOfBuffer:
-      if not status.commandWindow.askFileChangedSinceReading(status.messageLog):
+      if not status.commandLine.askFileChangedSinceReading(status.commandWindow, status.messageLog):
         # Cancel overwrite
         status.changeMode(status.bufStatus[bufferIndex].prevMode)
         status.commandWindow.erase
         return
 
   ## Ask if you want to create a directory that does not exist
-  if not status.commandWindow.checkAndCreateDir(status.messageLog, path):
+  if not status.commandLine.checkAndCreateDir(status.commandWindow, status.messageLog, path):
     status.changeMode(status.bufStatus[bufferIndex].prevMode)
-    status.commandWindow.writeSaveError(status.messageLog)
+    status.commandLine.writeSaveError(status.messageLog)
     return
 
   try:
@@ -856,9 +860,7 @@ proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
              status.bufStatus[bufferIndex].buffer.toRunes,
              status.bufStatus[bufferIndex].characterEncoding)
   except IOError:
-    status.commandWindow.writeSaveError(status.messageLog)
-
-  let workspaceIndex = status.currentWorkSpaceIndex
+    status.commandLine.writeSaveError(status.messageLog)
 
   if status.bufStatus[bufferIndex].path != path:
     status.bufStatus[bufferIndex].path = path
@@ -869,9 +871,9 @@ proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
     try:
       status.buildOnSave
     except IOError:
-      status.commandWindow.writeSaveError(status.messageLog)
+      status.commandLine.writeSaveError(status.messageLog)
   else:
-      status.commandWindow.writeMessageSaveFile(
+      status.commandLine.writeMessageSaveFile(
         path,
         status.settings.notificationSettings,
         status.messageLog)
@@ -895,7 +897,7 @@ proc quitCommand(status: var EditorStatus) =
       status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
       status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
     else:
-      status.commandWindow.writeNoWriteError(status.messageLog)
+      status.commandLine.writeNoWriteError(status.messageLog)
       status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
 proc writeAndQuitCommand(status: var EditorStatus) =
@@ -910,16 +912,16 @@ proc writeAndQuitCommand(status: var EditorStatus) =
       lastSaveTimeOfBuffer = status.bufStatus[bufferIndex].lastSaveTime.toTime
       lastModificationTimeOfFile = getLastModificationTime($path)
     if lastModificationTimeOfFile > lastSaveTimeOfBuffer:
-      if not status.commandWindow.askFileChangedSinceReading(status.messageLog):
+      if not status.commandLine.askFileChangedSinceReading(status.commandWindow, status.messageLog):
         # Cancel overwrite
         status.changeMode(status.bufStatus[bufferIndex].prevMode)
         status.commandWindow.erase
         return
 
   ## Ask if you want to create a directory that does not exist
-  if not status.commandWindow.checkAndCreateDir(status.messageLog, path):
+  if not status.commandLine.checkAndCreateDir(status.commandWindow, status.messageLog, path):
     status.changeMode(status.bufStatus[bufferIndex].prevMode)
-    status.commandWindow.writeSaveError(status.messageLog)
+    status.commandLine.writeSaveError(status.messageLog)
     return
 
   try:
@@ -927,7 +929,7 @@ proc writeAndQuitCommand(status: var EditorStatus) =
              status.bufStatus[bufferIndex].buffer.toRunes,
              status.bufStatus[bufferIndex].characterEncoding)
   except IOError:
-    status.commandWindow.writeSaveError(status.messageLog)
+    status.commandLine.writeSaveError(status.messageLog)
     status.changeMode(status.bufStatus[bufferIndex].prevMode)
     return
 
@@ -951,7 +953,7 @@ proc allBufferQuitCommand(status: var EditorStatus) =
       path = status.bufStatus[bufferIndex].path
 
     if status.bufStatus[node.bufferIndex].countChange > 0:
-      status.commandWindow.writeNoWriteError(status.messageLog)
+      status.commandLine.writeNoWriteError(status.messageLog)
       status.changeMode(Mode.normal)
       return
 
@@ -971,16 +973,16 @@ proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
         lastSaveTimeOfBuffer = status.bufStatus[bufferIndex].lastSaveTime.toTime
         lastModificationTimeOfFile = getLastModificationTime($path)
       if lastModificationTimeOfFile > lastSaveTimeOfBuffer:
-        if not status.commandWindow.askFileChangedSinceReading(status.messageLog):
+        if not status.commandLine.askFileChangedSinceReading(status.commandWindow, status.messageLog):
           # Cancel overwrite
           status.changeMode(status.bufStatus[bufferIndex].prevMode)
           status.commandWindow.erase
           return
 
     ## Ask if you want to create a directory that does not exist
-    if not status.commandWindow.checkAndCreateDir(status.messageLog, path):
+    if not status.commandLine.checkAndCreateDir(status.commandWindow, status.messageLog, path):
       status.changeMode(status.bufStatus[bufferIndex].prevMode)
-      status.commandWindow.writeSaveError(status.messageLog)
+      status.commandLine.writeSaveError(status.messageLog)
       return
 
     try:
@@ -988,7 +990,7 @@ proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
                bufStatus.buffer.toRunes,
                bufStatus.characterEncoding)
     except IOError:
-      status.commandWindow.writeSaveError(status.messageLog)
+      status.commandLine.writeSaveError(status.messageLog)
       status.changeMode(status.bufStatus[bufferIndex].prevMode)
       return
 
@@ -1119,7 +1121,7 @@ proc workspaceListCommand(status: var Editorstatus) =
     else:
       buffer &= $i & " "
 
-  status.commandwindow.writeWorkspaceList(buffer)
+  status.commandLine.writeWorkspaceList(buffer)
 
 proc changeCurrentWorkSpaceCommand(status: var Editorstatus, index: int) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -1135,7 +1137,7 @@ proc deleteCurrentWorkSpaceCommand*(status: var Editorstatus) =
         status.workSpace[status.currentWorkSpaceIndex].mainWindowNode.searchByWindowIndex(i)
       ## Check if buffer has changed
       if status.bufStatus[node.bufferIndex].countChange > 0:
-        status.commandWindow.writeNoWriteError(status.messageLog)
+        status.commandLine.writeNoWriteError(status.messageLog)
         status.changeMode(Mode.normal)
         return
 
@@ -1153,7 +1155,7 @@ proc createNewEmptyBufferCommand*(status: var Editorstatus) =
     status.addNewBuffer
     status.changeCurrentBuffer(status.bufStatus.high)
   else:
-    status.commandWindow.writeNoWriteError(status.messageLog)
+    status.commandLine.writeNoWriteError(status.messageLog)
 
 proc newEmptyBufferInSplitWindowHorizontally*(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -1323,7 +1325,7 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
   elif isSmartcaseSettingCommand(command):
     status.smartcaseSettingCommand(command[1])
   else:
-    status.commandWindow.writeNotEditorCommandError(command, status.messageLog)
+    status.commandLine.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
 proc exMode*(status: var EditorStatus) =

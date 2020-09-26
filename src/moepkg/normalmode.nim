@@ -112,7 +112,7 @@ proc turnOffHighlighting*(status: var EditorStatus) =
 proc writeFileAndExit(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   if status.bufStatus[currentBufferIndex].path.len == 0:
-    status.commandwindow.writeNoFileNameError(status.messageLog)
+    status.commandLine.writeNoFileNameError(status.messageLog)
     status.changeMode(Mode.normal)
   else:
     try:
@@ -122,7 +122,7 @@ proc writeFileAndExit(status: var EditorStatus) =
       let workspaceIndex = status.currentWorkSpaceIndex
       status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
     except IOError:
-      status.commandWindow.writeSaveError(status.messageLog)
+      status.commandLine.writeSaveError(status.messageLog)
 
 proc forceExit(status: var Editorstatus) =
   let workspaceIndex = status.currentWorkSpaceIndex
@@ -142,6 +142,7 @@ proc runQuickRunCommand(status: var Editorstatus) =
     windowNode = status.workspace[workspaceIndex].currentMainWindowNode
 
     buffer = runQuickRun(status.bufStatus[windowNode.bufferIndex],
+                         status.commandLine,
                          status.commandwindow,
                          status.messageLog,
                          status.settings)

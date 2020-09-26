@@ -1,6 +1,6 @@
 import osproc, highlite, terminal, times
 import unicodeext, settings, bufferstatus, gapbuffer, messages, ui,
-       editorstatus, movement, window, workspace, fileutils
+       editorstatus, movement, window, workspace, fileutils, commandline
 
 proc generateCommand(bufStatus: BufferStatus,
                      settings: QuickRunSettings): string =
@@ -34,6 +34,7 @@ proc getQuickRunBufferIndex*(bufStatus: seq[BufferStatus],
     if bufStatus[index].mode == Mode.quickRun: return index
 
 proc runQuickRun*(bufStatus: var BufferStatus,
+                  commandLine: var CommandLine,
                   cmdWin: var Window,
                   messageLog: var seq[seq[Rune]],
                   settings: EditorSettings): seq[seq[Rune]] =
@@ -49,7 +50,7 @@ proc runQuickRun*(bufStatus: var BufferStatus,
   let command = bufStatus.generateCommand(settings.quickRunSettings)
   if command == "": return @[ru""]
 
-  cmdWin.writeRunQuickRunMessage(settings.notificationSettings, messageLog)
+  commandLine.writeRunQuickRunMessage(settings.notificationSettings, messageLog)
   let cmdResult = execCmdEx(command)
   cmdWin.erase
 
@@ -57,7 +58,7 @@ proc runQuickRun*(bufStatus: var BufferStatus,
 
   case cmdResult.exitCode:
     of 124:
-      cmdWin.writeRunQuickRunTimeoutMessage(messageLog)
+      commandLine.writeRunQuickRunTimeoutMessage(messageLog)
     else:
       for i in 0 ..< cmdResult.output.len:
         if cmdResult.output[i] == '\n': result.add(@[ru""])
