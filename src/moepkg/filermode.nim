@@ -1,6 +1,7 @@
 import os, terminal, strutils, unicodeext, times, algorithm, sequtils
 import editorstatus, ui, fileutils, editorview, gapbuffer, highlight,
-       commandview, highlight, window, color, bufferstatus, settings, messages
+       commandview, highlight, window, color, bufferstatus, settings, messages,
+       commandline
 
 type PathInfo = tuple[kind: PathComponent,
                       path: string,
@@ -33,8 +34,7 @@ proc searchFiles(status: var EditorStatus,
   let command = getCommand(status, "/")
 
   if command.len == 0:
-    status.commandWindow.erase
-    status.commandWindow.refresh
+    status.commandLine.erase
     return @[]
 
   let str = command[0].join("")
@@ -47,28 +47,27 @@ proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
   let command = getCommand(status, "Delete file? 'y' or 'n': ")
 
   if command.len == 0:
-    status.commandWindow.erase
-    status.commandWindow.refresh
+    status.commandLine.erase
   elif (command[0] == ru"y" or command[0] == ru"yes") and command.len == 1:
     let workspaceIndex = status.currentWorkSpaceIndex
     var windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
     if filerStatus.dirList[windowNode.currentLine].kind == pcDir:
       try:
         removeDir(filerStatus.dirList[windowNode.currentLine].path)
-        status.commandWindow.writeMessageDeletedFile(
+        status.commandLine.writeMessageDeletedFile(
           filerStatus.dirList[windowNode.currentLine].path,
           status.settings.notificationSettings,
           status.messageLog)
       except OSError:
-        status.commandWindow.writeRemoveDirError(status.messageLog)
+        status.commandLine.writeRemoveDirError(status.messageLog)
     else:
       if tryRemoveFile(filerStatus.dirList[windowNode.currentLine].path):
-        status.commandWindow.writeMessageDeletedFile(
+        status.commandLine.writeMessageDeletedFile(
           filerStatus.dirList[windowNode.currentLine].path,
           status.settings.notificationSettings,
           status.messageLog)
       else:
-        status.commandWindow.writeRemoveFileError(status.messageLog)
+        status.commandLine.writeRemoveFileError(status.messageLog)
 
 proc sortDirList(dirList: seq[PathInfo], sortBy: Sort): seq[PathInfo] =
   case sortBy:
@@ -204,7 +203,7 @@ proc cutFile(filerStatus: var FilerStatus,
   filerStatus.register.filename = path
   filerStatus.register.originPath = $currentPath / path
 
-proc pasteFile(commandWindow: var Window,
+proc pasteFile(commandLine: var CommandLine,
                filerStatus: var FilerStatus,
                currentPath: seq[Rune],
                messageLog: var seq[seq[Rune]]) =
@@ -215,14 +214,14 @@ proc pasteFile(commandWindow: var Window,
     filerStatus.dirlistUpdate = true
     filerStatus.viewUpdate = true
   except OSError:
-    commandWindow.writeCopyFileError(messageLog)
+    commandLine.writeCopyFileError(messageLog)
     return
 
   if filerStatus.register.cut:
     let filename = filerStatus.register.filename
     if tryRemoveFile(filerStatus.register.originPath / filename):
       filerStatus.register.cut = false
-    else: commandWindow.writeRemoveFileError(messageLog)
+    else: commandLine.writeRemoveFileError(messageLog)
 
 proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   let dirname = getCommand(status, "New file name: ")
@@ -230,7 +229,7 @@ proc createDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   try:
     createDir($dirname[0])
     filerStatus.dirlistUpdate = true
-  except OSError: status.commandWindow.writeCreateDirError(status.messageLog)
+  except OSError: status.commandLine.writeCreateDirError(status.messageLog)
 
 proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
   let workspaceIndex = status.currentWorkSpaceIndex
@@ -270,7 +269,7 @@ proc openNewWinAndOpenFilerOrDir(status: var EditorStatus,
     try:
       setCurrentDir($path)
     except OSError:
-      status.commandWindow.writeFileOpenError($path, status.messageLog)
+      status.commandLine.writeFileOpenError($path, status.messageLog)
       status.addNewBuffer("")
     status.bufStatus.add(BufferStatus(mode: Mode.filer, lastSaveTime: now()))
   else:
@@ -515,9 +514,8 @@ proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
     windowNode.window.erase
     windowNode.window.write(0, 0, "not found", EditorColorPair.commandBar)
     windowNode.window.refresh
-    discard getKey(status.commandWindow)
-    status.commandWindow.erase
-    status.commandWindow.refresh
+    discard status.commandLine.getKey
+    status.commandLine.erase
     filerStatus.dirlistUpdate = true
 
 proc isFilerMode(status: Editorstatus): bool =
@@ -573,7 +571,6 @@ proc filerMode*(status: var EditorStatus) =
 
     elif isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-      status.commandWindow.erase
       filerStatus.viewUpdate = true
 
     elif key == ord('/'): searchFileMode(status, filerStatus)
@@ -602,7 +599,7 @@ proc filerMode*(status: var EditorStatus) =
     elif key == ord('C'):
       filerStatus.cutFile(windowNode.currentLine, currentPath)
     elif key == ord('p'):
-      status.commandWindow.pasteFile(
+      status.commandLine.pasteFile(
         filerStatus,
         currentPath,
         status.messageLog)

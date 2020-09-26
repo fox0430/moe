@@ -1,6 +1,6 @@
 import os, re, terminal
 import editorstatus, ui, unicodeext, bufferstatus, movement, gapbuffer,
-       messages
+       messages, commandline
 
 proc openSelectedBuffer(status: var Editorstatus) =
   let
@@ -12,7 +12,7 @@ proc openSelectedBuffer(status: var Editorstatus) =
   if fileExists($filename):
     status.addNewBuffer($filename)
   else:
-    status.commandWindow.writeFileNotFoundError(filename, status.messageLog)
+    status.commandLine.writeFileNotFoundError(filename, status.messageLog)
 
 proc initRecentFileModeBuffer(bufStatus: var BufferStatus) =
   var f = open(getHomeDir() / ".local/share/recently-used.xbel")
@@ -51,9 +51,7 @@ proc recentFileMode*(status: var Editorstatus) =
       status.eventLoopTask
       key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
 
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-      status.commandWindow.erase
+    if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
 
     elif isControlK(key): status.moveNextWindow
     elif isControlJ(key): status.movePrevWindow

@@ -2,19 +2,20 @@ from strutils import parseInt
 import strformat, terminal, times
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, undoredostack,
        window, movement, editor, search, color, bufferstatus, quickrun,
-       messages
+       messages, commandline
 
-proc writeDebugInfo(status: var EditorStatus, str: string = "") =
-  status.commandWindow.erase
-
-  let windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
-
-  status.commandWindow.write(0, 0, "debuf info: ", EditorColorPair.commandBar)
-  status.commandWindow.append(fmt"currentLine: {windowNode.currentLine}, currentColumn: {windowNode.currentColumn}")
-  status.commandWindow.append(fmt", cursor.y: {windowNode.cursor.y}, cursor.x: {windowNode.cursor.x}")
-  status.commandWindow.append(fmt", {str}")
-
-  status.commandWindow.refresh
+# TODO
+#proc writeDebugInfo(status: var EditorStatus, str: string = "") =
+#  status.commandLine.erase
+#
+#  let windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+#
+#  status.commandLine.window.write(0, 0, "debuf info: ", EditorColorPair.commandBar)
+#  status.commandLine.window.append(fmt"currentLine: {windowNode.currentLine}, currentColumn: {windowNode.currentColumn}")
+#  status.commandLine.window.append(fmt", cursor.y: {windowNode.cursor.y}, cursor.x: {windowNode.cursor.x}")
+#  status.commandLine.window.append(fmt", {str}")
+#
+#  status.commandLine.window.refresh
 
 proc searchOneCharactorToEndOfLine(bufStatus: var BufferStatus,
                                    windowNode: WindowNode,
@@ -112,7 +113,7 @@ proc turnOffHighlighting*(status: var EditorStatus) =
 proc writeFileAndExit(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   if status.bufStatus[currentBufferIndex].path.len == 0:
-    status.commandwindow.writeNoFileNameError(status.messageLog)
+    status.commandLine.writeNoFileNameError(status.messageLog)
     status.changeMode(Mode.normal)
   else:
     try:
@@ -122,7 +123,7 @@ proc writeFileAndExit(status: var EditorStatus) =
       let workspaceIndex = status.currentWorkSpaceIndex
       status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
     except IOError:
-      status.commandWindow.writeSaveError(status.messageLog)
+      status.commandLine.writeSaveError(status.messageLog)
 
 proc forceExit(status: var Editorstatus) =
   let workspaceIndex = status.currentWorkSpaceIndex
@@ -142,7 +143,7 @@ proc runQuickRunCommand(status: var Editorstatus) =
     windowNode = status.workspace[workspaceIndex].currentMainWindowNode
 
     buffer = runQuickRun(status.bufStatus[windowNode.bufferIndex],
-                         status.commandwindow,
+                         status.commandLine,
                          status.messageLog,
                          status.settings)
 
@@ -734,7 +735,6 @@ proc normalMode*(status: var EditorStatus) =
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-      status.commandWindow.erase
     elif key == ord('/'):
       status.searchFordwards
     elif key == ord('?'):

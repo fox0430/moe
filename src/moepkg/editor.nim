@@ -629,9 +629,9 @@ proc yankLines*(status: var EditorStatus, first, last: int) =
   for i in first .. last:
     status.registers.yankedLines.add(status.bufStatus[currentBufferIndex].buffer[i])
 
-  status.commandWindow.writeMessageYankedLine(status.registers.yankedLines.len,
-                                              status.settings.notificationSettings,
-                                              status.messageLog)
+  status.commandLine.writeMessageYankedLine(status.registers.yankedLines.len,
+                                            status.settings.notificationSettings,
+                                            status.messageLog)
 
 proc pasteLines(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -662,7 +662,7 @@ proc yankString*(status: var EditorStatus, length: int) =
   block:
     let strLen = status.registers.yankedStr.len
 
-    status.commandWindow.writeMessageYankedCharactor(strLen,
+    status.commandLine.writeMessageYankedCharactor(strLen,
       status.settings.notificationSettings,
       status.messageLog)
 

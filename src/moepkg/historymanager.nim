@@ -140,21 +140,22 @@ proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
     backupDir = getBackupDir(sourcePath, status.settings.autoBackupSettings)
     backupFilePath = backupDir / backupFilename
 
-  let isRestore = status.commandWindow.askBackupRestorePrompt(status.messageLog,
-                                                              backupFilename)
+  let isRestore = status.commandLine.askBackupRestorePrompt(
+    status.messageLog,
+    backupFilename)
   if not isRestore: return
 
   # Backup files before restore
   bufStatus.backupBuffer(bufStatus.characterEncoding,
                          status.settings.autoBackupSettings,
                          status.settings.notificationSettings,
-                         status.commandwindow,
+                         status.commandLine,
                          status.messageLog)
 
   try:
     copyFile($backupFilePath, $sourcePath)
   except OSError:
-    status.commandWindow.writeBackupRestoreError
+    status.commandLine.writeBackupRestoreError
     return
 
   # Update restored buffer
@@ -177,9 +178,9 @@ proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
   status.resize(terminalHeight(), terminalWidth())
 
   let settings = status.settings.notificationSettings
-  status.commandwindow.writeRestoreFileSuccessMessage(backupFilename,
-                                                      settings,
-                                                      status.messageLog)
+  status.commandLine.writeRestoreFileSuccessMessage(backupFilename,
+                                                    settings,
+                                                    status.messageLog)
 
 proc deleteBackupFiles(status: var EditorStatus, sourcePath: seq[Rune]) =
   let
@@ -191,21 +192,22 @@ proc deleteBackupFiles(status: var EditorStatus, sourcePath: seq[Rune]) =
     backupDir = getBackupDir(sourcePath, status.settings.autoBackupSettings)
     backupFilePath = backupDir / backupFilename
 
-  let isDelete = status.commandWindow.askDeleteBackupPrompt(status.messageLog,
-                                                            backupFilename)
+  let isDelete = status.commandLine.askDeleteBackupPrompt(
+    status.messageLog,
+    backupFilename)
 
   if not isDelete: return
 
   try:
     removeFile($backupFilePath)
   except OSError:
-    status.commandwindow.writeDeleteBackupError
+    status.commandLine.writeDeleteBackupError
     return
 
   let settings = status.settings.notificationSettings
-  status.commandwindow.writeMessageDeletedFile($backupFilename,
-                                              settings,
-                                              status.messageLog)
+  status.commandLine.writeMessageDeletedFile($backupFilename,
+                                             settings,
+                                             status.messageLog)
 
 proc historyManager*(status: var EditorStatus) =
   # BufferStatus.path is the path of the backup source file
@@ -242,7 +244,6 @@ proc historyManager*(status: var EditorStatus) =
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-      status.commandWindow.erase
     elif isControlK(key):
       status.moveNextWindow
     elif isControlJ(key):
