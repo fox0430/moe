@@ -3,9 +3,12 @@ import color, unicodeext, settings, commandline
 
 proc writeMessageOnCommandWindow*(commandLine: var CommandLine,
                                   message: string,
-                                  color: EditorColorPair) =
-
+                                  color: EditorColorPair) {.inline.} =
   commandLine.updateCommandBuffer(ru message, color)
+
+proc writeMessageOnCommandWindow*(commandLine: var CommandLine,
+                                  message: string) {.inline.} =
+  commandLine.writeMessageOnCommandWindow(message, EditorColorPair.commandBar)
 
 proc writeNoWriteError*(commandLine: var CommandLine, messageLog: var seq[seq[Rune]]) =
   let mess = "Error: No write since last change"
@@ -51,7 +54,7 @@ proc writeMessageDeletedFile*(commandLine: var CommandLine,
 
   let mess = "Deleted: " & filename
   if settings.screenNotifications and settings.filerScreenNotify:
-    commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+    commandLine.writeMessageOnCommandWindow(mess)
   if settings.logNotifications and settings.filerLogNotify:
     messageLog.add(mess.toRunes)
 
@@ -68,7 +71,7 @@ proc writeMessageYankedLine*(commandLine: var CommandLine,
 
   let mess = fmt"{numOfLine} line(s) yanked"
   if settings.screenNotifications and settings.yankScreenNotify:
-    commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+    commandLine.writeMessageOnCommandWindow(mess)
   if settings.logNotifications and settings.yankLogNotify:
     messageLog.add(mess.toRunes)
 
@@ -79,7 +82,7 @@ proc writeMessageYankedCharactor*(commandLine: var CommandLine,
 
   let mess = fmt"{numOfChar} character(s) yanked"
   if settings.screenNotifications and settings.yankScreenNotify:
-    commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+    commandLine.writeMessageOnCommandWindow(mess)
   if settings.yankLogNotify:
     messageLog.add(mess.toRunes)
 
@@ -91,7 +94,7 @@ proc writeMessageAutoSave*(commandLine: var CommandLine,
   let mess = fmt"Auto saved {filename}"
   if settings.screenNotifications and settings.autoSaveScreenNotify:
     let mess = fmt"Auto saved {filename}"
-    commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+    commandLine.writeMessageOnCommandWindow(mess)
   if settings.logNotifications and settings.autoSaveLogNotify:
     messageLog.add(mess.toRunes)
 
@@ -101,7 +104,7 @@ proc writeMessageBuildOnSave*(commandLine: var CommandLine,
 
   const mess = "Build on save..."
   if settings.screenNotifications and settings.buildOnSaveScreenNotify:
-    commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+    commandLine.writeMessageOnCommandWindow(mess)
   if settings.logNotifications and settings.buildOnSaveLogNotify:
     messageLog.add(mess.toRunes)
 
@@ -111,13 +114,13 @@ proc writeMessageSuccessBuildOnSave*(commandLine: var CommandLine,
 
   const mess = "Build successful, file saved"
   if settings.screenNotifications and settings.buildOnSaveScreenNotify:
-    commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+    commandLine.writeMessageOnCommandWindow(mess)
   if settings.logNotifications and settings.buildOnSaveLogNotify:
     messageLog.add(mess.toRunes)
 
 proc writeMessageFailedBuildOnSave*(commandLine: var CommandLine, messageLog: var seq[seq[Rune]]) =
   const mess = "Build failed"
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+  commandLine.writeMessageOnCommandWindow(mess)
   messageLog.add(mess.toRunes)
 
 proc writeNotEditorCommandError*(commandLine: var CommandLine,
@@ -138,7 +141,7 @@ proc writeMessageSaveFile*(commandLine: var CommandLine,
 
   let mess = fmt"Saved {filename}"
   if settings.screenNotifications and settings.saveScreenNotify:
-    commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+    commandLine.writeMessageOnCommandWindow(mess)
   if settings.logNotifications and settings.saveLogNotify:
     messageLog.add(mess.toRunes)
 
@@ -184,7 +187,7 @@ proc writeStartAutoBackupMessage*(commandLine: var CommandLine,
 
   const mess = "Start automatic backup..."
   if settings.screenNotifications and settings.autoBackupScreenNotify:
-    commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+    commandLine.writeMessageOnCommandWindow(mess)
   if settings.logNotifications and settings.autoBackupLogNotify:
     messageLog.add(mess.toRunes)
 
@@ -194,7 +197,7 @@ proc writeAutoBackupSuccessMessage*(commandLine: var CommandLine,
                                     messageLog: var seq[seq[Rune]]) =
 
   if settings.screenNotifications and settings.autoBackupScreenNotify:
-    commandLine.writeMessageOnCommandWindow(message, EditorColorPair.commandBar)
+    commandLine.writeMessageOnCommandWindow(message)
   if settings.logNotifications and settings.autoBackupLogNotify:
     messageLog.add(message.toRunes)
 
@@ -215,7 +218,7 @@ proc writeRunQuickRunMessage*(commandLine: var CommandLine,
 
   const mess = "Quick run..."
   if settings.quickRunScreenNotify:
-    commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.commandBar)
+    commandLine.writeMessageOnCommandWindow(mess)
 
 proc writeRunQuickRunTimeoutMessage*(commandLine: var CommandLine,
                                      messageLog: var seq[seq[Rune]]) =
@@ -266,7 +269,7 @@ proc writeRestoreFileSuccessMessage*(commandLine: var CommandLine,
 
   let message = fmt"Restore successful {filename}"
   if settings.screenNotifications and settings.restoreScreenNotify:
-    commandLine.writeMessageOnCommandWindow(message, EditorColorPair.commandBar)
+    commandLine.writeMessageOnCommandWindow(message)
   if settings.logNotifications and settings.restoreLogNotify:
     messageLog.add(message.toRunes)
 
