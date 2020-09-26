@@ -1,6 +1,6 @@
 import terminal, times
 import editorstatus, ui, unicodeext, movement, editor, bufferstatus, gapbuffer,
-       undoredostack, window, settings, commandline
+       undoredostack, window, settings
 
 proc isReplaceMode(status: EditorStatus): bool =
   let
