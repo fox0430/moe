@@ -958,9 +958,7 @@ proc configMode*(status: var Editorstatus) =
 
     status.lastOperatingTime = now()
 
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-      status.commandLine.erase
+    if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
     elif isControlK(key): status.moveNextWindow
     elif isControlJ(key): status.movePrevWindow
     elif key == ord(':'): status.changeMode(Mode.ex)

@@ -91,9 +91,7 @@ proc quickRunMode*(status: var Editorstatus) =
 
     status.lastOperatingTime = now()
 
-    if isResizekey(key):
-      status.commandLine.erase
-      status.resize(terminalHeight(), terminalWidth())
+    if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
     elif isControlK(key): status.moveNextWindow
     elif isControlJ(key): status.movePrevWindow
     elif key == ord(':'):

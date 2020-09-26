@@ -51,9 +51,7 @@ proc recentFileMode*(status: var Editorstatus) =
       status.eventLoopTask
       key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
 
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-      status.commandLine.erase
+    if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
 
     elif isControlK(key): status.moveNextWindow
     elif isControlJ(key): status.movePrevWindow

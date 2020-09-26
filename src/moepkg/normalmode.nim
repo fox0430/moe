@@ -735,7 +735,6 @@ proc normalMode*(status: var EditorStatus) =
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-      status.commandLine.erase
     elif key == ord('/'):
       status.searchFordwards
     elif key == ord('?'):

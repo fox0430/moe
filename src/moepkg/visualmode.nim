@@ -276,7 +276,6 @@ proc getInsertBuffer(status: var Editorstatus): seq[Rune] =
       break
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-      status.commandLine.erase
     elif isEnterKey(key):
       status.bufStatus[bufferIndex].keyEnter(windowNode,
         status.settings.autoIndent,
@@ -445,7 +444,6 @@ proc visualMode*(status: var EditorStatus) =
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-      status.commandLine.erase
     elif isEscKey(key) or isControlSquareBracketsRight(key):
       status.updatehighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
       status.changeMode(Mode.normal)
