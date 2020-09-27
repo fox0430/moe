@@ -1,21 +1,8 @@
 from strutils import parseInt
-import strformat, terminal, times
+import terminal, times
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, undoredostack,
        window, movement, editor, search, color, bufferstatus, quickrun,
        messages, commandline
-
-# TODO
-#proc writeDebugInfo(status: var EditorStatus, str: string = "") =
-#  status.commandLine.erase
-#
-#  let windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
-#
-#  status.commandLine.window.write(0, 0, "debuf info: ", EditorColorPair.commandBar)
-#  status.commandLine.window.append(fmt"currentLine: {windowNode.currentLine}, currentColumn: {windowNode.currentColumn}")
-#  status.commandLine.window.append(fmt", cursor.y: {windowNode.cursor.y}, cursor.x: {windowNode.cursor.x}")
-#  status.commandLine.window.append(fmt", {str}")
-#
-#  status.commandLine.window.refresh
 
 proc searchOneCharactorToEndOfLine(bufStatus: var BufferStatus,
                                    windowNode: WindowNode,
