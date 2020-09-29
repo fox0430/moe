@@ -1,4 +1,5 @@
-import sequtils, strutils, os, terminal, highlite, times
+import sequtils, strutils, os, terminal, highlite, times, strformat, osproc,
+       posix
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
         unicodeext, independentutils, search, highlight, commandview,
         window, movement, color, build, bufferstatus, editor,
@@ -27,6 +28,9 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
     replaceWord.add(command[i])
 
   return (searhWord: searchWord, replaceWord: replaceWord)
+
+proc isForceWriteCommand(command: seq[seq[Rune]]): bool {.inline.} =
+  return command.len == 1 and cmpIgnoreCase($command[0], "w!") == 0
 
 proc isPutConfigFileCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 1 and cmpIgnoreCase($command[0], "putconfigfile") == 0
@@ -175,8 +179,8 @@ proc isJumpCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
     prevMode = status.bufStatus[currentBufferIndex].prevMode
   return command.len == 1 and
          isDigit(command[0]) and
-         (prevMode == Mode.normal or
-         prevMode == Mode.logviewer)
+         (prevMode == bufferstatus.Mode.normal or
+         prevMode == bufferstatus.Mode.logviewer)
 
 proc isEditCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 2 and cmpIgnoreCase($command[0], "e") == 0
@@ -193,7 +197,7 @@ proc isWriteCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   return command.len in {1, 2} and
          cmpIgnoreCase($command[0], "w") == 0 and
-         status.bufStatus[currentBufferIndex].prevMode == Mode.normal
+         status.bufStatus[currentBufferIndex].prevMode == bufferstatus.Mode.normal
 
 proc isQuitCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 1 and cmpIgnoreCase($command[0], "q") == 0
@@ -202,7 +206,7 @@ proc isWriteAndQuitCommand(status: EditorStatus, command: seq[seq[Rune]]): bool 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   return command.len == 1 and
          cmpIgnoreCase($command[0], "wq") == 0 and
-         status.bufStatus[currentBufferIndex].prevMode == Mode.normal
+         status.bufStatus[currentBufferIndex].prevMode == bufferstatus.Mode.normal
 
 proc isForceQuitCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 1 and cmpIgnoreCase($command[0], "q!") == 0
@@ -259,7 +263,7 @@ proc startConfigMode(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
 
-  status.addNewBuffer(Mode.config)
+  status.addNewBuffer(bufferstatus.Mode.config)
   status.changeCurrentBuffer(status.bufStatus.high)
 
 proc startHistoryManager(status: var Editorstatus) =
@@ -267,15 +271,15 @@ proc startHistoryManager(status: var Editorstatus) =
   status.changeMode(status.bufStatus[bufferIndex].prevMode)
   status.prevBufferIndex = bufferIndex
 
-  if status.bufStatus[bufferIndex].mode != Mode.normal: return
+  if status.bufStatus[bufferIndex].mode != bufferstatus.Mode.normal: return
   for bufStatus in status.bufStatus:
-    if bufStatus.mode == Mode.history: return
+    if bufStatus.mode == bufferstatus.Mode.history: return
 
   status.verticalSplitWindow
   status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
 
-  status.addNewBuffer(Mode.history)
+  status.addNewBuffer(bufferstatus.Mode.history)
   status.changeCurrentBuffer(status.bufStatus.high)
 
 proc startRecentFileMode(status: var Editorstatus) =
@@ -295,7 +299,7 @@ proc startRecentFileMode(status: var Editorstatus) =
 
   status.addNewBuffer
   status.changeCurrentBuffer(status.bufStatus.high)
-  status.changeMode(Mode.recentFile)
+  status.changeMode(bufferstatus.Mode.recentFile)
 
 proc runQuickRunCommand(status: var Editorstatus) =
   let
@@ -324,7 +328,7 @@ proc runQuickRunCommand(status: var Editorstatus) =
 
     status.changeCurrentBuffer(status.bufStatus.high)
 
-    status.changeMode(Mode.quickRun)
+    status.changeMode(bufferstatus.Mode.quickRun)
   else:
     status.bufStatus[quickRunWindowIndex].buffer = initGapBuffer(buffer)
 
@@ -376,7 +380,7 @@ proc openHelp(status: var Editorstatus) =
 
   status.addNewBuffer
   status.changeCurrentBuffer(status.bufStatus.high)
-  status.changeMode(Mode.help)
+  status.changeMode(bufferstatus.Mode.help)
 
 proc openMessageLogViewer(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -388,7 +392,7 @@ proc openMessageLogViewer(status: var Editorstatus) =
 
   status.addNewBuffer
   status.changeCurrentBuffer(status.bufStatus.high)
-  status.changeMode(Mode.logviewer)
+  status.changeMode(bufferstatus.Mode.logviewer)
 
 proc openBufferManager(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -400,7 +404,7 @@ proc openBufferManager(status: var Editorstatus) =
 
   status.addNewBuffer
   status.changeCurrentBuffer(status.bufStatus.high)
-  status.changeMode(Mode.bufManager)
+  status.changeMode(bufferstatus.Mode.bufManager)
 
 proc changeCursorLineCommand(status: var Editorstatus, command: seq[Rune]) =
   if command == ru"on" : status.settings.view.cursorLine = true
@@ -648,7 +652,7 @@ proc turnOffHighlightingCommand(status: var EditorStatus) =
   turnOffHighlighting(status)
 
   status.commandLine.erase
-  status.changeMode(Mode.normal)
+  status.changeMode(bufferstatus.Mode.normal)
 
 proc multipleStatusBarSettingCommand(status: var Editorstatus,
                                      command: seq[Rune]) =
@@ -689,7 +693,7 @@ proc smartcaseSettingCommand(status: var EditorStatus, command: seq[Rune]) =
 proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
   if index < 0 or index > status.bufStatus.high:
     status.commandLine.writeNoBufferDeletedError(status.messageLog)
-    status.changeMode(Mode.normal)
+    status.changeMode(bufferstatus.Mode.normal)
     return
 
   status.bufStatus.delete(index)
@@ -700,31 +704,32 @@ proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
     status.workSpace[workspaceIndex].currentMainWindowNode.bufferIndex =
       status.bufStatus.high
 
-  if status.bufStatus[status.bufferIndexInCurrentWindow].mode == Mode.ex:
-    let prevMode = status.bufStatus[status.bufferIndexInCurrentWindow].prevMode
+  let bufferIndex = status.bufferIndexInCurrentWindow
+  if status.bufStatus[bufferIndex].mode == bufferstatus.Mode.ex:
+    let prevMode = status.bufStatus[bufferIndex].prevMode
     status.changeMode(prevMode)
   else:
     status.commandLine.erase
-    status.changeMode(status.bufStatus[status.bufferIndexInCurrentWindow].mode)
+    status.changeMode(status.bufStatus[bufferIndex].mode)
 
 proc changeFirstBufferCommand(status: var EditorStatus) =
   changeCurrentBuffer(status, 0)
 
   status.commandLine.erase
-  status.changeMode(Mode.normal)
+  status.changeMode(bufferstatus.Mode.normal)
 
 proc changeLastBufferCommand(status: var EditorStatus) =
   changeCurrentBuffer(status, status.bufStatus.high)
 
   status.commandLine.erase
-  status.changeMode(Mode.normal)
+  status.changeMode(bufferstatus.Mode.normal)
 
 proc opneBufferByNumberCommand(status: var EditorStatus, number: int) =
   if number < 0 or number > status.bufStatus.high: return
 
   changeCurrentBuffer(status, number)
   status.commandline.erase
-  status.changeMode(Mode.normal)
+  status.changeMode(bufferstatus.Mode.normal)
 
 proc changeNextBufferCommand(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -732,7 +737,7 @@ proc changeNextBufferCommand(status: var EditorStatus) =
 
   changeCurrentBuffer(status, currentBufferIndex + 1)
   status.commandline.erase
-  status.changeMode(Mode.normal)
+  status.changeMode(bufferstatus.Mode.normal)
 
 proc changePreveBufferCommand(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -741,13 +746,13 @@ proc changePreveBufferCommand(status: var EditorStatus) =
   changeCurrentBuffer(status, currentBufferIndex - 1)
 
   status.commandLine.erase
-  status.changeMode(Mode.normal)
+  status.changeMode(bufferstatus.Mode.normal)
 
 proc jumpCommand(status: var EditorStatus, line: int) =
   jumpLine(status, line)
 
   status.commandLine.erase
-  status.changeMode(Mode.normal)
+  status.changeMode(bufferstatus.Mode.normal)
 
 proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -761,7 +766,7 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
     status.commandLine.writeNoWriteError(status.messageLog)
   else:
     if dirExists($filename):
-      status.addNewBuffer($filename, Mode.filer)
+      status.addNewBuffer($filename, bufferstatus.Mode.filer)
     else:
       status.addNewBuffer($filename)
 
@@ -878,11 +883,25 @@ proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
   status.bufStatus[bufferIndex].lastSaveTime = now()
   status.changeMode(status.bufStatus[bufferIndex].prevMode)
 
+proc forceWriteCommand(status: var EditorStatus, path: seq[Rune]) =
+  let
+    username = getlogin()
+    chownCommand = fmt"sudo chown {username}:{username} {$path}"
+
+  # Exec chown command
+  saveCurrentTerminalModes()
+  exitUi()
+  discard execShellCmd(chownCommand)
+  restoreTerminalModes()
+  status.commandLine.erase
+
+  status.writeCommand(path)
+
 proc quitCommand(status: var EditorStatus) =
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     workspaceIndex = status.currentWorkSpaceIndex
-  if status.bufStatus[currentBufferIndex].prevMode != Mode.normal:
+  if status.bufStatus[currentBufferIndex].prevMode != bufferstatus.Mode.normal:
     status.deleteBuffer(currentBufferIndex)
   else:
     let
@@ -947,7 +966,7 @@ proc allBufferQuitCommand(status: var EditorStatus) =
 
     if status.bufStatus[node.bufferIndex].countChange > 0:
       status.commandLine.writeNoWriteError(status.messageLog)
-      status.changeMode(Mode.normal)
+      status.changeMode(bufferstatus.Mode.normal)
       return
 
   exitEditor(status.settings)
@@ -1015,9 +1034,9 @@ proc listAllBufferCommand(status: var Editorstatus) =
     let
       currentMode = status.bufStatus[i].mode
       prevMode = status.bufStatus[i].prevMode
-    if currentMode == Mode.filer or
-       (currentMode == Mode.ex and
-       prevMode == Mode.filer): line = getCurrentDir().toRunes
+    if currentMode == bufferstatus.Mode.filer or
+       (currentMode == bufferstatus.Mode.ex and
+       prevMode == bufferstatus.Mode.filer): line = getCurrentDir().toRunes
     else:
       let filename = status.bufStatus[i].path
       line = filename & ru"  line " & ($status.bufStatus[i].buffer.len).toRunes
@@ -1130,7 +1149,7 @@ proc deleteCurrentWorkSpaceCommand*(status: var Editorstatus) =
       ## Check if buffer has changed
       if status.bufStatus[node.bufferIndex].countChange > 0:
         status.commandLine.writeNoWriteError(status.messageLog)
-        status.changeMode(Mode.normal)
+        status.changeMode(bufferstatus.Mode.normal)
         return
 
     status.deleteWorkSpace(index)
@@ -1316,6 +1335,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     status.ignorecaseSettingCommand(command[1])
   elif isSmartcaseSettingCommand(command):
     status.smartcaseSettingCommand(command[1])
+  elif isForceWriteCommand(command):
+    status.forceWriteCommand(status.bufStatus[currentBufferIndex].path)
   else:
     status.commandLine.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
