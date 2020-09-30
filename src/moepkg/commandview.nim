@@ -65,8 +65,11 @@ const exCommandList = [
   "tabstop",
   "theme",
   "vs",
+  "w",
+  "w!"
   "ws",
   "wq",
+  "wq!",
   "wqa",
 ]
 
