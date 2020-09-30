@@ -891,6 +891,7 @@ proc forceWriteCommand(status: var EditorStatus, path: seq[Rune]) =
     setFilePermissions($path, {fpUserRead,fpUserWrite})
   except OSError:
     status.commandLine.writeSaveError(status.messageLog)
+    return
 
   status.writeCommand(path)
 
@@ -958,6 +959,7 @@ proc forceWriteAndQuitCommand(status: var EditorStatus) =
     setFilePermissions($path, {fpUserRead,fpUserWrite})
   except OSError:
     status.commandLine.writeSaveError(status.messageLog)
+    return
 
   discard status.commandLine.getKey()
 
