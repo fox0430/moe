@@ -804,3 +804,29 @@ suite "Ex mode: w! command":
     check entireFile == "abc"
 
     removeFile(filename)
+
+suite "Ex mode: wq! command":
+  test "Run Force write and close window":
+    const filename = "forceWriteAndQuitTest.txt"
+    writeFile(filename, "test")
+
+    # Set readonly
+    setFilePermissions(filename, {fpUserRead})
+
+    var status = initEditorStatus()
+    status.addNewBuffer(filename)
+    status.resize(100, 100)
+
+    status.verticalSplitWindow
+    status.resize(100, 100)
+
+    status.bufStatus[0].buffer[0] = ru"abc"
+
+    const command = @[ru"wq!"]
+    status.exModeCommand(command)
+    check status.workspace[0].numOfMainWindow == 1
+
+    let entireFile = readFile(filename)
+    check entireFile == "abc"
+
+    removeFile(filename)
