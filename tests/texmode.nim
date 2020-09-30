@@ -782,3 +782,25 @@ suite "Ex mode: q command":
     status.exModeCommand(command)
 
     check status.bufStatus[0].mode == Mode.normal
+
+suite "Ex mode: w! command":
+  test "Run Force write command":
+    const filename = "forceWriteTest.txt"
+    writeFile(filename, "test")
+
+    # Set readonly
+    setFilePermissions(filename, {fpUserRead})
+
+    var status = initEditorStatus()
+    status.addNewBuffer(filename)
+    status.resize(100, 100)
+
+    status.bufStatus[0].buffer[0] = ru"abc"
+
+    const command = @[ru"w!"]
+    status.exModeCommand(command)
+
+    let entireFile = readFile(filename)
+    check entireFile == "abc"
+
+    removeFile(filename)

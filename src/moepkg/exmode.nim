@@ -884,16 +884,10 @@ proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
   status.changeMode(status.bufStatus[bufferIndex].prevMode)
 
 proc forceWriteCommand(status: var EditorStatus, path: seq[Rune]) =
-  let
-    username = getlogin()
-    chownCommand = fmt"sudo chown {username}:{username} {$path}"
-
-  # Exec chown command
-  saveCurrentTerminalModes()
-  exitUi()
-  discard execShellCmd(chownCommand)
-  restoreTerminalModes()
-  status.commandLine.erase
+  try:
+    setFilePermissions($path, {fpUserRead,fpUserWrite})
+  except OSError:
+    status.commandLine.writeSaveError(status.messageLog)
 
   status.writeCommand(path)
 
