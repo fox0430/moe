@@ -29,6 +29,9 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
 
   return (searhWord: searchWord, replaceWord: replaceWord)
 
+proc isForceWriteAndQuitCommand(command: seq[seq[Rune]]): bool {.inline.} =
+  return command.len == 1 and cmpIgnoreCase($command[0], "wq!") == 0
+
 proc isForceWriteCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 1 and cmpIgnoreCase($command[0], "w!") == 0
 
@@ -946,6 +949,20 @@ proc writeAndQuitCommand(status: var EditorStatus) =
 
   status.changeMode(status.bufStatus[bufferIndex].prevMode)
 
+proc forceWriteAndQuitCommand(status: var EditorStatus) =
+  let
+    bufferIndex = status.bufferIndexInCurrentWindow
+    path = status.bufStatus[bufferIndex].path
+
+  try:
+    setFilePermissions($path, {fpUserRead,fpUserWrite})
+  except OSError:
+    status.commandLine.writeSaveError(status.messageLog)
+
+  discard status.commandLine.getKey()
+
+  status.writeAndQuitCommand
+
 proc forceQuitCommand(status: var EditorStatus) =
   let
     workspaceIndex = status.currentWorkSpaceIndex
@@ -1331,6 +1348,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     status.smartcaseSettingCommand(command[1])
   elif isForceWriteCommand(command):
     status.forceWriteCommand(status.bufStatus[currentBufferIndex].path)
+  elif isForceWriteAndQuitCommand(command):
+    status.forceWriteAndQuitCommand
   else:
     status.commandLine.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
