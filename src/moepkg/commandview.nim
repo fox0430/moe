@@ -66,7 +66,7 @@ const exCommandList = [
   "theme",
   "vs",
   "w",
-  "w!"
+  "w!",
   "ws",
   "wq",
   "wq!",
