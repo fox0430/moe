@@ -1,4 +1,4 @@
-import terminal, strutils, sequtils, strformat, os
+import terminal, strutils, sequtils, strformat, os, algorithm
 import ui, unicodeext, fileutils, color, commandline
 
 type
@@ -328,6 +328,10 @@ proc suggestFilePath(status: var Editorstatus,
           suggestlist.add(addPath)
         else:
           suggestlist.add(path.toRunes)
+
+  suggestlist.sort(proc (a, b: seq[Rune]): int =
+    if a == inputPath or b == inputPath: 0
+    else: cmp($a, $b))
 
   var
     suggestIndex = 0
