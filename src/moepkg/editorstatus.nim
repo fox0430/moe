@@ -572,7 +572,7 @@ proc writePopUpWindow*(popUpWindow: var Window,
 
   # Pop up window position
   let
-    actualY = y.clamp(0, terminalHeight() - h)
+    actualY = y.clamp(0, terminalHeight() - 1 - h)
     actualX = x.clamp(0, terminalWidth() - w)
 
   popUpWindow.resize(h, w, actualY, actualX)
