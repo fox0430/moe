@@ -1,5 +1,4 @@
-import sequtils, strutils, os, terminal, highlite, times, strformat, osproc,
-       posix
+import sequtils, strutils, os, terminal, highlite, times
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
         unicodeext, independentutils, search, highlight, commandview,
         window, movement, color, build, bufferstatus, editor,
