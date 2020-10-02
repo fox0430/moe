@@ -319,7 +319,8 @@ proc suggestFilePath(status: var Editorstatus,
       normalizedInput = normalizePath(inputPath)
       normalizedPath = normalizePath(inputPath.substr(0, inputPath.rfind(ru'/')))
     for kind, path in walkDir($normalizedPath):
-      if path.toRunes.startsWith(normalizedInput):
+      if path.toRunes.len > normalizedInput.len and
+            path.toRunes.startsWith(normalizedInput):
         if inputPath[0] == ru'~':
           let
             pathLen = path.toRunes.high
@@ -329,9 +330,7 @@ proc suggestFilePath(status: var Editorstatus,
         else:
           suggestlist.add(path.toRunes)
 
-  suggestlist.sort(proc (a, b: seq[Rune]): int =
-    if a == inputPath or b == inputPath: 0
-    else: cmp($a, $b))
+  suggestlist.sort(proc (a, b: seq[Rune]): int = cmp($a, $b))
 
   var
     suggestIndex = 0
