@@ -909,10 +909,10 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Highlight"].contains("pairOfParen"):
       result.highlightPairOfParen =  settings["Highlight"]["pairOfParen"].getbool()
 
-    if settings["Highlight"].contains("highlightFullWidthSpace"):
+    if settings["Highlight"].contains("fullWidthSpace"):
       result.highlightFullWidthSpace = settings["Highlight"]["fullWidthSpace"].getbool()
 
-    if settings["Highlight"].contains("highlightTrailingSpaces"):
+    if settings["Highlight"].contains("trailingSpaces"):
       result.highlightTrailingSpaces = settings["Highlight"]["trailingSpaces"].getbool()
 
   if settings.contains("AutoBackup"):
