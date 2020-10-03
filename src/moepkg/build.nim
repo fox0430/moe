@@ -1,4 +1,5 @@
-import os, osproc, strformat, highlite
+import os, osproc, strformat
+import syntax/highlite
 import unicodeext
 
 proc build*(filename, workspaceRoot,
