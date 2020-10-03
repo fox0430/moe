@@ -27,13 +27,8 @@ const tomlStr = """
   liveReloadOfConf = true
   incrementalSearch = false
   popUpWindowInExmode = false
-  replaceTextHighlight = false
-  highlightPairOfParen = false
   autoDeleteParen = false
   systemClipboard = false
-  highlightFullWidthSpace = false
-  highlightTrailingSpaces = false
-  highlightCurrentWord = false
   smoothScroll = false
   smoothScrollSpeed = 1
 
@@ -65,6 +60,11 @@ const tomlStr = """
 
   [Highlight]
   reservedWord = ["TEST", "TEST2"]
+  replaceText = false
+  pairOfParen = false
+  fullWidthSpace = false
+  trailingSpaces = false
+  currentWord = false
 
   [AutoBackup]
   enable = false
