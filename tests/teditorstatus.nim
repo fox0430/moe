@@ -4,58 +4,58 @@ import moepkg/[ui, highlight, editorstatus, editorview, gapbuffer, unicodeext,
 
 test "Add new buffer":
   var status = initEditorStatus()
-  status.addNewBuffer("")
-  status.addNewBuffer("")
+  status.addNewBuffer
+  status.addNewBuffer
   status.resize(100, 100)
   check(status.bufStatus.len == 2)
 
 test "Vertical split window":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.resize(100, 100)
   status.verticalSplitWindow
 
 test "Horizontal split window":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.resize(100, 100)
   status.horizontalSplitWindow
 
 test "resize 1":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.resize(100, 100)
   status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
-  
+
   status.workSpace[0].currentMainWindowNode.highlight =
     initHighlight($status.bufStatus[0].buffer,
     status.settings.reservedWords,
     status.bufStatus[0].language)
-    
+
   status.workSpace[0].currentMainWindowNode.view =
     initEditorView(status.bufStatus[0].buffer, 1, 1)
-    
+
   status.resize(0, 0)
 
 test "resize 2":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.resize(100, 100)
   status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
-  
+
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
     status.settings.reservedWords,
     status.bufStatus[0].language)
-    
+
   status.workSpace[0].currentMainWindowNode.view =
     initEditorView(status.bufStatus[0].buffer, 20, 4)
-    
+
   status.resize(20, 4)
-  
+
   status.workSpace[0].currentMainWindowNode.currentColumn = 1
   status.changeMode(Mode.insert)
-  
+
   for i in 0 ..< 10:
     status.bufStatus[0].keyEnter(status.workSpace[0].currentMainWindowNode,
                                  status.settings.autoCloseParen,
@@ -64,8 +64,8 @@ test "resize 2":
 
 test "Highlight of a pair of paren 1":
   var status = initEditorStatus()
-  status.addNewBuffer("")
-  
+  status.addNewBuffer
+
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
     status.settings.reservedWords,
@@ -120,7 +120,7 @@ test "Highlight of a pair of paren 1":
 
 test "Highlight of a pair of paren 2":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
@@ -139,7 +139,7 @@ test "Highlight of a pair of paren 2":
 
 test "Highlight of a pair of paren 3":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
@@ -161,7 +161,7 @@ test "Highlight of a pair of paren 3":
 
 test "Highlight of a pair of paren 4":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
     status.settings.reservedWords,
@@ -171,9 +171,9 @@ test "Highlight of a pair of paren 4":
   status.update
 
   status.bufStatus[0].keyDown(status.workSpace[0].currentMainWindowNode)
-  
+
   status.changeMode(Mode.insert)
-  
+
   status.bufStatus[0].keyEnter(status.workSpace[0].currentMainWindowNode,
                                status.settings.autoIndent,
                                status.settings.tabStop)
@@ -182,7 +182,7 @@ test "Highlight of a pair of paren 4":
 
 test "Highlight of a pair of paren 5":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.resize(100, 100)
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
@@ -198,7 +198,7 @@ test "Highlight of a pair of paren 5":
 test "Auto delete paren 1":
   block:
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"()"])
     status.bufStatus[0].deleteCurrentCharacter(
       status.workSpace[0].currentMainWindowNode,
@@ -208,10 +208,10 @@ test "Auto delete paren 1":
 
   block:
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"()"])
     status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
-    
+
     status.bufStatus[0].deleteCurrentCharacter(
       status.workSpace[0].currentMainWindowNode,
       status.settings.autoDeleteParen)
@@ -221,9 +221,9 @@ test "Auto delete paren 1":
 test "Auto delete paren 2":
   block:
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(())"])
-    
+
     status.bufStatus[0].deleteCurrentCharacter(
       status.workSpace[0].currentMainWindowNode,
       status.settings.autoDeleteParen)
@@ -232,10 +232,10 @@ test "Auto delete paren 2":
 
   block:
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(())"])
     status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
-    
+
     status.bufStatus[0].deleteCurrentCharacter(
       status.workSpace[0].currentMainWindowNode,
       status.settings.autoDeleteParen)
@@ -244,12 +244,12 @@ test "Auto delete paren 2":
 
   block:
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(())"])
-    
+
     for i in 0 ..< 2:
       status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
-      
+
     status.bufStatus[0].deleteCurrentCharacter(
       status.workSpace[0].currentMainWindowNode,
       status.settings.autoDeleteParen)
@@ -258,11 +258,11 @@ test "Auto delete paren 2":
 
   block:
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(())"])
     for i in 0 ..< 3:
       status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
-      
+
     status.bufStatus[0].deleteCurrentCharacter(
       status.workSpace[0].currentMainWindowNode,
       status.settings.autoDeleteParen)
@@ -272,10 +272,10 @@ test "Auto delete paren 2":
 test "Auto delete paren 3":
   block:
     var status = initEditorStatus()
-    status.addNewBuffer("")
-    
+    status.addNewBuffer
+
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(()"])
-    
+
     status.bufStatus[0].deleteCurrentCharacter(
       status.workSpace[0].currentMainWindowNode,
       status.settings.autoDeleteParen)
@@ -284,10 +284,10 @@ test "Auto delete paren 3":
 
   block:
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(()"])
     status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
-    
+
     status.bufStatus[0].deleteCurrentCharacter(
       status.workSpace[0].currentMainWindowNode,
       status.settings.autoDeleteParen)
@@ -296,11 +296,11 @@ test "Auto delete paren 3":
 
   block:
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(()"])
     for i in 0 ..< 2:
       status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
-      
+
     status.bufStatus[0].deleteCurrentCharacter(
       status.workSpace[0].currentMainWindowNode,
       status.settings.autoDeleteParen)
@@ -309,9 +309,9 @@ test "Auto delete paren 3":
 
   block:
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"())"])
-    
+
     status.bufStatus[0].deleteCurrentCharacter(
       status.workSpace[0].currentMainWindowNode,
       status.settings.autoDeleteParen)
@@ -320,10 +320,10 @@ test "Auto delete paren 3":
 
   block:
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"())"])
     status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
-    
+
     status.bufStatus[0].deleteCurrentCharacter(
       status.workSpace[0].currentMainWindowNode,
       status.settings.autoDeleteParen)
@@ -332,12 +332,12 @@ test "Auto delete paren 3":
 
   block:
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"())"])
-    
+
     for i in 0 ..< 3:
       status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
-      
+
     status.bufStatus[0].deleteCurrentCharacter(
       status.workSpace[0].currentMainWindowNode,
       status.settings.autoDeleteParen)
@@ -347,9 +347,9 @@ test "Auto delete paren 3":
 test "Auto delete paren 4":
   block:
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(", ru")"])
-    
+
     status.bufStatus[0].deleteCurrentCharacter(
       status.workSpace[0].currentMainWindowNode,
       status.settings.autoDeleteParen)
@@ -359,10 +359,10 @@ test "Auto delete paren 4":
 
   block:
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(", ru")"])
     status.bufStatus[0].keyDown(status.workSpace[0].currentMainWindowNode)
-    
+
     status.bufStatus[0].deleteCurrentCharacter(
       status.workSpace[0].currentMainWindowNode,
       status.settings.autoDeleteParen)
@@ -373,7 +373,7 @@ test "Auto delete paren 4":
 test "Auto delete paren 5":
   block:
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"()"])
     status.changeMode(Mode.insert)
     status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
@@ -385,7 +385,7 @@ test "Auto delete paren 5":
 
   block:
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"()"])
     status.changeMode(Mode.insert)
     for i in 0 ..< 2:
@@ -399,14 +399,14 @@ test "Auto delete paren 5":
 test "Auto delete paren 6":
   block:
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(a(a))"])
-    
+
     status.changeMode(Mode.insert)
-    
+
     for i in 0 ..< 5:
       status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
-      
+
     status.bufStatus[0].keyBackspace(status.workSpace[0].currentMainWindowNode,
                                      status.settings.autoDeleteParen,
                                      status.settings.tabStop)
@@ -415,14 +415,14 @@ test "Auto delete paren 6":
 
   block:
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"(a(a))"])
-    
+
     status.changeMode(Mode.insert)
-    
+
     for i in 0 ..< 6:
       status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
-      
+
     status.bufStatus[0].keyBackspace(status.workSpace[0].currentMainWindowNode,
                                      status.settings.autoDeleteParen,
                                      status.settings.tabStop)
@@ -431,7 +431,7 @@ test "Auto delete paren 6":
 
 test "Highlight current word 1":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"test abc test"])
 
   status.resize(100, 100)
@@ -443,7 +443,7 @@ test "Highlight current word 1":
 
 test "Highlight current word 2":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"test", ru"test"])
 
   status.resize(100, 100)
@@ -455,7 +455,7 @@ test "Highlight current word 2":
 
 test "Highlight current word 3":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"[test]", ru"test"])
 
   status.resize(100, 100)
@@ -468,7 +468,7 @@ test "Highlight current word 3":
 
 test "Highlight full width space 1":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"　"])
   status.settings.highlightOtherUsesCurrentWord = false
 
@@ -479,7 +479,7 @@ test "Highlight full width space 1":
 
 test "Highlight full width space 2":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc　"])
   status.settings.highlightOtherUsesCurrentWord = false
 
@@ -491,7 +491,7 @@ test "Highlight full width space 2":
 
 test "Highlight full width space 3":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"　"])
   status.settings.highlightOtherUsesCurrentWord = false
 
@@ -502,7 +502,7 @@ test "Highlight full width space 3":
 
 test "Highlight full width space 2":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"a　b"])
   status.settings.highlightOtherUsesCurrentWord = false
 
@@ -523,14 +523,14 @@ test "Write tab line":
 
 test "Close window":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.resize(100, 100)
   status.verticalSplitWindow
   status.closeWindow(status.workSpace[0].currentMainWindowNode)
 
 test "Close window 2":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
 
   status.resize(100, 100)
   status.update
@@ -552,7 +552,7 @@ test "Close window 2":
 
 test "Close window 3":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
 
   status.resize(100, 100)
   status.update
@@ -579,7 +579,7 @@ test "Close window 3":
 
 test "Close window 4":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
 
   status.resize(100, 100)
   status.update
@@ -633,7 +633,7 @@ test "Close window 5":
 
 test "Create work space":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
 
   status.resize(100, 100)
   status.update
@@ -645,7 +645,7 @@ test "Create work space":
 
 test "Change work space":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
 
   status.resize(100, 100)
   status.update
@@ -657,7 +657,7 @@ test "Change work space":
 
 test "Delete work space":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
 
   status.resize(100, 100)
   status.update
@@ -672,7 +672,7 @@ test "Delete work space":
 test "Change current buffer":
   var status = initEditorStatus()
 
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].path = ru"test"
   status.bufStatus[0].buffer = initGapBuffer(@[ru"", ru"abc"])
 
@@ -685,7 +685,7 @@ test "Change current buffer":
   status.workspace[0].currentMainWindowNode.currentLine = currentLine
   status.workspace[0].currentMainWindowNode.currentColumn = currentColumn
 
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].path = ru"test2"
   status.bufStatus[0].buffer =  initGapBuffer(@[ru""])
 
@@ -697,7 +697,7 @@ test "Change current buffer":
 # Fix #693
 test "Change create workspace":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
 
   status.resize(100, 100)
   status.update
@@ -721,41 +721,41 @@ test "Change create workspace":
 suite "editorstatus: Highlight trailing spaces":
   test "Highlight trailing spaces":
     var status = initEditorStatus()
-    status.addNewBuffer("")
-  
+    status.addNewBuffer
+
     status.settings.highlightOtherUsesCurrentWord = false
-    
+
     status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
       $status.bufStatus[0].buffer,
       status.settings.reservedWords,
       status.bufStatus[0].language)
-  
+
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
     status.updateHighlight(status.workSpace[0].currentMainWindowNode)
     status.update
-  
+
     let node = status.workSpace[0].currentMainWindowNode
     check(node.highlight[0].color == EditorColorPair.defaultChar)
     check(node.highlight[0].firstColumn == 0)
     check(node.highlight[0].lastColumn == 2)
-  
+
   test "Highlight trailing spaces 2":
     var status = initEditorStatus()
-    status.addNewBuffer("")
-  
+    status.addNewBuffer
+
     status.settings.highlightOtherUsesCurrentWord = false
-    
+
     status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
       $status.bufStatus[0].buffer,
       status.settings.reservedWords,
       status.bufStatus[0].language)
-  
+
     status.bufStatus[0].buffer = initGapBuffer(@[ru"", ru"abc  "])
     status.updateHighlight(status.workSpace[0].currentMainWindowNode)
     status.update
-  
+
     let node = status.workSpace[0].currentMainWindowNode
-  
+
     check(node.highlight[0].color == EditorColorPair.defaultChar)
     check(node.highlight[0].firstColumn == 0)
     check(node.highlight[0].lastColumn == -1)
@@ -763,26 +763,26 @@ suite "editorstatus: Highlight trailing spaces":
     check(node.highlight[1].color == EditorColorPair.defaultChar)
     check(node.highlight[1].firstColumn == 0)
     check(node.highlight[1].lastColumn == 2)
-  
+
     check(node.highlight[2].color == EditorColorPair.highlightTrailingSpaces)
     check(node.highlight[2].firstColumn == 3)
     check(node.highlight[2].lastColumn == 4)
-  
+
   test "Highlight trailing spaces 3":
     var status = initEditorStatus()
-    status.addNewBuffer("")
-  
+    status.addNewBuffer
+
     status.settings.highlightOtherUsesCurrentWord = false
-    
+
     status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
       $status.bufStatus[0].buffer,
       status.settings.reservedWords,
       status.bufStatus[0].language)
-  
+
     status.bufStatus[0].buffer = initGapBuffer(@[ru" "])
     status.updateHighlight(status.workSpace[0].currentMainWindowNode)
     status.update
-  
+
     let node = status.workSpace[0].currentMainWindowNode
 
     check(node.highlight[0].color == EditorColorPair.defaultChar)

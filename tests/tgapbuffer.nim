@@ -3,7 +3,7 @@ import moepkg/gapbuffer
 
 test "empty":
   let buffer = initGapBuffer[string]()
-  
+
   check(buffer.empty)
 
 test "insert":
@@ -11,7 +11,7 @@ test "insert":
   buffer.insert("0", 0)
   buffer.insert("1", 0)
   buffer.insert("2", 2)
-  
+
   check(buffer.len == 3)
   check(buffer[0] == "1")
   check(buffer[1] == "0")
@@ -51,7 +51,7 @@ test "delete(all)":
   buffer.add("4")
   buffer.add("5")
   buffer.delete(0, 4)
-  
+
   check(buffer.empty)
   check(buffer.len == 0)
 
