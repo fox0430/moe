@@ -56,3 +56,10 @@ proc isDiffViewerMode*(mode, prevMode: Mode): bool {.inline.} =
 
 proc isConfigMode*(mode, prevMode: Mode): bool {.inline.} =
   (mode == Mode.config) or (mode == Mode.ex and prevMode == Mode.config)
+
+proc isNormalMode*(mode, prevMode: Mode): bool {.inline.} =
+  (mode == Mode.normal) or (mode == Mode.ex and prevMode == Mode.normal)
+
+proc isInsertMode*(mode: Mode): bool {.inline.} = mode == Mode.insert
+
+proc isReplaceMode*(mode: Mode): bool {.inline.} = mode == Mode.replace
