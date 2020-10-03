@@ -1,4 +1,5 @@
-import highlite, tables, times
+import tables, times
+import syntax/highlite
 import gapbuffer, unicodeext
 
 type Mode* = enum

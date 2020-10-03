@@ -1,4 +1,5 @@
-import osproc, highlite, terminal, times
+import osproc, terminal, times
+import syntax/highlite
 import unicodeext, settings, bufferstatus, gapbuffer, messages, ui,
        editorstatus, movement, window, workspace, fileutils, commandline
 

@@ -1,6 +1,6 @@
 import strutils, terminal, os, strformat, tables, times, osproc, heapqueue,
        deques, times
-import highlite
+import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        undoredostack, window, color, workspace, statusbar, settings,
        bufferstatus, cursor, tabline, backup, messages, commandline
