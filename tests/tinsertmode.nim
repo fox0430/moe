@@ -29,8 +29,7 @@ suite "Insert mode":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b"])
 
     status.bufStatus[0].insertCharacterBelowCursor(
-      status.workSpace[0].currentMainWindowNode
-    )
+      status.workSpace[0].currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 2)
@@ -43,8 +42,7 @@ suite "Insert mode":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
     status.bufStatus[0].insertCharacterBelowCursor(
-      status.workSpace[0].currentMainWindowNode
-    )
+      status.workSpace[0].currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
@@ -58,8 +56,7 @@ suite "Insert mode":
     status.workspace[0].currentMainWindowNode.currentColumn = 2
 
     status.bufStatus[0].insertCharacterBelowCursor(
-      status.workSpace[0].currentMainWindowNode
-    )
+      status.workSpace[0].currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 2)
@@ -74,8 +71,7 @@ suite "Insert mode":
     status.workspace[0].currentMainWindowNode.currentLine = 1
 
     status.bufStatus[0].insertCharacterAboveCursor(
-      status.workSpace[0].currentMainWindowNode
-    )
+      status.workSpace[0].currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 2)
@@ -91,8 +87,7 @@ suite "Insert mode":
     status.workspace[0].currentMainWindowNode.currentColumn = 2
 
     status.bufStatus[0].insertCharacterAboveCursor(
-      status.workSpace[0].currentMainWindowNode
-    )
+      status.workSpace[0].currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 2)
@@ -105,8 +100,7 @@ suite "Insert mode":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
 
     status.bufStatus[0].insertCharacterAboveCursor(
-      status.workSpace[0].currentMainWindowNode
-    )
+      status.workSpace[0].currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
@@ -163,8 +157,7 @@ suite "Insert mode":
     status.workspace[0].currentMainWindowNode.currentColumn = 4
 
     status.bufStatus[0].deleteCharactersBeforeCursorInCurrentLine(
-      status.workSpace[0].currentMainWindowNode
-    )
+      status.workSpace[0].currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
@@ -176,8 +169,7 @@ suite "Insert mode":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
 
     status.bufStatus[0].deleteCharactersBeforeCursorInCurrentLine(
-      status.workSpace[0].currentMainWindowNode
-    )
+      status.workSpace[0].currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
@@ -190,8 +182,7 @@ suite "Insert mode":
 
     status.bufStatus[0].addIndentInCurrentLine(
       status.workSpace[0].currentMainWindowNode,
-      status.settings.view.tabStop
-    )
+      status.settings.view.tabStop)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer[0] == ru"  abc")
@@ -205,8 +196,7 @@ suite "Insert mode":
 
     status.bufStatus[0].deleteIndentInCurrentLine(
       status.workSpace[0].currentMainWindowNode,
-      status.settings.view.tabStop
-    )
+      status.settings.view.tabStop)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer[0] == ru"abc")
@@ -220,8 +210,7 @@ suite "Insert mode":
 
     status.bufStatus[0].deleteIndentInCurrentLine(
       status.workSpace[0].currentMainWindowNode,
-      status.settings.view.tabStop
-    )
+      status.settings.view.tabStop)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer[0] == ru"abc")
@@ -249,13 +238,16 @@ suite "Insert mode":
 
   test "General-purpose autocomplete window position 1":
     const buffer = @["a", "aba", "abb", "abc", "abd", "abe", "abf"]
-    var status = prepareInsertMode(buffer,
-                                   0,
-                                   1,
-                                   100,
-                                   100)
+    var status = prepareInsertMode(
+      buffer,
+      0,
+      1,
+      100,
+      100)
 
-    var suggestionWindow = tryOpenSuggestionWindow(currentBufStatus, currentMainWindow)
+    var suggestionWindow = tryOpenSuggestionWindow(
+      currentBufStatus,
+      currentMainWindow)
     let
       mainWindowHeight = status.settings.getMainWindowHeight(100)
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
@@ -277,7 +269,9 @@ suite "Insert mode":
                                    terminalHeight,
                                    100)
 
-    var suggestionWindow = tryOpenSuggestionWindow(currentBufStatus, currentMainWindow)
+    var suggestionWindow = tryOpenSuggestionWindow(
+      currentBufStatus,
+      currentMainWindow)
     let
       mainWindowHeight = status.settings.getMainWindowHeight(terminalHeight)
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
@@ -293,11 +287,12 @@ suite "Insert mode":
     const buffer = @[
       "import os, unicode, times",
       "import"]
-    var status = prepareInsertMode(buffer,
-                                   0,
-                                   1,
-                                   100,
-                                   100)
+    var status = prepareInsertMode(
+      buffer,
+      0,
+      1,
+      100,
+      100)
 
     var suggestionWindow = tryOpenSuggestionWindow(currentBufStatus, currentMainWindow)
     let
@@ -310,11 +305,12 @@ suite "Insert mode":
 
   test "General-purpose autocomplete (the cursor position): Selecting a suggestion which is length 1 when the buffer contains some lines.":
     const buffer = @["", "", "a"]
-    var status = prepareInsertMode(buffer,
-                                   0,
-                                   0,
-                                   100,
-                                   100)
+    var status = prepareInsertMode(
+      buffer,
+     0,
+     0,
+     100,
+     100)
 
     insertCharacter(currentBufStatus,
                     currentMainWindow,
@@ -332,22 +328,25 @@ suite "Insert mode":
 
   test "General-purpose autocomplete (the cursor position): Selecting a suggestion which is length 1 when the buffer contains a line.":
     const buffer = @[" a"]
-    var status = prepareInsertMode(buffer,
-                                   0,
-                                   0,
-                                   100,
-                                   100)
+    var status = prepareInsertMode(
+      buffer,
+      0,
+      0,
+      100,
+      100)
 
     insertCharacter(currentBufStatus,
                     currentMainWindow,
                     status.settings.autoCloseParen,
                     ru'a')
-    var suggestionWindow = tryOpenSuggestionWindow(currentBufStatus,
-                                                   currentMainWindow)
+    var suggestionWindow = tryOpenSuggestionWindow(
+      currentBufStatus,
+      currentMainWindow)
     status.update
 
-    suggestionWindow.get.handleKeyInSuggestionWindow(currentBufStatus,
-                                                     currentMainWindow,
-                                                     ru'\t')
+    suggestionWindow.get.handleKeyInSuggestionWindow(
+      currentBufStatus,
+      currentMainWindow,
+      ru'\t')
 
     check currentMainWindow.currentColumn == 1
