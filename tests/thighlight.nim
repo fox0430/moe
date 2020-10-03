@@ -1,5 +1,6 @@
 import unittest, strutils
-import moepkg/[highlight, highlite, color]
+import moepkg/[highlight, color]
+import moepkg/syntax/highlite
 
 const reservedWords = @[
   ReservedWord(word: "WIP", color: EditorColorPair.reservedWord)
@@ -12,7 +13,7 @@ test "initHighlight: start with newline":
     highlight = initHighlight(code,
                               reservedWords,
                               SourceLanguage.langNim)
-  
+
   # unite segments
   var unitedStr: string
   for i in 0 ..< highlight.len:
@@ -32,7 +33,7 @@ test "indexOf: basic":
     highlight = initHighlight(code,
                               reservedWords,
                               SourceLanguage.langNim)
-  
+
   check(highlight.indexOf(0, 0) == 0)
 
 test "indexOf: start with newline":
@@ -41,7 +42,7 @@ test "indexOf: start with newline":
     highlight = initHighlight(code,
                               reservedWords,
                               SourceLanguage.langNim)
-  
+
   check(highlight.indexOf(0, 0) == 0)
 
 test "over write":
