@@ -130,7 +130,9 @@ type EditorSettings* = object
   quickRunSettings*: QuickRunSettings
   notificationSettings*: NotificationSettings
 
-type InvalidItemError* = object of ValueError # Warning: inherit from a more precise exception type like ValueError, IOError or OSError. If these don't suit, inherit from CatchableError or Defect. [InheritFromException]
+# Warning: inherit from a more precise exception type like ValueError, IOError or OSError.
+# If these don't suit, inherit from CatchableError or Defect. [InheritFromException]
+type InvalidItemError* = object of ValueError
 
 proc initNotificationSettings(): NotificationSettings =
   result.screenNotifications = true
@@ -816,12 +818,6 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Standard"].contains("popUpWindowInExmode"):
       result.popUpWindowInExmode = settings["Standard"]["popUpWindowInExmode"].getbool()
 
-    if settings["Standard"].contains("replaceTextHighlight"):
-      result.replaceTextHighlight = settings["Standard"]["replaceTextHighlight"].getbool()
-
-    if settings["Standard"].contains("highlightPairOfParen"):
-      result.highlightPairOfParen =  settings["Standard"]["highlightPairOfParen"].getbool()
-
     if settings["Standard"].contains("autoDeleteParen"):
       result.autoDeleteParen =  settings["Standard"]["autoDeleteParen"].getbool()
 
@@ -831,17 +827,8 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Standard"].contains("smoothScrollSpeed"):
       result.smoothScrollSpeed = settings["Standard"]["smoothScrollSpeed"].getint()
 
-    if settings["Standard"].contains("highlightCurrentWord"):
-      result.highlightOtherUsesCurrentWord = settings["Standard"]["highlightCurrentWord"].getbool()
-
     if settings["Standard"].contains("systemClipboard"):
       result.systemClipboard = settings["Standard"]["systemClipboard"].getbool()
-
-    if settings["Standard"].contains("highlightFullWidthSpace"):
-      result.highlightFullWidthSpace = settings["Standard"]["highlightFullWidthSpace"].getbool()
-
-    if settings["Standard"].contains("highlightTrailingSpaces"):
-      result.highlightTrailingSpaces = settings["Standard"]["highlightTrailingSpaces"].getbool()
 
     if settings["Standard"].contains("indentationLines"):
       result.view.indentationLines = settings["Standard"]["indentationLines"].getbool()
@@ -912,6 +899,21 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
           word = reservedWords[i].getStr
           reservedWord = ReservedWord(word: word, color: EditorColorPair.reservedWord)
         result.reservedWords.add(reservedWord)
+
+    if settings["Highlight"].contains("currentWord"):
+      result.highlightOtherUsesCurrentWord = settings["Highlight"]["currentWord"].getbool()
+
+    if settings["Highlight"].contains("replaceText"):
+      result.replaceTextHighlight = settings["Highlight"]["replaceText"].getbool()
+
+    if settings["Highlight"].contains("pairOfParen"):
+      result.highlightPairOfParen =  settings["Highlight"]["pairOfParen"].getbool()
+
+    if settings["Highlight"].contains("fullWidthSpace"):
+      result.highlightFullWidthSpace = settings["Highlight"]["fullWidthSpace"].getbool()
+
+    if settings["Highlight"].contains("trailingSpaces"):
+      result.highlightTrailingSpaces = settings["Highlight"]["trailingSpaces"].getbool()
 
   if settings.contains("AutoBackup"):
     if settings["AutoBackup"].contains("enable"):
@@ -1384,13 +1386,8 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
            "liveReloadOfConf",
            "incrementalSearch",
            "popUpWindowInExmode",
-           "replaceTextHighlight",
-           "highlightPairOfParen",
            "autoDeleteParen",
            "systemClipboard",
-           "highlightFullWidthSpace",
-           "highlightTrailingSpaces",
-           "highlightCurrentWord",
            "smoothScroll":
           if not (item.val["type"].getStr == "bool"):
             return some($item)
@@ -1482,6 +1479,13 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
             for word in item.val["value"]:
               if word["type"].getStr != "string":
                 return some($item)
+        of "fullWidthSpace",
+           "trailingSpaces",
+           "replaceText",
+           "pairOfParen",
+           "currentWord":
+          if not (item.val["type"].getStr == "bool"):
+            return some($item)
         else:
           return some($item)
 

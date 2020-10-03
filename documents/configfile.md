@@ -130,17 +130,6 @@ default is true
 popUpWindowInExmode 
 ```
 
-Highlight replacement text (bool)  
-default is true
-```
-replaceTextHighlight
-```
-Highlight a pair of paren (bool)  
-default is true
-```
-highlightPairOfParen
-```
-
 Auto delete paren (bool)  
 default is true
 ```
@@ -158,28 +147,11 @@ default is 15
 ```
 smoothScrollSpeed
 ```
-highlight other uses of the current word under the cursor (bool)  
-default is true
-```
-highlightCurrentWord
-```
 
 System clipboard (bool)  
 default is true
 ```
 systemClipboard
-```
-
-Highlight full-width space (bool)  
-default is true
-```
-highlightFullWidthSpace
-```
-
-Highlight trailing spaces (bool)  
-default is true
-```
-highlightTrailingSpaces
 ```
 
 ### TabLine table
@@ -295,6 +267,36 @@ Highlighting any word (array)
 defaut
 ```
 ["TODO", "WIP", "NOTE"]
+```
+
+Highlight replacement text (bool)  
+default is true
+```
+replaceText
+```
+
+Highlight a pair of paren (bool)  
+default is true
+```
+pairOfParen
+```
+
+Highlight full-width space (bool)  
+default is true
+```
+fullWidthSpace
+```
+
+Highlight trailing spaces (bool)  
+default is true
+```
+trailingSpaces
+```
+
+highlight other uses of the current word under the cursor (bool)  
+default is true
+```
+currentWord
 ```
 
 ```

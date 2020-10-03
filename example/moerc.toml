@@ -44,19 +44,9 @@ incrementalSearch = true
 
 popUpWindowInExmode = true
 
-replaceTextHighlight = true
-
-highlightPairOfParen = true
-
 autoDeleteParen = true
 
 systemClipboard = true
-
-highlightFullWidthSpace = true
-
-highlightTrailingSpaces = true
-
-highlightCurrentWord = true
 
 smoothScroll = true
 
@@ -109,6 +99,16 @@ workSpaceLine = false
 [Highlight]
 
 reservedWord = ["TODO", "WIP", "NOTE"]
+
+replaceText = true
+
+pairOfParen = true
+
+fullWidthSpace = true
+
+trailingSpaces = true
+
+currentWord = true
 
 [AutoBackup]
 
