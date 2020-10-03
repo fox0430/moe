@@ -115,7 +115,6 @@ const tomlStr = """
   enable = true
 
   [Theme]
-
   baseTheme = "dark"
 
   editorBg = "pink1"
@@ -227,8 +226,6 @@ const tomlStr = """
   currentSetting = "pink1"
   currentSettingBg = "pink1"
 """
-
-
 
 suite "Parse configuration file":
   test "Parse toml configuration file":
@@ -456,6 +453,8 @@ suite "Validate toml config":
 
 suite "Configuration example":
   test "Check moerc.toml":
-    let filename = "./example/moerc.toml"
+    let
+      filename = "./example/moerc.toml"
+      toml = parsetoml.parseFile(filename)
 
-    discard parsetoml.parseFile(filename)
+    check toml.validateTomlConfig == none(string)
