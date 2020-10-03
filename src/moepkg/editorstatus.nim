@@ -1098,18 +1098,10 @@ proc eventLoopTask(status: var Editorstatus) =
         mode = bufStatus.mode
         prevMode = bufStatus.prevMode
 
-      if (mode == Mode.normal or
-          mode == Mode.insert or
-          mode == Mode.visual or
-          mode == Mode.visualBlock or
-          mode == Mode.replace) or
-          (mode == Mode.ex and
-          (prevMode == Mode.normal or
-           prevMode == Mode.insert or
-           prevMode == Mode.visual or
-           prevMode == Mode.visualBlock or
-           prevMode == Mode.replace)):
-
+      if isNormalMode(mode, prevMode) or
+         isInsertMode(mode) or
+         isVisualMode(mode) or
+         isReplaceMode(mode):
         bufStatus.backupBuffer(bufStatus.characterEncoding,
                                status.settings.autoBackupSettings,
                                status.settings.notificationSettings,
