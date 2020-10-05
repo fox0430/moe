@@ -17,8 +17,7 @@
 |:-----------------------------:|:---------------------------:|:-----------------------------:|
 | <kbd>**:**</kbd> <kbd>**w**</kbd> Write file | <kbd>**:**</kbd> <kbd>**q**</kbd> Quit | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> Write and Quit |
 | <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**!**</kbd> Force Quit | <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> Quit All Windows | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> Write and Quit All Window |
-| <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> <kbd>**!**</kbd> Force Quit All Window | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**!**</kbd> Force write | <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> Quit All Windows | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> Write and Quit All Window
-| <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> <kbd>**!**</kbd> Force Quit All Window  | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**!**</kbd> Force write | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> <kbd>**!**</kbd> Force write and quit window |
+| <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> <kbd>**!**</kbd> Force Quit All Window | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**!**</kbd> Force write | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> <kbd>**!**</kbd> Force write and quit window |
 
 </details>
 
@@ -51,10 +50,10 @@
 | <kbd>**u**</kbd><br>Undo | <kbd>**Ctrl**</kbd> <kbd>**r**</kbd><br> Redo | <kbd>**>**</kbd><br> Indent | <kbd>**<**</kbd><br> Unindent |
 | <kbd>**=**</kbd> <kbd>**=**</kbd><br>Auto Indent | <kbd>**d**</kbd> <kbd>**d**</kbd><br> Delete a line | <kbd>**x**</kbd><br> Delete current character | <kbd>**S**</kbd> OR <kbd>**c**</kbd> <kbd>**c**</kbd><br> Delete the characters in current line and start insert mode |
 | <kbd>**y**</kbd> <kbd>**y**</kbd><br>Copy a line | <kbd>**p**</kbd><br> Paste the clipboard | <kbd>**n**</kbd><br> Search forwards | <kbd>**N**</kbd><br> Search backwards |
-| <kbd> * </kbd> Search forwards for the word under cursor | <kbd>**#**</kbd><br>Search backwards for the word under cursor | <kbd>**f**</kbd><br>Jump to next occurrence | <kbd>**F**</kbd><br>Jump to previous occurence |
+| <kbd> * </kbd><br>Search forwards for the word under cursor | <kbd>**#**</kbd><br>Search backwards for the word under cursor | <kbd>**f**</kbd><br>Jump to next occurrence | <kbd>**F**</kbd><br>Jump to previous occurence |
 | <kbd>**Ctrl**</kbd> <kbd>**k**</kbd><br>Move next window | <kbd>**Ctrl**</kbd> <kbd>**j**</kbd><br>Move prev window  | <kbd>**z**</kbd> <kbd>**t**</kbd><br>Scroll the screen so the cursor is at the top | <kbd>**z**</kbd> <kbd>**b**</kbd><br>Scroll the screen so the cursor is at the bottom |
 | <kbd>**z**</kbd> <kbd>**.**</kbd><br>Center the screen on the cursor | <kbd>**Z**</kbd> <kbd>**Z**</kbd><br>Write current file and exit | <kbd>**Z**</kbd> <kbd>**Q**</kbd><br>Same as `:q!` | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**c**</kbd><br>Close current window |
-| <kbd>**/**</kbd><br>Search text | <kbd>**?**</kbd><br>`keyword` Search backwards | <kbd>**\\**</kbd> <kbd>**r**</kbd><br>Quick Run | <kbd>**/**</kbd><br>`keyword` Search forwards |
+| <kbd>**?**</kbd><br>`keyword` Search backwards | <kbd>**/**</kbd><br>`keyword` Search forwards | <kbd>**\\**</kbd> <kbd>**r**</kbd><br>Quick Run |
 
 </details>
 
@@ -107,7 +106,7 @@
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
 | <kbd>**j**</kbd><br> Go Down :arrow_down: | <kbd>**k**</kbd><br> Go Up :arrow_up: | <kbd>**Enter**</kbd><br> Open Diff | <kbd>**R**</kbd><br> Restore Backup file |
-| <kbd>**D**</kbd><br> Delete Backup file | <kbd>**r**</kbd><br> Reload Backup file | <kbd>**g**</kbd> <kbd>**g**</kbd><br> Go to the first line :arrow_up: | <kbd>**g**</kbd><br> Go to the last line :arrow_down: |
+| <kbd>**D**</kbd><br> Delete Backup file | <kbd>**r**</kbd><br> Reload Backup file | <kbd>**g**</kbd> <kbd>**g**</kbd><br> Go to the first line :arrow_up: | <kbd>**G**</kbd><br> Go to the last line :arrow_down: |
 
 </details>
 
@@ -119,7 +118,7 @@
 
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
-| <kbd>**j**</kbd><br> Go Down :arrow_down: | <kbd>**k**</kbd><br> Go Up :arrow_up: | <kbd>**g**</kbd> <kbd>**g**</kbd><br> Go to the first line :arrow_up: | <kbd>**g**</kbd><br> Go to the last line :arrow_down: |
+| <kbd>**j**</kbd><br> Go Down :arrow_down: | <kbd>**k**</kbd><br> Go Up :arrow_up: | <kbd>**g**</kbd> <kbd>**g**</kbd><br> Go to the first line :arrow_up: | <kbd>**G**</kbd><br> Go to the last line :arrow_down: |
 
 </details>
 
