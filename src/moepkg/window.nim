@@ -141,7 +141,7 @@ proc deleteWindowNode*(root: var WindowNode, windowIndex: int) =
     depth.inc
     for i in 0 ..< qeue.len:
       let node = qeue.pop
-      if node.windowIndex > 1 and node.windowIndex == windowIndex:
+      if node.windowIndex == windowIndex:
         var parent = node.parent
         parent.child.delete(i)
 
