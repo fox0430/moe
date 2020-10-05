@@ -6,7 +6,7 @@ include moepkg/help
 suite "Help":
   test "Check buffer":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.resize(100, 100)
     status.update
@@ -16,15 +16,10 @@ suite "Help":
 
     check(status.bufStatus[0].path == ru"help")
 
-    let buffer = status.bufStatus[0].buffer
-    var
-      line = 1
-      f = open(currentSourcePath.parentDir() / "../documents/howtouse.md",
-               FileMode.fmRead)
+    let
+      buffer = status.bufStatus[0].buffer
+      help = helpsentences.splitLines
 
-    while not f.endOfFile:
-      let
-        markDownLine = f.readLine()
-        bufferLine = $buffer[line][0 .. buffer[line].high]
-      check bufferLine == markDownLine.multiReplace(@[("```", ""), ("  ", "")])
-      inc line
+    for i in 0 ..< buffer.len:
+      if i == 0: check buffer[0] == ru""
+      else: check $buffer[i] == help[i - 1]
