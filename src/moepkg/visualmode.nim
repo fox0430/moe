@@ -270,7 +270,7 @@ proc getInsertBuffer(status: var Editorstatus): seq[Rune] =
     var key = errorKey
     while key == errorKey:
       status.eventLoopTask
-      key = getKey(windowNode.window)
+      key = getKey(windowNode)
 
     if isEscKey(key):
       break
@@ -347,7 +347,7 @@ proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   elif key == ord('U'):
     status.bufStatus[currentBufferIndex].toUpperString(area)
   elif key == ord('r'):
-    let ch = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.getKey
+    let ch = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.getKey
     if not isEscKey(ch):
       status.bufStatus[currentBufferIndex].replaceCharacter(area, ch)
   elif key == ord('I'):
@@ -405,7 +405,7 @@ proc visualBlockCommand(status: var EditorStatus, area: var SelectArea, key: Run
   elif key == ord('U'):
     status.bufStatus[currentBufferIndex].toUpperStringBlock(area)
   elif key == ord('r'):
-    let ch = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.getKey
+    let ch = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.getKey
     if not isEscKey(ch): status.bufStatus[currentBufferIndex].replaceCharacterBlock(area, ch)
   elif key == ord('I'):
     insertCharacterMultipleLines()
@@ -435,7 +435,7 @@ proc visualMode*(status: var EditorStatus) =
     var key = errorKey
     while key == errorKey:
       status.eventLoopTask
-      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     status.lastOperatingTime = now()
 
@@ -471,7 +471,7 @@ proc visualMode*(status: var EditorStatus) =
     elif key == ord('G'):
       moveToLastLine(status)
     elif key == ord('g'):
-      if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window) == ord('g'):
+      if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode) == ord('g'):
         moveToFirstLine(status)
     elif key == ord('i'):
       windowNode.currentLine = status.bufStatus[currentBufferIndex].selectArea.startLine

@@ -1,5 +1,5 @@
 import terminal
-import editorstatus, bufferstatus, ui, movement, unicodeext, gapbuffer
+import editorstatus, bufferstatus, ui, movement, unicodeext, gapbuffer, window
 
 const helpsentences = """
 # Exiting
@@ -230,7 +230,8 @@ proc helpMode*(status: var Editorstatus) =
     currentBufferIndex = status.bufferIndexInCurrentWindow
     currentWorkSpace = status.currentWorkSpaceIndex
 
-  while status.isHelpMode and currentWorkSpace == status.currentWorkSpaceIndex and currentBufferIndex == status.bufferIndexInCurrentWindow:
+  while status.isHelpMode and currentWorkSpace == status.currentWorkSpaceIndex and
+        currentBufferIndex == status.bufferIndexInCurrentWindow:
     let currentBufferIndex = status.bufferIndexInCurrentWindow
 
     status.update
@@ -241,21 +242,33 @@ proc helpMode*(status: var Editorstatus) =
     while key == errorKey:
       status.eventLoopTask
       key = getKey(
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
-    if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
+    if isResizekey(key):
+      status.resize(terminalHeight(), terminalWidth())
 
-    elif isControlK(key): status.moveNextWindow
-    elif isControlJ(key): status.movePrevWindow
+    elif isControlK(key):
+      status.moveNextWindow
+    elif isControlJ(key):
+      status.movePrevWindow
 
-    elif key == ord(':'): status.changeMode(Mode.ex)
+    elif key == ord(':'):
+      status.changeMode(Mode.ex)
 
-    elif key == ord('k') or isUpKey(key): status.bufStatus[currentBufferIndex].keyUp(windowNode)
-    elif key == ord('j') or isDownKey(key): status.bufStatus[currentBufferIndex].keyDown(windowNode)
-    elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key): windowNode.keyLeft
-    elif key == ord('l') or isRightKey(key): status.bufStatus[currentBufferIndex].keyRight(windowNode)
-    elif key == ord('0') or isHomeKey(key): windowNode.moveToFirstOfLine
-    elif key == ord('$') or isEndKey(key): status.bufStatus[currentBufferIndex].moveToLastOfLine(windowNode)
+    elif key == ord('k') or isUpKey(key):
+      status.bufStatus[currentBufferIndex].keyUp(windowNode)
+    elif key == ord('j') or isDownKey(key):
+      status.bufStatus[currentBufferIndex].keyDown(windowNode)
+    elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
+      windowNode.keyLeft
+    elif key == ord('l') or isRightKey(key):
+      status.bufStatus[currentBufferIndex].keyRight(windowNode)
+    elif key == ord('0') or isHomeKey(key):
+      windowNode.moveToFirstOfLine
+    elif key == ord('$') or isEndKey(key):
+      status.bufStatus[currentBufferIndex].moveToLastOfLine(windowNode)
     elif key == ord('g'):
-      if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window) == 'g': status.moveToFirstLine
-    elif key == ord('G'): status.moveToLastLine
+      if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode) == 'g':
+        status.moveToFirstLine
+    elif key == ord('G'):
+      status.moveToLastLine

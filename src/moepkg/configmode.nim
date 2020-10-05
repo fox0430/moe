@@ -1,4 +1,4 @@
-import terminal, times, typetraits, strutils
+import terminal, times, typetraits, strutils, options
 import gapbuffer, ui, editorstatus, unicodeext, window, movement, settings,
        bufferstatus, color, highlight
 
@@ -954,7 +954,7 @@ proc configMode*(status: var Editorstatus) =
     while key == ru'\0':
       status.eventLoopTask
       let index = status.currentWorkSpaceIndex
-      key = getKey(status.workSpace[index].currentMainWindowNode.window)
+      key = getKey(status.workSpace[index].currentMainWindowNode.window.get)
 
     status.lastOperatingTime = now()
 
@@ -973,6 +973,6 @@ proc configMode*(status: var Editorstatus) =
       let
         index = status.currentWorkSpaceIndex
         secondKey = getKey(
-          status.workSpace[index].currentMainWindowNode.window)
+          status.workSpace[index].currentMainWindowNode.window.get)
       if secondKey == 'g': status.moveToFirstLine
     elif key == ord('G'): status.moveToLastLine

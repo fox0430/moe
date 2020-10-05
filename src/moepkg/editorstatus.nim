@@ -1,5 +1,5 @@
 import strutils, terminal, os, strformat, tables, times, osproc, heapqueue,
-       deques, times
+       deques, times, options
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        undoredostack, window, color, workspace, statusbar, settings,
@@ -173,7 +173,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
     let queueLength = queue.len
     for i in  0 ..< queueLength:
       let node = queue.pop
-      if node.window != nil:
+      if node.window.isSome:
         let
           bufIndex = node.bufferIndex
           widthOfLineNum = node.view.widthOfLineNum
@@ -302,7 +302,7 @@ proc initSyntaxHighlight(windowNode: var WindowNode,
   while queue.len > 0:
     for i in  0 ..< queue.len:
       var node = queue.pop
-      if node.window != nil:
+      if node.window.isSome:
         let bufStatus = bufStatus[node.bufferIndex]
         if not isFilerMode(bufStatus.mode, bufStatus.prevMode) and
            not isHistoryManagerMode(bufStatus.mode, bufStatus.prevMode) and
@@ -351,7 +351,7 @@ proc update*(status: var EditorStatus) =
   while queue.len > 0:
     for i in  0 ..< queue.len:
       var node = queue.pop
-      if node.window != nil:
+      if node.window.isSome:
         let
           bufStatus = status.bufStatus[node.bufferIndex]
           currentMode = bufStatus.mode
@@ -403,7 +403,7 @@ proc update*(status: var EditorStatus) =
                              node.currentLine,
                              node.currentColumn)
 
-        node.view.update(node.window,
+        node.view.update(node.window.get,
                          status.settings.view,
                          isCurrentMainWin,
                          currentMode,
@@ -417,7 +417,7 @@ proc update*(status: var EditorStatus) =
         if isCurrentMainWin:
           node.cursor.update(node.view, node.currentLine, node.currentColumn)
 
-        node.window.refresh
+        node.refreshWindow
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)
@@ -433,7 +433,7 @@ proc update*(status: var EditorStatus) =
     let
       y = currentMainWindowNode.cursor.y
       x = currentMainWindowNode.view.widthOfLineNum + currentMainWindowNode.cursor.x
-    currentMainWindowNode.window.moveCursor(y, x)
+    currentMainWindowNode.window.get.moveCursor(y, x)
 
   if status.settings.statusBar.enable: status.updateStatusBar
 
@@ -493,48 +493,24 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
     exitEditor(status.settings)
 
   let deleteWindowIndex = node.windowIndex
-  var parent = node.parent
 
   if status.workspace[workspaceIndex].numOfMainWindow == 1:
     status.deleteWorkSpace(workspaceIndex)
-  elif parent.child.len == 1:
-    if status.settings.statusBar.multipleStatusBar:
-      let statusBarHigh = status.workSpace[workspaceIndex].statusBar.high
-      status.workSpace[workspaceIndex].statusBar.delete(statusBarHigh)
-
-    parent.parent.child.delete(parent.index)
-    dec(status.workSpace[workspaceIndex].numOfMainWindow)
-
-    status.resize(terminalHeight(), terminalWidth())
-
-    let newCurrentWinIndex =
-      if deleteWindowIndex > status.workSpace[workspaceIndex].numOfMainWindow - 1:
-        status.workSpace[workspaceIndex].numOfMainWindow - 1
-      else: deleteWindowIndex
-    var node =
-      status.workSpace[workspaceIndex].mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
-    status.workSpace[workspaceIndex].currentMainWindowNode = node
   else:
+    status.workspace[workspaceIndex].mainWindowNode.deleteWindowNode(deleteWindowIndex)
+    dec(status.workSpace[workspaceIndex].numOfMainWindow)
+
     if status.settings.statusBar.multipleStatusBar:
       let statusBarHigh = status.workSpace[workspaceIndex].statusBar.high
       status.workSpace[workspaceIndex].statusBar.delete(statusBarHigh)
 
-    parent.child.delete(node.index)
-    dec(status.workSpace[workspaceIndex].numOfMainWindow)
-
-    if parent.child.len == 1 and
-       parent.splitType == SplitType.horaizontal and
-       parent.parent != nil and
-       parent.parent.splitType == SplitType.vertical:
-      parent.parent.child[parent.index] = parent.child[0]
-
     status.resize(terminalHeight(), terminalWidth())
 
-    let newCurrentWinIndex =
-      if deleteWindowIndex > status.workSpace[workspaceIndex].numOfMainWindow - 1:
-        status.workSpace[workspaceIndex].numOfMainWindow - 1
-      else: deleteWindowIndex
-
+    let
+      numOfMainWindow = status.workSpace[workspaceIndex].numOfMainWindow
+      newCurrentWinIndex = if deleteWindowIndex > numOfMainWindow - 1:
+                             status.workSpace[workspaceIndex].numOfMainWindow - 1
+                           else: deleteWindowIndex
     var node =
       status.workSpace[workspaceIndex].mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
     status.workSpace[workspaceIndex].currentMainWindowNode = node

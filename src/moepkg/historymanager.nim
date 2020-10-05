@@ -3,7 +3,7 @@
 import re, os, times, terminal, osproc
 import editorstatus, bufferstatus, unicodeext, ui, movement, gapbuffer,
        highlight, color, settings, messages, backup, commandview, fileutils,
-       editorview
+       editorview, window
 
 proc generateFilenamePatern(path: seq[Rune]): seq[Rune] =
   let splitPath = splitPath($path)
@@ -238,7 +238,7 @@ proc historyManager*(status: var EditorStatus) =
     var key = errorKey
     while key == errorKey:
       status.eventLoopTask
-      key = getKey(status.workSpace[workspaceIndex].currentMainWindowNode.window)
+      key = getKey(status.workSpace[workspaceIndex].currentMainWindowNode)
 
     status.lastOperatingTime = now()
 
@@ -268,7 +268,7 @@ proc historyManager*(status: var EditorStatus) =
       status.initHistoryManagerBuffer(sourcePath)
     elif key == ord('g'):
       let secondKey = getKey(
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
       if  secondKey == ord('g'):
         status.moveToFirstLine
       else:

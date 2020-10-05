@@ -88,7 +88,7 @@ proc quickRunMode*(status: var Editorstatus) =
     var key = errorKey
     while key == errorKey:
       status.eventLoopTask
-      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     status.lastOperatingTime = now()
 
@@ -102,6 +102,6 @@ proc quickRunMode*(status: var Editorstatus) =
     elif key == ord('j') or isDownKey(key):
       status.bufStatus[currentBufferIndex].keyDown(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
     elif key == ord('g'):
-      if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window) == 'g':
+      if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode) == 'g':
         status.moveToFirstLine
     elif key == ord('G'): status.moveToLastLine

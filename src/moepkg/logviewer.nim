@@ -1,5 +1,5 @@
 import terminal, times
-import ui, editorstatus, unicodeext, movement, bufferstatus
+import ui, editorstatus, unicodeext, movement, bufferstatus, window
 
 proc initMessageLog*(status: var Editorstatus) {.inline.} =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -41,7 +41,7 @@ proc messageLogViewer*(status: var Editorstatus) =
     while key == errorKey:
       status.eventLoopTask
       key = getKey(
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     status.lastOperatingTime = now()
 
@@ -68,6 +68,6 @@ proc messageLogViewer*(status: var Editorstatus) =
     elif key == ord('q') or isEscKey(key):
       status.exitLogViewer
     elif key == ord('g'):
-      if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window) == 'g':
+      if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode) == 'g':
         status.moveToFirstLine
     elif key == ord('G'): status.moveToLastLine

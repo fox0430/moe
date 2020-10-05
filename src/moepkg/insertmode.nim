@@ -40,7 +40,7 @@ proc insertMode*(status: var EditorStatus) =
     var key = errorKey
     while key == errorKey:
       status.eventLoopTask
-      key = getKey(currentMainWindow.window)
+      key = getKey(currentMainWindow)
 
     status.lastOperatingTime = now()
 

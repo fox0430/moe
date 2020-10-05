@@ -1,5 +1,5 @@
 from strutils import parseInt
-import terminal, times
+import terminal, times, options
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, undoredostack,
        window, movement, editor, search, color, bufferstatus, quickrun,
        messages, commandline
@@ -532,7 +532,7 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
 proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
   template getAnotherKey(): Rune =
     let workspaceIndex = status.currentWorkSpaceIndex
-    getKey(status.workSpace[workspaceIndex].currentMainWindowNode.window)
+    getKey(status.workSpace[workspaceIndex].currentMainWindowNode)
 
   # Single key commands
   if isControlK(key) or
@@ -704,7 +704,7 @@ proc normalMode*(status: var EditorStatus) =
     while key == errorKey:
       status.eventLoopTask
       key = getKey(
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     status.lastOperatingTime = now()
 
@@ -714,7 +714,7 @@ proc normalMode*(status: var EditorStatus) =
 
     if isEscKey(key):
       let keyAfterEsc = getKey(
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
       if isEscKey(keyAfterEsc):
         status.turnOffHighlighting
         continue
