@@ -609,7 +609,6 @@ test "Close window 4":
 test "Close window 5":
   var status = initEditorStatus()
   status.addNewBuffer("test.nim")
-  status.bufStatus[0].buffer = initGapBuffer(@[ru"echo 'a'"])
 
   status.resize(100, 100)
   status.update
@@ -620,7 +619,6 @@ test "Close window 5":
 
   status.moveCurrentMainWindow(1)
   status.addNewBuffer("test2.nim")
-  status.bufStatus[1].buffer = initGapBuffer(@[ru"proc a() = discard"])
   status.changeCurrentBuffer(1)
   status.resize(100, 100)
   status.update

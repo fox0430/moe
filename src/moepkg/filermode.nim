@@ -1,4 +1,4 @@
-import os, terminal, strutils, unicodeext, times, algorithm, sequtils
+import os, terminal, strutils, unicodeext, times, algorithm, sequtils, options
 import editorstatus, ui, fileutils, editorview, gapbuffer, highlight,
        commandview, highlight, window, color, bufferstatus, settings, messages,
        commandline
@@ -487,7 +487,7 @@ proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string)
 
   status.update
   setCursor(false)
-  while isResizekey(status.workSpace[workspaceIndex].currentMainWindowNode.window.getKey):
+  while isResizekey(status.workSpace[workspaceIndex].currentMainWindowNode.getKey):
     status.resize(terminalHeight(), terminalWidth())
     status.update
     setCursor(false)
@@ -511,9 +511,9 @@ proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
   windowNode.currentLine = 0
 
   if filerStatus.dirList.len == 0:
-    windowNode.window.erase
-    windowNode.window.write(0, 0, "not found", EditorColorPair.commandBar)
-    windowNode.window.refresh
+    windowNode.eraseWindow
+    windowNode.window.get.write(0, 0, "not found", EditorColorPair.commandBar)
+    windowNode.refreshWindow
     discard status.commandLine.getKey
     status.commandLine.erase
     filerStatus.dirlistUpdate = true
@@ -558,7 +558,7 @@ proc filerMode*(status: var EditorStatus) =
     while key == errorKey:
       status.eventLoopTask
       key = getKey(
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     status.lastOperatingTime = now()
 

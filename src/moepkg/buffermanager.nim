@@ -135,7 +135,7 @@ proc bufferManager*(status: var Editorstatus) =
     var key = errorKey
     while key == errorKey:
       status.eventLoopTask
-      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     status.lastOperatingTime = now()
 

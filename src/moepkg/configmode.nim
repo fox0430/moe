@@ -954,7 +954,7 @@ proc configMode*(status: var Editorstatus) =
     while key == ru'\0':
       status.eventLoopTask
       let index = status.currentWorkSpaceIndex
-      key = getKey(status.workSpace[index].currentMainWindowNode.window)
+      key = getKey(status.workSpace[index].currentMainWindowNode)
 
     status.lastOperatingTime = now()
 
@@ -972,7 +972,6 @@ proc configMode*(status: var Editorstatus) =
     elif key == ord('g'):
       let
         index = status.currentWorkSpaceIndex
-        secondKey = getKey(
-          status.workSpace[index].currentMainWindowNode.window)
+        secondKey = getKey(status.workSpace[index].currentMainWindowNode)
       if secondKey == 'g': status.moveToFirstLine
     elif key == ord('G'): status.moveToLastLine

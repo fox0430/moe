@@ -1,6 +1,6 @@
 import os, re, terminal
 import editorstatus, ui, unicodeext, bufferstatus, movement, gapbuffer,
-       messages
+       messages, window
 
 proc openSelectedBuffer(status: var Editorstatus) =
   let
@@ -49,7 +49,7 @@ proc recentFileMode*(status: var Editorstatus) =
     var key = errorKey
     while key == errorKey:
       status.eventLoopTask
-      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
     if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
 
@@ -63,5 +63,5 @@ proc recentFileMode*(status: var Editorstatus) =
     elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key): windowNode.keyLeft
     elif key == ord('l') or isRightKey(key): status.bufStatus[currentBufferIndex].keyRight(windowNode)
     elif key == ord('G'): status.moveToLastLine
-    elif key == ord('g') and getKey(windowNode.window) == ord('g'): status.moveToFirstLine
+    elif key == ord('g') and getKey(windowNode) == ord('g'): status.moveToFirstLine
     elif isEnterKey(key): status.openSelectedBuffer

@@ -1,6 +1,6 @@
 import times, terminal
 import editorstatus, unicodeext, bufferstatus, highlight, color, gapbuffer, ui,
-       movement
+       movement, window
 
 proc isDiffViewerMode(status: Editorstatus): bool =
   let
@@ -46,7 +46,7 @@ proc diffViewer*(status: var Editorstatus) =
     var key = errorKey
     while key == errorKey:
       status.eventLoopTask
-      key = getKey(status.workSpace[workspaceIndex].currentMainWindowNode.window)
+      key = getKey(status.workSpace[workspaceIndex].currentMainWindowNode)
 
     status.lastOperatingTime = now()
 
@@ -66,7 +66,7 @@ proc diffViewer*(status: var Editorstatus) =
         status.workSpace[workspaceIndex].currentMainWindowNode)
     elif key == ord('g'):
       let secondKey = getKey(
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
       if  secondKey == ord('g'):
         status.moveToFirstLine
       else:

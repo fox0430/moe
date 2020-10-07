@@ -109,8 +109,8 @@ proc jumpLine*(status: var EditorStatus, destination: int) =
      (view.originalLine[view.height - 1] == -1 or
      destination <= view.originalLine[view.height - 1])):
     var startOfPrintedLines = 0
-    if destination > status.bufStatus[currentBufferIndex].buffer.high - windowNode.window.height - 1:
-      startOfPrintedLines = status.bufStatus[currentBufferIndex].buffer.high - windowNode.window.height - 1
+    if destination > status.bufStatus[currentBufferIndex].buffer.high - windowNode.getHeight - 1:
+      startOfPrintedLines = status.bufStatus[currentBufferIndex].buffer.high - windowNode.getHeight - 1
     else:
       startOfPrintedLines = max(destination - (currentLine - windowNode.view.originalLine[0]), 0)
 
@@ -138,13 +138,13 @@ proc scrollUpNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
 
       status.bufStatus[currentBufferIndex].keyUp(windowNode)
       status.update
-      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.setTimeout(status.settings.smoothScrollSpeed)
+      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.setTimeout(status.settings.smoothScrollSpeed)
       var key = errorKey
-      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
       if key != errorKey: break
 
     ## Set default time out setting
-    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.setTimeout
+    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.setTimeout
 
   else:
     jumpLine(status, destination)
@@ -170,13 +170,13 @@ proc scrollDownNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
 
       status.bufStatus[currentBufferIndex].keyDown(windowNode)
       status.update
-      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.setTimeout(status.settings.smoothScrollSpeed)
+      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.setTimeout(status.settings.smoothScrollSpeed)
       var key = errorKey
-      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
       if key != errorKey: break
 
     ## Set default time out setting
-    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window.setTimeout
+    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.setTimeout
 
   else:
     let  view = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.view
