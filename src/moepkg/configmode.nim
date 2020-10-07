@@ -27,13 +27,8 @@ const
     "liveReloadOfConf",
     "incrementalSearch",
     "popUpWindowInExmode",
-    "replaceTextHighlight",
-    "highlightPairOfParen",
     "autoDeleteParen",
     "systemClipboard",
-    "highlightFullWidthSpace",
-    "highlightTrailingSpaces",
-    "highlightCurrentWord",
     "smoothScroll",
     "smoothScrollSpeed",
   ]
@@ -64,6 +59,11 @@ const
     "workSpaceLine"
   ]
   highlightTableNames = [
+    "fullWidthSpace",
+    "trailingSpaces",
+    "currentWord",
+    "replaceText",
+    "pairOfParen",
     "reservedWord"
   ]
   autoBackupTableNames = [
@@ -258,20 +258,10 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
         result.add(ru nameStr & space & $settings.incrementalSearch)
       of "popUpWindowInExmode":
         result.add(ru nameStr & space & $settings.popUpWindowInExmode)
-      of "replaceTextHighlight":
-        result.add(ru nameStr & space & $settings.replaceTextHighlight)
-      of "highlightPairOfParen":
-        result.add(ru nameStr & space & $settings.highlightPairOfParen)
       of "autoDeleteParen":
         result.add(ru nameStr & space & $settings.autoDeleteParen)
       of "systemClipboard":
         result.add(ru nameStr & space & $settings.systemClipboard)
-      of "highlightFullWidthSpace":
-        result.add(ru nameStr & space & $settings.highlightFullWidthSpace)
-      of "highlightTrailingSpaces":
-        result.add(ru nameStr & space & $settings.highlightTrailingSpaces)
-      of "highlightCurrentWord":
-        result.add(ru nameStr & space & $settings.highlightOtherUsesCurrentWord)
       of "smoothScroll":
         result.add(ru nameStr & space & $settings.smoothScroll)
       of "smoothScrollSpeed":
@@ -353,7 +343,20 @@ proc initHighlightTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"Highlight")
 
   for name in highlightTableNames:
+    let
+      nameStr = indent & name
+      space = " ".repeat(positionOfSetVal - name.len)
     case name:
+      of "replaceText":
+        result.add(ru nameStr & space & $settings.replaceTextHighlight)
+      of "highlightPairOfParen":
+        result.add(ru nameStr & space & $settings.highlightPairOfParen)
+      of "fullWidthSpace":
+        result.add(ru nameStr & space & $settings.highlightFullWidthSpace)
+      of "trailingSpaces":
+        result.add(ru nameStr & space & $settings.highlightTrailingSpaces)
+      of "currentWord":
+        result.add(ru nameStr & space & $settings.highlightOtherUsesCurrentWord)
       of "reservedWord":
         result.add(ru indent & name)
         let space = " ".repeat(positionOfSetVal)
