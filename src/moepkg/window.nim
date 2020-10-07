@@ -1,4 +1,4 @@
-import heapqueue, strformat, options
+import heapqueue, options
 import ui, editorview, gapbuffer, color, cursor, highlight, unicodeext
 
 # vertical is default
