@@ -1,4 +1,4 @@
-import deques, options
+import deques
 import editorstatus, ui, editorview, gapbuffer, unicodeext, window, bufferstatus
 
 proc keyLeft*(windowNode: var WindowNode) =
@@ -109,8 +109,8 @@ proc jumpLine*(status: var EditorStatus, destination: int) =
      (view.originalLine[view.height - 1] == -1 or
      destination <= view.originalLine[view.height - 1])):
     var startOfPrintedLines = 0
-    if destination > status.bufStatus[currentBufferIndex].buffer.high - windowNode.window.get.height - 1:
-      startOfPrintedLines = status.bufStatus[currentBufferIndex].buffer.high - windowNode.window.get.height - 1
+    if destination > status.bufStatus[currentBufferIndex].buffer.high - windowNode.getHeight - 1:
+      startOfPrintedLines = status.bufStatus[currentBufferIndex].buffer.high - windowNode.getHeight - 1
     else:
       startOfPrintedLines = max(destination - (currentLine - windowNode.view.originalLine[0]), 0)
 
