@@ -146,8 +146,10 @@ proc deleteWindowNode*(root: var WindowNode, windowIndex: int) =
         let deleteIndex = node.index
         parent.child.delete(deleteIndex)
 
-        if parent.child.len == 1 and depth > 0:
-          parent = parent.child[0]
+        if parent.child.len == 1 and depth > 1:
+          let parentIndex = parent.index
+          node.parent = parent.parent
+          parent.parent.child[parentIndex] = node
 
         return
 

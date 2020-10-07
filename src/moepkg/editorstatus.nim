@@ -492,11 +492,11 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
      status.workSpace[workspaceIndex].numOfMainWindow == 1:
     exitEditor(status.settings)
 
-  let deleteWindowIndex = node.windowIndex
-
   if status.workspace[workspaceIndex].numOfMainWindow == 1:
     status.deleteWorkSpace(workspaceIndex)
   else:
+    let deleteWindowIndex = node.windowIndex
+
     status.workspace[workspaceIndex].mainWindowNode.deleteWindowNode(deleteWindowIndex)
     dec(status.workSpace[workspaceIndex].numOfMainWindow)
 
@@ -511,8 +511,10 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
       newCurrentWinIndex = if deleteWindowIndex > numOfMainWindow - 1:
                              status.workSpace[workspaceIndex].numOfMainWindow - 1
                            else: deleteWindowIndex
-    var node =
-      status.workSpace[workspaceIndex].mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
+
+    let
+      mainWindowNode = status.workSpace[workspaceIndex].mainWindowNode
+      node = mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
     status.workSpace[workspaceIndex].currentMainWindowNode = node
 
 proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
