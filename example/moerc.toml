@@ -199,6 +199,39 @@ showIcons = true
 
 enable = true
 
+[Debug.WindowNode]
+enable = true
+currentWindow = true
+index = true
+windowIndex = true
+bufferIndex = true
+parentIndex = true
+childLen = true
+splitType = true
+haveCursesWin = true
+y = true
+x = true
+h = true
+w = true
+currentLine = true
+currentColumn = true
+expandedColumn = true
+cursor = true
+
+[Debug.BufferStatus]
+enable = true
+bufferIndex = true
+path = true
+openDir = true
+currentMode = true
+prevMode = true
+language = true
+encoding = true
+countChange = true
+cmdLoop = true
+lastSaveTime = true
+bufferLen = true
+
 [Theme]
 
 baseTheme = "dark"
