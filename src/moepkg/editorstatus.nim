@@ -26,7 +26,6 @@ type EditorStatus* = object
   timeConfFileLastReloaded*: DateTime
   currentDir: seq[Rune]
   messageLog*: seq[seq[Rune]]
-  debugMode: int
   commandLine*: CommandLine
   tabWindow*: Window
   popUpWindow*: Window
