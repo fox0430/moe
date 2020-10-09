@@ -84,12 +84,6 @@ proc initDebugModeBuffer*(bufStatuses: var seq[BufferStatus],
     debugModeBuffer.add(ru fmt"  buffer length    : {bufStatus.buffer.len}")
     debugModeBuffer.add(ru "")
 
-  exitUi()
-  echo debugModeBuffer
-  echo ""
-  echo ""
-  echo ""
-
 proc debugMode*(status: var Editorstatus) =
   let
     currentBufferIndex = currentMainWindowNode.bufferIndex
