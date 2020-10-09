@@ -1101,7 +1101,8 @@ proc updateDebugModeView(status: var EditorStatus) =
 
   status.bufStatus.initDebugModeBuffer(
     status.workSpace[workspaceIndex].mainWindowNode,
-    status.workSpace[workspaceIndex].currentMainWindowNode.windowIndex)
+    status.workSpace[workspaceIndex].currentMainWindowNode.windowIndex,
+    status.settings.debugModeSettings)
 
   let highlight = status.bufStatus[debugModeBufferIndex].buffer.initDebugmodeHighlight
   status.workSpace[workspaceIndex].currentMainWindowNode.highlight = highlight

@@ -9,6 +9,43 @@ when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
 
 import ui, color, unicodeext, highlight
 
+type DebugWindowNodeSettings* = object
+  enable*: bool
+  currentWindow*: bool
+  index*: bool
+  windowIndex*: bool
+  bufferIndex*: bool
+  parentIndex*: bool
+  childLen*: bool
+  splitType*: bool
+  haveCursesWin*: bool
+  y*: bool
+  x*: bool
+  h*: bool
+  w*: bool
+  currentLine*: bool
+  currentColumn*: bool
+  expandedColumn*: bool
+  cursor*: bool
+
+type DebugBufferStatusSettings* = object
+  enable*: bool
+  bufferIndex*: bool
+  path*: bool
+  openDir*: bool
+  currentMode*: bool
+  prevMode*: bool
+  language*: bool
+  encoding*: bool
+  countChange*: bool
+  cmdLoop*: bool
+  lastSaveTime*: bool
+  bufferLen*: bool
+
+type DebugModeSettings* = object
+  windowNode*: DebugWindowNodeSettings
+  bufStatus*: DebugBufferStatusSettings
+
 type NotificationSettings* = object
   screenNotifications*: bool
   logNotifications*: bool
@@ -129,10 +166,45 @@ type EditorSettings* = object
   autoBackupSettings*: AutoBackupSettings
   quickRunSettings*: QuickRunSettings
   notificationSettings*: NotificationSettings
+  debugModeSettings*: DebugModeSettings
 
 # Warning: inherit from a more precise exception type like ValueError, IOError or OSError.
 # If these don't suit, inherit from CatchableError or Defect. [InheritFromException]
 type InvalidItemError* = object of ValueError
+
+proc initDebugModeSettings(): DebugModeSettings =
+  result.windowNode = DebugWindowNodeSettings(
+    enable: true,
+    currentWindow: true,
+    index: true,
+    windowIndex: true,
+    bufferIndex: true,
+    parentIndex: true,
+    childLen: true,
+    splitType: true,
+    haveCursesWin: true,
+    y: true,
+    x: true,
+    h: true,
+    w: true,
+    currentLine: true,
+    currentColumn: true,
+    expandedColumn: true,
+    cursor: true)
+
+  result.bufStatus = DebugBufferStatusSettings(
+    enable: true,
+    bufferIndex: true,
+    path: true,
+    openDir: true,
+    currentMode: true,
+    prevMode: true,
+    language: true,
+    encoding: true,
+    countChange: true,
+    cmdLoop: true,
+    lastSaveTime: true,
+    bufferLen: true)
 
 proc initNotificationSettings(): NotificationSettings =
   result.screenNotifications = true
@@ -1039,6 +1111,133 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if (const key = "enable"; settings[table].contains(key)):
       result.autocompleteSettings.enable = settings[table][key].getbool
 
+  if settings.contains("Debug"):
+    if settings["Debug"].contains("WindowNode"):
+      let windowNodeSettings = settings["Debug"]["WindowNode"]
+
+      if windowNodeSettings.contains("enable"):
+        let setting = windowNodeSettings["enable"].getbool
+        result.debugModeSettings.windowNode.enable = setting
+
+      if windowNodeSettings.contains("currentWindow"):
+        let setting = windowNodeSettings["currentWindow"].getbool
+        result.debugModeSettings.windowNode.currentWindow = setting
+
+      if windowNodeSettings.contains("index"):
+        let setting = windowNodeSettings["index"].getbool
+        result.debugModeSettings.windowNode.index = setting
+
+      if windowNodeSettings.contains("windowIndex"):
+        let setting = windowNodeSettings["windowIndex"].getbool
+        result.debugModeSettings.windowNode.windowIndex = setting
+
+      if windowNodeSettings.contains("bufferIndex"):
+        let setting = windowNodeSettings["bufferIndex"].getbool
+        result.debugModeSettings.windowNode.bufferIndex = setting
+
+      if windowNodeSettings.contains("parentIndex"):
+        let setting = windowNodeSettings["parentIndex"].getbool
+        result.debugModeSettings.windowNode.parentIndex = setting
+
+      if windowNodeSettings.contains("childLen"):
+        let setting = windowNodeSettings["childLen"].getbool
+        result.debugModeSettings.windowNode.childLen = setting
+
+      if windowNodeSettings.contains("splitType"):
+        let setting = windowNodeSettings["splitType"].getbool
+        result.debugModeSettings.windowNode.splitType = setting
+
+      if windowNodeSettings.contains("haveCursesWin"):
+        let setting = windowNodeSettings["haveCursesWin"].getbool
+        result.debugModeSettings.windowNode.haveCursesWin = setting
+
+      if windowNodeSettings.contains("haveCursesWin"):
+        let setting = windowNodeSettings["haveCursesWin"].getbool
+        result.debugModeSettings.windowNode.haveCursesWin = setting
+
+      if windowNodeSettings.contains("y"):
+        let setting = windowNodeSettings["y"].getbool
+        result.debugModeSettings.windowNode.y = setting
+
+      if windowNodeSettings.contains("x"):
+        let setting = windowNodeSettings["x"].getbool
+        result.debugModeSettings.windowNode.x = setting
+
+      if windowNodeSettings.contains("h"):
+        let setting = windowNodeSettings["h"].getbool
+        result.debugModeSettings.windowNode.h = setting
+
+      if windowNodeSettings.contains("w"):
+        let setting = windowNodeSettings["w"].getbool
+        result.debugModeSettings.windowNode.w = setting
+
+      if windowNodeSettings.contains("currentLine"):
+        let setting = windowNodeSettings["currentLine"].getbool
+        result.debugModeSettings.windowNode.currentLine = setting
+
+      if windowNodeSettings.contains("currentColumn"):
+        let setting = windowNodeSettings["currentColumn"].getbool
+        result.debugModeSettings.windowNode.currentColumn = setting
+
+      if windowNodeSettings.contains("expandedColumn"):
+        let setting = windowNodeSettings["expandedColumn"].getbool
+        result.debugModeSettings.windowNode.expandedColumn = setting
+
+      if windowNodeSettings.contains("cursor"):
+        let setting = windowNodeSettings["cursor"].getbool
+        result.debugModeSettings.windowNode.cursor = setting
+
+    if settings["Debug"].contains("BufferStatus"):
+      let bufStatusSettings = settings["Debug"]["BufferStatus"]
+
+      if bufStatusSettings.contains("enable"):
+        let setting = bufStatusSettings["enable"].getbool
+        result.debugModeSettings.bufStatus.enable = setting
+
+      if bufStatusSettings.contains("bufferIndex"):
+        let setting = bufStatusSettings["bufferIndex"].getbool
+        result.debugModeSettings.bufStatus.bufferIndex = setting
+
+      if bufStatusSettings.contains("path"):
+        let setting = bufStatusSettings["path"].getbool
+        result.debugModeSettings.bufStatus.path = setting
+
+      if bufStatusSettings.contains("openDir"):
+        let setting = bufStatusSettings["openDir"].getbool
+        result.debugModeSettings.bufStatus.openDir = setting
+
+      if bufStatusSettings.contains("currentMode"):
+        let setting = bufStatusSettings["currentMode"].getbool
+        result.debugModeSettings.bufStatus.currentMode = setting
+
+      if bufStatusSettings.contains("prevMode"):
+        let setting = bufStatusSettings["prevMode"].getbool
+        result.debugModeSettings.bufStatus.prevMode = setting
+
+      if bufStatusSettings.contains("language"):
+        let setting = bufStatusSettings["language"].getbool
+        result.debugModeSettings.bufStatus.language = setting
+
+      if bufStatusSettings.contains("encoding"):
+        let setting = bufStatusSettings["encoding"].getbool
+        result.debugModeSettings.bufStatus.encoding = setting
+
+      if bufStatusSettings.contains("countChange"):
+        let setting = bufStatusSettings["countChange"].getbool
+        result.debugModeSettings.bufStatus.countChange = setting
+
+      if bufStatusSettings.contains("cmdLoop"):
+        let setting = bufStatusSettings["cmdLoop"].getbool
+        result.debugModeSettings.bufStatus.cmdLoop = setting
+
+      if bufStatusSettings.contains("lastSaveTime"):
+        let setting = bufStatusSettings["lastSaveTime"].getbool
+        result.debugModeSettings.bufStatus.lastSaveTime = setting
+
+      if bufStatusSettings.contains("bufferLen"):
+        let setting = bufStatusSettings["bufferLen"].getbool
+        result.debugModeSettings.bufStatus.bufferLen = setting
+
   if not vscodeTheme and settings.contains("Theme"):
     if settings["Theme"].contains("baseTheme"):
       let themeString = settings["Theme"]["baseTheme"].getStr()
@@ -1573,11 +1772,62 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
   template validateAutocompleteTable() =
     for item in json["Autocomplete"].pairs:
       case item.key:
-      of "enable":
-        if item.val["type"].getStr != "bool":
+        of "enable":
+          if item.val["type"].getStr != "bool":
+            return some($item)
+        else:
           return some($item)
-      else:
-        return some($item)
+
+  template validateDebugTable() =
+    for item in json["Debug"].pairs:
+      case item.key:
+        # Check [Debug.WindowNode]
+        of "WindowNode":
+          for item in json["Debug"]["WindowNode"].pairs:
+            case item.key:
+              of "enable",
+                 "currentWindow",
+                 "index",
+                 "windowIndex",
+                 "bufferIndex",
+                 "parentIndex",
+                 "childLen",
+                 "splitType",
+                 "haveCursesWin",
+                 "y",
+                 "x",
+                 "h",
+                 "w",
+                 "currentLine",
+                 "currentColumn",
+                 "expandedColumn",
+                 "cursor":
+                if item.val["type"].getStr != "bool":
+                  return some($item)
+              else:
+                return some($item)
+        # Check [Debug.BufferStatus]
+        of "BufferStatus":
+          for item in json["Debug"]["BufferStatus"].pairs:
+            case item.key:
+              of "enable",
+                 "bufferIndex",
+                 "path",
+                 "openDir",
+                 "currentMode",
+                 "prevMode",
+                 "language",
+                 "encoding",
+                 "countChange",
+                 "cmdLoop",
+                 "lastSaveTime",
+                 "bufferLen":
+                if item.val["type"].getStr != "bool":
+                  return some($item)
+              else:
+                return some($item)
+        else:
+          return some($item)
 
   template validateThemeTable() =
     let editorColors = ColorThemeTable[ColorTheme.config].EditorColor
@@ -1631,6 +1881,8 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         validateThemeTable()
       of "Autocomplete":
         validateAutocompleteTable()
+      of "Debug":
+        validateDebugTable()
       else: discard
 
   return none(string)

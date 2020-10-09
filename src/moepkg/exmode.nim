@@ -288,7 +288,8 @@ proc startDebugMode(status: var Editorstatus) =
   let workspaceIndex = status.currentWorkSpaceIndex
   status.bufStatus.initDebugModeBuffer(
     status.workSpace[workspaceIndex].mainWindowNode,
-    status.workSpace[workspaceIndex].currentMainWindowNode.windowIndex)
+    status.workSpace[workspaceIndex].currentMainWindowNode.windowIndex,
+    status.settings.debugModeSettings)
   let buffer = currentBufStatus.buffer
   currentMainWindowNode.highlight = buffer.initDebugmodeHighlight
 
