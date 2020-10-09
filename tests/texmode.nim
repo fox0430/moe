@@ -830,3 +830,25 @@ suite "Ex mode: wq! command":
     check entireFile == "abc"
 
     removeFile(filename)
+
+suite "Ex mode: debug command":
+  test "Start debug mode":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    status.changeMode(Mode.ex)
+
+    status.resize(100, 100)
+
+    const command = @[ru"debug"]
+    status.exModeCommand(command)
+
+    check status.workspace[0].numOfMainWindow == 2
+
+    check status.bufStatus[0].mode == Mode.normal
+    check status.bufStatus[0].prevMode == Mode.ex
+
+    check status.bufStatus[1].mode == Mode.debug
+    check status.bufStatus[1].prevMode == Mode.normal
+
+    check status.workspace[0].currentMainWindowNode.bufferIndex == 0
+
