@@ -174,6 +174,7 @@ proc setModeStr(mode: Mode, isActiveWindow, showModeInactive: bool): string =
     of Mode.history: result = " HISTORY "
     of Mode.diff: result = "DIFF "
     of Mode.config: result = " CONFIG "
+    of Mode.debug: result = " DEBUG "
     else: result = " NORMAL "
 
 proc setModeStrColor(mode: Mode): EditorColorPair =

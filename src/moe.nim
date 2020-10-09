@@ -17,6 +17,7 @@ import moepkg/quickrun
 import moepkg/historymanager
 import moepkg/diffviewer
 import moepkg/configmode
+import moepkg/debugmode
 
 proc main() =
   let parsedList = parseCommandLineOption(commandLineParams())
@@ -32,8 +33,7 @@ proc main() =
 
   setControlCHook(proc() {.noconv.} =
     exitUi()
-    quit()
-  )
+    quit())
 
   if parsedList.len > 0:
     for p in parsedList:
@@ -47,7 +47,10 @@ proc main() =
   while status.workSpace.len > 0 and
         status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow > 0:
 
-    let currentBufferIndex = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
+    let
+      n = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+      currentBufferIndex = n.bufferIndex
+
     case status.bufStatus[currentBufferIndex].mode:
     of Mode.normal: status.normalMode
     of Mode.insert: status.insertMode
@@ -63,6 +66,7 @@ proc main() =
     of Mode.history: status.historyManager
     of Mode.diff: status.diffViewer
     of Mode.config: status.configMode
+    of Mode.debug: status.debugMode
 
   status.settings.exitEditor
 

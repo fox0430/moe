@@ -307,7 +307,8 @@ proc initSyntaxHighlight(windowNode: var WindowNode,
         if not isFilerMode(bufStatus.mode, bufStatus.prevMode) and
            not isHistoryManagerMode(bufStatus.mode, bufStatus.prevMode) and
            not isDiffViewerMode(bufStatus.mode, bufStatus.prevMode) and
-           not isConfigMode(bufStatus.mode, bufStatus.prevMode):
+           not isConfigMode(bufStatus.mode, bufStatus.prevMode) and
+           not isDebugMode(bufStatus.mode, bufStatus.prevMode):
           let lang = if isSyntaxHighlight: bufStatus.language
                      else: SourceLanguage.langNone
           node.highlight = ($bufStatus.buffer).initHighlight(reservedWords, lang)
@@ -322,6 +323,8 @@ proc updateLogViewer(status: var Editorstatus, bufferIndex: int) =
   status.bufStatus[bufferIndex].buffer = initGapBuffer(@[ru""])
   for i in 0 ..< status.messageLog.len:
     status.bufStatus[bufferIndex].buffer.insert(status.messageLog[i], i)
+
+proc updateDebugModeView(status: var EditorStatus)
 
 proc update*(status: var EditorStatus) =
   setCursor(false)
@@ -385,6 +388,8 @@ proc update*(status: var EditorStatus) =
 
           if isLogViewerMode(currentMode, prevMode):
             status.updateLogViewer(node.bufferIndex)
+          elif isDebugMode(currentMode, prevMode):
+            status.updateDebugModeView
           elif isCurrentMainWin:
             if status.settings.highlightOtherUsesCurrentWord:
               status.highlightOtherUsesCurrentWord
@@ -393,7 +398,7 @@ proc update*(status: var EditorStatus) =
             if status.settings.highlightPairOfParen:
               status.highlightPairOfParen
 
-          status.updateHighlight(node)
+            status.updateHighlight(node)
 
         let
           startSelectedLine = bufStatus.selectArea.startLine
@@ -520,9 +525,8 @@ proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
   if index < 0 or
      status.workSpace[workspaceIndex].numOfMainWindow <= index: return
 
-  var node =
+  status.workSpace[workspaceIndex].currentMainWindowNode =
     status.workSpace[workspaceIndex].mainWindowNode.searchByWindowIndex(index)
-  status.workSpace[workspaceIndex].currentMainWindowNode = node
 
 proc moveNextWindow*(status: var EditorStatus) =
   let
@@ -909,7 +913,8 @@ proc highlightTrailingSpaces(status: var Editorstatus) =
     currentBufferIndex = status.bufferIndexInCurrentWindow
     bufStatus = status.bufStatus[currentBufferIndex]
 
-  if isConfigMode(bufStatus.mode, bufStatus.prevMode): return
+  if isConfigMode(bufStatus.mode, bufStatus.prevMode) or
+     isDebugMode(bufStatus.mode, bufStatus.prevMode): return
 
   let
     buffer = bufStatus.buffer
@@ -1085,3 +1090,15 @@ proc eventLoopTask(status: var Editorstatus) =
                                status.messageLog)
 
         status.autoBackupStatus.lastBackupTime = now()
+
+import debugmode
+
+proc updateDebugModeView(status: var EditorStatus) =
+  let debugModeBufferIndex = status.bufStatus.getDebugModeBufferIndex
+  if debugModeBufferIndex == -1: return
+
+  status.initDebugModeBuffer
+  let
+    workspaceIndex = status.currentWorkSpaceIndex
+    highlight = status.bufStatus[debugModeBufferIndex].buffer.initDebugmodeHighlight
+  status.workSpace[workspaceIndex].currentMainWindowNode.highlight = highlight
