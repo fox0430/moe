@@ -1094,11 +1094,15 @@ proc eventLoopTask(status: var Editorstatus) =
 import debugmode
 
 proc updateDebugModeView(status: var EditorStatus) =
-  let debugModeBufferIndex = status.bufStatus.getDebugModeBufferIndex
+  let
+    debugModeBufferIndex = status.bufStatus.getDebugModeBufferIndex
+    workspaceIndex = status.currentWorkSpaceIndex
+
   if debugModeBufferIndex == -1: return
 
-  status.initDebugModeBuffer
-  let
-    workspaceIndex = status.currentWorkSpaceIndex
-    highlight = status.bufStatus[debugModeBufferIndex].buffer.initDebugmodeHighlight
+  status.bufStatus.initDebugModeBuffer(
+    status.workSpace[workspaceIndex].mainWindowNode,
+    status.workSpace[workspaceIndex].currentMainWindowNode.windowIndex)
+
+  let highlight = status.bufStatus[debugModeBufferIndex].buffer.initDebugmodeHighlight
   status.workSpace[workspaceIndex].currentMainWindowNode.highlight = highlight

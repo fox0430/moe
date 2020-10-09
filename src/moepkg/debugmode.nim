@@ -19,7 +19,7 @@ proc getDebugModeBufferIndex*(bufStatuses: seq[BufferStatus]): int =
   for index, bufStatus in bufStatuses:
     if isDebugMode(bufStatus.mode, bufStatus.prevMode): return index
 
-proc initDebugmodeHighlight*[T](buffer: T): Highlight =
+proc initDebugModeHighlight*[T](buffer: T): Highlight =
   for i in 0 ..< buffer.len:
     result.colorSegments.add(ColorSegment(
       firstRow: i,
@@ -30,19 +30,20 @@ proc initDebugmodeHighlight*[T](buffer: T): Highlight =
 
 import editorstatus
 
-proc initDebugModeBuffer*(status: var Editorstatus) =
+proc initDebugModeBuffer*(bufStatuses: var seq[BufferStatus],
+                          root: WindowNode,
+                          currentWindowIndex: int) =
+
   template debugModeBuffer: var GapBuffer[seq[Rune]] =
-    status.bufStatus[debugModeBufferIndex].buffer
+    bufStatuses[debugModeBufferIndex].buffer
 
-  let debugModeBufferIndex = status.bufStatus.getDebugModeBufferIndex
+  let debugModeBufferIndex = bufStatuses.getDebugModeBufferIndex
 
-  status.bufStatus[debugModeBufferIndex].path = ru"Debug mode"
-  status.bufStatus[debugModeBufferIndex].buffer = initGapBuffer[seq[Rune]]()
+  bufStatuses[debugModeBufferIndex].path = ru"Debug mode"
+  bufStatuses[debugModeBufferIndex].buffer = initGapBuffer[seq[Rune]]()
 
   # Add WindowNode info
-  let
-    windowNodes = currentWorkSpace.mainWindowNode.getAllWindowNode
-    currentWindowIndex = currentMainWindowNode.windowIndex
+  let windowNodes = root.getAllWindowNode
   debugModeBuffer.add(ru fmt" -- WindowNode --")
   for n in windowNodes:
     let
@@ -67,7 +68,6 @@ proc initDebugModeBuffer*(status: var Editorstatus) =
     debugModeBuffer.add(ru "")
 
   # Add BufferStatus info
-  let bufStatuses = status.bufStatus
   debugModeBuffer.add(ru fmt"-- bufStatus --")
   for i in 0 ..< bufStatuses.len:
     let bufStatus = bufStatuses[i]
