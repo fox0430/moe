@@ -44,7 +44,7 @@ proc initDebugModeBuffer*(bufStatuses: var seq[BufferStatus],
 
   # Add WindowNode info
   let windowNodes = root.getAllWindowNode
-  debugModeBuffer.add(ru fmt" -- WindowNode --")
+  debugModeBuffer.add(ru fmt"-- WindowNode --")
   for n in windowNodes:
     let
       haveCursesWin = if n.window.isSome: true else: false
@@ -83,6 +83,12 @@ proc initDebugModeBuffer*(bufStatuses: var seq[BufferStatus],
     debugModeBuffer.add(ru fmt"  lastSaveTime     : {$bufStatus.lastSaveTime}")
     debugModeBuffer.add(ru fmt"  buffer length    : {bufStatus.buffer.len}")
     debugModeBuffer.add(ru "")
+
+  exitUi()
+  echo debugModeBuffer
+  echo ""
+  echo ""
+  echo ""
 
 proc debugMode*(status: var Editorstatus) =
   let
