@@ -11,7 +11,8 @@ suite "Init debug mode buffer":
 
     status.bufStatus.initDebugModeBuffer(
       status.workspace[0].mainWindowNode,
-      status.workspace[0].currentMainWindowNode.windowIndex)
+      status.workspace[0].currentMainWindowNode.windowIndex,
+      status.settings.debugModeSettings)
 
     let correctBuf = initGapBuffer[seq[Rune]](@[
       ru"-- WindowNode --",

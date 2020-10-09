@@ -114,6 +114,39 @@ const tomlStr = """
   [Autocomplete]
   enable = true
 
+  [Debug.WindowNode]
+  enable = false
+  currentWindow = false
+  index = false
+  windowIndex = false
+  bufferIndex = false
+  parentIndex = false
+  childLen = false
+  splitType = false
+  haveCursesWin = false
+  y = false
+  x = false
+  h = false
+  w = false
+  currentLine = false
+  currentColumn = false
+  expandedColumn = false
+  cursor = false
+
+  [Debug.BufferStatus]
+  enable = false
+  bufferIndex = false
+  path = false
+  openDir = false
+  currentMode = false
+  prevMode = false
+  language = false
+  encoding = false
+  countChange = false
+  cmdLoop = false
+  lastSaveTime = false
+  bufferLen = false
+
   [Theme]
   baseTheme = "dark"
 
@@ -331,6 +364,37 @@ suite "Parse configuration file":
     check not settings.filerSettings.showIcons
 
     check settings.autocompleteSettings.enable
+
+    check not settings.debugModeSettings.windowNode.enable
+    check not settings.debugModeSettings.windowNode.currentWindow
+    check not settings.debugModeSettings.windowNode.index
+    check not settings.debugModeSettings.windowNode.windowIndex
+    check not settings.debugModeSettings.windowNode.bufferIndex
+    check not settings.debugModeSettings.windowNode.parentIndex
+    check not settings.debugModeSettings.windowNode.childLen
+    check not settings.debugModeSettings.windowNode.splitType
+    check not settings.debugModeSettings.windowNode.haveCursesWin
+    check not settings.debugModeSettings.windowNode.y
+    check not settings.debugModeSettings.windowNode.x
+    check not settings.debugModeSettings.windowNode.h
+    check not settings.debugModeSettings.windowNode.w
+    check not settings.debugModeSettings.windowNode.currentLine
+    check not settings.debugModeSettings.windowNode.currentColumn
+    check not settings.debugModeSettings.windowNode.expandedColumn
+    check not settings.debugModeSettings.windowNode.cursor
+
+    check not settings.debugModeSettings.bufStatus.enable
+    check not settings.debugModeSettings.bufStatus.bufferIndex
+    check not settings.debugModeSettings.bufStatus.path
+    check not settings.debugModeSettings.bufStatus.openDir
+    check not settings.debugModeSettings.bufStatus.currentMode
+    check not settings.debugModeSettings.bufStatus.prevMode
+    check not settings.debugModeSettings.bufStatus.language
+    check not settings.debugModeSettings.bufStatus.encoding
+    check not settings.debugModeSettings.bufStatus.countChange
+    check not settings.debugModeSettings.bufStatus.cmdLoop
+    check not settings.debugModeSettings.bufStatus.lastSaveTime
+    check not settings.debugModeSettings.bufStatus.bufferLen
 
     let theme = ColorTheme.config
     check ColorThemeTable[theme].editorBg == Color.pink1
