@@ -68,7 +68,7 @@ const
   ]
   autoBackupTableNames = [
     "enable",
-    "idolTime",
+    "idleTime",
     "interval",
     "backupDir",
     "dirToExclude"
@@ -376,8 +376,8 @@ proc initAutoBackupTableBuffer(settings: AutoBackupSettings): seq[seq[Rune]] =
     case name:
       of "enable":
         result.add(ru nameStr & space & $settings.enable)
-      of "idolTime":
-        result.add(ru nameStr & space & $settings.idolTime)
+      of "idleTime":
+        result.add(ru nameStr & space & $settings.idleTime)
       of "interval":
         result.add(ru nameStr & space & $settings.interval)
       of "backupDir":

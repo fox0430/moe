@@ -115,7 +115,7 @@ currentWord = true
 enable = true
 
 # 10 second
-idolTime = 10
+idleTime = 10
 
 # 5 minute
 interval = 5

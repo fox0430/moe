@@ -68,7 +68,7 @@ const tomlStr = """
 
   [AutoBackup]
   enable = false
-  idolTime = 1
+  idleTime = 1
   interval = 1
   backupDir = "/tmp"
   dirToExclude = ["/tmp"]
@@ -290,7 +290,7 @@ suite "Parse configuration file":
     check settings.reservedWords[4].word == "TEST2"
 
     check not settings.autoBackupSettings.enable
-    check settings.autoBackupSettings.idolTime == 1
+    check settings.autoBackupSettings.idleTime == 1
     check settings.autoBackupSettings.interval == 1
     check settings.autoBackupSettings.backupDir == ru"/tmp"
     check settings.autoBackupSettings.dirToExclude  == @[ru"/tmp"]

@@ -314,7 +314,7 @@ enable
 Start backup when there is no operation for the set number of seconds (int)  
 default is 10 (10 second)  
 ```
-idolTime
+idleTime
 ```
 
 Backup interval (int)  

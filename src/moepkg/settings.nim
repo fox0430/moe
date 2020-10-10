@@ -51,7 +51,7 @@ type QuickRunSettings* = object
 
 type AutoBackupSettings* = object
   enable*: bool
-  idolTime*: int # seconds
+  idleTime*: int # seconds
   interval*: int # minutes
   backupDir*: seq[Rune]
   dirToExclude*: seq[seq[Rune]]
@@ -166,7 +166,7 @@ proc initQuickRunSettings(): QuickRunSettings =
 proc initAutoBackupSettings(): AutoBackupSettings =
   result.enable = true
   result.interval = 5 # 5 minutes
-  result.idolTime = 10 # 10 seconds
+  result.idleTime = 10 # 10 seconds
   result.dirToExclude = @[ru"/etc"]
 
 proc initFilerSettings(): FilerSettings {.inline.} =
@@ -919,8 +919,8 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["AutoBackup"].contains("enable"):
       result.autoBackupSettings.enable = settings["AutoBackup"]["enable"].getbool()
 
-    if settings["AutoBackup"].contains("idolTime"):
-      result.autoBackupSettings.idolTime = settings["AutoBackup"]["idolTime"].getInt()
+    if settings["AutoBackup"].contains("idleTime"):
+      result.autoBackupSettings.idleTime = settings["AutoBackup"]["idleTime"].getInt()
 
     if settings["AutoBackup"].contains("interval"):
       result.autoBackupSettings.interval = settings["AutoBackup"]["interval"].getInt()
@@ -1495,7 +1495,7 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         of "enable", "showMessages":
           if item.val["type"].getStr != "bool":
             return some($item)
-        of "idolTime",
+        of "idleTime",
            "interval":
           if item.val["type"].getStr != "integer":
             return some($item)
