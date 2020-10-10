@@ -129,6 +129,10 @@ And one more, it comes from the Japanese slang 萌え(moe).
 ## Contributing, bug reports, requests
 Welcome❤
 
+## Community
+
+ - [Discord](https://discord.gg/UaJPnCF)
+
 ## License
 
 GNU General Public License version 3
