@@ -532,7 +532,6 @@ default is true
 restoreLogNotify
 ```
 
-
 ### Filer table
 
 Show/hidden unicode icons (bool)  
@@ -547,6 +546,156 @@ Enable/Disable general-purpose autocomplete (bool).
 The default value is true.
 ```
 enable
+```
+
+### Debug.windowNode table
+
+Show/Hidden all windowNode info in debug mode (bool)
+```
+enable
+```
+
+Show/Hidden whether the current window or not in debug mode (bool)
+```
+currentWindow
+```
+
+Show/Hidden windowNode.index in debug mode (bool)
+```
+index
+```
+
+Show/Hidden windowNode.windowIndex in debug mode (bool)
+```
+windowIndex
+```
+
+Show/Hidden windowNode.bufferIndex in debug mode (bool)
+```
+bufferIndex
+```
+
+Show/Hidden parent node's windoeNode.index in debug mode (bool)
+```
+parentIndex
+```
+
+Show/Hidden windoeNode.child.len in debug mode (bool)
+```
+childLen
+```
+
+Show/Hidden windoeNode.splitType in debug mode (bool)
+```
+splitType
+```
+
+Show/Hidden whether windoeNode have cursesWindow or not in debug mode (bool)
+```
+haveCursesWin
+```
+
+Show/Hidden windowNode.y in debug mode (bool)
+```
+y
+```
+
+Show/Hidden windowNode.x in debug mode (bool)
+```
+x
+```
+
+Show/Hidden windowNode.h in debug mode (bool)
+```
+h
+```
+
+Show/Hidden windowNode.w in debug mode (bool)
+```
+w
+```
+
+Show/Hidden windowNode.currentLine in debug mode (bool)
+```
+currentLine
+```
+
+Show/Hidden windowNode.currentColumn in debug mode (bool)
+```
+currentColumn
+```
+
+Show/Hidden windowNode.expandedColumn in debug mode (bool)
+```
+expandedColumn
+```
+
+Show/Hidden windowNode.curosr in debug mode (bool)
+```
+cursor
+```
+
+### Debug.bufStatus table
+
+Show/Hidden all bufStatus info in debug mode (bool)
+```
+enable
+```
+
+Show/Hidden bufStatus index in debug mode (bool)
+```
+bufferIndex
+```
+
+Show/Hidden bufStatus.path in debug mode (bool)
+```
+path
+```
+
+Show/Hidden bufStatus.openDir in debug mode (bool)
+```
+openDir
+```
+
+Show/Hidden bufStatus.mode in debug mode (bool)
+```
+currentMode
+
+```
+
+Show/Hidden bufStatus.prevMode in debug mode (bool)
+```
+prevMode
+```
+
+Show/Hidden bufStatus.language in debug mode (bool)
+```
+language
+```
+
+Show/Hidden bufStatus.characterEncoding in debug mode (bool)
+```
+encoding 
+```
+
+Show/Hidden bufStatus.countChange in debug mode (bool)
+```
+countChange
+```
+
+Show/Hidden bufStatus.cmdLoop in debug mode (bool)
+```
+cmdLoop
+```
+
+Show/Hidden bufStatus.lastSaveTime in debug mode (bool)
+```
+lastSaveTime
+```
+
+Show/Hidden bufStatus.buffer.len in debug mode (bool)
+```
+bufferLen
 ```
 
 ### Color and theme

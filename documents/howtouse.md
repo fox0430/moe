@@ -208,6 +208,8 @@
 
 ```conf``` - Open configuration mode
 
+```debug``` - Open debug mode
+
 </details>
 
 [Go To Top](#table-of-contents)
