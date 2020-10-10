@@ -1099,7 +1099,7 @@ proc updateDebugModeView(status: var EditorStatus) =
 
   if debugModeBufferIndex == -1: return
 
-  status.bufStatus.initDebugModeBuffer(
+  status.bufStatus.updateDebugModeBuffer(
     status.workSpace[workspaceIndex].mainWindowNode,
     status.workSpace[workspaceIndex].currentMainWindowNode.windowIndex,
     status.settings.debugModeSettings)

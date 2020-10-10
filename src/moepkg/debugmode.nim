@@ -14,10 +14,12 @@ template currentWorkSpace: var WorkSpace =
   mixin status
   status.workSpace[status.currentWorkSpaceIndex]
 
-proc getDebugModeBufferIndex*(bufStatuses: seq[BufferStatus]): int =
+proc getDebugModeBufferIndex*(bufStatus: seq[BufferStatus]): int =
   result = -1
-  for index, bufStatus in bufStatuses:
-    if isDebugMode(bufStatus.mode, bufStatus.prevMode): return index
+  for index, bufStatus in bufStatus:
+    if isDebugMode(bufStatus.mode, bufStatus.prevMode): result = index
+
+  doAssert(result > -1, "Error: Debug mode is not open")
 
 proc initDebugModeHighlight*[T](buffer: T): Highlight =
   for i in 0 ..< buffer.len:
@@ -28,18 +30,15 @@ proc initDebugModeHighlight*[T](buffer: T): Highlight =
       lastColumn: buffer[i].len,
       color: EditorColorPair.defaultChar))
 
-proc initDebugModeBuffer*(bufStatuses: var seq[BufferStatus],
-                          root: WindowNode,
-                          currentWindowIndex: int,
-                          debugModeSettings: DebugModeSettings) =
+proc updateDebugModeBuffer*(bufStatus: var seq[BufferStatus],
+                            root: WindowNode,
+                            currentWindowIndex: int,
+                            debugModeSettings: DebugModeSettings) =
 
   template debugModeBuffer: var GapBuffer[seq[Rune]] =
-    bufStatuses[debugModeBufferIndex].buffer
+    bufStatus[bufStatus.getDebugModeBufferIndex].buffer
 
-  let debugModeBufferIndex = bufStatuses.getDebugModeBufferIndex
-
-  bufStatuses[debugModeBufferIndex].path = ru"Debug mode"
-  bufStatuses[debugModeBufferIndex].buffer = initGapBuffer[seq[Rune]]()
+  debugModeBuffer = initGapBuffer[seq[Rune]](@[ru""])
 
   # Add WindowNode info
   if debugModeSettings.windowNode.enable:
@@ -84,35 +83,42 @@ proc initDebugModeBuffer*(bufStatuses: var seq[BufferStatus],
 
       debugModeBuffer.add(ru "")
 
-    # Add BufferStatus info
-    if debugModeSettings.bufStatus.enable:
-      debugModeBuffer.add(ru fmt"-- bufStatus --")
-      for i in 0 ..< bufStatuses.len:
-        let bufStatus = bufStatuses[i]
-        if debugModeSettings.bufStatus.bufferIndex:
-          debugModeBuffer.add(ru fmt"buffer Index: {i}")
-        if debugModeSettings.bufStatus.path:
-          debugModeBuffer.add(ru fmt"  path             : {bufStatus.path}")
-        if debugModeSettings.bufStatus.openDir:
-          debugModeBuffer.add(ru fmt"  openDir          : {bufStatus.openDir}")
-        if debugModeSettings.bufStatus.currentMode:
-          debugModeBuffer.add(ru fmt"  currentMode      : {bufStatus.mode}")
-        if debugModeSettings.bufStatus.prevMode:
-          debugModeBuffer.add(ru fmt"  prevMode         : {bufStatus.prevMode}")
-        if debugModeSettings.bufStatus.language:
-          debugModeBuffer.add(ru fmt"  language         : {bufStatus.language}")
-        if debugModeSettings.bufStatus.encoding:
-          debugModeBuffer.add(ru fmt"  encoding         : {bufStatus.characterEncoding}")
-        if debugModeSettings.bufStatus.countChange:
-          debugModeBuffer.add(ru fmt"  countChange      : {bufStatus.countChange}")
-        if debugModeSettings.bufStatus.cmdLoop:
-          debugModeBuffer.add(ru fmt"  cmdLoop          : {bufStatus.cmdLoop}")
-        if debugModeSettings.bufStatus.lastSaveTime:
-          debugModeBuffer.add(ru fmt"  lastSaveTime     : {$bufStatus.lastSaveTime}")
-        if debugModeSettings.bufStatus.bufferLen:
-          debugModeBuffer.add(ru fmt"  buffer length    : {bufStatus.buffer.len}")
+  # Add BufferStatus info
+  if debugModeSettings.bufStatus.enable:
+    debugModeBuffer.add(ru fmt"-- bufStatus --")
+    for i in 0 ..< bufStatus.len:
+      if debugModeSettings.bufStatus.bufferIndex:
+        debugModeBuffer.add(ru fmt"buffer Index: {i}")
+      if debugModeSettings.bufStatus.path:
+        debugModeBuffer.add(ru fmt"  path             : {bufStatus[i].path}")
+      if debugModeSettings.bufStatus.openDir:
+        debugModeBuffer.add(ru fmt"  openDir          : {bufStatus[i].openDir}")
+      if debugModeSettings.bufStatus.currentMode:
+        debugModeBuffer.add(ru fmt"  currentMode      : {bufStatus[i].mode}")
+      if debugModeSettings.bufStatus.prevMode:
+        debugModeBuffer.add(ru fmt"  prevMode         : {bufStatus[i].prevMode}")
+      if debugModeSettings.bufStatus.language:
+        debugModeBuffer.add(ru fmt"  language         : {bufStatus[i].language}")
+      if debugModeSettings.bufStatus.encoding:
+        debugModeBuffer.add(ru fmt"  encoding         : {bufStatus[i].characterEncoding}")
+      if debugModeSettings.bufStatus.countChange:
+        debugModeBuffer.add(ru fmt"  countChange      : {bufStatus[i].countChange}")
+      if debugModeSettings.bufStatus.cmdLoop:
+        debugModeBuffer.add(ru fmt"  cmdLoop          : {bufStatus[i].cmdLoop}")
+      if debugModeSettings.bufStatus.lastSaveTime:
+        debugModeBuffer.add(ru fmt"  lastSaveTime     : {$bufStatus[i].lastSaveTime}")
+      if debugModeSettings.bufStatus.bufferLen:
+        debugModeBuffer.add(ru fmt"  buffer length    : {bufStatus[i].buffer.len}")
 
-        debugModeBuffer.add(ru "")
+      debugModeBuffer.add(ru "")
+
+proc initDebugModeBuffer*(bufStatus: var seq[BufferStatus],
+                            root: WindowNode,
+                            currentWindowIndex: int,
+                            debugModeSettings: DebugModeSettings) =
+
+  bufStatus[bufStatus.getDebugModeBufferIndex].path = ru"Debug mode"
+  bufStatus.updateDebugModeBuffer(root, currentWindowIndex, debugModeSettings)
 
 import editorstatus
 
