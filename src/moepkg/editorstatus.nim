@@ -291,6 +291,8 @@ proc updateStatusBar(status: var Editorstatus) =
         isActiveWindow,
         status.settings)
 
+proc initDebugModeHighlight[T](buffer: T): Highlight
+
 proc initSyntaxHighlight(windowNode: var WindowNode,
                          bufStatus: seq[BufferStatus],
                          reservedWords: seq[ReservedWord],
@@ -306,11 +308,12 @@ proc initSyntaxHighlight(windowNode: var WindowNode,
         if not isFilerMode(bufStatus.mode, bufStatus.prevMode) and
            not isHistoryManagerMode(bufStatus.mode, bufStatus.prevMode) and
            not isDiffViewerMode(bufStatus.mode, bufStatus.prevMode) and
-           not isConfigMode(bufStatus.mode, bufStatus.prevMode) and
-           not isDebugMode(bufStatus.mode, bufStatus.prevMode):
+           not isConfigMode(bufStatus.mode, bufStatus.prevMode):
           let lang = if isSyntaxHighlight: bufStatus.language
                      else: SourceLanguage.langNone
           node.highlight = ($bufStatus.buffer).initHighlight(reservedWords, lang)
+        elif isDebugMode(bufStatus.mode, bufStatus.prevMode):
+          node.highlight = bufStatus.buffer.initDebugmodeHighlight
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)
@@ -323,7 +326,7 @@ proc updateLogViewer(status: var Editorstatus, bufferIndex: int) =
   for i in 0 ..< status.messageLog.len:
     status.bufStatus[bufferIndex].buffer.insert(status.messageLog[i], i)
 
-proc updateDebugModeView(status: var EditorStatus)
+proc updateDebugModeBuffer(status: var EditorStatus)
 
 proc update*(status: var EditorStatus) =
   setCursor(false)
@@ -342,12 +345,12 @@ proc update*(status: var EditorStatus) =
 
   let workspaceIndex = status.currentWorkSpaceIndex
 
+  status.updateDebugModeBuffer
+
   status.workspace[workspaceIndex].mainWindowNode.initSyntaxHighlight(
     status.bufStatus,
     status.settings.reservedWords,
     status.settings.syntax)
-
-  status.updateDebugModeView
 
   var queue = initHeapQueue[WindowNode]()
   for node in status.workSpace[workspaceIndex].mainWindowNode.child:
@@ -1092,30 +1095,15 @@ proc eventLoopTask(status: var Editorstatus) =
 
 import debugmode
 
-# TODO: Refactor
-proc updateDebugModeView(status: var EditorStatus) =
-  let
-    debugModeBufferIndex = status.bufStatus.getDebugModeBufferIndex
-    workspaceIndex = status.currentWorkSpaceIndex
+proc initDebugModeHighlight[T](buffer: T): Highlight =
+  debugmode.initDebugModeHighlight(buffer)
 
+proc updateDebugModeBuffer(status: var EditorStatus) =
+  let debugModeBufferIndex = status.bufStatus.getDebugModeBufferIndex
   if debugModeBufferIndex == -1: return
 
+  let workspaceIndex = status.currentWorkSpaceIndex
   status.bufStatus.updateDebugModeBuffer(
     status.workSpace[workspaceIndex].mainWindowNode,
     status.workSpace[workspaceIndex].currentMainWindowNode.windowIndex,
     status.settings.debugModeSettings)
-
-  var qeue = initHeapQueue[WindowNode]()
-  for node in status.workSpace[workspaceIndex].mainWindowNode.child: qeue.push(node)
-  while qeue.len > 0:
-    for i in 0 ..< qeue.len:
-      let node = qeue.pop
-      if node.window.isSome:
-        let
-          mode = status.bufStatus[node.bufferIndex].mode
-          prevMode = status.bufStatus[node.bufferIndex].prevMode
-        if isDebugMode(mode, prevMode):
-          node.highlight = status.bufStatus[debugModeBufferIndex].buffer.initDebugmodeHighlight
-
-      if node.child.len > 0:
-        for node in node.child: qeue.push(node)
