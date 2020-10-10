@@ -1064,11 +1064,11 @@ proc eventLoopTask(status: var Editorstatus) =
   let
     lastBackupTime = status.autoBackupStatus.lastBackupTime
     interval = status.settings.autoBackupSettings.interval
-    idolTime = status.settings.autoBackupSettings.idolTime
+    idleTime = status.settings.autoBackupSettings.idleTime
 
   if status.settings.autoBackupSettings.enable and
      lastBackupTime + interval.minutes < now() and
-     status.lastOperatingTime + idolTime.seconds < now():
+     status.lastOperatingTime + idleTime.seconds < now():
     for bufStatus in status.bufStatus:
       let
         mode = bufStatus.mode
