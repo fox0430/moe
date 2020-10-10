@@ -314,6 +314,7 @@ proc initEditorSettings*(): EditorSettings =
   result.autoBackupSettings = initAutoBackupSettings()
   result.quickRunSettings = initQuickRunSettings()
   result.notificationSettings = initNotificationSettings()
+  result.debugModeSettings = initDebugModeSettings()
 
 proc getTheme(theme: string): ColorTheme =
   if theme == "vivid": return ColorTheme.vivid
