@@ -15,6 +15,7 @@ suite "Init debug mode buffer":
       status.settings.debugModeSettings)
 
     let correctBuf = initGapBuffer[seq[Rune]](@[
+      ru "",
       ru"-- WindowNode --",
       ru"  currentWindow    : true",
       ru"  index            : 0",
@@ -56,7 +57,7 @@ suite "Init debug mode buffer":
       ru"  countChange      : 0",
       ru"  cmdLoop          : 0",
       ru fmt"  lastSaveTime     : {$status.bufStatus[1].lastSaveTime}",
-      ru"  buffer length    : 31",
+      ru"  buffer length    : 42",
       ru""])
 
     for i in 0 ..< status.bufStatus[1].buffer.len:
