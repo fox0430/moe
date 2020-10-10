@@ -15,8 +15,6 @@ proc getDebugModeBufferIndex*(bufStatus: seq[BufferStatus]): int =
   for index, bufStatus in bufStatus:
     if isDebugMode(bufStatus.mode, bufStatus.prevMode): result = index
 
-  doAssert(result > -1, "Error: Debug mode is not open")
-
 proc initDebugModeHighlight*[T](buffer: T): Highlight =
   for i in 0 ..< buffer.len:
     result.colorSegments.add(ColorSegment(
