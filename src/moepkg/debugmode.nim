@@ -10,10 +10,6 @@ template currentMainWindowNode: var WindowNode =
   mixin status
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
 
-template currentWorkSpace: var WorkSpace =
-  mixin status
-  status.workSpace[status.currentWorkSpaceIndex]
-
 proc getDebugModeBufferIndex*(bufStatus: seq[BufferStatus]): int =
   result = -1
   for index, bufStatus in bufStatus:
