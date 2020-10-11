@@ -199,6 +199,11 @@ showIcons = true
 
 enable = true
 
+[Debug.WorkSpace]
+enable = true
+numOfWorkSpaces = true
+currentWorkSpaceIndex = true
+
 [Debug.WindowNode]
 enable = true
 currentWindow = true
