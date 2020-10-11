@@ -62,3 +62,23 @@ suite "Init debug mode buffer":
 
     for i in 0 ..< status.bufStatus[1].buffer.len:
       check status.bufStatus[1].buffer[i] == correctBuf[i]
+
+  test "Init highlight":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    status.addNewBuffer(Mode.debug)
+
+    status.bufStatus.initDebugModeBuffer(
+      status.workspace[0].mainWindowNode,
+      status.workspace[0].currentMainWindowNode.windowIndex,
+      status.settings.debugModeSettings)
+
+    let
+      buffer = status.bufStatus[1].buffer
+      highlight = buffer.initDebugModeHighlight
+
+    for i in 0 ..< buffer.len:
+      check highlight[i].firstRow == i
+      check highlight[i].lastRow == i
+      check highlight[i].firstColumn == 0
+      check highlight[i].lastColumn == buffer[i].len
