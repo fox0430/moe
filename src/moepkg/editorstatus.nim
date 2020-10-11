@@ -1106,4 +1106,6 @@ proc updateDebugModeBuffer(status: var EditorStatus) =
   status.bufStatus.updateDebugModeBuffer(
     status.workSpace[workspaceIndex].mainWindowNode,
     status.workSpace[workspaceIndex].currentMainWindowNode.windowIndex,
+    status.workSpace.len,
+    workspaceIndex,
     status.settings.debugModeSettings)

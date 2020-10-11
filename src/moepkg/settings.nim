@@ -9,6 +9,11 @@ when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
 
 import ui, color, unicodeext, highlight
 
+type DebugWorkSpaceSettings* = object
+  enable*: bool
+  numOfWorkSpaces*: bool
+  currentWorkSpaceIndex*: bool
+
 type DebugWindowNodeSettings* = object
   enable*: bool
   currentWindow*: bool
@@ -43,6 +48,7 @@ type DebugBufferStatusSettings* = object
   bufferLen*: bool
 
 type DebugModeSettings* = object
+  workSpace*: DebugWorkSpaceSettings
   windowNode*: DebugWindowNodeSettings
   bufStatus*: DebugBufferStatusSettings
 
@@ -173,6 +179,11 @@ type EditorSettings* = object
 type InvalidItemError* = object of ValueError
 
 proc initDebugModeSettings(): DebugModeSettings =
+  result.workSpace = DebugWorkSpaceSettings(
+    enable: true,
+    numOfWorkSpaces: true,
+    currentWorkSpaceIndex: true)
+
   result.windowNode = DebugWindowNodeSettings(
     enable: true,
     currentWindow: true,
@@ -1113,6 +1124,21 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       result.autocompleteSettings.enable = settings[table][key].getbool
 
   if settings.contains("Debug"):
+    if settings["Debug"].contains("WorkSpace"):
+      let workSpaceSettings = settings["Debug"]["WorkSpace"]
+
+      if workSpaceSettings.contains("enable"):
+        let setting = workSpaceSettings["enable"].getbool
+        result.debugModeSettings.workSpace.enable = setting
+
+      if workSpaceSettings.contains("numOfWorkSpaces"):
+        let setting = workSpaceSettings["numOfWorkSpaces"].getbool
+        result.debugModeSettings.workSpace.numOfWorkSpaces = setting
+
+      if workSpaceSettings.contains("currentWorkSpaceIndex"):
+        let setting = workSpaceSettings["currentWorkSpaceIndex"].getbool
+        result.debugModeSettings.workSpace.currentWorkSpaceIndex = setting
+
     if settings["Debug"].contains("WindowNode"):
       let windowNodeSettings = settings["Debug"]["WindowNode"]
 
@@ -1782,6 +1808,17 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
   template validateDebugTable() =
     for item in json["Debug"].pairs:
       case item.key:
+        of "WorkSpace":
+        # Check [Debug.WorkSpace]
+          for item in json["Debug"]["WorkSpace"].pairs:
+            case item.key:
+              of "enable",
+                  "numOfWorkSpaces",
+                  "currentWorkSpaceIndex":
+                if item.val["type"].getStr != "bool":
+                  return some($item)
+              else:
+                return some($item)
         # Check [Debug.WindowNode]
         of "WindowNode":
           for item in json["Debug"]["WindowNode"].pairs:

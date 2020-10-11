@@ -114,6 +114,11 @@ const tomlStr = """
   [Autocomplete]
   enable = true
 
+  [Debug.WorkSpace]
+  enable = false
+  numOfWorkSpaces = false
+  currentWorkSpaceIndex = false
+
   [Debug.WindowNode]
   enable = false
   currentWindow = false
@@ -364,6 +369,10 @@ suite "Parse configuration file":
     check not settings.filerSettings.showIcons
 
     check settings.autocompleteSettings.enable
+
+    check not settings.debugModeSettings.workSpace.enable
+    check not settings.debugModeSettings.workSpace.numOfWorkSpaces
+    check not settings.debugModeSettings.workSpace.currentWorkSpaceIndex
 
     check not settings.debugModeSettings.windowNode.enable
     check not settings.debugModeSettings.windowNode.currentWindow
