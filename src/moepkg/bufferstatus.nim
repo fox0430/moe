@@ -17,7 +17,8 @@ type Mode* = enum
   quickRun,
   history,
   diff,
-  config
+  config,
+  debug
 
 type SelectArea* = object
   startLine*: int
@@ -32,7 +33,7 @@ type BufferStatus* = object
   selectArea*: SelectArea
   isSearchHighlight*: bool
   path*: seq[Rune]
-  openDir: seq[Rune]
+  openDir*: seq[Rune]
   positionRecord*: Table[int, tuple[line, column, expandedColumn: int]]
   countChange*: int
   cmdLoop*: int
@@ -64,3 +65,6 @@ proc isNormalMode*(mode, prevMode: Mode): bool {.inline.} =
 proc isInsertMode*(mode: Mode): bool {.inline.} = mode == Mode.insert
 
 proc isReplaceMode*(mode: Mode): bool {.inline.} = mode == Mode.replace
+
+proc isDebugMode*(mode, prevMode: Mode): bool {.inline.} =
+  (mode == Mode.debug) or (mode == Mode.ex and prevMode == Mode.debug)

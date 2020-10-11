@@ -23,6 +23,7 @@ const exCommandList = [
   "conf",
   "cursorLine",
   "cws",
+  "debug",
   "deleteTrailingSpaces",
   "dws",
   "e",

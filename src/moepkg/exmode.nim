@@ -3,9 +3,17 @@ import syntax/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
         unicodeext, independentutils, search, highlight, commandview,
         window, movement, color, build, bufferstatus, editor,
-        settings, quickrun, messages, commandline
+        settings, quickrun, messages, commandline, debugmode
 
 type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
+
+template currentBufStatus: var BufferStatus =
+  mixin status
+  status.bufStatus[status.bufferIndexInCurrentWindow]
+
+template currentMainWindowNode: var WindowNode =
+  mixin status
+  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
 
 proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   var numOfSlash = 0
@@ -257,6 +265,38 @@ proc isHistoryManagerCommand(command: seq[seq[Rune]]): bool {.inline.} =
 
 proc isStartConfigMode(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 1 and cmpIgnoreCase($command[0], "conf") == 0
+
+proc isStartDebugMode(command: seq[seq[Rune]]): bool {.inline.} =
+  return command.len == 1 and cmpIgnoreCase($command[0], "debug") == 0
+
+proc startDebugMode(status: var Editorstatus) =
+  let bufferIndex = status.bufferIndexInCurrentWindow
+  status.changeMode(status.bufStatus[bufferIndex].prevMode)
+
+  # Split window and move to new window
+  status.verticalSplitWindow
+  status.resize(terminalHeight(), terminalWidth())
+  status.moveNextWindow
+
+  let highlight = currentMainWindowNode.highlight
+
+  # Add debug mode buffer
+  status.addNewBuffer(bufferstatus.Mode.debug)
+  status.changeCurrentBuffer(status.bufStatus.high)
+
+  # Initialize debug mode buffer
+  let workspaceIndex = status.currentWorkSpaceIndex
+  status.bufStatus.initDebugModeBuffer(
+    status.workSpace[workspaceIndex].mainWindowNode,
+    status.workSpace[workspaceIndex].currentMainWindowNode.windowIndex,
+    status.workSpace.len,
+    workspaceIndex,
+    status.settings.debugModeSettings)
+  let buffer = currentBufStatus.buffer
+  currentMainWindowNode.highlight = buffer.initDebugmodeHighlight
+
+  status.movePrevWindow
+  status.changeCurrentBuffer(bufferIndex)
 
 proc startConfigMode(status: var Editorstatus) =
   let bufferIndex = status.bufferIndexInCurrentWindow
@@ -907,8 +947,8 @@ proc quitCommand(status: var EditorStatus) =
       numberReferenced = node.countReferencedWindow(currentBufferIndex)
       countChange = status.bufStatus[currentBufferIndex].countChange
     if countChange == 0 or numberReferenced > 1:
-      status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
       status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+      status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
     else:
       status.commandLine.writeNoWriteError(status.messageLog)
       status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
@@ -946,9 +986,8 @@ proc writeAndQuitCommand(status: var EditorStatus) =
     status.changeMode(status.bufStatus[bufferIndex].prevMode)
     return
 
-  status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
-
   status.changeMode(status.bufStatus[bufferIndex].prevMode)
+  status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
 
 proc forceWriteAndQuitCommand(status: var EditorStatus) =
   let
@@ -969,8 +1008,8 @@ proc forceQuitCommand(status: var EditorStatus) =
   let
     workspaceIndex = status.currentWorkSpaceIndex
     bufferIndex = status.bufferIndexInCurrentWindow
-  status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
   status.changeMode(status.bufStatus[bufferIndex].prevMode)
+  status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
 
 proc allBufferQuitCommand(status: var EditorStatus) =
   let workspaceIndex = status.currentWorkSpaceIndex
@@ -1352,6 +1391,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     status.forceWriteCommand(status.bufStatus[currentBufferIndex].path)
   elif isForceWriteAndQuitCommand(command):
     status.forceWriteAndQuitCommand
+  elif isStartDebugMode(command):
+    status.startDebugMode
   else:
     status.commandLine.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(status.bufStatus[currentBufferIndex].prevMode)

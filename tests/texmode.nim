@@ -1,5 +1,6 @@
 import unittest, os
-import moepkg/[ui, editorstatus, gapbuffer, exmode, unicodeext, bufferstatus]
+import moepkg/[ui, editorstatus, gapbuffer, exmode, unicodeext, bufferstatus,
+               settings]
 
 suite "Ex mode: Edit command":
   test "Edit command":
@@ -830,3 +831,55 @@ suite "Ex mode: wq! command":
     check entireFile == "abc"
 
     removeFile(filename)
+
+suite "Ex mode: debug command":
+  test "Start debug mode":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    status.changeMode(Mode.ex)
+
+    status.resize(100, 100)
+    status.update
+
+    const command = @[ru"debug"]
+    status.exModeCommand(command)
+
+    status.resize(100, 100)
+    status.update
+
+    check status.workspace[0].numOfMainWindow == 2
+
+    check status.bufStatus[0].mode == Mode.normal
+    check status.bufStatus[0].prevMode == Mode.ex
+
+    check status.bufStatus[1].mode == Mode.debug
+    check status.bufStatus[1].prevMode == Mode.normal
+
+    check status.workspace[0].currentMainWindowNode.bufferIndex == 0
+
+  test "Start debug mode (Disable all info)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    status.changeMode(Mode.ex)
+
+    status.settings.debugModeSettings.windowNode.enable = false
+    status.settings.debugModeSettings.bufStatus.enable = false
+
+    status.resize(100, 100)
+    status.update
+
+    const command = @[ru"debug"]
+    status.exModeCommand(command)
+
+    status.resize(100, 100)
+    status.update
+
+    check status.workspace[0].numOfMainWindow == 2
+
+    check status.bufStatus[0].mode == Mode.normal
+    check status.bufStatus[0].prevMode == Mode.ex
+
+    check status.bufStatus[1].mode == Mode.debug
+    check status.bufStatus[1].prevMode == Mode.normal
+
+    check status.workspace[0].currentMainWindowNode.bufferIndex == 0
