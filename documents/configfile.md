@@ -548,7 +548,24 @@ The default value is true.
 enable
 ```
 
-### Debug.windowNode table
+### Debug.WorkSpace table
+
+Show/Hidden all WorkSpace info in debug mode (bool)
+```
+enable
+```
+
+Show/Hidden the number of workspaces in debug mode (bool)
+```
+numOfWorkSpaces
+```
+
+Show/Hidden status.currentWorkSpaceIndex in debug mode (bool)
+```
+currentWorkSpaceIndex 
+```
+
+### Debug.WindowNode table
 
 Show/Hidden all windowNode info in debug mode (bool)
 ```
@@ -635,7 +652,7 @@ Show/Hidden windowNode.curosr in debug mode (bool)
 cursor
 ```
 
-### Debug.bufStatus table
+### Debug.BufStatus table
 
 Show/Hidden all bufStatus info in debug mode (bool)
 ```
