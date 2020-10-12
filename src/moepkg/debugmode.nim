@@ -2,14 +2,6 @@ import terminal, times, strformat, options
 import gapbuffer, ui, unicodeext, highlight, color, window, bufferstatus,
        movement, workspace, settings
 
-template currentBufStatus: var BufferStatus =
-  mixin status
-  status.bufStatus[status.bufferIndexInCurrentWindow]
-
-template currentMainWindowNode: var WindowNode =
-  mixin status
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
-
 proc getDebugModeBufferIndex*(bufStatus: seq[BufferStatus]): int =
   result = -1
   for index, bufStatus in bufStatus:
