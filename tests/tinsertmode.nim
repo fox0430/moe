@@ -247,11 +247,11 @@ suite "Insert mode":
 
     var suggestionWindow = tryOpenSuggestionWindow(
       currentBufStatus,
-      currentMainWindow)
+      currentMainWindowNode)
     let
       mainWindowHeight = status.settings.getMainWindowHeight(100)
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
-        currentMainWindow,
+        currentMainWindowNode,
         mainWindowHeight)
 
     suggestionWindow.get.writeSuggestionWindow(y, x)
@@ -271,11 +271,11 @@ suite "Insert mode":
 
     var suggestionWindow = tryOpenSuggestionWindow(
       currentBufStatus,
-      currentMainWindow)
+      currentMainWindowNode)
     let
       mainWindowHeight = status.settings.getMainWindowHeight(terminalHeight)
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
-        currentMainWindow,
+        currentMainWindowNode,
         mainWindowHeight)
 
     suggestionWindow.get.writeSuggestionWindow(y, x)
@@ -294,11 +294,11 @@ suite "Insert mode":
       100,
       100)
 
-    var suggestionWindow = tryOpenSuggestionWindow(currentBufStatus, currentMainWindow)
+    var suggestionWindow = tryOpenSuggestionWindow(currentBufStatus, currentMainWindowNode)
     let
       mainWindowHeight = status.settings.getMainWindowHeight(100)
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
-        currentMainWindow,
+        currentMainWindowNode,
         mainWindowHeight)
 
     suggestionWindow.get.writeSuggestionWindow(y, x)
@@ -313,18 +313,18 @@ suite "Insert mode":
      100)
 
     insertCharacter(currentBufStatus,
-                    currentMainWindow,
+                    currentMainWindowNode,
                     status.settings.autoCloseParen,
                     ru'a')
     var suggestionWindow = tryOpenSuggestionWindow(currentBufStatus,
-                                                   currentMainWindow)
+                                                   currentMainWindowNode)
     status.update
 
     suggestionWindow.get.handleKeyInSuggestionWindow(currentBufStatus,
-                                                     currentMainWindow,
+                                                     currentMainWindowNode,
                                                      ru'\t')
 
-    check currentMainWindow.currentLine == 0
+    check currentMainWindowNode.currentLine == 0
 
   test "General-purpose autocomplete (the cursor position): Selecting a suggestion which is length 1 when the buffer contains a line.":
     const buffer = @[" a"]
@@ -336,17 +336,17 @@ suite "Insert mode":
       100)
 
     insertCharacter(currentBufStatus,
-                    currentMainWindow,
+                    currentMainWindowNode,
                     status.settings.autoCloseParen,
                     ru'a')
     var suggestionWindow = tryOpenSuggestionWindow(
       currentBufStatus,
-      currentMainWindow)
+      currentMainWindowNode)
     status.update
 
     suggestionWindow.get.handleKeyInSuggestionWindow(
       currentBufStatus,
-      currentMainWindow,
+      currentMainWindowNode,
       ru'\t')
 
-    check currentMainWindow.currentColumn == 1
+    check currentMainWindowNode.currentColumn == 1
