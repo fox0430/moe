@@ -930,25 +930,22 @@ proc isConfigMode(status: Editorstatus): bool =
 proc configMode*(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
 
+  currentBufStatus.buffer = initConfigModeBuffer(
+    status.settings)
+
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     currentWorkSpace = status.currentWorkSpaceIndex
-
-  status.bufStatus[currentBufferIndex].buffer = initConfigModeBuffer(
-    status.settings)
 
   while status.isConfigMode and
         currentWorkSpace == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
 
     let
-      currentBufferIndex = status.bufferIndexInCurrentWindow
-      workspaceIndex = status.currentWorkSpaceIndex
-      node = status.workspace[workspaceIndex].currentMainWindowNode
-      buffer = status.bufStatus[currentBufferIndex].buffer
-      highlight = buffer.initConfigModeHighlight(node.currentLine)
+      currentLine = currentMainWindowNode.currentLine
+      highlight = currentBufStatus.buffer.initConfigModeHighlight(currentLine)
 
-    status.workspace[workspaceIndex].currentMainWindowNode.highlight = highlight
+    currentMainWindowNode.highlight = highlight
 
     status.update
     setCursor(false)
@@ -956,8 +953,7 @@ proc configMode*(status: var Editorstatus) =
     var key: Rune = ru'\0'
     while key == ru'\0':
       status.eventLoopTask
-      let index = status.currentWorkSpaceIndex
-      key = getKey(status.workSpace[index].currentMainWindowNode)
+      key = getKey(currentMainWindowNode)
 
     status.lastOperatingTime = now()
 
@@ -967,14 +963,11 @@ proc configMode*(status: var Editorstatus) =
     elif key == ord(':'): status.changeMode(Mode.ex)
 
     elif key == ord('k') or isUpKey(key):
-      status.bufStatus[currentBufferIndex].keyUp(
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+      status.bufStatus[currentBufferIndex].keyUp(currentMainWindowNode)
     elif key == ord('j') or isDownKey(key):
-      status.bufStatus[currentBufferIndex].keyDown(
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+      currentBufStatus.keyDown(currentMainWindowNode)
     elif key == ord('g'):
-      let
-        index = status.currentWorkSpaceIndex
-        secondKey = getKey(status.workSpace[index].currentMainWindowNode)
+      let secondKey = getKey(currentMainWindowNode)
       if secondKey == 'g': status.moveToFirstLine
-    elif key == ord('G'): status.moveToLastLine
+    elif key == ord('G'):
+      status.moveToLastLine
