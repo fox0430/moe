@@ -100,10 +100,8 @@ proc replaceMode*(status: var EditorStatus) =
   var
     isMoved = false
     undoLastSuitId = currentBufStatus.buffer.lastSuitId
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
 
   while isReplaceMode(currentBufStatus.mode):
-    let currentBufferIndex = status.bufferIndexInCurrentWindow
 
     status.update
 

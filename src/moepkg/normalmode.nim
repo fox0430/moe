@@ -98,7 +98,6 @@ proc writeFileAndExit(status: var EditorStatus) =
       saveFile(currentBufStatus.path,
                currentBufStatus.buffer.toRunes,
                currentBufStatus.characterEncoding)
-      let workspaceIndex = status.currentWorkSpaceIndex
       status.closeWindow(currentMainWindowNode)
     except IOError:
       status.commandLine.writeSaveError(status.messageLog)
