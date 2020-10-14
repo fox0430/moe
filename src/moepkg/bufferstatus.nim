@@ -47,6 +47,8 @@ proc initBufferStatus*(path: seq[Rune], mode: Mode): BufferStatus {.inline.} =
 proc isVisualMode*(mode: Mode): bool {.inline.} =
   mode == Mode.visual or mode == Mode.visualBlock
 
+proc isFilerMode*(mode: Mode): bool {.inline.} = mode == Mode.filer
+
 proc isFilerMode*(mode, prevMode: Mode): bool {.inline.} =
   (mode == Mode.filer) or (mode == Mode.ex and prevMode == Mode.filer)
 
