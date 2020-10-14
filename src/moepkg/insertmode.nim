@@ -2,13 +2,6 @@ import terminal, times, options
 import ui, editorstatus, gapbuffer, unicodeext, undoredostack, window,
        movement, editor, bufferstatus, suggestionwindow
 
-proc isInsertMode(status: EditorStatus): bool =
-  let
-    workSpaceIndex = status.currentWorkSpaceIndex
-    bufferIndex = currentMainWindowNode.bufferIndex
-    mode = status.bufStatus[bufferIndex].mode
-  return mode == Mode.insert
-
 proc insertMode*(status: var EditorStatus) =
   if not status.settings.disableChangeCursor:
     changeCursorType(status.settings.insertModeCursor)
@@ -17,7 +10,7 @@ proc insertMode*(status: var EditorStatus) =
 
   var suggestionWindow = none(SuggestionWindow)
 
-  while status.isInsertMode:
+  while isInsertMode(currentBufStatus.mode):
     status.update
 
     if suggestionWindow.isSome:
