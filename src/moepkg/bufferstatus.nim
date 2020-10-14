@@ -72,3 +72,5 @@ proc isDebugMode*(mode, prevMode: Mode): bool {.inline.} =
   (mode == Mode.debug) or (mode == Mode.ex and prevMode == Mode.debug)
 
 proc isQuickRunMode*(mode: Mode): bool {.inline.} = mode == Mode.quickRun
+
+proc isLogViewerMode*(mode: Mode): bool {.inline.} = mode == Mode.logViewer
