@@ -2,12 +2,6 @@ import terminal, times
 import editorstatus, ui, unicodeext, movement, editor, bufferstatus, gapbuffer,
        undoredostack, window, settings
 
-proc isReplaceMode(status: EditorStatus): bool =
-  let
-    workspaceIndex = status.currentWorkSpaceIndex
-    bufferIndex = status.workspace[workspaceIndex].currentMainWindowNode.bufferIndex
-  result = status.bufStatus[bufferIndex].mode == Mode.replace
-
 proc moveRight(bufStatus: var BufferStatus,
                windowNode: var WindowNode,
                isMoved: var bool,
@@ -105,12 +99,10 @@ proc undoOrMoveCursor(bufStatus: var BufferStatus,
 proc replaceMode*(status: var EditorStatus) =
   var
     isMoved = false
-    undoLastSuitId =
-      status.bufStatus[status.bufferIndexInCurrentWindow].buffer.lastSuitId
-    windowNode =
-      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+    undoLastSuitId = currentBufStatus.buffer.lastSuitId
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
 
-  while status.isReplaceMode:
+  while isReplaceMode(currentBufStatus.mode):
     let currentBufferIndex = status.bufferIndexInCurrentWindow
 
     status.update
@@ -118,40 +110,36 @@ proc replaceMode*(status: var EditorStatus) =
     var key = errorKey
     while key == errorKey:
       status.eventLoopTask
-      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+      key = getKey(currentMainWindowNode)
 
     status.lastOperatingTime = now()
 
-    status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
-    status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(windowNode)
+    currentBufStatus.buffer.beginNewSuitIfNeeded
+    currentBufStatus.tryRecordCurrentPosition(currentMainWindowNode)
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
     elif isEscKey(key) or isControlSquareBracketsRight(key):
       status.changeMode(Mode.normal)
     elif isRightKey(key):
-      status.bufStatus[currentBufferIndex].moveRight(windowNode,
-                                                     isMoved,
-                                                     undoLastSuitId)
+      currentBufStatus.moveRight(currentMainWindowNode, isMoved, undoLastSuitId)
     elif isLeftKey(key):
-      status.bufStatus[currentBufferIndex].moveLeft(windowNode, isMoved, undoLastSuitId)
+      currentBufStatus.moveLeft(currentMainWindowNode, isMoved, undoLastSuitId)
     elif isUpKey(key):
-      status.bufStatus[currentBufferIndex].moveUp(windowNode, isMoved, undoLastSuitId)
+      currentBufStatus.moveUp(currentMainWindowNode, isMoved, undoLastSuitId)
     elif isDownKey(key):
-      status.bufStatus[currentBufferIndex].moveDown(windowNode,
-                                                    isMoved,
-                                                    undoLastSuitId)
+      currentBufStatus.moveDown(currentMainWindowNode, isMoved, undoLastSuitId)
     elif isEnterKey(key):
-      status.bufStatus[currentBufferIndex].keyEnter(windowNode,
-                                                    status.settings.autoIndent,
-                                                    status.settings.tabStop)
+      currentBufStatus.keyEnter(currentMainWindowNode,
+                                status.settings.autoIndent,
+                                status.settings.tabStop)
     elif isBackspaceKey(key):
-      status.bufStatus[currentBufferIndex].undoOrMoveCursor(windowNode,
-                                                            isMoved,
-                                                            undoLastSuitId)
+      currentBufStatus.undoOrMoveCursor(currentMainWindowNode,
+                                        isMoved,
+                                        undoLastSuitId)
     else:
-      status.bufStatus[currentBufferIndex].replaceCurrentCharacter(
-        windowNode,
+      currentBufStatus.replaceCurrentCharacter(
+        currentMainWindowNode,
         isMoved,
         key,
         status.settings)
