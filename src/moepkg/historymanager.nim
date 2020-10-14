@@ -54,17 +54,14 @@ proc generateBackUpFilePath(path: seq[Rune],
       result = ru".history" / path
 
 proc initHistoryManagerBuffer(status: var Editorstatus, sourcePath: seq[Rune]) =
-  let
-    bufferIndex = status.bufferIndexInCurrentWindow
-    path = sourcePath
-    list = getBackupFiles(path, status.settings.autoBackupSettings)
+  let list = getBackupFiles(sourcePath, status.settings.autoBackupSettings)
 
   if list.len == 0: return
 
-  status.bufStatus[bufferIndex].buffer = initGapBuffer[seq[Rune]]()
+  currentBufStatus.buffer = initGapBuffer[seq[Rune]]()
 
   for name in list:
-    status.bufStatus[bufferIndex].buffer.add(name)
+    currentBufStatus.buffer.add(name)
 
 proc initHistoryManagerHighlight(bufStatus: BufferStatus,
                                  currentLine: int): Highlight =
@@ -87,17 +84,12 @@ proc isHistoryManagerMode(status: var Editorstatus): bool =
   status.bufStatus[index].mode == Mode.history
 
 proc openDiffViewer(status: var Editorstatus, path: seq[Rune]) =
-  let
-    workspaceIndex = status.currentWorkSpaceIndex
-    currentLine = status.workSpace[workspaceIndex].currentMainWindowNode.currentLine
-    bufferIndex = status.bufferIndexInCurrentWindow
-
-  if status.bufStatus[bufferIndex].buffer.len == 0 or
-     status.bufStatus[bufferIndex].buffer[currentLine].len == 0: return
+  if currentBufStatus.buffer.len == 0 or
+     currentBufStatus.buffer[currentMainWindowNode.currentLine].len == 0: return
 
   # Setup backup file path and excute diff command
   let
-    backupFilename = status.bufStatus[bufferIndex].buffer[currentLine]
+    backupFilename = currentBufStatus.buffer[currentMainWindowNode.currentLine]
     settings = status.settings.autoBackupSettings
     backupPath = generateBackUpFilePath(backupFilename, settings)
     cmdOut = execCmdEx("diff -u " & $path & " " & $backupPath)
@@ -111,12 +103,11 @@ proc openDiffViewer(status: var Editorstatus, path: seq[Rune]) =
   status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
 
-  status.addNewBuffer("")
+  status.addNewBuffer(Mode.diff)
   status.changeCurrentBuffer(status.bufStatus.high)
-  status.changeMode(Mode.diff)
 
-  status.bufStatus[status.bufStatus.high].path = backupPath
-  status.bufStatus[status.bufStatus.high].buffer = initGapBuffer(buffer)
+  currentBufStatus.path = backupPath
+  currentBufStatus.buffer = initGapBuffer(buffer)
 
 proc getBackupDir(sourcePath: seq[Rune],
                   settings: AutoBackupSettings): seq[Rune] =
@@ -132,11 +123,7 @@ proc getBackupDir(sourcePath: seq[Rune],
 
 proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
   let
-    workspaceIndex = status.currentWorkSpaceIndex
-    windowNode = status.workspace[workspaceIndex].currentMainWindowNode
-    bufferIndex = windowNode.bufferIndex
-    bufStatus = status.bufStatus[bufferIndex]
-    backupFilename = bufStatus.buffer[windowNode.currentLine]
+    backupFilename = currentBufStatus.buffer[currentMainWindowNode.currentLine]
     backupDir = getBackupDir(sourcePath, status.settings.autoBackupSettings)
     backupFilePath = backupDir / backupFilename
 
@@ -146,11 +133,11 @@ proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
   if not isRestore: return
 
   # Backup files before restore
-  bufStatus.backupBuffer(bufStatus.characterEncoding,
-                         status.settings.autoBackupSettings,
-                         status.settings.notificationSettings,
-                         status.commandLine,
-                         status.messageLog)
+  currentBufStatus.backupBuffer(currentBufStatus.characterEncoding,
+                                status.settings.autoBackupSettings,
+                                status.settings.notificationSettings,
+                                status.commandLine,
+                                status.messageLog)
 
   try:
     copyFile($backupFilePath, $sourcePath)
@@ -170,8 +157,7 @@ proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
       status.bufStatus[i].buffer = textAndEncoding.text.toGapBuffer
       status.bufStatus[i].characterEncoding = textAndEncoding.encoding
 
-      let workspaceIndex = status.currentWorkSpaceIndex
-      status.workSpace[workspaceIndex].currentMainWindowNode.view =
+      currentMainWindowNode.view =
         status.bufStatus[i].buffer.initEditorView(terminalHeight(),
                                                   terminalWidth())
 
@@ -184,11 +170,7 @@ proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
 
 proc deleteBackupFiles(status: var EditorStatus, sourcePath: seq[Rune]) =
   let
-    workspaceIndex = status.currentWorkSpaceIndex
-    windowNode = status.workspace[workspaceIndex].currentMainWindowNode
-    bufferIndex = windowNode.bufferIndex
-    bufStatus = status.bufStatus[bufferIndex]
-    backupFilename = bufStatus.buffer[windowNode.currentLine]
+    backupFilename = currentBufStatus.buffer[currentMainWindowNode.currentLine]
     backupDir = getBackupDir(sourcePath, status.settings.autoBackupSettings)
     backupFilePath = backupDir / backupFilename
 
@@ -211,34 +193,27 @@ proc deleteBackupFiles(status: var EditorStatus, sourcePath: seq[Rune]) =
 
 proc historyManager*(status: var EditorStatus) =
   # BufferStatus.path is the path of the backup source file
-  block:
-    let bufferIndex = status.bufferIndexInCurrentWindow
-    if status.bufStatus[bufferIndex].path.len == 0:
-      let sourcePath = status.bufStatus[status.prevBufferIndex].path
-      status.bufStatus[bufferIndex].path = sourcePath
+  if currentBufStatus.path.len == 0:
+    currentBufStatus.path = status.bufStatus[status.prevBufferIndex].path
 
-  block:
-    let bufferIndex = status.bufferIndexInCurrentWindow
-    status.initHistoryManagerBuffer(status.bufStatus[bufferIndex].path)
+  status.initHistoryManagerBuffer(currentBufStatus.path)
 
   while status.isHistoryManagerMode:
-    let
-      bufferIndex = status.bufferIndexInCurrentWindow
-      workspaceIndex = status.currentWorkSpaceIndex
-      sourcePath = status.bufStatus[bufferIndex].path
+    let sourcePath = currentBufStatus.path
 
     block:
       let
-        bufStatus = status.bufStatus[bufferIndex]
-        currentLine = status.workSpace[workspaceIndex].currentMainWindowNode.currentLine
-      status.workspace[workspaceIndex].currentMainWindowNode.highlight = bufStatus.initHistoryManagerHighlight(currentLine)
+        currentLine = currentMainWindowNode.currentLine
+        highlight = currentBufStatus.initHistoryManagerHighlight(currentLine)
+      currentMainWindowNode.highlight = highlight
+
     status.update
     setCursor(false)
 
     var key = errorKey
     while key == errorKey:
       status.eventLoopTask
-      key = getKey(status.workSpace[workspaceIndex].currentMainWindowNode)
+      key = getKey(currentMainWindowNode)
 
     status.lastOperatingTime = now()
 
@@ -251,11 +226,9 @@ proc historyManager*(status: var EditorStatus) =
     elif key == ord(':'):
       status.changeMode(Mode.ex)
     elif key == ord('k') or isUpKey(key):
-      status.bufStatus[bufferIndex].keyUp(
-        status.workSpace[workspaceIndex].currentMainWindowNode)
+      currentBufStatus.keyUp(currentMainWindowNode)
     elif key == ord('j') or isDownKey(key):
-      status.bufStatus[bufferIndex].keyDown(
-        status.workSpace[workspaceIndex].currentMainWindowNode)
+      currentBufStatus.keyDown(currentMainWindowNode)
     elif isEnterKey(key):
       status.openDiffViewer(sourcePath)
     elif key == ord('R'):
@@ -267,12 +240,9 @@ proc historyManager*(status: var EditorStatus) =
       # Reload backup files
       status.initHistoryManagerBuffer(sourcePath)
     elif key == ord('g'):
-      let secondKey = getKey(
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
-      if  secondKey == ord('g'):
-        status.moveToFirstLine
-      else:
-        discard
+      let secondKey = getKey(currentMainWindowNode)
+      if  secondKey == ord('g'): status.moveToFirstLine
+      else: discard
     elif key == ord('G'):
       status.moveToLastLine
     else:
