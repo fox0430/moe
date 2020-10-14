@@ -70,3 +70,5 @@ proc isReplaceMode*(mode: Mode): bool {.inline.} = mode == Mode.replace
 
 proc isDebugMode*(mode, prevMode: Mode): bool {.inline.} =
   (mode == Mode.debug) or (mode == Mode.ex and prevMode == Mode.debug)
+
+proc isQuickRunMode*(mode: Mode): bool {.inline.} = mode == Mode.quickRun

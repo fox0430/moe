@@ -64,44 +64,40 @@ proc runQuickRun*(bufStatus: var BufferStatus,
         if cmdResult.output[i] == '\n': result.add(@[ru""])
         else: result[^1].add(toRunes($cmdResult.output[i])[0])
 
-proc isQuickRunMode(status: Editorstatus): bool =
-  let
-    workspaceIndex = status.currentWorkSpaceIndex
-    index = status.workspace[workspaceIndex].currentMainWindowNode.bufferIndex
-
-  return status.bufStatus[index].mode == Mode.quickRun
-
 proc quickRunMode*(status: var Editorstatus) =
+  status.resize(terminalHeight(), terminalWidth())
+
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     currentWorkSpace = status.currentWorkSpaceIndex
 
-  status.resize(terminalHeight(), terminalWidth())
-
-  while status.isQuickRunMode and
+  while isQuickRunMode(currentBufStatus.mode) and
         currentWorkSpace == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
 
-    let currentBufferIndex = status.bufferIndexInCurrentWindow
     status.update
 
     var key = errorKey
     while key == errorKey:
       status.eventLoopTask
-      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+      key = getKey(currentMainWindowNode)
 
     status.lastOperatingTime = now()
 
-    if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
-    elif isControlK(key): status.moveNextWindow
-    elif isControlJ(key): status.movePrevWindow
+    if isResizekey(key):
+      status.resize(terminalHeight(), terminalWidth())
+    elif isControlK(key):
+      status.moveNextWindow
+    elif isControlJ(key):
+      status.movePrevWindow
     elif key == ord(':'):
       status.changeMode(Mode.ex)
     elif key == ord('k') or isUpKey(key):
-      status.bufStatus[currentBufferIndex].keyUp(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+      currentBufStatus.keyUp(currentMainWindowNode)
     elif key == ord('j') or isDownKey(key):
-      status.bufStatus[currentBufferIndex].keyDown(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+      currentBufStatus.keyDown(currentMainWindowNode)
     elif key == ord('g'):
-      if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode) == 'g':
-        status.moveToFirstLine
-    elif key == ord('G'): status.moveToLastLine
+      let secondKey = getKey(currentMainWindowNode)
+      if secondKey == 'g': status.moveToFirstLine
+    elif key == ord('G'):
+      status.moveToLastLine
