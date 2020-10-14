@@ -270,8 +270,6 @@ proc startDebugMode(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
 
-  let highlight = currentMainWindowNode.highlight
-
   # Add debug mode buffer
   status.addNewBuffer(bufferstatus.Mode.debug)
   status.changeCurrentBuffer(status.bufStatus.high)
@@ -564,7 +562,6 @@ proc statusBarSettingCommand(status: var EditorStatus, command: seq[Rune]) =
                             numberOfDigits(status.bufStatus[0].buffer.len) - 2
                           else: 0
     useStatusBar = if status.settings.statusBar.enable : 1 else: 0
-    workspaceIndex = status.currentWorkSpaceIndex
 
   currentMainWindowNode.view = initEditorView(
     status.bufStatus[0].buffer,
@@ -893,7 +890,6 @@ proc forceWriteCommand(status: var EditorStatus, path: seq[Rune]) =
 proc quitCommand(status: var EditorStatus) =
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
-    workspaceIndex = status.currentWorkSpaceIndex
   if currentBufStatus.prevMode != bufferstatus.Mode.normal:
     status.deleteBuffer(currentBufferIndex)
   else:
@@ -910,7 +906,6 @@ proc quitCommand(status: var EditorStatus) =
 proc writeAndQuitCommand(status: var EditorStatus) =
   let
     bufferIndex = status.bufferIndexInCurrentWindow
-    workspaceIndex = status.currentWorkSpaceIndex
     path = status.bufStatus[bufferIndex].path
 
   # Check if the file has been overwritten by another application
@@ -959,7 +954,6 @@ proc forceQuitCommand(status: var EditorStatus) =
   status.closeWindow(currentMainWindowNode)
 
 proc allBufferQuitCommand(status: var EditorStatus) =
-  let workspaceIndex = status.currentWorkSpaceIndex
   for i in 0 ..< currentWorkSpace.numOfMainWindow:
     let node = mainWindowNode.searchByWindowIndex(i)
 
@@ -1035,15 +1029,13 @@ proc listAllBufferCommand(status: var Editorstatus) =
       let filename = status.bufStatus[i].path
       line = filename & ru"  line " & ($status.bufStatus[i].buffer.len).toRunes
 
-    let currentBufferIndex = currentMainWindowNode.bufferIndex
-    if i == 0: status.bufStatus[currentBufferIndex].buffer[0] = line
-    else: status.bufStatus[currentBufferIndex].buffer.insert(line, i)
+    if i == 0: currentBufStatus.buffer[0] = line
+    else: currentBufStatus.buffer.insert(line, i)
 
   let
     useStatusBar = if status.settings.statusBar.enable: 1 else: 0
     useTab = if status.settings.tabLine.useTab: 1 else: 0
     swapCurrentLineNumStting = status.settings.view.currentLineNumber
-    currentBufferIndex = currentMainWindowNode.bufferIndex
 
   status.settings.view.currentLineNumber = false
   currentMainWindowNode.view = currentBufStatus.buffer.initEditorView(
