@@ -1,14 +1,12 @@
 import unittest, terminal
-import moepkg/[editorstatus, logviewer, bufferstatus]
+import moepkg/[editorstatus, logviewer, bufferstatus, unicodeext]
 
 test "Exit log viewer":
   var status = initEditorStatus()
-  status.addNewBuffer("")
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.bufStatus[currentBufferIndex].mode = Mode.logViewer
+  status.addNewBuffer("Log viewer", Mode.logViewer)
 
-  status.initMessageLog
   status.resize(terminalHeight(), terminalWidth())
+  status.update
 
   status.exitLogViewer
 
