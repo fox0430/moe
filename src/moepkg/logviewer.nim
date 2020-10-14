@@ -47,7 +47,7 @@ proc messageLogViewer*(status: var Editorstatus) =
     elif key == ord('l') or isRightKey(key):
       currentBufStatus.keyRight(currentMainWindowNode)
     elif key == ord('0') or isHomeKey(key):
-      currentBufStatus.moveToFirstOfLine
+      currentMainWindowNode.moveToFirstOfLine
     elif key == ord('$') or isEndKey(key):
       currentBufStatus.moveToLastOfLine(currentMainWindowNode)
     elif key == ord('q') or isEscKey(key):
