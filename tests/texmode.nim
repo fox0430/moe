@@ -310,11 +310,11 @@ suite "Ex mode: Highlight pair of paren settig command":
     block:
       const command = @[ru"highlightparen", ru"off"]
       status.exModeCommand(command)
-      check(status.settings.highlightPairOfParen == false)
+      check(status.settings.highlightSettings.pairOfParen == false)
     block:
       const command = @[ru"highlightparen", ru"on"]
       status.exModeCommand(command)
-      check(status.settings.highlightPairOfParen == true)
+      check(status.settings.highlightSettings.pairOfParen == true)
 
 suite "Ex mode: Auto delete paren setting command":
   test "Auto delete paren setting command":
@@ -364,12 +364,12 @@ suite "Ex mode: Highlight current word setting command":
     block:
       const command = @[ru"highlightcurrentword", ru"off"]
       status.exModeCommand(command)
-      check(status.settings.highlightOtherUsesCurrentWord == false)
+      check(status.settings.highlightSettings.currentWord == false)
 
     block:
       const command = @[ru"highlightcurrentword", ru"on"]
       status.exModeCommand(command)
-      check(status.settings.highlightOtherUsesCurrentWord == true)
+      check(status.settings.highlightSettings.currentWord == true)
 
 suite "Ex mode: Clipboard setting command":
   test "Clipboard setting command":
@@ -394,12 +394,12 @@ suite "Ex mode: Highlight full width space command":
     block:
       const command = @[ru"highlightfullspace", ru"off"]
       status.exModeCommand(command)
-      check(status.settings.highlightFullWidthSpace == false)
+      check(status.settings.highlightSettings.fullWidthSpace == false)
 
     block:
       const command = @[ru"highlightfullspace", ru"on"]
       status.exModeCommand(command)
-      check(status.settings.highlightFullWidthSpace == true)
+      check(status.settings.highlightSettings.fullWidthSpace == true)
 
 suite "Ex mode: Create work space command":
   test "Create work space command":

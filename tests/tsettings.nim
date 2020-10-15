@@ -292,13 +292,8 @@ suite "Parse configuration file":
     check settings.liveReloadOfConf
     check not settings.incrementalSearch
     check not settings.popUpWindowInExmode
-    check not settings.replaceTextHighlight
-    check not settings.highlightPairOfParen
     check not settings.autoDeleteParen
     check not settings.systemClipboard
-    check not settings.highlightFullWidthSpace
-    check not settings.highlightTrailingSpaces
-    check not settings.highlightOtherUsesCurrentWord
     check not settings.smoothScroll
     check settings.smoothScrollSpeed == 1
 
@@ -324,8 +319,13 @@ suite "Parse configuration file":
 
     check settings.workSpace.workSpaceLine
 
-    check settings.reservedWords[3].word == "TEST"
-    check settings.reservedWords[4].word == "TEST2"
+    check not settings.highlightSettings.replaceText
+    check not settings.highlightSettings.pairOfParen
+    check not settings.highlightSettings.fullWidthSpace
+    check not settings.highlightSettings.trailingSpaces
+    check not settings.highlightSettings.currentWord
+    check settings.highlightSettings.reservedWords[3].word == "TEST"
+    check settings.highlightSettings.reservedWords[4].word == "TEST2"
 
     check not settings.autoBackupSettings.enable
     check settings.autoBackupSettings.idleTime == 1

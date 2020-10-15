@@ -497,7 +497,7 @@ proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
                    else: SourceLanguage.langNone
 
   currentMainWindowNode.highlight = initHighlight($currentBufStatus.buffer,
-                                                  status.settings.reservedWords,
+                                                  status.settings.highlightSettings.reservedWords,
                                                   sourceLang)
 
   status.commandLine.erase
@@ -583,8 +583,8 @@ proc incrementalSearchSettingCommand(status: var Editorstatus, command: seq[Rune
 proc highlightPairOfParenSettigCommand(status: var Editorstatus,
                                        command: seq[Rune]) =
 
-  if command == ru"on": status.settings.highlightPairOfParen = true
-  elif command == ru"off": status.settings.highlightPairOfParen = false
+  if command == ru"on": status.settings.highlightSettings.pairOfParen = true
+  elif command == ru"off": status.settings.highlightSettings.pairOfParen = false
 
   status.commandLine.erase
 
@@ -618,8 +618,8 @@ proc smoothScrollSpeedSettingCommand(status: var Editorstatus, speed: int) =
 proc highlightCurrentWordSettingCommand(status: var Editorstatus,
                                         command: seq[Rune]) =
 
-  if command == ru"on": status.settings.highlightOtherUsesCurrentWord = true
-  if command == ru"off": status.settings.highlightOtherUsesCurrentWord = false
+  if command == ru"on": status.settings.highlightSettings.currentWord = true
+  if command == ru"off": status.settings.highlightSettings.currentWord = false
 
   status.commandLine.erase
 
@@ -638,8 +638,10 @@ proc systemClipboardSettingCommand(status: var Editorstatus,
 proc highlightFullWidthSpaceSettingCommand(status: var Editorstatus,
                                            command: seq[Rune]) =
 
-  if command == ru"on": status.settings.highlightFullWidthSpace = true
-  elif command == ru"off": status.settings.highlightFullWidthSpace = false
+  if command == ru"on":
+    status.settings.highlightSettings.fullWidthSpace = true
+  elif command == ru"off":
+    status.settings.highlightSettings.fullWidthSpace = false
 
   status.commandLine.erase
 
@@ -1347,7 +1349,7 @@ proc exMode*(status: var EditorStatus) =
       status.searchHistory.add(ru"")
 
     if cancelInput or exitInput: break
-    elif isReplaceCommand and status.settings.replaceTextHighlight:
+    elif isReplaceCommand and status.settings.highlightSettings.replaceText:
       var keyword = ru""
       for i in 3 ..< command.len :
           if command[i] == ru'/': break

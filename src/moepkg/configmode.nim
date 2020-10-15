@@ -351,19 +351,19 @@ proc initHighlightTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       space = " ".repeat(positionOfSetVal - name.len)
     case name:
       of "replaceText":
-        result.add(ru nameStr & space & $settings.replaceTextHighlight)
+        result.add(ru nameStr & space & $settings.highlightSettings.replaceText)
       of "highlightPairOfParen":
-        result.add(ru nameStr & space & $settings.highlightPairOfParen)
+        result.add(ru nameStr & space & $settings.highlightSettings.pairOfParen)
       of "fullWidthSpace":
-        result.add(ru nameStr & space & $settings.highlightFullWidthSpace)
+        result.add(ru nameStr & space & $settings.highlightSettings.fullWidthSpace)
       of "trailingSpaces":
-        result.add(ru nameStr & space & $settings.highlightTrailingSpaces)
+        result.add(ru nameStr & space & $settings.highlightSettings.trailingSpaces)
       of "currentWord":
-        result.add(ru nameStr & space & $settings.highlightOtherUsesCurrentWord)
+        result.add(ru nameStr & space & $settings.highlightSettings.currentWord)
       of "reservedWord":
         result.add(ru indent & name)
         let space = " ".repeat(positionOfSetVal)
-        for reservedWord in settings.reservedWords:
+        for reservedWord in settings.highlightSettings.reservedWords:
           result.add(ru indent & space & reservedWord.word)
 
 proc initAutoBackupTableBuffer(settings: AutoBackupSettings): seq[seq[Rune]] =

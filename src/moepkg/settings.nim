@@ -135,6 +135,14 @@ type EditorViewSettings* = object
 type AutocompleteSettings* = object
   enable*: bool
 
+type HighlightSettings* = object
+  replaceText*: bool
+  pairOfParen*: bool
+  currentWord*: bool
+  fullWidthSpace*: bool
+  trailingSpaces*: bool
+  reservedWords*: seq[ReservedWord]
+
 type EditorSettings* = object
   editorColorTheme*: ColorTheme
   statusBar*: StatusBarSettings
@@ -155,24 +163,19 @@ type EditorSettings* = object
   liveReloadOfConf*: bool
   incrementalSearch*: bool
   popUpWindowInExmode*: bool
-  replaceTextHighlight*: bool
-  highlightPairOfParen*: bool
   autoDeleteParen*: bool
   smoothScroll*: bool
   smoothScrollSpeed*: int
-  highlightOtherUsesCurrentWord*: bool
   systemClipboard*: bool
-  highlightFullWidthSpace*: bool
-  highlightTrailingSpaces*: bool
   buildOnSave*: BuildOnSaveSettings
   workSpace*: WorkSpaceSettings
   filerSettings*: FilerSettings
   autocompleteSettings*: AutocompleteSettings
-  reservedWords*: seq[ReservedWord]
   autoBackupSettings*: AutoBackupSettings
   quickRunSettings*: QuickRunSettings
   notificationSettings*: NotificationSettings
   debugModeSettings*: DebugModeSettings
+  highlightSettings*: HighlightSettings
 
 # Warning: inherit from a more precise exception type like ValueError, IOError or OSError.
 # If these don't suit, inherit from CatchableError or Defect. [InheritFromException]
@@ -290,6 +293,14 @@ proc initReservedWords*(): seq[ReservedWord] =
     ReservedWord(word: "NOTE", color: EditorColorPair.reservedWord),
   ]
 
+proc initHighlightSettings(): HighlightSettings =
+  result.replaceText = true
+  result.pairOfParen = true
+  result.currentWord = true
+  result.fullWidthSpace = true
+  result.trailingSpaces = true
+  result.reservedWords =  initReservedWords()
+
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = ColorTheme.dark
   result.statusBar = initStatusBarSettings()
@@ -308,24 +319,19 @@ proc initEditorSettings*(): EditorSettings =
   result.autoSaveInterval = 5
   result.incrementalSearch = true
   result.popUpWindowInExmode = true
-  result.replaceTextHighlight = true
-  result.highlightPairOfParen = true
   result.autoDeleteParen = true
   result.smoothScroll = true
   result.smoothScrollSpeed = 15
-  result.highlightOtherUsesCurrentWord = true
   result.systemClipboard = true
-  result.highlightFullWidthSpace = true
-  result.highlightTrailingSpaces = true
   result.buildOnSave = BuildOnSaveSettings()
   result.workSpace= initWorkSpaceSettings()
   result.filerSettings = initFilerSettings()
   result.autocompleteSettings = initAutocompleteSettings()
-  result.reservedWords = initReservedWords()
   result.autoBackupSettings = initAutoBackupSettings()
   result.quickRunSettings = initQuickRunSettings()
   result.notificationSettings = initNotificationSettings()
   result.debugModeSettings = initDebugModeSettings()
+  result.highlightSettings = initHighlightSettings()
 
 proc getTheme(theme: string): ColorTheme =
   if theme == "vivid": return ColorTheme.vivid
@@ -982,22 +988,22 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
         let
           word = reservedWords[i].getStr
           reservedWord = ReservedWord(word: word, color: EditorColorPair.reservedWord)
-        result.reservedWords.add(reservedWord)
+        result.highlightSettings.reservedWords.add(reservedWord)
 
     if settings["Highlight"].contains("currentWord"):
-      result.highlightOtherUsesCurrentWord = settings["Highlight"]["currentWord"].getbool()
+      result.highlightSettings.currentWord = settings["Highlight"]["currentWord"].getbool()
 
     if settings["Highlight"].contains("replaceText"):
-      result.replaceTextHighlight = settings["Highlight"]["replaceText"].getbool()
+      result.highlightSettings.replaceText = settings["Highlight"]["replaceText"].getbool()
 
     if settings["Highlight"].contains("pairOfParen"):
-      result.highlightPairOfParen =  settings["Highlight"]["pairOfParen"].getbool()
+      result.highlightSettings.pairOfParen =  settings["Highlight"]["pairOfParen"].getbool()
 
     if settings["Highlight"].contains("fullWidthSpace"):
-      result.highlightFullWidthSpace = settings["Highlight"]["fullWidthSpace"].getbool()
+      result.highlightSettings.fullWidthSpace = settings["Highlight"]["fullWidthSpace"].getbool()
 
     if settings["Highlight"].contains("trailingSpaces"):
-      result.highlightTrailingSpaces = settings["Highlight"]["trailingSpaces"].getbool()
+      result.highlightSettings.trailingSpaces = settings["Highlight"]["trailingSpaces"].getbool()
 
   if settings.contains("AutoBackup"):
     if settings["AutoBackup"].contains("enable"):

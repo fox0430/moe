@@ -29,7 +29,7 @@ test "resize 1":
 
   status.workSpace[0].currentMainWindowNode.highlight =
     initHighlight($status.bufStatus[0].buffer,
-    status.settings.reservedWords,
+    status.settings.highlightSettings.reservedWords,
     status.bufStatus[0].language)
 
   status.workSpace[0].currentMainWindowNode.view =
@@ -45,7 +45,7 @@ test "resize 2":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
-    status.settings.reservedWords,
+    status.settings.highlightSettings.reservedWords,
     status.bufStatus[0].language)
 
   status.workSpace[0].currentMainWindowNode.view =
@@ -68,7 +68,7 @@ test "Highlight of a pair of paren 1":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
-    status.settings.reservedWords,
+    status.settings.highlightSettings.reservedWords,
     status.bufStatus[0].language)
 
   block:
@@ -124,7 +124,7 @@ test "Highlight of a pair of paren 2":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
-    status.settings.reservedWords,
+    status.settings.highlightSettings.reservedWords,
     status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"(())"])
@@ -143,7 +143,7 @@ test "Highlight of a pair of paren 3":
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
-    status.settings.reservedWords,
+    status.settings.highlightSettings.reservedWords,
     status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"(", ru")"])
@@ -164,7 +164,7 @@ test "Highlight of a pair of paren 4":
   status.addNewBuffer
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
-    status.settings.reservedWords,
+    status.settings.highlightSettings.reservedWords,
     status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"(", ru")"])
@@ -186,7 +186,7 @@ test "Highlight of a pair of paren 5":
   status.resize(100, 100)
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
-    status.settings.reservedWords,
+    status.settings.highlightSettings.reservedWords,
     status.bufStatus[0].language)
 
   status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"a)"])
@@ -470,7 +470,7 @@ test "Highlight full width space 1":
   var status = initEditorStatus()
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"　"])
-  status.settings.highlightOtherUsesCurrentWord = false
+  status.settings.highlightSettings.currentWord = false
 
   status.update
 
@@ -481,7 +481,7 @@ test "Highlight full width space 2":
   var status = initEditorStatus()
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc　"])
-  status.settings.highlightOtherUsesCurrentWord = false
+  status.settings.highlightSettings.currentWord = false
 
   status.update
 
@@ -493,7 +493,7 @@ test "Highlight full width space 3":
   var status = initEditorStatus()
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"　"])
-  status.settings.highlightOtherUsesCurrentWord = false
+  status.settings.highlightSettings.currentWord = false
 
   status.update
 
@@ -504,7 +504,7 @@ test "Highlight full width space 2":
   var status = initEditorStatus()
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"a　b"])
-  status.settings.highlightOtherUsesCurrentWord = false
+  status.settings.highlightSettings.currentWord = false
 
   status.update
 
@@ -721,11 +721,11 @@ suite "editorstatus: Highlight trailing spaces":
     var status = initEditorStatus()
     status.addNewBuffer
 
-    status.settings.highlightOtherUsesCurrentWord = false
+    status.settings.highlightSettings.currentWord = false
 
     status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
       $status.bufStatus[0].buffer,
-      status.settings.reservedWords,
+      status.settings.highlightSettings.reservedWords,
       status.bufStatus[0].language)
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
@@ -741,11 +741,11 @@ suite "editorstatus: Highlight trailing spaces":
     var status = initEditorStatus()
     status.addNewBuffer
 
-    status.settings.highlightOtherUsesCurrentWord = false
+    status.settings.highlightSettings.currentWord = false
 
     status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
       $status.bufStatus[0].buffer,
-      status.settings.reservedWords,
+      status.settings.highlightSettings.reservedWords,
       status.bufStatus[0].language)
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"", ru"abc  "])
@@ -770,11 +770,11 @@ suite "editorstatus: Highlight trailing spaces":
     var status = initEditorStatus()
     status.addNewBuffer
 
-    status.settings.highlightOtherUsesCurrentWord = false
+    status.settings.highlightSettings.currentWord = false
 
     status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
       $status.bufStatus[0].buffer,
-      status.settings.reservedWords,
+      status.settings.highlightSettings.reservedWords,
       status.bufStatus[0].language)
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru" "])
