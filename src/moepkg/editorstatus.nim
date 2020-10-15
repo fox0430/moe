@@ -349,7 +349,7 @@ proc update*(status: var EditorStatus) =
 
   mainWindowNode.initSyntaxHighlight(
     status.bufStatus,
-    status.settings.reservedWords,
+    status.settings.highlightSettings.reservedWords,
     status.settings.syntax)
 
   var queue = initHeapQueue[WindowNode]()
@@ -392,11 +392,11 @@ proc update*(status: var EditorStatus) =
           if isLogViewerMode(currentMode, prevMode):
             status.updateLogViewer(node.bufferIndex)
           elif isCurrentMainWin:
-            if status.settings.highlightOtherUsesCurrentWord:
+            if status.settings.highlightSettings.currentWord:
               status.highlightOtherUsesCurrentWord
             if isVisualMode:
               status.highlightSelectedArea
-            if status.settings.highlightPairOfParen:
+            if status.settings.highlightSettings.pairOfParen:
               status.highlightPairOfParen
 
             status.updateHighlight(node)
@@ -970,11 +970,11 @@ proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
   for i in startLine ..< endLine: bufferInView.add(bufStatus.buffer[i])
 
   # highlight trailing spaces
-  if status.settings.highlightTrailingSpaces:
+  if status.settings.highlightSettings.trailingSpaces:
     status.highlightTrailingSpaces
 
   # highlight full width space
-  if status.settings.highlightFullWidthSpace:
+  if status.settings.highlightSettings.fullWidthSpace:
     windowNode.highlightFullWidthSpace(bufferInView, range)
 
   # highlight search results
