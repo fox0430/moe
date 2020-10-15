@@ -7,7 +7,7 @@ The location is
 ~/.config/moe/moerc.toml
 ```
 
-You can use the example -> https://github.com/fox0430/moe/blob/master/example/moerc.toml
+You can use the example -> https://github.com/fox0430/moe/blob/develop/example/moerc.toml
 
 ## Setting items
 
@@ -268,6 +268,9 @@ defaut
 ```
 ["TODO", "WIP", "NOTE"]
 ```
+```
+reservedWord
+```
 
 Highlight replacement text (bool)  
 default is true
@@ -297,10 +300,6 @@ highlight other uses of the current word under the cursor (bool)
 default is true
 ```
 currentWord
-```
-
-```
-reservedWord
 ```
 
 ### AutoBackup table
