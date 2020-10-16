@@ -5,7 +5,7 @@ include moepkg/[visualmode]
 suite "Visual mode: Delete buffer":
   test "Delete buffer 1":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abcd"])
 
     status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -31,7 +31,7 @@ suite "Visual mode: Delete buffer":
 
   test "Delete buffer 2":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b", ru"c"])
 
     status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -58,7 +58,7 @@ suite "Visual mode: Delete buffer":
 
   test "Delete buffer 3":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"ab", ru"cdef"])
 
     status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -92,7 +92,7 @@ suite "Visual mode: Delete buffer":
 
   test "Delete buffer 4":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"defg"])
 
     status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -134,7 +134,7 @@ suite "Visual mode: Delete buffer":
 
   test "Delete buffer 5":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
     status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -169,7 +169,7 @@ suite "Visual mode: Delete buffer":
 
   test "Fix #890":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"", ru"a"])
 
     status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -199,7 +199,7 @@ suite "Visual mode: Delete buffer":
 
 test "Visual mode: Yank buffer (Disable clipboard) 1":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -238,7 +238,7 @@ test "Visual mode: Yank buffer (Disable clipboard) 1":
 
 test "Visual mode: Yank buffer (Disable clipboard) 2":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -283,7 +283,7 @@ test "Visual mode: Yank buffer (Disable clipboard) 2":
 
 test "Visual block mode: Yank buffer (Disable clipboard) 1":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def"])
 
   status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.highlight = initHighlight(
@@ -320,7 +320,7 @@ test "Visual block mode: Yank buffer (Disable clipboard) 1":
 
 test "Visual block mode: Yank buffer (Disable clipboard) 2":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"d"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -365,7 +365,7 @@ test "Visual block mode: Yank buffer (Disable clipboard) 2":
 
 test "Visual block mode: Delete buffer (Disable clipboard) 1":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -404,7 +404,7 @@ test "Visual block mode: Delete buffer (Disable clipboard) 1":
 
 test "Visual mode: Yank buffer (Enable clipboard) 1":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -458,7 +458,7 @@ test "Visual mode: Yank buffer (Enable clipboard) 1":
 
 test "Visual mode: Yank buffer (Enable clipboard) 2":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -520,7 +520,7 @@ test "Visual mode: Yank buffer (Enable clipboard) 2":
 
 test "Visual block mode: Yank buffer (Enable clipboard) 1":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -565,7 +565,7 @@ test "Visual block mode: Yank buffer (Enable clipboard) 1":
 
 test "Visual block mode: Yank buffer (Enable clipboard) 2":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"d"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -619,7 +619,7 @@ test "Visual block mode: Yank buffer (Enable clipboard) 2":
 suite "Visual block mode: Delete buffer":
   test "Delete buffer (Enable clipboard) 1":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -659,7 +659,7 @@ suite "Visual block mode: Delete buffer":
 
   test "Delete buffer (Enable clipboard) 2":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"", ru"edf"])
 
     status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -696,7 +696,7 @@ suite "Visual block mode: Delete buffer":
 
   test "Fix #885":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"de", ru"fgh"])
 
     status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -738,7 +738,7 @@ suite "Visual block mode: Delete buffer":
 
 test "Visual mode: Join lines":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -775,7 +775,7 @@ test "Visual mode: Join lines":
 
 test "Visual block mode: Join lines":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -812,7 +812,7 @@ test "Visual block mode: Join lines":
 
 test "Visual mode: Add indent":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -847,7 +847,7 @@ test "Visual mode: Add indent":
 
 test "Visual block mode: Add indent":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -881,7 +881,7 @@ test "Visual block mode: Add indent":
 
 test "Visual mode: Delete indent":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc", ru"  def", ru"  ghi"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -917,7 +917,7 @@ test "Visual mode: Delete indent":
 
 test "Visual block mode: Delete indent":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc", ru"  def", ru"  ghi"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -953,7 +953,7 @@ test "Visual block mode: Delete indent":
 
 test "Visual mode: Converts string into lower-case string":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"ABC"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -984,7 +984,7 @@ test "Visual mode: Converts string into lower-case string":
 
 test "Visual mode: Converts string into lower-case string 2":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"AあbC"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -1015,7 +1015,7 @@ test "Visual mode: Converts string into lower-case string 2":
 
 test "Visual mode: Converts string into lower-case string 3":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"ABC", ru"DEF"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -1047,7 +1047,7 @@ test "Visual mode: Converts string into lower-case string 3":
 # Fix #687
 test "Visual mode: Converts string into lower-case string 4":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"ABC", ru"", ru"DEF", ru""])
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight($status.bufStatus[0].buffer,
     status.settings.reservedWords,
@@ -1073,7 +1073,7 @@ test "Visual mode: Converts string into lower-case string 4":
 
 test "Visual block mode: Converts string into lower-case string":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"ABC"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -1104,7 +1104,7 @@ test "Visual block mode: Converts string into lower-case string":
 
 test "Visual block mode: Converts string into lower-case string 2":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"ABC", ru"DEF"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -1143,7 +1143,7 @@ test "Visual block mode: Converts string into lower-case string 2":
 
 test "Visual mode: Converts string into upper-case string":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -1175,7 +1175,7 @@ test "Visual mode: Converts string into upper-case string":
 
 test "Visual mode: Converts string into upper-case string 2":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"aあBc"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -1207,7 +1207,7 @@ test "Visual mode: Converts string into upper-case string 2":
 
 test "Visual mode: Converts string into upper-case string 3":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -1238,7 +1238,7 @@ test "Visual mode: Converts string into upper-case string 3":
 # Fix #687
 test "Visual mode: Converts string into upper-case string 4":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"", ru"def", ru""])
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
@@ -1266,7 +1266,7 @@ test "Visual mode: Converts string into upper-case string 4":
 
 test "Visual block mode: Converts string into upper-case string":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -1298,7 +1298,7 @@ test "Visual block mode: Converts string into upper-case string":
 
 test "Visual block mode: Converts string into upper-case string 2":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def"])
 
   status.workSpace[0].currentMainWindowNode.highlight = initHighlight(

@@ -5,7 +5,7 @@ include moepkg/insertmode
 suite "Insert mode":
   test "Issue #474":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru""])
 
     status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
@@ -25,7 +25,7 @@ suite "Insert mode":
 
   test "Insert the character which is below the cursor":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b"])
 
     status.bufStatus[0].insertCharacterBelowCursor(
@@ -38,7 +38,7 @@ suite "Insert mode":
 
   test "Insert the character which is below the cursor 2":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
     status.bufStatus[0].insertCharacterBelowCursor(
@@ -50,7 +50,7 @@ suite "Insert mode":
 
   test "Insert the character which is below the cursor 3":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"e"])
 
     status.workspace[0].currentMainWindowNode.currentColumn = 2
@@ -65,7 +65,7 @@ suite "Insert mode":
 
   test "Insert the character which is above the cursor":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b"])
 
     status.workspace[0].currentMainWindowNode.currentLine = 1
@@ -80,7 +80,7 @@ suite "Insert mode":
 
   test "Insert the character which is above the cursor":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"bcd"])
 
     status.workspace[0].currentMainWindowNode.currentLine = 1
@@ -96,7 +96,7 @@ suite "Insert mode":
 
   test "Insert the character which is above the cursor 3":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
 
     status.bufStatus[0].insertCharacterAboveCursor(
@@ -108,7 +108,7 @@ suite "Insert mode":
 
   test "Delete the word before the cursor":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc def"])
 
     status.workspace[0].currentMainWindowNode.currentColumn = 4
@@ -123,7 +123,7 @@ suite "Insert mode":
 
   test "Delete the word before the cursor 2":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
     status.bufStatus[0].deleteWordBeforeCursor(
@@ -136,7 +136,7 @@ suite "Insert mode":
 
   test "Delete the word before the cursor 3":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     status.workspace[0].currentMainWindowNode.currentLine = 1
@@ -151,7 +151,7 @@ suite "Insert mode":
 
   test "Delete characters before the cursor in current line":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abcdef"])
 
     status.workspace[0].currentMainWindowNode.currentColumn = 4
@@ -165,7 +165,7 @@ suite "Insert mode":
 
   test "Delete characters before the cursor in current line 2":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
 
     status.bufStatus[0].deleteCharactersBeforeCursorInCurrentLine(
@@ -177,7 +177,7 @@ suite "Insert mode":
 
   test "Add indent in current line":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
     status.bufStatus[0].addIndentInCurrentLine(
@@ -191,7 +191,7 @@ suite "Insert mode":
 
   test "Delete indent in current line":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc"])
 
     status.bufStatus[0].deleteIndentInCurrentLine(
@@ -205,7 +205,7 @@ suite "Insert mode":
 
   test "Delete indent in current line 2":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
     status.bufStatus[0].deleteIndentInCurrentLine(
@@ -219,7 +219,7 @@ suite "Insert mode":
 
   test "Move to last of line":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
     status.bufStatus[0].mode = Mode.insert
 
@@ -227,7 +227,9 @@ suite "Insert mode":
 
     check status.workspace[0].currentMainWindowNode.currentColumn == 3
 
-  proc prepareInsertMode(buffer: openArray[string], line, column, height, width: int): EditorStatus =
+  proc prepareInsertMode(buffer: openArray[string],
+                         line, column, height, width: int): EditorStatus =
+
     result = initEditorStatus()
     result.addNewBuffer(Mode.insert)
     result.bufStatus[0].buffer = initGapBuffer(buffer.map(s => s.ru))
