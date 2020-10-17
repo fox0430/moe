@@ -1,12 +1,18 @@
 import terminal, strutils, sequtils, strformat, os, algorithm
 import ui, unicodeext, fileutils, color, commandline
 
-type
-  ExModeViewStatus = tuple[
-    buffer: seq[Rune],
-    prompt: string,
-    cursorY, cursorX, currentPosition, startPosition: int
-  ]
+type ExModeViewStatus = object
+    buffer: seq[Rune]
+    prompt: string
+    cursorY: int
+    cursorX: int
+    currentPosition: int
+    startPosition: int
+
+type SuggestType = enum
+  exCommand
+  exCommandOption
+  filePath
 
 const exCommandList = [
   "!",
@@ -171,16 +177,21 @@ proc splitCommand*(command: string): seq[seq[Rune]] =
   if (command).contains('"'):
     return splitQout(command)
   else:
-    return strutils.splitWhitespace(command).map(proc(s: string): seq[Rune] = toRunes(s))
+    return strutils.splitWhitespace(command)
+                    .map(proc(s: string): seq[Rune] = toRunes(s))
 
 proc writeExModeView(commandLine: var CommandLine,
                      exStatus: ExModeViewStatus,
                      color: EditorColorPair) =
 
-  let buffer = ($exStatus.buffer).substr(exStatus.startPosition, exStatus.buffer.len)
+  let buffer = ($exStatus.buffer).substr(exStatus.startPosition,
+                                         exStatus.buffer.len)
 
   commandLine.erase
-  commandLine.window.write(exStatus.cursorY, 0, fmt"{exStatus.prompt}{buffer}", color)
+  commandLine.window.write(exStatus.cursorY,
+                           0,
+                           fmt"{exStatus.prompt}{buffer}",
+                           color)
   commandLine.window.moveCursor(0, exStatus.cursorX)
   commandLine.window.refresh
 
@@ -226,13 +237,15 @@ proc clearCommandBuffer(exStatus: var ExModeViewStatus) =
 proc deleteCommandBuffer(exStatus: var ExModeViewStatus) =
   if exStatus.buffer.len > 0:
     if exStatus.buffer.len < terminalWidth(): dec(exStatus.cursorX)
-    exStatus.buffer.delete(exStatus.currentPosition - 1, exStatus.currentPosition - 1)
+    exStatus.buffer.delete(exStatus.currentPosition - 1,
+                           exStatus.currentPosition - 1)
     dec(exStatus.currentPosition)
 
 proc deleteCommandBufferCurrentPosition(exStatus: var ExModeViewStatus) =
   if exStatus.buffer.len > 0 and exStatus.currentPosition < exStatus.buffer.len:
     exStatus.buffer.delete(exStatus.cursorX - 1, exStatus.cursorX - 1)
-    if exStatus.currentPosition > exStatus.buffer.len: dec(exStatus.currentPosition)
+    if exStatus.currentPosition > exStatus.buffer.len:
+      dec(exStatus.currentPosition)
 
 proc insertCommandBuffer(exStatus: var ExModeViewStatus, r: Rune) =
   exStatus.buffer.insert(r, exStatus.currentPosition)
@@ -240,11 +253,14 @@ proc insertCommandBuffer(exStatus: var ExModeViewStatus, r: Rune) =
   if exStatus.cursorX < terminalWidth() - 1: inc(exStatus.cursorX)
   else: inc(exStatus.startPosition)
 
-proc insertCommandBuffer(exStatus: var ExModeViewStatus, runes: seq[Rune]) {.inline.} =
+proc insertCommandBuffer(exStatus: var ExModeViewStatus,
+                         runes: seq[Rune]) {.inline.} =
+
   for r in runes:
     exStatus.insertCommandBuffer(r)
 
 import editorstatus
+# Search text in buffer
 proc getKeyword*(status: var EditorStatus,
                  prompt: string,
                  isSearch: bool): (seq[Rune], bool) =
@@ -301,20 +317,24 @@ proc calcPopUpWindowSize(buffer: seq[seq[Rune]]): (int, int) =
 
   return (height, width)
 
-proc suggestFilePath(status: var Editorstatus,
-                     exStatus: var ExModeViewStatus,
-                     command: string,
-                     key: var Rune) =
+proc getInputPath(buffer, cmd: seq[Rune]): seq[Rune] =
+  if (buffer.substr(cmd.len + 1)) == ru"~":
+    getHomeDir().toRunes
+  else:
+    buffer.substr(cmd.len + 1)
 
-  let inputPath = if (exStatus.buffer.substr(command.len + 1)) == ru"~":
-                    getHomeDir().toRunes
-                  else:
-                    exStatus.buffer.substr(command.len + 1)
-  var suggestlist = @[inputPath]
+proc getCandidatesFilePath(buffer: seq[Rune],
+                           command: string): seq[string] =
+
+  let inputPath = getInputPath(buffer, command.ru)
+
+  var list: seq[seq[Rune]] = @[]
+  if inputPath.len > 0: list.add(inputPath)
+
   if inputPath.len == 0 or not inputPath.contains(ru'/'):
     for kind, path in walkDir("./"):
       if path.toRunes.normalizePath.startsWith(inputPath):
-        suggestlist.add(path.toRunes.normalizePath)
+        list.add(path.toRunes.normalizePath)
   elif inputPath.contains(ru'/'):
     let
       normalizedInput = normalizePath(inputPath)
@@ -327,75 +347,26 @@ proc suggestFilePath(status: var Editorstatus,
             pathLen = path.toRunes.high
             hoemeDirLen = (getHomeDir()).high
             addPath = ru"~" & path.toRunes.substr(hoemeDirLen, pathLen)
-          suggestlist.add(addPath)
+          list.add(addPath)
         else:
-          suggestlist.add(path.toRunes)
+          list.add(path.toRunes)
 
-  suggestlist.sort(proc (a, b: seq[Rune]): int = cmp($a, $b))
-
-  var
-    suggestIndex = 0
-    # Pop up window initial size/position
-    h = 1
-    w = 1
-    # Pop up window position
-    positionInInputPath = if inputPath.rfind(ru"/") > 0: inputPath.rfind(ru"/")
-                          else: 0
-    # +2 is pronpt and space
-    x = command.len + 2 + positionInInputPath
-    y = terminalHeight() - 1
-    popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
-
-  # TODO: I don't know why yet, but there is a bug which is related to scrolling of the pup-up window.
-
-  while (isTabKey(key) or isShiftTab(key)) and suggestlist.len > 1:
-    exStatus.buffer = (command & " ").toRunes
-    exStatus.currentPosition = command.len + 1
-    exStatus.cursorX = command.len + 2
-
-    if isTabKey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
-    elif isShiftTab(key) and suggestIndex > 0: dec(suggestIndex)
-    elif isShiftTab(key) and suggestIndex == 0: suggestIndex = suggestlist.high
-    else: suggestIndex = 0
-
-    if status.settings.popUpWindowInExmode:
-      let currentLine = if suggestIndex == 0: -1 else: suggestIndex - 1
-
-      var displayBuffer: seq[seq[Rune]] = @[]
-      if suggestlist[1].contains(ru'/'):
-        for i in 1 ..< suggestlist.len:
-          let path = suggestlist[i]
-          displayBuffer.add(path[path.rfind(ru'/') + 1 ..< path.len])
-      else: displayBuffer = suggestlist[1 ..< suggestlist.len]
-
-      var (h, w) = displayBuffer.calcPopUpWindowSize
-      popUpWindow.writePopUpWindow(h, w, y, x, currentLine, displayBuffer)
-
-    for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
-    if suggestlist.len == 1:
-      status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
-      return
-
-    status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
-
-    key = status.commandLine.getKey
+  for path in list: result.add($path)
+  result.sort(proc (a, b: string): int = cmp(a, b))
 
 proc isExCommand(exBuffer: seq[Rune]): bool =
   if ($exBuffer).contains(" ") == false: return false
 
   let buffer = ($exBuffer).splitWhitespace(-1)
   for i in 0 ..< exCommandList.len:
-    if buffer[0] == $exCommandList[i]:
-      result = true
-      break
+    if buffer[0] == $exCommandList[i]: return true
 
-proc suggestExCommandOption(status: var Editorstatus,
-                            exStatus: var ExModeViewStatus,
-                            key: var Rune) =
+proc getCandidatesExCommandOption(status: var Editorstatus,
+                                  exStatus: var ExModeViewStatus,
+                                  command: string,
+                                  key: var Rune): seq[seq[Rune]] =
 
   var argList: seq[string] = @[]
-  let command = (splitWhitespace(exStatus.buffer))[0]
-
   case toLowerAscii($command):
     of "cursorLine",
        "highlightparen",
@@ -416,71 +387,110 @@ proc suggestExCommandOption(status: var Editorstatus,
        "icon",
        "showgitinactive",
        "ignorecase",
-       "smartcase":
-      argList = @["on", "off"]
-    of "theme":
-      argList= @["vivid", "dark", "light", "config", "vscode"]
+       "smartcase": argList = @["on", "off"]
+    of "theme": argList= @["vivid", "dark", "light", "config", "vscode"]
     of "e",
        "sp",
        "vs",
-       "sv":
-      status.suggestFilePath(exStatus, $command, key)
+       "sv": argList = getCandidatesFilePath(exStatus.buffer, command)
     else: discard
 
   let  arg = if (splitWhitespace(exStatus.buffer)).len > 1:
                (splitWhitespace(exStatus.buffer))[1]
              else: ru""
-  var suggestlist: seq[seq[Rune]] = @[arg]
+  result = @[arg]
 
   for i in 0 ..< argList.len:
-    if argList[i].startsWith($arg): suggestlist.add(argList[i].toRunes)
+    if argList[i].startsWith($arg): result.add(argList[i].toRunes)
 
-  var
-    suggestIndex = 0
-    # Pop up window initial size/position
-    h = 1
-    w = 1
-    # +1 is space
-    x = command.len + 1
-    y = terminalHeight() - 1
-
-    popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
-
-  while (isTabKey(key) or isShiftTab(key)) and suggestlist.len > 1:
-    exStatus.currentPosition = 0
-    exStatus.cursorX = 1
-    exStatus.buffer = ru""
-
-    if isTabKey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
-    elif isShiftTab(key) and suggestIndex > 0: dec(suggestIndex)
-    elif isShiftTab(key) and suggestIndex == 0: suggestIndex = suggestlist.high
-    else: suggestIndex = 0
-
-    if status.settings.popUpWindowInExmode:
-      let
-        currentLine = if suggestIndex == 0: -1 else: suggestIndex - 1
-        displayBuffer = suggestlist[1 ..< suggestlist.len]
-      # Pop up window size
-      var (h, w) = displayBuffer.calcPopUpWindowSize
-
-      popUpWindow.writePopUpWindow(h, w, y, x, currentLine, displayBuffer)
-
-    for rune in command & ru' ': exStatus.insertCommandBuffer(rune)
-    for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
-
-    status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
-
-    key = status.commandLine.getKey
-
-proc suggestExCommand(status: var Editorstatus,
-                      exStatus: var ExModeViewStatus,
-                      key: var Rune) =
-
-  var suggestlist: seq[seq[Rune]] = @[exStatus.buffer]
-  let buffer = toLowerAscii($exStatus.buffer)
+proc getCandidatesExCommand(commandLineBuffer: seq[Rune]): seq[seq[Rune]] =
+  result = @[commandLineBuffer]
+  let buffer = toLowerAscii($commandLineBuffer)
   for str in exCommandList:
-    if str.len >= buffer.len and
-       str.startsWith(buffer): suggestlist.add(str.toRunes)
+    if str.len >= buffer.len and str.startsWith(buffer):
+      result.add(str.toRunes)
+
+proc getSuggestType(buffer: seq[Rune]): SuggestType =
+  template isECommand(command: seq[seq[Rune]]): bool =
+    command.len == 2 and cmpIgnoreCase($command[0], "e") == 0
+
+  template isVsCommand(command: seq[seq[Rune]]): bool =
+    command.len == 2 and cmpIgnoreCase($command[0], "vs") == 0
+
+  template isSvCommand(command: seq[seq[Rune]]): bool =
+    command.len == 1 and cmpIgnoreCase($command[0], "sv") == 0
+
+  template isSpCommand(command: seq[seq[Rune]]): bool =
+    command.len > 0 and
+    command.len < 3 and
+    cmpIgnoreCase($command[0], "sp") == 0
+
+  if buffer.len > 0 and buffer.isExCommand:
+    let cmd = splitCommand($buffer)
+    if isECommand(cmd) or
+       isVsCommand(cmd) or
+       isSvCommand(cmd) or
+       isSpCommand(cmd): SuggestType.filePath
+    else:
+      SuggestType.exCommandOption
+  else:
+    SuggestType.exCommand
+
+proc isSuggestTypeExCommand(suggestType: SuggestType): bool {.inline.} =
+  suggestType == SuggestType.exCommand
+
+proc isSuggestTypeExCommandOption(suggestType: SuggestType): bool {.inline.} =
+  suggestType == SuggestType.exCommandOption
+
+proc isSuggestTypeFilePath(suggestType: SuggestType): bool {.inline.} =
+  suggestType == SuggestType.filePath
+
+proc getSuggestList(status: var Editorstatus,
+                    exStatus: var ExModeViewStatus,
+                    key: var Rune,
+                    suggestType: SuggestType): seq[seq[Rune]] =
+
+  if isSuggestTypeExCommand(suggestType):
+    result = getCandidatesExCommand(exStatus.buffer)
+  elif isSuggestTypeExCommandOption(suggestType):
+    let cmd = $(splitWhitespace(exStatus.buffer))[0]
+    result = status.getCandidatesExCommandOption(exStatus, cmd, key)
+  else:
+    let
+      cmd = (splitWhitespace(exStatus.buffer))[0]
+      pathList = getCandidatesFilePath(exStatus.buffer, $cmd)
+    for path in pathList: result.add(path.ru)
+
+proc calcXWhenSuggestPath(buffer: seq[Rune]): int =
+  let
+    cmd = (splitWhitespace(buffer))[0]
+    inputPath = getInputPath(buffer, cmd)
+    positionInInputPath = if inputPath.rfind(ru"/") > 0:
+                            inputPath.rfind(ru"/")
+                          else:
+                            0
+  # +2 is pronpt and space
+  return cmd.len + 2 + positionInInputPath
+
+proc initDisplayBuffer(suggestlist: seq[seq[Rune]],
+                       suggestType: SuggestType): seq[seq[Rune]] =
+
+  if isSuggestTypeFilePath(suggestType):
+    if suggestlist[1].contains(ru'/'):
+      for i in 1 ..< suggestlist.len:
+        let path = suggestlist[i]
+        result.add(path[path.rfind(ru'/') + 1 ..< path.len])
+    else: result = suggestlist[1 ..< suggestlist.len]
+  else:
+    result = suggestlist[1 ..< suggestlist.len]
+
+proc suggestCommandLine(status: var Editorstatus,
+                        exStatus: var ExModeViewStatus,
+                        key: var Rune) =
+
+  let
+    suggestType = getSuggestType(exStatus.buffer)
+    suggestlist = status.getSuggestList(exStatus, key, suggestType)
 
   var
     suggestIndex = 0
@@ -490,12 +500,31 @@ proc suggestExCommand(status: var Editorstatus,
     x = 0
     y = terminalHeight() - 1
 
-    popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
+  let command = if exStatus.buffer.len > 0:
+                  (splitWhitespace(exStatus.buffer))[0]
+                else: ru""
+
+  if isSuggestTypeFilePath(suggestType):
+    x = calcXWhenSuggestPath(exStatus.buffer)
+  elif isSuggestTypeExCommandOption(suggestType):
+    x = command.len + 1
+
+  var popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
+
+  template updateExModeViewStatus() =
+    if isSuggestTypeFilePath(suggestType):
+      exStatus.buffer = command & ru" "
+      exStatus.currentPosition = command.len + exStatus.prompt.len
+      exStatus.cursorX = exStatus.currentPosition
+    else:
+      exStatus.buffer = ru""
+      exStatus.currentPosition = 0
+      exStatus.cursorX = 0
+
+  # TODO: I don't know why yet, but there is a bug which is related to scrolling of the pup-up window.
 
   while (isTabKey(key) or isShiftTab(key)) and suggestlist.len > 1:
-    exStatus.buffer = ru""
-    exStatus.currentPosition = 0
-    exStatus.cursorX = 1
+    updateExModeViewStatus()
 
     if isTabKey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
     elif isShiftTab(key) and suggestIndex > 0: dec(suggestIndex)
@@ -505,35 +534,40 @@ proc suggestExCommand(status: var Editorstatus,
     if status.settings.popUpWindowInExmode:
       let
         currentLine = if suggestIndex == 0: -1 else: suggestIndex - 1
-        displayBuffer = suggestlist[1 ..< suggestlist.len]
+        displayBuffer = initDisplayBuffer(suggestlist, suggestType)
       # Pop up window size
       var (h, w) = displayBuffer.calcPopUpWindowSize
 
       popUpWindow.writePopUpWindow(h, w, y, x, currentLine, displayBuffer)
 
-    for rune in suggestlist[suggestIndex]: exStatus.insertCommandBuffer(rune)
+    if isSuggestTypeExCommandOption(suggestType):
+      exStatus.insertCommandBuffer(command & ru' ')
+
+    exStatus.insertCommandBuffer(suggestlist[suggestIndex])
+    exStatus.cursorX.inc
 
     status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
 
     key = status.commandLine.getKey
+    exStatus.cursorX = exStatus.currentPosition + 1
+
+  status.commandLine.window.moveCursor(exStatus.cursorY, exStatus.cursorX)
+  if status.settings.popUpWindowInExmode: status.deletePopUpWindow
 
 proc suggestMode(status: var Editorstatus,
                  exStatus: var ExModeViewStatus,
                  key: var Rune) =
 
-  if exStatus.buffer.len > 0 and exStatus.buffer.isExCommand:
-    status.suggestExCommandOption(exStatus, key)
-  else: suggestExCommand(status, exStatus, key)
-  status.commandLine.window.moveCursor(exStatus.cursorY, exStatus.cursorX)
-  if status.settings.popUpWindowInExmode: status.deletePopUpWindow
+  status.suggestCommandLine(exStatus, key)
 
   while isTabKey(key) or isShiftTab(key):
     key = status.commandLine.getKey
 
-proc getKeyOnceAndWriteCommandView*(status: var Editorstatus,
-                                    prompt: string,
-                                    buffer: seq[Rune],
-                                    isSuggest, isSearch : bool): (seq[Rune], bool, bool) =
+proc getKeyOnceAndWriteCommandView*(
+  status: var Editorstatus,
+  prompt: string,
+  buffer: seq[Rune],
+  isSuggest, isSearch : bool): (seq[Rune], bool, bool) =
 
   var
     exStatus = initExModeViewStatus(prompt)
@@ -646,5 +680,3 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
     else: insertCommandBuffer(exStatus, key)
 
   return splitCommand($exStatus.buffer)
-
-
