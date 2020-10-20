@@ -363,8 +363,7 @@ proc isExCommand(exBuffer: seq[Rune]): bool =
 
 proc getCandidatesExCommandOption(status: var Editorstatus,
                                   exStatus: var ExModeViewStatus,
-                                  command: string,
-                                  key: var Rune): seq[seq[Rune]] =
+                                  command: string): seq[seq[Rune]] =
 
   var argList: seq[string] = @[]
   case toLowerAscii($command):
@@ -447,14 +446,13 @@ proc isSuggestTypeFilePath(suggestType: SuggestType): bool {.inline.} =
 
 proc getSuggestList(status: var Editorstatus,
                     exStatus: var ExModeViewStatus,
-                    key: var Rune,
                     suggestType: SuggestType): seq[seq[Rune]] =
 
   if isSuggestTypeExCommand(suggestType):
     result = getCandidatesExCommand(exStatus.buffer)
   elif isSuggestTypeExCommandOption(suggestType):
     let cmd = $(splitWhitespace(exStatus.buffer))[0]
-    result = status.getCandidatesExCommandOption(exStatus, cmd, key)
+    result = status.getCandidatesExCommandOption(exStatus, cmd)
   else:
     let
       cmd = (splitWhitespace(exStatus.buffer))[0]
@@ -490,7 +488,7 @@ proc suggestCommandLine(status: var Editorstatus,
 
   let
     suggestType = getSuggestType(exStatus.buffer)
-    suggestlist = status.getSuggestList(exStatus, key, suggestType)
+    suggestlist = status.getSuggestList(exStatus, suggestType)
 
   var
     suggestIndex = 0
