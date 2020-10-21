@@ -1,6 +1,6 @@
 import parseopt, pegs, os, strformat
 
-type ComdParsedList* = seq[tuple[filename: string]]
+type CmdParsedList* = seq[tuple[filename: string]]
 
 proc staticReadVersionFromNimble: string {.compileTime.} =
   let peg = """@ "version" \s* "=" \s* \" {[0-9.]+} \" @ $""".peg
@@ -52,7 +52,7 @@ proc writeCmdLineError(kind: CmdLineKind, arg: string) =
   echo """Pelase check "moe -h""""
   quit()
 
-proc parseCommandLineOption*(line: seq[string]): ComdParsedList =
+proc parseCommandLineOption*(line: seq[string]): CmdParsedList =
   var
     parsedLine = initOptParser(line)
     index = 0
