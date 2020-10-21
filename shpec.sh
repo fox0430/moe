@@ -48,7 +48,7 @@ describe "moe is an editor"
 
         it "can display command line options"
             # TODO: Expand this test to include verifying the option list is formatted and localized correctly.
-            assert egrep "`moe --help`" " *moe \[file\] +edit file.*"
+            assert egrep "`moe --help`" " *moe \[file\] +Edit file.*"
         end
 
 _has_pty_session_man && {
