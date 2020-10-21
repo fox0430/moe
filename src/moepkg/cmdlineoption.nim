@@ -1,4 +1,4 @@
-import parseopt, pegs, os
+import parseopt, pegs, os, strformat
 
 type ComdParsedList* = seq[tuple[filename: string]]
 
@@ -20,12 +20,24 @@ proc writeVersion() =
   quit()
 
 proc writeHelp() =
-  echo """
-  moe [file]    edit file
+  const helpMessage = """
+Usage:
+  moe [file]       Edit file
 
-  -v    Print version
-  --version    Print version
-  """
+Arguments:
+  -h, --help       Print this help
+  -v, --version    Print version
+"""
+
+  echo helpMessage
+  quit()
+
+proc writeCmdLineError(kind: CmdLineKind, arg: string) =
+  # Short option or long option
+  let optionStr = if kind == cmdShortOption: "-" else: "--"
+
+  echo fmt"Unknown option argument: {optionStr}{arg}"
+  echo """Pelase check "moe -h""""
   quit()
 
 proc parseCommandLineOption*(line: seq[string]): ComdParsedList  =
@@ -35,10 +47,16 @@ proc parseCommandLineOption*(line: seq[string]): ComdParsedList  =
     case kind:
       of cmdArgument:
         result.add((filename: key))
-      of cmdShortOption, cmdLongOption:
+      of cmdShortOption:
         case key:
-          of "v", "version": writeVersion()
+          of "v": writeVersion()
+          of "h": writeHelp()
+          else: writeCmdLineError(kind, key)
+      of cmdLongOption:
+        case key:
+          of "version": writeVersion()
           of "help": writeHelp()
+          else: writeCmdLineError(kind, key)
       of cmdEnd:
         assert(false)
 
