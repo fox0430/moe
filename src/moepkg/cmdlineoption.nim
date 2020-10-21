@@ -5,7 +5,10 @@ type ComdParsedList* = seq[tuple[filename: string]]
 proc staticReadVersionFromNimble: string {.compileTime.} =
   let peg = """@ "version" \s* "=" \s* \" {[0-9.]+} \" @ $""".peg
   var captures: seq[string] = @[""]
-  let nimbleSpec = staticRead(currentSourcePath.parentDir() / "../../moe.nimble")
+  let
+    nimblePath = currentSourcePath.parentDir() / "../../moe.nimble"
+    nimbleSpec = staticRead(nimblePath)
+
   assert nimbleSpec.match(peg, captures)
   assert captures.len == 1
   return captures[0]
@@ -14,12 +17,18 @@ proc checkReleaseBuild: string {.compileTime.} =
   if defined(release): return "Release"
   else: return "Debug"
 
+proc generateVersionInfoMessage(): string =
+  const
+    versionInfo = "moe v" & staticReadVersionFromNimble()
+    buildType = "Build type: " & checkReleaseBuild()
+
+  result = versionInfo & "\n" & buildType
+
 proc writeVersion() =
-  echo "moe v" & staticReadVersionFromNimble()
-  echo "Build type: " & checkReleaseBuild()
+  echo generateVersionInfoMessage()
   quit()
 
-proc writeHelp() =
+proc generateHelpMessage(): string =
   const helpMessage = """
 Usage:
   moe [file]       Edit file
@@ -29,7 +38,10 @@ Arguments:
   -v, --version    Print version
 """
 
-  echo helpMessage
+  result = generateVersionInfoMessage() & "\n\n" & helpMessage
+
+proc writeHelp() =
+  echo generateHelpMessage()
   quit()
 
 proc writeCmdLineError(kind: CmdLineKind, arg: string) =
@@ -40,9 +52,10 @@ proc writeCmdLineError(kind: CmdLineKind, arg: string) =
   echo """Pelase check "moe -h""""
   quit()
 
-proc parseCommandLineOption*(line: seq[string]): ComdParsedList  =
-  var parsedLine = initOptParser(line)
-  var index = 0
+proc parseCommandLineOption*(line: seq[string]): ComdParsedList =
+  var
+    parsedLine = initOptParser(line)
+    index = 0
   for kind, key, val in parsedLine.getopt():
     case kind:
       of cmdArgument:
