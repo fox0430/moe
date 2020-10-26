@@ -1,6 +1,6 @@
 import sequtils, os, strformat, parseutils
 import syntax/highlite
-import unicodeext, color
+import unicodetext, color
 from strutils import find
 
 type ColorSegment* = object

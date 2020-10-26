@@ -1,5 +1,5 @@
 import unittest, deques
-import moepkg/[editorview, gapbuffer, unicodeext]
+import moepkg/[editorview, gapbuffer, unicodetext]
 
 test "initEditorView 1":
   let
@@ -31,7 +31,7 @@ test "seekCursor 1":
 
   check(view.lines[0] == ru"aaa")
   check(view.lines[1] == ru"bbb")
-  
+
   view.seekCursor(buffer, 2, 3)
   check(view.lines[0] == ru"ccc")
   check(view.lines[1] == ru"cc")
@@ -60,6 +60,6 @@ test "seekCursor 2":
   check(view.lines[1] == ru"ccc")
 
   view.seekCursor(buffer, 0, 6)
-  
+
   check(view.lines[0] == ru"a")
   check(view.lines[1] == ru"bbb")

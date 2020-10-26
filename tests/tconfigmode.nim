@@ -1,5 +1,5 @@
 import unittest
-import moepkg/[editorstatus, gapbuffer, bufferstatus, unicodeext]
+import moepkg/[editorstatus, gapbuffer, bufferstatus, unicodetext]
 
 include moepkg/configmode
 

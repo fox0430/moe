@@ -1,6 +1,6 @@
 import unittest
 import moepkg/[filermode, editorstatus, highlight, color, bufferstatus,
-               unicodeext]
+               unicodetext]
 
 test "Update directory list":
   var status = initEditorStatus()

@@ -1,5 +1,5 @@
 import deques, strutils, math, strformat
-import gapbuffer, ui, unicodeext, highlight, independentutils, color, settings,
+import gapbuffer, ui, unicodetext, highlight, independentutils, color, settings,
        bufferstatus
 
 type EditorView* = object
@@ -23,7 +23,7 @@ proc loadSingleViewLine[T](view: EditorView,
   let bufferLine = buffer[originalLine]
   template isRemaining: bool = start+result.length < bufferLine.len
   template calcNextWidth: int =
-    if isRemaining(): unicodeext.width(bufferLine[start+result.length]) else: 0
+    if isRemaining(): unicodetext.width(bufferLine[start+result.length]) else: 0
   var
     totalWidth = 0
     nextWidth = calcNextWidth()

@@ -1,5 +1,5 @@
 import terminal, times
-import ui, editorstatus, unicodeext, movement, bufferstatus, window
+import ui, editorstatus, unicodetext, movement, bufferstatus, window
 
 proc exitLogViewer*(status: var Editorstatus) {.inline.} =
   status.deleteBuffer(status.bufferIndexInCurrentWindow)

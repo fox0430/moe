@@ -1,5 +1,5 @@
 import os, re, terminal
-import editorstatus, ui, unicodeext, bufferstatus, movement, gapbuffer,
+import editorstatus, ui, unicodetext, bufferstatus, movement, gapbuffer,
        messages, window
 
 proc openSelectedBuffer(status: var Editorstatus) =

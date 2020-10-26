@@ -1,5 +1,5 @@
 import terminal, os, heapqueue, times
-import gapbuffer, ui, editorstatus, unicodeext, highlight, window, movement,
+import gapbuffer, ui, editorstatus, unicodetext, highlight, window, movement,
        color, bufferstatus
 
 proc initFilelistHighlight[T](buffer: T,
