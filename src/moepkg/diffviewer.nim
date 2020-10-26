@@ -1,5 +1,5 @@
 import times, terminal
-import editorstatus, unicodeext, bufferstatus, highlight, color, gapbuffer, ui,
+import editorstatus, unicodetext, bufferstatus, highlight, color, gapbuffer, ui,
        movement, window
 
 proc isDiffViewerMode(status: Editorstatus): bool =

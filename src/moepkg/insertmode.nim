@@ -1,5 +1,5 @@
 import terminal, times, options
-import ui, editorstatus, gapbuffer, unicodeext, undoredostack, window,
+import ui, editorstatus, gapbuffer, unicodetext, undoredostack, window,
        movement, editor, bufferstatus, suggestionwindow
 
 proc insertMode*(status: var EditorStatus) =

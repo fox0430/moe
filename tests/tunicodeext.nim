@@ -1,5 +1,5 @@
 import strutils, unittest, encodings, sequtils, sugar
-import moepkg/unicodeext
+import moepkg/unicodetext
 
 test "width 1":
   check("abc".toRunes.width == 3)
@@ -20,7 +20,7 @@ test "toRune":
 
 test "ru":
   check(($(ru'a'))[0] == 'a')
-  
+
   check($(ru"abcde") == "abcde")
   check($(ru"あいうえお") == "あいうえお")
   check($(ru"編集表示") == "編集表示")
@@ -35,7 +35,7 @@ test "numberOfBytes":
   for x in 0 .. 127:
     let c = char(x)
     check(numberOfBytes(c) == 1)
-  
+
   check(numberOfBytes("Ā"[0]) == 2)
   check(numberOfBytes("あ"[0]) == 3)
   check(numberOfBytes("。"[0]) == 3)
@@ -279,15 +279,15 @@ test "iteratorSplit":
   const
     expectedResult = @[ru"", ru"", ru"this", ru"is", ru"an", ru"", ru"example", ru"", ru"", ru""]
     actualResult = collect(newSeq):
-      for x in unicodeext.split(ru";;this;is;an;;example;;;", r => r == ru';'):
+      for x in unicodetext.split(ru";;this;is;an;;example;;;", r => r == ru';'):
         x
   check actualResult == expectedResult
 
 test "iteratorSplitWithRemoveEmptyEntries":
-  const 
+  const
     expectedResult = @[ru"", ru"", ru"this", ru"is", ru"an", ru"", ru"example", ru"", ru"", ru""].filter(runes => runes.len > 0)
     actualResult = collect(newSeq):
-      for x in unicodeext.split(ru";;this;is;an;;example;;;", r => r == ru';', true):
+      for x in unicodetext.split(ru";;this;is;an;;example;;;", r => r == ru';', true):
         x
   check actualResult == expectedResult
 

@@ -1,7 +1,7 @@
 import posix, strformat, osproc, strutils
 from os import execShellCmd
 import ncurses
-import unicodeext, color
+import unicodetext, color
 
 type Attributes* = enum
   normal = A_NORMAL

@@ -1,5 +1,5 @@
 import unittest, strformat
-import moepkg/[editorstatus, unicodeext, bufferstatus]
+import moepkg/[editorstatus, unicodetext, bufferstatus]
 
 include moepkg/debugmode
 

@@ -1,7 +1,7 @@
 import strutils, terminal, os, strformat, tables, times, osproc, heapqueue,
        deques, times, options
 import syntax/highlite
-import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
+import gapbuffer, editorview, ui, unicodetext, highlight, fileutils,
        undoredostack, window, color, workspace, statusbar, settings,
        bufferstatus, cursor, tabline, backup, messages, commandline
 
@@ -801,7 +801,7 @@ proc highlightOtherUsesCurrentWord(status: var Editorstatus) =
   if line.len < 1 or
      currentMainWindowNode.currentColumn > line.high or
      (line[currentMainWindowNode.currentColumn] != '_' and
-     unicodeext.isPunct(line[currentMainWindowNode.currentColumn])) or
+     unicodetext.isPunct(line[currentMainWindowNode.currentColumn])) or
      line[currentMainWindowNode.currentColumn].isSpace: return
   var
     startCol = currentMainWindowNode.currentColumn
@@ -809,13 +809,13 @@ proc highlightOtherUsesCurrentWord(status: var Editorstatus) =
 
   # Set start col
   for i in countdown(currentMainWindowNode.currentColumn - 1, 0):
-    if (line[i] != '_' and unicodeext.isPunct(line[i])) or line[i].isSpace:
+    if (line[i] != '_' and unicodetext.isPunct(line[i])) or line[i].isSpace:
       break
     else: startCol.dec
 
   # Set end col
   for i in currentMainWindowNode.currentColumn ..< line.len:
-    if (line[i] != '_' and unicodeext.isPunct(line[i])) or line[i].isSpace:
+    if (line[i] != '_' and unicodetext.isPunct(line[i])) or line[i].isSpace:
       break
     else: endCol.inc
 
@@ -842,11 +842,11 @@ proc highlightOtherUsesCurrentWord(status: var Editorstatus) =
         if j == 0 or
            (j > 0 and
            ((line[j - 1] != '_' and
-           unicodeext.isPunct(line[j - 1])) or
+           unicodetext.isPunct(line[j - 1])) or
            line[j - 1].isSpace)):
           if (j == (line.len - highlightWord.len)) or
              ((line[j + highlightWord.len] != '_' and
-             unicodeext.isPunct(line[j + highlightWord.len])) or
+             unicodetext.isPunct(line[j + highlightWord.len])) or
              line[j + highlightWord.len].isSpace):
 
             # Do not highlight current word on the cursor

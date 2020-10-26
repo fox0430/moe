@@ -1,5 +1,5 @@
 import unittest, options
-import moepkg/[color, ui, highlight, unicodeext]
+import moepkg/[color, ui, highlight, unicodetext]
 
 include moepkg/settings
 

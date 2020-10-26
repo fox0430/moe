@@ -1,6 +1,6 @@
 from strutils import parseInt
 import terminal, times
-import editorstatus, ui, gapbuffer, unicodeext, fileutils, undoredostack,
+import editorstatus, ui, gapbuffer, unicodetext, fileutils, undoredostack,
        window, movement, editor, search, color, bufferstatus, quickrun,
        messages, commandline
 

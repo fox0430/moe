@@ -1,5 +1,5 @@
 import terminal, times, strformat, options
-import gapbuffer, ui, unicodeext, highlight, color, window, bufferstatus,
+import gapbuffer, ui, unicodetext, highlight, color, window, bufferstatus,
        movement, workspace, settings
 
 proc getDebugModeBufferIndex*(bufStatus: seq[BufferStatus]): int =

@@ -1,5 +1,5 @@
 import unittest
-import moepkg/[editorstatus, unicodeext, exmode]
+import moepkg/[editorstatus, unicodetext, exmode]
 
 test "Force quit command":
   var status = initEditorStatus()

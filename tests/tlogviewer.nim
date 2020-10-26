@@ -1,5 +1,5 @@
 import unittest, terminal
-import moepkg/[editorstatus, logviewer, bufferstatus, unicodeext]
+import moepkg/[editorstatus, logviewer, bufferstatus, unicodetext]
 
 test "Exit log viewer":
   var status = initEditorStatus()

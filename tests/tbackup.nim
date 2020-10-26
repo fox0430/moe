@@ -1,5 +1,5 @@
 import unittest, times, os
-import moepkg/[editorstatus, unicodeext]
+import moepkg/[editorstatus, unicodetext]
 include moepkg/[backup]
 
 suite "Backup: Generate filename":

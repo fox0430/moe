@@ -1,6 +1,6 @@
 import osproc, terminal, times
 import syntax/highlite
-import unicodeext, settings, bufferstatus, gapbuffer, messages, ui,
+import unicodetext, settings, bufferstatus, gapbuffer, messages, ui,
        editorstatus, movement, window, workspace, fileutils, commandline
 
 proc generateCommand(bufStatus: BufferStatus,
