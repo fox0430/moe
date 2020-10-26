@@ -1,5 +1,5 @@
 import strformat, os
-import color, unicodeext, settings, commandline
+import color, unicodetext, settings, commandline
 
 proc writeMessageOnCommandWindow*(commandLine: var CommandLine,
                                   message: string,

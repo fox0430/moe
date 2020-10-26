@@ -1,7 +1,7 @@
 # History manager for automatic backup.
 
 import re, os, times, terminal, osproc
-import editorstatus, bufferstatus, unicodeext, ui, movement, gapbuffer,
+import editorstatus, bufferstatus, unicodetext, ui, movement, gapbuffer,
        highlight, color, settings, messages, backup, commandview, fileutils,
        editorview, window
 

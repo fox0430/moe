@@ -1,5 +1,5 @@
-import unicodeext, system, terminal, strutils
-import editorstatus, gapbuffer, commandview, movement, commandline
+import system, terminal, strutils
+import editorstatus, gapbuffer, commandview, movement, commandline, unicodetext
 
 type
   SearchResult* = tuple[line: int, column: int]

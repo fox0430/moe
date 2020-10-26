@@ -1,6 +1,6 @@
 import ui, strutils, strformat, os, osproc
 import syntax/highlite
-import bufferstatus, color, unicodeext, settings, window, gapbuffer
+import bufferstatus, color, unicodetext, settings, window, gapbuffer
 
 type StatusBar* = object
   window*: Window

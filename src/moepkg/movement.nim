@@ -1,5 +1,5 @@
 import deques
-import editorstatus, ui, editorview, gapbuffer, unicodeext, window, bufferstatus
+import editorstatus, ui, editorview, gapbuffer, unicodetext, window, bufferstatus
 
 template currentLineLen: int = bufStatus.buffer[windowNode.currentLine].len
 
@@ -211,9 +211,9 @@ proc moveToForwardWord*(bufStatus: var BufferStatus,
     currentColumn = windowNode.currentColumn
     startWith = if bufStatus.buffer[currentLine].len == 0: ru'\n' else:
                    bufStatus.buffer[currentLine][currentColumn]
-    isSkipped = if unicodeext.isPunct(startWith): unicodeext.isPunct elif
-                   unicodeext.isAlpha(startWith): unicodeext.isAlpha elif
-                   unicodeext.isDigit(startWith): unicodeext.isDigit
+    isSkipped = if unicodetext.isPunct(startWith): unicodetext.isPunct elif
+                   unicodetext.isAlpha(startWith): unicodetext.isAlpha elif
+                   unicodetext.isDigit(startWith): unicodetext.isDigit
                 else: nil
 
   if isSkipped == nil:
@@ -268,7 +268,7 @@ proc moveToBackwardWord*(bufStatus: var BufferStatus,
        bufStatus.buffer.isFirst(currentLine, currentColumn): break
 
     let curr = bufStatus.buffer[currentLine][currentColumn]
-    if unicodeext.isSpace(curr): continue
+    if unicodetext.isSpace(curr): continue
 
     if windowNode.currentColumn == 0: break
 
@@ -291,9 +291,9 @@ proc moveToForwardEndOfWord*(bufStatus: var BufferStatus,
     currentColumn = windowNode.currentColumn
     startWith = if bufStatus.buffer[currentLine].len == 0: ru'\n'
                 else: bufStatus.buffer[currentLine][currentColumn]
-    isSkipped = if unicodeext.isPunct(startWith): unicodeext.isPunct elif
-                   unicodeext.isAlpha(startWith): unicodeext.isAlpha elif
-                   unicodeext.isDigit(startWith): unicodeext.isDigit
+    isSkipped = if unicodetext.isPunct(startWith): unicodetext.isPunct elif
+                   unicodetext.isAlpha(startWith): unicodetext.isAlpha elif
+                   unicodetext.isDigit(startWith): unicodetext.isDigit
                 else: nil
 
   if isSkipped == nil:

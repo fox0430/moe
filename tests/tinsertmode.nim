@@ -1,5 +1,5 @@
 import unittest, options, sequtils, sugar
-import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, suggestionwindow]
+import moepkg/[editorstatus, gapbuffer, unicodetext, highlight, suggestionwindow]
 include moepkg/insertmode
 
 suite "Insert mode":

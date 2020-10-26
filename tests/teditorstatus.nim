@@ -1,5 +1,5 @@
 import unittest
-import moepkg/[ui, highlight, editorstatus, editorview, gapbuffer, unicodeext,
+import moepkg/[ui, highlight, editorstatus, editorview, gapbuffer, unicodetext,
                insertmode, movement, editor, window, color, bufferstatus]
 
 test "Add new buffer":

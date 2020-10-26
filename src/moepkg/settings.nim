@@ -7,7 +7,7 @@ when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
   from strutils import nimIdentNormalize
   export strutils.nimIdentNormalize
 
-import ui, color, unicodeext, highlight
+import ui, color, unicodetext, highlight
 
 type DebugWorkSpaceSettings* = object
   enable*: bool
