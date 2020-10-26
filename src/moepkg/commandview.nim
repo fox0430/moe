@@ -367,7 +367,7 @@ proc getCandidatesExCommandOption(status: var Editorstatus,
 
   var argList: seq[string] = @[]
   case toLowerAscii($command):
-    of "cursorLine",
+    of "cursorline",
        "highlightparen",
        "indent",
        "linenum",
