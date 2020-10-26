@@ -1,5 +1,5 @@
 import unittest, os, strutils
-import moepkg/[editorstatus, unicodeext]
+import moepkg/[editorstatus, unicodetext]
 include moepkg/commandview
 
 suite "commandview: getCandidatesFilePath":
