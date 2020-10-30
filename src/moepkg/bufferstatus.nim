@@ -76,3 +76,5 @@ proc isQuickRunMode*(mode: Mode): bool {.inline.} = mode == Mode.quickRun
 proc isLogViewerMode*(mode: Mode): bool {.inline.} = mode == Mode.logViewer
 
 proc isBufferManagerMode*(mode: Mode): bool {.inline.} = mode == Mode.bufManager
+
+proc isVisualBlockMode*(mode: Mode): bool {.inline.} = mode == Mode.visualBlock
