@@ -30,22 +30,23 @@ proc yankBuffer(bufStatus: var BufferStatus,
   registers.yankedLines = @[]
   registers.yankedStr = @[]
 
-  for i in area.startLine .. area.endLine:
-    if area.startLine == area.endLine:
-      for j in area.startColumn .. area.endColumn:
-        registers.yankedStr.add(bufStatus.buffer[area.startLine][j])
-    if i == area.startLine and area.startColumn > 0:
-      registers.yankedLines.add(ru"")
-      for j in area.startColumn ..< bufStatus.buffer[area.startLine].len:
-        registers.yankedLines[registers.yankedLines.high].add(bufStatus.buffer[area.startLine][j])
-    elif i == area.endLine and area.endColumn < bufStatus.buffer[area.endLine].len:
-      registers.yankedLines.add(ru"")
-      for j in 0 .. area.endColumn:
-        registers.yankedLines[registers.yankedLines.high].add(bufStatus.buffer[area.endLine][j])
-    else:
-      registers.yankedLines.add(bufStatus.buffer[i])
+  if area.startLine == area.endLine:
+    for j in area.startColumn .. area.endColumn:
+      registers.yankedStr.add(bufStatus.buffer[area.startLine][j])
+  else:
+    for i in area.startLine .. area.endLine:
+      if i == area.startLine and area.startColumn > 0:
+        registers.yankedLines.add(ru"")
+        for j in area.startColumn ..< bufStatus.buffer[area.startLine].len:
+          registers.yankedLines[registers.yankedLines.high].add(bufStatus.buffer[area.startLine][j])
+      elif i == area.endLine and area.endColumn < bufStatus.buffer[area.endLine].len:
+        registers.yankedLines.add(ru"")
+        for j in 0 .. area.endColumn:
+          registers.yankedLines[registers.yankedLines.high].add(bufStatus.buffer[area.endLine][j])
+      else:
+        registers.yankedLines.add(bufStatus.buffer[i])
 
-    if clipboard: registers.sendToClipboad(platform)
+  if clipboard: registers.sendToClipboad(platform)
 
 proc yankBufferBlock(bufStatus: var BufferStatus,
                      registers: var Registers,

@@ -281,6 +281,40 @@ test "Visual mode: Yank buffer (Disable clipboard) 2":
 
   check(status.registers.yankedLines == @[ru"abc", ru"def"])
 
+test "Visual mode: Yank buffer (Disable clipboard) 3 (Fix #1124)":
+  var status = initEditorStatus()
+  status.addNewBuffer
+  status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def"])
+
+  status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+    $status.bufStatus[0].buffer,
+    status.settings.highlightSettings.reservedWords,
+    status.bufStatus[0].language)
+
+  status.resize(100, 100)
+
+  status.changeMode(Mode.visual)
+
+  status.bufStatus[0].moveToForwardEndOfWord(currentMainWindowNode)
+
+  status.bufStatus[0].selectArea.updateSelectArea(
+    status.workSpace[0].currentMainWindowNode.currentLine,
+    status.workSpace[0].currentMainWindowNode.currentColumn)
+
+  status.update
+
+  let
+    area = status.bufStatus[0].selectArea
+    clipboard = false
+  status.bufStatus[0].yankBuffer(
+    status.registers,
+    status.workSpace[0].currentMainWindowNode,
+    area,
+    status.platform,
+    clipboard)
+
+  check(status.registers.yankedStr == ru"abc")
+
 test "Visual block mode: Yank buffer (Disable clipboard) 1":
   var status = initEditorStatus()
   status.addNewBuffer
