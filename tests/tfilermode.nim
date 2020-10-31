@@ -10,7 +10,7 @@ test "Update directory list":
 
   var filerStatus = initFilerStatus()
   filerStatus = filerStatus.updateDirList(ru path)
-  status.updateFilerView(filerStatus)
+  status.updateFilerView(filerStatus, 100, 100)
 
 test "Check highlight in filer mode":
   var status = initEditorStatus()
@@ -20,7 +20,7 @@ test "Check highlight in filer mode":
 
   var filerStatus = initFilerStatus()
   filerStatus = filerStatus.updateDirList(ru path)
-  status.updateFilerView(filerStatus)
+  status.updateFilerView(filerStatus, 100, 100)
 
   let node = status.workSpace[0].currentMainWindowNode
   check(node.highlight[0].color == EditorColorPair.currentFile)

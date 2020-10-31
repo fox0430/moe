@@ -16,7 +16,7 @@ suite "Normal mode: Move to the right":
 
     status.bufStatus[0].cmdLoop = 2
     const key = @[ru'l']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check(status.workspace[0].currentMainWindowNode.currentColumn == 2)
@@ -32,7 +32,7 @@ suite "Normal mode: Move to the left":
     status.update
 
     const key = @[ru'h']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check(status.workspace[0].currentMainWindowNode.currentColumn == 1)
@@ -48,7 +48,7 @@ suite "Normal mode: Move to the down":
 
     status.bufStatus[0].cmdLoop = 2
     const key = @[ru'j']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check(status.workspace[0].currentMainWindowNode.currentLine == 2)
@@ -65,7 +65,7 @@ suite "Normal mode: Move to the up":
 
     status.bufStatus[0].cmdLoop = 2
     const key = @[ru'k']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check(status.workspace[0].currentMainWindowNode.currentLine == 0)
@@ -81,7 +81,7 @@ suite "Normal mode: Delete current character":
 
     status.bufStatus[0].cmdLoop = 2
     const key = @[ru'x']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check status.bufStatus[0].buffer[0] == ru"c"
@@ -97,7 +97,7 @@ suite "Normal mode: Move to last of line":
     status.update
 
     const key = @[ru'$']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check(status.workspace[0].currentMainWindowNode.currentColumn == 2)
@@ -113,7 +113,7 @@ suite "Normal mode: Move to first of line":
     status.update
 
     const key = @[ru'0']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check(status.workspace[0].currentMainWindowNode.currentColumn == 0)
@@ -129,7 +129,7 @@ suite "Normal mode: Move to first non blank of line":
     status.update
 
     const key = @[ru'^']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check(status.workspace[0].currentMainWindowNode.currentColumn == 2)
@@ -145,12 +145,12 @@ suite "Normal mode: Move to first of previous line":
     status.update
 
     const key = @[ru'-']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
     check(status.workspace[0].currentMainWindowNode.currentLine == 1)
     check(status.workspace[0].currentMainWindowNode.currentColumn == 0)
 
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
     check(status.workspace[0].currentMainWindowNode.currentLine == 0)
     check(status.workspace[0].currentMainWindowNode.currentColumn == 0)
@@ -165,7 +165,7 @@ suite "Normal mode: Move to first of next line":
     status.update
 
     const key = @[ru'+']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check(status.workspace[0].currentMainWindowNode.currentLine == 1)
@@ -181,7 +181,7 @@ suite "Normal mode: Move to last line":
     status.update
 
     const key = @[ru'G']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check(status.workspace[0].currentMainWindowNode.currentLine == 2)
@@ -199,7 +199,7 @@ suite "Normal mode: Page down":
     status.update
 
     const key = @[KEY_NPAGE.toRune]
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     let
@@ -222,12 +222,12 @@ suite "Normal mode: Page up":
 
     block:
       const key = @[KEY_NPAGE.toRune]
-      status.normalCommand(key)
+      status.normalCommand(key, 100, 100)
     status.update
 
     block:
       const key = @[KEY_PPAGE.toRune]
-      status.normalCommand(key)
+      status.normalCommand(key, 100, 100)
     status.update
 
     check(status.workspace[0].currentMainWindowNode.currentLine == 0)
@@ -243,7 +243,7 @@ suite "Normal mode: Move to forward word":
 
     status.bufStatus[0].cmdLoop = 2
     const key = @[ru'w']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check(status.workspace[0].currentMainWindowNode.currentColumn == 8)
@@ -260,7 +260,7 @@ suite "Normal mode: Move to backward word":
 
     status.bufStatus[0].cmdLoop = 1
     const key = @[ru'b']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check(status.workspace[0].currentMainWindowNode.currentColumn == 4)
@@ -276,7 +276,7 @@ suite "Normal mode: Move to forward end of word":
 
     status.bufStatus[0].cmdLoop = 2
     const key = @[ru'e']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check(status.workspace[0].currentMainWindowNode.currentColumn == 6)
@@ -291,7 +291,7 @@ suite "Normal mode: Open blank line below":
     status.update
 
     const key = @[ru'o']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check(status.bufStatus[0].buffer.len == 2)
@@ -312,7 +312,7 @@ suite "Normal mode: Open blank line below":
     status.update
 
     const key = @[ru'O']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check(status.bufStatus[0].buffer.len == 2)
@@ -333,7 +333,7 @@ suite "Normal mode: Add indent":
     status.update
 
     const key = @[ru'>']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check(status.bufStatus[0].buffer[0] == ru"  a")
@@ -348,7 +348,7 @@ suite "Normal mode: Delete indent":
     status.update
 
     const key = @[ru'<']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check(status.bufStatus[0].buffer[0] == ru"a")
@@ -363,7 +363,7 @@ suite "Normal mode: Join line":
     status.update
 
     const key = @[ru'J']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check(status.bufStatus[0].buffer[0] == ru"ab")
@@ -378,7 +378,7 @@ suite "Normal mode: Replace mode":
     status.update
 
     const key = @[ru'R']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check(status.bufStatus[0].mode == Mode.replace)
@@ -393,7 +393,7 @@ suite "Normal mode: Move right and enter insert mode":
     status.update
 
     const key = @[ru'a']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check(status.bufStatus[0].mode == Mode.insert)
@@ -409,7 +409,7 @@ suite "Normal mode: Move last of line and enter insert mode":
     status.update
 
     const key = @[ru'A']
-    status.normalCommand(key)
+    status.normalCommand(key, 100, 100)
     status.update
 
     check(status.bufStatus[0].mode == Mode.insert)
@@ -427,12 +427,12 @@ suite "Normal mode: Repeat last command":
     block:
       const key = ru'x'
       let commands = status.isNormalModeCommand(key)
-      status.normalCommand(commands)
+      status.normalCommand(commands, 100, 100)
       status.update
 
     block:
       const key = @[ru'.']
-      status.normalCommand(key)
+      status.normalCommand(key, 100, 100)
       status.update
 
     check(status.bufStatus[0].buffer.len == 1)
@@ -449,7 +449,7 @@ suite "Normal mode: Repeat last command":
     block:
       const key = ru'>'
       let commands = status.isNormalModeCommand(key)
-      status.normalCommand(commands)
+      status.normalCommand(commands, 100, 100)
       status.update
 
     status.workspace[0].currentMainWindowNode.currentColumn = 0
@@ -457,12 +457,12 @@ suite "Normal mode: Repeat last command":
     block:
       const key = ru'x'
       let commands = status.isNormalModeCommand(key)
-      status.normalCommand(commands)
+      status.normalCommand(commands, 100, 100)
       status.update
 
     block:
       const key = @[ru'.']
-      status.normalCommand(key)
+      status.normalCommand(key, 100, 100)
       status.update
 
     check(status.bufStatus[0].buffer.len == 1)
@@ -479,12 +479,12 @@ suite "Normal mode: Repeat last command":
     block:
       const key = ru'j'
       let commands = status.isNormalModeCommand(key)
-      status.normalCommand(commands)
+      status.normalCommand(commands, 100, 100)
       status.update
 
     block:
       const key = @[ru'.']
-      status.normalCommand(key)
+      status.normalCommand(key, 100, 100)
       status.update
 
     check(status.workspace[0].currentMainWindowNode.currentLine == 1)
@@ -500,7 +500,7 @@ suite "Normal mode: Delete the line from current line to last line":
     status.update
 
     let commands = @[ru'd', ru'G']
-    status.normalCommand(commands)
+    status.normalCommand(commands, 100, 100)
     status.update
 
     let buffer = status.bufStatus[0].buffer
@@ -519,7 +519,7 @@ suite "Normal mode: Delete the line from first line to current line":
     status.update
 
     let commands = @[ru'd', ru'g', ru'g']
-    status.normalCommand(commands)
+    status.normalCommand(commands, 100, 100)
     status.update
 
     let buffer = status.bufStatus[0].buffer
