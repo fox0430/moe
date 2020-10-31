@@ -424,10 +424,22 @@ proc addIndent*(bufStatus: var BufferStatus,
 
   let oldLine = bufStatus.buffer[windowNode.currentLine]
   var newLine = bufStatus.buffer[windowNode.currentLine]
-  newLine.insert(newSeqWith(tabStop, ru' '))
-  if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
 
-  inc(bufStatus.countChange)
+  var numOfSpace = 0
+  for r in oldLine:
+    if r != ru' ': break
+    else: numOfSpace.inc
+
+  let numOfInsertSpace = if numOfSpace mod tabStop != 0: numOfSpace mod tabStop
+                         else: tabStop
+
+  newLine.insert(newSeqWith(numOfInsertSpace, ru' '), 0)
+  if oldLine != newLine:
+    bufStatus.buffer[windowNode.currentLine] = newLine
+
+    windowNode.currentColumn = 0
+
+    inc(bufStatus.countChange)
 
 proc deleteIndent*(bufStatus: var BufferStatus,
                    windowNode: WindowNode,
