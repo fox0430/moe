@@ -1,0 +1,70 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  before:
+    runs-on: ubuntu-latest
+    if: "! contains(github.event.head_commit.message, '[skip ci]')"
+    steps:
+      - run: echo ${{ github.event.head_commit.message }}
+
+  build:
+    name: build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    needs: before
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          # - macOS-latest
+          # - windows-latest
+    env:
+      NIM_VERSION: 1.4.0
+    steps:
+    - uses: actions/checkout@v1
+    - run: |
+        sudo apt-get update -yqq
+        sudo apt-get install -y gcc libncursesw5-dev build-essential
+    - name: Cache choosenim
+      id: cache-choosenim
+      uses: actions/cache@v1
+      with:
+        path: ~/.choosenim
+        key: ${{ runner.os }}-choosenim-${{ env.NIM_VERSION }}
+    - name: Cache nimble
+      id: cache-nimble
+      uses: actions/cache@v1
+      with:
+        path: ~/.nimble
+        key: ${{ runner.os }}-nimble-${{ env.NIM_VERSION }}
+    - uses: jiro4989/setup-nim-action@v1.0.1
+      with:
+        nim-version: ${{ env.NIM_VERSION }}
+
+    - name: Install xclip
+      # Manual install xclip v0.13. Because moe required -r option
+      run: |
+        wget http://mirrors.kernel.org/ubuntu/pool/universe/x/xclip/xclip_0.13-1_amd64.deb
+        sudo dpkg -i xclip_0.13-1_amd64.deb
+
+    - name: Install integtation tools
+      run: |
+        # shprc
+        sudo sh -c "`curl -L https://raw.githubusercontent.com/rylnd/shpec/master/install.sh`"
+        # abduco
+        wget http://mirrors.kernel.org/ubuntu/pool/universe/a/abduco/abduco_0.1-2_amd64.deb
+        sudo dpkg -i abduco_0.1-2_amd64.deb
+
+    - name: Run unit test
+      run: |
+        nimble refresh
+        script -e -c "xvfb-run nimble test --verbose -Y"
+
+    - name: Install moe
+      run: nimble install --verbose -Y
+
+    - name: Run integtation test
+      run: shpec ./shpec.sh
