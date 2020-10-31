@@ -2,7 +2,15 @@ name: Build
 
 on:
   push:
+    paths-ignore:
+      - 'LICENSE'
+      - '*.md'
+      - 'documents/*.md'
   pull_request:
+    paths-ignore:
+      - 'LICENSE'
+      - '*.md'
+      - 'documents/*.md'
 
 jobs:
   before:
