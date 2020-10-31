@@ -35,7 +35,7 @@ suite "Ex mode: Write command":
     const command = @[ru"w"]
     status.exModeCommand(command, 100, 100)
 
-    if existsFile("test.txt"):
+    if fileExists("test.txt"):
       removeFile("test.txt")
 
 suite "Ex mode: Change next buffer command":
@@ -683,7 +683,7 @@ suite "Ex mode: Put config file command":
     const command = @[ru"putConfigFile"]
     status.exModeCommand(command, 100, 100)
 
-    check existsFile(getHomeDir() / ".config" / "moe" / "moerc.toml")
+    check fileExists(getHomeDir() / ".config" / "moe" / "moerc.toml")
 
 suite "Ex mode: Show/Hide git branch name in status bar when inactive window":
   test "Show/Hide git branch name in status bar when inactive window":
