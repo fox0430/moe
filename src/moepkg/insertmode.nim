@@ -19,7 +19,7 @@ proc insertMode*(status: var EditorStatus) =
         (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
           currentMainWindowNode,
           mainWindowHeight)
-      suggestionWindow.get.writeSuggestionWindow(y, x)
+      suggestionWindow.get.writeSuggestionWindow(y, x, terminalHeight(), terminalWidth())
 
     var key = errorKey
     while key == errorKey:

@@ -1,8 +1,8 @@
 import terminal, times
 import ui, editorstatus, unicodetext, movement, bufferstatus, window
 
-proc exitLogViewer*(status: var Editorstatus) {.inline.} =
-  status.deleteBuffer(status.bufferIndexInCurrentWindow)
+proc exitLogViewer*(status: var Editorstatus, height, width: int) {.inline.} =
+  status.deleteBuffer(status.bufferIndexInCurrentWindow, height, width)
 
 proc messageLogViewer*(status: var Editorstatus) =
   currentBufStatus.path = ru"Log viewer"
@@ -51,7 +51,7 @@ proc messageLogViewer*(status: var Editorstatus) =
     elif key == ord('$') or isEndKey(key):
       currentBufStatus.moveToLastOfLine(currentMainWindowNode)
     elif key == ord('q') or isEscKey(key):
-      status.exitLogViewer
+      status.exitLogViewer(terminalHeight(), terminalWidth())
     elif key == ord('g'):
       let secondKey = getKey(currentMainWindowNode)
       if secondKey == 'g': status.moveToFirstLine

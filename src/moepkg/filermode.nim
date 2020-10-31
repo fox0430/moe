@@ -248,12 +248,13 @@ proc openFileOrDir(status: var EditorStatus, filerStatus: var FilerStatus) =
       filerStatus.dirlistUpdate = true
 
 proc openNewWinAndOpenFilerOrDir(status: var EditorStatus,
-                                 filerStatus: var FilerStatus) =
+                                 filerStatus: var FilerStatus,
+                                 terminalHeight, terminalWidth: int) =
 
   let path = filerStatus.dirList[currentMainWindowNode.currentLine].path
 
   status.verticalSplitWindow
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize(terminalHeight, terminalWidth)
   status.moveNextWindow
 
   if dirExists($path):
@@ -370,7 +371,8 @@ proc pathToIcon(path: string): seq[Rune] =
 proc fileNameToGapBuffer(bufStatus: var BufferStatus,
                          windowNode: WindowNode,
                          settings: EditorSettings,
-                         filerStatus: FilerStatus) =
+                         filerStatus: FilerStatus,
+                         terminalHeight, terminalWidth: int) =
 
   bufStatus.buffer = initGapBuffer[seq[Rune]]()
 
@@ -411,15 +413,20 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus,
                                                bufStatus.buffer,
                                                windowNode.currentLine)
   windowNode.view = initEditorView(bufStatus.buffer,
-                                   terminalHeight() - useStatusBar - 1,
-                                   terminalWidth() - numOfFile)
+                                   terminalHeight - useStatusBar - 1,
+                                   terminalWidth - numOfFile)
 
-proc updateFilerView*(status: var EditorStatus, filerStatus: var FilerStatus) =
+proc updateFilerView*(status: var EditorStatus,
+                      filerStatus: var FilerStatus,
+                      terminalHeight, terminalWidth: int) =
+
   fileNameToGapBuffer(currentBufStatus,
                       currentMainWindowNode,
                       status.settings,
-                      filerStatus)
-  status.resize(terminalHeight(), terminalWidth())
+                      filerStatus,
+                      terminalHeight,
+                      terminalWidth)
+  status.resize(terminalHeight, terminalWidth)
   status.update
   filerStatus.viewUpdate = false
 
@@ -431,7 +438,11 @@ proc initFileDeitalHighlight[T](buffer: T): Highlight =
                                           lastColumn: buffer[i].len,
                                           color: EditorColorPair.defaultChar))
 
-proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string) =
+proc writefileDetail(status: var Editorstatus,
+                     numOfFile: int,
+                     fileName: string,
+                     terminalHeight, terminalWidth: int) =
+
   currentBufStatus.buffer = initGapBuffer[seq[Rune]]()
 
   let fileInfo = getFileInfo(fileName, false)
@@ -463,14 +474,14 @@ proc writefileDetail(status: var Editorstatus, numOfFile: int, fileName: string)
     tmpCurrentLine = windowNode.currentLine
 
   windowNode.view = initEditorView(currentBufStatus.buffer,
-                                   terminalHeight() - useStatusBar - 1,
-                                   terminalWidth() - numOfFile)
+                                   terminalHeight - useStatusBar - 1,
+                                   terminalWidth - numOfFile)
   windowNode.currentLine = 0
 
   status.update
   setCursor(false)
   while isResizekey(currentMainWindowNode.getKey):
-    status.resize(terminalHeight(), terminalWidth())
+    status.resize(terminalHeight, terminalWidth)
     status.update
     setCursor(false)
 
@@ -518,7 +529,8 @@ proc filerMode*(status: var EditorStatus) =
       if currentMainWindowNode.currentLine > filerStatus.dirList.high:
         currentMainWindowNode.currentLine = filerStatus.dirList.high
 
-    if filerStatus.viewUpdate: status.updateFilerView(filerStatus)
+    if filerStatus.viewUpdate:
+      status.updateFilerView(filerStatus, terminalHeight(), terminalWidth())
 
     setCursor(false)
 
@@ -549,7 +561,9 @@ proc filerMode*(status: var EditorStatus) =
     elif key == ord('i'):
       status.writeFileDetail(
         filerStatus.dirList.len,
-        filerStatus.dirList[currentMainWindowNode.currentLine][1])
+        filerStatus.dirList[currentMainWindowNode.currentLine][1],
+        terminalHeight(),
+        terminalWidth())
       filerStatus.viewUpdate = true
     elif key == 'j' or isDownKey(key):
       filerStatus.keyDown(currentMainWindowNode.currentLine)
@@ -575,7 +589,10 @@ proc filerMode*(status: var EditorStatus) =
     elif key == ord('N'):
       status.createDir(filerStatus)
     elif key == ord('v'):
-      status.openNewWinAndOpenFilerOrDir(filerStatus)
+      status.openNewWinAndOpenFilerOrDir(
+        filerStatus,
+        terminalHeight(),
+        terminalWidth())
     elif isControlJ(key):
       status.movePrevWindow
     elif isControlK(key):

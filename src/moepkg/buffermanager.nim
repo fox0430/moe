@@ -42,7 +42,7 @@ proc updateBufferManagerHighlight[T](node: var WindowNode,
 
   node.highlight = initFilelistHighlight(buffer, currentLine)
 
-proc deleteSelectedBuffer(status: var Editorstatus) =
+proc deleteSelectedBuffer(status: var Editorstatus, height, width: int) =
   let deleteIndex = currentMainWindowNode.currentLine
 
   var qeue = initHeapQueue[WindowNode]()
@@ -51,7 +51,8 @@ proc deleteSelectedBuffer(status: var Editorstatus) =
   while qeue.len > 0:
     for i in 0 ..< qeue.len:
       let node = qeue.pop
-      if node.bufferIndex == deleteIndex: status.closeWindow(node)
+      if node.bufferIndex == deleteIndex:
+        status.closeWindow(node, height, width)
 
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
@@ -140,6 +141,6 @@ proc bufferManager*(status: var Editorstatus) =
     elif key == ord('o'):
       status.openSelectedBuffer(true)
     elif key == ord('D'):
-      status.deleteSelectedBuffer
+      status.deleteSelectedBuffer(terminalHeight(), terminalWidth())
 
     if status.bufStatus.len < 2: exitEditor(status.settings)
