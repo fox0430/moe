@@ -157,7 +157,9 @@ proc calcSuggestionWindowPosition*(
 
   return (y, absoluteX - leftMargin)
 
-proc writeSuggestionWindow*(suggestionWindow: var SuggestionWindow, y, x: int) =
+proc writeSuggestionWindow*(suggestionWindow: var SuggestionWindow,
+                            y, x, terminalHeight, terminalWidth: int) =
+
   let
     height = suggestionwindow.suggestoins.len
     width = suggestionwindow.suggestoins.map(item => item.len).max + 2
@@ -181,6 +183,8 @@ proc writeSuggestionWindow*(suggestionWindow: var SuggestionWindow, y, x: int) =
     popUpWindow.width,
     popUpWindow.y,
     popUpWindow.x,
+    terminalHeight,
+    terminalWidth,
     suggestionWindow.selectedSuggestion,
     suggestionWindow.suggestoins)
 

@@ -89,7 +89,7 @@ proc turnOffHighlighting*(status: var EditorStatus) =
   currentBufStatus.isSearchHighlight = false
   status.updateHighlight(currentMainWindowNode)
 
-proc writeFileAndExit(status: var EditorStatus) =
+proc writeFileAndExit(status: var EditorStatus, height, width: int) =
   if currentBufStatus.path.len == 0:
     status.commandLine.writeNoFileNameError(status.messageLog)
     status.changeMode(Mode.normal)
@@ -98,12 +98,12 @@ proc writeFileAndExit(status: var EditorStatus) =
       saveFile(currentBufStatus.path,
                currentBufStatus.buffer.toRunes,
                currentBufStatus.characterEncoding)
-      status.closeWindow(currentMainWindowNode)
+      status.closeWindow(currentMainWindowNode, height, width)
     except IOError:
       status.commandLine.writeSaveError(status.messageLog)
 
-proc forceExit(status: var Editorstatus) {.inline.} =
-  status.closeWindow(currentMainWindowNode)
+proc forceExit(status: var Editorstatus, height, width: int) {.inline.} =
+  status.closeWindow(currentMainWindowNode, height, width)
 
 proc toggleCase(ch: Rune): Rune =
   result = ch
@@ -135,14 +135,20 @@ proc runQuickRunCommand(status: var Editorstatus) =
   else:
     status.bufStatus[quickRunWindowIndex].buffer = initGapBuffer(buffer)
 
-proc normalCommand(status: var EditorStatus, commands: seq[Rune])
-proc repeatNormalModeCommand(status: var Editorstatus) =
+proc normalCommand(status: var EditorStatus,
+                   commands: seq[Rune],
+                   height, width: int)
+
+proc repeatNormalModeCommand(status: var Editorstatus, height, width: int) =
   if status.normalCommandHistory.len == 0: return
 
   let commands  = status.normalCommandHistory[^1]
-  status.normalCommand(commands)
+  status.normalCommand(commands, height, width)
 
-proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
+proc normalCommand(status: var EditorStatus,
+                   commands: seq[Rune],
+                   height, width: int) =
+
   if commands.len == 0: return
 
   let
@@ -273,7 +279,7 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
 
     if currentBufStatus.countChange == 0 or
        mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
-        status.closeWindow(currentWorkSpace.currentMainWindowNode)
+        status.closeWindow(currentWorkSpace.currentMainWindowNode, height, width)
 
   template deleteLineFromFirstLineToCurrentLine() =
     let currentLine = windowNode.currentLine
@@ -473,13 +479,15 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
     currentBufStatus.redo(currentMainWindowNode)
   elif key == ord('Z'):
     let secondKey = commands[1]
-    if  secondKey == ord('Z'): status.writeFileAndExit
-    elif secondKey == ord('Q'): status.forceExit
+    if  secondKey == ord('Z'):
+      status.writeFileAndExit(height, width)
+    elif secondKey == ord('Q'):
+      status.forceExit(height, width)
   elif isControlW(key):
     let secondKey = commands[1]
     if secondKey == ord('c'): closeWindow()
   elif key == ord('.'):
-    status.repeatNormalModeCommand
+    status.repeatNormalModeCommand(height, width)
   elif key == ord('\\'):
     let secondKey = commands[1]
     if secondKey == ord('r'): status.runQuickRunCommand
@@ -686,7 +694,7 @@ proc normalMode*(status: var EditorStatus) =
       let num = ($key)[0]
       if status.bufStatus[currentBufferIndex].cmdLoop == 0 and num == '0':
         let commands = status.isNormalModeCommand(key)
-        status.normalCommand(commands)
+        status.normalCommand(commands, terminalHeight(), terminalWidth())
         continue
 
       currentBufStatus.cmdLoop *= 10
@@ -697,5 +705,5 @@ proc normalMode*(status: var EditorStatus) =
       continue
     else:
       let commands = status.isNormalModeCommand(key)
-      status.normalCommand(commands)
+      status.normalCommand(commands, terminalHeight(), terminalWidth())
       currentBufStatus.cmdLoop = 0

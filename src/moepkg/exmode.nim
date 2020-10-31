@@ -889,26 +889,24 @@ proc forceWriteCommand(status: var EditorStatus, path: seq[Rune]) =
 
   status.writeCommand(path)
 
-proc quitCommand(status: var EditorStatus) =
-  let
-    currentBufferIndex = status.bufferIndexInCurrentWindow
+proc quitCommand(status: var EditorStatus, height, width: int) =
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+
   if currentBufStatus.prevMode != bufferstatus.Mode.normal:
-    status.deleteBuffer(currentBufferIndex)
+    status.deleteBuffer(currentBufferIndex, height, width)
   else:
     let
       numberReferenced = mainWindowNode.countReferencedWindow(currentBufferIndex)
       countChange = currentBufStatus.countChange
     if countChange == 0 or numberReferenced > 1:
       status.changeMode(currentBufStatus.prevMode)
-      status.closeWindow(currentMainWindowNode)
+      status.closeWindow(currentMainWindowNode, height, width)
     else:
       status.commandLine.writeNoWriteError(status.messageLog)
       status.changeMode(currentBufStatus.prevMode)
 
-proc writeAndQuitCommand(status: var EditorStatus) =
-  let
-    bufferIndex = status.bufferIndexInCurrentWindow
-    path = status.bufStatus[bufferIndex].path
+proc writeAndQuitCommand(status: var EditorStatus, height, width: int) =
+  let path = currentBufStatus.path
 
   # Check if the file has been overwritten by another application
   if fileExists($path):
@@ -938,9 +936,9 @@ proc writeAndQuitCommand(status: var EditorStatus) =
     return
 
   status.changeMode(currentBufStatus.prevMode)
-  status.closeWindow(currentMainWindowNode)
+  status.closeWindow(currentMainWindowNode, height, width)
 
-proc forceWriteAndQuitCommand(status: var EditorStatus) =
+proc forceWriteAndQuitCommand(status: var EditorStatus, height, width: int) =
   try:
     setFilePermissions($currentBufStatus.path, {fpUserRead,fpUserWrite})
   except OSError:
@@ -949,11 +947,11 @@ proc forceWriteAndQuitCommand(status: var EditorStatus) =
 
   discard status.commandLine.getKey
 
-  status.writeAndQuitCommand
+  status.writeAndQuitCommand(height, width)
 
-proc forceQuitCommand(status: var EditorStatus) =
+proc forceQuitCommand(status: var EditorStatus, height, width: int) =
   status.changeMode(currentBufStatus.prevMode)
-  status.closeWindow(currentMainWindowNode)
+  status.closeWindow(currentMainWindowNode, height, width)
 
 proc allBufferQuitCommand(status: var EditorStatus) =
   for i in 0 ..< currentWorkSpace.numOfMainWindow:
@@ -1165,7 +1163,10 @@ proc newEmptyBufferInSplitWindowVertically*(status: var Editorstatus) =
 
   status.changeCurrentBuffer(status.bufStatus.high)
 
-proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
+proc exModeCommand*(status: var EditorStatus,
+                    command: seq[seq[Rune]],
+                    height, width: int) =
+
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
   if command.len == 0 or command[0].len == 0:
@@ -1189,11 +1190,11 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
     let path = if command.len < 2: currentBufStatus.path else: command[1]
     status.writeCommand(path)
   elif isQuitCommand(command):
-    status.quitCommand
+    status.quitCommand(height, width)
   elif status.isWriteAndQuitCommand(command):
-    status.writeAndQuitCommand
+    status.writeAndQuitCommand(height, width)
   elif isForceQuitCommand(command):
-    status.forceQuitCommand
+    status.forceQuitCommand(height, width)
   elif isShellCommand(command):
     status.shellCommand(command.join(" ").substr(1))
   elif isReplaceCommand(command):
@@ -1311,7 +1312,7 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
   elif isForceWriteCommand(command):
     status.forceWriteCommand(status.bufStatus[currentBufferIndex].path)
   elif isForceWriteAndQuitCommand(command):
-    status.forceWriteAndQuitCommand
+    status.forceWriteAndQuitCommand(height, width)
   elif isStartDebugMode(command):
     status.startDebugMode
   else:
@@ -1385,4 +1386,6 @@ proc exMode*(status: var EditorStatus) =
     currentBufStatus.buffer.beginNewSuitIfNeeded
     currentBufStatus.tryRecordCurrentPosition(currentMainWindowNode)
 
-    status.exModeCommand(splitCommand($command))
+    status.exModeCommand(splitCommand($command),
+                         terminalHeight(),
+                         terminalWidth())

@@ -536,7 +536,10 @@ proc suggestCommandLine(status: var Editorstatus,
       # Pop up window size
       var (h, w) = displayBuffer.calcPopUpWindowSize
 
-      popUpWindow.writePopUpWindow(h, w, y, x, currentLine, displayBuffer)
+      popUpWindow.writePopUpWindow(h, w, y, x,
+                                   terminalHeight(), terminalWidth(),
+                                   currentLine,
+                                   displayBuffer)
 
     if isSuggestTypeExCommandOption(suggestType):
       exStatus.insertCommandBuffer(command & ru' ')

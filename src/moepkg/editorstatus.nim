@@ -58,11 +58,10 @@ proc initEditorStatus*(): EditorStatus =
   if result.settings.workSpace.workSpaceLine:
     const
       h = 1
+      w = 1
       t = 0
       l = 0
       color = EditorColorPair.defaultChar
-    let
-      w = terminalWidth()
     result.workSpaceTabWindow = initWindow(h, w, t, l, color)
 
   var newWorkSpace = initWorkSpace()
@@ -72,11 +71,10 @@ proc initEditorStatus*(): EditorStatus =
   if result.settings.tabLine.useTab:
     const
       h = 1
+      w = 1
       t = 0
       l = 0
       color = EditorColorPair.defaultChar
-    let
-      w = terminalWidth()
     result.tabWindow = initWindow(h, w, t, l, color)
 
 template currentBufStatus*: var BufferStatus =
@@ -446,6 +444,7 @@ proc update*(status: var EditorStatus) =
   setCursor(true)
 
 proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode)
+
 proc verticalSplitWindow*(status: var EditorStatus) =
   let buffer = currentBufStatus.buffer
 
@@ -479,7 +478,11 @@ proc horizontalSplitWindow*(status: var Editorstatus) =
   currentWorkSpace.statusBar.add(initStatusBar())
 
 proc deleteWorkSpace*(status: var Editorstatus, index: int)
-proc closeWindow*(status: var EditorStatus, node: WindowNode) =
+
+proc closeWindow*(status: var EditorStatus,
+                  node: WindowNode,
+                  height, width: int) =
+
   if status.workSpace.len == 1 and
      currentWorkSpace.numOfMainWindow == 1:
     exitEditor(status.settings)
@@ -496,7 +499,7 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
       let statusBarHigh = currentWorkSpace.statusBar.high
       currentWorkSpace.statusBar.delete(statusBarHigh)
 
-    status.resize(terminalHeight(), terminalWidth())
+    status.resize(height, width)
 
     let
       numOfMainWindow = currentWorkSpace.numOfMainWindow
@@ -521,6 +524,7 @@ proc movePrevWindow*(status: var EditorStatus) {.inline.} =
 
 proc writePopUpWindow*(popUpWindow: var Window,
                        h, w, y, x: int,
+                       terminalHeight, terminalWidth: int,
                        currentLine: int,
                        buffer: seq[seq[Rune]]) =
   # TODO: Probably, the parameter `y` means the bottom of the window, but it should change to the top of the window for consistency.
@@ -529,8 +533,8 @@ proc writePopUpWindow*(popUpWindow: var Window,
 
   # Pop up window position
   let
-    actualY = y.clamp(0, terminalHeight() - 1 - h)
-    actualX = x.clamp(0, terminalWidth() - w)
+    actualY = y.clamp(0, terminalHeight - 1 - h)
+    actualX = x.clamp(0, terminalWidth - w)
 
   popUpWindow.resize(h, w, actualY, actualX)
 
@@ -553,6 +557,7 @@ proc deletePopUpWindow*(status: var Editorstatus) =
     status.update
 
 proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode) =
+
   let path = if mode == Mode.filer: ru absolutePath(filename) else: ru filename
 
   status.bufStatus.add(initBufferStatus(path, mode))
@@ -572,9 +577,8 @@ proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode) =
 
     if filename != "": status.bufStatus[index].language = detectLanguage(filename)
 
-  currentMainWindowNode.view = status.bufStatus[index].buffer.initEditorView(
-    terminalHeight(),
-    terminalWidth())
+  let buffer = status.bufStatus[index].buffer
+  currentMainWindowNode.view = buffer.initEditorView(1, 1)
 
   status.changeCurrentBuffer(index)
 
@@ -587,7 +591,8 @@ proc addNewBuffer*(status: var EditorStatus, filename: string) {.inline.} =
 proc addNewBuffer*(status: var EditorStatus) {.inline.} =
   status.addNewBuffer("")
 
-proc deleteBuffer*(status: var Editorstatus, deleteIndex: int) =
+proc deleteBuffer*(status: var Editorstatus, deleteIndex,
+                   terminalHeight, terminalWidth: int) =
   let beforeWindowIndex = currentMainWindowNode.windowIndex
 
   var queue = initHeapQueue[WindowNode]()
@@ -596,12 +601,13 @@ proc deleteBuffer*(status: var Editorstatus, deleteIndex: int) =
   while queue.len > 0:
     for i in 0 ..< queue.len:
       let node = queue.pop
-      if node.bufferIndex == deleteIndex: status.closeWindow(node)
+      if node.bufferIndex == deleteIndex:
+        status.closeWindow(node, terminalHeight, terminalWidth)
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize(terminalHeight, terminalWidth)
 
   status.bufStatus.delete(deleteIndex)
 

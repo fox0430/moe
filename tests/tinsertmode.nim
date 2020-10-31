@@ -256,7 +256,7 @@ suite "Insert mode":
         currentMainWindowNode,
         mainWindowHeight)
 
-    suggestionWindow.get.writeSuggestionWindow(y, x)
+    suggestionWindow.get.writeSuggestionWindow(y, x, 100, 100)
 
     check y == 2
     check x == 1
@@ -280,7 +280,7 @@ suite "Insert mode":
         currentMainWindowNode,
         mainWindowHeight)
 
-    suggestionWindow.get.writeSuggestionWindow(y, x)
+    suggestionWindow.get.writeSuggestionWindow(y, x, 100, 100)
 
     check y == 2
     check x == 1
@@ -303,7 +303,7 @@ suite "Insert mode":
         currentMainWindowNode,
         mainWindowHeight)
 
-    suggestionWindow.get.writeSuggestionWindow(y, x)
+    suggestionWindow.get.writeSuggestionWindow(y, x, 100, 100)
 
   test "General-purpose autocomplete (the cursor position): Selecting a suggestion which is length 1 when the buffer contains some lines.":
     const buffer = @["", "", "a"]

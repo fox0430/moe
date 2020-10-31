@@ -170,14 +170,15 @@ test "Highlight of a pair of paren 4":
   status.bufStatus[0].buffer = initGapBuffer(@[ru"(", ru")"])
   status.update
 
-  status.bufStatus[0].keyDown(status.workSpace[0].currentMainWindowNode)
+  status.bufStatus[0].keyDown(currentMainWindowNode)
 
   status.changeMode(Mode.insert)
 
-  status.bufStatus[0].keyEnter(status.workSpace[0].currentMainWindowNode,
+  status.bufStatus[0].keyEnter(currentMainWindowNode,
                                status.settings.autoIndent,
                                status.settings.tabStop)
 
+  status.resize(100, 100)
   status.update
 
 test "Highlight of a pair of paren 5":
@@ -526,7 +527,7 @@ test "Close window":
   status.addNewBuffer
   status.resize(100, 100)
   status.verticalSplitWindow
-  status.closeWindow(status.workSpace[0].currentMainWindowNode)
+  status.closeWindow(currentMainWindowNode, 100, 100)
 
 test "Close window 2":
   var status = initEditorStatus()
@@ -539,7 +540,7 @@ test "Close window 2":
   status.resize(100, 100)
   status.update
 
-  status.closeWindow(status.workSpace[0].currentMainWindowNode)
+  status.closeWindow(currentMainWindowNode, 100, 100)
   status.resize(100, 100)
   status.update
 
@@ -565,7 +566,7 @@ test "Close window 3":
   status.resize(100, 100)
   status.update
 
-  status.closeWindow(status.workSpace[0].currentMainWindowNode)
+  status.closeWindow(currentMainWindowNode, 100, 100)
   status.resize(100, 100)
   status.update
 
@@ -592,7 +593,7 @@ test "Close window 4":
   status.resize(100, 100)
   status.update
 
-  status.closeWindow(status.workSpace[0].currentMainWindowNode)
+  status.closeWindow(currentMainWindowNode, 100, 100)
   status.resize(100, 100)
   status.update
 
@@ -623,7 +624,7 @@ test "Close window 5":
   status.resize(100, 100)
   status.update
 
-  status.closeWindow(status.workSpace[0].currentMainWindowNode)
+  status.closeWindow(currentMainWindowNode, 100, 100)
   status.resize(100, 100)
   status.update
 
