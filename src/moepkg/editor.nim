@@ -436,9 +436,7 @@ proc addIndent*(bufStatus: var BufferStatus,
   newLine.insert(newSeqWith(numOfInsertSpace, ru' '), 0)
   if oldLine != newLine:
     bufStatus.buffer[windowNode.currentLine] = newLine
-
     windowNode.currentColumn = 0
-
     inc(bufStatus.countChange)
 
 proc deleteIndent*(bufStatus: var BufferStatus,
@@ -473,15 +471,15 @@ proc deleteCharactersBeforeCursorInCurrentLine*(bufStatus: var BufferStatus,
   if newLine != oldLine: bufStatus.buffer[currentLine] = newLine
 
 proc addIndentInCurrentLine*(bufStatus: var BufferStatus,
-                            windowNode: WindowNode,
-                            tabStop: int) =
+                             windowNode: WindowNode,
+                             tabStop: int) =
 
   bufStatus.addIndent(windowNode, tabStop)
   windowNode.currentColumn += tabStop
 
 proc deleteIndentInCurrentLine*(bufStatus: var BufferStatus,
-                            windowNode: WindowNode,
-                            tabStop: int) =
+                                windowNode: WindowNode,
+                                tabStop: int) =
 
   let oldLine = bufStatus.buffer[windowNode.currentLine]
 
