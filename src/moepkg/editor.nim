@@ -418,35 +418,54 @@ proc deleteWordBeforeCursor*(bufStatus: var BufferStatus,
     bufStatus.moveToBackwardWord(windowNode)
     bufStatus.deleteWord(windowNode)
 
+proc countSpaceOfBeginningOfLine(line: seq[Rune]): int =
+  for r in line:
+    if r != ru' ': break
+    else: result.inc
+
 proc addIndent*(bufStatus: var BufferStatus,
                 windowNode: WindowNode,
                 tabStop: int) =
 
   let oldLine = bufStatus.buffer[windowNode.currentLine]
   var newLine = bufStatus.buffer[windowNode.currentLine]
-  newLine.insert(newSeqWith(tabStop, ru' '))
-  if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
 
-  inc(bufStatus.countChange)
+  let
+    numOfSpace = countSpaceOfBeginningOfLine(oldLine)
+    numOfInsertSpace = if numOfSpace mod tabStop != 0: numOfSpace mod tabStop
+                       else: tabStop
+
+  newLine.insert(newSeqWith(numOfInsertSpace, ru' '), 0)
+  if oldLine != newLine:
+    bufStatus.buffer[windowNode.currentLine] = newLine
+    windowNode.currentColumn = 0
+    inc(bufStatus.countChange)
 
 proc deleteIndent*(bufStatus: var BufferStatus,
                    windowNode: WindowNode,
                    tabStop: int) =
 
-  if bufStatus.buffer.len == 0: return
+  let
+    oldLine = bufStatus.buffer[windowNode.currentLine]
+    numOfSpace = countSpaceOfBeginningOfLine(oldLine)
+    numOfDeleteSpace = if numOfSpace > 0 and numOfSpace mod tabStop != 0:
+                         numOfSpace mod tabStop
+                       elif numOfSpace > 0:
+                         tabStop
+                       else:
+                         0
 
-  if bufStatus.buffer[windowNode.currentLine][0] == ru' ':
-    for i in 0 ..< tabStop:
-      if bufStatus.buffer.len == 0 or
-         bufStatus.buffer[windowNode.currentLine][0] != ru' ': break
-      let oldLine = bufStatus.buffer[windowNode.currentLine]
-      var newLine = bufStatus.buffer[windowNode.currentLine]
-      newLine.delete(0, 0)
-      if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
-  inc(bufStatus.countChange)
+  if numOfDeleteSpace > 0:
+    var newLine = bufStatus.buffer[windowNode.currentLine]
+
+    for i in 0 ..< numOfDeleteSpace: newLine.delete(0, 0)
+
+    if oldLine != newLine:
+      bufStatus.buffer[windowNode.currentLine] = newLine
+      inc(bufStatus.countChange)
 
 proc deleteCharactersBeforeCursorInCurrentLine*(bufStatus: var BufferStatus,
-                                               windowNode: var WindowNode) =
+                                                windowNode: var WindowNode) =
 
   if windowNode.currentColumn == 0: return
 
@@ -461,15 +480,15 @@ proc deleteCharactersBeforeCursorInCurrentLine*(bufStatus: var BufferStatus,
   if newLine != oldLine: bufStatus.buffer[currentLine] = newLine
 
 proc addIndentInCurrentLine*(bufStatus: var BufferStatus,
-                            windowNode: WindowNode,
-                            tabStop: int) =
+                             windowNode: WindowNode,
+                             tabStop: int) =
 
   bufStatus.addIndent(windowNode, tabStop)
   windowNode.currentColumn += tabStop
 
 proc deleteIndentInCurrentLine*(bufStatus: var BufferStatus,
-                            windowNode: WindowNode,
-                            tabStop: int) =
+                                windowNode: WindowNode,
+                                tabStop: int) =
 
   let oldLine = bufStatus.buffer[windowNode.currentLine]
 
