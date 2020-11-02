@@ -1,6 +1,10 @@
 import terminal, times, options
 import ui, editorstatus, gapbuffer, unicodetext, undoredostack, window,
-       movement, editor, bufferstatus, suggestionwindow
+       movement, editor, bufferstatus, suggestionwindow, settings
+
+proc calcMainWindowY(isEnableTabLine, isEnableWorkSpaceLine: bool): int =
+  if isEnableTabLine: result.inc
+  if isEnableWorkSpaceLine: result.inc
 
 proc insertMode*(status: var EditorStatus) =
   if not status.settings.disableChangeCursor:
@@ -15,11 +19,18 @@ proc insertMode*(status: var EditorStatus) =
 
     if suggestionWindow.isSome:
       let
+        mainWindowY = calcMainWindowY(status.settings.tabLine.useTab,
+                                      status.settings.workSpace.workSpaceLine)
         mainWindowHeight = status.settings.getMainWindowHeight(terminalHeight())
         (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
           currentMainWindowNode,
           mainWindowHeight)
-      suggestionWindow.get.writeSuggestionWindow(y, x, terminalHeight(), terminalWidth())
+      suggestionWindow.get.writeSuggestionWindow(
+        currentMainWindowNode,
+        y, x,
+        terminalHeight(), terminalWidth(),
+        mainWindowY,
+        status.settings.statusBar.enable)
 
     var key = errorKey
     while key == errorKey:

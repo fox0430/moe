@@ -1,6 +1,6 @@
-import unittest, options, sequtils, sugar
-import moepkg/[editorstatus, gapbuffer, unicodetext, highlight, suggestionwindow]
-include moepkg/insertmode
+import unittest, options, sequtils, sugar, random
+import moepkg/[editorstatus, gapbuffer, unicodetext, highlight, settings]
+include moepkg/[insertmode, suggestionwindow]
 
 suite "Insert mode":
   test "Issue #474":
@@ -284,7 +284,15 @@ suite "Insert mode":
         currentMainWindowNode,
         mainWindowHeight)
 
-    suggestionWindow.get.writeSuggestionWindow(y, x, 100, 100)
+    const
+      isEnableStatusLine = true
+      mainWindowNodeY = 2
+    suggestionWindow.get.writeSuggestionWindow(
+      currentMainWindowNode,
+      y, x,
+      100, 100,
+      mainWindowNodeY,
+      isEnableStatusLine)
 
     check y == 2
     check x == 1
@@ -308,7 +316,15 @@ suite "Insert mode":
         currentMainWindowNode,
         mainWindowHeight)
 
-    suggestionWindow.get.writeSuggestionWindow(y, x, 100, 100)
+    const
+      isEnableStatusLine = true
+      mainWindowNodeY = 2
+    suggestionWindow.get.writeSuggestionWindow(
+      currentMainWindowNode,
+      y, x,
+      100, 100,
+      mainWindowNodeY,
+      isEnableStatusLine)
 
     check y == 2
     check x == 1
@@ -331,7 +347,15 @@ suite "Insert mode":
         currentMainWindowNode,
         mainWindowHeight)
 
-    suggestionWindow.get.writeSuggestionWindow(y, x, 100, 100)
+    const
+      isEnableStatusLine = true
+      mainWindowNodeY = 2
+    suggestionWindow.get.writeSuggestionWindow(
+      currentMainWindowNode,
+      y, x,
+      100, 100,
+      mainWindowNodeY,
+      isEnableStatusLine)
 
   test "General-purpose autocomplete (the cursor position): Selecting a suggestion which is length 1 when the buffer contains some lines.":
     const buffer = @["", "", "a"]
@@ -380,3 +404,48 @@ suite "Insert mode":
       ru'\t')
 
     check currentMainWindowNode.currentColumn == 1
+
+  test "General-purpose autocomplete: Check window position and height 1 (Fix #1049)":
+    # Generate random string start with "a" and add to buffer
+    var buffer: seq[string] = @["a"]
+    # Generate the number of strings more than the window height
+    for i in 0 ..< 110:
+      var randStr = ""
+      for _ in .. 10: add(randStr, char(rand(int('A') .. int('z'))))
+      buffer.add("a" & randStr)
+
+    const
+      line = 0
+      column = 1
+      terminalHeight = 100
+      terminalWidth = 100
+    var status = prepareInsertMode(
+      buffer,
+      line,
+      column,
+      terminalHeight,
+      terminalWidth)
+
+    status.settings.tabLine.useTab = true
+    status.settings.workSpace.workSpaceLine = false
+    status.settings.statusBar.enable = true
+
+    var suggestionWindow = tryOpenSuggestionWindow(
+      currentBufStatus,
+      currentMainWindowNode)
+    let
+      mainWindowHeight = status.settings.getMainWindowHeight(100)
+      (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
+        currentMainWindowNode,
+        mainWindowHeight)
+      mainWindowNodeY = calcMainWindowY(status.settings.tabLine.useTab,
+                                    status.settings.workSpace.workSpaceLine)
+    suggestionWindow.get.writeSuggestionWindow(
+      currentMainWindowNode,
+      y, x,
+      100, 100,
+      mainWindowNodeY,
+      status.settings.statusBar.enable)
+
+    check suggestionWindow.get.popUpWindow.y == 2
+    check suggestionWindow.get.popUpWindow.height == terminalHeight - 4
