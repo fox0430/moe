@@ -43,7 +43,7 @@ describe "moe is an editor"
     describe "invocation options"
 
         it "can display it's version"
-            assert equal `moe -v | grep -oPq "^moe v\d+\.\d+\.\d+.\d+$";echo $?` 0
+            assert equal `moe -v | grep -oPq "^moe v\d+\.\d+\.\d+$";echo $?` 0
         end
 
         it "can display command line options"
