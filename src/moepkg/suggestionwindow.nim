@@ -164,7 +164,7 @@ proc calcMaxSugestionWindowHeight(y,
                                   mainWindowNodeY: int,
                                   isEnableStatusLine: bool): int =
 
-  const commanLineHeight = 1 
+  const commanLineHeight = 1
   let statusLineHeight = if isEnableStatusLine: 1 else: 0
 
   if y > cursorYPosition:
@@ -195,7 +195,7 @@ proc writeSuggestionWindow*(suggestionWindow: var SuggestionWindow,
     suggestionwindow.popUpWindow = initWindow(
       height,
       width,
-      if y > absoluteY: y else: y + mainWindowNodeY,
+      if y < mainWindowNodeY: mainWindowNodeY else: y,
       x,
       EditorColorPair.popUpWindow)
   else:
