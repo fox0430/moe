@@ -1,6 +1,7 @@
-import osproc, highlite, terminal, times
-import unicodeext, settings, bufferstatus, gapbuffer, messages, ui,
-       editorstatus, movement, window, workspace, fileutils
+import osproc, terminal, times
+import syntax/highlite
+import unicodetext, settings, bufferstatus, gapbuffer, messages, ui,
+       editorstatus, movement, window, workspace, fileutils, commandline
 
 proc generateCommand(bufStatus: BufferStatus,
                      settings: QuickRunSettings): string =
@@ -34,7 +35,7 @@ proc getQuickRunBufferIndex*(bufStatus: seq[BufferStatus],
     if bufStatus[index].mode == Mode.quickRun: return index
 
 proc runQuickRun*(bufStatus: var BufferStatus,
-                  cmdWin: var Window,
+                  commandLine: var CommandLine,
                   messageLog: var seq[seq[Rune]],
                   settings: EditorSettings): seq[seq[Rune]] =
 
@@ -49,60 +50,54 @@ proc runQuickRun*(bufStatus: var BufferStatus,
   let command = bufStatus.generateCommand(settings.quickRunSettings)
   if command == "": return @[ru""]
 
-  cmdWin.writeRunQuickRunMessage(settings.notificationSettings, messageLog)
+  commandLine.writeRunQuickRunMessage(settings.notificationSettings, messageLog)
   let cmdResult = execCmdEx(command)
-  cmdWin.erase
+  commandLine.erase
 
   result = @[ru""]
 
   case cmdResult.exitCode:
     of 124:
-      cmdWin.writeRunQuickRunTimeoutMessage(messageLog)
+      commandLine.writeRunQuickRunTimeoutMessage(messageLog)
     else:
       for i in 0 ..< cmdResult.output.len:
         if cmdResult.output[i] == '\n': result.add(@[ru""])
         else: result[^1].add(toRunes($cmdResult.output[i])[0])
 
-proc isQuickRunMode(status: Editorstatus): bool =
-  let
-    workspaceIndex = status.currentWorkSpaceIndex
-    index = status.workspace[workspaceIndex].currentMainWindowNode.bufferIndex
-
-  return status.bufStatus[index].mode == Mode.quickRun
-
 proc quickRunMode*(status: var Editorstatus) =
+  status.resize(terminalHeight(), terminalWidth())
+
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     currentWorkSpace = status.currentWorkSpaceIndex
 
-  status.resize(terminalHeight(), terminalWidth())
-
-  while status.isQuickRunMode and
+  while isQuickRunMode(currentBufStatus.mode) and
         currentWorkSpace == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
 
-    let currentBufferIndex = status.bufferIndexInCurrentWindow
     status.update
 
     var key = errorKey
     while key == errorKey:
       status.eventLoopTask
-      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+      key = getKey(currentMainWindowNode)
 
     status.lastOperatingTime = now()
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-      status.commandWindow.erase
-    elif isControlK(key): status.moveNextWindow
-    elif isControlJ(key): status.movePrevWindow
+    elif isControlK(key):
+      status.moveNextWindow
+    elif isControlJ(key):
+      status.movePrevWindow
     elif key == ord(':'):
       status.changeMode(Mode.ex)
     elif key == ord('k') or isUpKey(key):
-      status.bufStatus[currentBufferIndex].keyUp(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+      currentBufStatus.keyUp(currentMainWindowNode)
     elif key == ord('j') or isDownKey(key):
-      status.bufStatus[currentBufferIndex].keyDown(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+      currentBufStatus.keyDown(currentMainWindowNode)
     elif key == ord('g'):
-      if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window) == 'g':
-        status.moveToFirstLine
-    elif key == ord('G'): status.moveToLastLine
+      let secondKey = getKey(currentMainWindowNode)
+      if secondKey == 'g': status.moveToFirstLine
+    elif key == ord('G'):
+      status.moveToLastLine

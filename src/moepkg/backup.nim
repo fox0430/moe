@@ -1,5 +1,6 @@
 import os, times, re
-import settings, unicodeext, fileutils, bufferstatus, ui, gapbuffer, messages
+import settings, unicodetext, fileutils, bufferstatus, gapbuffer, messages,
+       commandline
 
 type AutoBackupStatus* = object
   lastBackupTime*: DateTime
@@ -69,7 +70,7 @@ proc backupBuffer*(bufStatus: BufferStatus,
                    encoding: CharacterEncoding,
                    autoBackupSettings: AutoBackupSettings,
                    notificationSettings: NotificationSettings,
-                   cmdWin: var Window,
+                   commandLine: var CommandLine,
                    messageLog: var seq[seq[Rune]]) =
 
   if bufStatus.path.len == 0: return
@@ -84,18 +85,22 @@ proc backupBuffer*(bufStatus: BufferStatus,
     backupFilename = bufStatus.path.generateFilename(now())
     dir = bufStatus.path.checkAndCreateBackupDir(autoBackupSettings.backupDir)
   if dir.len == 0:
-    cmdWin.writeAutoBackupFailedMessage(backupFilename,
-                                        notificationSettings,
-                                        messageLog)
+    commandLine.writeAutoBackupFailedMessage(
+      backupFilename,
+      notificationSettings,
+      messageLog)
     return
 
   let
     path = dir / backupFilename
     isSame = diffWithBackup(path, $bufStatus.buffer)
   if not isSame:
-    cmdWin.writeStartAutoBackupMessage(notificationSettings, messageLog)
+    commandLine.writeStartAutoBackupMessage(notificationSettings, messageLog)
 
     saveFile(path, bufStatus.buffer.toRunes, encoding)
 
     let message = "Automatic backup successful: " & $path
-    cmdWin.writeAutoBackupSuccessMessage(message, notificationSettings, messageLog)
+    commandLine.writeAutoBackupSuccessMessage(
+      message,
+      notificationSettings,
+      messageLog)

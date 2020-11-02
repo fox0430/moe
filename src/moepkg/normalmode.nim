@@ -1,20 +1,8 @@
 from strutils import parseInt
-import strformat, terminal, times
-import editorstatus, ui, gapbuffer, unicodeext, fileutils, undoredostack,
+import terminal, times
+import editorstatus, ui, gapbuffer, unicodetext, fileutils, undoredostack,
        window, movement, editor, search, color, bufferstatus, quickrun,
-       messages
-
-proc writeDebugInfo(status: var EditorStatus, str: string = "") =
-  status.commandWindow.erase
-
-  let windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
-
-  status.commandWindow.write(0, 0, "debuf info: ", EditorColorPair.commandBar)
-  status.commandWindow.append(fmt"currentLine: {windowNode.currentLine}, currentColumn: {windowNode.currentColumn}")
-  status.commandWindow.append(fmt", cursor.y: {windowNode.cursor.y}, cursor.x: {windowNode.cursor.x}")
-  status.commandWindow.append(fmt", {str}")
-
-  status.commandWindow.refresh
+       messages, commandline
 
 proc searchOneCharactorToEndOfLine(bufStatus: var BufferStatus,
                                    windowNode: WindowNode,
@@ -73,14 +61,10 @@ proc searchNextOccurrence(status: var EditorStatus) =
   status.searchNextOccurrence(keyword)
 
 proc searchNextOccurrenceReversely(status: var EditorStatus, keyword: seq[Rune]) =
-  let
-    currentBufferIndex = status.bufferIndexInCurrentWindow
-    workspaceIndex = status.currentWorkSpaceIndex
+  currentBufStatus.isSearchHighlight = true
+  status.updateHighlight(currentMainWindowNode)
 
-  status.bufStatus[currentBufferIndex].isSearchHighlight = true
-  status.updateHighlight(status.workspace[workspaceIndex].currentMainWindowNode)
-
-  var windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
+  var windowNode = currentMainWindowNode
 
   windowNode.keyLeft
   let
@@ -90,43 +74,36 @@ proc searchNextOccurrenceReversely(status: var EditorStatus, keyword: seq[Rune])
   if searchResult.line > -1:
     status.jumpLine(searchResult.line)
     for column in 0 ..< searchResult.column:
-      status.bufStatus[currentBufferIndex].keyRight(windowNode)
+      currentBufStatus.keyRight(windowNode)
   elif searchResult.line == -1:
-    status.bufStatus[currentBufferIndex].keyRight(windowNode)
+    currentBufStatus.keyRight(windowNode)
 
 proc searchNextOccurrenceReversely(status: var EditorStatus) =
   if status.searchHistory.len < 1: return
 
-  let keyword = status.searchHistory[status.searchHistory.high]
+  let keyword = status.searchHistory[^1]
 
-  searchNextOccurrenceReversely(status, keyword)
+  status.searchNextOccurrenceReversely(keyword)
 
 proc turnOffHighlighting*(status: var EditorStatus) =
-  let
-    currentBufferIndex = status.bufferIndexInCurrentWindow
-    workspaceIndex = status.currentWorkSpaceIndex
+  currentBufStatus.isSearchHighlight = false
+  status.updateHighlight(currentMainWindowNode)
 
-  status.bufStatus[currentBufferIndex].isSearchHighlight = false
-  status.updateHighlight(status.workspace[workspaceIndex].currentMainWindowNode)
-
-proc writeFileAndExit(status: var EditorStatus) =
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  if status.bufStatus[currentBufferIndex].path.len == 0:
-    status.commandwindow.writeNoFileNameError(status.messageLog)
+proc writeFileAndExit(status: var EditorStatus, height, width: int) =
+  if currentBufStatus.path.len == 0:
+    status.commandLine.writeNoFileNameError(status.messageLog)
     status.changeMode(Mode.normal)
   else:
     try:
-      saveFile(status.bufStatus[currentBufferIndex].path,
-               status.bufStatus[currentBufferIndex].buffer.toRunes,
-               status.bufStatus[currentBufferIndex].characterEncoding)
-      let workspaceIndex = status.currentWorkSpaceIndex
-      status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
+      saveFile(currentBufStatus.path,
+               currentBufStatus.buffer.toRunes,
+               currentBufStatus.characterEncoding)
+      status.closeWindow(currentMainWindowNode, height, width)
     except IOError:
-      status.commandWindow.writeSaveError(status.messageLog)
+      status.commandLine.writeSaveError(status.messageLog)
 
-proc forceExit(status: var Editorstatus) =
-  let workspaceIndex = status.currentWorkSpaceIndex
-  status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
+proc forceExit(status: var Editorstatus, height, width: int) {.inline.} =
+  status.closeWindow(currentMainWindowNode, height, width)
 
 proc toggleCase(ch: Rune): Rune =
   result = ch
@@ -138,16 +115,11 @@ proc toggleCase(ch: Rune): Rune =
 
 proc runQuickRunCommand(status: var Editorstatus) =
   let
-    workspaceIndex = status.currentWorkSpaceIndex
-    windowNode = status.workspace[workspaceIndex].currentMainWindowNode
-
-    buffer = runQuickRun(status.bufStatus[windowNode.bufferIndex],
-                         status.commandwindow,
+    buffer = runQuickRun(status.bufStatus[currentMainWindowNode.bufferIndex],
+                         status.commandLine,
                          status.messageLog,
                          status.settings)
-
-    workspace = status.workspace[workspaceIndex]
-    quickRunWindowIndex = status.bufStatus.getQuickRunBufferIndex(workspace)
+    quickRunWindowIndex = status.bufStatus.getQuickRunBufferIndex(currentWorkSpace)
 
   if quickRunWindowIndex == -1:
     status.verticalSplitWindow
@@ -163,14 +135,20 @@ proc runQuickRunCommand(status: var Editorstatus) =
   else:
     status.bufStatus[quickRunWindowIndex].buffer = initGapBuffer(buffer)
 
-proc normalCommand(status: var EditorStatus, commands: seq[Rune])
-proc repeatNormalModeCommand(status: var Editorstatus) =
+proc normalCommand(status: var EditorStatus,
+                   commands: seq[Rune],
+                   height, width: int)
+
+proc repeatNormalModeCommand(status: var Editorstatus, height, width: int) =
   if status.normalCommandHistory.len == 0: return
 
   let commands  = status.normalCommandHistory[^1]
-  status.normalCommand(commands)
+  status.normalCommand(commands, height, width)
 
-proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
+proc normalCommand(status: var EditorStatus,
+                   commands: seq[Rune],
+                   height, width: int) =
+
   if commands.len == 0: return
 
   let
@@ -184,7 +162,7 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
   var windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
 
   template getWordUnderCursor(): (int, seq[Rune]) =
-    let line = status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine]
+    let line = currentBufStatus.buffer[windowNode.currentLine]
     if line.len() <= windowNode.currentColumn:
       return
 
@@ -208,43 +186,42 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
       (beginCol, line[beginCol..endCol])
 
   template getCharacterUnderCursor(): Rune =
-    let line = status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine]
+    let line = currentBufStatus.buffer[windowNode.currentLine]
     if line.len() <= windowNode.currentColumn:
       return
 
     line[windowNode.currentColumn]
 
   template insertAfterCursor() =
-    let lineWidth = status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine].len
+    let lineWidth = currentBufStatus.buffer[windowNode.currentLine].len
     if lineWidth == 0: discard
     elif lineWidth == windowNode.currentColumn: discard
     else: inc(windowNode.currentColumn)
     status.changeMode(Mode.insert)
 
   template insertCharacter(rune: Rune) =
-    insertCharacter(
-      status.bufStatus[currentBufferIndex],
+    currentBufStatus.insertCharacter(
       windowNode,
       status.settings.autoCloseParen,
       rune)
 
   template deleteCharactersUntilEndOfLine() =
-    status.bufStatus[currentBufferIndex].deleteCharacterUntilEndOfLine(
+    currentBufStatus.deleteCharacterUntilEndOfLine(
       status.settings.autoDeleteParen, windowNode)
 
   template deleteCharactersOfLine() =
-    status.bufStatus[currentBufferIndex].deleteCharactersOfLine(
+    currentBufStatus.deleteCharactersOfLine(
       status.settings.autoDeleteParen,
       windowNode)
 
   template deleteCurrentCharacter() =
-    status.bufStatus[currentBufferIndex].deleteCurrentCharacter(
+    currentBufStatus.deleteCurrentCharacter(
       windowNode,
       status.settings.autoDeleteParen)
 
   template replaceCurrentCharacter(newCharacter: Rune) =
-    status.bufStatus[currentBufferIndex].replaceCurrentCharacter(
-      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode,
+    currentBufStatus.replaceCurrentCharacter(
+      currentWorkSpace.currentMainWindowNode,
       status.settings.autoIndent,
       status.settings.autoDeleteParen,
       status.settings.tabStop,
@@ -300,107 +277,91 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
 
     if status.workspace[workspaceIndex].numOfMainWindow == 1: return
 
-    if status.bufStatus[currentBufferIndex].countChange == 0 or
-       status.workSpace[workspaceIndex].mainWindowNode.countReferencedWindow(
-         currentBufferIndex
-       ) > 1:
-        status.closeWindow(status.workSpace[workspaceIndex].currentMainWindowNode)
+    if currentBufStatus.countChange == 0 or
+       mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
+        status.closeWindow(currentWorkSpace.currentMainWindowNode, height, width)
 
   template deleteLineFromFirstLineToCurrentLine() =
     let currentLine = windowNode.currentLine
     status.yankLines(0, currentLine)
     status.moveToFirstLine
     for i in 0 ..< currentLine + 1:
-      status.bufStatus[currentBufferIndex].deleteLine(
-        windowNode,
-        windowNode.currentLine
-      )
+      currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
 
   let key = commands[0]
 
   if isControlK(key):
-    moveNextWindow(status)
+    status.moveNextWindow
   elif isControlJ(key):
-    movePrevWindow(status)
+    status.movePrevWindow
   elif isControlV(key):
     status.changeMode(Mode.visualBlock)
   elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
     for i in 0 ..< cmdLoop: windowNode.keyLeft
   elif key == ord('l') or isRightKey(key):
-    for i in 0 ..< cmdLoop: status.bufStatus[currentBufferIndex].keyRight(windowNode)
+    for i in 0 ..< cmdLoop: currentBufStatus.keyRight(windowNode)
   elif key == ord('k') or isUpKey(key):
-    for i in 0 ..< cmdLoop: status.bufStatus[currentBufferIndex].keyUp(windowNode)
+    for i in 0 ..< cmdLoop: currentBufStatus.keyUp(windowNode)
   elif key == ord('j') or isDownKey(key) or isEnterKey(key):
-    for i in 0 ..< cmdLoop: status.bufStatus[currentBufferIndex].keyDown(windowNode)
+    for i in 0 ..< cmdLoop: currentBufStatus.keyDown(windowNode)
   elif key == ord('x') or isDcKey(key):
     let
-      lineWidth = status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine].len
-      loop = min(cmdLoop,
-                 lineWidth - windowNode.currentColumn)
+      lineWidth = currentBufStatus.buffer[windowNode.currentLine].len
+      loop = min(cmdLoop, lineWidth - windowNode.currentColumn)
     status.yankString(loop)
     for i in 0 ..< loop:
       deleteCurrentCharacter()
   elif key == ord('^') or key == ord('_'):
-    status.bufStatus[currentBufferIndex].moveToFirstNonBlankOfLine(windowNode)
+    currentBufStatus.moveToFirstNonBlankOfLine(windowNode)
   elif key == ord('0') or isHomeKey(key):
     windowNode.moveToFirstOfLine
   elif key == ord('$') or isEndKey(key):
-    status.bufStatus[currentBufferIndex].moveToLastOfLine(windowNode)
+    currentBufStatus.moveToLastOfLine(windowNode)
   elif key == ord('-'):
-    status.bufStatus[currentBufferIndex].moveToFirstOfPreviousLine(windowNode)
+    currentBufStatus.moveToFirstOfPreviousLine(windowNode)
   elif key == ord('+'):
-    status.bufStatus[currentBufferIndex].moveToFirstOfNextLine(windowNode)
+    currentBufStatus.moveToFirstOfNextLine(windowNode)
   elif key == ord('g'):
     let secondKey = commands[1]
     if secondKey == ord('g'):
       status.jumpLine(cmdLoop - 1)
     elif secondKey == ord('_'):
-      status.bufStatus[currentBufferIndex].moveToLastNonBlankOfLine(windowNode)
+      currentBufStatus.moveToLastNonBlankOfLine(windowNode)
   elif key == ord('G'):
     moveToLastLine(status)
   elif isControlU(key):
-    for i in 0 ..< cmdLoop: halfPageUp(status)
+    for i in 0 ..< cmdLoop: status.halfPageUp
   elif isControlD(key):
     for i in 0 ..< cmdLoop: halfPageDown(status)
   elif isPageUpkey(key):
-    for i in 0 ..< cmdLoop: pageUp(status)
+    for i in 0 ..< cmdLoop: status.pageUp
   elif isPageDownKey(key): ## Page down and Ctrl - F
-    for i in 0 ..< cmdLoop: pageDown(status)
+    for i in 0 ..< cmdLoop: status.pageDown
   elif key == ord('w'):
     for i in 0 ..< cmdLoop:
-      status.bufStatus[currentBufferIndex].moveToForwardWord(windowNode)
+      currentBufStatus.moveToForwardWord(windowNode)
   elif key == ord('b'):
     for i in 0 ..< cmdLoop:
-      status.bufStatus[currentBufferIndex].moveToBackwardWord(windowNode)
+      currentBufStatus.moveToBackwardWord(windowNode)
   elif key == ord('e'):
     for i in 0 ..< cmdLoop:
-      status.bufStatus[currentBufferIndex].moveToForwardEndOfWord(windowNode)
+      currentBufStatus.moveToForwardEndOfWord(windowNode)
   elif key == ord('z'):
     let secondKey = commands[1]
     if secondKey == ord('.'):
-      moveCenterScreen(
-        status.bufStatus[currentBufferIndex],
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+      currentBufStatus.moveCenterScreen(currentMainWindowNode)
     elif secondKey == ord('t'):
-      scrollScreenTop(
-        status.bufStatus[currentBufferIndex],
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+      currentBufStatus.scrollScreenTop(currentMainWindowNode)
     elif secondKey == ord('b'):
-      scrollScreenBottom(
-        status.bufStatus[currentBufferIndex],
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+      currentBufStatus.scrollScreenBottom(currentMainWindowNode)
   elif key == ord('o'):
     for i in 0 ..< cmdLoop:
-      openBlankLineBelow(
-        status.bufStatus[currentBufferIndex],
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+      currentBufStatus.openBlankLineBelow(currentMainWindowNode)
     status.changeMode(Mode.insert)
   elif key == ord('O'):
     for i in 0 ..< cmdLoop:
-      openBlankLineAbove(
-        status.bufStatus[currentBufferIndex],
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
-    status.updateHighlight(status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode)
+      currentBufStatus.openBlankLineAbove(currentMainWindowNode)
+    status.updateHighlight(currentMainWindowNode)
     status.changeMode(Mode.insert)
   elif key == ord('c'):
     let secondKey = commands[1]
@@ -411,26 +372,26 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
     let secondKey = commands[1]
     if secondKey == ord('d'):
       let lastLine = min(windowNode.currentLine + cmdLoop - 1,
-                         status.bufStatus[currentBufferIndex].buffer.high)
+                         currentBufStatus.buffer.high)
       status.yankLines(windowNode.currentLine, lastLine)
       let loop = min(cmdLoop,
-                     status.bufStatus[currentBufferIndex].buffer.len - windowNode.currentLine)
+                     currentBufStatus.buffer.len - windowNode.currentLine)
       for i in 0 ..< loop:
-        status.bufStatus[currentBufferIndex].deleteLine(windowNode, windowNode.currentLine)
-    elif secondKey == ord('w'): status.bufStatus[currentBufferIndex].deleteWord(windowNode)
+        currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
+    elif secondKey == ord('w'): currentBufStatus.deleteWord(windowNode)
     elif secondKey == ('$') or isEndKey(secondKey):
       deleteCharactersUntilEndOfLine()
     elif secondKey == ('0') or isHomeKey(secondKey):
-      status.bufStatus[currentBufferIndex].deleteCharacterBeginningOfLine(
+      currentBufStatus.deleteCharacterBeginningOfLine(
         status.settings.autoDeleteParen,
         windowNode)
     # Delete the line from current line to last line
     elif secondKey == ord('G'):
-      let lastLine = status.bufStatus[currentBufferIndex].buffer.high
+      let lastLine = currentBufStatus.buffer.high
       status.yankLines(windowNode.currentLine, lastLine)
-      let loop = status.bufStatus[currentBufferIndex].buffer.len - windowNode.currentLine
+      let loop = currentBufStatus.buffer.len - windowNode.currentLine
       for i in 0 ..< loop:
-        status.bufStatus[currentBufferIndex].deleteLine(windowNode, windowNode.currentLine)
+        currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
     # Delete the line from first line to current line
     elif secondKey == ord('g'):
       let thirdKey = commands[2]
@@ -445,7 +406,7 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
     let secondKey = commands[1]
     if secondKey == ord('y'):
       let lastLine = min(windowNode.currentLine + cmdLoop - 1,
-                         status.bufStatus[currentBufferIndex].buffer.high)
+                         currentBufStatus.buffer.high)
       status.yankLines(windowNode.currentLine, lastLine)
     elif secondKey == ord('w'): status.yankWord(cmdLoop)
   elif key == ord('p'):
@@ -454,24 +415,16 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
     status.pasteBeforeCursor
   elif key == ord('>'):
     for i in 0 ..< cmdLoop:
-      status.bufStatus[currentBufferIndex].addIndent(
-        windowNode,
-        status.settings.tabStop)
+      currentBufStatus.addIndent( windowNode, status.settings.tabStop)
   elif key == ord('<'):
     for i in 0 ..< cmdLoop:
-      deleteIndent(
-        status.bufStatus[currentBufferIndex],
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode,
-        status.settings.tabStop)
+      currentBufStatus.deleteIndent(currentMainWindowNode, status.settings.tabStop)
   elif key == ord('='):
     let secondKey = commands[1]
     if secondKey == ord('='):
-      status.bufStatus[currentBufferIndex].autoIndentCurrentLine(
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
-      )
+      currentBufStatus.autoIndentCurrentLine(currentMainWindowNode)
   elif key == ord('J'):
-    joinLine(status.bufStatus[currentBufferIndex],
-             status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+    currentBufStatus.joinLine(currentMainWindowNode)
   elif isControlA(key):
     modifyWordUnderCursor(cmdLoop)
   elif isControlX(key):
@@ -479,10 +432,10 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
   elif key == ord('~'):
     for i in 0 ..< cmdLoop:
       replaceCurrentCharacter(toggleCase(getCharacterUnderCursor()))
-      status.bufStatus[currentBufferIndex].keyRight(windowNode)
+      currentBufStatus.keyRight(windowNode)
   elif key == ord('r'):
     let
-      lineWidth = status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine].len
+      lineWidth = currentBufStatus.buffer[windowNode.currentLine].len
       loop = lineWidth - windowNode.currentColumn
     if cmdLoop > loop: return
 
@@ -493,58 +446,58 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
         windowNode.expandedColumn = windowNode.currentColumn
       replaceCurrentCharacter(secondKey)
   elif key == ord('n'):
-    searchNextOccurrence(status)
+    status.searchNextOccurrence
   elif key == ord('N'):
-    searchNextOccurrenceReversely(status)
+    status.searchNextOccurrenceReversely
   elif key == ord('*'):
-    searchNextOccurrence(status, getWordUnderCursor()[1])
+    status.searchNextOccurrence(getWordUnderCursor()[1])
   elif key == ord('#'):
-    searchNextOccurrenceReversely(status, getWordUnderCursor()[1])
+    status.searchNextOccurrenceReversely(getWordUnderCursor()[1])
   elif key == ord('f'):
     let secondKey = commands[1]
-    status.bufStatus[currentBufferIndex].searchOneCharactorToEndOfLine(windowNode, secondKey)
+    currentBufStatus.searchOneCharactorToEndOfLine(windowNode, secondKey)
   elif key == ord('F'):
     let secondKey = commands[1]
-    status.bufStatus[currentBufferIndex].searchOneCharactorToBeginOfLine(windowNode, secondKey)
+    currentBufStatus.searchOneCharactorToBeginOfLine(windowNode, secondKey)
   elif key == ord('R'):
     status.changeMode(Mode.replace)
   elif key == ord('i'):
     status.changeMode(Mode.insert)
   elif key == ord('I'):
-    status.bufStatus[currentBufferIndex].moveToFirstNonBlankOfLine(windowNode)
+    currentBufStatus.moveToFirstNonBlankOfLine(windowNode)
     status.changeMode(Mode.insert)
   elif key == ord('v'):
     status.changeMode(Mode.visual)
   elif key == ord('a'):
     insertAfterCursor()
   elif key == ord('A'):
-    windowNode.currentColumn = status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine].len
+    windowNode.currentColumn = currentBufStatus.buffer[windowNode.currentLine].len
     status.changeMode(Mode.insert)
   elif key == ord('u'):
     status.bufStatus[currentBufferIndex].undo(windowNode)
   elif isControlR(key):
-    redo(status.bufStatus[currentBufferIndex],
-         status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+    currentBufStatus.redo(currentMainWindowNode)
   elif key == ord('Z'):
     let secondKey = commands[1]
-    if  secondKey == ord('Z'): writeFileAndExit(status)
-    elif secondKey == ord('Q'): forceExit(status)
+    if  secondKey == ord('Z'):
+      status.writeFileAndExit(height, width)
+    elif secondKey == ord('Q'):
+      status.forceExit(height, width)
   elif isControlW(key):
     let secondKey = commands[1]
     if secondKey == ord('c'): closeWindow()
   elif key == ord('.'):
-    status.repeatNormalModeCommand
+    status.repeatNormalModeCommand(height, width)
   elif key == ord('\\'):
     let secondKey = commands[1]
-    if secondKey == ord('r'):
-      status.runQuickRunCommand
+    if secondKey == ord('r'): status.runQuickRunCommand
   else:
     discard
 
 proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
   template getAnotherKey(): Rune =
     let workspaceIndex = status.currentWorkSpaceIndex
-    getKey(status.workSpace[workspaceIndex].currentMainWindowNode.window)
+    getKey(status.workSpace[workspaceIndex].currentMainWindowNode)
 
   # Single key commands
   if isControlK(key) or
@@ -700,33 +653,30 @@ proc normalMode*(status: var EditorStatus) =
 
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
-    currentWorkSpace = status.currentWorkSpaceIndex
+    currentWorkSpaceIndex = status.currentWorkSpaceIndex
   var countChange = 0
 
   while status.isNormalMode and
-        currentWorkSpace == status.currentWorkSpaceIndex and
+        currentWorkSpaceIndex == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
 
-    if status.bufStatus[currentBufferIndex].countChange > countChange:
-      countChange = status.bufStatus[currentBufferIndex].countChange
+    if currentBufStatus.countChange > countChange:
+      countChange = currentBufStatus.countChange
 
     status.update
 
     var key = errorKey
     while key == errorKey:
       status.eventLoopTask
-      key = getKey(
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+      key = getKey(currentMainWindowNode)
 
     status.lastOperatingTime = now()
 
-    status.bufStatus[currentBufferIndex].buffer.beginNewSuitIfNeeded
-    status.bufStatus[currentBufferIndex].tryRecordCurrentPosition(
-      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+    currentBufStatus.buffer.beginNewSuitIfNeeded
+    currentBufStatus.tryRecordCurrentPosition(currentMainWindowNode)
 
     if isEscKey(key):
-      let keyAfterEsc = getKey(
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+      let keyAfterEsc = getKey(currentMainWindowNode)
       if isEscKey(keyAfterEsc):
         status.turnOffHighlighting
         continue
@@ -734,7 +684,6 @@ proc normalMode*(status: var EditorStatus) =
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-      status.commandWindow.erase
     elif key == ord('/'):
       status.searchFordwards
     elif key == ord('?'):
@@ -745,16 +694,16 @@ proc normalMode*(status: var EditorStatus) =
       let num = ($key)[0]
       if status.bufStatus[currentBufferIndex].cmdLoop == 0 and num == '0':
         let commands = status.isNormalModeCommand(key)
-        status.normalCommand(commands)
+        status.normalCommand(commands, terminalHeight(), terminalWidth())
         continue
 
-      status.bufStatus[currentBufferIndex].cmdLoop *= 10
-      status.bufStatus[currentBufferIndex].cmdLoop += ord(num)-ord('0')
-      status.bufStatus[currentBufferIndex].cmdLoop = min(
+      currentBufStatus.cmdLoop *= 10
+      currentBufStatus.cmdLoop += ord(num)-ord('0')
+      currentBufStatus.cmdLoop = min(
         100000,
-        status.bufStatus[currentBufferIndex].cmdLoop)
+        currentBufStatus.cmdLoop)
       continue
     else:
       let commands = status.isNormalModeCommand(key)
-      status.normalCommand(commands)
-      status.bufStatus[currentBufferIndex].cmdLoop = 0
+      status.normalCommand(commands, terminalHeight(), terminalWidth())
+      currentBufStatus.cmdLoop = 0

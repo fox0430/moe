@@ -1,5 +1,5 @@
 import deques, strutils, math, strformat
-import gapbuffer, ui, unicodeext, highlight, independentutils, color, settings,
+import gapbuffer, ui, unicodetext, highlight, independentutils, color, settings,
        bufferstatus
 
 type EditorView* = object
@@ -23,7 +23,7 @@ proc loadSingleViewLine[T](view: EditorView,
   let bufferLine = buffer[originalLine]
   template isRemaining: bool = start+result.length < bufferLine.len
   template calcNextWidth: int =
-    if isRemaining(): unicodeext.width(bufferLine[start+result.length]) else: 0
+    if isRemaining(): unicodetext.width(bufferLine[start+result.length]) else: 0
   var
     totalWidth = 0
     nextWidth = calcNextWidth()
@@ -39,9 +39,7 @@ proc reload*[T](view: var EditorView, buffer: T, topLine: int) =
 
   view.updated = true
 
-  let
-    height = view.height
-    width = view.width
+  let height = view.height
 
   const empty = ru""
   for x in view.originalLine.mitems: x = -1
@@ -265,7 +263,6 @@ proc writeAllLines*[T](view: var EditorView,
 
       block:
         let
-          firstStr = $first
           lastStr = $last
           lineStr = $view.lines[y]
         assert(last <= view.lines[y].high,

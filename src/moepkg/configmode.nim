@@ -1,5 +1,5 @@
 import terminal, times, typetraits, strutils
-import gapbuffer, ui, editorstatus, unicodeext, window, movement, settings,
+import gapbuffer, ui, editorstatus, unicodetext, window, movement, settings,
        bufferstatus, color, highlight
 
 const
@@ -27,13 +27,8 @@ const
     "liveReloadOfConf",
     "incrementalSearch",
     "popUpWindowInExmode",
-    "replaceTextHighlight",
-    "highlightPairOfParen",
     "autoDeleteParen",
     "systemClipboard",
-    "highlightFullWidthSpace",
-    "highlightTrailingSpaces",
-    "highlightCurrentWord",
     "smoothScroll",
     "smoothScrollSpeed",
   ]
@@ -64,11 +59,16 @@ const
     "workSpaceLine"
   ]
   highlightTableNames = [
+    "fullWidthSpace",
+    "trailingSpaces",
+    "currentWord",
+    "replaceText",
+    "pairOfParen",
     "reservedWord"
   ]
   autoBackupTableNames = [
     "enable",
-    "idolTime",
+    "idleTime",
     "interval",
     "backupDir",
     "dirToExclude"
@@ -261,20 +261,10 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
         result.add(ru nameStr & space & $settings.incrementalSearch)
       of "popUpWindowInExmode":
         result.add(ru nameStr & space & $settings.popUpWindowInExmode)
-      of "replaceTextHighlight":
-        result.add(ru nameStr & space & $settings.replaceTextHighlight)
-      of "highlightPairOfParen":
-        result.add(ru nameStr & space & $settings.highlightPairOfParen)
       of "autoDeleteParen":
         result.add(ru nameStr & space & $settings.autoDeleteParen)
       of "systemClipboard":
         result.add(ru nameStr & space & $settings.systemClipboard)
-      of "highlightFullWidthSpace":
-        result.add(ru nameStr & space & $settings.highlightFullWidthSpace)
-      of "highlightTrailingSpaces":
-        result.add(ru nameStr & space & $settings.highlightTrailingSpaces)
-      of "highlightCurrentWord":
-        result.add(ru nameStr & space & $settings.highlightOtherUsesCurrentWord)
       of "smoothScroll":
         result.add(ru nameStr & space & $settings.smoothScroll)
       of "smoothScrollSpeed":
@@ -356,11 +346,24 @@ proc initHighlightTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"Highlight")
 
   for name in highlightTableNames:
+    let
+      nameStr = indent & name
+      space = " ".repeat(positionOfSetVal - name.len)
     case name:
+      of "replaceText":
+        result.add(ru nameStr & space & $settings.highlightSettings.replaceText)
+      of "highlightPairOfParen":
+        result.add(ru nameStr & space & $settings.highlightSettings.pairOfParen)
+      of "fullWidthSpace":
+        result.add(ru nameStr & space & $settings.highlightSettings.fullWidthSpace)
+      of "trailingSpaces":
+        result.add(ru nameStr & space & $settings.highlightSettings.trailingSpaces)
+      of "currentWord":
+        result.add(ru nameStr & space & $settings.highlightSettings.currentWord)
       of "reservedWord":
         result.add(ru indent & name)
         let space = " ".repeat(positionOfSetVal)
-        for reservedWord in settings.reservedWords:
+        for reservedWord in settings.highlightSettings.reservedWords:
           result.add(ru indent & space & reservedWord.word)
 
 proc initAutoBackupTableBuffer(settings: AutoBackupSettings): seq[seq[Rune]] =
@@ -373,8 +376,8 @@ proc initAutoBackupTableBuffer(settings: AutoBackupSettings): seq[seq[Rune]] =
     case name:
       of "enable":
         result.add(ru nameStr & space & $settings.enable)
-      of "idolTime":
-        result.add(ru nameStr & space & $settings.idolTime)
+      of "idleTime":
+        result.add(ru nameStr & space & $settings.idleTime)
       of "interval":
         result.add(ru nameStr & space & $settings.interval)
       of "backupDir":
@@ -927,25 +930,22 @@ proc isConfigMode(status: Editorstatus): bool =
 proc configMode*(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
 
+  currentBufStatus.buffer = initConfigModeBuffer(
+    status.settings)
+
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     currentWorkSpace = status.currentWorkSpaceIndex
-
-  status.bufStatus[currentBufferIndex].buffer = initConfigModeBuffer(
-    status.settings)
 
   while status.isConfigMode and
         currentWorkSpace == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
 
     let
-      currentBufferIndex = status.bufferIndexInCurrentWindow
-      workspaceIndex = status.currentWorkSpaceIndex
-      node = status.workspace[workspaceIndex].currentMainWindowNode
-      buffer = status.bufStatus[currentBufferIndex].buffer
-      highlight = buffer.initConfigModeHighlight(node.currentLine)
+      currentLine = currentMainWindowNode.currentLine
+      highlight = currentBufStatus.buffer.initConfigModeHighlight(currentLine)
 
-    status.workspace[workspaceIndex].currentMainWindowNode.highlight = highlight
+    currentMainWindowNode.highlight = highlight
 
     status.update
     setCursor(false)
@@ -953,28 +953,21 @@ proc configMode*(status: var Editorstatus) =
     var key: Rune = ru'\0'
     while key == ru'\0':
       status.eventLoopTask
-      let index = status.currentWorkSpaceIndex
-      key = getKey(status.workSpace[index].currentMainWindowNode.window)
+      key = getKey(currentMainWindowNode)
 
     status.lastOperatingTime = now()
 
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-      status.commandWindow.erase
+    if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
     elif isControlK(key): status.moveNextWindow
     elif isControlJ(key): status.movePrevWindow
     elif key == ord(':'): status.changeMode(Mode.ex)
 
     elif key == ord('k') or isUpKey(key):
-      status.bufStatus[currentBufferIndex].keyUp(
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+      status.bufStatus[currentBufferIndex].keyUp(currentMainWindowNode)
     elif key == ord('j') or isDownKey(key):
-      status.bufStatus[currentBufferIndex].keyDown(
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+      currentBufStatus.keyDown(currentMainWindowNode)
     elif key == ord('g'):
-      let
-        index = status.currentWorkSpaceIndex
-        secondKey = getKey(
-          status.workSpace[index].currentMainWindowNode.window)
+      let secondKey = getKey(currentMainWindowNode)
       if secondKey == 'g': status.moveToFirstLine
-    elif key == ord('G'): status.moveToLastLine
+    elif key == ord('G'):
+      status.moveToLastLine

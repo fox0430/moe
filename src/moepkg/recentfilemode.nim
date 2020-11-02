@@ -1,6 +1,6 @@
 import os, re, terminal
-import editorstatus, ui, unicodeext, bufferstatus, movement, gapbuffer,
-       messages
+import editorstatus, ui, unicodetext, bufferstatus, movement, gapbuffer,
+       messages, window
 
 proc openSelectedBuffer(status: var Editorstatus) =
   let
@@ -12,7 +12,7 @@ proc openSelectedBuffer(status: var Editorstatus) =
   if fileExists($filename):
     status.addNewBuffer($filename)
   else:
-    status.commandWindow.writeFileNotFoundError(filename, status.messageLog)
+    status.commandLine.writeFileNotFoundError(filename, status.messageLog)
 
 proc initRecentFileModeBuffer(bufStatus: var BufferStatus) =
   var f = open(getHomeDir() / ".local/share/recently-used.xbel")
@@ -49,11 +49,9 @@ proc recentFileMode*(status: var Editorstatus) =
     var key = errorKey
     while key == errorKey:
       status.eventLoopTask
-      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+      key = getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
 
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-      status.commandWindow.erase
+    if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
 
     elif isControlK(key): status.moveNextWindow
     elif isControlJ(key): status.movePrevWindow
@@ -65,5 +63,5 @@ proc recentFileMode*(status: var Editorstatus) =
     elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key): windowNode.keyLeft
     elif key == ord('l') or isRightKey(key): status.bufStatus[currentBufferIndex].keyRight(windowNode)
     elif key == ord('G'): status.moveToLastLine
-    elif key == ord('g') and getKey(windowNode.window) == ord('g'): status.moveToFirstLine
+    elif key == ord('g') and getKey(windowNode) == ord('g'): status.moveToFirstLine
     elif isEnterKey(key): status.openSelectedBuffer

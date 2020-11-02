@@ -1,6 +1,6 @@
 import sugar, critbits, options
 import unicodedb, unicodedb/properties
-import unicodeext
+import unicodetext
 
 const
   letterCharacter = ctgLu + ctgLl + ctgLt + ctgLm + ctgLo + ctgNl

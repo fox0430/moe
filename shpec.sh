@@ -43,12 +43,12 @@ describe "moe is an editor"
     describe "invocation options"
 
         it "can display it's version"
-            assert equal `moe -v | grep -oPq "^moe v\d+\.\d+\.\d+.\d+$";echo $?` 0
+            assert equal `moe -v | grep -oPq "^moe v\d+\.\d+\.\d+$";echo $?` 0
         end
 
         it "can display command line options"
             # TODO: Expand this test to include verifying the option list is formatted and localized correctly.
-            assert egrep "`moe --help`" " *moe \[file\] +edit file.*"
+            assert egrep "`moe --help`" " *moe \[file\] +Edit file.*"
         end
 
 _has_pty_session_man && {

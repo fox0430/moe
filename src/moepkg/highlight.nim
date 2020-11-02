@@ -1,5 +1,6 @@
-import highlite, sequtils, os, strformat, parseutils
-import unicodeext, ui, color
+import sequtils, os, strformat, parseutils
+import syntax/highlite
+import unicodetext, color
 from strutils import find
 
 type ColorSegment* = object

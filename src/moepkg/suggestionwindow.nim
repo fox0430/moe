@@ -1,6 +1,6 @@
 import critbits, unicode, sugar, options, sequtils
-import ui, window, generalautocomplete, bufferstatus, gapbuffer, unicodeext,
-       color, editorstatus, movement
+import ui, window, generalautocomplete, bufferstatus, gapbuffer, unicodetext,
+       color, editorstatus
 
 type SuggestionWindow* = object
   wordDictionary: CritBitTree[void]
@@ -60,11 +60,10 @@ proc handleKeyInSuggestionWindow*(
   if suggestionWindow.selectedSuggestion != prevSuggestion:
     # The selected suggestoin is changed.
     # Update the buffer without recording the change.
-    bufStatus.moveToBackwardWord(windowNode)
     bufStatus.buffer.assign(suggestionWindow.newLine,
                             windowNode.currentLine,
                             false)
-    bufStatus.moveToForwardAfterWord(windowNode)
+    windowNode.currentColumn = suggestionWindow.firstColumn + suggestionWindow.selectedWordOrInputWord.len
 
 proc initSuggestionWindow*(
   text, word, currentLineText: seq[Rune],
@@ -87,7 +86,7 @@ proc initSuggestionWindow*(
 
   return some(suggestionWindow)
 
-proc extractWordAfterCursor(
+proc extractWordBeforeCursor(
   bufStatus: BufferStatus,
   windowNode: WindowNode): Option[tuple[word: seq[Rune], first, last: int]] =
 
@@ -95,29 +94,29 @@ proc extractWordAfterCursor(
   extractNeighborWord(bufStatus.buffer[windowNode.currentLine],
                       windowNode.currentColumn - 1)
 
-proc wordExistsAfterCursor(bufStatus: BufferStatus,
+proc wordExistsBeforeCursor(bufStatus: BufferStatus,
                            windowNode: WindowNode): bool =
 
   if windowNode.currentColumn == 0: return false
-  let wordFirstLast = extractWordAfterCursor(bufStatus, windowNode)
+  let wordFirstLast = extractWordBeforeCursor(bufStatus, windowNode)
   wordFirstLast.isSome and wordFirstLast.get.word.len > 0
 
 proc buildSuggestionWindow*(bufStatus: BufferStatus,
                             windowNode: WindowNode): Option[SuggestionWindow] =
 
-  let (word, firstColumn, lastColumn) = extractWordAfterCursor(
+  let (word, firstColumn, lastColumn) = extractWordBeforeCursor(
     bufStatus,
     windowNode).get
 
   # Eliminate the word on the cursor.
   let
     line = windowNode.currentLine
-    column = windowNode.currentColumn - 1
-    lastDeletedIndex = bufStatus.buffer.calcIndexInEntireBuffer(
+    column = firstColumn
+    firstDeletedIndex = bufStatus.buffer.calcIndexInEntireBuffer(
       line,
       column,
       true)
-    firstDeletedIndex = max(lastDeletedIndex - word.len + 1, 0)
+    lastDeletedIndex = firstDeletedIndex + word.len - 1
     text = bufStatus.buffer.toRunes.dup(
       delete(firstDeletedIndex, lastDeletedIndex))
 
@@ -132,7 +131,7 @@ proc tryOpenSuggestionWindow*(
   bufStatus: BufferStatus,
   windowNode: WindowNode): Option[SuggestionWindow] =
 
-  if wordExistsAfterCursor(bufStatus, windowNode):
+  if wordExistsBeforeCursor(bufStatus, windowNode):
     return buildSuggestionWindow(bufStatus, windowNode)
 
 proc calcSuggestionWindowPosition*(
@@ -158,16 +157,45 @@ proc calcSuggestionWindowPosition*(
 
   return (y, absoluteX - leftMargin)
 
-proc writeSuggestionWindow*(suggestionWindow: var SuggestionWindow, y, x: int) =
+# cursorPosition is absolute y
+proc calcMaxSugestionWindowHeight(y,
+                                  terminalHeight,
+                                  cursorYPosition,
+                                  mainWindowNodeY: int,
+                                  isEnableStatusLine: bool): int =
+
+  const commanLineHeight = 1
+  let statusLineHeight = if isEnableStatusLine: 1 else: 0
+
+  if y > cursorYPosition:
+    result = (terminalHeight - 1) - cursorYPosition - commanLineHeight - statusLineHeight
+  else:
+    result = cursorYPosition - mainWindowNodeY
+
+proc writeSuggestionWindow*(suggestionWindow: var SuggestionWindow,
+                            windowNode: WindowNode,
+                            y, x,
+                            terminalHeight, terminalWidth,
+                            mainWindowNodeY: int,
+                            isEnableStatusLine: bool) =
+
   let
-    height = suggestionwindow.suggestoins.len
+    line = windowNode.currentLine
+    column = windowNode.currentColumn
+    (absoluteY, _) = windowNode.absolutePosition(line, column)
+    maxHeight = calcMaxSugestionWindowHeight(y,
+                                             terminalHeight,
+                                             absoluteY,
+                                             mainWindowNodeY,
+                                             isEnableStatusLine)
+    height = min(suggestionwindow.suggestoins.len, maxHeight)
     width = suggestionwindow.suggestoins.map(item => item.len).max + 2
 
   if suggestionwindow.popUpWindow == nil:
     suggestionwindow.popUpWindow = initWindow(
       height,
       width,
-      y,
+      if y < mainWindowNodeY: mainWindowNodeY else: y,
       x,
       EditorColorPair.popUpWindow)
   else:
@@ -182,6 +210,8 @@ proc writeSuggestionWindow*(suggestionWindow: var SuggestionWindow, y, x: int) =
     popUpWindow.width,
     popUpWindow.y,
     popUpWindow.x,
+    terminalHeight,
+    terminalWidth,
     suggestionWindow.selectedSuggestion,
     suggestionWindow.suggestoins)
 

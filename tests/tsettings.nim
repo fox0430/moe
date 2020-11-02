@@ -1,5 +1,5 @@
 import unittest, options
-import moepkg/[color, ui, highlight, unicodeext]
+import moepkg/[color, ui, highlight, unicodetext]
 
 include moepkg/settings
 
@@ -27,13 +27,8 @@ const tomlStr = """
   liveReloadOfConf = true
   incrementalSearch = false
   popUpWindowInExmode = false
-  replaceTextHighlight = false
-  highlightPairOfParen = false
   autoDeleteParen = false
   systemClipboard = false
-  highlightFullWidthSpace = false
-  highlightTrailingSpaces = false
-  highlightCurrentWord = false
   smoothScroll = false
   smoothScrollSpeed = 1
 
@@ -65,10 +60,15 @@ const tomlStr = """
 
   [Highlight]
   reservedWord = ["TEST", "TEST2"]
+  replaceText = false
+  pairOfParen = false
+  fullWidthSpace = false
+  trailingSpaces = false
+  currentWord = false
 
   [AutoBackup]
   enable = false
-  idolTime = 1
+  idleTime = 1
   interval = 1
   backupDir = "/tmp"
   dirToExclude = ["/tmp"]
@@ -114,8 +114,45 @@ const tomlStr = """
   [Autocomplete]
   enable = true
 
-  [Theme]
+  [Debug.WorkSpace]
+  enable = false
+  numOfWorkSpaces = false
+  currentWorkSpaceIndex = false
 
+  [Debug.WindowNode]
+  enable = false
+  currentWindow = false
+  index = false
+  windowIndex = false
+  bufferIndex = false
+  parentIndex = false
+  childLen = false
+  splitType = false
+  haveCursesWin = false
+  y = false
+  x = false
+  h = false
+  w = false
+  currentLine = false
+  currentColumn = false
+  expandedColumn = false
+  cursor = false
+
+  [Debug.BufferStatus]
+  enable = false
+  bufferIndex = false
+  path = false
+  openDir = false
+  currentMode = false
+  prevMode = false
+  language = false
+  encoding = false
+  countChange = false
+  cmdLoop = false
+  lastSaveTime = false
+  bufferLen = false
+
+  [Theme]
   baseTheme = "dark"
 
   editorBg = "pink1"
@@ -228,8 +265,6 @@ const tomlStr = """
   currentSettingBg = "pink1"
 """
 
-
-
 suite "Parse configuration file":
   test "Parse toml configuration file":
     let toml = parsetoml.parseString(tomlStr)
@@ -257,13 +292,8 @@ suite "Parse configuration file":
     check settings.liveReloadOfConf
     check not settings.incrementalSearch
     check not settings.popUpWindowInExmode
-    check not settings.replaceTextHighlight
-    check not settings.highlightPairOfParen
     check not settings.autoDeleteParen
     check not settings.systemClipboard
-    check not settings.highlightFullWidthSpace
-    check not settings.highlightTrailingSpaces
-    check not settings.highlightOtherUsesCurrentWord
     check not settings.smoothScroll
     check settings.smoothScrollSpeed == 1
 
@@ -289,11 +319,16 @@ suite "Parse configuration file":
 
     check settings.workSpace.workSpaceLine
 
-    check settings.reservedWords[3].word == "TEST"
-    check settings.reservedWords[4].word == "TEST2"
+    check not settings.highlightSettings.replaceText
+    check not settings.highlightSettings.pairOfParen
+    check not settings.highlightSettings.fullWidthSpace
+    check not settings.highlightSettings.trailingSpaces
+    check not settings.highlightSettings.currentWord
+    check settings.highlightSettings.reservedWords[3].word == "TEST"
+    check settings.highlightSettings.reservedWords[4].word == "TEST2"
 
     check not settings.autoBackupSettings.enable
-    check settings.autoBackupSettings.idolTime == 1
+    check settings.autoBackupSettings.idleTime == 1
     check settings.autoBackupSettings.interval == 1
     check settings.autoBackupSettings.backupDir == ru"/tmp"
     check settings.autoBackupSettings.dirToExclude  == @[ru"/tmp"]
@@ -334,6 +369,41 @@ suite "Parse configuration file":
     check not settings.filerSettings.showIcons
 
     check settings.autocompleteSettings.enable
+
+    check not settings.debugModeSettings.workSpace.enable
+    check not settings.debugModeSettings.workSpace.numOfWorkSpaces
+    check not settings.debugModeSettings.workSpace.currentWorkSpaceIndex
+
+    check not settings.debugModeSettings.windowNode.enable
+    check not settings.debugModeSettings.windowNode.currentWindow
+    check not settings.debugModeSettings.windowNode.index
+    check not settings.debugModeSettings.windowNode.windowIndex
+    check not settings.debugModeSettings.windowNode.bufferIndex
+    check not settings.debugModeSettings.windowNode.parentIndex
+    check not settings.debugModeSettings.windowNode.childLen
+    check not settings.debugModeSettings.windowNode.splitType
+    check not settings.debugModeSettings.windowNode.haveCursesWin
+    check not settings.debugModeSettings.windowNode.y
+    check not settings.debugModeSettings.windowNode.x
+    check not settings.debugModeSettings.windowNode.h
+    check not settings.debugModeSettings.windowNode.w
+    check not settings.debugModeSettings.windowNode.currentLine
+    check not settings.debugModeSettings.windowNode.currentColumn
+    check not settings.debugModeSettings.windowNode.expandedColumn
+    check not settings.debugModeSettings.windowNode.cursor
+
+    check not settings.debugModeSettings.bufStatus.enable
+    check not settings.debugModeSettings.bufStatus.bufferIndex
+    check not settings.debugModeSettings.bufStatus.path
+    check not settings.debugModeSettings.bufStatus.openDir
+    check not settings.debugModeSettings.bufStatus.currentMode
+    check not settings.debugModeSettings.bufStatus.prevMode
+    check not settings.debugModeSettings.bufStatus.language
+    check not settings.debugModeSettings.bufStatus.encoding
+    check not settings.debugModeSettings.bufStatus.countChange
+    check not settings.debugModeSettings.bufStatus.cmdLoop
+    check not settings.debugModeSettings.bufStatus.lastSaveTime
+    check not settings.debugModeSettings.bufStatus.bufferLen
 
     let theme = ColorTheme.config
     check ColorThemeTable[theme].editorBg == Color.pink1
@@ -456,6 +526,8 @@ suite "Validate toml config":
 
 suite "Configuration example":
   test "Check moerc.toml":
-    let filename = "./example/moerc.toml"
+    let
+      filename = "./example/moerc.toml"
+      toml = parsetoml.parseFile(filename)
 
-    discard parsetoml.parseFile(filename)
+    check toml.validateTomlConfig == none(string)

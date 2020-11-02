@@ -1,5 +1,5 @@
 import strutils, sequtils, os, osproc, random, strformat
-import editorstatus, ui, gapbuffer, unicodeext, undoredostack,
+import editorstatus, ui, gapbuffer, unicodetext, undoredostack,
        window, bufferstatus, movement, messages
 
 proc correspondingCloseParen(c: char): char =
@@ -19,9 +19,12 @@ proc nextRuneIs(bufStatus: var BufferStatus,
                 windowNode: WindowNode,
                 c: Rune): bool =
 
-  if bufStatus.buffer[windowNode.currentLine].len > windowNode.currentColumn:
-    result =
-      bufStatus.buffer[windowNode.currentLine][windowNode.currentColumn] == c
+  let
+    currentLine = windowNode.currentLine
+    currentColumn = windowNode.currentColumn
+
+  if bufStatus.buffer[currentLine].len > currentColumn:
+    result = bufStatus.buffer[currentLine][currentColumn] == c
 
 proc insertCharacter*(bufStatus: var BufferStatus,
                       windowNode: WindowNode,
@@ -29,8 +32,11 @@ proc insertCharacter*(bufStatus: var BufferStatus,
 
   let oldLine = bufStatus.buffer[windowNode.currentLine]
   var newLine = bufStatus.buffer[windowNode.currentLine]
+
   template insert = newLine.insert(c, windowNode.currentColumn)
+
   template moveRight = inc(windowNode.currentColumn)
+
   template inserted =
     if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
     inc(bufStatus.countChange)
@@ -57,6 +63,7 @@ proc insertCharacter*(bufStatus: var BufferStatus,
 proc deleteParen*(bufStatus: var BufferStatus,
                   windowNode: WindowNode,
                   currentChar: Rune) =
+
   let
     currentLine = windowNode.currentLine
     currentColumn = windowNode.currentColumn
@@ -364,9 +371,9 @@ proc deleteWord*(bufStatus: var BufferStatus, windowNode: WindowNode) =
       currentColumn = windowNode.currentColumn
       startWith = if bufStatus.buffer[currentLine].len == 0: ru'\n'
                   else: bufStatus.buffer[currentLine][currentColumn]
-      isSkipped = if unicodeext.isPunct(startWith): unicodeext.isPunct elif
-                     unicodeext.isAlpha(startWith): unicodeext.isAlpha elif
-                     unicodeext.isDigit(startWith): unicodeext.isDigit
+      isSkipped = if unicodetext.isPunct(startWith): unicodetext.isPunct elif
+                     unicodetext.isAlpha(startWith): unicodetext.isAlpha elif
+                     unicodetext.isDigit(startWith): unicodetext.isDigit
                   else: nil
 
     if isSkipped == nil:
@@ -411,35 +418,54 @@ proc deleteWordBeforeCursor*(bufStatus: var BufferStatus,
     bufStatus.moveToBackwardWord(windowNode)
     bufStatus.deleteWord(windowNode)
 
+proc countSpaceOfBeginningOfLine(line: seq[Rune]): int =
+  for r in line:
+    if r != ru' ': break
+    else: result.inc
+
 proc addIndent*(bufStatus: var BufferStatus,
                 windowNode: WindowNode,
                 tabStop: int) =
 
   let oldLine = bufStatus.buffer[windowNode.currentLine]
   var newLine = bufStatus.buffer[windowNode.currentLine]
-  newLine.insert(newSeqWith(tabStop, ru' '))
-  if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
 
-  inc(bufStatus.countChange)
+  let
+    numOfSpace = countSpaceOfBeginningOfLine(oldLine)
+    numOfInsertSpace = if numOfSpace mod tabStop != 0: numOfSpace mod tabStop
+                       else: tabStop
+
+  newLine.insert(newSeqWith(numOfInsertSpace, ru' '), 0)
+  if oldLine != newLine:
+    bufStatus.buffer[windowNode.currentLine] = newLine
+    windowNode.currentColumn = 0
+    inc(bufStatus.countChange)
 
 proc deleteIndent*(bufStatus: var BufferStatus,
                    windowNode: WindowNode,
                    tabStop: int) =
 
-  if bufStatus.buffer.len == 0: return
+  let
+    oldLine = bufStatus.buffer[windowNode.currentLine]
+    numOfSpace = countSpaceOfBeginningOfLine(oldLine)
+    numOfDeleteSpace = if numOfSpace > 0 and numOfSpace mod tabStop != 0:
+                         numOfSpace mod tabStop
+                       elif numOfSpace > 0:
+                         tabStop
+                       else:
+                         0
 
-  if bufStatus.buffer[windowNode.currentLine][0] == ru' ':
-    for i in 0 ..< tabStop:
-      if bufStatus.buffer.len == 0 or
-         bufStatus.buffer[windowNode.currentLine][0] != ru' ': break
-      let oldLine = bufStatus.buffer[windowNode.currentLine]
-      var newLine = bufStatus.buffer[windowNode.currentLine]
-      newLine.delete(0, 0)
-      if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
-  inc(bufStatus.countChange)
+  if numOfDeleteSpace > 0:
+    var newLine = bufStatus.buffer[windowNode.currentLine]
+
+    for i in 0 ..< numOfDeleteSpace: newLine.delete(0, 0)
+
+    if oldLine != newLine:
+      bufStatus.buffer[windowNode.currentLine] = newLine
+      inc(bufStatus.countChange)
 
 proc deleteCharactersBeforeCursorInCurrentLine*(bufStatus: var BufferStatus,
-                                               windowNode: var WindowNode) =
+                                                windowNode: var WindowNode) =
 
   if windowNode.currentColumn == 0: return
 
@@ -454,15 +480,15 @@ proc deleteCharactersBeforeCursorInCurrentLine*(bufStatus: var BufferStatus,
   if newLine != oldLine: bufStatus.buffer[currentLine] = newLine
 
 proc addIndentInCurrentLine*(bufStatus: var BufferStatus,
-                            windowNode: WindowNode,
-                            tabStop: int) =
+                             windowNode: WindowNode,
+                             tabStop: int) =
 
   bufStatus.addIndent(windowNode, tabStop)
   windowNode.currentColumn += tabStop
 
 proc deleteIndentInCurrentLine*(bufStatus: var BufferStatus,
-                            windowNode: WindowNode,
-                            tabStop: int) =
+                                windowNode: WindowNode,
+                                tabStop: int) =
 
   let oldLine = bufStatus.buffer[windowNode.currentLine]
 
@@ -476,6 +502,7 @@ proc deleteIndentInCurrentLine*(bufStatus: var BufferStatus,
 proc deleteCurrentCharacter*(bufStatus: var BufferStatus,
                              windowNode: WindowNode,
                              autoDeleteParen: bool) =
+
   let
     currentLine = windowNode.currentLine
     currentColumn = windowNode.currentColumn
@@ -516,10 +543,11 @@ proc deleteCurrentCharacter*(bufStatus: var BufferStatus,
 
 proc openBlankLineBelow*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   let
-    indent = sequtils.repeat(ru' ',
-                             countRepeat(bufStatus.buffer[windowNode.currentLine],
-                             Whitespace,
-                             0))
+    indent = sequtils.repeat(
+      ru' ',
+      countRepeat(bufStatus.buffer[windowNode.currentLine],
+      Whitespace,
+      0))
 
   bufStatus.buffer.insert(indent, windowNode.currentLine + 1)
   inc(windowNode.currentLine)
@@ -608,7 +636,7 @@ proc sendToClipboad*(registers: Registers, platform: Platform) =
   case platform
     of linux:
       ## Check if X server is running
-      let (output, exitCode) = execCmdEx("xset q")
+      let (_, exitCode) = execCmdEx("xset q")
       if exitCode == 0:
         let cmd = "xclip -r <<" & "'" & delimiterStr & "'" & "\n" & buffer & "\n" & delimiterStr & "\n"
         discard execShellCmd(cmd)
@@ -624,45 +652,39 @@ proc yankLines*(status: var EditorStatus, first, last: int) =
   status.registers.yankedStr = @[]
   status.registers.yankedLines = @[]
 
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-
   for i in first .. last:
-    status.registers.yankedLines.add(status.bufStatus[currentBufferIndex].buffer[i])
+    status.registers.yankedLines.add(currentBufStatus.buffer[i])
 
-  status.commandWindow.writeMessageYankedLine(status.registers.yankedLines.len,
-                                              status.settings.notificationSettings,
-                                              status.messageLog)
+  status.commandLine.writeMessageYankedLine(status.registers.yankedLines.len,
+                                            status.settings.notificationSettings,
+                                            status.messageLog)
 
 proc pasteLines(status: var EditorStatus) =
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
   for i in 0 ..< status.registers.yankedLines.len:
-    status.bufStatus[currentBufferIndex].buffer.insert(status.registers.yankedLines[i],
-                                                       windowNode.currentLine + i + 1)
+    currentBufStatus.buffer.insert(status.registers.yankedLines[i],
+                                   currentMainWindowNode.currentLine + i + 1)
 
-  inc(status.bufStatus[currentBufferIndex].countChange)
+  inc(currentBufStatus.countChange)
 
 proc yankString*(status: var EditorStatus, length: int) =
   status.registers.yankedLines = @[]
   status.registers.yankedStr = @[]
 
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  var windowNode =
-    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
-
   for i in 0 ..< length:
     let
-      col = windowNode.currentColumn + i
-      line = windowNode.currentLine
-      r = status.bufStatus[currentBufferIndex].buffer[line][col]
+      col = currentMainWindowNode.currentColumn + i
+      line = currentMainWindowNode.currentLine
+      r = currentBufStatus.buffer[line][col]
     status.registers.yankedStr.add(r)
 
-  if status.settings.systemClipboard: status.registers.sendToClipboad(status.platform)
+  if status.settings.systemClipboard:
+    status.registers.sendToClipboad(status.platform)
 
   block:
     let strLen = status.registers.yankedStr.len
 
-    status.commandWindow.writeMessageYankedCharactor(strLen,
+    status.commandLine.writeMessageYankedCharactor(
+      strLen,
       status.settings.notificationSettings,
       status.messageLog)
 
@@ -670,12 +692,8 @@ proc yankWord*(status: var Editorstatus, loop: int) =
   status.registers.yankedLines = @[]
   status.registers.yankedStr = @[]
 
-  var windowNode =
-    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
-  let
-    currentBufferIndex = status.bufferIndexInCurrentWindow
-    line = status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine]
-  var startColumn = windowNode.currentColumn
+  let line = currentBufStatus.buffer[currentMainWindowNode.currentLine]
+  var startColumn = currentMainWindowNode.currentColumn
 
   for i in 0 ..< loop:
     if line.len < 1:
@@ -689,7 +707,7 @@ proc yankWord*(status: var Editorstatus, loop: int) =
       let rune = line[j]
       if isWhiteSpace(rune):
         for k in j ..< line.len:
-          if isWhiteSpace(line[k]):status.registers.yankedStr.add(rune)
+          if isWhiteSpace(line[k]): status.registers.yankedStr.add(rune)
           else:
             startColumn = k
             break
@@ -700,37 +718,30 @@ proc yankWord*(status: var Editorstatus, loop: int) =
       else: status.registers.yankedStr.add(rune)
 
 proc pasteString(status: var EditorStatus) =
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  let oldLine = currentBufStatus.buffer[currentMainWindowNode.currentLine]
+  var newLine = currentBufStatus.buffer[currentMainWindowNode.currentLine]
 
-  var windowNode =
-    status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+  newLine.insert(status.registers.yankedStr, currentMainWindowNode.currentColumn)
 
-  let oldLine =
-    status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine]
-  var newLine =
-    status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine]
-  newLine.insert(status.registers.yankedStr, windowNode.currentColumn)
   if oldLine != newLine:
-    status.bufStatus[currentBufferIndex].buffer[windowNode.currentLine] = newLine
+    currentBufStatus.buffer[currentMainWindowNode.currentLine] = newLine
 
-  windowNode.currentColumn += status.registers.yankedStr.high - 1
+  currentMainWindowNode.currentColumn += status.registers.yankedStr.high - 1
 
-  inc(status.bufStatus[currentBufferIndex].countChange)
+  inc(currentBufStatus.countChange)
 
 proc pasteAfterCursor*(status: var EditorStatus) =
   if status.registers.yankedStr.len > 0:
-    var windowNode =
-      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
-    windowNode.currentColumn.inc
-    pasteString(status)
+    currentMainWindowNode.currentColumn.inc
+    status.pasteString
   elif status.registers.yankedLines.len > 0:
-    pasteLines(status)
+    status.pasteLines
 
 proc pasteBeforeCursor*(status: var EditorStatus) =
   if status.registers.yankedLines.len > 0:
-    pasteLines(status)
+    status.pasteLines
   elif status.registers.yankedStr.len > 0:
-    pasteString(status)
+    status.pasteString
 
 proc replaceCurrentCharacter*(bufStatus: var BufferStatus,
                               windowNode: WindowNode,

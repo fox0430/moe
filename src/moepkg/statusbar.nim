@@ -1,5 +1,6 @@
-import ui, strutils, strformat, highlite, os, osproc
-import bufferstatus, color, unicodeext, settings, window, gapbuffer
+import ui, strutils, strformat, os, osproc
+import syntax/highlite
+import bufferstatus, color, unicodetext, settings, window, gapbuffer
 
 type StatusBar* = object
   window*: Window
@@ -173,6 +174,7 @@ proc setModeStr(mode: Mode, isActiveWindow, showModeInactive: bool): string =
     of Mode.history: result = " HISTORY "
     of Mode.diff: result = "DIFF "
     of Mode.config: result = " CONFIG "
+    of Mode.debug: result = " DEBUG "
     else: result = " NORMAL "
 
 proc setModeStrColor(mode: Mode): EditorColorPair =

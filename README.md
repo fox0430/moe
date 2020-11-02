@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/fox0430/moe.svg?branch=master)](https://travis-ci.org/fox0430/moe)
+[![Build](https://github.com/fox0430/moe/workflows/Build/badge.svg)](https://github.com/fox0430/moe/actions)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 ## moe
@@ -128,6 +128,10 @@ And one more, it comes from the Japanese slang 萌え(moe).
 
 ## Contributing, bug reports, requests
 Welcome❤
+
+## Community
+
+ - [Discord](https://discord.gg/UaJPnCF)
 
 ## License
 

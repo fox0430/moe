@@ -7,7 +7,50 @@ when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
   from strutils import nimIdentNormalize
   export strutils.nimIdentNormalize
 
-import ui, color, unicodeext, highlight
+import ui, color, unicodetext, highlight
+
+type DebugWorkSpaceSettings* = object
+  enable*: bool
+  numOfWorkSpaces*: bool
+  currentWorkSpaceIndex*: bool
+
+type DebugWindowNodeSettings* = object
+  enable*: bool
+  currentWindow*: bool
+  index*: bool
+  windowIndex*: bool
+  bufferIndex*: bool
+  parentIndex*: bool
+  childLen*: bool
+  splitType*: bool
+  haveCursesWin*: bool
+  y*: bool
+  x*: bool
+  h*: bool
+  w*: bool
+  currentLine*: bool
+  currentColumn*: bool
+  expandedColumn*: bool
+  cursor*: bool
+
+type DebugBufferStatusSettings* = object
+  enable*: bool
+  bufferIndex*: bool
+  path*: bool
+  openDir*: bool
+  currentMode*: bool
+  prevMode*: bool
+  language*: bool
+  encoding*: bool
+  countChange*: bool
+  cmdLoop*: bool
+  lastSaveTime*: bool
+  bufferLen*: bool
+
+type DebugModeSettings* = object
+  workSpace*: DebugWorkSpaceSettings
+  windowNode*: DebugWindowNodeSettings
+  bufStatus*: DebugBufferStatusSettings
 
 type NotificationSettings* = object
   screenNotifications*: bool
@@ -51,7 +94,7 @@ type QuickRunSettings* = object
 
 type AutoBackupSettings* = object
   enable*: bool
-  idolTime*: int # seconds
+  idleTime*: int # seconds
   interval*: int # minutes
   backupDir*: seq[Rune]
   dirToExclude*: seq[seq[Rune]]
@@ -92,6 +135,14 @@ type EditorViewSettings* = object
 type AutocompleteSettings* = object
   enable*: bool
 
+type HighlightSettings* = object
+  replaceText*: bool
+  pairOfParen*: bool
+  currentWord*: bool
+  fullWidthSpace*: bool
+  trailingSpaces*: bool
+  reservedWords*: seq[ReservedWord]
+
 type EditorSettings* = object
   editorColorTheme*: ColorTheme
   statusBar*: StatusBarSettings
@@ -112,25 +163,62 @@ type EditorSettings* = object
   liveReloadOfConf*: bool
   incrementalSearch*: bool
   popUpWindowInExmode*: bool
-  replaceTextHighlight*: bool
-  highlightPairOfParen*: bool
   autoDeleteParen*: bool
   smoothScroll*: bool
   smoothScrollSpeed*: int
-  highlightOtherUsesCurrentWord*: bool
   systemClipboard*: bool
-  highlightFullWidthSpace*: bool
-  highlightTrailingSpaces*: bool
   buildOnSave*: BuildOnSaveSettings
   workSpace*: WorkSpaceSettings
   filerSettings*: FilerSettings
   autocompleteSettings*: AutocompleteSettings
-  reservedWords*: seq[ReservedWord]
   autoBackupSettings*: AutoBackupSettings
   quickRunSettings*: QuickRunSettings
   notificationSettings*: NotificationSettings
+  debugModeSettings*: DebugModeSettings
+  highlightSettings*: HighlightSettings
 
-type InvalidItemError* = object of ValueError # Warning: inherit from a more precise exception type like ValueError, IOError or OSError. If these don't suit, inherit from CatchableError or Defect. [InheritFromException]
+# Warning: inherit from a more precise exception type like ValueError, IOError or OSError.
+# If these don't suit, inherit from CatchableError or Defect. [InheritFromException]
+type InvalidItemError* = object of ValueError
+
+proc initDebugModeSettings(): DebugModeSettings =
+  result.workSpace = DebugWorkSpaceSettings(
+    enable: true,
+    numOfWorkSpaces: true,
+    currentWorkSpaceIndex: true)
+
+  result.windowNode = DebugWindowNodeSettings(
+    enable: true,
+    currentWindow: true,
+    index: true,
+    windowIndex: true,
+    bufferIndex: true,
+    parentIndex: true,
+    childLen: true,
+    splitType: true,
+    haveCursesWin: true,
+    y: true,
+    x: true,
+    h: true,
+    w: true,
+    currentLine: true,
+    currentColumn: true,
+    expandedColumn: true,
+    cursor: true)
+
+  result.bufStatus = DebugBufferStatusSettings(
+    enable: true,
+    bufferIndex: true,
+    path: true,
+    openDir: true,
+    currentMode: true,
+    prevMode: true,
+    language: true,
+    encoding: true,
+    countChange: true,
+    cmdLoop: true,
+    lastSaveTime: true,
+    bufferLen: true)
 
 proc initNotificationSettings(): NotificationSettings =
   result.screenNotifications = true
@@ -164,7 +252,7 @@ proc initQuickRunSettings(): QuickRunSettings =
 proc initAutoBackupSettings(): AutoBackupSettings =
   result.enable = true
   result.interval = 5 # 5 minutes
-  result.idolTime = 10 # 10 seconds
+  result.idleTime = 10 # 10 seconds
   result.dirToExclude = @[ru"/etc"]
 
 proc initFilerSettings(): FilerSettings {.inline.} =
@@ -205,6 +293,14 @@ proc initReservedWords*(): seq[ReservedWord] =
     ReservedWord(word: "NOTE", color: EditorColorPair.reservedWord),
   ]
 
+proc initHighlightSettings(): HighlightSettings =
+  result.replaceText = true
+  result.pairOfParen = true
+  result.currentWord = true
+  result.fullWidthSpace = true
+  result.trailingSpaces = true
+  result.reservedWords =  initReservedWords()
+
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = ColorTheme.dark
   result.statusBar = initStatusBarSettings()
@@ -223,23 +319,19 @@ proc initEditorSettings*(): EditorSettings =
   result.autoSaveInterval = 5
   result.incrementalSearch = true
   result.popUpWindowInExmode = true
-  result.replaceTextHighlight = true
-  result.highlightPairOfParen = true
   result.autoDeleteParen = true
   result.smoothScroll = true
   result.smoothScrollSpeed = 15
-  result.highlightOtherUsesCurrentWord = true
   result.systemClipboard = true
-  result.highlightFullWidthSpace = true
-  result.highlightTrailingSpaces = true
   result.buildOnSave = BuildOnSaveSettings()
   result.workSpace= initWorkSpaceSettings()
   result.filerSettings = initFilerSettings()
   result.autocompleteSettings = initAutocompleteSettings()
-  result.reservedWords = initReservedWords()
   result.autoBackupSettings = initAutoBackupSettings()
   result.quickRunSettings = initQuickRunSettings()
   result.notificationSettings = initNotificationSettings()
+  result.debugModeSettings = initDebugModeSettings()
+  result.highlightSettings = initHighlightSettings()
 
 proc getTheme(theme: string): ColorTheme =
   if theme == "vivid": return ColorTheme.vivid
@@ -260,7 +352,6 @@ proc getTheme(theme: string): ColorTheme =
 #   InverseForeground    - inversing the foreground color
 #   ReadableVsBackground - adjusts foreground to be readable
 macro setEditorColor(args: varargs[untyped]): untyped =
-  echo args.treeRepr
   let colorNameIdent           = args[0]
   let colorNameBackgroundIdent = ident(colorNameIdent.strVal & "Bg")
   let resultIdent              = ident"result"
@@ -366,316 +457,315 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
   # This is currently optimized and tested for the Forest Focus theme
   # and even for that theme it only produces a partial and imperfect
   # translation
-  expandMacros:
-    setEditorColor editorBg:
-      background:
-        colorFromNode(jsonNode{"colors", "editor.background"})
+  setEditorColor editorBg:
+    background:
+      colorFromNode(jsonNode{"colors", "editor.background"})
 
-    # Color scheme
-    setEditorColor defaultChar:
-      foreground:
-        colorFromNode(jsonNode{"colors", "editor.foreground"})
-    setEditorColor gtKeyword:
-      foreground:
-        colorFromNode(getScope("keyword"){"foreground"})
-    setEditorColor gtFunctionName:
-      foreground:
-        colorFromNode(getScope("entity"){"foreground"})
-    setEditorColor gtBoolean:
-      foreground:
-        colorFromNode(getScope("entity"){"foreground"})
-    setEditorColor gtSpecialVar:
-      foreground:
-        colorFromNode(getScope("variable"){"foreground"})
-    setEditorColor gtBuiltin:
-      foreground:
-        colorFromNode(getScope("entity"){"foreground"})
-    setEditorColor gtStringLit:
-      foreground:
-        colorFromNode(getScope("string"){"foreground"})
-    setEditorColor gtDecNumber:
-      foreground:
-        colorFromNode(getScope("constant"){"foreground"})
-    setEditorColor gtComment:
-      foreground:
-        colorFromNode(getScope("comment"){"foreground"})
-    setEditorColor gtLongComment:
-      foreground:
-        colorFromNode(getScope("comment"){"foreground"})
-    setEditorColor gtWhitespace:
-      foreground:
-        colorFromNode(jsonNode{"colors", "editorWhitespace.foreground"})
+  # Color scheme
+  setEditorColor defaultChar:
+    foreground:
+      colorFromNode(jsonNode{"colors", "editor.foreground"})
+  setEditorColor gtKeyword:
+    foreground:
+      colorFromNode(getScope("keyword"){"foreground"})
+  setEditorColor gtFunctionName:
+    foreground:
+      colorFromNode(getScope("entity"){"foreground"})
+  setEditorColor gtBoolean:
+    foreground:
+      colorFromNode(getScope("entity"){"foreground"})
+  setEditorColor gtSpecialVar:
+    foreground:
+      colorFromNode(getScope("variable"){"foreground"})
+  setEditorColor gtBuiltin:
+    foreground:
+      colorFromNode(getScope("entity"){"foreground"})
+  setEditorColor gtStringLit:
+    foreground:
+      colorFromNode(getScope("string"){"foreground"})
+  setEditorColor gtDecNumber:
+    foreground:
+      colorFromNode(getScope("constant"){"foreground"})
+  setEditorColor gtComment:
+    foreground:
+      colorFromNode(getScope("comment"){"foreground"})
+  setEditorColor gtLongComment:
+    foreground:
+      colorFromNode(getScope("comment"){"foreground"})
+  setEditorColor gtWhitespace:
+    foreground:
+      colorFromNode(jsonNode{"colors", "editorWhitespace.foreground"})
 
-    # status bar
-    setEditorColor statusBarNormalMode:
-      foreground:
-        colorFromNode(jsonNode{"colors", "editor.foreground"})
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarModeNormalMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarNormalModeInactive:
-      foreground:
-        colorFromNode(jsonNode{"colors", "statusBar.foreground"})
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "editor.background"})
-    setEditorColor statusBarInsertMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarModeInsertMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        white
-    setEditorColor statusBarInsertModeInactive:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarVisualMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarModeVisualMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        white
-    setEditorColor statusBarVisualModeInactive:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarReplaceMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarModeReplaceMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        white
-    setEditorColor statusBarReplaceModeInactive:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarFilerMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarModeFilerMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        white
-    setEditorColor statusBarFilerModeInactive:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarExMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarModeExMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        white
-    setEditorColor statusBarExModeInactive:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    setEditorColor statusBarGitBranch:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "statusBar.background"})
-    # command  bar
-    setEditorColor commandBar:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        Color.default
-    # error message
-    setEditorColor errorMessage:
-      foreground:
-        colorFromNode(getScope("console.error"){"foreground"})
-      background:
-        Color.default
-    setEditorColor currentTab:
-      foreground:
-        colorFromNode(jsonNode{"colors", "tab.foreground"})
-      background:
-        colorFromNode(jsonNode{"colors", "tab.activeBackground"})
+  # status bar
+  setEditorColor statusBarNormalMode:
+    foreground:
+      colorFromNode(jsonNode{"colors", "editor.foreground"})
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+  setEditorColor statusBarModeNormalMode:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+  setEditorColor statusBarNormalModeInactive:
+    foreground:
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "editor.background"})
+  setEditorColor statusBarInsertMode:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+  setEditorColor statusBarModeInsertMode:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      white
+  setEditorColor statusBarInsertModeInactive:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+  setEditorColor statusBarVisualMode:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+  setEditorColor statusBarModeVisualMode:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      white
+  setEditorColor statusBarVisualModeInactive:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+  setEditorColor statusBarReplaceMode:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+  setEditorColor statusBarModeReplaceMode:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      white
+  setEditorColor statusBarReplaceModeInactive:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+  setEditorColor statusBarFilerMode:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+  setEditorColor statusBarModeFilerMode:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      white
+  setEditorColor statusBarFilerModeInactive:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+  setEditorColor statusBarExMode:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+  setEditorColor statusBarModeExMode:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      white
+  setEditorColor statusBarExModeInactive:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+  setEditorColor statusBarGitBranch:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+  # command  bar
+  setEditorColor commandBar:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      Color.default
+  # error message
+  setEditorColor errorMessage:
+    foreground:
+      colorFromNode(getScope("console.error"){"foreground"})
+    background:
+      Color.default
+  setEditorColor currentTab:
+    foreground:
+      colorFromNode(jsonNode{"colors", "tab.foreground"})
+    background:
+      colorFromNode(jsonNode{"colors", "tab.activeBackground"})
 
-    setEditorColor tab:
-      foreground:
-        colorFromNode(jsonNode{"colors", "tab.foreground"})
-      background:
-        colorFromNode(jsonNode{"colors", "tab.inactiveBackground"})
+  setEditorColor tab:
+    foreground:
+      colorFromNode(jsonNode{"colors", "tab.foreground"})
+    background:
+      colorFromNode(jsonNode{"colors", "tab.inactiveBackground"})
 
-    setEditorColor lineNum:
-      foreground:
-        colorFromNode(jsonNode{"colors", "editorLineNumber.foreground"})
-        adjust: InverseBackground
-      background:
-        colorFromNode(jsonNode{"colors", "editorLineNumber.background"})
+  setEditorColor lineNum:
+    foreground:
+      colorFromNode(jsonNode{"colors", "editorLineNumber.foreground"})
+      adjust: InverseBackground
+    background:
+      colorFromNode(jsonNode{"colors", "editorLineNumber.background"})
 
-    setEditorColor currentLineNum:
-      foreground:
-        colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
-      background:
-        colorFromNode(jsonNode{"colors", "editor.background"})
+  setEditorColor currentLineNum:
+    foreground:
+      colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
+    background:
+      colorFromNode(jsonNode{"colors", "editor.background"})
 
-    setEditorColor pcLink:
-      foreground:
-        colorFromNode(getScope("hyperlink"){"foreground"})
-        adjust: ReadableVsBackground
-      background:
-        Color.default
+  setEditorColor pcLink:
+    foreground:
+      colorFromNode(getScope("hyperlink"){"foreground"})
+      adjust: ReadableVsBackground
+    background:
+      Color.default
 
-    # highlight other uses current word
-    setEditorColor currentWord:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
+  # highlight other uses current word
+  setEditorColor currentWord:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
 
-    setEditorColor popUpWinCurrentLine:
-      foreground:
-        colorFromNode(jsonNode{"colors", "sideBarTitle.forground"})
-      background:
-        colorFromNode(jsonNode{"colors", "sideBarSectionHeader.background"})
+  setEditorColor popUpWinCurrentLine:
+    foreground:
+      colorFromNode(jsonNode{"colors", "sideBarTitle.forground"})
+    background:
+      colorFromNode(jsonNode{"colors", "sideBarSectionHeader.background"})
 
-    # pop up window
-    setEditorColor popUpWindow:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "sideBar.background"})
-    setEditorColor popUpWinCurrentLine:
-      foreground:
-        colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "sideBar.background"})
+  # pop up window
+  setEditorColor popUpWindow:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "sideBar.background"})
+  setEditorColor popUpWinCurrentLine:
+    foreground:
+      colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "sideBar.background"})
 
-    # pair of paren highlighting
-    setEditorColor parenText:
-      foreground:
-        colorFromNode(getScope("unnamedScope"){"bracketsForeground"})
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
+  # pair of paren highlighting
+  setEditorColor parenText:
+    foreground:
+      colorFromNode(getScope("unnamedScope"){"bracketsForeground"})
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
 
-    # replace text highlighting
-    setEditorColor replaceText:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors",
-          "gitDecoration.conflictingResourceForeground"})
+  # replace text highlighting
+  setEditorColor replaceText:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors",
+        "gitDecoration.conflictingResourceForeground"})
 
-    # filer mode
-    setEditorColor currentFile:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
-    setEditorColor file:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        Color.default
-    setEditorColor dir:
-      foreground:
-        colorFromNode(getScope("hyperlink"){"foreground"})
-        adjust: ReadableVsBackground
-      background:
-        Color.default
+  # filer mode
+  setEditorColor currentFile:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
+  setEditorColor file:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      Color.default
+  setEditorColor dir:
+    foreground:
+      colorFromNode(getScope("hyperlink"){"foreground"})
+      adjust: ReadableVsBackground
+    background:
+      Color.default
 
-    # highlight full width space
-    setEditorColor highlightFullWidthSpace:
-      foreground:
-        colorFromNode(jsonNode{"colors", "tab.activeBorder"})
-      background:
-        colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+  # highlight full width space
+  setEditorColor highlightFullWidthSpace:
+    foreground:
+      colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+    background:
+      colorFromNode(jsonNode{"colors", "tab.activeBorder"})
 
-    # highlight trailing spaces
-    setEditorColor highlightTrailingSpaces:
-      foreground:
-        colorFromNode(jsonNode{"colors", "tab.activeBorder"})
-      background:
-        colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+  # highlight trailing spaces
+  setEditorColor highlightTrailingSpaces:
+    foreground:
+      colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+    background:
+      colorFromNode(jsonNode{"colors", "tab.activeBorder"})
 
-    # highlight diff
-    setEditorColor addedLine:
-      foreground:
-        colorFromNode(jsonNode{"colors", "diff.inserted"})
-      background:
-        colorFromNode(jsonNode{"colors", "editor.background"})
-    setEditorColor deletedLine:
-      foreground:
-        colorFromNode(jsonNode{"colors", "diff.deleted"})
-      background:
-        colorFromNode(jsonNode{"colors", "editor.background"})
+  # highlight diff
+  setEditorColor addedLine:
+    foreground:
+      colorFromNode(jsonNode{"colors", "diff.inserted"})
+    background:
+      colorFromNode(jsonNode{"colors", "editor.background"})
+  setEditorColor deletedLine:
+    foreground:
+      colorFromNode(jsonNode{"colors", "diff.deleted"})
+    background:
+      colorFromNode(jsonNode{"colors", "editor.background"})
 
-    # work space bar
-    setEditorColor workSpaceBar:
-      foreground:
-        colorFromNode(jsonNode{"colors", "activityBar.foreground"})
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "activityBar.background"})
-    setEditorColor reservedWord:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "activityBarBadge.background"})
+  # work space bar
+  setEditorColor workSpaceBar:
+    foreground:
+      colorFromNode(jsonNode{"colors", "activityBar.foreground"})
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "activityBar.background"})
+  setEditorColor reservedWord:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "activityBarBadge.background"})
 
-    # search result highlighting
-    setEditorColor searchResult:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+  # search result highlighting
+  setEditorColor searchResult:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "tab.activeBorder"})
 
-    # selected area in visual mode
-    setEditorColor visualMode:
-      foreground:
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+  # selected area in visual mode
+  setEditorColor visualMode:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "tab.activeBorder"})
 
-    # History manager
-    setEditorColor currentHistory:
-      foreground:
-        colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "editor.background"})
+  # History manager
+  setEditorColor currentHistory:
+    foreground:
+      colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "editor.background"})
 
   # Configuration mode
-    setEditorColor currentSetting:
-      foreground:
-        colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
-        adjust: ReadableVsBackground
-      background:
-        colorFromNode(jsonNode{"colors", "editor.background"})
+  setEditorColor currentSetting:
+    foreground:
+      colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "editor.background"})
 
 proc loadVSCodeTheme*(): ColorTheme =
   # search for the vscode theme that is set in the current preferences of
@@ -818,12 +908,6 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Standard"].contains("popUpWindowInExmode"):
       result.popUpWindowInExmode = settings["Standard"]["popUpWindowInExmode"].getbool()
 
-    if settings["Standard"].contains("replaceTextHighlight"):
-      result.replaceTextHighlight = settings["Standard"]["replaceTextHighlight"].getbool()
-
-    if settings["Standard"].contains("highlightPairOfParen"):
-      result.highlightPairOfParen =  settings["Standard"]["highlightPairOfParen"].getbool()
-
     if settings["Standard"].contains("autoDeleteParen"):
       result.autoDeleteParen =  settings["Standard"]["autoDeleteParen"].getbool()
 
@@ -833,17 +917,8 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Standard"].contains("smoothScrollSpeed"):
       result.smoothScrollSpeed = settings["Standard"]["smoothScrollSpeed"].getint()
 
-    if settings["Standard"].contains("highlightCurrentWord"):
-      result.highlightOtherUsesCurrentWord = settings["Standard"]["highlightCurrentWord"].getbool()
-
     if settings["Standard"].contains("systemClipboard"):
       result.systemClipboard = settings["Standard"]["systemClipboard"].getbool()
-
-    if settings["Standard"].contains("highlightFullWidthSpace"):
-      result.highlightFullWidthSpace = settings["Standard"]["highlightFullWidthSpace"].getbool()
-
-    if settings["Standard"].contains("highlightTrailingSpaces"):
-      result.highlightTrailingSpaces = settings["Standard"]["highlightTrailingSpaces"].getbool()
 
     if settings["Standard"].contains("indentationLines"):
       result.view.indentationLines = settings["Standard"]["indentationLines"].getbool()
@@ -913,14 +988,29 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
         let
           word = reservedWords[i].getStr
           reservedWord = ReservedWord(word: word, color: EditorColorPair.reservedWord)
-        result.reservedWords.add(reservedWord)
+        result.highlightSettings.reservedWords.add(reservedWord)
+
+    if settings["Highlight"].contains("currentWord"):
+      result.highlightSettings.currentWord = settings["Highlight"]["currentWord"].getbool()
+
+    if settings["Highlight"].contains("replaceText"):
+      result.highlightSettings.replaceText = settings["Highlight"]["replaceText"].getbool()
+
+    if settings["Highlight"].contains("pairOfParen"):
+      result.highlightSettings.pairOfParen =  settings["Highlight"]["pairOfParen"].getbool()
+
+    if settings["Highlight"].contains("fullWidthSpace"):
+      result.highlightSettings.fullWidthSpace = settings["Highlight"]["fullWidthSpace"].getbool()
+
+    if settings["Highlight"].contains("trailingSpaces"):
+      result.highlightSettings.trailingSpaces = settings["Highlight"]["trailingSpaces"].getbool()
 
   if settings.contains("AutoBackup"):
     if settings["AutoBackup"].contains("enable"):
       result.autoBackupSettings.enable = settings["AutoBackup"]["enable"].getbool()
 
-    if settings["AutoBackup"].contains("idolTime"):
-      result.autoBackupSettings.idolTime = settings["AutoBackup"]["idolTime"].getInt()
+    if settings["AutoBackup"].contains("idleTime"):
+      result.autoBackupSettings.idleTime = settings["AutoBackup"]["idleTime"].getInt()
 
     if settings["AutoBackup"].contains("interval"):
       result.autoBackupSettings.interval = settings["AutoBackup"]["interval"].getInt()
@@ -1038,6 +1128,148 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
   if (const table = "Autocomplete"; settings.contains(table)):
     if (const key = "enable"; settings[table].contains(key)):
       result.autocompleteSettings.enable = settings[table][key].getbool
+
+  if settings.contains("Debug"):
+    if settings["Debug"].contains("WorkSpace"):
+      let workSpaceSettings = settings["Debug"]["WorkSpace"]
+
+      if workSpaceSettings.contains("enable"):
+        let setting = workSpaceSettings["enable"].getbool
+        result.debugModeSettings.workSpace.enable = setting
+
+      if workSpaceSettings.contains("numOfWorkSpaces"):
+        let setting = workSpaceSettings["numOfWorkSpaces"].getbool
+        result.debugModeSettings.workSpace.numOfWorkSpaces = setting
+
+      if workSpaceSettings.contains("currentWorkSpaceIndex"):
+        let setting = workSpaceSettings["currentWorkSpaceIndex"].getbool
+        result.debugModeSettings.workSpace.currentWorkSpaceIndex = setting
+
+    if settings["Debug"].contains("WindowNode"):
+      let windowNodeSettings = settings["Debug"]["WindowNode"]
+
+      if windowNodeSettings.contains("enable"):
+        let setting = windowNodeSettings["enable"].getbool
+        result.debugModeSettings.windowNode.enable = setting
+
+      if windowNodeSettings.contains("currentWindow"):
+        let setting = windowNodeSettings["currentWindow"].getbool
+        result.debugModeSettings.windowNode.currentWindow = setting
+
+      if windowNodeSettings.contains("index"):
+        let setting = windowNodeSettings["index"].getbool
+        result.debugModeSettings.windowNode.index = setting
+
+      if windowNodeSettings.contains("windowIndex"):
+        let setting = windowNodeSettings["windowIndex"].getbool
+        result.debugModeSettings.windowNode.windowIndex = setting
+
+      if windowNodeSettings.contains("bufferIndex"):
+        let setting = windowNodeSettings["bufferIndex"].getbool
+        result.debugModeSettings.windowNode.bufferIndex = setting
+
+      if windowNodeSettings.contains("parentIndex"):
+        let setting = windowNodeSettings["parentIndex"].getbool
+        result.debugModeSettings.windowNode.parentIndex = setting
+
+      if windowNodeSettings.contains("childLen"):
+        let setting = windowNodeSettings["childLen"].getbool
+        result.debugModeSettings.windowNode.childLen = setting
+
+      if windowNodeSettings.contains("splitType"):
+        let setting = windowNodeSettings["splitType"].getbool
+        result.debugModeSettings.windowNode.splitType = setting
+
+      if windowNodeSettings.contains("haveCursesWin"):
+        let setting = windowNodeSettings["haveCursesWin"].getbool
+        result.debugModeSettings.windowNode.haveCursesWin = setting
+
+      if windowNodeSettings.contains("haveCursesWin"):
+        let setting = windowNodeSettings["haveCursesWin"].getbool
+        result.debugModeSettings.windowNode.haveCursesWin = setting
+
+      if windowNodeSettings.contains("y"):
+        let setting = windowNodeSettings["y"].getbool
+        result.debugModeSettings.windowNode.y = setting
+
+      if windowNodeSettings.contains("x"):
+        let setting = windowNodeSettings["x"].getbool
+        result.debugModeSettings.windowNode.x = setting
+
+      if windowNodeSettings.contains("h"):
+        let setting = windowNodeSettings["h"].getbool
+        result.debugModeSettings.windowNode.h = setting
+
+      if windowNodeSettings.contains("w"):
+        let setting = windowNodeSettings["w"].getbool
+        result.debugModeSettings.windowNode.w = setting
+
+      if windowNodeSettings.contains("currentLine"):
+        let setting = windowNodeSettings["currentLine"].getbool
+        result.debugModeSettings.windowNode.currentLine = setting
+
+      if windowNodeSettings.contains("currentColumn"):
+        let setting = windowNodeSettings["currentColumn"].getbool
+        result.debugModeSettings.windowNode.currentColumn = setting
+
+      if windowNodeSettings.contains("expandedColumn"):
+        let setting = windowNodeSettings["expandedColumn"].getbool
+        result.debugModeSettings.windowNode.expandedColumn = setting
+
+      if windowNodeSettings.contains("cursor"):
+        let setting = windowNodeSettings["cursor"].getbool
+        result.debugModeSettings.windowNode.cursor = setting
+
+    if settings["Debug"].contains("BufferStatus"):
+      let bufStatusSettings = settings["Debug"]["BufferStatus"]
+
+      if bufStatusSettings.contains("enable"):
+        let setting = bufStatusSettings["enable"].getbool
+        result.debugModeSettings.bufStatus.enable = setting
+
+      if bufStatusSettings.contains("bufferIndex"):
+        let setting = bufStatusSettings["bufferIndex"].getbool
+        result.debugModeSettings.bufStatus.bufferIndex = setting
+
+      if bufStatusSettings.contains("path"):
+        let setting = bufStatusSettings["path"].getbool
+        result.debugModeSettings.bufStatus.path = setting
+
+      if bufStatusSettings.contains("openDir"):
+        let setting = bufStatusSettings["openDir"].getbool
+        result.debugModeSettings.bufStatus.openDir = setting
+
+      if bufStatusSettings.contains("currentMode"):
+        let setting = bufStatusSettings["currentMode"].getbool
+        result.debugModeSettings.bufStatus.currentMode = setting
+
+      if bufStatusSettings.contains("prevMode"):
+        let setting = bufStatusSettings["prevMode"].getbool
+        result.debugModeSettings.bufStatus.prevMode = setting
+
+      if bufStatusSettings.contains("language"):
+        let setting = bufStatusSettings["language"].getbool
+        result.debugModeSettings.bufStatus.language = setting
+
+      if bufStatusSettings.contains("encoding"):
+        let setting = bufStatusSettings["encoding"].getbool
+        result.debugModeSettings.bufStatus.encoding = setting
+
+      if bufStatusSettings.contains("countChange"):
+        let setting = bufStatusSettings["countChange"].getbool
+        result.debugModeSettings.bufStatus.countChange = setting
+
+      if bufStatusSettings.contains("cmdLoop"):
+        let setting = bufStatusSettings["cmdLoop"].getbool
+        result.debugModeSettings.bufStatus.cmdLoop = setting
+
+      if bufStatusSettings.contains("lastSaveTime"):
+        let setting = bufStatusSettings["lastSaveTime"].getbool
+        result.debugModeSettings.bufStatus.lastSaveTime = setting
+
+      if bufStatusSettings.contains("bufferLen"):
+        let setting = bufStatusSettings["bufferLen"].getbool
+        result.debugModeSettings.bufStatus.bufferLen = setting
 
   if not vscodeTheme and settings.contains("Theme"):
     if settings["Theme"].contains("baseTheme"):
@@ -1386,13 +1618,8 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
            "liveReloadOfConf",
            "incrementalSearch",
            "popUpWindowInExmode",
-           "replaceTextHighlight",
-           "highlightPairOfParen",
            "autoDeleteParen",
            "systemClipboard",
-           "highlightFullWidthSpace",
-           "highlightTrailingSpaces",
-           "highlightCurrentWord",
            "smoothScroll":
           if not (item.val["type"].getStr == "bool"):
             return some($item)
@@ -1484,6 +1711,13 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
             for word in item.val["value"]:
               if word["type"].getStr != "string":
                 return some($item)
+        of "fullWidthSpace",
+           "trailingSpaces",
+           "replaceText",
+           "pairOfParen",
+           "currentWord":
+          if not (item.val["type"].getStr == "bool"):
+            return some($item)
         else:
           return some($item)
 
@@ -1493,7 +1727,7 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         of "enable", "showMessages":
           if item.val["type"].getStr != "bool":
             return some($item)
-        of "idolTime",
+        of "idleTime",
            "interval":
           if item.val["type"].getStr != "integer":
             return some($item)
@@ -1571,11 +1805,73 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
   template validateAutocompleteTable() =
     for item in json["Autocomplete"].pairs:
       case item.key:
-      of "enable":
-        if item.val["type"].getStr != "bool":
+        of "enable":
+          if item.val["type"].getStr != "bool":
+            return some($item)
+        else:
           return some($item)
-      else:
-        return some($item)
+
+  template validateDebugTable() =
+    for item in json["Debug"].pairs:
+      case item.key:
+        of "WorkSpace":
+        # Check [Debug.WorkSpace]
+          for item in json["Debug"]["WorkSpace"].pairs:
+            case item.key:
+              of "enable",
+                  "numOfWorkSpaces",
+                  "currentWorkSpaceIndex":
+                if item.val["type"].getStr != "bool":
+                  return some($item)
+              else:
+                return some($item)
+        # Check [Debug.WindowNode]
+        of "WindowNode":
+          for item in json["Debug"]["WindowNode"].pairs:
+            case item.key:
+              of "enable",
+                 "currentWindow",
+                 "index",
+                 "windowIndex",
+                 "bufferIndex",
+                 "parentIndex",
+                 "childLen",
+                 "splitType",
+                 "haveCursesWin",
+                 "y",
+                 "x",
+                 "h",
+                 "w",
+                 "currentLine",
+                 "currentColumn",
+                 "expandedColumn",
+                 "cursor":
+                if item.val["type"].getStr != "bool":
+                  return some($item)
+              else:
+                return some($item)
+        # Check [Debug.BufferStatus]
+        of "BufferStatus":
+          for item in json["Debug"]["BufferStatus"].pairs:
+            case item.key:
+              of "enable",
+                 "bufferIndex",
+                 "path",
+                 "openDir",
+                 "currentMode",
+                 "prevMode",
+                 "language",
+                 "encoding",
+                 "countChange",
+                 "cmdLoop",
+                 "lastSaveTime",
+                 "bufferLen":
+                if item.val["type"].getStr != "bool":
+                  return some($item)
+              else:
+                return some($item)
+        else:
+          return some($item)
 
   template validateThemeTable() =
     let editorColors = ColorThemeTable[ColorTheme.config].EditorColor
@@ -1629,6 +1925,8 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         validateThemeTable()
       of "Autocomplete":
         validateAutocompleteTable()
+      of "Debug":
+        validateDebugTable()
       else: discard
 
   return none(string)

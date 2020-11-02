@@ -1,6 +1,6 @@
 import times, terminal
-import editorstatus, unicodeext, bufferstatus, highlight, color, gapbuffer, ui,
-       movement
+import editorstatus, unicodetext, bufferstatus, highlight, color, gapbuffer, ui,
+       movement, window
 
 proc isDiffViewerMode(status: Editorstatus): bool =
   let
@@ -46,13 +46,12 @@ proc diffViewer*(status: var Editorstatus) =
     var key = errorKey
     while key == errorKey:
       status.eventLoopTask
-      key = getKey(status.workSpace[workspaceIndex].currentMainWindowNode.window)
+      key = getKey(status.workSpace[workspaceIndex].currentMainWindowNode)
 
     status.lastOperatingTime = now()
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
-      status.commandWindow.erase
     elif isControlK(key):
       status.moveNextWindow
     elif isControlJ(key):
@@ -67,7 +66,7 @@ proc diffViewer*(status: var Editorstatus) =
         status.workSpace[workspaceIndex].currentMainWindowNode)
     elif key == ord('g'):
       let secondKey = getKey(
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.window)
+        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
       if  secondKey == ord('g'):
         status.moveToFirstLine
       else:

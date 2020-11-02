@@ -1,9 +1,9 @@
 import unittest
-import moepkg/[editorstatus, unicodeext, exmode]
+import moepkg/[editorstatus, unicodetext, exmode]
 
 test "Quit command":
   var status = initEditorStatus()
-  status.addNewBuffer("")
+  status.addNewBuffer
 
   const command = @[ru"q"]
-  status.exModeCommand(command)
+  status.exModeCommand(command, 100, 100)

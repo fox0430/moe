@@ -4,65 +4,61 @@ include moepkg/[editor, editorstatus]
 suite "Editor: Auto indent":
   test "Auto indent in current Line":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  a", ru"b"])
 
     status.workSpace[0].currentMainWindowNode.currentLine = 1
 
     status.bufStatus[0].autoIndentCurrentLine(
-      status.workspace[0].currentMainWindowNode
-    )
+      status.workspace[0].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"  a")
     check(status.bufStatus[0].buffer[1] == ru"  b")
 
   test "Auto indent in current Line 2":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b"])
 
     status.workSpace[0].currentMainWindowNode.currentLine = 1
 
     status.bufStatus[0].autoIndentCurrentLine(
-      status.workspace[0].currentMainWindowNode
-    )
+      status.workspace[0].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"a")
     check(status.bufStatus[0].buffer[1] == ru"b")
 
   test "Auto indent in current Line 3":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"  b"])
 
     status.workSpace[0].currentMainWindowNode.currentLine = 1
 
     status.bufStatus[0].autoIndentCurrentLine(
-      status.workspace[0].currentMainWindowNode
-    )
+      status.workspace[0].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"a")
     check(status.bufStatus[0].buffer[1] == ru"b")
 
   test "Auto indent in current Line 4":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru""])
 
     status.bufStatus[0].autoIndentCurrentLine(
-      status.workspace[0].currentMainWindowNode
-    )
+      status.workspace[0].currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"")
 
 suite "Editor: Delete trailing spaces":
   test "Delete trailing spaces 1":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"d  ", ru"efg"])
 
@@ -78,39 +74,79 @@ suite "Editor: Send to clipboad":
     const str = ru"Clipboard test"
     const registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
 
-    const platform = editorstatus.Platform.linux
+    let platform = editorstatus.Platform(initPlatform())
     sendToClipboad(registers, platform)
 
-    let (output, exitCode) = execCmdEx("xclip -o")
+    if (platform == editorstatus.Platform.linux or
+        platform == editorstatus.Platform.wsl):
+      let
+        cmd = if platform == editorstatus.Platform.linux:
+                execCmdEx("xclip -o")
+              else:
+                # On the WSL
+                execCmdEx("powershell.exe -Command Get-Clipboard")
+        (output, exitCode) = cmd
 
-    check exitCode == 0 and output[0 .. output.high - 1] == "Clipboard test"
+      check exitCode == 0
+      if platform == editorstatus.Platform.linux:
+        check output[0 .. output.high - 1] == $str
+      else:
+        # On the WSL
+        check output[0 .. output.high - 2] == $str
 
   test "Send string to clipboard 2":
     const str = ru"`````"
     const registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
 
-    const platform = editorstatus.Platform.linux
+    let platform = editorstatus.Platform(initPlatform())
     registers.sendToClipboad(platform)
 
-    let (output, exitCode) = execCmdEx("xclip -o")
+    if (platform == editorstatus.Platform.linux or
+        platform == editorstatus.Platform.wsl):
+      let
+        cmd = if platform == editorstatus.Platform.linux:
+                execCmdEx("xclip -o")
+              else:
+                # On the WSL
+                execCmdEx("powershell.exe -Command Get-Clipboard")
+        (output, exitCode) = cmd
 
-    check exitCode == 0 and output[0 .. output.high - 1] == "`````"
+      check exitCode == 0
+      if platform == editorstatus.Platform.linux:
+        check output[0 .. output.high - 1] == $str
+      else:
+        # On the WSL
+        check output[0 .. output.high - 2] == $str
 
   test "Send string to clipboard 3":
     const str = ru"$Clipboard test"
     const registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
 
-    const platform = editorstatus.Platform.linux
+    let platform = editorstatus.Platform(initPlatform())
     registers.sendToClipboad(platform)
 
-    let (output, exitCode) = execCmdEx("xclip -o")
+    if (platform == editorstatus.Platform.linux or
+        platform == editorstatus.Platform.wsl):
+      let
+        cmd = if platform == editorstatus.Platform.linux:
+                execCmdEx("xclip -o")
+              else:
 
-    check exitCode == 0 and output[0 .. output.high - 1] == "$Clipboard test"
+                # On the WSL
+                execCmdEx("powershell.exe -Command Get-Clipboard")
+        (output, exitCode) = cmd
+
+      check exitCode == 0
+      if platform == editorstatus.Platform.linux:
+        check output[0 .. output.high - 1] == $str
+      else:
+        # On the WSL
+        check output[0 .. output.high - 2] == $str
 
 suite "Editor: Delete word":
   test "Fix #842":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"block:", ru"  "])
     status.workspace[0].currentMainWindowNode.currentLine = 1
@@ -121,7 +157,7 @@ suite "Editor: Delete word":
 suite "Editor: keyEnter":
   test "Delete all characters in the previous line if only whitespaces":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"block:", ru"  "])
     status.bufStatus[0].mode = Mode.insert
@@ -141,7 +177,7 @@ suite "Editor: keyEnter":
 
   test "Auto indent if finish a previous line with ':'":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"block:"])
     status.bufStatus[0].mode = Mode.insert
@@ -158,7 +194,7 @@ suite "Editor: keyEnter":
 
   test "New line":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"test "])
     status.bufStatus[0].mode = Mode.insert
@@ -175,7 +211,7 @@ suite "Editor: keyEnter":
 suite "Delete character before cursor":
   test "Delete one character":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"test"])
     status.bufStatus[0].mode = Mode.insert
@@ -211,7 +247,7 @@ suite "Delete character before cursor":
 
   test "Delete current Line":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"test", ru""])
     status.bufStatus[0].mode = Mode.insert
@@ -230,7 +266,7 @@ suite "Delete character before cursor":
 
   test "Delete tab":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
     status.bufStatus[0].mode = Mode.insert
@@ -248,7 +284,7 @@ suite "Delete character before cursor":
 
   test "Delete tab 2":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"   test"])
     status.bufStatus[0].mode = Mode.insert
@@ -266,7 +302,7 @@ suite "Delete character before cursor":
 
   test "Delete tab 3":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"    test"])
     status.bufStatus[0].mode = Mode.insert
@@ -284,7 +320,7 @@ suite "Delete character before cursor":
 
   test "Delete tab 4":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
     status.bufStatus[0].mode = Mode.insert
@@ -302,7 +338,7 @@ suite "Delete character before cursor":
 
   test "Delete tab 5":
     var status = initEditorStatus()
-    status.addNewBuffer("")
+    status.addNewBuffer
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
     status.bufStatus[0].mode = Mode.insert
