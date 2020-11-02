@@ -182,7 +182,7 @@ proc writeSuggestionWindow*(suggestionWindow: var SuggestionWindow,
   let
     line = windowNode.currentLine
     column = windowNode.currentColumn
-    (absoluteY, absoluteX) = windowNode.absolutePosition(line, column)
+    (absoluteY, _) = windowNode.absolutePosition(line, column)
     maxHeight = calcMaxSugestionWindowHeight(y,
                                              terminalHeight,
                                              absoluteY,
