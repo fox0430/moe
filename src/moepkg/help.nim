@@ -43,6 +43,8 @@ G         - Go to the last line
 0         - Go to the first line
 $         - Go to the end of the line
 ^         - Go to the non-blank character start of line
+{         - Go previous blank line
+}         - Go next blank line
 Ctrl, w   - Half Page Down
 Ctrl - d  - Half Page Up
 d, $ or D - Delete until the end of the line
