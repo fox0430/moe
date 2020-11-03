@@ -135,6 +135,27 @@ proc runQuickRunCommand(status: var Editorstatus) =
   else:
     status.bufStatus[quickRunWindowIndex].buffer = initGapBuffer(buffer)
 
+# ci command
+proc changeInnerCommand(status: var EditorStatus, key: Rune) =
+  let
+    currentLine = currentMainWindowNode.currentLine
+    oldLine = currentBufStatus.buffer[currentLine]
+  case key:
+    # Delete inside paren and enter insert mode
+    of ru'"', ru'\'':
+      currentBufStatus.deleteInsideParen(currentMainWindowNode, key)
+
+      if oldLine != currentBufStatus.buffer[currentLine]:
+        currentMainWindowNode.currentColumn.inc
+        status.changeMode(Mode.insert)
+    # Delete current word and enter insert mode
+    of ru'w':
+      if oldLine.len > 0:
+        currentBufStatus.deleteWord(currentMainWindowNode)
+      status.changeMode(Mode.insert)
+    else:
+      discard
+
 proc normalCommand(status: var EditorStatus,
                    commands: seq[Rune],
                    height, width: int)
@@ -372,6 +393,12 @@ proc normalCommand(status: var EditorStatus,
     if secondKey == ord('c'):
       deleteCharactersOfLine()
       insertAfterCursor()
+    elif secondKey == ord('i'):
+      let thirdKey = commands[2]
+      if thirdKey == ord('"') or
+         thirdKey == ord('\'') or
+         thirdKey == ord('w'):
+        status.changeInnerCommand(thirdKey)
   elif key == ord('d'):
     let secondKey = commands[1]
     if secondKey == ord('d'):
@@ -572,13 +599,19 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
     let secondKey = getAnotherKey()
     if secondKey == ord('c'):
       result = @[key, secondKey]
+    elif secondKey == ('i'):
+      let thirdKey = getAnotherKey()
+      if thirdKey == ('"') or
+         thirdKey == ('\'') or
+         thirdKey == ('w'):
+        result = @[key, secondKey, thirdKey]
   elif key == ord('d'):
     let secondKey = getAnotherKey()
     if secondKey == ord('d') or
        secondKey == ord('w') or
        secondKey == ord('$') or isEndKey(secondKey) or
        secondKey == ord('0') or isHomeKey(secondKey) or
-       secondKey == ord('G') or 
+       secondKey == ord('G') or
        secondKey == ord('{') or
        secondKey == ord('}'): result = @[key, secondKey]
     elif secondKey == ord('g'):
