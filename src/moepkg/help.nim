@@ -60,6 +60,9 @@ Ctrl, r   - Redo
 dd        - Delete a line
 x         - Delete current character
 S or cc   - Delete the characters in current line and start insert mode
+ci"       - Delete inside double quotes and enter insert mode
+ci'       - Delete inside single quotes and enter insert mode
+ciw       - Delete current word and enter insert mode
 *         - Search forwards for the word under cursor
 #         - Search backwards for the word under cursor
 f         - Jump to next occurrence
