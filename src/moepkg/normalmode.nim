@@ -135,22 +135,20 @@ proc runQuickRunCommand(status: var Editorstatus) =
   else:
     status.bufStatus[quickRunWindowIndex].buffer = initGapBuffer(buffer)
 
-proc changeInnerCommand(status: var EditorStatus, key: char) =
+proc changeInnerCommand(status: var EditorStatus, key: Rune) =
   case key:
-    # Delete inside double quotes and enter insert mode
-    of '"':
+    # Delete inside paren and enter insert mode
+    of ru'"', ru'\'':
       let
         currentLine = currentMainWindowNode.currentLine
         oldLine = currentBufStatus.buffer[currentLine]
-      currentBufStatus.deleteInsideDoubleQuotes(currentMainWindowNode)
+      currentBufStatus.deleteInsideParen(currentMainWindowNode, key)
 
       if oldLine != currentBufStatus.buffer[currentLine]:
         currentMainWindowNode.currentColumn.inc
         status.changeMode(Mode.insert)
-
     else:
       discard
-
 
 proc normalCommand(status: var EditorStatus,
                    commands: seq[Rune],
@@ -391,8 +389,9 @@ proc normalCommand(status: var EditorStatus,
       insertAfterCursor()
     elif secondKey == ord('i'):
       let thirdKey = commands[2]
-      if thirdKey == ord('"'):
-        status.changeInnerCommand('"')
+      if thirdKey == ord('"') or
+         thirdKey == ord('\''):
+        status.changeInnerCommand(thirdKey)
   elif key == ord('d'):
     let secondKey = commands[1]
     if secondKey == ord('d'):
@@ -595,7 +594,8 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
       result = @[key, secondKey]
     elif secondKey == ('i'):
       let thirdKey = getAnotherKey()
-      if thirdKey == ('"'):
+      if thirdKey == ('"') or
+         thirdKey == ('\''):
         result = @[key, secondKey, thirdKey]
   elif key == ord('d'):
     let secondKey = getAnotherKey()

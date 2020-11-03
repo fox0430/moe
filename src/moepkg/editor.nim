@@ -874,23 +874,24 @@ proc redo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   bufStatus.revertPosition(windowNode, bufStatus.buffer.lastSuitId)
   inc(bufStatus.countChange)
 
-# Delete inside double quotes in the current line
-proc deleteInsideDoubleQuotes*(bufStatus: var BufferStatus,
-                               windowNode: var WindowNode) =
+# Delete inside paren in the current line
+proc deleteInsideParen*(bufStatus: var BufferStatus,
+                        windowNode: var WindowNode,
+                        rune: Rune) =
 
   let
     currentLine = windowNode.currentLine
     oldLine = bufStatus.buffer[currentLine]
   var newLine = bufStatus.buffer[currentLine]
 
-  if oldLine[windowNode.currentColumn .. ^1].count(ru'"') > 1:
+  if oldLine[windowNode.currentColumn .. ^1].count(rune) > 1:
     let currentColumn = windowNode.currentColumn
     for i in currentColumn ..< oldLine.high:
-      if oldLine[i] != ru'"': windowNode.currentColumn.inc
+      if oldLine[i] != rune: windowNode.currentColumn.inc
       else: break
 
     while newLine.high > windowNode.currentColumn:
-      if newLine[windowNode.currentColumn + 1] != ru'"':
+      if newLine[windowNode.currentColumn + 1] != rune:
         newLine.delete(windowNode.currentColumn + 1)
       else:
         break
