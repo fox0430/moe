@@ -1,5 +1,4 @@
 [![Build](https://github.com/fox0430/moe/workflows/Build/badge.svg)](https://github.com/fox0430/moe/actions)
-
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 ## moe
@@ -54,8 +53,6 @@ This project's goal is a very customizable, high productivity, user friendly, hi
 
 - Suggestions in ex mode
 
-- Popup window
-
 - VSCode themes
 
 - Build on save
@@ -68,7 +65,9 @@ This project's goal is a very customizable, high productivity, user friendly, hi
 
 - Automatic backups
 
-- Highlighting current words
+- Highlighti current words
+
+- Highlight/Delete trailing spaces
 
 ## Planned features
 
