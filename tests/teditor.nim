@@ -353,3 +353,13 @@ suite "Delete character before cursor":
 
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru"  tst"
+
+suite "Editor: Delete inside paren":
+  test "delete inside double quotes":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru """abc "def" "ghi""""])
+
+    currentBufStatus.deleteInsideParen(currentMainWindowNode, ru'"')
+
+    check currentBufStatus.buffer[0] == ru """abc "" "ghi""""
