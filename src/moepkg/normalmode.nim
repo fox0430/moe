@@ -321,6 +321,10 @@ proc normalCommand(status: var EditorStatus,
     currentBufStatus.moveToFirstOfPreviousLine(windowNode)
   elif key == ord('+'):
     currentBufStatus.moveToFirstOfNextLine(windowNode)
+  elif key == ord('{'):
+    currentBufStatus.moveToPreviousBlankLine(status, windowNode)
+  elif key == ord('}'):
+    currentBufStatus.moveToNextBlankLine(status, windowNode)
   elif key == ord('g'):
     let secondKey = commands[1]
     if secondKey == ord('g'):
@@ -397,6 +401,10 @@ proc normalCommand(status: var EditorStatus,
       let thirdKey = commands[2]
       if thirdKey == ord('g'):
         deleteLineFromFirstLineToCurrentLine()
+    elif secondKey == ord('{'):
+      currentBufStatus.deleteTillPreviousBlankLine(status, windowNode)
+    elif secondKey == ord('}'):
+      currentBufStatus.deleteTillNextBlankLine(status, windowNode)
   elif key == ord('D'):
      deleteCharactersUntilEndOfLine()
   elif key == ord('S'):
@@ -512,6 +520,8 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
      key == ord('^') or key == ord('_') or
      key == ord('0') or isHomeKey(key) or
      key == ord('$') or isEndKey(key) or
+     key == ord('{') or
+     key == ord('}') or
      key == ord('-') or
      key == ord('+') or
      key == ord('G') or
@@ -568,7 +578,9 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
        secondKey == ord('w') or
        secondKey == ord('$') or isEndKey(secondKey) or
        secondKey == ord('0') or isHomeKey(secondKey) or
-       secondKey == ord('G'): result = @[key, secondKey]
+       secondKey == ord('G') or 
+       secondKey == ord('{') or
+       secondKey == ord('}'): result = @[key, secondKey]
     elif secondKey == ord('g'):
       let thirdKey = getAnotherKey()
       if thirdKey == ord('g'): result = @[key, secondKey, thirdKey]
@@ -623,7 +635,9 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
            isPageDownKey(key) or
            key == ord('w') or
            key == ord('b') or
-           key == ord('e')
+           key == ord('e') or
+           key == ord('{') or
+           key == ord('}')
 
   proc isChangeModeKey(key: Rune): bool =
      return key == ord('v') or

@@ -131,6 +131,57 @@ proc jumpLine*(status: var EditorStatus, destination: int) =
 
     currentMainWindowNode.view.reload(currentBufStatus.buffer, startOfPrintedLines)
 
+proc findNextBlankLine*(bufStatus: BufferStatus,
+                          status: var EditorStatus,
+                          windowNode: WindowNode): int =
+
+
+  result = -1
+
+  let currentLine = currentMainWindowNode.currentLine
+  if currentLine < currentBufStatus.buffer.len - 1:
+    var currentLineStartedBlank = bufStatus.buffer[currentLine].len == 0
+    for i in countup(currentLine + 1, currentBufStatus.buffer.len - 1):
+      if bufStatus.buffer[i].len == 0:
+        if not currentLineStartedBlank:
+          return i
+      elif currentLineStartedBlank:
+        currentLineStartedBlank = false
+
+  return -1
+
+proc findPreviousBlankLine*(bufStatus: BufferStatus,
+                              status: var EditorStatus,
+                              windowNode: WindowNode): int =
+
+  result = -1
+
+  let currentLine = currentMainWindowNode.currentLine
+  if currentLine > 0:
+    var currentLineStartedBlank = bufStatus.buffer[currentLine].len == 0
+    for i in countdown(currentLine - 1, 0):
+      if bufStatus.buffer[i].len == 0:
+        if not currentLineStartedBlank:
+          return i
+      elif currentLineStartedBlank:
+        currentLineStartedBlank = false
+
+  return -1
+
+proc moveToNextBlankLine*(bufStatus: BufferStatus,
+                          status: var EditorStatus,
+                          windowNode: WindowNode) =
+
+  let nextBlankLine = bufStatus.findNextBlankLine(status, windowNode)
+  if nextBlankLine >= 0: status.jumpLine(nextBlankLine)
+
+proc moveToPreviousBlankLine*(bufStatus: BufferStatus,
+                              status: var EditorStatus,
+                              windowNode: WindowNode) =
+
+  let previousBlankLine = bufStatus.findPreviousBlankLine(status, windowNode)
+  if previousBlankLine >= 0: status.jumpLine(previousBlankLine)
+
 proc moveToFirstLine*(status: var EditorStatus) {.inline.} = status.jumpLine(0)
 
 proc moveToLastLine*(status: var EditorStatus) =
