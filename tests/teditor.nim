@@ -359,7 +359,8 @@ suite "Editor: Delete inside paren":
     var status = initEditorStatus()
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru """abc "def" "ghi""""])
+    currentMainWindowNode.currentColumn = 6
 
-    currentBufStatus.deleteInsideParen(currentMainWindowNode, ru'"')
+    currentBufStatus.deleteInsideOfParen(currentMainWindowNode, ru'"')
 
     check currentBufStatus.buffer[0] == ru """abc "" "ghi""""

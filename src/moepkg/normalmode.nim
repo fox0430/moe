@@ -143,7 +143,7 @@ proc changeInnerCommand(status: var EditorStatus, key: Rune) =
   case key:
     # Delete inside paren and enter insert mode
     of ru'"', ru'\'':
-      currentBufStatus.deleteInsideParen(currentMainWindowNode, key)
+      currentBufStatus.deleteInsideOfParen(currentMainWindowNode, key)
 
       if oldLine != currentBufStatus.buffer[currentLine]:
         currentMainWindowNode.currentColumn.inc

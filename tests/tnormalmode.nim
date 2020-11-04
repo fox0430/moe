@@ -531,6 +531,7 @@ suite "Normal mode: Delete inside paren and enter insert mode":
     var status = initEditorStatus()
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru """abc "def" "ghi""""])
+    currentMainWindowNode.currentColumn = 6
 
     status.resize(100, 100)
     status.update
@@ -547,6 +548,7 @@ suite "Normal mode: Delete inside paren and enter insert mode":
     var status = initEditorStatus()
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru "abc 'def' 'ghi'"])
+    currentMainWindowNode.currentColumn = 6
 
     status.resize(100, 100)
     status.update

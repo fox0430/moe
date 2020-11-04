@@ -874,27 +874,40 @@ proc redo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   bufStatus.revertPosition(windowNode, bufStatus.buffer.lastSuitId)
   inc(bufStatus.countChange)
 
-# Delete inside paren in the current line
-proc deleteInsideParen*(bufStatus: var BufferStatus,
-                        windowNode: var WindowNode,
-                        rune: Rune) =
+# If cursor is inside of paren, delete inside paren in the current line
+proc deleteInsideOfParen*(bufStatus: var BufferStatus,
+                          windowNode: var WindowNode,
+                          rune: Rune) =
 
   let
     currentLine = windowNode.currentLine
+    currentColumn = windowNode.currentColumn
     oldLine = bufStatus.buffer[currentLine]
-  var newLine = bufStatus.buffer[currentLine]
+    openParen = if isCloseParen(rune): correspondingCloseParen(rune) else: rune
+    closeParen = if isOpenParen(rune): correspondingOpenParen(rune) else: rune
 
-  if oldLine[windowNode.currentColumn .. ^1].count(rune) > 1:
-    let currentColumn = windowNode.currentColumn
-    for i in currentColumn ..< oldLine.high:
-      if oldLine[i] != rune: windowNode.currentColumn.inc
-      else: break
+  var
+    openParenPosition = -1
+    closeParenPosition = -1
 
-    while newLine.high > windowNode.currentColumn:
-      if newLine[windowNode.currentColumn + 1] != rune:
-        newLine.delete(windowNode.currentColumn + 1)
-      else:
-        break
+  # Check open paren position
+  for i in countdown(currentColumn, 0):
+    if oldLine[i] == openParen:
+      openParenPosition = i
+      break
+
+  # Check close paren position
+  for i in openParenPosition + 1 ..< oldLine.len:
+    if oldLine[i] == closeParen:
+      closeParenPosition = i
+      break
+
+  if openParenPosition > 0 and closeParenPosition > 0:
+    var newLine = bufStatus.buffer[currentLine]
+
+    for i in 0 ..< closeParenPosition - openParenPosition - 1:
+      newLine.delete(openParenPosition + 1)
 
     if oldLine != newLine:
       bufStatus.buffer[currentLine] = newLine
+      windowNode.currentColumn = openParenPosition
