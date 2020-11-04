@@ -883,8 +883,8 @@ proc deleteInsideOfParen*(bufStatus: var BufferStatus,
     currentLine = windowNode.currentLine
     currentColumn = windowNode.currentColumn
     oldLine = bufStatus.buffer[currentLine]
-    openParen = if isCloseParen(rune): correspondingCloseParen(rune) else: rune
-    closeParen = if isOpenParen(rune): correspondingOpenParen(rune) else: rune
+    openParen = if isCloseParen(rune): correspondingOpenParen(rune) else: rune
+    closeParen = if isOpenParen(rune): correspondingCloseParen(rune) else: rune
 
   var
     openParenPosition = -1

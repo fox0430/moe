@@ -561,6 +561,57 @@ suite "Normal mode: Delete inside paren and enter insert mode":
     check currentBufStatus.mode == Mode.insert
     check currentMainWindowNode.currentColumn == 5
 
+  test "Delete inside curly brackets and enter insert mode (ci{ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc {def} {ghi}"])
+    currentMainWindowNode.currentColumn = 6
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'c', ru'i', ru'{']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru "abc {} {ghi}"
+    check currentBufStatus.mode == Mode.insert
+    check currentMainWindowNode.currentColumn == 5
+
+  test "Delete inside round brackets and enter insert mode (ci( command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc (def) (ghi)"])
+    currentMainWindowNode.currentColumn = 6
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'c', ru'i', ru'(']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru "abc () (ghi)"
+    check currentBufStatus.mode == Mode.insert
+    check currentMainWindowNode.currentColumn == 5
+
+  test "Delete inside square brackets and enter insert mode (ci[ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc [def] [ghi]"])
+    currentMainWindowNode.currentColumn = 6
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'c', ru'i', ru'[']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru "abc [] [ghi]"
+    check currentBufStatus.mode == Mode.insert
+    check currentMainWindowNode.currentColumn == 5
+
 suite "Normal mode: Delete current word and enter insert mode":
   test "Delete current word and enter insert mode (ciw command)":
     var status = initEditorStatus()
