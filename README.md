@@ -65,7 +65,7 @@ This project's goal is a very customizable, high productivity, user friendly, hi
 
 - Automatic backups
 
-- Highlighti current words
+- Highlight current words
 
 - Highlight/Delete trailing spaces
 
