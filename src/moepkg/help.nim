@@ -27,60 +27,60 @@ A       -Same as $, a
 
 # Normal mode
 
-h         - Go left
-j         - Go down
-k         - Go up
-l         - Go right
-w         - Go forwards to the start of a word
-e         - Go forwards to the end of a word
-b         - Go backwards to the start of a word
-r         - Replace a character at the cursor
-Page Up   - Page Up
-Page Down - Page Down
-gg        - Go to the first line
-g_        - Go to the last non-blank character of the line
-G         - Go to the last line
-0         - Go to the first line
-$         - Go to the end of the line
-^         - Go to the non-blank character start of line
-{         - Go previous blank line
-}         - Go next blank line
-Ctrl, w   - Half Page Down
-Ctrl - d  - Half Page Up
-d, $ or D - Delete until the end of the line
-yy        - Copy a line
-p         - Paste the clipboard
-n         - Search forwards
-:         - Start Ex mode
-u         - Undo
-Ctrl, r   - Redo
->         - Indent
-<         - Unindent
-==        - Auto indent
-dd        - Delete a line
-x         - Delete current character
-S or cc   - Delete the characters in current line and start insert mode
-ci"       - Delete inside of double quotes and enter insert mode
-ci'       - Delete inside of single quotes and enter insert mode
-ciw       - Delete current word and enter insert mode
-ci(       - Delete inside of round brackets and enter insert mode
-ci[       - Delete inside of square brackets and enter insert mode
-ci{       - Delete inside of curly brackets and enter insert mode
-*         - Search forwards for the word under cursor
-#         - Search backwards for the word under cursor
-f         - Jump to next occurrence
-F         - Jump to previous occurence
-Ctrl, k   - Move next window
-Ctrl, j   - Move prev window
-zt        - Scroll the screen so the cursor is at the top
-zb        - Scroll the screen so the cursor is at the bottom
-z.        - Center the screen on the cursor
-ZZ        - Write current file and exit
-ZQ        - Same as :q!
-Ctrl, wc  - CLose current window
-/         - Search forwards
-?         - Search backwards
-\r        - QuickRun
+h          - Go left
+j          - Go down
+k          - Go up
+l          - Go right
+w          - Go forwards to the start of a word
+e          - Go forwards to the end of a word
+b          - Go backwards to the start of a word
+r          - Replace a character at the cursor
+Page Up    - Page Up
+Page Down  - Page Down
+gg         - Go to the first line
+g_         - Go to the last non-blank character of the line
+G          - Go to the last line
+0          - Go to the first line
+$          - Go to the end of the line
+^          - Go to the non-blank character start of line
+{          - Go previous blank line
+}          - Go next blank line
+Ctrl, w    - Half Page Down
+Ctrl - d   - Half Page Up
+d, $ or D  - Delete until the end of the line
+yy         - Copy a line
+p          - Paste the clipboard
+n          - Search forwards
+:          - Start Ex mode
+u          - Undo
+Ctrl, r    - Redo
+>          - Indent
+<          - Unindent
+==         - Auto indent
+dd         - Delete a line
+x          - Delete current character
+S or cc    - Delete the characters in current line and start insert mode
+ci"        - Delete inside of double quotes and enter insert mode
+ci'        - Delete inside of single quotes and enter insert mode
+ciw        - Delete current word and enter insert mode
+ci( or ci) - Delete inside of round brackets and enter insert mode
+ci[ or ci] - Delete inside of square brackets and enter insert mode
+ci{ or ci} - Delete inside of curly brackets and enter insert mode
+*          - Search forwards for the word under cursor
+#          - Search backwards for the word under cursor
+f          - Jump to next occurrence
+F          - Jump to previous occurence
+Ctrl, k    - Move next window
+Ctrl, j    - Move prev window
+zt         - Scroll the screen so the cursor is at the top
+zb         - Scroll the screen so the cursor is at the bottom
+z.         - Center the screen on the cursor
+ZZ         - Write current file and exit
+ZQ         - Same as :q!
+Ctrl, wc   - CLose current window
+/          - Search forwards
+?          - Search backwards
+\r         - QuickRun
 
 # Visual mode
 
