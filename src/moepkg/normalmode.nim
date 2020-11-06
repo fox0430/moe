@@ -156,6 +156,21 @@ proc changeInnerCommand(status: var EditorStatus, key: Rune) =
   else:
     discard
 
+# di command
+proc deleteInnerCommand(status: var EditorStatus, key: Rune) =
+  let currentLine = currentMainWindowNode.currentLine
+
+  # Delete inside paren and enter insert mode
+  if isParen(key):
+    currentBufStatus.deleteInsideOfParen(currentMainWindowNode, key)
+    currentBufStatus.keyRight(currentMainWindowNode)
+  # Delete current word and enter insert mode
+  elif key == ru'w':
+    if currentBufStatus.buffer[currentMainWindowNode.currentLine].len > 0:
+      currentBufStatus.deleteWord(currentMainWindowNode)
+  else:
+    discard
+
 proc normalCommand(status: var EditorStatus,
                    commands: seq[Rune],
                    height, width: int)
@@ -431,6 +446,9 @@ proc normalCommand(status: var EditorStatus,
       currentBufStatus.deleteTillPreviousBlankLine(status, windowNode)
     elif secondKey == ord('}'):
       currentBufStatus.deleteTillNextBlankLine(status, windowNode)
+    elif secondKey == ord('i'):
+      let thirdKey = commands[2]
+      status.deleteInnerCommand(thirdKey)
   elif key == ord('D'):
      deleteCharactersUntilEndOfLine()
   elif key == ord('S'):
@@ -615,6 +633,11 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
     elif secondKey == ord('g'):
       let thirdKey = getAnotherKey()
       if thirdKey == ord('g'): result = @[key, secondKey, thirdKey]
+    elif secondKey == ord('i'):
+      let thirdKey = getAnotherKey()
+      if isParen(thirdKey) or
+         thirdKey == ('w'):
+        result = @[key, secondKey, thirdKey]
   elif key == ord('y'):
     let secondKey = getAnotherKey()
     if key == ord('y') or key == ord('w'):
