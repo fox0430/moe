@@ -66,6 +66,12 @@ ciw        - Delete current word and enter insert mode
 ci( or ci) - Delete inside of round brackets and enter insert mode
 ci[ or ci] - Delete inside of square brackets and enter insert mode
 ci{ or ci} - Delete inside of curly brackets and enter insert mode
+di"        - Delete inside of double quotes
+di'        - Delete inside of single quotes
+diw        - Delete current word
+di( or di) - Delete inside of round brackets
+di[ or di] - Delete inside of square brackets
+di{ or di} - Delete inside of curly brackets
 *          - Search forwards for the word under cursor
 #          - Search backwards for the word under cursor
 f          - Jump to next occurrence
