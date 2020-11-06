@@ -646,3 +646,117 @@ suite "Normal mode: Delete current word and enter insert mode":
     check currentBufStatus.mode == Mode.insert
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
+
+suite "Normal mode: Delete inside paren":
+  test "Delete inside double quotes and enter insert mode (di\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru """abc "def" "ghi""""])
+    currentMainWindowNode.currentColumn = 6
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'd', ru'i', ru'"']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru """abc "" "ghi""""
+    check currentMainWindowNode.currentColumn == 5
+
+  test "Delete inside double quotes (di' command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc 'def' 'ghi'"])
+    currentMainWindowNode.currentColumn = 6
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'd', ru'i', ru'\'']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru "abc '' 'ghi'"
+    check currentMainWindowNode.currentColumn == 5
+
+  test "Delete inside curly brackets (di{ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc {def} {ghi}"])
+    currentMainWindowNode.currentColumn = 6
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'd', ru'i', ru'{']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru "abc {} {ghi}"
+    check currentMainWindowNode.currentColumn == 5
+
+  test "Delete inside round brackets (di( command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc (def) (ghi)"])
+    currentMainWindowNode.currentColumn = 6
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'd', ru'i', ru'(']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru "abc () (ghi)"
+    check currentMainWindowNode.currentColumn == 5
+
+  test "Delete inside square brackets (di[ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc [def] [ghi]"])
+    currentMainWindowNode.currentColumn = 6
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'd', ru'i', ru'[']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru "abc [] [ghi]"
+    check currentMainWindowNode.currentColumn == 5
+
+suite "Normal mode: Delete current word":
+  test "Delete current word and (diw command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'd', ru'i', ru'w']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru "def"
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Delete current word when empty line (diw command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc"])
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'd', ru'i', ru'w']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru""
+    check currentBufStatus.buffer[1] == ru"abc"
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
