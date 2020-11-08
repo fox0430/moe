@@ -262,7 +262,13 @@ workSpaceLine
 
 ### Highlight table
 
-Highlighting any word (array)  
+Highlight the current line (bool)  
+```
+currentLine
+
+```
+
+Highlight any word (array)  
 
 defaut
 ```
