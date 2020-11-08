@@ -159,8 +159,6 @@ proc changeInnerCommand(status: var EditorStatus, key: Rune) =
 
 # di command
 proc deleteInnerCommand(status: var EditorStatus, key: Rune) =
-  let currentLine = currentMainWindowNode.currentLine
-
   # Delete inside paren and enter insert mode
   if isParen(key):
     currentBufStatus.deleteInsideOfParen(currentMainWindowNode, key)
