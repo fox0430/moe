@@ -151,6 +151,7 @@ proc changeInnerCommand(status: var EditorStatus, key: Rune) =
   # Delete current word and enter insert mode
   elif key == ru'w':
     if oldLine.len > 0:
+      currentBufStatus.moveToBackwardWord(currentMainWindowNode)
       currentBufStatus.deleteWord(currentMainWindowNode)
     status.changeMode(Mode.insert)
   else:
@@ -167,6 +168,7 @@ proc deleteInnerCommand(status: var EditorStatus, key: Rune) =
   # Delete current word and enter insert mode
   elif key == ru'w':
     if currentBufStatus.buffer[currentMainWindowNode.currentLine].len > 0:
+      currentBufStatus.moveToBackwardWord(currentMainWindowNode)
       currentBufStatus.deleteWord(currentMainWindowNode)
   else:
     discard
