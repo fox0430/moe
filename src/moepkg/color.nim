@@ -539,6 +539,9 @@ type EditorColor* = object
   currentSetting*: Color
   currentSettingBg*: Color
 
+  # highlight curent line background
+  currentLineBg*: Color
+
 type EditorColorPair* = enum
   lineNum = 1
   currentLineNum = 2
@@ -622,6 +625,8 @@ type EditorColorPair* = enum
   deletedLine = 59
   # configuration mode
   currentSetting = 60
+  # highlight current line background
+  currentLineBg = 61
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -752,7 +757,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     deletedLineBg: default,
     # configuration mode
     currentSetting: gray100,
-    currentSettingBg: teal
+    currentSettingBg: teal,
+    # Highlight current line background
+    currentLineBg: gray27
   ),
   vscode: EditorColor(
     editorBg: default,
@@ -882,7 +889,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     deletedLineBg: default,
     # configuration mode
     currentSetting: gray100,
-    currentSettingBg: teal
+    currentSettingBg: teal,
+    # Highlight current line background
+    currentLineBg: gray27
   ),
   dark: EditorColor(
     editorBg: default,
@@ -1012,7 +1021,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     deletedLineBg: default,
     # configuration mode
     currentSetting: gray100,
-    currentSettingBg: teal
+    currentSettingBg: teal,
+    # Highlight current line background
+    currentLineBg: gray27
   ),
   light: EditorColor(
     editorBg: default,
@@ -1142,7 +1153,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     deletedLineBg: default,
     # configuration mode
     currentSetting: black,
-    currentSettingBg: deepPink1_1
+    currentSettingBg: deepPink1_1,
+    # Highlight current line background
+    currentLineBg: gray27
   ),
   vivid: EditorColor(
     editorBg: default,
@@ -1272,7 +1285,9 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     deletedLineBg: default,
     # configuration mode
     currentSetting: gray100,
-    currentSettingBg: deepPink1_1
+    currentSettingBg: deepPink1_1,
+    # Highlight current line background
+    currentLineBg: gray27
   ),
 ]
 

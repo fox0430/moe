@@ -210,7 +210,7 @@ proc writeCurrentLine(win: var Window,
                  theme.getColorFromEditorColorPair(defaultCharColor)
     setColorPair(currentLineColorPair,
                  colors[0],
-                 ColorThemeTable[theme].currentWordBg)
+                 ColorThemeTable[theme].EditorColor.currentLineBg)
 
     view.write(win, y, x, str, currentLineColorPair)
 

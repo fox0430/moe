@@ -1588,6 +1588,9 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("currentSettingBg"):
       ColorThemeTable[ColorTheme.config].currentSettingBg = color("currentSettingBg")
 
+    if settings["Theme"].contains("currentLineBg"):
+      ColorThemeTable[ColorTheme.config].currentLineBg = color("currentLineBg")
+
     result.editorColorTheme = ColorTheme.config
 
   if vscodeTheme:

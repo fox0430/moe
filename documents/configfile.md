@@ -1443,3 +1443,8 @@ Current line background color in configuration mode
 ```
 currentSettingBg
 ```
+
+Current line background color
+```
+currentLineBg
+```

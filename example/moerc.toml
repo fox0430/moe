@@ -377,3 +377,6 @@ reservedWordBg = "gray"
 # configuration mode
 currentSetting = "gray100"
 currentSettingBg = "teal"
+
+# highlight current line background
+currentLineBg = "gray27"
