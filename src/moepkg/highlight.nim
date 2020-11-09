@@ -300,7 +300,7 @@ proc detectLanguage*(filename: string): SourceLanguage =
   # TODO: use settings file
   let extention = filename.splitFile.ext
   case extention:
-  of ".nim", ".nimble":
+  of ".nim", ".nimble", ".nims":
     return SourceLanguage.langNim
   of ".c", ".h":
     return SourceLanguage.langC
