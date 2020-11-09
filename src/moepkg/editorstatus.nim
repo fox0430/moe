@@ -566,7 +566,8 @@ proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode) =
   let index = status.bufStatus.high
 
   if mode != Mode.filer:
-    if not fileExists(filename): status.bufStatus[index].buffer = newFile()
+    if not fileExists(filename):
+      status.bufStatus[index].buffer = newFile()
     else:
       try:
         let textAndEncoding = openFile(filename.toRunes)
@@ -576,7 +577,8 @@ proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode) =
         status.commandLine.writeFileOpenError(filename, status.messageLog)
         return
 
-    if filename != "": status.bufStatus[index].language = detectLanguage(filename)
+    if filename != "":
+      status.bufStatus[index].language = detectLanguage(filename)
 
   let buffer = status.bufStatus[index].buffer
   currentMainWindowNode.view = buffer.initEditorView(1, 1)
@@ -977,7 +979,8 @@ proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
   for i in startLine ..< endLine: bufferInView.add(bufStatus.buffer[i])
 
   # highlight trailing spaces
-  if status.settings.highlightSettings.trailingSpaces:
+  if status.settings.highlightSettings.trailingSpaces and
+     bufStatus.language != SourceLanguage.langMarkDown:
     status.highlightTrailingSpaces
 
   # highlight full width space

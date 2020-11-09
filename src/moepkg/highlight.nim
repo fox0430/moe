@@ -220,7 +220,8 @@ proc initHighlight*(buffer: string,
         empty = false
     if not empty: result.colorSegments.add(cs)
 
-  if language == SourceLanguage.langNone:
+  if language == SourceLanguage.langNone or
+     language == SourceLanguage.langMarkDown:
     splitByNewline(buffer, EditorColorPair.defaultChar)
     return result
 
@@ -318,5 +319,7 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langJavaScript
   of ".sh", ".bash":
     return SourceLanguage.langShell
+  of ".md":
+    return SourceLanguage.langMarkDown
   else:
     return SourceLanguage.langNone
