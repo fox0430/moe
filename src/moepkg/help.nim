@@ -203,6 +203,7 @@ icon - Setting show/hidden icons in filer mode
 deleteTrailingSpaces - Delete trailing spaces
 ignorecase - Change setting to ignorecase
 smartcase - Change setting to smartcase
+highlightCurrentLine on or highlightCurrentLine off - Change the highlight setting of the current line
 
 log - Open messages log viwer
 

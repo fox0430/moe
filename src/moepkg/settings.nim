@@ -126,6 +126,7 @@ type TabLineSettings* = object
   allbuffer*: bool
 
 type EditorViewSettings* = object
+  highlightCurrentLine*: bool
   lineNumber*: bool
   currentLineNumber*: bool
   cursorLine*: bool
@@ -281,6 +282,7 @@ proc initWorkSpaceSettings(): WorkSpaceSettings {.inline.} =
   result.workSpaceLine = false
 
 proc initEditorViewSettings*(): EditorViewSettings =
+  result.highlightCurrentLine = true
   result.lineNumber = true
   result.currentLineNumber = true
   result.indentationLines = true
@@ -989,6 +991,9 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
           word = reservedWords[i].getStr
           reservedWord = ReservedWord(word: word, color: EditorColorPair.reservedWord)
         result.highlightSettings.reservedWords.add(reservedWord)
+
+    if settings["Highlight"].contains("currentLine"):
+      result.view.highlightCurrentLine = settings["Highlight"]["currentLine"].getbool()
 
     if settings["Highlight"].contains("currentWord"):
       result.highlightSettings.currentWord = settings["Highlight"]["currentWord"].getbool()
@@ -1711,7 +1716,8 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
             for word in item.val["value"]:
               if word["type"].getStr != "string":
                 return some($item)
-        of "fullWidthSpace",
+        of "currentLine",
+           "fullWidthSpace",
            "trailingSpaces",
            "replaceText",
            "pairOfParen",

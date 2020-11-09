@@ -98,6 +98,8 @@ workSpaceLine = false
 
 [Highlight]
 
+currentLine = true
+
 reservedWord = ["TODO", "WIP", "NOTE"]
 
 replaceText = true

@@ -355,3 +355,11 @@ iterator split*(runes: seq[Rune], isSep: proc (r: Rune): bool, removeEmptyEntrie
 from os import `/`
 proc `/`*(runes1, runes2: seq[Rune]): seq[Rune] {.inline.} =
   toRunes($runes1 / $runes2)
+
+proc repeat*(runes: seq[Rune], n: Natural): seq[Rune] =
+  let str = repeat($runes, n)
+  result = str.toRunes
+
+proc repeat*(rune: Rune, n: Natural): seq[Rune] =
+  let str = repeat($rune, n)
+  result = str.ru

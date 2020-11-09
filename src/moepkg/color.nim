@@ -1276,7 +1276,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   ),
 ]
 
-proc setColorPair*(colorPair: EditorColorPair, character, background: Color) {.inline.} =
+proc setColorPair*(colorPair: EditorColorPair | int, character, background: Color) {.inline.} =
   init_pair(cshort(ord(colorPair)), cshort(ord(character)), cshort(ord(background)))
 
 proc setCursesColor*(editorColor: EditorColor) =

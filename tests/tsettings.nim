@@ -59,6 +59,7 @@ const tomlStr = """
   workSpaceLine = true
 
   [Highlight]
+  currentLine = false
   reservedWord = ["TEST", "TEST2"]
   replaceText = false
   pairOfParen = false
@@ -319,6 +320,7 @@ suite "Parse configuration file":
 
     check settings.workSpace.workSpaceLine
 
+    check not settings.view.highlightCurrentLine
     check not settings.highlightSettings.replaceText
     check not settings.highlightSettings.pairOfParen
     check not settings.highlightSettings.fullWidthSpace

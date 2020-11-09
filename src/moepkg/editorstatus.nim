@@ -414,6 +414,7 @@ proc update*(status: var EditorStatus) =
                          prevMode,
                          bufStatus.buffer,
                          node.highlight,
+                         status.settings.editorColorTheme,
                          node.currentLine,
                          startSelectedLine,
                          endSelectedLine)
