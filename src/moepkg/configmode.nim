@@ -59,6 +59,7 @@ const
     "workSpaceLine"
   ]
   highlightTableNames = [
+    "currentLine",
     "fullWidthSpace",
     "trailingSpaces",
     "currentWord",
@@ -350,6 +351,8 @@ proc initHighlightTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       nameStr = indent & name
       space = " ".repeat(positionOfSetVal - name.len)
     case name:
+      of "currentLine":
+        result.add(ru nameStr & space & $settings.view.highlightCurrentLine)
       of "replaceText":
         result.add(ru nameStr & space & $settings.highlightSettings.replaceText)
       of "highlightPairOfParen":
