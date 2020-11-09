@@ -264,6 +264,7 @@ const tomlStr = """
   deletedLineBg = "pink1"
   currentSetting = "pink1"
   currentSettingBg = "pink1"
+  currentLineBg = "pink1"
 """
 
 suite "Parse configuration file":
@@ -508,6 +509,7 @@ suite "Parse configuration file":
     check ColorThemeTable[theme].deletedLineBg == Color.pink1
     check ColorThemeTable[theme].currentSetting == Color.pink1
     check ColorThemeTable[theme].currentSettingBg == Color.pink1
+    check ColorThemeTable[theme].currentLineBg == Color.pink1
 
 suite "Validate toml config":
   test "Except for success":
