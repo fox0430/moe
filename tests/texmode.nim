@@ -883,3 +883,22 @@ suite "Ex mode: debug command":
     check status.bufStatus[1].prevMode == Mode.normal
 
     check status.workspace[0].currentMainWindowNode.bufferIndex == 0
+
+suite "Ex mode: highlight current line setting command":
+  test "Enable current line highlighting":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const command = @[ru"highlightCurrentLine", ru"off"]
+    status.exModeCommand(command, 100, 100)
+    check not status.settings.view.highlightCurrentLine
+
+  test "Disable current line highlighting":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    check(status.settings.view.highlightCurrentLine == true)
+
+    const command = @[ru"highlightCurrentLine", ru"on"]
+    status.exModeCommand(command, 100, 100)
+    check status.settings.view.highlightCurrentLine

@@ -148,6 +148,12 @@ proc isIgnorecaseSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
 proc isSmartcaseSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 2 and cmpIgnoreCase($command[0], "smartcase") == 0
 
+proc isHighlightCurrentLineSettingCommand(
+  command: seq[seq[Rune]]): bool {.inline.} =
+
+  return command.len == 2 and
+         cmpIgnoreCase($command[0], "highlightcurrentline") == 0
+
 proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 1 and cmpIgnoreCase($command[0], "noh") == 0
 
@@ -691,6 +697,14 @@ proc ignorecaseSettingCommand(status: var EditorStatus, command: seq[Rune]) =
 proc smartcaseSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru "on": status.settings.smartcase = true
   elif command == ru "off": status.settings.smartcase = false
+
+  status.changeMode(currentBufStatus.prevMode)
+
+proc highlightCurrentLineSettingCommand(status: var EditorStatus,
+                                        command: seq[Rune]) =
+
+  if command == ru "on": status.settings.view.highlightCurrentLine = true
+  elif command == ru "off": status.settings.view.highlightCurrentLine  = false
 
   status.changeMode(currentBufStatus.prevMode)
 
@@ -1315,6 +1329,8 @@ proc exModeCommand*(status: var EditorStatus,
     status.forceWriteAndQuitCommand(height, width)
   elif isStartDebugMode(command):
     status.startDebugMode
+  elif isHighlightCurrentLineSettingCommand(command):
+    status.highlightCurrentLineSettingCommand(command[1])
   else:
     status.commandLine.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(currentBufStatus.prevMode)
