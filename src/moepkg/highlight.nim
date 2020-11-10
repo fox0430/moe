@@ -312,7 +312,7 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langCsharp
   of ".java":
     return SourceLanguage.langJava
-  of ".yaml":
+  of ".yaml", ".yml":
     return SourceLanguage.langYaml
   of ".py":
     return SourceLanguage.langPython
