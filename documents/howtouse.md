@@ -57,7 +57,7 @@
 | <kbd>**#**</kbd><br>Search backwards for the word under cursor | <kbd>**f**</kbd><br>Jump to next occurrence | <kbd>**F**</kbd><br>Jump to previous occurence | <kbd>**Ctrl**</kbd> <kbd>**k**</kbd><br>Move next window |
 | <kbd>**Ctrl**</kbd> <kbd>**j**</kbd><br>Move prev window  | <kbd>**z**</kbd> <kbd>**t**</kbd><br>Scroll the screen so the cursor is at the top | <kbd>**z**</kbd> <kbd>**b**</kbd><br>Scroll the screen so the cursor is at the bottom | <kbd>**z**</kbd> <kbd>**.**</kbd><br>Center the screen on the cursor |
 | <kbd>**Z**</kbd> <kbd>**Z**</kbd><br>Write current file and exit | <kbd>**Z**</kbd> <kbd>**Q**</kbd><br>Same as `:q!` | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**c**</kbd><br>Close current window | <kbd>**?**</kbd><br>`keyword` Search backwards |
-| <kbd>**/**</kbd><br>`keyword` Search forwards | <kbd>**\\**</kbd> <kbd>**r**</kbd><br>Quick Run |
+| <kbd>**/**</kbd><br>`keyword` Search forwards | <kbd>**\\**</kbd> <kbd>**r**</kbd><br>Quick Run | <kbd>**s**</kbd> OR <kbd>**c**</kbd><kbd>**u**</kbd><br> Delete current charater and enter insert mode |
 
 </details>
 
