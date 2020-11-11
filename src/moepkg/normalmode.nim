@@ -324,7 +324,7 @@ proc normalCommand(status: var EditorStatus,
     for i in 0 ..< currentLine + 1:
       currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
 
-  # s command
+  # s and cl commands
   template deleteCharacterAndEnterInsertMode() =
     if currentBufStatus.buffer[windowNode.currentLine].len > 0:
       for i in 0 ..< cmdLoop:
@@ -417,6 +417,8 @@ proc normalCommand(status: var EditorStatus,
     if secondKey == ord('c'):
       deleteCharactersOfLine()
       insertAfterCursor()
+    if secondKey == ord('l'):
+      deleteCharacterAndEnterInsertMode()
     elif secondKey == ord('i'):
       let thirdKey = commands[2]
       if isParen(thirdKey) or
@@ -626,7 +628,7 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
       result = @[key, secondKey]
   elif key == ord('c'):
     let secondKey = getAnotherKey()
-    if secondKey == ord('c'):
+    if secondKey == ord('c') or secondKey == ('l'):
       result = @[key, secondKey]
     elif secondKey == ('i'):
       let thirdKey = getAnotherKey()
