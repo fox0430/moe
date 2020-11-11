@@ -760,3 +760,55 @@ suite "Normal mode: Delete current word":
     check currentBufStatus.buffer[1] == ru"abc"
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
+
+suite "Normal mode: Delete current character and enter insert mode":
+  test "Delete current character and enter insert mode (s command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru's']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru"bc"
+    check currentBufStatus.mode == Mode.insert
+
+  test "Delete current character and enter insert mode when empty line (s command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"", ru""])
+    currentMainWindowNode.currentLine = 1
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru's']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 3
+    for i in  0 ..< currentBufStatus.buffer.len:
+      check currentBufStatus.buffer[i] == ru""
+
+    check currentBufStatus.mode == Mode.insert
+
+  test "Delete 3 characters and enter insert mode(3s command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcdef"])
+    currentMainWindowNode.currentLine = 1
+
+    status.resize(100, 100)
+    status.update
+
+    currentBufStatus.cmdLoop = 3
+    let commands = @[ru's']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru"def"
+    check currentBufStatus.mode == Mode.insert
