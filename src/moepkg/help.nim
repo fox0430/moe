@@ -60,6 +60,7 @@ Ctrl, r    - Redo
 dd         - Delete a line
 x          - Delete current character
 S or cc    - Delete the characters in current line and start insert mode
+s or cl    - Delete current character and enter insert mode
 ci"        - Delete inside of double quotes and enter insert mode
 ci'        - Delete inside of single quotes and enter insert mode
 ciw        - Delete current word and enter insert mode
