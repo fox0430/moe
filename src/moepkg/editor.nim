@@ -617,23 +617,21 @@ proc deleteCharactersOfLine*(bufStatus: var BufferStatus,
     bufStatus.deleteCurrentCharacter(windowNode, autoDeleteParen)
 
 proc deleteTillPreviousBlankLine*(bufStatus: var BufferStatus,
-                                  status: var EditorStatus,
                                   windowNode: WindowNode) =
 
   let
     currentLine = windowNode.currentLine
-    blankLine = findPreviousBlankLine(bufStatus, status, windowNode)
+    blankLine = bufStatus.findPreviousBlankLine(currentLine)
 
   bufStatus.buffer.delete(blankLine + 1, currentLine)
   windowNode.currentLine = max(0, blankLine)
   inc(bufStatus.countChange)
 
 proc deleteTillNextBlankLine*(bufStatus: var BufferStatus,
-                              status: var EditorStatus,
                               windowNode: WindowNode) =
 
   let currentLine = windowNode.currentLine
-  var blankLine = findNextBlankLine(bufStatus, status, windowNode)
+  var blankLine = bufStatus.findNextBlankLine(currentLine)
   if blankLine < 0: blankLine = bufStatus.buffer.len
 
   bufStatus.buffer.delete(currentLine, blankLine - 1)
