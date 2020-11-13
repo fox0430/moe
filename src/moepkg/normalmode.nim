@@ -333,6 +333,19 @@ proc normalCommand(status: var EditorStatus,
           status.settings.autoDeleteParen)
     status.changeMode(Mode.insert)
 
+  # d{ command
+  template deleteTillPreviousBlankLine() =
+    let
+      blankLine = currentBufStatus.findPreviousBlankLine(windowNode.currentLine)
+    status.yankLines(blankLine + 1, windowNode.currentLine)
+    currentBufStatus.deleteTillPreviousBlankLine(windowNode)
+
+  # d} command
+  template deleteTillNextBlankLine() =
+    let blankLine = currentBufStatus.findNextBlankLine(windowNode.currentLine)
+    status.yankLines(windowNode.currentLine, blankLine - 1)
+    currentBufStatus.deleteTillNextBlankLine(windowNode)
+
   let key = commands[0]
 
   if isControlK(key):
@@ -454,9 +467,9 @@ proc normalCommand(status: var EditorStatus,
       if thirdKey == ord('g'):
         deleteLineFromFirstLineToCurrentLine()
     elif secondKey == ord('{'):
-      currentBufStatus.deleteTillPreviousBlankLine(status, windowNode)
+      deleteTillPreviousBlankLine()
     elif secondKey == ord('}'):
-      currentBufStatus.deleteTillNextBlankLine(status, windowNode)
+      deleteTillNextBlankLine()
     elif secondKey == ord('i'):
       let thirdKey = commands[2]
       status.deleteInnerCommand(thirdKey)
