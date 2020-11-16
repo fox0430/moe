@@ -49,6 +49,8 @@ Ctrl, w    - Half Page Down
 Ctrl - d   - Half Page Up
 d, $ or D  - Delete until the end of the line
 yy         - Copy a line
+y{         - Yank to the previous blank line
+y}         - Yank to the next blank line
 p          - Paste the clipboard
 n          - Search forwards
 :          - Start Ex mode
