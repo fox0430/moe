@@ -847,7 +847,7 @@ suite "Normal mode: Delete current character and enter insert mode":
 
     check currentBufStatus.mode == Mode.insert
 
-  test "Delete 3 characters and enter insert mode(3s command)":
+  test "Delete 3 characters and enter insert mode (3s command)":
     var status = initEditorStatus()
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru"abcdef"])
@@ -863,3 +863,67 @@ suite "Normal mode: Delete current character and enter insert mode":
 
     check currentBufStatus.buffer[0] == ru"def"
     check currentBufStatus.mode == Mode.insert
+
+suite "Normal mode: Yank lines":
+  test "Yank to the previous blank line (y{ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(
+      @[ru"abc", ru"", ru"def", ru"ghi", ru"", ru"jkl"])
+    currentMainWindowNode.currentLine = 4
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'y', ru'{']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.yankedLines.len == 4
+    check status.registers.yankedLines == @[ru "", ru"def", ru"ghi", ru""]
+
+  test "Yank to the first line (y{ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru""])
+    currentMainWindowNode.currentLine = 2
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'y', ru'{']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.yankedLines.len == 3
+    check status.registers.yankedLines == @[ru "abc", ru"def", ru""]
+
+  test "Yank to the next blank line (y} command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc", ru"def", ru""])
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'y', ru'}']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.yankedLines.len == 4
+    check status.registers.yankedLines == @[ru"", ru "abc", ru"def", ru""]
+
+  test "Yank to the last line (y} command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc", ru"def"])
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'y', ru'}']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.yankedLines.len == 3
+    check status.registers.yankedLines == @[ru"", ru "abc", ru"def"]
