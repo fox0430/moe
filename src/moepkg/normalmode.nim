@@ -346,6 +346,23 @@ proc normalCommand(status: var EditorStatus,
     status.yankLines(windowNode.currentLine, blankLine - 1)
     currentBufStatus.deleteTillNextBlankLine(windowNode)
 
+  # y{ command
+  template yankToPreviousBlankLine() =
+    let
+      currentLine = windowNode.currentLine
+      previousBlankLine = currentBufStatus.findPreviousBlankLine(currentLine)
+    status.yankLines(max(previousBlankLine, 0), currentLine)
+    if previousBlankLine >= 0: status.jumpLine(previousBlankLine)
+
+  # y} command
+  template yankToNextBlankLine() =
+    let
+      currentLine = windowNode.currentLine
+      buffer = currentBufStatus.buffer
+      nextBlankLine = currentBufStatus.findNextBlankLine(currentLine)
+    status.yankLines(currentLine, max(nextBlankLine, buffer.high))
+    if nextBlankLine >= 0: status.jumpLine(nextBlankLine)
+
   let key = commands[0]
 
   if isControlK(key):
@@ -486,14 +503,19 @@ proc normalCommand(status: var EditorStatus,
       let lastLine = min(windowNode.currentLine + cmdLoop - 1,
                          currentBufStatus.buffer.high)
       status.yankLines(windowNode.currentLine, lastLine)
-    elif secondKey == ord('w'): status.yankWord(cmdLoop)
+    elif secondKey == ord('w'):
+      status.yankWord(cmdLoop)
+    elif secondKey == ord('{'):
+      yankToPreviousBlankLine()
+    elif secondKey == ord('}'):
+      yankToNextBlankLine()
   elif key == ord('p'):
     status.pasteAfterCursor
   elif key == ord('P'):
     status.pasteBeforeCursor
   elif key == ord('>'):
     for i in 0 ..< cmdLoop:
-      currentBufStatus.addIndent( windowNode, status.settings.tabStop)
+      currentBufStatus.addIndent(windowNode, status.settings.tabStop)
   elif key == ord('<'):
     for i in 0 ..< cmdLoop:
       currentBufStatus.deleteIndent(currentMainWindowNode, status.settings.tabStop)
@@ -667,7 +689,10 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
         result = @[key, secondKey, thirdKey]
   elif key == ord('y'):
     let secondKey = getAnotherKey()
-    if key == ord('y') or key == ord('w'):
+    if key == ord('y') or
+       key == ord('w') or
+       key == ord('{') or
+       key == ord('}'):
       result = @[key, secondKey]
   elif key == ord('='):
     let secondKey = getAnotherKey()
