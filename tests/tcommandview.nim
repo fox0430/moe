@@ -104,7 +104,7 @@ suite "commandview: getCandidatesExCommand":
 
     for i in 0 ..< r.high:
       # r[0] is empty string
-      check exCommandList[i] == $r[i + 1]
+      check exCommandList[i][0] == $r[i + 1]
 
   test "Expect ex commands starting with \"b\"":
     let r = getCandidatesExCommand(ru"b")
@@ -123,3 +123,12 @@ suite "commandview: getCandidatesExCommand":
     for i in 0 ..< r.high:
       # r[0] is empty string
       check commands[i] == $r[i + 1]
+
+suite "commandview: initDisplayBuffer":
+  test "Check display buffer":
+    let
+      list = getCandidatesExCommand(ru"")
+      r = initDisplayBuffer(list, SuggestType.exCommand)
+
+    for i in 0 ..< r.high:
+      check exCommandList[i][0] & exCommandList[i][1] == $r[i]
