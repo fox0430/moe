@@ -194,13 +194,14 @@ proc writeCurrentLine(win: var Window,
                       str: seq[Rune],
                       currentLineColorPair: var int,
                       y, x, i, last: int,
+                      mode: Mode,
                       viewSettings: EditorViewSettings) =
 
   if viewSettings.cursorLine:
     # Enable underline
     win.attron(Attributes.underline)
 
-  if viewSettings.highlightCurrentLine:
+  if viewSettings.highlightCurrentLine and not isVisualMode(mode):
     # Change background color to white
     let
       defaultCharColor = EditorColorPair.defaultChar
@@ -280,6 +281,7 @@ proc writeAllLines*[T](view: var EditorView,
                            ru"",
                            currentLineColorPair,
                            y, x, i, 0,
+                           mode,
                            viewSettings)
         else:
           view.write(win, y, x, view.lines[y], EditorColorPair.defaultChar)
@@ -338,6 +340,7 @@ proc writeAllLines*[T](view: var EditorView,
                          str,
                          currentLineColorPair,
                          y, x, i, last,
+                         mode,
                          viewSettings)
       else:
         view.write(win, y, x, str, highlight[i].color)
