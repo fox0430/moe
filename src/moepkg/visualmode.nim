@@ -28,13 +28,15 @@ proc yankBuffer(bufStatus: var BufferStatus,
                 platform: Platform,
                 clipboard: bool) =
 
-  if bufStatus.buffer[windowNode.currentLine].len < 1: return
   registers.yankedLines = @[]
   registers.yankedStr = @[]
 
   if area.startLine == area.endLine:
-    for j in area.startColumn .. area.endColumn:
-      registers.yankedStr.add(bufStatus.buffer[area.startLine][j])
+    if bufStatus.buffer[windowNode.currentLine].len < 1:
+        registers.yankedLines.add(@[ru""])
+    else:
+      for j in area.startColumn .. area.endColumn:
+        registers.yankedStr.add(bufStatus.buffer[area.startLine][j])
   else:
     for i in area.startLine .. area.endLine:
       if i == area.startLine and area.startColumn > 0:

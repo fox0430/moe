@@ -270,6 +270,69 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     check(status.registers.yankedStr == ru"abc")
 
+  test "Yank lines when the last line is empty (Fix #1183)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru""])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    currentBufStatus.keyDown(currentMainWindowNode)
+    currentBufStatus.selectArea.updateSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    let
+      area = currentBufStatus.selectArea
+      clipboard = false
+    currentBufStatus.yankBuffer(status.registers,
+                                currentMainWindowNode,
+                                area,
+                                status.platform,
+                                clipboard)
+
+    check(status.registers.yankedLines == @[ru"abc", ru""])
+
+  test "Yank the empty line":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    currentBufStatus.selectArea.updateSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    let
+      area = currentBufStatus.selectArea
+      clipboard = false
+    currentBufStatus.yankBuffer(status.registers,
+                                currentMainWindowNode,
+                                area,
+                                status.platform,
+                                clipboard)
+
+    check(status.registers.yankedLines == @[ru""])
+
 suite "Visual block mode: Yank buffer (Disable clipboard)":
   test "Yank lines 1":
     var status = initEditorStatus()
