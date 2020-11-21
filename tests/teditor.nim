@@ -364,3 +364,31 @@ suite "Editor: Delete inside paren":
     currentBufStatus.deleteInsideOfParen(currentMainWindowNode, ru'"')
 
     check currentBufStatus.buffer[0] == ru """abc "" "ghi""""
+
+suite "Editor: Paste lines":
+  test "Paste the single line":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const registers = editorstatus.Registers(yankedLines: @[ru"def"],
+                                             yankedStr: ru"")
+    currentBufStatus.pasteAfterCursor(currentMainWindowNode, registers)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru"abc"
+    check currentBufStatus.buffer[1] == ru"def"
+
+  test "Paste lines when the last line is empty":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const registers = editorstatus.Registers(yankedLines: @[ru"def", ru""],
+                                             yankedStr: ru"")
+    currentBufStatus.pasteAfterCursor(currentMainWindowNode, registers)
+
+    check currentBufStatus.buffer.len == 3
+    check currentBufStatus.buffer[0] == ru"abc"
+    check currentBufStatus.buffer[1] == ru"def"
+    check currentBufStatus.buffer[2] == ru""
