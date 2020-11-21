@@ -510,9 +510,9 @@ proc normalCommand(status: var EditorStatus,
     elif secondKey == ord('}'):
       yankToNextBlankLine()
   elif key == ord('p'):
-    status.pasteAfterCursor
+    currentBufStatus.pasteAfterCursor(windowNode, status.registers)
   elif key == ord('P'):
-    status.pasteBeforeCursor
+    currentBufStatus.pasteBeforeCursor(windowNode, status.registers)
   elif key == ord('>'):
     for i in 0 ..< cmdLoop:
       currentBufStatus.addIndent(windowNode, status.settings.tabStop)

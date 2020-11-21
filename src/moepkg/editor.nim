@@ -680,12 +680,15 @@ proc yankLines*(status: var EditorStatus, first, last: int) =
                                             status.settings.notificationSettings,
                                             status.messageLog)
 
-proc pasteLines(status: var EditorStatus) =
-  for i in 0 ..< status.registers.yankedLines.len:
-    currentBufStatus.buffer.insert(status.registers.yankedLines[i],
-                                   currentMainWindowNode.currentLine + i + 1)
+proc pasteLines(bufStatus: var BufferStatus,
+                windowNode: var WindowNode,
+                registers: Registers) =
 
-  inc(currentBufStatus.countChange)
+  for i in 0 ..< registers.yankedLines.len:
+    bufStatus.buffer.insert(registers.yankedLines[i],
+                            windowNode.currentLine + i + 1)
+
+  inc(bufStatus.countChange)
 
 proc yankString*(status: var EditorStatus, length: int) =
   status.registers.yankedLines = @[]
@@ -738,31 +741,40 @@ proc yankWord*(status: var Editorstatus, loop: int) =
         break
       else: status.registers.yankedStr.add(rune)
 
-proc pasteString(status: var EditorStatus) =
-  let oldLine = currentBufStatus.buffer[currentMainWindowNode.currentLine]
-  var newLine = currentBufStatus.buffer[currentMainWindowNode.currentLine]
+proc pasteString(bufStatus: var BufferStatus,
+                 windowNode: var WindowNode,
+                 registers: Registers) =
 
-  newLine.insert(status.registers.yankedStr, currentMainWindowNode.currentColumn)
+  let oldLine = bufStatus.buffer[windowNode.currentLine]
+  var newLine = bufStatus.buffer[windowNode.currentLine]
+
+  newLine.insert(registers.yankedStr, windowNode.currentColumn)
 
   if oldLine != newLine:
-    currentBufStatus.buffer[currentMainWindowNode.currentLine] = newLine
+    bufStatus.buffer[windowNode.currentLine] = newLine
 
-  currentMainWindowNode.currentColumn += status.registers.yankedStr.high - 1
+  windowNode.currentColumn += registers.yankedStr.high - 1
 
-  inc(currentBufStatus.countChange)
+  inc(bufStatus.countChange)
 
-proc pasteAfterCursor*(status: var EditorStatus) =
-  if status.registers.yankedStr.len > 0:
-    currentMainWindowNode.currentColumn.inc
-    status.pasteString
-  elif status.registers.yankedLines.len > 0:
-    status.pasteLines
+proc pasteAfterCursor*(bufStatus: var BufferStatus,
+                       windowNode: var WindowNode,
+                       registers: Registers) =
 
-proc pasteBeforeCursor*(status: var EditorStatus) =
-  if status.registers.yankedLines.len > 0:
-    status.pasteLines
-  elif status.registers.yankedStr.len > 0:
-    status.pasteString
+  if registers.yankedStr.len > 0:
+    windowNode.currentColumn.inc
+    bufStatus.pasteString(windowNode, registers)
+  elif registers.yankedLines.len > 0:
+    bufStatus.pasteLines(windowNode, registers)
+
+proc pasteBeforeCursor*(bufStatus: var BufferStatus,
+                        windowNode: var WindowNode,
+                        registers: Registers) =
+
+  if registers.yankedLines.len > 0:
+    bufStatus.pasteString(windowNode, registers)
+  elif registers.yankedStr.len > 0:
+    bufStatus.pasteLines(windowNode, registers)
 
 proc replaceCurrentCharacter*(bufStatus: var BufferStatus,
                               windowNode: WindowNode,
