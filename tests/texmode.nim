@@ -897,8 +897,6 @@ suite "Ex mode: highlight current line setting command":
     var status = initEditorStatus()
     status.addNewBuffer
 
-    check(status.settings.view.highlightCurrentLine == true)
-
     const command = @[ru"highlightCurrentLine", ru"on"]
     status.exModeCommand(command, 100, 100)
     check status.settings.view.highlightCurrentLine
