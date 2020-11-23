@@ -1,6 +1,7 @@
 import unittest
 import moepkg/[ui, highlight, editorstatus, editorview, gapbuffer, unicodetext,
-               insertmode, movement, editor, window, color, bufferstatus]
+               insertmode, movement, editor, window, color, bufferstatus,
+               settings]
 
 test "Add new buffer":
   var status = initEditorStatus()
@@ -8,6 +9,14 @@ test "Add new buffer":
   status.addNewBuffer
   status.resize(100, 100)
   check(status.bufStatus.len == 2)
+
+test "Add new buffer and update editor view when disabling current line highlighting (Fix #1189)":
+  var status = initEditorStatus()
+  status.addNewBuffer
+  status.settings.view.highlightCurrentLine = false
+
+  status.resize(100, 100)
+  status.update
 
 test "Vertical split window":
   var status = initEditorStatus()

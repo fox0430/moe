@@ -239,7 +239,8 @@ proc writeAllLines*[T](view: var EditorView,
                        currentLine, startSelectedLine, endSelectedLine: int) =
 
   win.erase
-  view.widthOfLineNum = if viewSettings.lineNumber: buffer.len.numberOfDigits + 1 else: 0
+  view.widthOfLineNum = if viewSettings.lineNumber: buffer.len.numberOfDigits + 1
+                        else: 0
 
   var
     indents          = 0
@@ -251,16 +252,18 @@ proc writeAllLines*[T](view: var EditorView,
                    (highlight[0].firstRow, highlight[0].firstColumn) <= start and
                    start <= (highlight[^1].lastRow, highlight[^1].lastColumn)
 
-  var i = if useHighlight: highlight.indexOf(view.originalLine[0], view.start[0]) else: -1
+  var i = if useHighlight: highlight.indexOf(view.originalLine[0], view.start[0])
+          else: -1
   for y in 0 ..< view.height:
     if view.originalLine[y] == -1: break
 
     let isCurrentLine = view.originalLine[y] == currentLine
     if viewSettings.lineNumber and view.start[y] == 0:
-      let lineNumberColor = if isCurrentLine and
-                               isCurrentWin and
-                               viewSettings.currentLineNumber: EditorColorPair.currentLineNum
-                            else: EditorColorPair.lineNum
+      let lineNumberColor = if isCurrentLine and isCurrentWin and
+                               viewSettings.currentLineNumber:
+                              EditorColorPair.currentLineNum
+                            else:
+                              EditorColorPair.lineNum
       view.writeLineNum(win, y, view.originalLine[y], lineNumberColor)
 
     var x = view.widthOfLineNum
@@ -270,7 +273,8 @@ proc writeAllLines*[T](view: var EditorView,
          endSelectedLine >= view.originalLine[y]):
         view.write(win, y, x, ru" ", EditorColorPair.visualMode)
       else:
-        if isCurrentLine and currentLine < buffer.len:
+        if viewSettings.highlightCurrentLine and isCurrentLine and
+           currentLine < buffer.len:
           # Set editor Color Pair for current line highlight.
           # New color pairs are set to Number larger than the maximum value of EditorColorPiar.
           var currentLineColorPair = ord(EditorColorPair.high) + 1
