@@ -1348,3 +1348,54 @@ suite "Visual block mode: Converts string into upper-case string":
 
     check(currentBufStatus.buffer[0] == ru"ABc")
     check(currentBufStatus.buffer[1] == ru"DEf")
+
+suite "Visual block mode: Insert buffer":
+  test "insert tab (Fix #1186)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visualBlock)
+    currentBufStatus.selectArea = initSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    currentBufStatus.keyDown(currentMainWindowNode)
+    currentBufStatus.selectArea.updateSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+    status.update
+
+    # Insert buffer
+    block:
+      status.changeMode(Mode.insert)
+
+      let area = currentBufStatus.selectArea
+      currentMainWindowNode.currentLine = area.startLine
+      currentMainWindowNode.currentColumn = area.startColumn
+
+      const insertBuffer = ru "\t"
+
+      # Insert buffer to the area.startLine
+      for c in insertBuffer:
+        insertTab(currentBufStatus,
+                  currentMainWindowNode,
+                  status.settings.tabStop,
+                  status.settings.autoCloseParen)
+
+      currentBufStatus.insertCharBlock(
+        currentMainWindowNode,
+        insertBuffer,
+        area,
+        status.settings.tabStop,
+        status.settings.autoCloseParen)
+
+    check currentBufStatus.buffer[0] == ru"  abc"
+    check currentBufStatus.buffer[1] == ru"  def"
