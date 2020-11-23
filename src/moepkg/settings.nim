@@ -282,7 +282,7 @@ proc initWorkSpaceSettings(): WorkSpaceSettings {.inline.} =
   result.workSpaceLine = false
 
 proc initEditorViewSettings*(): EditorViewSettings =
-  result.highlightCurrentLine = true
+  result.highlightCurrentLine = false
   result.lineNumber = true
   result.currentLineNumber = true
   result.indentationLines = true
