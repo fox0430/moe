@@ -132,3 +132,16 @@ suite "commandview: initDisplayBuffer":
 
     for i in 0 ..< r.high:
       check exCommandList[i][0] & exCommandList[i][1] == $r[i]
+
+suite "commandview: getSuggestType":
+  test "Expect to SuggestType.exCommand":
+    const buffer = ru"h"
+    check getSuggestType(buffer) == SuggestType.exCommand
+
+  test "Expect to SuggestType.exCommandOption":
+    const buffer = ru"cursorLine "
+    check getSuggestType(buffer) == SuggestType.exCommandOption
+
+  test "Expect to SuggestType.filePath":
+    const buffer = ru"e "
+    check getSuggestType(buffer) == SuggestType.filePath
