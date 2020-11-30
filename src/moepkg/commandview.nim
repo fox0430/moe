@@ -360,7 +360,7 @@ proc isExCommand(exBuffer: seq[Rune]): bool =
 
   let buffer = ($exBuffer).splitWhitespace(-1)
   for i in 0 ..< exCommandList.len:
-    if buffer[0] == $exCommandList[i]: return true
+    if buffer[0] == exCommandList[i][0]: return true
 
 proc getCandidatesExCommandOption(status: var Editorstatus,
                                   exStatus: var ExModeViewStatus,
@@ -414,13 +414,13 @@ proc getCandidatesExCommand(commandLineBuffer: seq[Rune]): seq[seq[Rune]] =
 
 proc getSuggestType(buffer: seq[Rune]): SuggestType =
   template isECommand(command: seq[seq[Rune]]): bool =
-    command.len == 2 and cmpIgnoreCase($command[0], "e") == 0
+    cmpIgnoreCase($command[0], "e") == 0
 
   template isVsCommand(command: seq[seq[Rune]]): bool =
-    command.len == 2 and cmpIgnoreCase($command[0], "vs") == 0
+    cmpIgnoreCase($command[0], "vs") == 0
 
   template isSvCommand(command: seq[seq[Rune]]): bool =
-    command.len == 1 and cmpIgnoreCase($command[0], "sv") == 0
+    cmpIgnoreCase($command[0], "sv") == 0
 
   template isSpCommand(command: seq[seq[Rune]]): bool =
     command.len > 0 and
