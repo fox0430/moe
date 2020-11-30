@@ -14,71 +14,71 @@ type SuggestType = enum
   exCommandOption
   filePath
 
-const exCommandList = [
-  ["!", "                    | Shell command execution"],
-  ["deleteParen", "          | Enable/Disable auto delete paren"],
-  ["b", "                    | Change the buffer with the given number"],
-  ["bd", "                   | Delete the current buffer"],
-  ["bfirst", "               | Change the first buffer"],
-  ["blast", "                | Change the last buffer"],
-  ["bnext", "                | Change the next buffer"],
-  ["bprev", "                | Change the previous buffer"],
-  ["buildOnSave", "          | Enable/Disable build on save"],
-  ["buf", "                  | Open the buffer manager"],
-  ["clipboard", "            | Enable/Disable accessing the system clipboard"],
-  ["conf", "                 | Open the configuration mode"],
-  ["cursorLine", "           | Change setting to the cursorLine"],
-  ["cws", "                  | Create the work space"],
-  ["debug", "                | Open the debug mode"],
-  ["deleteTrailingSpaces", " | Delete the trailing spaces in the current buffer"],
-  ["dws", "                  | Delete the current workspace"],
-  ["e", "                    | Open file"],
-  ["ene", "                  | Create the empty buffer"],
-  ["help", "                 | Open the help"],
-  ["highlightCurrentLine", " | Change setting to the highlightCurrentLine"],
-  ["highlightCurrentWord", " | Change setting to the highlightCurrentWord"],
-  ["highlightFullSpace", "   | Change setting to the highlightFullSpace"],
-  ["highlightParen", "       | Change setting to the highlightParen"],
-  ["history", "              | Open the history mode (Backup file manager)"],
-  ["icon", "                 | Show/Hidden icons in filer mode"],
-  ["ignorecase", "           | Change setting to ignore case in search"],
-  ["incrementalSearch", "    | Enable/Disable incremental search"],
-  ["indent", "               | Enable/Disable auto indent"],
-  ["indentationLines", "     | Enable/Disable auto indentation lines"],
-  ["linenum", "              | Enable/Disable the line number"],
-  ["liveReload", "           | Enable/Disable the live reload of the config file"],
-  ["log", "                  | Open the log viewer"],
-  ["ls", "                   | Show the all buffer"],
-  ["lsw", "                  | Show the all workspace"],
-  ["multipleStatusbar", "    | Enable/Disable multiple statusbar"],
-  ["new", "                  | Create the new buffer in split window horizontally"],
-  ["noh", "                  | Turn off highlights"],
-  ["paren", "                | Enable/Disable auto close paren"],
-  ["putConfigFile", "        | Put the sample configuration file in ~/.config/moe"],
-  ["q", "                    | Close the current window"],
-  ["Q", "                    | Run Quickrun"],
-  ["q!", "                   | Force close the current window"],
-  ["qa", "                   | Close the all window in current workspace"],
-  ["qa!", "                  | Force close the all window in current workspace"],
-  ["recent", "               | Open the recent file selection mode"],
-  ["run", "                  | run Quickrun"],
-  ["scrollSpeed", "          | Change setting to the scroll speed"],
-  ["showGitInactive", "      | Change status bar setting to show/hide git branch name in inactive window"],
-  ["smartcase", "            | Change setting to smart case in search"],
-  ["smoothScroll", "         | Enable/Disable the smooth scroll"],
-  ["sp", "                   | Open the file in horizontal split window"],
-  ["statusbar", "            | Enable/Disable the status line"],
-  ["syntax", "               | Enable/Disable the syntax highlighting"],
-  ["tab", "                  | Enable/Disable the tab line"],
-  ["tabstop", "              | Change setting to the tabstop"],
-  ["theme", "                | Change the color theme"],
-  ["vs", "                   | Vertical split window"],
-  ["w", "                    | Write file"],
-  ["w!", "                   | Force write file"],
-  ["ws", "                   | Change the current workspace"],
-  ["wq", "                   | Write file and close window"],
-  ["wq!", "                  | Force write file and close window"],
-  ["wqa", "                  | Write all file in current workspace"],
+const exCommandList: array[64, tuple[command, description: string]] = [
+  (command: "!", description: "                    | Shell command execution"),
+  (command: "deleteParen", description: "          | Enable/Disable auto delete paren"),
+  (command: "b", description: "                    | Change the buffer with the given number"),
+  (command: "bd", description: "                   | Delete the current buffer"),
+  (command: "bfirst", description: "               | Change the first buffer"),
+  (command: "blast", description: "                | Change the last buffer"),
+  (command: "bnext", description: "                | Change the next buffer"),
+  (command: "bprev", description: "                | Change the previous buffer"),
+  (command: "buildOnSave", description: "          | Enable/Disable build on save"),
+  (command: "buf", description: "                  | Open the buffer manager"),
+  (command: "clipboard", description: "            | Enable/Disable accessing the system clipboard"),
+  (command: "conf", description: "                 | Open the configuration mode"),
+  (command: "cursorLine", description: "           | Change setting to the cursorLine"),
+  (command: "cws", description: "                  | Create the work space"),
+  (command: "debug", description: "                | Open the debug mode"),
+  (command: "deleteTrailingSpaces", description: " | Delete the trailing spaces in the current buffer"),
+  (command: "dws", description: "                  | Delete the current workspace"),
+  (command: "e", description: "                    | Open file"),
+  (command: "ene", description: "                  | Create the empty buffer"),
+  (command: "help", description: "                 | Open the help"),
+  (command: "highlightCurrentLine", description: " | Change setting to the highlightCurrentLine"),
+  (command: "highlightCurrentWord", description: " | Change setting to the highlightCurrentWord"),
+  (command: "highlightFullSpace", description: "   | Change setting to the highlightFullSpace"),
+  (command: "highlightParen", description: "       | Change setting to the highlightParen"),
+  (command: "history", description: "              | Open the history mode (Backup file manager)"),
+  (command: "icon", description: "                 | Show/Hidden icons in filer mode"),
+  (command: "ignorecase", description: "           | Change setting to ignore case in search"),
+  (command: "incrementalSearch", description: "    | Enable/Disable incremental search"),
+  (command: "indent", description: "               | Enable/Disable auto indent"),
+  (command: "indentationLines", description: "     | Enable/Disable auto indentation lines"),
+  (command: "linenum", description: "              | Enable/Disable the line number"),
+  (command: "liveReload", description: "           | Enable/Disable the live reload of the config file"),
+  (command: "log", description: "                  | Open the log viewer"),
+  (command: "ls", description: "                   | Show the all buffer"),
+  (command: "lsw", description: "                  | Show the all workspace"),
+  (command: "multipleStatusbar", description: "    | Enable/Disable multiple statusbar"),
+  (command: "new", description: "                  | Create the new buffer in split window horizontally"),
+  (command: "noh", description: "                  | Turn off highlights"),
+  (command: "paren", description: "                | Enable/Disable auto close paren"),
+  (command: "putConfigFile", description: "        | Put the sample configuration file in ~/.config/moe"),
+  (command: "q", description: "                    | Close the current window"),
+  (command: "Q", description: "                    | Run Quickrun"),
+  (command: "q!", description: "                   | Force close the current window"),
+  (command: "qa", description: "                   | Close the all window in current workspace"),
+  (command: "qa!", description: "                  | Force close the all window in current workspace"),
+  (command: "recent", description: "               | Open the recent file selection mode"),
+  (command: "run", description: "                  | run Quickrun"),
+  (command: "scrollSpeed", description: "          | Change setting to the scroll speed"),
+  (command: "showGitInactive", description: "      | Change status bar setting to show/hide git branch name in inactive window"),
+  (command: "smartcase", description: "            | Change setting to smart case in search"),
+  (command: "smoothScroll", description: "         | Enable/Disable the smooth scroll"),
+  (command: "sp", description: "                   | Open the file in horizontal split window"),
+  (command: "statusbar", description: "            | Enable/Disable the status line"),
+  (command: "syntax", description: "               | Enable/Disable the syntax highlighting"),
+  (command: "tab", description: "                  | Enable/Disable the tab line"),
+  (command: "tabstop", description: "              | Change setting to the tabstop"),
+  (command: "theme", description: "                | Change the color theme"),
+  (command: "vs", description: "                   | Vertical split window"),
+  (command: "w", description: "                    | Write file"),
+  (command: "w!", description: "                   | Force write file"),
+  (command: "ws", description: "                   | Change the current workspace"),
+  (command: "wq", description: "                   | Write file and close window"),
+  (command: "wq!", description: "                  | Force write file and close window"),
+  (command: "wqa", description: "                  | Write all file in current workspace")
 ]
 
 proc askCreateDirPrompt*(commndLine: var CommandLine,
@@ -360,7 +360,7 @@ proc isExCommand(exBuffer: seq[Rune]): bool =
 
   let buffer = ($exBuffer).splitWhitespace(-1)
   for i in 0 ..< exCommandList.len:
-    if buffer[0] == exCommandList[i][0]: return true
+    if buffer[0] == exCommandList[i].command: return true
 
 proc getCandidatesExCommandOption(status: var Editorstatus,
                                   exStatus: var ExModeViewStatus,
@@ -407,8 +407,8 @@ proc getCandidatesExCommandOption(status: var Editorstatus,
 proc getCandidatesExCommand(commandLineBuffer: seq[Rune]): seq[seq[Rune]] =
   result = @[commandLineBuffer]
   let buffer = toLowerAscii($commandLineBuffer)
-  for exCommand in exCommandList:
-    let cmd = exCommand[0]
+  for list in exCommandList:
+    let cmd = list.command
     if cmd.len >= buffer.len and cmd.startsWith(buffer):
       result.add(cmd.toRunes)
 
@@ -484,9 +484,10 @@ proc initDisplayBuffer(suggestlist: seq[seq[Rune]],
     else: result = suggestlist[1 ..< suggestlist.len]
   elif isSuggestTypeExCommand(suggestType):
     # Add command description
-    for exCmd in exCommandList:
+    for list in exCommandList:
       for i in 1 ..< suggestlist.len:
-        if $suggestlist[i] == exCmd[0]: result.add suggestlist[i] & exCmd[1].ru
+        if $suggestlist[i] == list.command:
+          result.add suggestlist[i] & list.description.ru
   else:
     result = suggestlist[1 ..< suggestlist.len]
 
