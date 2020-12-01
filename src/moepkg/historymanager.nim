@@ -18,6 +18,7 @@ proc generateFilenamePatern(path: seq[Rune]): seq[Rune] =
 
 proc getBackupFiles(path: seq[Rune],
                     settings: AutoBackupSettings): seq[seq[Rune]] =
+
   let
     splitPath = splitPath($path)
     patern = generateFilenamePatern(splitPath.tail.toRunes)
@@ -30,28 +31,29 @@ proc getBackupFiles(path: seq[Rune],
         let splitPath = splitPath(path)
         result.add(splitPath.tail.toRunes)
 
-proc generateBackUpFilePath(path: seq[Rune],
+proc generateBackUpFilePath(originalFilePath, backupFileName: seq[Rune],
                             settings: AutoBackupSettings): seq[Rune] =
 
-  if path.len == 0: return
+  if backupFileName.len == 0: return
 
-  let slashPosition = path.rfind(ru"/")
+  let slashPosition = originalFilePath.rfind(ru"/")
 
   if settings.backupDir.len > 0:
     if not dirExists($settings.backupDir): return ru""
     if slashPosition > 0:
-      result = path[0 ..< slashPosition] /
+      result = backupFileName[0 ..< slashPosition] /
                settings.backupDir /
-               path[slashPosition + 1 ..< ^1]
+               backupFileName[slashPosition + 1 ..< ^1]
     else:
-      result = settings.backupDir / path
+      result = settings.backupDir / backupFileName
   else:
     if slashPosition > 0:
-      result = path[0 ..< slashPosition] /
+      let pathSplit = splitPath($originalFilePath)
+      result = pathSplit.head.ru /
                ru".history" /
-               path[slashPosition + 1 ..< ^1]
+               backupFileName
     else:
-      result = ru".history" / path
+      result = ru".history" / backupFileName
 
 proc initHistoryManagerBuffer(status: var Editorstatus, sourcePath: seq[Rune]) =
   let list = getBackupFiles(sourcePath, status.settings.autoBackupSettings)
@@ -91,7 +93,7 @@ proc openDiffViewer(status: var Editorstatus, path: seq[Rune]) =
   let
     backupFilename = currentBufStatus.buffer[currentMainWindowNode.currentLine]
     settings = status.settings.autoBackupSettings
-    backupPath = generateBackUpFilePath(backupFilename, settings)
+    backupPath = generateBackUpFilePath(path, backupFilename, settings)
     cmdOut = execCmdEx("diff -u " & $path & " " & $backupPath)
   var buffer: seq[seq[Rune]] = @[ru""]
   for r in ru(cmdOut.output):
