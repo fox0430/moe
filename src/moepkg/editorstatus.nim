@@ -749,7 +749,7 @@ proc highlightSelectedArea(status: var Editorstatus) =
 proc highlightPairOfParen(status: var Editorstatus) =
   let
     buffer = currentBufStatus.buffer
-    currentLine = mainWindowNode.currentLine
+    currentLine = currentMainWindowNode.currentLine
     currentColumn = if currentMainWindowNode.currentColumn > buffer[currentLine].high:
                       buffer[currentLine].high
                     else: currentMainWindowNode.currentColumn
