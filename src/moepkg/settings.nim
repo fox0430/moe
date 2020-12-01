@@ -782,7 +782,7 @@ proc loadVSCodeTheme*(): ColorTheme =
     let homeDir = getHomeDir()
     var vsCodeSettingsFile = homeDir & "/.config/VSCodium/User/settings.json"
     var vsCodeThemeFile = ""
-    var vsCodeExtensionsDir = homeDir & "/.vscode-oss/extensions/"
+    var vsCodeExtensionsDir = homeDir & "/.vscode/extensions/"
     var vsCodeThemeSetting = ""
     if not fileExists(vsCodeSettingsFile):
       vsCodeSettingsFile = homeDir & "/.config/Code/User/settings.json"
@@ -796,7 +796,7 @@ proc loadVSCodeTheme*(): ColorTheme =
       break vsCodeThemeLoading
 
     if not dirExists(vsCodeExtensionsDir):
-      vsCodeExtensionsDir = homeDir & "/.vscode/extensions/"
+      vsCodeExtensionsDir = homeDir & "/.vscode-oss/extensions/"
       if not dirExists(vsCodeExtensionsDir):
         break vsCodeThemeLoading
 
