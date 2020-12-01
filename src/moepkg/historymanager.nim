@@ -192,6 +192,8 @@ proc deleteBackupFiles(status: var EditorStatus, sourcePath: seq[Rune]) =
                                              status.messageLog)
 
 proc historyManager*(status: var EditorStatus) =
+  status.resize(terminalHeight(), terminalWidth())
+
   # BufferStatus.path is the path of the backup source file
   if currentBufStatus.path.len == 0:
     currentBufStatus.path = status.bufStatus[status.prevBufferIndex].path
