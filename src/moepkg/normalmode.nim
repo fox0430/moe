@@ -152,7 +152,7 @@ proc changeInnerCommand(status: var EditorStatus, key: Rune) =
   elif key == ru'w':
     if oldLine.len > 0:
       currentBufStatus.moveToBackwardWord(currentMainWindowNode)
-      currentBufStatus.deleteWord(currentMainWindowNode)
+      currentBufStatus.deleteWord(currentMainWindowNode, status.registers)
     status.changeMode(Mode.insert)
   else:
     discard
@@ -167,7 +167,7 @@ proc deleteInnerCommand(status: var EditorStatus, key: Rune) =
   elif key == ru'w':
     if currentBufStatus.buffer[currentMainWindowNode.currentLine].len > 0:
       currentBufStatus.moveToBackwardWord(currentMainWindowNode)
-      currentBufStatus.deleteWord(currentMainWindowNode)
+      currentBufStatus.deleteWord(currentMainWindowNode, status.registers)
   else:
     discard
 
@@ -464,7 +464,8 @@ proc normalCommand(status: var EditorStatus,
                      currentBufStatus.buffer.len - windowNode.currentLine)
       for i in 0 ..< loop:
         currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
-    elif secondKey == ord('w'): currentBufStatus.deleteWord(windowNode)
+    elif secondKey == ord('w'):
+      currentBufStatus.deleteWord(windowNode, status.registers)
     elif secondKey == ('$') or isEndKey(secondKey):
       deleteCharactersUntilEndOfLine()
     elif secondKey == ('0') or isHomeKey(secondKey):

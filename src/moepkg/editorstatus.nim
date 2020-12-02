@@ -41,7 +41,7 @@ proc initPlatform(): Platform =
   elif defined macosx: result = Platform.mac
   else: result = Platform.other
 
-proc initRegisters(): Registers {.inline.} =
+proc initRegisters*(): Registers {.inline.} =
   result.yankedLines = @[]
   result.yankedStr = @[]
 

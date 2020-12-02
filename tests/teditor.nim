@@ -148,11 +148,27 @@ suite "Editor: Delete word":
     var status = initEditorStatus()
     status.addNewBuffer
 
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"block:", ru"  "])
-    status.workspace[0].currentMainWindowNode.currentLine = 1
+    currentBufStatus.buffer = initGapBuffer(@[ru"block:", ru"  "])
+    currentMainWindowNode.currentLine = 1
+
+    var registers = editorstatus.Registers(yankedLines: @[ru""],
+                                           yankedStr: ru"")
 
     for i in 0 ..< 2:
-      status.bufStatus[0].deleteWord(status.workspace[0].currentMainWindowNode)
+      currentBufStatus.deleteWord(currentMainWindowNode, registers)
+
+  test "Fix #1204":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"proc test() ="])
+
+    var registers = editorstatus.Registers(yankedLines: @[ru""],
+                                           yankedStr: ru"")
+
+    currentBufStatus.deleteWord(currentMainWindowNode, registers)
+
+    check currentBufStatus.buffer[0] == ru"test() ="
+    check registers.yankedStr == ru"proc "
 
 suite "Editor: keyEnter":
   test "Delete all characters in the previous line if only whitespaces":
