@@ -349,20 +349,30 @@ proc insertCharacterAboveCursor*(bufStatus: var BufferStatus,
     bufStatus.buffer[currentLine] = newLine
     inc windowNode.currentColumn
 
-proc deleteWord*(bufStatus: var BufferStatus, windowNode: WindowNode) =
+# Yank and delete current word
+proc deleteWord*(bufStatus: var BufferStatus,
+                 windowNode: var WindowNode,
+                 registers: var Registers) =
+
+  registers = initRegisters()
+
   if bufStatus.buffer.len == 1 and
      bufStatus.buffer[windowNode.currentLine].len < 1: return
   elif bufStatus.buffer.len > 1 and
        windowNode.currentLine < bufStatus.buffer.high and
        bufStatus.buffer[windowNode.currentLine].len < 1:
+    registers.yankedLines = @[bufStatus.buffer[windowNode.currentLine]]
     bufStatus.buffer.delete(windowNode.currentLine, windowNode.currentLine + 1)
+
     if windowNode.currentLine > bufStatus.buffer.high:
       windowNode.currentLine = bufStatus.buffer.high
   elif windowNode.currentColumn == bufStatus.buffer[windowNode.currentLine].high:
     let oldLine = bufStatus.buffer[windowNode.currentLine]
     var newLine = bufStatus.buffer[windowNode.currentLine]
     newLine.delete(windowNode.currentColumn)
-    if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
+    if oldLine != newLine:
+      bufStatus.buffer[windowNode.currentLine] = newLine
+      registers.yankedLines = @[newLine]
 
     if windowNode.currentColumn > 0: dec(windowNode.currentColumn)
   else:
@@ -396,10 +406,15 @@ proc deleteWord*(bufStatus: var BufferStatus, windowNode: WindowNode) =
       inc(windowNode.currentColumn)
 
     let oldLine = bufStatus.buffer[currentLine]
-    var newLine = bufStatus.buffer[currentLine]
+    var
+      newLine = bufStatus.buffer[currentLine]
+      yankStr = ru""
     for i in currentColumn ..< windowNode.currentColumn:
+      yankStr.add newLine[currentColumn]
       newLine.delete(currentColumn)
-    if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
+    if oldLine != newLine:
+      bufStatus.buffer[currentLine] = newLine
+      registers.yankedStr = yankStr
     windowNode.expandedColumn = currentColumn
     windowNode.currentColumn = currentColumn
 
@@ -407,6 +422,7 @@ proc deleteWord*(bufStatus: var BufferStatus, windowNode: WindowNode) =
 
 proc deleteWordBeforeCursor*(bufStatus: var BufferStatus,
                             windowNode: var WindowNode,
+                            registers: var Registers,
                             tabStop: int) =
 
   if windowNode.currentLine == 0 and windowNode.currentColumn == 0: return
@@ -416,7 +432,7 @@ proc deleteWordBeforeCursor*(bufStatus: var BufferStatus,
     bufStatus.keyBackspace(windowNode, isAutoDeleteParen, tabStop)
   else:
     bufStatus.moveToBackwardWord(windowNode)
-    bufStatus.deleteWord(windowNode)
+    bufStatus.deleteWord(windowNode, registers)
 
 proc countSpaceOfBeginningOfLine(line: seq[Rune]): int =
   for r in line:
