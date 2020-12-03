@@ -241,6 +241,7 @@ proc normalCommand(status: var EditorStatus,
       status.settings.autoCloseParen,
       rune)
 
+  # d$ command
   template yankAndDeleteCharactersUntilEndOfLine() =
     let
       lineWidth = currentBufStatus.buffer[windowNode.currentLine].len
@@ -368,6 +369,16 @@ proc normalCommand(status: var EditorStatus,
     status.yankLines(currentLine, max(nextBlankLine, buffer.high))
     if nextBlankLine >= 0: status.jumpLine(nextBlankLine)
 
+  # dd command
+  template yankAndDeleteLines() =
+    let lastLine = min(windowNode.currentLine + cmdLoop - 1,
+                       currentBufStatus.buffer.high)
+    status.yankLines(windowNode.currentLine, lastLine)
+    let count = min(cmdLoop,
+                    currentBufStatus.buffer.len - windowNode.currentLine)
+    for i in 0 ..< count:
+      currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
+
   let key = commands[0]
 
   if isControlK(key):
@@ -462,13 +473,7 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('d'):
     let secondKey = commands[1]
     if secondKey == ord('d'):
-      let lastLine = min(windowNode.currentLine + cmdLoop - 1,
-                         currentBufStatus.buffer.high)
-      status.yankLines(windowNode.currentLine, lastLine)
-      let loop = min(cmdLoop,
-                     currentBufStatus.buffer.len - windowNode.currentLine)
-      for i in 0 ..< loop:
-        currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
+      yankAndDeleteLines()
     elif secondKey == ord('w'):
       currentBufStatus.deleteWord(windowNode, status.registers)
     elif secondKey == ('$') or isEndKey(secondKey):
