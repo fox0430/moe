@@ -241,7 +241,12 @@ proc normalCommand(status: var EditorStatus,
       status.settings.autoCloseParen,
       rune)
 
-  template deleteCharactersUntilEndOfLine() =
+  template yankAndDeleteCharactersUntilEndOfLine() =
+    let
+      lineWidth = currentBufStatus.buffer[windowNode.currentLine].len
+      count = lineWidth - windowNode.currentColumn
+    status.yankString(count)
+
     currentBufStatus.deleteCharacterUntilEndOfLine(
       status.settings.autoDeleteParen, windowNode)
 
@@ -467,7 +472,7 @@ proc normalCommand(status: var EditorStatus,
     elif secondKey == ord('w'):
       currentBufStatus.deleteWord(windowNode, status.registers)
     elif secondKey == ('$') or isEndKey(secondKey):
-      deleteCharactersUntilEndOfLine()
+      yankAndDeleteCharactersUntilEndOfLine()
     elif secondKey == ('0') or isHomeKey(secondKey):
       currentBufStatus.deleteCharacterBeginningOfLine(
         status.settings.autoDeleteParen,
@@ -492,7 +497,7 @@ proc normalCommand(status: var EditorStatus,
       let thirdKey = commands[2]
       status.deleteInnerCommand(thirdKey)
   elif key == ord('D'):
-     deleteCharactersUntilEndOfLine()
+     yankAndDeleteCharactersUntilEndOfLine()
   elif key == ord('S'):
      deleteCharactersOfLine()
      insertAfterCursor()
