@@ -379,6 +379,16 @@ proc normalCommand(status: var EditorStatus,
     for i in 0 ..< count:
       currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
 
+  template yankAndDeleteCharacterBeginningOfLine() =
+    let currentColumn = windowNode.currentColumn
+    windowNode.currentColumn = 0
+    status.yankString(currentColumn)
+    windowNode.currentColumn = currentColumn
+
+    currentBufStatus.deleteCharacterBeginningOfLine(
+      status.settings.autoDeleteParen,
+      windowNode)
+
   let key = commands[0]
 
   if isControlK(key):
@@ -479,9 +489,7 @@ proc normalCommand(status: var EditorStatus,
     elif secondKey == ('$') or isEndKey(secondKey):
       yankAndDeleteCharactersUntilEndOfLine()
     elif secondKey == ('0') or isHomeKey(secondKey):
-      currentBufStatus.deleteCharacterBeginningOfLine(
-        status.settings.autoDeleteParen,
-        windowNode)
+     yankAndDeleteCharacterBeginningOfLine()
     # Delete the line from current line to last line
     elif secondKey == ord('G'):
       let lastLine = currentBufStatus.buffer.high
