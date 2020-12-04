@@ -913,9 +913,10 @@ proc redo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   inc(bufStatus.countChange)
 
 # If cursor is inside of paren, delete inside paren in the current line
-proc deleteInsideOfParen*(bufStatus: var BufferStatus,
-                          windowNode: var WindowNode,
-                          rune: Rune) =
+proc yankAndDeleteInsideOfParen*(bufStatus: var BufferStatus,
+                                 windowNode: var WindowNode,
+                                 registers: var Registers,
+                                 rune: Rune) =
 
   let
     currentLine = windowNode.currentLine
@@ -941,11 +942,17 @@ proc deleteInsideOfParen*(bufStatus: var BufferStatus,
       break
 
   if openParenPosition > 0 and closeParenPosition > 0:
-    var newLine = bufStatus.buffer[currentLine]
+    var
+      newLine = bufStatus.buffer[currentLine]
+      yankStr = ru""
 
     for i in 0 ..< closeParenPosition - openParenPosition - 1:
+      yankStr.add newLine[openParenPosition + 1]
       newLine.delete(openParenPosition + 1)
 
     if oldLine != newLine:
+      registers = initRegisters()
+      registers.yankedStr = yankStr
+
       bufStatus.buffer[currentLine] = newLine
       windowNode.currentColumn = openParenPosition

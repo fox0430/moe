@@ -143,7 +143,9 @@ proc changeInnerCommand(status: var EditorStatus, key: Rune) =
 
   # Delete inside paren and enter insert mode
   if isParen(key):
-    currentBufStatus.deleteInsideOfParen(currentMainWindowNode, key)
+    currentBufStatus.yankAndDeleteInsideOfParen(currentMainWindowNode,
+                                                status.registers,
+                                                key)
 
     if oldLine != currentBufStatus.buffer[currentLine]:
       currentMainWindowNode.currentColumn.inc
@@ -158,10 +160,12 @@ proc changeInnerCommand(status: var EditorStatus, key: Rune) =
     discard
 
 # di command
-proc deleteInnerCommand(status: var EditorStatus, key: Rune) =
+proc yankAndDeleteInnerCommand(status: var EditorStatus, key: Rune) =
   # Delete inside paren and enter insert mode
   if isParen(key):
-    currentBufStatus.deleteInsideOfParen(currentMainWindowNode, key)
+    currentBufStatus.yankAndDeleteInsideOfParen(currentMainWindowNode,
+                                                status.registers,
+                                                key)
     currentBufStatus.keyRight(currentMainWindowNode)
   # Delete current word and enter insert mode
   elif key == ru'w':
@@ -323,7 +327,9 @@ proc normalCommand(status: var EditorStatus,
        mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
         status.closeWindow(currentWorkSpace.currentMainWindowNode, height, width)
 
-  template deleteLineFromFirstLineToCurrentLine() =
+  # dgg command
+  # Delete the line from first line to current line
+  template yankAndDeleteLineFromFirstLineToCurrentLine() =
     let currentLine = windowNode.currentLine
     status.yankLines(0, currentLine)
     status.moveToFirstLine
@@ -340,14 +346,14 @@ proc normalCommand(status: var EditorStatus,
     status.changeMode(Mode.insert)
 
   # d{ command
-  template deleteTillPreviousBlankLine() =
+  template yankAndDeleteTillPreviousBlankLine() =
     let
       blankLine = currentBufStatus.findPreviousBlankLine(windowNode.currentLine)
     status.yankLines(blankLine + 1, windowNode.currentLine)
     currentBufStatus.deleteTillPreviousBlankLine(windowNode)
 
   # d} command
-  template deleteTillNextBlankLine() =
+  template yankAndDeleteTillNextBlankLine() =
     let blankLine = currentBufStatus.findNextBlankLine(windowNode.currentLine)
     status.yankLines(windowNode.currentLine, blankLine - 1)
     currentBufStatus.deleteTillNextBlankLine(windowNode)
@@ -379,6 +385,7 @@ proc normalCommand(status: var EditorStatus,
     for i in 0 ..< count:
       currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
 
+  # d0 command
   template yankAndDeleteCharacterBeginningOfLine() =
     let currentColumn = windowNode.currentColumn
     windowNode.currentColumn = 0
@@ -388,6 +395,16 @@ proc normalCommand(status: var EditorStatus,
     currentBufStatus.deleteCharacterBeginningOfLine(
       status.settings.autoDeleteParen,
       windowNode)
+
+  # dG command
+  # Yank and delete the line from current line to last line
+  template yankAndDeleteFromCurrentLineToLastLine() =
+    let lastLine = currentBufStatus.buffer.high
+    status.yankLines(windowNode.currentLine, lastLine)
+    let count = currentBufStatus.buffer.len - windowNode.currentLine
+
+    for i in 0 ..< count:
+      currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
 
   let key = commands[0]
 
@@ -490,25 +507,19 @@ proc normalCommand(status: var EditorStatus,
       yankAndDeleteCharactersUntilEndOfLine()
     elif secondKey == ('0') or isHomeKey(secondKey):
      yankAndDeleteCharacterBeginningOfLine()
-    # Delete the line from current line to last line
     elif secondKey == ord('G'):
-      let lastLine = currentBufStatus.buffer.high
-      status.yankLines(windowNode.currentLine, lastLine)
-      let loop = currentBufStatus.buffer.len - windowNode.currentLine
-      for i in 0 ..< loop:
-        currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
-    # Delete the line from first line to current line
+      yankAndDeleteFromCurrentLineToLastLine()
     elif secondKey == ord('g'):
       let thirdKey = commands[2]
       if thirdKey == ord('g'):
-        deleteLineFromFirstLineToCurrentLine()
+        yankAndDeleteLineFromFirstLineToCurrentLine()
     elif secondKey == ord('{'):
-      deleteTillPreviousBlankLine()
+      yankAndDeleteTillPreviousBlankLine()
     elif secondKey == ord('}'):
-      deleteTillNextBlankLine()
+      yankAndDeleteTillNextBlankLine()
     elif secondKey == ord('i'):
       let thirdKey = commands[2]
-      status.deleteInnerCommand(thirdKey)
+      status.yankAndDeleteInnerCommand(thirdKey)
   elif key == ord('D'):
      yankAndDeleteCharactersUntilEndOfLine()
   elif key == ord('S'):
