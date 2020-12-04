@@ -377,7 +377,11 @@ suite "Editor: Delete inside paren":
     currentBufStatus.buffer = initGapBuffer(@[ru """abc "def" "ghi""""])
     currentMainWindowNode.currentColumn = 6
 
-    currentBufStatus.deleteInsideOfParen(currentMainWindowNode, ru'"')
+    var registers = editorstatus.Registers(yankedLines: @[], yankedStr: ru"")
+
+    currentBufStatus.yankAndDeleteInsideOfParen(currentMainWindowNode,
+                                                registers,
+                                                ru'"')
 
     check currentBufStatus.buffer[0] == ru """abc "" "ghi""""
 
