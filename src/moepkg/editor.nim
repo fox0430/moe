@@ -61,13 +61,10 @@ proc insertCharacter*(bufStatus: var BufferStatus,
     inserted()
 
 proc deleteParen*(bufStatus: var BufferStatus,
-                  windowNode: WindowNode,
+                  currentLine, currentColumn: int,
                   currentChar: Rune) =
 
-  let
-    currentLine = windowNode.currentLine
-    currentColumn = windowNode.currentColumn
-    buffer = bufStatus.buffer
+  let buffer = bufStatus.buffer
 
   if isOpenParen(currentChar):
     var depth = 1
@@ -117,7 +114,9 @@ proc currentLineDeleteCharacterBeforeCursor(bufStatus: var BufferStatus,
     bufStatus.buffer[windowNode.currentLine] = newLine
 
   if autoDeleteParen:
-    bufStatus.deleteParen(windowNode, currentChar)
+    bufStatus.deleteParen(windowNode.currentLine,
+                          windowNode.currentColumn,
+                          currentChar)
 
   if(bufStatus.mode == Mode.insert and
      windowNode.currentColumn > bufStatus.buffer[windowNode.currentLine].len):
@@ -514,48 +513,61 @@ proc deleteIndentInCurrentLine*(bufStatus: var BufferStatus,
      windowNode.currentColumn >= tabStop:
     windowNode.currentColumn -= tabStop
 
-
-proc deleteCurrentCharacter*(bufStatus: var BufferStatus,
-                             windowNode: WindowNode,
-                             autoDeleteParen: bool) =
+proc deleteCharacter*(bufStatus: var BufferStatus,
+                      line, colmun: int,
+                      autoDeleteParen: bool) =
 
   let
-    currentLine = windowNode.currentLine
-    currentColumn = windowNode.currentColumn
+    currentLine = line
+    currentColumn = colmun
     currentMode = bufStatus.mode
 
   if currentLine >= bufStatus.buffer.high and
      currentColumn > bufStatus.buffer[currentLine].high: return
 
   if currentColumn == bufStatus.buffer[currentLine].len:
-    let oldLine = bufStatus.buffer[windowNode.currentLine]
-    var newLine = bufStatus.buffer[windowNode.currentLine]
+    let oldLine = bufStatus.buffer[line]
+    var newLine = bufStatus.buffer[line]
     newLine.insert(bufStatus.buffer[currentLine + 1], currentColumn)
     if oldLine != newLine:
-      bufStatus.buffer[windowNode.currentLine] = newLine
+      bufStatus.buffer[line] = newLine
 
     bufStatus.buffer.delete(currentLine + 1, currentLine + 1)
   else:
     let
       currentChar = bufStatus.buffer[currentLine][currentColumn]
-      oldLine = bufStatus.buffer[windowNode.currentLine]
-    var newLine = bufStatus.buffer[windowNode.currentLine]
+      oldLine = bufStatus.buffer[line]
+    var newLine = bufStatus.buffer[line]
     newLine.delete(currentColumn)
     if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
 
     if autoDeleteParen and currentChar.isParen:
-      bufStatus.deleteParen(windowNode, currentChar)
+      bufStatus.deleteParen(line,
+                            colmun,
+                            currentChar)
 
-    if bufStatus.buffer[currentLine].len < 1:
+proc deleteCurrentCharacter*(bufStatus: var BufferStatus,
+                             windowNode: WindowNode,
+                             autoDeleteParen: bool) =
+
+  let oldLine = bufStatus.buffer[windowNode.currentLine]
+
+  deleteCharacter(bufStatus,
+                  windowNode.currentLine,
+                  windowNode.currentColumn,
+                  autoDeleteParen)
+
+  if oldLine != bufStatus.buffer[windowNode.currentLine]:
+    if bufStatus.buffer[windowNode.currentLine].len < 1:
       windowNode.currentColumn = 0
       windowNode.expandedColumn = 0
-    elif bufStatus.buffer[currentLine].len > 0 and
-         currentColumn > bufStatus.buffer[currentLine].high and
-         currentMode != Mode.insert:
+    elif bufStatus.buffer[windowNode.currentLine].len > 0 and
+         windowNode.currentColumn > bufStatus.buffer[windowNode.currentLine].high and
+         bufStatus.mode != Mode.insert:
       windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].len - 1
       windowNode.expandedColumn = bufStatus.buffer[windowNode.currentLine].len - 1
 
-  inc(bufStatus.countChange)
+    inc(bufStatus.countChange)
 
 proc openBlankLineBelow*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   let
@@ -901,9 +913,10 @@ proc redo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   inc(bufStatus.countChange)
 
 # If cursor is inside of paren, delete inside paren in the current line
-proc deleteInsideOfParen*(bufStatus: var BufferStatus,
-                          windowNode: var WindowNode,
-                          rune: Rune) =
+proc yankAndDeleteInsideOfParen*(bufStatus: var BufferStatus,
+                                 windowNode: var WindowNode,
+                                 registers: var Registers,
+                                 rune: Rune) =
 
   let
     currentLine = windowNode.currentLine
@@ -929,11 +942,17 @@ proc deleteInsideOfParen*(bufStatus: var BufferStatus,
       break
 
   if openParenPosition > 0 and closeParenPosition > 0:
-    var newLine = bufStatus.buffer[currentLine]
+    var
+      newLine = bufStatus.buffer[currentLine]
+      yankStr = ru""
 
     for i in 0 ..< closeParenPosition - openParenPosition - 1:
+      yankStr.add newLine[openParenPosition + 1]
       newLine.delete(openParenPosition + 1)
 
     if oldLine != newLine:
+      registers = initRegisters()
+      registers.yankedStr = yankStr
+
       bufStatus.buffer[currentLine] = newLine
       windowNode.currentColumn = openParenPosition

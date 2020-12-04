@@ -542,7 +542,10 @@ suite "Normal mode: Delete inside paren and enter insert mode":
 
     check currentBufStatus.buffer[0] == ru """abc "" "ghi""""
     check currentBufStatus.mode == Mode.insert
+
     check currentMainWindowNode.currentColumn == 5
+
+    check status.registers.yankedStr == ru"def"
 
   test "Delete inside double quotes and enter insert mode (ci' command)":
     var status = initEditorStatus()
@@ -559,7 +562,10 @@ suite "Normal mode: Delete inside paren and enter insert mode":
 
     check currentBufStatus.buffer[0] == ru "abc '' 'ghi'"
     check currentBufStatus.mode == Mode.insert
+
     check currentMainWindowNode.currentColumn == 5
+
+    check status.registers.yankedStr == ru"def"
 
   test "Delete inside curly brackets and enter insert mode (ci{ command)":
     var status = initEditorStatus()
@@ -576,7 +582,10 @@ suite "Normal mode: Delete inside paren and enter insert mode":
 
     check currentBufStatus.buffer[0] == ru "abc {} {ghi}"
     check currentBufStatus.mode == Mode.insert
+
     check currentMainWindowNode.currentColumn == 5
+
+    check status.registers.yankedStr == ru"def"
 
   test "Delete inside round brackets and enter insert mode (ci( command)":
     var status = initEditorStatus()
@@ -593,7 +602,10 @@ suite "Normal mode: Delete inside paren and enter insert mode":
 
     check currentBufStatus.buffer[0] == ru "abc () (ghi)"
     check currentBufStatus.mode == Mode.insert
+
     check currentMainWindowNode.currentColumn == 5
+
+    check status.registers.yankedStr == ru"def"
 
   test "Delete inside square brackets and enter insert mode (ci[ command)":
     var status = initEditorStatus()
@@ -610,7 +622,10 @@ suite "Normal mode: Delete inside paren and enter insert mode":
 
     check currentBufStatus.buffer[0] == ru "abc [] [ghi]"
     check currentBufStatus.mode == Mode.insert
+
     check currentMainWindowNode.currentColumn == 5
+
+    check status.registers.yankedStr == ru"def"
 
 suite "Normal mode: Delete current word and enter insert mode":
   test "Delete current word and enter insert mode (ciw command)":
@@ -627,7 +642,10 @@ suite "Normal mode: Delete current word and enter insert mode":
 
     check currentBufStatus.buffer[0] == ru "def"
     check currentBufStatus.mode == Mode.insert
+
     check currentMainWindowNode.currentColumn == 0
+
+    check status.registers.yankedStr == ru"abc "
 
   test "Delete current word and enter insert mode when empty line (ciw command)":
     var status = initEditorStatus()
@@ -644,6 +662,7 @@ suite "Normal mode: Delete current word and enter insert mode":
     check currentBufStatus.buffer[0] == ru""
     check currentBufStatus.buffer[1] == ru"abc"
     check currentBufStatus.mode == Mode.insert
+
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
 
@@ -662,7 +681,10 @@ suite "Normal mode: Delete inside paren":
     status.update
 
     check currentBufStatus.buffer[0] == ru """abc "" "ghi""""
+
     check currentMainWindowNode.currentColumn == 5
+
+    check status.registers.yankedStr == ru"def"
 
   test "Delete inside double quotes (di' command)":
     var status = initEditorStatus()
@@ -678,7 +700,10 @@ suite "Normal mode: Delete inside paren":
     status.update
 
     check currentBufStatus.buffer[0] == ru "abc '' 'ghi'"
+
     check currentMainWindowNode.currentColumn == 5
+
+    check status.registers.yankedStr == ru"def"
 
   test "Delete inside curly brackets (di{ command)":
     var status = initEditorStatus()
@@ -694,7 +719,10 @@ suite "Normal mode: Delete inside paren":
     status.update
 
     check currentBufStatus.buffer[0] == ru "abc {} {ghi}"
+
     check currentMainWindowNode.currentColumn == 5
+
+    check status.registers.yankedStr == ru"def"
 
   test "Delete inside round brackets (di( command)":
     var status = initEditorStatus()
@@ -710,7 +738,10 @@ suite "Normal mode: Delete inside paren":
     status.update
 
     check currentBufStatus.buffer[0] == ru "abc () (ghi)"
+
     check currentMainWindowNode.currentColumn == 5
+
+    check status.registers.yankedStr == ru"def"
 
   test "Delete inside square brackets (di[ command)":
     var status = initEditorStatus()
@@ -726,7 +757,10 @@ suite "Normal mode: Delete inside paren":
     status.update
 
     check currentBufStatus.buffer[0] == ru "abc [] [ghi]"
+
     check currentMainWindowNode.currentColumn == 5
+
+    check status.registers.yankedStr == ru"def"
 
 suite "Normal mode: Delete current word":
   test "Delete current word and (diw command)":
@@ -742,7 +776,10 @@ suite "Normal mode: Delete current word":
     status.update
 
     check currentBufStatus.buffer[0] == ru "def"
+
     check currentMainWindowNode.currentColumn == 0
+
+    check status.registers.yankedStr == ru"abc "
 
   test "Delete current word when empty line (diw command)":
     var status = initEditorStatus()
@@ -758,6 +795,7 @@ suite "Normal mode: Delete current word":
 
     check currentBufStatus.buffer[0] == ru""
     check currentBufStatus.buffer[1] == ru"abc"
+
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
 
@@ -927,3 +965,39 @@ suite "Normal mode: Yank lines":
 
     check status.registers.yankedLines.len == 3
     check status.registers.yankedLines == @[ru"", ru "abc", ru"def"]
+
+suite "Normal mode: Delete the characters from current column to end of line":
+  test "Delete 5 characters (d$ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcdefgh"])
+    currentMainWindowNode.currentColumn = 3
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'd', ru'$']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru"abc"
+
+    check status.registers.yankedStr == ru"defgh"
+
+suite "Normal mode: delete from the beginning of the line to current column":
+  test "Delete 5 characters (d0 command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcdefgh"])
+    currentMainWindowNode.currentColumn = 5
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'd', ru'0']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru"fgh"
+
+    check status.registers.yankedStr == ru"abcde"
