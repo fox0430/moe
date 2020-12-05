@@ -126,17 +126,17 @@ suite "Ex mode: Tab line setting command":
       status.exModeCommand(command, 100, 100)
     check(status.settings.tabLine.useTab == true)
 
-suite "Ex mode: StatusBar setting command":
-  test "StatusBar setting command":
+suite "Ex mode: StatusLine setting command":
+  test "StatusLine setting command":
     var status = initEditorStatus()
     status.addNewBuffer
 
     block:
-      const command = @[ru"statusbar", ru"off"]
+      const command = @[ru"statusline", ru"off"]
       status.exModeCommand(command, 100, 100)
     check(status.settings.statusLine.enable == false)
     block:
-      const command = @[ru"statusbar", ru"on"]
+      const command = @[ru"statusline", ru"on"]
       status.exModeCommand(command, 100, 100)
     check(status.settings.statusLine.enable == true)
 
