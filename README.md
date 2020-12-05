@@ -59,7 +59,7 @@ This project's goal is a very customizable, high productivity, user friendly, hi
 
 - Work space
 
-- Multiple status bar
+- Multiple status line
 
 - QuickRun
 
