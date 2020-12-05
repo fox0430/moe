@@ -105,7 +105,7 @@ type FilerSettings = object
 type WorkSpaceSettings = object
   workSpaceLine*: bool
 
-type StatusBarSettings* = object
+type StatusLineSettings* = object
   enable*: bool
   merge*: bool
   mode*: bool
@@ -116,7 +116,7 @@ type StatusBarSettings* = object
   characterEncoding*: bool
   language*: bool
   directory*: bool
-  multipleStatusBar*: bool
+  multipleStatusLine*: bool
   gitbranchName*: bool
   showGitInactive*: bool
   showModeInactive*: bool
@@ -146,7 +146,7 @@ type HighlightSettings* = object
 
 type EditorSettings* = object
   editorColorTheme*: ColorTheme
-  statusBar*: StatusBarSettings
+  statusLine*: StatusLineSettings
   tabLine*: TabLineSettings
   view*: EditorViewSettings
   syntax*: bool
@@ -265,7 +265,7 @@ proc initAutocompleteSettings*(): AutocompleteSettings {.inline.} =
 proc initTabBarSettings*(): TabLineSettings {.inline.} =
   result.useTab = true
 
-proc initStatusBarSettings*(): StatusBarSettings =
+proc initStatusLineSettings*(): StatusLineSettings =
   result.enable = true
   result.mode = true
   result.filename = true
@@ -275,7 +275,7 @@ proc initStatusBarSettings*(): StatusBarSettings =
   result.characterEncoding = true
   result.language = true
   result.directory = true
-  result.multipleStatusBar = true
+  result.multipleStatusLine = true
   result.gitbranchName = true
 
 proc initWorkSpaceSettings(): WorkSpaceSettings {.inline.} =
@@ -305,7 +305,7 @@ proc initHighlightSettings(): HighlightSettings =
 
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = ColorTheme.dark
-  result.statusBar = initStatusBarSettings()
+  result.statusLine = initStatusLineSettings()
   result.tabLine = initTabBarSettings()
   result.view = initEditorViewSettings()
   result.syntax = true
@@ -499,103 +499,103 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
       colorFromNode(jsonNode{"colors", "editorWhitespace.foreground"})
 
   # status bar
-  setEditorColor statusBarNormalMode:
+  setEditorColor statusLineNormalMode:
     foreground:
       colorFromNode(jsonNode{"colors", "editor.foreground"})
       adjust: ReadableVsBackground
     background:
-      colorFromNode(jsonNode{"colors", "statusBar.background"})
-  setEditorColor statusBarModeNormalMode:
+      colorFromNode(jsonNode{"colors", "statusLine.background"})
+  setEditorColor statusLineModeNormalMode:
     foreground:
       adjust: ReadableVsBackground
     background:
-      colorFromNode(jsonNode{"colors", "statusBar.background"})
-  setEditorColor statusBarNormalModeInactive:
+      colorFromNode(jsonNode{"colors", "statusLine.background"})
+  setEditorColor statusLineNormalModeInactive:
     foreground:
-      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+      colorFromNode(jsonNode{"colors", "statusLine.foreground"})
       adjust: ReadableVsBackground
     background:
       colorFromNode(jsonNode{"colors", "editor.background"})
-  setEditorColor statusBarInsertMode:
+  setEditorColor statusLineInsertMode:
     foreground:
       adjust: ReadableVsBackground
     background:
-      colorFromNode(jsonNode{"colors", "statusBar.background"})
-  setEditorColor statusBarModeInsertMode:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      white
-  setEditorColor statusBarInsertModeInactive:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "statusBar.background"})
-  setEditorColor statusBarVisualMode:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "statusBar.background"})
-  setEditorColor statusBarModeVisualMode:
+      colorFromNode(jsonNode{"colors", "statusLine.background"})
+  setEditorColor statusLineModeInsertMode:
     foreground:
       adjust: ReadableVsBackground
     background:
       white
-  setEditorColor statusBarVisualModeInactive:
+  setEditorColor statusLineInsertModeInactive:
     foreground:
       adjust: ReadableVsBackground
     background:
-      colorFromNode(jsonNode{"colors", "statusBar.background"})
-  setEditorColor statusBarReplaceMode:
+      colorFromNode(jsonNode{"colors", "statusLine.background"})
+  setEditorColor statusLineVisualMode:
     foreground:
       adjust: ReadableVsBackground
     background:
-      colorFromNode(jsonNode{"colors", "statusBar.background"})
-  setEditorColor statusBarModeReplaceMode:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      white
-  setEditorColor statusBarReplaceModeInactive:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "statusBar.background"})
-  setEditorColor statusBarFilerMode:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "statusBar.background"})
-  setEditorColor statusBarModeFilerMode:
+      colorFromNode(jsonNode{"colors", "statusLine.background"})
+  setEditorColor statusLineModeVisualMode:
     foreground:
       adjust: ReadableVsBackground
     background:
       white
-  setEditorColor statusBarFilerModeInactive:
+  setEditorColor statusLineVisualModeInactive:
     foreground:
       adjust: ReadableVsBackground
     background:
-      colorFromNode(jsonNode{"colors", "statusBar.background"})
-  setEditorColor statusBarExMode:
+      colorFromNode(jsonNode{"colors", "statusLine.background"})
+  setEditorColor statusLineReplaceMode:
     foreground:
       adjust: ReadableVsBackground
     background:
-      colorFromNode(jsonNode{"colors", "statusBar.background"})
-  setEditorColor statusBarModeExMode:
+      colorFromNode(jsonNode{"colors", "statusLine.background"})
+  setEditorColor statusLineModeReplaceMode:
     foreground:
       adjust: ReadableVsBackground
     background:
       white
-  setEditorColor statusBarExModeInactive:
+  setEditorColor statusLineReplaceModeInactive:
     foreground:
       adjust: ReadableVsBackground
     background:
-      colorFromNode(jsonNode{"colors", "statusBar.background"})
-  setEditorColor statusBarGitBranch:
+      colorFromNode(jsonNode{"colors", "statusLine.background"})
+  setEditorColor statusLineFilerMode:
     foreground:
       adjust: ReadableVsBackground
     background:
-      colorFromNode(jsonNode{"colors", "statusBar.background"})
+      colorFromNode(jsonNode{"colors", "statusLine.background"})
+  setEditorColor statusLineModeFilerMode:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      white
+  setEditorColor statusLineFilerModeInactive:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "statusLine.background"})
+  setEditorColor statusLineExMode:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "statusLine.background"})
+  setEditorColor statusLineModeExMode:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      white
+  setEditorColor statusLineExModeInactive:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "statusLine.background"})
+  setEditorColor statusLineGitBranch:
+    foreground:
+      adjust: ReadableVsBackground
+    background:
+      colorFromNode(jsonNode{"colors", "statusLine.background"})
   # command  bar
   setEditorColor commandBar:
     foreground:
@@ -855,8 +855,8 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Standard"].contains("cursorLine"):
       result.view.cursorLine = settings["Standard"]["cursorLine"].getbool()
 
-    if settings["Standard"].contains("statusBar"):
-      result.statusBar.enable = settings["Standard"]["statusBar"].getbool()
+    if settings["Standard"].contains("statusLine"):
+      result.statusLine.enable = settings["Standard"]["statusLine"].getbool()
 
     if settings["Standard"].contains("tabLine"):
       result.tabLine.useTab = settings["Standard"]["tabLine"].getbool()
@@ -929,45 +929,45 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["TabLine"].contains("allBuffer"):
         result.tabLine.allBuffer= settings["TabLine"]["allBuffer"].getbool()
 
-  if settings.contains("StatusBar"):
-    if settings["StatusBar"].contains("multipleStatusBar"):
-        result.statusBar.multipleStatusBar = settings["StatusBar"]["multipleStatusBar"].getbool()
+  if settings.contains("StatusLine"):
+    if settings["StatusLine"].contains("multipleStatusLine"):
+        result.statusLine.multipleStatusLine = settings["StatusLine"]["multipleStatusLine"].getbool()
 
-    if settings["StatusBar"].contains("merge"):
-        result.statusBar.merge = settings["StatusBar"]["merge"].getbool()
+    if settings["StatusLine"].contains("merge"):
+        result.statusLine.merge = settings["StatusLine"]["merge"].getbool()
 
-    if settings["StatusBar"].contains("mode"):
-        result.statusBar.mode= settings["StatusBar"]["mode"].getbool()
+    if settings["StatusLine"].contains("mode"):
+        result.statusLine.mode= settings["StatusLine"]["mode"].getbool()
 
-    if settings["StatusBar"].contains("filename"):
-        result.statusBar.filename = settings["StatusBar"]["filename"].getbool()
+    if settings["StatusLine"].contains("filename"):
+        result.statusLine.filename = settings["StatusLine"]["filename"].getbool()
 
-    if settings["StatusBar"].contains("chanedMark"):
-        result.statusBar.chanedMark = settings["StatusBar"]["chanedMark"].getbool()
+    if settings["StatusLine"].contains("chanedMark"):
+        result.statusLine.chanedMark = settings["StatusLine"]["chanedMark"].getbool()
 
-    if settings["StatusBar"].contains("line"):
-        result.statusBar.line = settings["StatusBar"]["line"].getbool()
+    if settings["StatusLine"].contains("line"):
+        result.statusLine.line = settings["StatusLine"]["line"].getbool()
 
-    if settings["StatusBar"].contains("column"):
-        result.statusBar.column = settings["StatusBar"]["column"].getbool()
+    if settings["StatusLine"].contains("column"):
+        result.statusLine.column = settings["StatusLine"]["column"].getbool()
 
-    if settings["StatusBar"].contains("encoding"):
-        result.statusBar.characterEncoding = settings["StatusBar"]["encoding"].getbool()
+    if settings["StatusLine"].contains("encoding"):
+        result.statusLine.characterEncoding = settings["StatusLine"]["encoding"].getbool()
 
-    if settings["StatusBar"].contains("language"):
-        result.statusBar.language = settings["StatusBar"]["language"].getbool()
+    if settings["StatusLine"].contains("language"):
+        result.statusLine.language = settings["StatusLine"]["language"].getbool()
 
-    if settings["StatusBar"].contains("directory"):
-        result.statusBar.directory = settings["StatusBar"]["directory"].getbool()
+    if settings["StatusLine"].contains("directory"):
+        result.statusLine.directory = settings["StatusLine"]["directory"].getbool()
 
-    if settings["StatusBar"].contains("gitbranchName"):
-        result.statusBar.gitbranchName = settings["StatusBar"]["gitbranchName"].getbool()
+    if settings["StatusLine"].contains("gitbranchName"):
+        result.statusLine.gitbranchName = settings["StatusLine"]["gitbranchName"].getbool()
 
-    if settings["StatusBar"].contains("showGitInactive"):
-        result.statusBar.showGitInactive = settings["StatusBar"]["showGitInactive"].getbool()
+    if settings["StatusLine"].contains("showGitInactive"):
+        result.statusLine.showGitInactive = settings["StatusLine"]["showGitInactive"].getbool()
 
-    if settings["StatusBar"].contains("showModeInactive"):
-        result.statusBar.showModeInactive = settings["StatusBar"]["showModeInactive"].getbool()
+    if settings["StatusLine"].contains("showModeInactive"):
+        result.statusLine.showModeInactive = settings["StatusLine"]["showModeInactive"].getbool()
 
   if settings.contains("BuildOnSave"):
     if settings["BuildOnSave"].contains("enable"):
@@ -1303,119 +1303,119 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("currentLineNumBg"):
       ColorThemeTable[ColorTheme.config].currentLineNumBg = color("currentLineNumBg")
 
-    if settings["Theme"].contains("statusBarNormalMode"):
-      ColorThemeTable[ColorTheme.config].statusBarNormalMode = color("statusBarNormalMode")
+    if settings["Theme"].contains("statusLineNormalMode"):
+      ColorThemeTable[ColorTheme.config].statusLineNormalMode = color("statusLineNormalMode")
 
-    if settings["Theme"].contains("statusBarNormalModeBg"):
-      ColorThemeTable[ColorTheme.config].statusBarNormalModeBg = color("statusBarNormalModeBg")
+    if settings["Theme"].contains("statusLineNormalModeBg"):
+      ColorThemeTable[ColorTheme.config].statusLineNormalModeBg = color("statusLineNormalModeBg")
 
-    if settings["Theme"].contains("statusBarModeNormalMode"):
-      ColorThemeTable[ColorTheme.config].statusBarModeNormalMode = color("statusBarModeNormalMode")
+    if settings["Theme"].contains("statusLineModeNormalMode"):
+      ColorThemeTable[ColorTheme.config].statusLineModeNormalMode = color("statusLineModeNormalMode")
 
-    if settings["Theme"].contains("statusBarModeNormalModeBg"):
-      ColorThemeTable[ColorTheme.config].statusBarModeNormalModeBg = color("statusBarModeNormalModeBg")
+    if settings["Theme"].contains("statusLineModeNormalModeBg"):
+      ColorThemeTable[ColorTheme.config].statusLineModeNormalModeBg = color("statusLineModeNormalModeBg")
 
-    if settings["Theme"].contains("statusBarNormalModeInactive"):
-      ColorThemeTable[ColorTheme.config].statusBarNormalModeInactive = color("statusBarNormalModeInactive")
+    if settings["Theme"].contains("statusLineNormalModeInactive"):
+      ColorThemeTable[ColorTheme.config].statusLineNormalModeInactive = color("statusLineNormalModeInactive")
 
-    if settings["Theme"].contains("statusBarNormalModeInactiveBg"):
-      ColorThemeTable[ColorTheme.config].statusBarNormalModeInactiveBg = color("statusBarNormalModeInactiveBg")
+    if settings["Theme"].contains("statusLineNormalModeInactiveBg"):
+      ColorThemeTable[ColorTheme.config].statusLineNormalModeInactiveBg = color("statusLineNormalModeInactiveBg")
 
-    if settings["Theme"].contains("statusBarInsertMode"):
-      ColorThemeTable[ColorTheme.config].statusBarInsertMode = color("statusBarInsertMode")
+    if settings["Theme"].contains("statusLineInsertMode"):
+      ColorThemeTable[ColorTheme.config].statusLineInsertMode = color("statusLineInsertMode")
 
-    if settings["Theme"].contains("statusBarInsertModeBg"):
-      ColorThemeTable[ColorTheme.config].statusBarInsertModeBg = color("statusBarInsertModeBg")
+    if settings["Theme"].contains("statusLineInsertModeBg"):
+      ColorThemeTable[ColorTheme.config].statusLineInsertModeBg = color("statusLineInsertModeBg")
 
-    if settings["Theme"].contains("statusBarModeInsertMode"):
-      ColorThemeTable[ColorTheme.config].statusBarModeInsertMode = color("statusBarModeInsertMode")
+    if settings["Theme"].contains("statusLineModeInsertMode"):
+      ColorThemeTable[ColorTheme.config].statusLineModeInsertMode = color("statusLineModeInsertMode")
 
-    if settings["Theme"].contains("statusBarModeInsertModeBg"):
-      ColorThemeTable[ColorTheme.config].statusBarModeInsertModeBg = color("statusBarModeInsertModeBg")
+    if settings["Theme"].contains("statusLineModeInsertModeBg"):
+      ColorThemeTable[ColorTheme.config].statusLineModeInsertModeBg = color("statusLineModeInsertModeBg")
 
-    if settings["Theme"].contains("statusBarInsertModeInactive"):
-      ColorThemeTable[ColorTheme.config].statusBarInsertModeInactive = color("statusBarInsertModeInactive")
+    if settings["Theme"].contains("statusLineInsertModeInactive"):
+      ColorThemeTable[ColorTheme.config].statusLineInsertModeInactive = color("statusLineInsertModeInactive")
 
-    if settings["Theme"].contains("statusBarInsertModeInactiveBg"):
-      ColorThemeTable[ColorTheme.config].statusBarInsertModeInactiveBg = color("statusBarInsertModeInactiveBg")
+    if settings["Theme"].contains("statusLineInsertModeInactiveBg"):
+      ColorThemeTable[ColorTheme.config].statusLineInsertModeInactiveBg = color("statusLineInsertModeInactiveBg")
 
-    if settings["Theme"].contains("statusBarVisualMode"):
-      ColorThemeTable[ColorTheme.config].statusBarVisualMode = color("statusBarVisualMode")
+    if settings["Theme"].contains("statusLineVisualMode"):
+      ColorThemeTable[ColorTheme.config].statusLineVisualMode = color("statusLineVisualMode")
 
-    if settings["Theme"].contains("statusBarVisualModeBg"):
-      ColorThemeTable[ColorTheme.config].statusBarVisualModeBg = color("statusBarVisualModeBg")
+    if settings["Theme"].contains("statusLineVisualModeBg"):
+      ColorThemeTable[ColorTheme.config].statusLineVisualModeBg = color("statusLineVisualModeBg")
 
-    if settings["Theme"].contains("statusBarModeVisualMode"):
-      ColorThemeTable[ColorTheme.config].statusBarModeVisualMode = color("statusBarModeVisualMode")
+    if settings["Theme"].contains("statusLineModeVisualMode"):
+      ColorThemeTable[ColorTheme.config].statusLineModeVisualMode = color("statusLineModeVisualMode")
 
-    if settings["Theme"].contains("statusBarModeVisualModeBg"):
-      ColorThemeTable[ColorTheme.config].statusBarModeVisualModeBg = color("statusBarModeVisualModeBg")
+    if settings["Theme"].contains("statusLineModeVisualModeBg"):
+      ColorThemeTable[ColorTheme.config].statusLineModeVisualModeBg = color("statusLineModeVisualModeBg")
 
-    if settings["Theme"].contains("statusBarVisualModeInactive"):
-      ColorThemeTable[ColorTheme.config].statusBarVisualModeInactive = color("statusBarVisualModeInactive")
+    if settings["Theme"].contains("statusLineVisualModeInactive"):
+      ColorThemeTable[ColorTheme.config].statusLineVisualModeInactive = color("statusLineVisualModeInactive")
 
-    if settings["Theme"].contains("statusBarVisualModeInactiveBg"):
-      ColorThemeTable[ColorTheme.config].statusBarVisualModeInactiveBg = color("statusBarVisualModeInactiveBg")
+    if settings["Theme"].contains("statusLineVisualModeInactiveBg"):
+      ColorThemeTable[ColorTheme.config].statusLineVisualModeInactiveBg = color("statusLineVisualModeInactiveBg")
 
-    if settings["Theme"].contains("statusBarReplaceMode"):
-      ColorThemeTable[ColorTheme.config].statusBarReplaceMode = color("statusBarReplaceMode")
+    if settings["Theme"].contains("statusLineReplaceMode"):
+      ColorThemeTable[ColorTheme.config].statusLineReplaceMode = color("statusLineReplaceMode")
 
-    if settings["Theme"].contains("statusBarReplaceModeBg"):
-      ColorThemeTable[ColorTheme.config].statusBarReplaceModeBg = color("statusBarReplaceModeBg")
+    if settings["Theme"].contains("statusLineReplaceModeBg"):
+      ColorThemeTable[ColorTheme.config].statusLineReplaceModeBg = color("statusLineReplaceModeBg")
 
-    if settings["Theme"].contains("statusBarModeReplaceMode"):
-      ColorThemeTable[ColorTheme.config].statusBarModeReplaceMode = color("statusBarModeReplaceMode")
+    if settings["Theme"].contains("statusLineModeReplaceMode"):
+      ColorThemeTable[ColorTheme.config].statusLineModeReplaceMode = color("statusLineModeReplaceMode")
 
-    if settings["Theme"].contains("statusBarModeReplaceModeBg"):
-      ColorThemeTable[ColorTheme.config].statusBarModeReplaceModeBg = color("statusBarModeReplaceModeBg")
+    if settings["Theme"].contains("statusLineModeReplaceModeBg"):
+      ColorThemeTable[ColorTheme.config].statusLineModeReplaceModeBg = color("statusLineModeReplaceModeBg")
 
-    if settings["Theme"].contains("statusBarReplaceModeInactive"):
-      ColorThemeTable[ColorTheme.config].statusBarReplaceModeInactive = color("statusBarReplaceModeInactive")
+    if settings["Theme"].contains("statusLineReplaceModeInactive"):
+      ColorThemeTable[ColorTheme.config].statusLineReplaceModeInactive = color("statusLineReplaceModeInactive")
 
-    if settings["Theme"].contains("statusBarReplaceModeInactiveBg"):
-      ColorThemeTable[ColorTheme.config].statusBarReplaceModeInactiveBg = color("statusBarReplaceModeInactiveBg")
+    if settings["Theme"].contains("statusLineReplaceModeInactiveBg"):
+      ColorThemeTable[ColorTheme.config].statusLineReplaceModeInactiveBg = color("statusLineReplaceModeInactiveBg")
 
-    if settings["Theme"].contains("statusBarFilerMode"):
-      ColorThemeTable[ColorTheme.config].statusBarFilerMode = color("statusBarFilerMode")
+    if settings["Theme"].contains("statusLineFilerMode"):
+      ColorThemeTable[ColorTheme.config].statusLineFilerMode = color("statusLineFilerMode")
 
-    if settings["Theme"].contains("statusBarFilerModeBg"):
-      ColorThemeTable[ColorTheme.config].statusBarFilerModeBg = color("statusBarFilerModeBg")
+    if settings["Theme"].contains("statusLineFilerModeBg"):
+      ColorThemeTable[ColorTheme.config].statusLineFilerModeBg = color("statusLineFilerModeBg")
 
-    if settings["Theme"].contains("statusBarModeFilerMode"):
-      ColorThemeTable[ColorTheme.config].statusBarModeFilerMode = color("statusBarModeFilerMode")
+    if settings["Theme"].contains("statusLineModeFilerMode"):
+      ColorThemeTable[ColorTheme.config].statusLineModeFilerMode = color("statusLineModeFilerMode")
 
-    if settings["Theme"].contains("statusBarModeFilerModeBg"):
-      ColorThemeTable[ColorTheme.config].statusBarModeFilerModeBg = color("statusBarModeFilerModeBg")
+    if settings["Theme"].contains("statusLineModeFilerModeBg"):
+      ColorThemeTable[ColorTheme.config].statusLineModeFilerModeBg = color("statusLineModeFilerModeBg")
 
-    if settings["Theme"].contains("statusBarFilerModeInactive"):
-      ColorThemeTable[ColorTheme.config].statusBarFilerModeInactive = color("statusBarFilerModeInactive")
+    if settings["Theme"].contains("statusLineFilerModeInactive"):
+      ColorThemeTable[ColorTheme.config].statusLineFilerModeInactive = color("statusLineFilerModeInactive")
 
-    if settings["Theme"].contains("statusBarFilerModeInactiveBg"):
-      ColorThemeTable[ColorTheme.config].statusBarFilerModeInactiveBg = color("statusBarFilerModeInactiveBg")
+    if settings["Theme"].contains("statusLineFilerModeInactiveBg"):
+      ColorThemeTable[ColorTheme.config].statusLineFilerModeInactiveBg = color("statusLineFilerModeInactiveBg")
 
-    if settings["Theme"].contains("statusBarExMode"):
-      ColorThemeTable[ColorTheme.config].statusBarExMode = color("statusBarExMode")
+    if settings["Theme"].contains("statusLineExMode"):
+      ColorThemeTable[ColorTheme.config].statusLineExMode = color("statusLineExMode")
 
-    if settings["Theme"].contains("statusBarExModeBg"):
-      ColorThemeTable[ColorTheme.config].statusBarExModeBg = color("statusBarExModeBg")
+    if settings["Theme"].contains("statusLineExModeBg"):
+      ColorThemeTable[ColorTheme.config].statusLineExModeBg = color("statusLineExModeBg")
 
-    if settings["Theme"].contains("statusBarModeExMode"):
-      ColorThemeTable[ColorTheme.config].statusBarModeExMode = color("statusBarModeExMode")
+    if settings["Theme"].contains("statusLineModeExMode"):
+      ColorThemeTable[ColorTheme.config].statusLineModeExMode = color("statusLineModeExMode")
 
-    if settings["Theme"].contains("statusBarModeExModeBg"):
-      ColorThemeTable[ColorTheme.config].statusBarModeExModeBg = color("statusBarModeExModeBg")
+    if settings["Theme"].contains("statusLineModeExModeBg"):
+      ColorThemeTable[ColorTheme.config].statusLineModeExModeBg = color("statusLineModeExModeBg")
 
-    if settings["Theme"].contains("statusBarExModeInactive"):
-      ColorThemeTable[ColorTheme.config].statusBarExModeInactive = color("statusBarExModeInactive")
+    if settings["Theme"].contains("statusLineExModeInactive"):
+      ColorThemeTable[ColorTheme.config].statusLineExModeInactive = color("statusLineExModeInactive")
 
-    if settings["Theme"].contains("statusBarExModeInactiveBg"):
-      ColorThemeTable[ColorTheme.config].statusBarExModeInactiveBg = color("statusBarExModeInactiveBg")
+    if settings["Theme"].contains("statusLineExModeInactiveBg"):
+      ColorThemeTable[ColorTheme.config].statusLineExModeInactiveBg = color("statusLineExModeInactiveBg")
 
-    if settings["Theme"].contains("statusBarGitBranch"):
-      ColorThemeTable[ColorTheme.config].statusBarGitBranch = color("statusBarGitBranch")
+    if settings["Theme"].contains("statusLineGitBranch"):
+      ColorThemeTable[ColorTheme.config].statusLineGitBranch = color("statusLineGitBranch")
 
-    if settings["Theme"].contains("statusBarGitBranchBg"):
-      ColorThemeTable[ColorTheme.config].statusBarGitBranchBg = color("statusBarGitBranchBg")
+    if settings["Theme"].contains("statusLineGitBranchBg"):
+      ColorThemeTable[ColorTheme.config].statusLineGitBranchBg = color("statusLineGitBranchBg")
 
     if settings["Theme"].contains("tab"):
       ColorThemeTable[ColorTheme.config].tab = color("tab")
@@ -1613,7 +1613,7 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         of "number",
            "currentNumber",
            "cursorLine",
-           "statusBar",
+           "statusLine",
            "tabLine",
            "syntax",
            "indentationLines",
@@ -1668,10 +1668,10 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         else:
           return some($item)
 
-  template validateStatusBarTable() =
-    for item in json["StatusBar"].pairs:
+  template validateStatusLineTable() =
+    for item in json["StatusLine"].pairs:
       case item.key:
-        of "multipleStatusBar",
+        of "multipleStatusLine",
            "merge",
            "mode",
            "filename",
@@ -1914,8 +1914,8 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         validateStandardTable()
       of "TabLine":
         validateTabLineTable()
-      of "StatusBar":
-        validateStatusBarTable()
+      of "StatusLine":
+        validateStatusLineTable()
       of "BuildOnSave":
         validateBuildOnSaveTable()
       of "WorkSpace":

@@ -9,7 +9,7 @@ const
     "number",
     "currentNumber",
     "cursorLine",
-    "statusBar",
+    "statusLine",
     "tabLine",
     "syntax",
     "indentationLines",
@@ -40,8 +40,8 @@ const
   tabLineTableNames = [
     "allBuffer"
   ]
-  statusBarTableNames = [
-    "multipleStatusBar",
+  statusLineTableNames = [
+    "multipleStatusLine",
     "merge",
     "mode",
     "filename",
@@ -119,25 +119,25 @@ const
     "editorBg",
     "lineNum",
     "currentLineNum",
-    "statusBarNormalMode",
-    "statusBarModeNormalMode",
-    "statusBarNormalModeInactive",
-    "statusBarInsertMode",
-    "statusBarModeInsertMode",
-    "statusBarInsertModeInactive",
-    "statusBarVisualMode",
-    "statusBarModeVisualMode",
-    "statusBarVisualModeInactive",
-    "statusBarReplaceMode",
-    "statusBarModeReplaceMode",
-    "statusBarReplaceModeInactive",
-    "statusBarFilerMode",
-    "statusBarModeFilerMode",
-    "statusBarFilerModeInactive",
-    "statusBarExMode",
-    "statusBarModeExMode",
-    "statusBarExModeInactive",
-    "statusBarGitBranch",
+    "statusLineNormalMode",
+    "statusLineModeNormalMode",
+    "statusLineNormalModeInactive",
+    "statusLineInsertMode",
+    "statusLineModeInsertMode",
+    "statusLineInsertModeInactive",
+    "statusLineVisualMode",
+    "statusLineModeVisualMode",
+    "statusLineVisualModeInactive",
+    "statusLineReplaceMode",
+    "statusLineModeReplaceMode",
+    "statusLineReplaceModeInactive",
+    "statusLineFilerMode",
+    "statusLineModeFilerMode",
+    "statusLineFilerModeInactive",
+    "statusLineExMode",
+    "statusLineModeExMode",
+    "statusLineExModeInactive",
+    "statusLineGitBranch",
     "tab",
     "currentTab",
     "commandBar",
@@ -226,8 +226,8 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
         result.add(ru nameStr & space & $settings.view.currentLineNumber)
       of "cursorLine":
         result.add(ru nameStr & space & $settings.view.cursorLine)
-      of "statusBar":
-        result.add(ru nameStr & space & $settings.statusBar.enable)
+      of "statusLine":
+        result.add(ru nameStr & space & $settings.statusLine.enable)
       of "tabLine":
         result.add(ru nameStr & space & $settings.tabLine.useTab)
       of "syntax":
@@ -297,16 +297,16 @@ proc initTabLineTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       of "allBuffer":
         result.add(ru nameStr & space & $settings.tabLine.allBuffer)
 
-proc initStatusBarTableBuffer(settings: StatusBarSettings): seq[seq[Rune]] =
-  result.add(ru"StatusBar")
+proc initStatusLineTableBuffer(settings: StatusLineSettings): seq[seq[Rune]] =
+  result.add(ru"StatusLine")
 
-  for name in statusBarTableNames:
+  for name in statusLineTableNames:
     let
       nameStr = indent & name
       space = " ".repeat(positionOfSetVal - name.len)
     case name:
-      of "multipleStatusBar":
-        result.add(ru nameStr & space & $settings.multipleStatusBar)
+      of "multipleStatusLine":
+        result.add(ru nameStr & space & $settings.multipleStatusLine)
       of "merge":
         result.add(ru nameStr & space & $settings.merge)
       of "mode":
@@ -525,135 +525,135 @@ proc initThemeTableBuffer*(settings: EditorSettings): seq[seq[Rune]] =
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
         result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
-      of "statusBarNormalMode":
+      of "statusLineNormalMode":
         let
-          colorPair = EditorColorPair.statusBarNormalMode
+          colorPair = EditorColorPair.statusLineNormalMode
           colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
         result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
-      of "statusBarModeNormalMode":
+      of "statusLineModeNormalMode":
         let
-          colorPair = EditorColorPair.statusBarModeNormalMode
+          colorPair = EditorColorPair.statusLineModeNormalMode
           colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
         result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
-      of "statusBarNormalModeInactive":
+      of "statusLineNormalModeInactive":
         let
-          colorPair = EditorColorPair.statusBarNormalModeInactive
+          colorPair = EditorColorPair.statusLineNormalModeInactive
           colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
         result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
-      of "statusBarInsertMode":
+      of "statusLineInsertMode":
         let
-          colorPair = EditorColorPair.statusBarInsertMode
+          colorPair = EditorColorPair.statusLineInsertMode
           colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
         result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
-      of "statusBarModeInsertMode":
+      of "statusLineModeInsertMode":
         let
-          colorPair = EditorColorPair.statusBarModeInsertMode
+          colorPair = EditorColorPair.statusLineModeInsertMode
           colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
         result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
-      of "statusBarInsertModeInactive":
+      of "statusLineInsertModeInactive":
         let
-          colorPair = EditorColorPair.statusBarInsertModeInactive
+          colorPair = EditorColorPair.statusLineInsertModeInactive
           colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
         result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
-      of "statusBarVisualMode":
+      of "statusLineVisualMode":
         let
-          colorPair = EditorColorPair.statusBarVisualMode
+          colorPair = EditorColorPair.statusLineVisualMode
           colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
         result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
-      of "statusBarModeVisualMode":
+      of "statusLineModeVisualMode":
         let
-          colorPair = EditorColorPair.statusBarModeVisualMode
+          colorPair = EditorColorPair.statusLineModeVisualMode
           colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
         result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
-      of "statusBarVisualModeInactive":
+      of "statusLineVisualModeInactive":
         let
-          colorPair = EditorColorPair.statusBarVisualModeInactive
+          colorPair = EditorColorPair.statusLineVisualModeInactive
           colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
         result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
-      of "statusBarReplaceMode":
+      of "statusLineReplaceMode":
         let
-          colorPair = EditorColorPair.statusBarReplaceMode
+          colorPair = EditorColorPair.statusLineReplaceMode
           colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
         result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
-      of "statusBarModeReplaceMode":
+      of "statusLineModeReplaceMode":
         let
-          colorPair = EditorColorPair.statusBarModeReplaceMode
+          colorPair = EditorColorPair.statusLineModeReplaceMode
           colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
         result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
-      of "statusBarReplaceModeInactive":
+      of "statusLineReplaceModeInactive":
         let
-          colorPair = EditorColorPair.statusBarReplaceModeInactive
+          colorPair = EditorColorPair.statusLineReplaceModeInactive
           colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
         result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
-      of "statusBarFilerMode":
+      of "statusLineFilerMode":
         let
-          colorPair = EditorColorPair.statusBarFilerMode
+          colorPair = EditorColorPair.statusLineFilerMode
           colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
         result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
-      of "statusBarModeFilerMode":
+      of "statusLineModeFilerMode":
         let
-          colorPair = EditorColorPair.statusBarModeFilerMode
+          colorPair = EditorColorPair.statusLineModeFilerMode
           colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
         result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
-      of "statusBarFilerModeInactive":
+      of "statusLineFilerModeInactive":
         let
-          colorPair = EditorColorPair.statusBarFilerModeInactive
+          colorPair = EditorColorPair.statusLineFilerModeInactive
           colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
         result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
-      of "statusBarExMode":
+      of "statusLineExMode":
         let
-          colorPair = EditorColorPair.statusBarExMode
+          colorPair = EditorColorPair.statusLineExMode
           colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
         result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
-      of "statusBarModeExMode":
+      of "statusLineModeExMode":
         let
-          colorPair = EditorColorPair.statusBarModeExMode
+          colorPair = EditorColorPair.statusLineModeExMode
           colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
         result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
-      of "statusBarExModeInactive":
+      of "statusLineExModeInactive":
         let
-          colorPair = EditorColorPair.statusBarExModeInactive
+          colorPair = EditorColorPair.statusLineExModeInactive
           colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
         result.add(ru nameStr & space & $colors[0] & secondSpace & $colors[1])
-      of "statusBarGitBranch":
+      of "statusLineGitBranch":
         let
-          colorPair = EditorColorPair.statusBarGitBranch
+          colorPair = EditorColorPair.statusLineGitBranch
           colors = getColorFromEditorColorPair(theme, colorPair)
           secondSpaceLen = calcPositionOfThemeSettingValue(theme)
           secondSpace = " ".repeat(secondSpaceLen - ($colors[0]).len)
@@ -894,7 +894,7 @@ proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
   buffer.add(initTabLineTableBuffer(settings))
 
   buffer.add(ru"")
-  buffer.add(initStatusBarTableBuffer(settings.statusBar))
+  buffer.add(initStatusLineTableBuffer(settings.statusLine))
 
   buffer.add(ru"")
   buffer.add(initWorkspaceTableBuffer(settings))

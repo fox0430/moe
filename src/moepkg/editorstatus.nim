@@ -102,9 +102,9 @@ proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
     currentMainWindowNode.expandedColumn = 0
 
     let node = currentMainWindowNode
-    for i in 0 ..< currentWorkSpace.statusbar.len:
-      if currentWorkSpace.statusbar[i].windowIndex == node.windowIndex:
-        currentWorkSpace.statusbar[i].bufferIndex = bufferIndex
+    for i in 0 ..< currentWorkSpace.statusLine.len:
+      if currentWorkSpace.statusLine[i].windowIndex == node.windowIndex:
+        currentWorkSpace.statusLine[i].bufferIndex = bufferIndex
 
 proc bufferIndexInCurrentWindow*(status: Editorstatus): int {.inline.} =
   currentMainWindowNode.bufferIndex
@@ -138,18 +138,18 @@ proc exitEditor*(settings: EditorSettings) =
 proc getMainWindowHeight*(settings: EditorSettings, h: int): int =
   let
     tabHeight = if settings.tabLine.useTab: 1 else: 0
-    statusHeight = if settings.statusBar.enable: 1 else: 0
+    statusHeight = if settings.statusLine.enable: 1 else: 0
     workSpaceHeight = if settings.workSpace.workSpaceLine: 1 else: 0
-    commandHeight = if settings.statusBar.merge: 1 else: 0
+    commandHeight = if settings.statusLine.merge: 1 else: 0
 
   result = h - tabHeight - statusHeight - workSpaceHeight + commandHeight
 
 proc resizeMainWindowNode(status: var EditorStatus, height, width: int) =
   let
     tabLineHeight = if status.settings.tabLine.useTab: 1 else: 0
-    statusLineHeight = if status.settings.statusBar.enable: 1 else: 0
+    statusLineHeight = if status.settings.statusLine.enable: 1 else: 0
     workSpaceLineHeight = if status.settings.workSpace.workSpaceLine: 1 else: 0
-    commandLineHeight = if status.settings.statusBar.merge: 1 else: 0
+    commandLineHeight = if status.settings.statusLine.merge: 1 else: 0
 
   const x = 0
   let
@@ -164,9 +164,9 @@ proc resize*(status: var EditorStatus, height, width: int) =
 
   status.resizeMainWindowNode(height, width)
 
-  const statusBarHeight = 1
+  const statusLineHeight = 1
   var
-    statusBarIndex = 0
+    statusLineIndex = 0
     queue = initHeapQueue[WindowNode]()
 
   for node in mainWindowNode.child:
@@ -179,7 +179,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
         let
           bufIndex = node.bufferIndex
           widthOfLineNum = node.view.widthOfLineNum
-          h = node.h - statusBarHeight
+          h = node.h - statusLineHeight
           adjustedHeight = max(h, 4)
           adjustedWidth = max(node.w - widthOfLineNum, 4)
 
@@ -195,45 +195,45 @@ proc resize*(status: var EditorStatus, height, width: int) =
 
         ## Resize status bar window
         let
-          isMergeStatusBar = status.settings.statusBar.merge
-          enableStatusBar = status.settings.statusBar.enable
+          isMergeStatusLine = status.settings.statusLine.merge
+          enableStatusLine = status.settings.statusLine.enable
           mode = status.bufStatus[bufIndex].mode
-        if enableStatusBar and
-           (not isMergeStatusBar or
-           (isMergeStatusBar and mode != Mode.ex)):
+        if enableStatusLine and
+           (not isMergeStatusLine or
+           (isMergeStatusLine and mode != Mode.ex)):
 
           const statusLineHeight = 1
           let
             width = node.w
             y = node.y + adjustedHeight
             x = node.x
-          currentWorkSpace.statusBar[statusBarIndex].window.resize(
+          currentWorkSpace.statusLine[statusLineIndex].window.resize(
             statusLineHeight,
             width,
             y,
             x)
-          currentWorkSpace.statusBar[statusBarIndex].window.refresh
+          currentWorkSpace.statusLine[statusLineIndex].window.refresh
 
           # Update status bar info
-          currentWorkSpace.statusbar[statusBarIndex].bufferIndex =
+          currentWorkSpace.statusLine[statusLineIndex].bufferIndex =
             node.bufferIndex
-          currentWorkSpace.statusbar[statusBarIndex].windowIndex =
+          currentWorkSpace.statusLine[statusLineIndex].windowIndex =
             node.windowIndex
-          inc(statusBarIndex)
+          inc(statusLineIndex)
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
   # Resize status bar window
-  if status.settings.statusBar.enable and
-     not status.settings.statusBar.multipleStatusBar:
+  if status.settings.statusLine.enable and
+     not status.settings.statusLine.multipleStatusLine:
     const
-      statusBarHeight = 1
+      statusLineHeight = 1
       x = 0
     let
-      y = max(height, 4) - 1 - (if status.settings.statusBar.merge: 0 else: 1)
-    currentWorkSpace.statusBar[0].window.resize(
-      statusBarHeight,
+      y = max(height, 4) - 1 - (if status.settings.statusLine.merge: 0 else: 1)
+    currentWorkSpace.statusLine[0].window.resize(
+      statusLineHeight,
       width,
       y,
       x)
@@ -268,25 +268,25 @@ proc highlightOtherUsesCurrentWord(status: var Editorstatus)
 proc highlightSelectedArea(status: var Editorstatus)
 proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode)
 
-proc updateStatusBar(status: var Editorstatus) =
-  if not status.settings.statusBar.multipleStatusBar:
+proc updateStatusLine(status: var Editorstatus) =
+  if not status.settings.statusLine.multipleStatusLine:
     const isActiveWindow = true
-    let index = currentWorkSpace.statusBar[0].bufferIndex
-    status.bufStatus[index].writeStatusBar(
-      currentWorkSpace.statusBar[0],
+    let index = currentWorkSpace.statusLine[0].bufferIndex
+    status.bufStatus[index].writeStatusLine(
+      currentWorkSpace.statusLine[0],
       currentMainWindowNode,
       isActiveWindow,
       status.settings)
   else:
-    for i in 0 ..< currentWorkSpace.statusBar.len:
+    for i in 0 ..< currentWorkSpace.statusLine.len:
       let
-        bufferIndex = currentWorkSpace.statusBar[i].bufferIndex
-        index = currentWorkSpace.statusBar[i].windowIndex
+        bufferIndex = currentWorkSpace.statusLine[i].bufferIndex
+        index = currentWorkSpace.statusLine[i].windowIndex
         node = mainWindowNode.searchByWindowIndex(index)
         currentNode = currentWorkSpace.currentMainWindowNode
         isActiveWindow = index == currentNode.windowIndex
-      status.bufStatus[bufferIndex].writeStatusBar(
-        currentWorkSpace.statusBar[i],
+      status.bufStatus[bufferIndex].writeStatusLine(
+        currentWorkSpace.statusLine[i],
         node,
         isActiveWindow,
         status.settings)
@@ -438,7 +438,7 @@ proc update*(status: var EditorStatus) =
       x = currentMainWindowNode.view.widthOfLineNum + currentMainWindowNode.cursor.x
     currentMainWindowNode.window.get.moveCursor(y, x)
 
-  if status.settings.statusBar.enable: status.updateStatusBar
+  if status.settings.statusLine.enable: status.updateStatusLine
 
   status.commandLine.updateCommandLineView
 
@@ -460,7 +460,7 @@ proc verticalSplitWindow*(status: var EditorStatus) =
     currentBufStatus.changeMode(Mode.filer)
     currentMainWindowNode.bufferIndex = status.bufStatus.high
 
-  currentWorkSpace.statusBar.add(initStatusBar())
+  currentWorkSpace.statusLine.add(initStatusLine())
 
 proc horizontalSplitWindow*(status: var Editorstatus) =
   let buffer = currentBufStatus.buffer
@@ -476,7 +476,7 @@ proc horizontalSplitWindow*(status: var Editorstatus) =
     currentBufStatus.changeMode(Mode.filer)
     currentMainWindowNode.bufferIndex = status.bufStatus.high
 
-  currentWorkSpace.statusBar.add(initStatusBar())
+  currentWorkSpace.statusLine.add(initStatusLine())
 
 proc deleteWorkSpace*(status: var Editorstatus, index: int)
 
@@ -496,9 +496,9 @@ proc closeWindow*(status: var EditorStatus,
     mainWindowNode.deleteWindowNode(deleteWindowIndex)
     dec(currentWorkSpace.numOfMainWindow)
 
-    if status.settings.statusBar.multipleStatusBar:
-      let statusBarHigh = currentWorkSpace.statusBar.high
-      currentWorkSpace.statusBar.delete(statusBarHigh)
+    if status.settings.statusLine.multipleStatusLine:
+      let statusLineHigh = currentWorkSpace.statusLine.high
+      currentWorkSpace.statusLine.delete(statusLineHigh)
 
     status.resize(height, width)
 
