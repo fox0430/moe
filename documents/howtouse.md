@@ -182,7 +182,7 @@
 ```paren on``` or ```paren off``` - Change setting to auto close paren  
 ```indent on``` or ```indent off``` - Chnage sestting to auto indent  
 ```linenum on``` or ```linenum off``` - Change setting to dispaly line number  
-```statusbar on``` or ```statusbar on``` - Change setting to display stattus bar  
+```statusLine on``` or ```statusLine on``` - Change setting to display stattus bar  
 ```realtimesearch on``` or ```realtimesearch off``` - Change setting to real-time search   
 ```deleteparen on``` or ```deleteparen off``` - Change setting to auto delete paren  
 ```smoothscroll on``` or ```smoothscroll off``` - Change setting to smooth scroll  
