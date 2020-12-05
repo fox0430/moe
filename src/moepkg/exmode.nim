@@ -548,11 +548,11 @@ proc lineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
     numberOfDigitsLen = if status.settings.view.lineNumber:
                             numberOfDigits(status.bufStatus[0].buffer.len) - 2
                           else: 0
-    useStatusBar = if status.settings.statusLine.enable: 1 else: 0
+    useStatusLine = if status.settings.statusLine.enable: 1 else: 0
 
   currentMainWindowNode.view = initEditorView(
     status.bufStatus[0].buffer,
-    terminalHeight() - useStatusBar - 1,
+    terminalHeight() - useStatusLine - 1,
     terminalWidth() - numberOfDigitsLen)
 
   status.commandLine.erase
@@ -567,11 +567,11 @@ proc statusLineSettingCommand(status: var EditorStatus, command: seq[Rune]) =
     numberOfDigitsLen = if status.settings.view.lineNumber:
                             numberOfDigits(status.bufStatus[0].buffer.len) - 2
                           else: 0
-    useStatusBar = if status.settings.statusLine.enable : 1 else: 0
+    useStatusLine = if status.settings.statusLine.enable : 1 else: 0
 
   currentMainWindowNode.view = initEditorView(
     status.bufStatus[0].buffer,
-    terminalHeight() - useStatusBar - 1,
+    terminalHeight() - useStatusLine - 1,
     terminalWidth() - numberOfDigitsLen)
 
   status.commandLine.erase
@@ -1047,13 +1047,13 @@ proc listAllBufferCommand(status: var Editorstatus) =
     else: currentBufStatus.buffer.insert(line, i)
 
   let
-    useStatusBar = if status.settings.statusLine.enable: 1 else: 0
+    useStatusLine = if status.settings.statusLine.enable: 1 else: 0
     useTab = if status.settings.tabLine.useTab: 1 else: 0
     swapCurrentLineNumStting = status.settings.view.currentLineNumber
 
   status.settings.view.currentLineNumber = false
   currentMainWindowNode.view = currentBufStatus.buffer.initEditorView(
-    terminalHeight() - useStatusBar - useTab - 1,
+    terminalHeight() - useStatusLine - useTab - 1,
     terminalWidth())
 
   currentMainWindowNode.currentLine = 0
