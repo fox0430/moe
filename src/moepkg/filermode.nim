@@ -407,7 +407,7 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus,
 
     bufStatus.buffer.add(newLine)
 
-  let useStatusBar = if settings.statusBar.enable: 1 else: 0
+  let useStatusBar = if settings.statusLine.enable: 1 else: 0
   let numOfFile = filerStatus.dirList.len
   windowNode.highlight = initFilelistHighlight(filerStatus.dirList,
                                                bufStatus.buffer,
@@ -470,7 +470,7 @@ proc writefileDetail(status: var Editorstatus,
 
   var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
   let
-    useStatusBar = if status.settings.statusBar.enable: 1 else: 0
+    useStatusBar = if status.settings.statusLine.enable: 1 else: 0
     tmpCurrentLine = windowNode.currentLine
 
   windowNode.view = initEditorView(currentBufStatus.buffer,

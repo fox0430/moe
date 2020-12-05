@@ -104,8 +104,8 @@ proc isIndentationLinesSettingCommand(command: seq[seq[Rune]]): bool {.inline.} 
 proc isLineNumberSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 2 and cmpIgnoreCase($command[0], "linenum") == 0
 
-proc isStatusBarSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "statusbar") == 0
+proc isStatusLineSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
+  return command.len == 2 and cmpIgnoreCase($command[0], "statusline") == 0
 
 proc isIncrementalSearchSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 2 and cmpIgnoreCase($command[0], "incrementalsearch") == 0
@@ -133,8 +133,8 @@ proc isSystemClipboardSettingCommand(command: seq[seq[RUne]]): bool {.inline.} =
 proc isHighlightFullWidthSpaceSettingCommand(command: seq[seq[RUne]]): bool {.inline.} =
   return command.len == 2 and cmpIgnoreCase($command[0], "highlightfullspace") == 0
 
-proc isMultipleStatusBarSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "multiplestatusbar") == 0
+proc isMultipleStatusLineSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
+  return command.len == 2 and cmpIgnoreCase($command[0], "multiplestatusline") == 0
 
 proc isBuildOnSaveSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 2 and cmpIgnoreCase($command[0], "buildonsave") == 0
@@ -548,30 +548,30 @@ proc lineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
     numberOfDigitsLen = if status.settings.view.lineNumber:
                             numberOfDigits(status.bufStatus[0].buffer.len) - 2
                           else: 0
-    useStatusBar = if status.settings.statusBar.enable: 1 else: 0
+    useStatusLine = if status.settings.statusLine.enable: 1 else: 0
 
   currentMainWindowNode.view = initEditorView(
     status.bufStatus[0].buffer,
-    terminalHeight() - useStatusBar - 1,
+    terminalHeight() - useStatusLine - 1,
     terminalWidth() - numberOfDigitsLen)
 
   status.commandLine.erase
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc statusBarSettingCommand(status: var EditorStatus, command: seq[Rune]) =
-  if command == ru"on": status.settings.statusBar.enable = true
-  elif command == ru"off": status.settings.statusBar.enable = false
+proc statusLineSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.statusLine.enable = true
+  elif command == ru"off": status.settings.statusLine.enable = false
 
   let
     numberOfDigitsLen = if status.settings.view.lineNumber:
                             numberOfDigits(status.bufStatus[0].buffer.len) - 2
                           else: 0
-    useStatusBar = if status.settings.statusBar.enable : 1 else: 0
+    useStatusLine = if status.settings.statusLine.enable : 1 else: 0
 
   currentMainWindowNode.view = initEditorView(
     status.bufStatus[0].buffer,
-    terminalHeight() - useStatusBar - 1,
+    terminalHeight() - useStatusLine - 1,
     terminalWidth() - numberOfDigitsLen)
 
   status.commandLine.erase
@@ -668,11 +668,11 @@ proc turnOffHighlightingCommand(status: var EditorStatus) =
   status.commandLine.erase
   status.changeMode(bufferstatus.Mode.normal)
 
-proc multipleStatusBarSettingCommand(status: var Editorstatus,
+proc multipleStatusLineSettingCommand(status: var Editorstatus,
                                      command: seq[Rune]) =
 
-  if command == ru"on": status.settings.statusBar.multipleStatusBar = true
-  elif command == ru"off": status.settings.statusBar.multipleStatusBar = false
+  if command == ru"on": status.settings.statusLine.multipleStatusLine = true
+  elif command == ru"off": status.settings.statusLine.multipleStatusLine = false
 
   status.commandLine.erase
 
@@ -681,8 +681,8 @@ proc multipleStatusBarSettingCommand(status: var Editorstatus,
 proc showGitInInactiveSettingCommand(status: var EditorStatus,
                                      command: seq[Rune]) =
 
-  if command == ru"on": status.settings.statusBar.showGitInactive = true
-  elif command == ru"off": status.settings.statusBar.showGitInactive = false
+  if command == ru"on": status.settings.statusLine.showGitInactive = true
+  elif command == ru"off": status.settings.statusLine.showGitInactive = false
 
   status.commandLine.erase
 
@@ -1047,13 +1047,13 @@ proc listAllBufferCommand(status: var Editorstatus) =
     else: currentBufStatus.buffer.insert(line, i)
 
   let
-    useStatusBar = if status.settings.statusBar.enable: 1 else: 0
+    useStatusLine = if status.settings.statusLine.enable: 1 else: 0
     useTab = if status.settings.tabLine.useTab: 1 else: 0
     swapCurrentLineNumStting = status.settings.view.currentLineNumber
 
   status.settings.view.currentLineNumber = false
   currentMainWindowNode.view = currentBufStatus.buffer.initEditorView(
-    terminalHeight() - useStatusBar - useTab - 1,
+    terminalHeight() - useStatusLine - useTab - 1,
     terminalWidth())
 
   currentMainWindowNode.currentLine = 0
@@ -1231,8 +1231,8 @@ proc exModeCommand*(status: var EditorStatus,
     status.turnOffHighlightingCommand
   elif isTabLineSettingCommand(command):
     status.tabLineSettingCommand(command[1])
-  elif isStatusBarSettingCommand(command):
-    status.statusBarSettingCommand(command[1])
+  elif isStatusLineSettingCommand(command):
+    status.statusLineSettingCommand(command[1])
   elif isLineNumberSettingCommand(command):
     status.lineNumberSettingCommand(command[1])
   elif isIndentationLinesSettingCommand(command):
@@ -1283,8 +1283,8 @@ proc exModeCommand*(status: var EditorStatus,
     status.systemClipboardSettingCommand(command[1])
   elif isHighlightFullWidthSpaceSettingCommand(command):
     status.highlightFullWidthSpaceSettingCommand(command[1])
-  elif isMultipleStatusBarSettingCommand(command):
-    status.multipleStatusBarSettingCommand(command[1])
+  elif isMultipleStatusLineSettingCommand(command):
+    status.multipleStatusLineSettingCommand(command[1])
   elif isBuildOnSaveSettingCommand(command):
     status.buildOnSaveSettingCommand(command[1])
   elif isCreateWorkSpaceCommand(command):

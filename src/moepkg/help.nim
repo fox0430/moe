@@ -180,7 +180,7 @@ sp filename - Open in horizontal split window
 cws - Create new work space
 ws number - Change current work space : Example ws 2
 dws - Delete current work space
-lsw - Show workspace list in status bar
+lsw - Show workspace list in status line
 
 livereload on or livereload on - Change setting of live reload of configuration file
 theme themeName - Change color theme : Example theme dark
@@ -190,7 +190,7 @@ tabstop number - Change setting to tabStop : Exmaple tabstop 2
 paren on or paren off - Change setting to auto close paren
 indent on or indent off - Chnage sestting to auto indent
 linenum on or linenum off - Change setting to dispaly line number
-statusbar on or statusbar on - Change setting to display stattus bar
+statusLine on or statusLine on - Change setting to display stattus bar
 realtimesearch on or realtimesearch off - Change setting to real-time search
 deleteparen on or deleteparen off - Change setting to auto delete paren
 smoothscroll on or smoothscroll off - Change setting to smooth scroll
@@ -200,7 +200,7 @@ clipboard on or clipboard off - Change setting to system clipboard
 highlightfullspace on or highlightfullspace off - Change setting to highlight full width space
 buildonsave on or buildonsave off - Change setting to build on save
 indentationlines on  or indentationlines off - Change setting to indentation lines
-showGitInactive on or showGitInactive off - Change status bar setting to show/hide git branch name in inactive window
+showGitInactive on or showGitInactive off - Change status line setting to show/hide git branch name in inactive window
 noh - Turn off highlights
 icon - Setting show/hidden icons in filer mode
 deleteTrailingSpaces - Delete trailing spaces
