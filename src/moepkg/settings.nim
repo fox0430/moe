@@ -498,7 +498,7 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
     foreground:
       colorFromNode(jsonNode{"colors", "editorWhitespace.foreground"})
 
-  # status bar
+  # status line
   setEditorColor statusLineNormalMode:
     foreground:
       colorFromNode(jsonNode{"colors", "editor.foreground"})

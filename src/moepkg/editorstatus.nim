@@ -193,7 +193,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
           node.currentLine,
           node.currentColumn)
 
-        ## Resize status bar window
+        ## Resize status line window
         let
           isMergeStatusLine = status.settings.statusLine.merge
           enableStatusLine = status.settings.statusLine.enable
@@ -214,7 +214,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
             x)
           currentWorkSpace.statusLine[statusLineIndex].window.refresh
 
-          # Update status bar info
+          # Update status line info
           currentWorkSpace.statusLine[statusLineIndex].bufferIndex =
             node.bufferIndex
           currentWorkSpace.statusLine[statusLineIndex].windowIndex =
@@ -224,7 +224,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
-  # Resize status bar window
+  # Resize status line window
   if status.settings.statusLine.enable and
      not status.settings.statusLine.multipleStatusLine:
     const
