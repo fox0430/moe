@@ -133,8 +133,8 @@ proc isSystemClipboardSettingCommand(command: seq[seq[RUne]]): bool {.inline.} =
 proc isHighlightFullWidthSpaceSettingCommand(command: seq[seq[RUne]]): bool {.inline.} =
   return command.len == 2 and cmpIgnoreCase($command[0], "highlightfullspace") == 0
 
-proc isMultipleStatusBarSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "multiplestatusbar") == 0
+proc isMultipleStatusLineSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
+  return command.len == 2 and cmpIgnoreCase($command[0], "multipleStatusLine") == 0
 
 proc isBuildOnSaveSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 2 and cmpIgnoreCase($command[0], "buildonsave") == 0
@@ -668,7 +668,7 @@ proc turnOffHighlightingCommand(status: var EditorStatus) =
   status.commandLine.erase
   status.changeMode(bufferstatus.Mode.normal)
 
-proc multipleStatusBarSettingCommand(status: var Editorstatus,
+proc multipleStatusLineSettingCommand(status: var Editorstatus,
                                      command: seq[Rune]) =
 
   if command == ru"on": status.settings.statusLine.multipleStatusLine = true
@@ -1283,8 +1283,8 @@ proc exModeCommand*(status: var EditorStatus,
     status.systemClipboardSettingCommand(command[1])
   elif isHighlightFullWidthSpaceSettingCommand(command):
     status.highlightFullWidthSpaceSettingCommand(command[1])
-  elif isMultipleStatusBarSettingCommand(command):
-    status.multipleStatusBarSettingCommand(command[1])
+  elif isMultipleStatusLineSettingCommand(command):
+    status.multipleStatusLineSettingCommand(command[1])
   elif isBuildOnSaveSettingCommand(command):
     status.buildOnSaveSettingCommand(command[1])
   elif isCreateWorkSpaceCommand(command):
