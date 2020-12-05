@@ -348,7 +348,8 @@ proc normalCommand(status: var EditorStatus,
         currentBufStatus.deleteCurrentCharacter(
           windowNode,
           status.settings.autoDeleteParen)
-      status.changeMode(Mode.insert)
+
+    status.changeMode(Mode.insert)
 
   # d{ command
   template yankAndDeleteTillPreviousBlankLine() =
