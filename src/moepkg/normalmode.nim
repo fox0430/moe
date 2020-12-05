@@ -339,10 +339,16 @@ proc normalCommand(status: var EditorStatus,
   # s and cl commands
   template deleteCharacterAndEnterInsertMode() =
     if currentBufStatus.buffer[windowNode.currentLine].len > 0:
-      for i in 0 ..< cmdLoop:
+      let
+        lineWidth = currentBufStatus.buffer[windowNode.currentLine].len
+        loop = min(cmdLoop, lineWidth - windowNode.currentColumn)
+      status.yankString(loop)
+
+      for i in 0 ..< loop:
         currentBufStatus.deleteCurrentCharacter(
           windowNode,
           status.settings.autoDeleteParen)
+
     status.changeMode(Mode.insert)
 
   # d{ command
