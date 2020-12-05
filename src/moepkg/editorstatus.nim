@@ -2,7 +2,7 @@ import strutils, terminal, os, strformat, tables, times, osproc, heapqueue,
        deques, times, options
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodetext, highlight, fileutils,
-       undoredostack, window, color, workspace, statusbar, settings,
+       undoredostack, window, color, workspace, statusline, settings,
        bufferstatus, cursor, tabline, backup, messages, commandline
 
 type Platform* = enum

@@ -1,4 +1,4 @@
-import window, statusbar
+import window, statusline
 
 type WorkSpace* = object
   mainWindowNode*: WindowNode
