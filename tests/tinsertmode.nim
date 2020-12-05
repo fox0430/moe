@@ -431,7 +431,7 @@ suite "Insert mode":
 
     status.settings.tabLine.useTab = true
     status.settings.workSpace.workSpaceLine = false
-    status.settings.statusBar.enable = true
+    status.settings.statusLine.enable = true
 
     var suggestionWindow = tryOpenSuggestionWindow(
       currentBufStatus,
@@ -448,7 +448,7 @@ suite "Insert mode":
       y, x,
       100, 100,
       mainWindowNodeY,
-      status.settings.statusBar.enable)
+      status.settings.statusLine.enable)
 
     check suggestionWindow.get.popUpWindow.y == 2
     check suggestionWindow.get.popUpWindow.height == terminalHeight - 4

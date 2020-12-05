@@ -134,11 +134,11 @@ suite "Ex mode: StatusBar setting command":
     block:
       const command = @[ru"statusbar", ru"off"]
       status.exModeCommand(command, 100, 100)
-    check(status.settings.statusBar.enable == false)
+    check(status.settings.statusLine.enable == false)
     block:
       const command = @[ru"statusbar", ru"on"]
       status.exModeCommand(command, 100, 100)
-    check(status.settings.statusBar.enable == true)
+    check(status.settings.statusLine.enable == true)
 
 suite "Ex mode: Line number setting command":
   test "Line number setting command":
@@ -693,12 +693,12 @@ suite "Ex mode: Show/Hide git branch name in status bar when inactive window":
     block:
       const command = @[ru"showGitInactive", ru"off"]
       status.exModeCommand(command, 100, 100)
-      check not status.settings.statusBar.showGitInactive
+      check not status.settings.statusLine.showGitInactive
 
     block:
       const command = @[ru"showGitInactive", ru"on"]
       status.exModeCommand(command, 100, 100)
-      check status.settings.statusBar.showGitInactive
+      check status.settings.statusLine.showGitInactive
 
 suite "Ex mode: Quick run command":
   test "Quick run command":
