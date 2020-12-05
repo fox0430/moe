@@ -104,8 +104,8 @@ proc isIndentationLinesSettingCommand(command: seq[seq[Rune]]): bool {.inline.} 
 proc isLineNumberSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 2 and cmpIgnoreCase($command[0], "linenum") == 0
 
-proc isStatusBarSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "statusbar") == 0
+proc isStatusLineSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
+  return command.len == 2 and cmpIgnoreCase($command[0], "statusline") == 0
 
 proc isIncrementalSearchSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 2 and cmpIgnoreCase($command[0], "incrementalsearch") == 0
@@ -1231,7 +1231,7 @@ proc exModeCommand*(status: var EditorStatus,
     status.turnOffHighlightingCommand
   elif isTabLineSettingCommand(command):
     status.tabLineSettingCommand(command[1])
-  elif isStatusBarSettingCommand(command):
+  elif isStatusLineSettingCommand(command):
     status.statusLineSettingCommand(command[1])
   elif isLineNumberSettingCommand(command):
     status.lineNumberSettingCommand(command[1])
