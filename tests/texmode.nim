@@ -685,8 +685,8 @@ suite "Ex mode: Put config file command":
 
     check fileExists(getHomeDir() / ".config" / "moe" / "moerc.toml")
 
-suite "Ex mode: Show/Hide git branch name in status bar when inactive window":
-  test "Show/Hide git branch name in status bar when inactive window":
+suite "Ex mode: Show/Hide git branch name in status line when inactive window":
+  test "Show/Hide git branch name in status line when inactive window":
     var status = initEditorStatus()
     status.addNewBuffer
 
