@@ -172,7 +172,7 @@
 ```cws``` - Create new work space  
 ```ws number``` - Change current work space : Example ```ws 2```  
 ```dws``` - Delete current work space  
-```lsw``` - Show workspace list in status bar  
+```lsw``` - Show workspace list in status line
 
 ```livereload on``` or ```livereload on``` - Change setting of live reload of configuration file  
 ```theme themeName``` - Change color theme : Example ```theme dark```  
@@ -192,7 +192,7 @@
 ```highlightfullspace on``` or ```highlightfullspace off``` - Change setting to highlight full width space  
 ```buildonsave on``` or ```buildonsave off``` - Change setting to build on save  
 ```indentationlines on ``` or ```indentationlines off``` - Change setting to indentation lines  
-```showGitInactive on``` or ```showGitInactive off``` - Change status bar setting to show/hide git branch name in inactive window  
+```showGitInactive on``` or ```showGitInactive off``` - Change status line setting to show/hide git branch name in inactive window  
 ```noh``` - Turn off highlights  
 ```icon``` - Setting show/hidden icons in filer mode  
 ```deleteTrailingSpaces``` - Delete trailing spaces  
