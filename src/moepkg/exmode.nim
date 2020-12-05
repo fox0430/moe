@@ -134,7 +134,7 @@ proc isHighlightFullWidthSpaceSettingCommand(command: seq[seq[RUne]]): bool {.in
   return command.len == 2 and cmpIgnoreCase($command[0], "highlightfullspace") == 0
 
 proc isMultipleStatusLineSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "multipleStatusLine") == 0
+  return command.len == 2 and cmpIgnoreCase($command[0], "multiplestatusline") == 0
 
 proc isBuildOnSaveSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 2 and cmpIgnoreCase($command[0], "buildonsave") == 0
