@@ -21,12 +21,34 @@ proc showFilename(mode, prevMode: Mode): bool {.inline.} =
   not isHistoryManagerMode(mode, prevMode) and
   not isConfigMode(mode, prevMode)
 
+proc appendFileName(statusLineBuffer: var seq[Rune],
+                    bufStatus: BufferStatus,
+                    statusLineWindow: var Window,
+                    color: EditorColorPair) =
+
+  let
+    mode = bufStatus.mode
+    prevMode = bufStatus.prevMode
+  var filename = if not showFilename(mode, prevMode): ru""
+                 elif bufStatus.path.len > 0: bufStatus.path
+                 else: ru"No name"
+  let homeDir = ru(getHomeDir())
+  if (filename.len() >= homeDir.len() and
+      filename[0..homeDir.len()-1] == homeDir):
+    filename = filename[homeDir.len()-1..filename.len()-1]
+    if filename[0] == ru'/':
+      filename = ru"~" & filename
+    else:
+      filename = ru"~/" & filename
+  statusLineBuffer.add(filename)
+  statusLineWindow.append(filename, color)
+
 proc writeStatusLineNormalModeInfo(bufStatus: var BufferStatus,
-                                  statusLine: var StatusLine,
-                                  statusLineBuffer: var seq[Rune],
-                                  windowNode: WindowNode,
-                                  isActiveWindow: bool,
-                                  settings: EditorSettings) =
+                                   statusLine: var StatusLine,
+                                   statusLineBuffer: var seq[Rune],
+                                   windowNode: WindowNode,
+                                   isActiveWindow: bool,
+                                   settings: EditorSettings) =
 
   proc setStatusLineColor(mode: Mode): EditorColorPair =
     case mode:
@@ -56,19 +78,7 @@ proc writeStatusLineNormalModeInfo(bufStatus: var BufferStatus,
   statusLine.window.append(ru" ", color)
 
   if settings.statusLine.filename:
-    var filename = if not showFilename(mode, prevMode): ru""
-                   elif bufStatus.path.len > 0: bufStatus.path
-                   else: ru"No name"
-    let homeDir = ru(getHomeDir())
-    if (filename.len() >= homeDir.len() and
-        filename[0..homeDir.len()-1] == homeDir):
-      filename = filename[homeDir.len()-1..filename.len()-1]
-      if filename[0] == ru'/':
-        filename = ru"~" & filename
-      else:
-        filename = ru"~/" & filename
-    statusLineBuffer.add(filename)
-    statusLine.window.append(filename, color)
+    statusLineBuffer.appendFileName(bufStatus, statusLine.window, color)
 
   if bufStatus.countChange > 0 and settings.statusLine.chanedMark:
     statusLineBuffer.add(ru" [+]")
@@ -103,8 +113,10 @@ proc writeStatusLineFilerModeInfo(bufStatus: var BufferStatus,
             else: EditorColorPair.statusLineFilerModeInactive
     statusLineWidth = statusLine.window.width
 
-  if settings.statusLine.directory: statusLine.window.append(ru" ", color)
-  statusLine.window.append(getCurrentDir().toRunes, color)
+  if settings.statusLine.directory:
+    statusLine.window.append(ru" ", color)
+    statusLine.window.append(bufStatus.path, color)
+
   statusLine.window.append(ru " ".repeat(statusLineWidth - 5), color)
 
 proc writeStatusLineBufferManagerModeInfo(bufStatus: var BufferStatus,
@@ -225,7 +237,7 @@ proc writeStatusLine*(bufStatus: var BufferStatus,
                          settings.statusLine.showModeInactive)
 
   var statusLineBuffer = if windowNode.x > 0: ru" " & modeStr.toRunes
-                        else: modeStr.toRunes
+                         else: modeStr.toRunes
 
   ## Write current mode
   if settings.statusLine.mode:
