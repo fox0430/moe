@@ -988,3 +988,39 @@ suite "Normal mode: delete from the beginning of the line to current column":
     check currentBufStatus.buffer[0] == ru"fgh"
 
     check status.registers.yankedStr == ru"abcde"
+
+suite "Normal mode: Yank string":
+  test "yank character (yl command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcdefgh"])
+
+    let commands = @[ru'y', ru'l']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.yankedStr == ru"a"
+
+  test "yank 3 characters (3yl command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+
+    currentBufStatus.cmdLoop = 3
+    let commands = @[ru'y', ru'l']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.yankedStr == ru"abc"
+
+  test "yank 5 characters (10yl command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+
+    currentBufStatus.cmdLoop = 10
+    let commands = @[ru'y', ru'l']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.yankedStr == ru"abcde"

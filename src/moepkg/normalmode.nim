@@ -412,6 +412,22 @@ proc normalCommand(status: var EditorStatus,
     for i in 0 ..< count:
       currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
 
+  ## yy command
+  template yankLines() =
+    let lastLine = min(windowNode.currentLine + cmdLoop - 1,
+                       currentBufStatus.buffer.high)
+    status.yankLines(windowNode.currentLine, lastLine)
+
+  # yl command
+  # Yank characters in the current line
+  template yankCharacters() =
+    let
+      buffer = currentBufStatus.buffer
+      width = buffer[windowNode.currentLine].len - windowNode.currentColumn
+      count = if  width > cmdLoop: cmdLoop
+              else: width
+    status.yankString(count)
+
   let key = commands[0]
 
   if isControlK(key):
@@ -536,15 +552,15 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('y'):
     let secondKey = commands[1]
     if secondKey == ord('y'):
-      let lastLine = min(windowNode.currentLine + cmdLoop - 1,
-                         currentBufStatus.buffer.high)
-      status.yankLines(windowNode.currentLine, lastLine)
+      yankLines()
     elif secondKey == ord('w'):
       status.yankWord(cmdLoop)
     elif secondKey == ord('{'):
       yankToPreviousBlankLine()
     elif secondKey == ord('}'):
       yankToNextBlankLine()
+    elif secondKey == ord('l'):
+      yankCharacters()
   elif key == ord('p'):
     currentBufStatus.pasteAfterCursor(windowNode, status.registers)
   elif key == ord('P'):
@@ -728,7 +744,8 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
     if key == ord('y') or
        key == ord('w') or
        key == ord('{') or
-       key == ord('}'):
+       key == ord('}') or
+       key == ord('l'):
       result = @[key, secondKey]
   elif key == ord('='):
     let secondKey = getAnotherKey()
