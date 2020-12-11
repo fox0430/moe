@@ -561,6 +561,8 @@ proc normalCommand(status: var EditorStatus,
       yankToNextBlankLine()
     elif secondKey == ord('l'):
       yankCharacters()
+  elif key == ord('Y'):
+    yankLines()
   elif key == ord('p'):
     currentBufStatus.pasteAfterCursor(windowNode, status.registers)
   elif key == ord('P'):
@@ -747,6 +749,8 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
        key == ord('}') or
        key == ord('l'):
       result = @[key, secondKey]
+  elif key == ord('Y'):
+      result = @[key]
   elif key == ord('='):
     let secondKey = getAnotherKey()
     if secondKey == ord('='):

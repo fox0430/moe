@@ -953,6 +953,36 @@ suite "Normal mode: Yank lines":
     check status.registers.yankedLines.len == 3
     check status.registers.yankedLines == @[ru"", ru "abc", ru"def"]
 
+  test "Yank a line (yy command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(
+      @[ru"abc", ru"def", ru"ghi"])
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'y', ru'y']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.yankedLines == @[ru "abc"]
+
+  test "Yank a line (Y command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(
+      @[ru"abc", ru"def", ru"ghi"])
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'Y']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.yankedLines == @[ru "abc"]
+
 suite "Normal mode: Delete the characters from current column to end of line":
   test "Delete 5 characters (d$ command)":
     var status = initEditorStatus()
