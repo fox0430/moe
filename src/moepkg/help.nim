@@ -62,6 +62,7 @@ Ctrl, r    - Redo
 ==         - Auto indent
 dd         - Delete a line
 x          - Delete current character
+X or dh    - cut a character before cursor
 S or cc    - Delete the characters in current line and start insert mode
 s or cl    - Delete current character and enter insert mode
 ci"        - Delete inside of double quotes and enter insert mode
