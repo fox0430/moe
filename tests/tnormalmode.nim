@@ -1054,3 +1054,60 @@ suite "Normal mode: Yank string":
     status.update
 
     check status.registers.yankedStr == ru"abcde"
+
+suite "Normal mode: Cut character before cursor":
+  test "Cut character before cursor (X command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+    currentMainWindowNode.currentColumn = 1
+
+    let commands = @[ru'X']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru"bcde"
+
+    check status.registers.yankedStr == ru"a"
+
+  test "Cut 3 characters before cursor (3X command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+    currentMainWindowNode.currentColumn = 3
+
+    currentBufStatus.cmdLoop = 3
+    let commands = @[ru'X']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru"de"
+
+    check status.registers.yankedStr == ru"abc"
+
+  test "Do nothing (X command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+
+    let commands = @[ru'X']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru"abcde"
+
+    check status.registers.yankedStr == ru""
+
+  test "Cut character before cursor (dh command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+    currentMainWindowNode.currentColumn = 1
+
+    let commands = @[ru'd', ru'h']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru"bcde"
+
+    check status.registers.yankedStr == ru"a"
