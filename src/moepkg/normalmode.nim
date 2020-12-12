@@ -428,6 +428,19 @@ proc normalCommand(status: var EditorStatus,
               else: width
     status.yankString(count)
 
+  # X and dh command
+  template cutCharacterBeforeCursor() =
+    if windowNode.currentColumn > 0:
+      let
+        currentColumn = windowNode.currentColumn
+        loop = if currentColumn - cmdLoop > 0: cmdLoop
+               else: currentColumn
+      currentMainWindowNode.currentColumn = currentColumn - loop
+
+      status.yankString(loop)
+      for i in 0 ..< loop:
+        deleteCurrentCharacter()
+
   let key = commands[0]
 
   if isControlK(key):
@@ -451,6 +464,8 @@ proc normalCommand(status: var EditorStatus,
     status.yankString(loop)
     for i in 0 ..< loop:
       deleteCurrentCharacter()
+  elif key == ord('X'):
+    cutCharacterBeforeCursor()
   elif key == ord('^') or key == ord('_'):
     currentBufStatus.moveToFirstNonBlankOfLine(windowNode)
   elif key == ord('0') or isHomeKey(key):
@@ -542,6 +557,8 @@ proc normalCommand(status: var EditorStatus,
     elif secondKey == ord('i'):
       let thirdKey = commands[2]
       status.yankAndDeleteInnerCommand(thirdKey)
+    elif secondKey == ord('h'):
+      cutCharacterBeforeCursor()
   elif key == ord('D'):
      yankAndDeleteCharactersUntilEndOfLine()
   elif key == ord('S'):
@@ -663,6 +680,7 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
      key == ord('j') or isDownKey(key) or
      isEnterKey(key) or
      key == ord('x') or isDcKey(key) or
+     key == ord('X') or
      key == ord('^') or key == ord('_') or
      key == ord('0') or isHomeKey(key) or
      key == ord('$') or isEndKey(key) or
