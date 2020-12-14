@@ -111,6 +111,8 @@ This project's goal is a very customizable, high productivity, user friendly, hi
 
 - ncurses
 
+- xclip (Option on GNU/Linux)
+
 ```sh
 # Latest released version
 nimble install moe
@@ -130,6 +132,8 @@ And one more, it comes from the Japanese slang 萌え(moe).
 Welcome❤
 
 ## Community
+
+Ask me anything!
 
  - [Discord](https://discord.gg/UaJPnCF)
 
