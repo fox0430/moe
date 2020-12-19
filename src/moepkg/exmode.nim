@@ -912,7 +912,8 @@ proc quitCommand(status: var EditorStatus, height, width: int) =
     let
       numberReferenced = mainWindowNode.countReferencedWindow(currentBufferIndex)
       countChange = currentBufStatus.countChange
-    if countChange == 0 or numberReferenced > 1:
+      canundo = currentBufStatus.buffer.canundo
+    if countChange == 0 or numberReferenced > 1 or not canundo:
       status.changeMode(currentBufStatus.prevMode)
       status.closeWindow(currentMainWindowNode, height, width)
     else:
