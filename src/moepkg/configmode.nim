@@ -2,175 +2,399 @@ import terminal, times, typetraits, strutils
 import gapbuffer, ui, editorstatus, unicodetext, window, movement, settings,
        bufferstatus, color, highlight
 
+type standardTableNames {.pure.} = enum
+  theme
+  number
+  currentNumber
+  cursorLine
+  statusLine
+  tabLine
+  syntax
+  indentationLines
+  tabStop
+  autoCloseParen
+  autoIndent
+  ignorecase
+  smartcase
+  disableChangeCursor
+  defaultCursor
+  normalModeCursor
+  insertModeCursor
+  autoSave
+  autoSaveInterval
+  liveReloadOfConf
+  incrementalSearch
+  popUpWindowInExmode
+  autoDeleteParen
+  systemClipboard
+  smoothScroll
+  smoothScrollSpeed
+
+type buildOnSaveTableNames {.pure.}= enum
+  enable
+  workspaceRoot
+  command
+
+type tabLineTableNames {.pure.} = enum
+ allBuffer
+
+type statusLineTableNames {.pure.} = enum
+    multipleStatusLine
+    merge
+    mode
+    filename
+    chanedMark
+    line
+    column
+    encoding
+    language
+    directory
+    gitbranchName
+    showGitInactive
+    showModeInactive
+
+type workSpaceTableNames {.pure.} = enum
+  workSpaceLine
+
+type highlightTableNames {.pure.} = enum
+  currentLine
+  fullWidthSpace
+  trailingSpaces
+  currentWord
+  replaceText
+  pairOfParen
+  reservedWord
+
+type autoBackupTableNames {.pure.} = enum
+  enable
+  idleTime
+  interval
+  backupDir
+  dirToExclude
+
+type quickRunTableNames {.pure.} = enum
+  saveBufferWhenQuickRun
+  command
+  timeout
+  nimAdvancedCommand
+  ClangOptions
+  CppOptions
+  NimOptions
+  shOptions
+  bashOptions
+
+type notificationTableNames {.pure.} = enum
+  screenNotifications
+  logNotifications
+  autoBackupScreenNotify
+  autoBackupLogNotify
+  autoSaveScreenNotify
+  autoSaveLogNotify
+  yankScreenNotify
+  yankLogNotify
+  deleteScreenNotify
+  deleteLogNotify
+  saveScreenNotify
+  saveLogNotify
+  workspaceScreenNotify
+  workspaceLogNotify
+  quickRunScreenNotify
+  quickRunLogNotify
+  buildOnSaveScreenNotify
+  buildOnSaveLogNotify
+  filerScreenNotify
+  filerLogNotify
+  restoreScreenNotify
+  restoreLogNotify
+
+type filerTableNames {.pure.} = enum
+  showIcons
+
+type autocompleteTableNames {.pure.} = enum
+  enable
+
+type themeTableNames {.pure.} = enum
+  editorBg
+  lineNum
+  currentLineNum
+  statusLineNormalMode
+  statusLineModeNormalMode
+  statusLineNormalModeInactive
+  statusLineInsertMode
+  statusLineModeInsertMode
+  statusLineInsertModeInactive
+  statusLineVisualMode
+  statusLineModeVisualMode
+  statusLineVisualModeInactive
+  statusLineReplaceMode
+  statusLineModeReplaceMode
+  statusLineReplaceModeInactive
+  statusLineFilerMode
+  statusLineModeFilerMode
+  statusLineFilerModeInactive
+  statusLineExMode
+  statusLineModeExMode
+  statusLineExModeInactive
+  statusLineGitBranch
+  tab
+  currentTab
+  commandBar
+  errorMessage
+  searchResult
+  visualMode
+  defaultChar
+  keyword
+  functionName
+  boolean
+  specialVar
+  builtin
+  stringLit
+  decNumber
+  comment
+  longComment
+  whitespace
+  preprocessor
+  currentFile
+  file
+  dir
+  pcLink
+  popUpWindow
+  popUpWinCurrentLine
+  replaceText
+  parenText
+  currentWord
+  highlightFullWidthSpace
+  highlightTrailingSpaces
+  workSpaceBar
+  reservedWord
+  currentSetting
+
+proc calcPositionOfSettingValue(): int {.compileTime.} =
+  var names: seq[string]
+
+  for name in standardTableNames: names.add($name)
+  for name in buildOnSaveTableNames: names.add($name)
+  for name in tabLineTableNames: names.add($name)
+  for name in workSpaceTableNames: names.add($name)
+  for name in highlightTableNames: names.add($name)
+  for name in autoBackupTableNames: names.add($name)
+  for name in quickRunTableNames: names.add($name)
+  for name in notificationTableNames: names.add($name)
+  for name in filerTableNames: names.add($name)
+  for name in themeTableNames: names.add($name)
+
+  for name in names:
+    if result < name.len: result = name.len
+
+  const numOfIndent = 2
+  result += numOfIndent
+
 const
-  # Settings names
-  standardTableNames = [
-    "theme",
-    "number",
-    "currentNumber",
-    "cursorLine",
-    "statusLine",
-    "tabLine",
-    "syntax",
-    "indentationLines",
-    "tabStop",
-    "autoCloseParen",
-    "autoIndent",
-    "ignorecase",
-    "smartcase",
-    "disableChangeCursor",
-    "defaultCursor",
-    "normalModeCursor",
-    "insertModeCursor",
-    "autoSave",
-    "autoSaveInterval",
-    "liveReloadOfConf",
-    "incrementalSearch",
-    "popUpWindowInExmode",
-    "autoDeleteParen",
-    "systemClipboard",
-    "smoothScroll",
-    "smoothScrollSpeed",
-  ]
-  buildOnSaveTableNames = [
-    "enable",
-    "workspaceRoot",
-    "command"
-  ]
-  tabLineTableNames = [
-    "allBuffer"
-  ]
-  statusLineTableNames = [
-    "multipleStatusLine",
-    "merge",
-    "mode",
-    "filename",
-    "chanedMark",
-    "line",
-    "column",
-    "encoding",
-    "language",
-    "directory",
-    "gitbranchName",
-    "showGitInactive",
-    "showModeInactive"
-  ]
-  workSpaceTableNames = [
-    "workSpaceLine"
-  ]
-  highlightTableNames = [
-    "currentLine",
-    "fullWidthSpace",
-    "trailingSpaces",
-    "currentWord",
-    "replaceText",
-    "pairOfParen",
-    "reservedWord"
-  ]
-  autoBackupTableNames = [
-    "enable",
-    "idleTime",
-    "interval",
-    "backupDir",
-    "dirToExclude"
-  ]
-  quickRunTableNames = [
-    "saveBufferWhenQuickRun",
-    "command",
-    "timeout",
-    "nimAdvancedCommand",
-    "ClangOptions",
-    "CppOptions",
-    "NimOptions",
-    "shOptions",
-    "bashOptions"
-  ]
-  notificationTableNames = [
-    "screenNotifications",
-    "logNotifications",
-    "autoBackupScreenNotify",
-    "autoBackupLogNotify",
-    "autoSaveScreenNotify",
-    "autoSaveLogNotify",
-    "yankScreenNotify",
-    "yankLogNotify",
-    "deleteScreenNotify",
-    "deleteLogNotify",
-    "saveScreenNotify",
-    "saveLogNotify",
-    "workspaceScreenNotify",
-    "workspaceLogNotify",
-    "quickRunScreenNotify",
-    "quickRunLogNotify",
-    "buildOnSaveScreenNotify",
-    "buildOnSaveLogNotify",
-    "filerScreenNotify",
-    "filerLogNotify",
-    "restoreScreenNotify",
-    "restoreLogNotify"
-  ]
-  filerTableNames = [
-    "showIcons"
-  ]
-  autocompleteTableNames = [
-    "enable"
-  ]
-  themeTableNames = [
-    "editorBg",
-    "lineNum",
-    "currentLineNum",
-    "statusLineNormalMode",
-    "statusLineModeNormalMode",
-    "statusLineNormalModeInactive",
-    "statusLineInsertMode",
-    "statusLineModeInsertMode",
-    "statusLineInsertModeInactive",
-    "statusLineVisualMode",
-    "statusLineModeVisualMode",
-    "statusLineVisualModeInactive",
-    "statusLineReplaceMode",
-    "statusLineModeReplaceMode",
-    "statusLineReplaceModeInactive",
-    "statusLineFilerMode",
-    "statusLineModeFilerMode",
-    "statusLineFilerModeInactive",
-    "statusLineExMode",
-    "statusLineModeExMode",
-    "statusLineExModeInactive",
-    "statusLineGitBranch",
-    "tab",
-    "currentTab",
-    "commandBar",
-    "errorMessage",
-    "searchResult",
-    "visualMode",
-    "defaultChar",
-    "keyword",
-    "functionName",
-    "boolean",
-    "specialVar",
-    "builtin",
-    "stringLit",
-    "decNumber",
-    "comment",
-    "longComment",
-    "whitespace",
-    "preprocessor",
-    "currentFile",
-    "file",
-    "dir",
-    "pcLink",
-    "popUpWindow",
-    "popUpWinCurrentLine",
-    "replaceText",
-    "parenText",
-    "currentWord",
-    "highlightFullWidthSpace",
-    "highlightTrailingSpaces",
-    "workSpaceBar",
-    "reservedWord",
-    "currentSetting"
-  ]
+  positionOfSetVal = calcPositionOfSettingValue()
+  indent = "  "
+
+proc getSettingValue(editorSettings: EditorSettings,
+                    table, setting: string): seq[seq[Rune]] =
+
+  proc getColorThemeList(): seq[seq[Rune]] {.compileTime.} =
+    for theme in ColorTheme:
+      result.add ru $theme
+
+  proc getCursorTypeList(): seq[seq[Rune]] {.compileTime.} =
+    for cursorType in CursorType:
+      result.add ru $cursorType
+
+  proc getStandardTableList(setting: string): seq[seq[Rune]] {.inline.} =
+    case setting:
+      of "theme": result = getColorThemeList()
+      of "defaultCursor",
+         "normalModeCursor",
+         "insertModeCursor": result = getCursorTypeList()
+      of "number",
+         "currentNumber",
+         "cursorLine",
+         "statusLine",
+         "tabLine",
+         "syntax",
+         "indentationLines",
+         "autoCloseParen",
+         "autoIndent",
+         "ignorecase",
+         "smartcase",
+         "disableChangeCursor",
+         "autoSave",
+         "autoSaveInterval",
+         "liveReloadOfConf",
+         "incrementalSearch",
+         "popUpWindowInExmode",
+         "autoDeleteParen",
+         "systemClipboard",
+         "smoothScroll": result = @[ru"true", ru"false"]
+      else: discard
+
+  proc getBuildOnSaveTableList(setting: string): seq[seq[Rune]] {.inline.} =
+    case setting:
+      of "enable": result = @[ru"true", ru"false"]
+      else: discard
+
+  proc getTabLineTableList(setting: string): seq[seq[Rune]] {.inline.} =
+    case setting:
+      of "allBuffer": result = @[ru"true", ru"false"]
+      else: discard
+
+  proc getStatusLineTableList(setting: string): seq[seq[Rune]] {.inline.} =
+    case setting:
+      of "multipleStatusLine",
+         "merge",
+         "mode",
+         "filename",
+         "chanedMark",
+         "line",
+         "column",
+         "encoding",
+         "language",
+         "directory",
+         "gitbranchName",
+         "showGitInactive",
+         "showModeInactive": result = @[ru"true", ru"false"]
+      else: discard
+
+  proc getWorkSpaceTableList(setting: string): seq[seq[Rune]] {.inline.} =
+    case setting:
+      of "workSpaceLine": result = @[ru"true", ru"false"]
+      else: discard
+
+  proc getHighlightTableList(setting: string): seq[seq[Rune]] {.inline.} =
+    case setting:
+    of "currentLine",
+       "fullWidthSpace",
+       "trailingSpaces",
+       "currentWord",
+       "replaceText",
+       "pairOfParen": result = @[ru"true", ru"false"]
+    else: discard
+
+  proc getAutoBackupTableList(setting: string): seq[seq[Rune]] {.inline.} =
+    case setting:
+      of "enable": result = @[ru"true", ru"false"]
+      else: discard
+
+  proc getQuickRunTableList(setting: string): seq[seq[Rune]] {.inline.} =
+    case setting:
+      of "saveBufferWhenQuickRun": result = @[ru"true", ru"false"]
+      else: discard
+
+  proc getNotificationTableList(setting: string): seq[seq[Rune]] {.inline.} =
+    case setting:
+      of "screenNotifications",
+         "logNotifications",
+         "autoBackupScreenNotify",
+         "autoBackupLogNotify",
+         "autoSaveScreenNotify",
+         "autoSaveLogNotify",
+         "yankScreenNotify",
+         "yankLogNotify",
+         "deleteScreenNotify",
+         "deleteLogNotify",
+         "saveScreenNotify",
+         "saveLogNotify",
+         "workspaceScreenNotify",
+         "workspaceLogNotify",
+         "quickRunScreenNotify",
+         "quickRunLogNotify",
+         "buildOnSaveScreenNotify",
+         "buildOnSaveLogNotify",
+         "filerScreenNotify",
+         "filerLogNotify",
+         "restoreScreenNotify",
+         "restoreLogNotify": result = @[ru"true", ru"false"]
+      else: discard
+
+  proc getFilerTableList(setting: string): seq[seq[Rune]] {.inline.} =
+    case setting:
+      of "showIcons": result = @[ru"true", ru"false"]
+      else: discard
+
+  proc getAutocompleteTableList(setting: string): seq[seq[Rune]] {.inline.} =
+    case setting:
+      of "enable": result = @[ru"true", ru"false"]
+      else: discard
+
+  proc getThemeTableList(): seq[seq[Rune]] {.compileTime.} =
+    for color in Color:
+      result.add ru $color
+
+  case table:
+    of "standardTable":
+      result = getStandardTableList(setting)
+    of "buildOnSaveTable":
+      result = getBuildOnSaveTableList(setting)
+    of "tabLineTable":
+      result = getTabLineTableList(setting)
+    of "statusLineTable":
+      result = getStandardTableList(setting)
+    of "workSpaceTable":
+      result = getWorkSpaceTableList(setting)
+    of "highlightTable":
+      result = getHighlightTableList(setting)
+    of "autoBackupTable":
+      result = getAutoBackupTableList(setting)
+    of "quickRunTable":
+      result = getAutoBackupTableList(setting)
+    of "notificationTable":
+      result = getNotificationTableList(setting)
+    of "filerTable":
+      result = getFilerTableList(setting)
+    of "autocompleteTable":
+      result = getAutocompleteTableList(setting)
+    of "themeTableNames":
+      result = getThemeTableList()
+
+proc maxLen(list: seq[seq[Rune]]): int =
+  for r in list:
+    if r.len > result:
+      result = r.len
+
+proc changeEditorSettings(status: var EditorStatus) =
+  let
+    line = currentBufStatus.buffer[currentMainWindowNode.currentLine]
+    lineSplit = line.splitWhitespace
+
+  if lineSplit.len != 2 or lineSplit[0].len < 1 or lineSplit[1].len < 1: return
+
+  var windowNode = currentMainWindowNode
+
+  const
+    numOfIndent = 2
+  let
+    selectedTable = $lineSplit[0]
+    selectedSetting = $lineSplit[1]
+    settingValue = getSettingValue(status.settings,
+                                   selectedTable,
+                                   selectedSetting)
+
+    h = min(windowNode.h, settingValue.len)
+    w = min(windowNode.w, maxLen(settingValue))
+    (absoluteY, absoluteX) = windowNode.absolutePosition(
+      windowNode.currentLine,
+      windowNode.currentColumn)
+    y = absoluteY
+    margin = 1
+    x = absoluteX + positionOfSetVal + numOfIndent - margin
+
+  var popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
+
+  let currentLine = 0
+  popUpWindow.writePopUpWindow(h, w, y, x,
+                               terminalHeight(), terminalWidth(),
+                               currentLine,
+                               settingValue)
+
+  var key = windowNode.getKey
+  while not isEscKey(key) and not isEnterKey(key):
+    key = windowNode.getKey
+
+  status.deletePopUpWindow
 
 proc initConfigModeHighlight[T](buffer: T, currentLine: int): Highlight =
   for i in 0 ..< buffer.len:
@@ -186,38 +410,14 @@ proc initConfigModeHighlight[T](buffer: T, currentLine: int): Highlight =
 
     result.colorSegments.add(colorSegment)
 
-proc calcPositionOfSettingValue(): int {.compileTime.} =
-  var names: seq[string]
-
-  for name in standardTableNames: names.add(name)
-  for name in buildOnSaveTableNames: names.add(name)
-  for name in tabLineTableNames: names.add(name)
-  for name in workSpaceTableNames: names.add(name)
-  for name in highlightTableNames: names.add(name)
-  for name in autoBackupTableNames: names.add(name)
-  for name in quickRunTableNames: names.add(name)
-  for name in notificationTableNames: names.add(name)
-  for name in filerTableNames: names.add(name)
-  for name in themeTableNames: names.add(name)
-
-  for name in names:
-    if result < name.len: result = name.len
-
-  const numOfIndent = 2
-  result += numOfIndent
-
-const
-  positionOfSetVal = calcPositionOfSettingValue()
-  indent = "  "
-
 proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"Standard")
 
   for name in standardTableNames:
     let
-      nameStr = indent & name
-      space = " ".repeat(positionOfSetVal - name.len)
-    case name:
+      nameStr = indent & $name
+      space = " ".repeat(positionOfSetVal - len($name))
+    case $name:
       of "theme":
         result.add(ru nameStr & space & $settings.editorColorTheme)
       of "number":
@@ -276,9 +476,9 @@ proc initBuildOnSaveTableBuffer(settings: BuildOnSaveSettings): seq[seq[Rune]] =
 
   for name in buildOnSaveTableNames:
     let
-      nameStr = indent & name
-      space = " ".repeat(positionOfSetVal - name.len)
-    case name:
+      nameStr = indent & $name
+      space = " ".repeat(positionOfSetVal - len($name))
+    case $name:
       of "enable":
         result.add(ru nameStr & space & $settings.enable)
       of "workspaceRoot":
@@ -291,9 +491,9 @@ proc initTabLineTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
 
   for name in tabLineTableNames:
     let
-      nameStr = indent & name
-      space = " ".repeat(positionOfSetVal - name.len)
-    case name:
+      nameStr = indent & $name
+      space = " ".repeat(positionOfSetVal - len($name))
+    case $name:
       of "allBuffer":
         result.add(ru nameStr & space & $settings.tabLine.allBuffer)
 
@@ -302,9 +502,9 @@ proc initStatusLineTableBuffer(settings: StatusLineSettings): seq[seq[Rune]] =
 
   for name in statusLineTableNames:
     let
-      nameStr = indent & name
-      space = " ".repeat(positionOfSetVal - name.len)
-    case name:
+      nameStr = indent & $name
+      space = " ".repeat(positionOfSetVal - len($name))
+    case $name:
       of "multipleStatusLine":
         result.add(ru nameStr & space & $settings.multipleStatusLine)
       of "merge":
@@ -337,9 +537,9 @@ proc initWorkspaceTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
 
   for name in workSpaceTableNames:
     let
-      nameStr = indent & name
-      space = " ".repeat(positionOfSetVal - name.len)
-    case name:
+      nameStr = indent & $name
+      space = " ".repeat(positionOfSetVal - len($name))
+    case $name:
       of "workSpaceLine":
         result.add(ru nameStr & space & $settings.workSpace.workSpaceLine)
 
@@ -348,9 +548,9 @@ proc initHighlightTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
 
   for name in highlightTableNames:
     let
-      nameStr = indent & name
-      space = " ".repeat(positionOfSetVal - name.len)
-    case name:
+      nameStr = indent & $name
+      space = " ".repeat(positionOfSetVal - len($name))
+    case $name:
       of "currentLine":
         result.add(ru nameStr & space & $settings.view.highlightCurrentLine)
       of "replaceText":
@@ -364,7 +564,7 @@ proc initHighlightTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       of "currentWord":
         result.add(ru nameStr & space & $settings.highlightSettings.currentWord)
       of "reservedWord":
-        result.add(ru indent & name)
+        result.add(ru indent & $name)
         let space = " ".repeat(positionOfSetVal)
         for reservedWord in settings.highlightSettings.reservedWords:
           result.add(ru indent & space & reservedWord.word)
@@ -374,9 +574,9 @@ proc initAutoBackupTableBuffer(settings: AutoBackupSettings): seq[seq[Rune]] =
 
   for name in autoBackupTableNames:
     let
-      nameStr = indent & name
-      space = " ".repeat(positionOfSetVal - name.len)
-    case name:
+      nameStr = indent & $name
+      space = " ".repeat(positionOfSetVal - len($name))
+    case $name:
       of "enable":
         result.add(ru nameStr & space & $settings.enable)
       of "idleTime":
@@ -393,9 +593,9 @@ proc initQuickRunTableBuffer(settings: QuickRunSettings): seq[seq[Rune]] =
 
   for name in quickRunTableNames:
     let
-      nameStr = indent & name
-      space = " ".repeat(positionOfSetVal - name.len)
-    case name:
+      nameStr = indent & $name
+      space = " ".repeat(positionOfSetVal - len($name))
+    case $name:
       of "saveBufferWhenQuickRun":
         result.add(ru nameStr & space & $settings.saveBufferWhenQuickRun)
       of "command":
@@ -420,9 +620,9 @@ proc initNotificationTableBuffer(settings: NotificationSettings): seq[seq[Rune]]
 
   for name in notificationTableNames:
     let
-      nameStr = indent & name
-      space = " ".repeat(positionOfSetVal - name.len)
-    case name:
+      nameStr = indent & $name
+      space = " ".repeat(positionOfSetVal - len($name))
+    case $name:
       of "screenNotifications":
         result.add(ru nameStr & space & $settings.screenNotifications)
       of "logNotifications":
@@ -473,9 +673,9 @@ proc initFilerTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
 
   for name in filerTableNames:
     let
-      nameStr = indent & name
-      space = " ".repeat(positionOfSetVal - name.len)
-    case name:
+      nameStr = indent & $name
+      space = " ".repeat(positionOfSetVal - len($name))
+    case $name:
       of "showIcons":
         result.add(ru nameStr & space & $settings.filerSettings.showIcons)
 
@@ -484,9 +684,9 @@ proc initAutocompleteTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
 
   for name in autocompleteTableNames:
     let
-      nameStr = indent & name
-      space = " ".repeat(positionOfSetVal - name.len)
-    case name:
+      nameStr = indent & $name
+      space = " ".repeat(positionOfSetVal - len($name))
+    case $name:
       of "enable":
         result.add(ru nameStr & space & $settings.autocompleteSettings.enable)
 
@@ -505,9 +705,9 @@ proc initThemeTableBuffer*(settings: EditorSettings): seq[seq[Rune]] =
 
   for name in themeTableNames:
     let
-      nameStr = indent & name
-      space = " ".repeat(positionOfSetVal - name.len)
-    case name:
+      nameStr = indent & $name
+      space = " ".repeat(positionOfSetVal - len($name))
+    case $name:
       of "editorBg":
         let editorColor = ColorThemeTable[theme]
         result.add(ru nameStr & space & $editorColor.editorBg)
@@ -965,6 +1165,8 @@ proc configMode*(status: var Editorstatus) =
     elif isControlJ(key): status.movePrevWindow
     elif key == ord(':'): status.changeMode(Mode.ex)
 
+    elif isEnterKey(key):
+      status.changeEditorSettings
     elif key == ord('k') or isUpKey(key):
       status.bufStatus[currentBufferIndex].keyUp(currentMainWindowNode)
     elif key == ord('j') or isDownKey(key):
