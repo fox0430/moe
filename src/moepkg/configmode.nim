@@ -36,22 +36,22 @@ type buildOnSaveTableNames {.pure.}= enum
   command
 
 type tabLineTableNames {.pure.} = enum
- allBuffer
+  allBuffer
 
 type statusLineTableNames {.pure.} = enum
-    multipleStatusLine
-    merge
-    mode
-    filename
-    chanedMark
-    line
-    column
-    encoding
-    language
-    directory
-    gitbranchName
-    showGitInactive
-    showModeInactive
+  multipleStatusLine
+  merge
+  mode
+  filename
+  chanedMark
+  line
+  column
+  encoding
+  language
+  directory
+  gitbranchName
+  showGitInactive
+  showModeInactive
 
 type workSpaceTableNames {.pure.} = enum
   workSpaceLine
@@ -82,6 +82,11 @@ type quickRunTableNames {.pure.} = enum
   NimOptions
   shOptions
   bashOptions
+
+type autoBackupTableName {.pure.} = enum
+  enable
+  idleTime
+  interval
 
 type notificationTableNames {.pure.} = enum
   screenNotifications
@@ -325,35 +330,45 @@ proc getSettingValue(editorSettings: EditorSettings,
       result.add ru $color
 
   case table:
-    of "standardTable":
+    of "Standard":
       result = getStandardTableList(setting)
-    of "buildOnSaveTable":
+    of "BuildOnSave":
       result = getBuildOnSaveTableList(setting)
-    of "tabLineTable":
+    of "TabLine":
       result = getTabLineTableList(setting)
-    of "statusLineTable":
-      result = getStandardTableList(setting)
-    of "workSpaceTable":
+    of "StatusLine":
+      result = getStatusLineTableList(setting)
+    of "WorkSpace":
       result = getWorkSpaceTableList(setting)
-    of "highlightTable":
+    of "Highlight":
       result = getHighlightTableList(setting)
-    of "autoBackupTable":
+    of "AutoBackup":
       result = getAutoBackupTableList(setting)
-    of "quickRunTable":
-      result = getAutoBackupTableList(setting)
-    of "notificationTable":
+    of "QuickRun":
+      result = getQuickRunTableList(setting)
+    of "Notification":
       result = getNotificationTableList(setting)
-    of "filerTable":
+    of "Filer":
       result = getFilerTableList(setting)
-    of "autocompleteTable":
+    of "Autocomplete":
       result = getAutocompleteTableList(setting)
-    of "themeTableNames":
+    of "Theme":
       result = getThemeTableList()
 
 proc maxLen(list: seq[seq[Rune]]): int =
   for r in list:
     if r.len > result:
       result = r.len
+
+proc getTableName(buffer: GapBuffer[seq[Rune]], line: int): string =
+  const
+    spaceLineLen = 1
+    tableNameLineLen = 1
+  var total = tableNameLineLen
+
+  for i in countDown(line, 0):
+    if buffer[i].len > 0 and buffer[i][0] != ru ' ':
+      return $buffer[i]
 
 proc changeEditorSettings(status: var EditorStatus) =
   let
@@ -367,8 +382,8 @@ proc changeEditorSettings(status: var EditorStatus) =
   const
     numOfIndent = 2
   let
-    selectedTable = $lineSplit[0]
-    selectedSetting = $lineSplit[1]
+    selectedTable = getTableName(currentBufStatus.buffer, currentMainWindowNode.currentLine)
+    selectedSetting = $lineSplit[0]
     settingValue = getSettingValue(status.settings,
                                    selectedTable,
                                    selectedSetting)
@@ -384,7 +399,7 @@ proc changeEditorSettings(status: var EditorStatus) =
 
   var popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
 
-  let currentLine = 0
+  var currentLine = 0
   popUpWindow.writePopUpWindow(h, w, y, x,
                                terminalHeight(), terminalWidth(),
                                currentLine,
