@@ -564,10 +564,11 @@ proc initHighlightTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       of "currentWord":
         result.add(ru nameStr & space & $settings.highlightSettings.currentWord)
       of "reservedWord":
-        result.add(ru indent & $name)
-        let space = " ".repeat(positionOfSetVal)
+        var line = ru nameStr & space
         for reservedWord in settings.highlightSettings.reservedWords:
-          result.add(ru indent & space & reservedWord.word)
+          line &= ru reservedWord.word & " "
+
+        result.add line
 
 proc initAutoBackupTableBuffer(settings: AutoBackupSettings): seq[seq[Rune]] =
   result.add(ru"AutoBackup")
