@@ -198,7 +198,7 @@ const
   positionOfSetVal = calcPositionOfSettingValue()
   indent = "  "
 
-proc getSettingValue(editorSettings: EditorSettings,
+proc getSettingValues(editorSettings: EditorSettings,
                     table, setting: string): seq[seq[Rune]] =
 
   proc getColorThemeList(): seq[seq[Rune]] {.compileTime.} =
@@ -356,9 +356,10 @@ proc getSettingValue(editorSettings: EditorSettings,
       result = getThemeTableList()
 
 proc maxLen(list: seq[seq[Rune]]): int =
+  const mergen = 2
   for r in list:
     if r.len > result:
-      result = r.len
+      result = r.len + 2
 
 proc getTableName(buffer: GapBuffer[seq[Rune]], line: int): string =
   const
@@ -366,11 +367,111 @@ proc getTableName(buffer: GapBuffer[seq[Rune]], line: int): string =
     tableNameLineLen = 1
   var total = tableNameLineLen
 
+  # Search table name from configuration mode buffer
   for i in countDown(line, 0):
     if buffer[i].len > 0 and buffer[i][0] != ru ' ':
       return $buffer[i]
 
-proc changeEditorSettings(status: var EditorStatus) =
+proc changeStandardTableSetting(settings: var EditorSettings,
+                                settingName, settingVal: string) =
+
+  case settingName:
+    of "number":
+      settings.view.lineNumber = bool(settingVal)
+    of "currentNumber":
+      settings.view.currentLineNumber = bool(settingVal)
+    of "cursorLine":
+      settings.view.cursorLine = bool(settingVal)
+    of "statusLine":
+      settings.statusLine.enable = bool(settingVal)
+    of "tabLine":
+      settings.tabline.useTab = bool(settingVal)
+    of "syntax":
+      settings.syntax = bool(settingVal)
+    of "indentationLines":
+      settings.view.indentationLines = bool(settingVal)
+    of "autoCloseParen":
+      settings.autoCloseParen = bool(settingVal)
+    of "autoIndent":
+      settings.autoIndent = bool(settingVal)
+    of "ignorecase":
+      settings.ignorecase = bool(settingVal)
+    of "smartcase":
+      settings.smartcase = bool(settingVal)
+    of "disableChangeCursor":
+      settings.disableChangeCursor = bool(settingVal)
+    of "autoSave":
+      settings.autoSave = bool(settingVal)
+    of "liveReloadOfConf":
+      settings.liveReloadOfConf = bool(settingVal)
+    of "incrementalSearch":
+      settings.incrementalSearch = bool(settingVal)
+    of "popUpWindowInExmode":
+      settings.popUpWindowInExmode = bool(settingVal)
+    of "autoDeleteParen":
+      settings.autoDeleteParen = bool(settingVal)
+    of "systemClipboard":
+      settings.systemClipboard = bool(settingVal)
+    of "smoothScroll":
+      settings.smoothScroll = bool(settingVal)
+    else:
+      # TODO: Add other settings
+      discard
+
+proc changeBuildOnSaveTableSetting(settings: var EditorSettings,
+                                   settingName, settingVal: string) =
+
+  case settingName:
+    of "enable":
+      settings.buildOnSave.enable = bool(settingVal)
+    else:
+      # TODO: Add other settings
+      discard
+
+proc changeTabLineTableSetting(settings: var EditorSettings,
+                               settingName, settingVal: string) =
+
+  case settingName:
+    of "allBuffer":
+      settings.view.allBuffer = bool(settingVal)
+    else:
+      discard
+
+proc changeStatusLineTableSetting(settings: var EditorSettings,
+                                  settingName, settingVal: string) =
+
+
+proc changeEditorSettings(settings: var EditorSettings,
+                          table, settingName, settingVal: string) =
+
+  case table:
+    of "Standard":
+      settings.changeStandardTableSetting(settingName, settingVal)
+    of "BuildOnSave":
+      settings.changeBuildOnSaveTableSetting(settingName, settingVal)
+    of "TabLine":
+      settings.changeTabLineTableSetting(settingName, settingVal)
+    of "StatusLine":
+      result = getStatusLineTableList(setting)
+    of "WorkSpace":
+      result = getWorkSpaceTableList(setting)
+    of "Highlight":
+      result = getHighlightTableList(setting)
+    of "AutoBackup":
+      result = getAutoBackupTableList(setting)
+    of "QuickRun":
+      result = getQuickRunTableList(setting)
+    of "Notification":
+      result = getNotificationTableList(setting)
+    of "Filer":
+      result = getFilerTableList(setting)
+    of "Autocomplete":
+      result = getAutocompleteTableList(setting)
+    of "Theme":
+      result = getThemeTableList()
+
+
+proc selectAndChangeEditorSettings(status: var EditorStatus) =
   let
     line = currentBufStatus.buffer[currentMainWindowNode.currentLine]
     lineSplit = line.splitWhitespace
@@ -384,12 +485,12 @@ proc changeEditorSettings(status: var EditorStatus) =
   let
     selectedTable = getTableName(currentBufStatus.buffer, currentMainWindowNode.currentLine)
     selectedSetting = $lineSplit[0]
-    settingValue = getSettingValue(status.settings,
+    settingValues = getSettingValues(status.settings,
                                    selectedTable,
                                    selectedSetting)
 
-    h = min(windowNode.h, settingValue.len)
-    w = min(windowNode.w, maxLen(settingValue))
+    h = min(windowNode.h, settingValues.len)
+    w = min(windowNode.w, maxLen(settingValues))
     (absoluteY, absoluteX) = windowNode.absolutePosition(
       windowNode.currentLine,
       windowNode.currentColumn)
@@ -397,19 +498,35 @@ proc changeEditorSettings(status: var EditorStatus) =
     margin = 1
     x = absoluteX + positionOfSetVal + numOfIndent - margin
 
-  var popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
+  var
+    popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
+    suggestIndex = 0
 
-  var currentLine = 0
-  popUpWindow.writePopUpWindow(h, w, y, x,
-                               terminalHeight(), terminalWidth(),
-                               currentLine,
-                               settingValue)
+    key = errorKey
 
-  var key = windowNode.getKey
-  while not isEscKey(key) and not isEnterKey(key):
-    key = windowNode.getKey
+  while (isTabKey(key) or isShiftTab(key) or errorKey == key) and
+        settingValues.len > 1:
 
-  status.deletePopUpWindow
+    if (isTabKey(key) or isDownKey(key)) and suggestIndex < settingValues.high:
+      inc(suggestIndex)
+    elif (isShiftTab(key) or isUpKey(key)) and suggestIndex > 0:
+      dec(suggestIndex)
+    elif (isShiftTab(key) or isUpKey(key)) and suggestIndex == 0:
+      suggestIndex = settingValues.high
+    else:
+      suggestIndex = 0
+
+    popUpWindow.writePopUpWindow(h, w, y, x,
+                                 terminalHeight(), terminalWidth(),
+                                 suggestIndex,
+                                 settingValues)
+
+    key = currentMainWindowNode.getKey
+
+  if isEnterKey(key):
+    let settingVal = settingValues[suggestIndex]
+  else:
+    status.deletePopUpWindow
 
 proc initConfigModeHighlight[T](buffer: T, currentLine: int): Highlight =
   for i in 0 ..< buffer.len:
