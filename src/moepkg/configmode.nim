@@ -377,43 +377,43 @@ proc changeStandardTableSetting(settings: var EditorSettings,
 
   case settingName:
     of "number":
-      settings.view.lineNumber = bool(settingVal)
+      settings.view.lineNumber = parseBool(settingVal)
     of "currentNumber":
-      settings.view.currentLineNumber = bool(settingVal)
+      settings.view.currentLineNumber = parseBool(settingVal)
     of "cursorLine":
-      settings.view.cursorLine = bool(settingVal)
+      settings.view.cursorLine = parseBool(settingVal)
     of "statusLine":
-      settings.statusLine.enable = bool(settingVal)
+      settings.statusLine.enable = parseBool(settingVal)
     of "tabLine":
-      settings.tabline.useTab = bool(settingVal)
+      settings.tabline.useTab = parseBool(settingVal)
     of "syntax":
-      settings.syntax = bool(settingVal)
+      settings.syntax = parseBool(settingVal)
     of "indentationLines":
-      settings.view.indentationLines = bool(settingVal)
+      settings.view.indentationLines = parseBool(settingVal)
     of "autoCloseParen":
-      settings.autoCloseParen = bool(settingVal)
+      settings.autoCloseParen = parseBool(settingVal)
     of "autoIndent":
-      settings.autoIndent = bool(settingVal)
+      settings.autoIndent = parseBool(settingVal)
     of "ignorecase":
-      settings.ignorecase = bool(settingVal)
+      settings.ignorecase = parseBool(settingVal)
     of "smartcase":
-      settings.smartcase = bool(settingVal)
+      settings.smartcase = parseBool(settingVal)
     of "disableChangeCursor":
-      settings.disableChangeCursor = bool(settingVal)
+      settings.disableChangeCursor = parseBool(settingVal)
     of "autoSave":
-      settings.autoSave = bool(settingVal)
+      settings.autoSave = parseBool(settingVal)
     of "liveReloadOfConf":
-      settings.liveReloadOfConf = bool(settingVal)
+      settings.liveReloadOfConf = parseBool(settingVal)
     of "incrementalSearch":
-      settings.incrementalSearch = bool(settingVal)
+      settings.incrementalSearch = parseBool(settingVal)
     of "popUpWindowInExmode":
-      settings.popUpWindowInExmode = bool(settingVal)
+      settings.popUpWindowInExmode = parseBool(settingVal)
     of "autoDeleteParen":
-      settings.autoDeleteParen = bool(settingVal)
+      settings.autoDeleteParen = parseBool(settingVal)
     of "systemClipboard":
-      settings.systemClipboard = bool(settingVal)
+      settings.systemClipboard = parseBool(settingVal)
     of "smoothScroll":
-      settings.smoothScroll = bool(settingVal)
+      settings.smoothScroll = parseBool(settingVal)
     else:
       # TODO: Add other settings
       discard
@@ -423,7 +423,7 @@ proc changeBuildOnSaveTableSetting(settings: var EditorSettings,
 
   case settingName:
     of "enable":
-      settings.buildOnSave.enable = bool(settingVal)
+      settings.buildOnSave.enable = parseBool(settingVal)
     else:
       # TODO: Add other settings
       discard
@@ -433,13 +433,155 @@ proc changeTabLineTableSetting(settings: var EditorSettings,
 
   case settingName:
     of "allBuffer":
-      settings.view.allBuffer = bool(settingVal)
+      settings.tabLine.allBuffer = parseBool(settingVal)
     else:
       discard
 
 proc changeStatusLineTableSetting(settings: var EditorSettings,
                                   settingName, settingVal: string) =
 
+  case settingName:
+  of "multipleStatusLine":
+    settings.statusLine.multipleStatusLine = parseBool(settingVal)
+  of "merge":
+    settings.statusLine.merge = parseBool(settingVal)
+  of "mode":
+    settings.statusLine.mode = parseBool(settingVal)
+  of "filename":
+    settings.statusLine.filename = parseBool(settingVal)
+  of "chanedMark":
+    settings.statusLine.chanedMark = parseBool(settingVal)
+  of "line":
+    settings.statusLine.line = parseBool(settingVal)
+  of "column":
+    settings.statusLine.column = parseBool(settingVal)
+  of "encoding":
+    settings.statusLine.characterEncoding = parseBool(settingVal)
+  of "language":
+    settings.statusLine.language = parseBool(settingVal)
+  of "directory":
+    settings.statusLine.directory = parseBool(settingVal)
+  of "gitbranchName":
+    settings.statusLine.gitbranchName = parseBool(settingVal)
+  of "showGitInactive":
+    settings.statusLine.showGitInactive = parseBool(settingVal)
+  of "showModeInactive":
+    settings.statusLine.showModeInactive = parseBool(settingVal)
+  else:
+    discard
+
+proc changeWorkSpaceTableSetting(settings: var EditorSettings,
+                                 settingName, settingVal: string) =
+
+  case settingName:
+    of "workSpaceLine":
+      settings.workSpace.workSpaceLine = parseBool(settingVal)
+    else:
+      discard
+
+proc changeHighlightTableSetting(settings: var EditorSettings,
+                                 settingName, settingVal: string) =
+
+  case settingName:
+     of "currentLine":
+       settings.view.highlightCurrentLine = parseBool(settingVal)
+     of "fullWidthSpace":
+       settings.highlightSettings.fullWidthSpace = parseBool(settingVal)
+     of "trailingSpaces":
+       settings.highlightSettings.trailingSpaces = parseBool(settingVal)
+     of "replaceText":
+       settings.highlightSettings.replaceText = parseBool(settingVal)
+     of "pairOfParen":
+       settings.highlightSettings.pairOfParen = parseBool(settingVal)
+     of "currentWord":
+       settings.highlightSettings.currentWord = parseBool(settingVal)
+     else:
+      discard
+
+proc changeBackupTableSetting(settings: var EditorSettings,
+                              settingName, settingVal: string) =
+
+  case settingName:
+    of "enable":
+      settings.autoBackupSettings.enable = parseBool(settingVal)
+    else:
+      discard
+
+proc changeQuickRunTableSetting(settings: var EditorSettings,
+                              settingName, settingVal: string) =
+
+  case settingName:
+    of "saveBufferWhenQuickRun":
+      settings.quickRunSettings.saveBufferWhenQuickRun = parseBool(settingVal)
+    else:
+      discard
+
+proc changeNotificationTableSetting(settings: var EditorSettings,
+                                    settingName, settingVal: string) =
+
+  case settingName:
+    of "screenNotifications":
+      settings.notificationSettings.screenNotifications = parseBool(settingVal)
+    of "logNotifications":
+      settings.notificationSettings.logNotifications = parseBool(settingVal)
+    of "autoBackupScreenNotify":
+      settings.notificationSettings.autoBackupScreenNotify = parseBool(settingVal)
+    of "autoBackupLogNotify":
+      settings.notificationSettings.autoBackupLogNotify = parseBool(settingVal)
+    of "autoSaveScreenNotify":
+      settings.notificationSettings.autoSaveScreenNotify = parseBool(settingVal)
+    of "autoSaveLogNotify":
+      settings.notificationSettings.autoSaveLogNotify = parseBool(settingVal)
+    of "yankScreenNotify":
+      settings.notificationSettings.yankScreenNotify = parseBool(settingVal)
+    of "yankLogNotify":
+      settings.notificationSettings.yankLogNotify = parseBool(settingVal)
+    of "deleteScreenNotify":
+      settings.notificationSettings.deleteScreenNotify = parseBool(settingVal)
+    of "deleteLogNotify":
+      settings.notificationSettings.deleteLogNotify = parseBool(settingVal)
+    of "saveScreenNotify":
+      settings.notificationSettings.saveScreenNotify = parseBool(settingVal)
+    of "saveLogNotify":
+      settings.notificationSettings.saveLogNotify = parseBool(settingVal)
+    of "workspaceScreenNotify":
+      settings.notificationSettings.workspaceScreenNotify = parseBool(settingVal)
+    of "workspaceLogNotify":
+      settings.notificationSettings.workspaceLogNotify = parseBool(settingVal)
+    of "quickRunScreenNotify":
+      settings.notificationSettings.quickRunScreenNotify = parseBool(settingVal)
+    of "quickRunLogNotify":
+      settings.notificationSettings.quickRunLogNotify = parseBool(settingVal)
+    of "buildOnSaveScreenNotify":
+      settings.notificationSettings.buildOnSaveScreenNotify = parseBool(settingVal)
+    of "buildOnSaveLogNotify":
+      settings.notificationSettings.buildOnSaveLogNotify = parseBool(settingVal)
+    of "filerScreenNotify":
+      settings.notificationSettings.filerScreenNotify = parseBool(settingVal)
+    of "filerLogNotify":
+      settings.notificationSettings.filerLogNotify = parseBool(settingVal)
+    of "restoreScreenNotify":
+      settings.notificationSettings.restoreScreenNotify = parseBool(settingVal)
+    of "restoreLogNotify":
+      settings.notificationSettings.restoreLogNotify = parseBool(settingVal)
+
+proc changeFilerTableSetting(settings: var EditorSettings,
+                             settingName, settingVal: string) =
+
+  case settingName:
+    of "showIcons":
+      settings.filerSettings.showIcons = parseBool(settingVal)
+    else:
+      discard
+
+proc changeAutoCompleteTableSetting(settings: var EditorSettings,
+                                    settingName, settingVal: string) =
+
+  case settingName:
+    of "enable":
+      settings.autocompleteSettings.enable = parseBool(settingVal)
+    else:
+      discard
 
 proc changeEditorSettings(settings: var EditorSettings,
                           table, settingName, settingVal: string) =
@@ -452,23 +594,25 @@ proc changeEditorSettings(settings: var EditorSettings,
     of "TabLine":
       settings.changeTabLineTableSetting(settingName, settingVal)
     of "StatusLine":
-      result = getStatusLineTableList(setting)
+      settings.changeStatusLineTableSetting(settingName, settingVal)
     of "WorkSpace":
-      result = getWorkSpaceTableList(setting)
+      settings.changeWorkSpaceTableSetting(settingName, settingVal)
     of "Highlight":
-      result = getHighlightTableList(setting)
+      settings.changeHighlightTableSetting(settingName, settingVal)
     of "AutoBackup":
-      result = getAutoBackupTableList(setting)
+      settings.changeBackupTableSetting(settingName, settingVal)
     of "QuickRun":
-      result = getQuickRunTableList(setting)
+      settings.changeQuickRunTableSetting(settingName, settingVal)
     of "Notification":
-      result = getNotificationTableList(setting)
+      settings.changeNotificationTableSetting(settingName, settingVal)
     of "Filer":
-      result = getFilerTableList(setting)
+      settings.changeFilerTableSetting(settingName, settingVal)
     of "Autocomplete":
-      result = getAutocompleteTableList(setting)
-    of "Theme":
-      result = getThemeTableList()
+      settings.changeAutoCompleteTableSetting(settingName, settingVal)
+    else:
+      # TODO: Add theme settings
+      discard
+
 
 
 proc selectAndChangeEditorSettings(status: var EditorStatus) =
@@ -524,7 +668,8 @@ proc selectAndChangeEditorSettings(status: var EditorStatus) =
     key = currentMainWindowNode.getKey
 
   if isEnterKey(key):
-    let settingVal = settingValues[suggestIndex]
+    let settingVal = $settingValues[suggestIndex]
+    status.settings.changeEditorSettings(selectedTable, selectedSetting, settingVal)
   else:
     status.deletePopUpWindow
 
@@ -1266,8 +1411,7 @@ proc isConfigMode(status: Editorstatus): bool =
 proc configMode*(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
 
-  currentBufStatus.buffer = initConfigModeBuffer(
-    status.settings)
+  currentBufStatus.buffer = initConfigModeBuffer(status.settings)
 
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -1299,7 +1443,8 @@ proc configMode*(status: var Editorstatus) =
     elif key == ord(':'): status.changeMode(Mode.ex)
 
     elif isEnterKey(key):
-      status.changeEditorSettings
+      status.selectAndChangeEditorSettings
+      currentBufStatus.buffer = initConfigModeBuffer(status.settings)
     elif key == ord('k') or isUpKey(key):
       status.bufStatus[currentBufferIndex].keyUp(currentMainWindowNode)
     elif key == ord('j') or isDownKey(key):
