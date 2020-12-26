@@ -1638,13 +1638,16 @@ proc getColorFromEditorColorPair*(theme: ColorTheme,
   else:
     return (editorColor.parenText, editorColor.parenTextBg)
 
-# Environment where only 8 colors can be used
-proc convertToConsoleEnvironmentColor*(theme: ColorTheme) =
-  macro setColor(theme, pairName: untyped, color: Color): untyped =
+macro setColor*(theme: ColorTheme,
+                editorColor: string,
+                color: Color): untyped =
+
     parseStmt(fmt"""
-      ColorThemeTable[{repr(theme)}].{pairName} = {repr(color)}
+      ColorThemeTable[{repr(theme)}].{editorColor} = {repr(color)}
     """)
 
+# Environment where only 8 colors can be used
+proc convertToConsoleEnvironmentColor*(theme: ColorTheme) =
   proc isDefault(color: Color): bool {.inline.} = color == Color.default
 
   proc isBlack(color: Color): bool =

@@ -583,9 +583,30 @@ proc changeAutoCompleteTableSetting(settings: var EditorSettings,
     else:
       discard
 
-proc changeEditorSettings(settings: var EditorSettings,
-                          table, settingName, settingVal: string) =
+proc changeeThemeTableSetting(settings: var EditorSettings,
+                              settingName, position, settingVal: string) =
 
+  let theme = settings.editorColorTheme
+  case settingName:
+    of "editorBg":
+      ColorThemeTable[theme].editorBg = parseEnum[Color](settingVal)
+    else:
+      var colorPair = parseEnum[EditorColorPair](settingName)
+      let
+        color = parseEnum[Color](settingVal)
+        editoColor = if position == "background" and settingVal != "editorBg":
+                       settingName & "Bg"
+                     else:
+                       settingName
+
+      for name, _ in ColorThemeTable[theme].fieldPairs:
+        if editoColor == name:
+          setColor(theme, name, color)
+
+proc changeEditorSettings(status: var EditorStatus,
+                          table, settingName, position, settingVal: string) =
+
+  var settings = status.settings
   case table:
     of "Standard":
       settings.changeStandardTableSetting(settingName, settingVal)
@@ -609,37 +630,52 @@ proc changeEditorSettings(settings: var EditorSettings,
       settings.changeFilerTableSetting(settingName, settingVal)
     of "Autocomplete":
       settings.changeAutoCompleteTableSetting(settingName, settingVal)
+    of "Theme":
+      settings.changeeThemeTableSetting(settingName, position, settingVal)
+      status.changeTheme
     else:
-      # TODO: Add theme settings
       discard
-
-
 
 proc selectAndChangeEditorSettings(status: var EditorStatus) =
   let
-    line = currentBufStatus.buffer[currentMainWindowNode.currentLine]
+    currentLine = currentMainWindowNode.currentLine
+    line = currentBufStatus.buffer[currentLine]
     lineSplit = line.splitWhitespace
 
-  if lineSplit.len != 2 or lineSplit[0].len < 1 or lineSplit[1].len < 1: return
+  if lineSplit.len == 1 or lineSplit[0].len < 1 or lineSplit[1].len < 1: return
 
-  var windowNode = currentMainWindowNode
+  # TODO: Refactor
+  proc getEditorColorPairStr(buffer: GapBuffer[seq[Rune]],
+                             lineSplit: seq[seq[Rune]],
+                             currentLine: int): string =
+
+    if (lineSplit[0] == ru "foreground") or
+       (buffer[currentLine - 2] == ru "Theme"):
+      return $(buffer[currentLine - 1].splitWhitespace)[0]
+    else:
+      return $(buffer[currentLine - 2].splitWhitespace)[0]
 
   const
     numOfIndent = 2
-  let
-    selectedTable = getTableName(currentBufStatus.buffer, currentMainWindowNode.currentLine)
-    selectedSetting = $lineSplit[0]
-    settingValues = getSettingValues(status.settings,
-                                   selectedTable,
-                                   selectedSetting)
-
-    h = min(windowNode.h, settingValues.len)
-    w = min(windowNode.w, maxLen(settingValues))
-    (absoluteY, absoluteX) = windowNode.absolutePosition(
-      windowNode.currentLine,
-      windowNode.currentColumn)
-    y = absoluteY
     margin = 1
+  let
+    selectedTable = getTableName(currentBufStatus.buffer,
+                                 currentMainWindowNode.currentLine)
+    selectedSetting = if selectedTable == "Theme":
+                        currentBufStatus.buffer.getEditorColorPairStr(
+                          lineSplit,currentLine)
+                      else:
+                        $lineSplit[0]
+    settingValues = getSettingValues(status.settings,
+                                     selectedTable,
+                                     selectedSetting)
+
+    h = min(currentMainWindowNode.h, settingValues.len)
+    w = min(currentMainWindowNode.w, maxLen(settingValues))
+    (absoluteY, absoluteX) = currentMainWindowNode.absolutePosition(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+    y = absoluteY
     x = absoluteX + positionOfSetVal + numOfIndent - margin
 
   var
@@ -668,8 +704,12 @@ proc selectAndChangeEditorSettings(status: var EditorStatus) =
     key = currentMainWindowNode.getKey
 
   if isEnterKey(key):
-    let settingVal = $settingValues[suggestIndex]
-    status.settings.changeEditorSettings(selectedTable, selectedSetting, settingVal)
+    let
+      settingVal = $settingValues[suggestIndex]
+      # position is "foreground" or "background" or ""
+      position = if selectedTable == "Theme": $lineSplit[0] else: ""
+    status.changeEditorSettings(
+      selectedTable, selectedSetting, position, settingVal)
   else:
     status.deletePopUpWindow
 
@@ -1061,10 +1101,29 @@ proc configMode*(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
 
   currentBufStatus.buffer = initConfigModeBuffer(status.settings)
+  currentMainWindowNode.currentLine = 1
 
   let
-    currentBufferIndex = status.bufferIndexInCurrentWindow
+    currentBufferIndex = currentMainWindowNode.bufferIndex
     currentWorkSpace = status.currentWorkSpaceIndex
+
+  template keyUp() =
+    if currentLine > 1:
+      currentBufStatus.keyUp(windowNode)
+
+      # Skip empty line and table name line
+      while currentBufStatus.buffer[windowNode.currentLine].len == 0 or
+            currentBufStatus.buffer[windowNode.currentLine][0] != ' ':
+        currentBufStatus.keyUp(windowNode)
+
+  template keyDown() =
+    if currentLine < currentBufStatus.buffer.high - 1:
+      currentBufStatus.keyDown(windowNode)
+
+      # Skip empty line and table name line
+      while currentBufStatus.buffer[windowNode.currentLine].len == 0 or
+            currentBufStatus.buffer[windowNode.currentLine][0] != ' ':
+        currentBufStatus.keyDown(windowNode)
 
   while status.isConfigMode and
         currentWorkSpace == status.currentWorkSpaceIndex and
@@ -1074,12 +1133,20 @@ proc configMode*(status: var Editorstatus) =
       currentLine = currentMainWindowNode.currentLine
       highlight = currentBufStatus.buffer.initConfigModeHighlight(currentLine)
 
+    if currentLine == 0:
+      currentMainWindowNode.currentLine = 1
+    elif currentLine > currentBufStatus.buffer.high - 1:
+      currentMainWindowNode.currentLine = currentBufStatus.buffer.high - 1
+
     currentMainWindowNode.highlight = highlight
 
     status.update
     setCursor(false)
 
-    var key: Rune = ru'\0'
+    var
+      windowNode = currentMainWindowNode
+
+      key: Rune = ru'\0'
     while key == ru'\0':
       status.eventLoopTask
       key = getKey(currentMainWindowNode)
@@ -1095,9 +1162,9 @@ proc configMode*(status: var Editorstatus) =
       status.selectAndChangeEditorSettings
       currentBufStatus.buffer = initConfigModeBuffer(status.settings)
     elif key == ord('k') or isUpKey(key):
-      status.bufStatus[currentBufferIndex].keyUp(currentMainWindowNode)
+      keyUp()
     elif key == ord('j') or isDownKey(key):
-      currentBufStatus.keyDown(currentMainWindowNode)
+      keyDown()
     elif key == ord('g'):
       let secondKey = getKey(currentMainWindowNode)
       if secondKey == 'g': status.moveToFirstLine
