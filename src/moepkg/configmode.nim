@@ -1,6 +1,6 @@
 import terminal, times, typetraits, strutils
 import gapbuffer, ui, editorstatus, unicodetext, window, movement, settings,
-       bufferstatus, color, highlight
+       bufferstatus, color, highlight, search
 
 type standardTableNames {.pure.} = enum
   theme
@@ -1179,3 +1179,8 @@ proc configMode*(status: var Editorstatus) =
       if secondKey == 'g': status.moveToFirstLine
     elif key == ord('G'):
       status.moveToLastLine
+
+    elif key == ord('/'):
+      status.searchFordwards
+    elif key == ord('?'):
+      status.searchBackwards
