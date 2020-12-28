@@ -1161,6 +1161,11 @@ proc configMode*(status: var Editorstatus) =
     elif isEnterKey(key):
       status.selectAndChangeEditorSettings
       currentBufStatus.buffer = initConfigModeBuffer(status.settings)
+
+    elif isControlU(key):
+      status.halfPageUp
+    elif isControlD(key):
+      status.halfPageDown
     elif key == ord('k') or isUpKey(key):
       keyUp()
     elif key == ord('j') or isDownKey(key):
