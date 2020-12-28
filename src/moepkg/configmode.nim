@@ -684,8 +684,8 @@ proc selectAndChangeEditorSettings(status: var EditorStatus) =
 
     key = errorKey
 
-  while (isTabKey(key) or isShiftTab(key) or errorKey == key) and
-        settingValues.len > 1:
+  while (isTabKey(key) or isShiftTab(key) or isDownKey(key) or isUpKey(key) or
+         errorKey == key) and settingValues.len > 1:
 
     if (isTabKey(key) or isDownKey(key)) and suggestIndex < settingValues.high:
       inc(suggestIndex)
