@@ -1166,6 +1166,10 @@ proc configMode*(status: var Editorstatus) =
       status.halfPageUp
     elif isControlD(key):
       status.halfPageDown
+    elif isPageUpkey(key):
+      status.pageUp
+    elif isPageDownKey(key): ## Page down and Ctrl - F
+      status.pageDown
     elif key == ord('k') or isUpKey(key):
       keyUp()
     elif key == ord('j') or isDownKey(key):
