@@ -99,10 +99,10 @@ type AutoBackupSettings* = object
   backupDir*: seq[Rune]
   dirToExclude*: seq[seq[Rune]]
 
-type FilerSettings = object
+type FilerSettings* = object
   showIcons*: bool
 
-type WorkSpaceSettings = object
+type WorkSpaceSettings* = object
   workSpaceLine*: bool
 
 type StatusLineSettings* = object
