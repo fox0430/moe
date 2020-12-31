@@ -1,6 +1,6 @@
 import terminal, times, typetraits, strutils
 import gapbuffer, ui, editorstatus, unicodetext, window, movement, settings,
-       bufferstatus, color, highlight, search
+       bufferstatus, color, highlight, search, editor
 
 type standardTableNames {.pure.} = enum
   theme
@@ -173,6 +173,13 @@ type themeTableNames {.pure.} = enum
   workSpaceBar
   reservedWord
   currentSetting
+
+type SettingType {.pure.} = enum
+  None
+  Bool
+  Enum
+  Number
+  String
 
 proc calcPositionOfSettingValue(): int {.compileTime.} =
   var names: seq[string]
@@ -371,6 +378,20 @@ proc getTableName(buffer: GapBuffer[seq[Rune]], line: int): string =
   for i in countDown(line, 0):
     if buffer[i].len > 0 and buffer[i][0] != ru ' ':
       return $buffer[i]
+
+proc initConfigModeHighlight[T](buffer: T, currentLine: int): Highlight =
+  for i in 0 ..< buffer.len:
+    let color = if i == currentLine: EditorColorPair.currentSetting
+                else: EditorColorPair.defaultChar
+
+    let colorSegment = ColorSegment(
+      firstRow: i,
+      firstColumn: 0,
+      lastRow: i,
+      lastColumn: buffer[i].len,
+      color: color)
+
+    result.colorSegments.add(colorSegment)
 
 proc changeStandardTableSetting(settings: var EditorSettings,
                                 settingName, settingVal: string) =
@@ -675,40 +696,337 @@ proc changeEditorSettings(status: var EditorStatus,
     else:
       discard
 
-proc selectAndChangeEditorSettings(status: var EditorStatus) =
+proc getSettingType(table, name: string): SettingType =
+  template standardTable() =
+    case name:
+      of "theme",
+         "defaultCursor",
+         "normalModeCursor",
+         "insertModeCursor": result = SettingType.Enum
+      of "number",
+         "currentNumber",
+         "cursorLine",
+         "statusLine",
+         "tabLine",
+         "syntax",
+         "indentationLines",
+         "autoCloseParen",
+         "autoIndent",
+         "ignorecase",
+         "smartcase",
+         "disableChangeCursor",
+         "autoSave",
+         "liveReloadOfConf",
+         "incrementalSearch",
+         "popUpWindowInExmode",
+         "autoDeleteParen",
+         "systemClipboard",
+         "smoothScroll": result = SettingType.Bool
+      of "tabStop",
+         "autoSaveInterval",
+         "smoothScrollSpeed": result = SettingType.Number
+      else:
+        result = SettingType.None
+
+  template buildOnSaveTable() =
+    case name:
+      of "enable":
+        result = SettingType.Bool
+      else:
+        result = SettingType.None
+
+  template tablineTable() =
+    case name:
+      of "allBuffer":
+        result = SettingType.Bool
+      else:
+        result = SettingType.None
+
+  template statusLineTable() =
+    case name:
+      of "multipleStatusLine",
+         "merge",
+         "mode",
+         "filename",
+         "chanedMark",
+         "line",
+         "column",
+         "encoding",
+         "language",
+         "directory",
+         "gitbranchName",
+         "showGitInactive",
+         "showModeInactive": result = SettingType.Bool
+      else:
+        result = SettingType.None
+
+  template workSpaceTable() =
+    case name:
+      of "workSpaceLine":
+        result = SettingType.Bool
+      else:
+        result = SettingType.None
+
+  template highlightTable() =
+    case name:
+      of "currentLine",
+         "fullWidthSpace",
+         "trailingSpaces",
+         "currentWord",
+         "replaceText",
+         "pairOfParen": result = SettingType.Bool
+      else:
+        result = SettingType.None
+
+  template autoBackupTable() =
+    case name:
+      of "enable":
+        result = SettingType.Bool
+      of "idleTime",
+         "interval": result = SettingType.Number
+      else:
+        result = SettingType.None
+
+  template quickRunTable() =
+    case name:
+      of "saveBufferWhenQuickRun":
+        result = SettingType.Bool
+      of "timeout":
+        result = SettingType.Number
+      else:
+        result = SettingType.None
+
+  template notificationTable() =
+    case name:
+      of "screenNotifications",
+         "logNotifications",
+         "autoBackupScreenNotify",
+         "autoBackupLogNotify",
+         "autoSaveScreenNotify",
+         "autoSaveLogNotify",
+         "yankScreenNotify",
+         "yankLogNotify",
+         "deleteScreenNotify",
+         "deleteLogNotify",
+         "saveScreenNotify",
+         "saveLogNotify",
+         "workspaceScreenNotify",
+         "workspaceLogNotify",
+         "quickRunScreenNotify",
+         "quickRunLogNotify",
+         "buildOnSaveScreenNotify",
+         "buildOnSaveLogNotify",
+         "filerScreenNotify",
+         "filerLogNotify",
+         "restoreScreenNotify",
+         "restoreLogNotify": result = SettingType.Bool
+      else:
+        result = SettingType.None
+
+  template filerTable() =
+    case name:
+      of "showIcons":
+        result = SettingType.Bool
+      else:
+        result = SettingType.None
+
+  template autocompleteTable() =
+    case name:
+      of "enable":
+        result = SettingType.Bool
+      else:
+        result = SettingType.None
+
+  template themeTable() =
+    for color in Color:
+      if name == $color:
+        return SettingType.Enum
+    result = SettingType.None
+
+  case table:
+    of "Standard":
+      standardTable()
+    of "BuildOnSave":
+      buildOnSaveTable()
+    of "TabLine":
+      tablineTable()
+    of "StatusLine":
+      statusLineTable()
+    of "WorkSpace":
+      workSpaceTable()
+    of "Highlight":
+      highlightTable()
+    of "AutoBackup":
+      autoBackupTable()
+    of "QuickRun":
+      quickRunTable()
+    of "Notification":
+      notificationTable()
+    of "Filer":
+      filerTable()
+    of "Autocomplete":
+      autocompleteTable()
+    of "Theme":
+      themeTable()
+
+proc insertCharacter(bufStatus: var BufferStatus,
+                     windowNode: WindowNode,
+                     c: Rune) =
+
+  let oldLine = bufStatus.buffer[windowNode.currentLine]
+  var newLine = bufStatus.buffer[windowNode.currentLine]
+
+  # Insert character to newLine
+  newLine.insert(c, windowNode.currentColumn)
+  # Move to the right
+  inc(windowNode.currentColumn)
+
+  # Update buffer
+  if oldLine != newLine:
+    bufStatus.buffer[windowNode.currentLine] = newLine
+
+proc editFiguresSetting(status: var EditorStatus,
+                        table, name: string) =
+
+  setCursor(true)
+  if not status.settings.disableChangeCursor:
+    changeCursorType(status.settings.insertModeCursor)
+
   let
     currentLine = currentMainWindowNode.currentLine
-    line = currentBufStatus.buffer[currentLine]
-    lineSplit = line.splitWhitespace
+    minColumn = currentBufStatus.buffer[currentLine].high
 
-  if lineSplit.len == 1 or lineSplit[0].len < 1 or lineSplit[1].len < 1: return
+  template moveToLeft() =
+    if minColumn > currentMainWindowNode.currentColumn:
+      currentMainWindowNode.keyLeft
 
-  # TODO: Refactor
-  proc getEditorColorPairStr(buffer: GapBuffer[seq[Rune]],
-                             lineSplit: seq[seq[Rune]],
-                             currentLine: int): string =
+  # Set currentColumn
+  block:
+    let settings = status.settings
+    template getSettingVal: int =
+      case table:
+        of "Standard":
+          case name:
+            of "tabStop": settings.tabStop
+            of "autoSaveInterval": settings.autoSaveInterval
+            of "smoothScrollSpeed": settings.smoothScrollSpeed
+            else: 0
 
-    if (lineSplit[0] == ru "foreground") or
-       (buffer[currentLine - 2] == ru "Theme"):
-      return $(buffer[currentLine - 1].splitWhitespace)[0]
+        of "AutoBackup":
+          case name:
+            of "idleTime": settings.autoBackupSettings.idleTime
+            of "interval": settings.autoBackupSettings.interval
+            else: 0
+
+        of "QuickRun":
+          case name:
+            of "timeout": settings.quickRunSettings.timeout
+            else: 0
+        else: 0
+
+    const numOfIndent = 2
+    let
+      val = getSettingVal()
+      col = positionOfSetVal + numOfIndent + ($val).len
+    currentMainWindowNode.currentColumn = col
+
+  var
+    numStr = ""
+    isCancel = false
+    isBreak = false
+  while not isBreak and not isCancel:
+    status.update
+
+    var key = errorKey
+    while key == errorKey:
+      key = currentMainWindowNode.getKey
+
+    if isResizekey(key):
+      status.resize(terminalHeight(), terminalWidth())
+    elif isEscKey(key):
+      isCancel = true
+    elif isEnterKey(key):
+      isBreak = true
+
+    elif isLeftKey(key):
+      moveToLeft()
+    elif isRightkey(key):
+      currentBufStatus.keyRight(currentMainWindowNode)
+
+    elif isBackspaceKey(key):
+      let
+        autoDeleteParen = false
+
+      if currentMainWindowNode.currentColumn > minColumn:
+        currentBufStatus.keyBackspace(
+          currentMainWindowNode,
+          autoDeleteParen,
+          status.settings.tabStop)
+
     else:
-      return $(buffer[currentLine - 2].splitWhitespace)[0]
+      numStr &= key
+      let autoCloseParen = false
+      currentBufStatus.insertCharacter(currentMainWindowNode, key)
+      currentMainWindowNode.highlight =
+        currentBufStatus.buffer.initConfigModeHighlight(currentLine)
+
+  if not isCancel:
+    let number = try: parseInt(numStr)
+                 except ValueError: return
+
+    template standardTable() =
+      case name:
+        of "tabStop":
+          status.settings.tabStop = number
+          status.settings.view.tabStop = number
+        of "autoSaveInterval":
+          status.settings.autoSaveInterval = number
+        of "smoothScrollSpeed":
+          status.settings.smoothScrollSpeed = number
+        else:
+          discard
+
+    template autoBackupTable() =
+      case name:
+        of "idleTime":
+          status.settings.autoBackupSettings.idleTime = number
+        of "interval":
+          status.settings.autoBackupSettings.interval = number
+        else:
+          discard
+
+    template quickRunTable() =
+      case name:
+        of "timeout":
+          status.settings.quickRunSettings.timeout = number
+        else:
+          discard
+
+    # Change setting
+    case table:
+      of "Standard":
+        standardTable()
+      of "AutoBackup":
+        autoBackupTable()
+      of "QuickRun":
+        quickRunTable()
+      else:
+        discard
+
+  setCursor(false)
+  currentMainWindowNode.currentColumn = 0
+  if not status.settings.disableChangeCursor:
+    changeCursorType(status.settings.normalModeCursor)
+
+proc editEnumAndBoolSettings(status: var EditorStatus,
+                             lineSplit: seq[seq[Rune]],
+                             selectedTable, selectedSetting: string,
+                             settingValues: seq[seq[Rune]]) =
 
   const
     numOfIndent = 2
     margin = 1
   let
-    selectedTable = getTableName(currentBufStatus.buffer,
-                                 currentMainWindowNode.currentLine)
-    selectedSetting = if selectedTable == "Theme":
-                        currentBufStatus.buffer.getEditorColorPairStr(
-                          lineSplit,currentLine)
-                      else:
-                        $lineSplit[0]
-    settingValues = getSettingValues(status.settings,
-                                     selectedTable,
-                                     selectedSetting)
-
     h = min(currentMainWindowNode.h, settingValues.len)
     w = min(currentMainWindowNode.w, maxLen(settingValues))
     (absoluteY, absoluteX) = currentMainWindowNode.absolutePosition(
@@ -726,8 +1044,8 @@ proc selectAndChangeEditorSettings(status: var EditorStatus) =
   while (isTabKey(key) or isShiftTab(key) or isDownKey(key) or isUpKey(key) or
          errorKey == key) and settingValues.len > 1:
 
-    if (isTabKey(key) or isDownKey(key)) and suggestIndex < settingValues.high:
-      inc(suggestIndex)
+    if (isTabKey(key) or isDownKey(key)) and
+       suggestIndex < settingValues.high: inc(suggestIndex)
     elif (isShiftTab(key) or isUpKey(key)) and suggestIndex > 0:
       dec(suggestIndex)
     elif (isShiftTab(key) or isUpKey(key)) and suggestIndex == 0:
@@ -752,19 +1070,44 @@ proc selectAndChangeEditorSettings(status: var EditorStatus) =
   else:
     status.deletePopUpWindow
 
-proc initConfigModeHighlight[T](buffer: T, currentLine: int): Highlight =
-  for i in 0 ..< buffer.len:
-    let color = if i == currentLine: EditorColorPair.currentSetting
-                else: EditorColorPair.defaultChar
+proc selectAndChangeEditorSettings(status: var EditorStatus) =
+  let
+    currentLine = currentMainWindowNode.currentLine
+    line = currentBufStatus.buffer[currentLine]
+    lineSplit = line.splitWhitespace
 
-    let colorSegment = ColorSegment(
-      firstRow: i,
-      firstColumn: 0,
-      lastRow: i,
-      lastColumn: buffer[i].len,
-      color: color)
+  if lineSplit.len == 1 or lineSplit[0].len < 1 or lineSplit[1].len < 1: return
 
-    result.colorSegments.add(colorSegment)
+  proc getEditorColorPairStr(buffer: GapBuffer[seq[Rune]],
+                             lineSplit: seq[seq[Rune]],
+                             currentLine: int): string =
+
+    if (lineSplit[0] == ru "foreground") or
+       (buffer[currentLine - 2] == ru "Theme"):
+      return $(buffer[currentLine - 1].splitWhitespace)[0]
+    else:
+      return $(buffer[currentLine - 2].splitWhitespace)[0]
+
+  let
+    selectedTable = getTableName(currentBufStatus.buffer,
+                                 currentMainWindowNode.currentLine)
+    selectedSetting = if selectedTable == "Theme":
+                        currentBufStatus.buffer.getEditorColorPairStr(
+                          lineSplit,currentLine)
+                      else:
+                        $lineSplit[0]
+    settingType = getSettingType(selectedTable, selectedSetting)
+    settingValues = getSettingValues(status.settings,
+                                     selectedTable,
+                                     selectedSetting)
+
+  if settingType == SettingType.Number:
+    status.editFiguresSetting(selectedTable, selectedSetting)
+  else:
+    status.editEnumAndBoolSettings(lineSplit,
+                                   selectedTable,
+                                   selectedSetting,
+                                   settingValues)
 
 proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"Standard")
@@ -791,7 +1134,7 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       of "indentationLines":
         result.add(ru nameStr & space & $settings.view.indentationLines)
       of "tabStop":
-        result.add(ru nameStr & space & $settings.view.tabStop)
+        result.add(ru nameStr & space & $settings.tabStop)
       of "autoCloseParen":
         result.add(ru nameStr & space & $settings.autoCloseParen)
       of "autoIndent":
@@ -1130,11 +1473,8 @@ proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
 
   result = initGapBuffer(buffer)
 
-proc isConfigMode(status: Editorstatus): bool {.inline.} =
-  let
-    mode = currentBufStatus.mode
-    prevMode = currentBufStatus.prevMode
-  (mode == Mode.config) or (prevMode == Mode.ex and mode == Mode.config)
+proc isConfigMode(mode: Mode): bool {.inline.} =
+  mode == Mode.config
 
 proc configMode*(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
@@ -1164,7 +1504,7 @@ proc configMode*(status: var Editorstatus) =
             currentBufStatus.buffer[windowNode.currentLine][0] != ' ':
         currentBufStatus.keyDown(windowNode)
 
-  while status.isConfigMode and
+  while isConfigMode(currentBufStatus.mode) and
         currentWorkSpace == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
 
@@ -1184,7 +1524,6 @@ proc configMode*(status: var Editorstatus) =
 
     var
       windowNode = currentMainWindowNode
-
       key: Rune = ru'\0'
     while key == ru'\0':
       status.eventLoopTask
@@ -1204,7 +1543,6 @@ proc configMode*(status: var Editorstatus) =
     elif isEnterKey(key):
       status.selectAndChangeEditorSettings
       currentBufStatus.buffer = initConfigModeBuffer(status.settings)
-
     elif isControlU(key):
       status.halfPageUp
     elif isControlD(key):
@@ -1227,3 +1565,5 @@ proc configMode*(status: var Editorstatus) =
       status.searchFordwards
     elif key == ord('?'):
       status.searchBackwards
+    else:
+      discard
