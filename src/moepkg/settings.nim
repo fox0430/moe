@@ -1652,17 +1652,7 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
   template validateTabLineTable() =
     for item in json["TabLine"].pairs:
       case item.key:
-        of "allBuffer",
-           "mode",
-           "chanedMark",
-           "line",
-           "column",
-           "encoding",
-           "language",
-           "directory",
-           "gitbranchName",
-           "showGitInactive",
-           "showModeInactive":
+        of "allBuffer":
           if not (item.val["type"].getStr == "bool"):
             return some($item)
         else:
