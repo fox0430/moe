@@ -205,162 +205,355 @@ const
   positionOfSetVal = calcPositionOfSettingValue()
   indent = "  "
 
-proc getSettingValues(editorSettings: EditorSettings,
-                    table, setting: string): seq[seq[Rune]] =
-
-  proc getColorThemeList(): seq[seq[Rune]] {.compileTime.} =
-    for theme in ColorTheme:
+proc getColorThemeSettingValues(currentVal: string): seq[seq[Rune]] =
+  result.add ru currentVal
+  for theme in ColorTheme:
+    if $theme != currentVal:
       result.add ru $theme
 
-  proc getCursorTypeList(): seq[seq[Rune]] {.compileTime.} =
-    for cursorType in CursorType:
+proc getCursorTypeSettingValues(currentVal: CursorType): seq[seq[Rune]] =
+  result.add ru $currentVal
+  for cursorType in CursorType:
+    if $cursorType != $currentVal:
       result.add ru $cursorType
 
-  proc getStandardTableList(setting: string): seq[seq[Rune]] {.inline.} =
-    case setting:
-      of "theme": result = getColorThemeList()
-      of "defaultCursor",
-         "normalModeCursor",
-         "insertModeCursor": result = getCursorTypeList()
-      of "number",
-         "currentNumber",
-         "cursorLine",
-         "statusLine",
-         "tabLine",
-         "syntax",
-         "indentationLines",
-         "autoCloseParen",
-         "autoIndent",
-         "ignorecase",
-         "smartcase",
-         "disableChangeCursor",
-         "autoSave",
-         "autoSaveInterval",
-         "liveReloadOfConf",
-         "incrementalSearch",
-         "popUpWindowInExmode",
-         "autoDeleteParen",
-         "systemClipboard",
-         "smoothScroll": result = @[ru"true", ru"false"]
-      else: discard
+proc getStandardTableSettingValues(settings: EditorSettings,
+                                   name: string): seq[seq[Rune]] =
+  if name == "theme":
+    result = getColorThemeSettingValues(name)
+  elif name == "defaultCursor":
+      let currentCursorType = settings.defaultCursor
+      result = getCursorTypeSettingValues(currentCursorType)
+  elif name == "normalModeCursor":
+      let currentCursorType = settings.normalModeCursor
+      result = getCursorTypeSettingValues(currentCursorType)
+  elif name == "insertModeCursor":
+      let currentCursorType = settings.insertModeCursor
+      result = getCursorTypeSettingValues(currentCursorType)
+  else:
+    var currentVal: bool
 
-  proc getBuildOnSaveTableList(setting: string): seq[seq[Rune]] {.inline.} =
-    case setting:
-      of "enable": result = @[ru"true", ru"false"]
-      else: discard
+    case name:
+      of "number":
+        currentVal = settings.view.lineNumber
+      of "currentNumber":
+        currentVal = settings.view.currentLineNumber
+      of "cursorLine":
+        currentVal = settings.view.cursorLine
+      of "statusLine":
+        currentVal = settings.statusLine.enable
+      of "tabLine":
+        currentVal = settings.tabLine.useTab
+      of "syntax":
+        currentVal = settings.syntax
+      of "indentationLines":
+        currentVal = settings.view.indentationLines
+      of "autoCloseParen":
+        currentVal = settings.autoCloseParen
+      of "autoIndent":
+        currentVal = settings.autoIndent
+      of "ignorecase":
+        currentVal = settings.ignorecase
+      of "smartcase":
+        currentVal = settings.smartcase
+      of "disableChangeCursor":
+        currentVal = settings.disableChangeCursor
+      of "autoSave":
+        currentVal = settings.autoSave
+      of "autoSaveInterval":
+        currentVal = settings.autoSave
+      of "liveReloadOfConf":
+        currentVal = settings.liveReloadOfConf
+      of "incrementalSearch":
+        currentVal = settings.incrementalSearch
+      of "popUpWindowInExmode":
+        currentVal = settings.popUpWindowInExmode
+      of "autoDeleteParen":
+        currentVal = settings.autoDeleteParen
+      of "systemClipboard":
+        currentVal = settings.systemClipboard
+      of "smoothScroll":
+        currentVal = settings.smoothScroll
+      else:
+        return
 
-  proc getTabLineTableList(setting: string): seq[seq[Rune]] {.inline.} =
-    case setting:
-      of "allBuffer": result = @[ru"true", ru"false"]
-      else: discard
+    if currentVal:
+      result = @[ru "true", ru "false"]
+    else:
+      result = @[ru "false", ru "true"]
 
-  proc getStatusLineTableList(setting: string): seq[seq[Rune]] {.inline.} =
-    case setting:
-      of "multipleStatusLine",
-         "merge",
-         "mode",
-         "filename",
-         "chanedMark",
-         "line",
-         "column",
-         "encoding",
-         "language",
-         "directory",
-         "gitbranchName",
-         "showGitInactive",
-         "showModeInactive": result = @[ru"true", ru"false"]
-      else: discard
+proc getBuildOnSaveTableSettingValues(settings: BuildOnSaveSettings,
+                                      name: string): seq[seq[Rune]] =
 
-  proc getWorkSpaceTableList(setting: string): seq[seq[Rune]] {.inline.} =
-    case setting:
-      of "workSpaceLine": result = @[ru"true", ru"false"]
-      else: discard
+  var currentVal: bool
+  case name:
+    of "enable":
+      currentVal = settings.enable
+    else:
+      return
 
-  proc getHighlightTableList(setting: string): seq[seq[Rune]] {.inline.} =
-    case setting:
-    of "currentLine",
-       "fullWidthSpace",
-       "trailingSpaces",
-       "currentWord",
-       "replaceText",
-       "pairOfParen": result = @[ru"true", ru"false"]
-    else: discard
+  if currentVal:
+    result = @[ru "true", ru "false"]
+  else:
+    result = @[ru "false", ru "true"]
 
-  proc getAutoBackupTableList(setting: string): seq[seq[Rune]] {.inline.} =
-    case setting:
-      of "enable": result = @[ru"true", ru"false"]
-      else: discard
+proc getTabLineTableSettingValues(settings: TabLineSettings,
+                                  name: string): seq[seq[Rune]] =
 
-  proc getQuickRunTableList(setting: string): seq[seq[Rune]] {.inline.} =
-    case setting:
-      of "saveBufferWhenQuickRun": result = @[ru"true", ru"false"]
-      else: discard
+  var currentVal: bool
+  case name:
+    of "allBuffer":
+      currentVal = settings.allBuffer
+    else:
+      return
 
-  proc getNotificationTableList(setting: string): seq[seq[Rune]] {.inline.} =
-    case setting:
-      of "screenNotifications",
-         "logNotifications",
-         "autoBackupScreenNotify",
-         "autoBackupLogNotify",
-         "autoSaveScreenNotify",
-         "autoSaveLogNotify",
-         "yankScreenNotify",
-         "yankLogNotify",
-         "deleteScreenNotify",
-         "deleteLogNotify",
-         "saveScreenNotify",
-         "saveLogNotify",
-         "workspaceScreenNotify",
-         "workspaceLogNotify",
-         "quickRunScreenNotify",
-         "quickRunLogNotify",
-         "buildOnSaveScreenNotify",
-         "buildOnSaveLogNotify",
-         "filerScreenNotify",
-         "filerLogNotify",
-         "restoreScreenNotify",
-         "restoreLogNotify": result = @[ru"true", ru"false"]
-      else: discard
+  if currentVal:
+    result = @[ru "true", ru "false"]
+  else:
+    result = @[ru "false", ru "true"]
 
-  proc getFilerTableList(setting: string): seq[seq[Rune]] {.inline.} =
-    case setting:
-      of "showIcons": result = @[ru"true", ru"false"]
-      else: discard
+proc getStatusLineTableSettingValues(settings: StatusLineSettings,
+                                     name: string): seq[seq[Rune]] =
 
-  proc getAutocompleteTableList(setting: string): seq[seq[Rune]] {.inline.} =
-    case setting:
-      of "enable": result = @[ru"true", ru"false"]
-      else: discard
+  var currentVal: bool
+  case name:
+    of "multipleStatusLine":
+      currentVal = settings.multipleStatusLine
+    of "merge":
+      currentVal = settings.merge
+    of "mode":
+      currentVal = settings.mode
+    of "filename":
+      currentVal = settings.filename
+    of "chanedMark":
+      currentVal = settings.chanedMark
+    of "line":
+      currentVal = settings.line
+    of "column":
+      currentVal = settings.column
+    of "encoding":
+      currentVal = settings.characterEncoding
+    of "language":
+      currentVal = settings.language
+    of "directory":
+      currentVal = settings.directory
+    of "gitbranchName":
+      currentVal = settings.gitbranchName
+    of "showGitInactive":
+      currentVal = settings.showGitInactive
+    of "showModeInactive":
+      currentVal = settings.showModeInactive
+    else:
+      return
 
-  proc getThemeTableList(): seq[seq[Rune]] {.compileTime.} =
-    for color in Color:
+  if currentVal:
+    result = @[ru "true", ru "false"]
+  else:
+    result = @[ru "false", ru "true"]
+
+proc getWorkSpaceTableSettingValues(settings: WorkSpaceSettings,
+                                    name: string): seq[seq[Rune]] =
+
+  var currentVal: bool
+  case name:
+    of "workSpaceLine":
+      currentVal = settings.workSpaceLine
+    else:
+      return
+
+  if currentVal:
+    result = @[ru "true", ru "false"]
+  else:
+    result = @[ru "false", ru "true"]
+
+proc getHighlightTableSettingValues(settings: EditorSettings,
+                                    name: string): seq[seq[Rune]] =
+
+  var currentVal: bool
+  case name:
+    of "currentLine":
+      currentVal = settings.view.highlightCurrentLine
+    of "fullWidthSpace":
+      currentVal = settings.highlightSettings.fullWidthSpace
+    of "trailingSpaces":
+      currentVal = settings.highlightSettings.trailingSpaces
+    of "currentWord":
+      currentVal = settings.highlightSettings.currentWord
+    of "replaceText":
+      currentVal = settings.highlightSettings.replaceText
+    of "pairOfParen":
+      currentVal = settings.highlightSettings.pairOfParen
+    else:
+      return
+
+  if currentVal:
+    result = @[ru "true", ru "false"]
+  else:
+    result = @[ru "false", ru "true"]
+
+proc getAutoBackupTableSettingValues(settings: AutoBackupSettings,
+                                     name: string): seq[seq[Rune]] =
+
+  var currentVal: bool
+  case name:
+    of "enable":
+      currentVal = settings.enable
+    else:
+      return
+
+  if currentVal:
+    result = @[ru "true", ru "false"]
+  else:
+    result = @[ru "false", ru "true"]
+
+proc getQuickRunTableSettingValues(settings: QuickRunSettings,
+                                   name: string): seq[seq[Rune]] =
+
+  var currentVal: bool
+  case name:
+    of "saveBufferWhenQuickRun":
+      currentVal = settings.saveBufferWhenQuickRun
+    else:
+      return
+
+  if currentVal:
+    result = @[ru "true", ru "false"]
+  else:
+    result = @[ru "false", ru "true"]
+
+proc getNotificationTableSettingValues(settings: NotificationSettings,
+                                       name: string): seq[seq[Rune]] =
+
+  var currentVal: bool
+  case name:
+    of "screenNotifications":
+      currentVal = settings.screenNotifications
+    of "logNotifications":
+      currentVal = settings.logNotifications
+    of "autoBackupScreenNotify":
+      currentVal = settings.autoBackupScreenNotify
+    of "autoBackupLogNotify":
+      currentVal = settings.autoBackupLogNotify
+    of "autoSaveScreenNotify":
+      currentVal = settings.autoSaveScreenNotify
+    of "autoSaveLogNotify":
+      currentVal = settings.autoSaveLogNotify
+    of "yankScreenNotify":
+      currentVal = settings.yankScreenNotify
+    of "yankLogNotify":
+      currentVal = settings.yankLogNotify
+    of "deleteScreenNotify":
+      currentVal = settings.deleteScreenNotify
+    of "deleteLogNotify":
+      currentVal = settings.deleteLogNotify
+    of "saveScreenNotify":
+      currentVal = settings.saveScreenNotify
+    of "saveLogNotify":
+      currentVal = settings.saveLogNotify
+    of "workspaceScreenNotify":
+      currentVal = settings.workspaceScreenNotify
+    of "workspaceLogNotify":
+      currentVal = settings.workspaceLogNotify
+    of "quickRunScreenNotify":
+      currentVal = settings.quickRunScreenNotify
+    of "quickRunLogNotify":
+      currentVal = settings.quickRunLogNotify
+    of "buildOnSaveScreenNotify":
+      currentVal = settings.buildOnSaveScreenNotify
+    of "buildOnSaveLogNotify":
+      currentVal = settings.buildOnSaveLogNotify
+    of "filerScreenNotify":
+      currentVal = settings.filerScreenNotify
+    of "filerLogNotify":
+      currentVal = settings.filerLogNotify
+    of "restoreScreenNotify":
+      currentVal = settings.restoreScreenNotify
+    of "restoreLogNotify":
+      currentVal = settings.restoreLogNotify
+    else:
+      return
+
+  if currentVal:
+    result = @[ru "true", ru "false"]
+  else:
+    result = @[ru "false", ru "true"]
+
+proc getFilerTableSettingValues(settings: FilerSettings,
+                                name: string): seq[seq[Rune]] =
+
+  var currentVal: bool
+  case name:
+    of "showIcons":
+      currentVal = settings.showIcons
+    else:
+      return
+
+  if currentVal:
+    result = @[ru "true", ru "false"]
+  else:
+    result = @[ru "false", ru "true"]
+
+proc getAutocompleteTableSettingValues(settings: AutocompleteSettings,
+                                       name: string): seq[seq[Rune]] =
+
+  var currentVal: bool
+  case name:
+    of "enable":
+      currentVal = settings.enable
+    else:
+      return
+
+  if currentVal:
+    result = @[ru "true", ru "false"]
+  else:
+    result = @[ru "false", ru "true"]
+
+proc getThemeTableSettingValues(settings: EditorSettings,
+                                name, position: string): seq[seq[Rune]] =
+
+  let
+    theme = settings.editorColorTheme
+    colorPair = parseEnum[EditorColorPair]($name)
+    (fg, bg) = getColorFromEditorColorPair(theme, colorPair)
+    currentVal = if position == "foreground": fg else: bg
+
+  result.add ru $currentVal
+  for color in Color:
+    if $color != $currentVal:
       result.add ru $color
+
+proc getSettingValues(settings: EditorSettings,
+                      table, name, position: string): seq[seq[Rune]] =
 
   case table:
     of "Standard":
-      result = getStandardTableList(setting)
+      result = settings.getStandardTableSettingValues(name)
     of "BuildOnSave":
-      result = getBuildOnSaveTableList(setting)
+      result = settings.buildOnSave.getBuildOnSaveTableSettingValues(name)
     of "TabLine":
-      result = getTabLineTableList(setting)
+      result = settings.tabline.getTabLineTableSettingValues(name)
     of "StatusLine":
-      result = getStatusLineTableList(setting)
+      result = settings.statusLine.getStatusLineTableSettingValues(name)
     of "WorkSpace":
-      result = getWorkSpaceTableList(setting)
+      result = settings.workSpace.getWorkSpaceTableSettingValues(name)
     of "Highlight":
-      result = getHighlightTableList(setting)
+      result = settings.getHighlightTableSettingValues(name)
     of "AutoBackup":
-      result = getAutoBackupTableList(setting)
+      let autoBackupSettings = settings.autoBackupSettings
+      result = autoBackupSettings.getAutoBackupTableSettingValues(name)
     of "QuickRun":
-      result = getQuickRunTableList(setting)
+      let quickRunSettings = settings.quickRunSettings
+      result = quickRunSettings.getQuickRunTableSettingValues(name)
     of "Notification":
-      result = getNotificationTableList(setting)
+      let notificationSettings = settings.notificationSettings
+      result = notificationSettings.getNotificationTableSettingValues(name)
     of "Filer":
-      result = getFilerTableList(setting)
+      result = settings.filerSettings.getFilerTableSettingValues(name)
     of "Autocomplete":
-      result = getAutocompleteTableList(setting)
+      let autocompleteSettings = settings.autocompleteSettings
+      result = autocompleteSettings.getAutocompleteTableSettingValues(name)
     of "Theme":
-      result = getThemeTableList()
+      result = settings.getThemeTableSettingValues(name, position)
 
 proc maxLen(list: seq[seq[Rune]]): int =
   const mergen = 2
@@ -438,7 +631,6 @@ proc changeStandardTableSetting(settings: var EditorSettings,
     of "smoothScroll":
       settings.smoothScroll = parseBool(settingVal)
     else:
-      # TODO: Add other settings
       discard
 
 proc changeBuildOnSaveTableSetting(settings: var BuildOnSaveSettings,
@@ -448,7 +640,6 @@ proc changeBuildOnSaveTableSetting(settings: var BuildOnSaveSettings,
     of "enable":
       settings.enable = parseBool(settingVal)
     else:
-      # TODO: Add other settings
       discard
 
 proc changeTabLineTableSetting(settings: var TabLineSettings,
@@ -1097,9 +1288,12 @@ proc selectAndChangeEditorSettings(status: var EditorStatus) =
                       else:
                         $lineSplit[0]
     settingType = getSettingType(selectedTable, selectedSetting)
+    # position is "foreground" or "background" or ""
+    position = if selectedTable == "Theme": $lineSplit[0] else: ""
     settingValues = getSettingValues(status.settings,
                                      selectedTable,
-                                     selectedSetting)
+                                     selectedSetting,
+                                     position)
 
   if settingType == SettingType.Number:
     status.editFiguresSetting(selectedTable, selectedSetting)
