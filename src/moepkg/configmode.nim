@@ -261,8 +261,6 @@ proc getStandardTableSettingValues(settings: EditorSettings,
         currentVal = settings.disableChangeCursor
       of "autoSave":
         currentVal = settings.autoSave
-      of "autoSaveInterval":
-        currentVal = settings.autoSave
       of "liveReloadOfConf":
         currentVal = settings.liveReloadOfConf
       of "incrementalSearch":
@@ -512,16 +510,24 @@ proc getAutocompleteTableSettingValues(settings: AutocompleteSettings,
 proc getThemeTableSettingValues(settings: EditorSettings,
                                 name, position: string): seq[seq[Rune]] =
 
-  let
-    theme = settings.editorColorTheme
-    colorPair = parseEnum[EditorColorPair]($name)
-    (fg, bg) = getColorFromEditorColorPair(theme, colorPair)
-    currentVal = if position == "foreground": fg else: bg
+  proc getCurrentVal(theme: ColorTheme, name, position: string): Color =
+    if name == "editorBg":
+      result = ColorThemeTable[theme].editorBg
+    else:
+      let
+        colorPair = parseEnum[EditorColorPair]($name)
+        (fg, bg) = getColorFromEditorColorPair(theme, colorPair)
+      result = if position == "foreground": fg else: bg
 
-  result.add ru $currentVal
-  for color in Color:
-    if $color != $currentVal:
-      result.add ru $color
+  if name != "" or position != "":
+    let
+      theme = settings.editorColorTheme
+      currentVal = getCurrentVal(theme, name, position)
+
+    result.add ru $currentVal
+    for color in Color:
+      if $color != $currentVal:
+        result.add ru $color
 
 proc getSettingValues(settings: EditorSettings,
                       table, name, position: string): seq[seq[Rune]] =
