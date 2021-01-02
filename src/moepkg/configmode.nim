@@ -205,10 +205,10 @@ const
   positionOfSetVal = calcPositionOfSettingValue()
   indent = "  "
 
-proc getColorThemeSettingValues(currentVal: string): seq[seq[Rune]] =
-  result.add ru currentVal
+proc getColorThemeSettingValues(currentVal: ColorTheme): seq[seq[Rune]] =
+  result.add ru $currentVal
   for theme in ColorTheme:
-    if $theme != currentVal:
+    if theme != currentVal:
       result.add ru $theme
 
 proc getCursorTypeSettingValues(currentVal: CursorType): seq[seq[Rune]] =
@@ -220,7 +220,8 @@ proc getCursorTypeSettingValues(currentVal: CursorType): seq[seq[Rune]] =
 proc getStandardTableSettingValues(settings: EditorSettings,
                                    name: string): seq[seq[Rune]] =
   if name == "theme":
-    result = getColorThemeSettingValues(name)
+    let theme = settings.editorColorTheme
+    result = getColorThemeSettingValues(theme)
   elif name == "defaultCursor":
       let currentCursorType = settings.defaultCursor
       result = getCursorTypeSettingValues(currentCursorType)
