@@ -726,9 +726,7 @@ suite "Config mode: Get TabLine table setting values":
     let tablineSettings = status.settings.tabLine
 
     const name = "test"
-    let
-      default = tablineSettings.allBuffer
-      values = tablineSettings.getTabLineTableSettingValues(name)
+    let values = tablineSettings.getTabLineTableSettingValues(name)
 
     check values.len == 0
 
@@ -881,9 +879,7 @@ suite "Config mode: Get StatusLine table setting values":
     let statusLineSettings = status.settings.statusLine
 
     const name = "test"
-    let
-      default = statusLineSettings.multipleStatusLine
-      values = statusLineSettings.getStatusLineTableSettingValues(name)
+    let values = statusLineSettings.getStatusLineTableSettingValues(name)
 
     check values.len == 0
 
@@ -904,9 +900,7 @@ suite "Config mode: Get WorkSpace table setting values":
     let workSpaceSettings = status.settings.workSpace
 
     const name = "test"
-    let
-      default = workSpaceSettings.workSpaceLine
-      values = workSpaceSettings.getWorkSpaceTableSettingValues(name)
+    let values = workSpaceSettings.getWorkSpaceTableSettingValues(name)
 
     check values.len == 0
 
@@ -982,9 +976,7 @@ suite "Config mode: Get Highlight table setting values":
     let settings = status.settings
 
     const name = "test"
-    let
-      default = settings.view.highlightCurrentLine
-      values = settings.getHighlightTableSettingValues(name)
+    let values = settings.getHighlightTableSettingValues(name)
 
     check values.len == 0
 
@@ -1026,9 +1018,7 @@ suite "Config mode: Get QuickRun table setting values":
     let quickRunSettings = status.settings.quickRunSettings
 
     const name = "test"
-    let
-      default = quickRunSettings.saveBufferWhenQuickRun
-      values = quickRunSettings.getQuickRunTableSettingValues(name)
+    let values = quickRunSettings.getQuickRunTableSettingValues(name)
 
     check values.len == 0
 
@@ -1280,9 +1270,7 @@ suite "Config mode: Get Notification table setting values":
     let notificationSettings = status.settings.notificationSettings
 
     const name = "test"
-    let
-      default = notificationSettings.screenNotifications
-      values = notificationSettings.getNotificationTableSettingValues(name)
+    let values = notificationSettings.getNotificationTableSettingValues(name)
 
     check values.len == 0
 
@@ -1303,9 +1291,7 @@ suite "Config mode: Get Filer table setting values":
     let filerSettings = status.settings.filerSettings
 
     const name = "test"
-    let
-      default = filerSettings.showIcons
-      values = filerSettings.getFilerTableSettingValues(name)
+    let values = filerSettings.getFilerTableSettingValues(name)
 
     check values.len == 0
 
@@ -1326,9 +1312,7 @@ suite "Config mode: Get Autocomplete table setting values":
     let autocompleteSettings = status.settings.autocompleteSettings
 
     const name = "test"
-    let
-      default = autocompleteSettings.enable
-      values = autocompleteSettings.getAutocompleteTableSettingValues(name)
+    let values = autocompleteSettings.getAutocompleteTableSettingValues(name)
 
     check values.len == 0
 
@@ -1371,8 +1355,9 @@ suite "Config mode: Get Theme table setting values":
       # values[0] should be current setting
       default = $values[0]
 
-      colorLen = int(Color.high)
+    check default == $bg
 
+    let colorLen = int(Color.high)
     var index = 0
     for c in Color:
       if index < colorLen and $c != default:
