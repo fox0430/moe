@@ -83,11 +83,6 @@ type quickRunTableNames {.pure.} = enum
   shOptions
   bashOptions
 
-type autoBackupTableName {.pure.} = enum
-  enable
-  idleTime
-  interval
-
 type notificationTableNames {.pure.} = enum
   screenNotifications
   logNotifications
@@ -563,17 +558,11 @@ proc getSettingValues(settings: EditorSettings,
       result = settings.getThemeTableSettingValues(name, position)
 
 proc maxLen(list: seq[seq[Rune]]): int =
-  const mergen = 2
   for r in list:
     if r.len > result:
       result = r.len + 2
 
 proc getTableName(buffer: GapBuffer[seq[Rune]], line: int): string =
-  const
-    spaceLineLen = 1
-    tableNameLineLen = 1
-  var total = tableNameLineLen
-
   # Search table name from configuration mode buffer
   for i in countDown(line, 0):
     if buffer[i].len > 0 and buffer[i][0] != ru ' ':
@@ -812,7 +801,6 @@ proc changeeThemeTableSetting(settings: var EditorSettings,
     of "editorBg":
       ColorThemeTable[theme].editorBg = parseEnum[Color](settingVal)
     else:
-      var colorPair = parseEnum[EditorColorPair](settingName)
       let
         color = parseEnum[Color](settingVal)
         editoColor = if position == "background" and settingVal != "editorBg":
@@ -1163,7 +1151,6 @@ proc editFiguresSetting(status: var EditorStatus,
 
     else:
       numStr &= key
-      let autoCloseParen = false
       currentBufStatus.insertCharacter(currentMainWindowNode, key)
       currentMainWindowNode.highlight =
         currentBufStatus.buffer.initConfigModeHighlight(currentLine)
@@ -1592,14 +1579,6 @@ proc initAutocompleteTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
     case $name:
       of "enable":
         result.add(ru nameStr & space & $settings.autocompleteSettings.enable)
-
-proc calcPositionOfThemeSettingValue(theme: ColorTheme): int =
-  for colorPair in EditorColorPair:
-    let
-      colors = getColorFromEditorColorPair(theme, colorPair)
-      color = $colors[0]
-
-    if result < color.len: result = color.len + 1
 
 proc initThemeTableBuffer*(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"Theme")
