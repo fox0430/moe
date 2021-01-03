@@ -1368,3 +1368,191 @@ suite "Config mode: Get Theme table setting values":
   for pair in EditorColorPair:
     checkColorValues(pair, "foreground")
     checkColorValues(pair, "background")
+
+suite "Config mode: Chaging Standard table settings":
+  test "Chaging theme":
+    var settings = initEditorSettings()
+    settings.changeStandardTableSetting("theme", "vivid")
+
+    check settings.editorColorTheme == ColorTheme.vivid
+
+  test "Chaging number":
+    var settings = initEditorSettings()
+
+    let val = not settings.view.lineNumber
+    settings.changeStandardTableSetting("number", $val)
+
+    check val == settings.view.lineNumber
+
+  test "Chaging currentNumber":
+    var settings = initEditorSettings()
+
+    let val = not settings.view.currentLineNumber
+    settings.changeStandardTableSetting("currentNumber", $val)
+
+    check val == settings.view.currentLineNumber
+
+  test "Chaging cursorLine":
+    var settings = initEditorSettings()
+
+    let val = not settings.view.cursorLine
+    settings.changeStandardTableSetting("cursorLine", $val)
+
+    check val == settings.view.cursorLine
+
+  test "Chaging statusLine":
+    var settings = initEditorSettings()
+
+    let val = not settings.statusLine.enable
+    settings.changeStandardTableSetting("statusLine", $val)
+
+    check val == settings.statusLine.enable
+
+  test "Chaging tabLine":
+    var settings = initEditorSettings()
+
+    let val = not settings.tabLine.useTab
+    settings.changeStandardTableSetting("tabLine", $val)
+
+    check val == settings.tabLine.useTab
+
+  test "Chaging syntax":
+    var settings = initEditorSettings()
+
+    let val = not settings.syntax
+    settings.changeStandardTableSetting("syntax", $val)
+
+    check val == settings.syntax
+
+  test "Chaging indentationLines":
+    var settings = initEditorSettings()
+
+    let val = not settings.view.indentationLines
+    settings.changeStandardTableSetting("indentationLines", $val)
+
+    check val == settings.view.indentationLines
+
+  test "Chaging autoCloseParen":
+    var settings = initEditorSettings()
+
+    let val = not settings.autoCloseParen
+    settings.changeStandardTableSetting("autoCloseParen", $val)
+
+    check val == settings.autoCloseParen
+
+  test "Chaging autoIndent":
+    var settings = initEditorSettings()
+
+    let val = not settings.autoIndent
+    settings.changeStandardTableSetting("autoIndent", $val)
+
+    check val == settings.autoIndent
+
+  test "Chaging ignorecase":
+    var settings = initEditorSettings()
+
+    let val = not settings.ignorecase
+    settings.changeStandardTableSetting("ignorecase", $val)
+
+    check val == settings.ignorecase
+
+  test "Chaging smartcase":
+    var settings = initEditorSettings()
+
+    let val = not settings.smartcase
+    settings.changeStandardTableSetting("smartcase", $val)
+
+    check val == settings.smartcase
+
+  test "Chaging disableChangeCursor":
+    var settings = initEditorSettings()
+
+    let val = not settings.disableChangeCursor
+    settings.changeStandardTableSetting("disableChangeCursor", $val)
+
+    check val == settings.disableChangeCursor
+
+  test "Chaging autoSave":
+    var settings = initEditorSettings()
+
+    let val = not settings.autoSave
+    settings.changeStandardTableSetting("autoSave", $val)
+
+    check val == settings.autoSave
+
+  test "Chaging liveReloadOfConf":
+    var settings = initEditorSettings()
+
+    let val = not settings.liveReloadOfConf
+    settings.changeStandardTableSetting("liveReloadOfConf", $val)
+
+    check val == settings.liveReloadOfConf
+
+  test "Chaging incrementalSearch":
+    var settings = initEditorSettings()
+
+    let val = not settings.incrementalSearch
+    settings.changeStandardTableSetting("incrementalSearch", $val)
+
+    check val == settings.incrementalSearch
+
+  test "Chaging popUpWindowInExmode":
+    var settings = initEditorSettings()
+
+    let val = not settings.popUpWindowInExmode
+    settings.changeStandardTableSetting("popUpWindowInExmode", $val)
+
+    check val == settings.popUpWindowInExmode
+
+  test "Chaging autoDeleteParen":
+    var settings = initEditorSettings()
+
+    let val = not settings.autoDeleteParen
+    settings.changeStandardTableSetting("autoDeleteParen", $val)
+
+    check val == settings.autoDeleteParen
+
+  test "Chaging systemClipboard":
+    var settings = initEditorSettings()
+
+    let val = not settings.systemClipboard
+    settings.changeStandardTableSetting("systemClipboard", $val)
+
+    check val == settings.systemClipboard
+
+  test "Chaging smoothScroll":
+    var settings = initEditorSettings()
+
+    let val = not settings.smoothScroll
+    settings.changeStandardTableSetting("smoothScroll", $val)
+
+    check val == settings.smoothScroll
+
+  test "Set invalid value":
+    var settings = initEditorSettings()
+
+    let beforeSettings = settings
+    settings.changeStandardTableSetting("test", "test")
+
+    check beforeSettings == settings
+
+suite "Config mode: Chaging BuildOnSave table settings":
+  test "Chaging enable":
+    var
+      settings = initEditorSettings()
+      buildOnSaveSettings = settings.buildOnSave
+
+    let val = not buildOnSaveSettings.enable
+    buildOnSaveSettings.changeBuildOnSaveTableSetting("enable", $val)
+
+    check val == buildOnSaveSettings.enable
+
+  test "Set invalid value":
+    var
+      settings = initEditorSettings()
+      buildOnSaveSettings = settings.buildOnSave
+
+    let beforeSettings = buildOnSaveSettings
+    buildOnSaveSettings.changeBuildOnSaveTableSetting("test", "test")
+
+    check beforeSettings == buildOnSaveSettings
