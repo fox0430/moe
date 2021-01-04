@@ -913,7 +913,8 @@ proc quitCommand(status: var EditorStatus, height, width: int) =
       numberReferenced = mainWindowNode.countReferencedWindow(currentBufferIndex)
       countChange = currentBufStatus.countChange
       canundo = currentBufStatus.buffer.canundo
-    if countChange == 0 or numberReferenced > 1 or not canundo:
+    if (not isNormalMode(currentBufStatus.mode, currentBufStatus.prevMode)) or
+       (countChange == 0 or numberReferenced > 1 or not canundo):
       status.changeMode(currentBufStatus.prevMode)
       status.closeWindow(currentMainWindowNode, height, width)
     else:
@@ -970,9 +971,12 @@ proc forceQuitCommand(status: var EditorStatus, height, width: int) =
 
 proc allBufferQuitCommand(status: var EditorStatus) =
   for i in 0 ..< currentWorkSpace.numOfMainWindow:
-    let node = mainWindowNode.searchByWindowIndex(i)
+    let
+      node = mainWindowNode.searchByWindowIndex(i)
+      bufStatus = status.bufStatus[node.bufferIndex]
 
-    if status.bufStatus[node.bufferIndex].countChange > 0:
+    if isNormalMode(bufStatus.mode, bufStatus.prevMode) and
+       bufStatus.countChange > 0:
       status.commandLine.writeNoWriteError(status.messageLog)
       status.changeMode(bufferstatus.Mode.normal)
       return
