@@ -793,7 +793,7 @@ proc changeAutoCompleteTableSetting(settings: var AutocompleteSettings,
     else:
       discard
 
-proc changeeThemeTableSetting(settings: var EditorSettings,
+proc changeThemeTableSetting(settings: var EditorSettings,
                               settingName, position, settingVal: string) =
 
   let theme = settings.editorColorTheme
@@ -877,7 +877,7 @@ proc changeEditorSettings(status: var EditorStatus,
     of "Autocomplete":
       autocompleteSettings.changeAutoCompleteTableSetting(settingName, settingVal)
     of "Theme":
-      settings.changeeThemeTableSetting(settingName, position, settingVal)
+      settings.changeThemeTableSetting(settingName, position, settingVal)
       status.changeTheme
     else:
       discard

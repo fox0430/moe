@@ -2133,7 +2133,7 @@ suite "Config mode: Chaging Theme table settings":
               else: name
         var val = Color.default
         if currentVal == val: inc(val)
-        settings.changeeThemeTableSetting(n, position, $val)
+        settings.changeThemeTableSetting(n, position, $val)
 
         check ColorThemeTable[theme].`editorColor` == val
 
