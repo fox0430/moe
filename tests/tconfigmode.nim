@@ -1556,3 +1556,587 @@ suite "Config mode: Chaging BuildOnSave table settings":
     buildOnSaveSettings.changeBuildOnSaveTableSetting("test", "test")
 
     check beforeSettings == buildOnSaveSettings
+
+suite "Config mode: Chaging TabLine table settings":
+  test "Chaging allBuffer":
+
+    var
+      settings = initEditorSettings()
+      tablineSettings = settings.tabline
+
+    let val = not tablineSettings.allBuffer
+    tablineSettings.changeTabLineTableSetting("allBuffer", $val)
+
+    check val == tablineSettings.allBuffer
+
+  test "Set invalid value":
+    var
+      settings = initEditorSettings()
+      tablineSettings = settings.tabline
+
+    let beforeSettings = tablineSettings
+    tablineSettings.changeTabLineTableSetting("test", "test")
+
+    check beforeSettings == tablineSettings
+
+suite "Config mode: Chaging StatusLine table settings":
+  test "Chaging ":
+    var
+      settings = initEditorSettings()
+      statusLineSettings = settings.statusLine
+
+    let val = not statusLineSettings.multipleStatusLine
+    statusLineSettings.changeStatusLineTableSetting("multipleStatusLine", $val)
+
+    check val == statusLineSettings.multipleStatusLine
+
+  test "Chaging merge":
+    var
+      settings = initEditorSettings()
+      statusLineSettings = settings.statusLine
+
+    let val = not statusLineSettings.merge
+    statusLineSettings.changeStatusLineTableSetting("merge", $val)
+
+    check val == statusLineSettings.merge
+
+  test "Chaging mode":
+    var
+      settings = initEditorSettings()
+      statusLineSettings = settings.statusLine
+
+    let val = not statusLineSettings.mode
+    statusLineSettings.changeStatusLineTableSetting("mode", $val)
+
+    check val == statusLineSettings.mode
+
+  test "Chaging filename":
+    var
+      settings = initEditorSettings()
+      statusLineSettings = settings.statusLine
+
+    let val = not statusLineSettings.filename
+    statusLineSettings.changeStatusLineTableSetting("filename", $val)
+
+    check val == statusLineSettings.filename
+
+  test "Chaging chanedMark":
+    var
+      settings = initEditorSettings()
+      statusLineSettings = settings.statusLine
+
+    let val = not statusLineSettings.chanedMark
+    statusLineSettings.changeStatusLineTableSetting("chanedMark", $val)
+
+    check val == statusLineSettings.chanedMark
+
+  test "Chaging line":
+    var
+      settings = initEditorSettings()
+      statusLineSettings = settings.statusLine
+
+    let val = not statusLineSettings.line
+    statusLineSettings.changeStatusLineTableSetting("line", $val)
+
+    check val == statusLineSettings.line
+
+  test "Chaging column":
+    var
+      settings = initEditorSettings()
+      statusLineSettings = settings.statusLine
+
+    let val = not statusLineSettings.column
+    statusLineSettings.changeStatusLineTableSetting("column", $val)
+
+    check val == statusLineSettings.column
+
+  test "Chaging encoding":
+    var
+      settings = initEditorSettings()
+      statusLineSettings = settings.statusLine
+
+    let val = not statusLineSettings.characterEncoding
+    statusLineSettings.changeStatusLineTableSetting("encoding", $val)
+
+    check val == statusLineSettings.characterEncoding
+
+  test "Chaging language":
+    var
+      settings = initEditorSettings()
+      statusLineSettings = settings.statusLine
+
+    let val = not statusLineSettings.language
+    statusLineSettings.changeStatusLineTableSetting("language", $val)
+
+    check val == statusLineSettings.language
+
+  test "Chaging directory":
+    var
+      settings = initEditorSettings()
+      statusLineSettings = settings.statusLine
+
+    let val = not statusLineSettings.directory
+    statusLineSettings.changeStatusLineTableSetting("directory", $val)
+
+    check val == statusLineSettings.directory
+
+  test "Chaging gitbranchName":
+    var
+      settings = initEditorSettings()
+      statusLineSettings = settings.statusLine
+
+    let val = not statusLineSettings.gitbranchName
+    statusLineSettings.changeStatusLineTableSetting("gitbranchName", $val)
+
+    check val == statusLineSettings.gitbranchName
+
+  test "Chaging showGitInactive":
+    var
+      settings = initEditorSettings()
+      statusLineSettings = settings.statusLine
+
+    let val = not statusLineSettings.showGitInactive
+    statusLineSettings.changeStatusLineTableSetting("showGitInactive", $val)
+
+    check val == statusLineSettings.showGitInactive
+
+  test "Chaging showModeInactive":
+    var
+      settings = initEditorSettings()
+      statusLineSettings = settings.statusLine
+
+    let val = not statusLineSettings.showModeInactive
+    statusLineSettings.changeStatusLineTableSetting("showModeInactive", $val)
+
+    check val == statusLineSettings.showModeInactive
+
+  test "Set invalid value":
+    var
+      settings = initEditorSettings()
+      statusLineSettings = settings.statusLine
+
+    let beforeSettings = statusLineSettings
+    statusLineSettings.changeStatusLineTableSetting("test", "test")
+
+    check beforeSettings == statusLineSettings
+
+suite "Config mode: Chaging WorkSpace table settings":
+  test "Chaging workSpaceLine":
+    var
+      settings = initEditorSettings()
+      workSpaceSettings = settings.workSpace
+
+    let val = not workSpaceSettings.workSpaceLine
+    workSpaceSettings.changeWorkSpaceTableSetting("workSpaceLine", $val)
+
+    check val == workSpaceSettings.workSpaceLine
+
+  test "Set invalid value":
+    var
+      settings = initEditorSettings()
+      workSpaceSettings = settings.workSpace
+
+    let beforeSettings = workSpaceSettings
+    workSpaceSettings.changeWorkSpaceTableSetting("test", "test")
+
+    check beforeSettings == workSpaceSettings
+
+suite "Config mode: Chaging Highlight table settings":
+  test "Chaging currentLine":
+    var settings = initEditorSettings()
+
+    let val = not settings.view.highlightCurrentLine
+    settings.changeHighlightTableSetting("currentLine", $val)
+
+    check val == settings.view.highlightCurrentLine
+
+  test "Chaging fullWidthSpace":
+    var settings = initEditorSettings()
+
+    let val = not settings.highlightSettings.fullWidthSpace
+    settings.changeHighlightTableSetting("fullWidthSpace", $val)
+
+    check val == settings.highlightSettings.fullWidthSpace
+
+  test "Chaging trailingSpaces":
+    var settings = initEditorSettings()
+
+    let val = not settings.highlightSettings.trailingSpaces
+    settings.changeHighlightTableSetting("trailingSpaces", $val)
+
+    check val == settings.highlightSettings.trailingSpaces
+
+  test "Chaging replaceText":
+    var settings = initEditorSettings()
+
+    let val = not settings.highlightSettings.replaceText
+    settings.changeHighlightTableSetting("replaceText", $val)
+
+    check val == settings.highlightSettings.replaceText
+
+  test "Chaging pairOfParen":
+    var settings = initEditorSettings()
+
+    let val = not settings.highlightSettings.pairOfParen
+    settings.changeHighlightTableSetting("pairOfParen", $val)
+
+    check val == settings.highlightSettings.pairOfParen
+
+  test "Chaging currentWord":
+    var settings = initEditorSettings()
+
+    let val = not settings.highlightSettings.currentWord
+    settings.changeHighlightTableSetting("currentWord", $val)
+
+    check val == settings.highlightSettings.currentWord
+
+  test "Set invalid value":
+    var settings = initEditorSettings()
+
+    let beforeSettings = settings
+    settings.changeHighlightTableSetting("test", "test")
+
+    check beforeSettings == settings
+
+suite "Config mode: Chaging AutoBackup table settings":
+  test "Chaging enable":
+    var
+      settings = initEditorSettings()
+      autoBackupSettings = settings.autoBackupSettings
+
+    let val = not autoBackupSettings.enable
+    autoBackupSettings.changeBackupTableSetting("enable", $val)
+
+    check val == autoBackupSettings.enable
+
+  test "Set invalid value":
+    var
+      settings = initEditorSettings()
+      autoBackupSettings = settings.autoBackupSettings
+
+    let beforeSettings = autoBackupSettings
+    autoBackupSettings.changeBackupTableSetting("test", "test")
+
+    check beforeSettings == autoBackupSettings
+
+suite "Config mode: Chaging QuickRun table settings":
+  test "Chaging saveBufferWhenQuickRun":
+    var
+      settings = initEditorSettings()
+      quickRunSettings = settings.quickRunSettings
+
+    let val = not quickRunSettings.saveBufferWhenQuickRun
+    quickRunSettings.changeQuickRunTableSetting("saveBufferWhenQuickRun", $val)
+
+    check val == quickRunSettings.saveBufferWhenQuickRun
+
+  test "Set invalid value":
+    var
+      settings = initEditorSettings()
+      quickRunSettings = settings.quickRunSettings
+
+    let beforeSettings = quickRunSettings
+    quickRunSettings.changeQuickRunTableSetting("test", "test")
+
+    check beforeSettings == quickRunSettings
+
+suite "Config mode: Chaging Notification table settings":
+  test "Chaging screenNotifications":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.screenNotifications
+    notificationSettings.changeNotificationTableSetting("screenNotifications", $val)
+
+    check val == notificationSettings.screenNotifications
+
+  test "Chaging logNotifications":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.logNotifications
+    notificationSettings.changeNotificationTableSetting("logNotifications", $val)
+
+    check val == notificationSettings.logNotifications
+
+  test "Chaging autoBackupScreenNotify":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.autoBackupScreenNotify
+    notificationSettings.changeNotificationTableSetting("autoBackupScreenNotify", $val)
+
+    check val == notificationSettings.autoBackupScreenNotify
+
+  test "Chaging autoBackupLogNotify":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.autoBackupLogNotify
+    notificationSettings.changeNotificationTableSetting("autoBackupLogNotify", $val)
+
+    check val == notificationSettings.autoBackupLogNotify
+
+  test "Chaging autoSaveScreenNotify":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.autoSaveScreenNotify
+    notificationSettings.changeNotificationTableSetting("autoSaveScreenNotify", $val)
+
+    check val == notificationSettings.autoSaveScreenNotify
+
+  test "Chaging autoSaveLogNotify":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.autoSaveLogNotify
+    notificationSettings.changeNotificationTableSetting("autoSaveLogNotify", $val)
+
+    check val == notificationSettings.autoSaveLogNotify
+
+  test "Chaging yankScreenNotify":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.yankScreenNotify
+    notificationSettings.changeNotificationTableSetting("yankScreenNotify", $val)
+
+    check val == notificationSettings.yankScreenNotify
+
+  test "Chaging yankLogNotify":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.yankLogNotify
+    notificationSettings.changeNotificationTableSetting("yankLogNotify", $val)
+
+    check val == notificationSettings.yankLogNotify
+
+  test "Chaging deleteScreenNotify":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.deleteScreenNotify
+    notificationSettings.changeNotificationTableSetting("deleteScreenNotify", $val)
+
+    check val == notificationSettings.deleteScreenNotify
+
+  test "Chaging deleteLogNotify":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.deleteLogNotify
+    notificationSettings.changeNotificationTableSetting("deleteLogNotify", $val)
+
+    check val == notificationSettings.deleteLogNotify
+
+  test "Chaging saveScreenNotify":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.saveScreenNotify
+    notificationSettings.changeNotificationTableSetting("saveScreenNotify", $val)
+
+    check val == notificationSettings.saveScreenNotify
+
+  test "Chaging saveLogNotify":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.saveLogNotify
+    notificationSettings.changeNotificationTableSetting("saveLogNotify", $val)
+
+    check val == notificationSettings.saveLogNotify
+
+  test "Chaging workspaceScreenNotify":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.workspaceScreenNotify
+    notificationSettings.changeNotificationTableSetting("workspaceScreenNotify", $val)
+
+    check val == notificationSettings.workspaceScreenNotify
+
+  test "Chaging workspaceLogNotify":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.workspaceLogNotify
+    notificationSettings.changeNotificationTableSetting("workspaceLogNotify", $val)
+
+    check val == notificationSettings.workspaceLogNotify
+
+  test "Chaging quickRunScreenNotify":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.quickRunScreenNotify
+    notificationSettings.changeNotificationTableSetting("quickRunScreenNotify", $val)
+
+    check val == notificationSettings.quickRunScreenNotify
+
+  test "Chaging quickRunLogNotify":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.quickRunLogNotify
+    notificationSettings.changeNotificationTableSetting("quickRunLogNotify", $val)
+
+    check val == notificationSettings.quickRunLogNotify
+
+  test "Chaging buildOnSaveScreenNotify":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.buildOnSaveScreenNotify
+    notificationSettings.changeNotificationTableSetting("buildOnSaveScreenNotify", $val)
+
+    check val == notificationSettings.buildOnSaveScreenNotify
+
+  test "Chaging buildOnSaveLogNotify":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.buildOnSaveLogNotify
+    notificationSettings.changeNotificationTableSetting("buildOnSaveLogNotify", $val)
+
+    check val == notificationSettings.buildOnSaveLogNotify
+
+  test "Chaging filerScreenNotify":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.filerScreenNotify
+    notificationSettings.changeNotificationTableSetting("filerScreenNotify", $val)
+
+    check val == notificationSettings.filerScreenNotify
+
+  test "Chaging filerLogNotify":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.filerLogNotify
+    notificationSettings.changeNotificationTableSetting("filerLogNotify", $val)
+
+    check val == notificationSettings.filerLogNotify
+
+  test "Chaging restoreScreenNotify":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.restoreScreenNotify
+    notificationSettings.changeNotificationTableSetting("restoreScreenNotify", $val)
+
+    check val == notificationSettings.restoreScreenNotify
+
+  test "Chaging restoreLogNotify":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let val = not notificationSettings.restoreLogNotify
+    notificationSettings.changeNotificationTableSetting("restoreLogNotify", $val)
+
+    check val == notificationSettings.restoreLogNotify
+
+  test "Set invalid value":
+    var
+      settings = initEditorSettings()
+      notificationSettings = settings.notificationSettings
+
+    let beforeSettings = notificationSettings
+    notificationSettings.changeNotificationTableSetting("test", "test")
+
+    check beforeSettings == notificationSettings
+
+suite "Config mode: Chaging Filer table settings":
+  test "Chaging showIcons":
+    var
+      settings = initEditorSettings()
+      filerSettings = settings.filerSettings
+
+    let val = not filerSettings.showIcons
+    filerSettings.changeFilerTableSetting("showIcons", $val)
+
+    check val == filerSettings.showIcons
+
+  test "Set invalid value":
+    var
+      settings = initEditorSettings()
+      filerSettings = settings.filerSettings
+
+    let beforeSettings = filerSettings
+    filerSettings.changeFilerTableSetting("test", "test")
+
+    check beforeSettings == filerSettings
+
+suite "Config mode: Chaging Autocomplete table settings":
+  test "Chaging enable":
+    var
+      settings = initEditorSettings()
+      autocompleteSettings = settings.autocompleteSettings
+
+    let val = not autocompleteSettings.enable
+    autocompleteSettings.changeAutoCompleteTableSetting("enable", $val)
+
+    check val == autocompleteSettings.enable
+
+  test "Set invalid value":
+    var
+      settings = initEditorSettings()
+      autocompleteSettings = settings.autocompleteSettings
+
+    let beforeSettings = autocompleteSettings
+    autocompleteSettings.changeAutoCompleteTableSetting("test", "test")
+
+    check beforeSettings == autocompleteSettings
+
+suite "Config mode: Chaging Theme table settings":
+  # Generate test code
+  macro checkChaingThemeSetting(theme: ColorTheme, editorColorName: string): untyped =
+    let editorColor = ident(editorColorName.strVal)
+    quote do:
+      let
+        name = $`editorColorName`
+        testTitle = "Chaging " & name
+
+      test testTitle:
+        var settings = initEditorSettings()
+
+        let
+          position = if name[name.len - 2 .. ^1] == "Bg": "background"
+                     else: "foreground"
+          currentVal = ColorThemeTable[theme].`editorColor`
+          n = if position == "background": name[0 .. name.high - 2]
+              else: name
+        var val = Color.default
+        if currentVal == val: inc(val)
+        settings.changeeThemeTableSetting(n, position, $val)
+
+        check ColorThemeTable[theme].`editorColor` == val
+
+  let theme = ColorTheme.dark
+  for name, _ in ColorThemeTable[theme].fieldPairs:
+    checkChaingThemeSetting(theme, $name)
