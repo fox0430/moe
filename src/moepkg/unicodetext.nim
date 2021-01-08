@@ -340,7 +340,8 @@ proc contains*(runes, sub: seq[Rune]): bool {.inline.} =
 
 proc splitWhitespace*(runes: seq[Rune]): seq[seq[Rune]] =
   for s in unicode.split($runes):
-    result.add(s.toRunes)
+    if not s.isEmptyOrWhitespace:
+      result.add(s.toRunes)
 
 iterator split*(runes: seq[Rune], isSep: proc (r: Rune): bool, removeEmptyEntries: bool = false): seq[Rune] =
   var first = 0
@@ -355,3 +356,11 @@ iterator split*(runes: seq[Rune], isSep: proc (r: Rune): bool, removeEmptyEntrie
 from os import `/`
 proc `/`*(runes1, runes2: seq[Rune]): seq[Rune] {.inline.} =
   toRunes($runes1 / $runes2)
+
+proc repeat*(runes: seq[Rune], n: Natural): seq[Rune] =
+  let str = repeat($runes, n)
+  result = str.toRunes
+
+proc repeat*(rune: Rune, n: Natural): seq[Rune] =
+  let str = repeat($rune, n)
+  result = str.ru

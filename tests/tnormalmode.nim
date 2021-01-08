@@ -525,3 +525,589 @@ suite "Normal mode: Delete the line from first line to current line":
     check buffer.len == 1 and buffer[0] == ru"d"
 
     check status.registers.yankedLines == @[ru"a", ru"b", ru"c"]
+
+suite "Normal mode: Delete inside paren and enter insert mode":
+  test "Delete inside double quotes and enter insert mode (ci\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru """abc "def" "ghi""""])
+    currentMainWindowNode.currentColumn = 6
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'c', ru'i', ru'"']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru """abc "" "ghi""""
+    check currentBufStatus.mode == Mode.insert
+
+    check currentMainWindowNode.currentColumn == 5
+
+    check status.registers.yankedStr == ru"def"
+
+  test "Delete inside double quotes and enter insert mode (ci' command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc 'def' 'ghi'"])
+    currentMainWindowNode.currentColumn = 6
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'c', ru'i', ru'\'']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru "abc '' 'ghi'"
+    check currentBufStatus.mode == Mode.insert
+
+    check currentMainWindowNode.currentColumn == 5
+
+    check status.registers.yankedStr == ru"def"
+
+  test "Delete inside curly brackets and enter insert mode (ci{ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc {def} {ghi}"])
+    currentMainWindowNode.currentColumn = 6
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'c', ru'i', ru'{']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru "abc {} {ghi}"
+    check currentBufStatus.mode == Mode.insert
+
+    check currentMainWindowNode.currentColumn == 5
+
+    check status.registers.yankedStr == ru"def"
+
+  test "Delete inside round brackets and enter insert mode (ci( command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc (def) (ghi)"])
+    currentMainWindowNode.currentColumn = 6
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'c', ru'i', ru'(']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru "abc () (ghi)"
+    check currentBufStatus.mode == Mode.insert
+
+    check currentMainWindowNode.currentColumn == 5
+
+    check status.registers.yankedStr == ru"def"
+
+  test "Delete inside square brackets and enter insert mode (ci[ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc [def] [ghi]"])
+    currentMainWindowNode.currentColumn = 6
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'c', ru'i', ru'[']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru "abc [] [ghi]"
+    check currentBufStatus.mode == Mode.insert
+
+    check currentMainWindowNode.currentColumn == 5
+
+    check status.registers.yankedStr == ru"def"
+
+suite "Normal mode: Delete current word and enter insert mode":
+  test "Delete current word and enter insert mode (ciw command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'c', ru'i', ru'w']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru "def"
+    check currentBufStatus.mode == Mode.insert
+
+    check currentMainWindowNode.currentColumn == 0
+
+    check status.registers.yankedStr == ru"abc "
+
+  test "Delete current word and enter insert mode when empty line (ciw command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc"])
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'c', ru'i', ru'w']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru""
+    check currentBufStatus.buffer[1] == ru"abc"
+    check currentBufStatus.mode == Mode.insert
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+suite "Normal mode: Delete inside paren":
+  test "Delete inside double quotes and enter insert mode (di\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru """abc "def" "ghi""""])
+    currentMainWindowNode.currentColumn = 6
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'd', ru'i', ru'"']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru """abc "" "ghi""""
+
+    check currentMainWindowNode.currentColumn == 5
+
+    check status.registers.yankedStr == ru"def"
+
+  test "Delete inside double quotes (di' command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc 'def' 'ghi'"])
+    currentMainWindowNode.currentColumn = 6
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'd', ru'i', ru'\'']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru "abc '' 'ghi'"
+
+    check currentMainWindowNode.currentColumn == 5
+
+    check status.registers.yankedStr == ru"def"
+
+  test "Delete inside curly brackets (di{ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc {def} {ghi}"])
+    currentMainWindowNode.currentColumn = 6
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'd', ru'i', ru'{']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru "abc {} {ghi}"
+
+    check currentMainWindowNode.currentColumn == 5
+
+    check status.registers.yankedStr == ru"def"
+
+  test "Delete inside round brackets (di( command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc (def) (ghi)"])
+    currentMainWindowNode.currentColumn = 6
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'd', ru'i', ru'(']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru "abc () (ghi)"
+
+    check currentMainWindowNode.currentColumn == 5
+
+    check status.registers.yankedStr == ru"def"
+
+  test "Delete inside square brackets (di[ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc [def] [ghi]"])
+    currentMainWindowNode.currentColumn = 6
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'd', ru'i', ru'[']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru "abc [] [ghi]"
+
+    check currentMainWindowNode.currentColumn == 5
+
+    check status.registers.yankedStr == ru"def"
+
+suite "Normal mode: Delete current word":
+  test "Delete current word and (diw command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'd', ru'i', ru'w']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru "def"
+
+    check currentMainWindowNode.currentColumn == 0
+
+    check status.registers.yankedStr == ru"abc "
+
+  test "Delete current word when empty line (diw command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc"])
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'd', ru'i', ru'w']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru""
+    check currentBufStatus.buffer[1] == ru"abc"
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+suite "Normal mode: Delete current character and enter insert mode":
+  test "Delete current character and enter insert mode (s command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru's']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru"bc"
+    check currentBufStatus.mode == Mode.insert
+
+    check status.registers.yankedStr == ru"a"
+
+  test "Delete current character and enter insert mode when empty line (s command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"", ru""])
+    currentMainWindowNode.currentLine = 1
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru's']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 3
+    for i in  0 ..< currentBufStatus.buffer.len:
+      check currentBufStatus.buffer[i] == ru""
+
+    check currentBufStatus.mode == Mode.insert
+
+  test "Delete 3 characters and enter insert mode(3s command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcdef"])
+    currentMainWindowNode.currentLine = 1
+
+    status.resize(100, 100)
+    status.update
+
+    currentBufStatus.cmdLoop = 3
+    let commands = @[ru's']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru"def"
+    check currentBufStatus.mode == Mode.insert
+
+    check status.registers.yankedStr == ru"abc"
+
+  test "Delete current character and enter insert mode (cu command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'c', ru'l']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru"bc"
+    check currentBufStatus.mode == Mode.insert
+
+  test "Delete current character and enter insert mode when empty line (s command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"", ru""])
+    currentMainWindowNode.currentLine = 1
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'c', ru'l']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 3
+    for i in  0 ..< currentBufStatus.buffer.len:
+      check currentBufStatus.buffer[i] == ru""
+
+    check currentBufStatus.mode == Mode.insert
+
+suite "Normal mode: Yank lines":
+  test "Yank to the previous blank line (y{ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(
+      @[ru"abc", ru"", ru"def", ru"ghi", ru"", ru"jkl"])
+    currentMainWindowNode.currentLine = 4
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'y', ru'{']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.yankedLines.len == 4
+    check status.registers.yankedLines == @[ru "", ru"def", ru"ghi", ru""]
+
+  test "Yank to the first line (y{ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru""])
+    currentMainWindowNode.currentLine = 2
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'y', ru'{']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.yankedLines.len == 3
+    check status.registers.yankedLines == @[ru "abc", ru"def", ru""]
+
+  test "Yank to the next blank line (y} command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc", ru"def", ru""])
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'y', ru'}']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.yankedLines.len == 4
+    check status.registers.yankedLines == @[ru"", ru "abc", ru"def", ru""]
+
+  test "Yank to the last line (y} command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc", ru"def"])
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'y', ru'}']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.yankedLines.len == 3
+    check status.registers.yankedLines == @[ru"", ru "abc", ru"def"]
+
+  test "Yank a line (yy command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(
+      @[ru"abc", ru"def", ru"ghi"])
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'y', ru'y']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.yankedLines == @[ru "abc"]
+
+  test "Yank a line (Y command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(
+      @[ru"abc", ru"def", ru"ghi"])
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'Y']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.yankedLines == @[ru "abc"]
+
+suite "Normal mode: Delete the characters from current column to end of line":
+  test "Delete 5 characters (d$ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcdefgh"])
+    currentMainWindowNode.currentColumn = 3
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'd', ru'$']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru"abc"
+
+    check status.registers.yankedStr == ru"defgh"
+
+suite "Normal mode: delete from the beginning of the line to current column":
+  test "Delete 5 characters (d0 command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcdefgh"])
+    currentMainWindowNode.currentColumn = 5
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = @[ru'd', ru'0']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru"fgh"
+
+    check status.registers.yankedStr == ru"abcde"
+
+suite "Normal mode: Yank string":
+  test "yank character (yl command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcdefgh"])
+
+    let commands = @[ru'y', ru'l']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.yankedStr == ru"a"
+
+  test "yank 3 characters (3yl command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+
+    currentBufStatus.cmdLoop = 3
+    let commands = @[ru'y', ru'l']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.yankedStr == ru"abc"
+
+  test "yank 5 characters (10yl command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+
+    currentBufStatus.cmdLoop = 10
+    let commands = @[ru'y', ru'l']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.yankedStr == ru"abcde"
+
+suite "Normal mode: Cut character before cursor":
+  test "Cut character before cursor (X command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+    currentMainWindowNode.currentColumn = 1
+
+    let commands = @[ru'X']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru"bcde"
+
+    check status.registers.yankedStr == ru"a"
+
+  test "Cut 3 characters before cursor (3X command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+    currentMainWindowNode.currentColumn = 3
+
+    currentBufStatus.cmdLoop = 3
+    let commands = @[ru'X']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru"de"
+
+    check status.registers.yankedStr == ru"abc"
+
+  test "Do nothing (X command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+
+    let commands = @[ru'X']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru"abcde"
+
+    check status.registers.yankedStr == ru""
+
+  test "Cut character before cursor (dh command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+    currentMainWindowNode.currentColumn = 1
+
+    let commands = @[ru'd', ru'h']
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer[0] == ru"bcde"
+
+    check status.registers.yankedStr == ru"a"

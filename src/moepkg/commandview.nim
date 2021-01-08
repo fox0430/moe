@@ -14,70 +14,71 @@ type SuggestType = enum
   exCommandOption
   filePath
 
-const exCommandList = [
-  "!",
-  "deleteParen",
-  "b",
-  "bd",
-  "bfirst",
-  "blast",
-  "bnext",
-  "bprev",
-  "buildOnSave",
-  "buf",
-  "clipboard",
-  "conf",
-  "cursorLine",
-  "cws",
-  "debug",
-  "deleteTrailingSpaces",
-  "dws",
-  "e",
-  "ene",
-  "help",
-  "highlightCurrentWord",
-  "highlightFullSpace",
-  "highlightParen",
-  "history",
-  "icon",
-  "ignorecase",
-  "incrementalSearch",
-  "indent",
-  "indentationLines",
-  "linenum",
-  "liveReload",
-  "log",
-  "ls",
-  "lsw",
-  "multipleStatusbar",
-  "new",
-  "noh",
-  "paren",
-  "putConfigFile",
-  "q",
-  "Q",
-  "q!",
-  "qa",
-  "qa!",
-  "recent",
-  "run",
-  "scrollSpeed",
-  "showGitInactive",
-  "smartcase",
-  "smoothScroll",
-  "sp",
-  "statusbar",
-  "syntax",
-  "tab",
-  "tabstop",
-  "theme",
-  "vs",
-  "w",
-  "w!",
-  "ws",
-  "wq",
-  "wq!",
-  "wqa",
+const exCommandList: array[64, tuple[command, description: string]] = [
+  (command: "!", description: "                    | Shell command execution"),
+  (command: "deleteParen", description: "          | Enable/Disable auto delete paren"),
+  (command: "b", description: "                    | Change the buffer with the given number"),
+  (command: "bd", description: "                   | Delete the current buffer"),
+  (command: "bfirst", description: "               | Change the first buffer"),
+  (command: "blast", description: "                | Change the last buffer"),
+  (command: "bnext", description: "                | Change the next buffer"),
+  (command: "bprev", description: "                | Change the previous buffer"),
+  (command: "buildOnSave", description: "          | Enable/Disable build on save"),
+  (command: "buf", description: "                  | Open the buffer manager"),
+  (command: "clipboard", description: "            | Enable/Disable accessing the system clipboard"),
+  (command: "conf", description: "                 | Open the configuration mode"),
+  (command: "cursorLine", description: "           | Change setting to the cursorLine"),
+  (command: "cws", description: "                  | Create the work space"),
+  (command: "debug", description: "                | Open the debug mode"),
+  (command: "deleteTrailingSpaces", description: " | Delete the trailing spaces in the current buffer"),
+  (command: "dws", description: "                  | Delete the current workspace"),
+  (command: "e", description: "                    | Open file"),
+  (command: "ene", description: "                  | Create the empty buffer"),
+  (command: "help", description: "                 | Open the help"),
+  (command: "highlightCurrentLine", description: " | Change setting to the highlightCurrentLine"),
+  (command: "highlightCurrentWord", description: " | Change setting to the highlightCurrentWord"),
+  (command: "highlightFullSpace", description: "   | Change setting to the highlightFullSpace"),
+  (command: "highlightParen", description: "       | Change setting to the highlightParen"),
+  (command: "history", description: "              | Open the history mode (Backup file manager)"),
+  (command: "icon", description: "                 | Show/Hidden icons in filer mode"),
+  (command: "ignorecase", description: "           | Change setting to ignore case in search"),
+  (command: "incrementalSearch", description: "    | Enable/Disable incremental search"),
+  (command: "indent", description: "               | Enable/Disable auto indent"),
+  (command: "indentationLines", description: "     | Enable/Disable auto indentation lines"),
+  (command: "linenum", description: "              | Enable/Disable the line number"),
+  (command: "liveReload", description: "           | Enable/Disable the live reload of the config file"),
+  (command: "log", description: "                  | Open the log viewer"),
+  (command: "ls", description: "                   | Show the all buffer"),
+  (command: "lsw", description: "                  | Show the all workspace"),
+  (command: "multipleStatusLine", description: "    | Enable/Disable multiple status line"),
+  (command: "new", description: "                  | Create the new buffer in split window horizontally"),
+  (command: "noh", description: "                  | Turn off highlights"),
+  (command: "paren", description: "                | Enable/Disable auto close paren"),
+  (command: "putConfigFile", description: "        | Put the sample configuration file in ~/.config/moe"),
+  (command: "q", description: "                    | Close the current window"),
+  (command: "Q", description: "                    | Run Quickrun"),
+  (command: "q!", description: "                   | Force close the current window"),
+  (command: "qa", description: "                   | Close the all window in current workspace"),
+  (command: "qa!", description: "                  | Force close the all window in current workspace"),
+  (command: "recent", description: "               | Open the recent file selection mode"),
+  (command: "run", description: "                  | run Quickrun"),
+  (command: "scrollSpeed", description: "          | Change setting to the scroll speed"),
+  (command: "showGitInactive", description: "      | Change status line setting to show/hide git branch name in inactive window"),
+  (command: "smartcase", description: "            | Change setting to smart case in search"),
+  (command: "smoothScroll", description: "         | Enable/Disable the smooth scroll"),
+  (command: "sp", description: "                   | Open the file in horizontal split window"),
+  (command: "statusLine", description: "            | Enable/Disable the status line"),
+  (command: "syntax", description: "               | Enable/Disable the syntax highlighting"),
+  (command: "tab", description: "                  | Enable/Disable the tab line"),
+  (command: "tabstop", description: "              | Change setting to the tabstop"),
+  (command: "theme", description: "                | Change the color theme"),
+  (command: "vs", description: "                   | Vertical split window"),
+  (command: "w", description: "                    | Write file"),
+  (command: "w!", description: "                   | Force write file"),
+  (command: "ws", description: "                   | Change the current workspace"),
+  (command: "wq", description: "                   | Write file and close window"),
+  (command: "wq!", description: "                  | Force write file and close window"),
+  (command: "wqa", description: "                  | Write all file in current workspace")
 ]
 
 proc askCreateDirPrompt*(commndLine: var CommandLine,
@@ -359,7 +360,7 @@ proc isExCommand(exBuffer: seq[Rune]): bool =
 
   let buffer = ($exBuffer).splitWhitespace(-1)
   for i in 0 ..< exCommandList.len:
-    if buffer[0] == $exCommandList[i]: return true
+    if buffer[0] == exCommandList[i].command: return true
 
 proc getCandidatesExCommandOption(status: var Editorstatus,
                                   exStatus: var ExModeViewStatus,
@@ -373,14 +374,15 @@ proc getCandidatesExCommandOption(status: var Editorstatus,
        "linenum",
        "livereload",
        "realtimesearch",
-       "statusbar",
+       "statusline",
        "syntax",
        "tabstop",
        "smoothscroll",
        "clipboard",
+       "highlightCurrentLine",
        "highlightcurrentword",
        "highlightfullspace",
-       "multiplestatusbar",
+       "multiplestatusline",
        "buildonsave",
        "indentationlines",
        "icon",
@@ -405,19 +407,20 @@ proc getCandidatesExCommandOption(status: var Editorstatus,
 proc getCandidatesExCommand(commandLineBuffer: seq[Rune]): seq[seq[Rune]] =
   result = @[commandLineBuffer]
   let buffer = toLowerAscii($commandLineBuffer)
-  for str in exCommandList:
-    if str.len >= buffer.len and str.startsWith(buffer):
-      result.add(str.toRunes)
+  for list in exCommandList:
+    let cmd = list.command
+    if cmd.len >= buffer.len and cmd.startsWith(buffer):
+      result.add(cmd.toRunes)
 
 proc getSuggestType(buffer: seq[Rune]): SuggestType =
   template isECommand(command: seq[seq[Rune]]): bool =
-    command.len == 2 and cmpIgnoreCase($command[0], "e") == 0
+    cmpIgnoreCase($command[0], "e") == 0
 
   template isVsCommand(command: seq[seq[Rune]]): bool =
-    command.len == 2 and cmpIgnoreCase($command[0], "vs") == 0
+    cmpIgnoreCase($command[0], "vs") == 0
 
   template isSvCommand(command: seq[seq[Rune]]): bool =
-    command.len == 1 and cmpIgnoreCase($command[0], "sv") == 0
+    cmpIgnoreCase($command[0], "sv") == 0
 
   template isSpCommand(command: seq[seq[Rune]]): bool =
     command.len > 0 and
@@ -479,6 +482,12 @@ proc initDisplayBuffer(suggestlist: seq[seq[Rune]],
         let path = suggestlist[i]
         result.add(path[path.rfind(ru'/') + 1 ..< path.len])
     else: result = suggestlist[1 ..< suggestlist.len]
+  elif isSuggestTypeExCommand(suggestType):
+    # Add command description
+    for list in exCommandList:
+      for i in 1 ..< suggestlist.len:
+        if $suggestlist[i] == list.command:
+          result.add suggestlist[i] & list.description.ru
   else:
     result = suggestlist[1 ..< suggestlist.len]
 

@@ -8,7 +8,7 @@ currentNumber = true
 
 cursorLine = false
 
-statusBar = true
+statusLine = true
 
 tabLine = true
 
@@ -97,6 +97,8 @@ showModeInactive = false
 workSpaceLine = false
 
 [Highlight]
+
+currentLine = false
 
 reservedWord = ["TODO", "WIP", "NOTE"]
 
@@ -247,50 +249,50 @@ lineNumBg = "default"
 currentLineNum = "teal"
 currentLineNumBg = "default"
 # statsu bar
-statusBarNormalMode = "white"
-statusBarNormalModeBg = "blue"
-statusBarModeNormalMode = "black"
-statusBarModeNormalModeBg = "white"
-statusBarNormalModeInactive = "blue"
-statusBarNormalModeInactiveBg = "white"
+statusLineNormalMode = "white"
+statusLineNormalModeBg = "blue"
+statusLineModeNormalMode = "black"
+statusLineModeNormalModeBg = "white"
+statusLineNormalModeInactive = "blue"
+statusLineNormalModeInactiveBg = "white"
 
-statusBarInsertMode = "white"
-statusBarInsertModeBg = "blue"
-statusBarModeInsertMode = "black"
-statusBarModeInsertModeBg = "white"
-statusBarInsertModeInactive = "blue"
-statusBarInsertModeInactiveBg = "white"
+statusLineInsertMode = "white"
+statusLineInsertModeBg = "blue"
+statusLineModeInsertMode = "black"
+statusLineModeInsertModeBg = "white"
+statusLineInsertModeInactive = "blue"
+statusLineInsertModeInactiveBg = "white"
 
-statusBarVisualMode = "white"
-statusBarVisualModeBg = "blue"
-statusBarModeVisualMode = "black"
-statusBarModeVisualModeBg = "white"
-statusBarVisualModeInactive = "blue"
-statusBarVisualModeInactiveBg = "white"
+statusLineVisualMode = "white"
+statusLineVisualModeBg = "blue"
+statusLineModeVisualMode = "black"
+statusLineModeVisualModeBg = "white"
+statusLineVisualModeInactive = "blue"
+statusLineVisualModeInactiveBg = "white"
 
-statusBarReplaceMode = "white"
-statusBarReplaceModeBg = "blue"
-statusBarModeReplaceMode = "black"
-statusBarModeReplaceModeBg = "white"
-statusBarReplaceModeInactive = "blue"
-statusBarReplaceModeInactiveBg = "white"
+statusLineReplaceMode = "white"
+statusLineReplaceModeBg = "blue"
+statusLineModeReplaceMode = "black"
+statusLineModeReplaceModeBg = "white"
+statusLineReplaceModeInactive = "blue"
+statusLineReplaceModeInactiveBg = "white"
 
-statusBarFilerMode = "white"
-statusBarFilerModeBg = "blue"
-statusBarModeFilerMode = "black"
-statusBarModeFilerModeBg = "white"
-statusBarFilerModeInactive = "blue"
-statusBarFilerModeInactiveBg = "white"
+statusLineFilerMode = "white"
+statusLineFilerModeBg = "blue"
+statusLineModeFilerMode = "black"
+statusLineModeFilerModeBg = "white"
+statusLineFilerModeInactive = "blue"
+statusLineFilerModeInactiveBg = "white"
 
-statusBarExMode = "white"
-statusBarExModeBg = "blue"
-statusBarModeExMode = "black"
-statusBarModeExModeBg = "white"
-statusBarExModeInactive = "blue"
-statusBarExModeInactiveBg = "white"
+statusLineExMode = "white"
+statusLineExModeBg = "blue"
+statusLineModeExMode = "black"
+statusLineModeExModeBg = "white"
+statusLineExModeInactive = "blue"
+statusLineExModeInactiveBg = "white"
 
-statusBarGitBranch = "white"
-statusBarGitBranchBg = "blue"
+statusLineGitBranch = "white"
+statusLineGitBranchBg = "blue"
 
 # tab line
 tab = "white"
@@ -375,3 +377,6 @@ reservedWordBg = "gray"
 # configuration mode
 currentSetting = "gray100"
 currentSettingBg = "teal"
+
+# highlight current line background
+currentLineBg = "gray27"

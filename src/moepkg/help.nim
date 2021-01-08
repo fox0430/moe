@@ -27,52 +27,71 @@ A       -Same as $, a
 
 # Normal mode
 
-h         - Go left
-j         - Go down
-k         - Go up
-l         - Go right
-w         - Go forwards to the start of a word
-e         - Go forwards to the end of a word
-b         - Go backwards to the start of a word
-r         - Replace a character at the cursor
-Page Up   - Page Up
-Page Down - Page Down
-gg        - Go to the first line
-g_        - Go to the last non-blank character of the line
-G         - Go to the last line
-0         - Go to the first line
-$         - Go to the end of the line
-^         - Go to the non-blank character start of line
-Ctrl, w   - Half Page Down
-Ctrl - d  - Half Page Up
-d, $ or D - Delete until the end of the line
-yy        - Copy a line
-p         - Paste the clipboard
-n         - Search forwards
-:         - Start Ex mode
-u         - Undo
-Ctrl, r   - Redo
->         - Indent
-<         - Unindent
-==        - Auto indent
-dd        - Delete a line
-x         - Delete current character
-S or cc   - Delete the characters in current line and start insert mode
-*         - Search forwards for the word under cursor
-#         - Search backwards for the word under cursor
-f         - Jump to next occurrence
-F         - Jump to previous occurence
-Ctrl, k   - Move next window
-Ctrl, j   - Move prev window
-zt        - Scroll the screen so the cursor is at the top
-zb        - Scroll the screen so the cursor is at the bottom
-z.        - Center the screen on the cursor
-ZZ        - Write current file and exit
-ZQ        - Same as :q!
-Ctrl, wc  - CLose current window
-/         - Search forwards
-?         - Search backwards
-\r        - QuickRun
+h          - Go left
+j          - Go down
+k          - Go up
+l          - Go right
+w          - Go forwards to the start of a word
+e          - Go forwards to the end of a word
+b          - Go backwards to the start of a word
+r          - Replace a character at the cursor
+Page Up    - Page Up
+Page Down  - Page Down
+gg         - Go to the first line
+g_         - Go to the last non-blank character of the line
+G          - Go to the last line
+0          - Go to the first line
+$          - Go to the end of the line
+^          - Go to the non-blank character start of line
+{          - Go previous blank line
+}          - Go next blank line
+Ctrl, w    - Half Page Down
+Ctrl - d   - Half Page Up
+d, $ or D  - Delete until the end of the line
+yy or Y    - Copy a line
+y{         - Yank to the previous blank line
+y}         - Yank to the next blank line
+yl         - Yank a character
+p          - Paste the clipboard
+n          - Search forwards
+:          - Start Ex mode
+u          - Undo
+Ctrl, r    - Redo
+>          - Indent
+<          - Unindent
+==         - Auto indent
+dd         - Delete a line
+x          - Delete current character
+X or dh    - cut a character before cursor
+S or cc    - Delete the characters in current line and start insert mode
+s or cl    - Delete current character and enter insert mode
+ci"        - Delete inside of double quotes and enter insert mode
+ci'        - Delete inside of single quotes and enter insert mode
+ciw        - Delete current word and enter insert mode
+ci( or ci) - Delete inside of round brackets and enter insert mode
+ci[ or ci] - Delete inside of square brackets and enter insert mode
+ci{ or ci} - Delete inside of curly brackets and enter insert mode
+di"        - Delete inside of double quotes
+di'        - Delete inside of single quotes
+diw        - Delete current word
+di( or di) - Delete inside of round brackets
+di[ or di] - Delete inside of square brackets
+di{ or di} - Delete inside of curly brackets
+*          - Search forwards for the word under cursor
+#          - Search backwards for the word under cursor
+f          - Jump to next occurrence
+F          - Jump to previous occurence
+Ctrl, k    - Move next window
+Ctrl, j    - Move prev window
+zt         - Scroll the screen so the cursor is at the top
+zb         - Scroll the screen so the cursor is at the bottom
+z.         - Center the screen on the cursor
+ZZ         - Write current file and exit
+ZQ         - Same as :q!
+Ctrl, wc   - CLose current window
+/          - Search forwards
+?          - Search backwards
+\r         - QuickRun
 
 # Visual mode
 
@@ -163,7 +182,7 @@ sp filename - Open in horizontal split window
 cws - Create new work space
 ws number - Change current work space : Example ws 2
 dws - Delete current work space
-lsw - Show workspace list in status bar
+lsw - Show workspace list in status line
 
 livereload on or livereload on - Change setting of live reload of configuration file
 theme themeName - Change color theme : Example theme dark
@@ -173,7 +192,7 @@ tabstop number - Change setting to tabStop : Exmaple tabstop 2
 paren on or paren off - Change setting to auto close paren
 indent on or indent off - Chnage sestting to auto indent
 linenum on or linenum off - Change setting to dispaly line number
-statusbar on or statusbar on - Change setting to display stattus bar
+statusLine on or statusLine on - Change setting to display stattus bar
 realtimesearch on or realtimesearch off - Change setting to real-time search
 deleteparen on or deleteparen off - Change setting to auto delete paren
 smoothscroll on or smoothscroll off - Change setting to smooth scroll
@@ -183,12 +202,13 @@ clipboard on or clipboard off - Change setting to system clipboard
 highlightfullspace on or highlightfullspace off - Change setting to highlight full width space
 buildonsave on or buildonsave off - Change setting to build on save
 indentationlines on  or indentationlines off - Change setting to indentation lines
-showGitInactive on or showGitInactive off - Change status bar setting to show/hide git branch name in inactive window
+showGitInactive on or showGitInactive off - Change status line setting to show/hide git branch name in inactive window
 noh - Turn off highlights
 icon - Setting show/hidden icons in filer mode
 deleteTrailingSpaces - Delete trailing spaces
 ignorecase - Change setting to ignorecase
 smartcase - Change setting to smartcase
+highlightCurrentLine on or highlightCurrentLine off - Change the highlight setting of the current line
 
 log - Open messages log viwer
 

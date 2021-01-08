@@ -221,7 +221,8 @@ proc initHighlight*(buffer: string,
     if not empty: result.colorSegments.add(cs)
 
   if language == SourceLanguage.langNone or
-     language == SourceLanguage.langShell:
+     language == SourceLanguage.langShell or
+     language == SourceLanguage.langMarkDown:
     splitByNewline(buffer, EditorColorPair.defaultChar)
     return result
 
@@ -301,7 +302,7 @@ proc detectLanguage*(filename: string): SourceLanguage =
   # TODO: use settings file
   let extention = filename.splitFile.ext
   case extention:
-  of ".nim", ".nimble":
+  of ".nim", ".nimble", ".nims":
     return SourceLanguage.langNim
   of ".c", ".h":
     return SourceLanguage.langC
@@ -311,7 +312,7 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langCsharp
   of ".java":
     return SourceLanguage.langJava
-  of ".yaml":
+  of ".yaml", ".yml":
     return SourceLanguage.langYaml
   of ".py":
     return SourceLanguage.langPython
@@ -319,5 +320,7 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langJavaScript
   of ".sh", ".bash":
     return SourceLanguage.langShell
+  of ".md":
+    return SourceLanguage.langMarkDown
   else:
     return SourceLanguage.langNone

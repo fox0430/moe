@@ -1,6 +1,7 @@
 import unittest
 import moepkg/[ui, highlight, editorstatus, editorview, gapbuffer, unicodetext,
-               insertmode, movement, editor, window, color, bufferstatus]
+               insertmode, movement, editor, window, color, bufferstatus,
+               settings]
 
 test "Add new buffer":
   var status = initEditorStatus()
@@ -8,6 +9,14 @@ test "Add new buffer":
   status.addNewBuffer
   status.resize(100, 100)
   check(status.bufStatus.len == 2)
+
+test "Add new buffer and update editor view when disabling current line highlighting (Fix #1189)":
+  var status = initEditorStatus()
+  status.addNewBuffer
+  status.settings.view.highlightCurrentLine = false
+
+  status.resize(100, 100)
+  status.update
 
 test "Vertical split window":
   var status = initEditorStatus()
@@ -787,3 +796,42 @@ suite "editorstatus: Highlight trailing spaces":
     check(node.highlight[0].color == EditorColorPair.defaultChar)
     check(node.highlight[0].firstColumn == 0)
     check(node.highlight[0].lastColumn == 0)
+
+suite "editorstatus: Highlight paren":
+  test "Highlight ')'":
+    var status = initEditorStatus()
+    status.addNewBuffer("test.nim")
+    currentBufStatus.buffer = initGapBuffer(@[ru"proc test(a: string) ="])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    currentMainWindowNode.currentColumn = 9
+
+    status.resize(100, 100)
+    status.update
+
+    check currentMainWindowNode.highlight[8] == ColorSegment(
+      firstRow: 0, firstColumn: 19, lastRow: 0, lastColumn: 19,
+      color: EditorColorPair.parenText)
+
+  test "Highlight '('":
+    var status = initEditorStatus()
+    status.addNewBuffer("test.nim")
+    currentBufStatus.buffer = initGapBuffer(@[ru"proc test(a: string) ="])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    currentMainWindowNode.currentColumn = 19
+
+    status.resize(100, 100)
+    status.update
+
+    check currentMainWindowNode.highlight[3] == ColorSegment(
+      firstRow: 0, firstColumn: 9, lastRow: 0, lastColumn: 9,
+      color: EditorColorPair.parenText)

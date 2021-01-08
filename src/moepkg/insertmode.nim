@@ -30,7 +30,7 @@ proc insertMode*(status: var EditorStatus) =
         y, x,
         terminalHeight(), terminalWidth(),
         mainWindowY,
-        status.settings.statusBar.enable)
+        status.settings.statusLine.enable)
 
     var key = errorKey
     while key == errorKey:
@@ -114,6 +114,7 @@ proc insertMode*(status: var EditorStatus) =
     elif isControlW(key):
       currentBufStatus.deleteWordBeforeCursor(
         currentMainWindowNode,
+        status.registers,
         status.settings.tabStop)
     elif isControlU(key):
       currentBufStatus.deleteCharactersBeforeCursorInCurrentLine(

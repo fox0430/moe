@@ -71,3 +71,11 @@ test """Highlight "echo \"""":
   discard initHighlight(code,
                         reservedWords,
                         SourceLanguage.langNim)
+
+test "initHighlight shell script (Fix #1166)":
+  const code = "echo hello"
+  let r = initHighlight(code,
+                        reservedWords,
+                        SourceLanguage.langShell)
+
+  check r.len > 0

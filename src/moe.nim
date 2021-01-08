@@ -1,35 +1,20 @@
 import os, unicode, times
-import moepkg/ui
-import moepkg/editorstatus
-import moepkg/normalmode
-import moepkg/insertmode
-import moepkg/visualmode
-import moepkg/replacemode
-import moepkg/filermode
-import moepkg/exmode
-import moepkg/buffermanager
-import moepkg/logviewer
-import moepkg/cmdlineoption
-import moepkg/bufferstatus
-import moepkg/help
-import moepkg/recentfilemode
-import moepkg/quickrun
-import moepkg/historymanager
-import moepkg/diffviewer
-import moepkg/configmode
-import moepkg/debugmode
+import moepkg/[ui, editorstatus, normalmode, insertmode, visualmode,
+               replacemode, filermode, exmode, buffermanager, logviewer,
+               cmdlineoption, bufferstatus, help, recentfilemode, quickrun,
+               historymanager, diffviewer, configmode, debugmode]
 
-proc main() =
+proc initEditor(): EditorStatus =
   let parsedList = parseCommandLineOption(commandLineParams())
 
   defer: exitUi()
 
   startUi()
 
-  var status = initEditorStatus()
-  status.loadConfigurationFile
-  status.timeConfFileLastReloaded = now()
-  status.changeTheme
+  result = initEditorStatus()
+  result.loadConfigurationFile
+  result.timeConfFileLastReloaded = now()
+  result.changeTheme
 
   setControlCHook(proc() {.noconv.} =
     exitUi()
@@ -38,11 +23,16 @@ proc main() =
   if parsedList.len > 0:
     for p in parsedList:
       if dirExists(p.filename):
-        status.addNewBuffer(p.filename, Mode.filer)
-      else: status.addNewBuffer(p.filename)
-  else: status.addNewBuffer
+        result.addNewBuffer(p.filename, Mode.filer)
+      else:
+        result.addNewBuffer(p.filename)
+  else:
+    result.addNewBuffer
 
   disableControlC()
+
+proc main() =
+  var status = initEditor()
 
   while status.workSpace.len > 0 and
         status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow > 0:

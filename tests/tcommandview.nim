@@ -40,14 +40,14 @@ suite "commandview: getCandidatesExCommandOption":
       "linenum",
       "livereload",
       "realtimesearch",
-      "statusbar",
+      "statusline",
       "syntax",
       "tabstop",
       "smoothscroll",
       "clipboard",
       "highlightcurrentword",
       "highlightfullspace",
-      "multiplestatusbar",
+      "multiplestatusline",
       "buildonsave",
       "indentationlines",
       "icon",
@@ -104,7 +104,7 @@ suite "commandview: getCandidatesExCommand":
 
     for i in 0 ..< r.high:
       # r[0] is empty string
-      check exCommandList[i] == $r[i + 1]
+      check exCommandList[i].command == $r[i + 1]
 
   test "Expect ex commands starting with \"b\"":
     let r = getCandidatesExCommand(ru"b")
@@ -123,3 +123,25 @@ suite "commandview: getCandidatesExCommand":
     for i in 0 ..< r.high:
       # r[0] is empty string
       check commands[i] == $r[i + 1]
+
+suite "commandview: initDisplayBuffer":
+  test "Check display buffer":
+    let
+      list = getCandidatesExCommand(ru"")
+      r = initDisplayBuffer(list, SuggestType.exCommand)
+
+    for i in 0 ..< r.high:
+      check exCommandList[i].command & exCommandList[i].description == $r[i]
+
+suite "commandview: getSuggestType":
+  test "Expect to SuggestType.exCommand":
+    const buffer = ru"h"
+    check getSuggestType(buffer) == SuggestType.exCommand
+
+  test "Expect to SuggestType.exCommandOption":
+    const buffer = ru"cursorLine "
+    check getSuggestType(buffer) == SuggestType.exCommandOption
+
+  test "Expect to SuggestType.filePath":
+    const buffer = ru"e "
+    check getSuggestType(buffer) == SuggestType.filePath

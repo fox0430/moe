@@ -28,13 +28,15 @@ proc yankBuffer(bufStatus: var BufferStatus,
                 platform: Platform,
                 clipboard: bool) =
 
-  if bufStatus.buffer[windowNode.currentLine].len < 1: return
   registers.yankedLines = @[]
   registers.yankedStr = @[]
 
   if area.startLine == area.endLine:
-    for j in area.startColumn .. area.endColumn:
-      registers.yankedStr.add(bufStatus.buffer[area.startLine][j])
+    if bufStatus.buffer[windowNode.currentLine].len < 1:
+        registers.yankedLines.add(@[ru""])
+    else:
+      for j in area.startColumn .. area.endColumn:
+        registers.yankedStr.add(bufStatus.buffer[area.startLine][j])
   else:
     for i in area.startLine .. area.endLine:
       if i == area.startLine and area.startColumn > 0:
@@ -267,52 +269,66 @@ proc getInsertBuffer(status: var Editorstatus): seq[Rune] =
   while true:
     status.update
 
-    var
-      workspaceIndex = status.currentWorkSpaceIndex
-      windowNode = status.workspace[workspaceIndex].currentMainWindowNode
-      bufferIndex = windowNode.bufferIndex
-
     var key = errorKey
     while key == errorKey:
       status.eventLoopTask
-      key = getKey(windowNode)
+      key = getKey(currentMainWindowNode)
 
     if isEscKey(key):
       break
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
     elif isEnterKey(key):
-      status.bufStatus[bufferIndex].keyEnter(windowNode,
+      currentBufStatus.keyEnter(
+        currentMainWindowNode,
         status.settings.autoIndent,
         status.settings.tabStop)
       break
     elif isDcKey(key):
-      status.bufStatus[bufferIndex].deleteCurrentCharacter(
-        status.workSpace[workspaceIndex].currentMainWindowNode,
+      currentBufStatus.deleteCurrentCharacter(
+        currentMainWindowNode,
         status.settings.autoDeleteParen)
       break
+    elif isTabKey(key):
+      result.add(key)
+      insertTab(currentBufStatus,
+                currentMainWindowNode,
+                status.settings.tabStop,
+                status.settings.autoCloseParen)
     else:
       result.add(key)
-      status.bufStatus[bufferIndex].insertCharacter(windowNode,
+      currentBufStatus.insertCharacter(
+        currentMainWindowNode,
         status.settings.autoCloseParen,
         key)
 
 proc insertCharBlock(bufStatus: var BufferStatus,
+                     windowNode: var WindowNode,
                      insertBuffer: seq[Rune],
-                     area: SelectArea) =
+                     area: SelectArea,
+                     tabStop: int,
+                     autoCloseParen: bool) =
 
-  if insertBuffer.len == 0 or
-      area.startLine == area.endLine: return
+  if area.startLine == area.endLine: return
+
+  let beforeLine = windowNode.currentLine
 
   for i in area.startLine + 1 .. area.endLine:
+    windowNode.currentLine = i
+    windowNode.currentColumn = area.startColumn
+
     if bufStatus.buffer[i].high >= area.startColumn:
-      let oldLine = bufStatus.buffer[i]
-      var newLine = bufStatus.buffer[i]
-
-      newline.insert(insertBuffer, area.startColumn)
-
-      if oldLine != newLine:
-        bufStatus.buffer[i] = newline
+      for c in insertBuffer:
+        if isTabKey(c):
+          insertTab(bufStatus,
+                    windowNode,
+                    tabStop,
+                    autoCloseParen)
+        else:
+          bufStatus.insertCharacter(windowNode,
+                                    autoCloseParen,
+                                    c)
+  windowNode.currentLine = beforeLine
 
 proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSelectArea
@@ -367,7 +383,13 @@ proc visualBlockCommand(status: var EditorStatus, area: var SelectArea, key: Run
     let insertBuffer = status.getInsertBuffer
 
     if insertBuffer.len > 0:
-      currentBufStatus.insertCharBlock(insertBuffer, area)
+      var windowNode = currentMainWindowNode
+      currentBufStatus.insertCharBlock(
+        windowNode,
+        insertBuffer,
+        area,
+        status.settings.tabStop,
+        status.settings.autoCloseParen)
     else:
       currentMainWindowNode.currentLine = area.startLine
       currentMainWindowNode.currentColumn = area.startColumn

@@ -109,12 +109,13 @@ suite "Insert mode":
   test "Delete the word before the cursor":
     var status = initEditorStatus()
     status.addNewBuffer
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc def"])
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc def"])
 
-    status.workspace[0].currentMainWindowNode.currentColumn = 4
+    currentMainWindowNode.currentColumn = 4
 
-    status.bufStatus[0].deleteWordBeforeCursor(
-      status.workSpace[0].currentMainWindowNode,
+    currentBufStatus.deleteWordBeforeCursor(
+      currentMainWindowNode,
+      status.registers,
       status.settings.tabStop)
 
     let buffer = status.bufStatus[0].buffer
@@ -124,10 +125,11 @@ suite "Insert mode":
   test "Delete the word before the cursor 2":
     var status = initEditorStatus()
     status.addNewBuffer
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    status.bufStatus[0].deleteWordBeforeCursor(
-      status.workSpace[0].currentMainWindowNode,
+    currentBufStatus.deleteWordBeforeCursor(
+      currentMainWindowNode,
+      status.registers,
       status.settings.tabStop)
 
     let buffer = status.bufStatus[0].buffer
@@ -141,8 +143,9 @@ suite "Insert mode":
 
     status.workspace[0].currentMainWindowNode.currentLine = 1
 
-    status.bufStatus[0].deleteWordBeforeCursor(
-      status.workSpace[0].currentMainWindowNode,
+    currentBufStatus.deleteWordBeforeCursor(
+      currentMainWindowNode,
+      status.registers,
       status.settings.tabStop)
 
     let buffer = status.bufStatus[0].buffer
@@ -428,7 +431,7 @@ suite "Insert mode":
 
     status.settings.tabLine.useTab = true
     status.settings.workSpace.workSpaceLine = false
-    status.settings.statusBar.enable = true
+    status.settings.statusLine.enable = true
 
     var suggestionWindow = tryOpenSuggestionWindow(
       currentBufStatus,
@@ -445,7 +448,7 @@ suite "Insert mode":
       y, x,
       100, 100,
       mainWindowNodeY,
-      status.settings.statusBar.enable)
+      status.settings.statusLine.enable)
 
     check suggestionWindow.get.popUpWindow.y == 2
     check suggestionWindow.get.popUpWindow.height == terminalHeight - 4

@@ -135,6 +135,46 @@ proc runQuickRunCommand(status: var Editorstatus) =
   else:
     status.bufStatus[quickRunWindowIndex].buffer = initGapBuffer(buffer)
 
+# ci command
+proc changeInnerCommand(status: var EditorStatus, key: Rune) =
+  let
+    currentLine = currentMainWindowNode.currentLine
+    oldLine = currentBufStatus.buffer[currentLine]
+
+  # Delete inside paren and enter insert mode
+  if isParen(key):
+    currentBufStatus.yankAndDeleteInsideOfParen(currentMainWindowNode,
+                                                status.registers,
+                                                key)
+
+    if oldLine != currentBufStatus.buffer[currentLine]:
+      currentMainWindowNode.currentColumn.inc
+      status.changeMode(Mode.insert)
+  # Delete current word and enter insert mode
+  elif key == ru'w':
+    if oldLine.len > 0:
+      currentBufStatus.moveToBackwardWord(currentMainWindowNode)
+      currentBufStatus.deleteWord(currentMainWindowNode, status.registers)
+    status.changeMode(Mode.insert)
+  else:
+    discard
+
+# di command
+proc yankAndDeleteInnerCommand(status: var EditorStatus, key: Rune) =
+  # Delete inside paren and enter insert mode
+  if isParen(key):
+    currentBufStatus.yankAndDeleteInsideOfParen(currentMainWindowNode,
+                                                status.registers,
+                                                key)
+    currentBufStatus.keyRight(currentMainWindowNode)
+  # Delete current word and enter insert mode
+  elif key == ru'w':
+    if currentBufStatus.buffer[currentMainWindowNode.currentLine].len > 0:
+      currentBufStatus.moveToBackwardWord(currentMainWindowNode)
+      currentBufStatus.deleteWord(currentMainWindowNode, status.registers)
+  else:
+    discard
+
 proc normalCommand(status: var EditorStatus,
                    commands: seq[Rune],
                    height, width: int)
@@ -205,7 +245,13 @@ proc normalCommand(status: var EditorStatus,
       status.settings.autoCloseParen,
       rune)
 
-  template deleteCharactersUntilEndOfLine() =
+  # d$ command
+  template yankAndDeleteCharactersUntilEndOfLine() =
+    let
+      lineWidth = currentBufStatus.buffer[windowNode.currentLine].len
+      count = lineWidth - windowNode.currentColumn
+    status.yankString(count)
+
     currentBufStatus.deleteCharacterUntilEndOfLine(
       status.settings.autoDeleteParen, windowNode)
 
@@ -281,12 +327,119 @@ proc normalCommand(status: var EditorStatus,
        mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
         status.closeWindow(currentWorkSpace.currentMainWindowNode, height, width)
 
-  template deleteLineFromFirstLineToCurrentLine() =
+  # dgg command
+  # Delete the line from first line to current line
+  template yankAndDeleteLineFromFirstLineToCurrentLine() =
     let currentLine = windowNode.currentLine
     status.yankLines(0, currentLine)
     status.moveToFirstLine
     for i in 0 ..< currentLine + 1:
       currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
+
+  # s and cl commands
+  template deleteCharacterAndEnterInsertMode() =
+    if currentBufStatus.buffer[windowNode.currentLine].len > 0:
+      let
+        lineWidth = currentBufStatus.buffer[windowNode.currentLine].len
+        loop = min(cmdLoop, lineWidth - windowNode.currentColumn)
+      status.yankString(loop)
+
+      for i in 0 ..< loop:
+        currentBufStatus.deleteCurrentCharacter(
+          windowNode,
+          status.settings.autoDeleteParen)
+
+    status.changeMode(Mode.insert)
+
+  # d{ command
+  template yankAndDeleteTillPreviousBlankLine() =
+    let
+      blankLine = currentBufStatus.findPreviousBlankLine(windowNode.currentLine)
+    status.yankLines(blankLine + 1, windowNode.currentLine)
+    currentBufStatus.deleteTillPreviousBlankLine(windowNode)
+
+  # d} command
+  template yankAndDeleteTillNextBlankLine() =
+    let blankLine = currentBufStatus.findNextBlankLine(windowNode.currentLine)
+    status.yankLines(windowNode.currentLine, blankLine - 1)
+    currentBufStatus.deleteTillNextBlankLine(windowNode)
+
+  # y{ command
+  template yankToPreviousBlankLine() =
+    let
+      currentLine = windowNode.currentLine
+      previousBlankLine = currentBufStatus.findPreviousBlankLine(currentLine)
+    status.yankLines(max(previousBlankLine, 0), currentLine)
+    if previousBlankLine >= 0: status.jumpLine(previousBlankLine)
+
+  # y} command
+  template yankToNextBlankLine() =
+    let
+      currentLine = windowNode.currentLine
+      buffer = currentBufStatus.buffer
+      nextBlankLine = currentBufStatus.findNextBlankLine(currentLine)
+    status.yankLines(currentLine, max(nextBlankLine, buffer.high))
+    if nextBlankLine >= 0: status.jumpLine(nextBlankLine)
+
+  # dd command
+  template yankAndDeleteLines() =
+    let lastLine = min(windowNode.currentLine + cmdLoop - 1,
+                       currentBufStatus.buffer.high)
+    status.yankLines(windowNode.currentLine, lastLine)
+    let count = min(cmdLoop,
+                    currentBufStatus.buffer.len - windowNode.currentLine)
+    for i in 0 ..< count:
+      currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
+
+  # d0 command
+  template yankAndDeleteCharacterBeginningOfLine() =
+    let currentColumn = windowNode.currentColumn
+    windowNode.currentColumn = 0
+    status.yankString(currentColumn)
+    windowNode.currentColumn = currentColumn
+
+    currentBufStatus.deleteCharacterBeginningOfLine(
+      status.settings.autoDeleteParen,
+      windowNode)
+
+  # dG command
+  # Yank and delete the line from current line to last line
+  template yankAndDeleteFromCurrentLineToLastLine() =
+    let lastLine = currentBufStatus.buffer.high
+    status.yankLines(windowNode.currentLine, lastLine)
+    let count = currentBufStatus.buffer.len - windowNode.currentLine
+
+    for i in 0 ..< count:
+      currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
+
+  ## yy command
+  template yankLines() =
+    let lastLine = min(windowNode.currentLine + cmdLoop - 1,
+                       currentBufStatus.buffer.high)
+    status.yankLines(windowNode.currentLine, lastLine)
+
+  # yl command
+  # Yank characters in the current line
+  template yankCharacters() =
+    let
+      buffer = currentBufStatus.buffer
+      width = buffer[windowNode.currentLine].len - windowNode.currentColumn
+      count = if  width > cmdLoop: cmdLoop
+              else: width
+    status.yankString(count)
+
+  # X and dh command
+  template cutCharacterBeforeCursor() =
+    if windowNode.currentColumn > 0:
+      let
+        currentColumn = windowNode.currentColumn
+        loop = if currentColumn - cmdLoop > 0: cmdLoop
+               else: currentColumn
+      currentMainWindowNode.currentColumn = currentColumn - loop
+
+      status.yankString(loop)
+      for i in 0 ..< loop:
+        deleteCurrentCharacter()
 
   let key = commands[0]
 
@@ -311,6 +464,8 @@ proc normalCommand(status: var EditorStatus,
     status.yankString(loop)
     for i in 0 ..< loop:
       deleteCurrentCharacter()
+  elif key == ord('X'):
+    cutCharacterBeforeCursor()
   elif key == ord('^') or key == ord('_'):
     currentBufStatus.moveToFirstNonBlankOfLine(windowNode)
   elif key == ord('0') or isHomeKey(key):
@@ -321,6 +476,10 @@ proc normalCommand(status: var EditorStatus,
     currentBufStatus.moveToFirstOfPreviousLine(windowNode)
   elif key == ord('+'):
     currentBufStatus.moveToFirstOfNextLine(windowNode)
+  elif key == ord('{'):
+    currentBufStatus.moveToPreviousBlankLine(status, windowNode)
+  elif key == ord('}'):
+    currentBufStatus.moveToNextBlankLine(status, windowNode)
   elif key == ord('g'):
     let secondKey = commands[1]
     if secondKey == ord('g'):
@@ -368,54 +527,66 @@ proc normalCommand(status: var EditorStatus,
     if secondKey == ord('c'):
       deleteCharactersOfLine()
       insertAfterCursor()
+    if secondKey == ord('l'):
+      deleteCharacterAndEnterInsertMode()
+    elif secondKey == ord('i'):
+      let thirdKey = commands[2]
+      if isParen(thirdKey) or
+         thirdKey == ord('w'):
+        status.changeInnerCommand(thirdKey)
   elif key == ord('d'):
     let secondKey = commands[1]
     if secondKey == ord('d'):
-      let lastLine = min(windowNode.currentLine + cmdLoop - 1,
-                         currentBufStatus.buffer.high)
-      status.yankLines(windowNode.currentLine, lastLine)
-      let loop = min(cmdLoop,
-                     currentBufStatus.buffer.len - windowNode.currentLine)
-      for i in 0 ..< loop:
-        currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
-    elif secondKey == ord('w'): currentBufStatus.deleteWord(windowNode)
+      yankAndDeleteLines()
+    elif secondKey == ord('w'):
+      currentBufStatus.deleteWord(windowNode, status.registers)
     elif secondKey == ('$') or isEndKey(secondKey):
-      deleteCharactersUntilEndOfLine()
+      yankAndDeleteCharactersUntilEndOfLine()
     elif secondKey == ('0') or isHomeKey(secondKey):
-      currentBufStatus.deleteCharacterBeginningOfLine(
-        status.settings.autoDeleteParen,
-        windowNode)
-    # Delete the line from current line to last line
+     yankAndDeleteCharacterBeginningOfLine()
     elif secondKey == ord('G'):
-      let lastLine = currentBufStatus.buffer.high
-      status.yankLines(windowNode.currentLine, lastLine)
-      let loop = currentBufStatus.buffer.len - windowNode.currentLine
-      for i in 0 ..< loop:
-        currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
-    # Delete the line from first line to current line
+      yankAndDeleteFromCurrentLineToLastLine()
     elif secondKey == ord('g'):
       let thirdKey = commands[2]
       if thirdKey == ord('g'):
-        deleteLineFromFirstLineToCurrentLine()
+        yankAndDeleteLineFromFirstLineToCurrentLine()
+    elif secondKey == ord('{'):
+      yankAndDeleteTillPreviousBlankLine()
+    elif secondKey == ord('}'):
+      yankAndDeleteTillNextBlankLine()
+    elif secondKey == ord('i'):
+      let thirdKey = commands[2]
+      status.yankAndDeleteInnerCommand(thirdKey)
+    elif secondKey == ord('h'):
+      cutCharacterBeforeCursor()
   elif key == ord('D'):
-     deleteCharactersUntilEndOfLine()
+     yankAndDeleteCharactersUntilEndOfLine()
   elif key == ord('S'):
      deleteCharactersOfLine()
      insertAfterCursor()
+  elif key == ord('s'):
+    deleteCharacterAndEnterInsertMode()
   elif key == ord('y'):
     let secondKey = commands[1]
     if secondKey == ord('y'):
-      let lastLine = min(windowNode.currentLine + cmdLoop - 1,
-                         currentBufStatus.buffer.high)
-      status.yankLines(windowNode.currentLine, lastLine)
-    elif secondKey == ord('w'): status.yankWord(cmdLoop)
+      yankLines()
+    elif secondKey == ord('w'):
+      status.yankWord(cmdLoop)
+    elif secondKey == ord('{'):
+      yankToPreviousBlankLine()
+    elif secondKey == ord('}'):
+      yankToNextBlankLine()
+    elif secondKey == ord('l'):
+      yankCharacters()
+  elif key == ord('Y'):
+    yankLines()
   elif key == ord('p'):
-    status.pasteAfterCursor
+    currentBufStatus.pasteAfterCursor(windowNode, status.registers)
   elif key == ord('P'):
-    status.pasteBeforeCursor
+    currentBufStatus.pasteBeforeCursor(windowNode, status.registers)
   elif key == ord('>'):
     for i in 0 ..< cmdLoop:
-      currentBufStatus.addIndent( windowNode, status.settings.tabStop)
+      currentBufStatus.addIndent(windowNode, status.settings.tabStop)
   elif key == ord('<'):
     for i in 0 ..< cmdLoop:
       currentBufStatus.deleteIndent(currentMainWindowNode, status.settings.tabStop)
@@ -509,9 +680,12 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
      key == ord('j') or isDownKey(key) or
      isEnterKey(key) or
      key == ord('x') or isDcKey(key) or
+     key == ord('X') or
      key == ord('^') or key == ord('_') or
      key == ord('0') or isHomeKey(key) or
      key == ord('$') or isEndKey(key) or
+     key == ord('{') or
+     key == ord('}') or
      key == ord('-') or
      key == ord('+') or
      key == ord('G') or
@@ -527,6 +701,7 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
      key == ord('O') or
      key == ord('D') or
      key == ord('S') or
+     key == ord('s') or
      key == ord('p') or
      key == ord('P') or
      key == ord('>') or
@@ -560,22 +735,40 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
       result = @[key, secondKey]
   elif key == ord('c'):
     let secondKey = getAnotherKey()
-    if secondKey == ord('c'):
+    if secondKey == ord('c') or secondKey == ('l'):
       result = @[key, secondKey]
+    elif secondKey == ('i'):
+      let thirdKey = getAnotherKey()
+      if isParen(thirdKey) or
+         thirdKey == ('w'):
+        result = @[key, secondKey, thirdKey]
   elif key == ord('d'):
     let secondKey = getAnotherKey()
     if secondKey == ord('d') or
        secondKey == ord('w') or
        secondKey == ord('$') or isEndKey(secondKey) or
        secondKey == ord('0') or isHomeKey(secondKey) or
-       secondKey == ord('G'): result = @[key, secondKey]
+       secondKey == ord('G') or
+       secondKey == ord('{') or
+       secondKey == ord('}'): result = @[key, secondKey]
     elif secondKey == ord('g'):
       let thirdKey = getAnotherKey()
       if thirdKey == ord('g'): result = @[key, secondKey, thirdKey]
+    elif secondKey == ord('i'):
+      let thirdKey = getAnotherKey()
+      if isParen(thirdKey) or
+         thirdKey == ('w'):
+        result = @[key, secondKey, thirdKey]
   elif key == ord('y'):
     let secondKey = getAnotherKey()
-    if key == ord('y') or key == ord('w'):
+    if key == ord('y') or
+       key == ord('w') or
+       key == ord('{') or
+       key == ord('}') or
+       key == ord('l'):
       result = @[key, secondKey]
+  elif key == ord('Y'):
+      result = @[key]
   elif key == ord('='):
     let secondKey = getAnotherKey()
     if secondKey == ord('='):
@@ -623,7 +816,9 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
            isPageDownKey(key) or
            key == ord('w') or
            key == ord('b') or
-           key == ord('e')
+           key == ord('e') or
+           key == ord('{') or
+           key == ord('}')
 
   proc isChangeModeKey(key: Rune): bool =
      return key == ord('v') or

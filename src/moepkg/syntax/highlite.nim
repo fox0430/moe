@@ -87,11 +87,12 @@ type
 
   SourceLanguage* = enum
     langNone, langNim, langCpp, langCsharp, langC, langJava,
-    langYaml, langPython, langJavaScript, langShell
+    langYaml, langPython, langJavaScript, langShell, langMarkDown
 
 const
   sourceLanguageToStr*: array[SourceLanguage, string] = ["none",
-    "Nim", "C++", "C#", "C", "Java", "Yaml", "Python", "JavaScript", "Shell"]
+    "Nim", "C++", "C#", "C", "Java", "Yaml", "Python", "JavaScript", "Shell",
+    "MarkDown"]
 
   OpChars* = {'+', '-', '*', '/', '\\', '<', '>', '!', '?', '^', '.',
               '|', '=', '%', '&', '$', '@', '~', ':'}

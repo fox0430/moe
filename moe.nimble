@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.2.3.1"
+version       = "0.2.4"
 author        = "fox0430"
 description   = "A command lined based text editor"
 license       = "GPLv3"
@@ -9,7 +9,7 @@ bin           = @["moe"]
 
 # Dependencies
 
-requires "nim >= 1.2.2"
+requires "nim >= 1.4.2"
 requires "https://github.com/walkre-niboshi/nim-ncurses >= 1.0.2"
 requires "unicodedb >= 0.9.0"
 requires "parsetoml >= 0.4.0"

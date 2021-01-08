@@ -43,17 +43,22 @@
 |                               |                             |                               |                             |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
 | <kbd>**h**</kbd><br>Go Left :arrow_left: | <kbd>**j**</kbd><br> Go Down :arrow_down: | <kbd>**k**</kbd><br> Go Up :arrow_up: | <kbd>**l**</kbd><br> Go Rigth :arrow_right: |
-| <kbd>**w**</kbd><br>Go forwards to the start of a word :arrow_right: | <kbd>**e**</kbd><br> Go forwards to the end of a word :arrow_right: | <kbd>**b**</kbd><br> Go backwards to the start of a word :arrow_left: | <kbd>**r**</kbd><br> Replace a character at the cursor |
-| <kbd>**Page Up**</kbd><br>Page Up :arrow_up: | <kbd>**Page Down**</kbd><br> Page Down :arrow_down: | <kbd>**g**</kbd> <kbd>**g**</kbd><br> Go to the first line :arrow_up: | <kbd>**g**</kbd> <kbd>**_**</kbd><br> Go to the last non-blank character of the line :arrow_right: |
-| <kbd>**G**</kbd><br>Go to the last line :arrow_down: | <kbd>**0**</kbd><br> Go to the first line :arrow_up: | <kbd>**$**</kbd><br> Go to the end of the line :arrow_right: | <kbd>**^**</kbd><br> Go to the non-blank character start of line :arrow_left: |
-| <kbd>**Ctrl**</kbd> <kbd>**u**</kbd><br>Half Page Down :arrow_down: | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd><br> Half Page Up :arrow_up: | <kbd>**d**</kbd> <kbd>**$**</kbd> OR  <kbd>**D**</kbd><br> Delete until the end of the line | <kbd>**:**</kbd><br> Start Ex mode |
-| <kbd>**u**</kbd><br>Undo | <kbd>**Ctrl**</kbd> <kbd>**r**</kbd><br> Redo | <kbd>**>**</kbd><br> Indent | <kbd>**<**</kbd><br> Unindent |
-| <kbd>**=**</kbd> <kbd>**=**</kbd><br>Auto Indent | <kbd>**d**</kbd> <kbd>**d**</kbd><br> Delete a line | <kbd>**x**</kbd><br> Delete current character | <kbd>**S**</kbd> OR <kbd>**c**</kbd> <kbd>**c**</kbd><br> Delete the characters in current line and start insert mode |
-| <kbd>**y**</kbd> <kbd>**y**</kbd><br>Copy a line | <kbd>**p**</kbd><br> Paste the clipboard | <kbd>**n**</kbd><br> Search forwards | <kbd>**N**</kbd><br> Search backwards |
-| <kbd> * </kbd><br>Search forwards for the word under cursor | <kbd>**#**</kbd><br>Search backwards for the word under cursor | <kbd>**f**</kbd><br>Jump to next occurrence | <kbd>**F**</kbd><br>Jump to previous occurence |
-| <kbd>**Ctrl**</kbd> <kbd>**k**</kbd><br>Move next window | <kbd>**Ctrl**</kbd> <kbd>**j**</kbd><br>Move prev window  | <kbd>**z**</kbd> <kbd>**t**</kbd><br>Scroll the screen so the cursor is at the top | <kbd>**z**</kbd> <kbd>**b**</kbd><br>Scroll the screen so the cursor is at the bottom |
-| <kbd>**z**</kbd> <kbd>**.**</kbd><br>Center the screen on the cursor | <kbd>**Z**</kbd> <kbd>**Z**</kbd><br>Write current file and exit | <kbd>**Z**</kbd> <kbd>**Q**</kbd><br>Same as `:q!` | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**c**</kbd><br>Close current window |
-| <kbd>**?**</kbd><br>`keyword` Search backwards | <kbd>**/**</kbd><br>`keyword` Search forwards | <kbd>**\\**</kbd> <kbd>**r**</kbd><br>Quick Run |
+| <kbd>**w**</kbd><br>Go forwards to the start of a word :arrow_right: | <kbd>**e**</kbd><br> Go forwards to the end of a word :arrow_right: | <kbd>**b**</kbd><br> Go backwards to the start of a word :arrow_left: | <kbd>**{**</kbd><br> Go previous blank line |
+| <kbd>**}**</kbd><br> Go next blank line | <kbd>**r**</kbd><br> Replace a character at the cursor | <kbd>**Page Up**</kbd><br>Page Up :arrow_up: | <kbd>**Page Down**</kbd><br> Page Down :arrow_down: |
+| <kbd>**g**</kbd> <kbd>**g**</kbd><br> Go to the first line :arrow_up: | <kbd>**g**</kbd> <kbd>**_**</kbd><br> Go to the last non-blank character of the line :arrow_right: | <kbd>**G**</kbd><br>Go to the last line :arrow_down: | <kbd>**0**</kbd><br> Go to the first line :arrow_up: |
+| <kbd>**$**</kbd><br> Go to the end of the line :arrow_right: | <kbd>**^**</kbd><br> Go to the non-blank character start of line :arrow_left: | <kbd>**Ctrl**</kbd> <kbd>**u**</kbd><br>Half Page Down :arrow_down: | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd><br> Half Page Up :arrow_up: |
+| <kbd>**d**</kbd> <kbd>**$**</kbd> OR  <kbd>**D**</kbd><br> Delete until the end of the line | <kbd>**:**</kbd><br> Start Ex mode | <kbd>**u**</kbd><br>Undo | <kbd>**Ctrl**</kbd> <kbd>**r**</kbd><br> Redo |
+| <kbd>**>**</kbd><br> Indent | <kbd>**<**</kbd><br> Unindent | <kbd>**=**</kbd> <kbd>**=**</kbd><br>Auto Indent | <kbd>**d**</kbd> <kbd>**d**</kbd><br> Delete a line |
+| <kbd>**d**</kbd> <kbd>**w**</kbd><br> Delete a word | <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**"**</kbd><br> Delete inside double quotes and enter insert mode | <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**'**</kbd><br> Delete inside sinble quotes and enter insert mode | <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**(**</kbd><br> OR <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**)**</kbd><br> Delete inside round brackets and enter insert mode |
+| <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**[**</kbd><br> OR <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**]**</kbd><br> Delete inside square brackets and enter insert mode | <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**{**</kbd><br> OR <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**}**</kbd><br> Delete inside curly brackets and enter insert mode | <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**w**</kbd><br> Delete word and enter insert mode |  <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**"**</kbd><br> Delete inside double quotes |
+| <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**'**</kbd><br> Delete inside sinble quotes | <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**(**</kbd><br> OR <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**)**</kbd><br> Delete inside round brackets | <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**[**</kbd><br> OR <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**]**</kbd><br> Delete inside square brackets | <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**{**</kbd><br> OR <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**}**</kbd><br> Delete inside curly brackets | 
+| <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**w**</kbd><br> Delete word | <kbd>**x**</kbd><br> Delete current character | <kbd>**S**</kbd> OR <kbd>**c**</kbd> <kbd>**c**</kbd><br> Delete the characters in current line and start insert mode | <kbd>**y**</kbd> <kbd>**y**</kbd> OR <kbd>**Y**</kbd><br>Copy a line |
+| <kbd>**p**</kbd><br> Paste the clipboard | <kbd>**n**</kbd><br> Search forwards | <kbd>**N**</kbd><br> Search backwards | <kbd> * </kbd><br>Search forwards for the word under cursor |
+| <kbd>**#**</kbd><br>Search backwards for the word under cursor | <kbd>**f**</kbd><br>Jump to next occurrence | <kbd>**F**</kbd><br>Jump to previous occurence | <kbd>**Ctrl**</kbd> <kbd>**k**</kbd><br>Move next window |
+| <kbd>**Ctrl**</kbd> <kbd>**j**</kbd><br>Move prev window  | <kbd>**z**</kbd> <kbd>**t**</kbd><br>Scroll the screen so the cursor is at the top | <kbd>**z**</kbd> <kbd>**b**</kbd><br>Scroll the screen so the cursor is at the bottom | <kbd>**z**</kbd> <kbd>**.**</kbd><br>Center the screen on the cursor |
+| <kbd>**Z**</kbd> <kbd>**Z**</kbd><br>Write current file and exit | <kbd>**Z**</kbd> <kbd>**Q**</kbd><br>Same as `:q!` | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**c**</kbd><br>Close current window | <kbd>**?**</kbd><br>`keyword` Search backwards |
+| <kbd>**/**</kbd><br>`keyword` Search forwards | <kbd>**\\**</kbd> <kbd>**r**</kbd><br>Quick Run | <kbd>**s**</kbd> OR <kbd>**c**</kbd><kbd>**u**</kbd><br> Delete current charater and enter insert mode | <kbd>**y**</kbd><kbd>**{**</kbd><br> Yank to the previous blank line |
+| <kbd>**y**</kbd><kbd>**}**</kbd><br> Yank to the next blank line | <kbd>**y**</kbd><kbd>**l**</kbd><br> Yank a character| <kbd>**X**</kbd> OR <kbd>**d**</kbd><kbd>**h**</kbd><br> Cut a character before cursor |
 
 </details>
 
@@ -167,7 +172,7 @@
 ```cws``` - Create new work space  
 ```ws number``` - Change current work space : Example ```ws 2```  
 ```dws``` - Delete current work space  
-```lsw``` - Show workspace list in status bar  
+```lsw``` - Show workspace list in status line
 
 ```livereload on``` or ```livereload on``` - Change setting of live reload of configuration file  
 ```theme themeName``` - Change color theme : Example ```theme dark```  
@@ -177,7 +182,7 @@
 ```paren on``` or ```paren off``` - Change setting to auto close paren  
 ```indent on``` or ```indent off``` - Chnage sestting to auto indent  
 ```linenum on``` or ```linenum off``` - Change setting to dispaly line number  
-```statusbar on``` or ```statusbar on``` - Change setting to display stattus bar  
+```statusLine on``` or ```statusLine on``` - Change setting to display stattus bar  
 ```realtimesearch on``` or ```realtimesearch off``` - Change setting to real-time search   
 ```deleteparen on``` or ```deleteparen off``` - Change setting to auto delete paren  
 ```smoothscroll on``` or ```smoothscroll off``` - Change setting to smooth scroll  
@@ -187,12 +192,13 @@
 ```highlightfullspace on``` or ```highlightfullspace off``` - Change setting to highlight full width space  
 ```buildonsave on``` or ```buildonsave off``` - Change setting to build on save  
 ```indentationlines on ``` or ```indentationlines off``` - Change setting to indentation lines  
-```showGitInactive on``` or ```showGitInactive off``` - Change status bar setting to show/hide git branch name in inactive window  
+```showGitInactive on``` or ```showGitInactive off``` - Change status line setting to show/hide git branch name in inactive window  
 ```noh``` - Turn off highlights  
 ```icon``` - Setting show/hidden icons in filer mode  
 ```deleteTrailingSpaces``` - Delete trailing spaces  
 ```ignorecase``` - Change setting to ignorecase  
 ```smartcase``` - Change setting to smartcase  
+```highlightCurrentLine on``` or ```highlightCurrentLine off``` - Change the highlight setting of the current line  
 
 ```log``` - Open messages log viwer  
 

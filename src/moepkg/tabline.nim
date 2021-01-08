@@ -1,4 +1,4 @@
-import strutils, os, terminal
+import strutils, terminal
 import ui, window, color, bufferstatus, workspace, independentutils, unicodetext
 
 proc writeTab*(tabWin: var Window,
@@ -34,7 +34,7 @@ proc writeTabLineBuffer*(tabWin: var Window,
                 else: defaultColor
         currentMode = bufStatus.mode
         prevMode = bufStatus.prevMode
-        filename = if isFilerMode(currentMode, prevMode): getCurrentDir()
+        filename = if isFilerMode(currentMode, prevMode): $bufStatus.path
                    elif isHistoryManagerMode(currentMode, prevMode): "HISOTY"
                    elif isConfigMode(currentMode, prevMode): "CONFIG"
                    else: $bufStatus.path
@@ -51,7 +51,7 @@ proc writeTabLineBuffer*(tabWin: var Window,
         bufStatus = allBufStatus[bufIndex]
         currentMode = bufStatus.mode
         prevMode = bufStatus.prevMode
-        filename = if isFilerMode(currentMode, prevMode): getCurrentDir()
+        filename = if isFilerMode(currentMode, prevMode): $bufStatus.path
                    elif isHistoryManagerMode(currentMode, prevMode): "HISOTY"
                    elif isConfigMode(currentMode, prevMode): "CONFIG"
                    else: $bufStatus.path

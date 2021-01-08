@@ -148,11 +148,27 @@ suite "Editor: Delete word":
     var status = initEditorStatus()
     status.addNewBuffer
 
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"block:", ru"  "])
-    status.workspace[0].currentMainWindowNode.currentLine = 1
+    currentBufStatus.buffer = initGapBuffer(@[ru"block:", ru"  "])
+    currentMainWindowNode.currentLine = 1
+
+    var registers = editorstatus.Registers(yankedLines: @[ru""],
+                                           yankedStr: ru"")
 
     for i in 0 ..< 2:
-      status.bufStatus[0].deleteWord(status.workspace[0].currentMainWindowNode)
+      currentBufStatus.deleteWord(currentMainWindowNode, registers)
+
+  test "Fix #1204":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"proc test() ="])
+
+    var registers = editorstatus.Registers(yankedLines: @[ru""],
+                                           yankedStr: ru"")
+
+    currentBufStatus.deleteWord(currentMainWindowNode, registers)
+
+    check currentBufStatus.buffer[0] == ru"test() ="
+    check registers.yankedStr == ru"proc "
 
 suite "Editor: keyEnter":
   test "Delete all characters in the previous line if only whitespaces":
@@ -353,3 +369,46 @@ suite "Delete character before cursor":
 
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru"  tst"
+
+suite "Editor: Delete inside paren":
+  test "delete inside double quotes":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru """abc "def" "ghi""""])
+    currentMainWindowNode.currentColumn = 6
+
+    var registers = editorstatus.Registers(yankedLines: @[], yankedStr: ru"")
+
+    currentBufStatus.yankAndDeleteInsideOfParen(currentMainWindowNode,
+                                                registers,
+                                                ru'"')
+
+    check currentBufStatus.buffer[0] == ru """abc "" "ghi""""
+
+suite "Editor: Paste lines":
+  test "Paste the single line":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const registers = editorstatus.Registers(yankedLines: @[ru"def"],
+                                             yankedStr: ru"")
+    currentBufStatus.pasteAfterCursor(currentMainWindowNode, registers)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru"abc"
+    check currentBufStatus.buffer[1] == ru"def"
+
+  test "Paste lines when the last line is empty":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const registers = editorstatus.Registers(yankedLines: @[ru"def", ru""],
+                                             yankedStr: ru"")
+    currentBufStatus.pasteAfterCursor(currentMainWindowNode, registers)
+
+    check currentBufStatus.buffer.len == 3
+    check currentBufStatus.buffer[0] == ru"abc"
+    check currentBufStatus.buffer[1] == ru"def"
+    check currentBufStatus.buffer[2] == ru""

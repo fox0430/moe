@@ -53,21 +53,21 @@ This project's goal is a very customizable, high productivity, user friendly, hi
 
 - Suggestions in ex mode
 
-- Popup window
-
 - VSCode themes
 
 - Build on save
 
 - Work space
 
-- Multiple status bar
+- Multiple status line
 
 - QuickRun
 
 - Automatic backups
 
-- Highlighting current words
+- Highlight current words
+
+- Highlight/Delete trailing spaces
 
 ## Planned features
 
@@ -107,9 +107,11 @@ This project's goal is a very customizable, high productivity, user friendly, hi
 
 ### Requires
 
-- Nim 1.2.2 or higher
+- Nim 1.4.2 or higher
 
-- ncurses (ncursesw)
+- ncurses
+
+- xclip (Option on GNU/Linux)
 
 ```sh
 # Latest released version
@@ -130,6 +132,8 @@ And one more, it comes from the Japanese slang 萌え(moe).
 Welcome❤
 
 ## Community
+
+Ask me anything!
 
  - [Discord](https://discord.gg/UaJPnCF)
 

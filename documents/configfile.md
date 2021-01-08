@@ -27,10 +27,10 @@ default is true
 number
 ```
 
-Display status bar (bool)  
+Display status line (bool)  
 default is true
 ```
-statusBar
+statusLine
 ```
 
 Enable syntax highlighting (bool)  
@@ -161,14 +161,14 @@ default is false
 allBuffer
 ```
 
-### StatusBar table
-Multiple status bar (bool)  
+### StatusLine table
+Multiple status line (bool)  
 default is true
 ```
-multipleStatusBar 
+multipleStatusLine
 ```
 
-Enable/Disable merging status bar with command line (bool)  
+Enable/Disable merging status line with command line (bool)  
 default is true
 ```
 merge
@@ -222,13 +222,13 @@ default is true
 gitbranchName
 ```
 
-Show/Hide git branch name in status bar when window is inactive (bool)  
+Show/Hide git branch name in status line when window is inactive (bool)  
 default is false
 ```
 showGitInactive
 ```
 
-Show/Hide mode string in status bar when window is inactive (bool)  
+Show/Hide mode string in status line when window is inactive (bool)  
 default is false
 ```
 showModeInactive
@@ -262,7 +262,14 @@ workSpaceLine
 
 ### Highlight table
 
-Highlighting any word (array)  
+Highlight the current line (bool)  
+defaut is false
+```
+currentLine
+
+```
+
+Highlight any word (array)  
 
 defaut
 ```
@@ -399,7 +406,7 @@ bashOptions
 
 ### Notification table
 
-Enable/disable all messages/notifications in status bar (bool)  
+Enable/disable all messages/notifications in status line (bool)  
 default is true
 ```
 screenNotifications
@@ -411,7 +418,7 @@ default is true
 logNotifications
 ```
 
-Enable/disable auto backups messages/notifications in status bar (bool)  
+Enable/disable auto backups messages/notifications in status line (bool)  
 default is true
 ```
 autoBackupScreenNotify
@@ -423,7 +430,7 @@ default is true
 autoBackupLogNotify
 ```
 
-Enable/disable auto save messages/notifications in status bar (bool)  
+Enable/disable auto save messages/notifications in status line (bool)  
 default is true
 ```
 autoSaveScreenNotify
@@ -435,7 +442,7 @@ default is true
 autoSaveLogNotify
 ```
 
-Enable/disable yank messages/notifications in status bar (bool)  
+Enable/disable yank messages/notifications in status line (bool)  
 default is true
 ```
 yankScreenNotify
@@ -447,7 +454,7 @@ default is true
 yankLogNotify
 ```
 
-Enable/disable delete buffer messages/notifications in status bar (bool)  
+Enable/disable delete buffer messages/notifications in status line (bool)  
 default is true
 ```
 deleteScreenNotify
@@ -459,7 +466,7 @@ default is true
 deleteLogNotify
 ```
 
-Enable/disable save messages/notifications in status bar (bool)  
+Enable/disable save messages/notifications in status line (bool)  
 default is true
 ```
 saveScreenNotify
@@ -471,19 +478,19 @@ default is true
 saveLogNotify
 ```
 
-Enable/disable workspace (create, delete, etc...) messages/notifications in status bar (bool)  
+Enable/disable workspace (create, delete, etc...) messages/notifications in status line (bool)  
 default is true
 ```
 workspaceScreenNotify
 ```
 
-Enable/disable workspace (create, delete, etc...) messages/notifications in status bar (bool)  
+Enable/disable workspace (create, delete, etc...) messages/notifications in status line (bool)  
 default is true
 ```
 workspaceLogNotify
 ```
 
-Enable/disable QuickRun messages/notifications in status bar (bool)  
+Enable/disable QuickRun messages/notifications in status line (bool)  
 default is true
 ```
 quickRunScreenNotify
@@ -495,7 +502,7 @@ default is true
 quickRunLogNotify
 ```
 
-Enable/disable build on save messages/notifications in status bar (bool)  
+Enable/disable build on save messages/notifications in status line (bool)  
 default is true
 ```
 buildOnSaveScreenNotify
@@ -507,7 +514,7 @@ default is true
 buildOnSaveLogNotify
 ```
 
-Enable/disable filer messages/notifications in status bar (bool)  
+Enable/disable filer messages/notifications in status line (bool)  
 default is true
 ```
 filerScreenNotify
@@ -519,7 +526,7 @@ default is true
 filerLogNotify
 ```
 
-Enable/disable restore messages/notifications in status bar (bool)  
+Enable/disable restore messages/notifications in status line (bool)  
 default is true
 ```
 restoreScreenNotify
@@ -1002,195 +1009,195 @@ Current line number highlighting background color
 currentLineNumBg
 ```
 
-Character color of Status bar in normal mode
+Character color of Status line in normal mode
 ```
-statusBarNormalMode
-```
-
-Status bar base color in normal mode
-```
-statusBarNormalModeBg
+statusLineNormalMode
 ```
 
-Mode text color in the status bar in normal mode
+Status line base color in normal mode
 ```
-statusBarModeNormalMode
-```
-
-Background color of mode text in the status bar in normal mode
-```
-statusBarModeNormalModeBg
+statusLineNormalModeBg
 ```
 
-Character color of Status bar in normal mode when inactive  
+Mode text color in the status line in normal mode
 ```
-statusBarNormalModeInactive
-```
-
-Status bar base color in normal mode when inactive  
-```
-statusBarNormalModeInactiveBg
+statusLineModeNormalMode
 ```
 
-Character color of Status bar in insert mode
+Background color of mode text in the status line in normal mode
 ```
-statusBarInsertMode
-```
-
-Status bar base color in insert mode
-```
-statusBarInsertModeBg
+statusLineModeNormalModeBg
 ```
 
-Mode text color in the status bar in insert mode
+Character color of Status line in normal mode when inactive  
 ```
-statusBarModeInsertMode
-```
-
-Background color of mode text in the status bar in insert mode
-```
-statusBarModeInsertModeBg
+statusLineNormalModeInactive
 ```
 
-Character color of Status bar in insert mode when inactive
+Status line base color in normal mode when inactive  
 ```
-statusBarInsertModeInactive
-```
-
-Status bar base color in insert mode when inactive
-```
-statusBarInsertModeInactiveBg
+statusLineNormalModeInactiveBg
 ```
 
-Character color of Status bar in visual mode
+Character color of Status line in insert mode
 ```
-statusBarVisualMode
-```
-
-Status bar base color in visual mode
-```
-statusBarVisualModeBg
+statusLineInsertMode
 ```
 
-Mode text color in the status bar in visual mode
+Status line base color in insert mode
 ```
-statusBarModeVisualMode
-```
-
-Background color of mode text in the status bar in visual mode
-```
-statusBarModeVisualModeBg
+statusLineInsertModeBg
 ```
 
-Character color of Status bar in visual mode when inactive
+Mode text color in the status line in insert mode
 ```
-statusBarVisualModeInactive
-```
-
-Status bar base color in visual mode when inactive
-```
-statusBarVisualModeInactiveBg
+statusLineModeInsertMode
 ```
 
-Character color of Status bar replace in mode
+Background color of mode text in the status line in insert mode
 ```
-statusBarReplaceMode
-```
-
-Status bar base color in replace mode
-```
-statusBarReplaceModeBg
+statusLineModeInsertModeBg
 ```
 
-Mode text color in the status bar in replace mode
+Character color of Status line in insert mode when inactive
 ```
-statusBarModeReplaceMode
-```
-
-Background color of mode text in the status bar in replace mode
-```
-statusBarModeReplaceModeBg
+statusLineInsertModeInactive
 ```
 
-Character color of Status bar replace in mode when inactive
+Status line base color in insert mode when inactive
 ```
-statusBarReplaceModeInactive
-```
-
-Status bar base color in replace mode when inactive
-```
-statusBarReplaceModeInactiveBg
+statusLineInsertModeInactiveBg
 ```
 
-Character color of Status bar in filer mode
+Character color of Status line in visual mode
 ```
-statusBarFilerMode
-```
-
-Status bar base color in filer mode
-```
-statusBarFilerModeBg
+statusLineVisualMode
 ```
 
-Mode text color in the status bar in filer mode
+Status line base color in visual mode
 ```
-statusBarModeFilerMode
-```
-
-Background color of mode text in the status bar in filer mode
-```
-statusBarModeFilerModeBg
+statusLineVisualModeBg
 ```
 
-Character color of Status bar in filer mode when inactive
+Mode text color in the status line in visual mode
 ```
-statusBarFilerModeInactive
-```
-
-Status bar base color in filer mode when inactive
-```
-statusBarFilerModeInactiveBg
+statusLineModeVisualMode
 ```
 
-Character color of Status bar in ex mode
+Background color of mode text in the status line in visual mode
 ```
-statusBarExMode
-```
-
-Status bar base color in ex mode
-```
-statusBarExModeBg
+statusLineModeVisualModeBg
 ```
 
-Mode text color in the status bar in ex mode
+Character color of Status line in visual mode when inactive
 ```
-statusBarExModeBg
-```
-
-Background color of mode text in the status bar in ex mode
-```
-statusBarModeExModeBg
+statusLineVisualModeInactive
 ```
 
-Character color of Status bar in ex mode when inactive
+Status line base color in visual mode when inactive
 ```
-statusBarExModeInactive
+statusLineVisualModeInactiveBg
 ```
 
-Status bar base color in ex mode when inactive
+Character color of Status line replace in mode
 ```
-statusBarExModeInactiveBg
+statusLineReplaceMode
+```
+
+Status line base color in replace mode
+```
+statusLineReplaceModeBg
+```
+
+Mode text color in the status line in replace mode
+```
+statusLineModeReplaceMode
+```
+
+Background color of mode text in the status line in replace mode
+```
+statusLineModeReplaceModeBg
+```
+
+Character color of Status line replace in mode when inactive
+```
+statusLineReplaceModeInactive
+```
+
+Status line base color in replace mode when inactive
+```
+statusLineReplaceModeInactiveBg
+```
+
+Character color of Status line in filer mode
+```
+statusLineFilerMode
+```
+
+Status line base color in filer mode
+```
+statusLineFilerModeBg
+```
+
+Mode text color in the status line in filer mode
+```
+statusLineModeFilerMode
+```
+
+Background color of mode text in the status line in filer mode
+```
+statusLineModeFilerModeBg
+```
+
+Character color of Status line in filer mode when inactive
+```
+statusLineFilerModeInactive
+```
+
+Status line base color in filer mode when inactive
+```
+statusLineFilerModeInactiveBg
+```
+
+Character color of Status line in ex mode
+```
+statusLineExMode
+```
+
+Status line base color in ex mode
+```
+statusLineExModeBg
+```
+
+Mode text color in the status line in ex mode
+```
+statusLineExModeBg
+```
+
+Background color of mode text in the status line in ex mode
+```
+statusLineModeExModeBg
+```
+
+Character color of Status line in ex mode when inactive
+```
+statusLineExModeInactive
+```
+
+Status line base color in ex mode when inactive
+```
+statusLineExModeInactiveBg
 ```
 
 Current git branch text color
 ```
-statusBarGitBranch
+statusLineGitBranch
 
 ```
 
 Current git branch background color
 ```
-statusBarGitBranchBg
+statusLineGitBranchBg
 ```
 
 
@@ -1436,4 +1443,9 @@ currentSetting
 Current line background color in configuration mode
 ```
 currentSettingBg
+```
+
+Current line background color
+```
+currentLineBg
 ```

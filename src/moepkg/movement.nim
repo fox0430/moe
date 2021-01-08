@@ -131,6 +131,48 @@ proc jumpLine*(status: var EditorStatus, destination: int) =
 
     currentMainWindowNode.view.reload(currentBufStatus.buffer, startOfPrintedLines)
 
+proc findNextBlankLine*(bufStatus: BufferStatus, currentLine: int): int =
+  result = -1
+
+  if currentLine < bufStatus.buffer.len - 1:
+    var currentLineStartedBlank = bufStatus.buffer[currentLine].len == 0
+    for i in countup(currentLine + 1, bufStatus.buffer.len - 1):
+      if bufStatus.buffer[i].len == 0:
+        if not currentLineStartedBlank:
+          return i
+      elif currentLineStartedBlank:
+        currentLineStartedBlank = false
+
+  return -1
+
+proc findPreviousBlankLine*(bufStatus: BufferStatus, currentLine: int): int =
+  result = -1
+
+  if currentLine > 0:
+    var currentLineStartedBlank = bufStatus.buffer[currentLine].len == 0
+    for i in countdown(currentLine - 1, 0):
+      if bufStatus.buffer[i].len == 0:
+        if not currentLineStartedBlank:
+          return i
+      elif currentLineStartedBlank:
+        currentLineStartedBlank = false
+
+  return -1
+
+proc moveToNextBlankLine*(bufStatus: BufferStatus,
+                          status: var EditorStatus,
+                          windowNode: WindowNode) =
+
+  let nextBlankLine = bufStatus.findNextBlankLine(windowNode.currentLine)
+  if nextBlankLine >= 0: status.jumpLine(nextBlankLine)
+
+proc moveToPreviousBlankLine*(bufStatus: BufferStatus,
+                              status: var EditorStatus,
+                              windowNode: WindowNode) =
+
+  let previousBlankLine = bufStatus.findPreviousBlankLine(windowNode.currentLine)
+  if previousBlankLine >= 0: status.jumpLine(previousBlankLine)
+
 proc moveToFirstLine*(status: var EditorStatus) {.inline.} = status.jumpLine(0)
 
 proc moveToLastLine*(status: var EditorStatus) =

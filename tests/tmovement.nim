@@ -159,3 +159,24 @@ test "Move to forward end of word":
   for i in 0 ..< 2:
     status.bufStatus[0].moveToForwardEndOfWord(status.workSpace[0].currentMainWindowNode)
   check(status.workSpace[0].currentMainWindowNode.currentColumn == 6)
+
+test "Move to previous blank line":
+  var status = initEditorStatus()
+  status.addNewBuffer
+  currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"def", ru"ghi"])
+  currentMainWindowNode.currentLine = currentBufStatus.buffer.high
+
+  currentBufStatus.moveToPreviousBlankLine(status, currentMainWindowNode)
+
+  check currentMainWindowNode.currentLine == 1
+  check currentMainWindowNode.currentColumn == 0
+
+test "Move to next blank line":
+  var status = initEditorStatus()
+  status.addNewBuffer
+  currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"", ru"ghi"])
+
+  currentBufStatus.moveToNextBlankLine(status, currentMainWindowNode)
+
+  check currentMainWindowNode.currentLine == 2
+  check currentMainWindowNode.currentColumn == 0

@@ -104,8 +104,8 @@ proc isIndentationLinesSettingCommand(command: seq[seq[Rune]]): bool {.inline.} 
 proc isLineNumberSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 2 and cmpIgnoreCase($command[0], "linenum") == 0
 
-proc isStatusBarSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "statusbar") == 0
+proc isStatusLineSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
+  return command.len == 2 and cmpIgnoreCase($command[0], "statusline") == 0
 
 proc isIncrementalSearchSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 2 and cmpIgnoreCase($command[0], "incrementalsearch") == 0
@@ -133,8 +133,8 @@ proc isSystemClipboardSettingCommand(command: seq[seq[RUne]]): bool {.inline.} =
 proc isHighlightFullWidthSpaceSettingCommand(command: seq[seq[RUne]]): bool {.inline.} =
   return command.len == 2 and cmpIgnoreCase($command[0], "highlightfullspace") == 0
 
-proc isMultipleStatusBarSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "multiplestatusbar") == 0
+proc isMultipleStatusLineSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
+  return command.len == 2 and cmpIgnoreCase($command[0], "multiplestatusline") == 0
 
 proc isBuildOnSaveSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 2 and cmpIgnoreCase($command[0], "buildonsave") == 0
@@ -147,6 +147,12 @@ proc isIgnorecaseSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
 
 proc isSmartcaseSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 2 and cmpIgnoreCase($command[0], "smartcase") == 0
+
+proc isHighlightCurrentLineSettingCommand(
+  command: seq[seq[Rune]]): bool {.inline.} =
+
+  return command.len == 2 and
+         cmpIgnoreCase($command[0], "highlightcurrentline") == 0
 
 proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 1 and cmpIgnoreCase($command[0], "noh") == 0
@@ -542,30 +548,30 @@ proc lineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
     numberOfDigitsLen = if status.settings.view.lineNumber:
                             numberOfDigits(status.bufStatus[0].buffer.len) - 2
                           else: 0
-    useStatusBar = if status.settings.statusBar.enable: 1 else: 0
+    useStatusLine = if status.settings.statusLine.enable: 1 else: 0
 
   currentMainWindowNode.view = initEditorView(
     status.bufStatus[0].buffer,
-    terminalHeight() - useStatusBar - 1,
+    terminalHeight() - useStatusLine - 1,
     terminalWidth() - numberOfDigitsLen)
 
   status.commandLine.erase
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc statusBarSettingCommand(status: var EditorStatus, command: seq[Rune]) =
-  if command == ru"on": status.settings.statusBar.enable = true
-  elif command == ru"off": status.settings.statusBar.enable = false
+proc statusLineSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+  if command == ru"on": status.settings.statusLine.enable = true
+  elif command == ru"off": status.settings.statusLine.enable = false
 
   let
     numberOfDigitsLen = if status.settings.view.lineNumber:
                             numberOfDigits(status.bufStatus[0].buffer.len) - 2
                           else: 0
-    useStatusBar = if status.settings.statusBar.enable : 1 else: 0
+    useStatusLine = if status.settings.statusLine.enable : 1 else: 0
 
   currentMainWindowNode.view = initEditorView(
     status.bufStatus[0].buffer,
-    terminalHeight() - useStatusBar - 1,
+    terminalHeight() - useStatusLine - 1,
     terminalWidth() - numberOfDigitsLen)
 
   status.commandLine.erase
@@ -662,11 +668,11 @@ proc turnOffHighlightingCommand(status: var EditorStatus) =
   status.commandLine.erase
   status.changeMode(bufferstatus.Mode.normal)
 
-proc multipleStatusBarSettingCommand(status: var Editorstatus,
+proc multipleStatusLineSettingCommand(status: var Editorstatus,
                                      command: seq[Rune]) =
 
-  if command == ru"on": status.settings.statusBar.multipleStatusBar = true
-  elif command == ru"off": status.settings.statusBar.multipleStatusBar = false
+  if command == ru"on": status.settings.statusLine.multipleStatusLine = true
+  elif command == ru"off": status.settings.statusLine.multipleStatusLine = false
 
   status.commandLine.erase
 
@@ -675,8 +681,8 @@ proc multipleStatusBarSettingCommand(status: var Editorstatus,
 proc showGitInInactiveSettingCommand(status: var EditorStatus,
                                      command: seq[Rune]) =
 
-  if command == ru"on": status.settings.statusBar.showGitInactive = true
-  elif command == ru"off": status.settings.statusBar.showGitInactive = false
+  if command == ru"on": status.settings.statusLine.showGitInactive = true
+  elif command == ru"off": status.settings.statusLine.showGitInactive = false
 
   status.commandLine.erase
 
@@ -691,6 +697,14 @@ proc ignorecaseSettingCommand(status: var EditorStatus, command: seq[Rune]) =
 proc smartcaseSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru "on": status.settings.smartcase = true
   elif command == ru "off": status.settings.smartcase = false
+
+  status.changeMode(currentBufStatus.prevMode)
+
+proc highlightCurrentLineSettingCommand(status: var EditorStatus,
+                                        command: seq[Rune]) =
+
+  if command == ru "on": status.settings.view.highlightCurrentLine = true
+  elif command == ru "off": status.settings.view.highlightCurrentLine  = false
 
   status.changeMode(currentBufStatus.prevMode)
 
@@ -898,7 +912,9 @@ proc quitCommand(status: var EditorStatus, height, width: int) =
     let
       numberReferenced = mainWindowNode.countReferencedWindow(currentBufferIndex)
       countChange = currentBufStatus.countChange
-    if countChange == 0 or numberReferenced > 1:
+      canundo = currentBufStatus.buffer.canundo
+    if (not isNormalMode(currentBufStatus.mode, currentBufStatus.prevMode)) or
+       (countChange == 0 or numberReferenced > 1 or not canundo):
       status.changeMode(currentBufStatus.prevMode)
       status.closeWindow(currentMainWindowNode, height, width)
     else:
@@ -955,9 +971,12 @@ proc forceQuitCommand(status: var EditorStatus, height, width: int) =
 
 proc allBufferQuitCommand(status: var EditorStatus) =
   for i in 0 ..< currentWorkSpace.numOfMainWindow:
-    let node = mainWindowNode.searchByWindowIndex(i)
+    let
+      node = mainWindowNode.searchByWindowIndex(i)
+      bufStatus = status.bufStatus[node.bufferIndex]
 
-    if status.bufStatus[node.bufferIndex].countChange > 0:
+    if isNormalMode(bufStatus.mode, bufStatus.prevMode) and
+       bufStatus.countChange > 0:
       status.commandLine.writeNoWriteError(status.messageLog)
       status.changeMode(bufferstatus.Mode.normal)
       return
@@ -1033,13 +1052,13 @@ proc listAllBufferCommand(status: var Editorstatus) =
     else: currentBufStatus.buffer.insert(line, i)
 
   let
-    useStatusBar = if status.settings.statusBar.enable: 1 else: 0
+    useStatusLine = if status.settings.statusLine.enable: 1 else: 0
     useTab = if status.settings.tabLine.useTab: 1 else: 0
     swapCurrentLineNumStting = status.settings.view.currentLineNumber
 
   status.settings.view.currentLineNumber = false
   currentMainWindowNode.view = currentBufStatus.buffer.initEditorView(
-    terminalHeight() - useStatusBar - useTab - 1,
+    terminalHeight() - useStatusLine - useTab - 1,
     terminalWidth())
 
   currentMainWindowNode.currentLine = 0
@@ -1217,8 +1236,8 @@ proc exModeCommand*(status: var EditorStatus,
     status.turnOffHighlightingCommand
   elif isTabLineSettingCommand(command):
     status.tabLineSettingCommand(command[1])
-  elif isStatusBarSettingCommand(command):
-    status.statusBarSettingCommand(command[1])
+  elif isStatusLineSettingCommand(command):
+    status.statusLineSettingCommand(command[1])
   elif isLineNumberSettingCommand(command):
     status.lineNumberSettingCommand(command[1])
   elif isIndentationLinesSettingCommand(command):
@@ -1269,8 +1288,8 @@ proc exModeCommand*(status: var EditorStatus,
     status.systemClipboardSettingCommand(command[1])
   elif isHighlightFullWidthSpaceSettingCommand(command):
     status.highlightFullWidthSpaceSettingCommand(command[1])
-  elif isMultipleStatusBarSettingCommand(command):
-    status.multipleStatusBarSettingCommand(command[1])
+  elif isMultipleStatusLineSettingCommand(command):
+    status.multipleStatusLineSettingCommand(command[1])
   elif isBuildOnSaveSettingCommand(command):
     status.buildOnSaveSettingCommand(command[1])
   elif isCreateWorkSpaceCommand(command):
@@ -1315,6 +1334,8 @@ proc exModeCommand*(status: var EditorStatus,
     status.forceWriteAndQuitCommand(height, width)
   elif isStartDebugMode(command):
     status.startDebugMode
+  elif isHighlightCurrentLineSettingCommand(command):
+    status.highlightCurrentLineSettingCommand(command[1])
   else:
     status.commandLine.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(currentBufStatus.prevMode)

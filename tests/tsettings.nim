@@ -9,7 +9,7 @@ const tomlStr = """
   number = false
   currentNumber = false
   cursorLine = true
-  statusBar = false
+  statusLine = false
   tabLine = false
   syntax = false
   indentationLines = false
@@ -40,8 +40,8 @@ const tomlStr = """
   [TabLine]
   allBuffer = true
 
-  [StatusBar]
-  multipleStatusBar = false
+  [StatusLine]
+  multipleStatusLine = false
   merge = true
   mode = false
   filename = false
@@ -59,6 +59,7 @@ const tomlStr = """
   workSpaceLine = true
 
   [Highlight]
+  currentLine = true
   reservedWord = ["TEST", "TEST2"]
   replaceText = false
   pairOfParen = false
@@ -161,50 +162,50 @@ const tomlStr = """
   currentLineNum = "pink1"
   currentLineNumBg = "pink1"
   # statsu bar
-  statusBarNormalMode = "pink1"
-  statusBarNormalModeBg = "pink1"
-  statusBarModeNormalMode = "pink1"
-  statusBarModeNormalModeBg = "pink1"
-  statusBarNormalModeInactive = "pink1"
-  statusBarNormalModeInactiveBg = "pink1"
+  statusLineNormalMode = "pink1"
+  statusLineNormalModeBg = "pink1"
+  statusLineModeNormalMode = "pink1"
+  statusLineModeNormalModeBg = "pink1"
+  statusLineNormalModeInactive = "pink1"
+  statusLineNormalModeInactiveBg = "pink1"
 
-  statusBarInsertMode = "pink1"
-  statusBarInsertModeBg = "pink1"
-  statusBarModeInsertMode = "pink1"
-  statusBarModeInsertModeBg = "pink1"
-  statusBarInsertModeInactive = "pink1"
-  statusBarInsertModeInactiveBg = "pink1"
+  statusLineInsertMode = "pink1"
+  statusLineInsertModeBg = "pink1"
+  statusLineModeInsertMode = "pink1"
+  statusLineModeInsertModeBg = "pink1"
+  statusLineInsertModeInactive = "pink1"
+  statusLineInsertModeInactiveBg = "pink1"
 
-  statusBarVisualMode = "pink1"
-  statusBarVisualModeBg = "pink1"
-  statusBarModeVisualMode = "pink1"
-  statusBarModeVisualModeBg = "pink1"
-  statusBarVisualModeInactive = "pink1"
-  statusBarVisualModeInactiveBg = "pink1"
+  statusLineVisualMode = "pink1"
+  statusLineVisualModeBg = "pink1"
+  statusLineModeVisualMode = "pink1"
+  statusLineModeVisualModeBg = "pink1"
+  statusLineVisualModeInactive = "pink1"
+  statusLineVisualModeInactiveBg = "pink1"
 
-  statusBarReplaceMode = "pink1"
-  statusBarReplaceModeBg = "pink1"
-  statusBarModeReplaceMode = "pink1"
-  statusBarModeReplaceModeBg = "pink1"
-  statusBarReplaceModeInactive = "pink1"
-  statusBarReplaceModeInactiveBg = "pink1"
+  statusLineReplaceMode = "pink1"
+  statusLineReplaceModeBg = "pink1"
+  statusLineModeReplaceMode = "pink1"
+  statusLineModeReplaceModeBg = "pink1"
+  statusLineReplaceModeInactive = "pink1"
+  statusLineReplaceModeInactiveBg = "pink1"
 
-  statusBarFilerMode = "pink1"
-  statusBarFilerModeBg = "pink1"
-  statusBarModeFilerMode = "pink1"
-  statusBarModeFilerModeBg = "pink1"
-  statusBarFilerModeInactive = "pink1"
-  statusBarFilerModeInactiveBg = "pink1"
+  statusLineFilerMode = "pink1"
+  statusLineFilerModeBg = "pink1"
+  statusLineModeFilerMode = "pink1"
+  statusLineModeFilerModeBg = "pink1"
+  statusLineFilerModeInactive = "pink1"
+  statusLineFilerModeInactiveBg = "pink1"
 
-  statusBarExMode = "pink1"
-  statusBarExModeBg = "pink1"
-  statusBarModeExMode = "pink1"
-  statusBarModeExModeBg = "pink1"
-  statusBarExModeInactive = "pink1"
-  statusBarExModeInactiveBg = "pink1"
+  statusLineExMode = "pink1"
+  statusLineExModeBg = "pink1"
+  statusLineModeExMode = "pink1"
+  statusLineModeExModeBg = "pink1"
+  statusLineExModeInactive = "pink1"
+  statusLineExModeInactiveBg = "pink1"
 
-  statusBarGitBranch = "pink1"
-  statusBarGitBranchBg = "pink1"
+  statusLineGitBranch = "pink1"
+  statusLineGitBranchBg = "pink1"
   tab = "pink1"
   tabBg = "pink1"
   currentTab = "pink1"
@@ -263,6 +264,7 @@ const tomlStr = """
   deletedLineBg = "pink1"
   currentSetting = "pink1"
   currentSettingBg = "pink1"
+  currentLineBg = "pink1"
 """
 
 suite "Parse configuration file":
@@ -274,7 +276,7 @@ suite "Parse configuration file":
     check not settings.view.lineNumber
     check not settings.view.currentLineNumber
     check settings.view.cursorLine
-    check not settings.statusBar.enable
+    check not settings.statusLine.enable
     check not settings.tabLine.useTab
     check not settings.syntax
     check not settings.view.indentationLines
@@ -303,22 +305,23 @@ suite "Parse configuration file":
 
     check settings.tabLine.allbuffer
 
-    check not settings.statusBar.multipleStatusBar
-    check settings.statusBar.merge
-    check not settings.statusBar.mode
-    check not settings.statusBar.filename
-    check not settings.statusBar.chanedMark
-    check not settings.statusBar.line
-    check not settings.statusBar.column
-    check not settings.statusBar.characterEncoding
-    check not settings.statusBar.language
-    check not settings.statusBar.directory
-    check not settings.statusBar.gitbranchName
-    check settings.statusBar.showGitInactive
-    check settings.statusBar.showModeInactive
+    check not settings.statusLine.multipleStatusLine
+    check settings.statusLine.merge
+    check not settings.statusLine.mode
+    check not settings.statusLine.filename
+    check not settings.statusLine.chanedMark
+    check not settings.statusLine.line
+    check not settings.statusLine.column
+    check not settings.statusLine.characterEncoding
+    check not settings.statusLine.language
+    check not settings.statusLine.directory
+    check not settings.statusLine.gitbranchName
+    check settings.statusLine.showGitInactive
+    check settings.statusLine.showModeInactive
 
     check settings.workSpace.workSpaceLine
 
+    check settings.view.highlightCurrentLine
     check not settings.highlightSettings.replaceText
     check not settings.highlightSettings.pairOfParen
     check not settings.highlightSettings.fullWidthSpace
@@ -411,44 +414,44 @@ suite "Parse configuration file":
     check ColorThemeTable[theme].lineNumBg == Color.pink1
     check ColorThemeTable[theme].currentLineNum == Color.pink1
     check ColorThemeTable[theme].currentLineNumBg == Color.pink1
-    check ColorThemeTable[theme].statusBarNormalMode == Color.pink1
-    check ColorThemeTable[theme].statusBarNormalModeBg == Color.pink1
-    check ColorThemeTable[theme].statusBarModeNormalMode == Color.pink1
-    check ColorThemeTable[theme].statusBarModeNormalModeBg == Color.pink1
-    check ColorThemeTable[theme].statusBarNormalModeInactive == Color.pink1
-    check ColorThemeTable[theme].statusBarNormalModeInactiveBg == Color.pink1
-    check ColorThemeTable[theme].statusBarInsertMode == Color.pink1
-    check ColorThemeTable[theme].statusBarInsertModeBg == Color.pink1
-    check ColorThemeTable[theme].statusBarModeInsertMode == Color.pink1
-    check ColorThemeTable[theme].statusBarModeInsertModeBg == Color.pink1
-    check ColorThemeTable[theme].statusBarInsertModeInactive == Color.pink1
-    check ColorThemeTable[theme].statusBarInsertModeInactiveBg == Color.pink1
-    check ColorThemeTable[theme].statusBarVisualMode == Color.pink1
-    check ColorThemeTable[theme].statusBarVisualModeBg == Color.pink1
-    check ColorThemeTable[theme].statusBarModeVisualMode == Color.pink1
-    check ColorThemeTable[theme].statusBarModeVisualModeBg == Color.pink1
-    check ColorThemeTable[theme].statusBarVisualModeInactive == Color.pink1
-    check ColorThemeTable[theme].statusBarVisualModeInactiveBg == Color.pink1
-    check ColorThemeTable[theme].statusBarReplaceMode == Color.pink1
-    check ColorThemeTable[theme].statusBarReplaceModeBg == Color.pink1
-    check ColorThemeTable[theme].statusBarModeReplaceMode == Color.pink1
-    check ColorThemeTable[theme].statusBarModeReplaceModeBg == Color.pink1
-    check ColorThemeTable[theme].statusBarReplaceModeInactive == Color.pink1
-    check ColorThemeTable[theme].statusBarReplaceModeInactiveBg == Color.pink1
-    check ColorThemeTable[theme].statusBarFilerMode == Color.pink1
-    check ColorThemeTable[theme].statusBarFilerModeBg == Color.pink1
-    check ColorThemeTable[theme].statusBarModeFilerMode == Color.pink1
-    check ColorThemeTable[theme].statusBarModeFilerModeBg == Color.pink1
-    check ColorThemeTable[theme].statusBarFilerModeInactive == Color.pink1
-    check ColorThemeTable[theme].statusBarFilerModeInactiveBg == Color.pink1
-    check ColorThemeTable[theme].statusBarExMode == Color.pink1
-    check ColorThemeTable[theme].statusBarExModeBg == Color.pink1
-    check ColorThemeTable[theme].statusBarModeExMode == Color.pink1
-    check ColorThemeTable[theme].statusBarModeExModeBg == Color.pink1
-    check ColorThemeTable[theme].statusBarExModeInactive == Color.pink1
-    check ColorThemeTable[theme].statusBarExModeInactiveBg == Color.pink1
-    check ColorThemeTable[theme].statusBarGitBranch == Color.pink1
-    check ColorThemeTable[theme].statusBarGitBranchBg == Color.pink1
+    check ColorThemeTable[theme].statusLineNormalMode == Color.pink1
+    check ColorThemeTable[theme].statusLineNormalModeBg == Color.pink1
+    check ColorThemeTable[theme].statusLineModeNormalMode == Color.pink1
+    check ColorThemeTable[theme].statusLineModeNormalModeBg == Color.pink1
+    check ColorThemeTable[theme].statusLineNormalModeInactive == Color.pink1
+    check ColorThemeTable[theme].statusLineNormalModeInactiveBg == Color.pink1
+    check ColorThemeTable[theme].statusLineInsertMode == Color.pink1
+    check ColorThemeTable[theme].statusLineInsertModeBg == Color.pink1
+    check ColorThemeTable[theme].statusLineModeInsertMode == Color.pink1
+    check ColorThemeTable[theme].statusLineModeInsertModeBg == Color.pink1
+    check ColorThemeTable[theme].statusLineInsertModeInactive == Color.pink1
+    check ColorThemeTable[theme].statusLineInsertModeInactiveBg == Color.pink1
+    check ColorThemeTable[theme].statusLineVisualMode == Color.pink1
+    check ColorThemeTable[theme].statusLineVisualModeBg == Color.pink1
+    check ColorThemeTable[theme].statusLineModeVisualMode == Color.pink1
+    check ColorThemeTable[theme].statusLineModeVisualModeBg == Color.pink1
+    check ColorThemeTable[theme].statusLineVisualModeInactive == Color.pink1
+    check ColorThemeTable[theme].statusLineVisualModeInactiveBg == Color.pink1
+    check ColorThemeTable[theme].statusLineReplaceMode == Color.pink1
+    check ColorThemeTable[theme].statusLineReplaceModeBg == Color.pink1
+    check ColorThemeTable[theme].statusLineModeReplaceMode == Color.pink1
+    check ColorThemeTable[theme].statusLineModeReplaceModeBg == Color.pink1
+    check ColorThemeTable[theme].statusLineReplaceModeInactive == Color.pink1
+    check ColorThemeTable[theme].statusLineReplaceModeInactiveBg == Color.pink1
+    check ColorThemeTable[theme].statusLineFilerMode == Color.pink1
+    check ColorThemeTable[theme].statusLineFilerModeBg == Color.pink1
+    check ColorThemeTable[theme].statusLineModeFilerMode == Color.pink1
+    check ColorThemeTable[theme].statusLineModeFilerModeBg == Color.pink1
+    check ColorThemeTable[theme].statusLineFilerModeInactive == Color.pink1
+    check ColorThemeTable[theme].statusLineFilerModeInactiveBg == Color.pink1
+    check ColorThemeTable[theme].statusLineExMode == Color.pink1
+    check ColorThemeTable[theme].statusLineExModeBg == Color.pink1
+    check ColorThemeTable[theme].statusLineModeExMode == Color.pink1
+    check ColorThemeTable[theme].statusLineModeExModeBg == Color.pink1
+    check ColorThemeTable[theme].statusLineExModeInactive == Color.pink1
+    check ColorThemeTable[theme].statusLineExModeInactiveBg == Color.pink1
+    check ColorThemeTable[theme].statusLineGitBranch == Color.pink1
+    check ColorThemeTable[theme].statusLineGitBranchBg == Color.pink1
     check ColorThemeTable[theme].tab == Color.pink1
     check ColorThemeTable[theme].tabBg == Color.pink1
     check ColorThemeTable[theme].currentTab == Color.pink1
@@ -506,6 +509,7 @@ suite "Parse configuration file":
     check ColorThemeTable[theme].deletedLineBg == Color.pink1
     check ColorThemeTable[theme].currentSetting == Color.pink1
     check ColorThemeTable[theme].currentSettingBg == Color.pink1
+    check ColorThemeTable[theme].currentLineBg == Color.pink1
 
 suite "Validate toml config":
   test "Except for success":
