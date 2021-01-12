@@ -1,4 +1,4 @@
-import terminal, times, typetraits, strutils
+import terminal, times, strutils
 import gapbuffer, ui, editorstatus, unicodetext, window, movement, settings,
        bufferstatus, color, highlight, search, editor
 
