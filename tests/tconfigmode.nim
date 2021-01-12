@@ -1325,7 +1325,8 @@ suite "Config mode: Get Theme table setting values":
       let testTitle = "Get " & $`colorPair` & "." & $`position`  & " values"
       test testTitle:
         let
-          (fg, bg) = getColorFromEditorColorPair(theme, `colorPair`)
+          theme = settings.editorColorTheme
+          (fg, bg) = theme.getColorFromEditorColorPair(`colorPair`)
           values = settings.getThemeTableSettingValues($`colorPair`, $`position`)
           # values[0] should be current setting
           default = $values[0]
@@ -1345,11 +1346,11 @@ suite "Config mode: Get Theme table setting values":
   let
     status = initEditorStatus()
     settings = status.settings
-    theme = settings.editorColorTheme
 
   # Check Theme.editorBg
   test "Get editorBg.background values":
     let
+      theme = settings.editorColorTheme
       bg = ColorThemeTable[theme].editorBg
       values = settings.getThemeTableSettingValues("editorBg", "background")
       # values[0] should be current setting

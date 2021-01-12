@@ -1653,6 +1653,26 @@ proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
 
   result = initGapBuffer(buffer)
 
+proc keyUp(bufStatus: BufferStatus, windowNode: var WindowNode) =
+  let currentLine = windowNode.currentLine
+  if currentLine > 1:
+    bufStatus.keyUp(windowNode)
+
+    # Skip empty line and table name line
+    while bufStatus.buffer[windowNode.currentLine].len == 0 or
+          bufStatus.buffer[windowNode.currentLine][0] != ' ':
+      bufStatus.keyUp(windowNode)
+
+proc keyDown(bufStatus: BufferStatus, windowNode: var WindowNode) =
+  let currentLine = windowNode.currentLine
+  if currentLine < bufStatus.buffer.high - 1:
+    bufStatus.keyDown(windowNode)
+
+    # Skip empty line and table name line
+    while bufStatus.buffer[windowNode.currentLine].len == 0 or
+          bufStatus.buffer[windowNode.currentLine][0] != ' ':
+      bufStatus.keyDown(windowNode)
+
 proc isConfigMode(mode: Mode): bool {.inline.} =
   mode == Mode.config
 
@@ -1665,24 +1685,6 @@ proc configMode*(status: var Editorstatus) =
   let
     currentBufferIndex = currentMainWindowNode.bufferIndex
     currentWorkSpace = status.currentWorkSpaceIndex
-
-  template keyUp() =
-    if currentLine > 1:
-      currentBufStatus.keyUp(windowNode)
-
-      # Skip empty line and table name line
-      while currentBufStatus.buffer[windowNode.currentLine].len == 0 or
-            currentBufStatus.buffer[windowNode.currentLine][0] != ' ':
-        currentBufStatus.keyUp(windowNode)
-
-  template keyDown() =
-    if currentLine < currentBufStatus.buffer.high - 1:
-      currentBufStatus.keyDown(windowNode)
-
-      # Skip empty line and table name line
-      while currentBufStatus.buffer[windowNode.currentLine].len == 0 or
-            currentBufStatus.buffer[windowNode.currentLine][0] != ' ':
-        currentBufStatus.keyDown(windowNode)
 
   while isConfigMode(currentBufStatus.mode) and
         currentWorkSpace == status.currentWorkSpaceIndex and
@@ -1732,9 +1734,9 @@ proc configMode*(status: var Editorstatus) =
     elif isPageDownKey(key): ## Page down and Ctrl - F
       status.pageDown
     elif key == ord('k') or isUpKey(key):
-      keyUp()
+      currentBufStatus.keyUp(currentMainWindowNode)
     elif key == ord('j') or isDownKey(key):
-      keyDown()
+      currentBufStatus.keyDown(currentMainWindowNode)
     elif key == ord('g'):
       let secondKey = getKey(currentMainWindowNode)
       if secondKey == 'g': status.moveToFirstLine
