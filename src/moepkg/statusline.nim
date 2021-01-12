@@ -69,9 +69,7 @@ proc writeStatusLineNormalModeInfo(bufStatus: var BufferStatus,
         else: return EditorColorPair.statusLineNormalModeInactive
 
   let
-    mode = bufStatus.mode
-    prevMode = bufStatus.prevMode
-    color = setStatusLineColor(mode)
+    color = setStatusLineColor(bufStatus.mode)
     statusLineWidth = statusLine.window.width
 
   statusLineBuffer.add(ru" ")

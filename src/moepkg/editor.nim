@@ -520,7 +520,6 @@ proc deleteCharacter*(bufStatus: var BufferStatus,
   let
     currentLine = line
     currentColumn = colmun
-    currentMode = bufStatus.mode
 
   if currentLine >= bufStatus.buffer.high and
      currentColumn > bufStatus.buffer[currentLine].high: return
