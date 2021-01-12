@@ -7,8 +7,8 @@ Currently you can use normal mode, visual mode, replace mode, insert mode, ex mo
 # Install and compile
 
 ## Requires
-- Nim 1.2.2 or higher
-- ncurses (ncursesw)
+- Nim 1.4.2 or higher
+- ncurses
 
 ### Install
 
@@ -69,5 +69,7 @@ nimble test
 
 ### Run integration test
 ```
+cd moe
+nimble install
 shpec ./shpec.sh
 ```
