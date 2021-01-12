@@ -84,5 +84,5 @@ jobs:
 
     - name: Build on Nim devel
       run: |
-        choosenim devel
+        choosenim -y devel
         nimble build
