@@ -350,6 +350,10 @@ proc update*(status: var EditorStatus) =
     status.settings.highlightSettings.reservedWords,
     status.settings.syntax)
 
+  # Set editor Color Pair for current line highlight.
+  # New color pairs are set to Number larger than the maximum value of EditorColorPiar.
+  var currentLineColorPair = ord(EditorColorPair.high) + 1
+
   var queue = initHeapQueue[WindowNode]()
   for node in mainWindowNode.child:
     queue.push(node)
@@ -418,7 +422,8 @@ proc update*(status: var EditorStatus) =
                          status.settings.editorColorTheme,
                          node.currentLine,
                          startSelectedLine,
-                         endSelectedLine)
+                         endSelectedLine,
+                         currentLineColorPair)
 
         if isCurrentMainWin:
           node.cursor.update(node.view, node.currentLine, node.currentColumn)
