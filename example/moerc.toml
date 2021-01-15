@@ -98,7 +98,7 @@ workSpaceLine = false
 
 [Highlight]
 
-currentLine = false
+currentLine = true
 
 reservedWord = ["TODO", "WIP", "NOTE"]
 
