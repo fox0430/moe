@@ -263,7 +263,7 @@ workSpaceLine
 ### Highlight table
 
 Highlight the current line (bool)  
-defaut is false
+defaut is true
 ```
 currentLine
 

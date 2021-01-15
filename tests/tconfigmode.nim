@@ -105,7 +105,7 @@ suite "Config mode: Init buffer":
     let buffer = status.settings.initHighlightTableBuffer
 
     const sample = @[ru "Highlight",
-                     ru "  currentLine                    false",
+                     ru "  currentLine                    true",
                      ru "  fullWidthSpace                 true",
                      ru "  trailingSpaces                 true",
                      ru "  currentWord                    true",
