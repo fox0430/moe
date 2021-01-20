@@ -985,10 +985,14 @@ suite "Config mode: Get AutoBackup table setting values":
     var status = initEditorStatus()
     let autoBackupSettings = status.settings.autoBackupSettings
 
-    const name = "enable"
+    const
+      name = "enable"
+      settingType = SettingType.Bool
     let
       default = autoBackupSettings.enable
-      values = autoBackupSettings.getAutoBackupTableSettingValues(name)
+      values = autoBackupSettings.getAutoBackupTableSettingValues(
+        name,
+        settingType)
 
     checkBoolSettingValue(default, values)
 
@@ -996,8 +1000,12 @@ suite "Config mode: Get AutoBackup table setting values":
     var status = initEditorStatus()
     let autoBackupSettings = status.settings.autoBackupSettings
 
-    const name = "test"
-    let values = autoBackupSettings.getAutoBackupTableSettingValues(name)
+    const
+      name = "test"
+      settingType = SettingType.None
+    let values = autoBackupSettings.getAutoBackupTableSettingValues(
+      name,
+      settingType)
 
     check values.len == 0
 
