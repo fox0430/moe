@@ -404,19 +404,30 @@ proc getAutoBackupTableSettingValues(settings: AutoBackupSettings,
       return
 
 proc getQuickRunTableSettingValues(settings: QuickRunSettings,
-                                   name: string): seq[seq[Rune]] =
+                                   name: string,
+                                   settingType: SettingType): seq[seq[Rune]] =
 
-  var currentVal: bool
   case name:
     of "saveBufferWhenQuickRun":
-      currentVal = settings.saveBufferWhenQuickRun
+      let currentVal = settings.saveBufferWhenQuickRun
+      if currentVal:
+        result = @[ru "true", ru "false"]
+      else:
+        result = @[ru "false", ru "true"]
+    of "nimAdvancedCommand":
+      result = @[ru settings.nimAdvancedCommand]
+    of "ClangOptions":
+      result = @[ru settings.ClangOptions]
+    of "CppOptions":
+      result = @[ru settings.CppOptions]
+    of "NimOptions":
+      result = @[ru settings.NimOptions]
+    of "shOptions":
+      result = @[ru settings.shOptions]
+    of "bashOptions":
+      result = @[ru settings.bashOptions]
     else:
       return
-
-  if currentVal:
-    result = @[ru "true", ru "false"]
-  else:
-    result = @[ru "false", ru "true"]
 
 proc getNotificationTableSettingValues(settings: NotificationSettings,
                                        name: string): seq[seq[Rune]] =
@@ -549,7 +560,7 @@ proc getSettingValues(settings: EditorSettings,
       result = settings.getAutoBackupTableSettingValues(name, settingType)
     of "QuickRun":
       let quickRunSettings = settings.quickRunSettings
-      result = quickRunSettings.getQuickRunTableSettingValues(name)
+      result = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
     of "Notification":
       let notificationSettings = settings.notificationSettings
       result = notificationSettings.getNotificationTableSettingValues(name)
