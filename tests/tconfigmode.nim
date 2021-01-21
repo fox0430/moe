@@ -700,6 +700,28 @@ suite "Config mode: Get BuildOnSave table setting values":
 
     checkBoolSettingValue(default, values)
 
+  test "Get workspaceRoot values":
+    var status = initEditorStatus()
+    let buildOnSaveSettings = status.settings.buildOnSave
+
+    const name = "workspaceRoot"
+    let
+      default = buildOnSaveSettings.workspaceRoot
+      values = buildOnSaveSettings.getBuildOnSaveTableSettingValues(name)
+
+    check default == values[0]
+
+  test "Get command values":
+    var status = initEditorStatus()
+    let buildOnSaveSettings = status.settings.buildOnSave
+
+    const name = "command"
+    let
+      default = buildOnSaveSettings.command
+      values = buildOnSaveSettings.getBuildOnSaveTableSettingValues(name)
+
+    check default == values[0]
+
   test "Set invalid name":
     var status = initEditorStatus()
     let buildOnSaveSettings = status.settings.buildOnSave
@@ -985,19 +1007,42 @@ suite "Config mode: Get AutoBackup table setting values":
     var status = initEditorStatus()
     let autoBackupSettings = status.settings.autoBackupSettings
 
-    const name = "enable"
+    const
+      name = "enable"
+      settingType = SettingType.Bool
     let
       default = autoBackupSettings.enable
-      values = autoBackupSettings.getAutoBackupTableSettingValues(name)
+      values = autoBackupSettings.getAutoBackupTableSettingValues(
+        name,
+        settingType)
 
     checkBoolSettingValue(default, values)
+
+  test "Get backupDir values":
+    var status = initEditorStatus()
+    let autoBackupSettings = status.settings.autoBackupSettings
+
+    const
+      name = "backupDir"
+      settingType = SettingType.String
+    let
+      default = autoBackupSettings.backupDir
+      values = autoBackupSettings.getAutoBackupTableSettingValues(
+        name,
+        settingType)
+
+    check default == values[0]
 
   test "Set invalid name":
     var status = initEditorStatus()
     let autoBackupSettings = status.settings.autoBackupSettings
 
-    const name = "test"
-    let values = autoBackupSettings.getAutoBackupTableSettingValues(name)
+    const
+      name = "test"
+      settingType = SettingType.None
+    let values = autoBackupSettings.getAutoBackupTableSettingValues(
+      name,
+      settingType)
 
     check values.len == 0
 
@@ -1006,19 +1051,101 @@ suite "Config mode: Get QuickRun table setting values":
     var status = initEditorStatus()
     let quickRunSettings = status.settings.quickRunSettings
 
-    const name = "saveBufferWhenQuickRun"
+    const
+      name = "saveBufferWhenQuickRun"
+      settingType = SettingType.Bool
     let
       default = quickRunSettings.saveBufferWhenQuickRun
-      values = quickRunSettings.getQuickRunTableSettingValues(name)
+      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
 
     checkBoolSettingValue(default, values)
+
+  test "Get nimAdvancedCommandvalues":
+    var status = initEditorStatus()
+    let quickRunSettings = status.settings.quickRunSettings
+
+    const
+      name = "nimAdvancedCommand"
+      settingType = SettingType.String
+    let
+      default = ru quickRunSettings.nimAdvancedCommand
+      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
+
+    check default == values[0]
+
+  test "Get ClangOptions values":
+    var status = initEditorStatus()
+    let quickRunSettings = status.settings.quickRunSettings
+
+    const
+      name = "ClangOptions"
+      settingType = SettingType.String
+    let
+      default = ru quickRunSettings.ClangOptions
+      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
+
+    check default == values[0]
+
+  test "Get CppOptions values":
+    var status = initEditorStatus()
+    let quickRunSettings = status.settings.quickRunSettings
+
+    const
+      name = "CppOptions"
+      settingType = SettingType.String
+    let
+      default = ru quickRunSettings.CppOptions
+      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
+
+    check default == values[0]
+
+  test "Get NimOptions values":
+    var status = initEditorStatus()
+    let quickRunSettings = status.settings.quickRunSettings
+
+    const
+      name = "NimOptions"
+      settingType = SettingType.String
+    let
+      default = ru quickRunSettings.NimOptions
+      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
+
+    check default == values[0]
+
+  test "Get shOptions values":
+    var status = initEditorStatus()
+    let quickRunSettings = status.settings.quickRunSettings
+
+    const
+      name = "shOptions"
+      settingType = SettingType.String
+    let
+      default = ru quickRunSettings.shOptions
+      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
+
+    check default == values[0]
+
+  test "Get bashOptions values":
+    var status = initEditorStatus()
+    let quickRunSettings = status.settings.quickRunSettings
+
+    const
+      name = "bashOptions"
+      settingType = SettingType.String
+    let
+      default = ru quickRunSettings.bashOptions
+      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
+
+    check default == values[0]
 
   test "Set invalid name":
     var status = initEditorStatus()
     let quickRunSettings = status.settings.quickRunSettings
 
-    const name = "test"
-    let values = quickRunSettings.getQuickRunTableSettingValues(name)
+    const
+      name = "test"
+      settingType = SettingType.None
+    let values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
 
     check values.len == 0
 
