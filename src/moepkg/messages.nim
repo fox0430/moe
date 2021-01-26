@@ -276,3 +276,7 @@ proc writeRestoreFileSuccessMessage*(commandLine: var CommandLine,
 proc writeDeleteBackupError*(commandLine: var CommandLine) {.inline.} =
   const mess = "Error: Delete backup file failed"
   commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+
+proc writeExitHelp*(commandLine: var CommandLine) {.inline.} =
+  const mess = "Type  :qa  and press <Enter> to exit moe"
+  commandLine.writeMessageOnCommandWindow(mess)
