@@ -614,7 +614,18 @@ proc getKeyOnceAndWriteCommandView*(
   while true:
     status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
 
-    var key = status.commandLine.getKey
+    var key = errorKey
+    while key == errorKey:
+      if not pressCtrlC:
+        key = status.commandLine.getKey
+      else:
+        # Exit command line mode
+        pressCtrlC = false
+
+        status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
+        exitSearch = true
+
+        return (exStatus.buffer, exitSearch, cancelSearch)
 
     # Suggestion mode
     if isTabKey(key) or isShiftTab(key):
