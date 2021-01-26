@@ -862,8 +862,13 @@ proc normalMode*(status: var EditorStatus) =
 
     var key = errorKey
     while key == errorKey:
-      status.eventLoopTask
-      key = getKey(currentMainWindowNode)
+      if not pressCtrlC:
+        status.eventLoopTask
+        key = getKey(currentMainWindowNode)
+      else:
+        pressCtrlC = false
+        status.commandLine.writeExitHelp
+        status.update
 
     status.lastOperatingTime = now()
 
