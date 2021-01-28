@@ -442,8 +442,15 @@ proc visualMode*(status: var EditorStatus) =
 
     var key = errorKey
     while key == errorKey:
-      status.eventLoopTask
-      key = getKey(currentMainWindowNode)
+      if not pressCtrlC:
+        status.eventLoopTask
+        key = getKey(currentMainWindowNode)
+      else:
+        # Exit visual mode
+        pressCtrlC = false
+        status.changeMode(Mode.normal)
+
+        return
 
     status.lastOperatingTime = now()
 
