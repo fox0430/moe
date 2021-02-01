@@ -147,4 +147,9 @@ proc insertMode*(status: var EditorStatus) =
     if status.settings.autocompleteSettings.enable and
        prevLineNumber == currentMainWindowNode.currentLine and
        prevLine != currentBufStatus.buffer[currentMainWindowNode.currentLine]:
-      suggestionWindow = tryOpenSuggestionWindow(currentBufStatus, currentMainWindowNode)
+
+      let currentBufferIndex =currentMainWindowNode.bufferIndex
+      suggestionWindow = tryOpenSuggestionWindow(status.bufStatus,
+                                                 currentBufferIndex,
+                                                 mainWindowNode,
+                                                 currentMainWindowNode)

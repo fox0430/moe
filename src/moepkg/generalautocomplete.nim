@@ -1,6 +1,6 @@
-import sugar, critbits, options
+import sugar, critbits, options, sequtils
 import unicodedb, unicodedb/properties
-import unicodetext
+import unicodetext, bufferstatus
 
 const
   letterCharacter = ctgLu + ctgLl + ctgLt + ctgLm + ctgLo + ctgNl
@@ -10,7 +10,12 @@ const
   formattingCharacter = ctgCf
 const
   firstCharacter = letterCharacter
-  succeedingCharacter = letterCharacter + combiningCharacter + decimalDigitCharacter + connectingCharacter + formattingCharacter + formattingCharacter
+  succeedingCharacter = letterCharacter +
+                        combiningCharacter +
+                        decimalDigitCharacter +
+                        connectingCharacter +
+                        formattingCharacter +
+                        formattingCharacter
 
 iterator enumerateWords*(runes: seq[Rune]): seq[Rune] =
   for word in split(runes, r => r.unicodeCategory notin succeedingCharacter, true):
@@ -42,3 +47,15 @@ proc collectSuggestions*(wordDictionary: CritBitTree[void], word: seq[Rune]): se
   collect(newSeq):
     for item in itemsWithPrefix(wordDictionary, $word):
       item.toRunes
+
+proc getTextInBuffers*(
+  bufStatus: seq[BufferStatus],
+  firstDeletedIndex, lastDeletedIndex: int): seq[Rune] =
+
+  for i, buf in bufStatus:
+    # 0 is current bufStatus
+    if i == 0:
+      result = buf.buffer.toRunes.dup(
+        delete(firstDeletedIndex, lastDeletedIndex))
+    else:
+      result.add buf.buffer.toRunes
