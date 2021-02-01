@@ -278,9 +278,12 @@ suite "Insert mode":
       100,
       100)
 
-    var suggestionWindow = tryOpenSuggestionWindow(
-      currentBufStatus,
-      currentMainWindowNode)
+    let currentBufferIndex =currentMainWindowNode.bufferIndex
+    var suggestionWindow = tryOpenSuggestionWindow(status.bufStatus,
+                                                   currentBufferIndex,
+                                                   mainWindowNode,
+                                                   currentMainWindowNode)
+
     let
       mainWindowHeight = status.settings.getMainWindowHeight(100)
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
@@ -310,9 +313,12 @@ suite "Insert mode":
                                    terminalHeight,
                                    100)
 
-    var suggestionWindow = tryOpenSuggestionWindow(
-      currentBufStatus,
-      currentMainWindowNode)
+    let currentBufferIndex =currentMainWindowNode.bufferIndex
+    var suggestionWindow = tryOpenSuggestionWindow(status.bufStatus,
+                                                   currentBufferIndex,
+                                                   mainWindowNode,
+                                                   currentMainWindowNode)
+
     let
       mainWindowHeight = status.settings.getMainWindowHeight(terminalHeight)
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
@@ -343,7 +349,12 @@ suite "Insert mode":
       100,
       100)
 
-    var suggestionWindow = tryOpenSuggestionWindow(currentBufStatus, currentMainWindowNode)
+    let currentBufferIndex =currentMainWindowNode.bufferIndex
+    var suggestionWindow = tryOpenSuggestionWindow(status.bufStatus,
+                                                   currentBufferIndex,
+                                                   mainWindowNode,
+                                                   currentMainWindowNode)
+
     let
       mainWindowHeight = status.settings.getMainWindowHeight(100)
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
@@ -373,8 +384,13 @@ suite "Insert mode":
                     currentMainWindowNode,
                     status.settings.autoCloseParen,
                     ru'a')
-    var suggestionWindow = tryOpenSuggestionWindow(currentBufStatus,
+
+    let currentBufferIndex =currentMainWindowNode.bufferIndex
+    var suggestionWindow = tryOpenSuggestionWindow(status.bufStatus,
+                                                   currentBufferIndex,
+                                                   mainWindowNode,
                                                    currentMainWindowNode)
+
     status.update
 
     suggestionWindow.get.handleKeyInSuggestionWindow(currentBufStatus,
@@ -396,9 +412,13 @@ suite "Insert mode":
                     currentMainWindowNode,
                     status.settings.autoCloseParen,
                     ru'a')
-    var suggestionWindow = tryOpenSuggestionWindow(
-      currentBufStatus,
-      currentMainWindowNode)
+
+    let currentBufferIndex =currentMainWindowNode.bufferIndex
+    var suggestionWindow = tryOpenSuggestionWindow(status.bufStatus,
+                                                   currentBufferIndex,
+                                                   mainWindowNode,
+                                                   currentMainWindowNode)
+
     status.update
 
     suggestionWindow.get.handleKeyInSuggestionWindow(
@@ -433,9 +453,12 @@ suite "Insert mode":
     status.settings.workSpace.workSpaceLine = false
     status.settings.statusLine.enable = true
 
-    var suggestionWindow = tryOpenSuggestionWindow(
-      currentBufStatus,
-      currentMainWindowNode)
+    let currentBufferIndex =currentMainWindowNode.bufferIndex
+    var suggestionWindow = tryOpenSuggestionWindow(status.bufStatus,
+                                                   currentBufferIndex,
+                                                   mainWindowNode,
+                                                   currentMainWindowNode)
+
     let
       mainWindowHeight = status.settings.getMainWindowHeight(100)
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
