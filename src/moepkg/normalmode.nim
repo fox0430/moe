@@ -175,6 +175,16 @@ proc yankAndDeleteInnerCommand(status: var EditorStatus, key: Rune) =
   else:
     discard
 
+proc showCurrentCharInfoCommand(status: var EditorStatus,
+                                windowNode: WindowNode) =
+
+  let
+    currentLine = windowNode.currentLine
+    currentColumn = windowNode.currentColumn
+    currentChar = currentBufStatus.buffer[currentLine][currentColumn]
+
+  status.commandLine.writeCurrentCharInfo(currentChar)
+
 proc normalCommand(status: var EditorStatus,
                    commands: seq[Rune],
                    height, width: int)
@@ -486,6 +496,8 @@ proc normalCommand(status: var EditorStatus,
       status.jumpLine(cmdLoop - 1)
     elif secondKey == ord('_'):
       currentBufStatus.moveToLastNonBlankOfLine(windowNode)
+    elif secondKey == ord('a'):
+      status.showCurrentCharInfoCommand(windowNode)
   elif key == ord('G'):
     moveToLastLine(status)
   elif isControlU(key):
@@ -727,8 +739,9 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
   # TODO: Refactor
   elif key == ord('g'):
       let secondKey = getAnotherKey()
-      if secondKey == ord('g') or secondKey == ord('_'):
-        result = @[key, secondKey]
+      if secondKey == ord('g') or
+         secondKey == ord('_') or
+         secondKey == ord('a'): result = @[key, secondKey]
   elif key == ord('z'):
     let secondKey = getAnotherKey()
     if secondKey == ord('.') or key == ord('t') or key == ord('b'):
