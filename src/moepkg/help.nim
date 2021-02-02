@@ -92,6 +92,7 @@ Ctrl-w c   - Close current window
 /          - Search forwards
 ?          - Search backwards
 \r         - QuickRun
+ga         - Show current character info
 
 # Visual mode
 

@@ -58,7 +58,7 @@
 | <kbd>**Ctrl**</kbd> <kbd>**j**</kbd><br>Move prev window  | <kbd>**z**</kbd> <kbd>**t**</kbd><br>Scroll the screen so the cursor is at the top | <kbd>**z**</kbd> <kbd>**b**</kbd><br>Scroll the screen so the cursor is at the bottom | <kbd>**z**</kbd> <kbd>**.**</kbd><br>Center the screen on the cursor |
 | <kbd>**Z**</kbd> <kbd>**Z**</kbd><br>Write current file and exit | <kbd>**Z**</kbd> <kbd>**Q**</kbd><br>Same as `:q!` | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**c**</kbd><br>Close current window | <kbd>**?**</kbd><br>`keyword` Search backwards |
 | <kbd>**/**</kbd><br>`keyword` Search forwards | <kbd>**\\**</kbd> <kbd>**r**</kbd><br>Quick Run | <kbd>**s**</kbd> OR <kbd>**c**</kbd><kbd>**u**</kbd><br> Delete current charater and enter insert mode | <kbd>**y**</kbd><kbd>**{**</kbd><br> Yank to the previous blank line |
-| <kbd>**y**</kbd><kbd>**}**</kbd><br> Yank to the next blank line | <kbd>**y**</kbd><kbd>**l**</kbd><br> Yank a character| <kbd>**X**</kbd> OR <kbd>**d**</kbd><kbd>**h**</kbd><br> Cut a character before cursor |
+| <kbd>**y**</kbd><kbd>**}**</kbd><br> Yank to the next blank line | <kbd>**y**</kbd><kbd>**l**</kbd><br> Yank a character| <kbd>**X**</kbd> OR <kbd>**d**</kbd><kbd>**h**</kbd><br> Cut a character before cursor | <kbd>**g**</kbd><kbd>**a**</kbd><br> Show current character info |
 
 </details>
 
