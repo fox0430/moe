@@ -2268,3 +2268,36 @@ suite "Config mode: Chaging Theme table settings":
   let theme = ColorTheme.dark
   for name, _ in ColorThemeTable[theme].fieldPairs:
     checkChaingThemeSetting(theme, $name)
+
+suite "Config mode: Get BuildOnSave table setting type":
+  test "Get enable setting type":
+    const
+      table= "BuildOnSave"
+      name = "enable"
+
+    const settingType = getSettingType(table, name)
+    check settingType == SettingType.Bool
+
+  test "Get workspaceRoot setting type":
+    const
+      table = "BuildOnSave"
+      name = "workspaceRoot"
+
+    const settingType = getSettingType(table, name)
+    check settingType == SettingType.String
+
+  test "Get command setting type":
+    const
+      table = "BuildOnSave"
+      name = "command"
+
+    const settingType = getSettingType(table, name)
+    check settingType == SettingType.String
+
+  test "Set invalid name":
+    const
+      table = "BuildOnSave"
+      name = "test"
+
+    const settingType = getSettingType(table, name)
+    check settingType == SettingType.None

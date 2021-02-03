@@ -933,6 +933,9 @@ proc getSettingType(table, name: string): SettingType =
     case name:
       of "enable":
         result = SettingType.Bool
+      of "workspaceRoot",
+         "command":
+        result = SettingType.String
       else:
         result = SettingType.None
 
@@ -1327,11 +1330,12 @@ proc editStringSetting(status: var EditorStatus,
     template buildOnSaveTable() =
       case name:
         of "workspaceRoot":
-          status.settings.buildOn.workspaceRoot = buffer
+          status.settings.buildOnSave.workspaceRoot = buffer.toRunes
         of "command":
-          status.settings.buildOn.command = buffer
+          status.settings.buildOnSave.command = buffer.toRunes
         else:
           discard
+
     template autoBackupTable() =
       case name:
         of "backupDir":
@@ -1358,6 +1362,8 @@ proc editStringSetting(status: var EditorStatus,
 
     # Change setting
     case table:
+      of "BuildOnSave":
+        buildOnSaveTable()
       of "AutoBackup":
         autoBackupTable()
       of "QuickRun":
