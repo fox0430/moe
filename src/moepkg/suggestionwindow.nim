@@ -45,9 +45,15 @@ proc handleKeyInSuggestionWindow*(
   let prevSuggestion = suggestionWindow.selectedSuggestion
 
   if isTabKey(key) or isDownKey(key):
-    inc(suggestionWindow.selectedSuggestion)
+    if suggestionWindow.selectedSuggestion == suggestionWindow.suggestoins.high:
+      suggestionWindow.selectedSuggestion = 0
+    else:
+      inc(suggestionWindow.selectedSuggestion)
   elif isShiftTab(key) or isUpKey(key):
-    dec(suggestionWindow.selectedSuggestion)
+    if suggestionWindow.selectedSuggestion == 0:
+      suggestionWindow.selectedSuggestion = suggestionWindow.suggestoins.high
+    else:
+      dec(suggestionWindow.selectedSuggestion)
   elif isPageDownkey(key):
     suggestionWindow.selectedSuggestion += suggestionWindow.popUpWindow.height - 1
   elif isPageUpKey(key):
