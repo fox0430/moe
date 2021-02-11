@@ -80,7 +80,7 @@ proc startUi*() =
 
     initscr()   ## start terminal control
     cbreak()    ## enable cbreak mode
-    nonl();     ## exit new line mode and improve move cursor performance
+    nonl()      ## exit new line mode and improve move cursor performance
     setCursor(true)
 
     if can_change_color():
