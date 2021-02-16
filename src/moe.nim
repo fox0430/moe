@@ -35,13 +35,9 @@ proc main() =
   var status = initEditor()
 
   while status.workSpace.len > 0 and
-        status.workSpace[status.currentWorkSpaceIndex].numOfMainWindow > 0:
+        currentWorkSpace.numOfMainWindow > 0:
 
-    let
-      n = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
-      currentBufferIndex = n.bufferIndex
-
-    case status.bufStatus[currentBufferIndex].mode:
+    case currentBufStatus.mode:
     of Mode.normal: status.normalMode
     of Mode.insert: status.insertMode
     of Mode.visual, Mode.visualBlock: status.visualMode
