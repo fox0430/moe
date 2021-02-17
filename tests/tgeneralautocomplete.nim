@@ -1,5 +1,5 @@
 import unittest, sugar, sequtils
-import moepkg/unicodetext
+import moepkg/unicodeext
 
 include moepkg/generalautocomplete
 

@@ -1,5 +1,5 @@
 import unittest, osproc
-import moepkg/[editorstatus, gapbuffer, unicodetext, highlight, movement, bufferstatus]
+import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, movement, bufferstatus]
 include moepkg/[visualmode]
 
 suite "Visual mode: Delete buffer":

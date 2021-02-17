@@ -1,5 +1,5 @@
 import unittest, os
-import moepkg/[ui, editorstatus, gapbuffer, exmode, unicodetext, bufferstatus,
+import moepkg/[ui, editorstatus, gapbuffer, exmode, unicodeext, bufferstatus,
                settings]
 
 suite "Ex mode: Edit command":
