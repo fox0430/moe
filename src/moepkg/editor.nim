@@ -1,5 +1,5 @@
 import strutils, sequtils, os, osproc, random, strformat
-import editorstatus, ui, gapbuffer, unicodetext, undoredostack,
+import editorstatus, ui, gapbuffer, unicodeext, undoredostack,
        window, bufferstatus, movement, messages
 
 proc correspondingCloseParen(c: char): char =
@@ -380,9 +380,9 @@ proc deleteWord*(bufStatus: var BufferStatus,
       currentColumn = windowNode.currentColumn
       startWith = if bufStatus.buffer[currentLine].len == 0: ru'\n'
                   else: bufStatus.buffer[currentLine][currentColumn]
-      isSkipped = if unicodetext.isPunct(startWith): unicodetext.isPunct elif
-                     unicodetext.isAlpha(startWith): unicodetext.isAlpha elif
-                     unicodetext.isDigit(startWith): unicodetext.isDigit
+      isSkipped = if unicodeext.isPunct(startWith): unicodeext.isPunct elif
+                     unicodeext.isAlpha(startWith): unicodeext.isAlpha elif
+                     unicodeext.isDigit(startWith): unicodeext.isDigit
                   else: nil
 
     if isSkipped == nil:

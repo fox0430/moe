@@ -1,6 +1,6 @@
 import tables, times
 import syntax/highlite
-import gapbuffer, unicodetext
+import gapbuffer, unicodeext
 
 type Mode* = enum
   normal,

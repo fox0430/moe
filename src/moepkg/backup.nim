@@ -1,5 +1,5 @@
 import os, times, re
-import settings, unicodetext, fileutils, bufferstatus, gapbuffer, messages,
+import settings, unicodeext, fileutils, bufferstatus, gapbuffer, messages,
        commandline
 
 type AutoBackupStatus* = object

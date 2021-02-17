@@ -1,5 +1,5 @@
 import critbits, unicode, sugar, options, sequtils
-import ui, window, generalautocomplete, bufferstatus, gapbuffer, unicodetext,
+import ui, window, generalautocomplete, bufferstatus, gapbuffer, unicodeext,
        color, editorstatus
 
 type SuggestionWindow* = object

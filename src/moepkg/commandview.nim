@@ -1,5 +1,5 @@
 import terminal, strutils, sequtils, strformat, os, algorithm
-import ui, unicodetext, fileutils, color, commandline
+import ui, unicodeext, fileutils, color, commandline
 
 type ExModeViewStatus = object
     buffer: seq[Rune]

@@ -1,5 +1,5 @@
 import terminal, times, options
-import ui, editorstatus, gapbuffer, unicodetext, undoredostack, window,
+import ui, editorstatus, gapbuffer, unicodeext, undoredostack, window,
        movement, editor, bufferstatus, suggestionwindow, settings
 
 proc calcMainWindowY(isEnableTabLine, isEnableWorkSpaceLine: bool): int =
