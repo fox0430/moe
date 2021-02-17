@@ -1,7 +1,7 @@
 import sequtils, strutils, os, terminal, times
 import syntax/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
-        unicodetext, independentutils, search, highlight, commandview,
+        unicodeext, independentutils, search, highlight, commandview,
         window, movement, color, build, bufferstatus, editor,
         settings, quickrun, messages, commandline, debugmode
 

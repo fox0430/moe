@@ -1,5 +1,5 @@
 import terminal
-import ui, unicodetext, color
+import ui, unicodeext, color
 
 type CommandLine* = object
     buffer: seq[Rune]

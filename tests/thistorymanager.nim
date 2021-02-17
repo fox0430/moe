@@ -1,5 +1,5 @@
 import unittest, os
-import moepkg/[unicodetext, settings]
+import moepkg/[unicodeext, settings]
 include moepkg/[historymanager]
 
 suite "History Manager: Gnerate file name patern":

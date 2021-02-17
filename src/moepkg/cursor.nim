@@ -1,5 +1,5 @@
 import deques, strformat
-import editorview, unicodetext
+import editorview, unicodeext
 
 type CursorPosition* = object
   y*, x*: int

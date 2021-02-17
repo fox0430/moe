@@ -1,5 +1,5 @@
 import terminal
-import editorstatus, bufferstatus, ui, movement, unicodetext, gapbuffer, window
+import editorstatus, bufferstatus, ui, movement, unicodeext, gapbuffer, window
 
 const helpsentences = """
 # Exiting

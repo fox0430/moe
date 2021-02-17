@@ -1,5 +1,5 @@
 import unittest, macros, strformat
-import moepkg/[editorstatus, gapbuffer, bufferstatus, unicodetext]
+import moepkg/[editorstatus, gapbuffer, bufferstatus, unicodeext]
 
 include moepkg/configmode
 

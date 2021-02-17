@@ -1,6 +1,6 @@
 import unittest
 import ncurses
-import moepkg/[editorstatus, gapbuffer, unicodetext, editor, bufferstatus]
+import moepkg/[editorstatus, gapbuffer, unicodeext, editor, bufferstatus]
 
 include moepkg/normalmode
 

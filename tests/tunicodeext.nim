@@ -1,5 +1,5 @@
 import strutils, unittest, encodings, sequtils, sugar
-import moepkg/unicodetext
+import moepkg/unicodeext
 
 test "width 1":
   check("abc".toRunes.width == 3)
@@ -279,7 +279,7 @@ test "iteratorSplit":
   const
     expectedResult = @[ru"", ru"", ru"this", ru"is", ru"an", ru"", ru"example", ru"", ru"", ru""]
     actualResult = collect(newSeq):
-      for x in unicodetext.split(ru";;this;is;an;;example;;;", r => r == ru';'):
+      for x in unicodeext.split(ru";;this;is;an;;example;;;", r => r == ru';'):
         x
   check actualResult == expectedResult
 
@@ -287,7 +287,7 @@ test "iteratorSplitWithRemoveEmptyEntries":
   const
     expectedResult = @[ru"", ru"", ru"this", ru"is", ru"an", ru"", ru"example", ru"", ru"", ru""].filter(runes => runes.len > 0)
     actualResult = collect(newSeq):
-      for x in unicodetext.split(ru";;this;is;an;;example;;;", r => r == ru';', true):
+      for x in unicodeext.split(ru";;this;is;an;;example;;;", r => r == ru';', true):
         x
   check actualResult == expectedResult
 

@@ -1,5 +1,5 @@
 import terminal, times, strutils
-import gapbuffer, ui, editorstatus, unicodetext, window, movement, settings,
+import gapbuffer, ui, editorstatus, unicodeext, window, movement, settings,
        bufferstatus, color, highlight, search, editor
 
 type standardTableNames {.pure.} = enum

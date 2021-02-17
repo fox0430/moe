@@ -1,5 +1,5 @@
 import unittest
-import moepkg/[editorstatus, gapbuffer, unicodetext, highlight, movement,
+import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, movement,
                bufferstatus]
 
 test "Move right":

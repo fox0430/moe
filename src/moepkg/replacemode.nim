@@ -1,5 +1,5 @@
 import terminal, times
-import editorstatus, ui, unicodetext, movement, editor, bufferstatus, gapbuffer,
+import editorstatus, ui, unicodeext, movement, editor, bufferstatus, gapbuffer,
        undoredostack, window, settings
 
 proc moveRight(bufStatus: var BufferStatus,
