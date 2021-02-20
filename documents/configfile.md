@@ -1463,3 +1463,18 @@ Current line background color
 ```
 currentLineBg
 ```
+
+### Map command
+
+Define character level keymap in normal mode:
+```
+[Map.Normal]
+";" = ":"
+```
+
+Likewise, define keymap in visual mode with:
+```
+[Map.Visual]
+";" = ":"
+```
+

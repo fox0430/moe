@@ -7,3 +7,4 @@ test.txt
 .history
 src/.history
 src/moepkg/.history
+*.gdb
