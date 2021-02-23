@@ -402,7 +402,7 @@ proc update*(status: var EditorStatus) =
             if status.settings.highlightSettings.pairOfParen:
               status.highlightPairOfParen
 
-            status.updateHighlight(node)
+          status.updateHighlight(node)
 
         let
           startSelectedLine = bufStatus.selectArea.startLine
@@ -886,17 +886,19 @@ proc highlightOtherUsesCurrentWord(status: var Editorstatus) =
               currentMainWindowNode.highlight =
                 currentMainWindowNode.highlight.overwrite(colorSegment)
 
-proc highlightTrailingSpaces(status: var Editorstatus) =
-  if isConfigMode(currentBufStatus.mode, currentBufStatus.prevMode) or
-     isDebugMode(currentBufStatus.mode, currentBufStatus.prevMode): return
+proc highlightTrailingSpaces(bufStatus: BufferStatus,
+                             windowNode: var WindowNode) =
+
+  if isConfigMode(bufStatus.mode, bufStatus.prevMode) or
+     isDebugMode(bufStatus.mode, bufStatus.prevMode): return
 
   let
-    currentLine = currentMainWindowNode.currentLine
+    currentLine = windowNode.currentLine
 
     color = EditorColorPair.highlightTrailingSpaces
 
-    range = currentMainWindowNode.view.rangeOfOriginalLineInView
-    buffer = currentBufStatus.buffer
+    range = windowNode.view.rangeOfOriginalLineInView
+    buffer = bufStatus.buffer
     startLine = range[0]
     endLine = if buffer.len > range[1] + 1: range[1] + 2
               elif buffer.len > range[1]: range[1] + 1
@@ -920,8 +922,8 @@ proc highlightTrailingSpaces(status: var Editorstatus) =
                                        color: color))
 
   for colorSegment in colorSegments:
-    currentMainWindowNode.highlight =
-      currentMainWindowNode.highlight.overwrite(colorSegment)
+    windowNode.highlight =
+      windowNode.highlight.overwrite(colorSegment)
 
 from search import searchAllOccurrence
 
@@ -987,7 +989,7 @@ proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
   # highlight trailing spaces
   if status.settings.highlightSettings.trailingSpaces and
      bufStatus.language != SourceLanguage.langMarkDown:
-    status.highlightTrailingSpaces
+    bufStatus.highlightTrailingSpaces(windowNode)
 
   # highlight full width space
   if status.settings.highlightSettings.fullWidthSpace:
