@@ -44,7 +44,7 @@ incrementalSearch = true
 
 popUpWindowInExmode = true
 
-autoDeleteParen = true
+autoDeleteParen = false
 
 systemClipboard = true
 
