@@ -38,7 +38,7 @@ suite "Config mode: Init buffer":
                      ru "  liveReloadOfConf               false",
                      ru "  incrementalSearch              true",
                      ru "  popUpWindowInExmode            true",
-                     ru "  autoDeleteParen                true",
+                     ru "  autoDeleteParen                false",
                      ru "  systemClipboard                true",
                      ru "  smoothScroll                   true",
                      ru "  smoothScrollSpeed              15"]
