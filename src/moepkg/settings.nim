@@ -321,7 +321,6 @@ proc initEditorSettings*(): EditorSettings =
   result.autoSaveInterval = 5
   result.incrementalSearch = true
   result.popUpWindowInExmode = true
-  result.autoDeleteParen = true
   result.smoothScroll = true
   result.smoothScrollSpeed = 15
   result.systemClipboard = true
