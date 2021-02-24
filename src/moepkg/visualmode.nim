@@ -110,7 +110,11 @@ proc deleteBuffer(bufStatus: var BufferStatus,
   if area.startLine > bufStatus.buffer.high:
     windowNode.currentLine = bufStatus.buffer.high
   else: windowNode.currentLine = area.startLine
-  let column = if area.startColumn > 0: area.startColumn - 1 else: 0
+  let column = if bufStatus.buffer[currentLine].high > area.startColumn:
+                 area.startColumn
+               elif area.startColumn > 0:
+                 area.startColumn - 1
+               else: 0
   windowNode.currentColumn = column
   windowNode.expandedColumn = column
 
