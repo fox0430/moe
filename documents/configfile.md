@@ -131,7 +131,7 @@ popUpWindowInExmode
 ```
 
 Auto delete paren (bool)  
-default is true
+default is false
 ```
 autoDeleteParen
 ```
