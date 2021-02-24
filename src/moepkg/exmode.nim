@@ -1378,7 +1378,7 @@ proc exMode*(status: var EditorStatus) =
           keyword.add(command[i])
       status.searchHistory[status.searchHistory.high] = keyword
       let bufferIndex = currentMainWindowNode.bufferIndex
-      status.bufStatus[bufferIndex].isSearchHighlight = true
+      status.isSearchHighlight = true
 
       status.jumpToSearchForwardResults(keyword)
     else:

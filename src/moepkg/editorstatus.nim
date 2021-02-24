@@ -32,6 +32,7 @@ type EditorStatus* = object
   workSpaceTabWindow*: Window
   lastOperatingTime*: DateTime
   autoBackupStatus*: AutoBackupStatus
+  isSearchHighlight*: bool
 
 proc initPlatform(): Platform =
   if defined linux:
@@ -534,7 +535,8 @@ proc writePopUpWindow*(popUpWindow: var Window,
                        terminalHeight, terminalWidth: int,
                        currentLine: int,
                        buffer: seq[seq[Rune]]) =
-  # TODO: Probably, the parameter `y` means the bottom of the window, but it should change to the top of the window for consistency.
+  # TODO: Probably, the parameter `y` means the bottom of the window,
+  #       but it should change to the top of the window for consistency.
 
   popUpWindow.erase
 
@@ -954,7 +956,8 @@ proc highlightSearchResults(windowNode: var WindowNode,
                             bufferInView: GapBuffer[seq[Rune]],
                             range: (int, int),
                             keyword: seq[Rune],
-                            settings: EditorSettings) =
+                            settings: EditorSettings,
+                            isSearchHighlight: bool) =
 
   let
     ignorecase = settings.ignorecase
@@ -964,7 +967,7 @@ proc highlightSearchResults(windowNode: var WindowNode,
       keyword,
       ignorecase,
       smartcase)
-    color = if bufStatus.isSearchHighlight: EditorColorPair.searchResult
+    color = if isSearchHighlight: EditorColorPair.searchResult
             else: EditorColorPair.replaceText
   for pos in allOccurrence:
     let colorSegment = ColorSegment(firstRow: range[0] + pos.line,
@@ -996,13 +999,14 @@ proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
     windowNode.highlightFullWidthSpace(bufferInView, range)
 
   # highlight search results
-  if bufStatus.isSearchHighlight and status.searchHistory.len > 0:
+  if status.isSearchHighlight and status.searchHistory.len > 0:
     windowNode.highlightSearchResults(
       bufStatus,
       bufferInView,
       range,
       status.searchHistory[^1],
-      status.settings)
+      status.settings,
+      status.isSearchHighlight)
 
 proc changeTheme*(status: var EditorStatus) =
   if status.settings.editorColorTheme == ColorTheme.vscode:
