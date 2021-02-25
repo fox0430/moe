@@ -780,7 +780,7 @@ proc pasteString(bufStatus: var BufferStatus,
   if oldLine != newLine:
     bufStatus.buffer[windowNode.currentLine] = newLine
 
-  windowNode.currentColumn += registers.yankedStr.high - 1
+  windowNode.currentColumn += registers.yankedStr.high
 
   inc(bufStatus.countChange)
 
@@ -799,9 +799,9 @@ proc pasteBeforeCursor*(bufStatus: var BufferStatus,
                         registers: Registers) =
 
   if registers.yankedLines.len > 0:
-    bufStatus.pasteString(windowNode, registers)
-  elif registers.yankedStr.len > 0:
     bufStatus.pasteLines(windowNode, registers)
+  elif registers.yankedStr.len > 0:
+    bufStatus.pasteString(windowNode, registers)
 
 proc replaceCurrentCharacter*(bufStatus: var BufferStatus,
                               windowNode: WindowNode,
