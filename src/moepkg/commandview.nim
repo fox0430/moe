@@ -528,7 +528,8 @@ proc suggestCommandLine(status: var Editorstatus,
       exStatus.currentPosition = 0
       exStatus.cursorX = 0
 
-  # TODO: I don't know why yet, but there is a bug which is related to scrolling of the pup-up window.
+  # TODO: I don't know why yet,
+  #       but there is a bug which is related to scrolling of the pup-up window.
 
   while (isTabKey(key) or isShiftTab(key)) and suggestlist.len > 1:
     updateExModeViewStatus()
@@ -570,7 +571,8 @@ proc suggestMode(status: var Editorstatus,
 
   status.suggestCommandLine(exStatus, key)
 
-  while isTabKey(key) or isShiftTab(key):
+  key = errorKey
+  while key == errorKey or isTabKey(key) or isShiftTab(key):
     key = status.commandLine.getKey
 
 proc getKeyOnceAndWriteCommandView*(
