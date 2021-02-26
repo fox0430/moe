@@ -1,8 +1,8 @@
-import os, unicode, times
+import os, times
 import moepkg/[ui, editorstatus, normalmode, insertmode, visualmode,
                replacemode, filermode, exmode, buffermanager, logviewer,
                cmdlineoption, bufferstatus, help, recentfilemode, quickrun,
-               historymanager, diffviewer, configmode, debugmode]
+               historymanager, diffviewer, configmode, debugmode, unicodeext]
 
 proc initEditor(): EditorStatus =
   let parsedList = parseCommandLineOption(commandLineParams())
@@ -31,6 +31,12 @@ proc initEditor(): EditorStatus =
 
   disableControlC()
 
+  # Load persisted data (Ex command history and search history)
+  if result.settings.persist.exCommand:
+    result.exCommandHistory = loadExCommandHistory()
+  if result.settings.persist.search:
+    result.searchHistory = loadSearchHistory()
+
 proc main() =
   var status = initEditor()
 
@@ -54,6 +60,6 @@ proc main() =
     of Mode.config: status.configMode
     of Mode.debug: status.debugMode
 
-  status.settings.exitEditor
+  status.exitEditor
 
 when isMainModule: main()

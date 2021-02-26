@@ -984,9 +984,9 @@ proc allBufferQuitCommand(status: var EditorStatus) =
       status.changeMode(bufferstatus.Mode.normal)
       return
 
-  exitEditor(status.settings)
+  status.exitEditor
 
-proc forceAllBufferQuitCommand(status: var EditorStatus) {.inline.} = exitEditor(status.settings)
+proc forceAllBufferQuitCommand(status: var EditorStatus) {.inline.} = status.exitEditor
 
 proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
   for bufStatus in status.bufStatus:
@@ -1019,7 +1019,7 @@ proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
       status.changeMode(currentBufStatus.prevMode)
       return
 
-  exitEditor(status.settings)
+  status.exitEditor
 
 # Save buffer, buid and open log viewer
 proc buildCommand(status: var Editorstatus) =
@@ -1203,6 +1203,11 @@ proc exModeCommand*(status: var EditorStatus,
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
+  # Save command history
+  status.exCommandHistory.add(@[ru ""])
+  for runes in command:
+    status.exCommandHistory[status.exCommandHistory.high].add(runes)
+
   if command.len == 0 or command[0].len == 0:
     status.changeMode(currentBufStatus.prevMode)
   elif isJumpCommand(status, command):
@@ -1368,8 +1373,6 @@ proc exMode*(status: var EditorStatus) =
     isSuggest = true
     isReplaceCommand = false
 
-  status.exCommandHistory.add(ru"")
-
   status.update
 
   while exitInput == false:
@@ -1400,7 +1403,6 @@ proc exMode*(status: var EditorStatus) =
       status.jumpToSearchForwardResults(keyword)
     else:
       if command.len > 0:
-        status.exCommandHistory[status.exCommandHistory.high] = command
         if isReplaceCommand:
           isReplaceCommand = false
           status.searchHistory.delete(status.searchHistory.high)
@@ -1408,9 +1410,6 @@ proc exMode*(status: var EditorStatus) =
     status.updatehighlight(currentMainWindowNode)
     status.resize(terminalHeight(), terminalWidth())
     status.update
-
-  if status.exCommandHistory[status.exCommandHistory.high] == ru"":
-    status.exCommandHistory.delete(status.exCommandHistory.high)
 
   if isReplaceCommand:
     status.searchHistory.delete(status.searchHistory.high)

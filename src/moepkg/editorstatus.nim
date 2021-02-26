@@ -127,12 +127,70 @@ proc changeCurrentWin*(status:var EditorStatus, index: int) =
     var node = mainWindowNode.searchByWindowIndex(index)
     currentMainWindowNode = node
 
+proc loadExCommandHistory*(): seq[seq[Rune]] =
+  let chaheFile = getHomeDir() / ".cache/moe/exCommandHistory"
+
+  if fileExists(chaheFile):
+    let f = open(chaheFile, FileMode.fmRead)
+    while not f.endOfFile:
+      let line = f.readLine
+      if line.len > 0:
+        result.add ru line
+
+proc loadSearchHistory*(): seq[seq[Rune]] =
+  let chaheFile = getHomeDir() / ".cache/moe/searchHistory"
+
+  if fileExists(chaheFile):
+    let f = open(chaheFile, FileMode.fmRead)
+    while not f.endOfFile:
+      let line = f.readLine
+      if line.len > 0:
+        result.add ru line
+
 proc executeOnExit(settings: EditorSettings) {.inline.} =
   if not settings.disableChangeCursor:
     changeCursorType(settings.defaultCursor)
 
-proc exitEditor*(settings: EditorSettings) =
-  executeOnExit(settings)
+proc saveExCommandHistory(history: seq[seq[Rune]]) =
+  let
+    chaheDir = getHomeDir() / ".cache/moe"
+    chaheFile = chaheDir / "exCommandHistory"
+
+  createDir(chaheDir)
+
+  var f = if fileExists(chaheFile): open(chaheFile, FileMode.fmAppend)
+          else: open(chaheFile, FileMode.fmWrite)
+
+  defer:
+    f.close
+
+  for line in history:
+    f.writeLine($line)
+
+proc saveSearchHistory(history: seq[seq[Rune]]) =
+  let
+    chaheDir = getHomeDir() / ".cache/moe"
+    chaheFile = chaheDir / "searchHistory"
+
+  createDir(chaheDir)
+
+  var f = if fileExists(chaheFile): open(chaheFile, FileMode.fmAppend)
+          else: open(chaheFile, FileMode.fmWrite)
+
+  defer:
+    f.close
+
+  for line in history:
+    f.writeLine($line)
+
+proc exitEditor*(status: EditorStatus) =
+  if status.exCommandHistory.len > 0:
+    saveExCommandHistory(status.exCommandHistory)
+
+  if status.searchHistory.len > 0:
+    saveSearchHistory(status.searchHistory)
+
+  executeOnExit(status.settings)
   exitUi()
   quit()
 
@@ -493,7 +551,7 @@ proc closeWindow*(status: var EditorStatus,
 
   if status.workSpace.len == 1 and
      currentWorkSpace.numOfMainWindow == 1:
-    exitEditor(status.settings)
+    status.exitEditor
 
   if currentWorkSpace.numOfMainWindow == 1:
     status.deleteWorkSpace(status.currentWorkSpaceIndex)
@@ -653,7 +711,7 @@ proc deleteWorkSpace*(status: var Editorstatus, index: int) =
   else:
     status.workspace.delete(index)
 
-    if status.workspace.len == 0: status.settings.exitEditor
+    if status.workspace.len == 0: status.exitEditor
 
     if status.currentWorkSpaceIndex > status.workSpace.high:
       status.currentWorkSpaceIndex = status.workSpace.high
