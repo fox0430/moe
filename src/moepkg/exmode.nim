@@ -267,6 +267,9 @@ proc isStartConfigMode(command: seq[seq[Rune]]): bool {.inline.} =
 proc isStartDebugMode(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 1 and cmpIgnoreCase($command[0], "debug") == 0
 
+proc isBuildCommand(command: seq[seq[Rune]]): bool {.inline.} =
+  return command.len == 1 and cmpIgnoreCase($command[0], "build") == 0
+
 proc startDebugMode(status: var Editorstatus) =
   let bufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[bufferIndex].prevMode)
@@ -1018,6 +1021,18 @@ proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
 
   exitEditor(status.settings)
 
+# Save buffer, buid and open log viewer
+proc buildCommand(status: var Editorstatus) =
+  # Force enable a build on save temporarily.
+  let currentSetting = status.settings.buildOnSave.enable
+
+  status.settings.buildOnSave.enable = true
+  status.writeCommand(currentBufStatus.path)
+
+  status.settings.buildOnSave.enable = currentSetting
+
+  status.openMessageLogViewer
+
 proc shellCommand(status: var EditorStatus, shellCommand: string) =
   saveCurrentTerminalModes()
   exitUi()
@@ -1336,6 +1351,8 @@ proc exModeCommand*(status: var EditorStatus,
     status.startDebugMode
   elif isHighlightCurrentLineSettingCommand(command):
     status.highlightCurrentLineSettingCommand(command[1])
+  elif isBuildCommand(command):
+    status.buildCommand
   else:
     status.commandLine.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(currentBufStatus.prevMode)

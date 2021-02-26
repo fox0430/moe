@@ -116,6 +116,7 @@ suite "commandview: getCandidatesExCommand":
       "blast",
       "bnext",
       "bprev",
+      "build",
       "buildOnSave",
       "buf"
     ]
