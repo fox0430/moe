@@ -210,6 +210,7 @@ deleteTrailingSpaces - Delete trailing spaces
 ignorecase - Change setting to ignorecase
 smartcase - Change setting to smartcase
 highlightCurrentLine on or highlightCurrentLine off - Change the highlight setting of the current line
+build - Build the current buffer
 
 log - Open messages log viewer
 
