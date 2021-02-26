@@ -14,7 +14,7 @@ type SuggestType = enum
   exCommandOption
   filePath
 
-const exCommandList: array[64, tuple[command, description: string]] = [
+const exCommandList: array[65, tuple[command, description: string]] = [
   (command: "!", description: "                    | Shell command execution"),
   (command: "deleteParen", description: "          | Enable/Disable auto delete paren"),
   (command: "b", description: "                    | Change the buffer with the given number"),
@@ -23,6 +23,7 @@ const exCommandList: array[64, tuple[command, description: string]] = [
   (command: "blast", description: "                | Change the last buffer"),
   (command: "bnext", description: "                | Change the next buffer"),
   (command: "bprev", description: "                | Change the previous buffer"),
+  (command: "build", description: "                | Build the current buffer"),
   (command: "buildOnSave", description: "          | Enable/Disable build on save"),
   (command: "buf", description: "                  | Open the buffer manager"),
   (command: "clipboard", description: "            | Enable/Disable accessing the system clipboard"),
