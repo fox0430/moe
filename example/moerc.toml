@@ -201,6 +201,12 @@ showIcons = true
 
 enable = true
 
+[Persist]
+
+exCommand = true
+
+search = true
+
 [Debug.WorkSpace]
 enable = true
 numOfWorkSpaces = true
