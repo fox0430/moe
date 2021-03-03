@@ -350,10 +350,10 @@ proc runQuickRunCommand(status: var Editorstatus) =
                          status.messageLog,
                          status.settings)
 
-    quickRunWindowIndex = status.bufStatus.getQuickRunBufferIndex(
+    quickRunBufferIndex = status.bufStatus.getQuickRunBufferIndex(
       currentWorkSpace)
 
-  if quickRunWindowIndex == -1:
+  if quickRunBufferIndex == -1:
     status.verticalSplitWindow
     status.resize(terminalHeight(), terminalWidth())
     status.moveNextWindow
@@ -365,7 +365,7 @@ proc runQuickRunCommand(status: var Editorstatus) =
 
     status.changeMode(bufferstatus.Mode.quickRun)
   else:
-    status.bufStatus[quickRunWindowIndex].buffer = initGapBuffer(buffer)
+    status.bufStatus[quickRunBufferIndex].buffer = initGapBuffer(buffer)
 
 proc staticReadVersionFromConfigFileExample(): string {.compileTime.} =
   staticRead(currentSourcePath.parentDir() / "../../example/moerc.toml")
