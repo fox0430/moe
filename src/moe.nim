@@ -2,7 +2,7 @@ import os, times
 import moepkg/[ui, editorstatus, normalmode, insertmode, visualmode,
                replacemode, filermode, exmode, buffermanager, logviewer,
                cmdlineoption, bufferstatus, help, recentfilemode, quickrun,
-               historymanager, diffviewer, configmode, debugmode, unicodeext]
+               historymanager, diffviewer, configmode, debugmode]
 
 proc initEditor(): EditorStatus =
   let parsedList = parseCommandLineOption(commandLineParams())
