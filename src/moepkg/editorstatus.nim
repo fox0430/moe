@@ -184,10 +184,10 @@ proc saveSearchHistory(history: seq[seq[Rune]]) =
     f.writeLine($line)
 
 proc exitEditor*(status: EditorStatus) =
-  if status.exCommandHistory.len > 0:
+  if status.settings.persist.exCommand and status.exCommandHistory.len > 0:
     saveExCommandHistory(status.exCommandHistory)
 
-  if status.searchHistory.len > 0:
+  if status.settings.persist.search and status.searchHistory.len > 0:
     saveSearchHistory(status.searchHistory)
 
   executeOnExit(status.settings)
