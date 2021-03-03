@@ -554,6 +554,19 @@ The default value is true.
 enable
 ```
 
+### Persist table
+
+Enable/Disable saving Ex command history (bool).
+The default value is true.
+```
+exCommand
+```
+
+Enable/Disable saving search history (bool).
+```
+search
+```
+
 ### Debug.WorkSpace table
 
 Show/Hidden all WorkSpace info in debug mode (bool)
