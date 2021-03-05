@@ -203,9 +203,9 @@ enable = true
 
 [Persist]
 
-exCommand = true
+exCommand = false
 
-search = true
+search = false
 
 [Debug.WorkSpace]
 enable = true
