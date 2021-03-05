@@ -1791,7 +1791,7 @@ proc initAutocompleteTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       of "enable":
         result.add(ru nameStr & space & $settings.autocompleteSettings.enable)
 
-proc initPersistSettingsTableBuffer(persistSettings: PersistSettings): seq[seq[Rune]] =
+proc initPersistTableBuffer(persistSettings: PersistSettings): seq[seq[Rune]] =
   result.add(ru"Persist")
 
   for name in persistTableSettings:
@@ -1873,7 +1873,7 @@ proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
   buffer.add(initAutocompleteTableBuffer(settings))
 
   buffer.add(ru"")
-  buffer.add(initPersistSettingsTableBuffer(settings.persist))
+  buffer.add(initPersistTableBuffer(settings.persist))
 
   buffer.add(ru"")
   buffer.add(initThemeTableBuffer(settings))
