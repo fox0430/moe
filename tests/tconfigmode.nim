@@ -190,12 +190,23 @@ suite "Config mode: Init buffer":
     for index, line in buffer:
       check sample[index] == line
 
-  test "Init Filer table buffer":
+  test "Init Autocomplete table buffer":
     var status = initEditorStatus()
     let buffer = status.settings.initAutocompleteTableBuffer
 
     const sample = @[ru "Autocomplete",
                      ru "  enable                         true"]
+
+    for index, line in buffer:
+      check sample[index] == line
+
+  test "Init Persist table buffer":
+    var status = initEditorStatus()
+    let buffer = status.settings.persist.initPersistTableBuffer
+
+    const sample = @[ru "Persist",
+                     ru "  exCommand                      true",
+                     ru "  search                         true"]
 
     for index, line in buffer:
       check sample[index] == line
@@ -1443,6 +1454,38 @@ suite "Config mode: Get Autocomplete table setting values":
 
     check values.len == 0
 
+suite "Config mode: Get Persist table setting values":
+  test "Get exCommand values":
+    var status = initEditorStatus()
+    let persistSettings = status.settings.persist
+
+    const name = "exCommand"
+    let
+      default = persistSettings.exCommand
+      values = persistSettings.getPersistTableSettingsValues(name)
+
+    checkBoolSettingValue(default, values)
+
+  test "Get search values":
+    var status = initEditorStatus()
+    let persistSettings = status.settings.persist
+
+    const name = "search"
+    let
+      default = persistSettings.exCommand
+      values = persistSettings.getPersistTableSettingsValues(name)
+
+    checkBoolSettingValue(default, values)
+
+  test "Set invalid name":
+    var status = initEditorStatus()
+    let persistSettings = status.settings.persist
+
+    const name = "test"
+    let values = persistSettings.getPersistTableSettingsValues(name)
+
+    check values.len == 0
+
 suite "Config mode: Get Theme table setting values":
   # Generate test code
   macro checkColorValues(colorPair: EditorColorPair,
@@ -2240,6 +2283,27 @@ suite "Config mode: Chaging Autocomplete table settings":
     autocompleteSettings.changeAutoCompleteTableSetting("test", "test")
 
     check beforeSettings == autocompleteSettings
+
+suite "Config mode: Chaging Persist table settings":
+  test "Chaging exCommand":
+    var
+      settings = initEditorSettings()
+      persistSettings = settings.persist
+
+    let val = not persistSettings.exCommand
+    persistSettings.changePerSistTableSettings("exCommand", $val)
+
+    check val == persistSettings.exCommand
+
+  test "Chaging search":
+    var
+      settings = initEditorSettings()
+      persistSettings = settings.persist
+
+    let val = not persistSettings.search
+    persistSettings.changePerSistTableSettings("search", $val)
+
+    check val == persistSettings.search
 
 suite "Config mode: Chaging Theme table settings":
   # Generate test code

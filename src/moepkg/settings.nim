@@ -144,6 +144,10 @@ type HighlightSettings* = object
   trailingSpaces*: bool
   reservedWords*: seq[ReservedWord]
 
+type PersistSettings* = object
+  exCommand*: bool
+  search*: bool
+
 type EditorSettings* = object
   editorColorTheme*: ColorTheme
   statusLine*: StatusLineSettings
@@ -177,6 +181,7 @@ type EditorSettings* = object
   notificationSettings*: NotificationSettings
   debugModeSettings*: DebugModeSettings
   highlightSettings*: HighlightSettings
+  persist*: PersistSettings
 
 # Warning: inherit from a more precise exception type like ValueError, IOError or OSError.
 # If these don't suit, inherit from CatchableError or Defect. [InheritFromException]
@@ -303,6 +308,10 @@ proc initHighlightSettings(): HighlightSettings =
   result.trailingSpaces = true
   result.reservedWords =  initReservedWords()
 
+proc initPersistSettings(): PersistSettings =
+  result.exCommand = true
+  result.search = true
+
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = ColorTheme.dark
   result.statusLine = initStatusLineSettings()
@@ -333,6 +342,7 @@ proc initEditorSettings*(): EditorSettings =
   result.notificationSettings = initNotificationSettings()
   result.debugModeSettings = initDebugModeSettings()
   result.highlightSettings = initHighlightSettings()
+  result.persist = initPersistSettings()
 
 proc getTheme(theme: string): ColorTheme =
   if theme == "vivid": return ColorTheme.vivid
@@ -1133,6 +1143,13 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if (const key = "enable"; settings[table].contains(key)):
       result.autocompleteSettings.enable = settings[table][key].getbool
 
+  if settings.contains("Persist"):
+    if settings["Persist"].contains("exCommand"):
+      result.persist.exCommand = settings["Persist"]["exCommand"].getBool
+
+    if settings["Persist"].contains("search"):
+      result.persist.search = settings["Persist"]["search"].getBool
+
   if settings.contains("Debug"):
     if settings["Debug"].contains("WorkSpace"):
       let workSpaceSettings = settings["Debug"]["WorkSpace"]
@@ -1804,6 +1821,15 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
     for item in json["Autocomplete"].pairs:
       case item.key:
         of "enable":
+          if item.val["type"].getStr != "bool":
+            return some($item)
+        else:
+          return some($item)
+
+  template validatePersistTable() =
+    for item in json["Persist"].pairs:
+      case item.key:
+        of "exCommand", "search":
           if item.val["type"].getStr != "bool":
             return some($item)
         else:

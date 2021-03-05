@@ -143,4 +143,4 @@ proc bufferManager*(status: var Editorstatus) =
     elif key == ord('D'):
       status.deleteSelectedBuffer(terminalHeight(), terminalWidth())
 
-    if status.bufStatus.len < 2: exitEditor(status.settings)
+    if status.bufStatus.len < 2: status.exitEditor
