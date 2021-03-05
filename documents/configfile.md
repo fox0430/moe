@@ -557,12 +557,13 @@ enable
 ### Persist table
 
 Enable/Disable saving Ex command history (bool).
-The default value is true.
+The default value is false.
 ```
 exCommand
 ```
 
 Enable/Disable saving search history (bool).
+The default value is false.
 ```
 search
 ```
