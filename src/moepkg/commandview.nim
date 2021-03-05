@@ -560,21 +560,14 @@ proc suggestCommandLine(status: var Editorstatus,
 
     status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
 
-    key = status.commandLine.getKey
+    key = errorKey
+    while key == errorKey:
+      key = status.commandLine.getKey
+
     exStatus.cursorX = exStatus.currentPosition + 1
 
   status.commandLine.window.moveCursor(exStatus.cursorY, exStatus.cursorX)
   if status.settings.popUpWindowInExmode: status.deletePopUpWindow
-
-proc suggestMode(status: var Editorstatus,
-                 exStatus: var ExModeViewStatus,
-                 key: var Rune) =
-
-  status.suggestCommandLine(exStatus, key)
-
-  key = errorKey
-  while key == errorKey or isTabKey(key) or isShiftTab(key):
-    key = status.commandLine.getKey
 
 proc getKeyOnceAndWriteCommandView*(
   status: var Editorstatus,
@@ -632,7 +625,7 @@ proc getKeyOnceAndWriteCommandView*(
 
     # Suggestion mode
     if isTabKey(key) or isShiftTab(key):
-      status.suggestMode(exStatus, key)
+      status.suggestCommandLine(exStatus, key)
       if status.settings.popUpWindowInExmode and isEnterKey(key):
         status.commandLine.window.moveCursor(exStatus.cursorY, exStatus.cursorX)
 
@@ -683,7 +676,7 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
 
     # Suggestion mode
     if isTabKey(key) or isShiftTab(key):
-      suggestMode(status, exStatus, key)
+      status.suggestCommandLine(exStatus, key)
       if status.settings.popUpWindowInExmode and isEnterKey(key):
           status.commandLine.window.moveCursor(exStatus.cursorY, exStatus.cursorX)
           key = status.commandLine.getKey
