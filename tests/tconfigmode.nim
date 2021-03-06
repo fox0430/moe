@@ -205,8 +205,8 @@ suite "Config mode: Init buffer":
     let buffer = status.settings.persist.initPersistTableBuffer
 
     const sample = @[ru "Persist",
-                     ru "  exCommand                      false",
-                     ru "  search                         false"]
+                     ru "  exCommand                      true",
+                     ru "  search                         true"]
 
     for index, line in buffer:
       check sample[index] == line
