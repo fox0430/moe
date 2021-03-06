@@ -158,9 +158,7 @@ proc saveExCommandHistory(history: seq[seq[Rune]]) =
 
   createDir(chaheDir)
 
-  var f = if fileExists(chaheFile): open(chaheFile, FileMode.fmAppend)
-          else: open(chaheFile, FileMode.fmWrite)
-
+  var f = open(chaheFile, FileMode.fmWrite)
   defer:
     f.close
 
@@ -174,9 +172,7 @@ proc saveSearchHistory(history: seq[seq[Rune]]) =
 
   createDir(chaheDir)
 
-  var f = if fileExists(chaheFile): open(chaheFile, FileMode.fmAppend)
-          else: open(chaheFile, FileMode.fmWrite)
-
+  var f = open(chaheFile, FileMode.fmWrite)
   defer:
     f.close
 
