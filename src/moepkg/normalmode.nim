@@ -36,7 +36,7 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
     currentBufferIndex = status.bufferIndexInCurrentWindow
     workspaceIndex = status.currentWorkSpaceIndex
 
-  status.bufStatus[currentBufferIndex].isSearchHighlight = true
+  status.isSearchHighlight = true
 
   status.updateHighlight(status.workspace[workspaceIndex].currentMainWindowNode)
 
@@ -61,7 +61,7 @@ proc searchNextOccurrence(status: var EditorStatus) =
   status.searchNextOccurrence(keyword)
 
 proc searchNextOccurrenceReversely(status: var EditorStatus, keyword: seq[Rune]) =
-  currentBufStatus.isSearchHighlight = true
+  status.isSearchHighlight = true
   status.updateHighlight(currentMainWindowNode)
 
   var windowNode = currentMainWindowNode
@@ -86,7 +86,7 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) =
   status.searchNextOccurrenceReversely(keyword)
 
 proc turnOffHighlighting*(status: var EditorStatus) =
-  currentBufStatus.isSearchHighlight = false
+  status.isSearchHighlight = false
   status.updateHighlight(currentMainWindowNode)
 
 proc writeFileAndExit(status: var EditorStatus, height, width: int) =

@@ -267,6 +267,9 @@ proc isStartConfigMode(command: seq[seq[Rune]]): bool {.inline.} =
 proc isStartDebugMode(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 1 and cmpIgnoreCase($command[0], "debug") == 0
 
+proc isBuildCommand(command: seq[seq[Rune]]): bool {.inline.} =
+  return command.len == 1 and cmpIgnoreCase($command[0], "build") == 0
+
 proc startDebugMode(status: var Editorstatus) =
   let bufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[bufferIndex].prevMode)
@@ -347,10 +350,10 @@ proc runQuickRunCommand(status: var Editorstatus) =
                          status.messageLog,
                          status.settings)
 
-    quickRunWindowIndex = status.bufStatus.getQuickRunBufferIndex(
+    quickRunBufferIndex = status.bufStatus.getQuickRunBufferIndex(
       currentWorkSpace)
 
-  if quickRunWindowIndex == -1:
+  if quickRunBufferIndex == -1:
     status.verticalSplitWindow
     status.resize(terminalHeight(), terminalWidth())
     status.moveNextWindow
@@ -362,7 +365,7 @@ proc runQuickRunCommand(status: var Editorstatus) =
 
     status.changeMode(bufferstatus.Mode.quickRun)
   else:
-    status.bufStatus[quickRunWindowIndex].buffer = initGapBuffer(buffer)
+    status.bufStatus[quickRunBufferIndex].buffer = initGapBuffer(buffer)
 
 proc staticReadVersionFromConfigFileExample(): string {.compileTime.} =
   staticRead(currentSourcePath.parentDir() / "../../example/moerc.toml")
@@ -981,9 +984,9 @@ proc allBufferQuitCommand(status: var EditorStatus) =
       status.changeMode(bufferstatus.Mode.normal)
       return
 
-  exitEditor(status.settings)
+  status.exitEditor
 
-proc forceAllBufferQuitCommand(status: var EditorStatus) {.inline.} = exitEditor(status.settings)
+proc forceAllBufferQuitCommand(status: var EditorStatus) {.inline.} = status.exitEditor
 
 proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
   for bufStatus in status.bufStatus:
@@ -1016,7 +1019,19 @@ proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
       status.changeMode(currentBufStatus.prevMode)
       return
 
-  exitEditor(status.settings)
+  status.exitEditor
+
+# Save buffer, buid and open log viewer
+proc buildCommand(status: var Editorstatus) =
+  # Force enable a build on save temporarily.
+  let currentSetting = status.settings.buildOnSave.enable
+
+  status.settings.buildOnSave.enable = true
+  status.writeCommand(currentBufStatus.path)
+
+  status.settings.buildOnSave.enable = currentSetting
+
+  status.openMessageLogViewer
 
 proc shellCommand(status: var EditorStatus, shellCommand: string) =
   saveCurrentTerminalModes()
@@ -1188,6 +1203,11 @@ proc exModeCommand*(status: var EditorStatus,
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
+  # Save command history
+  status.exCommandHistory.add(@[ru ""])
+  for runes in command:
+    status.exCommandHistory[status.exCommandHistory.high].add(runes)
+
   if command.len == 0 or command[0].len == 0:
     status.changeMode(currentBufStatus.prevMode)
   elif isJumpCommand(status, command):
@@ -1336,6 +1356,8 @@ proc exModeCommand*(status: var EditorStatus,
     status.startDebugMode
   elif isHighlightCurrentLineSettingCommand(command):
     status.highlightCurrentLineSettingCommand(command[1])
+  elif isBuildCommand(command):
+    status.buildCommand
   else:
     status.commandLine.writeNotEditorCommandError(command, status.messageLog)
     status.changeMode(currentBufStatus.prevMode)
@@ -1350,8 +1372,6 @@ proc exMode*(status: var EditorStatus) =
     cancelInput = false
     isSuggest = true
     isReplaceCommand = false
-
-  status.exCommandHistory.add(ru"")
 
   status.update
 
@@ -1378,12 +1398,11 @@ proc exMode*(status: var EditorStatus) =
           keyword.add(command[i])
       status.searchHistory[status.searchHistory.high] = keyword
       let bufferIndex = currentMainWindowNode.bufferIndex
-      status.bufStatus[bufferIndex].isSearchHighlight = true
+      status.isSearchHighlight = true
 
       status.jumpToSearchForwardResults(keyword)
     else:
       if command.len > 0:
-        status.exCommandHistory[status.exCommandHistory.high] = command
         if isReplaceCommand:
           isReplaceCommand = false
           status.searchHistory.delete(status.searchHistory.high)
@@ -1391,9 +1410,6 @@ proc exMode*(status: var EditorStatus) =
     status.updatehighlight(currentMainWindowNode)
     status.resize(terminalHeight(), terminalWidth())
     status.update
-
-  if status.exCommandHistory[status.exCommandHistory.high] == ru"":
-    status.exCommandHistory.delete(status.exCommandHistory.high)
 
   if isReplaceCommand:
     status.searchHistory.delete(status.searchHistory.high)

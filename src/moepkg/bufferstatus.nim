@@ -31,7 +31,6 @@ type BufferStatus* = object
   characterEncoding*: CharacterEncoding
   language*: SourceLanguage
   selectArea*: SelectArea
-  isSearchHighlight*: bool
   path*: seq[Rune]
   openDir*: seq[Rune]
   positionRecord*: Table[int, tuple[line, column, expandedColumn: int]]

@@ -44,7 +44,7 @@ incrementalSearch = true
 
 popUpWindowInExmode = true
 
-autoDeleteParen = true
+autoDeleteParen = false
 
 systemClipboard = true
 
@@ -200,6 +200,12 @@ showIcons = true
 [Autocomplete]
 
 enable = true
+
+[Persist]
+
+exCommand = false
+
+search = false
 
 [Debug.WorkSpace]
 enable = true

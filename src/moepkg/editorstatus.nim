@@ -32,6 +32,7 @@ type EditorStatus* = object
   workSpaceTabWindow*: Window
   lastOperatingTime*: DateTime
   autoBackupStatus*: AutoBackupStatus
+  isSearchHighlight*: bool
 
 proc initPlatform(): Platform =
   if defined linux:
@@ -126,12 +127,70 @@ proc changeCurrentWin*(status:var EditorStatus, index: int) =
     var node = mainWindowNode.searchByWindowIndex(index)
     currentMainWindowNode = node
 
+proc loadExCommandHistory*(): seq[seq[Rune]] =
+  let chaheFile = getHomeDir() / ".cache/moe/exCommandHistory"
+
+  if fileExists(chaheFile):
+    let f = open(chaheFile, FileMode.fmRead)
+    while not f.endOfFile:
+      let line = f.readLine
+      if line.len > 0:
+        result.add ru line
+
+proc loadSearchHistory*(): seq[seq[Rune]] =
+  let chaheFile = getHomeDir() / ".cache/moe/searchHistory"
+
+  if fileExists(chaheFile):
+    let f = open(chaheFile, FileMode.fmRead)
+    while not f.endOfFile:
+      let line = f.readLine
+      if line.len > 0:
+        result.add ru line
+
 proc executeOnExit(settings: EditorSettings) {.inline.} =
   if not settings.disableChangeCursor:
     changeCursorType(settings.defaultCursor)
 
-proc exitEditor*(settings: EditorSettings) =
-  executeOnExit(settings)
+proc saveExCommandHistory(history: seq[seq[Rune]]) =
+  let
+    chaheDir = getHomeDir() / ".cache/moe"
+    chaheFile = chaheDir / "exCommandHistory"
+
+  createDir(chaheDir)
+
+  var f = if fileExists(chaheFile): open(chaheFile, FileMode.fmAppend)
+          else: open(chaheFile, FileMode.fmWrite)
+
+  defer:
+    f.close
+
+  for line in history:
+    f.writeLine($line)
+
+proc saveSearchHistory(history: seq[seq[Rune]]) =
+  let
+    chaheDir = getHomeDir() / ".cache/moe"
+    chaheFile = chaheDir / "searchHistory"
+
+  createDir(chaheDir)
+
+  var f = if fileExists(chaheFile): open(chaheFile, FileMode.fmAppend)
+          else: open(chaheFile, FileMode.fmWrite)
+
+  defer:
+    f.close
+
+  for line in history:
+    f.writeLine($line)
+
+proc exitEditor*(status: EditorStatus) =
+  if status.settings.persist.exCommand and status.exCommandHistory.len > 0:
+    saveExCommandHistory(status.exCommandHistory)
+
+  if status.settings.persist.search and status.searchHistory.len > 0:
+    saveSearchHistory(status.searchHistory)
+
+  executeOnExit(status.settings)
   exitUi()
   quit()
 
@@ -402,7 +461,7 @@ proc update*(status: var EditorStatus) =
             if status.settings.highlightSettings.pairOfParen:
               status.highlightPairOfParen
 
-            status.updateHighlight(node)
+          status.updateHighlight(node)
 
         let
           startSelectedLine = bufStatus.selectArea.startLine
@@ -492,7 +551,7 @@ proc closeWindow*(status: var EditorStatus,
 
   if status.workSpace.len == 1 and
      currentWorkSpace.numOfMainWindow == 1:
-    exitEditor(status.settings)
+    status.exitEditor
 
   if currentWorkSpace.numOfMainWindow == 1:
     status.deleteWorkSpace(status.currentWorkSpaceIndex)
@@ -534,7 +593,8 @@ proc writePopUpWindow*(popUpWindow: var Window,
                        terminalHeight, terminalWidth: int,
                        currentLine: int,
                        buffer: seq[seq[Rune]]) =
-  # TODO: Probably, the parameter `y` means the bottom of the window, but it should change to the top of the window for consistency.
+  # TODO: Probably, the parameter `y` means the bottom of the window,
+  #       but it should change to the top of the window for consistency.
 
   popUpWindow.erase
 
@@ -651,7 +711,7 @@ proc deleteWorkSpace*(status: var Editorstatus, index: int) =
   else:
     status.workspace.delete(index)
 
-    if status.workspace.len == 0: status.settings.exitEditor
+    if status.workspace.len == 0: status.exitEditor
 
     if status.currentWorkSpaceIndex > status.workSpace.high:
       status.currentWorkSpaceIndex = status.workSpace.high
@@ -886,17 +946,19 @@ proc highlightOtherUsesCurrentWord(status: var Editorstatus) =
               currentMainWindowNode.highlight =
                 currentMainWindowNode.highlight.overwrite(colorSegment)
 
-proc highlightTrailingSpaces(status: var Editorstatus) =
-  if isConfigMode(currentBufStatus.mode, currentBufStatus.prevMode) or
-     isDebugMode(currentBufStatus.mode, currentBufStatus.prevMode): return
+proc highlightTrailingSpaces(bufStatus: BufferStatus,
+                             windowNode: var WindowNode) =
+
+  if isConfigMode(bufStatus.mode, bufStatus.prevMode) or
+     isDebugMode(bufStatus.mode, bufStatus.prevMode): return
 
   let
-    currentLine = currentMainWindowNode.currentLine
+    currentLine = windowNode.currentLine
 
     color = EditorColorPair.highlightTrailingSpaces
 
-    range = currentMainWindowNode.view.rangeOfOriginalLineInView
-    buffer = currentBufStatus.buffer
+    range = windowNode.view.rangeOfOriginalLineInView
+    buffer = bufStatus.buffer
     startLine = range[0]
     endLine = if buffer.len > range[1] + 1: range[1] + 2
               elif buffer.len > range[1]: range[1] + 1
@@ -920,8 +982,8 @@ proc highlightTrailingSpaces(status: var Editorstatus) =
                                        color: color))
 
   for colorSegment in colorSegments:
-    currentMainWindowNode.highlight =
-      currentMainWindowNode.highlight.overwrite(colorSegment)
+    windowNode.highlight =
+      windowNode.highlight.overwrite(colorSegment)
 
 from search import searchAllOccurrence
 
@@ -952,7 +1014,8 @@ proc highlightSearchResults(windowNode: var WindowNode,
                             bufferInView: GapBuffer[seq[Rune]],
                             range: (int, int),
                             keyword: seq[Rune],
-                            settings: EditorSettings) =
+                            settings: EditorSettings,
+                            isSearchHighlight: bool) =
 
   let
     ignorecase = settings.ignorecase
@@ -962,7 +1025,7 @@ proc highlightSearchResults(windowNode: var WindowNode,
       keyword,
       ignorecase,
       smartcase)
-    color = if bufStatus.isSearchHighlight: EditorColorPair.searchResult
+    color = if isSearchHighlight: EditorColorPair.searchResult
             else: EditorColorPair.replaceText
   for pos in allOccurrence:
     let colorSegment = ColorSegment(firstRow: range[0] + pos.line,
@@ -987,20 +1050,21 @@ proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
   # highlight trailing spaces
   if status.settings.highlightSettings.trailingSpaces and
      bufStatus.language != SourceLanguage.langMarkDown:
-    status.highlightTrailingSpaces
+    bufStatus.highlightTrailingSpaces(windowNode)
 
   # highlight full width space
   if status.settings.highlightSettings.fullWidthSpace:
     windowNode.highlightFullWidthSpace(bufferInView, range)
 
   # highlight search results
-  if bufStatus.isSearchHighlight and status.searchHistory.len > 0:
+  if status.isSearchHighlight and status.searchHistory.len > 0:
     windowNode.highlightSearchResults(
       bufStatus,
       bufferInView,
       range,
       status.searchHistory[^1],
-      status.settings)
+      status.settings,
+      status.isSearchHighlight)
 
 proc changeTheme*(status: var EditorStatus) =
   if status.settings.editorColorTheme == ColorTheme.vscode:

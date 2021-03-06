@@ -14,7 +14,7 @@ type SuggestType = enum
   exCommandOption
   filePath
 
-const exCommandList: array[64, tuple[command, description: string]] = [
+const exCommandList: array[65, tuple[command, description: string]] = [
   (command: "!", description: "                    | Shell command execution"),
   (command: "deleteParen", description: "          | Enable/Disable auto delete paren"),
   (command: "b", description: "                    | Change the buffer with the given number"),
@@ -23,6 +23,7 @@ const exCommandList: array[64, tuple[command, description: string]] = [
   (command: "blast", description: "                | Change the last buffer"),
   (command: "bnext", description: "                | Change the next buffer"),
   (command: "bprev", description: "                | Change the previous buffer"),
+  (command: "build", description: "                | Build the current buffer"),
   (command: "buildOnSave", description: "          | Enable/Disable build on save"),
   (command: "buf", description: "                  | Open the buffer manager"),
   (command: "clipboard", description: "            | Enable/Disable accessing the system clipboard"),
@@ -528,7 +529,8 @@ proc suggestCommandLine(status: var Editorstatus,
       exStatus.currentPosition = 0
       exStatus.cursorX = 0
 
-  # TODO: I don't know why yet, but there is a bug which is related to scrolling of the pup-up window.
+  # TODO: I don't know why yet,
+  #       but there is a bug which is related to scrolling of the pup-up window.
 
   while (isTabKey(key) or isShiftTab(key)) and suggestlist.len > 1:
     updateExModeViewStatus()
@@ -558,20 +560,14 @@ proc suggestCommandLine(status: var Editorstatus,
 
     status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
 
-    key = status.commandLine.getKey
+    key = errorKey
+    while key == errorKey:
+      key = status.commandLine.getKey
+
     exStatus.cursorX = exStatus.currentPosition + 1
 
   status.commandLine.window.moveCursor(exStatus.cursorY, exStatus.cursorX)
   if status.settings.popUpWindowInExmode: status.deletePopUpWindow
-
-proc suggestMode(status: var Editorstatus,
-                 exStatus: var ExModeViewStatus,
-                 key: var Rune) =
-
-  status.suggestCommandLine(exStatus, key)
-
-  while isTabKey(key) or isShiftTab(key):
-    key = status.commandLine.getKey
 
 proc getKeyOnceAndWriteCommandView*(
   status: var Editorstatus,
@@ -629,7 +625,7 @@ proc getKeyOnceAndWriteCommandView*(
 
     # Suggestion mode
     if isTabKey(key) or isShiftTab(key):
-      status.suggestMode(exStatus, key)
+      status.suggestCommandLine(exStatus, key)
       if status.settings.popUpWindowInExmode and isEnterKey(key):
         status.commandLine.window.moveCursor(exStatus.cursorY, exStatus.cursorX)
 
@@ -680,7 +676,7 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
 
     # Suggestion mode
     if isTabKey(key) or isShiftTab(key):
-      suggestMode(status, exStatus, key)
+      status.suggestCommandLine(exStatus, key)
       if status.settings.popUpWindowInExmode and isEnterKey(key):
           status.commandLine.window.moveCursor(exStatus.cursorY, exStatus.cursorX)
           key = status.commandLine.getKey

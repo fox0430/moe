@@ -115,6 +115,10 @@ const tomlStr = """
   [Autocomplete]
   enable = true
 
+  [Persist]
+  exCommand = true
+  search = true
+
   [Debug.WorkSpace]
   enable = false
   numOfWorkSpaces = false
@@ -372,6 +376,9 @@ suite "Parse configuration file":
     check not settings.filerSettings.showIcons
 
     check settings.autocompleteSettings.enable
+
+    check settings.persist.exCommand
+    check settings.persist.search
 
     check not settings.debugModeSettings.workSpace.enable
     check not settings.debugModeSettings.workSpace.numOfWorkSpaces

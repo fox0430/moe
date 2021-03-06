@@ -113,6 +113,10 @@ type filerTableNames {.pure.} = enum
 type autocompleteTableNames {.pure.} = enum
   enable
 
+type persistTableSettings {.pure.} = enum
+  exCommand
+  search
+
 type themeTableNames {.pure.} = enum
   editorBg
   lineNum
@@ -516,6 +520,23 @@ proc getAutocompleteTableSettingValues(settings: AutocompleteSettings,
   else:
     result = @[ru "false", ru "true"]
 
+proc getPersistTableSettingsValues(settings: PersistSettings,
+                                   name: string): seq[seq[Rune]] =
+
+  var currentVal: bool
+  case name:
+    of "exCommand":
+      currentVal = settings.exCommand
+    of "search":
+      currentVal = settings.search
+    else:
+      return
+
+  if currentVal:
+    result = @[ru "true", ru "false"]
+  else:
+    result = @[ru "false", ru "true"]
+
 proc getThemeTableSettingValues(settings: EditorSettings,
                                 name, position: string): seq[seq[Rune]] =
 
@@ -569,6 +590,9 @@ proc getSettingValues(settings: EditorSettings,
     of "Autocomplete":
       let autocompleteSettings = settings.autocompleteSettings
       result = autocompleteSettings.getAutocompleteTableSettingValues(name)
+    of "Persist":
+      let persistSettings = settings.persist
+      result = persistSettings.getPersistTableSettingsValues(name)
     of "Theme":
       result = settings.getThemeTableSettingValues(name, position)
 
@@ -808,6 +832,17 @@ proc changeAutoCompleteTableSetting(settings: var AutocompleteSettings,
     else:
       discard
 
+proc changePerSistTableSettings(settings: var PersistSettings,
+                                settingName, settingVal: string) =
+
+  case settingName:
+    of "exCommand":
+      settings.exCommand = parseBool(settingVal)
+    of "search":
+      settings.search = parseBool(settingVal)
+    else:
+      discard
+
 proc changeThemeTableSetting(settings: var EditorSettings,
                               settingName, position, settingVal: string) =
 
@@ -867,6 +902,9 @@ proc changeEditorSettings(status: var EditorStatus,
   template autocompleteSettings: var AutocompleteSettings =
     status.settings.autocompleteSettings
 
+  template persistSettings: var PersistSettings =
+    status.settings.persist
+
   case table:
     of "Standard":
       changeStandardTableSetting()
@@ -891,6 +929,8 @@ proc changeEditorSettings(status: var EditorStatus,
       filerSettings.changeFilerTableSetting(settingName, settingVal)
     of "Autocomplete":
       autocompleteSettings.changeAutoCompleteTableSetting(settingName, settingVal)
+    of "Persist":
+      persistSettings.changePerSistTableSettings(settingName, settingVal)
     of "Theme":
       settings.changeThemeTableSetting(settingName, position, settingVal)
       status.changeTheme
@@ -1454,8 +1494,8 @@ proc selectAndChangeEditorSettings(status: var EditorStatus) =
     position = if selectedTable == "Theme": $lineSplit[0] else: ""
     settingValues = getSettingValues(status.settings,
                                      settingType,
-                                     selectedSetting,
                                      selectedTable,
+                                     selectedSetting,
                                      position)
 
   if settingType == SettingType.Number:
@@ -1751,6 +1791,19 @@ proc initAutocompleteTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       of "enable":
         result.add(ru nameStr & space & $settings.autocompleteSettings.enable)
 
+proc initPersistTableBuffer(persistSettings: PersistSettings): seq[seq[Rune]] =
+  result.add(ru"Persist")
+
+  for name in persistTableSettings:
+    let
+      nameStr = indent & $name
+      space = " ".repeat(positionOfSetVal - len($name))
+    case $name:
+      of "exCommand":
+        result.add(ru nameStr & space & $persistSettings.exCommand)
+      of "search":
+        result.add(ru nameStr & space & $persistSettings.search)
+
 proc initThemeTableBuffer*(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"Theme")
 
@@ -1818,6 +1871,9 @@ proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
 
   buffer.add(ru"")
   buffer.add(initAutocompleteTableBuffer(settings))
+
+  buffer.add(ru"")
+  buffer.add(initPersistTableBuffer(settings.persist))
 
   buffer.add(ru"")
   buffer.add(initThemeTableBuffer(settings))

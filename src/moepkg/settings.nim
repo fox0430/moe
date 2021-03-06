@@ -144,7 +144,13 @@ type HighlightSettings* = object
   trailingSpaces*: bool
   reservedWords*: seq[ReservedWord]
 
+
 type CommandMaps* = Table[Rune, Rune]
+
+type PersistSettings* = object
+  exCommand*: bool
+  search*: bool
+
 
 type EditorSettings* = object
   editorColorTheme*: ColorTheme
@@ -180,6 +186,8 @@ type EditorSettings* = object
   debugModeSettings*: DebugModeSettings
   highlightSettings*: HighlightSettings
   commandMaps*: CommandMaps
+  persist*: PersistSettings
+
 
 # Warning: inherit from a more precise exception type like ValueError, IOError or OSError.
 # If these don't suit, inherit from CatchableError or Defect. [InheritFromException]
@@ -324,7 +332,6 @@ proc initEditorSettings*(): EditorSettings =
   result.autoSaveInterval = 5
   result.incrementalSearch = true
   result.popUpWindowInExmode = true
-  result.autoDeleteParen = true
   result.smoothScroll = true
   result.smoothScrollSpeed = 15
   result.systemClipboard = true
@@ -1137,6 +1144,13 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if (const key = "enable"; settings[table].contains(key)):
       result.autocompleteSettings.enable = settings[table][key].getbool
 
+  if settings.contains("Persist"):
+    if settings["Persist"].contains("exCommand"):
+      result.persist.exCommand = settings["Persist"]["exCommand"].getBool
+
+    if settings["Persist"].contains("search"):
+      result.persist.search = settings["Persist"]["search"].getBool
+
   if settings.contains("Debug"):
     if settings["Debug"].contains("WorkSpace"):
       let workSpaceSettings = settings["Debug"]["WorkSpace"]
@@ -1814,6 +1828,15 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
     for item in json["Autocomplete"].pairs:
       case item.key:
         of "enable":
+          if item.val["type"].getStr != "bool":
+            return some($item)
+        else:
+          return some($item)
+
+  template validatePersistTable() =
+    for item in json["Persist"].pairs:
+      case item.key:
+        of "exCommand", "search":
           if item.val["type"].getStr != "bool":
             return some($item)
         else:
