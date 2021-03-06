@@ -565,7 +565,7 @@ suite "Ex mode: Open in horizontal split window":
     status.update
 
     check(status.workSpace[0].numOfMainWindow == 2)
-    check(status.bufStatus.len == 2)
+    check(status.bufStatus.len == 1)
 
 suite "Ex mode: Open in vertical split window":
   test "Open in vertical split window":

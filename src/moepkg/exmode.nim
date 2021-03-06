@@ -1,4 +1,4 @@
-import sequtils, strutils, os, terminal, times
+import sequtils, strutils, os, terminal, times, options
 import syntax/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
         unicodeext, independentutils, search, highlight, commandview,
@@ -780,12 +780,16 @@ proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
     countReferencedWindow(mainWindowNode, currentBufferIndex) == 1:
     status.commandLine.writeNoWriteError(status.messageLog)
   else:
-    if dirExists($filename):
-      status.addNewBuffer($filename, bufferstatus.Mode.filer)
-    else:
-      status.addNewBuffer($filename)
+    var bufferIndex = status.bufStatus.checkBufferExist(filename)
+    if isNone(bufferIndex):
+      if dirExists($filename):
+        status.addNewBuffer($filename, bufferstatus.Mode.filer)
+      else:
+        status.addNewBuffer($filename)
 
-    status.changeCurrentBuffer(status.bufStatus.high)
+      bufferIndex = some(status.bufStatus.high)
+
+    status.changeCurrentBuffer(bufferIndex.get)
 
 proc openInHorizontalSplitWindow(status: var Editorstatus, filename: seq[Rune]) =
   status.horizontalSplitWindow

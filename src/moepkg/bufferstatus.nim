@@ -1,4 +1,4 @@
-import tables, times
+import tables, times, options
 import syntax/highlite
 import gapbuffer, unicodeext
 
@@ -77,3 +77,8 @@ proc isLogViewerMode*(mode: Mode): bool {.inline.} = mode == Mode.logViewer
 proc isBufferManagerMode*(mode: Mode): bool {.inline.} = mode == Mode.bufManager
 
 proc isVisualBlockMode*(mode: Mode): bool {.inline.} = mode == Mode.visualBlock
+
+proc checkBufferExist*(bufStatus: seq[BufferStatus], path: seq[Rune]): Option[int] =
+  for index, buf in bufStatus:
+    if buf.path == path:
+      return some(index)
