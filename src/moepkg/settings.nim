@@ -308,6 +308,10 @@ proc initHighlightSettings(): HighlightSettings =
   result.trailingSpaces = true
   result.reservedWords =  initReservedWords()
 
+proc initPersistSettings(): PersistSettings =
+  result.exCommand = true
+  result.search = true
+
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = ColorTheme.dark
   result.statusLine = initStatusLineSettings()
@@ -338,6 +342,7 @@ proc initEditorSettings*(): EditorSettings =
   result.notificationSettings = initNotificationSettings()
   result.debugModeSettings = initDebugModeSettings()
   result.highlightSettings = initHighlightSettings()
+  result.persist = initPersistSettings()
 
 proc getTheme(theme: string): ColorTheme =
   if theme == "vivid": return ColorTheme.vivid
