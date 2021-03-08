@@ -111,7 +111,7 @@ This project's goal is a very customizable, high productivity, user friendly, hi
 
 - ncurses
 
-- xclip (Option on GNU/Linux)
+- xclip v0.13 or higher (Option on GNU/Linux)
 
 ```sh
 # Latest released version
