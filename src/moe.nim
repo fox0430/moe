@@ -1,4 +1,4 @@
-import os, times
+import os, times, unicode
 import moepkg/[ui, editorstatus, normalmode, insertmode, visualmode,
                replacemode, filermode, exmode, buffermanager, logviewer,
                cmdlineoption, bufferstatus, help, recentfilemode, quickrun,
@@ -14,8 +14,8 @@ proc loadPersistData(status: var EditorStatus) =
 
   if status.settings.persist.lastPosition:
     status.lastPosition = loadLastPosition()
-    currentMainWindowNode.updateCursorPostion(currentBufStatus,
-                                              status.lastPosition)
+    currentMainWindowNode.restoreCursorPostion(currentBufStatus,
+                                               status.lastPosition)
 
 proc initEditor(): EditorStatus =
   let parsedList = parseCommandLineOption(commandLineParams())

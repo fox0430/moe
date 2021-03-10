@@ -15,8 +15,8 @@ type Registers* = object
 # Save cursor position when a buffer for a window(file) gets closed.
 type LastPosition* = object
   path: seq[Rune]
-  line*: int
-  column*: int
+  line: int
+  column: int
 
 type EditorStatus* = object
   platform*: Platform
@@ -137,18 +137,19 @@ proc updateLastCursorPostion*(status: var EditorStatus) {.inline.} =
       status.lastPosition[i].column = currentMainWindowNode.currentColumn
       return
 
-  let
-    path = currentBufStatus.path.absolutePath
-    line = currentMainWindowNode.currentLine
-    column = currentMainWindowNode.currentColumn
-  status.lastPosition.add LastPosition(path: path, line: line, column: column)
+  if currentBufStatus.path.len > 0:
+    let
+      path = currentBufStatus.path.absolutePath
+      line = currentMainWindowNode.currentLine
+      column = currentMainWindowNode.currentColumn
+    status.lastPosition.add LastPosition(path: path, line: line, column: column)
 
 proc getLastCursorPostion*(lastPosition: seq[LastPosition],
-                           path: seq[Rune]): LastPosition =
+                           path: seq[Rune]): Option[LastPosition] =
 
   for p in lastPosition:
     if p.path.absolutePath == path.absolutePath:
-      return p
+      return some(p)
 
 proc changeCurrentWin*(status: var EditorStatus, index: int) =
   if index < currentWorkSpace.numOfMainWindow and index > 0:
@@ -578,21 +579,23 @@ proc update*(status: var EditorStatus) =
 proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode)
 
 # Update currentLine and currentColumn from status.lastPosition
-proc updateCursorPostion*(node: var WindowNode,
-                          bufStatus: BufferStatus,
-                          lastPosition: seq[LastPosition]) =
+proc restoreCursorPostion*(node: var WindowNode,
+                           bufStatus: BufferStatus,
+                           lastPosition: seq[LastPosition]) =
 
   let position = lastPosition.getLastCursorPostion(bufStatus.path)
 
-  if position.line > bufStatus.buffer.high:
-    node.currentLine = bufStatus.buffer.high
-  else:
-    node.currentLine = position.line
+  if isSome(position):
+    let posi = position.get
+    if posi.line > bufStatus.buffer.high:
+      node.currentLine = bufStatus.buffer.high
+    else:
+      node.currentLine = posi.line
 
-  if position.column > bufStatus.buffer[node.currentLine].high:
-    node.currentColumn = bufStatus.buffer[node.currentLine].high
-  else:
-    node.currentColumn = position.column
+    if posi.column > bufStatus.buffer[node.currentLine].high:
+      node.currentColumn = bufStatus.buffer[node.currentLine].high
+    else:
+      node.currentColumn = posi.column
 
 proc verticalSplitWindow*(status: var EditorStatus) =
   status.updateLastCursorPostion
@@ -615,7 +618,7 @@ proc verticalSplitWindow*(status: var EditorStatus) =
   status.resize(terminalHeight(), terminalWidth())
 
   var newNode = mainWindowNode.searchByWindowIndex(currentMainWindowNode.windowIndex + 1)
-  newNode.updateCursorPostion(currentBufStatus, status.lastPosition)
+  newNode.restoreCursorPostion(currentBufStatus, status.lastPosition)
 
 proc horizontalSplitWindow*(status: var Editorstatus) =
   status.updateLastCursorPostion
@@ -637,7 +640,7 @@ proc horizontalSplitWindow*(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
 
   var newNode = mainWindowNode.searchByWindowIndex(currentMainWindowNode.windowIndex + 1)
-  newNode.updateCursorPostion(currentBufStatus, status.lastPosition)
+  newNode.restoreCursorPostion(currentBufStatus, status.lastPosition)
 
 proc deleteWorkSpace*(status: var Editorstatus, index: int)
 

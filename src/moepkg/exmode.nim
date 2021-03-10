@@ -794,9 +794,8 @@ proc editCommand(status: var EditorStatus, path: seq[Rune]) =
 
     status.changeCurrentBuffer(bufferIndex.get)
 
-    let position = status.lastPosition.getLastCursorPostion(path)
-    currentMainWindowNode.currentLine = position.line
-    currentMainWindowNode.currentColumn = position.column
+    currentMainWindowNode.restoreCursorPostion(currentBufStatus,
+                                               status.lastPosition)
 
 proc openInHorizontalSplitWindow(status: var Editorstatus, filename: seq[Rune]) =
   status.horizontalSplitWindow
