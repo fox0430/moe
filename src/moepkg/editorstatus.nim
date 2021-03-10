@@ -254,7 +254,7 @@ proc exitEditor*(status: EditorStatus) =
   if status.settings.persist.search and status.searchHistory.len > 0:
     saveSearchHistory(status.searchHistory)
 
-  if status.settings.persist.lastPosition:
+  if status.settings.persist.cursorPosition:
     saveLastPosition(status.lastPosition)
 
   executeOnExit(status.settings)
