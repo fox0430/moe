@@ -568,6 +568,12 @@ The default value is true.
 search
 ```
 
+Enable/Disable saving last cursor position (bool).
+The default value is true.
+```
+curosrPosition
+```
+
 ### Debug.WorkSpace table
 
 Show/Hidden all WorkSpace info in debug mode (bool)
