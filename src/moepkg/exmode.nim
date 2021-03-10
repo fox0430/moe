@@ -772,24 +772,31 @@ proc jumpCommand(status: var EditorStatus, line: int) =
   status.commandLine.erase
   status.changeMode(bufferstatus.Mode.normal)
 
-proc editCommand(status: var EditorStatus, filename: seq[Rune]) =
+proc editCommand(status: var EditorStatus, path: seq[Rune]) =
   status.changeMode(currentBufStatus.prevMode)
+
+  status.updateLastCursorPostion
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   if currentBufStatus.countChange > 0 and
     countReferencedWindow(mainWindowNode, currentBufferIndex) == 1:
     status.commandLine.writeNoWriteError(status.messageLog)
   else:
-    var bufferIndex = status.bufStatus.checkBufferExist(filename)
+    # Add buffer(bufStatus) if not exist.
+    var bufferIndex = status.bufStatus.checkBufferExist(path)
     if isNone(bufferIndex):
-      if dirExists($filename):
-        status.addNewBuffer($filename, bufferstatus.Mode.filer)
+      if dirExists($path):
+        status.addNewBuffer($path, bufferstatus.Mode.filer)
       else:
-        status.addNewBuffer($filename)
+        status.addNewBuffer($path)
 
       bufferIndex = some(status.bufStatus.high)
 
     status.changeCurrentBuffer(bufferIndex.get)
+
+    let position = status.lastPosition.getLastCursorPostion(path)
+    currentMainWindowNode.currentLine = position.line
+    currentMainWindowNode.currentColumn = position.column
 
 proc openInHorizontalSplitWindow(status: var Editorstatus, filename: seq[Rune]) =
   status.horizontalSplitWindow
@@ -922,6 +929,7 @@ proc quitCommand(status: var EditorStatus, height, width: int) =
       canundo = currentBufStatus.buffer.canundo
     if (not isNormalMode(currentBufStatus.mode, currentBufStatus.prevMode)) or
        (countChange == 0 or numberReferenced > 1 or not canundo):
+
       status.changeMode(currentBufStatus.prevMode)
       status.closeWindow(currentMainWindowNode, height, width)
     else:

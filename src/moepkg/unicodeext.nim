@@ -399,3 +399,7 @@ proc encodeUTF8*(r: Rune): seq[uint32] =
     result.add mbLead or i shl 12
     result.add mbLead or i shl 6
     result.add mbLead or i and mbMask
+
+from os import absolutePath
+proc absolutePath*(runes: seq[Rune]): seq[Rune] {.inline.} =
+  absolutePath($runes).ru

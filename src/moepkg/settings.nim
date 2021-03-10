@@ -147,6 +147,7 @@ type HighlightSettings* = object
 type PersistSettings* = object
   exCommand*: bool
   search*: bool
+  lastPosition*: bool
 
 type EditorSettings* = object
   editorColorTheme*: ColorTheme
@@ -311,6 +312,7 @@ proc initHighlightSettings(): HighlightSettings =
 proc initPersistSettings(): PersistSettings =
   result.exCommand = true
   result.search = true
+  result.lastPosition = true
 
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = ColorTheme.dark
@@ -1150,6 +1152,9 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Persist"].contains("search"):
       result.persist.search = settings["Persist"]["search"].getBool
 
+    if settings["Persist"].contains("lastPosition"):
+      result.persist.search = settings["Persist"]["lastPosition"].getBool
+
   if settings.contains("Debug"):
     if settings["Debug"].contains("WorkSpace"):
       let workSpaceSettings = settings["Debug"]["WorkSpace"]
@@ -1829,7 +1834,7 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
   template validatePersistTable() =
     for item in json["Persist"].pairs:
       case item.key:
-        of "exCommand", "search":
+        of "exCommand", "search", "lastPosition":
           if item.val["type"].getStr != "bool":
             return some($item)
         else:
