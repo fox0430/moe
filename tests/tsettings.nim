@@ -118,6 +118,7 @@ const tomlStr = """
   [Persist]
   exCommand = false
   search = false
+  cursorPosition = false
 
   [Debug.WorkSpace]
   enable = false
@@ -379,6 +380,7 @@ suite "Parse configuration file":
 
     check not settings.persist.exCommand
     check not settings.persist.search
+    check not settings.persist.cursorPosition
 
     check not settings.debugModeSettings.workSpace.enable
     check not settings.debugModeSettings.workSpace.numOfWorkSpaces
