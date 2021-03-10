@@ -1153,7 +1153,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       result.persist.search = settings["Persist"]["search"].getBool
 
     if settings["Persist"].contains("cursorPosition"):
-      result.persist.search = settings["Persist"]["cursorPosition"].getBool
+      result.persist.cursorPosition = settings["Persist"]["cursorPosition"].getBool
 
   if settings.contains("Debug"):
     if settings["Debug"].contains("WorkSpace"):
