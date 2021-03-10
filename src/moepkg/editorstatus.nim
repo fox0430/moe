@@ -592,8 +592,12 @@ proc restoreCursorPostion*(node: var WindowNode,
     else:
       node.currentLine = posi.line
 
-    if posi.column > bufStatus.buffer[node.currentLine].high:
-      node.currentColumn = bufStatus.buffer[node.currentLine].high
+    let currentColumn = bufStatus.buffer[node.currentLine].high
+    if posi.column > currentColumn:
+      if currentColumn > -1:
+        node.currentColumn = bufStatus.buffer[node.currentLine].high
+      else:
+        node.currentColumn = 0
     else:
       node.currentColumn = posi.column
 
