@@ -1,7 +1,9 @@
 import unittest
-import moepkg/[ui, highlight, editorstatus, editorview, gapbuffer, unicodeext,
-               insertmode, movement, editor, window, color, bufferstatus,
+import moepkg/[ui, highlight, editorview, gapbuffer, unicodeext, insertmode,
+               movement, editor, window, color, bufferstatus,
                settings]
+
+include moepkg/editorstatus
 
 test "Add new buffer":
   var status = initEditorStatus()
@@ -871,3 +873,66 @@ suite "editorstatus: Highlight paren":
     check currentMainWindowNode.highlight[3] == ColorSegment(
       firstRow: 0, firstColumn: 9, lastRow: 0, lastColumn: 9,
       color: EditorColorPair.parenText)
+
+suite "editorstatus: Updates/Restore the last cursor postion":
+  test "Update the last cursor position (3 lines)":
+    var status = initEditorStatus()
+
+    status.addNewBuffer("test.nim")
+    currentBufStatus.buffer = initGapBuffer(@[ru "a", ru "bcd", ru "e"])
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 1
+
+    status.updateLastCursorPostion
+
+    check status.lastPosition[0].path == absolutePath("test.nim").ru
+    check status.lastPosition[0].line == 1
+    check status.lastPosition[0].column == 1
+
+  test "Update and restore the last cursor position (3 lines and edit the buffer after save)":
+    var status = initEditorStatus()
+
+    status.addNewBuffer("test.nim")
+    currentBufStatus.buffer = initGapBuffer(@[ru "a", ru "bcd", ru "e"])
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 1
+
+    status.resize(100, 100)
+    status.update
+
+    status.updateLastCursorPostion
+
+    # Edit buffer after update the last cursor position
+    currentBufStatus.buffer[1] = ru ""
+
+    currentMainWindowNode.restoreCursorPostion(currentBufStatus,
+                                               status.lastPosition)
+    status.update
+
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 0
+
+  test "Update and restore the last cursor position (3 lines and last line is empty)":
+    var status = initEditorStatus()
+
+
+    status.addNewBuffer("test.nim")
+
+    status.addNewBuffer("test.nim")
+    currentBufStatus.buffer = initGapBuffer(@[ru "a", ru "bcd", ru ""])
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.currentLine = currentBufStatus.buffer.high
+    status.update
+
+    status.updateLastCursorPostion
+
+    currentMainWindowNode.restoreCursorPostion(currentBufStatus,
+                                               status.lastPosition)
+
+    status.update
+
+    currentMainWindowNode.currentLine = 2
+    currentMainWindowNode.currentColumn = 0

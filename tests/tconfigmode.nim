@@ -206,7 +206,8 @@ suite "Config mode: Init buffer":
 
     const sample = @[ru "Persist",
                      ru "  exCommand                      true",
-                     ru "  search                         true"]
+                     ru "  search                         true",
+                     ru "  cursorPosition                 true"]
 
     for index, line in buffer:
       check sample[index] == line
@@ -1477,6 +1478,17 @@ suite "Config mode: Get Persist table setting values":
 
     checkBoolSettingValue(default, values)
 
+  test "Get cursorPosition values":
+    var status = initEditorStatus()
+    let persistSettings = status.settings.persist
+
+    const name = "search"
+    let
+      default = persistSettings.cursorPosition
+      values = persistSettings.getPersistTableSettingsValues(name)
+
+    checkBoolSettingValue(default, values)
+
   test "Set invalid name":
     var status = initEditorStatus()
     let persistSettings = status.settings.persist
@@ -2301,6 +2313,16 @@ suite "Config mode: Chaging Persist table settings":
       persistSettings = settings.persist
 
     let val = not persistSettings.search
+    persistSettings.changePerSistTableSettings("search", $val)
+
+    check val == persistSettings.search
+
+  test "Chaging cursorPosition":
+    var
+      settings = initEditorSettings()
+      persistSettings = settings.persist
+
+    let val = not persistSettings.cursorPosition
     persistSettings.changePerSistTableSettings("search", $val)
 
     check val == persistSettings.search

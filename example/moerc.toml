@@ -207,6 +207,8 @@ exCommand = true
 
 search = true
 
+cursorPosition = true
+
 [Debug.WorkSpace]
 enable = true
 numOfWorkSpaces = true

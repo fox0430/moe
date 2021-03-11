@@ -1,8 +1,21 @@
-import os, times
+import os, times, unicode
 import moepkg/[ui, editorstatus, normalmode, insertmode, visualmode,
                replacemode, filermode, exmode, buffermanager, logviewer,
                cmdlineoption, bufferstatus, help, recentfilemode, quickrun,
                historymanager, diffviewer, configmode, debugmode]
+
+# Load persisted data (Ex command history, search history and cursor postion)
+proc loadPersistData(status: var EditorStatus) =
+  if status.settings.persist.exCommand:
+    status.exCommandHistory = loadExCommandHistory()
+
+  if status.settings.persist.search:
+    status.searchHistory = loadSearchHistory()
+
+  if status.settings.persist.cursorPosition:
+    status.lastPosition = loadLastPosition()
+    currentMainWindowNode.restoreCursorPostion(currentBufStatus,
+                                               status.lastPosition)
 
 proc initEditor(): EditorStatus =
   let parsedList = parseCommandLineOption(commandLineParams())
@@ -29,13 +42,9 @@ proc initEditor(): EditorStatus =
   else:
     result.addNewBuffer
 
-  disableControlC()
+  result.loadPersistData
 
-  # Load persisted data (Ex command history and search history)
-  if result.settings.persist.exCommand:
-    result.exCommandHistory = loadExCommandHistory()
-  if result.settings.persist.search:
-    result.searchHistory = loadSearchHistory()
+  disableControlC()
 
 proc main() =
   var status = initEditor()

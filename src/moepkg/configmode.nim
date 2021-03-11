@@ -116,6 +116,7 @@ type autocompleteTableNames {.pure.} = enum
 type persistTableSettings {.pure.} = enum
   exCommand
   search
+  cursorPosition
 
 type themeTableNames {.pure.} = enum
   editorBg
@@ -529,6 +530,8 @@ proc getPersistTableSettingsValues(settings: PersistSettings,
       currentVal = settings.exCommand
     of "search":
       currentVal = settings.search
+    of "cursorPosition":
+      currentVal = settings.cursorPosition
     else:
       return
 
@@ -840,6 +843,8 @@ proc changePerSistTableSettings(settings: var PersistSettings,
       settings.exCommand = parseBool(settingVal)
     of "search":
       settings.search = parseBool(settingVal)
+    of "cursorPosition":
+      settings.cursorPosition = parseBool(settingVal)
     else:
       discard
 
@@ -1803,6 +1808,8 @@ proc initPersistTableBuffer(persistSettings: PersistSettings): seq[seq[Rune]] =
         result.add(ru nameStr & space & $persistSettings.exCommand)
       of "search":
         result.add(ru nameStr & space & $persistSettings.search)
+      of "cursorPosition":
+        result.add(ru nameStr & space & $persistSettings.cursorPosition)
 
 proc initThemeTableBuffer*(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"Theme")
