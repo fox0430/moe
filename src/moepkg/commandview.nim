@@ -333,11 +333,7 @@ proc getCandidatesFilePath(buffer: seq[Rune],
   var list: seq[seq[Rune]] = @[]
   if inputPath.len > 0: list.add(inputPath)
 
-  if inputPath.len == 0 or not inputPath.contains(ru'/'):
-    for kind, path in walkDir("./"):
-      if path.toRunes.normalizePath.startsWith(inputPath):
-        list.add(path.toRunes.normalizePath)
-  elif inputPath.contains(ru'/'):
+  if inputPath.contains(ru'/'):
     let
       normalizedInput = normalizePath(inputPath)
       normalizedPath = normalizePath(inputPath.substr(0, inputPath.rfind(ru'/')))
@@ -349,9 +345,23 @@ proc getCandidatesFilePath(buffer: seq[Rune],
             pathLen = path.toRunes.high
             hoemeDirLen = (getHomeDir()).high
             addPath = ru"~" & path.toRunes.substr(hoemeDirLen, pathLen)
-          list.add(addPath)
+            # If the path is a directory, add '/'
+            p = if dirExists($addPath): addPath & ru "/" else: addPath
+          list.add(p)
         else:
-          list.add(path.toRunes)
+          # If the path is a directory, add '/'
+          let p = if dirExists(path): path & "/" else: path
+          list.add(p.toRunes)
+  else:
+    if inputPath.len == 0:
+      list.add ru ""
+
+    for kind, path in walkDir("./"):
+      if path.toRunes.normalizePath.startsWith(inputPath):
+        let p = path.toRunes.normalizePath
+        # If the path is a directory, add '/'
+        if dirExists($p): list.add p & ru "/"
+        else: list.add p
 
   for path in list: result.add($path)
   result.sort(proc (a, b: string): int = cmp(a, b))
@@ -397,13 +407,14 @@ proc getCandidatesExCommandOption(status: var Editorstatus,
        "sv": argList = getCandidatesFilePath(exStatus.buffer, command)
     else: discard
 
-  let  arg = if (splitWhitespace(exStatus.buffer)).len > 1:
-               (splitWhitespace(exStatus.buffer))[1]
-             else: ru""
-  result = @[arg]
+  if argList[0] != "":
+    let arg = if (splitWhitespace(exStatus.buffer)).len > 1:
+                (splitWhitespace(exStatus.buffer))[1]
+              else: ru""
+    result = @[arg]
 
   for i in 0 ..< argList.len:
-    if argList[i].startsWith($arg): result.add(argList[i].toRunes)
+    result.add(argList[i].toRunes)
 
 proc getCandidatesExCommand(commandLineBuffer: seq[Rune]): seq[seq[Rune]] =
   result = @[commandLineBuffer]
@@ -478,11 +489,15 @@ proc initDisplayBuffer(suggestlist: seq[seq[Rune]],
                        suggestType: SuggestType): seq[seq[Rune]] =
 
   if isSuggestTypeFilePath(suggestType):
-    if suggestlist[1].contains(ru'/'):
-      for i in 1 ..< suggestlist.len:
-        let path = suggestlist[i]
-        result.add(path[path.rfind(ru'/') + 1 ..< path.len])
-    else: result = suggestlist[1 ..< suggestlist.len]
+    for index, path in suggestlist:
+      # suggestlist[0] is input text
+      if index > 0:
+        # Remove '/' end of the path string
+        let p = path[0 .. path.high - 1]
+        if p.contains(ru '/'):
+          result.add(path[p.rfind(ru'/') + 1 ..< path.len])
+        else:
+          result.add(path)
   elif isSuggestTypeExCommand(suggestType):
     # Add command description
     for list in exCommandList:
