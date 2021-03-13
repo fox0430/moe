@@ -6,7 +6,10 @@ suite "commandview: getCandidatesFilePath":
   test "Expect file and dir in current path":
     var files: seq[string] = @[]
     for pathComponent in walkDir("./"):
-      files.add(pathComponent.path[2 .. ^1])
+      # Delete "./" and if the path is directory, add '/' end of the path
+      let path = pathComponent.path[2 .. ^1]
+      let p = if dirExists(path): path & '/' else: path
+      files.add(p)
 
     let r = getCandidatesFilePath(ru"e ", "e")
 
@@ -17,7 +20,11 @@ suite "commandview: getCandidatesFilePath":
   test "Expect file and dir in \"/\"":
     var files: seq[string] = @[]
     for pathComponent in walkDir("/"):
-      files.add(pathComponent.path)
+      # if the path is directory, add '/' end of the path
+      let
+        path = pathComponent.path
+        p = if dirExists(path): path & '/' else: path
+      files.add(p)
 
     let r = getCandidatesFilePath(ru"e /", "e")
 
@@ -87,15 +94,17 @@ suite "commandview: getCandidatesExCommandOption":
 
     var files: seq[string] = @[]
     for pathComponent in walkDir("./"):
-      # Delete "./"
-      files.add(pathComponent.path[2 .. ^1])
+      # Delete "./" and if the path is directory, add '/' end of the path
+      let path = pathComponent.path[2 .. ^1]
+      let p = if dirExists(path): path & '/' else: path
+      files.add(p)
 
     for c in commands:
       exStatus.buffer = c.ru & ru" "
       let r = status.getCandidatesExCommandOption(exStatus, c)
 
       # r[0] is empty string
-      for path in r[1 .. ^1]:
+      for i, path in r[1 .. ^1]:
         check files.contains($path)
 
 suite "commandview: getCandidatesExCommand":

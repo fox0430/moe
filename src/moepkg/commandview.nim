@@ -407,13 +407,14 @@ proc getCandidatesExCommandOption(status: var Editorstatus,
        "sv": argList = getCandidatesFilePath(exStatus.buffer, command)
     else: discard
 
-  let  arg = if (splitWhitespace(exStatus.buffer)).len > 1:
-               (splitWhitespace(exStatus.buffer))[1]
-             else: ru""
-  result = @[arg]
+  if argList[0] != "":
+    let arg = if (splitWhitespace(exStatus.buffer)).len > 1:
+                (splitWhitespace(exStatus.buffer))[1]
+              else: ru""
+    result = @[arg]
 
   for i in 0 ..< argList.len:
-    if argList[i].startsWith($arg): result.add(argList[i].toRunes)
+    result.add(argList[i].toRunes)
 
 proc getCandidatesExCommand(commandLineBuffer: seq[Rune]): seq[seq[Rune]] =
   result = @[commandLineBuffer]
