@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.2.5"
+version       = "0.2.6.0"
 author        = "fox0430"
 description   = "A command lined based text editor"
 license       = "GPLv3"
