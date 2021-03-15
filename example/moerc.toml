@@ -44,7 +44,7 @@ incrementalSearch = true
 
 popUpWindowInExmode = true
 
-autoDeleteParen = true
+autoDeleteParen = false
 
 systemClipboard = true
 
@@ -98,7 +98,7 @@ workSpaceLine = false
 
 [Highlight]
 
-currentLine = false
+currentLine = true
 
 reservedWord = ["TODO", "WIP", "NOTE"]
 
@@ -200,6 +200,14 @@ showIcons = true
 [Autocomplete]
 
 enable = true
+
+[Persist]
+
+exCommand = true
+
+search = true
+
+cursorPosition = true
 
 [Debug.WorkSpace]
 enable = true

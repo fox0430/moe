@@ -131,7 +131,7 @@ popUpWindowInExmode
 ```
 
 Auto delete paren (bool)  
-default is true
+default is false
 ```
 autoDeleteParen
 ```
@@ -263,7 +263,7 @@ workSpaceLine
 ### Highlight table
 
 Highlight the current line (bool)  
-defaut is false
+defaut is true
 ```
 currentLine
 
@@ -552,6 +552,26 @@ Enable/Disable general-purpose autocomplete (bool).
 The default value is true.
 ```
 enable
+```
+
+### Persist table
+
+Enable/Disable saving Ex command history (bool).
+The default value is true.
+```
+exCommand
+```
+
+Enable/Disable saving search history (bool).
+The default value is true.
+```
+search
+```
+
+Enable/Disable saving last cursor position (bool).
+The default value is true.
+```
+curosrPosition
 ```
 
 ### Debug.WorkSpace table

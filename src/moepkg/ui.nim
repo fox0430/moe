@@ -1,7 +1,7 @@
 import posix, strformat, osproc, strutils
 from os import execShellCmd
 import ncurses
-import unicodetext, color
+import unicodeext, color
 
 type Attributes* = enum
   normal = A_NORMAL
@@ -27,6 +27,9 @@ type Window* = ref object
   height*, width*: int
   y*, x*: int
 
+# if press ctrl-c key, set true in setControlCHook()
+var pressCtrlC* = false
+
 proc setBkinkingIbeamCursor*() {.inline.} = discard execShellCmd("printf \"\x1b[\x35 q\"")
 
 proc setNoneBlinkingIbeamCursor*() {.inline.} = discard execShellCmd("printf '\\033[6 q'")
@@ -42,7 +45,8 @@ proc changeCursorType*(cursorType: CursorType) =
   of blinkIbeam: setBkinkingIbeamCursor()
   of noneBlinkIbeam: setNoneBlinkingIbeamCursor()
 
-proc disableControlC*() {.inline.} = setControlCHook(proc() {.noconv.} = discard)
+proc disableControlC*() {.inline.} =
+  setControlCHook(proc() {.noconv.} = pressCtrlC = true)
 
 proc restoreTerminalModes*() {.inline.} = reset_prog_mode()
 
@@ -76,7 +80,7 @@ proc startUi*() =
 
     initscr()   ## start terminal control
     cbreak()    ## enable cbreak mode
-    nonl();     ## exit new line mode and improve move cursor performance
+    nonl()      ## exit new line mode and improve move cursor performance
     setCursor(true)
 
     if can_change_color():

@@ -1,5 +1,5 @@
 import terminal, strutils, sequtils, times
-import editorstatus, ui, gapbuffer, unicodetext, window, movement, editor,
+import editorstatus, ui, gapbuffer, unicodeext, window, movement, editor,
        bufferstatus
 
 proc initSelectArea(startLine, startColumn: int): SelectArea =
@@ -110,7 +110,11 @@ proc deleteBuffer(bufStatus: var BufferStatus,
   if area.startLine > bufStatus.buffer.high:
     windowNode.currentLine = bufStatus.buffer.high
   else: windowNode.currentLine = area.startLine
-  let column = if area.startColumn > 0: area.startColumn - 1 else: 0
+  let column = if bufStatus.buffer[currentLine].high > area.startColumn:
+                 area.startColumn
+               elif area.startColumn > 0:
+                 area.startColumn - 1
+               else: 0
   windowNode.currentColumn = column
   windowNode.expandedColumn = column
 
@@ -442,8 +446,15 @@ proc visualMode*(status: var EditorStatus) =
 
     var key = errorKey
     while key == errorKey:
-      status.eventLoopTask
-      key = getKey(currentMainWindowNode)
+      if not pressCtrlC:
+        status.eventLoopTask
+        key = getKey(currentMainWindowNode)
+      else:
+        # Exit visual mode
+        pressCtrlC = false
+        status.changeMode(Mode.normal)
+
+        return
 
     status.lastOperatingTime = now()
 

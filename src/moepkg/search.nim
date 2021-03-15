@@ -1,5 +1,5 @@
 import system, terminal, strutils
-import editorstatus, gapbuffer, commandview, movement, commandline, unicodetext
+import editorstatus, gapbuffer, commandview, movement, commandline, unicodeext
 
 type
   SearchResult* = tuple[line: int, column: int]
@@ -165,11 +165,11 @@ proc searchFirstOccurrence(status: var EditorStatus) =
   if cancelSearch:
     status.searchHistory.delete(status.searchHistory.high)
 
-    currentBufStatus.isSearchHighlight = false
+    status.isSearchHighlight = false
 
   else:
     if keyword.len > 0:
-      currentBufStatus.isSearchHighlight = true
+      status.isSearchHighlight = true
       status.updateHighlight(currentMainWindowNode)
 
 proc incrementalSearch(status: var Editorstatus, direction: Direction) =
@@ -203,7 +203,7 @@ proc incrementalSearch(status: var Editorstatus, direction: Direction) =
     if exitSearch or cancelSearch: break
 
     if keyword.len > 0:
-      currentBufStatus.isSearchHighlight = true
+      status.isSearchHighlight = true
 
       if direction == Direction.forward:
         status.jumpToSearchForwardResults(keyword)
@@ -212,7 +212,7 @@ proc incrementalSearch(status: var Editorstatus, direction: Direction) =
         currentMainWindowNode.currentColumn = currentColumn
         status.jumpToSearchBackwordResults(keyword)
     else:
-      currentBufStatus.isSearchHighlight = false
+      status.isSearchHighlight = false
 
     status.updateHighlight(currentMainWindowNode)
     status.resize(terminalHeight(), terminalWidth())
@@ -221,7 +221,7 @@ proc incrementalSearch(status: var Editorstatus, direction: Direction) =
   if cancelSearch:
     status.searchHistory.delete(status.searchHistory.high)
 
-    currentBufStatus.isSearchHighlight = false
+    status.isSearchHighlight = false
     status.updateHighlight(currentMainWindowNode)
 
     status.commandLine.erase

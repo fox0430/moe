@@ -364,3 +364,42 @@ proc repeat*(runes: seq[Rune], n: Natural): seq[Rune] =
 proc repeat*(rune: Rune, n: Natural): seq[Rune] =
   let str = repeat($rune, n)
   result = str.ru
+
+proc encodeUTF8*(r: Rune): seq[uint32] =
+  const
+    # first byte of a 2-byte encoding starts 110 and carries 5 bits of data
+    b2Lead = 0xC0 # 1100 0000
+    b2Mask = 0x1F # 0001 1111
+
+    # first byte of a 3-byte encoding starts 1110 and carries 4 bits of data
+    b3Lead = 0xE0 # 1110 0000
+    b3Mask = 0x0F # 0000 1111
+
+    # first byte of a 4-byte encoding starts 11110 and carries 3 bits of data
+    b4Lead = 0xF0 # 1111 0000
+    b4Mask = 0x07 # 0000 0111
+
+    # non-first bytes start 10 and carry 6 bits of data
+    mbLead = 0x80 # 1000 0000
+    mbMask = 0x3F # 0011 1111
+
+  let i = uint32(r)
+  if i <= i shl 7 - 1:
+    result.add uint32(r)
+  if i <= 1 shl 11 - 1:
+    result.add b2Lead or i shr 6
+    result.add mbLead or i and mbMask
+  if i <= i shl 16 - 1:
+    result.add b3Lead or i shr 12
+    result.add mbLead or i shr 6
+    result.add mbLead or i and mbLead
+  else:
+    result.add uint32(r)
+    result.add b4Lead or i shl 18
+    result.add mbLead or i shl 12
+    result.add mbLead or i shl 6
+    result.add mbLead or i and mbMask
+
+from os import absolutePath
+proc absolutePath*(runes: seq[Rune]): seq[Rune] {.inline.} =
+  absolutePath($runes).ru

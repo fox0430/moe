@@ -1,5 +1,5 @@
 import deques, strutils, math, strformat
-import gapbuffer, ui, unicodetext, highlight, independentutils, color, settings,
+import gapbuffer, ui, unicodeext, highlight, independentutils, color, settings,
        bufferstatus, highlight
 
 type EditorView* = object
@@ -23,7 +23,7 @@ proc loadSingleViewLine[T](view: EditorView,
   let bufferLine = buffer[originalLine]
   template isRemaining: bool = start+result.length < bufferLine.len
   template calcNextWidth: int =
-    if isRemaining(): unicodetext.width(bufferLine[start+result.length]) else: 0
+    if isRemaining(): unicodeext.width(bufferLine[start+result.length]) else: 0
   var
     totalWidth = 0
     nextWidth = calcNextWidth()
@@ -236,7 +236,8 @@ proc writeAllLines*[T](view: var EditorView,
                        buffer: T,
                        highlight: Highlight,
                        theme: ColorTheme,
-                       currentLine, startSelectedLine, endSelectedLine: int) =
+                       currentLine, startSelectedLine, endSelectedLine: int,
+                       currentLineColorPair: var int) =
 
   win.erase
   view.widthOfLineNum = if viewSettings.lineNumber: buffer.len.numberOfDigits + 1
@@ -275,9 +276,6 @@ proc writeAllLines*[T](view: var EditorView,
       else:
         if viewSettings.highlightCurrentLine and isCurrentLine and
            currentLine < buffer.len:
-          # Set editor Color Pair for current line highlight.
-          # New color pairs are set to Number larger than the maximum value of EditorColorPiar.
-          var currentLineColorPair = ord(EditorColorPair.high) + 1
           writeCurrentLine(win,
                            view,
                            highlight,
@@ -311,10 +309,6 @@ proc writeAllLines*[T](view: var EditorView,
       lastOriginalLine = view.originalLine[y]
 
     while i < highlight.len and highlight[i].firstRow < view.originalLine[y]: inc(i)
-
-    # Set editor Color Pair for current line highlight.
-    # New color pairs are set to Number larger than the maximum value of EditorColorPiar.
-    var currentLineColorPair = ord(EditorColorPair.high) + 1
 
     while i < highlight.len and highlight[i].firstRow == view.originalLine[y]:
       if (highlight[i].firstRow, highlight[i].firstColumn) > (highlight[i].lastRow, highlight[i].lastColumn):
@@ -370,7 +364,8 @@ proc update*[T](view: var EditorView,
                 buffer: T,
                 highlight: Highlight,
                 theme: ColorTheme,
-                currentLine, startSelectedLine, endSelectedLine: int) =
+                currentLine, startSelectedLine, endSelectedLine: int,
+                currentLineColorPair: var int) =
 
   let widthOfLineNum = buffer.len.intToStr.len + 1
   if viewSettings.lineNumber and widthOfLineNum != view.widthOfLineNum:
@@ -389,7 +384,9 @@ proc update*[T](view: var EditorView,
                      theme,
                      currentLine,
                      startSelectedLine,
-                     endSelectedLine)
+                     endSelectedLine,
+                     currentLineColorPair)
+
   view.updated = false
 
 proc seekCursor*[T](view: var EditorView,

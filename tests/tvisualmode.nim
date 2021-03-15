@@ -1,5 +1,5 @@
 import unittest, osproc
-import moepkg/[editorstatus, gapbuffer, unicodetext, highlight, movement, bufferstatus]
+import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, movement, bufferstatus]
 include moepkg/[visualmode]
 
 suite "Visual mode: Delete buffer":
@@ -196,6 +196,33 @@ suite "Visual mode: Delete buffer":
     check currentBufStatus.buffer[0] == ru"a"
     check currentBufStatus.buffer[1] == ru"a"
 
+  test "Visual mode: Check cursor position after delete buffer":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"a b c"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    currentMainWindowNode.currentColumn = 2
+
+    status.update
+
+    status.changeMode(Mode.visual)
+    currentBufStatus.selectArea = initSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectArea, ru'x')
+
+    check currentBufStatus.buffer[0] == ru"a  c"
+    check currentMainWindowNode.currentColumn == 2
 
 suite "Visual mode: Yank buffer (Disable clipboard)":
   test "Yank lines":

@@ -1,5 +1,5 @@
 import unittest, macros, strformat
-import moepkg/[editorstatus, gapbuffer, bufferstatus, unicodetext]
+import moepkg/[editorstatus, gapbuffer, bufferstatus, unicodeext]
 
 include moepkg/configmode
 
@@ -38,7 +38,7 @@ suite "Config mode: Init buffer":
                      ru "  liveReloadOfConf               false",
                      ru "  incrementalSearch              true",
                      ru "  popUpWindowInExmode            true",
-                     ru "  autoDeleteParen                true",
+                     ru "  autoDeleteParen                false",
                      ru "  systemClipboard                true",
                      ru "  smoothScroll                   true",
                      ru "  smoothScrollSpeed              15"]
@@ -105,7 +105,7 @@ suite "Config mode: Init buffer":
     let buffer = status.settings.initHighlightTableBuffer
 
     const sample = @[ru "Highlight",
-                     ru "  currentLine                    false",
+                     ru "  currentLine                    true",
                      ru "  fullWidthSpace                 true",
                      ru "  trailingSpaces                 true",
                      ru "  currentWord                    true",
@@ -190,12 +190,24 @@ suite "Config mode: Init buffer":
     for index, line in buffer:
       check sample[index] == line
 
-  test "Init Filer table buffer":
+  test "Init Autocomplete table buffer":
     var status = initEditorStatus()
     let buffer = status.settings.initAutocompleteTableBuffer
 
     const sample = @[ru "Autocomplete",
                      ru "  enable                         true"]
+
+    for index, line in buffer:
+      check sample[index] == line
+
+  test "Init Persist table buffer":
+    var status = initEditorStatus()
+    let buffer = status.settings.persist.initPersistTableBuffer
+
+    const sample = @[ru "Persist",
+                     ru "  exCommand                      true",
+                     ru "  search                         true",
+                     ru "  cursorPosition                 true"]
 
     for index, line in buffer:
       check sample[index] == line
@@ -700,6 +712,28 @@ suite "Config mode: Get BuildOnSave table setting values":
 
     checkBoolSettingValue(default, values)
 
+  test "Get workspaceRoot values":
+    var status = initEditorStatus()
+    let buildOnSaveSettings = status.settings.buildOnSave
+
+    const name = "workspaceRoot"
+    let
+      default = buildOnSaveSettings.workspaceRoot
+      values = buildOnSaveSettings.getBuildOnSaveTableSettingValues(name)
+
+    check default == values[0]
+
+  test "Get command values":
+    var status = initEditorStatus()
+    let buildOnSaveSettings = status.settings.buildOnSave
+
+    const name = "command"
+    let
+      default = buildOnSaveSettings.command
+      values = buildOnSaveSettings.getBuildOnSaveTableSettingValues(name)
+
+    check default == values[0]
+
   test "Set invalid name":
     var status = initEditorStatus()
     let buildOnSaveSettings = status.settings.buildOnSave
@@ -985,19 +1019,42 @@ suite "Config mode: Get AutoBackup table setting values":
     var status = initEditorStatus()
     let autoBackupSettings = status.settings.autoBackupSettings
 
-    const name = "enable"
+    const
+      name = "enable"
+      settingType = SettingType.Bool
     let
       default = autoBackupSettings.enable
-      values = autoBackupSettings.getAutoBackupTableSettingValues(name)
+      values = autoBackupSettings.getAutoBackupTableSettingValues(
+        name,
+        settingType)
 
     checkBoolSettingValue(default, values)
+
+  test "Get backupDir values":
+    var status = initEditorStatus()
+    let autoBackupSettings = status.settings.autoBackupSettings
+
+    const
+      name = "backupDir"
+      settingType = SettingType.String
+    let
+      default = autoBackupSettings.backupDir
+      values = autoBackupSettings.getAutoBackupTableSettingValues(
+        name,
+        settingType)
+
+    check default == values[0]
 
   test "Set invalid name":
     var status = initEditorStatus()
     let autoBackupSettings = status.settings.autoBackupSettings
 
-    const name = "test"
-    let values = autoBackupSettings.getAutoBackupTableSettingValues(name)
+    const
+      name = "test"
+      settingType = SettingType.None
+    let values = autoBackupSettings.getAutoBackupTableSettingValues(
+      name,
+      settingType)
 
     check values.len == 0
 
@@ -1006,19 +1063,101 @@ suite "Config mode: Get QuickRun table setting values":
     var status = initEditorStatus()
     let quickRunSettings = status.settings.quickRunSettings
 
-    const name = "saveBufferWhenQuickRun"
+    const
+      name = "saveBufferWhenQuickRun"
+      settingType = SettingType.Bool
     let
       default = quickRunSettings.saveBufferWhenQuickRun
-      values = quickRunSettings.getQuickRunTableSettingValues(name)
+      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
 
     checkBoolSettingValue(default, values)
+
+  test "Get nimAdvancedCommandvalues":
+    var status = initEditorStatus()
+    let quickRunSettings = status.settings.quickRunSettings
+
+    const
+      name = "nimAdvancedCommand"
+      settingType = SettingType.String
+    let
+      default = ru quickRunSettings.nimAdvancedCommand
+      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
+
+    check default == values[0]
+
+  test "Get ClangOptions values":
+    var status = initEditorStatus()
+    let quickRunSettings = status.settings.quickRunSettings
+
+    const
+      name = "ClangOptions"
+      settingType = SettingType.String
+    let
+      default = ru quickRunSettings.ClangOptions
+      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
+
+    check default == values[0]
+
+  test "Get CppOptions values":
+    var status = initEditorStatus()
+    let quickRunSettings = status.settings.quickRunSettings
+
+    const
+      name = "CppOptions"
+      settingType = SettingType.String
+    let
+      default = ru quickRunSettings.CppOptions
+      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
+
+    check default == values[0]
+
+  test "Get NimOptions values":
+    var status = initEditorStatus()
+    let quickRunSettings = status.settings.quickRunSettings
+
+    const
+      name = "NimOptions"
+      settingType = SettingType.String
+    let
+      default = ru quickRunSettings.NimOptions
+      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
+
+    check default == values[0]
+
+  test "Get shOptions values":
+    var status = initEditorStatus()
+    let quickRunSettings = status.settings.quickRunSettings
+
+    const
+      name = "shOptions"
+      settingType = SettingType.String
+    let
+      default = ru quickRunSettings.shOptions
+      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
+
+    check default == values[0]
+
+  test "Get bashOptions values":
+    var status = initEditorStatus()
+    let quickRunSettings = status.settings.quickRunSettings
+
+    const
+      name = "bashOptions"
+      settingType = SettingType.String
+    let
+      default = ru quickRunSettings.bashOptions
+      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
+
+    check default == values[0]
 
   test "Set invalid name":
     var status = initEditorStatus()
     let quickRunSettings = status.settings.quickRunSettings
 
-    const name = "test"
-    let values = quickRunSettings.getQuickRunTableSettingValues(name)
+    const
+      name = "test"
+      settingType = SettingType.None
+    let values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
 
     check values.len == 0
 
@@ -1313,6 +1452,49 @@ suite "Config mode: Get Autocomplete table setting values":
 
     const name = "test"
     let values = autocompleteSettings.getAutocompleteTableSettingValues(name)
+
+    check values.len == 0
+
+suite "Config mode: Get Persist table setting values":
+  test "Get exCommand values":
+    var status = initEditorStatus()
+    let persistSettings = status.settings.persist
+
+    const name = "exCommand"
+    let
+      default = persistSettings.exCommand
+      values = persistSettings.getPersistTableSettingsValues(name)
+
+    checkBoolSettingValue(default, values)
+
+  test "Get search values":
+    var status = initEditorStatus()
+    let persistSettings = status.settings.persist
+
+    const name = "search"
+    let
+      default = persistSettings.exCommand
+      values = persistSettings.getPersistTableSettingsValues(name)
+
+    checkBoolSettingValue(default, values)
+
+  test "Get cursorPosition values":
+    var status = initEditorStatus()
+    let persistSettings = status.settings.persist
+
+    const name = "search"
+    let
+      default = persistSettings.cursorPosition
+      values = persistSettings.getPersistTableSettingsValues(name)
+
+    checkBoolSettingValue(default, values)
+
+  test "Set invalid name":
+    var status = initEditorStatus()
+    let persistSettings = status.settings.persist
+
+    const name = "test"
+    let values = persistSettings.getPersistTableSettingsValues(name)
 
     check values.len == 0
 
@@ -2114,6 +2296,37 @@ suite "Config mode: Chaging Autocomplete table settings":
 
     check beforeSettings == autocompleteSettings
 
+suite "Config mode: Chaging Persist table settings":
+  test "Chaging exCommand":
+    var
+      settings = initEditorSettings()
+      persistSettings = settings.persist
+
+    let val = not persistSettings.exCommand
+    persistSettings.changePerSistTableSettings("exCommand", $val)
+
+    check val == persistSettings.exCommand
+
+  test "Chaging search":
+    var
+      settings = initEditorSettings()
+      persistSettings = settings.persist
+
+    let val = not persistSettings.search
+    persistSettings.changePerSistTableSettings("search", $val)
+
+    check val == persistSettings.search
+
+  test "Chaging cursorPosition":
+    var
+      settings = initEditorSettings()
+      persistSettings = settings.persist
+
+    let val = not persistSettings.cursorPosition
+    persistSettings.changePerSistTableSettings("search", $val)
+
+    check val == persistSettings.search
+
 suite "Config mode: Chaging Theme table settings":
   # Generate test code
   macro checkChaingThemeSetting(theme: ColorTheme, editorColorName: string): untyped =
@@ -2141,3 +2354,36 @@ suite "Config mode: Chaging Theme table settings":
   let theme = ColorTheme.dark
   for name, _ in ColorThemeTable[theme].fieldPairs:
     checkChaingThemeSetting(theme, $name)
+
+suite "Config mode: Get BuildOnSave table setting type":
+  test "Get enable setting type":
+    const
+      table= "BuildOnSave"
+      name = "enable"
+
+    const settingType = getSettingType(table, name)
+    check settingType == SettingType.Bool
+
+  test "Get workspaceRoot setting type":
+    const
+      table = "BuildOnSave"
+      name = "workspaceRoot"
+
+    const settingType = getSettingType(table, name)
+    check settingType == SettingType.String
+
+  test "Get command setting type":
+    const
+      table = "BuildOnSave"
+      name = "command"
+
+    const settingType = getSettingType(table, name)
+    check settingType == SettingType.String
+
+  test "Set invalid name":
+    const
+      table = "BuildOnSave"
+      name = "test"
+
+    const settingType = getSettingType(table, name)
+    check settingType == SettingType.None

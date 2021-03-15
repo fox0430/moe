@@ -1,5 +1,5 @@
 import terminal, times
-import editorstatus, ui, unicodetext, movement, editor, bufferstatus, gapbuffer,
+import editorstatus, ui, unicodeext, movement, editor, bufferstatus, gapbuffer,
        undoredostack, window, settings
 
 proc moveRight(bufStatus: var BufferStatus,
@@ -107,8 +107,20 @@ proc replaceMode*(status: var EditorStatus) =
 
     var key = errorKey
     while key == errorKey:
-      status.eventLoopTask
-      key = getKey(currentMainWindowNode)
+      if not pressCtrlC:
+        status.eventLoopTask
+        key = getKey(currentMainWindowNode)
+      else:
+        # Exit replace mode
+
+        pressCtrlC = false
+
+        if currentMainWindowNode.currentColumn > 0:
+          dec(currentMainWindowNode.currentColumn)
+        currentMainWindowNode.expandedColumn = currentMainWindowNode.currentColumn
+        status.changeMode(Mode.normal)
+
+        return
 
     status.lastOperatingTime = now()
 

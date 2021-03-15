@@ -1,5 +1,5 @@
 import unittest, options
-import moepkg/[color, ui, highlight, unicodetext]
+import moepkg/[color, ui, highlight, unicodeext]
 
 include moepkg/settings
 
@@ -114,6 +114,11 @@ const tomlStr = """
 
   [Autocomplete]
   enable = true
+
+  [Persist]
+  exCommand = false
+  search = false
+  cursorPosition = false
 
   [Debug.WorkSpace]
   enable = false
@@ -372,6 +377,10 @@ suite "Parse configuration file":
     check not settings.filerSettings.showIcons
 
     check settings.autocompleteSettings.enable
+
+    check not settings.persist.exCommand
+    check not settings.persist.search
+    check not settings.persist.cursorPosition
 
     check not settings.debugModeSettings.workSpace.enable
     check not settings.debugModeSettings.workSpace.numOfWorkSpaces

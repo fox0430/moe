@@ -1,5 +1,5 @@
 import terminal, strutils, sequtils, strformat, os, algorithm
-import ui, unicodetext, fileutils, color, commandline
+import ui, unicodeext, fileutils, color, commandline
 
 type ExModeViewStatus = object
     buffer: seq[Rune]
@@ -14,7 +14,7 @@ type SuggestType = enum
   exCommandOption
   filePath
 
-const exCommandList: array[64, tuple[command, description: string]] = [
+const exCommandList: array[65, tuple[command, description: string]] = [
   (command: "!", description: "                    | Shell command execution"),
   (command: "deleteParen", description: "          | Enable/Disable auto delete paren"),
   (command: "b", description: "                    | Change the buffer with the given number"),
@@ -23,6 +23,7 @@ const exCommandList: array[64, tuple[command, description: string]] = [
   (command: "blast", description: "                | Change the last buffer"),
   (command: "bnext", description: "                | Change the next buffer"),
   (command: "bprev", description: "                | Change the previous buffer"),
+  (command: "build", description: "                | Build the current buffer"),
   (command: "buildOnSave", description: "          | Enable/Disable build on save"),
   (command: "buf", description: "                  | Open the buffer manager"),
   (command: "clipboard", description: "            | Enable/Disable accessing the system clipboard"),
@@ -332,11 +333,7 @@ proc getCandidatesFilePath(buffer: seq[Rune],
   var list: seq[seq[Rune]] = @[]
   if inputPath.len > 0: list.add(inputPath)
 
-  if inputPath.len == 0 or not inputPath.contains(ru'/'):
-    for kind, path in walkDir("./"):
-      if path.toRunes.normalizePath.startsWith(inputPath):
-        list.add(path.toRunes.normalizePath)
-  elif inputPath.contains(ru'/'):
+  if inputPath.contains(ru'/'):
     let
       normalizedInput = normalizePath(inputPath)
       normalizedPath = normalizePath(inputPath.substr(0, inputPath.rfind(ru'/')))
@@ -348,9 +345,23 @@ proc getCandidatesFilePath(buffer: seq[Rune],
             pathLen = path.toRunes.high
             hoemeDirLen = (getHomeDir()).high
             addPath = ru"~" & path.toRunes.substr(hoemeDirLen, pathLen)
-          list.add(addPath)
+            # If the path is a directory, add '/'
+            p = if dirExists($addPath): addPath & ru "/" else: addPath
+          list.add(p)
         else:
-          list.add(path.toRunes)
+          # If the path is a directory, add '/'
+          let p = if dirExists(path): path & "/" else: path
+          list.add(p.toRunes)
+  else:
+    if inputPath.len == 0:
+      list.add ru ""
+
+    for kind, path in walkDir("./"):
+      if path.toRunes.normalizePath.startsWith(inputPath):
+        let p = path.toRunes.normalizePath
+        # If the path is a directory, add '/'
+        if dirExists($p): list.add p & ru "/"
+        else: list.add p
 
   for path in list: result.add($path)
   result.sort(proc (a, b: string): int = cmp(a, b))
@@ -396,13 +407,14 @@ proc getCandidatesExCommandOption(status: var Editorstatus,
        "sv": argList = getCandidatesFilePath(exStatus.buffer, command)
     else: discard
 
-  let  arg = if (splitWhitespace(exStatus.buffer)).len > 1:
-               (splitWhitespace(exStatus.buffer))[1]
-             else: ru""
-  result = @[arg]
+  if argList[0] != "":
+    let arg = if (splitWhitespace(exStatus.buffer)).len > 1:
+                (splitWhitespace(exStatus.buffer))[1]
+              else: ru""
+    result = @[arg]
 
   for i in 0 ..< argList.len:
-    if argList[i].startsWith($arg): result.add(argList[i].toRunes)
+    result.add(argList[i].toRunes)
 
 proc getCandidatesExCommand(commandLineBuffer: seq[Rune]): seq[seq[Rune]] =
   result = @[commandLineBuffer]
@@ -477,11 +489,15 @@ proc initDisplayBuffer(suggestlist: seq[seq[Rune]],
                        suggestType: SuggestType): seq[seq[Rune]] =
 
   if isSuggestTypeFilePath(suggestType):
-    if suggestlist[1].contains(ru'/'):
-      for i in 1 ..< suggestlist.len:
-        let path = suggestlist[i]
-        result.add(path[path.rfind(ru'/') + 1 ..< path.len])
-    else: result = suggestlist[1 ..< suggestlist.len]
+    for index, path in suggestlist:
+      # suggestlist[0] is input text
+      if index > 0:
+        # Remove '/' end of the path string
+        let p = path[0 .. path.high - 1]
+        if p.contains(ru '/'):
+          result.add(path[p.rfind(ru'/') + 1 ..< path.len])
+        else:
+          result.add(path)
   elif isSuggestTypeExCommand(suggestType):
     # Add command description
     for list in exCommandList:
@@ -528,7 +544,8 @@ proc suggestCommandLine(status: var Editorstatus,
       exStatus.currentPosition = 0
       exStatus.cursorX = 0
 
-  # TODO: I don't know why yet, but there is a bug which is related to scrolling of the pup-up window.
+  # TODO: I don't know why yet,
+  #       but there is a bug which is related to scrolling of the pup-up window.
 
   while (isTabKey(key) or isShiftTab(key)) and suggestlist.len > 1:
     updateExModeViewStatus()
@@ -558,20 +575,14 @@ proc suggestCommandLine(status: var Editorstatus,
 
     status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
 
-    key = status.commandLine.getKey
+    key = errorKey
+    while key == errorKey:
+      key = status.commandLine.getKey
+
     exStatus.cursorX = exStatus.currentPosition + 1
 
   status.commandLine.window.moveCursor(exStatus.cursorY, exStatus.cursorX)
   if status.settings.popUpWindowInExmode: status.deletePopUpWindow
-
-proc suggestMode(status: var Editorstatus,
-                 exStatus: var ExModeViewStatus,
-                 key: var Rune) =
-
-  status.suggestCommandLine(exStatus, key)
-
-  while isTabKey(key) or isShiftTab(key):
-    key = status.commandLine.getKey
 
 proc getKeyOnceAndWriteCommandView*(
   status: var Editorstatus,
@@ -614,11 +625,22 @@ proc getKeyOnceAndWriteCommandView*(
   while true:
     status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
 
-    var key = status.commandLine.getKey
+    var key = errorKey
+    while key == errorKey:
+      if not pressCtrlC:
+        key = status.commandLine.getKey
+      else:
+        # Exit command line mode
+        pressCtrlC = false
+
+        status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
+        exitSearch = true
+
+        return (exStatus.buffer, exitSearch, cancelSearch)
 
     # Suggestion mode
     if isTabKey(key) or isShiftTab(key):
-      status.suggestMode(exStatus, key)
+      status.suggestCommandLine(exStatus, key)
       if status.settings.popUpWindowInExmode and isEnterKey(key):
         status.commandLine.window.moveCursor(exStatus.cursorY, exStatus.cursorX)
 
@@ -669,7 +691,7 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
 
     # Suggestion mode
     if isTabKey(key) or isShiftTab(key):
-      suggestMode(status, exStatus, key)
+      status.suggestCommandLine(exStatus, key)
       if status.settings.popUpWindowInExmode and isEnterKey(key):
           status.commandLine.window.moveCursor(exStatus.cursorY, exStatus.cursorX)
           key = status.commandLine.getKey

@@ -1,5 +1,5 @@
 import critbits, unicode, sugar, options, sequtils
-import ui, window, generalautocomplete, bufferstatus, gapbuffer, unicodetext,
+import ui, window, generalautocomplete, bufferstatus, gapbuffer, unicodeext,
        color, editorstatus
 
 type SuggestionWindow* = object
@@ -45,9 +45,15 @@ proc handleKeyInSuggestionWindow*(
   let prevSuggestion = suggestionWindow.selectedSuggestion
 
   if isTabKey(key) or isDownKey(key):
-    inc(suggestionWindow.selectedSuggestion)
+    if suggestionWindow.selectedSuggestion == suggestionWindow.suggestoins.high:
+      suggestionWindow.selectedSuggestion = 0
+    else:
+      inc(suggestionWindow.selectedSuggestion)
   elif isShiftTab(key) or isUpKey(key):
-    dec(suggestionWindow.selectedSuggestion)
+    if suggestionWindow.selectedSuggestion == 0:
+      suggestionWindow.selectedSuggestion = suggestionWindow.suggestoins.high
+    else:
+      dec(suggestionWindow.selectedSuggestion)
   elif isPageDownkey(key):
     suggestionWindow.selectedSuggestion += suggestionWindow.popUpWindow.height - 1
   elif isPageUpKey(key):
@@ -95,44 +101,59 @@ proc extractWordBeforeCursor(
                       windowNode.currentColumn - 1)
 
 proc wordExistsBeforeCursor(bufStatus: BufferStatus,
-                           windowNode: WindowNode): bool =
+                            windowNode: WindowNode): bool =
 
   if windowNode.currentColumn == 0: return false
   let wordFirstLast = extractWordBeforeCursor(bufStatus, windowNode)
   wordFirstLast.isSome and wordFirstLast.get.word.len > 0
 
-proc buildSuggestionWindow*(bufStatus: BufferStatus,
-                            windowNode: WindowNode): Option[SuggestionWindow] =
+proc buildSuggestionWindow*(
+  bufStatus: seq[BufferStatus],
+  currentBufferIndex: int,
+  root, currenWindowNode: WindowNode): Option[SuggestionWindow] =
 
-  let (word, firstColumn, lastColumn) = extractWordBeforeCursor(
-    bufStatus,
-    windowNode).get
-
-  # Eliminate the word on the cursor.
   let
-    line = windowNode.currentLine
+    currentBufStatus = bufStatus[currentBufferIndex]
+    (word, firstColumn, lastColumn) = extractWordBeforeCursor(
+      currentBufStatus,
+      currenWindowNode).get
+
+    # Eliminate the word on the cursor.
+    line = currenWindowNode.currentLine
     column = firstColumn
-    firstDeletedIndex = bufStatus.buffer.calcIndexInEntireBuffer(
+    firstDeletedIndex = currentBufStatus.buffer.calcIndexInEntireBuffer(
       line,
       column,
       true)
     lastDeletedIndex = firstDeletedIndex + word.len - 1
-    text = bufStatus.buffer.toRunes.dup(
-      delete(firstDeletedIndex, lastDeletedIndex))
+    bufferIndexList = root.getAllBufferIndex
+
+  # 0 is current bufStatus
+  var checkBuffers: seq[BufferStatus] = @[bufStatus[currentBufferIndex]]
+  for i in bufferIndexList:
+    if i != currentBufferIndex: checkBuffers.add bufStatus[i]
+
+  let text = getTextInBuffers(checkBuffers,
+                              firstDeletedIndex,
+                              lastDeletedIndex)
 
   initSuggestionWindow(
     text,
     word,
-    bufStatus.buffer[windowNode.currentLine],
+    currentBufStatus.buffer[currenWindowNode.currentLine],
     firstColumn,
     lastColumn)
 
 proc tryOpenSuggestionWindow*(
-  bufStatus: BufferStatus,
-  windowNode: WindowNode): Option[SuggestionWindow] =
+  bufStatus: seq[BufferStatus],
+  currentBufferIndex: int,
+  root, currenWindowNode: WindowNode): Option[SuggestionWindow] =
 
-  if wordExistsBeforeCursor(bufStatus, windowNode):
-    return buildSuggestionWindow(bufStatus, windowNode)
+  if wordExistsBeforeCursor(bufStatus[currentBufferIndex], currenWindowNode):
+    return buildSuggestionWindow(bufStatus,
+                                 currentBufferIndex,
+                                 root,
+                                 currenWindowNode)
 
 proc calcSuggestionWindowPosition*(
   suggestionWindow: SuggestionWindow,

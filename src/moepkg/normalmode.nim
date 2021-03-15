@@ -1,6 +1,6 @@
 from strutils import parseInt
 import terminal, times
-import editorstatus, ui, gapbuffer, unicodetext, fileutils, undoredostack,
+import editorstatus, ui, gapbuffer, unicodeext, fileutils, undoredostack,
        window, movement, editor, search, color, bufferstatus, quickrun,
        messages, commandline
 
@@ -36,7 +36,7 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
     currentBufferIndex = status.bufferIndexInCurrentWindow
     workspaceIndex = status.currentWorkSpaceIndex
 
-  status.bufStatus[currentBufferIndex].isSearchHighlight = true
+  status.isSearchHighlight = true
 
   status.updateHighlight(status.workspace[workspaceIndex].currentMainWindowNode)
 
@@ -61,7 +61,7 @@ proc searchNextOccurrence(status: var EditorStatus) =
   status.searchNextOccurrence(keyword)
 
 proc searchNextOccurrenceReversely(status: var EditorStatus, keyword: seq[Rune]) =
-  currentBufStatus.isSearchHighlight = true
+  status.isSearchHighlight = true
   status.updateHighlight(currentMainWindowNode)
 
   var windowNode = currentMainWindowNode
@@ -86,7 +86,7 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) =
   status.searchNextOccurrenceReversely(keyword)
 
 proc turnOffHighlighting*(status: var EditorStatus) =
-  currentBufStatus.isSearchHighlight = false
+  status.isSearchHighlight = false
   status.updateHighlight(currentMainWindowNode)
 
 proc writeFileAndExit(status: var EditorStatus, height, width: int) =
@@ -174,6 +174,16 @@ proc yankAndDeleteInnerCommand(status: var EditorStatus, key: Rune) =
       currentBufStatus.deleteWord(currentMainWindowNode, status.registers)
   else:
     discard
+
+proc showCurrentCharInfoCommand(status: var EditorStatus,
+                                windowNode: WindowNode) =
+
+  let
+    currentLine = windowNode.currentLine
+    currentColumn = windowNode.currentColumn
+    currentChar = currentBufStatus.buffer[currentLine][currentColumn]
+
+  status.commandLine.writeCurrentCharInfo(currentChar)
 
 proc normalCommand(status: var EditorStatus,
                    commands: seq[Rune],
@@ -486,6 +496,8 @@ proc normalCommand(status: var EditorStatus,
       status.jumpLine(cmdLoop - 1)
     elif secondKey == ord('_'):
       currentBufStatus.moveToLastNonBlankOfLine(windowNode)
+    elif secondKey == ord('a'):
+      status.showCurrentCharInfoCommand(windowNode)
   elif key == ord('G'):
     moveToLastLine(status)
   elif isControlU(key):
@@ -727,8 +739,9 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
   # TODO: Refactor
   elif key == ord('g'):
       let secondKey = getAnotherKey()
-      if secondKey == ord('g') or secondKey == ord('_'):
-        result = @[key, secondKey]
+      if secondKey == ord('g') or
+         secondKey == ord('_') or
+         secondKey == ord('a'): result = @[key, secondKey]
   elif key == ord('z'):
     let secondKey = getAnotherKey()
     if secondKey == ord('.') or key == ord('t') or key == ord('b'):
@@ -862,8 +875,13 @@ proc normalMode*(status: var EditorStatus) =
 
     var key = errorKey
     while key == errorKey:
-      status.eventLoopTask
-      key = getKey(currentMainWindowNode)
+      if not pressCtrlC:
+        status.eventLoopTask
+        key = getKey(currentMainWindowNode)
+      else:
+        pressCtrlC = false
+        status.commandLine.writeExitHelp
+        status.update
 
     status.lastOperatingTime = now()
 

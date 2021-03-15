@@ -1,7 +1,7 @@
 import strutils, terminal, os, strformat, tables, times, osproc, heapqueue,
        deques, times, options
 import syntax/highlite
-import gapbuffer, editorview, ui, unicodetext, highlight, fileutils,
+import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        undoredostack, window, color, workspace, statusline, settings,
        bufferstatus, cursor, tabline, backup, messages, commandline
 
@@ -11,6 +11,12 @@ type Platform* = enum
 type Registers* = object
   yankedLines*: seq[seq[Rune]]
   yankedStr*: seq[Rune]
+
+# Save cursor position when a buffer for a window(file) gets closed.
+type LastPosition* = object
+  path: seq[Rune]
+  line: int
+  column: int
 
 type EditorStatus* = object
   platform*: Platform
@@ -32,6 +38,8 @@ type EditorStatus* = object
   workSpaceTabWindow*: Window
   lastOperatingTime*: DateTime
   autoBackupStatus*: AutoBackupStatus
+  isSearchHighlight*: bool
+  lastPosition*: seq[LastPosition]
 
 proc initPlatform(): Platform =
   if defined linux:
@@ -121,17 +129,135 @@ proc changeMode*(bufStatus: var BufferStatus, mode: Mode) {.inline.} =
   bufStatus.prevMode = bufStatus.mode
   bufStatus.mode = mode
 
-proc changeCurrentWin*(status:var EditorStatus, index: int) =
+# Set current cursor postion to status.lastPosition
+proc updateLastCursorPostion*(status: var EditorStatus) {.inline.} =
+  for i, p in status.lastPosition:
+    if p.path.absolutePath == currentBufStatus.path.absolutePath:
+      status.lastPosition[i].line = currentMainWindowNode.currentLine
+      status.lastPosition[i].column = currentMainWindowNode.currentColumn
+      return
+
+  if currentBufStatus.path.len > 0:
+    let
+      path = currentBufStatus.path.absolutePath
+      line = currentMainWindowNode.currentLine
+      column = currentMainWindowNode.currentColumn
+    status.lastPosition.add LastPosition(path: path, line: line, column: column)
+
+proc getLastCursorPostion*(lastPosition: seq[LastPosition],
+                           path: seq[Rune]): Option[LastPosition] =
+
+  for p in lastPosition:
+    if p.path.absolutePath == path.absolutePath:
+      return some(p)
+
+proc changeCurrentWin*(status: var EditorStatus, index: int) =
   if index < currentWorkSpace.numOfMainWindow and index > 0:
+    status.updateLastCursorPostion
+
     var node = mainWindowNode.searchByWindowIndex(index)
     currentMainWindowNode = node
+
+proc loadExCommandHistory*(): seq[seq[Rune]] =
+  let chaheFile = getHomeDir() / ".cache/moe/exCommandHistory"
+
+  if fileExists(chaheFile):
+    let f = open(chaheFile, FileMode.fmRead)
+    while not f.endOfFile:
+      let line = f.readLine
+      if line.len > 0:
+        result.add ru line
+
+proc loadSearchHistory*(): seq[seq[Rune]] =
+  let chaheFile = getHomeDir() / ".cache/moe/searchHistory"
+
+  if fileExists(chaheFile):
+    let f = open(chaheFile, FileMode.fmRead)
+    while not f.endOfFile:
+      let line = f.readLine
+      if line.len > 0:
+        result.add ru line
+
+proc loadLastPosition*(): seq[LastPosition] =
+  let chaheFile = getHomeDir() / ".cache/moe/lastPosition"
+
+  if fileExists(chaheFile):
+    let f = open(chaheFile, FileMode.fmRead)
+    while not f.endOfFile:
+      let line = f.readLine
+
+      if line.len > 0:
+        let lineSplit = (line.ru).split(ru ':')
+        if lineSplit.len == 3:
+          var position = LastPosition(path: lineSplit[0])
+          try:
+            position.line = parseInt($lineSplit[1])
+            position.column = parseInt($lineSplit[2])
+          except ValueError:
+            return
+
+          result.add position
 
 proc executeOnExit(settings: EditorSettings) {.inline.} =
   if not settings.disableChangeCursor:
     changeCursorType(settings.defaultCursor)
 
-proc exitEditor*(settings: EditorSettings) =
-  executeOnExit(settings)
+# Save Ex command history to the file
+proc saveExCommandHistory(history: seq[seq[Rune]]) =
+  let
+    chaheDir = getHomeDir() / ".cache/moe"
+    chaheFile = chaheDir / "exCommandHistory"
+
+  createDir(chaheDir)
+
+  var f = open(chaheFile, FileMode.fmWrite)
+  defer:
+    f.close
+
+  for line in history:
+    f.writeLine($line)
+
+# Save the search history to the file
+proc saveSearchHistory(history: seq[seq[Rune]]) =
+  let
+    chaheDir = getHomeDir() / ".cache/moe"
+    chaheFile = chaheDir / "searchHistory"
+
+  createDir(chaheDir)
+
+  var f = open(chaheFile, FileMode.fmWrite)
+  defer:
+    f.close
+
+  for line in history:
+    f.writeLine($line)
+
+# Save the cursor position to the file
+proc saveLastPosition(lastPosition: seq[LastPosition]) =
+  let
+    chaheDir = getHomeDir() / ".cache/moe"
+    chaheFile = chaheDir / "lastPosition"
+
+  createDir(chaheDir)
+
+  var f = open(chaheFile, FileMode.fmWrite)
+  defer:
+    f.close
+
+  for position in lastPosition:
+    f.writeLine(fmt"{$position.path}:{$position.line}:{$position.column}")
+
+proc exitEditor*(status: EditorStatus) =
+  if status.settings.persist.exCommand and status.exCommandHistory.len > 0:
+    saveExCommandHistory(status.exCommandHistory)
+
+  if status.settings.persist.search and status.searchHistory.len > 0:
+    saveSearchHistory(status.searchHistory)
+
+  if status.settings.persist.cursorPosition:
+    saveLastPosition(status.lastPosition)
+
+  executeOnExit(status.settings)
   exitUi()
   quit()
 
@@ -350,6 +476,10 @@ proc update*(status: var EditorStatus) =
     status.settings.highlightSettings.reservedWords,
     status.settings.syntax)
 
+  # Set editor Color Pair for current line highlight.
+  # New color pairs are set to Number larger than the maximum value of EditorColorPiar.
+  var currentLineColorPair = ord(EditorColorPair.high) + 1
+
   var queue = initHeapQueue[WindowNode]()
   for node in mainWindowNode.child:
     queue.push(node)
@@ -398,7 +528,7 @@ proc update*(status: var EditorStatus) =
             if status.settings.highlightSettings.pairOfParen:
               status.highlightPairOfParen
 
-            status.updateHighlight(node)
+          status.updateHighlight(node)
 
         let
           startSelectedLine = bufStatus.selectArea.startLine
@@ -418,7 +548,8 @@ proc update*(status: var EditorStatus) =
                          status.settings.editorColorTheme,
                          node.currentLine,
                          startSelectedLine,
-                         endSelectedLine)
+                         endSelectedLine,
+                         currentLineColorPair)
 
         if isCurrentMainWin:
           node.cursor.update(node.view, node.currentLine, node.currentColumn)
@@ -447,9 +578,34 @@ proc update*(status: var EditorStatus) =
 
 proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode)
 
-proc verticalSplitWindow*(status: var EditorStatus) =
-  let buffer = currentBufStatus.buffer
+# Update currentLine and currentColumn from status.lastPosition
+proc restoreCursorPostion*(node: var WindowNode,
+                           bufStatus: BufferStatus,
+                           lastPosition: seq[LastPosition]) =
 
+  let position = lastPosition.getLastCursorPostion(bufStatus.path)
+
+  if isSome(position):
+    let posi = position.get
+    if posi.line > bufStatus.buffer.high:
+      node.currentLine = bufStatus.buffer.high
+    else:
+      node.currentLine = posi.line
+
+    let currentColumn = bufStatus.buffer[node.currentLine].high
+    if posi.column > currentColumn:
+      if currentColumn > -1:
+        node.currentColumn = bufStatus.buffer[node.currentLine].high
+      else:
+        node.currentColumn = 0
+    else:
+      node.currentColumn = posi.column
+
+proc verticalSplitWindow*(status: var EditorStatus) =
+  status.updateLastCursorPostion
+
+  # Create the new window
+  let buffer = currentBufStatus.buffer
   currentMainWindowNode = currentMainWindowNode.verticalSplit(buffer)
   inc(currentWorkSpace.numOfMainWindow)
 
@@ -463,9 +619,15 @@ proc verticalSplitWindow*(status: var EditorStatus) =
 
   currentWorkSpace.statusLine.add(initStatusLine())
 
-proc horizontalSplitWindow*(status: var Editorstatus) =
-  let buffer = currentBufStatus.buffer
+  status.resize(terminalHeight(), terminalWidth())
 
+  var newNode = mainWindowNode.searchByWindowIndex(currentMainWindowNode.windowIndex + 1)
+  newNode.restoreCursorPostion(currentBufStatus, status.lastPosition)
+
+proc horizontalSplitWindow*(status: var Editorstatus) =
+  status.updateLastCursorPostion
+
+  let buffer = currentBufStatus.buffer
   currentMainWindowNode = currentMainWindowNode.horizontalSplit(buffer)
   inc(currentWorkSpace.numOfMainWindow)
 
@@ -479,15 +641,23 @@ proc horizontalSplitWindow*(status: var Editorstatus) =
 
   currentWorkSpace.statusLine.add(initStatusLine())
 
+  status.resize(terminalHeight(), terminalWidth())
+
+  var newNode = mainWindowNode.searchByWindowIndex(currentMainWindowNode.windowIndex + 1)
+  newNode.restoreCursorPostion(currentBufStatus, status.lastPosition)
+
 proc deleteWorkSpace*(status: var Editorstatus, index: int)
 
 proc closeWindow*(status: var EditorStatus,
                   node: WindowNode,
                   height, width: int) =
 
+  if currentBufStatus.mode == Mode.normal:
+    status.updateLastCursorPostion
+
   if status.workSpace.len == 1 and
      currentWorkSpace.numOfMainWindow == 1:
-    exitEditor(status.settings)
+    status.exitEditor
 
   if currentWorkSpace.numOfMainWindow == 1:
     status.deleteWorkSpace(status.currentWorkSpaceIndex)
@@ -516,12 +686,18 @@ proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
   if index < 0 or
      currentWorkSpace.numOfMainWindow <= index: return
 
+  status.updateLastCursorPostion
+
   currentMainWindowNode = mainWindowNode.searchByWindowIndex(index)
 
 proc moveNextWindow*(status: var EditorStatus) {.inline.} =
+  status.updateLastCursorPostion
+
   status.moveCurrentMainWindow(currentMainWindowNode.windowIndex + 1)
 
 proc movePrevWindow*(status: var EditorStatus) {.inline.} =
+  status.updateLastCursorPostion
+
   status.moveCurrentMainWindow(currentMainWindowNode.windowIndex - 1)
 
 proc writePopUpWindow*(popUpWindow: var Window,
@@ -529,7 +705,8 @@ proc writePopUpWindow*(popUpWindow: var Window,
                        terminalHeight, terminalWidth: int,
                        currentLine: int,
                        buffer: seq[seq[Rune]]) =
-  # TODO: Probably, the parameter `y` means the bottom of the window, but it should change to the top of the window for consistency.
+  # TODO: Probably, the parameter `y` means the bottom of the window,
+  #       but it should change to the top of the window for consistency.
 
   popUpWindow.erase
 
@@ -646,13 +823,15 @@ proc deleteWorkSpace*(status: var Editorstatus, index: int) =
   else:
     status.workspace.delete(index)
 
-    if status.workspace.len == 0: status.settings.exitEditor
+    if status.workspace.len == 0: status.exitEditor
 
     if status.currentWorkSpaceIndex > status.workSpace.high:
       status.currentWorkSpaceIndex = status.workSpace.high
 
 proc changeCurrentWorkSpace*(status: var Editorstatus, index: int) =
   if 0 < index and index <= status.workSpace.len:
+    status.updateLastCursorPostion
+
     status.currentWorkSpaceIndex = index - 1
   else:
     status.commandLine.writeNotExistWorkspaceError(index, status.messageLog)
@@ -811,7 +990,7 @@ proc highlightOtherUsesCurrentWord(status: var Editorstatus) =
   if line.len < 1 or
      currentMainWindowNode.currentColumn > line.high or
      (line[currentMainWindowNode.currentColumn] != '_' and
-     unicodetext.isPunct(line[currentMainWindowNode.currentColumn])) or
+     unicodeext.isPunct(line[currentMainWindowNode.currentColumn])) or
      line[currentMainWindowNode.currentColumn].isSpace: return
   var
     startCol = currentMainWindowNode.currentColumn
@@ -819,13 +998,13 @@ proc highlightOtherUsesCurrentWord(status: var Editorstatus) =
 
   # Set start col
   for i in countdown(currentMainWindowNode.currentColumn - 1, 0):
-    if (line[i] != '_' and unicodetext.isPunct(line[i])) or line[i].isSpace:
+    if (line[i] != '_' and unicodeext.isPunct(line[i])) or line[i].isSpace:
       break
     else: startCol.dec
 
   # Set end col
   for i in currentMainWindowNode.currentColumn ..< line.len:
-    if (line[i] != '_' and unicodetext.isPunct(line[i])) or line[i].isSpace:
+    if (line[i] != '_' and unicodeext.isPunct(line[i])) or line[i].isSpace:
       break
     else: endCol.inc
 
@@ -852,11 +1031,11 @@ proc highlightOtherUsesCurrentWord(status: var Editorstatus) =
         if j == 0 or
            (j > 0 and
            ((line[j - 1] != '_' and
-           unicodetext.isPunct(line[j - 1])) or
+           unicodeext.isPunct(line[j - 1])) or
            line[j - 1].isSpace)):
           if (j == (line.len - highlightWord.len)) or
              ((line[j + highlightWord.len] != '_' and
-             unicodetext.isPunct(line[j + highlightWord.len])) or
+             unicodeext.isPunct(line[j + highlightWord.len])) or
              line[j + highlightWord.len].isSpace):
 
             # Do not highlight current word on the cursor
@@ -881,17 +1060,19 @@ proc highlightOtherUsesCurrentWord(status: var Editorstatus) =
               currentMainWindowNode.highlight =
                 currentMainWindowNode.highlight.overwrite(colorSegment)
 
-proc highlightTrailingSpaces(status: var Editorstatus) =
-  if isConfigMode(currentBufStatus.mode, currentBufStatus.prevMode) or
-     isDebugMode(currentBufStatus.mode, currentBufStatus.prevMode): return
+proc highlightTrailingSpaces(bufStatus: BufferStatus,
+                             windowNode: var WindowNode) =
+
+  if isConfigMode(bufStatus.mode, bufStatus.prevMode) or
+     isDebugMode(bufStatus.mode, bufStatus.prevMode): return
 
   let
-    currentLine = currentMainWindowNode.currentLine
+    currentLine = windowNode.currentLine
 
     color = EditorColorPair.highlightTrailingSpaces
 
-    range = currentMainWindowNode.view.rangeOfOriginalLineInView
-    buffer = currentBufStatus.buffer
+    range = windowNode.view.rangeOfOriginalLineInView
+    buffer = bufStatus.buffer
     startLine = range[0]
     endLine = if buffer.len > range[1] + 1: range[1] + 2
               elif buffer.len > range[1]: range[1] + 1
@@ -915,8 +1096,8 @@ proc highlightTrailingSpaces(status: var Editorstatus) =
                                        color: color))
 
   for colorSegment in colorSegments:
-    currentMainWindowNode.highlight =
-      currentMainWindowNode.highlight.overwrite(colorSegment)
+    windowNode.highlight =
+      windowNode.highlight.overwrite(colorSegment)
 
 from search import searchAllOccurrence
 
@@ -947,7 +1128,8 @@ proc highlightSearchResults(windowNode: var WindowNode,
                             bufferInView: GapBuffer[seq[Rune]],
                             range: (int, int),
                             keyword: seq[Rune],
-                            settings: EditorSettings) =
+                            settings: EditorSettings,
+                            isSearchHighlight: bool) =
 
   let
     ignorecase = settings.ignorecase
@@ -957,7 +1139,7 @@ proc highlightSearchResults(windowNode: var WindowNode,
       keyword,
       ignorecase,
       smartcase)
-    color = if bufStatus.isSearchHighlight: EditorColorPair.searchResult
+    color = if isSearchHighlight: EditorColorPair.searchResult
             else: EditorColorPair.replaceText
   for pos in allOccurrence:
     let colorSegment = ColorSegment(firstRow: range[0] + pos.line,
@@ -982,20 +1164,21 @@ proc updateHighlight*(status: var EditorStatus, windowNode: var WindowNode) =
   # highlight trailing spaces
   if status.settings.highlightSettings.trailingSpaces and
      bufStatus.language != SourceLanguage.langMarkDown:
-    status.highlightTrailingSpaces
+    bufStatus.highlightTrailingSpaces(windowNode)
 
   # highlight full width space
   if status.settings.highlightSettings.fullWidthSpace:
     windowNode.highlightFullWidthSpace(bufferInView, range)
 
   # highlight search results
-  if bufStatus.isSearchHighlight and status.searchHistory.len > 0:
+  if status.isSearchHighlight and status.searchHistory.len > 0:
     windowNode.highlightSearchResults(
       bufStatus,
       bufferInView,
       range,
       status.searchHistory[^1],
-      status.settings)
+      status.settings,
+      status.isSearchHighlight)
 
 proc changeTheme*(status: var EditorStatus) =
   if status.settings.editorColorTheme == ColorTheme.vscode:

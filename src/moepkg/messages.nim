@@ -1,5 +1,5 @@
-import strformat, os
-import color, unicodetext, settings, commandline
+import strformat, os, strutils
+import color, unicodeext, settings, commandline, independentutils
 
 proc writeMessageOnCommandWindow*(commandLine: var CommandLine,
                                   message: string,
@@ -276,3 +276,15 @@ proc writeRestoreFileSuccessMessage*(commandLine: var CommandLine,
 proc writeDeleteBackupError*(commandLine: var CommandLine) {.inline.} =
   const mess = "Error: Delete backup file failed"
   commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+
+proc writeExitHelp*(commandLine: var CommandLine) {.inline.} =
+  const mess = "Type  :qa  and press <Enter> to exit moe"
+  commandLine.writeMessageOnCommandWindow(mess)
+
+proc writeCurrentCharInfo*(commandLine: var CommandLine, r: Rune) {.inline.} =
+  let
+    e = encodeUTF8(r)
+    eHex = e[0].toHex
+    eOct = int64(e[0]).toOct(5)
+    mess = fmt "<{$r}>  {e[0]}  Hex {normalizeHex($eHex)}  Oct {$eOct}"
+  commandLine.writeMessageOnCommandWindow(mess)

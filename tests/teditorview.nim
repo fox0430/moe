@@ -1,5 +1,5 @@
 import unittest, deques
-import moepkg/[editorview, gapbuffer, unicodetext]
+import moepkg/[editorview, gapbuffer, unicodeext]
 
 test "initEditorView 1":
   let

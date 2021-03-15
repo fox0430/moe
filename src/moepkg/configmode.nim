@@ -1,5 +1,5 @@
-import terminal, times, typetraits, strutils
-import gapbuffer, ui, editorstatus, unicodetext, window, movement, settings,
+import terminal, times, strutils
+import gapbuffer, ui, editorstatus, unicodeext, window, movement, settings,
        bufferstatus, color, highlight, search, editor
 
 type standardTableNames {.pure.} = enum
@@ -112,6 +112,11 @@ type filerTableNames {.pure.} = enum
 
 type autocompleteTableNames {.pure.} = enum
   enable
+
+type persistTableSettings {.pure.} = enum
+  exCommand
+  search
+  cursorPosition
 
 type themeTableNames {.pure.} = enum
   editorBg
@@ -279,17 +284,19 @@ proc getStandardTableSettingValues(settings: EditorSettings,
 proc getBuildOnSaveTableSettingValues(settings: BuildOnSaveSettings,
                                       name: string): seq[seq[Rune]] =
 
-  var currentVal: bool
   case name:
     of "enable":
-      currentVal = settings.enable
+      let currentVal = settings.enable
+      if currentVal:
+        result = @[ru "true", ru "false"]
+      else:
+        result = @[ru "false", ru "true"]
+    of "workspaceRoot":
+      result = @[settings.workspaceRoot]
+    of "command":
+      result = @[settings.command]
     else:
       return
-
-  if currentVal:
-    result = @[ru "true", ru "false"]
-  else:
-    result = @[ru "false", ru "true"]
 
 proc getTabLineTableSettingValues(settings: TabLineSettings,
                                   name: string): seq[seq[Rune]] =
@@ -386,34 +393,46 @@ proc getHighlightTableSettingValues(settings: EditorSettings,
     result = @[ru "false", ru "true"]
 
 proc getAutoBackupTableSettingValues(settings: AutoBackupSettings,
-                                     name: string): seq[seq[Rune]] =
+                                     name: string,
+                                     settingType: SettingType): seq[seq[Rune]] =
 
-  var currentVal: bool
   case name:
     of "enable":
-      currentVal = settings.enable
+      let currentVal = settings.enable
+      if currentVal:
+        result = @[ru "true", ru "false"]
+      else:
+        result = @[ru "false", ru "true"]
+    of "backupDir":
+      result = @[settings.backupDir]
     else:
       return
-
-  if currentVal:
-    result = @[ru "true", ru "false"]
-  else:
-    result = @[ru "false", ru "true"]
 
 proc getQuickRunTableSettingValues(settings: QuickRunSettings,
-                                   name: string): seq[seq[Rune]] =
+                                   name: string,
+                                   settingType: SettingType): seq[seq[Rune]] =
 
-  var currentVal: bool
   case name:
     of "saveBufferWhenQuickRun":
-      currentVal = settings.saveBufferWhenQuickRun
+      let currentVal = settings.saveBufferWhenQuickRun
+      if currentVal:
+        result = @[ru "true", ru "false"]
+      else:
+        result = @[ru "false", ru "true"]
+    of "nimAdvancedCommand":
+      result = @[ru settings.nimAdvancedCommand]
+    of "ClangOptions":
+      result = @[ru settings.ClangOptions]
+    of "CppOptions":
+      result = @[ru settings.CppOptions]
+    of "NimOptions":
+      result = @[ru settings.NimOptions]
+    of "shOptions":
+      result = @[ru settings.shOptions]
+    of "bashOptions":
+      result = @[ru settings.bashOptions]
     else:
       return
-
-  if currentVal:
-    result = @[ru "true", ru "false"]
-  else:
-    result = @[ru "false", ru "true"]
 
 proc getNotificationTableSettingValues(settings: NotificationSettings,
                                        name: string): seq[seq[Rune]] =
@@ -502,6 +521,25 @@ proc getAutocompleteTableSettingValues(settings: AutocompleteSettings,
   else:
     result = @[ru "false", ru "true"]
 
+proc getPersistTableSettingsValues(settings: PersistSettings,
+                                   name: string): seq[seq[Rune]] =
+
+  var currentVal: bool
+  case name:
+    of "exCommand":
+      currentVal = settings.exCommand
+    of "search":
+      currentVal = settings.search
+    of "cursorPosition":
+      currentVal = settings.cursorPosition
+    else:
+      return
+
+  if currentVal:
+    result = @[ru "true", ru "false"]
+  else:
+    result = @[ru "false", ru "true"]
+
 proc getThemeTableSettingValues(settings: EditorSettings,
                                 name, position: string): seq[seq[Rune]] =
 
@@ -525,6 +563,7 @@ proc getThemeTableSettingValues(settings: EditorSettings,
         result.add ru $color
 
 proc getSettingValues(settings: EditorSettings,
+                      settingType: SettingType,
                       table, name, position: string): seq[seq[Rune]] =
 
   case table:
@@ -541,11 +580,11 @@ proc getSettingValues(settings: EditorSettings,
     of "Highlight":
       result = settings.getHighlightTableSettingValues(name)
     of "AutoBackup":
-      let autoBackupSettings = settings.autoBackupSettings
-      result = autoBackupSettings.getAutoBackupTableSettingValues(name)
+      let settings = settings.autoBackupSettings
+      result = settings.getAutoBackupTableSettingValues(name, settingType)
     of "QuickRun":
       let quickRunSettings = settings.quickRunSettings
-      result = quickRunSettings.getQuickRunTableSettingValues(name)
+      result = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
     of "Notification":
       let notificationSettings = settings.notificationSettings
       result = notificationSettings.getNotificationTableSettingValues(name)
@@ -554,6 +593,9 @@ proc getSettingValues(settings: EditorSettings,
     of "Autocomplete":
       let autocompleteSettings = settings.autocompleteSettings
       result = autocompleteSettings.getAutocompleteTableSettingValues(name)
+    of "Persist":
+      let persistSettings = settings.persist
+      result = persistSettings.getPersistTableSettingsValues(name)
     of "Theme":
       result = settings.getThemeTableSettingValues(name, position)
 
@@ -793,6 +835,19 @@ proc changeAutoCompleteTableSetting(settings: var AutocompleteSettings,
     else:
       discard
 
+proc changePerSistTableSettings(settings: var PersistSettings,
+                                settingName, settingVal: string) =
+
+  case settingName:
+    of "exCommand":
+      settings.exCommand = parseBool(settingVal)
+    of "search":
+      settings.search = parseBool(settingVal)
+    of "cursorPosition":
+      settings.cursorPosition = parseBool(settingVal)
+    else:
+      discard
+
 proc changeThemeTableSetting(settings: var EditorSettings,
                               settingName, position, settingVal: string) =
 
@@ -852,6 +907,9 @@ proc changeEditorSettings(status: var EditorStatus,
   template autocompleteSettings: var AutocompleteSettings =
     status.settings.autocompleteSettings
 
+  template persistSettings: var PersistSettings =
+    status.settings.persist
+
   case table:
     of "Standard":
       changeStandardTableSetting()
@@ -876,6 +934,8 @@ proc changeEditorSettings(status: var EditorStatus,
       filerSettings.changeFilerTableSetting(settingName, settingVal)
     of "Autocomplete":
       autocompleteSettings.changeAutoCompleteTableSetting(settingName, settingVal)
+    of "Persist":
+      persistSettings.changePerSistTableSettings(settingName, settingVal)
     of "Theme":
       settings.changeThemeTableSetting(settingName, position, settingVal)
       status.changeTheme
@@ -918,6 +978,9 @@ proc getSettingType(table, name: string): SettingType =
     case name:
       of "enable":
         result = SettingType.Bool
+      of "workspaceRoot",
+         "command":
+        result = SettingType.String
       else:
         result = SettingType.None
 
@@ -969,7 +1032,10 @@ proc getSettingType(table, name: string): SettingType =
       of "enable":
         result = SettingType.Bool
       of "idleTime",
-         "interval": result = SettingType.Number
+         "interval":
+        result = SettingType.Number
+      of "backupDir":
+        result = SettingType.String
       else:
         result = SettingType.None
 
@@ -979,6 +1045,13 @@ proc getSettingType(table, name: string): SettingType =
         result = SettingType.Bool
       of "timeout":
         result = SettingType.Number
+      of "nimAdvancedCommand",
+         "ClangOptions",
+         "CppOptions",
+         "NimOptions",
+         "shOptions",
+         "bashOptions":
+           result = SettingType.String
       else:
         result = SettingType.None
 
@@ -1203,6 +1276,146 @@ proc editFiguresSetting(status: var EditorStatus,
   if not status.settings.disableChangeCursor:
     changeCursorType(status.settings.normalModeCursor)
 
+proc editStringSetting(status: var EditorStatus,
+                       table, name: string) =
+
+  setCursor(true)
+  if not status.settings.disableChangeCursor:
+    changeCursorType(status.settings.insertModeCursor)
+
+  let
+    currentLine = currentMainWindowNode.currentLine
+    minColumn = currentBufStatus.buffer[currentLine].high
+
+  template moveToLeft() =
+    if minColumn > currentMainWindowNode.currentColumn:
+      currentMainWindowNode.keyLeft
+
+  # Set currentColumn
+  block:
+    let settings = status.settings
+    template getSettingVal: seq[Rune] =
+      case table:
+        of "BuildOnSave":
+          case name:
+            of "workspaceRoot":
+              settings.buildOnSave.workspaceRoot
+            of "command":
+              settings.buildOnSave.command
+            else:
+              ru ""
+        of "AutoBackup":
+          case name:
+            of "backupDir":
+              settings.autoBackupSettings.backupDir
+            else: ru ""
+        of "QuickRun":
+          case name:
+            of "nimAdvancedCommand":
+              ru settings.quickRunSettings.nimAdvancedCommand
+            of "ClangOptions":
+              ru settings.quickRunSettings.ClangOptions
+            of "CppOptions":
+              ru settings.quickRunSettings.CppOptions
+            of "NimOptions":
+              ru settings.quickRunSettings.NimOptions
+            of "shOptions":
+              ru settings.quickRunSettings.shOptions
+            of "bashOptions":
+              ru settings.quickRunSettings.bashOptions
+            else: ru ""
+        else: ru ""
+
+    const numOfIndent = 2
+    let
+      val = getSettingVal()
+      col = positionOfSetVal + numOfIndent + ($val).len
+    currentMainWindowNode.currentColumn = col
+
+  var
+    buffer = ""
+    isCancel = false
+    isBreak = false
+  while not isBreak and not isCancel:
+    status.update
+
+    var key = errorKey
+    while key == errorKey:
+      key = currentMainWindowNode.getKey
+
+    if isResizekey(key):
+      status.resize(terminalHeight(), terminalWidth())
+    elif isEscKey(key):
+      isCancel = true
+    elif isEnterKey(key):
+      isBreak = true
+
+    elif isLeftKey(key):
+      moveToLeft()
+    elif isRightkey(key):
+      currentBufStatus.keyRight(currentMainWindowNode)
+
+    elif isBackspaceKey(key):
+      let
+        autoDeleteParen = false
+
+      if currentMainWindowNode.currentColumn > minColumn:
+        currentBufStatus.keyBackspace(
+          currentMainWindowNode,
+          autoDeleteParen,
+          status.settings.tabStop)
+
+    else:
+      buffer &= key
+      currentBufStatus.insertCharacter(currentMainWindowNode, key)
+      currentMainWindowNode.highlight =
+        currentBufStatus.buffer.initConfigModeHighlight(currentLine)
+
+  if not isCancel:
+    template buildOnSaveTable() =
+      case name:
+        of "workspaceRoot":
+          status.settings.buildOnSave.workspaceRoot = buffer.toRunes
+        of "command":
+          status.settings.buildOnSave.command = buffer.toRunes
+        else:
+          discard
+
+    template autoBackupTable() =
+      case name:
+        of "backupDir":
+          status.settings.autoBackupSettings.backupDir = ru buffer
+        else:
+          discard
+
+    template quickRunTable() =
+      case name:
+        of "nimAdvancedCommand":
+          status.settings.quickRunSettings.nimAdvancedCommand = buffer
+        of "ClangOptions":
+          status.settings.quickRunSettings.ClangOptions = buffer
+        of "CppOptions":
+          status.settings.quickRunSettings.CppOptions = buffer
+        of "NimOptions":
+          status.settings.quickRunSettings.NimOptions = buffer
+        of "shOptions":
+          status.settings.quickRunSettings.shOptions = buffer
+        of "bashOptions":
+          status.settings.quickRunSettings.bashOptions = buffer
+        else:
+          discard
+
+    # Change setting
+    case table:
+      of "BuildOnSave":
+        buildOnSaveTable()
+      of "AutoBackup":
+        autoBackupTable()
+      of "QuickRun":
+        quickRunTable()
+      else:
+        discard
+
 proc editEnumAndBoolSettings(status: var EditorStatus,
                              lineSplit: seq[seq[Rune]],
                              selectedTable, selectedSetting: string,
@@ -1261,7 +1474,7 @@ proc selectAndChangeEditorSettings(status: var EditorStatus) =
     line = currentBufStatus.buffer[currentLine]
     lineSplit = line.splitWhitespace
 
-  if lineSplit.len == 1 or lineSplit[0].len < 1 or lineSplit[1].len < 1: return
+  if not line.startsWith(ru "  "): return
 
   proc getEditorColorPairStr(buffer: GapBuffer[seq[Rune]],
                              lineSplit: seq[seq[Rune]],
@@ -1285,12 +1498,15 @@ proc selectAndChangeEditorSettings(status: var EditorStatus) =
     # position is "foreground" or "background" or ""
     position = if selectedTable == "Theme": $lineSplit[0] else: ""
     settingValues = getSettingValues(status.settings,
+                                     settingType,
                                      selectedTable,
                                      selectedSetting,
                                      position)
 
   if settingType == SettingType.Number:
     status.editFiguresSetting(selectedTable, selectedSetting)
+  elif settingType == SettingType.String:
+    status.editStringSetting(selectedTable, selectedSetting)
   else:
     status.editEnumAndBoolSettings(lineSplit,
                                    selectedTable,
@@ -1580,6 +1796,21 @@ proc initAutocompleteTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       of "enable":
         result.add(ru nameStr & space & $settings.autocompleteSettings.enable)
 
+proc initPersistTableBuffer(persistSettings: PersistSettings): seq[seq[Rune]] =
+  result.add(ru"Persist")
+
+  for name in persistTableSettings:
+    let
+      nameStr = indent & $name
+      space = " ".repeat(positionOfSetVal - len($name))
+    case $name:
+      of "exCommand":
+        result.add(ru nameStr & space & $persistSettings.exCommand)
+      of "search":
+        result.add(ru nameStr & space & $persistSettings.search)
+      of "cursorPosition":
+        result.add(ru nameStr & space & $persistSettings.cursorPosition)
+
 proc initThemeTableBuffer*(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"Theme")
 
@@ -1647,6 +1878,9 @@ proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
 
   buffer.add(ru"")
   buffer.add(initAutocompleteTableBuffer(settings))
+
+  buffer.add(ru"")
+  buffer.add(initPersistTableBuffer(settings.persist))
 
   buffer.add(ru"")
   buffer.add(initThemeTableBuffer(settings))

@@ -1,5 +1,5 @@
 import terminal
-import ui, unicodetext, color
+import ui, unicodeext, color
 
 type CommandLine* = object
     buffer: seq[Rune]
@@ -17,6 +17,7 @@ proc initCommandLine*(): CommandLine {.inline.} =
     w = terminalWidth()
     h = terminalHeight() - 1
   result.window = initWindow(h, w, t, l, color)
+  result.window.setTimeout()
 
 proc resize*(commndLine: var CommandLine, y, x, h, w: int) {.inline.} =
   commndLine.window.resize(h, w, y, x)

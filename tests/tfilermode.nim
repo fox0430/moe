@@ -1,6 +1,6 @@
 import unittest, os, algorithm, strutils
 import moepkg/[filermode, editorstatus, highlight, color, bufferstatus,
-               unicodetext, gapbuffer]
+               unicodeext, gapbuffer]
 
 include moepkg/filermode
 

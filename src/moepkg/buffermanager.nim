@@ -1,5 +1,5 @@
 import terminal, os, heapqueue, times
-import gapbuffer, ui, editorstatus, unicodetext, highlight, window, movement,
+import gapbuffer, ui, editorstatus, unicodeext, highlight, window, movement,
        color, bufferstatus
 
 proc initFilelistHighlight[T](buffer: T,
@@ -143,4 +143,4 @@ proc bufferManager*(status: var Editorstatus) =
     elif key == ord('D'):
       status.deleteSelectedBuffer(terminalHeight(), terminalWidth())
 
-    if status.bufStatus.len < 2: exitEditor(status.settings)
+    if status.bufStatus.len < 2: status.exitEditor

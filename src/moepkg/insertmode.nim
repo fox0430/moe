@@ -1,5 +1,5 @@
 import terminal, times, options
-import ui, editorstatus, gapbuffer, unicodetext, undoredostack, window,
+import ui, editorstatus, gapbuffer, unicodeext, undoredostack, window,
        movement, editor, bufferstatus, suggestionwindow, settings
 
 proc calcMainWindowY(isEnableTabLine, isEnableWorkSpaceLine: bool): int =
@@ -34,8 +34,20 @@ proc insertMode*(status: var EditorStatus) =
 
     var key = errorKey
     while key == errorKey:
-      status.eventLoopTask
-      key = getKey(currentMainWindowNode)
+      if not pressCtrlC:
+        status.eventLoopTask
+        key = getKey(currentMainWindowNode)
+      else:
+        # Exit insert mode
+
+        pressCtrlC = false
+
+        if currentMainWindowNode.currentColumn > 0:
+          dec(currentMainWindowNode.currentColumn)
+        currentMainWindowNode.expandedColumn = currentMainWindowNode.currentColumn
+        status.changeMode(Mode.normal)
+
+        return
 
     status.lastOperatingTime = now()
 
@@ -135,4 +147,9 @@ proc insertMode*(status: var EditorStatus) =
     if status.settings.autocompleteSettings.enable and
        prevLineNumber == currentMainWindowNode.currentLine and
        prevLine != currentBufStatus.buffer[currentMainWindowNode.currentLine]:
-      suggestionWindow = tryOpenSuggestionWindow(currentBufStatus, currentMainWindowNode)
+
+      let currentBufferIndex =currentMainWindowNode.bufferIndex
+      suggestionWindow = tryOpenSuggestionWindow(status.bufStatus,
+                                                 currentBufferIndex,
+                                                 mainWindowNode,
+                                                 currentMainWindowNode)

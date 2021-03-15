@@ -412,3 +412,16 @@ suite "Editor: Paste lines":
     check currentBufStatus.buffer[0] == ru"abc"
     check currentBufStatus.buffer[1] == ru"def"
     check currentBufStatus.buffer[2] == ru""
+
+suite "Editor: Paste a string":
+  test "Paste a string before cursor":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const registers = editorstatus.Registers(yankedLines: @[],
+                                             yankedStr: ru "def")
+    currentBufStatus.pasteBeforeCursor(currentMainWindowNode, registers)
+
+    echo currentBufStatus.buffer[0]
+    check currentBufStatus.buffer[0] == ru "defabc"
