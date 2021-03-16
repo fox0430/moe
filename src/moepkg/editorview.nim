@@ -217,9 +217,10 @@ proc writeCurrentLine(win: var Window,
 
     currentLineColorPair.inc
 
+    # Write spaces after text in the current line
     let
-      spaces = ru" ".repeat(view.width - view.lines[y].len)
-      x = view.widthOfLineNum + view.lines[y].len
+      spaces = ru" ".repeat(view.width - view.lines[y].width)
+      x = view.widthOfLineNum + view.lines[y].width
     view.write(win, y, x, spaces, currentLineColorPair)
   else:
     view.write(win, y, x, str, highlight[i].color)
