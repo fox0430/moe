@@ -464,7 +464,14 @@ proc visualMode*(status: var EditorStatus) =
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
     elif isEscKey(key) or isControlSquareBracketsRight(key):
-      status.updatehighlight(currentMainWindowNode)
+
+      currentMainWindowNode.highlight.updateHighlight(
+        currentBufStatus,
+        currentMainWindowNode,
+        status.isSearchHighlight,
+        status.searchHistory,
+        status.settings)
+
       status.changeMode(Mode.normal)
 
     elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):

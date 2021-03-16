@@ -40,6 +40,7 @@ proc insertCharacter*(bufStatus: var BufferStatus,
   template inserted =
     if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
     inc(bufStatus.countChange)
+    bufStatus.isUpdate = true
 
   if autoCloseParen and canConvertToChar(c):
     let ch = c.toChar
@@ -123,6 +124,7 @@ proc currentLineDeleteCharacterBeforeCursor(bufStatus: var BufferStatus,
     windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].len
 
   inc(bufStatus.countChange)
+  bufStatus.isUpdate = true
 
 proc currentLineDeleteLineBreakBeforeCursor*(bufStatus: var BufferStatus,
                                              windowNode: WindowNode,
@@ -141,6 +143,7 @@ proc currentLineDeleteLineBreakBeforeCursor*(bufStatus: var BufferStatus,
   dec(windowNode.currentLine)
 
   inc(bufStatus.countChange)
+  bufStatus.isUpdate = true
 
 proc countSpaceBeginOfLine(line: seq[Rune], tabStop, currentColumn: int): int =
   for i in 0 ..< min(line.len, currentColumn):
@@ -297,6 +300,7 @@ proc keyEnter*(bufStatus: var BufferStatus,
     windowNode.expandedColumn = 0
 
   inc(bufStatus.countChange)
+  bufStatus.isUpdate = true
 
 proc insertTab*(bufStatus: var BufferStatus,
                windowNode: WindowNode,
@@ -418,6 +422,7 @@ proc deleteWord*(bufStatus: var BufferStatus,
     windowNode.currentColumn = currentColumn
 
   inc(bufStatus.countChange)
+  bufStatus.isUpdate = true
 
 proc deleteWordBeforeCursor*(bufStatus: var BufferStatus,
                             windowNode: var WindowNode,
@@ -455,6 +460,7 @@ proc addIndent*(bufStatus: var BufferStatus,
     bufStatus.buffer[windowNode.currentLine] = newLine
     windowNode.currentColumn = 0
     inc(bufStatus.countChange)
+  bufStatus.isUpdate = true
 
 proc deleteIndent*(bufStatus: var BufferStatus,
                    windowNode: WindowNode,
@@ -478,6 +484,7 @@ proc deleteIndent*(bufStatus: var BufferStatus,
     if oldLine != newLine:
       bufStatus.buffer[windowNode.currentLine] = newLine
       inc(bufStatus.countChange)
+      bufStatus.isUpdate = true
 
 proc deleteCharactersBeforeCursorInCurrentLine*(bufStatus: var BufferStatus,
                                                 windowNode: var WindowNode) =
@@ -567,6 +574,7 @@ proc deleteCurrentCharacter*(bufStatus: var BufferStatus,
       windowNode.expandedColumn = bufStatus.buffer[windowNode.currentLine].len - 1
 
     inc(bufStatus.countChange)
+    bufStatus.isUpdate = true
 
 proc openBlankLineBelow*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   let
@@ -581,6 +589,7 @@ proc openBlankLineBelow*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   windowNode.currentColumn = indent.len
 
   inc(bufStatus.countChange)
+  bufStatus.isUpdate = true
 
 proc openBlankLineAbove*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   let
@@ -593,6 +602,7 @@ proc openBlankLineAbove*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   windowNode.currentColumn = indent.len
 
   inc(bufStatus.countChange)
+  bufStatus.isUpdate = true
 
 proc deleteLine*(bufStatus: var BufferStatus,
                  windowNode: WindowNode,
@@ -610,6 +620,7 @@ proc deleteLine*(bufStatus: var BufferStatus,
   windowNode.expandedColumn = 0
 
   inc(bufStatus.countChange)
+  bufStatus.isUpdate = true
 
 proc deleteCharacterUntilEndOfLine*(bufStatus: var BufferStatus,
                                     autoDeleteParen: bool,
@@ -653,6 +664,7 @@ proc deleteTillPreviousBlankLine*(bufStatus: var BufferStatus,
   bufStatus.buffer.delete(blankLine + 1, currentLine)
   windowNode.currentLine = max(0, blankLine)
   inc(bufStatus.countChange)
+  bufStatus.isUpdate = true
 
 proc deleteTillNextBlankLine*(bufStatus: var BufferStatus,
                               windowNode: WindowNode) =
@@ -663,6 +675,7 @@ proc deleteTillNextBlankLine*(bufStatus: var BufferStatus,
 
   bufStatus.buffer.delete(currentLine, blankLine - 1)
   inc(bufStatus.countChange)
+  bufStatus.isUpdate = true
 
 proc genDelimiterStr(buffer: string): string =
   while true:
@@ -716,6 +729,7 @@ proc pasteLines(bufStatus: var BufferStatus,
                             windowNode.currentLine + i + 1)
 
   inc(bufStatus.countChange)
+  bufStatus.isUpdate = true
 
 proc yankString*(status: var EditorStatus, length: int) =
   status.registers.yankedLines = @[]
@@ -783,6 +797,7 @@ proc pasteString(bufStatus: var BufferStatus,
   windowNode.currentColumn += registers.yankedStr.high
 
   inc(bufStatus.countChange)
+  bufStatus.isUpdate = true
 
 proc pasteAfterCursor*(bufStatus: var BufferStatus,
                        windowNode: var WindowNode,
@@ -819,6 +834,7 @@ proc replaceCurrentCharacter*(bufStatus: var BufferStatus,
     if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
 
     inc(bufStatus.countChange)
+    bufStatus.isUpdate = true
 
 proc autoIndentCurrentLine*(bufStatus: var BufferStatus,
                             windowNode: var WindowNode) =
@@ -853,6 +869,7 @@ proc autoIndentCurrentLine*(bufStatus: var BufferStatus,
   windowNode.currentColumn = prevLineIndent
 
   inc(bufStatus.countChange)
+  bufStatus.isUpdate = true
 
 proc joinLine*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   if windowNode.currentLine == bufStatus.buffer.len - 1 or
@@ -867,6 +884,7 @@ proc joinLine*(bufStatus: var BufferStatus, windowNode: WindowNode) =
                           windowNode.currentLine + 1)
 
   inc(bufStatus.countChange)
+  bufStatus.isUpdate = true
 
 proc deleteTrailingSpaces*(bufStatus: var BufferStatus) =
   var isChanged = false
@@ -881,7 +899,9 @@ proc deleteTrailingSpaces*(bufStatus: var BufferStatus) =
       bufStatus.buffer[i] = newline
       isChanged = true
 
-  if isChanged: inc(bufStatus.countChange)
+  if isChanged:
+    inc(bufStatus.countChange)
+    bufStatus.isUpdate = true
 
 proc undo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   if not bufStatus.buffer.canUndo: return
@@ -904,12 +924,14 @@ proc undo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
       windowNode.currentColumn)
 
   inc(bufStatus.countChange)
+  bufStatus.isUpdate = true
 
 proc redo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   if not bufStatus.buffer.canRedo: return
   bufStatus.buffer.redo
   bufStatus.revertPosition(windowNode, bufStatus.buffer.lastSuitId)
   inc(bufStatus.countChange)
+  bufStatus.isUpdate = true
 
 # If cursor is inside of paren, delete inside paren in the current line
 proc yankAndDeleteInsideOfParen*(bufStatus: var BufferStatus,

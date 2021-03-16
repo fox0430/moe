@@ -38,7 +38,12 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
 
   status.isSearchHighlight = true
 
-  status.updateHighlight(status.workspace[workspaceIndex].currentMainWindowNode)
+  currentMainWindowNode.highlight.updateHighlight(
+    currentBufStatus,
+    currentMainWindowNode,
+    status.isSearchHighlight,
+    status.searchHistory,
+    status.settings)
 
   var windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
 
@@ -62,7 +67,13 @@ proc searchNextOccurrence(status: var EditorStatus) =
 
 proc searchNextOccurrenceReversely(status: var EditorStatus, keyword: seq[Rune]) =
   status.isSearchHighlight = true
-  status.updateHighlight(currentMainWindowNode)
+
+  currentMainWindowNode.highlight.updateHighlight(
+    currentBufStatus,
+    currentMainWindowNode,
+    status.isSearchHighlight,
+    status.searchHistory,
+    status.settings)
 
   var windowNode = currentMainWindowNode
 
@@ -87,7 +98,13 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) =
 
 proc turnOffHighlighting*(status: var EditorStatus) =
   status.isSearchHighlight = false
-  status.updateHighlight(currentMainWindowNode)
+
+  currentMainWindowNode.highlight.updateHighlight(
+    currentBufStatus,
+    currentMainWindowNode,
+    status.isSearchHighlight,
+    status.searchHistory,
+    status.settings)
 
 proc writeFileAndExit(status: var EditorStatus, height, width: int) =
   if currentBufStatus.path.len == 0:
@@ -532,7 +549,14 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('O'):
     for i in 0 ..< cmdLoop:
       currentBufStatus.openBlankLineAbove(currentMainWindowNode)
-    status.updateHighlight(currentMainWindowNode)
+
+    currentMainWindowNode.highlight.updateHighlight(
+      currentBufStatus,
+      currentMainWindowNode,
+      status.isSearchHighlight,
+      status.searchHistory,
+      status.settings)
+
     status.changeMode(Mode.insert)
   elif key == ord('c'):
     let secondKey = commands[1]
