@@ -1413,7 +1413,6 @@ proc exMode*(status: var EditorStatus) =
           if command[i] == ru'/': break
           keyword.add(command[i])
       status.searchHistory[status.searchHistory.high] = keyword
-      let bufferIndex = currentMainWindowNode.bufferIndex
       status.isSearchHighlight = true
 
       status.jumpToSearchForwardResults(keyword)
