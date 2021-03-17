@@ -960,9 +960,9 @@ proc highlightSelectedArea(highlight: var Highlight,
       bufStatus.buffer)
 
 proc highlightPairOfParen(highlight: var Highlight,
-
                           bufStatus: BufferStatus,
                           windowNode: WindowNode) =
+
   let
     buffer = bufStatus.buffer
     currentLine = windowNode.currentLine
@@ -992,8 +992,7 @@ proc highlightPairOfParen(highlight: var Highlight,
                                         lastRow: i,
                                         lastColumn: j,
                                         color: color)
-          windowNode.highlight =
-            windowNode.highlight.overwrite(colorSegment)
+          highlight = highlight.overwrite(colorSegment)
           return
 
   elif isCloseParen(buffer[currentLine][currentColumn]):
@@ -1015,8 +1014,7 @@ proc highlightPairOfParen(highlight: var Highlight,
                                         lastRow: i,
                                         lastColumn: j,
                                         color: color)
-          windowNode.highlight =
-            windowNode.highlight.overwrite(colorSegment)
+          highlight = highlight.overwrite(colorSegment)
           return
 
 # Highlighting other uses of the current word under the cursor
@@ -1082,7 +1080,7 @@ proc highlightOtherUsesCurrentWord(highlight: var Highlight,
               # Set color
               let
                 originalColorPair =
-                  windowNode.highlight.getColorPair(i, j)
+                  highlight.getColorPair(i, j)
                 colors = theme.getColorFromEditorColorPair(originalColorPair)
               setColorPair(EditorColorPair.currentWord,
                            colors[0],
@@ -1095,7 +1093,7 @@ proc highlightOtherUsesCurrentWord(highlight: var Highlight,
                                             lastRow: i,
                                             lastColumn: j + highlightWord.high,
                                             color: color)
-              highlight = windowNode.highlight.overwrite(colorSegment)
+              highlight = highlight.overwrite(colorSegment)
 
 proc highlightTrailingSpaces(highlight: var Highlight,
                              bufStatus: BufferStatus,
