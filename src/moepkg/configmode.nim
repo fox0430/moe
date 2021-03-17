@@ -1938,9 +1938,7 @@ proc configMode*(status: var Editorstatus) =
     status.update
     setCursor(false)
 
-    var
-      windowNode = currentMainWindowNode
-      key: Rune = ru'\0'
+    var key: Rune = ru'\0'
     while key == ru'\0':
       status.eventLoopTask
       key = getKey(currentMainWindowNode)

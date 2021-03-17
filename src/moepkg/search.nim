@@ -170,7 +170,13 @@ proc searchFirstOccurrence(status: var EditorStatus) =
   else:
     if keyword.len > 0:
       status.isSearchHighlight = true
-      status.updateHighlight(currentMainWindowNode)
+
+      currentMainWindowNode.highlight.updateHighlight(
+        currentBufStatus,
+        currentMainWindowNode,
+        status.isSearchHighlight,
+        status.searchHistory,
+        status.settings)
 
 proc incrementalSearch(status: var Editorstatus, direction: Direction) =
   let prompt = if direction == Direction.forward: "/" else: "?"
@@ -214,7 +220,13 @@ proc incrementalSearch(status: var Editorstatus, direction: Direction) =
     else:
       status.isSearchHighlight = false
 
-    status.updateHighlight(currentMainWindowNode)
+    currentMainWindowNode.highlight.updateHighlight(
+      currentBufStatus,
+      currentMainWindowNode,
+      status.isSearchHighlight,
+      status.searchHistory,
+      status.settings)
+
     status.resize(terminalHeight(), terminalWidth())
     status.update
 
@@ -222,7 +234,13 @@ proc incrementalSearch(status: var Editorstatus, direction: Direction) =
     status.searchHistory.delete(status.searchHistory.high)
 
     status.isSearchHighlight = false
-    status.updateHighlight(currentMainWindowNode)
+
+    currentMainWindowNode.highlight.updateHighlight(
+      currentBufStatus,
+      currentMainWindowNode,
+      status.isSearchHighlight,
+      status.searchHistory,
+      status.settings)
 
     status.commandLine.erase
 

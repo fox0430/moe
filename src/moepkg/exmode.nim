@@ -1089,7 +1089,12 @@ proc listAllBufferCommand(status: var Editorstatus) =
 
   currentMainWindowNode.currentLine = 0
 
-  status.updatehighlight(currentMainWindowNode)
+  currentMainWindowNode.highlight.updateHighlight(
+    currentBufStatus,
+    currentMainWindowNode,
+    status.isSearchHighlight,
+    status.searchHistory,
+    status.settings)
 
   while true:
     status.update
@@ -1408,7 +1413,6 @@ proc exMode*(status: var EditorStatus) =
           if command[i] == ru'/': break
           keyword.add(command[i])
       status.searchHistory[status.searchHistory.high] = keyword
-      let bufferIndex = currentMainWindowNode.bufferIndex
       status.isSearchHighlight = true
 
       status.jumpToSearchForwardResults(keyword)
@@ -1418,14 +1422,25 @@ proc exMode*(status: var EditorStatus) =
           isReplaceCommand = false
           status.searchHistory.delete(status.searchHistory.high)
 
-    status.updatehighlight(currentMainWindowNode)
+    currentMainWindowNode.highlight.updateHighlight(
+      currentBufStatus,
+      currentMainWindowNode,
+      status.isSearchHighlight,
+      status.searchHistory,
+      status.settings)
+
     status.resize(terminalHeight(), terminalWidth())
     status.update
 
   if isReplaceCommand:
     status.searchHistory.delete(status.searchHistory.high)
 
-  status.updatehighlight(currentMainWindowNode)
+    currentMainWindowNode.highlight.updateHighlight(
+      currentBufStatus,
+      currentMainWindowNode,
+      status.isSearchHighlight,
+      status.searchHistory,
+      status.settings)
 
   if cancelInput:
     status.commandLine.erase
