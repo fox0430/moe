@@ -86,10 +86,12 @@ test "Highlight of a pair of paren 1":
     status.update
 
     var highlight = currentMainWindowNode.highlight
+    const isCurrentMainWin = true
     highlight.updateHighlight(
       currentBufStatus,
       currentMainWindowNode,
       status.isSearchHighlight,
+      isCurrentMainWin,
       status.searchHistory,
       status.settings)
 
@@ -107,10 +109,12 @@ test "Highlight of a pair of paren 1":
     status.update
 
     var highlight = currentMainWindowNode.highlight
+    const isCurrentMainWin = true
     highlight.updateHighlight(
       currentBufStatus,
       currentMainWindowNode,
       status.isSearchHighlight,
+      isCurrentMainWin,
       status.searchHistory,
       status.settings)
 
@@ -127,10 +131,12 @@ test "Highlight of a pair of paren 1":
     status.update
 
     var highlight = currentMainWindowNode.highlight
+    const isCurrentMainWin = true
     highlight.updateHighlight(
       currentBufStatus,
       currentMainWindowNode,
       status.isSearchHighlight,
+      isCurrentMainWin,
       status.searchHistory,
       status.settings)
 
@@ -147,10 +153,12 @@ test "Highlight of a pair of paren 1":
     status.update
 
     var highlight = currentMainWindowNode.highlight
+    const isCurrentMainWin = true
     highlight.updateHighlight(
       currentBufStatus,
       currentMainWindowNode,
       status.isSearchHighlight,
+      isCurrentMainWin,
       status.searchHistory,
       status.settings)
 
@@ -838,10 +846,12 @@ suite "editorstatus: Highlight trailing spaces":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     var highlight = currentMainWindowNode.highlight
+    const isCurrentMainWin = true
     highlight.updateHighlight(
       currentBufStatus,
       currentMainWindowNode,
       status.isSearchHighlight,
+      isCurrentMainWin,
       status.searchHistory,
       status.settings)
 
@@ -862,10 +872,12 @@ suite "editorstatus: Highlight trailing spaces":
     initHighlight()
 
     var highlight = currentMainWindowNode.highlight
+    const isCurrentMainWin = true
     highlight.updateHighlight(
       currentBufStatus,
       currentMainWindowNode,
       status.isSearchHighlight,
+      isCurrentMainWin,
       status.searchHistory,
       status.settings)
 
@@ -891,10 +903,12 @@ suite "editorstatus: Highlight trailing spaces":
     initHighlight()
 
     var highlight = currentMainWindowNode.highlight
+    const isCurrentMainWin = true
     highlight.updateHighlight(
       currentBufStatus,
       currentMainWindowNode,
       status.isSearchHighlight,
+      isCurrentMainWin,
       status.searchHistory,
       status.settings)
 
