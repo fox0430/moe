@@ -171,12 +171,10 @@ proc searchFirstOccurrence(status: var EditorStatus) =
     if keyword.len > 0:
       status.isSearchHighlight = true
 
-      const isCurrentMainWin = true
       currentMainWindowNode.highlight.updateHighlight(
         currentBufStatus,
         currentMainWindowNode,
         status.isSearchHighlight,
-        isCurrentMainWin,
         status.searchHistory,
         status.settings)
 
@@ -222,12 +220,10 @@ proc incrementalSearch(status: var Editorstatus, direction: Direction) =
     else:
       status.isSearchHighlight = false
 
-    const isCurrentMainWin = true
     currentMainWindowNode.highlight.updateHighlight(
       currentBufStatus,
       currentMainWindowNode,
       status.isSearchHighlight,
-      isCurrentMainWin,
       status.searchHistory,
       status.settings)
 
@@ -239,12 +235,10 @@ proc incrementalSearch(status: var Editorstatus, direction: Direction) =
 
     status.isSearchHighlight = false
 
-    const isCurrentMainWin = true
     currentMainWindowNode.highlight.updateHighlight(
       currentBufStatus,
       currentMainWindowNode,
       status.isSearchHighlight,
-      isCurrentMainWin,
       status.searchHistory,
       status.settings)
 
