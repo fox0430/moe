@@ -405,7 +405,7 @@ proc highlightSelectedArea(highlight: var Highlight,
 proc updateHighlight*(highlight: var Highlight,
                       bufStatus: BufferStatus,
                       windowNode: var WindowNode,
-                      isSearchHighlight: bool,
+                      isSearchHighlight, isCurrentMainWin: bool,
                       searchHistory: seq[seq[Rune]],
                       settings: EditorSettings)
 
@@ -512,6 +512,7 @@ proc update*(status: var EditorStatus) =
 
         if bufStatus.buffer.high < node.currentLine:
           node.currentLine = bufStatus.buffer.high
+
         if not isInsertMode(currentMode) and
            not isReplaceMode(currentMode) and
            not isConfigMode(currentMode, prevMode) and
@@ -527,8 +528,6 @@ proc update*(status: var EditorStatus) =
           currentWindowIndex = currentMainWindowNode.windowIndex
           isCurrentMainWin = if node.windowIndex == currentWindowIndex: true
                              else: false
-          isVisualMode = isVisualMode(bufStatus.mode)
-          settings = status.settings
 
         # node.highlight is not directly change here for performance.
         var highlight = node.highlight
@@ -542,23 +541,14 @@ proc update*(status: var EditorStatus) =
 
           if isLogViewerMode(currentMode, prevMode):
             status.updateLogViewer(node.bufferIndex)
-          elif isCurrentMainWin:
-            if settings.highlightSettings.currentWord:
-              highlight.highlightOtherUsesCurrentWord(
-                bufStatus,
-                node,
-                settings.editorColorTheme)
-            if isVisualMode:
-              highlight.highlightSelectedArea(bufStatus, node)
-            if settings.highlightSettings.pairOfParen:
-              highlight.highlightPairOfParen(bufStatus, node)
-
+          else:
             highlight.updateHighlight(
               bufStatus,
               node,
               status.isSearchHighlight,
+              isCurrentMainWin,
               status.searchHistory,
-              settings)
+              status.settings)
 
         let
           startSelectedLine = bufStatus.selectArea.startLine
@@ -589,12 +579,7 @@ proc update*(status: var EditorStatus) =
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
-  let
-    currentMode = currentBufStatus.mode
-    prevMode = currentBufStatus.prevMode
-  if (currentMode != Mode.filer) and
-     not (currentMode == Mode.ex and
-     prevMode == Mode.filer):
+  if isFilerMode(currentBufStatus.mode, currentBufStatus.prevMode):
     let
       y = currentMainWindowNode.cursor.y
       x = currentMainWindowNode.view.widthOfLineNum + currentMainWindowNode.cursor.x
@@ -1188,9 +1173,22 @@ proc highlightSearchResults(windowNode: var WindowNode,
 proc updateHighlight*(highlight: var Highlight,
                       bufStatus: BufferStatus,
                       windowNode: var WindowNode,
-                      isSearchHighlight: bool,
+                      isSearchHighlight, isCurrentMainWin: bool,
                       searchHistory: seq[seq[Rune]],
                       settings: EditorSettings) =
+
+  if isCurrentMainWin:
+    if settings.highlightSettings.currentWord:
+      highlight.highlightOtherUsesCurrentWord(
+      bufStatus,
+      windowNode,
+      settings.editorColorTheme)
+
+  if isVisualMode(bufStatus.mode):
+    highlight.highlightSelectedArea(bufStatus, windowNode)
+
+  if settings.highlightSettings.pairOfParen:
+    highlight.highlightPairOfParen(bufStatus, windowNode)
 
   let
     range = windowNode.view.rangeOfOriginalLineInView
