@@ -1089,12 +1089,10 @@ proc listAllBufferCommand(status: var Editorstatus) =
 
   currentMainWindowNode.currentLine = 0
 
-  const isCurrentMainWin = true
   currentMainWindowNode.highlight.updateHighlight(
     currentBufStatus,
     currentMainWindowNode,
     status.isSearchHighlight,
-    isCurrentMainWin,
     status.searchHistory,
     status.settings)
 
@@ -1424,12 +1422,10 @@ proc exMode*(status: var EditorStatus) =
           isReplaceCommand = false
           status.searchHistory.delete(status.searchHistory.high)
 
-    const isCurrentMainWin = true
     currentMainWindowNode.highlight.updateHighlight(
       currentBufStatus,
       currentMainWindowNode,
       status.isSearchHighlight,
-      isCurrentMainWin,
       status.searchHistory,
       status.settings)
 
@@ -1439,12 +1435,10 @@ proc exMode*(status: var EditorStatus) =
   if isReplaceCommand:
     status.searchHistory.delete(status.searchHistory.high)
 
-    const isCurrentMainWin = true
     currentMainWindowNode.highlight.updateHighlight(
       currentBufStatus,
       currentMainWindowNode,
       status.isSearchHighlight,
-      isCurrentMainWin,
       status.searchHistory,
       status.settings)
 

@@ -38,12 +38,10 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
 
   status.isSearchHighlight = true
 
-  const isCurrentMainWin = true
   currentMainWindowNode.highlight.updateHighlight(
     currentBufStatus,
     currentMainWindowNode,
     status.isSearchHighlight,
-    isCurrentMainWin,
     status.searchHistory,
     status.settings)
 
@@ -70,12 +68,10 @@ proc searchNextOccurrence(status: var EditorStatus) =
 proc searchNextOccurrenceReversely(status: var EditorStatus, keyword: seq[Rune]) =
   status.isSearchHighlight = true
 
-  const isCurrentMainWin = true
   currentMainWindowNode.highlight.updateHighlight(
     currentBufStatus,
     currentMainWindowNode,
     status.isSearchHighlight,
-    isCurrentMainWin,
     status.searchHistory,
     status.settings)
 
@@ -103,12 +99,10 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) =
 proc turnOffHighlighting*(status: var EditorStatus) =
   status.isSearchHighlight = false
 
-  const isCurrentMainWin = true
   currentMainWindowNode.highlight.updateHighlight(
     currentBufStatus,
     currentMainWindowNode,
     status.isSearchHighlight,
-    isCurrentMainWin,
     status.searchHistory,
     status.settings)
 
@@ -556,12 +550,10 @@ proc normalCommand(status: var EditorStatus,
     for i in 0 ..< cmdLoop:
       currentBufStatus.openBlankLineAbove(currentMainWindowNode)
 
-    const isCurrentMainWin = true
     currentMainWindowNode.highlight.updateHighlight(
       currentBufStatus,
       currentMainWindowNode,
       status.isSearchHighlight,
-      isCurrentMainWin,
       status.searchHistory,
       status.settings)
 

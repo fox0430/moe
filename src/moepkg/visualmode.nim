@@ -465,12 +465,10 @@ proc visualMode*(status: var EditorStatus) =
       status.resize(terminalHeight(), terminalWidth())
     elif isEscKey(key) or isControlSquareBracketsRight(key):
 
-      const isCurrentMainWin = true
       currentMainWindowNode.highlight.updateHighlight(
         currentBufStatus,
         currentMainWindowNode,
         status.isSearchHighlight,
-        isCurrentMainWin,
         status.searchHistory,
         status.settings)
 
