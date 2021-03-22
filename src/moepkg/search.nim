@@ -171,7 +171,8 @@ proc searchFirstOccurrence(status: var EditorStatus) =
     if keyword.len > 0:
       status.isSearchHighlight = true
 
-      currentMainWindowNode.highlight.updateHighlight(
+      var highlight = currentMainWindowNode.highlight
+      highlight.updateHighlight(
         currentBufStatus,
         currentMainWindowNode,
         status.isSearchHighlight,
@@ -220,7 +221,8 @@ proc incrementalSearch(status: var Editorstatus, direction: Direction) =
     else:
       status.isSearchHighlight = false
 
-    currentMainWindowNode.highlight.updateHighlight(
+    var highlight = currentMainWindowNode.highlight
+    highlight.updateHighlight(
       currentBufStatus,
       currentMainWindowNode,
       status.isSearchHighlight,
@@ -235,7 +237,8 @@ proc incrementalSearch(status: var Editorstatus, direction: Direction) =
 
     status.isSearchHighlight = false
 
-    currentMainWindowNode.highlight.updateHighlight(
+    var highlight = currentMainWindowNode.highlight
+    highlight.updateHighlight(
       currentBufStatus,
       currentMainWindowNode,
       status.isSearchHighlight,

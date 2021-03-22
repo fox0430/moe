@@ -982,7 +982,6 @@ suite "editorstatus: Updates/Restore the last cursor postion":
   test "Update and restore the last cursor position (3 lines and last line is empty)":
     var status = initEditorStatus()
 
-
     status.addNewBuffer("test.nim")
 
     status.addNewBuffer("test.nim")
@@ -1003,3 +1002,63 @@ suite "editorstatus: Updates/Restore the last cursor postion":
 
     currentMainWindowNode.currentLine = 2
     currentMainWindowNode.currentColumn = 0
+
+suite "Update search highlight":
+  test "single window":
+    var status = initEditorStatus()
+    status.addNewBuffer("test.nim")
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
+
+    status.resize(100, 100)
+    status.update
+
+    status.searchHistory = @[ru "abc"]
+    status.isSearchHighlight = true
+
+    var highlight = currentMainWindowNode.highlight
+    highlight.updateHighlight(
+      currentBufStatus,
+      currentMainWindowNode,
+      status.isSearchHighlight,
+      status.searchHistory,
+      status.settings)
+
+    check highlight.len == 3
+    check highlight[0].color == EditorColorPair.searchResult
+    check highlight[1].color == EditorColorPair.defaultChar
+    check highlight[2].color == EditorColorPair.defaultChar
+
+  test "two windows":
+    var status = initEditorStatus()
+    status.addNewBuffer("test.nim")
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
+
+    status.resize(100, 100)
+    status.update
+
+    status.verticalSplitWindow
+
+    status.searchHistory = @[ru "abc"]
+    status.isSearchHighlight = true
+
+    var queue = initHeapQueue[WindowNode]()
+    for node in mainWindowNode.child:
+      queue.push(node)
+
+    while queue.len > 0:
+      for i in  0 ..< queue.len:
+        var node = queue.pop
+
+        if node.window.isSome:
+          var highlight = node.highlight
+          highlight.updateHighlight(
+            currentBufStatus,
+            node,
+            status.isSearchHighlight,
+            status.searchHistory,
+            status.settings)
+
+          check highlight.len == 3
+          check highlight[0].color == EditorColorPair.searchResult
+          check highlight[1].color == EditorColorPair.defaultChar
+          check highlight[2].color == EditorColorPair.defaultChar

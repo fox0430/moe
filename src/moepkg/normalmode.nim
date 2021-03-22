@@ -38,7 +38,8 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
 
   status.isSearchHighlight = true
 
-  currentMainWindowNode.highlight.updateHighlight(
+  var highlight = currentMainWindowNode.highlight
+  highlight.updateHighlight(
     currentBufStatus,
     currentMainWindowNode,
     status.isSearchHighlight,
@@ -68,7 +69,8 @@ proc searchNextOccurrence(status: var EditorStatus) =
 proc searchNextOccurrenceReversely(status: var EditorStatus, keyword: seq[Rune]) =
   status.isSearchHighlight = true
 
-  currentMainWindowNode.highlight.updateHighlight(
+  var highlight = currentMainWindowNode.highlight
+  highlight.updateHighlight(
     currentBufStatus,
     currentMainWindowNode,
     status.isSearchHighlight,
@@ -98,13 +100,7 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) =
 
 proc turnOffHighlighting*(status: var EditorStatus) =
   status.isSearchHighlight = false
-
-  currentMainWindowNode.highlight.updateHighlight(
-    currentBufStatus,
-    currentMainWindowNode,
-    status.isSearchHighlight,
-    status.searchHistory,
-    status.settings)
+  status.update
 
 proc writeFileAndExit(status: var EditorStatus, height, width: int) =
   if currentBufStatus.path.len == 0:
@@ -550,7 +546,8 @@ proc normalCommand(status: var EditorStatus,
     for i in 0 ..< cmdLoop:
       currentBufStatus.openBlankLineAbove(currentMainWindowNode)
 
-    currentMainWindowNode.highlight.updateHighlight(
+    var highlight = currentMainWindowNode.highlight
+    highlight.updateHighlight(
       currentBufStatus,
       currentMainWindowNode,
       status.isSearchHighlight,

@@ -1089,7 +1089,8 @@ proc listAllBufferCommand(status: var Editorstatus) =
 
   currentMainWindowNode.currentLine = 0
 
-  currentMainWindowNode.highlight.updateHighlight(
+  var highlight = currentMainWindowNode.highlight
+  highlight.updateHighlight(
     currentBufStatus,
     currentMainWindowNode,
     status.isSearchHighlight,
@@ -1391,6 +1392,8 @@ proc exMode*(status: var EditorStatus) =
 
   status.update
 
+  var highlight = currentMainWindowNode.highlight
+
   while exitInput == false:
     let returnWord = status.getKeyOnceAndWriteCommandView(
       prompt,
@@ -1422,7 +1425,7 @@ proc exMode*(status: var EditorStatus) =
           isReplaceCommand = false
           status.searchHistory.delete(status.searchHistory.high)
 
-    currentMainWindowNode.highlight.updateHighlight(
+    highlight.updateHighlight(
       currentBufStatus,
       currentMainWindowNode,
       status.isSearchHighlight,
@@ -1435,7 +1438,7 @@ proc exMode*(status: var EditorStatus) =
   if isReplaceCommand:
     status.searchHistory.delete(status.searchHistory.high)
 
-    currentMainWindowNode.highlight.updateHighlight(
+    highlight.updateHighlight(
       currentBufStatus,
       currentMainWindowNode,
       status.isSearchHighlight,
