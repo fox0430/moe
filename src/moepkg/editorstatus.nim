@@ -553,12 +553,12 @@ proc update*(status: var EditorStatus) =
             if settings.highlightSettings.pairOfParen:
               highlight.highlightPairOfParen(bufStatus, node)
 
-            highlight.updateHighlight(
-              bufStatus,
-              node,
-              status.isSearchHighlight,
-              status.searchHistory,
-              settings)
+          highlight.updateHighlight(
+            bufStatus,
+            node,
+            status.isSearchHighlight,
+            status.searchHistory,
+            settings)
 
         let
           startSelectedLine = bufStatus.selectArea.startLine
@@ -950,12 +950,11 @@ proc highlightSelectedArea(highlight: var Highlight,
   if (currentMode == Mode.visual) or
      (currentMode == Mode.ex and
      prevMode == Mode.visual):
-    windowNode.highlight =
-      windowNode.highlight.overwrite(colorSegment)
+    highlight = highlight.overwrite(colorSegment)
   elif (currentMode == Mode.visualBlock) or
        (currentMode == Mode.ex and
        prevMode == Mode.visualBlock):
-    windowNode.highlight.overwriteColorSegmentBlock(
+    highlight.overwriteColorSegmentBlock(
       bufStatus.selectArea,
       bufStatus.buffer)
 
@@ -1159,7 +1158,7 @@ proc highlightFullWidthSpace(highlight: var Highlight,
                                     color: color)
     highlight = highlight.overwrite(colorSegment)
 
-proc highlightSearchResults(windowNode: var WindowNode,
+proc highlightSearchResults(highlight: var Highlight,
                             bufStatus: BufferStatus,
                             bufferInView: GapBuffer[seq[Rune]],
                             range: (int, int),
@@ -1183,7 +1182,7 @@ proc highlightSearchResults(windowNode: var WindowNode,
                                     lastRow: range[0] + pos.line,
                                     lastColumn: pos.column + keyword.high,
                                     color: color)
-    windowNode.highlight = windowNode.highlight.overwrite(colorSegment)
+    highlight = highlight.overwrite(colorSegment)
 
 proc updateHighlight*(highlight: var Highlight,
                       bufStatus: BufferStatus,
@@ -1195,7 +1194,6 @@ proc updateHighlight*(highlight: var Highlight,
   let
     range = windowNode.view.rangeOfOriginalLineInView
     startLine = range[0]
-    bufStatus = bufStatus
     endLine = if bufStatus.buffer.len > range[1] + 1: range[1] + 2
               elif bufStatus.buffer.len > range[1]: range[1] + 1
               else: range[1]
@@ -1214,7 +1212,7 @@ proc updateHighlight*(highlight: var Highlight,
 
   # highlight search results
   if isSearchHighlight and searchHistory.len > 0:
-    windowNode.highlightSearchResults(
+    highlight.highlightSearchResults(
       bufStatus,
       bufferInView,
       range,
