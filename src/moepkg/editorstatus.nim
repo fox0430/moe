@@ -543,16 +543,6 @@ proc update*(status: var EditorStatus) =
           if isLogViewerMode(currentMode, prevMode):
             status.updateLogViewer(node.bufferIndex)
           elif isCurrentMainWin:
-            if settings.highlightSettings.currentWord:
-              highlight.highlightOtherUsesCurrentWord(
-                bufStatus,
-                node,
-                settings.editorColorTheme)
-            if isVisualMode:
-              highlight.highlightSelectedArea(bufStatus, node)
-            if settings.highlightSettings.pairOfParen:
-              highlight.highlightPairOfParen(bufStatus, node)
-
             highlight.updateHighlight(
               bufStatus,
               node,
@@ -1191,6 +1181,18 @@ proc updateHighlight*(highlight: var Highlight,
                       isSearchHighlight: bool,
                       searchHistory: seq[seq[Rune]],
                       settings: EditorSettings) =
+
+  if settings.highlightSettings.currentWord:
+    highlight.highlightOtherUsesCurrentWord(
+      bufStatus,
+      windowNode,
+      settings.editorColorTheme)
+
+  if isVisualMode(bufStatus.mode):
+    highlight.highlightSelectedArea(bufStatus, windowNode)
+
+  if settings.highlightSettings.pairOfParen:
+    highlight.highlightPairOfParen(bufStatus, windowNode)
 
   let
     range = windowNode.view.rangeOfOriginalLineInView
