@@ -542,13 +542,13 @@ proc update*(status: var EditorStatus) =
 
           if isLogViewerMode(currentMode, prevMode):
             status.updateLogViewer(node.bufferIndex)
-          elif isCurrentMainWin:
-            highlight.updateHighlight(
-              bufStatus,
-              node,
-              status.isSearchHighlight,
-              status.searchHistory,
-              settings)
+
+          highlight.updateHighlight(
+            bufStatus,
+            node,
+            status.isSearchHighlight,
+            status.searchHistory,
+            settings)
 
         let
           startSelectedLine = bufStatus.selectArea.startLine
