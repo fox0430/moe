@@ -910,3 +910,27 @@ suite "Ex mode: Save Ex command history":
     status.exModeCommand(command, 100, 100)
 
     check status.exCommandHistory == @[ru "noh"]
+
+  test "Save \"noh\" command 2":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    for i in 0 ..< 2:
+      const command = @[ru"noh"]
+      status.exModeCommand(command, 100, 100)
+
+    check status.exCommandHistory == @[ru "noh"]
+
+  test "Save 2 commands":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    block:
+      const command = @[ru"noh"]
+      status.exModeCommand(command, 100, 100)
+
+    block:
+      const command = @[ru"vs"]
+      status.exModeCommand(command, 100, 100)
+
+    check status.exCommandHistory == @[ru "noh", ru "vs"]
