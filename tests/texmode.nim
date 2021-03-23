@@ -900,3 +900,13 @@ suite "Ex mode: highlight current line setting command":
     const command = @[ru"highlightCurrentLine", ru"on"]
     status.exModeCommand(command, 100, 100)
     check status.settings.view.highlightCurrentLine
+
+suite "Ex mode: Save Ex command history":
+  test "Save \"noh\" command":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const command = @[ru"noh"]
+    status.exModeCommand(command, 100, 100)
+
+    check status.exCommandHistory == @[ru "noh"]
