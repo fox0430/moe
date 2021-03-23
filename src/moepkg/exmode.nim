@@ -1218,8 +1218,9 @@ proc addExCommandHistory(exCommandHistory: var seq[seq[Rune]],
                          command: seq[seq[Rune]]) =
 
   var cmd = ru ""
-  for runes in command:
-    cmd.add(runes)
+  for index, runes in command:
+    if index > 0: cmd.add(ru" " & runes)
+    else: cmd.add(runes)
 
   if exCommandHistory.len == 0 or cmd != exCommandHistory[^1]:
     exCommandHistory.add(cmd)

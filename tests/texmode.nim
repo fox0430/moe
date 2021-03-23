@@ -934,3 +934,12 @@ suite "Ex mode: Save Ex command history":
       status.exModeCommand(command, 100, 100)
 
     check status.exCommandHistory == @[ru "noh", ru "vs"]
+
+  test "Fix #1304":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const command = @[ru"buildOnSave off"]
+    status.exModeCommand(command, 100, 100)
+
+    check status.exCommandHistory == @[ru "buildOnSave off"]
