@@ -1217,7 +1217,6 @@ proc newEmptyBufferInSplitWindowVertically*(status: var Editorstatus) =
 proc addExCommandHistory(exCommandHistory: var seq[seq[Rune]],
                          command: seq[seq[Rune]]) =
 
-  exitUi()
   var cmd = ru ""
   for index, runes in command:
     if index > 0: cmd.add(ru" " & runes)
