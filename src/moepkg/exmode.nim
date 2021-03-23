@@ -1214,6 +1214,16 @@ proc newEmptyBufferInSplitWindowVertically*(status: var Editorstatus) =
 
   status.changeCurrentBuffer(status.bufStatus.high)
 
+proc addExCommandHistory(exCommandHistory: var seq[seq[Rune]],
+                         command: seq[seq[Rune]]) =
+
+  var cmd = ru ""
+  for runes in command:
+    cmd.add(runes)
+
+  if exCommandHistory.len == 0 or cmd != exCommandHistory[^1]:
+    exCommandHistory.add(cmd)
+
 proc exModeCommand*(status: var EditorStatus,
                     command: seq[seq[Rune]],
                     height, width: int) =
@@ -1221,9 +1231,7 @@ proc exModeCommand*(status: var EditorStatus,
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
   # Save command history
-  status.exCommandHistory.add(@[ru ""])
-  for runes in command:
-    status.exCommandHistory[status.exCommandHistory.high].add(runes)
+  status.exCommandHistory.addExCommandHistory(command)
 
   if command.len == 0 or command[0].len == 0:
     status.changeMode(currentBufStatus.prevMode)
