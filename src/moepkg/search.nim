@@ -134,13 +134,17 @@ proc jumpToSearchBackwordResults(status: var Editorstatus, keyword: seq[Rune]) =
     for column in 0 ..< searchResult.column:
       currentBufStatus.keyRight(currentMainWindowNode)
 
+proc addSearchHistory(searchHistory: var seq[seq[Rune]],
+                      keyword: seq[Rune]) =
+
+  if searchHistory.len == 0 or keyword != searchHistory[^1]:
+    searchHistory.add(keyword)
+
 proc searchFirstOccurrence(status: var EditorStatus) =
   var
     exitSearch = false
     cancelSearch = false
     keyword = ru""
-
-  status.searchHistory.add(ru"")
 
   const
     prompt = "/"
@@ -157,19 +161,18 @@ proc searchFirstOccurrence(status: var EditorStatus) =
     keyword = returnWord[0]
     exitSearch = returnWord[1]
     cancelSearch = returnWord[2]
-    if keyword.len > 0:
-        status.searchHistory[status.searchHistory.high] = keyword
 
     if exitSearch or cancelSearch: break
 
   if cancelSearch:
-    status.searchHistory.delete(status.searchHistory.high)
-
     status.isSearchHighlight = false
 
   else:
     if keyword.len > 0:
       status.isSearchHighlight = true
+
+      # Save keyword in search history
+      status.searchHistory.addSearchHistory(keyword)
 
       var highlight = currentMainWindowNode.highlight
       highlight.updateHighlight(
@@ -185,7 +188,6 @@ proc incrementalSearch(status: var Editorstatus, direction: Direction) =
     keyword = ru""
     exitSearch = false
     cancelSearch = false
-  status.searchHistory.add(ru"")
 
   # For jumpToSearchBackwordResults
   let
@@ -205,7 +207,6 @@ proc incrementalSearch(status: var Editorstatus, direction: Direction) =
     keyword = returnWord[0]
     exitSearch = returnWord[1]
     cancelSearch = returnWord[2]
-    if keyword.len > 0: status.searchHistory[^1] = keyword
 
     if exitSearch or cancelSearch: break
 
@@ -246,6 +247,9 @@ proc incrementalSearch(status: var Editorstatus, direction: Direction) =
       status.settings)
 
     status.commandLine.erase
+  else:
+    # Save keyword in search history
+    status.searchHistory.addSearchHistory(keyword)
 
 proc searchFordwards*(status: var EditorStatus) =
   if status.settings.incrementalSearch:
