@@ -293,7 +293,7 @@ proc getInsertBuffer(status: var Editorstatus): seq[Rune] =
         currentMainWindowNode,
         status.settings.autoDeleteParen)
       break
-    elif isBackspaceKey(key) or isControlH(key):
+    elif isBackspaceKey(key):
       currentBufStatus.keyBackspace(
         currentMainWindowNode,
         status.settings.autoDeleteParen,
