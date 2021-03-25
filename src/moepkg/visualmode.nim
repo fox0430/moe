@@ -293,6 +293,13 @@ proc getInsertBuffer(status: var Editorstatus): seq[Rune] =
         currentMainWindowNode,
         status.settings.autoDeleteParen)
       break
+    elif isBackspaceKey(key):
+      currentBufStatus.keyBackspace(
+        currentMainWindowNode,
+        status.settings.autoDeleteParen,
+        status.settings.tabStop)
+      if result.len > 0:
+        result.delete(result.high)
     elif isTabKey(key):
       result.add(key)
       insertTab(currentBufStatus,
