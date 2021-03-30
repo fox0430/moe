@@ -71,11 +71,13 @@ suite "Editor: Delete trailing spaces":
 
 suite "Editor: Send to clipboad":
   test "Send string to clipboard 1":
-    const str = ru"Clipboard test"
-    const registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
+    const
+      str = ru"Clipboard test"
+      registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
+      tool = ClipboardToolOnLinux.xsel
 
     let platform = editorstatus.Platform(initPlatform())
-    sendToClipboad(registers, platform)
+    registers.sendToClipboad(platform, tool)
 
     if (platform == editorstatus.Platform.linux or
         platform == editorstatus.Platform.wsl):
@@ -95,11 +97,13 @@ suite "Editor: Send to clipboad":
         check output[0 .. output.high - 2] == $str
 
   test "Send string to clipboard 2":
-    const str = ru"`````"
-    const registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
+    const
+      str = ru"`````"
+      registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
+      tool = ClipboardToolOnLinux.xsel
 
     let platform = editorstatus.Platform(initPlatform())
-    registers.sendToClipboad(platform)
+    registers.sendToClipboad(platform, tool)
 
     if (platform == editorstatus.Platform.linux or
         platform == editorstatus.Platform.wsl):
@@ -119,11 +123,13 @@ suite "Editor: Send to clipboad":
         check output[0 .. output.high - 2] == $str
 
   test "Send string to clipboard 3":
-    const str = ru"$Clipboard test"
-    const registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
+    const
+      str = ru"$Clipboard test"
+      registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
+      tool = ClipboardToolOnLinux.xsel
 
     let platform = editorstatus.Platform(initPlatform())
-    registers.sendToClipboad(platform)
+    registers.sendToClipboad(platform, tool)
 
     if (platform == editorstatus.Platform.linux or
         platform == editorstatus.Platform.wsl):
