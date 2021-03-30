@@ -70,7 +70,7 @@ suite "Editor: Delete trailing spaces":
     check status.bufStatus[0].buffer[2] == ru"efg"
 
 suite "Editor: Send to clipboad":
-  test "Send string to clipboard 1":
+  test "Send string to clipboard 1 (xsel)":
     const
       str = ru"Clipboard test"
       registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
@@ -83,7 +83,7 @@ suite "Editor: Send to clipboad":
         platform == editorstatus.Platform.wsl):
       let
         cmd = if platform == editorstatus.Platform.linux:
-                execCmdEx("xclip -o")
+                execCmdEx("xsel")
               else:
                 # On the WSL
                 execCmdEx("powershell.exe -Command Get-Clipboard")
@@ -96,11 +96,11 @@ suite "Editor: Send to clipboad":
         # On the WSL
         check output[0 .. output.high - 2] == $str
 
-  test "Send string to clipboard 2":
+  test "Send string to clipboard 1 (xclip)":
     const
-      str = ru"`````"
+      str = ru"Clipboard test"
       registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
-      tool = ClipboardToolOnLinux.xsel
+      tool = ClipboardToolOnLinux.xclip
 
     let platform = editorstatus.Platform(initPlatform())
     registers.sendToClipboad(platform, tool)
@@ -122,11 +122,90 @@ suite "Editor: Send to clipboad":
         # On the WSL
         check output[0 .. output.high - 2] == $str
 
-  test "Send string to clipboard 3":
+  test "Send string to clipboard 2 (xsel)":
+    const
+      str = ru"`````"
+      registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
+      tool = ClipboardToolOnLinux.xsel
+
+    let platform = editorstatus.Platform(initPlatform())
+    registers.sendToClipboad(platform, tool)
+
+    if (platform == editorstatus.Platform.linux or
+        platform == editorstatus.Platform.wsl):
+      let
+        cmd = if platform == editorstatus.Platform.linux:
+                execCmdEx("xsel")
+              else:
+                # On the WSL
+                execCmdEx("powershell.exe -Command Get-Clipboard")
+        (output, exitCode) = cmd
+
+      check exitCode == 0
+      if platform == editorstatus.Platform.linux:
+        check output[0 .. output.high - 1] == $str
+      else:
+        # On the WSL
+        check output[0 .. output.high - 2] == $str
+
+  test "Send string to clipboard 2 (xclip)":
+    const
+      str = ru"`````"
+      registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
+      tool = ClipboardToolOnLinux.xclip
+
+    let platform = editorstatus.Platform(initPlatform())
+    registers.sendToClipboad(platform, tool)
+
+    if (platform == editorstatus.Platform.linux or
+        platform == editorstatus.Platform.wsl):
+      let
+        cmd = if platform == editorstatus.Platform.linux:
+                execCmdEx("xclip -o")
+              else:
+                # On the WSL
+                execCmdEx("powershell.exe -Command Get-Clipboard")
+        (output, exitCode) = cmd
+
+      check exitCode == 0
+      if platform == editorstatus.Platform.linux:
+        check output[0 .. output.high - 1] == $str
+      else:
+        # On the WSL
+        check output[0 .. output.high - 2] == $str
+
+  test "Send string to clipboard 3 (xsel)":
     const
       str = ru"$Clipboard test"
       registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
       tool = ClipboardToolOnLinux.xsel
+
+    let platform = editorstatus.Platform(initPlatform())
+    registers.sendToClipboad(platform, tool)
+
+    if (platform == editorstatus.Platform.linux or
+        platform == editorstatus.Platform.wsl):
+      let
+        cmd = if platform == editorstatus.Platform.linux:
+                execCmdEx("xsel")
+              else:
+
+                # On the WSL
+                execCmdEx("powershell.exe -Command Get-Clipboard")
+        (output, exitCode) = cmd
+
+      check exitCode == 0
+      if platform == editorstatus.Platform.linux:
+        check output[0 .. output.high - 1] == $str
+      else:
+        # On the WSL
+        check output[0 .. output.high - 2] == $str
+
+  test "Send string to clipboard 3 (xclip)":
+    const
+      str = ru"$Clipboard test"
+      registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
+      tool = ClipboardToolOnLinux.xclip
 
     let platform = editorstatus.Platform(initPlatform())
     registers.sendToClipboad(platform, tool)
@@ -429,5 +508,4 @@ suite "Editor: Paste a string":
                                              yankedStr: ru "def")
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, registers)
 
-    echo currentBufStatus.buffer[0]
     check currentBufStatus.buffer[0] == ru "defabc"
