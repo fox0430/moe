@@ -1,6 +1,6 @@
 import strutils, sequtils, os, osproc, random, strformat
 import editorstatus, ui, gapbuffer, unicodeext, undoredostack,
-       window, bufferstatus, movement, messages
+       window, bufferstatus, movement, messages, settings
 
 proc correspondingCloseParen(c: char): char =
   case c
@@ -682,7 +682,10 @@ proc genDelimiterStr(buffer: string): string =
     for _ in .. 10: add(result, char(rand(int('A') .. int('Z'))))
     if buffer != result: break
 
-proc sendToClipboad*(registers: Registers, platform: Platform) =
+proc sendToClipboad*(registers: Registers,
+                     platform: Platform,
+                     tool: ClipboardToolOnLinux) =
+
   var buffer = ""
   if registers.yankedStr.len > 0: buffer = $registers.yankedStr
   else:
@@ -699,7 +702,10 @@ proc sendToClipboad*(registers: Registers, platform: Platform) =
       ## Check if X server is running
       let (_, exitCode) = execCmdEx("xset q")
       if exitCode == 0:
-        let cmd = "xclip -r <<" & "'" & delimiterStr & "'" & "\n" & buffer & "\n" & delimiterStr & "\n"
+        let cmd = if tool == ClipboardToolOnLinux.xclip:
+                    "xclip -r <<" & "'" & delimiterStr & "'" & "\n" & buffer & "\n" & delimiterStr & "\n"
+                  else:
+                    "xsel <<" & "'" & delimiterStr & "'" & "\n" & buffer & "\n" & delimiterStr & "\n"
         discard execShellCmd(cmd)
     of wsl:
       let cmd = "clip.exe <<" & "'" & delimiterStr & "'" & "\n" & buffer & "\n"  & delimiterStr & "\n"
@@ -742,8 +748,9 @@ proc yankString*(status: var EditorStatus, length: int) =
       r = currentBufStatus.buffer[line][col]
     status.registers.yankedStr.add(r)
 
-  if status.settings.systemClipboard:
-    status.registers.sendToClipboad(status.platform)
+  if status.settings.clipboard.enable:
+    status.registers.sendToClipboad(status.platform,
+                                    status.settings.clipboard.toolOnLinux)
 
   block:
     let strLen = status.registers.yankedStr.len

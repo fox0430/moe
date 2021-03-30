@@ -26,9 +26,12 @@ type standardTableNames {.pure.} = enum
   incrementalSearch
   popUpWindowInExmode
   autoDeleteParen
-  systemClipboard
   smoothScroll
   smoothScrollSpeed
+
+type clipboardTableNames {.pure.} = enum
+  enable
+  toolOnLinux
 
 type buildOnSaveTableNames {.pure.}= enum
   enable
@@ -185,6 +188,7 @@ proc calcPositionOfSettingValue(): int {.compileTime.} =
   var names: seq[string]
 
   for name in standardTableNames: names.add($name)
+  for name in clipboardTableNames: names.add($name)
   for name in buildOnSaveTableNames: names.add($name)
   for name in tabLineTableNames: names.add($name)
   for name in workSpaceTableNames: names.add($name)
@@ -269,8 +273,6 @@ proc getStandardTableSettingValues(settings: EditorSettings,
         currentVal = settings.popUpWindowInExmode
       of "autoDeleteParen":
         currentVal = settings.autoDeleteParen
-      of "systemClipboard":
-        currentVal = settings.systemClipboard
       of "smoothScroll":
         currentVal = settings.smoothScroll
       else:
@@ -280,6 +282,22 @@ proc getStandardTableSettingValues(settings: EditorSettings,
       result = @[ru "true", ru "false"]
     else:
       result = @[ru "false", ru "true"]
+
+proc getClipboardTableSettingsValues(settings: ClipBoardSettings,
+                                     name: string): seq[seq[Rune]] =
+
+  case name:
+    of "enable":
+      let currentVal = settings.enable
+      if currentVal:
+        result = @[ru "true", ru "false"]
+      else:
+        result = @[ru "false", ru "true"]
+    of "toolOnLinux":
+      for toolName in ClipboardToolOnLinux:
+        result.add ($toolName).ru
+    else:
+      return
 
 proc getBuildOnSaveTableSettingValues(settings: BuildOnSaveSettings,
                                       name: string): seq[seq[Rune]] =
@@ -569,6 +587,8 @@ proc getSettingValues(settings: EditorSettings,
   case table:
     of "Standard":
       result = settings.getStandardTableSettingValues(name)
+    of "ClipBoard":
+      result = settings.clipboard.getClipboardTableSettingsValues(name)
     of "BuildOnSave":
       result = settings.buildOnSave.getBuildOnSaveTableSettingValues(name)
     of "TabLine":
@@ -664,10 +684,19 @@ proc changeStandardTableSetting(settings: var EditorSettings,
       settings.popUpWindowInExmode = parseBool(settingVal)
     of "autoDeleteParen":
       settings.autoDeleteParen = parseBool(settingVal)
-    of "systemClipboard":
-      settings.systemClipboard = parseBool(settingVal)
     of "smoothScroll":
       settings.smoothScroll = parseBool(settingVal)
+    else:
+      discard
+
+proc changeClipBoardTableSettings(settings: var ClipBoardSettings,
+                                  settingName, settingVal: string) =
+
+  case settingName:
+    of "enable":
+      settings.enable = parseBool(settingVal)
+    of "toolOnLinux":
+      settings.toolOnLinux = parseEnum[ClipboardToolOnLinux](settingVal)
     else:
       discard
 
@@ -849,7 +878,7 @@ proc changePerSistTableSettings(settings: var PersistSettings,
       discard
 
 proc changeThemeTableSetting(settings: var EditorSettings,
-                              settingName, position, settingVal: string) =
+                             settingName, position, settingVal: string) =
 
   let theme = settings.editorColorTheme
   case settingName:
@@ -879,6 +908,9 @@ proc changeEditorSettings(status: var EditorStatus,
 
     if status.settings.editorColorTheme != currentTheme:
       status.changeTheme
+
+  template clipboardSettings: var ClipBoardSettings =
+    status.settings.clipboard
 
   template buildOnSaveSettings: var BuildOnSaveSettings =
     status.settings.buildOnSave
@@ -913,6 +945,8 @@ proc changeEditorSettings(status: var EditorStatus,
   case table:
     of "Standard":
       changeStandardTableSetting()
+    of "ClipBoard":
+      clipboardSettings.changeClipBoardTableSettings(settingName, settingVal)
     of "BuildOnSave":
       buildOnSaveSettings.changeBuildOnSaveTableSetting(settingName, settingVal)
     of "TabLine":
@@ -971,6 +1005,15 @@ proc getSettingType(table, name: string): SettingType =
       of "tabStop",
          "autoSaveInterval",
          "smoothScrollSpeed": result = SettingType.Number
+      else:
+        result = SettingType.None
+
+  template clipboardTable() =
+    case name:
+      of "enable":
+        result = SettingType.Bool
+      of "toolOnLinux":
+        result = SettingType.Enum
       else:
         result = SettingType.None
 
@@ -1105,6 +1148,8 @@ proc getSettingType(table, name: string): SettingType =
   case table:
     of "Standard":
       standardTable()
+    of "ClipBoard":
+      clipboardTable()
     of "BuildOnSave":
       buildOnSaveTable()
     of "TabLine":
@@ -1567,12 +1612,23 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
         result.add(ru nameStr & space & $settings.popUpWindowInExmode)
       of "autoDeleteParen":
         result.add(ru nameStr & space & $settings.autoDeleteParen)
-      of "systemClipboard":
-        result.add(ru nameStr & space & $settings.systemClipboard)
       of "smoothScroll":
         result.add(ru nameStr & space & $settings.smoothScroll)
       of "smoothScrollSpeed":
         result.add(ru nameStr & space & $settings.smoothScrollSpeed)
+
+proc initClipBoardTableBuffer(settings: ClipBoardSettings): seq[seq[Rune]] =
+  result.add(ru"ClipBoard")
+
+  for name in clipboardTableNames:
+    let
+      nameStr = indent & $name
+      space = " ".repeat(positionOfSetVal - len($name))
+    case $name:
+      of "enable":
+        result.add(ru nameStr & space & $settings.enable)
+      of "toolOnLinux":
+        result.add(ru nameStr & space & $settings.toolOnLinux)
 
 proc initBuildOnSaveTableBuffer(settings: BuildOnSaveSettings): seq[seq[Rune]] =
   result.add(ru"BuildOnSave")
@@ -1848,6 +1904,9 @@ proc initThemeTableBuffer*(settings: EditorSettings): seq[seq[Rune]] =
 proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
   var buffer: seq[seq[Rune]]
   buffer.add(initStandardTableBuffer(settings))
+
+  buffer.add(ru"")
+  buffer.add(initClipBoardTableBuffer(settings.clipboard))
 
   buffer.add(ru"")
   buffer.add(initBuildOnSaveTableBuffer(settings.buildOnSave))
