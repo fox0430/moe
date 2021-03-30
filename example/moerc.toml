@@ -46,11 +46,14 @@ popUpWindowInExmode = true
 
 autoDeleteParen = false
 
-systemClipboard = true
-
 smoothScroll = true
 
 smoothScrollSpeed = 15
+
+[Clipboard]
+enable = true
+
+toolOnLinux = "xsel"
 
 [BuildOnSave]
 
