@@ -253,14 +253,13 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     status.update
 
-    let
-      area = currentBufStatus.selectArea
-      clipboard = false
+    let area = currentBufStatus.selectArea
+    status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(status.registers,
                                 currentMainWindowNode,
                                 area,
                                 status.platform,
-                                clipboard)
+                                status.settings.clipboard)
 
     check(status.registers.yankedLines == @[ru"abc", ru"def"])
 
@@ -286,14 +285,13 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     status.update
 
-    let
-      area = currentBufStatus.selectArea
-      clipboard = false
+    let area = currentBufStatus.selectArea
+    status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(status.registers,
                                 currentMainWindowNode,
                                 area,
                                 status.platform,
-                                clipboard)
+                                status.settings.clipboard)
 
     check(status.registers.yankedStr == ru"abc")
 
@@ -318,14 +316,13 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     status.update
 
-    let
-      area = currentBufStatus.selectArea
-      clipboard = false
+    let area = currentBufStatus.selectArea
+    status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(status.registers,
                                 currentMainWindowNode,
                                 area,
                                 status.platform,
-                                clipboard)
+                                status.settings.clipboard)
 
     check(status.registers.yankedLines == @[ru"abc", ru""])
 
@@ -349,14 +346,13 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     status.update
 
-    let
-      area = currentBufStatus.selectArea
-      clipboard = false
+    let area = currentBufStatus.selectArea
+    status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(status.registers,
                                 currentMainWindowNode,
                                 area,
                                 status.platform,
-                                clipboard)
+                                status.settings.clipboard)
 
     check(status.registers.yankedLines == @[ru""])
 
@@ -386,14 +382,13 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
 
     status.update
 
-    let
-      area = currentBufStatus.selectArea
-      clipboard = false
+    let area = currentBufStatus.selectArea
+    status.settings.clipboard.enable = false
     currentBufStatus.yankBufferBlock(status.registers,
                                      currentMainWindowNode,
                                      area,
                                      status.platform,
-                                     clipboard)
+                                     status.settings.clipboard)
 
     check(status.registers.yankedLines == @[ru"a", ru"d"])
 
@@ -430,14 +425,13 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
 
     status.update
 
-    let
-      area = currentBufStatus.selectArea
-      clipboard = false
+    let area = currentBufStatus.selectArea
+    status.settings.clipboard.enable = false
     currentBufStatus.yankBufferBlock(status.registers,
                                      currentMainWindowNode,
                                      area,
                                      status.platform,
-                                     clipboard)
+                                     status.settings.clipboard)
 
     check(status.registers.yankedLines == @[ru"a", ru"d"])
 
@@ -467,14 +461,13 @@ suite "Visual block mode: Delete buffer (Disable clipboard)":
 
     status.update
 
-    let
-      area = currentBufStatus.selectArea
-      clipboard = false
+    let area = currentBufStatus.selectArea
+    status.settings.clipboard.enable = false
     currentBufStatus.deleteBufferBlock(status.registers,
                                        currentMainWindowNode,
                                        area,
                                        status.platform,
-                                       clipboard)
+                                       status.settings.clipboard)
 
     check(currentBufStatus.buffer[0] == ru"bc")
     check(currentBufStatus.buffer[1] == ru"ef")
@@ -505,14 +498,13 @@ suite "Visual mode: Yank buffer (Enable clipboard)":
 
     status.update
 
-    let
-      area = currentBufStatus.selectArea
-      clipboard = true
+    let area = currentBufStatus.selectArea
+    status.settings.clipboard.enable = true
     currentBufStatus.yankBuffer(status.registers,
                                 currentMainWindowNode,
                                 area,
                                 status.platform,
-                                clipboard)
+                                status.settings.clipboard)
 
     if (status.platform == editorstatus.Platform.linux or
         status.platform == editorstatus.Platform.wsl):
@@ -561,14 +553,13 @@ suite "Visual mode: Yank buffer (Enable clipboard)":
       currentMainWindowNode.currentColumn)
     status.update
 
-    let
-      area = currentBufStatus.selectArea
-      clipboard = true
+    let area = currentBufStatus.selectArea
+    status.settings.clipboard.enable = true
     currentBufStatus.yankBuffer(status.registers,
                                 currentMainWindowNode,
                                 area,
                                 status.platform,
-                                clipboard)
+                                status.settings.clipboard)
 
     if (status.platform == editorstatus.Platform.linux or
         status.platform == editorstatus.Platform.wsl):
@@ -614,14 +605,13 @@ suite "Visual block mode: Yank buffer (Enable clipboard) 1":
 
     status.update
 
-    let
-      area = currentBufStatus.selectArea
-      clipboard = true
+    let area = currentBufStatus.selectArea
+    status.settings.clipboard.enable = true
     currentBufStatus.yankBufferBlock(status.registers,
                                      currentMainWindowNode,
                                      area,
                                      status.platform,
-                                     clipboard)
+                                     status.settings.clipboard)
 
     if status.platform == editorstatus.Platform.linux:
       let
@@ -661,14 +651,13 @@ suite "Visual block mode: Yank buffer (Enable clipboard) 1":
       status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentColumn)
     status.update
 
-    let
-      area = currentBufStatus.selectArea
-      clipboard = true
+    let area = currentBufStatus.selectArea
+    status.settings.clipboard.enable = true
     currentBufStatus.yankBufferBlock(status.registers,
                                      currentMainWindowNode,
                                      area,
                                      status.platform,
-                                     clipboard)
+                                     status.settings.clipboard)
 
     if status.platform == editorstatus.Platform.linux:
       let
@@ -705,14 +694,13 @@ suite "Visual block mode: Delete buffer":
 
     status.update
 
-    let
-      area = currentBufStatus.selectArea
-      clipboard = true
+    let area = currentBufStatus.selectArea
+    status.settings.clipboard.enable = true
     currentBufStatus.deleteBufferBlock(status.registers,
                                        currentMainWindowNode,
                                        area,
                                        status.platform,
-                                       clipboard)
+                                       status.settings.clipboard)
 
     if status.platform == editorstatus.Platform.linux:
       let (output, exitCode) = execCmdEx("xclip -o")
@@ -745,14 +733,13 @@ suite "Visual block mode: Delete buffer":
 
       status.update
 
-    let
-      area = currentBufStatus.selectArea
-      clipboard = true
+    let area = currentBufStatus.selectArea
+    status.settings.clipboard.enable = true
     currentBufStatus.deleteBufferBlock(status.registers,
                                        currentMainWindowNode,
                                        area,
                                        status.platform,
-                                       clipboard)
+                                       status.settings.clipboard)
 
   test "Fix #885":
     var status = initEditorStatus()
@@ -782,14 +769,13 @@ suite "Visual block mode: Delete buffer":
 
     status.update
 
-    let
-      area = currentBufStatus.selectArea
-      clipboard = false
+    let area = currentBufStatus.selectArea
+    status.settings.clipboard.enable = true
     currentBufStatus.deleteBufferBlock(status.registers,
       currentMainWindowNode,
       area,
       status.platform,
-      clipboard)
+      status.settings.clipboard)
 
     check currentBufStatus.buffer[0] == ru"c"
     check currentBufStatus.buffer[1] == ru""

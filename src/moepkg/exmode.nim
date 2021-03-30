@@ -637,8 +637,8 @@ proc highlightCurrentWordSettingCommand(status: var Editorstatus,
 proc systemClipboardSettingCommand(status: var Editorstatus,
                                    command: seq[Rune]) =
 
-  if command == ru"on": status.settings.systemClipboard = true
-  elif command == ru"off": status.settings.systemClipboard = false
+  if command == ru"on": status.settings.clipboard.enable = true
+  elif command == ru"off": status.settings.clipboard.enable = false
 
   status.commandLine.erase
 

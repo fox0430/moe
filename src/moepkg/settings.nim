@@ -149,6 +149,14 @@ type PersistSettings* = object
   search*: bool
   cursorPosition*: bool
 
+type ClipboardToolOnLinux* = enum
+  xsel
+  xclip
+
+type ClipBoardSettings* = object
+  enable*: bool
+  toolOnLinux*: ClipboardToolOnLinux
+
 type EditorSettings* = object
   editorColorTheme*: ColorTheme
   statusLine*: StatusLineSettings
@@ -172,7 +180,7 @@ type EditorSettings* = object
   autoDeleteParen*: bool
   smoothScroll*: bool
   smoothScrollSpeed*: int
-  systemClipboard*: bool
+  clipboard*: ClipBoardSettings
   buildOnSave*: BuildOnSaveSettings
   workSpace*: WorkSpaceSettings
   filerSettings*: FilerSettings
@@ -314,6 +322,10 @@ proc initPersistSettings(): PersistSettings =
   result.search = true
   result.cursorPosition = true
 
+proc initClipboardSettings(): ClipBoardSettings =
+  result.enable = true
+  result.toolOnLinux = ClipboardToolOnLinux.xsel
+
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = ColorTheme.dark
   result.statusLine = initStatusLineSettings()
@@ -334,7 +346,7 @@ proc initEditorSettings*(): EditorSettings =
   result.popUpWindowInExmode = true
   result.smoothScroll = true
   result.smoothScrollSpeed = 15
-  result.systemClipboard = true
+  result.clipboard = initClipboardSettings()
   result.buildOnSave = BuildOnSaveSettings()
   result.workSpace= initWorkSpaceSettings()
   result.filerSettings = initFilerSettings()
@@ -930,11 +942,20 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Standard"].contains("smoothScrollSpeed"):
       result.smoothScrollSpeed = settings["Standard"]["smoothScrollSpeed"].getint()
 
-    if settings["Standard"].contains("systemClipboard"):
-      result.systemClipboard = settings["Standard"]["systemClipboard"].getbool()
-
     if settings["Standard"].contains("indentationLines"):
       result.view.indentationLines = settings["Standard"]["indentationLines"].getbool()
+
+
+  if settings.contains("ClipBoard"):
+    if settings["ClipBoard"].contains("enable"):
+      result.clipboard.enable = settings["ClipBoard"]["enable"].getbool()
+
+    if settings["ClipBoard"].contains("toolOnLinux"):
+      let str = settings["ClipBoard"]["toolOnLinux"].getStr
+      case str:
+        of "xsel": result.clipboard.toolOnLinux = ClipboardToolOnLinux.xsel
+        of "xclip": result.clipboard.toolOnLinux = ClipboardToolOnLinux.xclip
+        else: result.clipboard.toolOnLinux = ClipboardToolOnLinux.xsel
 
   if settings.contains("TabLine"):
     if settings["TabLine"].contains("allBuffer"):
@@ -1648,7 +1669,6 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
            "incrementalSearch",
            "popUpWindowInExmode",
            "autoDeleteParen",
-           "systemClipboard",
            "smoothScroll":
           if not (item.val["type"].getStr == "bool"):
             return some($item)
@@ -1666,6 +1686,18 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
               break
 
           if not correctValue:
+            return some($item)
+        else:
+          return some($item)
+
+  template validateClipBoardTable() =
+    for item in json["ClipBoard"].pairs:
+      case item.key:
+        of "enable":
+          if not (item.val["type"].getStr == "bool"):
+            return some($item)
+        of "toolOnLinux":
+          if not (item.val["type"].getStr == "string"):
             return some($item)
         else:
           return some($item)
@@ -1932,6 +1964,8 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
     case table:
       of "Standard":
         validateStandardTable()
+      of "ClipBoard":
+        validateClipBoardTable()
       of "TabLine":
         validateTabLineTable()
       of "StatusLine":

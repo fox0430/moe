@@ -379,12 +379,12 @@ suite "Ex mode: Clipboard setting command":
     block:
       const command = @[ru"clipboard", ru"off"]
       status.exModeCommand(command, 100, 100)
-      check(status.settings.systemClipboard == false)
+      check(status.settings.clipboard.enable == false)
 
     block:
       const command = @[ru"clipboard", ru"on"]
       status.exModeCommand(command, 100, 100)
-      check(status.settings.systemClipboard == true)
+      check(status.settings.clipboard.enable == true)
 
 suite "Ex mode: Highlight full width space command":
   test "Highlight full width space command":
