@@ -183,6 +183,7 @@ type SettingType {.pure.} = enum
   Enum
   Number
   String
+  Array
 
 proc calcPositionOfSettingValue(): int {.compileTime.} =
   var names: seq[string]
@@ -764,19 +765,21 @@ proc changeHighlightTableSetting(settings: var EditorSettings,
                                  settingName, settingVal: string) =
 
   case settingName:
-     of "currentLine":
-       settings.view.highlightCurrentLine = parseBool(settingVal)
-     of "fullWidthSpace":
-       settings.highlightSettings.fullWidthSpace = parseBool(settingVal)
-     of "trailingSpaces":
-       settings.highlightSettings.trailingSpaces = parseBool(settingVal)
-     of "replaceText":
-       settings.highlightSettings.replaceText = parseBool(settingVal)
-     of "pairOfParen":
-       settings.highlightSettings.pairOfParen = parseBool(settingVal)
-     of "currentWord":
-       settings.highlightSettings.currentWord = parseBool(settingVal)
-     else:
+    of "currentLine":
+      settings.view.highlightCurrentLine = parseBool(settingVal)
+    of "fullWidthSpace":
+      settings.highlightSettings.fullWidthSpace = parseBool(settingVal)
+    of "trailingSpaces":
+      settings.highlightSettings.trailingSpaces = parseBool(settingVal)
+    of "replaceText":
+      settings.highlightSettings.replaceText = parseBool(settingVal)
+    of "pairOfParen":
+      settings.highlightSettings.pairOfParen = parseBool(settingVal)
+    of "currentWord":
+      settings.highlightSettings.currentWord = parseBool(settingVal)
+    of "reservedWord":
+      discard
+    else:
       discard
 
 proc changeBackupTableSetting(settings: var AutoBackupSettings,
@@ -1067,6 +1070,7 @@ proc getSettingType(table, name: string): SettingType =
          "currentWord",
          "replaceText",
          "pairOfParen": result = SettingType.Bool
+      of "reservedWord": result = SettingType.Array
       else:
         result = SettingType.None
 
@@ -1322,15 +1326,18 @@ proc editFiguresSetting(status: var EditorStatus,
     changeCursorType(status.settings.normalModeCursor)
 
 proc editStringSetting(status: var EditorStatus,
-                       table, name: string) =
+                       table, name: string,
+                       arrayIndex: int) =
 
   setCursor(true)
   if not status.settings.disableChangeCursor:
     changeCursorType(status.settings.insertModeCursor)
 
+  const numOfIndent = 2
+
   let
     currentLine = currentMainWindowNode.currentLine
-    minColumn = currentBufStatus.buffer[currentLine].high
+    minColumn = numOfIndent + positionOfSetVal
 
   template moveToLeft() =
     if minColumn > currentMainWindowNode.currentColumn:
@@ -1347,8 +1354,17 @@ proc editStringSetting(status: var EditorStatus,
               settings.buildOnSave.workspaceRoot
             of "command":
               settings.buildOnSave.command
-            else:
-              ru ""
+            else: ru ""
+        of "Highlight":
+          case name:
+            of "reservedWord":
+              var val = ru ""
+              for i in 0 .. arrayIndex:
+                if i > 0: val &= ru " "
+                val &= settings.highlightSettings.reservedWords[i].word.ru
+              # return val
+              val
+            else: ru ""
         of "AutoBackup":
           case name:
             of "backupDir":
@@ -1371,10 +1387,9 @@ proc editStringSetting(status: var EditorStatus,
             else: ru ""
         else: ru ""
 
-    const numOfIndent = 2
     let
       val = getSettingVal()
-      col = positionOfSetVal + numOfIndent + ($val).len
+      col = positionOfSetVal + numOfIndent + val.len
     currentMainWindowNode.currentColumn = col
 
   var
@@ -1426,6 +1441,13 @@ proc editStringSetting(status: var EditorStatus,
         else:
           discard
 
+    template  highlightTable() =
+      case name:
+        of "reservedWord":
+          status.settings.highlightSettings.reservedWords[arrayIndex].word = buffer
+        else:
+          discard
+
     template autoBackupTable() =
       case name:
         of "backupDir":
@@ -1454,6 +1476,8 @@ proc editStringSetting(status: var EditorStatus,
     case table:
       of "BuildOnSave":
         buildOnSaveTable()
+      of "Highlight":
+        highlightTable()
       of "AutoBackup":
         autoBackupTable()
       of "QuickRun":
@@ -1513,7 +1537,7 @@ proc editEnumAndBoolSettings(status: var EditorStatus,
   else:
     status.deletePopUpWindow
 
-proc selectAndChangeEditorSettings(status: var EditorStatus) =
+proc selectAndChangeEditorSettings(status: var EditorStatus, arrayIndex: int) =
   let
     currentLine = currentMainWindowNode.currentLine
     line = currentBufStatus.buffer[currentLine]
@@ -1548,15 +1572,16 @@ proc selectAndChangeEditorSettings(status: var EditorStatus) =
                                      selectedSetting,
                                      position)
 
-  if settingType == SettingType.Number:
-    status.editFiguresSetting(selectedTable, selectedSetting)
-  elif settingType == SettingType.String:
-    status.editStringSetting(selectedTable, selectedSetting)
-  else:
-    status.editEnumAndBoolSettings(lineSplit,
-                                   selectedTable,
-                                   selectedSetting,
-                                   settingValues)
+  case settingType:
+    of SettingType.Number:
+      status.editFiguresSetting(selectedTable, selectedSetting)
+    of SettingType.String, SettingType.Array:
+      status.editStringSetting(selectedTable, selectedSetting, arrayIndex)
+    else:
+      status.editEnumAndBoolSettings(lineSplit,
+                                     selectedTable,
+                                     selectedSetting,
+                                     settingValues)
 
 proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"Standard")
@@ -2014,7 +2039,7 @@ proc configMode*(status: var Editorstatus) =
       status.changeMode(Mode.ex)
 
     elif isEnterKey(key):
-      status.selectAndChangeEditorSettings
+      status.selectAndChangeEditorSettings(arrayIndex)
       currentBufStatus.buffer = initConfigModeBuffer(status.settings)
     elif isControlU(key):
       status.halfPageUp
