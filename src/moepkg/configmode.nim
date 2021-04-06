@@ -2064,9 +2064,12 @@ proc configMode*(status: var Editorstatus) =
     status.lastOperatingTime = now()
 
     # Adjust arrayIndex
-    if getSettingType() == SettingType.Array and
-       arrayIndex > getNumOfValueOfArraySetting():
-      arrayIndex = getNumOfValueOfArraySetting() - 1
+    block:
+      let line = currentBufStatus.buffer[currentMainWindowNode.currentLine]
+      if line.splitWhitespace.len > 1 and
+         getSettingType() == SettingType.Array and
+         arrayIndex > getNumOfValueOfArraySetting():
+        arrayIndex = getNumOfValueOfArraySetting() - 1
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
