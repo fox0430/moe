@@ -1177,6 +1177,30 @@ proc getSettingType(table, name: string): SettingType =
     of "Theme":
       themeTable()
 
+proc getEditorColorPairStr(buffer: GapBuffer[seq[Rune]],
+                             lineSplit: seq[seq[Rune]],
+                             currentLine: int): string =
+
+  if (lineSplit[0] == ru "foreground") or
+     (buffer[currentLine - 2] == ru "Theme"):
+    return $(buffer[currentLine - 1].splitWhitespace)[0]
+  else:
+    return $(buffer[currentLine - 2].splitWhitespace)[0]
+
+proc getSettingType(buffer: GapBuffer[seq[Rune]],
+                    currentLine: int): SettingType =
+
+  let
+    lineSplit = buffer[currentLine].splitWhitespace
+
+    selectedTable = getTableName(buffer, currentLine)
+    selectedSetting = if selectedTable == "Theme":
+                        buffer.getEditorColorPairStr(lineSplit,currentLine)
+                      else:
+                        $lineSplit[0]
+
+  return getSettingType(selectedTable, selectedSetting)
+
 proc insertCharacter(bufStatus: var BufferStatus,
                      windowNode: WindowNode,
                      c: Rune) =
@@ -1545,16 +1569,6 @@ proc selectAndChangeEditorSettings(status: var EditorStatus, arrayIndex: int) =
 
   if not line.startsWith(ru "  "): return
 
-  proc getEditorColorPairStr(buffer: GapBuffer[seq[Rune]],
-                             lineSplit: seq[seq[Rune]],
-                             currentLine: int): string =
-
-    if (lineSplit[0] == ru "foreground") or
-       (buffer[currentLine - 2] == ru "Theme"):
-      return $(buffer[currentLine - 1].splitWhitespace)[0]
-    else:
-      return $(buffer[currentLine - 2].splitWhitespace)[0]
-
   let
     selectedTable = getTableName(currentBufStatus.buffer,
                                  currentMainWindowNode.currentLine)
@@ -1564,6 +1578,7 @@ proc selectAndChangeEditorSettings(status: var EditorStatus, arrayIndex: int) =
                       else:
                         $lineSplit[0]
     settingType = getSettingType(selectedTable, selectedSetting)
+
     # position is "foreground" or "background" or ""
     position = if selectedTable == "Theme": $lineSplit[0] else: ""
     settingValues = getSettingValues(status.settings,
@@ -1991,10 +2006,16 @@ proc keyDown(bufStatus: BufferStatus, windowNode: var WindowNode) =
           bufStatus.buffer[windowNode.currentLine][0] != ' ':
       bufStatus.keyDown(windowNode)
 
+# Count number of values in the array setting.
+proc getNumOfValueOfArraySetting(line: seq[Rune]): int =
+  # 1 is the name of the setting
+  line.splitWhitespace.len - 1
+
 proc isConfigMode(mode: Mode): bool {.inline.} =
   mode == Mode.config
 
 proc configMode*(status: var Editorstatus) =
+
   status.resize(terminalHeight(), terminalWidth())
 
   currentBufStatus.buffer = initConfigModeBuffer(status.settings)
@@ -2003,6 +2024,9 @@ proc configMode*(status: var Editorstatus) =
   let
     currentBufferIndex = currentMainWindowNode.bufferIndex
     currentWorkSpace = status.currentWorkSpaceIndex
+
+  # For SettingType.Array
+  var arrayIndex = 0
 
   while isConfigMode(currentBufStatus.mode) and
         currentWorkSpace == status.currentWorkSpaceIndex and
@@ -2022,12 +2046,27 @@ proc configMode*(status: var Editorstatus) =
     status.update
     setCursor(false)
 
+    template getSettingType(): SettingType =
+      let buffer = currentBufStatus.buffer
+      buffer.getSettingType(currentMainWindowNode.currentLine)
+
+    template getNumOfValueOfArraySetting(): int =
+      let
+        currentLine = currentMainWindowNode.currentLine
+        line = currentBufStatus.buffer[currentLine]
+      getNumOfValueOfArraySetting(line)
+
     var key: Rune = ru'\0'
     while key == ru'\0':
       status.eventLoopTask
       key = getKey(currentMainWindowNode)
 
     status.lastOperatingTime = now()
+
+    # Adjust arrayIndex
+    if getSettingType() == SettingType.Array and
+       arrayIndex > getNumOfValueOfArraySetting():
+      arrayIndex = getNumOfValueOfArraySetting() - 1
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
@@ -2037,6 +2076,14 @@ proc configMode*(status: var Editorstatus) =
       status.movePrevWindow
     elif key == ord(':'):
       status.changeMode(Mode.ex)
+
+    elif key == ord('h') or isLeftKey(key):
+      if getSettingType() == SettingType.Array and arrayIndex > 0:
+        arrayIndex.dec
+    elif key == ord('l') or isRightKey(key):
+      let numOfValue = getNumOfValueOfArraySetting()
+      if getSettingType() == SettingType.Array and numOfValue > arrayIndex:
+        arrayIndex.inc
 
     elif isEnterKey(key):
       status.selectAndChangeEditorSettings(arrayIndex)
