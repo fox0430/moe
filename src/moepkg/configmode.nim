@@ -722,6 +722,12 @@ proc changeStandardTableSetting(settings: var EditorSettings,
       settings.smartcase = parseBool(settingVal)
     of "disableChangeCursor":
       settings.disableChangeCursor = parseBool(settingVal)
+    of "defaultCursor":
+      settings.defaultCursor = parseEnum[CursorType](settingVal)
+    of "normalModeCursor":
+      settings.normalModeCursor = parseEnum[CursorType](settingVal)
+    of "insertModeCursor":
+      settings.insertModeCursor = parseEnum[CursorType](settingVal)
     of "autoSave":
       settings.autoSave = parseBool(settingVal)
     of "liveReloadOfConf":
