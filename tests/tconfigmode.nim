@@ -1677,6 +1677,30 @@ suite "Config mode: Chaging Standard table settings":
 
     check val == settings.disableChangeCursor
 
+  test "Chaging defaultCursor":
+    var settings = initEditorSettings()
+
+    let val = "noneBlinkIbeam"
+    settings.changeStandardTableSetting("defaultCursor", val)
+
+    check CursorType.noneBlinkIbeam == settings.defaultCursor
+
+  test "Chaging normalModeCursor":
+    var settings = initEditorSettings()
+
+    let val = "noneBlinkIbeam"
+    settings.changeStandardTableSetting("normalModeCursor", val)
+
+    check CursorType.noneBlinkIbeam == settings.normalModeCursor
+
+  test "Chaging insertModeCursor":
+    var settings = initEditorSettings()
+
+    let val = "noneBlinkIbeam"
+    settings.changeStandardTableSetting("insertModeCursor", val)
+
+    check CursorType.noneBlinkIbeam == settings.insertModeCursor
+
   test "Chaging autoSave":
     var settings = initEditorSettings()
 
