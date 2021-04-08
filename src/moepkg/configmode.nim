@@ -2085,7 +2085,7 @@ proc configMode*(status: var Editorstatus) =
         arrayIndex.dec
     elif key == ord('l') or isRightKey(key):
       let numOfValue = getNumOfValueOfArraySetting()
-      if getSettingType() == SettingType.Array and numOfValue > arrayIndex:
+      if getSettingType() == SettingType.Array and numOfValue - 1 > arrayIndex:
         arrayIndex.inc
 
     elif isEnterKey(key):
