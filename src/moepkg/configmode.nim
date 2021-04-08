@@ -185,6 +185,8 @@ type SettingType {.pure.} = enum
   String
   Array
 
+const numOfIndent = 2
+
 proc calcPositionOfSettingValue(): int {.compileTime.} =
   var names: seq[string]
 
@@ -203,7 +205,6 @@ proc calcPositionOfSettingValue(): int {.compileTime.} =
   for name in names:
     if result < name.len: result = name.len
 
-  const numOfIndent = 2
   result += numOfIndent
 
 const
@@ -631,19 +632,65 @@ proc getTableName(buffer: GapBuffer[seq[Rune]], line: int): string =
     if buffer[i].len > 0 and buffer[i][0] != ru ' ':
       return $buffer[i]
 
-proc initConfigModeHighlight[T](buffer: T, currentLine: int): Highlight =
+# return (start, end: int)
+proc getCurrentArraySettingValueRange(reservedWords: seq[ReservedWord],
+                                      arrayIndex: int): (int, int) =
+
+  const spaceLengh = 1
+
+  result[0] = positionOfSetVal + numOfIndent
+
+  for i in 0 .. arrayIndex:
+    # Add space length
+    if i > 0:
+      result[0] += reservedWords[i - 1].word.ru.len + spaceLengh
+
+  result[1] = result[0] + reservedWords[arrayIndex].word.ru.high
+
+proc initConfigModeHighlight[T](buffer: T,
+                                currentLine, arrayIndex: int,
+                                reservedWords: seq[ReservedWord]): Highlight =
+
   for i in 0 ..< buffer.len:
-    let color = if i == currentLine: EditorColorPair.currentSetting
-                else: EditorColorPair.defaultChar
+    if i == currentLine:
+        result.colorSegments.add(
+          ColorSegment(
+            firstRow: i,
+            firstColumn: 0,
+            lastRow: i,
+            lastColumn: buffer[i].len,
+            color: EditorColorPair.defaultChar))
 
-    let colorSegment = ColorSegment(
-      firstRow: i,
-      firstColumn: 0,
-      lastRow: i,
-      lastColumn: buffer[i].len,
-      color: color)
+        if buffer[currentLine].splitWhitespace.len > 1 and
+           SettingType.Array == buffer.getSettingType(currentLine):
+          let
+            range = getCurrentArraySettingValueRange(reservedWords, arrayIndex)
+            start = range[0]
+            `end` = range[1]
 
-    result.colorSegments.add(colorSegment)
+          result = result.overwrite(
+            ColorSegment(
+              firstRow: i,
+              firstColumn: start,
+              lastRow: i,
+              lastColumn: `end`,
+              color: EditorColorPair.currentSetting))
+        else:
+          result = result.overwrite(
+            ColorSegment(
+              firstRow: i,
+              firstColumn: numOfIndent + positionOfSetVal,
+              lastRow: i,
+              lastColumn: buffer[i].len,
+              color: EditorColorPair.currentSetting))
+    else:
+      result.colorSegments.add(
+        ColorSegment(
+          firstRow: i,
+          firstColumn: 0,
+          lastRow: i,
+          lastColumn: buffer[i].len,
+          color: EditorColorPair.defaultChar))
 
 proc changeStandardTableSetting(settings: var EditorSettings,
                                 settingName, settingVal: string) =
@@ -1218,7 +1265,8 @@ proc insertCharacter(bufStatus: var BufferStatus,
     bufStatus.buffer[windowNode.currentLine] = newLine
 
 proc editFiguresSetting(status: var EditorStatus,
-                        table, name: string) =
+                        table, name: string,
+                        arrayIndex: int) =
 
   setCursor(true)
   if not status.settings.disableChangeCursor:
@@ -1256,7 +1304,6 @@ proc editFiguresSetting(status: var EditorStatus,
             else: 0
         else: 0
 
-    const numOfIndent = 2
     let
       val = getSettingVal()
       col = positionOfSetVal + numOfIndent + ($val).len
@@ -1298,8 +1345,11 @@ proc editFiguresSetting(status: var EditorStatus,
     else:
       numStr &= key
       currentBufStatus.insertCharacter(currentMainWindowNode, key)
+      let reservedWords = status.settings.highlightSettings.reservedWords
       currentMainWindowNode.highlight =
-        currentBufStatus.buffer.initConfigModeHighlight(currentLine)
+        currentBufStatus.buffer.initConfigModeHighlight(currentLine,
+                                                        arrayIndex,
+                                                        reservedWords)
 
   if not isCancel:
     let number = try: parseInt(numStr)
@@ -1356,8 +1406,6 @@ proc editStringSetting(status: var EditorStatus,
   setCursor(true)
   if not status.settings.disableChangeCursor:
     changeCursorType(status.settings.insertModeCursor)
-
-  const numOfIndent = 2
 
   let
     currentLine = currentMainWindowNode.currentLine
@@ -1452,8 +1500,9 @@ proc editStringSetting(status: var EditorStatus,
     else:
       buffer &= key
       currentBufStatus.insertCharacter(currentMainWindowNode, key)
+      let reservedWords = status.settings.highlightSettings.reservedWords
       currentMainWindowNode.highlight =
-        currentBufStatus.buffer.initConfigModeHighlight(currentLine)
+        currentBufStatus.buffer.initConfigModeHighlight(currentLine, arrayIndex, reservedWords)
 
   if not isCancel:
     template buildOnSaveTable() =
@@ -1515,7 +1564,6 @@ proc editEnumAndBoolSettings(status: var EditorStatus,
                              settingValues: seq[seq[Rune]]) =
 
   const
-    numOfIndent = 2
     margin = 1
   let
     h = min(currentMainWindowNode.h, settingValues.len)
@@ -1589,7 +1637,7 @@ proc selectAndChangeEditorSettings(status: var EditorStatus, arrayIndex: int) =
 
   case settingType:
     of SettingType.Number:
-      status.editFiguresSetting(selectedTable, selectedSetting)
+      status.editFiguresSetting(selectedTable, selectedSetting, arrayIndex)
     of SettingType.String, SettingType.Array:
       status.editStringSetting(selectedTable, selectedSetting, arrayIndex)
     else:
@@ -2034,7 +2082,10 @@ proc configMode*(status: var Editorstatus) =
 
     let
       currentLine = currentMainWindowNode.currentLine
-      highlight = currentBufStatus.buffer.initConfigModeHighlight(currentLine)
+      reservedWords = status.settings.highlightSettings.reservedWords
+      highlight = currentBufStatus.buffer.initConfigModeHighlight(currentLine,
+                                                                  arrayIndex,
+                                                                  reservedWords)
 
     if currentLine == 0:
       currentMainWindowNode.currentLine = 1
