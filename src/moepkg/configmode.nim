@@ -1615,7 +1615,7 @@ proc selectAndChangeEditorSettings(status: var EditorStatus, arrayIndex: int) =
     line = currentBufStatus.buffer[currentLine]
     lineSplit = line.splitWhitespace
 
-  if not line.startsWith(ru "  "): return
+  if lineSplit.len < 2: return
 
   let
     selectedTable = getTableName(currentBufStatus.buffer,
