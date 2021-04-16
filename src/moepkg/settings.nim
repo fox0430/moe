@@ -1,4 +1,4 @@
-import parsetoml, os, json, macros, times, options
+import parsetoml, os, json, macros, times, options, strformat
 from strutils import parseEnum, endsWith, parseInt
 export TomlError
 
@@ -2008,3 +2008,182 @@ proc loadSettingFile*(): EditorSettings =
     raise newException(InvalidItemError, $invalidItem)
   else:
     return parseSettingsFile(toml)
+
+proc generateTomlConfigStr*(settings: EditorSettings): string =
+  var buffer = "[Standard]"
+  buffer.add fmt "theme = {$settings.editorColorTheme}"
+  buffer.add fmt "number = {$settings.view.lineNumber}"
+  buffer.add fmt "currentNumber = {$settings.view.currentLineNumber}"
+  buffer.add fmt "statusLine = {$settings.statusLine}"
+  buffer.add fmt "tabLine = {$settings.tabLine.enable}"
+  buffer.add fmt "syntax = {$settings.syntax}"
+  buffer.add fmt "indentationLines = {$settings.view.indentationLines}"
+  buffer.add fmt "tabStop = {$settings.tabStop}"
+  buffer.add fmt "autoCloseParen = {$settings.autoCloseParen}"
+  buffer.add fmt "autoIndent = {$settings.autoIndent}"
+  buffer.add fmt "ignorecase = {$settings.ignorecase}"
+  buffer.add fmt "smartcase = {$settings.smartcase}"
+  buffer.add fmt "disableChangeCursor = {$settings.disableChangeCursor}"
+  buffer.add fmt "defaultCursor = {$settings.defaultCursor}"
+  buffer.add fmt "normalModeCursor = {$settings.normalModeCursor}"
+  buffer.add fmt "insertModeCursor = {$settings.insertModeCursor}"
+  buffer.add fmt "autoSave = {$settings.autoSave}"
+  buffer.add fmt "autoSaveInterval = {$settings.autoSaveInterval}"
+  buffer.add fmt "liveReloadOfConf = {$settings.liveReloadOfConf}"
+  buffer.add fmt "incrementalSearch = {$settings.incrementalSearch}"
+  buffer.add fmt "popUpWindowInExmode = {$settings.popUpWindowInExmode}"
+  buffer.add fmt "autoDeleteParen = {$settings.autoDeleteParen }"
+  buffer.add fmt "smoothScroll = {$settings.smoothScroll }"
+  buffer.add fmt "smoothScrollSpeed = {$settings.smoothScrollSpeed}"
+
+  buffer.add fmt "[Clipboard]"
+  buffer.add fmt "enable = {$settings.clipboard.enable}"
+  buffer.add fmt "toolOnLinux = {$settings.clipboard.toolOnLinux}"
+
+  buffer.add fmt "[BuildOnSave]"
+  buffer.add fmt "enable = {$settings.buildOnSave.enable}"
+  if settings.buildOnSave.workspaceRoot.len > 0:
+    buffer.add fmt "workspaceRoot = {$settings.buildOnSave.workspaceRoot}"
+  if settings.buildOnSave.command.len > 0:
+    buffer.add fmt "command = {$settings.buildOnSave.command}"
+
+  buffer.add fmt "[TabLine]"
+  buffer.add fmt "allBuffer = {$settings.tabLine.allbuffer}"
+
+  buffer.add fmt "[StatusBar]"
+  buffer.add fmt "multipleStatusBar  = {$settings.statusBar.multipleStatusBar }"
+  buffer.add fmt "merge = {$settings.statusBar.merge }"
+  buffer.add fmt "mode = {$settings.statusBar.mode }"
+  buffer.add fmt "filename = {$settings.statusBar.filename}"
+  buffer.add fmt "chanedMark = {$settings.statusBar.chanedMark }"
+  buffer.add fmt "line = {$settings.statusBar.line}"
+  buffer.add fmt "column = {$settings.statusBar.column}"
+  buffer.add fmt "encoding = {$settings.statusBar.encoding}"
+  buffer.add fmt "language = {$settings.statusBar.language}"
+  buffer.add fmt "directory = {$settings.statusBar.directory}"
+  buffer.add fmt "gitbranchName = {$settings.statusBar.gitbranchName}"
+  buffer.add fmt "showGitInactive = {$settings.statusBar.showGitInactive}"
+  buffer.add fmt "showModeInactive = {$settings.statusBar.showModeInactive}"
+
+  buffer.add fmt "[WorkSpace]"
+  buffer.add fmt "workSpaceLine = {$settings.workSpace.workSpaceLine}"
+
+  buffer.add fmt "[Highlight]"
+  buffer.add fmt "currentLine = {$settings.highlightSettings.currentLine}"
+  if settings.highlightSettings.reservedWords.len > 0:
+    buffer add "reservedWord = ["
+    for index, reservedWord in settings.highlightSettings.reservedWords:
+      if index > 0: buffer.add ", "
+      buffer.add fmt "\"{reservedWord.word}\""
+    buffer.add "]"
+  buffer.add fmt "replaceText = {$settings.highlightSettings.replaceText }"
+  buffer.add fmt "pairOfParen = {$settings.highlightSettings.pairOfParen }"
+  buffer.add fmt "fullWidthSpace = {$settings.highlightSettings.fullWidthSpace}"
+  buffer.add fmt "trailingSpaces = {$settings.highlightSettings.trailingSpaces }"
+  buffer.add fmt "currentWord = {$settings.highlightSettings.currentWord}"
+
+  buffer.add fmt "[AutoBackup]"
+  buffer.add fmt "enable = {$settings.autoBackupSettings.enable }"
+  buffer.add fmt "idleTime = {$settings.autoBackupSettings.idleTime }"
+  buffer.add fmt "interval = {$settings.autoBackupSettings.interval }"
+  if settings.autoBackupSettings.dirToExclude.len > 0:
+    buffer add "dirToExclude = ["
+    for index, dir in settings.autoBackupSettings.dirToExclude:
+      if index > 0: buffer.add ", "
+      buffer.add fmt "\"{$dir}\""
+    buffer add "]"
+
+  buffer.add fmt "[QuickRun]"
+  buffer.add fmt "saveBufferWhenQuickRun = {$settings.quickRunSettings.saveBufferWhenQuickRun}"
+  if settings.quickRunSettings.command.len > 0:
+    buffer.add fmt $settings.quickRunSettings.command
+  buffer.add fmt "timeout = {$settings.quickRunSettings.timeout }"
+  if settings.quickRunSettings.nimAdvancedCommand .len > 0:
+    buffer.add fmt "nimAdvancedCommand = {$settings.quickRunSettings.nimAdvancedCommand}"
+  if settings.quickRunSettings.ClangOptions.len > 0:
+    buffer.add fmt "ClangOptions = {$settings.quickRunSettings.ClangOptions}"
+  if settings.quickRunSettings.CppOptions.len > 0:
+    buffer.add fmt "CppOptions = {$settings.quickRunSettings.CppOptions}"
+  if settings.quickRunSettings.NimOptions.len > 0:
+    buffer.add fmt "NimOptions = {$settings.quickRunSettings.NimOptions}"
+  if settings.quickRunSettings.shOptions.len > 0:
+    buffer.add fmt "shOptions = {$settings.quickRunSettings.shOptions}"
+  if settings.quickRunSettings.bashOptions.len > 0:
+    buffer.add fmt "shOptions = {$settings.quickRunSettings.bashOptions}"
+
+  buffer.add fmt "[Notification]"
+  buffer.add fmt "screenNotifications = {$settings.notificationSettings.screenNotifications }"
+  buffer.add fmt "logNotifications = {$settings.notificationSettings.logNotifications }"
+  buffer.add fmt "autoBackupScreenNotify = {$settings.notificationSettings.autoBackupScreenNotify}"
+  buffer.add fmt "autoBackupLogNotify = {$settings.notificationSettings.autoBackupLogNotify}"
+  buffer.add fmt "autoSaveScreenNotify = {$settings.notificationSettings.autoSaveScreenNotify}"
+  buffer.add fmt "autoSaveLogNotify = {$settings.notificationSettings.autoSaveLogNotify}"
+  buffer.add fmt "yankScreenNotify = {$settings.notificationSettings.yankScreenNotify}"
+  buffer.add fmt "yankLogNotify = {$settings.notificationSettings.yankLogNotify}"
+  buffer.add fmt "deleteScreenNotify = {$settings.notificationSettings.deleteScreenNotify}"
+  buffer.add fmt "deleteLogNotify = {$settings.notificationSettings.deleteLogNotify}"
+  buffer.add fmt "saveScreenNotify = {$settings.notificationSettings.saveScreenNotify}"
+  buffer.add fmt "saveLogNotify = {$settings.notificationSettings.saveLogNotify}"
+  buffer.add fmt "workspaceScreenNotify = {$settings.notificationSettings.workspaceScreenNotify}"
+  buffer.add fmt "workspaceLogNotify = {$settings.notificationSettings.workspaceLogNotify}"
+  buffer.add fmt "quickRunScreenNotify = {$settings.notificationSettings.quickRunScreenNotify}"
+  buffer.add fmt "quickRunLogNotify  = {$settings.notificationSettings.quickRunLogNotify}"
+  buffer.add fmt "buildOnSaveScreenNotify = {$settings.notificationSettings.buildOnSaveScreenNotify}"
+  buffer.add fmt "buildOnSaveLogNotify = {$settings.notificationSettings.buildOnSaveLogNotify}"
+  buffer.add fmt "filerScreenNotify = {$settings.notificationSettings.filerScreenNotify}"
+  buffer.add fmt "filerLogNotify = {$settings.notificationSettings.filerLogNotify}"
+  buffer.add fmt "restoreScreenNotify = {$settings.notificationSettings.restoreScreenNotify}"
+  buffer.add fmt "restoreLogNotify = {$settings.notificationSettings.restoreLogNotify}"
+
+  buffer.add fmt "[Filer]"
+  buffer.add fmt "showIcons = {$settings.filerSettings.showIcons}"
+
+  buffer.add fmt "[Autocomplete]"
+  buffer.add fmt "enable = {$settings.autocompleteSettings.enable}"
+
+  buffer.add fmt "[Persist]"
+  buffer.add fmt "exCommand = {$settings.persist.exCommand}"
+  buffer.add fmt "search = {$settings.persist.search}"
+  buffer.add fmt "cursorPosition = {$settings.persist.cursorPosition}"
+
+  buffer.add fmt "[Debug.WorkSpace]"
+  buffer.add fmt "enable = {$settings.debugModeSettings.workSpace.enable}"
+  buffer.add fmt "numOfWorkSpaces = {$settings.debugModeSettings.workSpace.numOfWorkSpaces}"
+  buffer.add fmt "currentWorkSpaceIndex = {$settings.debugModeSettings.workSpace.currentWorkSpaceIndex}"
+
+  buffer.add fmt "[Debug.WindowNode]"
+  buffer.add fmt "enable = {$settings.debugModeSettings.windowNode.enable}"
+  buffer.add fmt "currentWindow = {$settings.debugModeSettings.windowNode.currentWindow}"
+  buffer.add fmt "index = {$settings.debugModeSettings.windowNode.index}"
+  buffer.add fmt "windowIndex = {$settings.debugModeSettings.windowNode.windowIndex}"
+  buffer.add fmt "bufferIndex= {$settings.debugModeSettings.windowNode.bufferIndex}"
+  buffer.add fmt "parentIndex= {$settings.debugModeSettings.windowNode.parentIndex}"
+  buffer.add fmt "childLen = {$settings.debugModeSettings.windowNode.childLen}"
+  buffer.add fmt "splitType = {$settings.debugModeSettings.windowNode.splitType}"
+  buffer.add fmt "haveCursesWin= {$settings.debugModeSettings.windowNode.haveCursesWin}"
+  buffer.add fmt "y = {$settings.debugModeSettings.windowNode.y}"
+  buffer.add fmt "x = {$settings.debugModeSettings.windowNode.x}"
+  buffer.add fmt "h = {$settings.debugModeSettings.windowNode.h}"
+  buffer.add fmt "w = {$settings.debugModeSettings.windowNode.w}"
+  buffer.add fmt "currentLine = {$settings.debugModeSettings.windowNode.currentLine}"
+  buffer.add fmt "currentColumn = {$settings.debugModeSettings.windowNode.currentColumn}"
+  buffer.add fmt "expandedColumn = {$settings.debugModeSettings.windowNode.expandedColumn}"
+  buffer.add fmt "cursor = {$settings.debugModeSettings.windowNode.cursor}"
+
+  buffer.add fmt "[Debug.BufferStatus]"
+  buffer.add fmt "enable = {$settings.debugModeSettings.bufStatus.enable}"
+  buffer.add fmt "bufferIndex = {$settings.debugModeSettings.bufStatus.bufferIndex }"
+  buffer.add fmt "path = {$settings.debugModeSettings.bufStatus.path}"
+  buffer.add fmt "openDir = {$settings.debugModeSettings.bufStatus.openDir}"
+  buffer.add fmt "currentMode = {$settings.debugModeSettings.bufStatus.currentMode}"
+  buffer.add fmt "prevMode = {$settings.debugModeSettings.bufStatus.prevMode}"
+  buffer.add fmt "language = {$settings.debugModeSettings.bufStatus.language}"
+  buffer.add fmt "encoding = {$settings.debugModeSettings.bufStatus.encoding}"
+  buffer.add fmt "countChange = {$settings.debugModeSettings.bufStatus.countChange}"
+  buffer.add fmt "cmdLoop = {$settings.debugModeSettings.bufStatus.cmdLoop}"
+  buffer.add fmt "lastSaveTime = {$settings.debugModeSettings.bufStatus.lastSaveTime}"
+  buffer.add fmt "bufferLen = {$settings.debugModeSettings.bufStatus.bufferLen}"
+
+  buffer.add fmt "[Theme]"
+  buffer.add fmt "baseTheme = {$settings.editorColorTheme}"
+  buffer.add fmt "editorBg = {$settings.editorColorTheme}"
