@@ -1,8 +1,8 @@
 from strutils import parseInt
-import terminal, times
-import editorstatus, ui, gapbuffer, unicodeext, fileutils, undoredostack,
+import terminal, times, tables
+import editorstatus, ui, gapbuffer, unicodetext, fileutils, undoredostack,
        window, movement, editor, search, color, bufferstatus, quickrun,
-       messages, commandline
+       messages, commandline, settings
 
 proc searchOneCharactorToEndOfLine(bufStatus: var BufferStatus,
                                    windowNode: WindowNode,
@@ -899,6 +899,8 @@ proc normalMode*(status: var EditorStatus) =
       if not pressCtrlC:
         status.eventLoopTask
         key = getKey(currentMainWindowNode)
+        if key in status.settings.commandMaps:
+          key = status.settings.commandMaps[key]
       else:
         pressCtrlC = false
         status.commandLine.writeExitHelp
