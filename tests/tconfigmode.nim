@@ -444,7 +444,6 @@ suite "Config mode: Init buffer":
                      ru ""]
 
     for index, line in buffer:
-      echo sample[index]
       check sample[index] == line
 
 proc checkBoolSettingValue(default: bool, values: seq[seq[Rune]]) =
