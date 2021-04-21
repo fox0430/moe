@@ -363,7 +363,7 @@ replaceTextBg = "red"
 
 # pair of paren highlighting
 parenText = "default"
-parenTextBg = "white"
+parenTextBg = "blue"
 
 # highlight other uses current word
 currentWord = "default"
