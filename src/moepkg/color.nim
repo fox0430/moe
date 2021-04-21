@@ -734,7 +734,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     replaceTextBg: red,
     # pair of paren highlighting
     parenText: default,
-    parenTextBg: white,
+    parenTextBg: blue,
     # highlight other uses current word
     currentWord: default,
     currentWordBg: gray,
@@ -866,7 +866,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     replaceTextBg: red,
     # pair of paren highlighting
     parenText: default,
-    parenTextBg: white,
+    parenTextBg: blue,
     # highlight other uses current word
     currentWord: default,
     currentWordBg: gray,
@@ -998,7 +998,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     replaceTextBg: red,
     # pair of paren highlighting
     parenText: default,
-    parenTextBg: white,
+    parenTextBg: blue,
     # highlight other uses current word
     currentWord: default,
     currentWordBg: gray,
@@ -1262,7 +1262,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     replaceTextBg: red,
     # pair of paren highlighting
     parenText: default,
-    parenTextBg: white,
+    parenTextBg: deepPink1_1,
     # highlight other uses current word
     currentWord: default,
     currentWordBg: gray,
