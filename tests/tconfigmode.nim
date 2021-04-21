@@ -416,15 +416,15 @@ suite "Config mode: Init buffer":
                      ru "",
                      ru "  parenText",
                      ru "    foreground                   default",
-                     ru "    background                   white",
+                     ru "    background                   blue",
                      ru "",
                      ru "  currentWord",
                      ru "    foreground                   default",
-                     ru "    background                   white",
+                     ru "    background                   gray",
                      ru "",
                      ru "  highlightFullWidthSpace",
-                     ru "    foreground                   default",
-                     ru "    background                   white",
+                     ru "    foreground                   red",
+                     ru "    background                   red",
                      ru "",
                      ru "  highlightTrailingSpaces",
                      ru "    foreground                   red",
@@ -444,6 +444,7 @@ suite "Config mode: Init buffer":
                      ru ""]
 
     for index, line in buffer:
+      echo sample[index]
       check sample[index] == line
 
 proc checkBoolSettingValue(default: bool, values: seq[seq[Rune]]) =
