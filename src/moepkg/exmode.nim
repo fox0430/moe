@@ -857,16 +857,15 @@ proc checkAndCreateDir(commandLine: var CommandLine,
       except OSError: result = false
 
 # Write current editor settings to configuration file
-proc writeConfigurationFile(status: EditorStatus) =
-  const configFilePath = getHomeDir() / ".config/moe/moerc.toml"
+proc writeConfigurationFile(status: var EditorStatus, buffer: string) =
+  const configFilePath = toRunes(getHomeDir() / ".config/moe/moerc.toml")
 
   try:
     saveFile(configFilePath,
-             currentBufStatus.buffer.toRunes,
-             currentBufStatus.characterEncoding)
+             buffer.toRunes,
+             CharacterEncoding.utf8)
   except IOError:
     status.commandLine.writeSaveError(status.messageLog)
-
 
 proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
   if path.len == 0:
