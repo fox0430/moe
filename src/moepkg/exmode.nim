@@ -203,10 +203,11 @@ proc isOpenInVerticalSplitWindowCommand(command: seq[seq[Rune]]): bool {.inline.
   return command.len == 2 and cmpIgnoreCase($command[0], "vs") == 0
 
 proc isWriteCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  let prevMode = currentBufStatus.prevMode
   return command.len in {1, 2} and
          cmpIgnoreCase($command[0], "w") == 0 and
-         status.bufStatus[currentBufferIndex].prevMode == bufferstatus.Mode.normal
+         (prevMode == bufferstatus.Mode.normal or
+          prevMode == bufferstatus.Mode.config)
 
 proc isQuitCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 1 and cmpIgnoreCase($command[0], "q") == 0
@@ -857,66 +858,73 @@ proc checkAndCreateDir(commandLine: var CommandLine,
       except OSError: result = false
 
 # Write current editor settings to configuration file
-proc writeConfigurationFile(status: var EditorStatus, buffer: string) =
-  const configFilePath = toRunes(getHomeDir() / ".config/moe/moerc.toml")
+proc writeConfigurationFile(status: var EditorStatus) =
+  const configFilePath = getHomeDir() / ".config/moe/moerc.toml"
+  let buffer = status.settings.generateTomlConfigStr
 
-  try:
-    saveFile(configFilePath,
-             buffer.toRunes,
-             CharacterEncoding.utf8)
-  except IOError:
-    status.commandLine.writeSaveError(status.messageLog)
-
-proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
-  if path.len == 0:
-    status.commandLine.writeNoFileNameError(status.messageLog)
-    status.changeMode(currentBufStatus.prevMode)
-    return
-
-  # Check if the file has been overwritten by another application
-  if fileExists($path):
-    let
-      lastSaveTimeOfBuffer = currentBufStatus.lastSaveTime.toTime
-      lastModificationTimeOfFile = getLastModificationTime($path)
-    if lastModificationTimeOfFile > lastSaveTimeOfBuffer:
-      if not status.commandLine.askFileChangedSinceReading(status.messageLog):
-        # Cancel overwrite
-        status.changeMode(currentBufStatus.prevMode)
-        status.commandLine.erase
-        return
-
-  ## Ask if you want to create a directory that does not exist
-  if not status.commandLine.checkAndCreateDir(status.messageLog, path):
-    status.changeMode(currentBufStatus.prevMode)
-    status.commandLine.writeSaveError(status.messageLog)
-    return
-
-  try:
-    saveFile(path,
-             currentBufStatus.buffer.toRunes,
-             currentBufStatus.characterEncoding)
-  except IOError:
-    status.commandLine.writeSaveError(status.messageLog)
-
-  if currentBufStatus.path != path:
-    currentBufStatus.path = path
-    currentBufStatus.language = detectLanguage($path)
-
-  # Build on save
-  if status.settings.buildOnSave.enable:
+  if not fileExists(configFilePath):
     try:
-      status.buildOnSave
+      saveFile(configFilePath.toRunes,
+               buffer.toRunes,
+               CharacterEncoding.utf8)
     except IOError:
       status.commandLine.writeSaveError(status.messageLog)
-  else:
-      status.commandLine.writeMessageSaveFile(
-        path,
-        status.settings.notificationSettings,
-        status.messageLog)
 
-  currentBufStatus.countChange = 0
-  currentBufStatus.lastSaveTime = now()
   status.changeMode(currentBufStatus.prevMode)
+
+proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
+  if isConfigMode(currentBufStatus.mode, currentBufStatus.prevMode):
+    status.writeConfigurationFile
+  else:
+    if path.len == 0:
+      status.commandLine.writeNoFileNameError(status.messageLog)
+      status.changeMode(currentBufStatus.prevMode)
+      return
+
+    # Check if the file has been overwritten by another application
+    if fileExists($path):
+      let
+        lastSaveTimeOfBuffer = currentBufStatus.lastSaveTime.toTime
+        lastModificationTimeOfFile = getLastModificationTime($path)
+      if lastModificationTimeOfFile > lastSaveTimeOfBuffer:
+        if not status.commandLine.askFileChangedSinceReading(status.messageLog):
+          # Cancel overwrite
+          status.changeMode(currentBufStatus.prevMode)
+          status.commandLine.erase
+          return
+
+    ## Ask if you want to create a directory that does not exist
+    if not status.commandLine.checkAndCreateDir(status.messageLog, path):
+      status.changeMode(currentBufStatus.prevMode)
+      status.commandLine.writeSaveError(status.messageLog)
+      return
+
+    try:
+      saveFile(path,
+               currentBufStatus.buffer.toRunes,
+               currentBufStatus.characterEncoding)
+    except IOError:
+      status.commandLine.writeSaveError(status.messageLog)
+
+    if currentBufStatus.path != path:
+      currentBufStatus.path = path
+      currentBufStatus.language = detectLanguage($path)
+
+    # Build on save
+    if status.settings.buildOnSave.enable:
+      try:
+        status.buildOnSave
+      except IOError:
+        status.commandLine.writeSaveError(status.messageLog)
+    else:
+        status.commandLine.writeMessageSaveFile(
+          path,
+          status.settings.notificationSettings,
+          status.messageLog)
+
+    currentBufStatus.countChange = 0
+    currentBufStatus.lastSaveTime = now()
+    status.changeMode(currentBufStatus.prevMode)
 
 proc forceWriteCommand(status: var EditorStatus, path: seq[Rune]) =
   try:
