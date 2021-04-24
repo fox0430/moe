@@ -434,7 +434,7 @@ suite "Insert mode":
     # Generate the number of strings more than the window height
     for i in 0 ..< 110:
       var randStr = ""
-      for _ in .. 10: add(randStr, char(rand(int('A') .. int('z'))))
+      for _ in 0 .. 10: add(randStr, char(rand(int('A') .. int('z'))))
       buffer.add("a" & randStr)
 
     const

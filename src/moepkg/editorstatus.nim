@@ -41,7 +41,7 @@ type EditorStatus* = object
   isSearchHighlight*: bool
   lastPosition*: seq[LastPosition]
 
-proc initPlatform(): Platform =
+proc initPlatform*(): Platform =
   if defined linux:
     if execProcess("uname -r").contains("Microsoft"):
       result = Platform.wsl
