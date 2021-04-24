@@ -679,7 +679,7 @@ proc deleteTillNextBlankLine*(bufStatus: var BufferStatus,
 
 proc genDelimiterStr(buffer: string): string =
   while true:
-    for _ in .. 10: add(result, char(rand(int('A') .. int('Z'))))
+    for _ in 0 .. 10: add(result, char(rand(int('A') .. int('Z'))))
     if buffer != result: break
 
 proc sendToClipboad*(registers: Registers,

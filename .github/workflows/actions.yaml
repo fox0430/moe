@@ -35,7 +35,7 @@ jobs:
           # - macOS-latest
           # - windows-latest
     env:
-      NIM_VERSION: 1.4.4
+      NIM_VERSION: 1.4.6
     steps:
     - uses: actions/checkout@v1
     - run: |

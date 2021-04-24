@@ -597,39 +597,33 @@ type EditorColorPair* = enum
 
   # filer mode
   currentFile = 40
-  currentFileBg = 41
-  file = 42
-  fileBg = 43
-  dir = 44
-  dirBg = 45
-  pcLink = 46
-  pcLinkBg = 47
+  file = 41
+  dir = 42
+  pcLink = 43
   # pop up window
-  popUpWindow = 48
-  popUpWinCurrentLine = 49
+  popUpWindow = 44
+  popUpWinCurrentLine = 45
   # replace text highlighting
-  replaceText = 50
+  replaceText = 46
   # pair of paren highlighting
-  parenText = 51
+  parenText = 47
   # highlight other uses current word
-  currentWord = 52
+  currentWord = 48
   # highlight full width space
-  highlightFullWidthSpace = 53
+  highlightFullWidthSpace = 49
   # highlight trailing spaces
-  highlightTrailingSpaces = 54
+  highlightTrailingSpaces = 50
   # work space bar
-  workSpaceBar = 55
+  workSpaceBar = 51
   # highlight reserved words
-  reservedWord = 56
+  reservedWord = 52
   # highlight history manager
-  currentHistory = 57
+  currentHistory = 53
   # highlight diff
-  addedLine = 58
-  deletedLine = 59
+  addedLine = 54
+  deletedLine = 55
   # configuration mode
-  currentSetting = 60
-  # highlight current line background
-  currentLineBg = 61
+  currentSetting = 56
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -734,7 +728,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     replaceTextBg: red,
     # pair of paren highlighting
     parenText: default,
-    parenTextBg: white,
+    parenTextBg: blue,
     # highlight other uses current word
     currentWord: default,
     currentWordBg: gray,
@@ -866,7 +860,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     replaceTextBg: red,
     # pair of paren highlighting
     parenText: default,
-    parenTextBg: white,
+    parenTextBg: blue,
     # highlight other uses current word
     currentWord: default,
     currentWordBg: gray,
@@ -998,7 +992,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     replaceTextBg: red,
     # pair of paren highlighting
     parenText: default,
-    parenTextBg: white,
+    parenTextBg: blue,
     # highlight other uses current word
     currentWord: default,
     currentWordBg: gray,
@@ -1262,7 +1256,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     replaceTextBg: red,
     # pair of paren highlighting
     parenText: default,
-    parenTextBg: white,
+    parenTextBg: deepPink1_1,
     # highlight other uses current word
     currentWord: default,
     currentWordBg: gray,
@@ -1471,7 +1465,7 @@ proc setCursesColor*(editorColor: EditorColor) =
     # highlight full width space
     setColorPair(EditorColorPair.highlightFullWidthSpace,
                  editorColor.highlightFullWidthSpace,
-                 editorColor.highlightFullWidthSpace)
+                 editorColor.highlightFullWidthSpaceBg)
 
     # highlight trailing spaces
     setColorPair(EditorColorPair.highlightTrailingSpaces,
@@ -1635,8 +1629,12 @@ proc getColorFromEditorColorPair*(theme: ColorTheme,
     return (editorColor.currentHistory, editorColor.currentHistoryBg)
   of EditorColorPair.currentSetting:
     return (editorColor.currentSetting, editorColor.currentSettingBg)
-  else:
+  of EditorColorPair.parenText:
     return (editorColor.parenText, editorColor.parenTextBg)
+  of EditorColorPair.currentWord:
+    return (editorColor.currentWord, editorColor.currentWordBg)
+  of EditorColorPair.highlightFullWidthSpace:
+    return (editorColor.highlightFullWidthSpace, editorColor.highlightFullWidthSpaceBg)
 
 macro setColor*(theme: ColorTheme,
                 editorColor: string,

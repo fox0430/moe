@@ -76,7 +76,7 @@ suite "Editor: Send to clipboad":
       registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
       tool = ClipboardToolOnLinux.xsel
 
-    let platform = editorstatus.Platform(initPlatform())
+    let platform = editorstatus.initPlatform()
     registers.sendToClipboad(platform, tool)
 
     if (platform == editorstatus.Platform.linux or
@@ -102,7 +102,7 @@ suite "Editor: Send to clipboad":
       registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
       tool = ClipboardToolOnLinux.xclip
 
-    let platform = editorstatus.Platform(initPlatform())
+    let platform = editorstatus.initPlatform()
     registers.sendToClipboad(platform, tool)
 
     if (platform == editorstatus.Platform.linux or
@@ -128,7 +128,7 @@ suite "Editor: Send to clipboad":
       registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
       tool = ClipboardToolOnLinux.xsel
 
-    let platform = editorstatus.Platform(initPlatform())
+    let platform = editorstatus.initPlatform()
     registers.sendToClipboad(platform, tool)
 
     if (platform == editorstatus.Platform.linux or
@@ -154,7 +154,7 @@ suite "Editor: Send to clipboad":
       registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
       tool = ClipboardToolOnLinux.xclip
 
-    let platform = editorstatus.Platform(initPlatform())
+    let platform = editorstatus.initPlatform()
     registers.sendToClipboad(platform, tool)
 
     if (platform == editorstatus.Platform.linux or
@@ -180,7 +180,7 @@ suite "Editor: Send to clipboad":
       registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
       tool = ClipboardToolOnLinux.xsel
 
-    let platform = editorstatus.Platform(initPlatform())
+    let platform = editorstatus.initPlatform()
     registers.sendToClipboad(platform, tool)
 
     if (platform == editorstatus.Platform.linux or
@@ -207,7 +207,7 @@ suite "Editor: Send to clipboad":
       registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
       tool = ClipboardToolOnLinux.xclip
 
-    let platform = editorstatus.Platform(initPlatform())
+    let platform = editorstatus.initPlatform()
     registers.sendToClipboad(platform, tool)
 
     if (platform == editorstatus.Platform.linux or
