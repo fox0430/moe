@@ -859,11 +859,17 @@ proc checkAndCreateDir(commandLine: var CommandLine,
 
 # Write current editor settings to configuration file
 proc writeConfigurationFile(status: var EditorStatus) =
-  const configFilePath = getHomeDir() / ".config/moe/moerc.toml"
+  const
+    configFileDir = getHomeDir() / ".config/moe/"
+    configFilePath = configFileDir & "moerc.toml"
+
   let buffer = status.settings.generateTomlConfigStr
 
-  if not fileExists(configFilePath):
+  if fileExists(configFilePath):
+    status.commandLine.writePutConfigFileAlreadyExistError(status.messageLog)
+  else:
     try:
+      createDir(configFileDir)
       saveFile(configFilePath.toRunes,
                buffer.toRunes,
                CharacterEncoding.utf8)
