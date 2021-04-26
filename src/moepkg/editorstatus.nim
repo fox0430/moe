@@ -43,7 +43,7 @@ type EditorStatus* = object
 
 proc initPlatform*(): Platform =
   if defined linux:
-    if execProcess("uname -r").contains("Microsoft"):
+    if execProcess("uname -r").contains("microsoft"):
       result = Platform.wsl
     else: result = Platform.linux
   elif defined macosx: result = Platform.mac
