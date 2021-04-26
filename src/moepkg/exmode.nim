@@ -809,7 +809,7 @@ proc openInVerticalSplitWindowCommand(status: var Editorstatus, filename: seq[Ru
 
   status.editCommand(filename)
 
-proc execCmdResultToMessageLog*(output: TaintedString,
+proc execCmdResultToMessageLog*(output: string,
                                 messageLog: var seq[seq[Rune]])=
 
   var line = ""
