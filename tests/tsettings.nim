@@ -789,6 +789,16 @@ suite "Validate toml config":
 
     check result == none(string)
 
+  test "Except to fail":
+    const tomlThemeConfig ="""
+      [Persist]
+      a = "a"
+    """
+    let toml = parsetoml.parseString(tomlThemeConfig)
+    let result = toml.validateTomlConfig
+
+    check isSome(result)
+
 suite "Configuration example":
   test "Check moerc.toml":
     let
