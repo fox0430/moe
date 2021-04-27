@@ -152,6 +152,14 @@ proc writeNoBufferDeletedError*(commandLine: var CommandLine,
   commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
   messageLog.add(mess.toRunes)
 
+proc writePutConfigFile*(commandLine: var CommandLine,
+                         configPath: string,
+                         messageLog: var seq[seq[Rune]]) =
+
+  let mess = fmt "Wrote the current editor settings to {$configPath}"
+  commandLine.writeMessageOnCommandWindow(mess)
+  messageLog.add(mess.toRunes)
+
 proc writePutConfigFileError*(commandLine: var CommandLine,
                               messageLog: var seq[seq[Rune]]) =
 

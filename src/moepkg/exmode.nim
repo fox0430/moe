@@ -876,6 +876,8 @@ proc writeConfigurationFile(status: var EditorStatus) =
     except IOError:
       status.commandLine.writeSaveError(status.messageLog)
 
+    status.commandLine.writePutConfigFile(configFilePath, status.messageLog)
+
   status.changeMode(currentBufStatus.prevMode)
 
 proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
