@@ -2009,7 +2009,7 @@ proc loadSettingFile*(): EditorSettings =
   else:
     return parseSettingsFile(toml)
 
-# Generate Generate a string of the configuration file of  TOML.
+# Generate a string of the configuration file of  TOML.
 proc generateTomlConfigStr*(settings: EditorSettings): string =
   proc addLine(buf: var string, str: string) {.inline.} = buf &= "\n" & str
 
