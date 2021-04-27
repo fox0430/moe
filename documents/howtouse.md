@@ -74,10 +74,7 @@
 | <kbd>**u**</kbd><br> Convert to Lowercase | <kbd>**U**</kbd><br> Convert to Uppercase | <kbd>**>**</kbd><br> Indent | <kbd>**<**</kbd><br> Unindent | <kbd>**~**</kbd><br> Toggle case of character under cursor |
 | <kbd>**Ctrl**</kbd> <kbd>**a**</kbd><br> Increase number under cursor | <kbd>**Ctrl**</kbd> <kbd>**x**</kbd><br> Decrease number under cursor | <kbd>**I**</kbd><br> Insert character, multiple lines | <kbd>**Esc**</kbd><br> Go to Normal mode |  |
 
-</details>
-
-
-## Replace mode
+</details>| <kbd>**j**</kbd><br> Go Down :arrow_down: | <kbd>**k**</kbd><br> Go Up :arrow_up: | <kbd>**j**</kbd><br> Go Left :arrow_left: | <kbd>**k**</kbd><br> Go Up :arrow_up: |
 
 <details open>
   <summary>Replace Text</summary>
@@ -140,6 +137,15 @@
 
 </details>
 
+
+## Configuration mode
+<details open>
+  <summary>In Configuration mode</summary>
+
+|                               |                             |                               |                             |
+|:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
+| <kbd>**h**</kbd><br>Go Left :arrow_left: | <kbd>**j**</kbd><br> Go Down :arrow_down: | <kbd>**k**</kbd><br> Go Up :arrow_up: | <kbd>**l**</kbd><br> Go Rigth :arrow_right: |
+| <kbd>**g**</kbd> <kbd>**g**</kbd><br> Go to the first line :arrow_up: | <kbd>**G**</kbd><br> Go to the last line :arrow_down: | <kbd>**Enter**</kbd><br> Edit setting | <kbd>**w**</kbd><br> Save the current editor settings to the configuration file |
 
 ## Ex mode
 
