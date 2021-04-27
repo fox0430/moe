@@ -1,4 +1,4 @@
-import unittest, options
+import unittest, options, strutils
 import moepkg/[color, ui, highlight, unicodeext]
 
 include moepkg/settings
@@ -275,6 +275,253 @@ const tomlStr = """
   currentLineBg = "pink1"
 """
 
+const tomlStr2 = """
+[Standard]
+theme = dark
+number = true
+currentNumber = true
+statusLine = true
+tabLine = true
+syntax = true
+indentationLines = true
+tabStop = 2
+autoCloseParen = true
+autoIndent = true
+ignorecase = true
+smartcase = true
+disableChangeCursor = false
+defaultCursor = blinkBlock
+normalModeCursor = blinkBlock
+insertModeCursor = blinkIbeam
+autoSave = false
+autoSaveInterval = 5
+liveReloadOfConf = false
+incrementalSearch = true
+popUpWindowInExmode = true
+autoDeleteParen = false
+smoothScroll = true
+smoothScrollSpeed = 15
+
+[Clipboard]
+enable = true
+toolOnLinux = xsel
+
+[BuildOnSave]
+enable = false
+
+[TabLine]
+allBuffer = false
+
+[StatusBar]
+multipleStatusBar = true
+merge = false
+mode = true
+filename = true
+chanedMark = true
+line = true
+column = true
+encoding = true
+language = true
+directory = true
+gitbranchName = true
+showGitInactive = false
+showModeInactive = false
+
+[WorkSpace]
+workSpaceLine = false
+
+[Highlight]
+currentLine = true
+reservedWord = ["TODO", "WIP", "NOTE"]
+replaceText = true
+pairOfParen = true
+fullWidthSpace = true
+trailingSpaces = true
+currentWord = true
+
+[AutoBackup]
+enable = true
+idleTime = 10
+interval = 5
+dirToExclude = ["/etc"]
+
+[QuickRun]
+saveBufferWhenQuickRun = true
+timeout = 30
+nimAdvancedCommand = c
+
+[Notification]
+screenNotifications = true
+logNotifications = true
+autoBackupScreenNotify = true
+autoBackupLogNotify = true
+autoSaveScreenNotify = true
+autoSaveLogNotify = true
+yankScreenNotify = true
+yankLogNotify = true
+deleteScreenNotify = true
+deleteLogNotify = true
+saveScreenNotify = true
+saveLogNotify = true
+workspaceScreenNotify = true
+workspaceLogNotify = true
+quickRunScreenNotify = true
+quickRunLogNotify  = true
+buildOnSaveScreenNotify = true
+buildOnSaveLogNotify = true
+filerScreenNotify = true
+filerLogNotify = true
+restoreScreenNotify = true
+restoreLogNotify = true
+
+[Filer]
+showIcons = true
+
+[Autocomplete]
+enable = true
+
+[Persist]
+exCommand = true
+search = true
+cursorPosition = true
+
+[Debug.WorkSpace]
+enable = true
+numOfWorkSpaces = true
+currentWorkSpaceIndex = true
+
+[Debug.WindowNode]
+enable = true
+currentWindow = true
+index = true
+windowIndex = true
+bufferIndex= true
+parentIndex= true
+childLen = true
+splitType = true
+haveCursesWin= true
+y = true
+x = true
+h = true
+w = true
+currentLine = true
+currentColumn = true
+expandedColumn = true
+cursor = true
+
+[Debug.BufferStatus]
+enable = true
+bufferIndex = true
+path = true
+openDir = true
+currentMode = true
+prevMode = true
+language = true
+encoding = true
+countChange = true
+cmdLoop = true
+lastSaveTime = true
+bufferLen = true
+
+[Theme]
+baseTheme = dark
+editorBg = pink1
+lineNum = pink1
+lineNumBg = pink1
+currentLineNum = pink1
+currentLineNumBg = pink1
+statusLineNormalMode = pink1
+statusLineNormalModeBg = pink1
+statusLineModeNormalMode = pink1
+statusLineModeNormalModeBg = pink1
+statusLineNormalModeInactive = pink1
+statusLineNormalModeInactiveBg = pink1
+statusLineInsertMode = pink1
+statusLineInsertModeBg = pink1
+statusLineModeInsertMode = pink1
+statusLineModeInsertModeBg = pink1
+statusLineInsertModeInactive = pink1
+statusLineInsertModeInactiveBg = pink1
+statusLineVisualMode = pink1
+statusLineVisualModeBg = pink1
+statusLineModeVisualMode = pink1
+statusLineModeVisualModeBg = pink1
+statusLineVisualModeInactive = pink1
+statusLineVisualModeInactiveBg = pink1
+statusLineReplaceMode = pink1
+statusLineReplaceModeBg = pink1
+statusLineModeReplaceMode = pink1
+statusLineModeReplaceModeBg = pink1
+statusLineReplaceModeInactive = pink1
+statusLineReplaceModeInactiveBg = pink1
+statusLineFilerMode = pink1
+statusLineFilerModeBg = pink1
+statusLineModeFilerMode = pink1
+statusLineModeFilerModeBg = pink1
+statusLineFilerModeInactive = pink1
+statusLineFilerModeInactiveBg = pink1
+statusLineExMode = pink1
+statusLineExModeBg = pink1
+statusLineModeExMode = pink1
+statusLineModeExModeBg = pink1
+statusLineExModeInactive = pink1
+statusLineExModeInactiveBg = pink1
+statusLineGitBranch = pink1
+statusLineGitBranchBg = pink1
+tab = pink1
+tabBg = pink1
+currentTab = pink1
+currentTabBg = pink1
+commandBar = pink1
+commandBarBg = pink1
+errorMessage = pink1
+errorMessageBg = pink1
+searchResult = pink1
+searchResultBg = pink1
+visualMode = pink1
+visualModeBg = pink1
+defaultChar = pink1
+gtKeyword = pink1
+gtFunctionName = pink1
+gtBoolean = pink1
+gtStringLit = pink1
+gtSpecialVar = pink1
+gtBuiltin = pink1
+gtDecNumber = pink1
+gtComment = pink1
+gtLongComment = pink1
+gtWhitespace = pink1
+gtPreprocessor = pink1
+currentFile = pink1
+currentFileBg = pink1
+file = pink1
+fileBg = pink1
+dir = pink1
+dirBg = pink1
+pcLink = pink1
+pcLinkBg = pink1
+popUpWindow = pink1
+popUpWindowBg = pink1
+popUpWinCurrentLine = pink1
+popUpWinCurrentLineBg = pink1
+replaceText = pink1
+replaceTextBg = pink1
+parenText = pink1
+parenTextBg = pink1
+currentWord = default
+currentWordBg = pink1
+highlightFullWidthSpace = pink1
+highlightFullWidthSpaceBg = pink1
+highlightTrailingSpaces = pink1
+highlightTrailingSpacesBg = pink1
+workSpaceBar = pink1
+workSpaceBarBg = pink1
+reservedWord = pink1
+reservedWordBg = pink1
+currentSetting = pink1
+currentSettingBg = pink1
+currentLineBg = pink1"""
+
 suite "Parse configuration file":
   test "Parse toml configuration file":
     let toml = parsetoml.parseString(tomlStr)
@@ -549,3 +796,15 @@ suite "Configuration example":
       toml = parsetoml.parseFile(filename)
 
     check toml.validateTomlConfig == none(string)
+
+suite "Generate toml config":
+  test "Generate current config":
+    let
+      settings = initEditorSettings()
+      buffer = settings.generateTomlConfigStr.splitLines
+      tomlStrSplit = tomlStr2.splitLines
+
+    check buffer.len == tomlStrSplit.len
+
+    for i in 0 ..< buffer.len:
+      check buffer[i] == tomlStrSplit[i]
