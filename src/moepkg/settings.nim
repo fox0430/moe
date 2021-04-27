@@ -1990,6 +1990,8 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         validateAutocompleteTable()
       of "Debug":
         validateDebugTable()
+      of "Persist":
+        validatePersistTable()
       else: discard
 
   return none(string)
