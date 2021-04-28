@@ -1,6 +1,6 @@
 import terminal, strutils, sequtils, times
 import editorstatus, ui, gapbuffer, unicodeext, window, movement, editor,
-       bufferstatus
+       bufferstatus, settings
 
 proc initSelectArea(startLine, startColumn: int): SelectArea =
   result.startLine = startLine
@@ -26,7 +26,7 @@ proc yankBuffer(bufStatus: var BufferStatus,
                 windowNode: WindowNode,
                 area: SelectArea,
                 platform: Platform,
-                clipboard: bool) =
+                clipboardSettings: ClipBoardSettings) =
 
   registers.yankedLines = @[]
   registers.yankedStr = @[]
@@ -51,14 +51,15 @@ proc yankBuffer(bufStatus: var BufferStatus,
       else:
         registers.yankedLines.add(bufStatus.buffer[i])
 
-  if clipboard: registers.sendToClipboad(platform)
+  if clipboardSettings.enable:
+    registers.sendToClipboad(platform, clipboardSettings.toolOnLinux)
 
 proc yankBufferBlock(bufStatus: var BufferStatus,
                      registers: var Registers,
                      windowNode: WindowNode,
                      area: SelectArea,
                      platform: Platform,
-                     clipboard: bool) =
+                     clipboardSettings: ClipBoardSettings) =
 
   if bufStatus.buffer.len == 1 and
      bufStatus.buffer[windowNode.currentLine].len < 1: return
@@ -70,18 +71,19 @@ proc yankBufferBlock(bufStatus: var BufferStatus,
     for j in area.startColumn .. min(bufStatus.buffer[i].high, area.endColumn):
       registers.yankedLines[^1].add(bufStatus.buffer[i][j])
 
-  if clipboard: registers.sendToClipboad(platform)
+  if clipboardSettings.enable:
+    registers.sendToClipboad(platform, clipboardSettings.toolOnLinux)
 
 proc deleteBuffer(bufStatus: var BufferStatus,
                   registers: var Registers,
                   windowNode: WindowNode,
                   area: SelectArea,
                   platform: Platform,
-                  clipboard: bool) =
+                  clipboardSettings: ClipBoardSettings) =
 
   if bufStatus.buffer.len == 1 and
      bufStatus.buffer[windowNode.currentLine].len < 1: return
-  bufStatus.yankBuffer(registers, windowNode, area, platform, clipboard)
+  bufStatus.yankBuffer(registers, windowNode, area, platform, clipboardSettings)
 
   var currentLine = area.startLine
   for i in area.startLine .. area.endLine:
@@ -125,11 +127,15 @@ proc deleteBufferBlock(bufStatus: var BufferStatus,
                        windowNode: WindowNode,
                        area: SelectArea,
                        platform: Platform,
-                       clipboard: bool) =
+                       clipboardSettings: ClipBoardSettings) =
 
   if bufStatus.buffer.len == 1 and
      bufStatus.buffer[windowNode.currentLine].len < 1: return
-  bufStatus.yankBufferBlock(registers, windowNode, area, platform, clipboard)
+  bufStatus.yankBufferBlock(registers,
+                            windowNode,
+                            area,
+                            platform,
+                            clipboardSettings)
 
   if area.startLine == area.endLine and bufStatus.buffer[area.startLine].len < 1:
     bufStatus.buffer.delete(area.startLine, area.startLine + 1)
@@ -293,6 +299,13 @@ proc getInsertBuffer(status: var Editorstatus): seq[Rune] =
         currentMainWindowNode,
         status.settings.autoDeleteParen)
       break
+    elif isBackspaceKey(key):
+      currentBufStatus.keyBackspace(
+        currentMainWindowNode,
+        status.settings.autoDeleteParen,
+        status.settings.tabStop)
+      if result.len > 0:
+        result.delete(result.high)
     elif isTabKey(key):
       result.add(key)
       insertTab(currentBufStatus,
@@ -337,19 +350,17 @@ proc insertCharBlock(bufStatus: var BufferStatus,
 proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSelectArea
 
-  let clipboard = status.settings.systemClipboard
-
   if key == ord('y') or isDcKey(key):
     currentBufStatus.yankBuffer(status.registers,
                                 currentMainWindowNode,
                                 area, status.platform,
-                                clipboard)
+                                status.settings.clipboard)
   elif key == ord('x') or key == ord('d'):
     currentBufStatus.deleteBuffer(status.registers,
                                   currentMainWindowNode,
                                   area,
                                   status.platform,
-                                  clipboard)
+                                  status.settings.clipboard)
   elif key == ord('>'):
     currentBufStatus.addIndent(currentMainWindowNode,
                                area,
@@ -377,8 +388,6 @@ proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
 proc visualBlockCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSelectArea
 
-  let clipboard = status.settings.systemClipboard
-
   template insertCharacterMultipleLines() =
     status.changeMode(Mode.insert)
 
@@ -403,13 +412,13 @@ proc visualBlockCommand(status: var EditorStatus, area: var SelectArea, key: Run
                                      currentMainWindowNode,
                                      area,
                                      status.platform,
-                                     clipboard)
+                                     status.settings.clipboard)
   elif key == ord('x') or key == ord('d'):
     currentBufStatus.deleteBufferBlock(status.registers,
                                        currentMainWindowNode,
                                        area,
                                        status.platform,
-                                       clipboard)
+                                       status.settings.clipboard)
   elif key == ord('>'):
     currentBufStatus.insertIndent(area, status.settings.tabStop)
   elif key == ord('<'):
@@ -464,7 +473,15 @@ proc visualMode*(status: var EditorStatus) =
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
     elif isEscKey(key) or isControlSquareBracketsRight(key):
-      status.updatehighlight(currentMainWindowNode)
+
+      var highlight = currentMainWindowNode.highlight
+      highlight.updateHighlight(
+        currentBufStatus,
+        currentMainWindowNode,
+        status.isSearchHighlight,
+        status.searchHistory,
+        status.settings)
+
       status.changeMode(Mode.normal)
 
     elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):

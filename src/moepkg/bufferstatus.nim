@@ -28,6 +28,7 @@ type SelectArea* = object
 
 type BufferStatus* = object
   buffer*: GapBuffer[seq[Rune]]
+  isUpdate*: bool
   characterEncoding*: CharacterEncoding
   language*: SourceLanguage
   selectArea*: SelectArea
@@ -41,7 +42,7 @@ type BufferStatus* = object
   lastSaveTime*: DateTime
 
 proc initBufferStatus*(path: seq[Rune], mode: Mode): BufferStatus {.inline.} =
-  BufferStatus(path: path, mode: mode, lastSaveTime: now())
+  BufferStatus(isUpdate: true, path: path, mode: mode, lastSaveTime: now())
 
 proc isVisualMode*(mode: Mode): bool {.inline.} =
   mode == Mode.visual or mode == Mode.visualBlock

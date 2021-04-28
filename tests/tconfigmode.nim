@@ -39,9 +39,19 @@ suite "Config mode: Init buffer":
                      ru "  incrementalSearch              true",
                      ru "  popUpWindowInExmode            true",
                      ru "  autoDeleteParen                false",
-                     ru "  systemClipboard                true",
                      ru "  smoothScroll                   true",
                      ru "  smoothScrollSpeed              15"]
+
+    for index, line in buffer:
+      check sample[index] == line
+
+  test "Init ClipBoard table buffer":
+    var status = initEditorStatus()
+    let buffer = status.settings.clipboard.initClipBoardTableBuffer
+
+    const sample = @[ru "ClipBoard",
+                     ru "  enable                         true",
+                     ru "  toolOnLinux                    xsel"]
 
     for index, line in buffer:
       check sample[index] == line
@@ -406,15 +416,15 @@ suite "Config mode: Init buffer":
                      ru "",
                      ru "  parenText",
                      ru "    foreground                   default",
-                     ru "    background                   white",
+                     ru "    background                   blue",
                      ru "",
                      ru "  currentWord",
                      ru "    foreground                   default",
-                     ru "    background                   white",
+                     ru "    background                   gray",
                      ru "",
                      ru "  highlightFullWidthSpace",
-                     ru "    foreground                   default",
-                     ru "    background                   white",
+                     ru "    foreground                   red",
+                     ru "    background                   red",
                      ru "",
                      ru "  highlightTrailingSpaces",
                      ru "    foreground                   red",
@@ -669,17 +679,6 @@ suite "Config mode: Get standard table setting values":
 
     checkBoolSettingValue(default, values)
 
-  test "Get systemClipboard values":
-    var status = initEditorStatus()
-    let settings = status.settings
-
-    const name = "systemClipboard"
-    let
-      default = settings.systemClipboard
-      values = settings.getStandardTableSettingValues(name)
-
-    checkBoolSettingValue(default, values)
-
   test "Get smoothScroll values":
     var status = initEditorStatus()
     let settings = status.settings
@@ -699,6 +698,29 @@ suite "Config mode: Get standard table setting values":
     let values = settings.getStandardTableSettingValues(name)
 
     check values.len == 0
+
+suite "Config mode: Get ClipBoard table setting values":
+  test "Get enable value":
+    var status = initEditorStatus()
+    let clipboardSettings = status.settings.clipboard
+
+    const name = "enable"
+    let
+      default = clipboardSettings.enable
+      values = clipboardSettings.getClipboardTableSettingsValues(name)
+
+    checkBoolSettingValue(default, values)
+
+  test "Get toolOnLinux value":
+    var status = initEditorStatus()
+    let clipboardSettings = status.settings.clipboard
+
+    const name = "toolOnLinux"
+    let
+      default = clipboardSettings.toolOnLinux
+      values = clipboardSettings.getClipboardTableSettingsValues(name)
+
+    check $default == $values[0]
 
 suite "Config mode: Get BuildOnSave table setting values":
   test "Get enable values":
@@ -1655,6 +1677,30 @@ suite "Config mode: Chaging Standard table settings":
 
     check val == settings.disableChangeCursor
 
+  test "Chaging defaultCursor":
+    var settings = initEditorSettings()
+
+    let val = "noneBlinkIbeam"
+    settings.changeStandardTableSetting("defaultCursor", val)
+
+    check CursorType.noneBlinkIbeam == settings.defaultCursor
+
+  test "Chaging normalModeCursor":
+    var settings = initEditorSettings()
+
+    let val = "noneBlinkIbeam"
+    settings.changeStandardTableSetting("normalModeCursor", val)
+
+    check CursorType.noneBlinkIbeam == settings.normalModeCursor
+
+  test "Chaging insertModeCursor":
+    var settings = initEditorSettings()
+
+    let val = "noneBlinkIbeam"
+    settings.changeStandardTableSetting("insertModeCursor", val)
+
+    check CursorType.noneBlinkIbeam == settings.insertModeCursor
+
   test "Chaging autoSave":
     var settings = initEditorSettings()
 
@@ -1695,14 +1741,6 @@ suite "Config mode: Chaging Standard table settings":
 
     check val == settings.autoDeleteParen
 
-  test "Chaging systemClipboard":
-    var settings = initEditorSettings()
-
-    let val = not settings.systemClipboard
-    settings.changeStandardTableSetting("systemClipboard", $val)
-
-    check val == settings.systemClipboard
-
   test "Chaging smoothScroll":
     var settings = initEditorSettings()
 
@@ -1718,6 +1756,37 @@ suite "Config mode: Chaging Standard table settings":
     settings.changeStandardTableSetting("test", "test")
 
     check beforeSettings == settings
+
+suite "Config mode: Chaging ClipBoard table settings":
+  test "Chaging enable":
+    var
+      settings = initEditorSettings()
+      clipboardSettings = settings.clipboard
+
+    let val = not clipboardSettings.enable
+    clipboardSettings.changeClipBoardTableSettings("enable", $val)
+
+    check val == clipboardSettings.enable
+
+  test "Change toolOnLinux":
+    var
+      settings = initEditorSettings()
+      clipboardSettings = settings.clipboard
+
+    let val = ClipboardToolOnLinux.xclip
+    clipboardSettings.changeClipBoardTableSettings("toolOnLinux", $val)
+
+    check val == clipboardSettings.toolOnLinux
+
+  test "Set invalid value":
+    var
+      settings = initEditorSettings()
+      clipboardSettings = settings.clipboard
+
+    let beforeSettings = clipboardSettings
+    clipboardSettings.changeClipBoardTableSettings("test", "test")
+
+    check beforeSettings == clipboardSettings
 
 suite "Config mode: Chaging BuildOnSave table settings":
   test "Chaging enable":

@@ -1,4 +1,4 @@
-import unittest, options
+import unittest, options, strutils
 import moepkg/[color, ui, highlight, unicodeext]
 
 include moepkg/settings
@@ -28,9 +28,12 @@ const tomlStr = """
   incrementalSearch = false
   popUpWindowInExmode = false
   autoDeleteParen = false
-  systemClipboard = false
   smoothScroll = false
   smoothScrollSpeed = 1
+
+  [ClipBoard]
+  enable = false
+  toolOnLinux = "xclip"
 
   [BuildOnSave]
   enable = true
@@ -300,9 +303,11 @@ suite "Parse configuration file":
     check not settings.incrementalSearch
     check not settings.popUpWindowInExmode
     check not settings.autoDeleteParen
-    check not settings.systemClipboard
     check not settings.smoothScroll
     check settings.smoothScrollSpeed == 1
+
+    check not settings.clipboard.enable
+    check settings.clipboard.toolOnLinux == ClipboardToolOnLinux.xclip
 
     check settings.buildOnSave.enable
     check settings.buildOnSave.workspaceRoot == ru"/home/fox/git/moe"
@@ -537,6 +542,16 @@ suite "Validate toml config":
 
     check result == none(string)
 
+  test "Except to fail":
+    const tomlThemeConfig ="""
+      [Persist]
+      a = "a"
+    """
+    let toml = parsetoml.parseString(tomlThemeConfig)
+    let result = toml.validateTomlConfig
+
+    check isSome(result)
+
 suite "Configuration example":
   test "Check moerc.toml":
     let
@@ -544,3 +559,14 @@ suite "Configuration example":
       toml = parsetoml.parseFile(filename)
 
     check toml.validateTomlConfig == none(string)
+
+suite "Generate toml config":
+  test "Generate current config":
+    let
+      settings = initEditorSettings()
+      str = settings.generateTomlConfigStr
+
+      toml = parsetoml.parseString(str)
+      result = toml.validateTomlConfig
+
+    check result == none(string)

@@ -148,10 +148,17 @@ default is 15
 smoothScrollSpeed
 ```
 
-System clipboard (bool)  
+### Clipboard table
+Enable/Disable system clipboard (bool)  
 default is true
 ```
-systemClipboard
+enable
+```
+
+Set clipboard tool for Linux (string)  
+default is xsel
+```
+toolOnLinux
 ```
 
 ### TabLine table

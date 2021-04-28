@@ -13,12 +13,13 @@ suite "Help":
     status.update
 
     status.initHelpModeBuffer
+    currentBufStatus.isUpdate = true
     status.update
 
-    check(status.bufStatus[0].path == ru"help")
+    check(currentBufStatus.path == ru"help")
 
     let
-      buffer = status.bufStatus[0].buffer
+      buffer = currentBufStatus.buffer
       help = helpsentences.splitLines
 
     for i in 0 ..< buffer.len:

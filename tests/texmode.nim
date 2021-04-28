@@ -379,12 +379,12 @@ suite "Ex mode: Clipboard setting command":
     block:
       const command = @[ru"clipboard", ru"off"]
       status.exModeCommand(command, 100, 100)
-      check(status.settings.systemClipboard == false)
+      check(status.settings.clipboard.enable == false)
 
     block:
       const command = @[ru"clipboard", ru"on"]
       status.exModeCommand(command, 100, 100)
-      check(status.settings.systemClipboard == true)
+      check(status.settings.clipboard.enable == true)
 
 suite "Ex mode: Highlight full width space command":
   test "Highlight full width space command":
@@ -900,3 +900,46 @@ suite "Ex mode: highlight current line setting command":
     const command = @[ru"highlightCurrentLine", ru"on"]
     status.exModeCommand(command, 100, 100)
     check status.settings.view.highlightCurrentLine
+
+suite "Ex mode: Save Ex command history":
+  test "Save \"noh\" command":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const command = @[ru"noh"]
+    status.exModeCommand(command, 100, 100)
+
+    check status.exCommandHistory == @[ru "noh"]
+
+  test "Save \"noh\" command 2":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    for i in 0 ..< 2:
+      const command = @[ru"noh"]
+      status.exModeCommand(command, 100, 100)
+
+    check status.exCommandHistory == @[ru "noh"]
+
+  test "Save 2 commands":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    block:
+      const command = @[ru"noh"]
+      status.exModeCommand(command, 100, 100)
+
+    block:
+      const command = @[ru"vs"]
+      status.exModeCommand(command, 100, 100)
+
+    check status.exCommandHistory == @[ru "noh", ru "vs"]
+
+  test "Fix #1304":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const command = @[ru"buildOnSave off"]
+    status.exModeCommand(command, 100, 100)
+
+    check status.exCommandHistory == @[ru "buildOnSave off"]

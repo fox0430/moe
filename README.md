@@ -113,6 +113,8 @@ This project's goal is a very customizable, high productivity, user friendly, hi
 
 - xclip v0.13 or higher (Option on GNU/Linux)
 
+- xsel (Option on GNU/Linux)
+
 ```sh
 # Latest released version
 nimble install moe

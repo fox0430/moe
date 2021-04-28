@@ -4,7 +4,7 @@ import unicodeext
 
 proc build*(filename, workspaceRoot,
             command: seq[Rune],
-            language: SourceLanguage): tuple[output: TaintedString, exitCode: int] =
+            language: SourceLanguage): tuple[output: string, exitCode: int] =
 
   if language == SourceLanguage.langNim:
     let

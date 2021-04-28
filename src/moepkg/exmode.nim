@@ -203,10 +203,11 @@ proc isOpenInVerticalSplitWindowCommand(command: seq[seq[Rune]]): bool {.inline.
   return command.len == 2 and cmpIgnoreCase($command[0], "vs") == 0
 
 proc isWriteCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  let prevMode = currentBufStatus.prevMode
   return command.len in {1, 2} and
          cmpIgnoreCase($command[0], "w") == 0 and
-         status.bufStatus[currentBufferIndex].prevMode == bufferstatus.Mode.normal
+         (prevMode == bufferstatus.Mode.normal or
+          prevMode == bufferstatus.Mode.config)
 
 proc isQuitCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 1 and cmpIgnoreCase($command[0], "q") == 0
@@ -637,8 +638,8 @@ proc highlightCurrentWordSettingCommand(status: var Editorstatus,
 proc systemClipboardSettingCommand(status: var Editorstatus,
                                    command: seq[Rune]) =
 
-  if command == ru"on": status.settings.systemClipboard = true
-  elif command == ru"off": status.settings.systemClipboard = false
+  if command == ru"on": status.settings.clipboard.enable = true
+  elif command == ru"off": status.settings.clipboard.enable = false
 
   status.commandLine.erase
 
@@ -809,7 +810,7 @@ proc openInVerticalSplitWindowCommand(status: var Editorstatus, filename: seq[Ru
 
   status.editCommand(filename)
 
-proc execCmdResultToMessageLog*(output: TaintedString,
+proc execCmdResultToMessageLog*(output: string,
                                 messageLog: var seq[seq[Rune]])=
 
   var line = ""
@@ -856,56 +857,82 @@ proc checkAndCreateDir(commandLine: var CommandLine,
       try: createDir(pathSplit.head)
       except OSError: result = false
 
-proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
-  if path.len == 0:
-    status.commandLine.writeNoFileNameError(status.messageLog)
-    status.changeMode(currentBufStatus.prevMode)
-    return
+# Write current editor settings to configuration file
+proc writeConfigurationFile(status: var EditorStatus) =
+  const
+    configFileDir = getHomeDir() / ".config/moe/"
+    configFilePath = configFileDir & "moerc.toml"
 
-  # Check if the file has been overwritten by another application
-  if fileExists($path):
-    let
-      lastSaveTimeOfBuffer = currentBufStatus.lastSaveTime.toTime
-      lastModificationTimeOfFile = getLastModificationTime($path)
-    if lastModificationTimeOfFile > lastSaveTimeOfBuffer:
-      if not status.commandLine.askFileChangedSinceReading(status.messageLog):
-        # Cancel overwrite
-        status.changeMode(currentBufStatus.prevMode)
-        status.commandLine.erase
-        return
+  let buffer = status.settings.generateTomlConfigStr
 
-  ## Ask if you want to create a directory that does not exist
-  if not status.commandLine.checkAndCreateDir(status.messageLog, path):
-    status.changeMode(currentBufStatus.prevMode)
-    status.commandLine.writeSaveError(status.messageLog)
-    return
-
-  try:
-    saveFile(path,
-             currentBufStatus.buffer.toRunes,
-             currentBufStatus.characterEncoding)
-  except IOError:
-    status.commandLine.writeSaveError(status.messageLog)
-
-  if currentBufStatus.path != path:
-    currentBufStatus.path = path
-    currentBufStatus.language = detectLanguage($path)
-
-  # Build on save
-  if status.settings.buildOnSave.enable:
+  if fileExists(configFilePath):
+    status.commandLine.writePutConfigFileAlreadyExistError(status.messageLog)
+  else:
     try:
-      status.buildOnSave
+      createDir(configFileDir)
+      saveFile(configFilePath.toRunes,
+               buffer.toRunes,
+               CharacterEncoding.utf8)
     except IOError:
       status.commandLine.writeSaveError(status.messageLog)
-  else:
-      status.commandLine.writeMessageSaveFile(
-        path,
-        status.settings.notificationSettings,
-        status.messageLog)
 
-  currentBufStatus.countChange = 0
-  currentBufStatus.lastSaveTime = now()
+    status.commandLine.writePutConfigFile(configFilePath, status.messageLog)
+
   status.changeMode(currentBufStatus.prevMode)
+
+proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
+  if isConfigMode(currentBufStatus.mode, currentBufStatus.prevMode):
+    status.writeConfigurationFile
+  else:
+    if path.len == 0:
+      status.commandLine.writeNoFileNameError(status.messageLog)
+      status.changeMode(currentBufStatus.prevMode)
+      return
+
+    # Check if the file has been overwritten by another application
+    if fileExists($path):
+      let
+        lastSaveTimeOfBuffer = currentBufStatus.lastSaveTime.toTime
+        lastModificationTimeOfFile = getLastModificationTime($path)
+      if lastModificationTimeOfFile > lastSaveTimeOfBuffer:
+        if not status.commandLine.askFileChangedSinceReading(status.messageLog):
+          # Cancel overwrite
+          status.changeMode(currentBufStatus.prevMode)
+          status.commandLine.erase
+          return
+
+    ## Ask if you want to create a directory that does not exist
+    if not status.commandLine.checkAndCreateDir(status.messageLog, path):
+      status.changeMode(currentBufStatus.prevMode)
+      status.commandLine.writeSaveError(status.messageLog)
+      return
+
+    try:
+      saveFile(path,
+               currentBufStatus.buffer.toRunes,
+               currentBufStatus.characterEncoding)
+    except IOError:
+      status.commandLine.writeSaveError(status.messageLog)
+
+    if currentBufStatus.path != path:
+      currentBufStatus.path = path
+      currentBufStatus.language = detectLanguage($path)
+
+    # Build on save
+    if status.settings.buildOnSave.enable:
+      try:
+        status.buildOnSave
+      except IOError:
+        status.commandLine.writeSaveError(status.messageLog)
+    else:
+        status.commandLine.writeMessageSaveFile(
+          path,
+          status.settings.notificationSettings,
+          status.messageLog)
+
+    currentBufStatus.countChange = 0
+    currentBufStatus.lastSaveTime = now()
+    status.changeMode(currentBufStatus.prevMode)
 
 proc forceWriteCommand(status: var EditorStatus, path: seq[Rune]) =
   try:
@@ -1089,7 +1116,13 @@ proc listAllBufferCommand(status: var Editorstatus) =
 
   currentMainWindowNode.currentLine = 0
 
-  status.updatehighlight(currentMainWindowNode)
+  var highlight = currentMainWindowNode.highlight
+  highlight.updateHighlight(
+    currentBufStatus,
+    currentMainWindowNode,
+    status.isSearchHighlight,
+    status.searchHistory,
+    status.settings)
 
   while true:
     status.update
@@ -1208,6 +1241,17 @@ proc newEmptyBufferInSplitWindowVertically*(status: var Editorstatus) =
 
   status.changeCurrentBuffer(status.bufStatus.high)
 
+proc addExCommandHistory(exCommandHistory: var seq[seq[Rune]],
+                         command: seq[seq[Rune]]) =
+
+  var cmd = ru ""
+  for index, runes in command:
+    if index > 0: cmd.add(ru" " & runes)
+    else: cmd.add(runes)
+
+  if exCommandHistory.len == 0 or cmd != exCommandHistory[^1]:
+    exCommandHistory.add(cmd)
+
 proc exModeCommand*(status: var EditorStatus,
                     command: seq[seq[Rune]],
                     height, width: int) =
@@ -1215,9 +1259,7 @@ proc exModeCommand*(status: var EditorStatus,
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
   # Save command history
-  status.exCommandHistory.add(@[ru ""])
-  for runes in command:
-    status.exCommandHistory[status.exCommandHistory.high].add(runes)
+  status.exCommandHistory.addExCommandHistory(command)
 
   if command.len == 0 or command[0].len == 0:
     status.changeMode(currentBufStatus.prevMode)
@@ -1386,6 +1428,8 @@ proc exMode*(status: var EditorStatus) =
 
   status.update
 
+  var highlight = currentMainWindowNode.highlight
+
   while exitInput == false:
     let returnWord = status.getKeyOnceAndWriteCommandView(
       prompt,
@@ -1408,7 +1452,6 @@ proc exMode*(status: var EditorStatus) =
           if command[i] == ru'/': break
           keyword.add(command[i])
       status.searchHistory[status.searchHistory.high] = keyword
-      let bufferIndex = currentMainWindowNode.bufferIndex
       status.isSearchHighlight = true
 
       status.jumpToSearchForwardResults(keyword)
@@ -1418,14 +1461,25 @@ proc exMode*(status: var EditorStatus) =
           isReplaceCommand = false
           status.searchHistory.delete(status.searchHistory.high)
 
-    status.updatehighlight(currentMainWindowNode)
+    highlight.updateHighlight(
+      currentBufStatus,
+      currentMainWindowNode,
+      status.isSearchHighlight,
+      status.searchHistory,
+      status.settings)
+
     status.resize(terminalHeight(), terminalWidth())
     status.update
 
   if isReplaceCommand:
     status.searchHistory.delete(status.searchHistory.high)
 
-  status.updatehighlight(currentMainWindowNode)
+    highlight.updateHighlight(
+      currentBufStatus,
+      currentMainWindowNode,
+      status.isSearchHighlight,
+      status.searchHistory,
+      status.settings)
 
   if cancelInput:
     status.commandLine.erase
