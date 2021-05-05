@@ -1,16 +1,21 @@
-name: Build
+name: Tests
 
 on:
   push:
     paths-ignore:
       - 'LICENSE'
       - '*.md'
-      - 'documents/*.md'
+      - 'documents/'
+      - 'docs/'
+    branches:
+      - develop
+      - master
   pull_request:
     paths-ignore:
       - 'LICENSE'
       - '*.md'
-      - 'documents/*.md'
+      - 'documents/'
+      - 'docs/'
 
 jobs:
   skip:
