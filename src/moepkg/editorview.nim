@@ -203,16 +203,22 @@ proc writeCurrentLine(win: var Window,
 
   if viewSettings.highlightCurrentLine and
      not (isVisualMode(mode) or isConfigMode(mode, prevMode)):
-    # Change background color to white
+    # Change background color to white if background color is editorBg
     let
       defaultCharColor = EditorColorPair.defaultChar
       colors = if i > -1 and i < highlight.len:
                  theme.getColorFromEditorColorPair(highlight[i].color)
                else:
                  theme.getColorFromEditorColorPair(defaultCharColor)
-    setColorPair(currentLineColorPair,
-                 colors[0],
-                 ColorThemeTable[theme].EditorColor.currentLineBg)
+
+      theme = ColorThemeTable[theme]
+      fg = colors[0]
+      bg = if colors[1] == theme.EditorColor.editorBg:
+             theme.EditorColor.currentLineBg
+           else:
+             colors[1]
+
+    setColorPair(currentLineColorPair, fg, bg)
 
     view.write(win, y, x, str, currentLineColorPair)
 
