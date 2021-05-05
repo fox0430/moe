@@ -5,7 +5,8 @@ on:
     paths-ignore:
       - 'LICENSE'
       - '*.md'
-      - 'documents/*.md'
+      - 'documents/'
+      - 'docs/'
     branches:
       - develop
       - master
@@ -13,7 +14,8 @@ on:
     paths-ignore:
       - 'LICENSE'
       - '*.md'
-      - 'documents/*.md'
+      - 'documents/'
+      - 'docs/'
 
 jobs:
   skip:
