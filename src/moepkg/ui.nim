@@ -30,13 +30,13 @@ type Window* = ref object
 # if press ctrl-c key, set true in setControlCHook()
 var pressCtrlC* = false
 
-proc setBkinkingIbeamCursor*() {.inline.} = discard execShellCmd("printf \"\x1b[\x35 q\"")
+proc setBkinkingIbeamCursor*() {.inline.} = discard execShellCmd("printf '\e[5 q'")
 
-proc setNoneBlinkingIbeamCursor*() {.inline.} = discard execShellCmd("printf '\\033[6 q'")
+proc setNoneBlinkingIbeamCursor*() {.inline.} = discard execShellCmd("printf '\e[6 q'")
 
-proc setBlinkingBlockCursor*() {.inline.} = discard execShellCmd("printf '\e[0 q'")
+proc setBlinkingBlockCursor*() {.inline.} = discard execShellCmd("printf '\e[1 q'")
 
-proc setNoneBlinkingBlockCursor*() {.inline.} = discard execShellCmd("printf '\x1b[\x32 q'")
+proc setNoneBlinkingBlockCursor*() {.inline.} = discard execShellCmd("printf '\e[2 q'")
 
 proc changeCursorType*(cursorType: CursorType) =
   case cursorType
