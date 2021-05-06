@@ -198,9 +198,13 @@ proc loadLastPosition*(): seq[LastPosition] =
 
           result.add position
 
-proc executeOnExit(settings: EditorSettings) {.inline.} =
+proc executeOnExit(settings: EditorSettings, platform: Platform) {.inline.} =
   if not settings.disableChangeCursor:
     changeCursorType(settings.defaultCursor)
+
+  # Without this, the cursor disappears in Windows terminal
+  if platform ==  Platform.wsl:
+    unhideCursor()
 
 # Save Ex command history to the file
 proc saveExCommandHistory(history: seq[seq[Rune]]) =
@@ -257,8 +261,10 @@ proc exitEditor*(status: EditorStatus) =
   if status.settings.persist.cursorPosition:
     saveLastPosition(status.lastPosition)
 
-  executeOnExit(status.settings)
   exitUi()
+
+  executeOnExit(status.settings, status.platform)
+
   quit()
 
 proc getMainWindowHeight*(settings: EditorSettings, h: int): int =

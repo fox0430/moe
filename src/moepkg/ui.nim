@@ -38,6 +38,8 @@ proc setBlinkingBlockCursor*() {.inline.} = discard execShellCmd("printf '\e[1 q
 
 proc setNoneBlinkingBlockCursor*() {.inline.} = discard execShellCmd("printf '\e[2 q'")
 
+proc unhideCursor*() {.inline.} = discard execShellCmd("printf '\e[?25h'")
+
 proc changeCursorType*(cursorType: CursorType) =
   case cursorType
   of blinkBlock: setBlinkingBlockCursor()
