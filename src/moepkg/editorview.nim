@@ -212,23 +212,36 @@ proc writeCurrentLine(win: var Window,
                  theme.getColorFromEditorColorPair(defaultCharColor)
 
       theme = ColorThemeTable[theme]
-      fg = colors[0]
-      bg = if colors[1] == theme.EditorColor.editorBg:
-             theme.EditorColor.currentLineBg
-           else:
-             colors[1]
 
-    setColorPair(currentLineColorPair, fg, bg)
+    block:
+      let
+        fg = colors[0]
+        bg = if colors[1] == theme.EditorColor.editorBg:
+               theme.EditorColor.currentLineBg
+             else:
+               colors[1]
+
+      setColorPair(currentLineColorPair, fg, bg)
 
     view.write(win, y, x, str, currentLineColorPair)
 
+    currentLineColorPair.inc
+
     # Write spaces after text in the current line
+    block:
+      let
+        fg = theme.EditorColor.defaultChar
+        bg = theme.EditorColor.currentLineBg
+
+      setColorPair(currentLineColorPair, fg, bg)
     let
       spaces = ru" ".repeat(view.width - view.lines[y].width)
       x = view.widthOfLineNum + view.lines[y].width
+
     view.write(win, y, x, spaces, currentLineColorPair)
 
     currentLineColorPair.inc
+
   else:
     view.write(win, y, x, str, highlight[i].color)
 
