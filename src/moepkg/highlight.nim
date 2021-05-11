@@ -238,7 +238,7 @@ proc initHighlight*(buffer: string,
   while true:
     try:
       token.getNextToken(language)
-    except AssertionError:
+    except AssertionDefect:
       discard
 
     if token.kind == gtEof: break
