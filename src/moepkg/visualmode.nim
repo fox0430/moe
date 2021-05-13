@@ -1,6 +1,6 @@
 import terminal, strutils, sequtils, times
 import editorstatus, ui, gapbuffer, unicodeext, window, movement, editor,
-       bufferstatus, settings
+       bufferstatus, settings, register
 
 proc initSelectArea(startLine, startColumn: int): SelectArea =
   result.startLine = startLine
@@ -22,40 +22,46 @@ proc swapSelectArea(area: var SelectArea) =
     swap(area.startColumn, area.endColumn)
 
 proc yankBuffer(bufStatus: var BufferStatus,
-                registers: var Registers,
+                registers: var seq[Register],
                 windowNode: WindowNode,
                 area: SelectArea,
                 platform: Platform,
                 clipboardSettings: ClipBoardSettings) =
 
-  registers.yankedLines = @[]
-  registers.yankedStr = @[]
+  var
+    yankedBuffer: seq[seq[Rune]]
+    isLine = true
 
   if area.startLine == area.endLine:
     if bufStatus.buffer[windowNode.currentLine].len < 1:
-        registers.yankedLines.add(@[ru""])
+        yankedBuffer.add(@[ru ""])
     else:
+      isLine = false
+      var runes = ru ""
       for j in area.startColumn .. area.endColumn:
-        registers.yankedStr.add(bufStatus.buffer[area.startLine][j])
+        runes.add(bufStatus.buffer[area.startLine][j])
+      yankedBuffer = @[runes]
   else:
     for i in area.startLine .. area.endLine:
       if i == area.startLine and area.startColumn > 0:
-        registers.yankedLines.add(ru"")
+        yankedBuffer.add(ru"")
         for j in area.startColumn ..< bufStatus.buffer[area.startLine].len:
-          registers.yankedLines[^1].add(bufStatus.buffer[area.startLine][j])
+          yankedBuffer[^1].add(bufStatus.buffer[area.startLine][j])
       elif i == area.endLine and
            area.endColumn < bufStatus.buffer[area.endLine].len:
-        registers.yankedLines.add(ru"")
+        yankedBuffer.add(ru"")
         for j in 0 .. area.endColumn:
-          registers.yankedLines[^1].add(bufStatus.buffer[area.endLine][j])
+          yankedBuffer[^1].add(bufStatus.buffer[area.endLine][j])
       else:
-        registers.yankedLines.add(bufStatus.buffer[i])
+        yankedBuffer.add(bufStatus.buffer[i])
+
+  registers.addRegister(yankedBuffer, isLine)
 
   if clipboardSettings.enable:
     registers.sendToClipboad(platform, clipboardSettings.toolOnLinux)
 
 proc yankBufferBlock(bufStatus: var BufferStatus,
-                     registers: var Registers,
+                     registers: var seq[Register],
                      windowNode: WindowNode,
                      area: SelectArea,
                      platform: Platform,
@@ -63,19 +69,21 @@ proc yankBufferBlock(bufStatus: var BufferStatus,
 
   if bufStatus.buffer.len == 1 and
      bufStatus.buffer[windowNode.currentLine].len < 1: return
-  registers.yankedLines = @[]
-  registers.yankedStr = @[]
+
+  var yankedBuffer: seq[seq[Rune]]
 
   for i in area.startLine .. area.endLine:
-    registers.yankedLines.add(ru"")
+    yankedBuffer.add(@[ru ""])
     for j in area.startColumn .. min(bufStatus.buffer[i].high, area.endColumn):
-      registers.yankedLines[^1].add(bufStatus.buffer[i][j])
+      yankedBuffer[^1].add(bufStatus.buffer[i][j])
+
+  registers.addRegister(yankedBuffer)
 
   if clipboardSettings.enable:
     registers.sendToClipboad(platform, clipboardSettings.toolOnLinux)
 
 proc deleteBuffer(bufStatus: var BufferStatus,
-                  registers: var Registers,
+                  registers: var seq[Register],
                   windowNode: WindowNode,
                   area: SelectArea,
                   platform: Platform,
@@ -123,7 +131,7 @@ proc deleteBuffer(bufStatus: var BufferStatus,
   inc(bufStatus.countChange)
 
 proc deleteBufferBlock(bufStatus: var BufferStatus,
-                       registers: var Registers,
+                       registers: var seq[Register],
                        windowNode: WindowNode,
                        area: SelectArea,
                        platform: Platform,

@@ -1,6 +1,6 @@
 import strutils, sequtils, os, osproc, random, strformat
 import editorstatus, ui, gapbuffer, unicodeext, undoredostack,
-       window, bufferstatus, movement, messages, settings
+       window, bufferstatus, movement, messages, settings, register
 
 proc correspondingCloseParen(c: char): char =
   case c
@@ -355,16 +355,15 @@ proc insertCharacterAboveCursor*(bufStatus: var BufferStatus,
 # Yank and delete current word
 proc deleteWord*(bufStatus: var BufferStatus,
                  windowNode: var WindowNode,
-                 registers: var Registers) =
-
-  registers = initRegisters()
+                 registers: var seq[Register]) =
 
   if bufStatus.buffer.len == 1 and
      bufStatus.buffer[windowNode.currentLine].len < 1: return
   elif bufStatus.buffer.len > 1 and
        windowNode.currentLine < bufStatus.buffer.high and
        bufStatus.buffer[windowNode.currentLine].len < 1:
-    registers.yankedLines = @[bufStatus.buffer[windowNode.currentLine]]
+    let yankedLines = bufStatus.buffer[windowNode.currentLine]
+    registers.addRegister(yankedLines)
     bufStatus.buffer.delete(windowNode.currentLine, windowNode.currentLine + 1)
 
     if windowNode.currentLine > bufStatus.buffer.high:
@@ -375,7 +374,7 @@ proc deleteWord*(bufStatus: var BufferStatus,
     newLine.delete(windowNode.currentColumn)
     if oldLine != newLine:
       bufStatus.buffer[windowNode.currentLine] = newLine
-      registers.yankedLines = @[newLine]
+    registers.addRegister(newLine)
 
     if windowNode.currentColumn > 0: dec(windowNode.currentColumn)
   else:
@@ -417,7 +416,7 @@ proc deleteWord*(bufStatus: var BufferStatus,
       newLine.delete(currentColumn)
     if oldLine != newLine:
       bufStatus.buffer[currentLine] = newLine
-      registers.yankedStr = yankStr
+      registers.addRegister(yankStr)
     windowNode.expandedColumn = currentColumn
     windowNode.currentColumn = currentColumn
 
@@ -426,7 +425,7 @@ proc deleteWord*(bufStatus: var BufferStatus,
 
 proc deleteWordBeforeCursor*(bufStatus: var BufferStatus,
                             windowNode: var WindowNode,
-                            registers: var Registers,
+                            registers: var seq[Register],
                             tabStop: int) =
 
   if windowNode.currentLine == 0 and windowNode.currentColumn == 0: return
@@ -682,16 +681,19 @@ proc genDelimiterStr(buffer: string): string =
     for _ in 0 .. 10: add(result, char(rand(int('A') .. int('Z'))))
     if buffer != result: break
 
-proc sendToClipboad*(registers: Registers,
+proc sendToClipboad*(registers: seq[Register],
                      platform: Platform,
                      tool: ClipboardToolOnLinux) =
 
+  if registers.len == 0: return
+
   var buffer = ""
-  if registers.yankedStr.len > 0: buffer = $registers.yankedStr
+  if registers[^1].buffer.len == 1:
+    buffer = $registers[^1].buffer
   else:
-    for i in 0 ..< registers.yankedLines.len:
-      if i == 0: buffer = $registers.yankedLines[0]
-      else: buffer &= "\n" & $registers.yankedLines[i]
+    for i in 0 ..< registers[^1].buffer.len:
+      if i == 0: buffer = $registers[^1].buffer[0]
+      else: buffer &= "\n" & $registers[^1].buffer[i]
 
   if buffer.len < 1: return
 
@@ -716,44 +718,46 @@ proc sendToClipboad*(registers: Registers,
     else: discard
 
 proc yankLines*(status: var EditorStatus, first, last: int) =
-  status.registers.yankedStr = @[]
-  status.registers.yankedLines = @[]
-
+  var yankedBuffer: seq[seq[Rune]]
   for i in first .. last:
-    status.registers.yankedLines.add(currentBufStatus.buffer[i])
+    yankedBuffer.add currentBufStatus.buffer[i]
 
-  status.commandLine.writeMessageYankedLine(status.registers.yankedLines.len,
+  if yankedBuffer.len == 1:
+    yankedBuffer.add @[ru "\n"]
+
+  status.registers.addRegister(yankedBuffer)
+
+  status.commandLine.writeMessageYankedLine(yankedBuffer.len,
                                             status.settings.notificationSettings,
                                             status.messageLog)
 
 proc pasteLines(bufStatus: var BufferStatus,
                 windowNode: var WindowNode,
-                registers: Registers) =
+                registers: seq[Register]) =
 
-  for i in 0 ..< registers.yankedLines.len:
-    bufStatus.buffer.insert(registers.yankedLines[i],
+  for i in 0 ..< registers[^1].buffer.len:
+    bufStatus.buffer.insert(registers[^1].buffer[i],
                             windowNode.currentLine + i + 1)
 
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
 
 proc yankString*(status: var EditorStatus, length: int) =
-  status.registers.yankedLines = @[]
-  status.registers.yankedStr = @[]
-
+  var yankedBuffer: seq[Rune]
   for i in 0 ..< length:
     let
       col = currentMainWindowNode.currentColumn + i
       line = currentMainWindowNode.currentLine
-      r = currentBufStatus.buffer[line][col]
-    status.registers.yankedStr.add(r)
+    yankedBuffer.add currentBufStatus.buffer[line][col]
+
+  status.registers.addRegister(yankedBuffer)
 
   if status.settings.clipboard.enable:
     status.registers.sendToClipboad(status.platform,
                                     status.settings.clipboard.toolOnLinux)
 
   block:
-    let strLen = status.registers.yankedStr.len
+    let strLen = status.registers[^1].buffer.len
 
     status.commandLine.writeMessageYankedCharactor(
       strLen,
@@ -761,25 +765,24 @@ proc yankString*(status: var EditorStatus, length: int) =
       status.messageLog)
 
 proc yankWord*(status: var Editorstatus, loop: int) =
-  status.registers.yankedLines = @[]
-  status.registers.yankedStr = @[]
+  var yankedBuffer: seq[seq[Rune]] = @[ru ""]
 
   let line = currentBufStatus.buffer[currentMainWindowNode.currentLine]
   var startColumn = currentMainWindowNode.currentColumn
 
   for i in 0 ..< loop:
     if line.len < 1:
-      status.registers.yankedLines = @[ru""]
+      yankedBuffer = @[ru ""]
       return
     if isPunct(line[startColumn]):
-      status.registers.yankedStr.add(line[startColumn])
+      yankedBuffer[0].add(line[startColumn])
       return
 
     for j in startColumn ..< line.len:
       let rune = line[j]
       if isWhiteSpace(rune):
         for k in j ..< line.len:
-          if isWhiteSpace(line[k]): status.registers.yankedStr.add(rune)
+          if isWhiteSpace(line[k]): yankedBuffer[0].add(rune)
           else:
             startColumn = k
             break
@@ -787,43 +790,45 @@ proc yankWord*(status: var Editorstatus, loop: int) =
       elif not isAlpha(rune) or isPunct(rune) or isDigit(rune):
         startColumn = j
         break
-      else: status.registers.yankedStr.add(rune)
+      else: yankedBuffer[0].add(rune)
 
 proc pasteString(bufStatus: var BufferStatus,
                  windowNode: var WindowNode,
-                 registers: Registers) =
+                 registers: seq[Register]) =
 
   let oldLine = bufStatus.buffer[windowNode.currentLine]
   var newLine = bufStatus.buffer[windowNode.currentLine]
 
-  newLine.insert(registers.yankedStr, windowNode.currentColumn)
+  newLine.insert(registers[^1].buffer[^1], windowNode.currentColumn)
 
   if oldLine != newLine:
     bufStatus.buffer[windowNode.currentLine] = newLine
 
-  windowNode.currentColumn += registers.yankedStr.high
+  windowNode.currentColumn += registers[^1].buffer[^1].high
 
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
 
 proc pasteAfterCursor*(bufStatus: var BufferStatus,
                        windowNode: var WindowNode,
-                       registers: Registers) =
+                       registers: seq[Register]) =
 
-  if registers.yankedStr.len > 0:
-    windowNode.currentColumn.inc
-    bufStatus.pasteString(windowNode, registers)
-  elif registers.yankedLines.len > 0:
-    bufStatus.pasteLines(windowNode, registers)
+  if registers.len > 0:
+    if registers[^1].isLine:
+      bufStatus.pasteLines(windowNode, registers)
+    else:
+      windowNode.currentColumn.inc
+      bufStatus.pasteString(windowNode, registers)
 
 proc pasteBeforeCursor*(bufStatus: var BufferStatus,
                         windowNode: var WindowNode,
-                        registers: Registers) =
+                        registers: seq[Register]) =
 
-  if registers.yankedLines.len > 0:
-    bufStatus.pasteLines(windowNode, registers)
-  elif registers.yankedStr.len > 0:
-    bufStatus.pasteString(windowNode, registers)
+  if registers.len > 0:
+    if registers[^1].isLine:
+      bufStatus.pasteLines(windowNode, registers)
+    else:
+      bufStatus.pasteString(windowNode, registers)
 
 proc replaceCurrentCharacter*(bufStatus: var BufferStatus,
                               windowNode: WindowNode,
@@ -943,7 +948,7 @@ proc redo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
 # If cursor is inside of paren, delete inside paren in the current line
 proc yankAndDeleteInsideOfParen*(bufStatus: var BufferStatus,
                                  windowNode: var WindowNode,
-                                 registers: var Registers,
+                                 registers: var seq[Register],
                                  rune: Rune) =
 
   let
@@ -979,8 +984,7 @@ proc yankAndDeleteInsideOfParen*(bufStatus: var BufferStatus,
       newLine.delete(openParenPosition + 1)
 
     if oldLine != newLine:
-      registers = initRegisters()
-      registers.yankedStr = yankStr
+      registers.addRegister(yankStr)
 
       bufStatus.buffer[currentLine] = newLine
       windowNode.currentColumn = openParenPosition
