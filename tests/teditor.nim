@@ -1,5 +1,5 @@
 import unittest
-include moepkg/[editor, editorstatus]
+include moepkg/[editor, editorstatus, register]
 
 suite "Editor: Auto indent":
   test "Auto indent in current Line":
@@ -69,12 +69,19 @@ suite "Editor: Delete trailing spaces":
     check status.bufStatus[0].buffer[1] == ru"d"
     check status.bufStatus[0].buffer[2] == ru"efg"
 
+proc initRegister(buffer: seq[Rune]): seq[register.Register] {.compiletime.} =
+  result.addRegister(buffer)
+
+proc initRegister(buffer: seq[seq[Rune]]): seq[register.Register] {.compiletime.} =
+  result.addRegister(buffer)
+
 suite "Editor: Send to clipboad":
   test "Send string to clipboard 1 (xsel)":
     const
       str = ru"Clipboard test"
-      registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
       tool = ClipboardToolOnLinux.xsel
+
+    let registers = initRegister(str)
 
     let platform = editorstatus.initPlatform()
     registers.sendToClipboad(platform, tool)
@@ -99,7 +106,7 @@ suite "Editor: Send to clipboad":
   test "Send string to clipboard 1 (xclip)":
     const
       str = ru"Clipboard test"
-      registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
+      registers = initRegister(str)
       tool = ClipboardToolOnLinux.xclip
 
     let platform = editorstatus.initPlatform()
@@ -125,7 +132,7 @@ suite "Editor: Send to clipboad":
   test "Send string to clipboard 2 (xsel)":
     const
       str = ru"`````"
-      registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
+      registers = initRegister(str)
       tool = ClipboardToolOnLinux.xsel
 
     let platform = editorstatus.initPlatform()
@@ -151,7 +158,7 @@ suite "Editor: Send to clipboad":
   test "Send string to clipboard 2 (xclip)":
     const
       str = ru"`````"
-      registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
+      registers = initRegister(str)
       tool = ClipboardToolOnLinux.xclip
 
     let platform = editorstatus.initPlatform()
@@ -177,7 +184,7 @@ suite "Editor: Send to clipboad":
   test "Send string to clipboard 3 (xsel)":
     const
       str = ru"$Clipboard test"
-      registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
+      registers = initRegister(str)
       tool = ClipboardToolOnLinux.xsel
 
     let platform = editorstatus.initPlatform()
@@ -204,7 +211,7 @@ suite "Editor: Send to clipboad":
   test "Send string to clipboard 3 (xclip)":
     const
       str = ru"$Clipboard test"
-      registers = editorstatus.Registers(yankedLines: @[], yankedStr: str)
+      registers = initRegister(str)
       tool = ClipboardToolOnLinux.xclip
 
     let platform = editorstatus.initPlatform()
@@ -236,8 +243,7 @@ suite "Editor: Delete word":
     currentBufStatus.buffer = initGapBuffer(@[ru"block:", ru"  "])
     currentMainWindowNode.currentLine = 1
 
-    var registers = editorstatus.Registers(yankedLines: @[ru""],
-                                           yankedStr: ru"")
+    var registers: seq[register.Register] = @[]
 
     for i in 0 ..< 2:
       currentBufStatus.deleteWord(currentMainWindowNode, registers)
@@ -247,13 +253,12 @@ suite "Editor: Delete word":
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru"proc test() ="])
 
-    var registers = editorstatus.Registers(yankedLines: @[ru""],
-                                           yankedStr: ru"")
+    var registers: seq[register.Register] = @[]
 
     currentBufStatus.deleteWord(currentMainWindowNode, registers)
 
-    check currentBufStatus.buffer[0] == ru"test() ="
-    check registers.yankedStr == ru"proc "
+    check currentBufStatus.buffer[0] == ru "test() ="
+    check registers[^1].buffer[^1] == ru "proc "
 
 suite "Editor: keyEnter":
   test "Delete all characters in the previous line if only whitespaces":
@@ -462,7 +467,7 @@ suite "Editor: Delete inside paren":
     currentBufStatus.buffer = initGapBuffer(@[ru """abc "def" "ghi""""])
     currentMainWindowNode.currentColumn = 6
 
-    var registers = editorstatus.Registers(yankedLines: @[], yankedStr: ru"")
+    var registers: seq[register.Register] = @[]
 
     currentBufStatus.yankAndDeleteInsideOfParen(currentMainWindowNode,
                                                 registers,
@@ -476,8 +481,9 @@ suite "Editor: Paste lines":
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
 
-    const registers = editorstatus.Registers(yankedLines: @[ru"def"],
-                                             yankedStr: ru"")
+    const registers = initRegister(@[ru "def"])
+    echo registers
+
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, registers)
 
     check currentBufStatus.buffer.len == 2
@@ -489,8 +495,8 @@ suite "Editor: Paste lines":
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
 
-    const registers = editorstatus.Registers(yankedLines: @[ru"def", ru""],
-                                             yankedStr: ru"")
+    const registers = initRegister(@[ru "def", ru ""])
+
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, registers)
 
     check currentBufStatus.buffer.len == 3
@@ -504,8 +510,7 @@ suite "Editor: Paste a string":
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
 
-    const registers = editorstatus.Registers(yankedLines: @[],
-                                             yankedStr: ru "def")
+    const registers = initRegister(ru "def")
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, registers)
 
     check currentBufStatus.buffer[0] == ru "defabc"
