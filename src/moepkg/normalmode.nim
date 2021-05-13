@@ -208,6 +208,13 @@ proc repeatNormalModeCommand(status: var Editorstatus, height, width: int) =
   let commands  = status.normalCommandHistory[^1]
   status.normalCommand(commands, height, width)
 
+proc addRegister(status: var EditorStatus, command, name: string) =
+  if command == "yy":
+    let
+      startLine = currentMainWindowNode.currentLine
+      lastLine = startLine
+    status.yankLines(startLine, lastLine, name)
+
 proc normalCommand(status: var EditorStatus,
                    commands: seq[Rune],
                    height, width: int) =
@@ -695,6 +702,11 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('\\'):
     let secondKey = commands[1]
     if secondKey == ord('r'): status.runQuickRunCommand
+  elif key == ord('"'):
+    let
+      name = $commands[1]
+      command = $commands[2] & $commands[3]
+    status.addRegister(command, name)
   else:
     discard
 
@@ -827,6 +839,10 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
   elif key == ('\\'):
     let secondKey = getAnotherKey()
     if secondKey == ord('r'): result = @[key, secondKey]
+  elif key == ord('"'):
+    result = @[key]
+    for i in 0 ..< 3:
+      result.add getAnotherKey()
   else: discard
 
   proc isMovementKey(key: Rune): bool =

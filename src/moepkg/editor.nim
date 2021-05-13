@@ -717,19 +717,23 @@ proc sendToClipboad*(registers: seq[Register],
       discard execShellCmd(cmd)
     else: discard
 
-proc yankLines*(status: var EditorStatus, first, last: int) =
+# name is the register name
+proc yankLines*(status: var EditorStatus, first, last: int, name: string) =
   var yankedBuffer: seq[seq[Rune]]
   for i in first .. last:
     yankedBuffer.add currentBufStatus.buffer[i]
 
-  if yankedBuffer.len == 1:
-    yankedBuffer.add @[ru "\n"]
-
-  status.registers.addRegister(yankedBuffer)
+  if name.len > 0:
+    status.registers.addRegister(yankedBuffer, name)
+  else:
+    status.registers.addRegister(yankedBuffer)
 
   status.commandLine.writeMessageYankedLine(yankedBuffer.len,
                                             status.settings.notificationSettings,
                                             status.messageLog)
+
+proc yankLines*(status: var EditorStatus, first, last: int) =
+  status.yankLines(first, last, "")
 
 proc pasteLines(bufStatus: var BufferStatus,
                 windowNode: var WindowNode,
