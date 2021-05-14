@@ -1,3 +1,4 @@
+import options
 import unicodeext
 
 type Register* = object
@@ -81,7 +82,7 @@ proc addRegister*(registers: var seq[Register],
 
     registers.add Register(buffer: buffer, isLine: isLine, name: name)
 
-proc searchByName(registers: seq[Register], name: string): Register =
+proc searchByName*(registers: seq[Register], name: string): Option[Register] =
   for r in registers:
     if r.name == name:
-      return r
+      return some(r)

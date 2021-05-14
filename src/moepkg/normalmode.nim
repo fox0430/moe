@@ -2,7 +2,7 @@ from strutils import parseInt
 import terminal, times
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, undoredostack,
        window, movement, editor, search, color, bufferstatus, quickrun,
-       messages, commandline
+       messages, commandline, register
 
 proc searchOneCharactorToEndOfLine(bufStatus: var BufferStatus,
                                    windowNode: WindowNode,
@@ -214,6 +214,23 @@ proc addRegister(status: var EditorStatus, command, name: string) =
       startLine = currentMainWindowNode.currentLine
       lastLine = startLine
     status.yankLines(startLine, lastLine, name)
+
+proc pasteFromRegister(status: var EditorStatus, command, name: string) =
+  if name.len == 0: return
+
+  case command:
+    of "p":
+      currentBufStatus.pasteAfterCursor(
+        currentMainWindowNode,
+        status.registers,
+        name)
+    of "P":
+      currentBufStatus.pasteBeforeCursor(
+        currentMainWindowNode,
+        status.registers,
+        name)
+    else:
+      discard
 
 proc normalCommand(status: var EditorStatus,
                    commands: seq[Rune],
@@ -703,10 +720,11 @@ proc normalCommand(status: var EditorStatus,
     let secondKey = commands[1]
     if secondKey == ord('r'): status.runQuickRunCommand
   elif key == ord('"'):
-    let
-      name = $commands[1]
-      command = $commands[2] & $commands[3]
-    status.addRegister(command, name)
+    let name = $commands[1]
+    if commands[2] == ru 'y':
+      status.addRegister($commands[2] & $commands[3], name)
+    elif commands[2] == ru 'p':
+      status.pasteFromRegister($commands[2], name)
   else:
     discard
 
@@ -840,9 +858,10 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
     let secondKey = getAnotherKey()
     if secondKey == ord('r'): result = @[key, secondKey]
   elif key == ord('"'):
-    result = @[key]
-    for i in 0 ..< 3:
-      result.add getAnotherKey()
+    var cmd = @[key]
+    for i in 0 ..< 2: cmd.add getAnotherKey()
+    if cmd[2] == ord('y'): cmd.add getAnotherKey()
+    for r in cmd: result.add r
   else: discard
 
   proc isMovementKey(key: Rune): bool =

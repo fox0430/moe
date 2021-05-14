@@ -1,4 +1,4 @@
-import strutils, sequtils, os, osproc, random, strformat
+import strutils, sequtils, os, osproc, random, strformat, options
 import editorstatus, ui, gapbuffer, unicodeext, undoredostack,
        window, bufferstatus, movement, messages, settings, register
 
@@ -737,10 +737,10 @@ proc yankLines*(status: var EditorStatus, first, last: int) =
 
 proc pasteLines(bufStatus: var BufferStatus,
                 windowNode: var WindowNode,
-                registers: seq[Register]) =
+                register: Register) =
 
-  for i in 0 ..< registers[^1].buffer.len:
-    bufStatus.buffer.insert(registers[^1].buffer[i],
+  for i in 0 ..< register.buffer.len:
+    bufStatus.buffer.insert(register.buffer[i],
                             windowNode.currentLine + i + 1)
 
   inc(bufStatus.countChange)
@@ -798,17 +798,17 @@ proc yankWord*(status: var Editorstatus, loop: int) =
 
 proc pasteString(bufStatus: var BufferStatus,
                  windowNode: var WindowNode,
-                 registers: seq[Register]) =
+                 register: Register) =
 
   let oldLine = bufStatus.buffer[windowNode.currentLine]
   var newLine = bufStatus.buffer[windowNode.currentLine]
 
-  newLine.insert(registers[^1].buffer[^1], windowNode.currentColumn)
+  newLine.insert(register.buffer[^1], windowNode.currentColumn)
 
   if oldLine != newLine:
     bufStatus.buffer[windowNode.currentLine] = newLine
 
-  windowNode.currentColumn += registers[^1].buffer[^1].high
+  windowNode.currentColumn += register.buffer[^1].high
 
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
@@ -818,21 +818,51 @@ proc pasteAfterCursor*(bufStatus: var BufferStatus,
                        registers: seq[Register]) =
 
   if registers.len > 0:
-    if registers[^1].isLine:
-      bufStatus.pasteLines(windowNode, registers)
+    let r = registers[^1]
+
+    if r.isLine:
+      bufStatus.pasteLines(windowNode, r)
     else:
       windowNode.currentColumn.inc
-      bufStatus.pasteString(windowNode, registers)
+      bufStatus.pasteString(windowNode, r)
+
+proc pasteAfterCursor*(bufStatus: var BufferStatus,
+                       windowNode: var WindowNode,
+                       registers: seq[Register],
+                       registerName: string) =
+
+  let r = registers.searchByName(registerName)
+
+  if r.isSome:
+    if r.get.isLine:
+      bufStatus.pasteLines(windowNode, r.get)
+    else:
+      windowNode.currentColumn.inc
+      bufStatus.pasteString(windowNode, r.get)
 
 proc pasteBeforeCursor*(bufStatus: var BufferStatus,
                         windowNode: var WindowNode,
                         registers: seq[Register]) =
 
   if registers.len > 0:
-    if registers[^1].isLine:
-      bufStatus.pasteLines(windowNode, registers)
+    let r = registers[^1]
+    if r.isLine:
+      bufStatus.pasteLines(windowNode, r)
     else:
-      bufStatus.pasteString(windowNode, registers)
+      bufStatus.pasteString(windowNode, r)
+
+proc pasteBeforeCursor*(bufStatus: var BufferStatus,
+                        windowNode: var WindowNode,
+                        registers: seq[Register],
+                        registerName: string) =
+
+  let r = registers.searchByName(registerName)
+
+  if r.isSome:
+    if r.get.isLine:
+      bufStatus.pasteLines(windowNode, r.get)
+    else:
+      bufStatus.pasteString(windowNode, r.get)
 
 proc replaceCurrentCharacter*(bufStatus: var BufferStatus,
                               windowNode: WindowNode,
