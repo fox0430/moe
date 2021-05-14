@@ -1,4 +1,4 @@
-import unittest
+import unittest, options
 include moepkg/[register]
 
 suite "Register: Add a string to the register":
@@ -77,7 +77,8 @@ suite "Register: Search a register by name":
 
     let registers = @[r1, r2, r3]
 
-    check registers.searchByName("b") == r2
+    check registers.searchByName("b").isSome
+    check registers.searchByName("b").get == r2
 
   test "Return empty":
     const
@@ -87,4 +88,4 @@ suite "Register: Search a register by name":
 
     let registers = @[r1, r2, r3]
 
-    check registers.searchByName("z") == Register()
+    check registers.searchByName("z").isNone
