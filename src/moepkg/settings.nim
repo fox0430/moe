@@ -157,6 +157,8 @@ type ClipBoardSettings* = object
   enable*: bool
   toolOnLinux*: ClipboardToolOnLinux
 
+type CommandMaps* = Table[Rune, Rune]
+
 type EditorSettings* = object
   editorColorTheme*: ColorTheme
   statusLine*: StatusLineSettings
@@ -191,6 +193,7 @@ type EditorSettings* = object
   debugModeSettings*: DebugModeSettings
   highlightSettings*: HighlightSettings
   persist*: PersistSettings
+  commandMaps*: CommandMaps
 
 # Warning: inherit from a more precise exception type like ValueError, IOError or OSError.
 # If these don't suit, inherit from CatchableError or Defect. [InheritFromException]
@@ -1637,6 +1640,12 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
   if vscodeTheme:
     result.editorColorTheme = loadVSCodeTheme()
+
+  if settings.contains("Map"):
+    if settings["Map"].contains("Normal"):
+      result.commandMaps = initTable[Rune, Rune]()
+      for k, v in settings["Map"]["Normal"].getTable().pairs:
+        result.commandMaps[k.runeAt(0)] = ($v).runeAt(0)
 
 proc validateTomlConfig(toml: TomlValueRef): Option[string] =
   template validateStandardTable() =
