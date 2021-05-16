@@ -482,7 +482,6 @@ suite "Editor: Paste lines":
     currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
 
     const registers = initRegister(@[ru "def"])
-    echo registers
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, registers)
 
@@ -535,3 +534,42 @@ suite "Editor: Yank a string":
                                 name)
 
     check status.registers.len == 0
+
+suite "Editor: Yank words":
+  test "Yank a word":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
+
+    let platform: editorstatus.Platform = editorstatus.initPlatform()
+    const
+      length = 1
+      name = ""
+      loop = 1
+    currentBufStatus.yankWord(status.registers,
+                              currentMainWindowNode,
+                              platform,
+                              status.settings.clipboard,
+                              loop)
+
+    check status.registers == @[
+      register.Register(buffer: @[ru "abc "], isLine: false, name: "")]
+
+    const str = "abc "
+    # Check clipboad
+    if (platform == editorstatus.Platform.linux or
+        platform == editorstatus.Platform.wsl):
+      let
+        cmd = if platform == editorstatus.Platform.linux:
+                execCmdEx("xsel")
+              else:
+                # On the WSL
+                execCmdEx("powershell.exe -Command Get-Clipboard")
+        (output, exitCode) = cmd
+
+      check exitCode == 0
+      if platform == editorstatus.Platform.linux:
+        check output[0 .. output.high - 1] == $str
+      else:
+        # On the WSL
+        check output[0 .. output.high - 2] == $str
