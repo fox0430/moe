@@ -28,8 +28,6 @@ proc addRegister*(registers: var seq[Register],
         registers[i] = Register(buffer: @[buffer], isLine: false, name: name)
         return
 
-    registers.add Register(buffer: @[buffer], isLine: false, name: name)
-
 proc addRegister*(registers: var seq[Register],
                   buffer: seq[Rune],
                   isLine: bool,
@@ -41,8 +39,6 @@ proc addRegister*(registers: var seq[Register],
       if r.name == name:
         registers[i] = Register(buffer: @[buffer], isLine: isLine, name: name)
         return
-
-    registers.add Register(buffer: @[buffer], isLine: isLine, name: name)
 
 proc addRegister*(registers: var seq[Register], buffer: seq[seq[Rune]]) =
   if registers.len == 0 or registers[^1].buffer != buffer:

@@ -1,6 +1,6 @@
 import strutils, sequtils, os, osproc, random, strformat, options
-import editorstatus, ui, gapbuffer, unicodeext, undoredostack,
-       window, bufferstatus, movement, messages, settings, register
+import editorstatus, ui, gapbuffer, unicodeext, undoredostack, window,
+       bufferstatus, movement, messages, settings, register, commandline
 
 proc correspondingCloseParen(c: char): char =
   case c
@@ -718,22 +718,41 @@ proc sendToClipboad*(registers: seq[Register],
     else: discard
 
 # name is the register name
-proc yankLines*(status: var EditorStatus, first, last: int, name: string) =
+proc yankLines*(bufStatus: BufferStatus,
+                registers: var seq[Register],
+                commandLine: var CommandLine,
+                messageLog: var seq[seq[Rune]],
+                notificationSettings: NotificationSettings,
+                first, last: int,
+                name: string) =
+
   var yankedBuffer: seq[seq[Rune]]
   for i in first .. last:
-    yankedBuffer.add currentBufStatus.buffer[i]
+    yankedBuffer.add bufStatus.buffer[i]
 
   if name.len > 0:
-    status.registers.addRegister(yankedBuffer, name)
+    registers.addRegister(yankedBuffer, name)
   else:
-    status.registers.addRegister(yankedBuffer)
+    registers.addRegister(yankedBuffer)
 
-  status.commandLine.writeMessageYankedLine(yankedBuffer.len,
-                                            status.settings.notificationSettings,
-                                            status.messageLog)
+  commandLine.writeMessageYankedLine(yankedBuffer.len,
+                                            notificationSettings,
+                                            messageLog)
 
-proc yankLines*(status: var EditorStatus, first, last: int) =
-  status.yankLines(first, last, "")
+proc yankLines*(bufStatus: BufferStatus,
+                registers: var seq[Register],
+                commandLine: var CommandLine,
+                messageLog: var seq[seq[Rune]],
+                notificationSettings: NotificationSettings,
+                first, last: int) =
+
+  const name = ""
+  bufStatus.yankLines(registers,
+                      commandLine,
+                      messageLog,
+                      notificationSettings,
+                      first, last,
+                      name)
 
 proc pasteLines(bufStatus: var BufferStatus,
                 windowNode: var WindowNode,
@@ -746,27 +765,58 @@ proc pasteLines(bufStatus: var BufferStatus,
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
 
-proc yankString*(status: var EditorStatus, length: int) =
+# name is the register name
+proc yankString*(bufStatus: BufferStatus,
+                 registers: var seq[Register],
+                 windowNode: WindowNode,
+                 commandLine: var CommandLine,
+                 messageLog: var seq[seq[Rune]],
+                 platform: Platform,
+                 settings: EditorSettings,
+                 length: int,
+                 name: string) =
+
   var yankedBuffer: seq[Rune]
   for i in 0 ..< length:
     let
-      col = currentMainWindowNode.currentColumn + i
-      line = currentMainWindowNode.currentLine
-    yankedBuffer.add currentBufStatus.buffer[line][col]
+      col = windowNode.currentColumn + i
+      line = windowNode.currentLine
+    yankedBuffer.add bufStatus.buffer[line][col]
 
-  status.registers.addRegister(yankedBuffer)
+  registers.addRegister(yankedBuffer)
 
-  if status.settings.clipboard.enable:
-    status.registers.sendToClipboad(status.platform,
-                                    status.settings.clipboard.toolOnLinux)
+  if settings.clipboard.enable:
+    registers.sendToClipboad(platform,
+                             settings.clipboard.toolOnLinux)
 
-  block:
-    let strLen = status.registers[^1].buffer.len
+  if name.len > 0:
+    registers.addRegister(yankedBuffer, name)
+  else:
+    registers.addRegister(yankedBuffer)
 
-    status.commandLine.writeMessageYankedCharactor(
-      strLen,
-      status.settings.notificationSettings,
-      status.messageLog)
+  commandLine.writeMessageYankedCharactor(
+    yankedBuffer.len,
+    settings.notificationSettings,
+    messageLog)
+
+proc yankString*(bufStatus: BufferStatus,
+                 registers: var seq[Register],
+                 windowNode: WindowNode,
+                 commandLine: var CommandLine,
+                 messageLog: var seq[seq[Rune]],
+                 platform: Platform,
+                 settings: EditorSettings,
+                 length: int) =
+
+  const name = ""
+  bufStatus.yankString(registers,
+                       windowNode,
+                       commandLine,
+                       messageLog,
+                       platform,
+                       settings,
+                       length,
+                       name)
 
 proc yankWord*(status: var Editorstatus, loop: int) =
   var yankedBuffer: seq[seq[Rune]] = @[ru ""]

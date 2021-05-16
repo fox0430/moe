@@ -208,12 +208,68 @@ proc repeatNormalModeCommand(status: var Editorstatus, height, width: int) =
   let commands  = status.normalCommandHistory[^1]
   status.normalCommand(commands, height, width)
 
+proc yankString(status: var Editorstatus, cmdLoop: int) =
+  let
+    buffer = currentBufStatus.buffer
+    lineLen = buffer[currentMainWindowNode.currentLine].len
+    width =  lineLen - currentMainWindowNode.currentColumn
+    count = if width > cmdLoop: cmdLoop else: width
+
+  currentBufStatus.yankString(status.registers,
+                              currentMainWindowNode,
+                              status.commandLine,
+                              status.messageLog,
+                              status.platform,
+                              status.settings,
+                              count)
+
+## yy command
+# name is the register name
+proc yankLines(status: var Editorstatus, name: string) =
+  let lastLine = min(currentMainWindowNode.currentLine,
+                     currentBufStatus.buffer.high)
+
+  currentBufStatus.yankLines(status.registers,
+                             status.commandLine,
+                             status.messageLog,
+                             status.settings.notificationSettings,
+                             currentMainWindowNode.currentLine, lastLine,
+                             name)
+
+proc yankLines(status: var Editorstatus, start, last: int) =
+  let lastLine = min(start,
+                     currentBufStatus.buffer.high)
+
+  currentBufStatus.yankLines(status.registers,
+                             status.commandLine,
+                             status.messageLog,
+                             status.settings.notificationSettings,
+                             start, lastLine)
+
+# yl command
+# Yank characters in the current line
+# name is the register name
+proc yankCharacters(status: var Editorstatus, name: string) =
+  let
+    buffer = currentBufStatus.buffer
+    lineLen = buffer[currentMainWindowNode.currentLine].len
+    width =  lineLen - currentMainWindowNode.currentColumn
+  const length = 1
+
+  currentBufStatus.yankString(status.registers,
+                              currentMainWindowNode,
+                              status.commandLine,
+                              status.messageLog,
+                              status.platform,
+                              status.settings,
+                              length,
+                              name)
+
 proc addRegister(status: var EditorStatus, command, name: string) =
-  if command == "yy":
-    let
-      startLine = currentMainWindowNode.currentLine
-      lastLine = startLine
-    status.yankLines(startLine, lastLine, name)
+  case command:
+    of "yy": status.yankLines(name)
+    of "yl": status.yankCharacters(name)
+    else: discard
 
 proc pasteFromRegister(status: var EditorStatus, command, name: string) =
   if name.len == 0: return
@@ -459,7 +515,7 @@ proc normalCommand(status: var EditorStatus,
     for i in 0 ..< count:
       currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
 
-  ## yy command
+  # yy command
   template yankLines() =
     let lastLine = min(windowNode.currentLine + cmdLoop - 1,
                        currentBufStatus.buffer.high)
