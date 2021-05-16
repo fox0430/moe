@@ -941,7 +941,7 @@ suite "Normal mode: Yank lines":
   test "Yank to the last line (y} command)":
     var status = initEditorStatus()
     status.addNewBuffer
-    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc", ru"def"])
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru ""])
 
     status.resize(100, 100)
     status.update
@@ -951,7 +951,7 @@ suite "Normal mode: Yank lines":
     status.update
 
     check status.registers.yankedLines.len == 3
-    check status.registers.yankedLines == @[ru"", ru "abc", ru"def"]
+    check status.registers.yankedLines == @[ru "abc", ru"def", ru""]
 
   test "Yank a line (yy command)":
     var status = initEditorStatus()
