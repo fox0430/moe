@@ -270,10 +270,20 @@ proc yankWord(status: var EditorStatus, loop: int) =
                             status.settings.clipboard,
                             loop)
 
+proc yankWord(status: var EditorStatus, name: string) =
+  const loop = 1
+  currentBufStatus.yankWord(status.registers,
+                            currentMainWindowNode,
+                            status.platform,
+                            status.settings.clipboard,
+                            loop,
+                            name)
+
 proc addRegister(status: var EditorStatus, command, name: string) =
   case command:
     of "yy": status.yankLines(name)
     of "yl": status.yankCharacters(name)
+    of "yw": status.yankWord(name)
     else: discard
 
 proc pasteFromRegister(status: var EditorStatus, command, name: string) =
