@@ -524,7 +524,7 @@ proc normalCommand(status: var EditorStatus,
       currentLine = windowNode.currentLine
       buffer = currentBufStatus.buffer
       nextBlankLine = currentBufStatus.findNextBlankLine(currentLine)
-    status.yankLines(currentLine, max(nextBlankLine, buffer.high))
+    status.yankLines(currentLine, min(nextBlankLine, buffer.high))
     if nextBlankLine >= 0: status.jumpLine(nextBlankLine)
 
   # dd command
