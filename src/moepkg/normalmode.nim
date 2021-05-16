@@ -223,7 +223,6 @@ proc yankString(status: var Editorstatus, cmdLoop: int) =
                               status.settings,
                               count)
 
-## yy command
 # name is the register name
 proc yankLines(status: var Editorstatus, name: string) =
   let lastLine = min(currentMainWindowNode.currentLine,
@@ -246,7 +245,6 @@ proc yankLines(status: var Editorstatus, start, last: int) =
                              status.settings.notificationSettings,
                              start, lastLine)
 
-# yl command
 # Yank characters in the current line
 # name is the register name
 proc yankCharacters(status: var Editorstatus, name: string) =
@@ -264,6 +262,13 @@ proc yankCharacters(status: var Editorstatus, name: string) =
                               status.settings,
                               length,
                               name)
+
+proc yankWord(status: var EditorStatus, loop: int) =
+  currentBufStatus.yankWord(status.registers,
+                            currentMainWindowNode,
+                            status.platform,
+                            status.settings.clipboard,
+                            loop)
 
 proc addRegister(status: var EditorStatus, command, name: string) =
   case command:

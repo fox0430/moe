@@ -4,7 +4,7 @@ import unicodeext
 type Register* = object
   buffer*: seq[seq[Rune]]
   isLine*: bool
-  name: string
+  name*: string
 
 proc addRegister*(registers: var seq[Register], buffer: seq[Rune]) =
   if registers.len == 0 or registers[^1].buffer != @[buffer]:

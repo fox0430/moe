@@ -820,11 +820,18 @@ proc yankString*(bufStatus: BufferStatus,
                        length,
                        name)
 
-proc yankWord*(status: var Editorstatus, loop: int) =
+proc yankWord*(bufStatus: var BufferStatus,
+               registers: var seq[Register],
+               windowNode: WindowNode,
+               platform: Platform,
+               clipboardSettings: ClipBoardSettings,
+               loop: int,
+               name: string) =
+
   var yankedBuffer: seq[seq[Rune]] = @[ru ""]
 
-  let line = currentBufStatus.buffer[currentMainWindowNode.currentLine]
-  var startColumn = currentMainWindowNode.currentColumn
+  let line = bufStatus.buffer[windowNode.currentLine]
+  var startColumn = windowNode.currentColumn
 
   for i in 0 ..< loop:
     if line.len < 1:
@@ -847,6 +854,31 @@ proc yankWord*(status: var Editorstatus, loop: int) =
         startColumn = j
         break
       else: yankedBuffer[0].add(rune)
+
+  const isLine = false
+  if name.len > 0:
+    registers.addRegister(yankedBuffer, isLine, name)
+  else:
+    registers.addRegister(yankedBuffer, isLine)
+
+  if clipboardSettings.enable:
+    registers.sendToClipboad(platform,
+                             clipboardSettings.toolOnLinux)
+
+proc yankWord*(bufStatus: var BufferStatus,
+               registers: var seq[Register],
+               windowNode: WindowNode,
+               platform: Platform,
+               clipboardSettings: ClipBoardSettings,
+               loop: int) =
+
+  const name = ""
+  bufStatus.yankWord(registers,
+                     windowNode,
+                     platform,
+                     clipboardSettings,
+                     loop,
+                     name)
 
 proc pasteString(bufStatus: var BufferStatus,
                  windowNode: var WindowNode,
