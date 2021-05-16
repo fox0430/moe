@@ -237,7 +237,7 @@ proc yankLines(status: var Editorstatus, name: string) =
                              name)
 
 proc yankLines(status: var Editorstatus, start, last: int) =
-  let lastLine = min(start,
+  let lastLine = min(last,
                      currentBufStatus.buffer.high)
 
   currentBufStatus.yankLines(status.registers,
