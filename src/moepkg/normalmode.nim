@@ -290,6 +290,7 @@ proc yankWord(status: var EditorStatus, name: string) =
                             loop,
                             name)
 
+# y{ command
 proc yankToPreviousBlankLine(status: var EditorStatus, name: string) =
   let
     currentLine = currentMainWindowNode.currentLine
@@ -297,12 +298,30 @@ proc yankToPreviousBlankLine(status: var EditorStatus, name: string) =
   status.yankLines(max(previousBlankLine, 0), currentLine, name)
   if previousBlankLine >= 0: status.jumpLine(previousBlankLine)
 
+# y{ command
+proc yankToPreviousBlankLine(status: var EditorStatus) =
+  let
+    currentLine = currentMainWindowNode.currentLine
+    previousBlankLine = currentBufStatus.findPreviousBlankLine(currentLine)
+  status.yankLines(max(previousBlankLine, 0), currentLine)
+  if previousBlankLine >= 0: status.jumpLine(previousBlankLine)
+
+# y} command
 proc yankToNextBlankLine(status: var EditorStatus, name: string) =
   let
     currentLine = currentMainWindowNode.currentLine
     buffer = currentBufStatus.buffer
     nextBlankLine = currentBufStatus.findNextBlankLine(currentLine)
   status.yankLines(currentLine, min(nextBlankLine, buffer.high), name)
+  if nextBlankLine >= 0: status.jumpLine(nextBlankLine)
+
+# y} command
+proc yankToNextBlankLine(status: var EditorStatus) =
+  let
+    currentLine = currentMainWindowNode.currentLine
+    buffer = currentBufStatus.buffer
+    nextBlankLine = currentBufStatus.findNextBlankLine(currentLine)
+  status.yankLines(currentLine, min(nextBlankLine, buffer.high))
   if nextBlankLine >= 0: status.jumpLine(nextBlankLine)
 
 proc addRegister(status: var EditorStatus, command, name: string) =
@@ -510,23 +529,6 @@ proc normalCommand(status: var EditorStatus,
     status.yankLines(windowNode.currentLine, blankLine - 1)
     currentBufStatus.deleteTillNextBlankLine(windowNode)
 
-  # y{ command
-  template yankToPreviousBlankLine() =
-    let
-      currentLine = windowNode.currentLine
-      previousBlankLine = currentBufStatus.findPreviousBlankLine(currentLine)
-    status.yankLines(max(previousBlankLine, 0), currentLine)
-    if previousBlankLine >= 0: status.jumpLine(previousBlankLine)
-
-  # y} command
-  template yankToNextBlankLine() =
-    let
-      currentLine = windowNode.currentLine
-      buffer = currentBufStatus.buffer
-      nextBlankLine = currentBufStatus.findNextBlankLine(currentLine)
-    status.yankLines(currentLine, min(nextBlankLine, buffer.high))
-    if nextBlankLine >= 0: status.jumpLine(nextBlankLine)
-
   # dd command
   template yankAndDeleteLines() =
     let lastLine = min(windowNode.currentLine + cmdLoop - 1,
@@ -729,9 +731,9 @@ proc normalCommand(status: var EditorStatus,
     elif secondKey == ord('w'):
       status.yankWord(cmdLoop)
     elif secondKey == ord('{'):
-      yankToPreviousBlankLine()
+      status.yankToPreviousBlankLine
     elif secondKey == ord('}'):
-      yankToNextBlankLine()
+      status.yankToNextBlankLine
     elif secondKey == ord('l'):
       yankCharacters()
   elif key == ord('Y'):
