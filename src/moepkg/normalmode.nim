@@ -245,6 +245,17 @@ proc yankLines(status: var Editorstatus, start, last: int) =
                              status.settings.notificationSettings,
                              start, lastLine)
 
+proc yankLines(status: var Editorstatus, start, last: int, name: string) =
+  let lastLine = min(last,
+                     currentBufStatus.buffer.high)
+
+  currentBufStatus.yankLines(status.registers,
+                             status.commandLine,
+                             status.messageLog,
+                             status.settings.notificationSettings,
+                             start, lastLine,
+                             name)
+
 # Yank characters in the current line
 # name is the register name
 proc yankCharacters(status: var Editorstatus, name: string) =
@@ -279,11 +290,28 @@ proc yankWord(status: var EditorStatus, name: string) =
                             loop,
                             name)
 
+proc yankToPreviousBlankLine(status: var EditorStatus, name: string) =
+  let
+    currentLine = currentMainWindowNode.currentLine
+    previousBlankLine = currentBufStatus.findPreviousBlankLine(currentLine)
+  status.yankLines(max(previousBlankLine, 0), currentLine, name)
+  if previousBlankLine >= 0: status.jumpLine(previousBlankLine)
+
+proc yankToNextBlankLine(status: var EditorStatus, name: string) =
+  let
+    currentLine = currentMainWindowNode.currentLine
+    buffer = currentBufStatus.buffer
+    nextBlankLine = currentBufStatus.findNextBlankLine(currentLine)
+  status.yankLines(currentLine, min(nextBlankLine, buffer.high), name)
+  if nextBlankLine >= 0: status.jumpLine(nextBlankLine)
+
 proc addRegister(status: var EditorStatus, command, name: string) =
   case command:
     of "yy": status.yankLines(name)
     of "yl": status.yankCharacters(name)
     of "yw": status.yankWord(name)
+    of "y{": status.yankToPreviousBlankLine(name)
+    of "y}": status.yankToNextBlankLine(name)
     else: discard
 
 proc pasteFromRegister(status: var EditorStatus, command, name: string) =
