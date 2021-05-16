@@ -21,24 +21,27 @@ proc addRegister*(registers: var seq[Register],
                   buffer: seq[Rune],
                   name: string) =
 
-  if registers.len == 0 or registers[^1].buffer != @[buffer]:
+  if name.len > 0:
     # Overwrite the register if exist the same name.
     for i, r in registers:
       if r.name == name:
         registers[i] = Register(buffer: @[buffer], isLine: false, name: name)
         return
 
+  registers.add Register(buffer: @[buffer], isLine: false, name: name)
+
 proc addRegister*(registers: var seq[Register],
                   buffer: seq[Rune],
                   isLine: bool,
                   name: string) =
-
-  if registers.len == 0 or registers[^1].buffer != @[buffer]:
+  if name.len > 0:
     # Overwrite the register if exist the same name.
     for i, r in registers:
       if r.name == name:
         registers[i] = Register(buffer: @[buffer], isLine: isLine, name: name)
         return
+
+  registers.add Register(buffer: @[buffer], isLine: isLine, name: name)
 
 proc addRegister*(registers: var seq[Register], buffer: seq[seq[Rune]]) =
   if registers.len == 0 or registers[^1].buffer != buffer:
@@ -55,7 +58,7 @@ proc addRegister*(registers: var seq[Register],
                   buffer: seq[seq[Rune]],
                   name: string) =
 
-  if registers.len == 0 or registers[^1].buffer != buffer:
+  if name.len > 0:
     # Overwrite the register if exist the same name.
     for i, r in registers:
       if r.name == name:
@@ -69,7 +72,7 @@ proc addRegister*(registers: var seq[Register],
                   isLine: bool,
                   name: string) =
 
-  if registers.len == 0 or registers[^1].buffer != buffer:
+  if name.len > 0:
     # Overwrite the register if exist the same name.
     for i, r in registers:
       if r.name == name:
