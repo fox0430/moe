@@ -514,3 +514,24 @@ suite "Editor: Paste a string":
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, registers)
 
     check currentBufStatus.buffer[0] == ru "defabc"
+
+suite "Editor: Yank a string":
+  test "Yank a string with name in the empty line":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru ""])
+
+    let platform: editorstatus.Platform = editorstatus.initPlatform()
+    const
+      length = 1
+      name = "a"
+    currentBufStatus.yankString(status.registers,
+                                currentMainWindowNode,
+                                status.commandline,
+                                status.messageLog,
+                                platform,
+                                status.settings,
+                                length,
+                                name)
+
+    check status.registers.len == 0
