@@ -777,22 +777,24 @@ proc yankString*(bufStatus: BufferStatus,
                  name: string) =
 
   var yankedBuffer: seq[Rune]
-  for i in 0 ..< length:
-    let
-      col = windowNode.currentColumn + i
-      line = windowNode.currentLine
-    yankedBuffer.add bufStatus.buffer[line][col]
 
-  registers.addRegister(yankedBuffer)
+  if bufStatus.buffer[windowNode.currentLine].len > 0:
+    for i in 0 ..< length:
+      let
+        col = windowNode.currentColumn + i
+        line = windowNode.currentLine
+      yankedBuffer.add bufStatus.buffer[line][col]
 
-  if settings.clipboard.enable:
-    registers.sendToClipboad(platform,
-                             settings.clipboard.toolOnLinux)
-
-  if name.len > 0:
-    registers.addRegister(yankedBuffer, name)
-  else:
     registers.addRegister(yankedBuffer)
+
+    if settings.clipboard.enable:
+      registers.sendToClipboad(platform,
+                               settings.clipboard.toolOnLinux)
+
+    if name.len > 0:
+      registers.addRegister(yankedBuffer, name)
+    else:
+      registers.addRegister(yankedBuffer)
 
   commandLine.writeMessageYankedCharactor(
     yankedBuffer.len,
