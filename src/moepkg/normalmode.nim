@@ -859,6 +859,7 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('\\'):
     let secondKey = commands[1]
     if secondKey == ord('r'): status.runQuickRunCommand
+  # TODO: Get cmdLoop
   elif key == ord('"'):
     let name = $commands[1]
     if commands[2] == ru 'y':
