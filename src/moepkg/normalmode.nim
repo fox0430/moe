@@ -1091,31 +1091,6 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
     else:
       discard
 
-# Check if a register command
-proc isRegisterCommand(command: seq[Rune]): InputState =
-  result = InputState.Continue
-
-  if command[0] != ru '"':
-    return InputState.Invalid
-
-  var currentIndex = 0
-  while currentIndex < command.len:
-    let ch = char(command[currentIndex])
-
-    if currentIndex == 1:
-      if not (ch in Letters and isDigit(ch)):
-        return InputState.Invalid
-
-    elif currentIndex == 2 and isDigit(ch):
-      while ch in Digits and currentIndex < command.len:
-        inc(currentIndex)
-
-    else:
-      let cmd = command[currentIndex .. ^1]
-      discard isNormalModeCommand(cmd)
-
-    inc(currentIndex)
-
 proc isNormalMode(status: Editorstatus): bool =
   let index =
     status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
