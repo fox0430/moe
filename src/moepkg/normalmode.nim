@@ -829,11 +829,19 @@ proc normalCommand(status: var EditorStatus,
   else:
     discard
 
-proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
-  template getAnotherKey(): Rune =
-    let workspaceIndex = status.currentWorkSpaceIndex
-    getKey(status.workSpace[workspaceIndex].currentMainWindowNode)
+# Get key and execute the event loop
+proc getKey(status: var Editorstatus): Rune =
+  result = errorKey
+  while result == errorKey:
+    if not pressCtrlC:
+      status.eventLoopTask
+      result = getKey(currentMainWindowNode)
+    else:
+      pressCtrlC = false
+      status.commandLine.writeExitHelp
+      status.update
 
+proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
   # Single key commands
   if isControlK(key) or
      isControlJ(key) or
@@ -890,25 +898,25 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
   # Multiple key commands
   # TODO: Refactor
   elif key == ord('g'):
-      let secondKey = getAnotherKey()
+      let secondKey = status.getKey()
       if secondKey == ord('g') or
          secondKey == ord('_') or
          secondKey == ord('a'): result = @[key, secondKey]
   elif key == ord('z'):
-    let secondKey = getAnotherKey()
+    let secondKey = status.getKey()
     if secondKey == ord('.') or key == ord('t') or key == ord('b'):
       result = @[key, secondKey]
   elif key == ord('c'):
-    let secondKey = getAnotherKey()
+    let secondKey = status.getKey()
     if secondKey == ord('c') or secondKey == ('l'):
       result = @[key, secondKey]
     elif secondKey == ('i'):
-      let thirdKey = getAnotherKey()
+      let thirdKey = status.getKey()
       if isParen(thirdKey) or
          thirdKey == ('w'):
         result = @[key, secondKey, thirdKey]
   elif key == ord('d'):
-    let secondKey = getAnotherKey()
+    let secondKey = status.getKey()
     if secondKey == ord('d') or
        secondKey == ord('w') or
        secondKey == ord('$') or isEndKey(secondKey) or
@@ -917,15 +925,15 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
        secondKey == ord('{') or
        secondKey == ord('}'): result = @[key, secondKey]
     elif secondKey == ord('g'):
-      let thirdKey = getAnotherKey()
+      let thirdKey = status.getKey()
       if thirdKey == ord('g'): result = @[key, secondKey, thirdKey]
     elif secondKey == ord('i'):
-      let thirdKey = getAnotherKey()
+      let thirdKey = status.getKey()
       if isParen(thirdKey) or
          thirdKey == ('w'):
         result = @[key, secondKey, thirdKey]
   elif key == ord('y'):
-    let secondKey = getAnotherKey()
+    let secondKey = status.getKey()
     if key == ord('y') or
        key == ord('w') or
        key == ord('{') or
@@ -935,33 +943,33 @@ proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
   elif key == ord('Y'):
       result = @[key]
   elif key == ord('='):
-    let secondKey = getAnotherKey()
+    let secondKey = status.getKey()
     if secondKey == ord('='):
       result = @[key, secondKey]
   elif key == ord('r'):
-    let secondKey = getAnotherKey()
+    let secondKey = status.getKey()
     result = @[key, secondKey]
   elif key == ord('f'):
-    let secondKey = getAnotherKey()
+    let secondKey = status.getKey()
     result = @[key, secondKey]
   elif key == ord('F'):
-    let secondKey = getAnotherKey()
+    let secondKey = status.getKey()
     result = @[key, secondKey]
   elif key == ord('Z'):
-    let secondKey = getAnotherKey()
+    let secondKey = status.getKey()
     if  secondKey == ord('Z') or secondKey == ord('Q'):
       result = @[key, secondKey]
   elif isControlW(key):
-    let secondKey = getAnotherKey()
+    let secondKey = status.getKey()
     if secondKey == ord('c'):
       result = @[key, secondKey]
   elif key == ('\\'):
-    let secondKey = getAnotherKey()
+    let secondKey = status.getKey()
     if secondKey == ord('r'): result = @[key, secondKey]
   elif key == ord('"'):
     var cmd = @[key]
-    for i in 0 ..< 2: cmd.add getAnotherKey()
-    if cmd[2] == ord('y'): cmd.add getAnotherKey()
+    for i in 0 ..< 2: cmd.add status.getKey()
+    if cmd[2] == ord('y'): cmd.add status.getKey()
     for r in cmd: result.add r
   else: discard
 
@@ -1030,15 +1038,7 @@ proc normalMode*(status: var EditorStatus) =
 
     status.update
 
-    var key = errorKey
-    while key == errorKey:
-      if not pressCtrlC:
-        status.eventLoopTask
-        key = getKey(currentMainWindowNode)
-      else:
-        pressCtrlC = false
-        status.commandLine.writeExitHelp
-        status.update
+    var key = status.getKey
 
     status.lastOperatingTime = now()
 
