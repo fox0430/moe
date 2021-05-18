@@ -425,9 +425,11 @@ suite "Normal mode: Repeat last command":
     status.update
 
     block:
-      const key = ru'x'
-      let commands = status.isNormalModeCommand(key)
-      status.normalCommand(commands, 100, 100)
+      const command = ru "x"
+
+      check isNormalModeCommand(command) == InputState.Valid
+
+      status.normalCommand(command, 100, 100)
       status.update
 
     block:
@@ -435,8 +437,8 @@ suite "Normal mode: Repeat last command":
       status.normalCommand(key, 100, 100)
       status.update
 
-    check(status.bufStatus[0].buffer.len == 1)
-    check(status.bufStatus[0].buffer[0].len == 1)
+    check(currentBufStatus.buffer.len == 1)
+    check(currentBufStatus.buffer[0].len == 1)
 
   test "Repeat last command 2":
     var status = initEditorStatus()
@@ -447,26 +449,30 @@ suite "Normal mode: Repeat last command":
     status.update
 
     block:
-      const key = ru'>'
-      let commands = status.isNormalModeCommand(key)
-      status.normalCommand(commands, 100, 100)
+      const command = ru ">"
+
+      check isNormalModeCommand(command) == InputState.Valid
+
+      status.normalCommand(command, 100, 100)
       status.update
 
     status.workspace[0].currentMainWindowNode.currentColumn = 0
 
     block:
-      const key = ru'x'
-      let commands = status.isNormalModeCommand(key)
-      status.normalCommand(commands, 100, 100)
+      const command = ru "x"
+
+      check isNormalModeCommand(command) == InputState.Valid
+
+      status.normalCommand(command, 100, 100)
       status.update
 
     block:
-      const key = @[ru'.']
-      status.normalCommand(key, 100, 100)
+      const command = ru "."
+      status.normalCommand(command, 100, 100)
       status.update
 
-    check(status.bufStatus[0].buffer.len == 1)
-    check(status.bufStatus[0].buffer[0] == ru"abc")
+    check(currentBufStatus.buffer.len == 1)
+    check(currentBufStatus.buffer[0] == ru"abc")
 
   test "Repeat last command 3":
     var status = initEditorStatus()
@@ -477,33 +483,42 @@ suite "Normal mode: Repeat last command":
     status.update
 
     block:
-      const key = ru'j'
-      let commands = status.isNormalModeCommand(key)
-      status.normalCommand(commands, 100, 100)
+      const command = ru "j"
+
+      check isNormalModeCommand(command) == InputState.Valid
+
+      status.normalCommand(command, 100, 100)
       status.update
 
     block:
-      const key = @[ru'.']
-      status.normalCommand(key, 100, 100)
+      const command = @[ru'.']
+
+      check isNormalModeCommand(command) == InputState.Valid
+
+      status.normalCommand(command, 100, 100)
       status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentLine == 1)
+    check(currentMainWindowNode.currentLine == 1)
 
 suite "Normal mode: Delete the line from current line to last line":
   test "Delete the line from current line to last line":
     var status = initEditorStatus()
     status.addNewBuffer
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
-    status.workspace[0].currentMainWindowNode.currentLine = 1
+    currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
+    currentMainWindowNode.currentLine = 1
 
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'd', ru'G']
-    status.normalCommand(commands, 100, 100)
+    let command = @[ru'd', ru'G']
+
+
+    check isNormalModeCommand(command) == InputState.Valid
+
+    status.normalCommand(command, 100, 100)
     status.update
 
-    let buffer = status.bufStatus[0].buffer
+    let buffer = currentBufStatus.buffer
     check buffer.len == 1 and buffer[0] == ru"a"
 
     check status.registers[^1].buffer == @[ru"b", ru"c", ru"d"]
