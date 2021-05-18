@@ -1,8 +1,13 @@
 from strutils import parseInt
-import terminal, times
+import terminal, times, strutils
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, undoredostack,
        window, movement, editor, search, color, bufferstatus, quickrun,
        messages, commandline, register
+
+type InputState = enum
+  Continue
+  Valid
+  Invalid
 
 proc searchOneCharactorToEndOfLine(bufStatus: var BufferStatus,
                                    windowNode: WindowNode,
@@ -349,6 +354,40 @@ proc pasteFromRegister(status: var EditorStatus, command, name: string) =
         name)
     else:
       discard
+
+proc isMovementKey(key: Rune): bool =
+  return isControlK(key) or
+         isControlJ(key) or
+         isControlV(key) or
+         key == ord('h') or isLeftKey(key) or isBackspaceKey(key) or
+         key == ord('l') or isRightKey(key) or
+         key == ord('k') or isUpKey(key) or
+         key == ord('j') or isDownKey(key) or
+         isEnterKey(key) or
+         key == ord('^') or key == ord('_') or
+         key == ord('0') or isHomeKey(key) or
+         key == ord('$') or isEndKey(key) or
+         key == ord('-') or
+         key == ord('+') or
+         key == ord('G') or
+         isControlU(key) or
+         isControlD(key) or
+         isPageUpkey(key) or
+         isPageDownKey(key) or
+         key == ord('w') or
+         key == ord('b') or
+         key == ord('e') or
+         key == ord('{') or
+         key == ord('}')
+
+proc isChangeModeKey(key: Rune): bool =
+   return key == ord('v') or
+          isControlV(key) or
+          key == ord('R') or
+          key == ord('i') or
+          key == ord('I') or
+          key == ord('a') or
+          key == ord('A')
 
 proc normalCommand(status: var EditorStatus,
                    commands: seq[Rune],
@@ -827,9 +866,15 @@ proc normalCommand(status: var EditorStatus,
     elif commands[2] == ru 'p':
       status.pasteFromRegister($commands[2], name)
   else:
-    discard
+    return
 
-# Get key and execute the event loop
+  # Record normal mode commands
+  if commands[0] != ord('.') and
+     not isMovementKey(commands[0]) and
+     not isChangeModeKey(commands[0]):
+    status.normalCommandHistory.add commands
+
+# Get a key and execute the event loop
 proc getKey(status: var Editorstatus): Rune =
   result = errorKey
   while result == errorKey:
@@ -841,177 +886,235 @@ proc getKey(status: var Editorstatus): Rune =
       status.commandLine.writeExitHelp
       status.update
 
-proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
-  # Single key commands
-  if isControlK(key) or
-     isControlJ(key) or
-     isControlV(key) or
-     key == ord('h') or isLeftKey(key) or isBackspaceKey(key) or
-     key == ord('l') or isRightKey(key) or
-     key == ord('k') or isUpKey(key) or
-     key == ord('j') or isDownKey(key) or
-     isEnterKey(key) or
-     key == ord('x') or isDcKey(key) or
-     key == ord('X') or
-     key == ord('^') or key == ord('_') or
-     key == ord('0') or isHomeKey(key) or
-     key == ord('$') or isEndKey(key) or
-     key == ord('{') or
-     key == ord('}') or
-     key == ord('-') or
-     key == ord('+') or
-     key == ord('G') or
-     isControlU(key) or
-     isControlD(key) or
-     isPageUpkey(key) or
-     ## Page down and Ctrl - F
-     isPageDownKey(key) or
-     key == ord('w') or
-     key == ord('b') or
-     key == ord('e') or
-     key == ord('o') or
-     key == ord('O') or
-     key == ord('D') or
-     key == ord('S') or
-     key == ord('s') or
-     key == ord('p') or
-     key == ord('P') or
-     key == ord('>') or
-     key == ord('<') or
-     key == ord('J') or
-     isControlA(key) or
-     isControlX(key) or
-     key == ord('~') or
-     key == ord('n') or
-     key == ord('N') or
-     key == ord('*') or
-     key == ord('#') or
-     key == ord('R') or
-     key == ord('i') or
-     key == ord('I') or
-     key == ord('v') or
-     key == ord('a') or
-     key == ord('A') or
-     key == ord('u') or
-     isControlR(key) or
-     key == ord('.'): result = @[key]
-  # Multiple key commands
-  # TODO: Refactor
-  elif key == ord('g'):
-      let secondKey = status.getKey()
-      if secondKey == ord('g') or
-         secondKey == ord('_') or
-         secondKey == ord('a'): result = @[key, secondKey]
-  elif key == ord('z'):
-    let secondKey = status.getKey()
-    if secondKey == ord('.') or key == ord('t') or key == ord('b'):
-      result = @[key, secondKey]
-  elif key == ord('c'):
-    let secondKey = status.getKey()
-    if secondKey == ord('c') or secondKey == ('l'):
-      result = @[key, secondKey]
-    elif secondKey == ('i'):
-      let thirdKey = status.getKey()
-      if isParen(thirdKey) or
-         thirdKey == ('w'):
-        result = @[key, secondKey, thirdKey]
-  elif key == ord('d'):
-    let secondKey = status.getKey()
-    if secondKey == ord('d') or
-       secondKey == ord('w') or
-       secondKey == ord('$') or isEndKey(secondKey) or
-       secondKey == ord('0') or isHomeKey(secondKey) or
-       secondKey == ord('G') or
-       secondKey == ord('{') or
-       secondKey == ord('}'): result = @[key, secondKey]
-    elif secondKey == ord('g'):
-      let thirdKey = status.getKey()
-      if thirdKey == ord('g'): result = @[key, secondKey, thirdKey]
-    elif secondKey == ord('i'):
-      let thirdKey = status.getKey()
-      if isParen(thirdKey) or
-         thirdKey == ('w'):
-        result = @[key, secondKey, thirdKey]
-  elif key == ord('y'):
-    let secondKey = status.getKey()
-    if key == ord('y') or
-       key == ord('w') or
-       key == ord('{') or
-       key == ord('}') or
-       key == ord('l'):
-      result = @[key, secondKey]
-  elif key == ord('Y'):
-      result = @[key]
-  elif key == ord('='):
-    let secondKey = status.getKey()
-    if secondKey == ord('='):
-      result = @[key, secondKey]
-  elif key == ord('r'):
-    let secondKey = status.getKey()
-    result = @[key, secondKey]
-  elif key == ord('f'):
-    let secondKey = status.getKey()
-    result = @[key, secondKey]
-  elif key == ord('F'):
-    let secondKey = status.getKey()
-    result = @[key, secondKey]
-  elif key == ord('Z'):
-    let secondKey = status.getKey()
-    if  secondKey == ord('Z') or secondKey == ord('Q'):
-      result = @[key, secondKey]
-  elif isControlW(key):
-    let secondKey = status.getKey()
-    if secondKey == ord('c'):
-      result = @[key, secondKey]
-  elif key == ('\\'):
-    let secondKey = status.getKey()
-    if secondKey == ord('r'): result = @[key, secondKey]
-  elif key == ord('"'):
-    var cmd = @[key]
-    for i in 0 ..< 2: cmd.add status.getKey()
-    if cmd[2] == ord('y'): cmd.add status.getKey()
-    for r in cmd: result.add r
-  else: discard
+proc isNormalModeCommand(command: seq[Rune]): InputState =
+  result = InputState.Invalid
 
-  proc isMovementKey(key: Rune): bool =
-    return isControlK(key) or
-           isControlJ(key) or
-           isControlV(key) or
-           key == ord('h') or isLeftKey(key) or isBackspaceKey(key) or
-           key == ord('l') or isRightKey(key) or
-           key == ord('k') or isUpKey(key) or
-           key == ord('j') or isDownKey(key) or
-           isEnterKey(key) or
-           key == ord('^') or key == ord('_') or
-           key == ord('0') or isHomeKey(key) or
-           key == ord('$') or isEndKey(key) or
-           key == ord('-') or
-           key == ord('+') or
-           key == ord('G') or
-           isControlU(key) or
-           isControlD(key) or
-           isPageUpkey(key) or
-           isPageDownKey(key) or
-           key == ord('w') or
-           key == ord('b') or
-           key == ord('e') or
-           key == ord('{') or
-           key == ord('}')
+  if command.len == 0:
+    result = InputState.Continue
+  else:
+    if isControlK(command[0]) or
+       isControlJ(command[0]) or
+       isControlV(command[0]) or
+       command[0] == ord('h') or isLeftKey(command[0]) or isBackspaceKey(command[0]) or
+       command[0] == ord('l') or isRightKey(command[0]) or
+       command[0] == ord('k') or isUpKey(command[0]) or
+       command[0] == ord('j') or isDownKey(command[0]) or
+       isEnterKey(command[0]) or
+       command[0] == ord('x') or isDcKey(command[0]) or
+       command[0] == ord('X') or
+       command[0] == ord('^') or command[0] == ord('_') or
+       command[0] == ord('0') or isHomeKey(command[0]) or
+       command[0] == ord('$') or isEndKey(command[0]) or
+       command[0] == ord('{') or
+       command[0] == ord('}') or
+       command[0] == ord('-') or
+       command[0] == ord('+') or
+       command[0] == ord('G') or
+       isControlU(command[0]) or
+       isControlD(command[0]) or
+       isPageUpKey(command[0]) or
+       ## Page down and Ctrl - F
+       isPageDownKey(command[0]) or
+       command[0] == ord('w') or
+       command[0] == ord('b') or
+       command[0] == ord('e') or
+       command[0] == ord('o') or
+       command[0] == ord('O') or
+       command[0] == ord('D') or
+       command[0] == ord('S') or
+       command[0] == ord('s') or
+       command[0] == ord('p') or
+       command[0] == ord('P') or
+       command[0] == ord('>') or
+       command[0] == ord('<') or
+       command[0] == ord('J') or
+       isControlA(command[0]) or
+       isControlX(command[0]) or
+       command[0] == ord('~') or
+       command[0] == ord('n') or
+       command[0] == ord('N') or
+       command[0] == ord('*') or
+       command[0] == ord('#') or
+       command[0] == ord('R') or
+       command[0] == ord('i') or
+       command[0] == ord('I') or
+       command[0] == ord('v') or
+       command[0] == ord('a') or
+       command[0] == ord('A') or
+       command[0] == ord('u') or
+       isControlR(command[0]) or
+       command[0] == ord('.') or
+       command[0] == ord('Y'):
+      result = InputState.Valid
 
-  proc isChangeModeKey(key: Rune): bool =
-     return key == ord('v') or
-            isControlV(key) or
-            key == ord('R') or
-            key == ord('i') or
-            key == ord('I') or
-            key == ord('a') or
-            key == ord('A')
+    elif command[0] == ord('g'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        if command[1] == ord('g') or
+           command[1] == ord('_') or
+           command[1] == ord('a'):
+          result = InputState.Valid
 
-  # Record normal mode commands
-  if result.len > 0 and
-     key != ord('.') and
-     not isMovementKey(key) and
-     not isChangeModeKey(key): status.normalCommandHistory.add(@[result])
+    elif command[0] == ord('z'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        if command[1] == ord('.') or
+           command[1] == ord('t') or
+           command[1] == ord('b'):
+          result = InputState.Valid
+
+    elif command[0] == ord('c'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        if command[1] == ord('i'):
+          result = InputState.Continue
+        elif command[1] == ord('c') or command[1] == ('l'):
+          result = InputState.Valid
+      elif command.len == 3:
+        if command[1] == ord('i'):
+          if isParen(command[2]) or
+             command[2]== ord('w'):
+            result = InputState.Valid
+
+    elif command[0] == ord('d'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        if command[1] == ord('d') or
+           command[1] == ord('w') or
+           command[1] == ord('$') or isEndKey(command[1]) or
+           command[1] == ord('0') or isHomeKey(command[1]) or
+           command[1] == ord('G') or
+           command[1] == ord('{') or
+           command[1] == ord('}'):
+          result = InputState.Valid
+        elif command[1] == ord('g') or command[1] == ord('i'):
+          result = InputState.Continue
+      elif command.len == 3:
+        if command[2] == ord('g'):
+          result = InputState.Valid
+        elif command[1] == ord('i'):
+          if isParen(command[2]) or
+             command[2] == ord('w'):
+            result = InputState.Valid
+
+    elif command[0] == ord('y'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        if command[1] == ord('y') or
+           command[1] == ord('w') or
+           command[1] == ord('{') or
+           command[1] == ord('}') or
+           command[1] == ord('l'):
+          result = InputState.Valid
+
+    elif command[0] == ord('='):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command[1] == ord('='):
+        result = InputState.Valid
+
+    elif command[0] == ord('r'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        result = InputState.Valid
+
+    elif command[0] == ord('f'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        result = InputState.Valid
+
+    elif command[0] == ord('F'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        result = InputState.Valid
+
+    elif command[0] == ord('Z'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        if command[1] == ord('Z') or command[1] == ord('Q'):
+          result = InputState.Valid
+
+    elif isControlW(command[0]):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        if command[1] == ord('c'):
+          result = InputState.Valid
+
+    elif command[0] == ('\\'):
+      if command.len == 1:
+        result = InputState.Continue
+      if command[1] == ord('r'):
+        result = InputState.Valid
+
+    elif command[0] == ord('"'):
+      if command.len < 3:
+        result = InputState.Continue
+      else:
+        var currentIndex = 1
+        while currentIndex < command.len:
+          let ch = char(command[currentIndex])
+
+          if currentIndex == 1:
+            if not (ch in Letters and isDigit(ch)):
+              result = InputState.Invalid
+
+          elif currentIndex == 2 and isDigit(ch):
+            while ch in Digits and currentIndex < command.len:
+              inc(currentIndex)
+
+          else:
+            let cmd = $command[currentIndex .. ^1]
+            if cmd == "y":
+              result = InputState.Continue
+            elif cmd == "p" or
+                 cmd == "P" or
+                 cmd == "yy" or
+                 cmd == "yw" or
+                 cmd == "yl" or
+                 cmd == "y{" or
+                 cmd == "y}":
+              result = InputState.Valid
+            break
+
+          inc(currentIndex)
+
+    else:
+      discard
+
+# Check if a register command
+proc isRegisterCommand(command: seq[Rune]): InputState =
+  result = InputState.Continue
+
+  if command[0] != ru '"':
+    return InputState.Invalid
+
+  var currentIndex = 0
+  while currentIndex < command.len:
+    let ch = char(command[currentIndex])
+
+    if currentIndex == 1:
+      if not (ch in Letters and isDigit(ch)):
+        return InputState.Invalid
+
+    elif currentIndex == 2 and isDigit(ch):
+      while ch in Digits and currentIndex < command.len:
+        inc(currentIndex)
+
+    else:
+      let cmd = command[currentIndex .. ^1]
+      discard isNormalModeCommand(cmd)
+
+    inc(currentIndex)
 
 proc isNormalMode(status: Editorstatus): bool =
   let index =
@@ -1027,7 +1130,9 @@ proc normalMode*(status: var EditorStatus) =
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
     currentWorkSpaceIndex = status.currentWorkSpaceIndex
-  var countChange = 0
+  var
+    countChange = 0
+    command = ru ""
 
   while status.isNormalMode and
         currentWorkSpaceIndex == status.currentWorkSpaceIndex and
@@ -1046,11 +1151,15 @@ proc normalMode*(status: var EditorStatus) =
     currentBufStatus.tryRecordCurrentPosition(currentMainWindowNode)
 
     if isEscKey(key):
+      command = ru ""
+      currentBufStatus.cmdLoop = 0
+
       let keyAfterEsc = getKey(currentMainWindowNode)
       if isEscKey(keyAfterEsc):
         status.turnOffHighlighting
         continue
-      else: key = keyAfterEsc
+      else:
+        key = keyAfterEsc
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
@@ -1063,17 +1172,22 @@ proc normalMode*(status: var EditorStatus) =
     elif isDigit(key):
       let num = ($key)[0]
       if status.bufStatus[currentBufferIndex].cmdLoop == 0 and num == '0':
-        let commands = status.isNormalModeCommand(key)
-        status.normalCommand(commands, terminalHeight(), terminalWidth())
         continue
 
       currentBufStatus.cmdLoop *= 10
-      currentBufStatus.cmdLoop += ord(num)-ord('0')
+      currentBufStatus.cmdLoop += ord(num) - ord('0')
       currentBufStatus.cmdLoop = min(
         100000,
         currentBufStatus.cmdLoop)
       continue
     else:
-      let commands = status.isNormalModeCommand(key)
-      status.normalCommand(commands, terminalHeight(), terminalWidth())
-      currentBufStatus.cmdLoop = 0
+      command &= key
+
+      let state = isNormalModeCommand(command)
+      if state == InputState.Continue:
+        continue
+      elif state == InputState.Valid:
+        status.normalCommand(command, terminalHeight(), terminalWidth())
+
+    command = ru ""
+    currentBufStatus.cmdLoop = 0
