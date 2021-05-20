@@ -278,20 +278,19 @@ proc yankLines(status: var Editorstatus, start, last: int, registerName: string)
                              start, lastLine,
                              registerName)
 
-proc yankWord(status: var EditorStatus, loop: int) =
+proc yankWord(status: var EditorStatus) =
   currentBufStatus.yankWord(status.registers,
                             currentMainWindowNode,
                             status.platform,
                             status.settings.clipboard,
-                            loop)
+                            currentBufStatus.cmdLoop)
 
 proc yankWord(status: var EditorStatus, registerName: string) =
-  const loop = 1
   currentBufStatus.yankWord(status.registers,
                             currentMainWindowNode,
                             status.platform,
                             status.settings.clipboard,
-                            loop,
+                            currentBufStatus.cmdLoop,
                             registerName)
 
 # y{ command
@@ -816,7 +815,7 @@ proc normalCommand(status: var EditorStatus,
     if secondKey == ord('y'):
       yankLines()
     elif secondKey == ord('w'):
-      status.yankWord(cmdLoop)
+      status.yankWord
     elif secondKey == ord('{'):
       status.yankToPreviousBlankLine
     elif secondKey == ord('}'):
