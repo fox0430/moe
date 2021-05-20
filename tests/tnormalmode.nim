@@ -1133,3 +1133,118 @@ suite "Normal mode: Cut character before cursor":
     check currentBufStatus.buffer[0] == ru"bcde"
 
     check status.registers[^1].buffer[0] == ru"a"
+
+suite "Add buffer to the register":
+  test "Add a character to the register (\"\"ayl\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+
+    let commands = ru "\"ayl"
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers == @[
+      Register(buffer: @[ru "a"], isLine: false, name: "a")]
+
+  test "Add 2 characters to the register (\"\"a2yl\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+
+    let commands = ru "\"a2yl"
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers == @[
+      Register(buffer: @[ru "ab"], isLine: false, name: "a")]
+
+  test "Add a word to the register (\"\"ayw\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc def"])
+
+    let commands = ru "\"ayw"
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers == @[
+      Register(buffer: @[ru "abc "], isLine: false, name: "a")]
+
+  test "Add 2 words to the register (\"\"a2yw\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc def"])
+
+    let commands = ru "\"a2yw"
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers == @[
+      Register(buffer: @[ru "abc def"], isLine: false, name: "a")]
+
+  test "Add a line to the register (\"\"ayy\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
+
+    let commands = ru "\"ayy"
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers == @[
+      Register(buffer: @[ru "abc"], isLine: true, name: "a")]
+
+  test "Add a line to the register (\"\"ayy\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
+
+    let commands = ru "\"a2yy"
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers == @[
+      Register(buffer: @[ru "abc", ru "def"], isLine: true, name: "a")]
+
+  test "Add 2 lines to the register (\"\"a2yy\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
+
+    let commands = ru "\"a2yy"
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers == @[
+      Register(buffer: @[ru "abc", ru "def"], isLine: true, name: "a")]
+
+  test "Add up to the next blank line to the register (\"ay} command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"", ru "ghi"])
+
+    status.resize(100, 100)
+
+    let commands = ru "\"ay}"
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers == @[
+      Register(buffer: @[ru "abc", ru "def", ru ""], isLine: true, name: "a")]
+
+  test "Add to the named register up to the previous blank line (\"ay{ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"def", ru"ghi"])
+    currentMainWindowNode.currentLine = 3
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = ru "\"ay{"
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers == @[
+      Register(buffer: @[ru "", ru "def", ru "ghi"], isLine: true, name: "a")]
