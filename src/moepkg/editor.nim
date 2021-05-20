@@ -785,8 +785,6 @@ proc yankString*(bufStatus: BufferStatus,
         line = windowNode.currentLine
       yankedBuffer.add bufStatus.buffer[line][col]
 
-    registers.addRegister(yankedBuffer)
-
     if settings.clipboard.enable:
       registers.sendToClipboad(platform,
                                settings.clipboard.toolOnLinux)
