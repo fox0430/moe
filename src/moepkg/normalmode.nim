@@ -229,7 +229,24 @@ proc yankString(status: var Editorstatus, cmdLoop: int) =
                               count)
 
 # name is the register name
-proc yankLines(status: var Editorstatus, name: string) =
+proc yankString(status: var Editorstatus, registerName: string) =
+  let
+    buffer = currentBufStatus.buffer
+    lineLen = buffer[currentMainWindowNode.currentLine].len
+    width =  lineLen - currentMainWindowNode.currentColumn
+    length = currentBufStatus.cmdLoop
+
+  currentBufStatus.yankString(status.registers,
+                              currentMainWindowNode,
+                              status.commandLine,
+                              status.messageLog,
+                              status.platform,
+                              status.settings,
+                              length,
+                              registerName)
+
+# name is the register name
+proc yankLines(status: var Editorstatus, registerName: string) =
   let lastLine = min(currentMainWindowNode.currentLine,
                      currentBufStatus.buffer.high)
 
@@ -238,7 +255,7 @@ proc yankLines(status: var Editorstatus, name: string) =
                              status.messageLog,
                              status.settings.notificationSettings,
                              currentMainWindowNode.currentLine, lastLine,
-                             name)
+                             registerName)
 
 proc yankLines(status: var Editorstatus, start, last: int) =
   let lastLine = min(last,
@@ -250,7 +267,7 @@ proc yankLines(status: var Editorstatus, start, last: int) =
                              status.settings.notificationSettings,
                              start, lastLine)
 
-proc yankLines(status: var Editorstatus, start, last: int, name: string) =
+proc yankLines(status: var Editorstatus, start, last: int, registerName: string) =
   let lastLine = min(last,
                      currentBufStatus.buffer.high)
 
@@ -259,25 +276,7 @@ proc yankLines(status: var Editorstatus, start, last: int, name: string) =
                              status.messageLog,
                              status.settings.notificationSettings,
                              start, lastLine,
-                             name)
-
-# Yank characters in the current line
-# name is the register name
-proc yankCharacters(status: var Editorstatus, name: string) =
-  let
-    buffer = currentBufStatus.buffer
-    lineLen = buffer[currentMainWindowNode.currentLine].len
-    width =  lineLen - currentMainWindowNode.currentColumn
-  const length = 1
-
-  currentBufStatus.yankString(status.registers,
-                              currentMainWindowNode,
-                              status.commandLine,
-                              status.messageLog,
-                              status.platform,
-                              status.settings,
-                              length,
-                              name)
+                             registerName)
 
 proc yankWord(status: var EditorStatus, loop: int) =
   currentBufStatus.yankWord(status.registers,
@@ -286,21 +285,21 @@ proc yankWord(status: var EditorStatus, loop: int) =
                             status.settings.clipboard,
                             loop)
 
-proc yankWord(status: var EditorStatus, name: string) =
+proc yankWord(status: var EditorStatus, registerName: string) =
   const loop = 1
   currentBufStatus.yankWord(status.registers,
                             currentMainWindowNode,
                             status.platform,
                             status.settings.clipboard,
                             loop,
-                            name)
+                            registerName)
 
 # y{ command
-proc yankToPreviousBlankLine(status: var EditorStatus, name: string) =
+proc yankToPreviousBlankLine(status: var EditorStatus, registerName: string) =
   let
     currentLine = currentMainWindowNode.currentLine
     previousBlankLine = currentBufStatus.findPreviousBlankLine(currentLine)
-  status.yankLines(max(previousBlankLine, 0), currentLine, name)
+  status.yankLines(max(previousBlankLine, 0), currentLine, registerName)
   if previousBlankLine >= 0: status.jumpLine(previousBlankLine)
 
 # y{ command
@@ -312,12 +311,12 @@ proc yankToPreviousBlankLine(status: var EditorStatus) =
   if previousBlankLine >= 0: status.jumpLine(previousBlankLine)
 
 # y} command
-proc yankToNextBlankLine(status: var EditorStatus, name: string) =
+proc yankToNextBlankLine(status: var EditorStatus, registerName: string) =
   let
     currentLine = currentMainWindowNode.currentLine
     buffer = currentBufStatus.buffer
     nextBlankLine = currentBufStatus.findNextBlankLine(currentLine)
-  status.yankLines(currentLine, min(nextBlankLine, buffer.high), name)
+  status.yankLines(currentLine, min(nextBlankLine, buffer.high), registerName)
   if nextBlankLine >= 0: status.jumpLine(nextBlankLine)
 
 # y} command
@@ -329,14 +328,40 @@ proc yankToNextBlankLine(status: var EditorStatus) =
   status.yankLines(currentLine, min(nextBlankLine, buffer.high))
   if nextBlankLine >= 0: status.jumpLine(nextBlankLine)
 
-proc addRegister(status: var EditorStatus, command, name: string) =
+proc addRegister(status: var EditorStatus, command, registerName: string) =
+  let
+    cmdLoop = currentBufStatus.cmdLoop
+    windowNode = currentMainWindowNode
+
+  # yy command
+  template yankLines() =
+    let lastLine = min(windowNode.currentLine + cmdLoop - 1,
+                       currentBufStatus.buffer.high)
+    status.yankLines(windowNode.currentLine, lastLine, registerName)
+
+  # yl command
+  # Yank characters in the current line
+  template yankCharacters() =
+    let
+      buffer = currentBufStatus.buffer
+      width = buffer[windowNode.currentLine].len - windowNode.currentColumn
+      count = if  width > cmdLoop: cmdLoop
+              else: width
+    status.yankString(registerName)
+
   case command:
-    of "yy": status.yankLines(name)
-    of "yl": status.yankCharacters(name)
-    of "yw": status.yankWord(name)
-    of "y{": status.yankToPreviousBlankLine(name)
-    of "y}": status.yankToNextBlankLine(name)
-    else: discard
+    of "yy":
+      yankLines()
+    of "yl":
+      yankCharacters()
+    of "yw":
+      status.yankWord(registerName)
+    of "y{":
+      status.yankToPreviousBlankLine(registerName)
+    of "y}":
+      status.yankToNextBlankLine(registerName)
+    else:
+      discard
 
 proc pasteFromRegister(status: var EditorStatus, command, name: string) =
   if name.len == 0: return
@@ -354,6 +379,29 @@ proc pasteFromRegister(status: var EditorStatus, command, name: string) =
         name)
     else:
       discard
+
+proc registerCommand(status: var EditorStatus, command: seq[Rune]) =
+  var
+    numberStr = ""
+    currentIndex = 2
+    registerName = command[1]
+
+  if isDigit(command[2]):
+    while isDigit(command[currentIndex]):
+      numberStr &= $command[currentIndex]
+      inc(currentIndex)
+
+  let cmd = $command[currentIndex .. ^1]
+  currentBufStatus.cmdLoop = if numberStr == "": 1
+                               else: numberStr.parseInt
+  if cmd == "p" or cmd == "P":
+    status.pasteFromRegister(cmd, $registerName)
+  elif cmd == "yy" or
+       cmd == "yw" or
+       cmd == "yl" or
+       cmd == "y{" or
+       cmd == "y}":
+    status.addRegister(cmd, $registerName)
 
 proc isMovementKey(key: Rune): bool =
   return isControlK(key) or
@@ -859,13 +907,8 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('\\'):
     let secondKey = commands[1]
     if secondKey == ord('r'): status.runQuickRunCommand
-  # TODO: Get cmdLoop
   elif key == ord('"'):
-    let name = $commands[1]
-    if commands[2] == ru 'y':
-      status.addRegister($commands[2] & $commands[3], name)
-    elif commands[2] == ru 'p':
-      status.pasteFromRegister($commands[2], name)
+    status.registerCommand(commands)
   else:
     return
 
@@ -1061,33 +1104,29 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
       if command.len < 3:
         result = InputState.Continue
       else:
-        var currentIndex = 1
-        while currentIndex < command.len:
-          let ch = char(command[currentIndex])
+        block:
+          let ch = char(command[2])
+          if not (ch in Letters and isDigit(ch)):
+            result = InputState.Invalid
 
-          if currentIndex == 1:
-            if not (ch in Letters and isDigit(ch)):
-              result = InputState.Invalid
-
-          elif currentIndex == 2 and isDigit(ch):
-            while ch in Digits and currentIndex < command.len:
-              inc(currentIndex)
-
-          else:
-            let cmd = $command[currentIndex .. ^1]
-            if cmd == "y":
-              result = InputState.Continue
-            elif cmd == "p" or
-                 cmd == "P" or
-                 cmd == "yy" or
-                 cmd == "yw" or
-                 cmd == "yl" or
-                 cmd == "y{" or
-                 cmd == "y}":
-              result = InputState.Valid
-            break
-
+        var
+          currentIndex = 3
+          ch = char(command[currentIndex])
+        while ch in Digits and currentIndex < command.len:
           inc(currentIndex)
+          ch = char(command[currentIndex])
+
+        let cmd = $command[currentIndex .. ^1]
+        if cmd == "y":
+          result = InputState.Continue
+        elif cmd == "p" or
+             cmd == "P" or
+             cmd == "yy" or
+             cmd == "yw" or
+             cmd == "yl" or
+             cmd == "y{" or
+             cmd == "y}":
+          result = InputState.Valid
 
     else:
       discard
