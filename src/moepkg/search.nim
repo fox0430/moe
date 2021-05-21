@@ -184,8 +184,10 @@ proc searchFirstOccurrence(status: var EditorStatus) =
 
 proc incrementalSearch(status: var Editorstatus, direction: Direction) =
   let prompt = if direction == Direction.forward: "/" else: "?"
+
+  status.searchHistory.add ru""
+
   var
-    keyword = ru""
     exitSearch = false
     cancelSearch = false
 
@@ -200,17 +202,18 @@ proc incrementalSearch(status: var Editorstatus, direction: Direction) =
       isSearch = true
     let returnWord = status.getKeyOnceAndWriteCommandView(
       prompt,
-      keyword,
+      status.searchHistory[^1],
       isSuggest,
       isSearch)
 
-    keyword = returnWord[0]
+    status.searchHistory[^1] = returnWord[0]
     exitSearch = returnWord[1]
     cancelSearch = returnWord[2]
 
     if exitSearch or cancelSearch: break
 
-    if keyword.len > 0:
+    if status.searchHistory[^1].len > 0:
+      let keyword = status.searchHistory[^1]
       status.isSearchHighlight = true
 
       if direction == Direction.forward:
@@ -247,9 +250,6 @@ proc incrementalSearch(status: var Editorstatus, direction: Direction) =
       status.settings)
 
     status.commandLine.erase
-  else:
-    # Save keyword in search history
-    status.searchHistory.addSearchHistory(keyword)
 
 proc searchFordwards*(status: var EditorStatus) =
   if status.settings.incrementalSearch:
