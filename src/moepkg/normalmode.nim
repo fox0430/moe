@@ -1109,7 +1109,7 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
             result = InputState.Invalid
 
         var
-          currentIndex = 3
+          currentIndex = 2
           ch = char(command[currentIndex])
         while ch in Digits and currentIndex < command.len:
           inc(currentIndex)
