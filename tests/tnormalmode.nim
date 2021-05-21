@@ -1248,3 +1248,20 @@ suite "Add buffer to the register":
 
     check status.registers == @[
       Register(buffer: @[ru "", ru "def", ru "ghi"], isLine: true, name: "a")]
+
+test "Validate normal mode command":
+  test "\" (Expect to continue)":
+    const command = ru "\""
+    check isNormalModeCommand(command) == InputState.Continue
+
+  test "\"a (Expect to continue)":
+    const command = ru "\"a"
+    check isNormalModeCommand(command) == InputState.Continue
+
+  test "\"ay (Expect to continue)":
+    const command = ru "\"ay"
+    check isNormalModeCommand(command) == InputState.Continue
+
+  test "\"ayy (Expect to validate)":
+    const command = ru "\"ayy"
+    check isNormalModeCommand(command) == InputState.Valid
