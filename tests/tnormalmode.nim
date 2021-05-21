@@ -1233,6 +1233,23 @@ suite "Add buffer to the register":
     check status.registers == @[
       Register(buffer: @[ru "abc", ru "def", ru ""], isLine: true, name: "a")]
 
+  test "Delete and ynak a line (\"add command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
+
+    status.resize(100, 100)
+
+    let commands = ru "\"add"
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "def"
+
+    check status.registers == @[
+      Register(buffer: @[ru "abc"], isLine: true, name: "a")]
+
   test "Add to the named register up to the previous blank line (\"ay{ command)":
     var status = initEditorStatus()
     status.addNewBuffer
