@@ -213,38 +213,6 @@ proc repeatNormalModeCommand(status: var Editorstatus, height, width: int) =
   let commands  = status.normalCommandHistory[^1]
   status.normalCommand(commands, height, width)
 
-proc yankString(status: var Editorstatus, cmdLoop: int) =
-  let
-    buffer = currentBufStatus.buffer
-    lineLen = buffer[currentMainWindowNode.currentLine].len
-    width =  lineLen - currentMainWindowNode.currentColumn
-    count = if width > cmdLoop: cmdLoop else: width
-
-  currentBufStatus.yankString(status.registers,
-                              currentMainWindowNode,
-                              status.commandLine,
-                              status.messageLog,
-                              status.platform,
-                              status.settings,
-                              count)
-
-# name is the register name
-proc yankString(status: var Editorstatus, registerName: string) =
-  let
-    buffer = currentBufStatus.buffer
-    lineLen = buffer[currentMainWindowNode.currentLine].len
-    width =  lineLen - currentMainWindowNode.currentColumn
-    length = currentBufStatus.cmdLoop
-
-  currentBufStatus.yankString(status.registers,
-                              currentMainWindowNode,
-                              status.commandLine,
-                              status.messageLog,
-                              status.platform,
-                              status.settings,
-                              length,
-                              registerName)
-
 # name is the register name
 proc yankLines(status: var Editorstatus, registerName: string) =
   let lastLine = min(currentMainWindowNode.currentLine,
@@ -354,6 +322,65 @@ proc yankAndDeleteLines(status: var EditorStatus, registerName: string) =
     currentBufStatus.deleteLine(currentMainWindowNode,
                                 currentMainWindowNode.currentLine)
 
+# TODO: Delete cmdLoop
+proc yankString(status: var Editorstatus, cmdLoop: int) =
+  let
+    buffer = currentBufStatus.buffer
+    lineLen = buffer[currentMainWindowNode.currentLine].len
+    width =  lineLen - currentMainWindowNode.currentColumn
+    count = if width > cmdLoop: cmdLoop else: width
+
+  currentBufStatus.yankString(status.registers,
+                              currentMainWindowNode,
+                              status.commandLine,
+                              status.messageLog,
+                              status.platform,
+                              status.settings,
+                              count)
+
+# name is the register name
+proc yankString(status: var Editorstatus, registerName: string) =
+  let
+    buffer = currentBufStatus.buffer
+    lineLen = buffer[currentMainWindowNode.currentLine].len
+    width =  lineLen - currentMainWindowNode.currentColumn
+    length = currentBufStatus.cmdLoop
+
+  currentBufStatus.yankString(status.registers,
+                              currentMainWindowNode,
+                              status.commandLine,
+                              status.messageLog,
+                              status.platform,
+                              status.settings,
+                              length,
+                              registerName)
+
+# d$ command
+proc yankAndDeleteCharactersUntilEndOfLine(status: var EditorStatus, registerName: string) =
+  let
+    lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
+    count = lineWidth - currentMainWindowNode.currentColumn
+  if registerName.len > 0:
+    currentBufStatus.cmdLoop = count
+    status.yankString(registerName)
+  else:
+    status.yankString(count)
+
+  currentBufStatus.deleteCharacterUntilEndOfLine(
+    status.settings.autoDeleteParen,
+    currentMainWindowNode)
+
+# d$ command
+proc yankAndDeleteCharactersUntilEndOfLine(status: var EditorStatus) =
+  let
+    lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
+    count = lineWidth - currentMainWindowNode.currentColumn
+  status.yankString(count)
+
+  currentBufStatus.deleteCharacterUntilEndOfLine(
+    status.settings.autoDeleteParen,
+    currentMainWindowNode)
+
 proc deleteWord(status: var EditorStatus) =
   const registerName = ""
   currentBufStatus.deleteWord(currentMainWindowNode,
@@ -386,23 +413,24 @@ proc addRegister(status: var EditorStatus, command, registerName: string) =
               else: width
     status.yankString(registerName)
 
-  case command:
-    of "yy":
-      yankLines()
-    of "yl":
-      yankCharacters()
-    of "yw":
-      status.yankWord(registerName)
-    of "y{":
-      status.yankToPreviousBlankLine(registerName)
-    of "y}":
-      status.yankToNextBlankLine(registerName)
-    of "dd":
-      status.yankAndDeleteLines(registerName)
-    of "dw":
-      status.deleteWord(registerName)
-    else:
-      discard
+  if command == "yy":
+    yankLines()
+  elif command == "yl":
+    yankCharacters()
+  elif command == "yw":
+    status.yankWord(registerName)
+  elif command == "y{":
+    status.yankToPreviousBlankLine(registerName)
+  elif command == "y}":
+    status.yankToNextBlankLine(registerName)
+  elif command == "dd":
+    status.yankAndDeleteLines(registerName)
+  elif command == "dw":
+    status.deleteWord(registerName)
+  elif command == "d$" or (command.len == 1 and isEndKey(command[0].toRune)):
+    status.yankAndDeleteCharactersUntilEndOfLine(registerName)
+  else:
+    discard
 
 proc pasteFromRegister(status: var EditorStatus, command, name: string) =
   if name.len == 0: return
@@ -443,7 +471,8 @@ proc registerCommand(status: var EditorStatus, command: seq[Rune]) =
        cmd == "y{" or
        cmd == "y}" or
        cmd == "dd" or
-       cmd == "dw":
+       cmd == "dw" or
+       cmd == "d$" or (cmd.len == 1 and isEndKey(command[0])):
     status.addRegister(cmd, $registerName)
 
 proc isMovementKey(key: Rune): bool =
@@ -539,16 +568,6 @@ proc normalCommand(status: var EditorStatus,
       windowNode,
       status.settings.autoCloseParen,
       rune)
-
-  # d$ command
-  template yankAndDeleteCharactersUntilEndOfLine() =
-    let
-      lineWidth = currentBufStatus.buffer[windowNode.currentLine].len
-      count = lineWidth - windowNode.currentColumn
-    status.yankString(count)
-
-    currentBufStatus.deleteCharacterUntilEndOfLine(
-      status.settings.autoDeleteParen, windowNode)
 
   template deleteCharactersOfLine() =
     currentBufStatus.deleteCharactersOfLine(
@@ -819,7 +838,7 @@ proc normalCommand(status: var EditorStatus,
     elif secondKey == ord('w'):
       currentBufStatus.deleteWord(windowNode, status.registers)
     elif secondKey == ('$') or isEndKey(secondKey):
-      yankAndDeleteCharactersUntilEndOfLine()
+      status.yankAndDeleteCharactersUntilEndOfLine
     elif secondKey == ('0') or isHomeKey(secondKey):
      yankAndDeleteCharacterBeginningOfLine()
     elif secondKey == ord('G'):
@@ -838,7 +857,7 @@ proc normalCommand(status: var EditorStatus,
     elif secondKey == ord('h'):
       cutCharacterBeforeCursor()
   elif key == ord('D'):
-     yankAndDeleteCharactersUntilEndOfLine()
+     status.yankAndDeleteCharactersUntilEndOfLine
   elif key == ord('S'):
      deleteCharactersOfLine()
      insertAfterCursor()
@@ -1161,7 +1180,8 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
              cmd == "y{" or
              cmd == "y}" or
              cmd == "dd" or
-             cmd == "dw":
+             cmd == "dw" or
+             cmd == "d$" or (cmd.len == 1 and isEndKey(cmd[0].toRune)):
           result = InputState.Valid
 
     else:
