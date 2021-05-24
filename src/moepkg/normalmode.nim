@@ -497,6 +497,31 @@ proc yankAndDeleteTillNextBlankLine(status: var EditorStatus,
 
   currentBufStatus.deleteTillNextBlankLine(currentMainWindowNode)
 
+# X and dh command
+proc cutCharacterBeforeCursor(status: var EditorStatus, registerName: string) =
+  if currentMainWindowNode.currentColumn > 0:
+    let
+      currentColumn = currentMainWindowNode.currentColumn
+      cmdLoop = currentBufStatus.cmdLoop
+      loop = if currentColumn - cmdLoop > 0: cmdLoop
+             else: currentColumn
+    currentMainWindowNode.currentColumn = currentColumn - loop
+
+    if registerName.len > 0:
+      status.yankString(registerName)
+    else:
+      status.yankString(loop)
+
+    for i in 0 ..< loop:
+      currentBufStatus.deleteCurrentCharacter(
+        currentMainWindowNode,
+        status.settings.autoDeleteParen)
+
+# X and dh command
+proc cutCharacterBeforeCursor(status: var EditorStatus) =
+  const registerName = ""
+  status.cutCharacterBeforeCursor(registerName)
+
 proc yankAndDeleteTillNextBlankLine(status: var EditorStatus) =
   const registerName = ""
   status.yankAndDeleteTillNextBlankLine(registerName)
@@ -558,6 +583,8 @@ proc addRegister(status: var EditorStatus, command, registerName: string) =
     status.yankAndDeleteTillNextBlankLine(registerName)
   elif command.len == 3 and command[0 .. 1] == "di":
     status.yankAndDeleteInnerCommand(command[2].toRune, registerName)
+  elif command == "dh":
+    status.cutCharacterBeforeCursor(registerName)
   else:
     discard
 
@@ -608,7 +635,8 @@ proc registerCommand(status: var EditorStatus, command: seq[Rune]) =
        cmd == "dgg" or
        cmd == "d{" or
        cmd == "d}" or
-       cmd.len == 3 and cmd[0 .. 1] == "di":
+       cmd.len == 3 and cmd[0 .. 1] == "di" or
+       cmd == "dh":
     status.addRegister(cmd, $registerName)
 
 proc isMovementKey(key: Rune): bool =
@@ -808,19 +836,6 @@ proc normalCommand(status: var EditorStatus,
               else: width
     status.yankString(count)
 
-  # X and dh command
-  template cutCharacterBeforeCursor() =
-    if windowNode.currentColumn > 0:
-      let
-        currentColumn = windowNode.currentColumn
-        loop = if currentColumn - cmdLoop > 0: cmdLoop
-               else: currentColumn
-      currentMainWindowNode.currentColumn = currentColumn - loop
-
-      status.yankString(loop)
-      for i in 0 ..< loop:
-        deleteCurrentCharacter()
-
   let key = commands[0]
 
   if isControlK(key):
@@ -845,7 +860,7 @@ proc normalCommand(status: var EditorStatus,
     for i in 0 ..< loop:
       deleteCurrentCharacter()
   elif key == ord('X'):
-    cutCharacterBeforeCursor()
+    status.cutCharacterBeforeCursor
   elif key == ord('^') or key == ord('_'):
     currentBufStatus.moveToFirstNonBlankOfLine(windowNode)
   elif key == ord('0') or isHomeKey(key):
@@ -948,7 +963,7 @@ proc normalCommand(status: var EditorStatus,
       let thirdKey = commands[2]
       status.yankAndDeleteInnerCommand(thirdKey)
     elif secondKey == ord('h'):
-      cutCharacterBeforeCursor()
+      status.cutCharacterBeforeCursor
   elif key == ord('D'):
      status.yankAndDeleteCharactersUntilEndOfLine
   elif key == ord('S'):
@@ -1282,7 +1297,8 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
              cmd == "dgg" or
              cmd == "d{" or
              cmd == "d}" or
-             cmd.len == 3 and cmd[0 .. 1] == "di":
+             cmd.len == 3 and cmd[0 .. 1] == "di" or
+             cmd == "dh":
           result = InputState.Valid
 
     else:
