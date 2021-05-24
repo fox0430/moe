@@ -355,7 +355,8 @@ proc insertCharacterAboveCursor*(bufStatus: var BufferStatus,
 # Yank and delete current word
 proc deleteWord*(bufStatus: var BufferStatus,
                  windowNode: var WindowNode,
-                 registers: var seq[Register]) =
+                 registers: var seq[Register],
+                 registerName: string) =
 
   if bufStatus.buffer.len == 1 and
      bufStatus.buffer[windowNode.currentLine].len < 1: return
@@ -363,7 +364,7 @@ proc deleteWord*(bufStatus: var BufferStatus,
        windowNode.currentLine < bufStatus.buffer.high and
        bufStatus.buffer[windowNode.currentLine].len < 1:
     let yankedLines = bufStatus.buffer[windowNode.currentLine]
-    registers.addRegister(yankedLines)
+    registers.addRegister(yankedLines, registerName)
     bufStatus.buffer.delete(windowNode.currentLine, windowNode.currentLine + 1)
 
     if windowNode.currentLine > bufStatus.buffer.high:
@@ -374,7 +375,7 @@ proc deleteWord*(bufStatus: var BufferStatus,
     newLine.delete(windowNode.currentColumn)
     if oldLine != newLine:
       bufStatus.buffer[windowNode.currentLine] = newLine
-    registers.addRegister(newLine)
+    registers.addRegister(newLine, registerName)
 
     if windowNode.currentColumn > 0: dec(windowNode.currentColumn)
   else:
@@ -416,12 +417,19 @@ proc deleteWord*(bufStatus: var BufferStatus,
       newLine.delete(currentColumn)
     if oldLine != newLine:
       bufStatus.buffer[currentLine] = newLine
-      registers.addRegister(yankStr)
+      registers.addRegister(yankStr, registerName)
     windowNode.expandedColumn = currentColumn
     windowNode.currentColumn = currentColumn
 
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
+
+proc deleteWord*(bufStatus: var BufferStatus,
+                 windowNode: var WindowNode,
+                 registers: var seq[Register]) =
+
+  const registerName = ""
+  bufStatus.deleteWord(windowNode, registers, registerName)
 
 proc deleteWordBeforeCursor*(bufStatus: var BufferStatus,
                             windowNode: var WindowNode,

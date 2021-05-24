@@ -354,6 +354,17 @@ proc yankAndDeleteLines(status: var EditorStatus, registerName: string) =
     currentBufStatus.deleteLine(currentMainWindowNode,
                                 currentMainWindowNode.currentLine)
 
+proc deleteWord(status: var EditorStatus) =
+  const registerName = ""
+  currentBufStatus.deleteWord(currentMainWindowNode,
+                              status.registers,
+                              registerName)
+
+proc deleteWord(status: var EditorStatus, registerName: string) =
+  currentBufStatus.deleteWord(currentMainWindowNode,
+                              status.registers,
+                              registerName)
+
 proc addRegister(status: var EditorStatus, command, registerName: string) =
   let
     cmdLoop = currentBufStatus.cmdLoop
@@ -388,6 +399,8 @@ proc addRegister(status: var EditorStatus, command, registerName: string) =
       status.yankToNextBlankLine(registerName)
     of "dd":
       status.yankAndDeleteLines(registerName)
+    of "dw":
+      status.deleteWord(registerName)
     else:
       discard
 
@@ -429,7 +442,8 @@ proc registerCommand(status: var EditorStatus, command: seq[Rune]) =
        cmd == "yl" or
        cmd == "y{" or
        cmd == "y}" or
-       cmd == "dd":
+       cmd == "dd" or
+       cmd == "dw":
     status.addRegister(cmd, $registerName)
 
 proc isMovementKey(key: Rune): bool =
@@ -1146,7 +1160,8 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
              cmd == "yl" or
              cmd == "y{" or
              cmd == "y}" or
-             cmd == "dd":
+             cmd == "dd" or
+             cmd == "dw":
           result = InputState.Valid
 
     else:
