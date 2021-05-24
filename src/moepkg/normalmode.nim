@@ -432,6 +432,27 @@ proc yankAndDeleteFromCurrentLineToLastLine(status: var EditorStatus,
     currentBufStatus.deleteLine(currentMainWindowNode,
                                 currentMainWindowNode.currentLine)
 
+# dgg command
+# Delete the line from first line to current line
+proc yankAndDeleteLineFromFirstLineToCurrentLine(status: var EditorStatus,
+                                                 registerName: string) =
+
+  let currentLine = currentMainWindowNode.currentLine
+  if registerName.len > 0:
+    status.yankLines(0, currentLine, registerName)
+  else:
+    status.yankLines(0, currentLine)
+
+  status.moveToFirstLine
+
+  for i in 0 ..< currentLine + 1:
+    currentBufStatus.deleteLine(currentMainWindowNode,
+                                currentMainWindowNode.currentLine)
+
+proc yankAndDeleteLineFromFirstLineToCurrentLine(status: var EditorStatus) =
+  const registerName = ""
+  status.yankAndDeleteLineFromFirstLineToCurrentLine(registerName)
+
 proc yankAndDeleteFromCurrentLineToLastLine(status: var EditorStatus) =
   const registerName = ""
   status.yankAndDeleteFromCurrentLineToLastLine(registerName)
@@ -477,6 +498,8 @@ proc addRegister(status: var EditorStatus, command, registerName: string) =
     status.yankAndDeleteCharacterBeginningOfLine(registerName)
   elif command == "dG":
     status.yankAndDeleteFromCurrentLineToLastLine(registerName)
+  elif command == "dgg":
+    status.yankAndDeleteLineFromFirstLineToCurrentLine(registerName)
   else:
     discard
 
@@ -523,7 +546,8 @@ proc registerCommand(status: var EditorStatus, command: seq[Rune]) =
        cmd == "dw" or
        cmd == "d$" or (cmd.len == 1 and isEndKey(command[0])) or
        cmd == "d0" or
-       cmd == "dG":
+       cmd == "dG" or
+       cmd == "dgg":
     status.addRegister(cmd, $registerName)
 
 proc isMovementKey(key: Rune): bool =
@@ -691,15 +715,6 @@ proc normalCommand(status: var EditorStatus,
     if currentBufStatus.countChange == 0 or
        mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
         status.closeWindow(currentWorkSpace.currentMainWindowNode, height, width)
-
-  # dgg command
-  # Delete the line from first line to current line
-  template yankAndDeleteLineFromFirstLineToCurrentLine() =
-    let currentLine = windowNode.currentLine
-    status.yankLines(0, currentLine)
-    status.moveToFirstLine
-    for i in 0 ..< currentLine + 1:
-      currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
 
   # s and cl commands
   template deleteCharacterAndEnterInsertMode() =
@@ -876,7 +891,7 @@ proc normalCommand(status: var EditorStatus,
     elif secondKey == ord('g'):
       let thirdKey = commands[2]
       if thirdKey == ord('g'):
-        yankAndDeleteLineFromFirstLineToCurrentLine()
+        status.yankAndDeleteLineFromFirstLineToCurrentLine
     elif secondKey == ord('{'):
       yankAndDeleteTillPreviousBlankLine()
     elif secondKey == ord('}'):
@@ -1200,7 +1215,8 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
 
         let cmd = $command[currentIndex .. ^1]
         if cmd == "y" or
-           cmd == "d":
+           cmd == "d" or
+           cmd == "dg":
           result = InputState.Continue
         elif cmd == "p" or
              cmd == "P" or
@@ -1213,7 +1229,8 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
              cmd == "dw" or
              cmd == "d$" or (cmd.len == 1 and isEndKey(cmd[0].toRune)) or
              cmd == "d0" or
-             cmd == "dG":
+             cmd == "dG" or
+             cmd == "dgg":
           result = InputState.Valid
 
     else:
