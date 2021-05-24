@@ -1283,6 +1283,151 @@ suite "Add buffer to the register":
     check status.registers == @[
       Register(buffer: @[ru "abc "], isLine: false, name: "a")]
 
+  test "Delete and yank characters to the end of the line (\"ad$ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc def", ru"ghi"])
+
+    status.resize(100, 100)
+
+    let command = ru "\"ad$"
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer[1] == ru "ghi"
+
+    check status.registers == @[
+      Register(buffer: @[ru "abc def"], isLine: false, name: "a")]
+
+  test "Delete and yank characters to the beginning of the line (\"ad0 command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc def"])
+    currentMainWindowNode.currentColumn = 4
+
+    status.resize(100, 100)
+
+    let command = ru "\"ad0"
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "def"
+
+    check status.registers == @[
+      Register(buffer: @[ru "abc "], isLine: false, name: "a")]
+
+  test "Delete and yank lines to the last line (\"adG command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
+    currentMainWindowNode.currentLine = 1
+
+    status.resize(100, 100)
+
+    let command = ru "\"adG"
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "a"
+
+    check status.registers == @[
+      Register(buffer: @[ru "b", ru "c", ru "d"], isLine: true, name: "a")]
+
+  test "Delete and yank lines from the first line to the current line (\"adgg command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
+    currentMainWindowNode.currentLine = 2
+
+    status.resize(100, 100)
+
+    let command = ru "\"adgg"
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "d"
+
+    check status.registers == @[
+      Register(buffer: @[ru "a", ru "b", ru "c"], isLine: true, name: "a")]
+
+  test "Delete and yank lines from the previous blank line to the current line (\"ad{ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"", ru"b", ru"c"])
+    currentMainWindowNode.currentLine = 3
+
+    status.resize(100, 100)
+
+    let command = ru "\"ad{"
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "a"
+    check currentBufStatus.buffer[1] == ru ""
+
+    check status.registers == @[
+      Register(buffer: @[ru "b", ru "c"], isLine: true, name: "a")]
+
+  test "Delete and yank lines from the current linet o the next blank line (\"ad} command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"", ru"c"])
+
+    status.resize(100, 100)
+
+    let command = ru "\"ad}"
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer[1] == ru "c"
+
+    check status.registers == @[
+      Register(buffer: @[ru "a", ru "b"], isLine: true, name: "a")]
+
+  test "Delete and yank characters in the paren (\"adi[ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"a[abc]"])
+    currentMainWindowNode.currentColumn = 1
+
+    status.resize(100, 100)
+
+    let command = ru "\"adi["
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "a[]"
+
+    check status.registers == @[
+      Register(buffer: @[ru "abc"], isLine: false, name: "a")]
+
+  test "Delete and yank characters befor cursor (\"adh command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+    currentMainWindowNode.currentColumn = 1
+
+    status.resize(100, 100)
+
+    let command = ru "\"adh"
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "bc"
+
+    check status.registers == @[
+      Register(buffer: @[ru "a"], isLine: false, name: "a")]
+
 test "Validate normal mode command":
   test "\" (Expect to continue)":
     const command = ru "\""
