@@ -449,6 +449,26 @@ proc yankAndDeleteLineFromFirstLineToCurrentLine(status: var EditorStatus,
     currentBufStatus.deleteLine(currentMainWindowNode,
                                 currentMainWindowNode.currentLine)
 
+# d{ command
+proc yankAndDeleteTillPreviousBlankLine(status: var EditorStatus,
+                                        registerName: string) =
+
+  let blankLine = currentBufStatus.findPreviousBlankLine(
+    currentMainWindowNode.currentLine)
+
+  if registerName.len > 0:
+    status.yankLines(blankLine + 1,
+                     currentMainWindowNode.currentLine,
+                     registerName)
+  else:
+    status.yankLines(blankLine + 1, currentMainWindowNode.currentLine)
+
+  currentBufStatus.deleteTillPreviousBlankLine(currentMainWindowNode)
+
+proc yankAndDeleteTillPreviousBlankLine(status: var EditorStatus) =
+  const registerName = ""
+  status.yankAndDeleteTillPreviousBlankLine(registerName)
+
 proc yankAndDeleteLineFromFirstLineToCurrentLine(status: var EditorStatus) =
   const registerName = ""
   status.yankAndDeleteLineFromFirstLineToCurrentLine(registerName)
@@ -500,6 +520,8 @@ proc addRegister(status: var EditorStatus, command, registerName: string) =
     status.yankAndDeleteFromCurrentLineToLastLine(registerName)
   elif command == "dgg":
     status.yankAndDeleteLineFromFirstLineToCurrentLine(registerName)
+  elif command == "d{":
+    status.yankAndDeleteTillPreviousBlankLine(registerName)
   else:
     discard
 
@@ -547,7 +569,8 @@ proc registerCommand(status: var EditorStatus, command: seq[Rune]) =
        cmd == "d$" or (cmd.len == 1 and isEndKey(command[0])) or
        cmd == "d0" or
        cmd == "dG" or
-       cmd == "dgg":
+       cmd == "dgg" or
+       cmd == "d{":
     status.addRegister(cmd, $registerName)
 
 proc isMovementKey(key: Rune): bool =
@@ -731,13 +754,6 @@ proc normalCommand(status: var EditorStatus,
 
     status.changeMode(Mode.insert)
 
-  # d{ command
-  template yankAndDeleteTillPreviousBlankLine() =
-    let
-      blankLine = currentBufStatus.findPreviousBlankLine(windowNode.currentLine)
-    status.yankLines(blankLine + 1, windowNode.currentLine)
-    currentBufStatus.deleteTillPreviousBlankLine(windowNode)
-
   # d} command
   template yankAndDeleteTillNextBlankLine() =
     let blankLine = currentBufStatus.findNextBlankLine(windowNode.currentLine)
@@ -893,7 +909,7 @@ proc normalCommand(status: var EditorStatus,
       if thirdKey == ord('g'):
         status.yankAndDeleteLineFromFirstLineToCurrentLine
     elif secondKey == ord('{'):
-      yankAndDeleteTillPreviousBlankLine()
+      status.yankAndDeleteTillPreviousBlankLine
     elif secondKey == ord('}'):
       yankAndDeleteTillNextBlankLine()
     elif secondKey == ord('i'):
@@ -1230,7 +1246,8 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
              cmd == "d$" or (cmd.len == 1 and isEndKey(cmd[0].toRune)) or
              cmd == "d0" or
              cmd == "dG" or
-             cmd == "dgg":
+             cmd == "dgg" or
+             cmd == "d{":
           result = InputState.Valid
 
     else:
