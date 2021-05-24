@@ -178,12 +178,19 @@ proc changeInnerCommand(status: var EditorStatus, key: Rune) =
     discard
 
 # di command
-proc yankAndDeleteInnerCommand(status: var EditorStatus, key: Rune) =
+proc yankAndDeleteInnerCommand(status: var EditorStatus, key: Rune, registerName: string) =
   # Delete inside paren and enter insert mode
   if isParen(key):
-    currentBufStatus.yankAndDeleteInsideOfParen(currentMainWindowNode,
-                                                status.registers,
-                                                key)
+    if registerName.len > 0:
+      currentBufStatus.yankAndDeleteInsideOfParen(currentMainWindowNode,
+                                                  status.registers,
+                                                  registerName,
+                                                  key)
+    else:
+      currentBufStatus.yankAndDeleteInsideOfParen(currentMainWindowNode,
+                                                  status.registers,
+                                                  key)
+
     currentBufStatus.keyRight(currentMainWindowNode)
   # Delete current word and enter insert mode
   elif key == ru'w':
@@ -192,6 +199,11 @@ proc yankAndDeleteInnerCommand(status: var EditorStatus, key: Rune) =
       currentBufStatus.deleteWord(currentMainWindowNode, status.registers)
   else:
     discard
+
+# di command
+proc yankAndDeleteInnerCommand(status: var EditorStatus, key: Rune) =
+  const registerName = ""
+  status.yankAndDeleteInnerCommand(key, registerName)
 
 proc showCurrentCharInfoCommand(status: var EditorStatus,
                                 windowNode: WindowNode) =
@@ -544,6 +556,8 @@ proc addRegister(status: var EditorStatus, command, registerName: string) =
     status.yankAndDeleteTillPreviousBlankLine(registerName)
   elif command == "d}":
     status.yankAndDeleteTillNextBlankLine(registerName)
+  elif command.len == 3 and command[0 .. 1] == "di":
+    status.yankAndDeleteInnerCommand(command[2].toRune, registerName)
   else:
     discard
 
@@ -593,7 +607,8 @@ proc registerCommand(status: var EditorStatus, command: seq[Rune]) =
        cmd == "dG" or
        cmd == "dgg" or
        cmd == "d{" or
-       cmd == "d}":
+       cmd == "d}" or
+       cmd.len == 3 and cmd[0 .. 1] == "di":
     status.addRegister(cmd, $registerName)
 
 proc isMovementKey(key: Rune): bool =
@@ -1249,7 +1264,8 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
         let cmd = $command[currentIndex .. ^1]
         if cmd == "y" or
            cmd == "d" or
-           cmd == "dg":
+           cmd == "dg" or
+           cmd == "di":
           result = InputState.Continue
         elif cmd == "p" or
              cmd == "P" or
@@ -1265,7 +1281,8 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
              cmd == "dG" or
              cmd == "dgg" or
              cmd == "d{" or
-             cmd == "d}":
+             cmd == "d}" or
+             cmd.len == 3 and cmd[0 .. 1] == "di":
           result = InputState.Valid
 
     else:
