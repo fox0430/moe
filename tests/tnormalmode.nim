@@ -1266,6 +1266,23 @@ suite "Add buffer to the register":
     check status.registers == @[
       Register(buffer: @[ru "", ru "def", ru "ghi"], isLine: true, name: "a")]
 
+  test "Delete and yank a word (\"adw command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc def"])
+
+    status.resize(100, 100)
+
+    let command = ru "\"adw"
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "def"
+
+    check status.registers == @[
+      Register(buffer: @[ru "abc "], isLine: false, name: "a")]
+
 test "Validate normal mode command":
   test "\" (Expect to continue)":
     const command = ru "\""
