@@ -392,6 +392,30 @@ proc deleteWord(status: var EditorStatus, registerName: string) =
                               status.registers,
                               registerName)
 
+# d0 command
+proc yankAndDeleteCharacterBeginningOfLine(status: var EditorStatus,
+                                           registerName: string) =
+
+  let currentColumn = currentMainWindowNode.currentColumn
+  currentMainWindowNode.currentColumn = 0
+
+  if registerName.len > 0:
+    currentBufStatus.cmdLoop = currentColumn
+    status.yankString(registerName)
+  else:
+    status.yankString(currentColumn)
+
+  currentMainWindowNode.currentColumn = currentColumn
+
+  currentBufStatus.deleteCharacterBeginningOfLine(
+    status.settings.autoDeleteParen,
+    currentMainWindowNode)
+
+# d0 command
+proc yankAndDeleteCharacterBeginningOfLine(status: var EditorStatus) =
+  const registerName = ""
+  status.yankAndDeleteCharacterBeginningOfLine(registerName)
+
 proc addRegister(status: var EditorStatus, command, registerName: string) =
   let
     cmdLoop = currentBufStatus.cmdLoop
@@ -429,6 +453,8 @@ proc addRegister(status: var EditorStatus, command, registerName: string) =
     status.deleteWord(registerName)
   elif command == "d$" or (command.len == 1 and isEndKey(command[0].toRune)):
     status.yankAndDeleteCharactersUntilEndOfLine(registerName)
+  elif command == "d0":
+    status.yankAndDeleteCharacterBeginningOfLine(registerName)
   else:
     discard
 
@@ -462,7 +488,8 @@ proc registerCommand(status: var EditorStatus, command: seq[Rune]) =
 
   let cmd = $command[currentIndex .. ^1]
   currentBufStatus.cmdLoop = if numberStr == "": 1
-                               else: numberStr.parseInt
+                             else: numberStr.parseInt
+
   if cmd == "p" or cmd == "P":
     status.pasteFromRegister(cmd, $registerName)
   elif cmd == "yy" or
@@ -472,7 +499,8 @@ proc registerCommand(status: var EditorStatus, command: seq[Rune]) =
        cmd == "y}" or
        cmd == "dd" or
        cmd == "dw" or
-       cmd == "d$" or (cmd.len == 1 and isEndKey(command[0])):
+       cmd == "d$" or (cmd.len == 1 and isEndKey(command[0])) or
+       cmd == "d0":
     status.addRegister(cmd, $registerName)
 
 proc isMovementKey(key: Rune): bool =
@@ -678,17 +706,6 @@ proc normalCommand(status: var EditorStatus,
     status.yankLines(windowNode.currentLine, blankLine - 1)
     currentBufStatus.deleteTillNextBlankLine(windowNode)
 
-  # d0 command
-  template yankAndDeleteCharacterBeginningOfLine() =
-    let currentColumn = windowNode.currentColumn
-    windowNode.currentColumn = 0
-    status.yankString(currentColumn)
-    windowNode.currentColumn = currentColumn
-
-    currentBufStatus.deleteCharacterBeginningOfLine(
-      status.settings.autoDeleteParen,
-      windowNode)
-
   # dG command
   # Yank and delete the line from current line to last line
   template yankAndDeleteFromCurrentLineToLastLine() =
@@ -840,7 +857,7 @@ proc normalCommand(status: var EditorStatus,
     elif secondKey == ('$') or isEndKey(secondKey):
       status.yankAndDeleteCharactersUntilEndOfLine
     elif secondKey == ('0') or isHomeKey(secondKey):
-     yankAndDeleteCharacterBeginningOfLine()
+     status.yankAndDeleteCharacterBeginningOfLine
     elif secondKey == ord('G'):
       yankAndDeleteFromCurrentLineToLastLine()
     elif secondKey == ord('g'):
@@ -1181,7 +1198,8 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
              cmd == "y}" or
              cmd == "dd" or
              cmd == "dw" or
-             cmd == "d$" or (cmd.len == 1 and isEndKey(cmd[0].toRune)):
+             cmd == "d$" or (cmd.len == 1 and isEndKey(cmd[0].toRune)) or
+             cmd == "d0":
           result = InputState.Valid
 
     else:
@@ -1240,7 +1258,7 @@ proc normalMode*(status: var EditorStatus) =
       status.searchBackwards
     elif key == ord(':'):
       status.changeMode(Mode.ex)
-    elif isDigit(key):
+    elif isDigit(command) and isDigit(key):
       let num = ($key)[0]
       if status.bufStatus[currentBufferIndex].cmdLoop == 0 and num == '0':
         continue
