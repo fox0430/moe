@@ -69,10 +69,10 @@ suite "Editor: Delete trailing spaces":
     check status.bufStatus[0].buffer[1] == ru"d"
     check status.bufStatus[0].buffer[2] == ru"efg"
 
-proc initRegister(buffer: seq[Rune]): seq[register.Register] {.compiletime.} =
+proc initRegister(buffer: seq[Rune]): register.Registers {.compiletime.} =
   result.addRegister(buffer)
 
-proc initRegister(buffer: seq[seq[Rune]]): seq[register.Register] {.compiletime.} =
+proc initRegister(buffer: seq[seq[Rune]]): register.Registers {.compiletime.} =
   result.addRegister(buffer)
 
 suite "Editor: Send to clipboad":
@@ -243,7 +243,7 @@ suite "Editor: Delete word":
     currentBufStatus.buffer = initGapBuffer(@[ru"block:", ru"  "])
     currentMainWindowNode.currentLine = 1
 
-    var registers: seq[register.Register] = @[]
+    var registers: register.Registers
 
     for i in 0 ..< 2:
       currentBufStatus.deleteWord(currentMainWindowNode, registers)
@@ -253,12 +253,12 @@ suite "Editor: Delete word":
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru"proc test() ="])
 
-    var registers: seq[register.Register] = @[]
+    var registers: register.Registers
 
     currentBufStatus.deleteWord(currentMainWindowNode, registers)
 
     check currentBufStatus.buffer[0] == ru "test() ="
-    check registers[^1].buffer[^1] == ru "proc "
+    check registers.noNameRegister.buffer[^1] == ru "proc "
 
 suite "Editor: keyEnter":
   test "Delete all characters in the previous line if only whitespaces":
@@ -467,7 +467,7 @@ suite "Editor: Delete inside paren":
     currentBufStatus.buffer = initGapBuffer(@[ru """abc "def" "ghi""""])
     currentMainWindowNode.currentColumn = 6
 
-    var registers: seq[register.Register] = @[]
+    var registers: register.Registers
 
     currentBufStatus.yankAndDeleteInsideOfParen(currentMainWindowNode,
                                                 registers,
@@ -533,7 +533,7 @@ suite "Editor: Yank a string":
                                 length,
                                 name)
 
-    check status.registers.len == 0
+    check status.registers.noNameRegister.buffer.len == 0
 
 suite "Editor: Yank words":
   test "Yank a word":
@@ -552,8 +552,10 @@ suite "Editor: Yank words":
                               status.settings.clipboard,
                               loop)
 
-    check status.registers == @[
-      register.Register(buffer: @[ru "abc "], isLine: false, name: "")]
+    check status.registers.noNameRegister ==  register.Register(
+      buffer: @[ru "abc "],
+      isLine: false,
+      name: "")
 
     const str = "abc "
     # Check clipboad
