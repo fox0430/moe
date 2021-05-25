@@ -21,7 +21,7 @@ type EditorStatus* = object
   searchHistory*: seq[seq[Rune]]
   exCommandHistory*: seq[seq[Rune]]
   normalCommandHistory*: seq[seq[Rune]]
-  registers*: seq[Register]
+  registers*: Registers
   settings*: EditorSettings
   workSpace*: seq[WorkSpace]
   currentWorkSpaceIndex*: int

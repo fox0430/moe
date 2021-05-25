@@ -355,7 +355,7 @@ proc insertCharacterAboveCursor*(bufStatus: var BufferStatus,
 # Yank and delete current word
 proc deleteWord*(bufStatus: var BufferStatus,
                  windowNode: var WindowNode,
-                 registers: var seq[Register],
+                 registers: var Registers,
                  registerName: string) =
 
   if bufStatus.buffer.len == 1 and
@@ -426,14 +426,14 @@ proc deleteWord*(bufStatus: var BufferStatus,
 
 proc deleteWord*(bufStatus: var BufferStatus,
                  windowNode: var WindowNode,
-                 registers: var seq[Register]) =
+                 registers: var Registers) =
 
   const registerName = ""
   bufStatus.deleteWord(windowNode, registers, registerName)
 
 proc deleteWordBeforeCursor*(bufStatus: var BufferStatus,
                             windowNode: var WindowNode,
-                            registers: var seq[Register],
+                            registers: var Registers,
                             tabStop: int) =
 
   if windowNode.currentLine == 0 and windowNode.currentColumn == 0: return
@@ -689,19 +689,21 @@ proc genDelimiterStr(buffer: string): string =
     for _ in 0 .. 10: add(result, char(rand(int('A') .. int('Z'))))
     if buffer != result: break
 
-proc sendToClipboad*(registers: seq[Register],
+proc sendToClipboad*(registers: Registers,
                      platform: Platform,
                      tool: ClipboardToolOnLinux) =
 
-  if registers.len == 0: return
+  let r = registers.noNameRegister
+
+  if r.buffer.len < 1: return
 
   var buffer = ""
-  if registers[^1].buffer.len == 1:
-    buffer = $registers[^1].buffer
+  if r.buffer.len == 1:
+    buffer = $r.buffer
   else:
-    for i in 0 ..< registers[^1].buffer.len:
-      if i == 0: buffer = $registers[^1].buffer[0]
-      else: buffer &= "\n" & $registers[^1].buffer[i]
+    for i in 0 ..< r.buffer.len:
+      if i == 0: buffer = $r.buffer[0]
+      else: buffer &= "\n" & $r.buffer[i]
 
   if buffer.len < 1: return
 
@@ -727,7 +729,7 @@ proc sendToClipboad*(registers: seq[Register],
 
 # name is the register name
 proc yankLines*(bufStatus: BufferStatus,
-                registers: var seq[Register],
+                registers: var Registers,
                 commandLine: var CommandLine,
                 messageLog: var seq[seq[Rune]],
                 notificationSettings: NotificationSettings,
@@ -748,7 +750,7 @@ proc yankLines*(bufStatus: BufferStatus,
                                             messageLog)
 
 proc yankLines*(bufStatus: BufferStatus,
-                registers: var seq[Register],
+                registers: var Registers,
                 commandLine: var CommandLine,
                 messageLog: var seq[seq[Rune]],
                 notificationSettings: NotificationSettings,
@@ -775,7 +777,7 @@ proc pasteLines(bufStatus: var BufferStatus,
 
 # name is the register name
 proc yankString*(bufStatus: BufferStatus,
-                 registers: var seq[Register],
+                 registers: var Registers,
                  windowNode: WindowNode,
                  commandLine: var CommandLine,
                  messageLog: var seq[seq[Rune]],
@@ -808,7 +810,7 @@ proc yankString*(bufStatus: BufferStatus,
     messageLog)
 
 proc yankString*(bufStatus: BufferStatus,
-                 registers: var seq[Register],
+                 registers: var Registers,
                  windowNode: WindowNode,
                  commandLine: var CommandLine,
                  messageLog: var seq[seq[Rune]],
@@ -827,7 +829,7 @@ proc yankString*(bufStatus: BufferStatus,
                        name)
 
 proc yankWord*(bufStatus: var BufferStatus,
-               registers: var seq[Register],
+               registers: var Registers,
                windowNode: WindowNode,
                platform: Platform,
                clipboardSettings: ClipBoardSettings,
@@ -872,7 +874,7 @@ proc yankWord*(bufStatus: var BufferStatus,
                              clipboardSettings.toolOnLinux)
 
 proc yankWord*(bufStatus: var BufferStatus,
-               registers: var seq[Register],
+               registers: var Registers,
                windowNode: WindowNode,
                platform: Platform,
                clipboardSettings: ClipBoardSettings,
@@ -905,11 +907,11 @@ proc pasteString(bufStatus: var BufferStatus,
 
 proc pasteAfterCursor*(bufStatus: var BufferStatus,
                        windowNode: var WindowNode,
-                       registers: seq[Register]) =
+                       registers: Registers) =
 
-  if registers.len > 0:
-    let r = registers[^1]
+  let r = registers.noNameRegister
 
+  if r.buffer.len > 0:
     if r.isLine:
       bufStatus.pasteLines(windowNode, r)
     else:
@@ -918,7 +920,7 @@ proc pasteAfterCursor*(bufStatus: var BufferStatus,
 
 proc pasteAfterCursor*(bufStatus: var BufferStatus,
                        windowNode: var WindowNode,
-                       registers: seq[Register],
+                       registers: Registers,
                        registerName: string) =
 
   let r = registers.searchByName(registerName)
@@ -932,10 +934,11 @@ proc pasteAfterCursor*(bufStatus: var BufferStatus,
 
 proc pasteBeforeCursor*(bufStatus: var BufferStatus,
                         windowNode: var WindowNode,
-                        registers: seq[Register]) =
+                        registers: Registers) =
 
-  if registers.len > 0:
-    let r = registers[^1]
+  let r = registers.noNameRegister
+
+  if r.buffer.len > 0:
     if r.isLine:
       bufStatus.pasteLines(windowNode, r)
     else:
@@ -943,7 +946,7 @@ proc pasteBeforeCursor*(bufStatus: var BufferStatus,
 
 proc pasteBeforeCursor*(bufStatus: var BufferStatus,
                         windowNode: var WindowNode,
-                        registers: seq[Register],
+                        registers: Registers,
                         registerName: string) =
 
   let r = registers.searchByName(registerName)
@@ -1072,7 +1075,7 @@ proc redo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
 # If cursor is inside of paren, delete inside paren in the current line
 proc yankAndDeleteInsideOfParen*(bufStatus: var BufferStatus,
                                  windowNode: var WindowNode,
-                                 registers: var seq[Register],
+                                 registers: var Registers,
                                  registerName: string,
                                  rune: Rune) =
 
@@ -1120,7 +1123,7 @@ proc yankAndDeleteInsideOfParen*(bufStatus: var BufferStatus,
 # If cursor is inside of paren, delete inside paren in the current line
 proc yankAndDeleteInsideOfParen*(bufStatus: var BufferStatus,
                                  windowNode: var WindowNode,
-                                 registers: var seq[Register],
+                                 registers: var Registers,
                                  rune: Rune) =
 
   const registerName = ""

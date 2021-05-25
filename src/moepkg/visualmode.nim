@@ -22,7 +22,7 @@ proc swapSelectArea(area: var SelectArea) =
     swap(area.startColumn, area.endColumn)
 
 proc yankBuffer(bufStatus: var BufferStatus,
-                registers: var seq[Register],
+                registers: var Registers,
                 windowNode: WindowNode,
                 area: SelectArea,
                 platform: Platform,
@@ -61,7 +61,7 @@ proc yankBuffer(bufStatus: var BufferStatus,
     registers.sendToClipboad(platform, clipboardSettings.toolOnLinux)
 
 proc yankBufferBlock(bufStatus: var BufferStatus,
-                     registers: var seq[Register],
+                     registers: var Registers,
                      windowNode: WindowNode,
                      area: SelectArea,
                      platform: Platform,
@@ -83,7 +83,7 @@ proc yankBufferBlock(bufStatus: var BufferStatus,
     registers.sendToClipboad(platform, clipboardSettings.toolOnLinux)
 
 proc deleteBuffer(bufStatus: var BufferStatus,
-                  registers: var seq[Register],
+                  registers: var Registers,
                   windowNode: WindowNode,
                   area: SelectArea,
                   platform: Platform,
@@ -131,7 +131,7 @@ proc deleteBuffer(bufStatus: var BufferStatus,
   inc(bufStatus.countChange)
 
 proc deleteBufferBlock(bufStatus: var BufferStatus,
-                       registers: var seq[Register],
+                       registers: var Registers,
                        windowNode: WindowNode,
                        area: SelectArea,
                        platform: Platform,
