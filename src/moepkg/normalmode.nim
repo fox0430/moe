@@ -334,13 +334,13 @@ proc yankAndDeleteLines(status: var EditorStatus, registerName: string) =
     currentBufStatus.deleteLine(currentMainWindowNode,
                                 currentMainWindowNode.currentLine)
 
-# TODO: Delete cmdLoop
-proc yankString(status: var Editorstatus, cmdLoop: int) =
+proc yankString(status: var Editorstatus) =
   let
     buffer = currentBufStatus.buffer
     lineLen = buffer[currentMainWindowNode.currentLine].len
     width =  lineLen - currentMainWindowNode.currentColumn
-    count = if width > cmdLoop: cmdLoop else: width
+    count = if width > currentBufStatus.cmdLoop: currentBufStatus.cmdLoop
+            else: width
 
   currentBufStatus.yankString(status.registers,
                               currentMainWindowNode,
@@ -369,14 +369,13 @@ proc yankString(status: var Editorstatus, registerName: string) =
 
 # d$ command
 proc yankAndDeleteCharactersUntilEndOfLine(status: var EditorStatus, registerName: string) =
-  let
-    lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
-    count = lineWidth - currentMainWindowNode.currentColumn
+  let lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
+  currentBufStatus.cmdLoop = lineWidth - currentMainWindowNode.currentColumn
+
   if registerName.len > 0:
-    currentBufStatus.cmdLoop = count
     status.yankString(registerName)
   else:
-    status.yankString(count)
+    status.yankString
 
   currentBufStatus.deleteCharacterUntilEndOfLine(
     status.settings.autoDeleteParen,
@@ -384,10 +383,10 @@ proc yankAndDeleteCharactersUntilEndOfLine(status: var EditorStatus, registerNam
 
 # d$ command
 proc yankAndDeleteCharactersUntilEndOfLine(status: var EditorStatus) =
-  let
-    lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
-    count = lineWidth - currentMainWindowNode.currentColumn
-  status.yankString(count)
+  let lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
+  currentBufStatus.cmdLoop = lineWidth - currentMainWindowNode.currentColumn
+
+  status.yankString
 
   currentBufStatus.deleteCharacterUntilEndOfLine(
     status.settings.autoDeleteParen,
@@ -409,13 +408,13 @@ proc yankAndDeleteCharacterBeginningOfLine(status: var EditorStatus,
                                            registerName: string) =
 
   let currentColumn = currentMainWindowNode.currentColumn
+  currentBufStatus.cmdLoop = currentColumn
   currentMainWindowNode.currentColumn = 0
 
   if registerName.len > 0:
-    currentBufStatus.cmdLoop = currentColumn
     status.yankString(registerName)
   else:
-    status.yankString(currentColumn)
+    status.yankString
 
   currentMainWindowNode.currentColumn = currentColumn
 
@@ -510,7 +509,8 @@ proc cutCharacterBeforeCursor(status: var EditorStatus, registerName: string) =
     if registerName.len > 0:
       status.yankString(registerName)
     else:
-      status.yankString(loop)
+      currentBufStatus.cmdLoop = loop
+      status.yankString
 
     for i in 0 ..< loop:
       currentBufStatus.deleteCurrentCharacter(
@@ -533,6 +533,24 @@ proc yankAndDeleteLineFromFirstLineToCurrentLine(status: var EditorStatus) =
 proc yankAndDeleteFromCurrentLineToLastLine(status: var EditorStatus) =
   const registerName = ""
   status.yankAndDeleteFromCurrentLineToLastLine(registerName)
+
+# s and cl commands
+proc deleteCharacterAndEnterInsertMode(status: var EditorStatus) =
+  if currentBufStatus.buffer[currentMainWindowNode.currentLine].len > 0:
+    let
+      lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
+      cmdLoop = currentBufStatus.cmdLoop
+      loop = min(cmdLoop, lineWidth - currentMainWindowNode.currentColumn)
+
+    currentBufStatus.cmdLoop = loop
+    status.yankString
+
+    for i in 0 ..< loop:
+      currentBufStatus.deleteCurrentCharacter(
+        currentMainWindowNode,
+        status.settings.autoDeleteParen)
+
+  status.changeMode(Mode.insert)
 
 proc addRegister(status: var EditorStatus, command, registerName: string) =
   let
@@ -805,21 +823,6 @@ proc normalCommand(status: var EditorStatus,
        mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
         status.closeWindow(currentWorkSpace.currentMainWindowNode, height, width)
 
-  # s and cl commands
-  template deleteCharacterAndEnterInsertMode() =
-    if currentBufStatus.buffer[windowNode.currentLine].len > 0:
-      let
-        lineWidth = currentBufStatus.buffer[windowNode.currentLine].len
-        loop = min(cmdLoop, lineWidth - windowNode.currentColumn)
-      status.yankString(loop)
-
-      for i in 0 ..< loop:
-        currentBufStatus.deleteCurrentCharacter(
-          windowNode,
-          status.settings.autoDeleteParen)
-
-    status.changeMode(Mode.insert)
-
   # yy command
   template yankLines() =
     let lastLine = min(windowNode.currentLine + cmdLoop - 1,
@@ -832,9 +835,7 @@ proc normalCommand(status: var EditorStatus,
     let
       buffer = currentBufStatus.buffer
       width = buffer[windowNode.currentLine].len - windowNode.currentColumn
-      count = if  width > cmdLoop: cmdLoop
-              else: width
-    status.yankString(count)
+    status.yankString
 
   let key = commands[0]
 
@@ -856,7 +857,8 @@ proc normalCommand(status: var EditorStatus,
     let
       lineWidth = currentBufStatus.buffer[windowNode.currentLine].len
       loop = min(cmdLoop, lineWidth - windowNode.currentColumn)
-    status.yankString(loop)
+    currentBufStatus.cmdLoop = loop
+    status.yankString
     for i in 0 ..< loop:
       deleteCurrentCharacter()
   elif key == ord('X'):
@@ -933,7 +935,7 @@ proc normalCommand(status: var EditorStatus,
       deleteCharactersOfLine()
       insertAfterCursor()
     if secondKey == ord('l'):
-      deleteCharacterAndEnterInsertMode()
+      status.deleteCharacterAndEnterInsertMode
     elif secondKey == ord('i'):
       let thirdKey = commands[2]
       if isParen(thirdKey) or
@@ -970,7 +972,7 @@ proc normalCommand(status: var EditorStatus,
      deleteCharactersOfLine()
      insertAfterCursor()
   elif key == ord('s'):
-    deleteCharacterAndEnterInsertMode()
+    status.deleteCharacterAndEnterInsertMode
   elif key == ord('y'):
     let secondKey = commands[1]
     if secondKey == ord('y'):
