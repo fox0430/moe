@@ -88,6 +88,14 @@ suite "Register: Add a buffer to the named register":
       isLine: true,
       name: name)
 
+  test "Not added to the register (_ register)":
+    var registers: Registers
+    const name = "_"
+    registers.addRegister(ru "def", name)
+
+    check registers.namedRegister.len == 0
+    check registers.noNameRegister == Register()
+
 suite "Register: Add a buffer to the number register":
   test "Add a string to the number register":
     var registers: Registers

@@ -83,19 +83,20 @@ proc addRegister*(registers: var Registers,
 proc addRegister(registers: var Registers, register: Register) =
   let name = register.name
 
-  # Add/Overwrite the named register
-  var isOverwrite = false
+  if name != "_":
+    # Add/Overwrite the named register
+    var isOverwrite = false
 
-  # Overwrite the register if exist the same name.
-  for i, r in registers.namedRegister:
-    if r.name == name:
-      registers.namedRegister[i] = register
-    isOverwrite = true
+    # Overwrite the register if exist the same name.
+    for i, r in registers.namedRegister:
+      if r.name == name:
+        registers.namedRegister[i] = register
+      isOverwrite = true
 
-  if not isOverwrite:
-    registers.namedRegister.add register
+    if not isOverwrite:
+      registers.namedRegister.add register
 
-  registers.noNameRegister = register
+    registers.noNameRegister = register
 
 # Add/Overwrite the named register or the number register
 proc addRegister*(registers: var Registers,
