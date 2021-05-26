@@ -500,6 +500,28 @@ suite "Normal mode: Repeat last command":
 
     check(currentMainWindowNode.currentLine == 1)
 
+suite "Normal mode: Delete the current line":
+  test "Delete the current line":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
+
+    status.resize(100, 100)
+    status.update
+
+    let command = @[ru'd', ru'd']
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 3
+    check currentBufStatus.buffer[0] == ru "b"
+    check currentBufStatus.buffer[1] == ru "c"
+    check currentBufStatus.buffer[2] == ru "d"
+
+    check status.registers.noNameRegister == Register(buffer: @[ru "a"], isLine: true)
+
+    check status.registers.numberRegister[1] == Register(buffer: @[ru "a"], isLine: true)
+
 suite "Normal mode: Delete the line from current line to last line":
   test "Delete the line from current line to last line":
     var status = initEditorStatus()

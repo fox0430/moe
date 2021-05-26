@@ -272,7 +272,8 @@ proc yankLines(status: var Editorstatus, start, last: int, isDelete: bool) =
                              status.commandLine,
                              status.messageLog,
                              status.settings.notificationSettings,
-                             start, lastLine)
+                             start, lastLine,
+                             isDelete)
 
 proc yankLines(status: var Editorstatus, start, last: int) =
   let lastLine = min(last,
@@ -334,7 +335,8 @@ proc yankAndDeleteLines(status: var EditorStatus) =
   let lastLine = min(
     currentMainWindowNode.currentLine + currentBufStatus.cmdLoop - 1,
     currentBufStatus.buffer.high)
-  status.yankLines(currentMainWindowNode.currentLine, lastLine)
+  const isDelete = true
+  status.yankLines(currentMainWindowNode.currentLine, lastLine, isDelete)
 
   let count = min(
     currentBufStatus.cmdLoop,
