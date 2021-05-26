@@ -2,7 +2,7 @@ from strutils import parseInt
 import terminal, times, strutils
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, undoredostack,
        window, movement, editor, search, color, bufferstatus, quickrun,
-       messages, commandline, register
+       messages
 
 type InputState = enum
   Continue
@@ -378,8 +378,6 @@ proc yankString(status: var Editorstatus) =
 proc yankString(status: var Editorstatus, registerName: string) =
   let
     buffer = currentBufStatus.buffer
-    lineLen = buffer[currentMainWindowNode.currentLine].len
-    width =  lineLen - currentMainWindowNode.currentColumn
     length = currentBufStatus.cmdLoop
 
   currentBufStatus.yankString(status.registers,
@@ -1218,7 +1216,7 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
       elif command.len == 3:
         if command[1] == ord('i'):
           if isParen(command[2]) or
-             command[2]== ord('w'):
+             command[2] == ord('w'):
             result = InputState.Valid
 
     elif command[0] == ord('d'):

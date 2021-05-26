@@ -1,5 +1,5 @@
 import unittest
-import moepkg/[editorstatus, bufferstatus]
+import moepkg/[editorstatus, bufferstatus, unicodeext]
 include moepkg/replacemode
 
 template recordCurrentPosition() =
@@ -22,7 +22,7 @@ suite "Replace mode: Replace current Character":
       isMoved = false
       undoLastSuitId =
         status.bufStatus[0].buffer.lastSuitId
-    const key = ru'z' 
+    const key = ru'z'
 
     status.bufStatus[0].replaceCurrentCharacter(
       status.workSpace[0].currentMainWindowNode,
@@ -42,7 +42,7 @@ suite "Replace mode: Replace current Character":
       isMoved = false
       undoLastSuitId =
         status.bufStatus[0].buffer.lastSuitId
-    const key = ru'z' 
+    const key = ru'z'
 
     for i in 0 ..< 5:
       status.bufStatus[0].replaceCurrentCharacter(
@@ -64,7 +64,7 @@ suite "Replace mode: Undo":
       isMoved = false
       undoLastSuitId =
         status.bufStatus[0].buffer.lastSuitId
-    const key = ru'z' 
+    const key = ru'z'
 
     recordCurrentPosition()
 
@@ -93,7 +93,7 @@ suite "Replace mode: Undo":
       isMoved = false
       undoLastSuitId =
         status.bufStatus[0].buffer.lastSuitId
-    const key = ru'z' 
+    const key = ru'z'
 
     recordCurrentPosition()
 
@@ -127,7 +127,7 @@ suite "Replace mode: Undo":
       isMoved = false
       undoLastSuitId =
         status.bufStatus[0].buffer.lastSuitId
-    const key = ru'z' 
+    const key = ru'z'
 
     recordCurrentPosition()
 
@@ -165,7 +165,7 @@ suite "Replace mode: New line":
                                  status.settings.tabStop)
 
     var isMoved = false
-    const key = ru'z' 
+    const key = ru'z'
 
     status.bufStatus[0].replaceCurrentCharacter(
       status.workSpace[0].currentMainWindowNode,
@@ -173,6 +173,6 @@ suite "Replace mode: New line":
       key,
       status.settings)
 
-    check status.bufStatus[0].buffer.len == 2 
+    check status.bufStatus[0].buffer.len == 2
     check status.bufStatus[0].buffer[0] == ru"a"
     check status.bufStatus[0].buffer[1] == ru"zc"

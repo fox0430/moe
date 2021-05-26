@@ -524,7 +524,6 @@ proc update*(status: var EditorStatus) =
           currentWindowIndex = currentMainWindowNode.windowIndex
           isCurrentMainWin = if node.windowIndex == currentWindowIndex: true
                              else: false
-          isVisualMode = isVisualMode(bufStatus.mode)
           settings = status.settings
 
         # node.highlight is not directly change here for performance.

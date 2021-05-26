@@ -359,7 +359,6 @@ proc deleteWord*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   elif bufStatus.buffer.len > 1 and
        windowNode.currentLine < bufStatus.buffer.high and
        bufStatus.buffer[windowNode.currentLine].len < 1:
-    let yankedLines = bufStatus.buffer[windowNode.currentLine]
     bufStatus.buffer.delete(windowNode.currentLine, windowNode.currentLine + 1)
 
     if windowNode.currentLine > bufStatus.buffer.high:

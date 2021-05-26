@@ -1,5 +1,5 @@
-import options, strutils
-import unicodeext, independentutils, ui
+import options, strutils, unicode
+import independentutils
 
 type Register* = object
   buffer*: seq[seq[Rune]]
