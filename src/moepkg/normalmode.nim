@@ -629,6 +629,7 @@ proc registerCommand(status: var EditorStatus, command: seq[Rune]) =
     currentIndex = 2
     registerName = command[1]
 
+  # Check the number of times the command is repeated
   if isDigit(command[2]):
     while isDigit(command[currentIndex]):
       numberStr &= $command[currentIndex]
