@@ -353,18 +353,13 @@ proc insertCharacterAboveCursor*(bufStatus: var BufferStatus,
     inc windowNode.currentColumn
 
 # Yank and delete current word
-proc deleteWord*(bufStatus: var BufferStatus,
-                 windowNode: var WindowNode,
-                 registers: var Registers,
-                 registerName: string) =
-
+proc deleteWord*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   if bufStatus.buffer.len == 1 and
      bufStatus.buffer[windowNode.currentLine].len < 1: return
   elif bufStatus.buffer.len > 1 and
        windowNode.currentLine < bufStatus.buffer.high and
        bufStatus.buffer[windowNode.currentLine].len < 1:
     let yankedLines = bufStatus.buffer[windowNode.currentLine]
-    registers.addRegister(yankedLines, registerName)
     bufStatus.buffer.delete(windowNode.currentLine, windowNode.currentLine + 1)
 
     if windowNode.currentLine > bufStatus.buffer.high:
@@ -375,12 +370,6 @@ proc deleteWord*(bufStatus: var BufferStatus,
     newLine.delete(windowNode.currentColumn)
     if oldLine != newLine:
       bufStatus.buffer[windowNode.currentLine] = newLine
-
-    # TODO: Delete
-    if registerName.len > 0:
-      registers.addRegister(newLine, registerName)
-    else:
-      registers.addRegister(newLine)
 
     if windowNode.currentColumn > 0: dec(windowNode.currentColumn)
   else:
@@ -423,24 +412,11 @@ proc deleteWord*(bufStatus: var BufferStatus,
     if oldLine != newLine:
       bufStatus.buffer[currentLine] = newLine
 
-      # TODO: Delete
-      if registerName.len > 0:
-        registers.addRegister(yankStr, registerName)
-      else:
-        registers.addRegister(yankStr)
-
     windowNode.expandedColumn = currentColumn
     windowNode.currentColumn = currentColumn
 
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
-
-proc deleteWord*(bufStatus: var BufferStatus,
-                 windowNode: var WindowNode,
-                 registers: var Registers) =
-
-  const registerName = ""
-  bufStatus.deleteWord(windowNode, registers, registerName)
 
 proc deleteWordBeforeCursor*(bufStatus: var BufferStatus,
                             windowNode: var WindowNode,
@@ -454,7 +430,7 @@ proc deleteWordBeforeCursor*(bufStatus: var BufferStatus,
     bufStatus.keyBackspace(windowNode, isAutoDeleteParen, tabStop)
   else:
     bufStatus.moveToBackwardWord(windowNode)
-    bufStatus.deleteWord(windowNode, registers)
+    bufStatus.deleteWord(windowNode)
 
 proc countSpaceOfBeginningOfLine(line: seq[Rune]): int =
   for r in line:

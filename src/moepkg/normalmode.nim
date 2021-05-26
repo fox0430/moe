@@ -153,6 +153,35 @@ proc runQuickRunCommand(status: var Editorstatus) =
   else:
     status.bufStatus[quickRunWindowIndex].buffer = initGapBuffer(buffer)
 
+proc yankWord(status: var EditorStatus) =
+  currentBufStatus.yankWord(status.registers,
+                            currentMainWindowNode,
+                            status.platform,
+                            status.settings.clipboard,
+                            currentBufStatus.cmdLoop)
+
+proc yankWord(status: var EditorStatus, registerName: string) =
+  currentBufStatus.yankWord(status.registers,
+                            currentMainWindowNode,
+                            status.platform,
+                            status.settings.clipboard,
+                            currentBufStatus.cmdLoop,
+                            registerName)
+
+proc deleteWord(status: var EditorStatus) =
+  currentBufStatus.deleteWord(currentMainWindowNode)
+
+proc deleteWord(status: var EditorStatus, registerName: string) =
+  currentBufStatus.deleteWord(currentMainWindowNode)
+
+proc yankAndDeleteWord(status: var EditorStatus) =
+  status.yankWord
+  status.deleteWord
+
+proc yankAndDeleteWord(status: var EditorStatus, registerName: string) =
+  status.yankWord(registerName)
+  status.deleteWord(registerName)
+
 # ci command
 proc changeInnerCommand(status: var EditorStatus, key: Rune) =
   let
@@ -172,7 +201,7 @@ proc changeInnerCommand(status: var EditorStatus, key: Rune) =
   elif key == ru'w':
     if oldLine.len > 0:
       currentBufStatus.moveToBackwardWord(currentMainWindowNode)
-      currentBufStatus.deleteWord(currentMainWindowNode, status.registers)
+      status.yankAndDeleteWord
     status.changeMode(Mode.insert)
   else:
     discard
@@ -196,7 +225,7 @@ proc yankAndDeleteInnerCommand(status: var EditorStatus, key: Rune, registerName
   elif key == ru'w':
     if currentBufStatus.buffer[currentMainWindowNode.currentLine].len > 0:
       currentBufStatus.moveToBackwardWord(currentMainWindowNode)
-      currentBufStatus.deleteWord(currentMainWindowNode, status.registers)
+      status.yankAndDeleteWord
   else:
     discard
 
@@ -257,21 +286,6 @@ proc yankLines(status: var Editorstatus, start, last: int, registerName: string)
                              status.settings.notificationSettings,
                              start, lastLine,
                              registerName)
-
-proc yankWord(status: var EditorStatus) =
-  currentBufStatus.yankWord(status.registers,
-                            currentMainWindowNode,
-                            status.platform,
-                            status.settings.clipboard,
-                            currentBufStatus.cmdLoop)
-
-proc yankWord(status: var EditorStatus, registerName: string) =
-  currentBufStatus.yankWord(status.registers,
-                            currentMainWindowNode,
-                            status.platform,
-                            status.settings.clipboard,
-                            currentBufStatus.cmdLoop,
-                            registerName)
 
 # y{ command
 proc yankToPreviousBlankLine(status: var EditorStatus, registerName: string) =
@@ -391,17 +405,6 @@ proc yankAndDeleteCharactersUntilEndOfLine(status: var EditorStatus) =
   currentBufStatus.deleteCharacterUntilEndOfLine(
     status.settings.autoDeleteParen,
     currentMainWindowNode)
-
-proc deleteWord(status: var EditorStatus) =
-  const registerName = ""
-  currentBufStatus.deleteWord(currentMainWindowNode,
-                              status.registers,
-                              registerName)
-
-proc deleteWord(status: var EditorStatus, registerName: string) =
-  currentBufStatus.deleteWord(currentMainWindowNode,
-                              status.registers,
-                              registerName)
 
 # d0 command
 proc yankAndDeleteCharacterBeginningOfLine(status: var EditorStatus,
@@ -586,7 +589,7 @@ proc addRegister(status: var EditorStatus, command, registerName: string) =
   elif command == "dd":
     status.yankAndDeleteLines(registerName)
   elif command == "dw":
-    status.deleteWord(registerName)
+    status.yankAndDeleteWord(registerName)
   elif command == "d$" or (command.len == 1 and isEndKey(command[0].toRune)):
     status.yankAndDeleteCharactersUntilEndOfLine(registerName)
   elif command == "d0":
@@ -947,7 +950,7 @@ proc normalCommand(status: var EditorStatus,
     if secondKey == ord('d'):
       status.yankAndDeleteLines
     elif secondKey == ord('w'):
-      currentBufStatus.deleteWord(windowNode, status.registers)
+      status.yankAndDeleteWord
     elif secondKey == ('$') or isEndKey(secondKey):
       status.yankAndDeleteCharactersUntilEndOfLine
     elif secondKey == ('0') or isHomeKey(secondKey):
