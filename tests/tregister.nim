@@ -96,6 +96,24 @@ suite "Register: Add a buffer to the named register":
     check registers.namedRegister.len == 0
     check registers.noNameRegister == Register()
 
+suite "Register: Add a buffer to the small delete register":
+  test "Add a deleted string to the small deleted register":
+    var registers: Registers
+
+    const
+      isLine = false
+      isDelete = true
+    registers.addRegister(ru "abc", isLine, isDelete)
+    registers.addRegister(ru "def", isLine, isDelete)
+
+    check registers.noNameRegister == Register(buffer: @[ru "def"])
+
+    check registers.smallDeleteRegister == Register(buffer: @[ru "def"])
+
+    for i in 0 ..< 10:
+      let r = registers.numberRegister[i]
+      check r == Register()
+
 suite "Register: Add a buffer to the number register":
   test "Add a yanked string to the number register":
     var registers: Registers
@@ -107,24 +125,6 @@ suite "Register: Add a buffer to the number register":
       let r  = registers.numberRegister[i]
       if i == 0:
         check r == Register(buffer: @[ru "def"])
-      else:
-        check r == Register()
-
-  test "Add a deleted string to the number register":
-    var registers: Registers
-
-    const
-      isLine = false
-      isDelete = true
-    registers.addRegister(ru "abc", isLine, isDelete)
-    registers.addRegister(ru "def", isLine, isDelete)
-
-    for i in 0 ..< 10:
-      let r  = registers.numberRegister[i]
-      if i == 1:
-        check r == Register(buffer: @[ru "def"])
-      elif i == 2:
-        check r == Register(buffer: @[ru "abc"])
       else:
         check r == Register()
 

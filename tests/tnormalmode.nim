@@ -512,7 +512,6 @@ suite "Normal mode: Delete the line from current line to last line":
 
     let command = @[ru'd', ru'G']
 
-
     check isNormalModeCommand(command) == InputState.Valid
 
     status.normalCommand(command, 100, 100)
@@ -540,7 +539,7 @@ suite "Normal mode: Delete the line from first line to current line":
     let buffer = status.bufStatus[0].buffer
     check buffer.len == 1 and buffer[0] == ru"d"
 
-    check status.registers.noNameRegister.buffer == @[ru"a", ru"b", ru"c"]
+    check status.registers.noNameRegister.buffer == @[ru "a", ru "b", ru "c"]
 
 suite "Normal mode: Delete inside paren and enter insert mode":
   test "Delete inside double quotes and enter insert mode (ci\" command)":
