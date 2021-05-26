@@ -160,6 +160,14 @@ proc yankWord(status: var EditorStatus) =
                             status.settings.clipboard,
                             currentBufStatus.cmdLoop)
 
+proc yankWord(status: var EditorStatus, isDelete: bool) =
+  currentBufStatus.yankWord(status.registers,
+                            currentMainWindowNode,
+                            status.platform,
+                            status.settings.clipboard,
+                            currentBufStatus.cmdLoop,
+                            isDelete)
+
 proc yankWord(status: var EditorStatus, registerName: string) =
   currentBufStatus.yankWord(status.registers,
                             currentMainWindowNode,
@@ -175,7 +183,8 @@ proc deleteWord(status: var EditorStatus, registerName: string) =
   currentBufStatus.deleteWord(currentMainWindowNode)
 
 proc yankAndDeleteWord(status: var EditorStatus) =
-  status.yankWord
+  const isDelete = true
+  status.yankWord(isDelete)
   status.deleteWord
 
 proc yankAndDeleteWord(status: var EditorStatus, registerName: string) =
@@ -255,16 +264,15 @@ proc repeatNormalModeCommand(status: var Editorstatus, height, width: int) =
   status.normalCommand(commands, height, width)
 
 # name is the register name
-proc yankLines(status: var Editorstatus, registerName: string) =
-  let lastLine = min(currentMainWindowNode.currentLine,
+proc yankLines(status: var Editorstatus, start, last: int, isDelete: bool) =
+  let lastLine = min(last,
                      currentBufStatus.buffer.high)
 
   currentBufStatus.yankLines(status.registers,
                              status.commandLine,
                              status.messageLog,
                              status.settings.notificationSettings,
-                             currentMainWindowNode.currentLine, lastLine,
-                             registerName)
+                             start, lastLine)
 
 proc yankLines(status: var Editorstatus, start, last: int) =
   let lastLine = min(last,
@@ -381,6 +389,22 @@ proc yankString(status: var Editorstatus, registerName: string) =
                               length,
                               registerName)
 
+proc yankString(status: var Editorstatus, isDelete: bool) =
+  let
+    buffer = currentBufStatus.buffer
+    lineLen = buffer[currentMainWindowNode.currentLine].len
+    width =  lineLen - currentMainWindowNode.currentColumn
+    count = if width > currentBufStatus.cmdLoop: currentBufStatus.cmdLoop
+            else: width
+
+  currentBufStatus.yankString(status.registers,
+                              currentMainWindowNode,
+                              status.commandLine,
+                              status.messageLog,
+                              status.platform,
+                              status.settings,
+                              count)
+
 # d$ command
 proc yankAndDeleteCharactersUntilEndOfLine(status: var EditorStatus, registerName: string) =
   let lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
@@ -439,7 +463,8 @@ proc yankAndDeleteFromCurrentLineToLastLine(status: var EditorStatus,
   if registerName.len > 0:
     status.yankLines(currentMainWindowNode.currentLine, lastLine, registerName)
   else:
-    status.yankLines(currentMainWindowNode.currentLine, lastLine)
+    const isDelete = true
+    status.yankLines(currentMainWindowNode.currentLine, lastLine, isDelete)
 
   let count = currentBufStatus.buffer.len - currentMainWindowNode.currentLine
   for i in 0 ..< count:
@@ -455,7 +480,8 @@ proc yankAndDeleteLineFromFirstLineToCurrentLine(status: var EditorStatus,
   if registerName.len > 0:
     status.yankLines(0, currentLine, registerName)
   else:
-    status.yankLines(0, currentLine)
+    const isDelete = true
+    status.yankLines(0, currentLine, isDelete)
 
   status.moveToFirstLine
 
@@ -475,7 +501,8 @@ proc yankAndDeleteTillPreviousBlankLine(status: var EditorStatus,
                      currentMainWindowNode.currentLine,
                      registerName)
   else:
-    status.yankLines(blankLine + 1, currentMainWindowNode.currentLine)
+    const isDelete = true
+    status.yankLines(blankLine + 1, currentMainWindowNode.currentLine, isDelete)
 
   currentBufStatus.deleteTillPreviousBlankLine(currentMainWindowNode)
 
@@ -495,7 +522,8 @@ proc yankAndDeleteTillNextBlankLine(status: var EditorStatus,
                      blankLine - 1,
                      registerName)
   else:
-    status.yankLines(currentMainWindowNode.currentLine, blankLine - 1)
+    const isDelete = true
+    status.yankLines(currentMainWindowNode.currentLine, blankLine - 1, isDelete)
 
   currentBufStatus.deleteTillNextBlankLine(currentMainWindowNode)
 
@@ -546,7 +574,9 @@ proc deleteCharacterAndEnterInsertMode(status: var EditorStatus) =
       loop = min(cmdLoop, lineWidth - currentMainWindowNode.currentColumn)
 
     currentBufStatus.cmdLoop = loop
-    status.yankString
+
+    const isDelete = true
+    status.yankString(isDelete)
 
     for i in 0 ..< loop:
       currentBufStatus.deleteCurrentCharacter(

@@ -8,6 +8,7 @@ type Register* = object
 
 type Registers* = object
   noNameRegister*: Register
+  smallDeleteRegister: Register
   numberRegister*: array[10, Register]
   namedRegister*: seq[Register]
 
@@ -19,9 +20,12 @@ proc addRegister(registers: var Registers,
   if isDelete:
     # If the buffer is deleted line, write to the register 1.
     # Previous registers are stored 2 ~ 9.
-    for i in countdown(8, 1):
-      registers.numberRegister[i + 1] = registers.numberRegister[i]
-    registers.numberRegister[1] = r
+    if r.isLine:
+      for i in countdown(8, 1):
+        registers.numberRegister[i + 1] = registers.numberRegister[i]
+      registers.numberRegister[1] = r
+    else:
+      registers.smallDeleteRegister = r
   else:
     # If the buffer is yanked line, overwrite the register 0.
     registers.numberRegister[0] = r
@@ -95,7 +99,6 @@ proc addRegister*(registers: var Registers,
     let register = Register(buffer: @[buffer], isLine: false, name: name)
     registers.addRegister(register)
 
-# Add/Overwrite the named register
 proc addRegister*(registers: var Registers,
                   buffer: seq[Rune],
                   isLine: bool,
@@ -105,7 +108,6 @@ proc addRegister*(registers: var Registers,
     let register = Register(buffer: @[buffer], isLine: isLine, name: name)
     registers.addRegister(register)
 
-# Add/Overwrite the named register
 proc addRegister*(registers: var Registers,
                   buffer: seq[seq[Rune]],
                   name: string) =
@@ -114,7 +116,6 @@ proc addRegister*(registers: var Registers,
     let register = Register(buffer: buffer, isLine: true, name: name)
     registers.addRegister(register)
 
-# Add/Overwrite the named register
 proc addRegister*(registers: var Registers,
                   buffer: seq[seq[Rune]],
                   isLine: bool,
@@ -126,10 +127,17 @@ proc addRegister*(registers: var Registers,
 
 # Search a register by the string
 proc searchByName*(registers: Registers, name: string): Option[Register] =
-  if isInt(name):
+  if name == "-":
+    let r = registers.smallDeleteRegister
+    if r.buffer.len > 0:
+      return some(r)
+  elif isInt(name):
     # Search a register in the number register
-    let number = name.parseInt
-    return some(registers.numberRegister[number])
+    let
+      number = name.parseInt
+      r = registers.numberRegister[number]
+    if r.buffer.len > 0:
+      return some(r)
   else:
     # Search a register in the named register
     for r in registers.namedRegister:

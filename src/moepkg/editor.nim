@@ -721,7 +721,8 @@ proc yankLines*(bufStatus: BufferStatus,
                 messageLog: var seq[seq[Rune]],
                 notificationSettings: NotificationSettings,
                 first, last: int,
-                name: string) =
+                name: string,
+                isDelete: bool) =
 
   var yankedBuffer: seq[seq[Rune]]
   for i in first .. last:
@@ -730,11 +731,47 @@ proc yankLines*(bufStatus: BufferStatus,
   if name.len > 0:
     registers.addRegister(yankedBuffer, name)
   else:
-    registers.addRegister(yankedBuffer)
+    const isLine = true
+    registers.addRegister(yankedBuffer, isLine, isDelete)
 
   commandLine.writeMessageYankedLine(yankedBuffer.len,
-                                            notificationSettings,
-                                            messageLog)
+                                     notificationSettings,
+                                     messageLog)
+
+proc yankLines*(bufStatus: BufferStatus,
+                registers: var Registers,
+                commandLine: var CommandLine,
+                messageLog: var seq[seq[Rune]],
+                notificationSettings: NotificationSettings,
+                first, last: int,
+                isDelete: bool) =
+
+  const name = ""
+  bufStatus.yankLines(registers,
+                      commandLine,
+                      messageLog,
+                      notificationSettings,
+                      first, last,
+                      name,
+                      isDelete)
+
+
+proc yankLines*(bufStatus: BufferStatus,
+                registers: var Registers,
+                commandLine: var CommandLine,
+                messageLog: var seq[seq[Rune]],
+                notificationSettings: NotificationSettings,
+                first, last: int,
+                name: string) =
+
+  const isDelete = false
+  bufStatus.yankLines(registers,
+                      commandLine,
+                      messageLog,
+                      notificationSettings,
+                      first, last,
+                      name,
+                      isDelete)
 
 proc yankLines*(bufStatus: BufferStatus,
                 registers: var Registers,
@@ -743,13 +780,16 @@ proc yankLines*(bufStatus: BufferStatus,
                 notificationSettings: NotificationSettings,
                 first, last: int) =
 
-  const name = ""
+  const
+    name = ""
+    isDelete = false
   bufStatus.yankLines(registers,
                       commandLine,
                       messageLog,
                       notificationSettings,
                       first, last,
-                      name)
+                      name,
+                      isDelete)
 
 proc pasteLines(bufStatus: var BufferStatus,
                 windowNode: var WindowNode,
@@ -771,7 +811,8 @@ proc yankString*(bufStatus: BufferStatus,
                  platform: Platform,
                  settings: EditorSettings,
                  length: int,
-                 name: string) =
+                 name: string,
+                 isDelete: bool) =
 
   var yankedBuffer: seq[Rune]
 
@@ -803,7 +844,51 @@ proc yankString*(bufStatus: BufferStatus,
                  messageLog: var seq[seq[Rune]],
                  platform: Platform,
                  settings: EditorSettings,
+                 length: int,
+                 name: string) =
+
+  const isDelete = false
+  bufStatus.yankString(registers,
+                       windowNode,
+                       commandLine,
+                       messageLog,
+                       platform,
+                       settings,
+                       length,
+                       name,
+                       isDelete)
+
+proc yankString*(bufStatus: BufferStatus,
+                 registers: var Registers,
+                 windowNode: WindowNode,
+                 commandLine: var CommandLine,
+                 messageLog: var seq[seq[Rune]],
+                 platform: Platform,
+                 settings: EditorSettings,
                  length: int) =
+
+  const
+    name = ""
+    isDelete = false
+  bufStatus.yankString(registers,
+                       windowNode,
+                       commandLine,
+                       messageLog,
+                       platform,
+                       settings,
+                       length,
+                       name,
+                       isDelete)
+
+proc yankString*(bufStatus: BufferStatus,
+                 registers: var Registers,
+                 windowNode: WindowNode,
+                 commandLine: var CommandLine,
+                 messageLog: var seq[seq[Rune]],
+                 platform: Platform,
+                 settings: EditorSettings,
+                 length: int,
+                 isDelete: bool) =
 
   const name = ""
   bufStatus.yankString(registers,
@@ -813,7 +898,8 @@ proc yankString*(bufStatus: BufferStatus,
                        platform,
                        settings,
                        length,
-                       name)
+                       name,
+                       isDelete)
 
 proc yankWord*(bufStatus: var BufferStatus,
                registers: var Registers,
@@ -821,7 +907,8 @@ proc yankWord*(bufStatus: var BufferStatus,
                platform: Platform,
                clipboardSettings: ClipBoardSettings,
                loop: int,
-               name: string) =
+               name: string,
+               isDelete: bool) =
 
   var yankedBuffer: seq[seq[Rune]] = @[ru ""]
 
@@ -854,7 +941,7 @@ proc yankWord*(bufStatus: var BufferStatus,
   if name.len > 0:
     registers.addRegister(yankedBuffer, isLine, name)
   else:
-    registers.addRegister(yankedBuffer, isLine)
+    registers.addRegister(yankedBuffer, isLine, isDelete)
 
   if clipboardSettings.enable:
     registers.sendToClipboad(platform,
@@ -865,7 +952,8 @@ proc yankWord*(bufStatus: var BufferStatus,
                windowNode: WindowNode,
                platform: Platform,
                clipboardSettings: ClipBoardSettings,
-               loop: int) =
+               loop: int,
+               isDelete: bool) =
 
   const name = ""
   bufStatus.yankWord(registers,
@@ -873,7 +961,43 @@ proc yankWord*(bufStatus: var BufferStatus,
                      platform,
                      clipboardSettings,
                      loop,
-                     name)
+                     name,
+                     isDelete)
+
+proc yankWord*(bufStatus: var BufferStatus,
+               registers: var Registers,
+               windowNode: WindowNode,
+               platform: Platform,
+               clipboardSettings: ClipBoardSettings,
+               loop: int,
+               name: string) =
+
+  const isDelete = false
+  bufStatus.yankWord(registers,
+                     windowNode,
+                     platform,
+                     clipboardSettings,
+                     loop,
+                     name,
+                     isDelete)
+
+proc yankWord*(bufStatus: var BufferStatus,
+               registers: var Registers,
+               windowNode: WindowNode,
+               platform: Platform,
+               clipboardSettings: ClipBoardSettings,
+               loop: int) =
+
+  const
+    name = ""
+    isDelete = false
+  bufStatus.yankWord(registers,
+                     windowNode,
+                     platform,
+                     clipboardSettings,
+                     loop,
+                     name,
+                     isDelete)
 
 proc pasteString(bufStatus: var BufferStatus,
                  windowNode: var WindowNode,
