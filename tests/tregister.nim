@@ -97,97 +97,56 @@ suite "Register: Add a buffer to the named register":
     check registers.noNameRegister == Register()
 
 suite "Register: Add a buffer to the number register":
-  test "Add a string to the number register":
+  test "Add a yanked string to the number register":
     var registers: Registers
 
-    block:
-      const number = 0
-      registers.addRegister(ru "abc", number)
-
-    block:
-      const number = 2
-      registers.addRegister(ru "def", number)
+    registers.addRegister(ru "abc")
+    registers.addRegister(ru "def")
 
     for i in 0 ..< 10:
       let r  = registers.numberRegister[i]
       if i == 0:
-        check r == Register(buffer: @[ru "abc"], name: "0")
-      elif i == 2:
-        check r == Register(buffer: @[ru "def"], name: "2")
+        check r == Register(buffer: @[ru "def"])
       else:
         check r == Register()
 
-  test "Add a string to the number register by the number string":
+  test "Add a deleted string to the number register":
     var registers: Registers
 
-    block:
-      const number = "0"
-      registers.addRegister(ru "abc", number)
-    block:
-      const number = "2"
-      registers.addRegister(ru "def", number)
+    const
+      isLine = false
+      isDelete = true
+    registers.addRegister(ru "abc", isLine, isDelete)
+    registers.addRegister(ru "def", isLine, isDelete)
 
     for i in 0 ..< 10:
       let r  = registers.numberRegister[i]
-      if i == 0:
-        check r == Register(buffer: @[ru "abc"], name: "0")
+      if i == 1:
+        check r == Register(buffer: @[ru "def"])
       elif i == 2:
-        check r == Register(buffer: @[ru "def"], name: "2")
+        check r == Register(buffer: @[ru "abc"])
       else:
         check r == Register()
 
   test "Add a line to the number register":
     var registers: Registers
 
-    block:
-      const number = 0
-      registers.addRegister(@[ru "abc"], number)
-    block:
-      const
-        number = 2
-        isLine = true
-      registers.addRegister(@[ru "def"], isLine, number)
-
-    for i in 0 ..< 10:
-      let r = registers.numberRegister[i]
-      if i == 0:
-        check r == Register(buffer: @[ru "abc"], isLine: true, name: "0")
-      elif i == 2:
-        check r == Register(buffer: @[ru "def"], isLine: true, name: "2")
-      else:
-        check r == Register()
-
-  test "Add a line to the number register by the number string":
-    var registers: Registers
-
-    block:
-      const number = "0"
-      registers.addRegister(@[ru "abc"], number)
-    block:
-      const
-        number = "2"
-        isLine = true
-      registers.addRegister(@[ru "def"], isLine, number)
-
-    for i in 0 ..< 10:
-      let r = registers.numberRegister[i]
-      if i == 0:
-        check r == Register(buffer: @[ru "abc"], isLine: true, name: "0")
-      elif i == 2:
-        check r == Register(buffer: @[ru "def"], isLine: true, name: "2")
-      else:
-        check r == Register()
-
-  test "Overwrite a string to the number register":
-    var registers: Registers
-
     const number = 0
-    registers.addRegister(ru "abc", number)
-    registers.addRegister(ru "def", number)
+    registers.addRegister(@[ru "abc"])
 
-    check registers.numberRegister[0] == Register(
-      buffer: @[ru "def"],
-      name: "0")
+    const
+      isDelete = true
+      isLine = true
+    registers.addRegister(ru "def", isLine, isDelete)
+
+    for i in 0 ..< 10:
+      let r = registers.numberRegister[i]
+      if i == 0:
+        check r == Register(buffer: @[ru "abc"], isLine: true)
+      elif i == 1:
+        check r == Register(buffer: @[ru "def"], isLine: true)
+      else:
+        check r == Register()
 
 suite "Register: Search a register by name":
   test "Search a register by name":

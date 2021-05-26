@@ -12,73 +12,61 @@ type Registers* = object
   namedRegister*: seq[Register]
 
 # Add/Overwrite the number register
-proc addRegister*(registers: var Registers, buffer: seq[Rune], number: int) =
-  # the number should 0 ~ 9
-  if number > -1 or number < 10:
-    let register = Register(buffer: @[buffer], isLine: false, name: $number)
+proc addRegister(registers: var Registers,
+                 r: Register,
+                 isDelete: bool) =
 
-    registers.numberRegister[number] = register
-    registers.noNameRegister = register
+  if isDelete:
+    # If the buffer is deleted line, write to the register 1.
+    # Previous registers are stored 2 ~ 9.
+    for i in countdown(8, 1):
+      registers.numberRegister[i + 1] = registers.numberRegister[i]
+    registers.numberRegister[1] = r
+  else:
+    # If the buffer is yanked line, overwrite the register 0.
+    registers.numberRegister[0] = r
 
-proc addRegister*(registers: var Registers,
-                  buffer: seq[Rune],
-                  isLine: bool,
-                  number: int) =
+  registers.noNameRegister = r
 
-  # the number should 0 ~ 9
-  if number > -1 or number < 10:
-    let register = Register(buffer: @[buffer], isLine: isLine, name: $number)
-
-    registers.numberRegister[number] = register
-    registers.noNameRegister = register
-
-proc addRegister*(registers: var Registers,
-                  buffer: seq[seq[Rune]],
-                  number: int) =
-
-  # the number should 0 ~ 9
-  if number > -1 or number < 10:
-    let register = Register(buffer: buffer, isLine: true, name: $number)
-
-    registers.numberRegister[number] = register
-    registers.noNameRegister = register
-
-proc addRegister*(registers: var Registers,
-                  buffer: seq[seq[Rune]],
-                  isLine: bool,
-                  number: int) =
-
-  # the number should 0 ~ 9
-  if number > -1 or number < 10:
-    let register = Register(buffer: buffer, isLine: isLine, name: $number)
-
-    registers.numberRegister[number] = register
-    registers.noNameRegister = register
-
-proc addRegister(registers: var Registers, r: Register, number: int) =
-  # the number should 0 ~ 9
-  if number > -1 or number < 10:
-    registers.numberRegister[number] = r
-    registers.noNameRegister = r
-
-# Overwrite the no name register
 proc addRegister*(registers: var Registers, buffer: seq[Rune]) =
-  registers.noNameRegister = Register(buffer: @[buffer], isLine: false)
+  let r = Register(buffer: @[buffer], isLine: false)
+  const isDelete = false
+  registers.addRegister(r, isDelete)
 
 proc addRegister*(registers: var Registers,
                   buffer: seq[Rune],
                   isLine: bool) =
 
-  registers.noNameRegister = Register(buffer: @[buffer], isLine: isLine)
+  let r = Register(buffer: @[buffer], isLine: isLine)
+  const isDelete = false
+  registers.addRegister(r, isDelete)
 
 proc addRegister*(registers: var Registers, buffer: seq[seq[Rune]]) =
-  registers.noNameRegister = Register(buffer: buffer, isLine: true)
+  let r = Register(buffer: buffer, isLine: true)
+  const isDelete = false
+  registers.addRegister(r, isDelete)
 
 proc addRegister*(registers: var Registers,
                   buffer: seq[seq[Rune]],
                   isLine: bool) =
 
-  registers.noNameRegister = Register(buffer: buffer, isLine: isLine)
+  let r = Register(buffer: buffer, isLine: isLine)
+  const isDelete = false
+  registers.addRegister(r, isDelete)
+
+proc addRegister*(registers: var Registers,
+                  buffer: seq[Rune],
+                  isLine, isDelete: bool) =
+
+  let r = Register(buffer: @[buffer], isLine: isLine)
+  registers.addRegister(r, isDelete)
+
+proc addRegister*(registers: var Registers,
+                  buffer: seq[seq[Rune]],
+                  isLine, isDelete: bool) =
+
+  let r = Register(buffer: buffer, isLine: isLine)
+  registers.addRegister(r, isDelete)
 
 proc addRegister(registers: var Registers, register: Register) =
   let name = register.name
@@ -98,20 +86,14 @@ proc addRegister(registers: var Registers, register: Register) =
 
     registers.noNameRegister = register
 
-# Add/Overwrite the named register or the number register
+# Add/Overwrite the named register
 proc addRegister*(registers: var Registers,
                   buffer: seq[Rune],
                   name: string) =
 
   if name.len > 0:
     let register = Register(buffer: @[buffer], isLine: false, name: name)
-
-    if isInt(name):
-      # Overwrite the number register
-      let index = name.parseInt
-      registers.addRegister(register, index)
-    else:
-      registers.addRegister(register)
+    registers.addRegister(register)
 
 # Add/Overwrite the named register
 proc addRegister*(registers: var Registers,
@@ -121,13 +103,7 @@ proc addRegister*(registers: var Registers,
 
   if name.len > 0:
     let register = Register(buffer: @[buffer], isLine: isLine, name: name)
-
-    if isInt(name):
-      # Overwrite the number register
-      let index = name.parseInt
-      registers.addRegister(register, index)
-    else:
-      registers.addRegister(register)
+    registers.addRegister(register)
 
 # Add/Overwrite the named register
 proc addRegister*(registers: var Registers,
@@ -136,13 +112,7 @@ proc addRegister*(registers: var Registers,
 
   if name.len > 0:
     let register = Register(buffer: buffer, isLine: true, name: name)
-
-    if isInt(name):
-      # Overwrite the number register
-      let index = name.parseInt
-      registers.addRegister(register, index)
-    else:
-      registers.addRegister(register)
+    registers.addRegister(register)
 
 # Add/Overwrite the named register
 proc addRegister*(registers: var Registers,
@@ -152,13 +122,7 @@ proc addRegister*(registers: var Registers,
 
   if name.len > 0:
     let register = Register(buffer: buffer, isLine: isLine, name: name)
-
-    if isInt(name):
-      # Overwrite the number register
-      let index = name.parseInt
-      registers.addRegister(register, index)
-    else:
-      registers.addRegister(register)
+    registers.addRegister(register)
 
 # Search a register by the string
 proc searchByName*(registers: Registers, name: string): Option[Register] =
