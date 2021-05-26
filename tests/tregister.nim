@@ -103,9 +103,9 @@ suite "Register: Add a buffer to the number register":
     for i in 0 ..< 10:
       let r  = registers.numberRegister[i]
       if i == 0:
-        check r == Register(buffer: @[ru "abc"])
+        check r == Register(buffer: @[ru "abc"], name: "0")
       elif i == 2:
-        check r == Register(buffer: @[ru "def"])
+        check r == Register(buffer: @[ru "def"], name: "2")
       else:
         check r == Register()
 
@@ -122,9 +122,9 @@ suite "Register: Add a buffer to the number register":
     for i in 0 ..< 10:
       let r  = registers.numberRegister[i]
       if i == 0:
-        check r == Register(buffer: @[ru "abc"])
+        check r == Register(buffer: @[ru "abc"], name: "0")
       elif i == 2:
-        check r == Register(buffer: @[ru "def"])
+        check r == Register(buffer: @[ru "def"], name: "2")
       else:
         check r == Register()
 
@@ -143,9 +143,9 @@ suite "Register: Add a buffer to the number register":
     for i in 0 ..< 10:
       let r = registers.numberRegister[i]
       if i == 0:
-        check r == Register(buffer: @[ru "abc"], isLine: true)
+        check r == Register(buffer: @[ru "abc"], isLine: true, name: "0")
       elif i == 2:
-        check r == Register(buffer: @[ru "def"], isLine: true)
+        check r == Register(buffer: @[ru "def"], isLine: true, name: "2")
       else:
         check r == Register()
 
@@ -164,9 +164,9 @@ suite "Register: Add a buffer to the number register":
     for i in 0 ..< 10:
       let r = registers.numberRegister[i]
       if i == 0:
-        check r == Register(buffer: @[ru "abc"], isLine: true)
+        check r == Register(buffer: @[ru "abc"], isLine: true, name: "0")
       elif i == 2:
-        check r == Register(buffer: @[ru "def"], isLine: true)
+        check r == Register(buffer: @[ru "def"], isLine: true, name: "2")
       else:
         check r == Register()
 
@@ -177,7 +177,9 @@ suite "Register: Add a buffer to the number register":
     registers.addRegister(ru "abc", number)
     registers.addRegister(ru "def", number)
 
-    check registers.numberRegister[0] == Register(buffer: @[ru "def"])
+    check registers.numberRegister[0] == Register(
+      buffer: @[ru "def"],
+      name: "0")
 
 suite "Register: Search a register by name":
   test "Search a register by name":
@@ -191,6 +193,20 @@ suite "Register: Search a register by name":
 
     check registers.searchByName("b").isSome
     check registers.searchByName("b").get == r2
+
+  test "Search a register by number string":
+    var registers: Registers
+    const
+      r1 = Register(buffer: @[ru "abc"], name: "a")
+      r2 = Register(buffer: @[ru "def"], name: "b")
+
+      r3 = Register(buffer: @[ru "ghi"], name: "0")
+
+    registers.namedRegister = @[r1, r2]
+    registers.numberRegister[0] = r3
+
+    check registers.searchByName("0").isSome
+    check registers.searchByName("0").get == r3
 
   test "Return empty":
     var registers: Registers
