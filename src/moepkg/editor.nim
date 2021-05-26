@@ -375,7 +375,12 @@ proc deleteWord*(bufStatus: var BufferStatus,
     newLine.delete(windowNode.currentColumn)
     if oldLine != newLine:
       bufStatus.buffer[windowNode.currentLine] = newLine
-    registers.addRegister(newLine, registerName)
+
+    # TODO: Delete
+    if registerName.len > 0:
+      registers.addRegister(newLine, registerName)
+    else:
+      registers.addRegister(newLine)
 
     if windowNode.currentColumn > 0: dec(windowNode.currentColumn)
   else:
@@ -417,7 +422,13 @@ proc deleteWord*(bufStatus: var BufferStatus,
       newLine.delete(currentColumn)
     if oldLine != newLine:
       bufStatus.buffer[currentLine] = newLine
-      registers.addRegister(yankStr, registerName)
+
+      # TODO: Delete
+      if registerName.len > 0:
+        registers.addRegister(yankStr, registerName)
+      else:
+        registers.addRegister(yankStr)
+
     windowNode.expandedColumn = currentColumn
     windowNode.currentColumn = currentColumn
 
