@@ -88,6 +88,36 @@ suite "Register: Add a buffer to the named register":
       isLine: true,
       name: name)
 
+suite "Register: Add a buffer to the number register":
+  test "Add a string to the number register":
+    var registers: Registers
+
+    block:
+      const number = 0
+      registers.addRegister(ru "abc", number)
+
+    block:
+      const number = 2
+      registers.addRegister(ru "def", number)
+
+    for i in 0 ..< 10:
+      let r  = registers.numberRegister[i]
+      if i == 0:
+        check r == Register(buffer: @[ru "abc"])
+      elif i == 2:
+        check r == Register(buffer: @[ru "def"])
+      else:
+        check r == Register()
+
+  test "Overwrite a string to the number register":
+    var registers: Registers
+
+    const number = 0
+    registers.addRegister(ru "abc", number)
+    registers.addRegister(ru "def", number)
+
+    check registers.numberRegister[0] == Register(buffer: @[ru "def"])
+
 suite "Register: Search a register by name":
   test "Search a register by name":
     var registers: Registers
