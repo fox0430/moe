@@ -243,22 +243,8 @@ suite "Editor: Delete word":
     currentBufStatus.buffer = initGapBuffer(@[ru"block:", ru"  "])
     currentMainWindowNode.currentLine = 1
 
-    var registers: register.Registers
-
     for i in 0 ..< 2:
-      currentBufStatus.deleteWord(currentMainWindowNode, registers)
-
-  test "Fix #1204":
-    var status = initEditorStatus()
-    status.addNewBuffer
-    currentBufStatus.buffer = initGapBuffer(@[ru"proc test() ="])
-
-    var registers: register.Registers
-
-    currentBufStatus.deleteWord(currentMainWindowNode, registers)
-
-    check currentBufStatus.buffer[0] == ru "test() ="
-    check registers.noNameRegister.buffer[^1] == ru "proc "
+      currentBufStatus.deleteWord(currentMainWindowNode)
 
 suite "Editor: keyEnter":
   test "Delete all characters in the previous line if only whitespaces":
