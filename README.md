@@ -29,11 +29,9 @@ This project's goal is a very customizable, high productivity, user friendly, hi
 
 - Configuration file (TOML)
 
-- Configuration mode (Incomplete)
+- Configuration mode
 
-- Live reload of configuration file
-
-- Multiple file buffers
+- Live reload of the configuration file
 
 - Vertical/Horizontal split window
 
@@ -68,6 +66,8 @@ This project's goal is a very customizable, high productivity, user friendly, hi
 - Highlight current words
 
 - Highlight/Delete trailing spaces
+
+- Vim like register
 
 ## Planned features
 
@@ -130,7 +130,7 @@ Check [detail](https://github.com/fox0430/moe/blob/develop/documents/overview.md
 moe is a recursive acronym for "moe is an optimal editor".    
 And one more, it comes from the Japanese slang 萌え(moe).
 
-## Contributing, bug reports, requests
+## Contributing, bug reports, feature request
 Welcome❤
 
 ## Community
