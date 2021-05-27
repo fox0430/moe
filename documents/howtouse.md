@@ -62,6 +62,20 @@
 
 </details>
 
+## Register
+
+<details open>
+  <summary>Register operations</summary>
+
+  |                               |                             |                               |                             |
+  |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
+  | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**y**</kbd> <kbd>**y**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**y**</kbd> <kbd>**l**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**y**</kbd> <kbd>**w**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**y**</kbd> <kbd>**{**</kbd> |
+  | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**y**</kbd> <kbd>**}**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**p**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**P**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**d**</kbd> <kbd>**d**</kbd> |
+  | <kbd>**"**</kbd> <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**d**</kbd> <kbd>**w**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**d**</kbd> <kbd>**$**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**d**</kbd> <kbd>**0**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**d**</kbd> <kbd>**G**</kbd> |
+  | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**d**</kbd> <kbd>**g**</kbd> <kbd>**g**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**d**</kbd> <kbd>**{**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**d**</kbd> <kbd>**}**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**any key**</kbd> |
+  | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**d**</kbd> <kbd>**h**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**c**</kbd> <kbd>**l**</kbd> OR <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**s**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**any key**</kbd> |
+ 
+</details>
 
 ## Visual block mode
 
