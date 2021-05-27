@@ -1449,7 +1449,7 @@ suite "Add buffer to the register":
     check status.registers.noNameRegister == Register(
       buffer: @[ru "a"], isLine: false, name: "a")
 
-test "Validate normal mode command":
+suite "Normal mode: Validate normal mode command":
   test "\" (Expect to continue)":
     const command = ru "\""
     check isNormalModeCommand(command) == InputState.Continue
@@ -1465,3 +1465,35 @@ test "Validate normal mode command":
   test "\"ayy (Expect to validate)":
     const command = ru "\"ayy"
     check isNormalModeCommand(command) == InputState.Valid
+
+suite "Normal mode: Yank and delete words":
+  test "Ynak and delete a word (dw command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc def ghi"])
+
+    const command = ru"dw"
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "def ghi"
+
+    check status.registers.noNameRegister == Register(buffer: @[ru "abc "])
+    check status.registers.noNameRegister == status.registers.smallDeleteRegister
+
+  test "Ynak and delete 2 words (2dw command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc def ghi"])
+
+    const command = ru"dw"
+    currentBufStatus.cmdLoop = 2
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "ghi"
+
+    check status.registers.noNameRegister == Register(buffer: @[ru "abc def "])
+    check status.registers.noNameRegister == status.registers.smallDeleteRegister
