@@ -8,7 +8,7 @@ type Register* = object
 
 type Registers* = object
   noNameRegister*: Register
-  smallDeleteRegister: Register
+  smallDeleteRegister*: Register
   numberRegister*: array[10, Register]
   namedRegister*: seq[Register]
 
