@@ -510,6 +510,7 @@ suite "Editor: Yank a string":
     const
       length = 1
       name = "a"
+      isDelete = false
     currentBufStatus.yankString(status.registers,
                                 currentMainWindowNode,
                                 status.commandline,
@@ -517,7 +518,8 @@ suite "Editor: Yank a string":
                                 platform,
                                 status.settings,
                                 length,
-                                name)
+                                name,
+                                isDelete)
 
     check status.registers.noNameRegister.buffer.len == 0
 
