@@ -4,8 +4,9 @@
 
 |                               |                             |                               |                             |                                   |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|:---------------------------------:|
-| [Normal Mode](#normal-mode)   | [Visual Mode](#visual-block-mode) | [Replace Mode](#replace-mode) | [Insert Mode](#insert-mode) | [History Mode](#history-mode)     |
-| [Ex Mode](#ex-mode)       | [Diff Mode](#diff-mode)     | [Filer Mode](#filer-mode)     | [Exiting](#exiting)         | [Changing Modes](#changing-modes) |
+| [Normal Mode](#normal-mode)   | [Register](#register) | [Visual Mode](#visual-block-mode) | [Replace Mode](#replace-mode) | [Insert Mode](#insert-mode) | 
+| [History Mode](#history-mode)     | [Ex Mode](#ex-mode)       | [Diff Mode](#diff-mode)     | [Filer Mode](#filer-mode)     | [Exiting](#exiting)         |
+| [Changing Modes](#changing-modes) |
 
 
 ## Exiting
@@ -86,9 +87,12 @@
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|:---------------------------------:|
 | <kbd>**d**</kbd> OR <kbd>**x**</kbd><br> Delete text | <kbd>**y**</kbd><br> Copy text | <kbd>**r**</kbd><br> Replace character | <kbd>**J**</kbd><br> Join lines | <kbd>**J**</kbd><br> Join lines |
 | <kbd>**u**</kbd><br> Convert to Lowercase | <kbd>**U**</kbd><br> Convert to Uppercase | <kbd>**>**</kbd><br> Indent | <kbd>**<**</kbd><br> Unindent | <kbd>**~**</kbd><br> Toggle case of character under cursor |
-| <kbd>**Ctrl**</kbd> <kbd>**a**</kbd><br> Increase number under cursor | <kbd>**Ctrl**</kbd> <kbd>**x**</kbd><br> Decrease number under cursor | <kbd>**I**</kbd><br> Insert character, multiple lines | <kbd>**Esc**</kbd><br> Go to Normal mode |  |
+| <kbd>**Ctrl**</kbd> <kbd>**a**</kbd><br> Increase number under cursor | <kbd>**Ctrl**</kbd> <kbd>**x**</kbd><br> Decrease number under cursor | <kbd>**I**</kbd><br> Insert character, multiple lines | <kbd>**Esc**</kbd><br> Go to Normal mode | <kbd>**j**</kbd><br> Go Down :arrow_down: |
+| <kbd>**k**</kbd><br> Go Up :arrow_up: | <kbd>**j**</kbd><br> Go Left :arrow_left: | <kbd>**k**</kbd><br> Go Up :arrow_up: |
 
-</details>| <kbd>**j**</kbd><br> Go Down :arrow_down: | <kbd>**k**</kbd><br> Go Up :arrow_up: | <kbd>**j**</kbd><br> Go Left :arrow_left: | <kbd>**k**</kbd><br> Go Up :arrow_up: |
+</details>
+
+## Replace mode
 
 <details open>
   <summary>Replace Text</summary>
