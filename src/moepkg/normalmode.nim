@@ -177,10 +177,12 @@ proc yankWord(status: var EditorStatus, registerName: string) =
                             registerName)
 
 proc deleteWord(status: var EditorStatus) =
-  currentBufStatus.deleteWord(currentMainWindowNode)
+  for i in 0 ..< currentBufStatus.cmdLoop:
+    currentBufStatus.deleteWord(currentMainWindowNode)
 
 proc deleteWord(status: var EditorStatus, registerName: string) =
-  currentBufStatus.deleteWord(currentMainWindowNode)
+  for i in 0 ..< currentBufStatus.cmdLoop:
+    currentBufStatus.deleteWord(currentMainWindowNode)
 
 proc yankAndDeleteWord(status: var EditorStatus) =
   const isDelete = true
