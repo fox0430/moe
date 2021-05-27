@@ -215,6 +215,34 @@ proc changeInnerCommand(status: var EditorStatus, key: Rune) =
   else:
     discard
 
+# ci command
+proc changeInnerCommand(status: var EditorStatus,
+                        key: Rune,
+                        registerName: string) =
+
+  let
+    currentLine = currentMainWindowNode.currentLine
+    oldLine = currentBufStatus.buffer[currentLine]
+
+  # Delete inside paren and enter insert mode
+  if isParen(key):
+    currentBufStatus.yankAndDeleteInsideOfParen(currentMainWindowNode,
+                                                status.registers,
+                                                registerName,
+                                                key)
+
+    if oldLine != currentBufStatus.buffer[currentLine]:
+      currentMainWindowNode.currentColumn.inc
+      status.changeMode(Mode.insert)
+  # Delete current word and enter insert mode
+  elif key == ru'w':
+    if oldLine.len > 0:
+      currentBufStatus.moveToBackwardWord(currentMainWindowNode)
+      status.yankAndDeleteWord
+    status.changeMode(Mode.insert)
+  else:
+    discard
+
 # di command
 proc yankAndDeleteInnerCommand(status: var EditorStatus, key: Rune, registerName: string) =
   # Delete inside paren and enter insert mode
@@ -700,6 +728,8 @@ proc addRegister(status: var EditorStatus, command, registerName: string) =
     status.cutCharacterBeforeCursor(registerName)
   elif command == "cl" or command == "s":
     status.deleteCharacterAndEnterInsertMode(registerName)
+  elif command.len == 3 and command[0 .. 1] == "ci":
+    status.changeInnerCommand(command[2].toRune, registerName)
   else:
     discard
 
@@ -753,7 +783,8 @@ proc registerCommand(status: var EditorStatus, command: seq[Rune]) =
        cmd == "d}" or
        cmd.len == 3 and cmd[0 .. 1] == "di" or
        cmd == "dh" or
-       cmd == "cl" or cmd == "s":
+       cmd == "cl" or cmd == "s" or
+       cmd.len == 3 and cmd[0 .. 1] == "ci":
     status.addRegister(cmd, $registerName)
 
 proc isMovementKey(key: Rune): bool =
@@ -1377,7 +1408,8 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
            cmd == "d" or
            cmd == "dg" or
            cmd == "di" or
-           cmd == "c":
+           cmd == "c" or
+           cmd == "ci":
           result = InputState.Continue
         elif cmd == "p" or
              cmd == "P" or
@@ -1394,9 +1426,10 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
              cmd == "dgg" or
              cmd == "d{" or
              cmd == "d}" or
-             cmd.len == 3 and cmd[0 .. 1] == "di" or
+             (cmd.len == 3 and cmd[0 .. 1] == "di") or
              cmd == "dh" or
-             cmd == "cl" or cmd == "s":
+             cmd == "cl" or cmd == "s" or
+             (cmd.len == 3 and cmd[0 .. 1] == "ci"):
           result = InputState.Valid
 
     else:
