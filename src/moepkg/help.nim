@@ -94,6 +94,29 @@ Ctrl-w c   - Close current window
 \r         - QuickRun
 ga         - Show current character info
 
+# Register
+
+"-any key-yy
+"-any key-yl
+"-any key-yw
+"-any key-y}
+"-any key-y{
+"-any key-p
+"-any key-P
+"-any key-dd
+"-any key-dw
+"-any key-d$
+"-any key-d0
+"-any key-dG
+"-any key-dgg
+"-any key-d{
+"-any key-d}
+"-any key-di-any key
+"-any key-dh
+"-any key-cl
+"-any key-s
+"-any key-ci-any key
+
 # Visual mode
 
 d or x  - Delete text
