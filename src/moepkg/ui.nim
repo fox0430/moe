@@ -1,4 +1,7 @@
-import posix, strformat, osproc, strutils
+import strformat, osproc, strutils
+when not defined unitTest:
+  import posix
+
 from os import execShellCmd
 import ncurses
 import unicodeext, color

@@ -13,3 +13,10 @@ proc normalizeHex*(s: string): string =
       break
 
   result = s[count .. ^1]
+
+proc isInt*(str: string): bool =
+  try:
+    discard str.parseInt
+    return true
+  except:
+    discard

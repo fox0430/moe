@@ -1,5 +1,6 @@
 import unittest, osproc
-import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, movement, bufferstatus]
+import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, movement, bufferstatus,
+               register]
 include moepkg/[visualmode]
 
 suite "Visual mode: Delete buffer":
@@ -261,7 +262,8 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
                                 status.platform,
                                 status.settings.clipboard)
 
-    check(status.registers.yankedLines == @[ru"abc", ru"def"])
+    check status.registers.noNameRegister.isLine
+    check status.registers.noNameRegister.buffer == @[ru"abc", ru"def"]
 
   test "Yank string (Fix #1124)":
     var status = initEditorStatus()
@@ -293,7 +295,8 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
                                 status.platform,
                                 status.settings.clipboard)
 
-    check(status.registers.yankedStr == ru"abc")
+    check not status.registers.noNameRegister.isLine
+    check status.registers.noNameRegister.buffer[^1] == ru"abc"
 
   test "Yank lines when the last line is empty (Fix #1183)":
     var status = initEditorStatus()
@@ -324,7 +327,8 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
                                 status.platform,
                                 status.settings.clipboard)
 
-    check(status.registers.yankedLines == @[ru"abc", ru""])
+    check status.registers.noNameRegister.isLine
+    check status.registers.noNameRegister.buffer == @[ru"abc", ru""]
 
   test "Yank the empty line":
     var status = initEditorStatus()
@@ -354,7 +358,8 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
                                 status.platform,
                                 status.settings.clipboard)
 
-    check(status.registers.yankedLines == @[ru""])
+    check status.registers.noNameRegister.isLine
+    check status.registers.noNameRegister.buffer == @[ru""]
 
 suite "Visual block mode: Yank buffer (Disable clipboard)":
   test "Yank lines 1":
@@ -390,7 +395,8 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
                                      status.platform,
                                      status.settings.clipboard)
 
-    check(status.registers.yankedLines == @[ru"a", ru"d"])
+    check status.registers.noNameRegister.isLine
+    check status.registers.noNameRegister.buffer == @[ru"a", ru"d"]
 
   test "Yank lines 2":
     var status = initEditorStatus()
@@ -433,7 +439,8 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
                                      status.platform,
                                      status.settings.clipboard)
 
-    check(status.registers.yankedLines == @[ru"a", ru"d"])
+    check status.registers.noNameRegister.isLine
+    check status.registers.noNameRegister.buffer == @[ru"a", ru"d"]
 
 suite "Visual block mode: Delete buffer (Disable clipboard)":
   test "Delete buffer":

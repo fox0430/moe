@@ -1,4 +1,4 @@
-# developer documentation
+# Developer documentation
 
 ## How to debug moe 
 ### printf debug
@@ -186,3 +186,6 @@ Implementation of Automatic backups.
 
 ### ```src/moepkg/buffermanager.nim```
 Buffer manager mode and commands. (```:buf```)
+
+### ```src/moepkg/register.nim```
+Definition of the registers and utils for the register.

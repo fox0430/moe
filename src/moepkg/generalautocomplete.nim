@@ -1,5 +1,5 @@
 import sugar, critbits, options, sequtils
-import unicodedb, unicodedb/properties
+import unicodedb/properties
 import unicodeext, bufferstatus
 
 const

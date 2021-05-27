@@ -3,14 +3,10 @@ import strutils, terminal, os, strformat, tables, times, osproc, heapqueue,
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        undoredostack, window, color, workspace, statusline, settings,
-       bufferstatus, cursor, tabline, backup, messages, commandline
+       bufferstatus, cursor, tabline, backup, messages, commandline, register
 
 type Platform* = enum
   linux, wsl, mac, other
-
-type Registers* = object
-  yankedLines*: seq[seq[Rune]]
-  yankedStr*: seq[Rune]
 
 # Save cursor position when a buffer for a window(file) gets closed.
 type LastPosition* = object
@@ -49,14 +45,9 @@ proc initPlatform*(): Platform =
   elif defined macosx: result = Platform.mac
   else: result = Platform.other
 
-proc initRegisters*(): Registers {.inline.} =
-  result.yankedLines = @[]
-  result.yankedStr = @[]
-
 proc initEditorStatus*(): EditorStatus =
   result.platform = initPlatform()
   result.currentDir = getCurrentDir().toRunes
-  result.registers = initRegisters()
   result.settings = initEditorSettings()
   result.lastOperatingTime = now()
   result.autoBackupStatus = initAutoBackupStatus()
@@ -533,7 +524,6 @@ proc update*(status: var EditorStatus) =
           currentWindowIndex = currentMainWindowNode.windowIndex
           isCurrentMainWin = if node.windowIndex == currentWindowIndex: true
                              else: false
-          isVisualMode = isVisualMode(bufStatus.mode)
           settings = status.settings
 
         # node.highlight is not directly change here for performance.

@@ -1,5 +1,5 @@
-import strutils, terminal
-import ui, window, color, bufferstatus, workspace, independentutils, unicodeext
+import strutils, terminal, unicode
+import ui, window, color, bufferstatus, workspace, independentutils
 
 proc writeTab*(tabWin: var Window,
               start, tabWidth: int,
