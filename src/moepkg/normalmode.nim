@@ -672,7 +672,16 @@ proc deleteCharacterAndEnterInsertMode(status: var EditorStatus,
   status.changeMode(Mode.insert)
 
 # cc/S command
-proc deleteCharactersOfLine(status: var EditorStatus) =
+proc yankAndDeleteCharactersOfLine(status: var EditorStatus) =
+  const
+    isDelete = true
+    registerName = ""
+  currentBufStatus.yankCharactersOfLines(
+    currentMainWindowNode,
+    status.registers,
+    isDelete,
+    registerName)
+
   currentBufStatus.deleteCharactersOfLine(
     status.settings.autoDeleteParen,
     currentMainWindowNode)
@@ -1059,7 +1068,7 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('c'):
     let secondKey = commands[1]
     if secondKey == ord('c'):
-      status.deleteCharactersOfLine
+      status.yankAndDeleteCharactersOfLine
       insertAfterCursor()
     if secondKey == ord('l'):
       status.deleteCharacterAndEnterInsertMode
@@ -1096,7 +1105,7 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('D'):
      status.yankAndDeleteCharactersUntilEndOfLine
   elif key == ord('S'):
-     status.deleteCharactersOfLine
+     status.yankAndDeleteCharactersOfLine
      insertAfterCursor()
   elif key == ord('s'):
     status.deleteCharacterAndEnterInsertMode

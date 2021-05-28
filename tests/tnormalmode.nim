@@ -1497,3 +1497,34 @@ suite "Normal mode: Yank and delete words":
 
     check status.registers.noNameRegister == Register(buffer: @[ru "abc def "])
     check status.registers.noNameRegister == status.registers.smallDeleteRegister
+
+suite "Editor: Yank characters in the current line":
+  test "Yank characters in the currentLine (cc command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc def", ru "ghi"])
+
+    const command = ru "cc"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer[1] == ru "ghi"
+
+    check status.registers.noNameRegister == Register(buffer: @[ru "abc def"])
+    check status.registers.smallDeleteRegister ==  status.registers.noNameRegister
+
+  test "Yank characters in the currentLine (S command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc def", ru "ghi"])
+
+    const command = ru "S"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer[1] == ru "ghi"
+
+    check status.registers.noNameRegister == Register(buffer: @[ru "abc def"])
+    check status.registers.smallDeleteRegister ==  status.registers.noNameRegister
