@@ -352,7 +352,7 @@ proc insertCharacterAboveCursor*(bufStatus: var BufferStatus,
     bufStatus.buffer[currentLine] = newLine
     inc windowNode.currentColumn
 
-# Yank and delete current word
+# delete current word
 proc deleteWord*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   if bufStatus.buffer.len == 1 and
      bufStatus.buffer[windowNode.currentLine].len < 1: return
@@ -933,6 +933,20 @@ proc yankWord*(bufStatus: var BufferStatus,
                      loop,
                      name,
                      isDelete)
+
+proc yankCharactersOfLines*(bufStatus: var BufferStatus,
+                            windowNode: var WindowNode,
+                            registers: var Registers,
+                            registerName: string) =
+
+  let line = bufStatus.buffer[windowNode.currentLine]
+
+  const isLine = false
+  if registerName.len > 0:
+    registers.addRegister(line, isLine, registerName)
+  else:
+    const isDelete = false
+    registers.addRegister(line, isLine, isDelete)
 
 proc pasteString(bufStatus: var BufferStatus,
                  windowNode: var WindowNode,
