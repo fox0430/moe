@@ -937,6 +937,7 @@ proc yankWord*(bufStatus: var BufferStatus,
 proc yankCharactersOfLines*(bufStatus: var BufferStatus,
                             windowNode: var WindowNode,
                             registers: var Registers,
+                            isDelete: bool,
                             registerName: string) =
 
   let line = bufStatus.buffer[windowNode.currentLine]
@@ -945,7 +946,6 @@ proc yankCharactersOfLines*(bufStatus: var BufferStatus,
   if registerName.len > 0:
     registers.addRegister(line, isLine, registerName)
   else:
-    const isDelete = false
     registers.addRegister(line, isLine, isDelete)
 
 proc pasteString(bufStatus: var BufferStatus,

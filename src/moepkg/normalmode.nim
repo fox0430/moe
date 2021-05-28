@@ -673,10 +673,13 @@ proc deleteCharacterAndEnterInsertMode(status: var EditorStatus,
 
 # cc/S command
 proc yankAndDeleteCharactersOfLine(status: var EditorStatus) =
-  const registerName = ""
+  const
+    isDelete = true
+    registerName = ""
   currentBufStatus.yankCharactersOfLines(
     currentMainWindowNode,
     status.registers,
+    isDelete,
     registerName)
 
   currentBufStatus.deleteCharactersOfLine(
