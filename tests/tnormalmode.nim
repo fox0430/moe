@@ -1512,7 +1512,7 @@ suite "Editor: Yank characters in the current line":
     check currentBufStatus.buffer[1] == ru "ghi"
 
     check status.registers.noNameRegister == Register(buffer: @[ru "abc def"])
-    check status.registers.numberRegister[0] ==  status.registers.noNameRegister
+    check status.registers.smallDeleteRegister ==  status.registers.noNameRegister
 
   test "Yank characters in the currentLine (S command)":
     var status = initEditorStatus()
@@ -1527,4 +1527,4 @@ suite "Editor: Yank characters in the current line":
     check currentBufStatus.buffer[1] == ru "ghi"
 
     check status.registers.noNameRegister == Register(buffer: @[ru "abc def"])
-    check status.registers.numberRegister[0] ==  status.registers.noNameRegister
+    check status.registers.smallDeleteRegister ==  status.registers.noNameRegister
