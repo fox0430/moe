@@ -2,8 +2,8 @@ import strutils, terminal, os, strformat, tables, times, osproc, heapqueue,
        deques, times, options
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
-       undoredostack, window, color, workspace, statusline, settings,
-       bufferstatus, cursor, tabline, backup, messages, commandline, register
+       undoredostack, window, color, settings, statusline, bufferstatus, cursor,
+       tabline, backup, messages, commandline, register
 
 type Platform* = enum
   linux, wsl, mac, other
@@ -23,15 +23,14 @@ type EditorStatus* = object
   normalCommandHistory*: seq[seq[Rune]]
   registers*: Registers
   settings*: EditorSettings
-  workSpace*: seq[WorkSpace]
-  currentWorkSpaceIndex*: int
+  mainWindow*: MainWindow
+  statusLine*: seq[StatusLine]
   timeConfFileLastReloaded*: DateTime
   currentDir: seq[Rune]
   messageLog*: seq[seq[Rune]]
   commandLine*: CommandLine
   tabWindow*: Window
   popUpWindow*: Window
-  workSpaceTabWindow*: Window
   lastOperatingTime*: DateTime
   autoBackupStatus*: AutoBackupStatus
   isSearchHighlight*: bool
@@ -52,19 +51,8 @@ proc initEditorStatus*(): EditorStatus =
   result.lastOperatingTime = now()
   result.autoBackupStatus = initAutoBackupStatus()
   result.commandLine = initCommandLine()
-
-  # Init workspace line
-  if result.settings.workSpace.workSpaceLine:
-    const
-      h = 1
-      w = 1
-      t = 0
-      l = 0
-      color = EditorColorPair.defaultChar
-    result.workSpaceTabWindow = initWindow(h, w, t, l, color)
-
-  var newWorkSpace = initWorkSpace()
-  result.workSpace = @[newWorkSpace]
+  result.mainWindow = initMainWindow()
+  result.statusLine = @[initStatusLine()]
 
   # Init tab line
   if result.settings.tabLine.useTab:
@@ -80,17 +68,17 @@ template currentBufStatus*: var BufferStatus =
   mixin status
   status.bufStatus[status.bufferIndexInCurrentWindow]
 
-template currentWorkSpace*: var WorkSpace =
+template mainWindow*: var MainWindow =
   mixin status
-  status.workSpace[status.currentWorkSpaceIndex]
+  status.mainWindow
 
 template currentMainWindowNode*: var WindowNode =
   mixin status
-  status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+  status.mainWindow.currentMainWindowNode
 
 template mainWindowNode*: var WindowNode =
   mixin status
-  status.workSpace[status.currentWorkSpaceIndex].mainWindowNode
+  status.mainWindow.mainWindowNode
 
 proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
   if 0 <= bufferIndex and bufferIndex < status.bufStatus.len:
@@ -101,9 +89,9 @@ proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
     currentMainWindowNode.expandedColumn = 0
 
     let node = currentMainWindowNode
-    for i in 0 ..< currentWorkSpace.statusLine.len:
-      if currentWorkSpace.statusLine[i].windowIndex == node.windowIndex:
-        currentWorkSpace.statusLine[i].bufferIndex = bufferIndex
+    for i in 0 ..< status.statusLine.len:
+      if status.statusLine[i].windowIndex == node.windowIndex:
+        status.statusLine[i].bufferIndex = bufferIndex
 
 proc bufferIndexInCurrentWindow*(status: Editorstatus): int {.inline.} =
   currentMainWindowNode.bufferIndex
@@ -143,7 +131,7 @@ proc getLastCursorPostion*(lastPosition: seq[LastPosition],
       return some(p)
 
 proc changeCurrentWin*(status: var EditorStatus, index: int) =
-  if index < currentWorkSpace.numOfMainWindow and index > 0:
+  if index < status.mainWindow.numOfMainWindow and index > 0:
     status.updateLastCursorPostion
 
     var node = mainWindowNode.searchByWindowIndex(index)
@@ -262,22 +250,20 @@ proc getMainWindowHeight*(settings: EditorSettings, h: int): int =
   let
     tabHeight = if settings.tabLine.useTab: 1 else: 0
     statusHeight = if settings.statusLine.enable: 1 else: 0
-    workSpaceHeight = if settings.workSpace.workSpaceLine: 1 else: 0
     commandHeight = if settings.statusLine.merge: 1 else: 0
 
-  result = h - tabHeight - statusHeight - workSpaceHeight + commandHeight
+  result = h - tabHeight - statusHeight - commandHeight
 
 proc resizeMainWindowNode(status: var EditorStatus, height, width: int) =
   let
     tabLineHeight = if status.settings.tabLine.useTab: 1 else: 0
     statusLineHeight = if status.settings.statusLine.enable: 1 else: 0
-    workSpaceLineHeight = if status.settings.workSpace.workSpaceLine: 1 else: 0
     commandLineHeight = if status.settings.statusLine.merge: 1 else: 0
 
   const x = 0
   let
-    y = tabLineHeight + workSpaceLineHeight
-    h = height - tabLineHeight - statusLineHeight - workSpaceLineHeight + commandLineHeight
+    y = tabLineHeight
+    h = height - tabLineHeight - statusLineHeight - commandLineHeight
     w = width
 
   mainWindowNode.resize(y, x, h, w)
@@ -330,17 +316,17 @@ proc resize*(status: var EditorStatus, height, width: int) =
             width = node.w
             y = node.y + adjustedHeight
             x = node.x
-          currentWorkSpace.statusLine[statusLineIndex].window.resize(
+          status.statusLine[statusLineIndex].window.resize(
             statusLineHeight,
             width,
             y,
             x)
-          currentWorkSpace.statusLine[statusLineIndex].window.refresh
+          status.statusLine[statusLineIndex].window.refresh
 
           # Update status line info
-          currentWorkSpace.statusLine[statusLineIndex].bufferIndex =
+          status.statusLine[statusLineIndex].bufferIndex =
             node.bufferIndex
-          currentWorkSpace.statusLine[statusLineIndex].windowIndex =
+          status.statusLine[statusLineIndex].windowIndex =
             node.windowIndex
           inc(statusLineIndex)
 
@@ -355,26 +341,18 @@ proc resize*(status: var EditorStatus, height, width: int) =
       x = 0
     let
       y = max(height, 4) - 1 - (if status.settings.statusLine.merge: 0 else: 1)
-    currentWorkSpace.statusLine[0].window.resize(
+    status.statusLine[0].window.resize(
       statusLineHeight,
       width,
       y,
       x)
-
-  ## Resize work space info window
-  if status.settings.workSpace.workSpaceLine:
-    const
-      workSpaceBarHeight = 1
-      x = 0
-      y = 0
-    status.workSpaceTabWindow.resize(workSpaceBarHeight, width, y, x)
 
   ## Resize tab line window
   if status.settings.tabLine.useTab:
     const
       tabLineHeight = 1
       x = 0
-    let y = if status.settings.workSpace.workSpaceLine: 1 else: 0
+      y = 0
     status.tabWindow.resize(tabLineHeight, width, y, x)
 
   ## Resize command window
@@ -409,22 +387,22 @@ proc updateHighlight*(highlight: var Highlight,
 proc updateStatusLine(status: var Editorstatus) =
   if not status.settings.statusLine.multipleStatusLine:
     const isActiveWindow = true
-    let index = currentWorkSpace.statusLine[0].bufferIndex
+    let index = status.statusLine[0].bufferIndex
     status.bufStatus[index].writeStatusLine(
-      currentWorkSpace.statusLine[0],
+      status.statusLine[0],
       currentMainWindowNode,
       isActiveWindow,
       status.settings)
   else:
-    for i in 0 ..< currentWorkSpace.statusLine.len:
+    for i in 0 ..< status.statusLine.len:
       let
-        bufferIndex = currentWorkSpace.statusLine[i].bufferIndex
-        index = currentWorkSpace.statusLine[i].windowIndex
+        bufferIndex = status.statusLine[i].bufferIndex
+        index = status.statusLine[i].windowIndex
         node = mainWindowNode.searchByWindowIndex(index)
-        currentNode = currentWorkSpace.currentMainWindowNode
+        currentNode = status.mainWindow.currentMainWindowNode
         isActiveWindow = index == currentNode.windowIndex
       status.bufStatus[bufferIndex].writeStatusLine(
-        currentWorkSpace.statusLine[i],
+        status.statusLine[i],
         node,
         isActiveWindow,
         status.settings)
@@ -472,16 +450,11 @@ proc updateDebugModeBuffer(status: var EditorStatus)
 proc update*(status: var EditorStatus) =
   setCursor(false)
 
-  if status.settings.workSpace.workSpaceLine:
-    status.workSpaceTabWindow.writeTabLineWorkSpace(
-      status.workspace.len,
-      status.currentWorkSpaceIndex)
-
   if status.settings.tabLine.useTab:
     status.tabWindow.writeTabLineBuffer(
       status.bufStatus,
       status.bufferIndexInCurrentWindow,
-      currentWorkSpace,
+      status.mainWindow.mainWindowNode,
       status.settings.tabline.allBuffer)
 
   status.updateDebugModeBuffer
@@ -623,7 +596,7 @@ proc verticalSplitWindow*(status: var EditorStatus) =
   # Create the new window
   let buffer = currentBufStatus.buffer
   currentMainWindowNode = currentMainWindowNode.verticalSplit(buffer)
-  inc(currentWorkSpace.numOfMainWindow)
+  inc(status.mainWindow.numOfMainWindow)
 
   let
     mode = currentBufStatus.mode
@@ -633,7 +606,7 @@ proc verticalSplitWindow*(status: var EditorStatus) =
     currentBufStatus.changeMode(Mode.filer)
     currentMainWindowNode.bufferIndex = status.bufStatus.high
 
-  currentWorkSpace.statusLine.add(initStatusLine())
+  status.statusLine.add(initStatusLine())
 
   status.resize(terminalHeight(), terminalWidth())
 
@@ -645,7 +618,7 @@ proc horizontalSplitWindow*(status: var Editorstatus) =
 
   let buffer = currentBufStatus.buffer
   currentMainWindowNode = currentMainWindowNode.horizontalSplit(buffer)
-  inc(currentWorkSpace.numOfMainWindow)
+  inc(status.mainWindow.numOfMainWindow)
 
   let
     mode = currentBufStatus.mode
@@ -655,14 +628,12 @@ proc horizontalSplitWindow*(status: var Editorstatus) =
     currentBufStatus.changeMode(Mode.filer)
     currentMainWindowNode.bufferIndex = status.bufStatus.high
 
-  currentWorkSpace.statusLine.add(initStatusLine())
+  status.statusLine.add(initStatusLine())
 
   status.resize(terminalHeight(), terminalWidth())
 
   var newNode = mainWindowNode.searchByWindowIndex(currentMainWindowNode.windowIndex + 1)
   newNode.restoreCursorPostion(currentBufStatus, status.lastPosition)
-
-proc deleteWorkSpace*(status: var Editorstatus, index: int)
 
 proc closeWindow*(status: var EditorStatus,
                   node: WindowNode,
@@ -671,36 +642,32 @@ proc closeWindow*(status: var EditorStatus,
   if currentBufStatus.mode == Mode.normal:
     status.updateLastCursorPostion
 
-  if status.workSpace.len == 1 and
-     currentWorkSpace.numOfMainWindow == 1:
+  if status.mainWindow.numOfMainWindow == 1:
     status.exitEditor
 
-  if currentWorkSpace.numOfMainWindow == 1:
-    status.deleteWorkSpace(status.currentWorkSpaceIndex)
-  else:
-    let deleteWindowIndex = node.windowIndex
+  let deleteWindowIndex = node.windowIndex
 
-    mainWindowNode.deleteWindowNode(deleteWindowIndex)
-    dec(currentWorkSpace.numOfMainWindow)
+  mainWindowNode.deleteWindowNode(deleteWindowIndex)
+  dec(status.mainWindow.numOfMainWindow)
 
-    if status.settings.statusLine.multipleStatusLine:
-      let statusLineHigh = currentWorkSpace.statusLine.high
-      currentWorkSpace.statusLine.delete(statusLineHigh)
+  if status.settings.statusLine.multipleStatusLine:
+    let statusLineHigh = status.statusLine.high
+    status.statusLine.delete(statusLineHigh)
 
-    status.resize(height, width)
+  status.resize(height, width)
 
-    let
-      numOfMainWindow = currentWorkSpace.numOfMainWindow
-      newCurrentWinIndex = if deleteWindowIndex > numOfMainWindow - 1:
-                             currentWorkSpace.numOfMainWindow - 1
-                           else: deleteWindowIndex
+  let
+    numOfMainWindow = status.mainWindow.numOfMainWindow
+    newCurrentWinIndex = if deleteWindowIndex > numOfMainWindow - 1:
+                           status.mainWindow.numOfMainWindow - 1
+                         else: deleteWindowIndex
 
-    let node = mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
-    currentWorkSpace.currentMainWindowNode = node
+  let node = mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
+  status.mainWindow.currentMainWindowNode = node
 
 proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
   if index < 0 or
-     currentWorkSpace.numOfMainWindow <= index: return
+     status.mainWindow.numOfMainWindow <= index: return
 
   status.updateLastCursorPostion
 
@@ -819,38 +786,10 @@ proc deleteBuffer*(status: var Editorstatus, deleteIndex,
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
-  let afterWindowIndex = if beforeWindowIndex > currentWorkSpace.numOfMainWindow - 1:
-                            currentWorkSpace.numOfMainWindow - 1
+  let afterWindowIndex = if beforeWindowIndex > status.mainWindow.numOfMainWindow - 1:
+                            status.mainWindow.numOfMainWindow - 1
                          else: beforeWindowIndex
   currentMainWindowNode = mainWindowNode.searchByWindowIndex(afterWindowIndex)
-
-proc createWrokSpace*(status: var Editorstatus) =
-  let newWorkSpaceIndex = status.currentWorkSpaceIndex + 1
-  var newWorkSpace = initWorkSpace()
-
-  status.workSpace.insert(newWorkSpace, newWorkSpaceIndex)
-  status.currentWorkSpaceIndex += 1
-  status.addNewBuffer
-  currentMainWindowNode.bufferIndex = status.bufStatus.high
-
-proc deleteWorkSpace*(status: var Editorstatus, index: int) =
-  if 0 > index and index > status.workSpace.high:
-    status.commandLine.writeNotExistWorkspaceError(index, status.messageLog)
-  else:
-    status.workspace.delete(index)
-
-    if status.workspace.len == 0: status.exitEditor
-
-    if status.currentWorkSpaceIndex > status.workSpace.high:
-      status.currentWorkSpaceIndex = status.workSpace.high
-
-proc changeCurrentWorkSpace*(status: var Editorstatus, index: int) =
-  if 0 < index and index <= status.workSpace.len:
-    status.updateLastCursorPostion
-
-    status.currentWorkSpaceIndex = index - 1
-  else:
-    status.commandLine.writeNotExistWorkspaceError(index, status.messageLog)
 
 proc tryRecordCurrentPosition*(bufStatus: var BufferStatus,
                                windowNode: WindowNode) {.inline.} =
@@ -1313,6 +1252,4 @@ proc updateDebugModeBuffer(status: var EditorStatus) =
   status.bufStatus.updateDebugModeBuffer(
     mainWindowNode,
     currentMainWindowNode.windowIndex,
-    status.workSpace.len,
-    status.currentWorkSpaceIndex,
     status.settings.debugModeSettings)

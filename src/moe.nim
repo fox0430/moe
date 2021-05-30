@@ -49,8 +49,7 @@ proc initEditor(): EditorStatus =
 proc main() =
   var status = initEditor()
 
-  while status.workSpace.len > 0 and
-        currentWorkSpace.numOfMainWindow > 0:
+  while status.mainWindow.numOfMainWindow > 0:
 
     case currentBufStatus.mode:
     of Mode.normal: status.normalMode

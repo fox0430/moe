@@ -37,9 +37,7 @@ proc searchOneCharactorToBeginOfLine(bufStatus: var BufferStatus,
       break
 
 proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
-  let
-    currentBufferIndex = status.bufferIndexInCurrentWindow
-    workspaceIndex = status.currentWorkSpaceIndex
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
 
   status.isSearchHighlight = true
 
@@ -51,9 +49,7 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
     status.searchHistory,
     status.settings)
 
-  var windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
-
-  status.bufStatus[currentBufferIndex].keyRight(windowNode)
+  status.bufStatus[currentBufferIndex].keyRight(currentMainWindowNode)
   let
     ignorecase = status.settings.ignorecase
     smartcase = status.settings.smartcase
@@ -61,8 +57,8 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
   if searchResult.line > -1:
     status.jumpLine(searchResult.line)
     for column in 0 ..< searchResult.column:
-      status.bufStatus[currentBufferIndex].keyRight(windowNode)
-  elif searchResult.line == -1: windowNode.keyLeft
+      status.bufStatus[currentBufferIndex].keyRight(currentMainWindowNode)
+  elif searchResult.line == -1: currentMainWindowNode.keyLeft
 
 proc searchNextOccurrence(status: var EditorStatus) =
   if status.searchHistory.len < 1: return
@@ -137,7 +133,7 @@ proc runQuickRunCommand(status: var Editorstatus) =
                          status.commandLine,
                          status.messageLog,
                          status.settings)
-    quickRunWindowIndex = status.bufStatus.getQuickRunBufferIndex(currentWorkSpace)
+    quickRunWindowIndex = status.bufStatus.getQuickRunBufferIndex(mainWindowNode)
 
   if quickRunWindowIndex == -1:
     status.verticalSplitWindow
@@ -838,15 +834,13 @@ proc normalCommand(status: var EditorStatus,
 
   if commands.len == 0: return
 
-  let
-    currentBufferIndex = status.bufferIndexInCurrentWindow
-    workspaceIndex = status.currentWorkSpaceIndex
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
 
   if status.bufStatus[currentBufferIndex].cmdLoop == 0:
     status.bufStatus[currentBufferIndex].cmdLoop = 1
 
   let cmdLoop = status.bufStatus[currentBufferIndex].cmdLoop
-  var windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
+  var windowNode = currentMainWindowNode
 
   template getWordUnderCursor(): (int, seq[Rune]) =
     let line = currentBufStatus.buffer[windowNode.currentLine]
@@ -899,7 +893,7 @@ proc normalCommand(status: var EditorStatus,
 
   template replaceCurrentCharacter(newCharacter: Rune) =
     currentBufStatus.replaceCurrentCharacter(
-      currentWorkSpace.currentMainWindowNode,
+      status.mainWindow.currentMainWindowNode,
       status.settings.autoIndent,
       status.settings.autoDeleteParen,
       status.settings.tabStop,
@@ -951,13 +945,14 @@ proc normalCommand(status: var EditorStatus,
 
   template closeWindow() =
     let currentBufferIndex = status.bufferIndexInCurrentWindow
-    let workspaceIndex = status.currentWorkSpaceIndex
 
-    if status.workspace[workspaceIndex].numOfMainWindow == 1: return
+    if status.mainWindow.numOfMainWindow == 1: return
 
     if currentBufStatus.countChange == 0 or
        mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
-        status.closeWindow(currentWorkSpace.currentMainWindowNode, height, width)
+        status.closeWindow(
+          status.mainWindow.currentMainWindowNode,
+          height, width)
 
   # yy command
   template yankLines() =
@@ -1447,8 +1442,7 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
       discard
 
 proc isNormalMode(status: Editorstatus): bool =
-  let index =
-    status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
+  let index = currentMainWindowNode.bufferIndex
   status.bufStatus[index].mode == Mode.normal
 
 proc normalMode*(status: var EditorStatus) =
@@ -1457,15 +1451,12 @@ proc normalMode*(status: var EditorStatus) =
 
   status.resize(terminalHeight(), terminalWidth())
 
-  let
-    currentBufferIndex = status.bufferIndexInCurrentWindow
-    currentWorkSpaceIndex = status.currentWorkSpaceIndex
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
   var
     countChange = 0
     command = ru ""
 
   while status.isNormalMode and
-        currentWorkSpaceIndex == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
 
     if currentBufStatus.countChange > countChange:
