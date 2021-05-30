@@ -216,7 +216,7 @@ suite "search.nim: jumpToSearchForwardResults":
     var status = initEditorStatus()
     status.addNewBuffer
 
-    status.workspace[0].currentMainWindowNode.currentColumn = 1
+    currentMainWindowNode.currentColumn = 1
 
     let
       line1 = ru"abc def"
@@ -227,14 +227,14 @@ suite "search.nim: jumpToSearchForwardResults":
     let keyword = ru"jkl"
     status.jumpToSearchForwardResults(keyword)
 
-    check(status.workspace[0].currentMainWindowNode.currentLine == 1)
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 4)
+    check(currentMainWindowNode.currentLine == 1)
+    check(currentMainWindowNode.currentColumn == 4)
 
   test "jumpToSearchForwardResults 2":
     var status = initEditorStatus()
     status.addNewBuffer
 
-    status.workspace[0].currentMainWindowNode.currentColumn = 1
+    currentMainWindowNode.currentColumn = 1
 
     let
       line1 = ru"abc def"
@@ -245,15 +245,15 @@ suite "search.nim: jumpToSearchForwardResults":
     let keyword = ru"xyz"
     status.jumpToSearchForwardResults(keyword)
 
-    check(status.workspace[0].currentMainWindowNode.currentLine == 0)
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 1)
+    check(currentMainWindowNode.currentLine == 0)
+    check(currentMainWindowNode.currentColumn == 1)
 
 suite "search.nim: jumpToSearchBackwordResults":
   test "jumpToSearchBackwordResults":
     var status = initEditorStatus()
     status.addNewBuffer
 
-    status.workspace[0].currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentLine = 1
 
     let
       line1 = ru"abc def"
@@ -264,14 +264,14 @@ suite "search.nim: jumpToSearchBackwordResults":
     let keyword = ru"abc"
     status.jumpToSearchBackwordResults(keyword)
 
-    check(status.workspace[0].currentMainWindowNode.currentLine == 0)
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 0)
+    check(currentMainWindowNode.currentLine == 0)
+    check(currentMainWindowNode.currentColumn == 0)
 
   test "jumpToSearchBackwordResults 2":
     var status = initEditorStatus()
     status.addNewBuffer
 
-    status.workspace[0].currentMainWindowNode.currentColumn = 1
+    currentMainWindowNode.currentColumn = 1
 
     let
       line1 = ru"abc def"
@@ -282,5 +282,5 @@ suite "search.nim: jumpToSearchBackwordResults":
     let keyword = ru"xyz"
     status.jumpToSearchBackwordResults(keyword)
 
-    check(status.workspace[0].currentMainWindowNode.currentLine == 0)
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 1)
+    check(currentMainWindowNode.currentLine == 0)
+    check(currentMainWindowNode.currentColumn == 1)

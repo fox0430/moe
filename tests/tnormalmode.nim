@@ -19,14 +19,14 @@ suite "Normal mode: Move to the right":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 2)
+    check(currentMainWindowNode.currentColumn == 2)
 
 suite "Normal mode: Move to the left":
   test "Move one to the left":
     var status = initEditorStatus()
     status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
-    status.workspace[0].currentMainWindowNode.currentColumn = 2
+    currentMainWindowNode.currentColumn = 2
 
     status.resize(100, 100)
     status.update
@@ -35,7 +35,7 @@ suite "Normal mode: Move to the left":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 1)
+    check(currentMainWindowNode.currentColumn == 1)
 
 suite "Normal mode: Move to the down":
   test "Move two to the down":
@@ -51,14 +51,14 @@ suite "Normal mode: Move to the down":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentLine == 2)
+    check(currentMainWindowNode.currentLine == 2)
 
 suite "Normal mode: Move to the up":
   test "Move two to the up":
     var status = initEditorStatus()
     status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b", ru"c"])
-    status.workspace[0].currentMainWindowNode.currentLine = 2
+    currentMainWindowNode.currentLine = 2
 
     status.resize(100, 100)
     status.update
@@ -68,7 +68,7 @@ suite "Normal mode: Move to the up":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentLine == 0)
+    check(currentMainWindowNode.currentLine == 0)
 
 suite "Normal mode: Delete current character":
   test "Delete two current character":
@@ -100,14 +100,14 @@ suite "Normal mode: Move to last of line":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 2)
+    check(currentMainWindowNode.currentColumn == 2)
 
 suite "Normal mode: Move to first of line":
   test "Move to first of line":
     var status = initEditorStatus()
     status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
-    status.workspace[0].currentMainWindowNode.currentColumn = 2
+    currentMainWindowNode.currentColumn = 2
 
     status.resize(100, 100)
     status.update
@@ -116,14 +116,14 @@ suite "Normal mode: Move to first of line":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 0)
+    check(currentMainWindowNode.currentColumn == 0)
 
 suite "Normal mode: Move to first non blank of line":
   test "Move to first non blank of line":
     var status = initEditorStatus()
     status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc"])
-    status.workspace[0].currentMainWindowNode.currentColumn = 4
+    currentMainWindowNode.currentColumn = 4
 
     status.resize(100, 100)
     status.update
@@ -132,14 +132,14 @@ suite "Normal mode: Move to first non blank of line":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 2)
+    check(currentMainWindowNode.currentColumn == 2)
 
 suite "Normal mode: Move to first of previous line":
   test "Move to first of previous line":
     var status = initEditorStatus()
     status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc", ru"def", ru"ghi"])
-    status.workspace[0].currentMainWindowNode.currentLine = 2
+    currentMainWindowNode.currentLine = 2
 
     status.resize(100, 100)
     status.update
@@ -147,13 +147,13 @@ suite "Normal mode: Move to first of previous line":
     const key = @[ru'-']
     status.normalCommand(key, 100, 100)
     status.update
-    check(status.workspace[0].currentMainWindowNode.currentLine == 1)
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 0)
+    check(currentMainWindowNode.currentLine == 1)
+    check(currentMainWindowNode.currentColumn == 0)
 
     status.normalCommand(key, 100, 100)
     status.update
-    check(status.workspace[0].currentMainWindowNode.currentLine == 0)
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 0)
+    check(currentMainWindowNode.currentLine == 0)
+    check(currentMainWindowNode.currentColumn == 0)
 
 suite "Normal mode: Move to first of next line":
   test "Move to first of next line":
@@ -168,8 +168,8 @@ suite "Normal mode: Move to first of next line":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentLine == 1)
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 0)
+    check(currentMainWindowNode.currentLine == 1)
+    check(currentMainWindowNode.currentColumn == 0)
 
 suite "Normal mode: Move to last line":
   test "Move to last line":
@@ -184,7 +184,7 @@ suite "Normal mode: Move to last line":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentLine == 2)
+    check(currentMainWindowNode.currentLine == 2)
 
 suite "Normal mode: Page down":
   test "Page down":
@@ -203,8 +203,8 @@ suite "Normal mode: Page down":
     status.update
 
     let
-      currentLine = status.workspace[0].currentMainWindowNode.currentLine
-      viewHeight = status.workspace[0].currentMainWindowNode.view.height
+      currentLine = currentMainWindowNode.currentLine
+      viewHeight = currentMainWindowNode.view.height
 
     check currentLine == viewHeight
 
@@ -230,7 +230,7 @@ suite "Normal mode: Page up":
       status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentLine == 0)
+    check(currentMainWindowNode.currentLine == 0)
 
 suite "Normal mode: Move to forward word":
   test "Move to forward word":
@@ -246,14 +246,14 @@ suite "Normal mode: Move to forward word":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 8)
+    check(currentMainWindowNode.currentColumn == 8)
 
 suite "Normal mode: Move to backward word":
   test "Move to backward word":
     var status = initEditorStatus()
     status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc def ghi"])
-    status.workspace[0].currentMainWindowNode.currentColumn = 8
+    currentMainWindowNode.currentColumn = 8
 
     status.resize(100, 100)
     status.update
@@ -263,7 +263,7 @@ suite "Normal mode: Move to backward word":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 4)
+    check(currentMainWindowNode.currentColumn == 4)
 
 suite "Normal mode: Move to forward end of word":
   test "Move to forward end of word":
@@ -279,7 +279,7 @@ suite "Normal mode: Move to forward end of word":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 6)
+    check(currentMainWindowNode.currentColumn == 6)
 
 suite "Normal mode: Open blank line below":
   test "Open blank line below":
@@ -298,7 +298,7 @@ suite "Normal mode: Open blank line below":
     check(status.bufStatus[0].buffer[0] == ru"a")
     check(status.bufStatus[0].buffer[1] == ru"")
 
-    check(status.workspace[0].currentMainWindowNode.currentLine == 1)
+    check(currentMainWindowNode.currentLine == 1)
 
     check(status.bufStatus[0].mode == Mode.insert)
 
@@ -319,7 +319,7 @@ suite "Normal mode: Open blank line below":
     check(status.bufStatus[0].buffer[0] == ru"")
     check(status.bufStatus[0].buffer[1] == ru"a")
 
-    check(status.workspace[0].currentMainWindowNode.currentLine == 0)
+    check(currentMainWindowNode.currentLine == 0)
 
     check(status.bufStatus[0].mode == Mode.insert)
 
@@ -397,7 +397,7 @@ suite "Normal mode: Move right and enter insert mode":
     status.update
 
     check(status.bufStatus[0].mode == Mode.insert)
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 1)
+    check(currentMainWindowNode.currentColumn == 1)
 
 suite "Normal mode: Move last of line and enter insert mode":
   test "Move last of line and enter insert mode":
@@ -413,7 +413,7 @@ suite "Normal mode: Move last of line and enter insert mode":
     status.update
 
     check(status.bufStatus[0].mode == Mode.insert)
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 3)
+    check(currentMainWindowNode.currentColumn == 3)
 
 suite "Normal mode: Repeat last command":
   test "Repeat last command":
@@ -456,7 +456,7 @@ suite "Normal mode: Repeat last command":
       status.normalCommand(command, 100, 100)
       status.update
 
-    status.workspace[0].currentMainWindowNode.currentColumn = 0
+    currentMainWindowNode.currentColumn = 0
 
     block:
       const command = ru "x"
@@ -549,7 +549,7 @@ suite "Normal mode: Delete the line from first line to current line":
     var status = initEditorStatus()
     status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
-    status.workspace[0].currentMainWindowNode.currentLine = 2
+    currentMainWindowNode.currentLine = 2
 
     status.resize(100, 100)
     status.update
