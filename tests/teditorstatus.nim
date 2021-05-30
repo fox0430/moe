@@ -650,7 +650,7 @@ test "Close window 2":
   status.resize(100, 100)
   status.update
 
-  let windowNodeList = status.workSpace[0].mainWindowNode.getAllWindowNode
+  let windowNodeList = mainWindowNode.getAllWindowNode
 
   check(windowNodeList.len == 1)
 
@@ -676,7 +676,7 @@ test "Close window 3":
   status.resize(100, 100)
   status.update
 
-  let windowNodeList = status.workSpace[0].mainWindowNode.getAllWindowNode
+  let windowNodeList = mainWindowNode.getAllWindowNode
 
   check(windowNodeList.len == 2)
 
@@ -703,7 +703,7 @@ test "Close window 4":
   status.resize(100, 100)
   status.update
 
-  let windowNodeList = status.workSpace[0].mainWindowNode.getAllWindowNode
+  let windowNodeList = mainWindowNode.getAllWindowNode
 
   check(windowNodeList.len == 2)
 
@@ -736,43 +736,6 @@ test "Close window 5":
 
   check(currentMainWindowNode.bufferIndex == 0)
 
-test "Create work space":
-  var status = initEditorStatus()
-  status.addNewBuffer
-
-  status.resize(100, 100)
-  status.update
-
-  status.createWrokSpace
-
-  check(status.workspace.len == 2)
-  check(status.currentWorkSpaceIndex == 1)
-
-test "Change work space":
-  var status = initEditorStatus()
-  status.addNewBuffer
-
-  status.resize(100, 100)
-  status.update
-
-  status.createWrokSpace
-
-  status.changeCurrentWorkSpace(1)
-  check(status.currentWorkSpaceIndex == 0)
-
-test "Delete work space":
-  var status = initEditorStatus()
-  status.addNewBuffer
-
-  status.resize(100, 100)
-  status.update
-
-  status.createWrokSpace
-
-  status.deleteWorkSpace(1)
-
-  check(status.workSpace.len == 1)
-
 # Fix #611
 test "Change current buffer":
   var status = initEditorStatus()
@@ -787,8 +750,8 @@ test "Change current buffer":
   let
     currentLine = currentBufStatus.buffer.high
     currentColumn = currentBufStatus.buffer[currentLine].high
-  status.workspace[0].currentMainWindowNode.currentLine = currentLine
-  status.workspace[0].currentMainWindowNode.currentColumn = currentColumn
+  currentMainWindowNode.currentLine = currentLine
+  currentMainWindowNode.currentColumn = currentColumn
 
   status.addNewBuffer
   currentBufStatus.path = ru"test2"
@@ -796,30 +759,6 @@ test "Change current buffer":
 
   status.changeCurrentBuffer(1)
 
-  status.resize(100, 100)
-  status.update
-
-# Fix #693
-test "Change create workspace":
-  var status = initEditorStatus()
-  status.addNewBuffer
-
-  status.resize(100, 100)
-  status.update
-
-  status.verticalSplitWindow
-  status.resize(100, 100)
-  status.update
-
-  status.createWrokSpace
-  status.resize(100, 100)
-  status.update
-
-  status.changeCurrentWorkSpace(0)
-  status.resize(100, 100)
-  status.update
-
-  status.changeCurrentWorkSpace(1)
   status.resize(100, 100)
   status.update
 

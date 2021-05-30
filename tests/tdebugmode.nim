@@ -10,18 +10,12 @@ suite "Init debug mode buffer":
     status.addNewBuffer(Mode.debug)
 
     status.bufStatus.initDebugModeBuffer(
-      status.workspace[0].mainWindowNode,
-      status.workspace[0].currentMainWindowNode.windowIndex,
-      status.workspace.len,
-      status.currentWorkSpaceindex,
+      mainWindow.mainWindowNode,
+      currentMainWindowNode.windowIndex,
       status.settings.debugModeSettings)
 
     let correctBuf = initGapBuffer[seq[Rune]](@[
       ru "",
-      ru"-- WorkSpace --",
-      ru"  Number of workspaces    : 1",
-      ru"  Current workspace index : 0",
-      ru"",
       ru"-- WindowNode --",
       ru"  currentWindow           : true",
       ru"  index                   : 0",
@@ -63,7 +57,7 @@ suite "Init debug mode buffer":
       ru"  countChange             : 0",
       ru"  cmdLoop                 : 0",
       ru fmt"  lastSaveTime            : {$status.bufStatus[1].lastSaveTime}",
-      ru"  buffer length           : 46",
+      ru"  buffer length           : 42",
       ru""])
 
     for i in 0 ..< status.bufStatus[1].buffer.len:
@@ -75,10 +69,8 @@ suite "Init debug mode buffer":
     status.addNewBuffer(Mode.debug)
 
     status.bufStatus.initDebugModeBuffer(
-      status.workspace[0].mainWindowNode,
-      status.workspace[0].currentMainWindowNode.windowIndex,
-      status.workspace.len,
-      status.currentWorkSpaceindex,
+      mainWindow.mainWindowNode,
+      currentMainWindowNode.windowIndex,
       status.settings.debugModeSettings)
 
     let

@@ -99,9 +99,6 @@ Messages displayed in the command line window.
 ### ```src/moepkg/window.nim```
 Management of the main window node.
 
-### ```src/moepkg/workspaceWorkSpace.nim```
-Define WorkSpace object.
-
 ### ```src/moepkg/tabline.nim```
 Write Tab line.
 

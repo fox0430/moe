@@ -8,7 +8,7 @@ suite "Insert mode":
     status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru""])
 
-    status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+    currentMainWindowNode.highlight = initHighlight(
       $status.bufStatus[0].buffer,
       status.settings.highlightSettings.reservedWords,
       status.bufStatus[0].language)
@@ -17,7 +17,7 @@ suite "Insert mode":
 
     for i in 0..<100:
       insertCharacter(status.bufStatus[0],
-                      status.workSpace[0].currentMainWindowNode,
+                      currentMainWindowNode,
                       status.settings.autoCloseParen,
                       ru'a')
 
@@ -29,7 +29,7 @@ suite "Insert mode":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b"])
 
     status.bufStatus[0].insertCharacterBelowCursor(
-      status.workSpace[0].currentMainWindowNode)
+      currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 2)
@@ -42,7 +42,7 @@ suite "Insert mode":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
     status.bufStatus[0].insertCharacterBelowCursor(
-      status.workSpace[0].currentMainWindowNode)
+      currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
@@ -53,10 +53,10 @@ suite "Insert mode":
     status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"e"])
 
-    status.workspace[0].currentMainWindowNode.currentColumn = 2
+    currentMainWindowNode.currentColumn = 2
 
     status.bufStatus[0].insertCharacterBelowCursor(
-      status.workSpace[0].currentMainWindowNode)
+      currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 2)
@@ -68,10 +68,10 @@ suite "Insert mode":
     status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b"])
 
-    status.workspace[0].currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentLine = 1
 
     status.bufStatus[0].insertCharacterAboveCursor(
-      status.workSpace[0].currentMainWindowNode)
+      currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 2)
@@ -83,11 +83,11 @@ suite "Insert mode":
     status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"bcd"])
 
-    status.workspace[0].currentMainWindowNode.currentLine = 1
-    status.workspace[0].currentMainWindowNode.currentColumn = 2
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 2
 
     status.bufStatus[0].insertCharacterAboveCursor(
-      status.workSpace[0].currentMainWindowNode)
+      currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 2)
@@ -100,7 +100,7 @@ suite "Insert mode":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
 
     status.bufStatus[0].insertCharacterAboveCursor(
-      status.workSpace[0].currentMainWindowNode)
+      currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
@@ -141,7 +141,7 @@ suite "Insert mode":
     status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def"])
 
-    status.workspace[0].currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentLine = 1
 
     currentBufStatus.deleteWordBeforeCursor(
       currentMainWindowNode,
@@ -157,10 +157,10 @@ suite "Insert mode":
     status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abcdef"])
 
-    status.workspace[0].currentMainWindowNode.currentColumn = 4
+    currentMainWindowNode.currentColumn = 4
 
     status.bufStatus[0].deleteCharactersBeforeCursorInCurrentLine(
-      status.workSpace[0].currentMainWindowNode)
+      currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
@@ -172,7 +172,7 @@ suite "Insert mode":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
 
     status.bufStatus[0].deleteCharactersBeforeCursorInCurrentLine(
-      status.workSpace[0].currentMainWindowNode)
+      currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
@@ -184,13 +184,13 @@ suite "Insert mode":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
     status.bufStatus[0].addIndentInCurrentLine(
-      status.workSpace[0].currentMainWindowNode,
+      currentMainWindowNode,
       status.settings.view.tabStop)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer[0] == ru"  abc")
 
-    check(status.workSpace[0].currentMainWindowNode.currentColumn == 2)
+    check(currentMainWindowNode.currentColumn == 2)
 
   test "Add indent in current line 2":
     var status = initEditorStatus()
@@ -198,13 +198,13 @@ suite "Insert mode":
     status.bufStatus[0].buffer = initGapBuffer(@[ru" abc"])
 
     status.bufStatus[0].addIndentInCurrentLine(
-      status.workSpace[0].currentMainWindowNode,
+      currentMainWindowNode,
       status.settings.view.tabStop)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer[0] == ru"  abc")
 
-    check(status.workSpace[0].currentMainWindowNode.currentColumn == 2)
+    check(currentMainWindowNode.currentColumn == 2)
 
   test "Delete indent in current line 1":
     var status = initEditorStatus()
@@ -212,13 +212,13 @@ suite "Insert mode":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc"])
 
     status.bufStatus[0].deleteIndentInCurrentLine(
-      status.workSpace[0].currentMainWindowNode,
+      currentMainWindowNode,
       status.settings.view.tabStop)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer[0] == ru"abc")
 
-    check(status.workSpace[0].currentMainWindowNode.currentColumn == 0)
+    check(currentMainWindowNode.currentColumn == 0)
 
   test "Delete indent in current line 2":
     var status = initEditorStatus()
@@ -226,13 +226,13 @@ suite "Insert mode":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
     status.bufStatus[0].deleteIndentInCurrentLine(
-      status.workSpace[0].currentMainWindowNode,
+      currentMainWindowNode,
       status.settings.view.tabStop)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer[0] == ru"abc")
 
-    check(status.workSpace[0].currentMainWindowNode.currentColumn == 0)
+    check(currentMainWindowNode.currentColumn == 0)
 
   test "Delete indent in current line 3":
     var status = initEditorStatus()
@@ -240,13 +240,13 @@ suite "Insert mode":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"   abc"])
 
     status.bufStatus[0].deleteIndentInCurrentLine(
-      status.workSpace[0].currentMainWindowNode,
+      currentMainWindowNode,
       status.settings.view.tabStop)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer[0] == ru"  abc")
 
-    check(status.workSpace[0].currentMainWindowNode.currentColumn == 0)
+    check(currentMainWindowNode.currentColumn == 0)
 
   test "Move to last of line":
     var status = initEditorStatus()
@@ -254,9 +254,9 @@ suite "Insert mode":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
     status.bufStatus[0].mode = Mode.insert
 
-    status.bufStatus[0].moveToLastOfLine(status.workspace[0].currentMainWindowNode)
+    status.bufStatus[0].moveToLastOfLine(currentMainWindowNode)
 
-    check status.workspace[0].currentMainWindowNode.currentColumn == 3
+    check currentMainWindowNode.currentColumn == 3
 
   proc prepareInsertMode(buffer: openArray[string],
                          line, column, height, width: int): EditorStatus =
@@ -264,8 +264,8 @@ suite "Insert mode":
     result = initEditorStatus()
     result.addNewBuffer(Mode.insert)
     result.bufStatus[0].buffer = initGapBuffer(buffer.map(s => s.ru))
-    result.workspace[0].currentMainWindowNode.currentLine = line
-    result.workspace[0].currentMainWindowNode.currentColumn = column
+    result.mainWindow.currentMainWindowNode.currentLine = line
+    result.mainWindow.currentMainWindowNode.currentColumn = column
     result.resize(height, width)
     result.update
 

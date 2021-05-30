@@ -468,7 +468,7 @@ proc writefileDetail(status: var Editorstatus,
   let buffer = currentBufStatus.buffer
   currentMainWindowNode.highlight = initFileDeitalHighlight(buffer)
 
-  var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
+  var windowNode = currentMainWindowNode
   let
     useStatusBar = if status.settings.statusLine.enable: 1 else: 0
     tmpCurrentLine = windowNode.currentLine
@@ -513,12 +513,9 @@ proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
 proc filerMode*(status: var EditorStatus) =
   var filerStatus = initFilerStatus()
 
-  let
-    currentBufferIndex = status.bufferIndexInCurrentWindow
-    currentWorkSpace = status.currentWorkSpaceIndex
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
 
   while isFilerMode(currentBufStatus.mode) and
-        currentWorkSpace == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
 
     if filerStatus.dirlistUpdate:

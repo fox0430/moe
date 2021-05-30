@@ -2075,23 +2075,21 @@ proc configMode*(status: var Editorstatus) =
   currentBufStatus.buffer = initConfigModeBuffer(status.settings)
   currentMainWindowNode.currentLine = 1
 
-  let
-    currentBufferIndex = currentMainWindowNode.bufferIndex
-    currentWorkSpace = status.currentWorkSpaceIndex
+  let currentBufferIndex = currentMainWindowNode.bufferIndex
 
   # For SettingType.Array
   var arrayIndex = 0
 
   while isConfigMode(currentBufStatus.mode) and
-        currentWorkSpace == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
 
     let
       currentLine = currentMainWindowNode.currentLine
       reservedWords = status.settings.highlightSettings.reservedWords
-      highlight = currentBufStatus.buffer.initConfigModeHighlight(currentLine,
-                                                                  arrayIndex,
-                                                                  reservedWords)
+      highlight = currentBufStatus.buffer.initConfigModeHighlight(
+        currentLine,
+        arrayIndex,
+        reservedWords)
 
     if currentLine == 0:
       currentMainWindowNode.currentLine = 1

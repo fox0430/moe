@@ -1,6 +1,6 @@
 import terminal, times, strformat, options
 import gapbuffer, ui, unicodeext, highlight, color, window, bufferstatus,
-       movement, workspace, settings
+       movement, settings
 
 proc getDebugModeBufferIndex*(bufStatus: seq[BufferStatus]): int =
   result = -1
@@ -19,23 +19,13 @@ proc initDebugModeHighlight*[T](buffer: T): Highlight =
 proc updateDebugModeBuffer*(
   bufStatus: var seq[BufferStatus],
   root: WindowNode,
-  currentWindowIndex, numOfWorkSpaces, currentWorkSpaceIndex: int,
+  currentWindowIndex: int,
   debugModeSettings: DebugModeSettings) =
 
   template debugModeBuffer: var GapBuffer[seq[Rune]] =
     bufStatus[bufStatus.getDebugModeBufferIndex].buffer
 
   debugModeBuffer = initGapBuffer[seq[Rune]](@[ru""])
-
-  # Add WorkSpace info
-  if debugModeSettings.workSpace.enable:
-    debugModeBuffer.add(ru fmt"-- WorkSpace --")
-    if debugModeSettings.workSpace.numOfWorkSpaces:
-      debugModeBuffer.add(ru fmt"  Number of workspaces    : {numOfWorkSpaces}")
-    if debugModeSettings.workSpace.currentWorkSpaceIndex:
-      debugModeBuffer.add(ru fmt"  Current workspace index : {currentWorkSpaceIndex}")
-
-    debugModeBuffer.add(ru "")
 
   # Add WindowNode info
   if debugModeSettings.windowNode.enable:
@@ -112,28 +102,23 @@ proc updateDebugModeBuffer*(
 proc initDebugModeBuffer*(
   bufStatus: var seq[BufferStatus],
   root: WindowNode,
-  currentWindowIndex, numOfWorkSpaces, currentWorkSpaceIndex: int,
+  currentWindowIndex: int,
   debugModeSettings: DebugModeSettings) =
 
   bufStatus[bufStatus.getDebugModeBufferIndex].path = ru"Debug mode"
   bufStatus.updateDebugModeBuffer(
     root,
     currentWindowIndex,
-    numOfWorkSpaces,
-    currentWorkSpaceIndex,
     debugModeSettings)
 
 import editorstatus
 
 proc debugMode*(status: var Editorstatus) =
-  let
-    currentBufferIndex = currentMainWindowNode.bufferIndex
-    currentWorkSpace = status.currentWorkSpaceIndex
+  let currentBufferIndex = currentMainWindowNode.bufferIndex
 
   status.resize(terminalHeight(), terminalWidth())
 
   while currentBufStatus.mode == Mode.debug and
-        currentWorkSpace == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
 
     status.update

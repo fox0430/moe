@@ -649,13 +649,13 @@ suite "Visual block mode: Yank buffer (Enable clipboard) 1":
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
     currentBufStatus.selectArea.updateSelectArea(
       currentMainWindowNode.currentLine,
-      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentColumn)
+      currentMainWindowNode.currentColumn)
     status.update
 
     currentBufStatus.keyDown(currentMainWindowNode)
     currentBufStatus.selectArea.updateSelectArea(
       currentMainWindowNode.currentLine,
-      status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode.currentColumn)
+      currentMainWindowNode.currentColumn)
     status.update
 
     let area = currentBufStatus.selectArea

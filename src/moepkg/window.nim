@@ -26,6 +26,11 @@ type WindowNode* = ref object
   h*: int
   w*: int
 
+type MainWindow* = object
+  mainWindowNode*: WindowNode
+  currentMainWindowNode*: WindowNode
+  numOfMainWindow*: int
+
 proc newWindow(): Window {.inline.} =
   result = initWindow(1, 1, 0, 0, EditorColorPair.defaultChar)
   result.setTimeout()
@@ -45,6 +50,12 @@ proc initWindowNode*(): WindowNode =
                       w: 1)
   node.parent = root
   return root
+
+proc initMainWindow*(): MainWindow =
+  var rootNode = initWindowNode()
+  result.mainWindowNode = rootNode
+  result.currentMainWindowNode = rootNode.child[0]
+  result.numOfMainWindow = 1
 
 proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
   var parent = n.parent

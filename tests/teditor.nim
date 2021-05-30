@@ -8,10 +8,9 @@ suite "Editor: Auto indent":
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  a", ru"b"])
 
-    status.workSpace[0].currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentLine = 1
 
-    status.bufStatus[0].autoIndentCurrentLine(
-      status.workspace[0].currentMainWindowNode)
+    status.bufStatus[0].autoIndentCurrentLine(currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"  a")
     check(status.bufStatus[0].buffer[1] == ru"  b")
@@ -22,10 +21,9 @@ suite "Editor: Auto indent":
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b"])
 
-    status.workSpace[0].currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentLine = 1
 
-    status.bufStatus[0].autoIndentCurrentLine(
-      status.workspace[0].currentMainWindowNode)
+    status.bufStatus[0].autoIndentCurrentLine(currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"a")
     check(status.bufStatus[0].buffer[1] == ru"b")
@@ -36,10 +34,10 @@ suite "Editor: Auto indent":
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"  b"])
 
-    status.workSpace[0].currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentLine = 1
 
     status.bufStatus[0].autoIndentCurrentLine(
-      status.workspace[0].currentMainWindowNode)
+      currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"a")
     check(status.bufStatus[0].buffer[1] == ru"b")
@@ -50,8 +48,7 @@ suite "Editor: Auto indent":
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru""])
 
-    status.bufStatus[0].autoIndentCurrentLine(
-      status.workspace[0].currentMainWindowNode)
+    status.bufStatus[0].autoIndentCurrentLine(currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"")
 
@@ -253,12 +250,12 @@ suite "Editor: keyEnter":
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"block:", ru"  "])
     status.bufStatus[0].mode = Mode.insert
-    status.workspace[0].currentMainWindowNode.currentLine = 1
-    status.workspace[0].currentMainWindowNode.currentColumn = 2
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 2
 
     const isAutoIndent = true
     for i in 0 ..< 2:
-      status.bufStatus[0].keyEnter(status.workspace[0].currentMainWindowNode,
+      status.bufStatus[0].keyEnter(currentMainWindowNode,
                                    isAutoIndent,
                                    status.settings.tabStop)
 
@@ -273,10 +270,10 @@ suite "Editor: keyEnter":
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"block:"])
     status.bufStatus[0].mode = Mode.insert
-    status.workspace[0].currentMainWindowNode.currentColumn = 6
+    currentMainWindowNode.currentColumn = 6
 
     const isAutoIndent = true
-    status.bufStatus[0].keyEnter(status.workspace[0].currentMainWindowNode,
+    status.bufStatus[0].keyEnter(currentMainWindowNode,
                                  isAutoIndent,
                                  status.settings.tabStop)
 
@@ -290,10 +287,10 @@ suite "Editor: keyEnter":
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"test "])
     status.bufStatus[0].mode = Mode.insert
-    status.workspace[0].currentMainWindowNode.currentColumn = 5
+    currentMainWindowNode.currentColumn = 5
 
     const isAutoIndent = true
-    status.bufStatus[0].keyEnter(status.workspace[0].currentMainWindowNode,
+    status.bufStatus[0].keyEnter(currentMainWindowNode,
                                  isAutoIndent,
                                  status.settings.tabStop)
 
@@ -307,12 +304,12 @@ suite "Delete character before cursor":
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"test"])
     status.bufStatus[0].mode = Mode.insert
-    status.workspace[0].currentMainWindowNode.currentColumn = 4
+    currentMainWindowNode.currentColumn = 4
 
     const
       autoCloseParen = true
       tabStop = 2
-    status.bufStatus[0].keyBackspace(status.workspace[0].currentMainWindowNode,
+    status.bufStatus[0].keyBackspace(currentMainWindowNode,
                                      autoCloseParen,
                                      tabStop)
 
@@ -325,12 +322,12 @@ suite "Delete character before cursor":
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  test test2"])
     status.bufStatus[0].mode = Mode.insert
-    status.workspace[0].currentMainWindowNode.currentColumn = 7
+    currentMainWindowNode.currentColumn = 7
 
     const
       autoCloseParen = true
       tabStop = 2
-    status.bufStatus[0].keyBackspace(status.workspace[0].currentMainWindowNode,
+    status.bufStatus[0].keyBackspace(currentMainWindowNode,
                                      autoCloseParen,
                                      tabStop)
 
@@ -343,13 +340,13 @@ suite "Delete character before cursor":
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"test", ru""])
     status.bufStatus[0].mode = Mode.insert
-    status.workspace[0].currentMainWindowNode.currentLine = 1
-    status.workspace[0].currentMainWindowNode.currentColumn = 0
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 0
 
     const
       autoCloseParen = true
       tabStop = 2
-    status.bufStatus[0].keyBackspace(status.workspace[0].currentMainWindowNode,
+    status.bufStatus[0].keyBackspace(currentMainWindowNode,
                                      autoCloseParen,
                                      tabStop)
 
@@ -362,12 +359,12 @@ suite "Delete character before cursor":
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
     status.bufStatus[0].mode = Mode.insert
-    status.workspace[0].currentMainWindowNode.currentColumn = 2
+    currentMainWindowNode.currentColumn = 2
 
     const
       autoCloseParen = true
       tabStop = 2
-    status.bufStatus[0].keyBackspace(status.workspace[0].currentMainWindowNode,
+    status.bufStatus[0].keyBackspace(currentMainWindowNode,
                                      autoCloseParen,
                                      tabStop)
 
@@ -380,12 +377,12 @@ suite "Delete character before cursor":
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"   test"])
     status.bufStatus[0].mode = Mode.insert
-    status.workspace[0].currentMainWindowNode.currentColumn = 3
+    currentMainWindowNode.currentColumn = 3
 
     const
       autoCloseParen = true
       tabStop = 2
-    status.bufStatus[0].keyBackspace(status.workspace[0].currentMainWindowNode,
+    status.bufStatus[0].keyBackspace(currentMainWindowNode,
                                      autoCloseParen,
                                      tabStop)
 
@@ -398,12 +395,12 @@ suite "Delete character before cursor":
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"    test"])
     status.bufStatus[0].mode = Mode.insert
-    status.workspace[0].currentMainWindowNode.currentColumn = 4
+    currentMainWindowNode.currentColumn = 4
 
     const
       autoCloseParen = true
       tabStop = 2
-    status.bufStatus[0].keyBackspace(status.workspace[0].currentMainWindowNode,
+    status.bufStatus[0].keyBackspace(currentMainWindowNode,
                                      autoCloseParen,
                                      tabStop)
 
@@ -416,12 +413,12 @@ suite "Delete character before cursor":
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
     status.bufStatus[0].mode = Mode.insert
-    status.workspace[0].currentMainWindowNode.currentColumn = 1
+    currentMainWindowNode.currentColumn = 1
 
     const
       autoCloseParen = true
       tabStop = 2
-    status.bufStatus[0].keyBackspace(status.workspace[0].currentMainWindowNode,
+    status.bufStatus[0].keyBackspace(currentMainWindowNode,
                                      autoCloseParen,
                                      tabStop)
 
@@ -434,12 +431,12 @@ suite "Delete character before cursor":
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
     status.bufStatus[0].mode = Mode.insert
-    status.workspace[0].currentMainWindowNode.currentColumn = 4
+    currentMainWindowNode.currentColumn = 4
 
     const
       autoCloseParen = true
       tabStop = 2
-    status.bufStatus[0].keyBackspace(status.workspace[0].currentMainWindowNode,
+    status.bufStatus[0].keyBackspace(currentMainWindowNode,
                                      autoCloseParen,
                                      tabStop)
 

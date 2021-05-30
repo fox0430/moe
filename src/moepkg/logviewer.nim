@@ -10,12 +10,9 @@ proc messageLogViewer*(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
   status.update
 
-  let
-    currentBufferIndex = status.bufferIndexInCurrentWindow
-    currentWorkSpace = status.currentWorkSpaceIndex
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
 
   while isLogViewerMode(currentBufStatus.mode) and
-        currentWorkSpace == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
 
     status.update
