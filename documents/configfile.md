@@ -259,14 +259,6 @@ Override commands executed at build (string)
 command
 ```
 
-### WorkSpace table
-
-Enable/Disable workspace bar (bool)  
-default is false
-```
-workSpaceLine
-```
-
 ### Highlight table
 
 Highlight the current line (bool)  
@@ -485,18 +477,6 @@ default is true
 saveLogNotify
 ```
 
-Enable/disable workspace (create, delete, etc...) messages/notifications in status line (bool)  
-default is true
-```
-workspaceScreenNotify
-```
-
-Enable/disable workspace (create, delete, etc...) messages/notifications in status line (bool)  
-default is true
-```
-workspaceLogNotify
-```
-
 Enable/disable QuickRun messages/notifications in status line (bool)  
 default is true
 ```
@@ -579,23 +559,6 @@ Enable/Disable saving last cursor position (bool).
 The default value is true.
 ```
 curosrPosition
-```
-
-### Debug.WorkSpace table
-
-Show/Hidden all WorkSpace info in debug mode (bool)
-```
-enable
-```
-
-Show/Hidden the number of workspaces in debug mode (bool)
-```
-numOfWorkSpaces
-```
-
-Show/Hidden status.currentWorkSpaceIndex in debug mode (bool)
-```
-currentWorkSpaceIndex 
 ```
 
 ### Debug.WindowNode table
@@ -1440,16 +1403,6 @@ highlightTrailingSpaces
 Trailing space background color
 ```
 highlightTrailingSpacesBg
-```
-
-Workspace bar text color
-```
-workSpaceBar
-```
-
-Workspace bar background color
-```
-workSpaceBarBg
 ```
 
 Reserved word text color
