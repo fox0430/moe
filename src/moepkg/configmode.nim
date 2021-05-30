@@ -56,9 +56,6 @@ type statusLineTableNames {.pure.} = enum
   showGitInactive
   showModeInactive
 
-type workSpaceTableNames {.pure.} = enum
-  workSpaceLine
-
 type highlightTableNames {.pure.} = enum
   currentLine
   fullWidthSpace
@@ -99,8 +96,6 @@ type notificationTableNames {.pure.} = enum
   deleteLogNotify
   saveScreenNotify
   saveLogNotify
-  workspaceScreenNotify
-  workspaceLogNotify
   quickRunScreenNotify
   quickRunLogNotify
   buildOnSaveScreenNotify
@@ -173,7 +168,6 @@ type themeTableNames {.pure.} = enum
   currentWord
   highlightFullWidthSpace
   highlightTrailingSpaces
-  workSpaceBar
   reservedWord
   currentSetting
 
@@ -194,7 +188,6 @@ proc calcPositionOfSettingValue(): int {.compileTime.} =
   for name in clipboardTableNames: names.add($name)
   for name in buildOnSaveTableNames: names.add($name)
   for name in tabLineTableNames: names.add($name)
-  for name in workSpaceTableNames: names.add($name)
   for name in highlightTableNames: names.add($name)
   for name in autoBackupTableNames: names.add($name)
   for name in quickRunTableNames: names.add($name)
@@ -372,21 +365,6 @@ proc getStatusLineTableSettingValues(settings: StatusLineSettings,
   else:
     result = @[ru "false", ru "true"]
 
-proc getWorkSpaceTableSettingValues(settings: WorkSpaceSettings,
-                                    name: string): seq[seq[Rune]] =
-
-  var currentVal: bool
-  case name:
-    of "workSpaceLine":
-      currentVal = settings.workSpaceLine
-    else:
-      return
-
-  if currentVal:
-    result = @[ru "true", ru "false"]
-  else:
-    result = @[ru "false", ru "true"]
-
 proc getHighlightTableSettingValues(settings: EditorSettings,
                                     name: string): seq[seq[Rune]] =
 
@@ -483,10 +461,6 @@ proc getNotificationTableSettingValues(settings: NotificationSettings,
       currentVal = settings.saveScreenNotify
     of "saveLogNotify":
       currentVal = settings.saveLogNotify
-    of "workspaceScreenNotify":
-      currentVal = settings.workspaceScreenNotify
-    of "workspaceLogNotify":
-      currentVal = settings.workspaceLogNotify
     of "quickRunScreenNotify":
       currentVal = settings.quickRunScreenNotify
     of "quickRunLogNotify":
@@ -597,8 +571,6 @@ proc getSettingValues(settings: EditorSettings,
       result = settings.tabline.getTabLineTableSettingValues(name)
     of "StatusLine":
       result = settings.statusLine.getStatusLineTableSettingValues(name)
-    of "WorkSpace":
-      result = settings.workSpace.getWorkSpaceTableSettingValues(name)
     of "Highlight":
       result = settings.getHighlightTableSettingValues(name)
     of "AutoBackup":
@@ -805,15 +777,6 @@ proc changeStatusLineTableSetting(settings: var StatusLineSettings,
   else:
     discard
 
-proc changeWorkSpaceTableSetting(settings: var WorkSpaceSettings,
-                                 settingName, settingVal: string) =
-
-  case settingName:
-    of "workSpaceLine":
-      settings.workSpaceLine = parseBool(settingVal)
-    else:
-      discard
-
 proc changeHighlightTableSetting(settings: var EditorSettings,
                                  settingName, settingVal: string) =
 
@@ -881,10 +844,6 @@ proc changeNotificationTableSetting(settings: var NotificationSettings,
       settings.saveScreenNotify = parseBool(settingVal)
     of "saveLogNotify":
       settings.saveLogNotify = parseBool(settingVal)
-    of "workspaceScreenNotify":
-      settings.workspaceScreenNotify = parseBool(settingVal)
-    of "workspaceLogNotify":
-      settings.workspaceLogNotify = parseBool(settingVal)
     of "quickRunScreenNotify":
       settings.quickRunScreenNotify = parseBool(settingVal)
     of "quickRunLogNotify":
@@ -977,9 +936,6 @@ proc changeEditorSettings(status: var EditorStatus,
   template statusLineSettings: var StatusLineSettings =
     status.settings.statusLine
 
-  template workSpaceSettings: var WorkSpaceSettings =
-    status.settings.workSpace
-
   template autoBackupSettings: var AutoBackupSettings =
     status.settings.autoBackupSettings
 
@@ -1009,8 +965,6 @@ proc changeEditorSettings(status: var EditorStatus,
       tablineSettings.changeTabLineTableSetting(settingName, settingVal)
     of "StatusLine":
       statusLineSettings.changeStatusLineTableSetting(settingName, settingVal)
-    of "WorkSpace":
-      workSpaceSettings.changeWorkSpaceTableSetting(settingName, settingVal)
     of "Highlight":
       settings.changeHighlightTableSetting(settingName, settingVal)
     of "AutoBackup":
@@ -1108,13 +1062,6 @@ proc getSettingType(table, name: string): SettingType =
       else:
         result = SettingType.None
 
-  template workSpaceTable() =
-    case name:
-      of "workSpaceLine":
-        result = SettingType.Bool
-      else:
-        result = SettingType.None
-
   template highlightTable() =
     case name:
       of "currentLine",
@@ -1169,8 +1116,6 @@ proc getSettingType(table, name: string): SettingType =
          "deleteLogNotify",
          "saveScreenNotify",
          "saveLogNotify",
-         "workspaceScreenNotify",
-         "workspaceLogNotify",
          "quickRunScreenNotify",
          "quickRunLogNotify",
          "buildOnSaveScreenNotify",
@@ -1213,8 +1158,6 @@ proc getSettingType(table, name: string): SettingType =
       tablineTable()
     of "StatusLine":
       statusLineTable()
-    of "WorkSpace":
-      workSpaceTable()
     of "Highlight":
       highlightTable()
     of "AutoBackup":
@@ -1785,17 +1728,6 @@ proc initStatusLineTableBuffer(settings: StatusLineSettings): seq[seq[Rune]] =
       of "showModeInactive":
         result.add(ru nameStr & space & $settings.showModeInactive)
 
-proc initWorkspaceTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
-  result.add(ru"WorkSpace")
-
-  for name in workSpaceTableNames:
-    let
-      nameStr = indent & $name
-      space = " ".repeat(positionOfSetVal - len($name))
-    case $name:
-      of "workSpaceLine":
-        result.add(ru nameStr & space & $settings.workSpace.workSpaceLine)
-
 proc initHighlightTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"Highlight")
 
@@ -1903,10 +1835,6 @@ proc initNotificationTableBuffer(
         result.add(ru nameStr & space & $settings.saveScreenNotify)
       of "saveLogNotify":
         result.add(ru nameStr & space & $settings.saveLogNotify)
-      of "workspaceScreenNotify":
-        result.add(ru nameStr & space & $settings.workspaceScreenNotify)
-      of "workspaceLogNotify":
-        result.add(ru nameStr & space & $settings.workspaceLogNotify)
       of "quickRunScreenNotify":
         result.add(ru nameStr & space & $settings.quickRunScreenNotify)
       of "quickRunLogNotify":
@@ -2010,9 +1938,6 @@ proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
 
   buffer.add(ru"")
   buffer.add(initStatusLineTableBuffer(settings.statusLine))
-
-  buffer.add(ru"")
-  buffer.add(initWorkspaceTableBuffer(settings))
 
   buffer.add(ru"")
   buffer.add(initHighlightTableBuffer(settings))
