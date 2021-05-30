@@ -55,8 +55,6 @@ This project's goal is a very customizable, high productivity, user friendly, hi
 
 - Build on save
 
-- Work space
-
 - Multiple status line
 
 - QuickRun
