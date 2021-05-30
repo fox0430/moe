@@ -100,16 +100,6 @@ suite "Config mode: Init buffer":
     for index, line in buffer:
       check sample[index] == line
 
-  test "Init workspace table buffer":
-    var status = initEditorStatus()
-    let buffer = status.settings.initWorkspaceTableBuffer
-
-    const sample = @[ru "WorkSpace",
-                     ru "  workSpaceLine                  false"]
-
-    for index, line in buffer:
-      check sample[index] == line
-
   test "Init highlight table buffer":
     var status = initEditorStatus()
     let buffer = status.settings.initHighlightTableBuffer
@@ -176,8 +166,6 @@ suite "Config mode: Init buffer":
                      ru "  deleteLogNotify                true",
                      ru "  saveScreenNotify               true",
                      ru "  saveLogNotify                  true",
-                     ru "  workspaceScreenNotify          true",
-                     ru "  workspaceLogNotify             true",
                      ru "  quickRunScreenNotify           true",
                      ru "  quickRunLogNotify              true",
                      ru "  buildOnSaveScreenNotify        true",
@@ -430,10 +418,6 @@ suite "Config mode: Init buffer":
                      ru "    foreground                   red",
                      ru "    background                   red",
                      ru "",
-                     ru "  workSpaceBar",
-                     ru "    foreground                   white",
-                     ru "    background                   blue",
-                     ru "",
                      ru "  reservedWord",
                      ru "    foreground                   white",
                      ru "    background                   gray",
@@ -446,6 +430,7 @@ suite "Config mode: Init buffer":
     for index, line in buffer:
       check sample[index] == line
 
+# TODO: Should return bool.
 proc checkBoolSettingValue(default: bool, values: seq[seq[Rune]]) =
   if default:
     check values == @[ru "true", ru "false"]
@@ -939,27 +924,6 @@ suite "Config mode: Get StatusLine table setting values":
 
     check values.len == 0
 
-suite "Config mode: Get WorkSpace table setting values":
-  test "Get workSpaceLine values":
-    var status = initEditorStatus()
-    let workSpaceSettings = status.settings.workSpace
-
-    const name = "workSpaceLine"
-    let
-      default = workSpaceSettings.workSpaceLine
-      values = workSpaceSettings.getWorkSpaceTableSettingValues(name)
-
-    checkBoolSettingValue(default, values)
-
-  test "Set invalid name":
-    var status = initEditorStatus()
-    let workSpaceSettings = status.settings.workSpace
-
-    const name = "test"
-    let values = workSpaceSettings.getWorkSpaceTableSettingValues(name)
-
-    check values.len == 0
-
 suite "Config mode: Get Highlight table setting values":
   test "Get currentLine values":
     var status = initEditorStatus()
@@ -1312,28 +1276,6 @@ suite "Config mode: Get Notification table setting values":
     const name = "saveLogNotify"
     let
       default = notificationSettings.saveLogNotify
-      values = notificationSettings.getNotificationTableSettingValues(name)
-
-    checkBoolSettingValue(default, values)
-
-  test "Get workspaceScreenNotify values":
-    var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
-
-    const name = "workspaceScreenNotify"
-    let
-      default = notificationSettings.workspaceScreenNotify
-      values = notificationSettings.getNotificationTableSettingValues(name)
-
-    checkBoolSettingValue(default, values)
-
-  test "Get workspaceLogNotify values":
-    var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
-
-    const name = "workspaceLogNotify"
-    let
-      default = notificationSettings.workspaceLogNotify
       values = notificationSettings.getNotificationTableSettingValues(name)
 
     checkBoolSettingValue(default, values)
@@ -1972,27 +1914,6 @@ suite "Config mode: Chaging StatusLine table settings":
 
     check beforeSettings == statusLineSettings
 
-suite "Config mode: Chaging WorkSpace table settings":
-  test "Chaging workSpaceLine":
-    var
-      settings = initEditorSettings()
-      workSpaceSettings = settings.workSpace
-
-    let val = not workSpaceSettings.workSpaceLine
-    workSpaceSettings.changeWorkSpaceTableSetting("workSpaceLine", $val)
-
-    check val == workSpaceSettings.workSpaceLine
-
-  test "Set invalid value":
-    var
-      settings = initEditorSettings()
-      workSpaceSettings = settings.workSpace
-
-    let beforeSettings = workSpaceSettings
-    workSpaceSettings.changeWorkSpaceTableSetting("test", "test")
-
-    check beforeSettings == workSpaceSettings
-
 suite "Config mode: Chaging Highlight table settings":
   test "Chaging currentLine":
     var settings = initEditorSettings()
@@ -2212,26 +2133,6 @@ suite "Config mode: Chaging Notification table settings":
     notificationSettings.changeNotificationTableSetting("saveLogNotify", $val)
 
     check val == notificationSettings.saveLogNotify
-
-  test "Chaging workspaceScreenNotify":
-    var
-      settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
-
-    let val = not notificationSettings.workspaceScreenNotify
-    notificationSettings.changeNotificationTableSetting("workspaceScreenNotify", $val)
-
-    check val == notificationSettings.workspaceScreenNotify
-
-  test "Chaging workspaceLogNotify":
-    var
-      settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
-
-    let val = not notificationSettings.workspaceLogNotify
-    notificationSettings.changeNotificationTableSetting("workspaceLogNotify", $val)
-
-    check val == notificationSettings.workspaceLogNotify
 
   test "Chaging quickRunScreenNotify":
     var

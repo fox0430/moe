@@ -450,7 +450,6 @@ suite "Insert mode":
       terminalWidth)
 
     status.settings.tabLine.useTab = true
-    status.settings.workSpace.workSpaceLine = false
     status.settings.statusLine.enable = true
 
     let currentBufferIndex =currentMainWindowNode.bufferIndex
@@ -464,8 +463,7 @@ suite "Insert mode":
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
         currentMainWindowNode,
         mainWindowHeight)
-      mainWindowNodeY = calcMainWindowY(status.settings.tabLine.useTab,
-                                    status.settings.workSpace.workSpaceLine)
+      mainWindowNodeY = calcMainWindowY(status.settings.tabLine.useTab)
     suggestionWindow.get.writeSuggestionWindow(
       currentMainWindowNode,
       y, x,
