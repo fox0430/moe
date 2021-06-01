@@ -1001,3 +1001,25 @@ suite "Update search highlight":
           check highlight[0].color == EditorColorPair.searchResult
           check highlight[1].color == EditorColorPair.defaultChar
           check highlight[2].color == EditorColorPair.defaultChar
+
+suite "Fix #1361":
+  test "Insert a character after split window":
+    var status = initEditorStatus()
+    status.addNewBuffer("test.nim")
+    currentBufStatus.buffer = initGapBuffer(@[ru ""])
+
+    status.resize(100, 100)
+    status.update
+
+    status.verticalSplitWindow
+
+    const key = ru 'a'
+    currentBufStatus.insertCharacter(
+      currentMainWindowNode,
+      status.settings.autoCloseParen,
+      key)
+
+    status.update
+
+    let nodes = mainWindowNode.getAllWindowNode
+    check nodes[0].highlight == nodes[1].highlight
