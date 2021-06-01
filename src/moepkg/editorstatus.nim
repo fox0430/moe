@@ -414,25 +414,35 @@ proc initSyntaxHighlight(windowNode: var WindowNode,
                          reservedWords: seq[ReservedWord],
                          isSyntaxHighlight: bool) =
 
+  # int is buffer index
+  var updatedHighlights: seq[(int, Highlight)]
+  for index, buf in bufStatus:
+    if buf.isUpdate:
+      if isDebugMode(buf.mode, buf.prevMode):
+        let h = buf.buffer.initDebugmodeHighlight
+        updatedHighlights.add((index, h))
+      elif not isFilerMode(buf.mode, buf.prevMode) and
+           not isHistoryManagerMode(buf.mode, buf.prevMode) and
+           not isDiffViewerMode(buf.mode, buf.prevMode) and
+           not isConfigMode(buf.mode, buf.prevMode):
+        let
+          lang = if isSyntaxHighlight: buf.language
+                 else: SourceLanguage.langNone
+          h = ($buf.buffer).initHighlight(reservedWords, lang)
+
+        updatedHighlights.add((index, h))
+
+        bufStatus[index].isUpdate = false
+
   var queue = initHeapQueue[WindowNode]()
   for node in windowNode.child: queue.push(node)
   while queue.len > 0:
     for i in  0 ..< queue.len:
       var node = queue.pop
       if node.window.isSome:
-        let buf = bufStatus[node.bufferIndex]
-        if buf.isUpdate:
-          if isDebugMode(buf.mode, buf.prevMode):
-            node.highlight = buf.buffer.initDebugmodeHighlight
-          elif not isFilerMode(buf.mode, buf.prevMode) and
-             not isHistoryManagerMode(buf.mode, buf.prevMode) and
-             not isDiffViewerMode(buf.mode, buf.prevMode) and
-             not isConfigMode(buf.mode, buf.prevMode):
-            let lang = if isSyntaxHighlight: buf.language
-                       else: SourceLanguage.langNone
-            node.highlight = ($buf.buffer).initHighlight(reservedWords, lang)
-
-          bufStatus[node.bufferIndex].isUpdate = false
+        for h in updatedHighlights:
+          if h[0] == node.bufferIndex:
+            node.highlight = h[1]
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)
