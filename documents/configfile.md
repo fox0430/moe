@@ -648,6 +648,42 @@ Show/Hidden windowNode.curosr in debug mode (bool)
 cursor
 ```
 
+### Debug.EditorView table
+Show/Hidden all editorview info in debug mode (bool)
+```
+enable
+```
+
+Show/Hidden editorview.widthOfLineNum in debug mode (bool)
+```
+widthOfLineNum
+```
+
+Show/Hidden editorview.height in debug mode (bool)
+```
+height
+```
+
+Show/Hidden editorview.width in debug mode (bool)
+```
+width
+```
+
+Show/Hidden editorview.originalLine in debug mode (bool)
+```
+originalLine
+```
+
+Show/Hidden editorview.start in debug mode (bool)
+```
+start
+```
+
+Show/Hidden editorview.length in debug mode (bool)
+```
+length
+```
+
 ### Debug.BufStatus table
 
 Show/Hidden all bufStatus info in debug mode (bool)
