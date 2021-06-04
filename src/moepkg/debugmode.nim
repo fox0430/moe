@@ -30,8 +30,9 @@ proc updateDebugModeBuffer*(
   # Add WindowNode info
   if debugModeSettings.windowNode.enable:
     let windowNodes = root.getAllWindowNode
-    debugModeBuffer.add(ru fmt"-- WindowNode --")
     for n in windowNodes:
+      debugModeBuffer.add(ru fmt"-- WindowNode --")
+
       let
         haveCursesWin = if n.window.isSome: true else: false
         isCurrentWindow = if n.windowIndex == currentWindowIndex: true else: false
@@ -67,6 +68,24 @@ proc updateDebugModeBuffer*(
         debugModeBuffer.add(ru fmt"  expandedColumn          : {n.expandedColumn}")
       if debugModeSettings.windowNode.cursor:
         debugModeBuffer.add(ru fmt"  cursor                  : {n.cursor}")
+
+      debugModeBuffer.add(ru "")
+
+      # Add Editorview info
+      if debugModeSettings.editorview.enable:
+        debugModeBuffer.add(ru fmt"-- editorview --")
+      if debugModeSettings.editorview.widthOfLineNum:
+        debugModeBuffer.add(ru fmt"  widthOfLineNum          : {n.view.widthOfLineNum}")
+      if debugModeSettings.editorview.height:
+        debugModeBuffer.add(ru fmt"  height                  : {n.view.height}")
+      if debugModeSettings.editorview.width:
+        debugModeBuffer.add(ru fmt"  width                   : {n.view.width}")
+      if debugModeSettings.editorview.originalLine:
+        debugModeBuffer.add(ru fmt"  originalLine            : {n.view.originalLine}")
+      if debugModeSettings.editorview.start:
+        debugModeBuffer.add(ru fmt"  start                   : {n.view.start}")
+      if debugModeSettings.editorview.length:
+        debugModeBuffer.add(ru fmt"  length                  : {n.view.length}")
 
       debugModeBuffer.add(ru "")
 

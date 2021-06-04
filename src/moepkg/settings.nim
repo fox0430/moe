@@ -42,8 +42,18 @@ type DebugBufferStatusSettings* = object
   lastSaveTime*: bool
   bufferLen*: bool
 
+type DebugEditorViewSettings* = object
+  enable*: bool
+  widthOfLineNum*: bool
+  height*: bool
+  width*: bool
+  originalLine*: bool
+  start*: bool
+  length*: bool
+
 type DebugModeSettings* = object
   windowNode*: DebugWindowNodeSettings
+  editorview*: DebugEditorViewSettings
   bufStatus*: DebugBufferStatusSettings
 
 type NotificationSettings* = object
@@ -203,6 +213,12 @@ proc initDebugModeSettings(): DebugModeSettings =
     currentColumn: true,
     expandedColumn: true,
     cursor: true)
+
+  result.editorview = DebugEditorViewSettings(
+    enable: true,
+    widthOfLineNum: true,
+    height: true,
+    width: true)
 
   result.bufStatus = DebugBufferStatusSettings(
     enable: true,
@@ -1206,6 +1222,37 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
         let setting = windowNodeSettings["cursor"].getbool
         result.debugModeSettings.windowNode.cursor = setting
 
+    if settings["Debug"].contains("EditorView"):
+      let editorViewSettings = settings["Debug"]["EditorView"]
+
+      if editorViewSettings.contains("enable"):
+        let setting = editorViewSettings["enable"].getbool
+        result.debugModeSettings.editorview.enable = setting
+
+      if editorViewSettings.contains("widthOfLineNum"):
+        let setting = editorViewSettings["widthOfLineNum"].getbool
+        result.debugModeSettings.editorview.widthOfLineNum = setting
+
+      if editorViewSettings.contains("height"):
+        let setting = editorViewSettings["height"].getbool
+        result.debugModeSettings.editorview.height = setting
+
+      if editorViewSettings.contains("width"):
+        let setting = editorViewSettings["width"].getbool
+        result.debugModeSettings.editorview.width = setting
+
+      if editorViewSettings.contains("originalLine"):
+        let setting = editorViewSettings["originalLine"].getbool
+        result.debugModeSettings.editorview.originalLine = setting
+
+      if editorViewSettings.contains("start"):
+        let setting = editorViewSettings["start"].getbool
+        result.debugModeSettings.editorview.start = setting
+
+      if editorViewSettings.contains("length"):
+        let setting = editorViewSettings["length"].getbool
+        result.debugModeSettings.editorview.length = setting
+
     if settings["Debug"].contains("BufferStatus"):
       let bufStatusSettings = settings["Debug"]["BufferStatus"]
 
@@ -1822,6 +1869,21 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
                   return some($item)
               else:
                 return some($item)
+        # Check [Debug.EditorView]
+        of "EditorView":
+          for item in json["Debug"]["EditorView"].pairs:
+            case item.key:
+              of "enable",
+                 "widthOfLineNum",
+                 "height",
+                 "width",
+                 "originalLine",
+                 "start",
+                 "length":
+                if item.val["type"].getStr != "bool":
+                  return some($item)
+              else:
+                return some($item)
         # Check [Debug.BufferStatus]
         of "BufferStatus":
           for item in json["Debug"]["BufferStatus"].pairs:
@@ -2099,6 +2161,15 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "cursor = {$settings.debugModeSettings.windowNode.cursor}"
 
   result.addLine ""
+
+  result.addLine fmt "[Debug.EditorView]"
+  result.addLine fmt "enable = {$settings.debugModeSettings.editorview.enable}"
+  result.addLine fmt "widthOfLineNum = {$settings.debugModeSettings.editorview.widthOfLineNum}"
+  result.addLine fmt "height = {$settings.debugModeSettings.editorview.height}"
+  result.addLine fmt "width = {$settings.debugModeSettings.editorview.width}"
+  result.addLine fmt "originalLine = {$settings.debugModeSettings.editorview.originalLine}"
+  result.addLine fmt "start = {$settings.debugModeSettings.editorview.start}"
+  result.addLine fmt "length = {$settings.debugModeSettings.editorview.length}"
 
   result.addLine fmt "[Debug.BufferStatus]"
   result.addLine fmt "enable = {$settings.debugModeSettings.bufStatus.enable}"

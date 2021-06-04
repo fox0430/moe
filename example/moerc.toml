@@ -224,6 +224,15 @@ currentColumn = true
 expandedColumn = true
 cursor = true
 
+[Debug.EditorView]
+enable = true
+widthOfLineNum = true
+height = true
+width = true
+originalLine = false
+start = false
+length = false
+
 [Debug.BufferStatus]
 enable = true
 bufferIndex = true

@@ -34,6 +34,11 @@ suite "Init debug mode buffer":
       ru"  expandedColumn          : 0",
       ru"  cursor                  : (y: 0, x: 0)",
       ru"",
+      ru"-- editorview --",
+      ru"  widthOfLineNum          : 2",
+      ru"  height                  : 1",
+      ru"  width                   : 1",
+      ru"",
       ru"-- bufStatus --",
       ru"buffer Index: 0",
       ru"  path                    : ",
@@ -57,10 +62,11 @@ suite "Init debug mode buffer":
       ru"  countChange             : 0",
       ru"  cmdLoop                 : 0",
       ru fmt"  lastSaveTime            : {$status.bufStatus[1].lastSaveTime}",
-      ru"  buffer length           : 42",
+      ru"  buffer length           : 47",
       ru""])
 
     for i in 0 ..< status.bufStatus[1].buffer.len:
+      if status.bufStatus[1].buffer[i] != correctBuf[i]: echo status.bufStatus[1].buffer[i]
       check status.bufStatus[1].buffer[i] == correctBuf[i]
 
   test "Init highlight":
