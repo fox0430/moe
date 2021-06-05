@@ -597,15 +597,35 @@ proc openBlankLineAbove*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
 
-proc deleteLine*(bufStatus: var BufferStatus,
-                 windowNode: WindowNode,
-                 line: int) =
+# Delete lines and store lines to the register
+proc deleteLines*(bufStatus: var BufferStatus,
+                  registers: var Registers,
+                  windowNode: WindowNode,
+                  registerName: string,
+                  startLine, loop: int) =
 
-  bufStatus.buffer.delete(line, line)
+  let endLine = min(startLine + loop, bufStatus.buffer.high)
+
+  # Store lines to the register before delete them
+  block:
+    let buffer = bufStatus.buffer
+
+    var deleteLines: seq[seq[Rune]]
+
+    for i in startLine .. endLine: deleteLines.add(buffer[i])
+
+    const isLine = true
+    if registerName.len > 0:
+      registers.addRegister(deleteLines, isLine, registerName)
+    else:
+      const isDelete = true
+      registers.addRegister(deleteLines, isLine, isDelete)
+
+  bufStatus.buffer.delete(startLine, endLine)
 
   if bufStatus.buffer.len == 0: bufStatus.buffer.insert(ru"", 0)
 
-  if line < windowNode.currentLine: dec(windowNode.currentLine)
+  if startLine < windowNode.currentLine: dec(windowNode.currentLine)
   if windowNode.currentLine >= bufStatus.buffer.len:
     windowNode.currentLine = bufStatus.buffer.high
 
@@ -733,9 +753,10 @@ proc yankLines*(bufStatus: BufferStatus,
     const isLine = true
     registers.addRegister(yankedBuffer, isLine, isDelete)
 
-  commandLine.writeMessageYankedLine(yankedBuffer.len,
-                                     notificationSettings,
-                                     messageLog)
+  commandLine.writeMessageYankedLine(
+    yankedBuffer.len,
+    notificationSettings,
+    messageLog)
 
 proc yankLines*(bufStatus: BufferStatus,
                 registers: var Registers,

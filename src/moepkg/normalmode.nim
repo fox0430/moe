@@ -357,32 +357,30 @@ proc yankToNextBlankLine(status: var EditorStatus) =
   if nextBlankLine >= 0: status.jumpLine(nextBlankLine)
 
 # dd command
-proc yankAndDeleteLines(status: var EditorStatus) =
-  let lastLine = min(
-    currentMainWindowNode.currentLine + currentBufStatus.cmdLoop - 1,
-    currentBufStatus.buffer.high)
-  const isDelete = true
-  status.yankLines(currentMainWindowNode.currentLine, lastLine, isDelete)
+proc deleteLines(status: var EditorStatus) =
+  const registerName = ""
+  let
+    startLine = currentMainWindowNode.currentLine
+    count = min(
+      currentBufStatus.cmdLoop - 1,
+      currentBufStatus.buffer.len - currentMainWindowNode.currentLine)
+  currentBufStatus.deleteLines(status.registers,
+                               currentMainWindowNode,
+                               registerName,
+                               startLine,
+                               count)
 
-  let count = min(
-    currentBufStatus.cmdLoop,
-    currentBufStatus.buffer.len - currentMainWindowNode.currentLine)
-  for i in 0 ..< count:
-    currentBufStatus.deleteLine(currentMainWindowNode,
-                                currentMainWindowNode.currentLine)
-
-proc yankAndDeleteLines(status: var EditorStatus, registerName: string) =
-  let lastLine = min(
-    currentMainWindowNode.currentLine + currentBufStatus.cmdLoop - 1,
-    currentBufStatus.buffer.high)
-  status.yankLines(currentMainWindowNode.currentLine, lastLine, registerName)
-
-  let count = min(
-    currentBufStatus.cmdLoop,
-    currentBufStatus.buffer.len - currentMainWindowNode.currentLine)
-  for i in 0 ..< count:
-    currentBufStatus.deleteLine(currentMainWindowNode,
-                                currentMainWindowNode.currentLine)
+proc deleteLines(status: var EditorStatus, registerName: string) =
+  let
+    startLine = currentMainWindowNode.currentLine
+    count = min(
+      currentBufStatus.cmdLoop - 1,
+      currentBufStatus.buffer.len - currentMainWindowNode.currentLine)
+  currentBufStatus.deleteLines(status.registers,
+                               currentMainWindowNode,
+                               registerName,
+                               startLine,
+                               count)
 
 proc yankString(status: var Editorstatus) =
   const
@@ -519,35 +517,29 @@ proc yankAndDeleteCharacterBeginningOfLine(status: var EditorStatus) =
 proc yankAndDeleteFromCurrentLineToLastLine(status: var EditorStatus,
                                             registerName: string) =
 
-  let lastLine = currentBufStatus.buffer.high
-  if registerName.len > 0:
-    status.yankLines(currentMainWindowNode.currentLine, lastLine, registerName)
-  else:
-    const isDelete = true
-    status.yankLines(currentMainWindowNode.currentLine, lastLine, isDelete)
-
-  let count = currentBufStatus.buffer.len - currentMainWindowNode.currentLine
-  for i in 0 ..< count:
-    currentBufStatus.deleteLine(currentMainWindowNode,
-                                currentMainWindowNode.currentLine)
+  let
+    startLine = currentMainWindowNode.currentLine
+    count = currentBufStatus.buffer.len - currentMainWindowNode.currentLine
+  currentBufStatus.deleteLines(status.registers,
+                               currentMainWindowNode,
+                               registerName,
+                               startLine,
+                               count)
 
 # dgg command
 # Delete the line from first line to current line
 proc yankAndDeleteLineFromFirstLineToCurrentLine(status: var EditorStatus,
                                                  registerName: string) =
 
-  let currentLine = currentMainWindowNode.currentLine
-  if registerName.len > 0:
-    status.yankLines(0, currentLine, registerName)
-  else:
-    const isDelete = true
-    status.yankLines(0, currentLine, isDelete)
+  const startLine = 0
+  let count = currentMainWindowNode.currentLine
+  currentBufStatus.deleteLines(status.registers,
+                               currentMainWindowNode,
+                               registerName,
+                               startLine,
+                               count)
 
   status.moveToFirstLine
-
-  for i in 0 ..< currentLine + 1:
-    currentBufStatus.deleteLine(currentMainWindowNode,
-                                currentMainWindowNode.currentLine)
 
 # d{ command
 proc yankAndDeleteTillPreviousBlankLine(status: var EditorStatus,
@@ -714,7 +706,7 @@ proc addRegister(status: var EditorStatus, command, registerName: string) =
   elif command == "y}":
     status.yankToNextBlankLine(registerName)
   elif command == "dd":
-    status.yankAndDeleteLines(registerName)
+    status.deleteLines(registerName)
   elif command == "dw":
     status.yankAndDeleteWord(registerName)
   elif command == "d$" or (command.len == 1 and isEndKey(command[0].toRune)):
@@ -1075,7 +1067,7 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('d'):
     let secondKey = commands[1]
     if secondKey == ord('d'):
-      status.yankAndDeleteLines
+      status.deleteLines
     elif secondKey == ord('w'):
       status.yankAndDeleteWord
     elif secondKey == ('$') or isEndKey(secondKey):
