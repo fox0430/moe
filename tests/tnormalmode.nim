@@ -85,7 +85,10 @@ suite "Normal mode: Delete current character":
     status.update
 
     check status.bufStatus[0].buffer[0] == ru"c"
-    check status.registers.noNameRegister.buffer[0] == ru"ab"
+
+    let registers = status.registers
+    check registers.noNameRegister.buffer[0] == ru"ab"
+    check registers.smallDeleteRegister == registers.noNameRegister
 
 suite "Normal mode: Move to last of line":
   test "Move to last of line":
