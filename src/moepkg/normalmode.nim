@@ -240,7 +240,7 @@ proc changeInnerCommand(status: var EditorStatus,
     discard
 
 # di command
-proc yankAndDeleteInnerCommand(status: var EditorStatus, key: Rune, registerName: string) =
+proc deleteInnerCommand(status: var EditorStatus, key: Rune, registerName: string) =
   # Delete inside paren and enter insert mode
   if isParen(key):
     if registerName.len > 0:
@@ -265,9 +265,9 @@ proc yankAndDeleteInnerCommand(status: var EditorStatus, key: Rune, registerName
     discard
 
 # di command
-proc yankAndDeleteInnerCommand(status: var EditorStatus, key: Rune) =
+proc deleteInnerCommand(status: var EditorStatus, key: Rune) =
   const registerName = ""
-  status.yankAndDeleteInnerCommand(key, registerName)
+  status.deleteInnerCommand(key, registerName)
 
 proc showCurrentCharInfoCommand(status: var EditorStatus,
                                 windowNode: WindowNode) =
@@ -722,7 +722,7 @@ proc addRegister(status: var EditorStatus, command, registerName: string) =
   elif command == "d}":
     status.yankAndDeleteTillNextBlankLine(registerName)
   elif command.len == 3 and command[0 .. 1] == "di":
-    status.yankAndDeleteInnerCommand(command[2].toRune, registerName)
+    status.deleteInnerCommand(command[2].toRune, registerName)
   elif command == "dh":
     status.cutCharacterBeforeCursor(registerName)
   elif command == "cl" or command == "s":
@@ -1086,7 +1086,7 @@ proc normalCommand(status: var EditorStatus,
       status.yankAndDeleteTillNextBlankLine
     elif secondKey == ord('i'):
       let thirdKey = commands[2]
-      status.yankAndDeleteInnerCommand(thirdKey)
+      status.deleteInnerCommand(thirdKey)
     elif secondKey == ord('h'):
       status.cutCharacterBeforeCursor
   elif key == ord('D'):
