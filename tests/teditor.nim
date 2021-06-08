@@ -455,9 +455,10 @@ suite "Editor: Delete inside paren":
 
     var registers: register.Registers
 
-    currentBufStatus.yankAndDeleteInsideOfParen(currentMainWindowNode,
-                                                registers,
-                                                ru'"')
+    currentBufStatus.deleteInsideOfParen(
+      currentMainWindowNode,
+      registers,
+      ru'"')
 
     check currentBufStatus.buffer[0] == ru """abc "" "ghi""""
 
