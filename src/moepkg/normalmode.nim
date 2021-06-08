@@ -1480,10 +1480,11 @@ proc normalMode*(status: var EditorStatus) =
       status.searchBackwards
     elif key == ord(':'):
       status.changeMode(Mode.ex)
-    elif isDigit(command) and isDigit(key):
+    elif isDigit(command) and
+         isDigit(key) and
+         not (currentBufStatus.cmdLoop == 0 and ($key)[0] == '0'):
+
       let num = ($key)[0]
-      if status.bufStatus[currentBufferIndex].cmdLoop == 0 and num == '0':
-        continue
 
       currentBufStatus.cmdLoop *= 10
       currentBufStatus.cmdLoop += ord(num) - ord('0')
