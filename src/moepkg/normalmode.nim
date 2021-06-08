@@ -173,21 +173,19 @@ proc yankWord(status: var EditorStatus, registerName: string) =
                             registerName)
 
 proc deleteWord(status: var EditorStatus) =
-  for i in 0 ..< currentBufStatus.cmdLoop:
-    currentBufStatus.deleteWord(currentMainWindowNode)
+  const registerName = ""
+  currentBufStatus.deleteWord(
+    currentMainWindowNode,
+    currentBufStatus.cmdLoop,
+    status.registers,
+    registerName)
 
 proc deleteWord(status: var EditorStatus, registerName: string) =
-  for i in 0 ..< currentBufStatus.cmdLoop:
-    currentBufStatus.deleteWord(currentMainWindowNode)
-
-proc yankAndDeleteWord(status: var EditorStatus) =
-  const isDelete = true
-  status.yankWord(isDelete)
-  status.deleteWord
-
-proc yankAndDeleteWord(status: var EditorStatus, registerName: string) =
-  status.yankWord(registerName)
-  status.deleteWord(registerName)
+  currentBufStatus.deleteWord(
+    currentMainWindowNode,
+    currentBufStatus.cmdLoop,
+    status.registers,
+    registerName)
 
 # ci command
 proc changeInnerCommand(status: var EditorStatus, key: Rune) =
@@ -208,7 +206,7 @@ proc changeInnerCommand(status: var EditorStatus, key: Rune) =
   elif key == ru'w':
     if oldLine.len > 0:
       currentBufStatus.moveToBackwardWord(currentMainWindowNode)
-      status.yankAndDeleteWord
+      status.deleteWord
     status.changeMode(Mode.insert)
   else:
     discard
@@ -236,7 +234,7 @@ proc changeInnerCommand(status: var EditorStatus,
   elif key == ru'w':
     if oldLine.len > 0:
       currentBufStatus.moveToBackwardWord(currentMainWindowNode)
-      status.yankAndDeleteWord
+      status.deleteWord
     status.changeMode(Mode.insert)
   else:
     discard
@@ -260,7 +258,7 @@ proc yankAndDeleteInnerCommand(status: var EditorStatus, key: Rune, registerName
   elif key == ru'w':
     if currentBufStatus.buffer[currentMainWindowNode.currentLine].len > 0:
       currentBufStatus.moveToBackwardWord(currentMainWindowNode)
-      status.yankAndDeleteWord
+      status.deleteWord
   else:
     discard
 
@@ -708,7 +706,7 @@ proc addRegister(status: var EditorStatus, command, registerName: string) =
   elif command == "dd":
     status.deleteLines(registerName)
   elif command == "dw":
-    status.yankAndDeleteWord(registerName)
+    status.deleteWord(registerName)
   elif command == "d$" or (command.len == 1 and isEndKey(command[0].toRune)):
     status.yankAndDeleteCharactersUntilEndOfLine(registerName)
   elif command == "d0":
@@ -1069,7 +1067,7 @@ proc normalCommand(status: var EditorStatus,
     if secondKey == ord('d'):
       status.deleteLines
     elif secondKey == ord('w'):
-      status.yankAndDeleteWord
+      status.deleteWord
     elif secondKey == ('$') or isEndKey(secondKey):
       status.yankAndDeleteCharactersUntilEndOfLine
     elif secondKey == ('0') or isHomeKey(secondKey):
