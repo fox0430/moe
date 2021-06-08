@@ -584,6 +584,53 @@ proc deleteCharacter*(bufStatus: var BufferStatus,
                             colmun,
                             currentChar)
 
+# Delete characters in the line
+proc deleteCharacters*(bufStatus: var BufferStatus,
+                       registers: var Registers,
+                       registerName: string,
+                       autoDeleteParen: bool,
+                       line, colmun, loop: int) =
+
+  if line >= bufStatus.buffer.high and
+     colmun > bufStatus.buffer[line].high: return
+
+  let oldLine = bufStatus.buffer[line]
+  var newLine = bufStatus.buffer[line]
+
+  var
+    currentColumn = colmun
+
+    deletedBuffer: seq[Rune]
+
+  for i in 0 ..< loop:
+    if newLine.len == 0: break
+
+    let deleteChar = newLine[currentColumn]
+    newLine.delete(currentColumn)
+
+    deletedBuffer.add deleteChar
+
+    if currentColumn > newLine.high: currentColumn = newLine.high
+
+    if autoDeleteParen and deleteChar.isParen:
+      bufStatus.deleteParen(
+        line,
+        colmun,
+        deleteChar)
+
+  if oldLine != newLine:
+    bufStatus.buffer[line] = newLine
+
+    const
+      isLine = false
+      isDelete = true
+
+    if registerName.len > 0:
+      registers.addRegister(deletedBuffer, registerName)
+    else:
+      registers.addRegister(deletedBuffer, isLine, isDelete)
+
+# TODO: Delete deleteCurrentCharacter()
 proc deleteCurrentCharacter*(bufStatus: var BufferStatus,
                              windowNode: WindowNode,
                              autoDeleteParen: bool) =

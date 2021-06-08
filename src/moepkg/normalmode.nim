@@ -463,6 +463,26 @@ proc yankString(status: var Editorstatus,
                               registerName,
                               isDelete)
 
+proc deleteCharacters(status: var EditorStatus, registerName: string) =
+  currentBufStatus.deleteCharacters(
+    status.registers,
+    registerName,
+    status.settings.autoDeleteParen,
+    currentMainWindowNode.currentLine,
+    currentMainWindowNode.currentColumn,
+    currentBufStatus.cmdLoop)
+
+
+proc deleteCharacters(status: var EditorStatus) =
+  const registerName = ""
+  currentBufStatus.deleteCharacters(
+    status.registers,
+    registerName,
+    status.settings.autoDeleteParen,
+    currentMainWindowNode.currentLine,
+    currentMainWindowNode.currentColumn,
+    currentBufStatus.cmdLoop)
+
 # d$ command
 proc yankAndDeleteCharactersUntilEndOfLine(status: var EditorStatus, registerName: string) =
   let lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
@@ -588,17 +608,9 @@ proc cutCharacterBeforeCursor(status: var EditorStatus, registerName: string) =
       loop = if currentColumn - cmdLoop > 0: cmdLoop
              else: currentColumn
     currentMainWindowNode.currentColumn = currentColumn - loop
+    currentBufStatus.cmdLoop = loop
 
-    if registerName.len > 0:
-      status.yankString(registerName)
-    else:
-      currentBufStatus.cmdLoop = loop
-      status.yankString
-
-    for i in 0 ..< loop:
-      currentBufStatus.deleteCurrentCharacter(
-        currentMainWindowNode,
-        status.settings.autoDeleteParen)
+    status.deleteCharacters(registerName)
 
 # X and dh command
 proc cutCharacterBeforeCursor(status: var EditorStatus) =
@@ -624,16 +636,9 @@ proc deleteCharacterAndEnterInsertMode(status: var EditorStatus) =
       lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
       cmdLoop = currentBufStatus.cmdLoop
       loop = min(cmdLoop, lineWidth - currentMainWindowNode.currentColumn)
-
     currentBufStatus.cmdLoop = loop
 
-    const isDelete = true
-    status.yankString(isDelete)
-
-    for i in 0 ..< loop:
-      currentBufStatus.deleteCurrentCharacter(
-        currentMainWindowNode,
-        status.settings.autoDeleteParen)
+    status.deleteCharacters
 
   status.changeMode(Mode.insert)
 
@@ -646,16 +651,9 @@ proc deleteCharacterAndEnterInsertMode(status: var EditorStatus,
       lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
       cmdLoop = currentBufStatus.cmdLoop
       loop = min(cmdLoop, lineWidth - currentMainWindowNode.currentColumn)
-
     currentBufStatus.cmdLoop = loop
 
-    const isDelete = true
-    status.yankString(registerName, isDelete)
-
-    for i in 0 ..< loop:
-      currentBufStatus.deleteCurrentCharacter(
-        currentMainWindowNode,
-        status.settings.autoDeleteParen)
+    status.deleteCharacters
 
   status.changeMode(Mode.insert)
 
@@ -891,6 +889,7 @@ proc normalCommand(status: var EditorStatus,
       status.settings.tabStop,
       newCharacter)
 
+  # TODO: Refactor
   template modifyWordUnderCursor(amount: int) =
     let wordUnderCursor      = getWordUnderCursor()
     var theWord              = wordUnderCursor[1]
@@ -977,13 +976,7 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('j') or isDownKey(key) or isEnterKey(key):
     for i in 0 ..< cmdLoop: currentBufStatus.keyDown(windowNode)
   elif key == ord('x') or isDcKey(key):
-    let
-      lineWidth = currentBufStatus.buffer[windowNode.currentLine].len
-      loop = min(cmdLoop, lineWidth - windowNode.currentColumn)
-    currentBufStatus.cmdLoop = loop
-    status.yankString
-    for i in 0 ..< loop:
-      deleteCurrentCharacter()
+    status.deleteCharacters
   elif key == ord('X'):
     status.cutCharacterBeforeCursor
   elif key == ord('^') or key == ord('_'):
