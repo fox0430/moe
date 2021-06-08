@@ -70,6 +70,7 @@ proc handleKeyInSuggestionWindow*(
                             windowNode.currentLine,
                             false)
     windowNode.currentColumn = suggestionWindow.firstColumn + suggestionWindow.selectedWordOrInputWord.len
+    bufStatus.isUpdate = true
 
 proc initSuggestionWindow*(
   text, word, currentLineText: seq[Rune],
