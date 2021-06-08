@@ -1193,7 +1193,7 @@ proc redo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   bufStatus.isUpdate = true
 
 # If cursor is inside of paren, delete inside paren in the current line
-proc yankAndDeleteInsideOfParen*(bufStatus: var BufferStatus,
+proc deleteInsideOfParen*(bufStatus: var BufferStatus,
                                  windowNode: var WindowNode,
                                  registers: var Registers,
                                  registerName: string,
@@ -1225,29 +1225,33 @@ proc yankAndDeleteInsideOfParen*(bufStatus: var BufferStatus,
   if openParenPosition > 0 and closeParenPosition > 0:
     var
       newLine = bufStatus.buffer[currentLine]
-      yankStr = ru""
+      deleteBuffer = ru ""
 
     for i in 0 ..< closeParenPosition - openParenPosition - 1:
-      yankStr.add newLine[openParenPosition + 1]
+      deleteBuffer.add newLine[openParenPosition + 1]
       newLine.delete(openParenPosition + 1)
 
     if oldLine != newLine:
       if registerName.len > 0:
-        registers.addRegister(yankStr, registerName)
+        registers.addRegister(deleteBuffer, registerName)
       else:
-        registers.addRegister(yankStr)
+        const
+          isLine = false
+          isDelete = true
+        registers.addRegister(deleteBuffer, isLine, isDelete)
 
       bufStatus.buffer[currentLine] = newLine
       windowNode.currentColumn = openParenPosition
 
 # If cursor is inside of paren, delete inside paren in the current line
-proc yankAndDeleteInsideOfParen*(bufStatus: var BufferStatus,
+proc deleteInsideOfParen*(bufStatus: var BufferStatus,
                                  windowNode: var WindowNode,
                                  registers: var Registers,
                                  rune: Rune) =
 
   const registerName = ""
-  bufStatus.yankAndDeleteInsideOfParen(windowNode,
-                                       registers,
-                                       registerName,
-                                       rune)
+  bufStatus.deleteInsideOfParen(
+    windowNode,
+    registers,
+    registerName,
+    rune)

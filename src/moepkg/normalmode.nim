@@ -195,7 +195,7 @@ proc changeInnerCommand(status: var EditorStatus, key: Rune) =
 
   # Delete inside paren and enter insert mode
   if isParen(key):
-    currentBufStatus.yankAndDeleteInsideOfParen(currentMainWindowNode,
+    currentBufStatus.deleteInsideOfParen(currentMainWindowNode,
                                                 status.registers,
                                                 key)
 
@@ -222,10 +222,10 @@ proc changeInnerCommand(status: var EditorStatus,
 
   # Delete inside paren and enter insert mode
   if isParen(key):
-    currentBufStatus.yankAndDeleteInsideOfParen(currentMainWindowNode,
-                                                status.registers,
-                                                registerName,
-                                                key)
+    currentBufStatus.deleteInsideOfParen(currentMainWindowNode,
+                                         status.registers,
+                                         registerName,
+                                         key)
 
     if oldLine != currentBufStatus.buffer[currentLine]:
       currentMainWindowNode.currentColumn.inc
@@ -244,14 +244,16 @@ proc yankAndDeleteInnerCommand(status: var EditorStatus, key: Rune, registerName
   # Delete inside paren and enter insert mode
   if isParen(key):
     if registerName.len > 0:
-      currentBufStatus.yankAndDeleteInsideOfParen(currentMainWindowNode,
-                                                  status.registers,
-                                                  registerName,
-                                                  key)
+      currentBufStatus.deleteInsideOfParen(
+        currentMainWindowNode,
+        status.registers,
+        registerName,
+        key)
     else:
-      currentBufStatus.yankAndDeleteInsideOfParen(currentMainWindowNode,
-                                                  status.registers,
-                                                  key)
+      currentBufStatus.deleteInsideOfParen(
+        currentMainWindowNode,
+        status.registers,
+        key)
 
     currentBufStatus.keyRight(currentMainWindowNode)
   # Delete current word and enter insert mode
