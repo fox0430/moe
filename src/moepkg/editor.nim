@@ -1194,10 +1194,10 @@ proc redo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
 
 # If cursor is inside of paren, delete inside paren in the current line
 proc deleteInsideOfParen*(bufStatus: var BufferStatus,
-                                 windowNode: var WindowNode,
-                                 registers: var Registers,
-                                 registerName: string,
-                                 rune: Rune) =
+                          windowNode: var WindowNode,
+                          registers: var Registers,
+                          registerName: string,
+                          rune: Rune) =
 
   let
     currentLine = windowNode.currentLine
