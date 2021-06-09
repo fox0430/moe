@@ -630,6 +630,41 @@ proc deleteCharacters*(bufStatus: var BufferStatus,
     else:
       registers.addRegister(deletedBuffer, isLine, isDelete)
 
+# No yank buffer
+proc deleteCharacters*(bufStatus: var BufferStatus,
+                       autoDeleteParen: bool,
+                       line, colmun, loop: int) =
+
+  if line >= bufStatus.buffer.high and
+     colmun > bufStatus.buffer[line].high: return
+
+  let oldLine = bufStatus.buffer[line]
+  var newLine = bufStatus.buffer[line]
+
+  var
+    currentColumn = colmun
+
+    deletedBuffer: seq[Rune]
+
+  for i in 0 ..< loop:
+    if newLine.len == 0: break
+
+    let deleteChar = newLine[currentColumn]
+    newLine.delete(currentColumn)
+
+    deletedBuffer.add deleteChar
+
+    if currentColumn > newLine.high: currentColumn = newLine.high
+
+    if autoDeleteParen and deleteChar.isParen:
+      bufStatus.deleteParen(
+        line,
+        colmun,
+        deleteChar)
+
+  if oldLine != newLine:
+    bufStatus.buffer[line] = newLine
+
 # TODO: Delete deleteCurrentCharacter()
 proc deleteCurrentCharacter*(bufStatus: var BufferStatus,
                              windowNode: WindowNode,
@@ -1334,3 +1369,81 @@ proc deleteInsideOfParen*(bufStatus: var BufferStatus,
     registers,
     registerName,
     rune)
+
+# Return the colmn and word
+proc getWordUnderCursor(bufStatus: BufferStatus,
+                        windowNode: WindowNode): (int, seq[Rune]) =
+
+  let line = bufStatus.buffer[windowNode.currentLine]
+  if line.len <= windowNode.currentColumn:
+    return
+
+  let atCursorRune = line[windowNode.currentColumn]
+  if not atCursorRune.isAlpha and not (char(atCursorRune) in '0'..'9'):
+    return
+
+  var
+    beginCol = -1
+    endCol = -1
+  for i in countdown(windowNode.currentColumn, 0):
+    if not line[i].isAlpha and not (char(line[i]) in '0'..'9'):
+      break
+    beginCol = i
+  for i in windowNode.currentColumn..line.len()-1:
+    if not line[i].isAlpha and not (char(line[i]) in '0'..'9'):
+      break
+    endCol = i
+  if endCol == -1 or beginCol == -1:
+    (-1, seq[Rune].default)
+  else:
+    return (beginCol, line[beginCol..endCol])
+
+proc getCharacterUnderCursor(bufStatus: BufferStatus,
+                             windowNode: WindowNode): Rune =
+
+  let line = bufStatus.buffer[windowNode.currentLine]
+  if line.len() <= windowNode.currentColumn:
+    return
+
+  line[windowNode.currentColumn]
+
+# Increment/Decrement the number string under the cursor
+proc modifyNumberTextUnderCurosr*(bufStatus: var BufferStatus,
+                                  windowNode: var WindowNode,
+                                  amount: int) =
+
+  let
+    currentLine = windowNode.currentLine
+    currentColumn = windowNode.currentColumn
+
+  if not isDigit(bufStatus.buffer[currentLine][currentColumn]): return
+
+  let
+    wordUnderCursor = bufStatus.getWordUnderCursor(windowNode)
+    beginCol = wordUnderCursor[0]
+    word = wordUnderCursor[1]
+
+  let
+    num = parseInt(word)
+    oldLine = bufStatus.buffer[currentLine]
+  var newLine = bufStatus.buffer[currentLine]
+
+  # Delete the current number string from newLine
+  block:
+    var col = currentColumn
+    while newLine.len > 0 and isDigit(newLine[col]):
+      newLine.delete(col, col)
+      if col > newLine.high: col = newLine.high
+
+  # Insert the new number string to newLine
+  block:
+    let newNumRunes= toRunes(num + amount)
+    var col = currentColumn
+    newLine.insert(newNumRunes, currentColumn)
+
+  # Update bufStatus.buffer
+  if newLine != oldLine:
+    bufStatus.buffer[currentLine] = newLine
+
+  inc(bufStatus.countChange)
+  bufStatus.isUpdate = true

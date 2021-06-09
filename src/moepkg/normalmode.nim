@@ -875,51 +875,6 @@ proc normalCommand(status: var EditorStatus,
       status.settings.tabStop,
       newCharacter)
 
-  # TODO: Refactor
-  template modifyWordUnderCursor(amount: int) =
-    let wordUnderCursor      = getWordUnderCursor()
-    var theWord              = wordUnderCursor[1]
-    var beginCol             = wordUnderCursor[0]
-    var num                  = 0
-    var runeBefore           : Rune
-    var currentColumnBefore  = windowNode.currentColumn
-    var expandedColumnBefore = windowNode.expandedColumn
-    try:
-      # first we check if there could possibly be a
-      # minus sign before our word
-      if beginCol > 0:
-        windowNode.currentColumn  = beginCol - 1
-        windowNode.expandedColumn = windowNode.currentColumn - 1
-        runeBefore = getCharacterUnderCursor()
-        if runeBefore == toRune('-'):
-          # there is a minus sign
-          theWord.insert(runeBefore, 0)
-          beginCol = beginCol - 1
-
-      # if the word is a number, this will be successful,
-      # if not we land in the exception case
-      num               = parseInt($theWord) + amount
-
-      # delete the old word/number
-      windowNode.currentColumn  = beginCol
-      windowNode.expandedColumn = windowNode.currentColumn
-      for _ in 1..len(theWord):
-        deleteCurrentCharacter()
-
-      # change the word to the new number
-      theWord = toRunes($num)
-
-      # insert the new number
-      for i in 0..len(theWord)-1:
-        insertCharacter(theWord[i])
-
-      # put the cursor on the last character of the number
-      windowNode.currentColumn  = beginCol + len(theWord)-1
-      windowNode.expandedColumn = windowNode.currentColumn
-    except:
-      windowNode.currentColumn  = currentColumnBefore
-      windowNode.expandedColumn = expandedColumnBefore
-
   template closeWindow() =
     let currentBufferIndex = status.bufferIndexInCurrentWindow
 
@@ -1106,9 +1061,10 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('J'):
     currentBufStatus.joinLine(currentMainWindowNode)
   elif isControlA(key):
-    modifyWordUnderCursor(cmdLoop)
+    currentBufStatus.modifyNumberTextUnderCurosr(currentMainWindowNode, cmdLoop)
   elif isControlX(key):
-    modifyWordUnderCursor(-cmdLoop)
+    currentBufStatus.modifyNumberTextUnderCurosr(currentMainWindowNode,
+                                                 -cmdLoop)
   elif key == ord('~'):
     for i in 0 ..< cmdLoop:
       replaceCurrentCharacter(toggleCase(getCharacterUnderCursor()))
