@@ -818,30 +818,6 @@ proc normalCommand(status: var EditorStatus,
   let cmdLoop = status.bufStatus[currentBufferIndex].cmdLoop
   var windowNode = currentMainWindowNode
 
-  template getWordUnderCursor(): (int, seq[Rune]) =
-    let line = currentBufStatus.buffer[windowNode.currentLine]
-    if line.len() <= windowNode.currentColumn:
-      return
-
-    let atCursorRune = line[windowNode.currentColumn]
-    if not atCursorRune.isAlpha() and not (char(atCursorRune) in '0'..'9'):
-      return
-
-    var beginCol = -1
-    var endCol = -1
-    for i in countdown(windowNode.currentColumn, 0):
-      if not line[i].isAlpha() and not (char(line[i]) in '0'..'9'):
-        break
-      beginCol = i
-    for i in windowNode.currentColumn..line.len()-1:
-      if not line[i].isAlpha() and not (char(line[i]) in '0'..'9'):
-        break
-      endCol = i
-    if endCol == -1 or beginCol == -1:
-      (-1, seq[Rune].default)
-    else:
-      (beginCol, line[beginCol..endCol])
-
   template getCharacterUnderCursor(): Rune =
     let line = currentBufStatus.buffer[windowNode.currentLine]
     if line.len() <= windowNode.currentColumn:
@@ -1086,9 +1062,11 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('N'):
     status.searchNextOccurrenceReversely
   elif key == ord('*'):
-    status.searchNextOccurrence(getWordUnderCursor()[1])
+    let word = currentBufStatus.getWordUnderCursor(currentMainWindowNode)[1]
+    status.searchNextOccurrence(word)
   elif key == ord('#'):
-    status.searchNextOccurrenceReversely(getWordUnderCursor()[1])
+    let word = currentBufStatus.getWordUnderCursor(currentMainWindowNode)[1]
+    status.searchNextOccurrenceReversely(word)
   elif key == ord('f'):
     let secondKey = commands[1]
     currentBufStatus.searchOneCharactorToEndOfLine(windowNode, secondKey)

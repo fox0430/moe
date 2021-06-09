@@ -1371,8 +1371,8 @@ proc deleteInsideOfParen*(bufStatus: var BufferStatus,
     rune)
 
 # Return the colmn and word
-proc getWordUnderCursor(bufStatus: BufferStatus,
-                        windowNode: WindowNode): (int, seq[Rune]) =
+proc getWordUnderCursor*(bufStatus: BufferStatus,
+                         windowNode: WindowNode): (int, seq[Rune]) =
 
   let line = bufStatus.buffer[windowNode.currentLine]
   if line.len <= windowNode.currentColumn:
