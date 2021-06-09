@@ -512,15 +512,16 @@ suite "Editor: Yank a string":
       length = 1
       name = "a"
       isDelete = false
-    currentBufStatus.yankString(status.registers,
-                                currentMainWindowNode,
-                                status.commandline,
-                                status.messageLog,
-                                platform,
-                                status.settings,
-                                length,
-                                name,
-                                isDelete)
+    currentBufStatus.yankCharacters(
+      status.registers,
+      currentMainWindowNode,
+      status.commandline,
+      status.messageLog,
+      platform,
+      status.settings,
+      length,
+      name,
+      isDelete)
 
     check status.registers.noNameRegister.buffer.len == 0
 
