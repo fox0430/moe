@@ -658,6 +658,30 @@ proc deleteCharactersAfterBlankInLine(status: var EditorStatus) =
     registerName,
     status.settings.autoDeleteParen)
 
+proc enterInsertModeAfterCursor(status: var EditorStatus) =
+  let lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
+  if lineWidth == 0: discard
+  elif lineWidth == currentMainWindowNode.currentColumn: discard
+  else: inc(currentMainWindowNode.currentColumn)
+  status.changeMode(Mode.insert)
+
+proc replaceCurrentCharacter(status: var EditorStatus, newCharacter: Rune) =
+  currentBufStatus.replaceCurrentCharacter(
+    currentMainWindowNode,
+    status.settings.autoIndent,
+    status.settings.autoDeleteParen,
+    status.settings.tabStop,
+    newCharacter)
+
+proc closeCurrentWindow(status: var EditorStatus, height, width: int) =
+  if status.mainWindow.numOfMainWindow == 1: return
+
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+
+  if currentBufStatus.countChange == 0 or
+     mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
+    status.closeWindow(currentMainWindowNode, height, width)
+
 proc addRegister(status: var EditorStatus, command, registerName: string) =
   let
     cmdLoop = currentBufStatus.cmdLoop
@@ -816,64 +840,29 @@ proc normalCommand(status: var EditorStatus,
     status.bufStatus[currentBufferIndex].cmdLoop = 1
 
   let cmdLoop = status.bufStatus[currentBufferIndex].cmdLoop
-  var windowNode = currentMainWindowNode
 
+  # TODO: Delete
   template getCharacterUnderCursor(): Rune =
-    let line = currentBufStatus.buffer[windowNode.currentLine]
-    if line.len() <= windowNode.currentColumn:
+    let line = currentBufStatus.buffer[currentMainWindowNode.currentLine]
+    if line.len() <= currentMainWindowNode.currentColumn:
       return
 
-    line[windowNode.currentColumn]
+    line[currentMainWindowNode.currentColumn]
 
-  template insertAfterCursor() =
-    let lineWidth = currentBufStatus.buffer[windowNode.currentLine].len
-    if lineWidth == 0: discard
-    elif lineWidth == windowNode.currentColumn: discard
-    else: inc(windowNode.currentColumn)
-    status.changeMode(Mode.insert)
-
-  template insertCharacter(rune: Rune) =
-    currentBufStatus.insertCharacter(
-      windowNode,
-      status.settings.autoCloseParen,
-      rune)
-
-  template deleteCurrentCharacter() =
-    currentBufStatus.deleteCurrentCharacter(
-      windowNode,
-      status.settings.autoDeleteParen)
-
-  template replaceCurrentCharacter(newCharacter: Rune) =
-    currentBufStatus.replaceCurrentCharacter(
-      status.mainWindow.currentMainWindowNode,
-      status.settings.autoIndent,
-      status.settings.autoDeleteParen,
-      status.settings.tabStop,
-      newCharacter)
-
-  template closeWindow() =
-    let currentBufferIndex = status.bufferIndexInCurrentWindow
-
-    if status.mainWindow.numOfMainWindow == 1: return
-
-    if currentBufStatus.countChange == 0 or
-       mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
-        status.closeWindow(
-          status.mainWindow.currentMainWindowNode,
-          height, width)
-
+  # TODO: Refactor
   # yy command
   template yankLines() =
-    let lastLine = min(windowNode.currentLine + cmdLoop - 1,
+    let lastLine = min(currentMainWindowNode.currentLine + cmdLoop - 1,
                        currentBufStatus.buffer.high)
-    status.yankLines(windowNode.currentLine, lastLine)
+    status.yankLines(currentMainWindowNode.currentLine, lastLine)
 
+  # TODO: Refactor
   # yl command
   # Yank characters in the current line
   template yankCharacters() =
     let
       buffer = currentBufStatus.buffer
-      width = buffer[windowNode.currentLine].len - windowNode.currentColumn
+      width = buffer[currentMainWindowNode.currentLine].len - currentMainWindowNode.currentColumn
     status.yankString
 
   let key = commands[0]
@@ -885,58 +874,60 @@ proc normalCommand(status: var EditorStatus,
   elif isControlV(key):
     status.changeMode(Mode.visualBlock)
   elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
-    for i in 0 ..< cmdLoop: windowNode.keyLeft
+    for i in 0 ..< cmdLoop: currentMainWindowNode.keyLeft
   elif key == ord('l') or isRightKey(key):
-    for i in 0 ..< cmdLoop: currentBufStatus.keyRight(windowNode)
+    for i in 0 ..< cmdLoop: currentBufStatus.keyRight(currentMainWindowNode)
   elif key == ord('k') or isUpKey(key):
-    for i in 0 ..< cmdLoop: currentBufStatus.keyUp(windowNode)
+    for i in 0 ..< cmdLoop: currentBufStatus.keyUp(currentMainWindowNode)
   elif key == ord('j') or isDownKey(key) or isEnterKey(key):
-    for i in 0 ..< cmdLoop: currentBufStatus.keyDown(windowNode)
+    for i in 0 ..< cmdLoop: currentBufStatus.keyDown(currentMainWindowNode)
   elif key == ord('x') or isDcKey(key):
     status.deleteCharacters
   elif key == ord('X'):
     status.cutCharacterBeforeCursor
   elif key == ord('^') or key == ord('_'):
-    currentBufStatus.moveToFirstNonBlankOfLine(windowNode)
+    currentBufStatus.moveToFirstNonBlankOfLine(currentMainWindowNode)
   elif key == ord('0') or isHomeKey(key):
-    windowNode.moveToFirstOfLine
+    currentMainWindowNode.moveToFirstOfLine
   elif key == ord('$') or isEndKey(key):
-    currentBufStatus.moveToLastOfLine(windowNode)
+    currentBufStatus.moveToLastOfLine(currentMainWindowNode)
   elif key == ord('-'):
-    currentBufStatus.moveToFirstOfPreviousLine(windowNode)
+    currentBufStatus.moveToFirstOfPreviousLine(currentMainWindowNode)
   elif key == ord('+'):
-    currentBufStatus.moveToFirstOfNextLine(windowNode)
+    currentBufStatus.moveToFirstOfNextLine(currentMainWindowNode)
   elif key == ord('{'):
-    currentBufStatus.moveToPreviousBlankLine(status, windowNode)
+    # TODO: Fix
+    currentBufStatus.moveToPreviousBlankLine(status, currentMainWindowNode)
   elif key == ord('}'):
-    currentBufStatus.moveToNextBlankLine(status, windowNode)
+    # TODO: Fix
+    currentBufStatus.moveToNextBlankLine(status, currentMainWindowNode)
   elif key == ord('g'):
     let secondKey = commands[1]
     if secondKey == ord('g'):
       status.jumpLine(cmdLoop - 1)
     elif secondKey == ord('_'):
-      currentBufStatus.moveToLastNonBlankOfLine(windowNode)
+      currentBufStatus.moveToLastNonBlankOfLine(currentMainWindowNode)
     elif secondKey == ord('a'):
-      status.showCurrentCharInfoCommand(windowNode)
+      status.showCurrentCharInfoCommand(currentMainWindowNode)
   elif key == ord('G'):
     moveToLastLine(status)
   elif isControlU(key):
     for i in 0 ..< cmdLoop: status.halfPageUp
   elif isControlD(key):
-    for i in 0 ..< cmdLoop: halfPageDown(status)
+    for i in 0 ..< cmdLoop: status.halfPageDown
   elif isPageUpkey(key):
     for i in 0 ..< cmdLoop: status.pageUp
   elif isPageDownKey(key): ## Page down and Ctrl - F
     for i in 0 ..< cmdLoop: status.pageDown
   elif key == ord('w'):
     for i in 0 ..< cmdLoop:
-      currentBufStatus.moveToForwardWord(windowNode)
+      currentBufStatus.moveToForwardWord(currentMainWindowNode)
   elif key == ord('b'):
     for i in 0 ..< cmdLoop:
-      currentBufStatus.moveToBackwardWord(windowNode)
+      currentBufStatus.moveToBackwardWord(currentMainWindowNode)
   elif key == ord('e'):
     for i in 0 ..< cmdLoop:
-      currentBufStatus.moveToForwardEndOfWord(windowNode)
+      currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
   elif key == ord('z'):
     let secondKey = commands[1]
     if secondKey == ord('.'):
@@ -966,7 +957,7 @@ proc normalCommand(status: var EditorStatus,
     let secondKey = commands[1]
     if secondKey == ord('c'):
       status.deleteCharactersAfterBlankInLine
-      insertAfterCursor()
+      status.enterInsertModeAfterCursor
     if secondKey == ord('l'):
       status.deleteCharacterAndEnterInsertMode
     elif secondKey == ord('i'):
@@ -1003,7 +994,7 @@ proc normalCommand(status: var EditorStatus,
      status.deleteCharactersUntilEndOfLine
   elif key == ord('S'):
      status.deleteCharactersAfterBlankInLine
-     insertAfterCursor()
+     status.enterInsertModeAfterCursor
   elif key == ord('s'):
     status.deleteCharacterAndEnterInsertMode
   elif key == ord('y'):
@@ -1021,12 +1012,12 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('Y'):
     yankLines()
   elif key == ord('p'):
-    currentBufStatus.pasteAfterCursor(windowNode, status.registers)
+    currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
   elif key == ord('P'):
-    currentBufStatus.pasteBeforeCursor(windowNode, status.registers)
+    currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
   elif key == ord('>'):
     for i in 0 ..< cmdLoop:
-      currentBufStatus.addIndent(windowNode, status.settings.tabStop)
+      currentBufStatus.addIndent(currentMainWindowNode, status.settings.tabStop)
   elif key == ord('<'):
     for i in 0 ..< cmdLoop:
       currentBufStatus.deleteIndent(currentMainWindowNode, status.settings.tabStop)
@@ -1042,21 +1033,24 @@ proc normalCommand(status: var EditorStatus,
     currentBufStatus.modifyNumberTextUnderCurosr(currentMainWindowNode,
                                                  -cmdLoop)
   elif key == ord('~'):
+    # TODO: Refactor
     for i in 0 ..< cmdLoop:
-      replaceCurrentCharacter(toggleCase(getCharacterUnderCursor()))
-      currentBufStatus.keyRight(windowNode)
+      let r = toggleCase(getCharacterUnderCursor())
+      status.replaceCurrentCharacter(r)
+      currentBufStatus.keyRight(currentMainWindowNode)
   elif key == ord('r'):
+    # TODO: Refactor
     let
-      lineWidth = currentBufStatus.buffer[windowNode.currentLine].len
-      loop = lineWidth - windowNode.currentColumn
+      lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
+      loop = lineWidth - currentMainWindowNode.currentColumn
     if cmdLoop > loop: return
 
     let secondKey = commands[1]
     for i in 0 ..< cmdLoop:
       if i > 0:
-        inc(windowNode.currentColumn)
-        windowNode.expandedColumn = windowNode.currentColumn
-      replaceCurrentCharacter(secondKey)
+        inc(currentMainWindowNode.currentColumn)
+        currentMainWindowNode.expandedColumn = currentMainWindowNode.currentColumn
+      status.replaceCurrentCharacter(secondKey)
   elif key == ord('n'):
     status.searchNextOccurrence
   elif key == ord('N'):
@@ -1069,26 +1063,31 @@ proc normalCommand(status: var EditorStatus,
     status.searchNextOccurrenceReversely(word)
   elif key == ord('f'):
     let secondKey = commands[1]
-    currentBufStatus.searchOneCharactorToEndOfLine(windowNode, secondKey)
+    currentBufStatus.searchOneCharactorToEndOfLine(
+      currentMainWindowNode,
+      secondKey)
   elif key == ord('F'):
     let secondKey = commands[1]
-    currentBufStatus.searchOneCharactorToBeginOfLine(windowNode, secondKey)
+    currentBufStatus.searchOneCharactorToBeginOfLine(
+      currentMainWindowNode,
+      secondKey)
   elif key == ord('R'):
     status.changeMode(Mode.replace)
   elif key == ord('i'):
     status.changeMode(Mode.insert)
   elif key == ord('I'):
-    currentBufStatus.moveToFirstNonBlankOfLine(windowNode)
+    currentBufStatus.moveToFirstNonBlankOfLine(currentMainWindowNode)
     status.changeMode(Mode.insert)
   elif key == ord('v'):
     status.changeMode(Mode.visual)
   elif key == ord('a'):
-    insertAfterCursor()
+    status.enterInsertModeAfterCursor
   elif key == ord('A'):
-    windowNode.currentColumn = currentBufStatus.buffer[windowNode.currentLine].len
+    let lineLen = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
+    currentMainWindowNode.currentColumn = lineLen
     status.changeMode(Mode.insert)
   elif key == ord('u'):
-    status.bufStatus[currentBufferIndex].undo(windowNode)
+    status.bufStatus[currentBufferIndex].undo(currentMainWindowNode)
   elif isControlR(key):
     currentBufStatus.redo(currentMainWindowNode)
   elif key == ord('Z'):
@@ -1099,7 +1098,8 @@ proc normalCommand(status: var EditorStatus,
       status.forceExit(height, width)
   elif isControlW(key):
     let secondKey = commands[1]
-    if secondKey == ord('c'): closeWindow()
+    if secondKey == ord('c'):
+      status.closeCurrentWindow(height, width)
   elif key == ord('.'):
     status.repeatNormalModeCommand(height, width)
   elif key == ord('\\'):
