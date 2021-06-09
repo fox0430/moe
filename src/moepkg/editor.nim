@@ -976,16 +976,16 @@ proc pasteLines(bufStatus: var BufferStatus,
   bufStatus.isUpdate = true
 
 # name is the register name
-proc yankString*(bufStatus: BufferStatus,
-                 registers: var Registers,
-                 windowNode: WindowNode,
-                 commandLine: var CommandLine,
-                 messageLog: var seq[seq[Rune]],
-                 platform: Platform,
-                 settings: EditorSettings,
-                 length: int,
-                 name: string,
-                 isDelete: bool) =
+proc yankCharacters*(bufStatus: BufferStatus,
+                     registers: var Registers,
+                     windowNode: WindowNode,
+                     commandLine: var CommandLine,
+                     messageLog: var seq[seq[Rune]],
+                     platform: Platform,
+                     settings: EditorSettings,
+                     length: int,
+                     name: string,
+                     isDelete: bool) =
 
   var yankedBuffer: seq[Rune]
 
@@ -1398,8 +1398,8 @@ proc getWordUnderCursor*(bufStatus: BufferStatus,
   else:
     return (beginCol, line[beginCol..endCol])
 
-proc getCharacterUnderCursor(bufStatus: BufferStatus,
-                             windowNode: WindowNode): Rune =
+proc getCharacterUnderCursor*(bufStatus: BufferStatus,
+                              windowNode: WindowNode): Rune =
 
   let line = bufStatus.buffer[windowNode.currentLine]
   if line.len() <= windowNode.currentColumn:
