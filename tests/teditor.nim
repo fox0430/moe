@@ -659,3 +659,44 @@ suite "Editor: Modify the number string under the cursor":
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
 
+suite "Editor: Delete from the previous blank line to the current line":
+  test "Delete lines":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc", ru "", ru "def", ru "ghi"])
+    currentMainWindowNode.currentLine = 3
+
+    const registerName = ""
+    currentBufStatus.deleteTillPreviousBlankLine(
+      status.registers,
+      currentMainWindowNode,
+      registerName)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "abc"
+    check currentBufStatus.buffer[1] == ru "ghi"
+
+    check status.registers.noNameRegister == register.Register(
+      buffer: @[ru "", ru "def"],
+      isLine: true)
+
+  test "Delete lines 2":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc", ru "", ru "def", ru "ghi"])
+    currentMainWindowNode.currentLine = 3
+    currentMainWindowNode.currentColumn = 1
+
+    const registerName = ""
+    currentBufStatus.deleteTillPreviousBlankLine(
+      status.registers,
+      currentMainWindowNode,
+      registerName)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "abc"
+    check currentBufStatus.buffer[1] == ru "hi"
+
+    check status.registers.noNameRegister == register.Register(
+      buffer: @[ru "", ru "def", ru "g"],
+      isLine: true)
