@@ -887,11 +887,9 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('+'):
     currentBufStatus.moveToFirstOfNextLine(currentMainWindowNode)
   elif key == ord('{'):
-    # TODO: Fix
-    currentBufStatus.moveToPreviousBlankLine(status, currentMainWindowNode)
+    status.moveToPreviousBlankLine
   elif key == ord('}'):
-    # TODO: Fix
-    currentBufStatus.moveToNextBlankLine(status, currentMainWindowNode)
+    status.moveToNextBlankLine
   elif key == ord('g'):
     let secondKey = commands[1]
     if secondKey == ord('g'):
