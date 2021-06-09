@@ -564,3 +564,97 @@ suite "Editor: Yank words":
       else:
         # On the WSL
         check output[0 .. output.high - 2] == $str
+
+suite "Editor: Modify the number string under the cursor":
+  test "Increment the number string":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "1"])
+
+    const amount = 1
+    currentBufStatus.modifyNumberTextUnderCurosr(
+      currentMainWindowNode,
+      amount)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "2"
+
+  test "Increment the number string 2":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru " 1 "])
+    currentMainWindowNode.currentColumn = 1
+
+    const amount = 1
+    currentBufStatus.modifyNumberTextUnderCurosr(
+      currentMainWindowNode,
+      amount)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru " 2 "
+
+  test "Increment the number string 3":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "9"])
+
+    const amount = 1
+    currentBufStatus.modifyNumberTextUnderCurosr(
+      currentMainWindowNode,
+      amount)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "10"
+
+  test "Decrement the number string":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "1"])
+
+    const amount = -1
+    currentBufStatus.modifyNumberTextUnderCurosr(
+      currentMainWindowNode,
+      amount)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "0"
+
+  test "Decrement the number string 2":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "0"])
+
+    const amount = -1
+    currentBufStatus.modifyNumberTextUnderCurosr(
+      currentMainWindowNode,
+      amount)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "-1"
+
+  test "Decrement the number string 3":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "10"])
+
+    const amount = -1
+    currentBufStatus.modifyNumberTextUnderCurosr(
+      currentMainWindowNode,
+      amount)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "9"
+
+  test "Do nothing":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const amount = 1
+    currentBufStatus.modifyNumberTextUnderCurosr(
+      currentMainWindowNode,
+      amount)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
