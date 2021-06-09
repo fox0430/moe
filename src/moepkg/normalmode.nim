@@ -484,58 +484,49 @@ proc deleteCharacters(status: var EditorStatus) =
     currentBufStatus.cmdLoop)
 
 # d$ command
-proc yankAndDeleteCharactersUntilEndOfLine(status: var EditorStatus, registerName: string) =
+proc deleteCharactersUntilEndOfLine(status: var EditorStatus,
+                                    registerName: string) =
+
   let lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
   currentBufStatus.cmdLoop = lineWidth - currentMainWindowNode.currentColumn
 
-  if registerName.len > 0:
-    status.yankString(registerName)
-  else:
-    status.yankString
-
   currentBufStatus.deleteCharacterUntilEndOfLine(
-    status.settings.autoDeleteParen,
-    currentMainWindowNode)
+    status.registers,
+    registerName,
+    currentMainWindowNode,
+    status.settings.autoDeleteParen)
 
 # d$ command
-proc yankAndDeleteCharactersUntilEndOfLine(status: var EditorStatus) =
+proc deleteCharactersUntilEndOfLine(status: var EditorStatus) =
   let lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
   currentBufStatus.cmdLoop = lineWidth - currentMainWindowNode.currentColumn
 
-  status.yankString
-
+  const registerName = ""
   currentBufStatus.deleteCharacterUntilEndOfLine(
-    status.settings.autoDeleteParen,
-    currentMainWindowNode)
+    status.registers,
+    registerName,
+    currentMainWindowNode,
+    status.settings.autoDeleteParen)
 
 # d0 command
-proc yankAndDeleteCharacterBeginningOfLine(status: var EditorStatus,
-                                           registerName: string) =
-
-  let currentColumn = currentMainWindowNode.currentColumn
-  currentBufStatus.cmdLoop = currentColumn
-  currentMainWindowNode.currentColumn = 0
-
-  if registerName.len > 0:
-    status.yankString(registerName)
-  else:
-    status.yankString
-
-  currentMainWindowNode.currentColumn = currentColumn
+proc deleteCharacterBeginningOfLine(status: var EditorStatus,
+                                    registerName: string) =
 
   currentBufStatus.deleteCharacterBeginningOfLine(
-    status.settings.autoDeleteParen,
-    currentMainWindowNode)
+    status.registers,
+    currentMainWindowNode,
+    registerName,
+    status.settings.autoDeleteParen)
 
 # d0 command
-proc yankAndDeleteCharacterBeginningOfLine(status: var EditorStatus) =
+proc deleteCharacterBeginningOfLine(status: var EditorStatus) =
   const registerName = ""
-  status.yankAndDeleteCharacterBeginningOfLine(registerName)
+  status.deleteCharacterBeginningOfLine(registerName)
 
 # dG command
 # Yank and delete the line from current line to last line
-proc yankAndDeleteFromCurrentLineToLastLine(status: var EditorStatus,
-                                            registerName: string) =
+proc deleteFromCurrentLineToLastLine(status: var EditorStatus,
+                                     registerName: string) =
 
   let
     startLine = currentMainWindowNode.currentLine
@@ -548,8 +539,8 @@ proc yankAndDeleteFromCurrentLineToLastLine(status: var EditorStatus,
 
 # dgg command
 # Delete the line from first line to current line
-proc yankAndDeleteLineFromFirstLineToCurrentLine(status: var EditorStatus,
-                                                 registerName: string) =
+proc deleteLineFromFirstLineToCurrentLine(status: var EditorStatus,
+                                          registerName: string) =
 
   const startLine = 0
   let count = currentMainWindowNode.currentLine
@@ -562,12 +553,13 @@ proc yankAndDeleteLineFromFirstLineToCurrentLine(status: var EditorStatus,
   status.moveToFirstLine
 
 # d{ command
-proc yankAndDeleteTillPreviousBlankLine(status: var EditorStatus,
-                                        registerName: string) =
+proc deleteTillPreviousBlankLine(status: var EditorStatus,
+                                 registerName: string) =
 
   let blankLine = currentBufStatus.findPreviousBlankLine(
     currentMainWindowNode.currentLine)
 
+  # TODO: Delete
   if registerName.len > 0:
     status.yankLines(blankLine + 1,
                      currentMainWindowNode.currentLine,
@@ -578,13 +570,13 @@ proc yankAndDeleteTillPreviousBlankLine(status: var EditorStatus,
 
   currentBufStatus.deleteTillPreviousBlankLine(currentMainWindowNode)
 
-proc yankAndDeleteTillPreviousBlankLine(status: var EditorStatus) =
+proc deleteTillPreviousBlankLine(status: var EditorStatus) =
   const registerName = ""
-  status.yankAndDeleteTillPreviousBlankLine(registerName)
+  status.deleteTillPreviousBlankLine(registerName)
 
 # d} command
-proc yankAndDeleteTillNextBlankLine(status: var EditorStatus,
-                                    registerName: string) =
+proc deleteTillNextBlankLine(status: var EditorStatus,
+                             registerName: string) =
 
   let blankLine = currentBufStatus.findNextBlankLine(
     currentMainWindowNode.currentLine)
@@ -617,17 +609,17 @@ proc cutCharacterBeforeCursor(status: var EditorStatus) =
   const registerName = ""
   status.cutCharacterBeforeCursor(registerName)
 
-proc yankAndDeleteTillNextBlankLine(status: var EditorStatus) =
+proc deleteTillNextBlankLine(status: var EditorStatus) =
   const registerName = ""
-  status.yankAndDeleteTillNextBlankLine(registerName)
+  status.deleteTillNextBlankLine(registerName)
 
-proc yankAndDeleteLineFromFirstLineToCurrentLine(status: var EditorStatus) =
+proc deleteLineFromFirstLineToCurrentLine(status: var EditorStatus) =
   const registerName = ""
-  status.yankAndDeleteLineFromFirstLineToCurrentLine(registerName)
+  status.deleteLineFromFirstLineToCurrentLine(registerName)
 
-proc yankAndDeleteFromCurrentLineToLastLine(status: var EditorStatus) =
+proc deleteFromCurrentLineToLastLine(status: var EditorStatus) =
   const registerName = ""
-  status.yankAndDeleteFromCurrentLineToLastLine(registerName)
+  status.deleteFromCurrentLineToLastLine(registerName)
 
 # s and cl commands
 proc deleteCharacterAndEnterInsertMode(status: var EditorStatus) =
@@ -658,19 +650,13 @@ proc deleteCharacterAndEnterInsertMode(status: var EditorStatus,
   status.changeMode(Mode.insert)
 
 # cc/S command
-proc yankAndDeleteCharactersOfLine(status: var EditorStatus) =
-  const
-    isDelete = true
-    registerName = ""
-  currentBufStatus.yankCharactersOfLines(
-    currentMainWindowNode,
+proc deleteCharactersAfterBlankInLine(status: var EditorStatus) =
+  const registerName = ""
+  currentBufStatus.deleteCharactersAfterBlankInLine(
     status.registers,
-    isDelete,
-    registerName)
-
-  currentBufStatus.deleteCharactersOfLine(
-    status.settings.autoDeleteParen,
-    currentMainWindowNode)
+    currentMainWindowNode,
+    registerName,
+    status.settings.autoDeleteParen)
 
 proc addRegister(status: var EditorStatus, command, registerName: string) =
   let
@@ -708,17 +694,17 @@ proc addRegister(status: var EditorStatus, command, registerName: string) =
   elif command == "dw":
     status.deleteWord(registerName)
   elif command == "d$" or (command.len == 1 and isEndKey(command[0].toRune)):
-    status.yankAndDeleteCharactersUntilEndOfLine(registerName)
+    status.deleteCharactersUntilEndOfLine(registerName)
   elif command == "d0":
-    status.yankAndDeleteCharacterBeginningOfLine(registerName)
+    status.deleteCharacterBeginningOfLine(registerName)
   elif command == "dG":
-    status.yankAndDeleteFromCurrentLineToLastLine(registerName)
+    status.deleteFromCurrentLineToLastLine(registerName)
   elif command == "dgg":
-    status.yankAndDeleteLineFromFirstLineToCurrentLine(registerName)
+    status.deleteLineFromFirstLineToCurrentLine(registerName)
   elif command == "d{":
-    status.yankAndDeleteTillPreviousBlankLine(registerName)
+    status.deleteTillPreviousBlankLine(registerName)
   elif command == "d}":
-    status.yankAndDeleteTillNextBlankLine(registerName)
+    status.deleteTillNextBlankLine(registerName)
   elif command.len == 3 and command[0 .. 1] == "di":
     status.deleteInnerCommand(command[2].toRune, registerName)
   elif command == "dh":
@@ -1048,7 +1034,7 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('c'):
     let secondKey = commands[1]
     if secondKey == ord('c'):
-      status.yankAndDeleteCharactersOfLine
+      status.deleteCharactersAfterBlankInLine
       insertAfterCursor()
     if secondKey == ord('l'):
       status.deleteCharacterAndEnterInsertMode
@@ -1064,28 +1050,28 @@ proc normalCommand(status: var EditorStatus,
     elif secondKey == ord('w'):
       status.deleteWord
     elif secondKey == ('$') or isEndKey(secondKey):
-      status.yankAndDeleteCharactersUntilEndOfLine
+      status.deleteCharactersUntilEndOfLine
     elif secondKey == ('0') or isHomeKey(secondKey):
-     status.yankAndDeleteCharacterBeginningOfLine
+     status.deleteCharacterBeginningOfLine
     elif secondKey == ord('G'):
-      status.yankAndDeleteFromCurrentLineToLastLine
+      status.deleteFromCurrentLineToLastLine
     elif secondKey == ord('g'):
       let thirdKey = commands[2]
       if thirdKey == ord('g'):
-        status.yankAndDeleteLineFromFirstLineToCurrentLine
+        status.deleteLineFromFirstLineToCurrentLine
     elif secondKey == ord('{'):
-      status.yankAndDeleteTillPreviousBlankLine
+      status.deleteTillPreviousBlankLine
     elif secondKey == ord('}'):
-      status.yankAndDeleteTillNextBlankLine
+      status.deleteTillNextBlankLine
     elif secondKey == ord('i'):
       let thirdKey = commands[2]
       status.deleteInnerCommand(thirdKey)
     elif secondKey == ord('h'):
       status.cutCharacterBeforeCursor
   elif key == ord('D'):
-     status.yankAndDeleteCharactersUntilEndOfLine
+     status.deleteCharactersUntilEndOfLine
   elif key == ord('S'):
-     status.yankAndDeleteCharactersOfLine
+     status.deleteCharactersAfterBlankInLine
      insertAfterCursor()
   elif key == ord('s'):
     status.deleteCharacterAndEnterInsertMode

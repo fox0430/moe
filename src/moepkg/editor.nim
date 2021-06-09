@@ -722,36 +722,68 @@ proc deleteLines*(bufStatus: var BufferStatus,
   bufStatus.isUpdate = true
 
 proc deleteCharacterUntilEndOfLine*(bufStatus: var BufferStatus,
-                                    autoDeleteParen: bool,
-                                    windowNode: WindowNode) =
+                                    registers: var Registers,
+                                    registerName: string,
+                                    windowNode: WindowNode,
+                                    autoDeleteParen: bool) =
 
   let
     currentLine = windowNode.currentLine
     startColumn = windowNode.currentColumn
-  for i in startColumn ..< bufStatus.buffer[currentLine].len:
-    bufStatus.deleteCurrentCharacter(windowNode, autoDeleteParen)
+    loop = bufStatus.buffer[currentLine].len - startColumn
+
+  bufStatus.deleteCharacters(
+    registers,
+    registerName,
+    autoDeleteParen,
+    currentLine,
+    startColumn,
+    loop)
 
 proc deleteCharacterBeginningOfLine*(bufStatus: var BufferStatus,
-                                     autoDeleteParen: bool,
-                                     windowNode: WindowNode) =
-
-  let beforColumn = windowNode.currentColumn
-  windowNode.currentColumn = 0
-  windowNode.expandedColumn = 0
-  for i in 0 ..< beforColumn:
-    bufStatus.deleteCurrentCharacter(windowNode, autoDeleteParen)
-
-proc deleteCharactersOfLine*(bufStatus: var BufferStatus,
-                             autoDeleteParen: bool,
-                             windowNode: WindowNode) =
+                                     registers: var Registers,
+                                     windowNode: var WindowNode,
+                                     registerName: string,
+                                     autoDeleteParen: bool) =
 
   let
     currentLine = windowNode.currentLine
-    firstNonBlank = getFirstNonBlankOfLineOrFirstColumn(bufStatus, windowNode)
-  windowNode.currentColumn = firstNonBlank
-  windowNode.expandedColumn = firstNonBlank
-  for _ in firstNonBlank ..< bufStatus.buffer[currentLine].len:
-    bufStatus.deleteCurrentCharacter(windowNode, autoDeleteParen)
+    startColumn = 0
+    loop = windowNode.currentColumn
+
+  bufStatus.deleteCharacters(
+    registers,
+    registerName,
+    autoDeleteParen,
+    currentLine,
+    startColumn,
+    loop)
+
+  windowNode.currentColumn = 0
+  windowNode.expandedColumn = 0
+
+# Delete characters after blank in the current line
+proc deleteCharactersAfterBlankInLine*(bufStatus: var BufferStatus,
+                                       registers: var Registers,
+                                       windowNode: var WindowNode,
+                                       registerName: string,
+                                       autoDeleteParen: bool) =
+
+  let
+    currentLine = windowNode.currentLine
+    firstNonBlankCol = getFirstNonBlankOfLineOrFirstColumn(bufStatus, windowNode)
+    loop = bufStatus.buffer[currentLine].len - firstNonBlankCol
+
+  bufStatus.deleteCharacters(
+    registers,
+    registerName,
+    autoDeleteParen,
+    currentLine,
+    firstNonBlankCol,
+    loop)
+
+  windowNode.currentColumn = firstNonBlankCol
+  windowNode.expandedColumn = firstNonBlankCol
 
 proc deleteTillPreviousBlankLine*(bufStatus: var BufferStatus,
                                   windowNode: WindowNode) =
