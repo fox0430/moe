@@ -1,7 +1,7 @@
 from strutils import parseInt
 import terminal, times, strutils
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, undoredostack,
-       window, movement, editor, search, color, bufferstatus, quickrun,
+       window, movement, editor, search, bufferstatus, quickrun,
        messages
 
 type InputState = enum
