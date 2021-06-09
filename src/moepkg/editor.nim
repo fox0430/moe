@@ -820,26 +820,78 @@ proc deleteCharactersAfterBlankInLine*(bufStatus: var BufferStatus,
   windowNode.currentColumn = firstNonBlankCol
   windowNode.expandedColumn = firstNonBlankCol
 
+# Delete from the previous blank line to the current line
 proc deleteTillPreviousBlankLine*(bufStatus: var BufferStatus,
-                                  windowNode: WindowNode) =
+                                  registers: var Registers,
+                                  windowNode: WindowNode,
+                                  registerName: string) =
 
-  let
-    currentLine = windowNode.currentLine
-    blankLine = bufStatus.findPreviousBlankLine(currentLine)
+  var deletedBuffer: seq[seq[Rune]]
 
-  bufStatus.buffer.delete(blankLine + 1, currentLine)
-  windowNode.currentLine = max(0, blankLine)
+  # Delete lines before the currentLine
+  block:
+    let blankLine = bufStatus.findPreviousBlankLine(windowNode.currentLine)
+
+    for i in blankLine ..< windowNode.currentLine:
+      deletedBuffer.add bufStatus.buffer[i]
+
+    bufStatus.buffer.delete(blankLine, windowNode.currentLine - 1)
+
+  # Delete characters before the cursor in the currentLine
+  block:
+    let
+      currentLine = min(bufStatus.buffer.high, windowNode.currentLine)
+      currentColumn = windowNode.currentColumn
+
+
+    let oldLine = bufStatus.buffer[currentLine]
+    var newLine = bufStatus.buffer[currentLine]
+
+    if currentColumn > 0:
+      var deletedLine: seq[Rune]
+      for i in 0 ..< currentColumn: deletedLine.add oldLine[i]
+      if deletedLine.len > 0: deletedBuffer.add deletedLine
+
+      newLine.delete(0, currentColumn - 1)
+
+      if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
+
+  if registerName.len > 0:
+    registers.addRegister(deletedBuffer, registerName)
+  else:
+    const
+      isLine = true
+      isDelete = true
+    registers.addRegister(deletedBuffer, isLine, isDelete)
+
+  windowNode.currentLine = min(bufStatus.buffer.high, windowNode.currentLine)
+  windowNode.currentColumn = 0
+
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
 
 proc deleteTillNextBlankLine*(bufStatus: var BufferStatus,
-                              windowNode: WindowNode) =
+                              registers: var Registers,
+                              windowNode: WindowNode,
+                              registerName: string) =
 
   let currentLine = windowNode.currentLine
   var blankLine = bufStatus.findNextBlankLine(currentLine)
   if blankLine < 0: blankLine = bufStatus.buffer.len
 
+  var deleteBuffer: seq[seq[Rune]]
+  for i in currentLine .. blankLine - 1: deleteBuffer.add bufStatus.buffer[i]
+
   bufStatus.buffer.delete(currentLine, blankLine - 1)
+
+  if registerName.len > 0:
+    registers.addRegister(deleteBuffer, registerName)
+  else:
+    const
+      isLine = true
+      isDelete = true
+    registers.addRegister(deleteBuffer, isLine, isDelete)
+
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
 
