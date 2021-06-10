@@ -1393,10 +1393,10 @@ suite "Add buffer to the register":
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru "a"
-    check currentBufStatus.buffer[1] == ru ""
 
+    echo status.registers.noNameRegister
     check status.registers.noNameRegister == Register(
-      buffer: @[ru "b", ru "c"], isLine: true, name: "a")
+      buffer: @[ru "", ru "b"], isLine: true, name: "a")
 
   test "Delete and yank lines from the current linet o the next blank line (\"ad} command)":
     var status = initEditorStatus()
