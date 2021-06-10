@@ -700,3 +700,44 @@ suite "Editor: Delete from the previous blank line to the current line":
     check status.registers.noNameRegister == register.Register(
       buffer: @[ru "", ru "def", ru "g"],
       isLine: true)
+
+suite "Editor: Delete from the current line to the next blank line":
+  test "Delete lines":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc", ru "def", ru "", ru "ghi"])
+
+    const registerName = ""
+    currentBufStatus.deleteTillNextBlankLine(
+      status.registers,
+      currentMainWindowNode,
+      registerName)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer[1] == ru "ghi"
+
+    check status.registers.noNameRegister == register.Register(
+      buffer: @[ru "abc", ru "def"],
+      isLine: true)
+
+  test "Delete lines 2":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc", ru "def", ru "", ru "ghi"])
+    currentMainWindowNode.currentColumn = 1
+
+    const registerName = ""
+    currentBufStatus.deleteTillNextBlankLine(
+      status.registers,
+      currentMainWindowNode,
+      registerName)
+
+    check currentBufStatus.buffer.len == 3
+    check currentBufStatus.buffer[0] == ru "a"
+    check currentBufStatus.buffer[1] == ru ""
+    check currentBufStatus.buffer[2] == ru "ghi"
+
+    check status.registers.noNameRegister == register.Register(
+      buffer: @[ru "bc", ru "def"],
+      isLine: true)
