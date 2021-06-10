@@ -240,11 +240,14 @@ suite "Editor: Delete word":
     currentBufStatus.buffer = initGapBuffer(@[ru"block:", ru"  "])
     currentMainWindowNode.currentLine = 1
 
-    const loop = 2
+    const
+      loop = 2
+      registerName = ""
     currentBufStatus.deleteWord(
       currentMainWindowNode,
       loop,
-      status.registers)
+      status.registers,
+      registerName)
 
 suite "Editor: keyEnter":
   test "Delete all characters in the previous line if only whitespaces":
