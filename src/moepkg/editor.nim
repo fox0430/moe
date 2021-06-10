@@ -434,14 +434,6 @@ proc deleteWord*(bufStatus: var BufferStatus,
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
 
-proc deleteWord(bufStatus: var BufferStatus,
-                windowNode: var WindowNode,
-                loop: int,
-                registers: var Registers) =
-
-  const registerName = ""
-  bufStatus.deleteWord(windowNode, loop, registers, registerName)
-
 proc deleteWordBeforeCursor*(bufStatus: var BufferStatus,
                              windowNode: var WindowNode,
                              registers: var Registers,
@@ -1494,7 +1486,6 @@ proc modifyNumberTextUnderCurosr*(bufStatus: var BufferStatus,
 
   let
     wordUnderCursor = bufStatus.getWordUnderCursor(windowNode)
-    beginCol = wordUnderCursor[0]
     word = wordUnderCursor[1]
 
   let
@@ -1512,7 +1503,6 @@ proc modifyNumberTextUnderCurosr*(bufStatus: var BufferStatus,
   # Insert the new number string to newLine
   block:
     let newNumRunes= toRunes(num + amount)
-    var col = currentColumn
     newLine.insert(newNumRunes, currentColumn)
 
   # Update bufStatus.buffer

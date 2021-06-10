@@ -156,14 +156,6 @@ proc yankWord(status: var EditorStatus) =
                             status.settings.clipboard,
                             currentBufStatus.cmdLoop)
 
-proc yankWord(status: var EditorStatus, isDelete: bool) =
-  currentBufStatus.yankWord(status.registers,
-                            currentMainWindowNode,
-                            status.platform,
-                            status.settings.clipboard,
-                            currentBufStatus.cmdLoop,
-                            isDelete)
-
 proc yankWord(status: var EditorStatus, registerName: string) =
   currentBufStatus.yankWord(status.registers,
                             currentMainWindowNode,
@@ -288,18 +280,6 @@ proc repeatNormalModeCommand(status: var Editorstatus, height, width: int) =
 
   let commands  = status.normalCommandHistory[^1]
   status.normalCommand(commands, height, width)
-
-# name is the register name
-proc yankLines(status: var Editorstatus, start, last: int, isDelete: bool) =
-  let lastLine = min(last,
-                     currentBufStatus.buffer.high)
-
-  currentBufStatus.yankLines(status.registers,
-                             status.commandLine,
-                             status.messageLog,
-                             status.settings.notificationSettings,
-                             start, lastLine,
-                             isDelete)
 
 proc yankLines(status: var Editorstatus, start, last: int) =
   let lastLine = min(last,
@@ -435,48 +415,6 @@ proc yankCharacters(status: var Editorstatus) =
 # name is the register name
 proc yankCharacters(status: var Editorstatus, registerName: string) =
   const isDelete = false
-  let
-    buffer = currentBufStatus.buffer
-    lineLen = buffer[currentMainWindowNode.currentLine].len
-    width = lineLen - currentMainWindowNode.currentColumn
-    length = if width > currentBufStatus.cmdLoop: currentBufStatus.cmdLoop
-             else: width
-
-  currentBufStatus.yankCharacters(
-    status.registers,
-    currentMainWindowNode,
-    status.commandLine,
-    status.messageLog,
-    status.platform,
-    status.settings,
-    length,
-    registerName,
-    isDelete)
-
-proc yankCharacters(status: var Editorstatus, isDelete: bool) =
-  const registerName = ""
-  let
-    buffer = currentBufStatus.buffer
-    lineLen = buffer[currentMainWindowNode.currentLine].len
-    width = lineLen - currentMainWindowNode.currentColumn
-    length = if width > currentBufStatus.cmdLoop: currentBufStatus.cmdLoop
-             else: width
-
-  currentBufStatus.yankCharacters(
-    status.registers,
-    currentMainWindowNode,
-    status.commandLine,
-    status.messageLog,
-    status.platform,
-    status.settings,
-    length,
-    registerName,
-    isDelete)
-
-proc yankCharacters(status: var Editorstatus,
-                registerName: string,
-                isDelete: bool) =
-
   let
     buffer = currentBufStatus.buffer
     lineLen = buffer[currentMainWindowNode.currentLine].len
@@ -698,10 +636,6 @@ proc closeCurrentWindow(status: var EditorStatus, height, width: int) =
     status.closeWindow(currentMainWindowNode, height, width)
 
 proc addRegister(status: var EditorStatus, command, registerName: string) =
-  let
-    cmdLoop = currentBufStatus.cmdLoop
-    windowNode = currentMainWindowNode
-
   if command == "yy":
     status.yankLines(registerName)
   elif command == "yl":
