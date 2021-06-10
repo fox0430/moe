@@ -588,15 +588,6 @@ proc deleteLineFromFirstLineToCurrentLine(status: var EditorStatus,
 proc deleteTillPreviousBlankLine(status: var EditorStatus,
                                  registerName: string) =
 
-  # TODO: Delete
-#  if registerName.len > 0:
-#    status.yankLines(blankLine + 1,
-#                     currentMainWindowNode.currentLine,
-#                     registerName)
-#  else:
-#    const isDelete = true
-#    status.yankLines(blankLine + 1, currentMainWindowNode.currentLine, isDelete)
-
   currentBufStatus.deleteTillPreviousBlankLine(
     status.registers,
     currentMainWindowNode,
@@ -609,17 +600,6 @@ proc deleteTillPreviousBlankLine(status: var EditorStatus) =
 # d} command
 proc deleteTillNextBlankLine(status: var EditorStatus,
                              registerName: string) =
-
-  let blankLine = currentBufStatus.findNextBlankLine(
-    currentMainWindowNode.currentLine)
-
-#  if registerName.len > 0:
-#    status.yankLines(currentMainWindowNode.currentLine,
-#                     blankLine - 1,
-#                     registerName)
-#  else:
-#    const isDelete = true
-#    status.yankLines(currentMainWindowNode.currentLine, blankLine - 1, isDelete)
 
   currentBufStatus.deleteTillNextBlankLine(
     status.registers,

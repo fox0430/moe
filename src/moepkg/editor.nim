@@ -843,7 +843,6 @@ proc deleteTillPreviousBlankLine*(bufStatus: var BufferStatus,
       currentLine = min(bufStatus.buffer.high, windowNode.currentLine)
       currentColumn = windowNode.currentColumn
 
-
     let oldLine = bufStatus.buffer[currentLine]
     var newLine = bufStatus.buffer[currentLine]
 
@@ -870,27 +869,50 @@ proc deleteTillPreviousBlankLine*(bufStatus: var BufferStatus,
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
 
+# Delete from the current line to the next blank line
 proc deleteTillNextBlankLine*(bufStatus: var BufferStatus,
                               registers: var Registers,
                               windowNode: WindowNode,
                               registerName: string) =
 
-  let currentLine = windowNode.currentLine
+  let
+    currentLine = windowNode.currentLine
+    currentColumn = windowNode.currentColumn
   var blankLine = bufStatus.findNextBlankLine(currentLine)
   if blankLine < 0: blankLine = bufStatus.buffer.len
 
-  var deleteBuffer: seq[seq[Rune]]
-  for i in currentLine .. blankLine - 1: deleteBuffer.add bufStatus.buffer[i]
+  var deletedBuffer: seq[seq[Rune]]
 
-  bufStatus.buffer.delete(currentLine, blankLine - 1)
+  # Delete characters after the cursor in the currentLine
+  block:
+    let oldLine = bufStatus.buffer[currentLine]
+    var newLine = bufStatus.buffer[currentLine]
+
+    if currentColumn > 0:
+      var deletedLine: seq[Rune]
+      for i in currentColumn ..< oldLine.len : deletedLine.add oldLine[i]
+
+      newLine.delete(currentColumn, oldLine.high)
+
+      if oldLine != newLine:
+        bufStatus.buffer[currentLine] = newLine
+        deletedBuffer.add deletedLine
+
+  # Delete to the next blank line
+  block:
+    let startLine = if currentColumn == 0: currentLine else: currentLine + 1
+    for i in startLine ..< blankLine:
+      deletedBuffer.add bufStatus.buffer[i]
+
+    bufStatus.buffer.delete(startLine, blankLine - 1)
 
   if registerName.len > 0:
-    registers.addRegister(deleteBuffer, registerName)
+    registers.addRegister(deletedBuffer, registerName)
   else:
     const
       isLine = true
       isDelete = true
-    registers.addRegister(deleteBuffer, isLine, isDelete)
+    registers.addRegister(deletedBuffer, isLine, isDelete)
 
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
