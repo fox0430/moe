@@ -1563,7 +1563,7 @@ suite "Normal mode: Open the blank line below and enter insert mode":
     check currentMainWindowNode.currentLine == 1
 
 suite "Normal mode: Open the blank line above and enter insert mode":
-  test "Open the blank line (\"O\" command)"
+  test "Open the blank line (\"O\" command)":
     var status = initEditorStatus()
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
@@ -1578,7 +1578,7 @@ suite "Normal mode: Open the blank line above and enter insert mode":
 
     check currentMainWindowNode.currentLine == 0
 
-  test "Open the blank line (\"3O\" command)"
+  test "Open the blank line (\"3O\" command)":
     var status = initEditorStatus()
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
