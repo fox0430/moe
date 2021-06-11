@@ -1,5 +1,5 @@
 import unittest
-include moepkg/[editor, editorstatus, register]
+include moepkg/[editor, editorstatus, register, ui]
 
 suite "Editor: Auto indent":
   test "Auto indent in current Line":
@@ -744,3 +744,155 @@ suite "Editor: Delete from the current line to the next blank line":
     check status.registers.noNameRegister == register.Register(
       buffer: @[ru "bc", ru "def"],
       isLine: true)
+
+suite "Editor: Replace characters":
+  test "Repace a character":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
+
+    const
+      autoIndent = false
+      autoDeleteParen = false
+      tabStop = 2
+      loop = 1
+      character = ru 'z'
+
+    currentBufStatus.replaceCharacters(
+      currentMainWindowNode,
+      autoIndent,
+      autoDeleteParen,
+      tabStop,
+      loop,
+      character)
+
+    check currentBufStatus.buffer[0] == ru "zbcdef"
+    check currentMainWindowNode.currentColumn == 1
+
+  test "Repace characters":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
+
+    const
+      autoIndent = false
+      autoDeleteParen = false
+      tabStop = 2
+      loop = 3
+      character = ru 'z'
+
+    currentBufStatus.replaceCharacters(
+      currentMainWindowNode,
+      autoIndent,
+      autoDeleteParen,
+      tabStop,
+      loop,
+      character)
+
+    check currentBufStatus.buffer[0] == ru "zzzdef"
+    check currentMainWindowNode.currentColumn == 3
+
+  test "Repace characters 2":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
+
+    const
+      autoIndent = false
+      autoDeleteParen = false
+      tabStop = 2
+      loop = 10
+      character = ru 'z'
+
+    currentBufStatus.replaceCharacters(
+      currentMainWindowNode,
+      autoIndent,
+      autoDeleteParen,
+      tabStop,
+      loop,
+      character)
+
+    check currentBufStatus.buffer[0] == ru "zzzzzz"
+    check currentMainWindowNode.currentColumn == 5
+
+  test "Repace characters 3":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
+
+    const
+      autoIndent = false
+      autoDeleteParen = false
+      tabStop = 2
+      loop = 1
+    let character = toRune(KEY_ENTER)
+
+    currentBufStatus.replaceCharacters(
+      currentMainWindowNode,
+      autoIndent,
+      autoDeleteParen,
+      tabStop,
+      loop,
+      character)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer[1] == ru "bcdef"
+
+  test "Repace characters 4":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
+
+    const
+      autoIndent = false
+      autoDeleteParen = false
+      tabStop = 2
+      loop = 3
+    let character = toRune(KEY_ENTER)
+
+    currentBufStatus.replaceCharacters(
+      currentMainWindowNode,
+      autoIndent,
+      autoDeleteParen,
+      tabStop,
+      loop,
+      character)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer[1] == ru "def"
+
+suite "Editor: Toggle characters":
+  test "Toggle a character":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
+
+    const loop = 1
+    currentBufStatus.toggleCharacters(currentMainWindowNode, loop)
+
+    check currentBufStatus.buffer[0] == ru "Abcdef"
+    check currentMainWindowNode.currentColumn == 1
+
+  test "Toggle characters":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
+
+    const loop = 3
+    currentBufStatus.toggleCharacters(currentMainWindowNode, loop)
+
+    check currentBufStatus.buffer[0] == ru "ABCdef"
+    check currentMainWindowNode.currentColumn == 3
+
+  test "Do nothing":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru " abcde"])
+
+    const loop = 1
+    currentBufStatus.toggleCharacters(currentMainWindowNode, loop)
+
+    check currentBufStatus.buffer[0] == ru " abcde"
+    check currentMainWindowNode.currentColumn == 0
