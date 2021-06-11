@@ -1531,3 +1531,64 @@ suite "Editor: Yank characters in the current line":
 
     check status.registers.noNameRegister == Register(buffer: @[ru "abc def"])
     check status.registers.smallDeleteRegister ==  status.registers.noNameRegister
+
+suite "Normal mode: Open the blank line below and enter insert mode":
+  test "Open the blank line (\"o\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "o"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "abc"
+    check currentBufStatus.buffer[1] == ru ""
+
+    check currentMainWindowNode.currentLine == 1
+
+  test "Open the blank line 2 (\"3o\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "o"
+    currentBufStatus.cmdLoop = 3
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "abc"
+    check currentBufStatus.buffer[1] == ru ""
+
+    check currentMainWindowNode.currentLine == 1
+
+suite "Normal mode: Open the blank line above and enter insert mode":
+  test "Open the blank line (\"O\" command)"
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "O"
+    currentBufStatus.cmdLoop = 1
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer[1] == ru "abc"
+
+    check currentMainWindowNode.currentLine == 0
+
+  test "Open the blank line (\"3O\" command)"
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "O"
+    currentBufStatus.cmdLoop = 3
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer[1] == ru "abc"
+
+    check currentMainWindowNode.currentLine == 0
