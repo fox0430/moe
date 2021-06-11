@@ -1257,6 +1257,7 @@ proc pasteBeforeCursor*(bufStatus: var BufferStatus,
     else:
       bufStatus.pasteString(windowNode, r.get)
 
+# Replace characters and move to the right
 proc replaceCharacters*(bufStatus: var BufferStatus,
                         windowNode: WindowNode,
                         autoIndent, autoDeleteParen: bool,
@@ -1278,7 +1279,7 @@ proc replaceCharacters*(bufStatus: var BufferStatus,
     if oldLine != newLine:
       bufStatus.buffer[windowNode.currentLine] = newLine
 
-      windowNode.currentColumn = min(newLine.len, loop)
+      windowNode.currentColumn = min(newLine.high, loop)
 
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
