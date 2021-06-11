@@ -624,6 +624,23 @@ proc replaceCurrentCharacter(status: var EditorStatus, newCharacter: Rune) =
     currentBufStatus.cmdLoop,
     newCharacter)
 
+proc openBlankLineBelowAndEnterInsertMode(status: var EditorStatus) =
+  currentBufStatus.openBlankLineBelow(currentMainWindowNode)
+  status.changeMode(Mode.insert)
+
+proc openBlankLineAboveAndEnterInsertMode(status: var EditorStatus) =
+  currentBufStatus.openBlankLineAbove(currentMainWindowNode)
+
+  var highlight = currentMainWindowNode.highlight
+  highlight.updateHighlight(
+    currentBufStatus,
+    currentMainWindowNode,
+    status.isSearchHighlight,
+    status.searchHistory,
+    status.settings)
+
+  status.changeMode(Mode.insert)
+
 proc closeCurrentWindow(status: var EditorStatus, height, width: int) =
   if status.mainWindow.numOfMainWindow == 1: return
 
@@ -841,22 +858,9 @@ proc normalCommand(status: var EditorStatus,
     elif secondKey == ord('b'):
       currentBufStatus.scrollScreenBottom(currentMainWindowNode)
   elif key == ord('o'):
-    for i in 0 ..< cmdLoop:
-      currentBufStatus.openBlankLineBelow(currentMainWindowNode)
-    status.changeMode(Mode.insert)
+    status.openBlankLineBelowAndEnterInsertMode
   elif key == ord('O'):
-    for i in 0 ..< cmdLoop:
-      currentBufStatus.openBlankLineAbove(currentMainWindowNode)
-
-    var highlight = currentMainWindowNode.highlight
-    highlight.updateHighlight(
-      currentBufStatus,
-      currentMainWindowNode,
-      status.isSearchHighlight,
-      status.searchHistory,
-      status.settings)
-
-    status.changeMode(Mode.insert)
+    status.openBlankLineAboveAndEnterInsertMode
   elif key == ord('c'):
     let secondKey = commands[1]
     if secondKey == ord('c'):
