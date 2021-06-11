@@ -1257,20 +1257,46 @@ proc pasteBeforeCursor*(bufStatus: var BufferStatus,
     else:
       bufStatus.pasteString(windowNode, r.get)
 
-proc replaceCurrentCharacter*(bufStatus: var BufferStatus,
-                              windowNode: WindowNode,
-                              autoIndent, autoDeleteParen: bool,
-                              tabStop: int,
-                              character: Rune) =
+proc replaceCharacters*(bufStatus: var BufferStatus,
+                        windowNode: WindowNode,
+                        autoIndent, autoDeleteParen: bool,
+                        tabStop, loop: int,
+                        character: Rune) =
 
   if isEnterKey(character):
+    let line = bufStatus.buffer[windowNode.currentLine]
+    for _ in windowNode.currentColumn ..< min(line.len, loop):
       bufStatus.deleteCurrentCharacter(windowNode, autoDeleteParen)
-      keyEnter(bufStatus, windowNode, autoIndent, tabStop)
+    keyEnter(bufStatus, windowNode, autoIndent, tabStop)
   else:
     let oldLine = bufStatus.buffer[windowNode.currentLine]
     var newLine = bufStatus.buffer[windowNode.currentLine]
-    newLine[windowNode.currentColumn] = character
-    if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
+
+    for i in windowNode.currentColumn ..< min(newLine.len, loop):
+      newLine[i] = character
+
+    if oldLine != newLine:
+      bufStatus.buffer[windowNode.currentLine] = newLine
+
+      windowNode.currentColumn = min(newLine.len, loop)
+
+  inc(bufStatus.countChange)
+  bufStatus.isUpdate = true
+
+proc toggleCharacters*(bufStatus: var BufferStatus,
+                       windowNode: var WindowNode,
+                       loop: int) =
+
+  let oldLine = bufStatus.buffer[windowNode.currentLine]
+  var newLine = bufStatus.buffer[windowNode.currentLine]
+
+  for i in windowNode.currentColumn ..< min(newLine.len, loop):
+    newLine[i] = toggleCase(oldLine[i])
+
+  if oldLine != newLine:
+    bufStatus.buffer[windowNode.currentLine] = newLine
+
+    windowNode.currentColumn = min(newLine.len, loop)
 
     inc(bufStatus.countChange)
     bufStatus.isUpdate = true

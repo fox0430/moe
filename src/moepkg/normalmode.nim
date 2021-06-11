@@ -119,14 +119,6 @@ proc writeFileAndExit(status: var EditorStatus, height, width: int) =
 proc forceExit(status: var Editorstatus, height, width: int) {.inline.} =
   status.closeWindow(currentMainWindowNode, height, width)
 
-proc toggleCase(ch: Rune): Rune =
-  result = ch
-  if result.isUpper():
-    result = result.toLower()
-  elif result.isLower():
-    result = result.toUpper()
-  return result
-
 proc runQuickRunCommand(status: var Editorstatus) =
   let
     buffer = runQuickRun(status.bufStatus[currentMainWindowNode.bufferIndex],
@@ -618,12 +610,18 @@ proc enterInsertModeAfterCursor(status: var EditorStatus) =
   else: inc(currentMainWindowNode.currentColumn)
   status.changeMode(Mode.insert)
 
+proc toggleCharacterAndMoveRight(status: var EditorStatus) =
+  currentBufStatus.toggleCharacters(
+    currentMainWindowNode,
+    currentBufStatus.cmdLoop)
+
 proc replaceCurrentCharacter(status: var EditorStatus, newCharacter: Rune) =
-  currentBufStatus.replaceCurrentCharacter(
+  currentBufStatus.replaceCharacters(
     currentMainWindowNode,
     status.settings.autoIndent,
     status.settings.autoDeleteParen,
     status.settings.tabStop,
+    currentBufStatus.cmdLoop,
     newCharacter)
 
 proc closeCurrentWindow(status: var EditorStatus, height, width: int) =
@@ -939,24 +937,9 @@ proc normalCommand(status: var EditorStatus,
     currentBufStatus.modifyNumberTextUnderCurosr(currentMainWindowNode,
                                                  -cmdLoop)
   elif key == ord('~'):
-    # TODO: Refactor
-    for i in 0 ..< cmdLoop:
-      let r = toggleCase(currentBufStatus.getCharacterUnderCursor(currentMainWindowNode))
-      status.replaceCurrentCharacter(r)
-      currentBufStatus.keyRight(currentMainWindowNode)
+    status.toggleCharacterAndMoveRight
   elif key == ord('r'):
-    # TODO: Refactor
-    let
-      lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
-      loop = lineWidth - currentMainWindowNode.currentColumn
-    if cmdLoop > loop: return
-
-    let secondKey = commands[1]
-    for i in 0 ..< cmdLoop:
-      if i > 0:
-        inc(currentMainWindowNode.currentColumn)
-        currentMainWindowNode.expandedColumn = currentMainWindowNode.currentColumn
-      status.replaceCurrentCharacter(secondKey)
+    status.replaceCurrentCharacter(commands[1])
   elif key == ord('n'):
     status.searchNextOccurrence
   elif key == ord('N'):

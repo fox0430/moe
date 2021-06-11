@@ -359,6 +359,14 @@ proc parseInt*(rune: Rune): int {.inline.} = parseInt($rune)
 
 proc parseInt*(runes: seq[Rune]): int {.inline.} = parseInt($runes)
 
+proc toggleCase*(ch: Rune): Rune =
+  result = ch
+  if result.isUpper():
+    result = result.toLower()
+  elif result.isLower():
+    result = result.toUpper()
+  return result
+
 from os import `/`
 proc `/`*(runes1, runes2: seq[Rune]): seq[Rune] {.inline.} =
   toRunes($runes1 / $runes2)
