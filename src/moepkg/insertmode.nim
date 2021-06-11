@@ -122,9 +122,11 @@ proc insertMode*(status: var EditorStatus) =
       currentBufStatus.insertCharacterAboveCursor(
         currentMainWindowNode)
     elif isControlW(key):
+      const loop = 1
       currentBufStatus.deleteWordBeforeCursor(
         currentMainWindowNode,
         status.registers,
+        loop,
         status.settings.tabStop)
     elif isControlU(key):
       currentBufStatus.deleteCharactersBeforeCursorInCurrentLine(

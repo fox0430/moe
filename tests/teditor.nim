@@ -1,5 +1,5 @@
 import unittest
-include moepkg/[editor, editorstatus, register]
+include moepkg/[editor, editorstatus, register, ui]
 
 suite "Editor: Auto indent":
   test "Auto indent in current Line":
@@ -240,8 +240,14 @@ suite "Editor: Delete word":
     currentBufStatus.buffer = initGapBuffer(@[ru"block:", ru"  "])
     currentMainWindowNode.currentLine = 1
 
-    for i in 0 ..< 2:
-      currentBufStatus.deleteWord(currentMainWindowNode)
+    const
+      loop = 2
+      registerName = ""
+    currentBufStatus.deleteWord(
+      currentMainWindowNode,
+      loop,
+      status.registers,
+      registerName)
 
 suite "Editor: keyEnter":
   test "Delete all characters in the previous line if only whitespaces":
@@ -452,9 +458,10 @@ suite "Editor: Delete inside paren":
 
     var registers: register.Registers
 
-    currentBufStatus.yankAndDeleteInsideOfParen(currentMainWindowNode,
-                                                registers,
-                                                ru'"')
+    currentBufStatus.deleteInsideOfParen(
+      currentMainWindowNode,
+      registers,
+      ru'"')
 
     check currentBufStatus.buffer[0] == ru """abc "" "ghi""""
 
@@ -508,15 +515,16 @@ suite "Editor: Yank a string":
       length = 1
       name = "a"
       isDelete = false
-    currentBufStatus.yankString(status.registers,
-                                currentMainWindowNode,
-                                status.commandline,
-                                status.messageLog,
-                                platform,
-                                status.settings,
-                                length,
-                                name,
-                                isDelete)
+    currentBufStatus.yankCharacters(
+      status.registers,
+      currentMainWindowNode,
+      status.commandline,
+      status.messageLog,
+      platform,
+      status.settings,
+      length,
+      name,
+      isDelete)
 
     check status.registers.noNameRegister.buffer.len == 0
 
@@ -560,3 +568,331 @@ suite "Editor: Yank words":
       else:
         # On the WSL
         check output[0 .. output.high - 2] == $str
+
+suite "Editor: Modify the number string under the cursor":
+  test "Increment the number string":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "1"])
+
+    const amount = 1
+    currentBufStatus.modifyNumberTextUnderCurosr(
+      currentMainWindowNode,
+      amount)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "2"
+
+  test "Increment the number string 2":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru " 1 "])
+    currentMainWindowNode.currentColumn = 1
+
+    const amount = 1
+    currentBufStatus.modifyNumberTextUnderCurosr(
+      currentMainWindowNode,
+      amount)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru " 2 "
+
+  test "Increment the number string 3":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "9"])
+
+    const amount = 1
+    currentBufStatus.modifyNumberTextUnderCurosr(
+      currentMainWindowNode,
+      amount)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "10"
+
+  test "Decrement the number string":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "1"])
+
+    const amount = -1
+    currentBufStatus.modifyNumberTextUnderCurosr(
+      currentMainWindowNode,
+      amount)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "0"
+
+  test "Decrement the number string 2":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "0"])
+
+    const amount = -1
+    currentBufStatus.modifyNumberTextUnderCurosr(
+      currentMainWindowNode,
+      amount)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "-1"
+
+  test "Decrement the number string 3":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "10"])
+
+    const amount = -1
+    currentBufStatus.modifyNumberTextUnderCurosr(
+      currentMainWindowNode,
+      amount)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "9"
+
+  test "Do nothing":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const amount = 1
+    currentBufStatus.modifyNumberTextUnderCurosr(
+      currentMainWindowNode,
+      amount)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
+suite "Editor: Delete from the previous blank line to the current line":
+  test "Delete lines":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc", ru "", ru "def", ru "ghi"])
+    currentMainWindowNode.currentLine = 3
+
+    const registerName = ""
+    currentBufStatus.deleteTillPreviousBlankLine(
+      status.registers,
+      currentMainWindowNode,
+      registerName)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "abc"
+    check currentBufStatus.buffer[1] == ru "ghi"
+
+    check status.registers.noNameRegister == register.Register(
+      buffer: @[ru "", ru "def"],
+      isLine: true)
+
+  test "Delete lines 2":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc", ru "", ru "def", ru "ghi"])
+    currentMainWindowNode.currentLine = 3
+    currentMainWindowNode.currentColumn = 1
+
+    const registerName = ""
+    currentBufStatus.deleteTillPreviousBlankLine(
+      status.registers,
+      currentMainWindowNode,
+      registerName)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "abc"
+    check currentBufStatus.buffer[1] == ru "hi"
+
+    check status.registers.noNameRegister == register.Register(
+      buffer: @[ru "", ru "def", ru "g"],
+      isLine: true)
+
+suite "Editor: Delete from the current line to the next blank line":
+  test "Delete lines":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc", ru "def", ru "", ru "ghi"])
+
+    const registerName = ""
+    currentBufStatus.deleteTillNextBlankLine(
+      status.registers,
+      currentMainWindowNode,
+      registerName)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer[1] == ru "ghi"
+
+    check status.registers.noNameRegister == register.Register(
+      buffer: @[ru "abc", ru "def"],
+      isLine: true)
+
+  test "Delete lines 2":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc", ru "def", ru "", ru "ghi"])
+    currentMainWindowNode.currentColumn = 1
+
+    const registerName = ""
+    currentBufStatus.deleteTillNextBlankLine(
+      status.registers,
+      currentMainWindowNode,
+      registerName)
+
+    check currentBufStatus.buffer.len == 3
+    check currentBufStatus.buffer[0] == ru "a"
+    check currentBufStatus.buffer[1] == ru ""
+    check currentBufStatus.buffer[2] == ru "ghi"
+
+    check status.registers.noNameRegister == register.Register(
+      buffer: @[ru "bc", ru "def"],
+      isLine: true)
+
+suite "Editor: Replace characters":
+  test "Repace a character":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
+
+    const
+      autoIndent = false
+      autoDeleteParen = false
+      tabStop = 2
+      loop = 1
+      character = ru 'z'
+
+    currentBufStatus.replaceCharacters(
+      currentMainWindowNode,
+      autoIndent,
+      autoDeleteParen,
+      tabStop,
+      loop,
+      character)
+
+    check currentBufStatus.buffer[0] == ru "zbcdef"
+    check currentMainWindowNode.currentColumn == 1
+
+  test "Repace characters":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
+
+    const
+      autoIndent = false
+      autoDeleteParen = false
+      tabStop = 2
+      loop = 3
+      character = ru 'z'
+
+    currentBufStatus.replaceCharacters(
+      currentMainWindowNode,
+      autoIndent,
+      autoDeleteParen,
+      tabStop,
+      loop,
+      character)
+
+    check currentBufStatus.buffer[0] == ru "zzzdef"
+    check currentMainWindowNode.currentColumn == 3
+
+  test "Repace characters 2":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
+
+    const
+      autoIndent = false
+      autoDeleteParen = false
+      tabStop = 2
+      loop = 10
+      character = ru 'z'
+
+    currentBufStatus.replaceCharacters(
+      currentMainWindowNode,
+      autoIndent,
+      autoDeleteParen,
+      tabStop,
+      loop,
+      character)
+
+    check currentBufStatus.buffer[0] == ru "zzzzzz"
+    check currentMainWindowNode.currentColumn == 5
+
+  test "Repace characters 3":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
+
+    const
+      autoIndent = false
+      autoDeleteParen = false
+      tabStop = 2
+      loop = 1
+    let character = toRune(KEY_ENTER)
+
+    currentBufStatus.replaceCharacters(
+      currentMainWindowNode,
+      autoIndent,
+      autoDeleteParen,
+      tabStop,
+      loop,
+      character)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer[1] == ru "bcdef"
+
+  test "Repace characters 4":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
+
+    const
+      autoIndent = false
+      autoDeleteParen = false
+      tabStop = 2
+      loop = 3
+    let character = toRune(KEY_ENTER)
+
+    currentBufStatus.replaceCharacters(
+      currentMainWindowNode,
+      autoIndent,
+      autoDeleteParen,
+      tabStop,
+      loop,
+      character)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer[1] == ru "def"
+
+suite "Editor: Toggle characters":
+  test "Toggle a character":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
+
+    const loop = 1
+    currentBufStatus.toggleCharacters(currentMainWindowNode, loop)
+
+    check currentBufStatus.buffer[0] == ru "Abcdef"
+    check currentMainWindowNode.currentColumn == 1
+
+  test "Toggle characters":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
+
+    const loop = 3
+    currentBufStatus.toggleCharacters(currentMainWindowNode, loop)
+
+    check currentBufStatus.buffer[0] == ru "ABCdef"
+    check currentMainWindowNode.currentColumn == 3
+
+  test "Do nothing":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru " abcde"])
+
+    const loop = 1
+    currentBufStatus.toggleCharacters(currentMainWindowNode, loop)
+
+    check currentBufStatus.buffer[0] == ru " abcde"
+    check currentMainWindowNode.currentColumn == 0

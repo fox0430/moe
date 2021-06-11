@@ -113,9 +113,11 @@ suite "Insert mode":
 
     currentMainWindowNode.currentColumn = 4
 
+    const loop = 1
     currentBufStatus.deleteWordBeforeCursor(
       currentMainWindowNode,
       status.registers,
+      loop,
       status.settings.tabStop)
 
     let buffer = status.bufStatus[0].buffer
@@ -127,9 +129,11 @@ suite "Insert mode":
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
+    const loop = 1
     currentBufStatus.deleteWordBeforeCursor(
       currentMainWindowNode,
       status.registers,
+      loop,
       status.settings.tabStop)
 
     let buffer = status.bufStatus[0].buffer
@@ -143,9 +147,11 @@ suite "Insert mode":
 
     currentMainWindowNode.currentLine = 1
 
+    const loop = 1
     currentBufStatus.deleteWordBeforeCursor(
       currentMainWindowNode,
       status.registers,
+      loop,
       status.settings.tabStop)
 
     let buffer = status.bufStatus[0].buffer

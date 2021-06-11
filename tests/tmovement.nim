@@ -166,7 +166,7 @@ test "Move to previous blank line":
   currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"def", ru"ghi"])
   currentMainWindowNode.currentLine = currentBufStatus.buffer.high
 
-  currentBufStatus.moveToPreviousBlankLine(status, currentMainWindowNode)
+  status.moveToPreviousBlankLine
 
   check currentMainWindowNode.currentLine == 1
   check currentMainWindowNode.currentColumn == 0
@@ -176,7 +176,7 @@ test "Move to next blank line":
   status.addNewBuffer
   currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"", ru"ghi"])
 
-  currentBufStatus.moveToNextBlankLine(status, currentMainWindowNode)
+  status.moveToNextBlankLine
 
   check currentMainWindowNode.currentLine == 2
   check currentMainWindowNode.currentColumn == 0
