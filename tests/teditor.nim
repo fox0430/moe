@@ -303,6 +303,26 @@ suite "Editor: keyEnter":
     check status.bufStatus[0].buffer[0] == ru"test "
     check status.bufStatus[0].buffer[1] == ru""
 
+  test "Fix #1370":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    currentBufStatus.buffer = initGapBuffer(@[ru""])
+    currentBufStatus.mode = Mode.insert
+
+    const isAutoIndent = false
+    currentBufStatus.keyEnter(
+      currentMainWindowNode,
+      isAutoIndent,
+      status.settings.tabStop)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer[1] == ru ""
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
 suite "Delete character before cursor":
   test "Delete one character":
     var status = initEditorStatus()

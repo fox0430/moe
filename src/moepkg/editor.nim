@@ -213,55 +213,56 @@ proc insertIndent(bufStatus: var BufferStatus,
     if oldLine != newLine:
       bufStatus.buffer[windowNode.currentLine + 1] = newLine
 
+proc isWhiteSpaceLine(line: seq[Rune]): bool =
+  result = true
+  for r in line:
+    if not isWhiteSpace(r): return false
+
+proc deleteAllCharInLine(line: var seq[Rune]) =
+  for i in 0 ..< line.len: line.delete(0)
+
 proc keyEnter*(bufStatus: var BufferStatus,
                windowNode: WindowNode,
                autoIndent: bool,
                tabStop: int) =
 
-  proc isWhiteSpaceLine(line: seq[Rune]): bool =
-    result = true
-    for r in line:
-      if not isWhiteSpace(r): return false
-
-  proc deleteAllCharInLine(line: var seq[Rune]) =
-    for i in 0 ..< line.len: line.delete(0)
-
   bufStatus.buffer.insert(ru"", windowNode.currentLine + 1)
 
-  if autoIndent:
-    bufStatus.insertIndent(windowNode, tabStop)
+  bufStatus.insertIndent(windowNode, tabStop)
 
-    var startOfCopy = max(
-      countRepeat(bufStatus.buffer[windowNode.currentLine], Whitespace, 0),
-      windowNode.currentColumn)
-    startOfCopy += countRepeat(bufStatus.buffer[windowNode.currentLine],
-                               Whitespace, startOfCopy)
+  var startOfCopy = max(
+    countRepeat(bufStatus.buffer[windowNode.currentLine], Whitespace, 0),
+    windowNode.currentColumn)
+  startOfCopy += countRepeat(bufStatus.buffer[windowNode.currentLine],
+                             Whitespace, startOfCopy)
 
-    block:
-      let oldLine = bufStatus.buffer[windowNode.currentLine + 1]
-      var newLine = bufStatus.buffer[windowNode.currentLine + 1]
+  block:
+    let oldLine = bufStatus.buffer[windowNode.currentLine + 1]
+    var newLine = bufStatus.buffer[windowNode.currentLine + 1]
 
-      let
-        line = windowNode.currentLine
-        startCol = startOfCopy
-        endCol = bufStatus.buffer[windowNode.currentLine].len
-      newLine &= bufStatus.buffer[line][startCol ..< endCol]
+    let
+      line = windowNode.currentLine
+      startCol = startOfCopy
+      endCol = bufStatus.buffer[windowNode.currentLine].len
+    newLine &= bufStatus.buffer[line][startCol ..< endCol]
 
+    if oldLine != newLine:
+      bufStatus.buffer[windowNode.currentLine + 1] = newLine
+
+  block:
+    let
+      first = windowNode.currentColumn
+      last = bufStatus.buffer[windowNode.currentLine].high
+    if first <= last:
+      let oldLine = bufStatus.buffer[windowNode.currentLine]
+      var newLine = bufStatus.buffer[windowNode.currentLine]
+      newLine.delete(first, last)
       if oldLine != newLine:
-        bufStatus.buffer[windowNode.currentLine + 1] = newLine
+        bufStatus.buffer[windowNode.currentLine] = newLine
 
-    block:
-      let
-        first = windowNode.currentColumn
-        last = bufStatus.buffer[windowNode.currentLine].high
-      if first <= last:
-        let oldLine = bufStatus.buffer[windowNode.currentLine]
-        var newLine = bufStatus.buffer[windowNode.currentLine]
-        newLine.delete(first, last)
-        if oldLine != newLine:
-          bufStatus.buffer[windowNode.currentLine] = newLine
+  inc(windowNode.currentLine)
 
-    inc(windowNode.currentLine)
+  if autoIndent:
     windowNode.currentColumn =
       countRepeat(bufStatus.buffer[windowNode.currentLine], Whitespace, 0)
 
@@ -275,27 +276,6 @@ proc keyEnter*(bufStatus: var BufferStatus,
       if newLine != oldLine:
         bufStatus.buffer[windowNode.currentLine - 1] = newLine
   else:
-    block:
-      let oldLine = bufStatus.buffer[windowNode.currentLine + 1]
-      var newLine = bufStatus.buffer[windowNode.currentLine + 1]
-
-      let
-        line = windowNode.currentLine
-        startCol = windowNode.currentColumn
-        endCol = bufStatus.buffer[windowNode.currentLine].len
-      newLine &= bufStatus.buffer[line][startCol ..< endCol]
-
-      if oldLine != newLine:
-        bufStatus.buffer[windowNode.currentLine + 1] = newLine
-
-    block:
-      let oldLine = bufStatus.buffer[windowNode.currentLine]
-      var newLine = bufStatus.buffer[windowNode.currentLine]
-      newLine.delete(windowNode.currentColumn,
-                     bufStatus.buffer[windowNode.currentLine].high)
-      if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
-
-    inc(windowNode.currentLine)
     windowNode.currentColumn = 0
     windowNode.expandedColumn = 0
 
