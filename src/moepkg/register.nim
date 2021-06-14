@@ -1,5 +1,5 @@
 import options, strutils, unicode
-import independentutils
+import independentutils, clipboard, settings
 
 type Register* = object
   buffer*: seq[seq[Rune]]
@@ -15,7 +15,8 @@ type Registers* = object
 # Add/Overwrite the number register
 proc addRegister(registers: var Registers,
                  r: Register,
-                 isDelete: bool) =
+                 isDelete: bool,
+                 settings: EditorSettings) =
 
   if isDelete:
     # If the buffer is deleted line, write to the register 1.
@@ -32,47 +33,63 @@ proc addRegister(registers: var Registers,
 
   registers.noNameRegister = r
 
-proc addRegister*(registers: var Registers, buffer: seq[Rune]) =
+  if settings.clipboard.enable:
+    r.buffer.sendToClipboard(settings.clipboard.toolOnLinux)
+
+proc addRegister*(registers: var Registers,
+                  buffer: seq[Rune],
+                  settings: EditorSettings) =
+
   let r = Register(buffer: @[buffer], isLine: false)
   const isDelete = false
-  registers.addRegister(r, isDelete)
+  registers.addRegister(r, isDelete, settings)
 
 proc addRegister*(registers: var Registers,
                   buffer: seq[Rune],
-                  isLine: bool) =
+                  isLine: bool,
+                  settings: EditorSettings) =
 
   let r = Register(buffer: @[buffer], isLine: isLine)
   const isDelete = false
-  registers.addRegister(r, isDelete)
+  registers.addRegister(r, isDelete, settings)
 
-proc addRegister*(registers: var Registers, buffer: seq[seq[Rune]]) =
+proc addRegister*(registers: var Registers,
+                  buffer: seq[seq[Rune]],
+                  settings: EditorSettings) =
+
   let r = Register(buffer: buffer, isLine: true)
   const isDelete = false
-  registers.addRegister(r, isDelete)
+  registers.addRegister(r, isDelete, settings)
 
 proc addRegister*(registers: var Registers,
                   buffer: seq[seq[Rune]],
-                  isLine: bool) =
+                  isLine: bool,
+                  settings: EditorSettings) =
 
   let r = Register(buffer: buffer, isLine: isLine)
   const isDelete = false
-  registers.addRegister(r, isDelete)
+  registers.addRegister(r, isDelete, settings)
 
 proc addRegister*(registers: var Registers,
                   buffer: seq[Rune],
-                  isLine, isDelete: bool) =
+                  isLine, isDelete: bool,
+                  settings: EditorSettings) =
 
   let r = Register(buffer: @[buffer], isLine: isLine)
-  registers.addRegister(r, isDelete)
+  registers.addRegister(r, isDelete, settings)
 
 proc addRegister*(registers: var Registers,
                   buffer: seq[seq[Rune]],
-                  isLine, isDelete: bool) =
+                  isLine, isDelete: bool,
+                  settings: EditorSettings) =
 
   let r = Register(buffer: buffer, isLine: isLine)
-  registers.addRegister(r, isDelete)
+  registers.addRegister(r, isDelete, settings)
 
-proc addRegister(registers: var Registers, register: Register) =
+proc addRegister(registers: var Registers,
+                 register: Register,
+                 settings: EditorSettings) =
+
   let name = register.name
 
   if name != "_":
@@ -90,40 +107,47 @@ proc addRegister(registers: var Registers, register: Register) =
 
     registers.noNameRegister = register
 
+    if settings.clipboard.enable:
+      register.buffer.sendToClipboard(settings.clipboard.toolOnLinux)
+
 # Add/Overwrite the named register
 proc addRegister*(registers: var Registers,
                   buffer: seq[Rune],
-                  name: string) =
+                  name: string,
+                  settings: EditorSettings) =
 
   if name.len > 0:
     let register = Register(buffer: @[buffer], isLine: false, name: name)
-    registers.addRegister(register)
+    registers.addRegister(register, settings)
 
 proc addRegister*(registers: var Registers,
                   buffer: seq[Rune],
                   isLine: bool,
-                  name: string) =
+                  name: string,
+                  settings: EditorSettings) =
 
   if name.len > 0:
     let register = Register(buffer: @[buffer], isLine: isLine, name: name)
-    registers.addRegister(register)
+    registers.addRegister(register, settings)
 
 proc addRegister*(registers: var Registers,
                   buffer: seq[seq[Rune]],
-                  name: string) =
+                  name: string,
+                  settings: EditorSettings) =
 
   if name.len > 0:
     let register = Register(buffer: buffer, isLine: true, name: name)
-    registers.addRegister(register)
+    registers.addRegister(register, settings)
 
 proc addRegister*(registers: var Registers,
                   buffer: seq[seq[Rune]],
                   isLine: bool,
-                  name: string) =
+                  name: string,
+                  settings: EditorSettings) =
 
   if name.len > 0:
     let register = Register(buffer: buffer, isLine: isLine, name: name)
-    registers.addRegister(register)
+    registers.addRegister(register, settings)
 
 # Search a register by the string
 proc searchByName*(registers: Registers, name: string): Option[Register] =

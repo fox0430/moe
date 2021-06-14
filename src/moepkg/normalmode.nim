@@ -144,17 +144,17 @@ proc runQuickRunCommand(status: var Editorstatus) =
 proc yankWord(status: var EditorStatus) =
   currentBufStatus.yankWord(status.registers,
                             currentMainWindowNode,
-                            status.platform,
                             status.settings.clipboard,
-                            currentBufStatus.cmdLoop)
+                            currentBufStatus.cmdLoop,
+                            status.settings)
 
 proc yankWord(status: var EditorStatus, registerName: string) =
   currentBufStatus.yankWord(status.registers,
                             currentMainWindowNode,
-                            status.platform,
                             status.settings.clipboard,
                             currentBufStatus.cmdLoop,
-                            registerName)
+                            registerName,
+                            status.settings)
 
 proc deleteWord(status: var EditorStatus) =
   const registerName = ""
@@ -162,14 +162,16 @@ proc deleteWord(status: var EditorStatus) =
     currentMainWindowNode,
     currentBufStatus.cmdLoop,
     status.registers,
-    registerName)
+    registerName,
+    status.settings)
 
 proc deleteWord(status: var EditorStatus, registerName: string) =
   currentBufStatus.deleteWord(
     currentMainWindowNode,
     currentBufStatus.cmdLoop,
     status.registers,
-    registerName)
+    registerName,
+    status.settings)
 
 # ci command
 proc changeInnerCommand(status: var EditorStatus, key: Rune) =
@@ -179,9 +181,11 @@ proc changeInnerCommand(status: var EditorStatus, key: Rune) =
 
   # Delete inside paren and enter insert mode
   if isParen(key):
-    currentBufStatus.deleteInsideOfParen(currentMainWindowNode,
-                                                status.registers,
-                                                key)
+    currentBufStatus.deleteInsideOfParen(
+      currentMainWindowNode,
+      status.registers,
+      key,
+      status.settings)
 
     if oldLine != currentBufStatus.buffer[currentLine]:
       currentMainWindowNode.currentColumn.inc
@@ -206,10 +210,12 @@ proc changeInnerCommand(status: var EditorStatus,
 
   # Delete inside paren and enter insert mode
   if isParen(key):
-    currentBufStatus.deleteInsideOfParen(currentMainWindowNode,
-                                         status.registers,
-                                         registerName,
-                                         key)
+    currentBufStatus.deleteInsideOfParen(
+      currentMainWindowNode,
+      status.registers,
+      registerName,
+      key,
+      status.settings)
 
     if oldLine != currentBufStatus.buffer[currentLine]:
       currentMainWindowNode.currentColumn.inc
@@ -232,12 +238,14 @@ proc deleteInnerCommand(status: var EditorStatus, key: Rune, registerName: strin
         currentMainWindowNode,
         status.registers,
         registerName,
-        key)
+        key,
+       status.settings)
     else:
       currentBufStatus.deleteInsideOfParen(
         currentMainWindowNode,
         status.registers,
-        key)
+        key,
+       status.settings)
 
     currentBufStatus.keyRight(currentMainWindowNode)
   # Delete current word and enter insert mode
@@ -281,7 +289,8 @@ proc yankLines(status: var Editorstatus, start, last: int) =
                              status.commandLine,
                              status.messageLog,
                              status.settings.notificationSettings,
-                             start, lastLine)
+                             start, lastLine,
+                             status.settings)
 
 proc yankLines(status: var Editorstatus, start, last: int, registerName: string) =
   let lastLine = min(last,
@@ -292,7 +301,8 @@ proc yankLines(status: var Editorstatus, start, last: int, registerName: string)
                              status.messageLog,
                              status.settings.notificationSettings,
                              start, lastLine,
-                             registerName)
+                             registerName,
+                             status.settings)
 
 # yy command
 # Ynak lines from the current line
@@ -307,7 +317,8 @@ proc yankLines(status: var Editorstatus) =
                              status.messageLog,
                              status.settings.notificationSettings,
                              currentLine, lastLine,
-                             registerName)
+                             registerName,
+                             status.settings)
 
 # Ynak lines from the current line
 proc yankLines(status: var Editorstatus, registerName: string) =
@@ -320,7 +331,8 @@ proc yankLines(status: var Editorstatus, registerName: string) =
                              status.messageLog,
                              status.settings.notificationSettings,
                              currentLine, lastLine,
-                             registerName)
+                             registerName,
+                             status.settings)
 
 # y{ command
 proc yankToPreviousBlankLine(status: var EditorStatus, registerName: string) =
@@ -368,7 +380,8 @@ proc deleteLines(status: var EditorStatus) =
                                currentMainWindowNode,
                                registerName,
                                startLine,
-                               count)
+                               count,
+                               status.settings)
 
 proc deleteLines(status: var EditorStatus, registerName: string) =
   let
@@ -380,7 +393,8 @@ proc deleteLines(status: var EditorStatus, registerName: string) =
                                currentMainWindowNode,
                                registerName,
                                startLine,
-                               count)
+                               count,
+                               status.settings)
 
 proc yankCharacters(status: var Editorstatus) =
   const
@@ -398,7 +412,6 @@ proc yankCharacters(status: var Editorstatus) =
     currentMainWindowNode,
     status.commandLine,
     status.messageLog,
-    status.platform,
     status.settings,
     length,
     registerName,
@@ -419,7 +432,6 @@ proc yankCharacters(status: var Editorstatus, registerName: string) =
     currentMainWindowNode,
     status.commandLine,
     status.messageLog,
-    status.platform,
     status.settings,
     length,
     registerName,
@@ -432,8 +444,8 @@ proc deleteCharacters(status: var EditorStatus, registerName: string) =
     status.settings.autoDeleteParen,
     currentMainWindowNode.currentLine,
     currentMainWindowNode.currentColumn,
-    currentBufStatus.cmdLoop)
-
+    currentBufStatus.cmdLoop,
+    status.settings)
 
 proc deleteCharacters(status: var EditorStatus) =
   const registerName = ""
@@ -443,7 +455,8 @@ proc deleteCharacters(status: var EditorStatus) =
     status.settings.autoDeleteParen,
     currentMainWindowNode.currentLine,
     currentMainWindowNode.currentColumn,
-    currentBufStatus.cmdLoop)
+    currentBufStatus.cmdLoop,
+    status.settings)
 
 # d$ command
 proc deleteCharactersUntilEndOfLine(status: var EditorStatus,
@@ -456,7 +469,8 @@ proc deleteCharactersUntilEndOfLine(status: var EditorStatus,
     status.registers,
     registerName,
     currentMainWindowNode,
-    status.settings.autoDeleteParen)
+    status.settings.autoDeleteParen,
+    status.settings)
 
 # d$ command
 proc deleteCharactersUntilEndOfLine(status: var EditorStatus) =
@@ -468,7 +482,8 @@ proc deleteCharactersUntilEndOfLine(status: var EditorStatus) =
     status.registers,
     registerName,
     currentMainWindowNode,
-    status.settings.autoDeleteParen)
+    status.settings.autoDeleteParen,
+    status.settings)
 
 # d0 command
 proc deleteCharacterBeginningOfLine(status: var EditorStatus,
@@ -478,7 +493,8 @@ proc deleteCharacterBeginningOfLine(status: var EditorStatus,
     status.registers,
     currentMainWindowNode,
     registerName,
-    status.settings.autoDeleteParen)
+    status.settings.autoDeleteParen,
+    status.settings)
 
 # d0 command
 proc deleteCharacterBeginningOfLine(status: var EditorStatus) =
@@ -497,7 +513,8 @@ proc deleteFromCurrentLineToLastLine(status: var EditorStatus,
                                currentMainWindowNode,
                                registerName,
                                startLine,
-                               count)
+                               count,
+                               status.settings)
 
 # dgg command
 # Delete the line from first line to current line
@@ -510,7 +527,8 @@ proc deleteLineFromFirstLineToCurrentLine(status: var EditorStatus,
                                currentMainWindowNode,
                                registerName,
                                startLine,
-                               count)
+                               count,
+                               status.settings)
 
   status.moveToFirstLine
 
@@ -521,7 +539,8 @@ proc deleteTillPreviousBlankLine(status: var EditorStatus,
   currentBufStatus.deleteTillPreviousBlankLine(
     status.registers,
     currentMainWindowNode,
-    registerName)
+    registerName,
+    status.settings)
 
 proc deleteTillPreviousBlankLine(status: var EditorStatus) =
   const registerName = ""
@@ -534,7 +553,8 @@ proc deleteTillNextBlankLine(status: var EditorStatus,
   currentBufStatus.deleteTillNextBlankLine(
     status.registers,
     currentMainWindowNode,
-    registerName)
+    registerName,
+    status.settings)
 
 # X and dh command
 proc cutCharacterBeforeCursor(status: var EditorStatus, registerName: string) =
@@ -601,7 +621,8 @@ proc deleteCharactersAfterBlankInLine(status: var EditorStatus) =
     status.registers,
     currentMainWindowNode,
     registerName,
-    status.settings.autoDeleteParen)
+    status.settings.autoDeleteParen,
+    status.settings)
 
 proc enterInsertModeAfterCursor(status: var EditorStatus) =
   let lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len

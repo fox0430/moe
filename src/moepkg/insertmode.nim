@@ -127,7 +127,8 @@ proc insertMode*(status: var EditorStatus) =
         currentMainWindowNode,
         status.registers,
         loop,
-        status.settings.tabStop)
+        status.settings.tabStop,
+        status.settings)
     elif isControlU(key):
       currentBufStatus.deleteCharactersBeforeCursorInCurrentLine(
         currentMainWindowNode)

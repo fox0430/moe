@@ -1,12 +1,9 @@
-import strutils, terminal, os, strformat, tables, times, osproc, heapqueue,
-       deques, times, options
+import strutils, terminal, os, strformat, tables, times, heapqueue, deques,
+       times, options
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        undoredostack, window, color, settings, statusline, bufferstatus, cursor,
-       tabline, backup, messages, commandline, register
-
-type Platform* = enum
-  linux, wsl, mac, other
+       tabline, backup, messages, commandline, register, platform
 
 # Save cursor position when a buffer for a window(file) gets closed.
 type LastPosition* = object
@@ -15,7 +12,6 @@ type LastPosition* = object
   column: int
 
 type EditorStatus* = object
-  platform*: Platform
   bufStatus*: seq[BufferStatus]
   prevBufferIndex*: int
   searchHistory*: seq[seq[Rune]]
@@ -36,16 +32,7 @@ type EditorStatus* = object
   isSearchHighlight*: bool
   lastPosition*: seq[LastPosition]
 
-proc initPlatform*(): Platform =
-  if defined linux:
-    if execProcess("uname -r").contains("microsoft"):
-      result = Platform.wsl
-    else: result = Platform.linux
-  elif defined macosx: result = Platform.mac
-  else: result = Platform.other
-
 proc initEditorStatus*(): EditorStatus =
-  result.platform = initPlatform()
   result.currentDir = getCurrentDir().toRunes
   result.settings = initEditorSettings()
   result.lastOperatingTime = now()
@@ -242,7 +229,7 @@ proc exitEditor*(status: EditorStatus) =
 
   exitUi()
 
-  executeOnExit(status.settings, status.platform)
+  executeOnExit(status.settings, CURRENT_PLATFORM)
 
   quit()
 
