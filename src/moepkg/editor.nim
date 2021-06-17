@@ -584,7 +584,6 @@ proc deleteCharacter*(bufStatus: var BufferStatus,
 proc deleteCharacters*(bufStatus: var BufferStatus,
                        registers: var Registers,
                        registerName: string,
-                       autoDeleteParen: bool,
                        line, colmun, loop: int,
                        settings: EditorSettings) =
 
@@ -609,7 +608,7 @@ proc deleteCharacters*(bufStatus: var BufferStatus,
 
     if currentColumn > newLine.high: currentColumn = newLine.high
 
-    if autoDeleteParen and deleteChar.isParen:
+    if settings.autoDeleteParen and deleteChar.isParen:
       bufStatus.deleteParen(
         line,
         colmun,
@@ -758,7 +757,6 @@ proc deleteCharacterUntilEndOfLine*(bufStatus: var BufferStatus,
                                     registers: var Registers,
                                     registerName: string,
                                     windowNode: WindowNode,
-                                    autoDeleteParen: bool,
                                     settings: EditorSettings) =
 
   let
@@ -769,7 +767,6 @@ proc deleteCharacterUntilEndOfLine*(bufStatus: var BufferStatus,
   bufStatus.deleteCharacters(
     registers,
     registerName,
-    autoDeleteParen,
     currentLine,
     startColumn,
     loop,
@@ -779,7 +776,6 @@ proc deleteCharacterBeginningOfLine*(bufStatus: var BufferStatus,
                                      registers: var Registers,
                                      windowNode: var WindowNode,
                                      registerName: string,
-                                     autoDeleteParen: bool,
                                      settings: EditorSettings) =
 
   let
@@ -790,7 +786,6 @@ proc deleteCharacterBeginningOfLine*(bufStatus: var BufferStatus,
   bufStatus.deleteCharacters(
     registers,
     registerName,
-    autoDeleteParen,
     currentLine,
     startColumn,
     loop,
@@ -804,7 +799,6 @@ proc deleteCharactersAfterBlankInLine*(bufStatus: var BufferStatus,
                                        registers: var Registers,
                                        windowNode: var WindowNode,
                                        registerName: string,
-                                       autoDeleteParen: bool,
                                        settings: EditorSettings) =
 
   let
@@ -815,7 +809,6 @@ proc deleteCharactersAfterBlankInLine*(bufStatus: var BufferStatus,
   bufStatus.deleteCharacters(
     registers,
     registerName,
-    autoDeleteParen,
     currentLine,
     firstNonBlankCol,
     loop,
@@ -1051,7 +1044,6 @@ proc yankCharacters*(bufStatus: BufferStatus,
 proc yankWord*(bufStatus: var BufferStatus,
                registers: var Registers,
                windowNode: WindowNode,
-               clipboardSettings: ClipBoardSettings,
                loop: int,
                name: string,
                isDelete: bool,
@@ -1093,7 +1085,6 @@ proc yankWord*(bufStatus: var BufferStatus,
 proc yankWord*(bufStatus: var BufferStatus,
                registers: var Registers,
                windowNode: WindowNode,
-               clipboardSettings: ClipBoardSettings,
                loop: int,
                isDelete: bool,
                settings: EditorSettings) =
@@ -1101,7 +1092,6 @@ proc yankWord*(bufStatus: var BufferStatus,
   const name = ""
   bufStatus.yankWord(registers,
                      windowNode,
-                     clipboardSettings,
                      loop,
                      name,
                      isDelete,
@@ -1110,7 +1100,6 @@ proc yankWord*(bufStatus: var BufferStatus,
 proc yankWord*(bufStatus: var BufferStatus,
                registers: var Registers,
                windowNode: WindowNode,
-               clipboardSettings: ClipBoardSettings,
                loop: int,
                name: string,
                settings: EditorSettings) =
@@ -1118,7 +1107,6 @@ proc yankWord*(bufStatus: var BufferStatus,
   const isDelete = false
   bufStatus.yankWord(registers,
                      windowNode,
-                     clipboardSettings,
                      loop,
                      name,
                      isDelete,
@@ -1127,7 +1115,6 @@ proc yankWord*(bufStatus: var BufferStatus,
 proc yankWord*(bufStatus: var BufferStatus,
                registers: var Registers,
                windowNode: WindowNode,
-               clipboardSettings: ClipBoardSettings,
                loop: int,
                settings: EditorSettings) =
 
@@ -1136,7 +1123,6 @@ proc yankWord*(bufStatus: var BufferStatus,
     isDelete = false
   bufStatus.yankWord(registers,
                      windowNode,
-                     clipboardSettings,
                      loop,
                      name,
                      isDelete,

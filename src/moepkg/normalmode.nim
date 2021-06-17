@@ -144,14 +144,12 @@ proc runQuickRunCommand(status: var Editorstatus) =
 proc yankWord(status: var EditorStatus) =
   currentBufStatus.yankWord(status.registers,
                             currentMainWindowNode,
-                            status.settings.clipboard,
                             currentBufStatus.cmdLoop,
                             status.settings)
 
 proc yankWord(status: var EditorStatus, registerName: string) =
   currentBufStatus.yankWord(status.registers,
                             currentMainWindowNode,
-                            status.settings.clipboard,
                             currentBufStatus.cmdLoop,
                             registerName,
                             status.settings)
@@ -441,7 +439,6 @@ proc deleteCharacters(status: var EditorStatus, registerName: string) =
   currentBufStatus.deleteCharacters(
     status.registers,
     registerName,
-    status.settings.autoDeleteParen,
     currentMainWindowNode.currentLine,
     currentMainWindowNode.currentColumn,
     currentBufStatus.cmdLoop,
@@ -452,7 +449,6 @@ proc deleteCharacters(status: var EditorStatus) =
   currentBufStatus.deleteCharacters(
     status.registers,
     registerName,
-    status.settings.autoDeleteParen,
     currentMainWindowNode.currentLine,
     currentMainWindowNode.currentColumn,
     currentBufStatus.cmdLoop,
@@ -469,7 +465,6 @@ proc deleteCharactersUntilEndOfLine(status: var EditorStatus,
     status.registers,
     registerName,
     currentMainWindowNode,
-    status.settings.autoDeleteParen,
     status.settings)
 
 # d$ command
@@ -482,7 +477,6 @@ proc deleteCharactersUntilEndOfLine(status: var EditorStatus) =
     status.registers,
     registerName,
     currentMainWindowNode,
-    status.settings.autoDeleteParen,
     status.settings)
 
 # d0 command
@@ -493,7 +487,6 @@ proc deleteCharacterBeginningOfLine(status: var EditorStatus,
     status.registers,
     currentMainWindowNode,
     registerName,
-    status.settings.autoDeleteParen,
     status.settings)
 
 # d0 command
@@ -621,7 +614,6 @@ proc deleteCharactersAfterBlankInLine(status: var EditorStatus) =
     status.registers,
     currentMainWindowNode,
     registerName,
-    status.settings.autoDeleteParen,
     status.settings)
 
 proc enterInsertModeAfterCursor(status: var EditorStatus) =
