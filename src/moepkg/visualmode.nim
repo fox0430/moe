@@ -25,7 +25,6 @@ proc yankBuffer(bufStatus: var BufferStatus,
                 registers: var Registers,
                 windowNode: WindowNode,
                 area: SelectArea,
-                clipboardSettings: ClipBoardSettings,
                 settings: EditorSettings) =
 
   var
@@ -61,7 +60,6 @@ proc yankBufferBlock(bufStatus: var BufferStatus,
                      registers: var Registers,
                      windowNode: WindowNode,
                      area: SelectArea,
-                     clipboardSettings: ClipBoardSettings,
                      settings: EditorSettings) =
 
   if bufStatus.buffer.len == 1 and
@@ -80,12 +78,11 @@ proc deleteBuffer(bufStatus: var BufferStatus,
                   registers: var Registers,
                   windowNode: WindowNode,
                   area: SelectArea,
-                  clipboardSettings: ClipBoardSettings,
                   settings: EditorSettings) =
 
   if bufStatus.buffer.len == 1 and
      bufStatus.buffer[windowNode.currentLine].len < 1: return
-  bufStatus.yankBuffer(registers, windowNode, area, clipboardSettings, settings)
+  bufStatus.yankBuffer(registers, windowNode, area, settings)
 
   var currentLine = area.startLine
   for i in area.startLine .. area.endLine:
@@ -128,7 +125,6 @@ proc deleteBufferBlock(bufStatus: var BufferStatus,
                        registers: var Registers,
                        windowNode: WindowNode,
                        area: SelectArea,
-                       clipboardSettings: ClipBoardSettings,
                        settings: EditorSettings) =
 
   if bufStatus.buffer.len == 1 and
@@ -136,7 +132,6 @@ proc deleteBufferBlock(bufStatus: var BufferStatus,
   bufStatus.yankBufferBlock(registers,
                             windowNode,
                             area,
-                            clipboardSettings,
                             settings)
 
   if area.startLine == area.endLine and bufStatus.buffer[area.startLine].len < 1:
@@ -356,13 +351,11 @@ proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
     currentBufStatus.yankBuffer(status.registers,
                                 currentMainWindowNode,
                                 area,
-                                status.settings.clipboard,
                                 status.settings)
   elif key == ord('x') or key == ord('d'):
     currentBufStatus.deleteBuffer(status.registers,
                                   currentMainWindowNode,
                                   area,
-                                  status.settings.clipboard,
                                   status.settings)
   elif key == ord('>'):
     currentBufStatus.addIndent(currentMainWindowNode,
@@ -414,13 +407,11 @@ proc visualBlockCommand(status: var EditorStatus, area: var SelectArea, key: Run
     currentBufStatus.yankBufferBlock(status.registers,
                                      currentMainWindowNode,
                                      area,
-                                     status.settings.clipboard,
                                      status.settings)
   elif key == ord('x') or key == ord('d'):
     currentBufStatus.deleteBufferBlock(status.registers,
                                        currentMainWindowNode,
                                        area,
-                                       status.settings.clipboard,
                                        status.settings)
   elif key == ord('>'):
     currentBufStatus.insertIndent(area, status.settings.tabStop)

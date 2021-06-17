@@ -439,14 +439,14 @@ proc deleteWordBeforeCursor*(bufStatus: var BufferStatus,
                              windowNode: var WindowNode,
                              registers: var Registers,
                              registerName: string,
-                             loop, tabStop: int,
+                             loop: int,
                              settings: EditorSettings) =
 
   if windowNode.currentLine == 0 and windowNode.currentColumn == 0: return
 
   if windowNode.currentColumn == 0:
     let isAutoDeleteParen = false
-    bufStatus.keyBackspace(windowNode, isAutoDeleteParen, tabStop)
+    bufStatus.keyBackspace(windowNode, isAutoDeleteParen, settings.tabStop)
   else:
     bufStatus.moveToBackwardWord(windowNode)
     bufStatus.deleteWord(windowNode, loop, registers, registerName, settings)
@@ -454,7 +454,7 @@ proc deleteWordBeforeCursor*(bufStatus: var BufferStatus,
 proc deleteWordBeforeCursor*(bufStatus: var BufferStatus,
                              windowNode: var WindowNode,
                              registers: var Registers,
-                             loop, tabStop: int,
+                             loop: int,
                              settings: EditorSettings) =
 
   const registerName = ""
@@ -463,7 +463,6 @@ proc deleteWordBeforeCursor*(bufStatus: var BufferStatus,
     registers,
     registerName,
     loop,
-    tabStop,
     settings)
 
 proc countSpaceOfBeginningOfLine(line: seq[Rune]): int =
