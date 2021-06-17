@@ -1,12 +1,13 @@
 import unittest, options
-import moepkg/unicodeext
+import moepkg/[unicodeext, settings]
 include moepkg/[register]
 
 suite "Register: Add a buffer to the no name register":
   test "Add a string to the no name register":
     var registers: Registers
+    let settings = initEditorSettings()
 
-    registers.addRegister(ru "abc")
+    registers.addRegister(ru "abc", settings)
 
     check registers.noNameRegister == Register(
       buffer: @[ru "abc"],
@@ -16,8 +17,9 @@ suite "Register: Add a buffer to the no name register":
   test "Overwrite a string in the no name register":
     var registers: Registers
     registers.noNameRegister = Register(buffer: @[ru "abc"])
+    let settings = initEditorSettings()
 
-    registers.addRegister(ru "def")
+    registers.addRegister(ru "def", settings)
 
     check registers.noNameRegister == Register(
       buffer: @[ru "def"],
@@ -26,9 +28,10 @@ suite "Register: Add a buffer to the no name register":
 
   test "Add a line to the no name register":
     var registers: Registers
+    let settings = initEditorSettings()
 
     const isLine = true
-    registers.addRegister(ru "abc", isLine)
+    registers.addRegister(ru "abc", isLine, settings)
 
     check registers.noNameRegister == Register(
       buffer: @[ru "abc"],
@@ -37,9 +40,10 @@ suite "Register: Add a buffer to the no name register":
 
   test "Add 2 lines to the no name register":
     var registers: Registers
+    let settings = initEditorSettings()
 
     const isLine = true
-    registers.addRegister(@[ru "abc", ru "def"], isLine)
+    registers.addRegister(@[ru "abc", ru "def"], isLine, settings)
 
     check registers.noNameRegister == Register(
       buffer: @[ru "abc", ru "def"],
@@ -49,9 +53,10 @@ suite "Register: Add a buffer to the no name register":
 suite "Register: Add a buffer to the named register":
   test "Add a string to the named register":
     var registers: Registers
+    let settings = initEditorSettings()
 
     const name = "a"
-    registers.addRegister(ru "abc", name)
+    registers.addRegister(ru "abc", name, settings)
 
     check registers.namedRegister[0] == Register(
       buffer: @[ru "abc"],
@@ -60,13 +65,15 @@ suite "Register: Add a buffer to the named register":
 
   test "Overwrite a string to the named register":
     var registers: Registers
+    let settings = initEditorSettings()
+
     const name = "a"
     registers.namedRegister.add Register(
       buffer: @[ru "abc"],
       isLine: false,
       name: name)
 
-    registers.addRegister(ru "def", name)
+    registers.addRegister(ru "def", name, settings)
 
     check registers.namedRegister[0] == Register(
       buffer: @[ru "def"],
@@ -75,6 +82,8 @@ suite "Register: Add a buffer to the named register":
 
   test "Overwrite a line to the named register":
     var registers: Registers
+    let settings = initEditorSettings()
+
     const name = "a"
     registers.namedRegister.add Register(
       buffer: @[ru "abc"],
@@ -82,7 +91,7 @@ suite "Register: Add a buffer to the named register":
       name: name)
 
     const isLine = true
-    registers.addRegister(ru "def", isLine, name)
+    registers.addRegister(ru "def", isLine, name, settings)
 
     check registers.namedRegister[0] == Register(
       buffer: @[ru "def"],
@@ -91,8 +100,10 @@ suite "Register: Add a buffer to the named register":
 
   test "Not added to the register (_ register)":
     var registers: Registers
+    let settings = initEditorSettings()
+
     const name = "_"
-    registers.addRegister(ru "def", name)
+    registers.addRegister(ru "def", name, settings)
 
     check registers.namedRegister.len == 0
     check registers.noNameRegister == Register()
@@ -100,12 +111,13 @@ suite "Register: Add a buffer to the named register":
 suite "Register: Add a buffer to the small delete register":
   test "Add a deleted string to the small deleted register":
     var registers: Registers
+    let settings = initEditorSettings()
 
     const
       isLine = false
       isDelete = true
-    registers.addRegister(ru "abc", isLine, isDelete)
-    registers.addRegister(ru "def", isLine, isDelete)
+    registers.addRegister(ru "abc", isLine, isDelete, settings)
+    registers.addRegister(ru "def", isLine, isDelete, settings)
 
     check registers.noNameRegister == Register(buffer: @[ru "def"])
 
@@ -118,9 +130,10 @@ suite "Register: Add a buffer to the small delete register":
 suite "Register: Add a buffer to the number register":
   test "Add a yanked string to the number register":
     var registers: Registers
+    let settings = initEditorSettings()
 
-    registers.addRegister(ru "abc")
-    registers.addRegister(ru "def")
+    registers.addRegister(ru "abc", settings)
+    registers.addRegister(ru "def", settings)
 
     for i in 0 ..< 10:
       let r  = registers.numberRegister[i]
@@ -131,14 +144,15 @@ suite "Register: Add a buffer to the number register":
 
   test "Add a line to the number register":
     var registers: Registers
+    let settings = initEditorSettings()
 
     const number = 0
-    registers.addRegister(@[ru "abc"])
+    registers.addRegister(@[ru "abc"], settings)
 
     const
       isDelete = true
       isLine = true
-    registers.addRegister(ru "def", isLine, isDelete)
+    registers.addRegister(ru "def", isLine, isDelete, settings)
 
     for i in 0 ..< 10:
       let r = registers.numberRegister[i]
@@ -152,6 +166,7 @@ suite "Register: Add a buffer to the number register":
 suite "Register: Search a register by name":
   test "Search a register by name":
     var registers: Registers
+    let settings = initEditorSettings()
     const
       r1 = Register(buffer: @[ru "abc"], name: "a")
       r2 = Register(buffer: @[ru "def"], name: "b")
@@ -164,6 +179,7 @@ suite "Register: Search a register by name":
 
   test "Search a register by number string":
     var registers: Registers
+    let settings = initEditorSettings()
     const
       r1 = Register(buffer: @[ru "abc"], name: "a")
       r2 = Register(buffer: @[ru "def"], name: "b")
@@ -178,6 +194,7 @@ suite "Register: Search a register by name":
 
   test "Return empty":
     var registers: Registers
+    let settings = initEditorSettings()
     const
       r1 = Register(buffer: @[ru "abc"], name: "a")
       r2 = Register(buffer: @[ru "def"], name: "b")
