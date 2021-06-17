@@ -1,16 +1,16 @@
 import osproc, strutils
 
-type Platform* = enum
+type Platforms* = enum
   linux, wsl, mac, other
 
-proc initPlatform(): Platform =
+proc initPlatform(): Platforms =
   if defined linux:
     if execProcess("uname -r").contains("microsoft"):
-      result = Platform.wsl
-    else: result = Platform.linux
+      result = Platforms.wsl
+    else: result = Platforms.linux
   elif defined macosx:
-    result = Platform.mac
+    result = Platforms.mac
   else:
-    result = Platform.other
+    result = Platforms.other
 
 let CURRENT_PLATFORM* = initPlatform()

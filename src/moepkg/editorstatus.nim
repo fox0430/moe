@@ -164,12 +164,12 @@ proc loadLastPosition*(): seq[LastPosition] =
 
           result.add position
 
-proc executeOnExit(settings: EditorSettings, platform: Platform) {.inline.} =
+proc executeOnExit(settings: EditorSettings, platform: Platforms) {.inline.} =
   if not settings.disableChangeCursor:
     changeCursorType(settings.defaultCursor)
 
   # Without this, the cursor disappears in Windows terminal
-  if platform ==  Platform.wsl:
+  if platform ==  Platforms.wsl:
     unhideCursor()
 
 # Save Ex command history to the file
