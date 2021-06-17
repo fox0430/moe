@@ -3,7 +3,7 @@ import independentutils, platform, settings
 
 proc runesToStrings(runes: seq[seq[Rune]]): string =
   if runes.len == 1:
-    result = $runes
+    result = $runes[0]
   else:
     for i in 0 ..< runes.len:
       if i == 0:
@@ -16,9 +16,9 @@ proc sendToClipboard*(buffer: seq[seq[Rune]],
 
   if buffer.len < 1: return
 
-  let buffer = runesToStrings(buffer)
-
-  let delimiterStr = genDelimiterStr(buffer)
+  let
+    str = runesToStrings(buffer)
+    delimiterStr = genDelimiterStr(str)
 
   case CURRENT_PLATFORM:
     of linux:
@@ -26,15 +26,15 @@ proc sendToClipboard*(buffer: seq[seq[Rune]],
       let (_, exitCode) = execCmdEx("xset q")
       if exitCode == 0:
         let cmd = if tool == ClipboardToolOnLinux.xclip:
-                    "xclip -r <<" & "'" & delimiterStr & "'" & "\n" & buffer & "\n" & delimiterStr & "\n"
+                    "xclip -r <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
                   else:
-                    "xsel <<" & "'" & delimiterStr & "'" & "\n" & buffer & "\n" & delimiterStr & "\n"
+                    "xsel <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
         discard execShellCmd(cmd)
     of wsl:
-      let cmd = "clip.exe <<" & "'" & delimiterStr & "'" & "\n" & buffer & "\n"  & delimiterStr & "\n"
+      let cmd = "clip.exe <<" & "'" & delimiterStr & "'" & "\n" & str & "\n"  & delimiterStr & "\n"
       discard execShellCmd(cmd)
     of mac:
-      let cmd = "pbcopy <<" & "'" & delimiterStr & "'" & "\n" & buffer & "\n"  & delimiterStr & "\n"
+      let cmd = "pbcopy <<" & "'" & delimiterStr & "'" & "\n" & str & "\n"  & delimiterStr & "\n"
       discard execShellCmd(cmd)
     else:
       discard
