@@ -1,5 +1,6 @@
 import unittest
-include moepkg/[editor, editorstatus, register, ui]
+import moepkg/register
+include moepkg/[editor, editorstatus, ui, platform]
 
 suite "Editor: Auto indent":
   test "Auto indent in current Line":
@@ -66,172 +67,6 @@ suite "Editor: Delete trailing spaces":
     check status.bufStatus[0].buffer[1] == ru"d"
     check status.bufStatus[0].buffer[2] == ru"efg"
 
-proc initRegister(buffer: seq[Rune]): register.Registers {.compiletime.} =
-  result.addRegister(buffer)
-
-proc initRegister(buffer: seq[seq[Rune]]): register.Registers {.compiletime.} =
-  result.addRegister(buffer)
-
-suite "Editor: Send to clipboad":
-  test "Send string to clipboard 1 (xsel)":
-    const
-      str = ru"Clipboard test"
-      tool = ClipboardToolOnLinux.xsel
-
-    let registers = initRegister(str)
-
-    let platform = editorstatus.initPlatform()
-    registers.sendToClipboad(platform, tool)
-
-    if (platform == editorstatus.Platform.linux or
-        platform == editorstatus.Platform.wsl):
-      let
-        cmd = if platform == editorstatus.Platform.linux:
-                execCmdEx("xsel")
-              else:
-                # On the WSL
-                execCmdEx("powershell.exe -Command Get-Clipboard")
-        (output, exitCode) = cmd
-
-      check exitCode == 0
-      if platform == editorstatus.Platform.linux:
-        check output[0 .. output.high - 1] == $str
-      else:
-        # On the WSL
-        check output[0 .. output.high - 2] == $str
-
-  test "Send string to clipboard 1 (xclip)":
-    const
-      str = ru"Clipboard test"
-      registers = initRegister(str)
-      tool = ClipboardToolOnLinux.xclip
-
-    let platform = editorstatus.initPlatform()
-    registers.sendToClipboad(platform, tool)
-
-    if (platform == editorstatus.Platform.linux or
-        platform == editorstatus.Platform.wsl):
-      let
-        cmd = if platform == editorstatus.Platform.linux:
-                execCmdEx("xclip -o")
-              else:
-                # On the WSL
-                execCmdEx("powershell.exe -Command Get-Clipboard")
-        (output, exitCode) = cmd
-
-      check exitCode == 0
-      if platform == editorstatus.Platform.linux:
-        check output[0 .. output.high - 1] == $str
-      else:
-        # On the WSL
-        check output[0 .. output.high - 2] == $str
-
-  test "Send string to clipboard 2 (xsel)":
-    const
-      str = ru"`````"
-      registers = initRegister(str)
-      tool = ClipboardToolOnLinux.xsel
-
-    let platform = editorstatus.initPlatform()
-    registers.sendToClipboad(platform, tool)
-
-    if (platform == editorstatus.Platform.linux or
-        platform == editorstatus.Platform.wsl):
-      let
-        cmd = if platform == editorstatus.Platform.linux:
-                execCmdEx("xsel")
-              else:
-                # On the WSL
-                execCmdEx("powershell.exe -Command Get-Clipboard")
-        (output, exitCode) = cmd
-
-      check exitCode == 0
-      if platform == editorstatus.Platform.linux:
-        check output[0 .. output.high - 1] == $str
-      else:
-        # On the WSL
-        check output[0 .. output.high - 2] == $str
-
-  test "Send string to clipboard 2 (xclip)":
-    const
-      str = ru"`````"
-      registers = initRegister(str)
-      tool = ClipboardToolOnLinux.xclip
-
-    let platform = editorstatus.initPlatform()
-    registers.sendToClipboad(platform, tool)
-
-    if (platform == editorstatus.Platform.linux or
-        platform == editorstatus.Platform.wsl):
-      let
-        cmd = if platform == editorstatus.Platform.linux:
-                execCmdEx("xclip -o")
-              else:
-                # On the WSL
-                execCmdEx("powershell.exe -Command Get-Clipboard")
-        (output, exitCode) = cmd
-
-      check exitCode == 0
-      if platform == editorstatus.Platform.linux:
-        check output[0 .. output.high - 1] == $str
-      else:
-        # On the WSL
-        check output[0 .. output.high - 2] == $str
-
-  test "Send string to clipboard 3 (xsel)":
-    const
-      str = ru"$Clipboard test"
-      registers = initRegister(str)
-      tool = ClipboardToolOnLinux.xsel
-
-    let platform = editorstatus.initPlatform()
-    registers.sendToClipboad(platform, tool)
-
-    if (platform == editorstatus.Platform.linux or
-        platform == editorstatus.Platform.wsl):
-      let
-        cmd = if platform == editorstatus.Platform.linux:
-                execCmdEx("xsel")
-              else:
-
-                # On the WSL
-                execCmdEx("powershell.exe -Command Get-Clipboard")
-        (output, exitCode) = cmd
-
-      check exitCode == 0
-      if platform == editorstatus.Platform.linux:
-        check output[0 .. output.high - 1] == $str
-      else:
-        # On the WSL
-        check output[0 .. output.high - 2] == $str
-
-  test "Send string to clipboard 3 (xclip)":
-    const
-      str = ru"$Clipboard test"
-      registers = initRegister(str)
-      tool = ClipboardToolOnLinux.xclip
-
-    let platform = editorstatus.initPlatform()
-    registers.sendToClipboad(platform, tool)
-
-    if (platform == editorstatus.Platform.linux or
-        platform == editorstatus.Platform.wsl):
-      let
-        cmd = if platform == editorstatus.Platform.linux:
-                execCmdEx("xclip -o")
-              else:
-
-                # On the WSL
-                execCmdEx("powershell.exe -Command Get-Clipboard")
-        (output, exitCode) = cmd
-
-      check exitCode == 0
-      if platform == editorstatus.Platform.linux:
-        check output[0 .. output.high - 1] == $str
-      else:
-        # On the WSL
-        check output[0 .. output.high - 2] == $str
-
 suite "Editor: Delete word":
   test "Fix #842":
     var status = initEditorStatus()
@@ -240,6 +75,7 @@ suite "Editor: Delete word":
     currentBufStatus.buffer = initGapBuffer(@[ru"block:", ru"  "])
     currentMainWindowNode.currentLine = 1
 
+    let settings = initEditorSettings()
     const
       loop = 2
       registerName = ""
@@ -247,7 +83,8 @@ suite "Editor: Delete word":
       currentMainWindowNode,
       loop,
       status.registers,
-      registerName)
+      registerName,
+      settings)
 
 suite "Editor: keyEnter":
   test "Delete all characters in the previous line if only whitespaces":
@@ -478,10 +315,12 @@ suite "Editor: Delete inside paren":
 
     var registers: register.Registers
 
+    let settings = initEditorSettings()
     currentBufStatus.deleteInsideOfParen(
       currentMainWindowNode,
       registers,
-      ru'"')
+      ru'"',
+      settings)
 
     check currentBufStatus.buffer[0] == ru """abc "" "ghi""""
 
@@ -491,20 +330,23 @@ suite "Editor: Paste lines":
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
 
-    const registers = initRegister(@[ru "def"])
+    var registers: Registers
+    let settings = initEditorSettings()
+    registers.addRegister(ru "def", settings)
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, registers)
 
-    check currentBufStatus.buffer.len == 2
-    check currentBufStatus.buffer[0] == ru"abc"
-    check currentBufStatus.buffer[1] == ru"def"
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru"adefbc"
 
   test "Paste lines when the last line is empty":
     var status = initEditorStatus()
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
 
-    const registers = initRegister(@[ru "def", ru ""])
+    var registers: Registers
+    let settings = initEditorSettings()
+    registers.addRegister(@[ru "def", ru ""], settings)
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, registers)
 
@@ -519,18 +361,19 @@ suite "Editor: Paste a string":
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
 
-    const registers = initRegister(ru "def")
+    var registers: Registers
+    let settings = initEditorSettings()
+    registers.addRegister(ru "def", settings)
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, registers)
 
     check currentBufStatus.buffer[0] == ru "defabc"
 
-suite "Editor: Yank a string":
+suite "Editor: Yank characters":
   test "Yank a string with name in the empty line":
     var status = initEditorStatus()
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru ""])
 
-    let platform: editorstatus.Platform = editorstatus.initPlatform()
     const
       length = 1
       name = "a"
@@ -540,7 +383,6 @@ suite "Editor: Yank a string":
       currentMainWindowNode,
       status.commandline,
       status.messageLog,
-      platform,
       status.settings,
       length,
       name,
@@ -554,40 +396,40 @@ suite "Editor: Yank words":
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
 
-    let platform: editorstatus.Platform = editorstatus.initPlatform()
     const
       length = 1
       name = ""
       loop = 1
     currentBufStatus.yankWord(status.registers,
                               currentMainWindowNode,
-                              platform,
-                              status.settings.clipboard,
-                              loop)
+                              loop,
+                              status.settings)
 
     check status.registers.noNameRegister ==  register.Register(
       buffer: @[ru "abc "],
       isLine: false,
       name: "")
 
-    const str = "abc "
+    let p = initPlatform()
     # Check clipboad
-    if (platform == editorstatus.Platform.linux or
-        platform == editorstatus.Platform.wsl):
+    if (p == Platforms.linux or
+        p == Platforms.wsl):
       let
-        cmd = if platform == editorstatus.Platform.linux:
-                execCmdEx("xsel")
+        cmd = if p == Platforms.linux:
+                execCmdEx("xsel -o")
               else:
                 # On the WSL
                 execCmdEx("powershell.exe -Command Get-Clipboard")
         (output, exitCode) = cmd
 
       check exitCode == 0
-      if platform == editorstatus.Platform.linux:
-        check output[0 .. output.high - 1] == $str
+
+      const str = "abc "
+      if p == Platforms.linux:
+        check output[0 .. output.high - 1] == str
       else:
         # On the WSL
-        check output[0 .. output.high - 2] == $str
+        check output[0 .. output.high - 2] == str
 
 suite "Editor: Modify the number string under the cursor":
   test "Increment the number string":
@@ -693,7 +535,8 @@ suite "Editor: Delete from the previous blank line to the current line":
     currentBufStatus.deleteTillPreviousBlankLine(
       status.registers,
       currentMainWindowNode,
-      registerName)
+      registerName,
+      status.settings)
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru "abc"
@@ -714,7 +557,8 @@ suite "Editor: Delete from the previous blank line to the current line":
     currentBufStatus.deleteTillPreviousBlankLine(
       status.registers,
       currentMainWindowNode,
-      registerName)
+      registerName,
+      status.settings)
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru "abc"
@@ -734,7 +578,8 @@ suite "Editor: Delete from the current line to the next blank line":
     currentBufStatus.deleteTillNextBlankLine(
       status.registers,
       currentMainWindowNode,
-      registerName)
+      registerName,
+      status.settings)
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru ""
@@ -754,7 +599,8 @@ suite "Editor: Delete from the current line to the next blank line":
     currentBufStatus.deleteTillNextBlankLine(
       status.registers,
       currentMainWindowNode,
-      registerName)
+      registerName,
+      status.settings)
 
     check currentBufStatus.buffer.len == 3
     check currentBufStatus.buffer[0] == ru "a"

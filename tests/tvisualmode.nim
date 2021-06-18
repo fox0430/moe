@@ -1,7 +1,7 @@
 import unittest, osproc
 import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, movement, bufferstatus,
                register]
-include moepkg/[visualmode]
+include moepkg/[visualmode, platform]
 
 suite "Visual mode: Delete buffer":
   test "Delete buffer 1":
@@ -259,8 +259,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     currentBufStatus.yankBuffer(status.registers,
                                 currentMainWindowNode,
                                 area,
-                                status.platform,
-                                status.settings.clipboard)
+                                status.settings)
 
     check status.registers.noNameRegister.isLine
     check status.registers.noNameRegister.buffer == @[ru"abc", ru"def"]
@@ -292,8 +291,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     currentBufStatus.yankBuffer(status.registers,
                                 currentMainWindowNode,
                                 area,
-                                status.platform,
-                                status.settings.clipboard)
+                                status.settings)
 
     check not status.registers.noNameRegister.isLine
     check status.registers.noNameRegister.buffer[^1] == ru"abc"
@@ -324,8 +322,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     currentBufStatus.yankBuffer(status.registers,
                                 currentMainWindowNode,
                                 area,
-                                status.platform,
-                                status.settings.clipboard)
+                                status.settings)
 
     check status.registers.noNameRegister.isLine
     check status.registers.noNameRegister.buffer == @[ru"abc", ru""]
@@ -355,8 +352,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     currentBufStatus.yankBuffer(status.registers,
                                 currentMainWindowNode,
                                 area,
-                                status.platform,
-                                status.settings.clipboard)
+                                status.settings)
 
     check status.registers.noNameRegister.isLine
     check status.registers.noNameRegister.buffer == @[ru""]
@@ -392,8 +388,7 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
     currentBufStatus.yankBufferBlock(status.registers,
                                      currentMainWindowNode,
                                      area,
-                                     status.platform,
-                                     status.settings.clipboard)
+                                     status.settings)
 
     check status.registers.noNameRegister.isLine
     check status.registers.noNameRegister.buffer == @[ru"a", ru"d"]
@@ -436,8 +431,7 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
     currentBufStatus.yankBufferBlock(status.registers,
                                      currentMainWindowNode,
                                      area,
-                                     status.platform,
-                                     status.settings.clipboard)
+                                     status.settings)
 
     check status.registers.noNameRegister.isLine
     check status.registers.noNameRegister.buffer == @[ru"a", ru"d"]
@@ -473,8 +467,7 @@ suite "Visual block mode: Delete buffer (Disable clipboard)":
     currentBufStatus.deleteBufferBlock(status.registers,
                                        currentMainWindowNode,
                                        area,
-                                       status.platform,
-                                       status.settings.clipboard)
+                                       status.settings)
 
     check(currentBufStatus.buffer[0] == ru"bc")
     check(currentBufStatus.buffer[1] == ru"ef")
@@ -510,13 +503,12 @@ suite "Visual mode: Yank buffer (Enable clipboard)":
     currentBufStatus.yankBuffer(status.registers,
                                 currentMainWindowNode,
                                 area,
-                                status.platform,
-                                status.settings.clipboard)
+                                status.settings)
 
-    if (status.platform == editorstatus.Platform.linux or
-        status.platform == editorstatus.Platform.wsl):
+    if (CURRENT_PLATFORM == Platforms.linux or
+        CURRENT_PLATFORM == Platforms.wsl):
       let
-        cmd = if status.platform == editorstatus.Platform.linux:
+        cmd = if CURRENT_PLATFORM == Platforms.linux:
                 execCmdEx("xclip -o")
               else:
                 # On the WSL
@@ -524,7 +516,7 @@ suite "Visual mode: Yank buffer (Enable clipboard)":
         (output, exitCode) = cmd
 
       check exitCode == 0
-      if status.platform == editorstatus.Platform.linux:
+      if CURRENT_PLATFORM == Platforms.linux:
         check output[0 .. output.high - 1] == "abc"
       else:
         # On the WSL
@@ -565,13 +557,12 @@ suite "Visual mode: Yank buffer (Enable clipboard)":
     currentBufStatus.yankBuffer(status.registers,
                                 currentMainWindowNode,
                                 area,
-                                status.platform,
-                                status.settings.clipboard)
+                                status.settings)
 
-    if (status.platform == editorstatus.Platform.linux or
-        status.platform == editorstatus.Platform.wsl):
+    if (CURRENT_PLATFORM == Platforms.linux or
+        CURRENT_PLATFORM == Platforms.wsl):
       let
-        cmd = if status.platform == editorstatus.Platform.linux:
+        cmd = if CURRENT_PLATFORM == Platforms.linux:
                 execCmdEx("xclip -o")
               else:
                 # On the WSL
@@ -579,7 +570,7 @@ suite "Visual mode: Yank buffer (Enable clipboard)":
         (output, exitCode) = cmd
 
       check exitCode == 0
-      if status.platform == editorstatus.Platform.linux:
+      if CURRENT_PLATFORM == Platforms.linux:
         check output[0 .. output.high - 1] == "abc\ndef"
       else:
         # On the WSL
@@ -617,10 +608,9 @@ suite "Visual block mode: Yank buffer (Enable clipboard) 1":
     currentBufStatus.yankBufferBlock(status.registers,
                                      currentMainWindowNode,
                                      area,
-                                     status.platform,
-                                     status.settings.clipboard)
+                                     status.settings)
 
-    if status.platform == editorstatus.Platform.linux:
+    if CURRENT_PLATFORM == Platforms.linux:
       let
         cmd = execCmdEx("xclip -o")
         (output, exitCode) = cmd
@@ -663,10 +653,9 @@ suite "Visual block mode: Yank buffer (Enable clipboard) 1":
     currentBufStatus.yankBufferBlock(status.registers,
                                      currentMainWindowNode,
                                      area,
-                                     status.platform,
-                                     status.settings.clipboard)
+                                     status.settings)
 
-    if status.platform == editorstatus.Platform.linux:
+    if CURRENT_PLATFORM == Platforms.linux:
       let
         cmd = execCmdEx("xclip -o")
         (output, exitCode) = cmd
@@ -706,10 +695,9 @@ suite "Visual block mode: Delete buffer":
     currentBufStatus.deleteBufferBlock(status.registers,
                                        currentMainWindowNode,
                                        area,
-                                       status.platform,
-                                       status.settings.clipboard)
+                                       status.settings)
 
-    if status.platform == editorstatus.Platform.linux:
+    if CURRENT_PLATFORM == Platforms.linux:
       let (output, exitCode) = execCmdEx("xclip -o")
       check(exitCode == 0 and output[0 .. output.high - 1] == "a\nd")
 
@@ -745,8 +733,7 @@ suite "Visual block mode: Delete buffer":
     currentBufStatus.deleteBufferBlock(status.registers,
                                        currentMainWindowNode,
                                        area,
-                                       status.platform,
-                                       status.settings.clipboard)
+                                       status.settings)
 
   test "Fix #885":
     var status = initEditorStatus()
@@ -781,8 +768,7 @@ suite "Visual block mode: Delete buffer":
     currentBufStatus.deleteBufferBlock(status.registers,
       currentMainWindowNode,
       area,
-      status.platform,
-      status.settings.clipboard)
+      status.settings)
 
     check currentBufStatus.buffer[0] == ru"c"
     check currentBufStatus.buffer[1] == ru""

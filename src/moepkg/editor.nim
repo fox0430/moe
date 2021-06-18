@@ -1,4 +1,4 @@
-import strutils, sequtils, os, osproc, random, strformat, options
+import strutils, sequtils, strformat, options
 import editorstatus, ui, gapbuffer, unicodeext, undoredostack, window,
        bufferstatus, movement, messages, settings, register, commandline
 
@@ -337,7 +337,8 @@ proc deleteWord*(bufStatus: var BufferStatus,
                  windowNode: var WindowNode,
                  loop: int,
                  registers: var Registers,
-                 registerName: string) =
+                 registerName: string,
+                 settings: EditorSettings) =
 
   var deletedBuffer: seq[Rune]
 
@@ -404,12 +405,12 @@ proc deleteWord*(bufStatus: var BufferStatus,
       windowNode.currentColumn = currentColumn
 
   if registerName.len > 0:
-    registers.addRegister(deletedBuffer, registerName)
+    registers.addRegister(deletedBuffer, registerName, settings)
   else:
     const
       isLine = false
       isDelete = true
-    registers.addRegister(deletedBuffer, isLine, isDelete)
+    registers.addRegister(deletedBuffer, isLine, isDelete, settings)
 
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
@@ -418,21 +419,23 @@ proc deleteWordBeforeCursor*(bufStatus: var BufferStatus,
                              windowNode: var WindowNode,
                              registers: var Registers,
                              registerName: string,
-                             loop, tabStop: int) =
+                             loop: int,
+                             settings: EditorSettings) =
 
   if windowNode.currentLine == 0 and windowNode.currentColumn == 0: return
 
   if windowNode.currentColumn == 0:
     let isAutoDeleteParen = false
-    bufStatus.keyBackspace(windowNode, isAutoDeleteParen, tabStop)
+    bufStatus.keyBackspace(windowNode, isAutoDeleteParen, settings.tabStop)
   else:
     bufStatus.moveToBackwardWord(windowNode)
-    bufStatus.deleteWord(windowNode, loop, registers, registerName)
+    bufStatus.deleteWord(windowNode, loop, registers, registerName, settings)
 
 proc deleteWordBeforeCursor*(bufStatus: var BufferStatus,
                              windowNode: var WindowNode,
                              registers: var Registers,
-                             loop, tabStop: int) =
+                             loop: int,
+                             settings: EditorSettings) =
 
   const registerName = ""
   bufStatus.deleteWordBeforeCursor(
@@ -440,7 +443,7 @@ proc deleteWordBeforeCursor*(bufStatus: var BufferStatus,
     registers,
     registerName,
     loop,
-    tabStop)
+    settings)
 
 proc countSpaceOfBeginningOfLine(line: seq[Rune]): int =
   for r in line:
@@ -560,8 +563,8 @@ proc deleteCharacter*(bufStatus: var BufferStatus,
 proc deleteCharacters*(bufStatus: var BufferStatus,
                        registers: var Registers,
                        registerName: string,
-                       autoDeleteParen: bool,
-                       line, colmun, loop: int) =
+                       line, colmun, loop: int,
+                       settings: EditorSettings) =
 
   if line >= bufStatus.buffer.high and
      colmun > bufStatus.buffer[line].high: return
@@ -584,7 +587,7 @@ proc deleteCharacters*(bufStatus: var BufferStatus,
 
     if currentColumn > newLine.high: currentColumn = newLine.high
 
-    if autoDeleteParen and deleteChar.isParen:
+    if settings.autoDeleteParen and deleteChar.isParen:
       bufStatus.deleteParen(
         line,
         colmun,
@@ -598,9 +601,9 @@ proc deleteCharacters*(bufStatus: var BufferStatus,
       isDelete = true
 
     if registerName.len > 0:
-      registers.addRegister(deletedBuffer, registerName)
+      registers.addRegister(deletedBuffer, registerName, settings)
     else:
-      registers.addRegister(deletedBuffer, isLine, isDelete)
+      registers.addRegister(deletedBuffer, isLine, isDelete, settings)
 
 # No yank buffer
 proc deleteCharacters*(bufStatus: var BufferStatus,
@@ -695,7 +698,8 @@ proc deleteLines*(bufStatus: var BufferStatus,
                   registers: var Registers,
                   windowNode: WindowNode,
                   registerName: string,
-                  startLine, loop: int) =
+                  startLine, loop: int,
+                  settings: EditorSettings) =
 
   let endLine = min(startLine + loop, bufStatus.buffer.high)
 
@@ -709,10 +713,10 @@ proc deleteLines*(bufStatus: var BufferStatus,
 
     const isLine = true
     if registerName.len > 0:
-      registers.addRegister(deleteLines, isLine, registerName)
+      registers.addRegister(deleteLines, isLine, registerName, settings)
     else:
       const isDelete = true
-      registers.addRegister(deleteLines, isLine, isDelete)
+      registers.addRegister(deleteLines, isLine, isDelete, settings)
 
   bufStatus.buffer.delete(startLine, endLine)
 
@@ -732,7 +736,7 @@ proc deleteCharacterUntilEndOfLine*(bufStatus: var BufferStatus,
                                     registers: var Registers,
                                     registerName: string,
                                     windowNode: WindowNode,
-                                    autoDeleteParen: bool) =
+                                    settings: EditorSettings) =
 
   let
     currentLine = windowNode.currentLine
@@ -742,16 +746,16 @@ proc deleteCharacterUntilEndOfLine*(bufStatus: var BufferStatus,
   bufStatus.deleteCharacters(
     registers,
     registerName,
-    autoDeleteParen,
     currentLine,
     startColumn,
-    loop)
+    loop,
+    settings)
 
 proc deleteCharacterBeginningOfLine*(bufStatus: var BufferStatus,
                                      registers: var Registers,
                                      windowNode: var WindowNode,
                                      registerName: string,
-                                     autoDeleteParen: bool) =
+                                     settings: EditorSettings) =
 
   let
     currentLine = windowNode.currentLine
@@ -761,10 +765,10 @@ proc deleteCharacterBeginningOfLine*(bufStatus: var BufferStatus,
   bufStatus.deleteCharacters(
     registers,
     registerName,
-    autoDeleteParen,
     currentLine,
     startColumn,
-    loop)
+    loop,
+    settings)
 
   windowNode.currentColumn = 0
   windowNode.expandedColumn = 0
@@ -774,7 +778,7 @@ proc deleteCharactersAfterBlankInLine*(bufStatus: var BufferStatus,
                                        registers: var Registers,
                                        windowNode: var WindowNode,
                                        registerName: string,
-                                       autoDeleteParen: bool) =
+                                       settings: EditorSettings) =
 
   let
     currentLine = windowNode.currentLine
@@ -784,10 +788,10 @@ proc deleteCharactersAfterBlankInLine*(bufStatus: var BufferStatus,
   bufStatus.deleteCharacters(
     registers,
     registerName,
-    autoDeleteParen,
     currentLine,
     firstNonBlankCol,
-    loop)
+    loop,
+    settings)
 
   windowNode.currentColumn = firstNonBlankCol
   windowNode.expandedColumn = firstNonBlankCol
@@ -796,7 +800,8 @@ proc deleteCharactersAfterBlankInLine*(bufStatus: var BufferStatus,
 proc deleteTillPreviousBlankLine*(bufStatus: var BufferStatus,
                                   registers: var Registers,
                                   windowNode: WindowNode,
-                                  registerName: string) =
+                                  registerName: string,
+                                  settings: EditorSettings) =
 
   var deletedBuffer: seq[seq[Rune]]
 
@@ -828,12 +833,12 @@ proc deleteTillPreviousBlankLine*(bufStatus: var BufferStatus,
       if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
 
   if registerName.len > 0:
-    registers.addRegister(deletedBuffer, registerName)
+    registers.addRegister(deletedBuffer, registerName, settings)
   else:
     const
       isLine = true
       isDelete = true
-    registers.addRegister(deletedBuffer, isLine, isDelete)
+    registers.addRegister(deletedBuffer, isLine, isDelete, settings)
 
   windowNode.currentLine = min(bufStatus.buffer.high, windowNode.currentLine)
   windowNode.currentColumn = 0
@@ -845,7 +850,8 @@ proc deleteTillPreviousBlankLine*(bufStatus: var BufferStatus,
 proc deleteTillNextBlankLine*(bufStatus: var BufferStatus,
                               registers: var Registers,
                               windowNode: WindowNode,
-                              registerName: string) =
+                              registerName: string,
+                              settings: EditorSettings) =
 
   let
     currentLine = windowNode.currentLine
@@ -879,58 +885,15 @@ proc deleteTillNextBlankLine*(bufStatus: var BufferStatus,
     bufStatus.buffer.delete(startLine, blankLine - 1)
 
   if registerName.len > 0:
-    registers.addRegister(deletedBuffer, registerName)
+    registers.addRegister(deletedBuffer, registerName, settings)
   else:
     const
       isLine = true
       isDelete = true
-    registers.addRegister(deletedBuffer, isLine, isDelete)
+    registers.addRegister(deletedBuffer, isLine, isDelete, settings)
 
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
-
-proc genDelimiterStr(buffer: string): string =
-  while true:
-    for _ in 0 .. 10: add(result, char(rand(int('A') .. int('Z'))))
-    if buffer != result: break
-
-proc sendToClipboad*(registers: Registers,
-                     platform: Platform,
-                     tool: ClipboardToolOnLinux) =
-
-  let r = registers.noNameRegister
-
-  if r.buffer.len < 1: return
-
-  var buffer = ""
-  if r.buffer.len == 1:
-    buffer = $r.buffer
-  else:
-    for i in 0 ..< r.buffer.len:
-      if i == 0: buffer = $r.buffer[0]
-      else: buffer &= "\n" & $r.buffer[i]
-
-  if buffer.len < 1: return
-
-  let delimiterStr = genDelimiterStr(buffer)
-
-  case platform
-    of linux:
-      ## Check if X server is running
-      let (_, exitCode) = execCmdEx("xset q")
-      if exitCode == 0:
-        let cmd = if tool == ClipboardToolOnLinux.xclip:
-                    "xclip -r <<" & "'" & delimiterStr & "'" & "\n" & buffer & "\n" & delimiterStr & "\n"
-                  else:
-                    "xsel <<" & "'" & delimiterStr & "'" & "\n" & buffer & "\n" & delimiterStr & "\n"
-        discard execShellCmd(cmd)
-    of wsl:
-      let cmd = "clip.exe <<" & "'" & delimiterStr & "'" & "\n" & buffer & "\n"  & delimiterStr & "\n"
-      discard execShellCmd(cmd)
-    of mac:
-      let cmd = "pbcopy <<" & "'" & delimiterStr & "'" & "\n" & buffer & "\n"  & delimiterStr & "\n"
-      discard execShellCmd(cmd)
-    else: discard
 
 # name is the register name
 proc yankLines*(bufStatus: BufferStatus,
@@ -940,17 +903,18 @@ proc yankLines*(bufStatus: BufferStatus,
                 notificationSettings: NotificationSettings,
                 first, last: int,
                 name: string,
-                isDelete: bool) =
+                isDelete: bool,
+                settings: EditorSettings) =
 
   var yankedBuffer: seq[seq[Rune]]
   for i in first .. last:
     yankedBuffer.add bufStatus.buffer[i]
 
   if name.len > 0:
-    registers.addRegister(yankedBuffer, name)
+    registers.addRegister(yankedBuffer, name, settings)
   else:
     const isLine = true
-    registers.addRegister(yankedBuffer, isLine, isDelete)
+    registers.addRegister(yankedBuffer, isLine, isDelete, settings)
 
   commandLine.writeMessageYankedLine(
     yankedBuffer.len,
@@ -963,7 +927,8 @@ proc yankLines*(bufStatus: BufferStatus,
                 messageLog: var seq[seq[Rune]],
                 notificationSettings: NotificationSettings,
                 first, last: int,
-                isDelete: bool) =
+                isDelete: bool,
+                settings: EditorSettings) =
 
   const name = ""
   bufStatus.yankLines(registers,
@@ -972,8 +937,8 @@ proc yankLines*(bufStatus: BufferStatus,
                       notificationSettings,
                       first, last,
                       name,
-                      isDelete)
-
+                      isDelete,
+                      settings)
 
 proc yankLines*(bufStatus: BufferStatus,
                 registers: var Registers,
@@ -981,7 +946,8 @@ proc yankLines*(bufStatus: BufferStatus,
                 messageLog: var seq[seq[Rune]],
                 notificationSettings: NotificationSettings,
                 first, last: int,
-                name: string) =
+                name: string,
+                settings: EditorSettings) =
 
   const isDelete = false
   bufStatus.yankLines(registers,
@@ -990,14 +956,16 @@ proc yankLines*(bufStatus: BufferStatus,
                       notificationSettings,
                       first, last,
                       name,
-                      isDelete)
+                      isDelete,
+                      settings)
 
 proc yankLines*(bufStatus: BufferStatus,
                 registers: var Registers,
                 commandLine: var CommandLine,
                 messageLog: var seq[seq[Rune]],
                 notificationSettings: NotificationSettings,
-                first, last: int) =
+                first, last: int,
+                settings: EditorSettings) =
 
   const
     name = ""
@@ -1008,7 +976,8 @@ proc yankLines*(bufStatus: BufferStatus,
                       notificationSettings,
                       first, last,
                       name,
-                      isDelete)
+                      isDelete,
+                      settings)
 
 proc pasteLines(bufStatus: var BufferStatus,
                 windowNode: var WindowNode,
@@ -1027,7 +996,6 @@ proc yankCharacters*(bufStatus: BufferStatus,
                      windowNode: WindowNode,
                      commandLine: var CommandLine,
                      messageLog: var seq[seq[Rune]],
-                     platform: Platform,
                      settings: EditorSettings,
                      length: int,
                      name: string,
@@ -1042,14 +1010,10 @@ proc yankCharacters*(bufStatus: BufferStatus,
         line = windowNode.currentLine
       yankedBuffer.add bufStatus.buffer[line][col]
 
-    if settings.clipboard.enable:
-      registers.sendToClipboad(platform,
-                               settings.clipboard.toolOnLinux)
-
     if name.len > 0:
-      registers.addRegister(yankedBuffer, name)
+      registers.addRegister(yankedBuffer, name, settings)
     else:
-      registers.addRegister(yankedBuffer)
+      registers.addRegister(yankedBuffer, settings)
 
   commandLine.writeMessageYankedCharactor(
     yankedBuffer.len,
@@ -1059,11 +1023,10 @@ proc yankCharacters*(bufStatus: BufferStatus,
 proc yankWord*(bufStatus: var BufferStatus,
                registers: var Registers,
                windowNode: WindowNode,
-               platform: Platform,
-               clipboardSettings: ClipBoardSettings,
                loop: int,
                name: string,
-               isDelete: bool) =
+               isDelete: bool,
+               settings: EditorSettings) =
 
   var yankedBuffer: seq[seq[Rune]] = @[ru ""]
 
@@ -1094,79 +1057,70 @@ proc yankWord*(bufStatus: var BufferStatus,
 
   const isLine = false
   if name.len > 0:
-    registers.addRegister(yankedBuffer, isLine, name)
+    registers.addRegister(yankedBuffer, isLine, name, settings)
   else:
-    registers.addRegister(yankedBuffer, isLine, isDelete)
-
-  if clipboardSettings.enable:
-    registers.sendToClipboad(platform,
-                             clipboardSettings.toolOnLinux)
+    registers.addRegister(yankedBuffer, isLine, isDelete, settings)
 
 proc yankWord*(bufStatus: var BufferStatus,
                registers: var Registers,
                windowNode: WindowNode,
-               platform: Platform,
-               clipboardSettings: ClipBoardSettings,
                loop: int,
-               isDelete: bool) =
+               isDelete: bool,
+               settings: EditorSettings) =
 
   const name = ""
   bufStatus.yankWord(registers,
                      windowNode,
-                     platform,
-                     clipboardSettings,
                      loop,
                      name,
-                     isDelete)
+                     isDelete,
+                     settings)
 
 proc yankWord*(bufStatus: var BufferStatus,
                registers: var Registers,
                windowNode: WindowNode,
-               platform: Platform,
-               clipboardSettings: ClipBoardSettings,
                loop: int,
-               name: string) =
+               name: string,
+               settings: EditorSettings) =
 
   const isDelete = false
   bufStatus.yankWord(registers,
                      windowNode,
-                     platform,
-                     clipboardSettings,
                      loop,
                      name,
-                     isDelete)
+                     isDelete,
+                     settings)
 
 proc yankWord*(bufStatus: var BufferStatus,
                registers: var Registers,
                windowNode: WindowNode,
-               platform: Platform,
-               clipboardSettings: ClipBoardSettings,
-               loop: int) =
+               loop: int,
+               settings: EditorSettings) =
 
   const
     name = ""
     isDelete = false
   bufStatus.yankWord(registers,
                      windowNode,
-                     platform,
-                     clipboardSettings,
                      loop,
                      name,
-                     isDelete)
+                     isDelete,
+                     settings)
 
 proc yankCharactersOfLines*(bufStatus: var BufferStatus,
                             windowNode: var WindowNode,
                             registers: var Registers,
                             isDelete: bool,
-                            registerName: string) =
+                            registerName: string,
+                            settings: EditorSettings) =
 
   let line = bufStatus.buffer[windowNode.currentLine]
 
   const isLine = false
   if registerName.len > 0:
-    registers.addRegister(line, isLine, registerName)
+    registers.addRegister(line, isLine, registerName, settings)
   else:
-    registers.addRegister(line, isLine, isDelete)
+    registers.addRegister(line, isLine, isDelete, settings)
 
 proc pasteString(bufStatus: var BufferStatus,
                  windowNode: var WindowNode,
@@ -1384,7 +1338,8 @@ proc deleteInsideOfParen*(bufStatus: var BufferStatus,
                           windowNode: var WindowNode,
                           registers: var Registers,
                           registerName: string,
-                          rune: Rune) =
+                          rune: Rune,
+                          settings: EditorSettings) =
 
   let
     currentLine = windowNode.currentLine
@@ -1420,12 +1375,12 @@ proc deleteInsideOfParen*(bufStatus: var BufferStatus,
 
     if oldLine != newLine:
       if registerName.len > 0:
-        registers.addRegister(deleteBuffer, registerName)
+        registers.addRegister(deleteBuffer, registerName, settings)
       else:
         const
           isLine = false
           isDelete = true
-        registers.addRegister(deleteBuffer, isLine, isDelete)
+        registers.addRegister(deleteBuffer, isLine, isDelete, settings)
 
       bufStatus.buffer[currentLine] = newLine
       windowNode.currentColumn = openParenPosition
@@ -1434,14 +1389,16 @@ proc deleteInsideOfParen*(bufStatus: var BufferStatus,
 proc deleteInsideOfParen*(bufStatus: var BufferStatus,
                                  windowNode: var WindowNode,
                                  registers: var Registers,
-                                 rune: Rune) =
+                                 rune: Rune,
+                                 settings: EditorSettings) =
 
   const registerName = ""
   bufStatus.deleteInsideOfParen(
     windowNode,
     registers,
     registerName,
-    rune)
+    rune,
+    settings)
 
 # Return the colmn and word
 proc getWordUnderCursor*(bufStatus: BufferStatus,

@@ -186,3 +186,9 @@ Buffer manager mode and commands. (```:buf```)
 
 ### ```src/moepkg/register.nim```
 Definition of the registers and utils for the register.
+
+###  ```src/moepkg/clipboard.nim```
+Utils for the clipboard.
+
+###  ```src/moepkg/platform.nim```
+Check and definition the platform.

@@ -118,7 +118,7 @@ suite "Insert mode":
       currentMainWindowNode,
       status.registers,
       loop,
-      status.settings.tabStop)
+      status.settings)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
@@ -134,7 +134,7 @@ suite "Insert mode":
       currentMainWindowNode,
       status.registers,
       loop,
-      status.settings.tabStop)
+      status.settings)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
@@ -152,7 +152,7 @@ suite "Insert mode":
       currentMainWindowNode,
       status.registers,
       loop,
-      status.settings.tabStop)
+      status.settings)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
