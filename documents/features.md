@@ -52,3 +52,30 @@ If you select backup file, you can check the difference from the current origina
 
 moe can now use simple auto-complete.  
 It is possible to auto-complete a words in the currently open buffer.
+
+## Register
+
+moe can use Vim-like registers.
+
+### Number register
+| Name | Description                                                                       |
+|------|-----------------------------------------------------------------------------------|
+| 0    | Yanked text                                                                       |
+| 1    | Deleted line. One line or less is stored in the small delete register ```-```     |
+| 2    | Every time a new delete command is issued, the contents of ```1``` are stored     |
+| 3~9  | Similar to ```2```, the contents of the previous register are stored sequentially |
+
+### Small delete register
+| Name | Description   |
+|------|---------------|
+| -    | Deleted text  |
+
+### Named register
+
+| Name | Description            |
+|------|------------------------|
+| a~z  | Any text can be stored |
+
+### No name register
+
+Stores the value of the last used register.
