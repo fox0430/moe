@@ -1,16 +1,21 @@
-name: Build
+name: Tests
 
 on:
   push:
     paths-ignore:
       - 'LICENSE'
       - '*.md'
-      - 'documents/*.md'
+      - 'documents/'
+      - 'docs/'
+    branches:
+      - develop
+      - master
   pull_request:
     paths-ignore:
       - 'LICENSE'
       - '*.md'
-      - 'documents/*.md'
+      - 'documents/'
+      - 'docs/'
 
 jobs:
   skip:
@@ -35,7 +40,7 @@ jobs:
           # - macOS-latest
           # - windows-latest
     env:
-      NIM_VERSION: 1.4.6
+      NIM_VERSION: 1.4.8
     steps:
     - uses: actions/checkout@v1
     - run: |

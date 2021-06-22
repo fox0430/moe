@@ -7,102 +7,102 @@ test "Move right":
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
-  status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+  currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
     status.settings.highlightSettings.reservedWords,
     status.bufStatus[0].language)
 
   for i in 0 ..< 3:
-    status.bufStatus[0].keyRight(status.workSpace[0].currentMainWindowNode)
+    status.bufStatus[0].keyRight(currentMainWindowNode)
 
-  check(status.workSpace[0].currentMainWindowNode.currentColumn == 2)
+  check(currentMainWindowNode.currentColumn == 2)
 
 test "Move left":
   var status = initEditorStatus()
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
-  status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+  currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
     status.settings.highlightSettings.reservedWords,
     status.bufStatus[0].language)
 
-  status.workSpace[0].currentMainWindowNode.currentColumn = 2
+  currentMainWindowNode.currentColumn = 2
   for i in 0 ..< 3:
-    status.workSpace[0].currentMainWindowNode.keyLeft
+    currentMainWindowNode.keyLeft
 
-  check(status.workSpace[0].currentMainWindowNode.currentColumn == 0)
+  check(currentMainWindowNode.currentColumn == 0)
 
 test "Move down":
   var status = initEditorStatus()
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"efg", ru"hij"])
 
-  status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+  currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
     status.settings.highlightSettings.reservedWords,
     status.bufStatus[0].language)
 
   for i in 0 ..< 3:
-    status.bufStatus[0].keyDown(status.workSpace[0].currentMainWindowNode)
+    status.bufStatus[0].keyDown(currentMainWindowNode)
 
-  check(status.workSpace[0].currentMainWindowNode.currentLine == 2)
+  check(currentMainWindowNode.currentLine == 2)
 
 test "Move up":
   var status = initEditorStatus()
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"efg", ru"hij"])
 
-  status.workSpace[0].currentMainWindowNode.highlight = initHighlight(
+  currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
     status.settings.highlightSettings.reservedWords,
     status.bufStatus[0].language)
 
-  status.workSpace[0].currentMainWindowNode.currentLine = 2
+  currentMainWindowNode.currentLine = 2
   for i in 0 ..< 3:
-    status.bufStatus[0].keyUp(status.workSpace[0].currentMainWindowNode)
+    status.bufStatus[0].keyUp(currentMainWindowNode)
 
-  check(status.workSpace[0].currentMainWindowNode.currentLine == 0)
+  check(currentMainWindowNode.currentLine == 0)
 
 test "Move to first non blank of current line":
   var status = initEditorStatus()
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc"])
-  status.workSpace[0].currentMainWindowNode.currentColumn = 4
-  status.bufStatus[0].moveToFirstNonBlankOfLine(status.workSpace[0].currentMainWindowNode)
-  check(status.workSpace[0].currentMainWindowNode.currentColumn == 2)
+  currentMainWindowNode.currentColumn = 4
+  status.bufStatus[0].moveToFirstNonBlankOfLine(currentMainWindowNode)
+  check(currentMainWindowNode.currentColumn == 2)
 
 test "Move to first of current line":
   var status = initEditorStatus()
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc"])
-  status.workSpace[0].currentMainWindowNode.currentColumn = 4
-  status.workSpace[0].currentMainWindowNode.moveToFirstOfLine
-  check(status.workSpace[0].currentMainWindowNode.currentColumn == 0)
+  currentMainWindowNode.currentColumn = 4
+  currentMainWindowNode.moveToFirstOfLine
+  check(currentMainWindowNode.currentColumn == 0)
 
 test "Move to last of current line":
   var status = initEditorStatus()
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc"])
-  status.bufStatus[0].moveToLastOfLine(status.workSpace[0].currentMainWindowNode)
-  check(status.workSpace[0].currentMainWindowNode.currentColumn == 4)
+  status.bufStatus[0].moveToLastOfLine(currentMainWindowNode)
+  check(currentMainWindowNode.currentColumn == 4)
 
 test "Move to first of previous Line":
   var status = initEditorStatus()
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc", ru"efg"])
-  status.workSpace[0].currentMainWindowNode.currentLine = 1
-  status.bufStatus[0].moveToFirstOfPreviousLine(status.workSpace[0].currentMainWindowNode)
-  check(status.workSpace[0].currentMainWindowNode.currentLine == 0)
-  check(status.workSpace[0].currentMainWindowNode.currentColumn == 0)
+  currentMainWindowNode.currentLine = 1
+  status.bufStatus[0].moveToFirstOfPreviousLine(currentMainWindowNode)
+  check(currentMainWindowNode.currentLine == 0)
+  check(currentMainWindowNode.currentColumn == 0)
 
 test "Move to first of next Line":
   var status = initEditorStatus()
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc", ru"efg"])
-  status.bufStatus[0].moveToFirstOfNextLine(status.workSpace[0].currentMainWindowNode)
-  check(status.workSpace[0].currentMainWindowNode.currentLine == 1)
-  check(status.workSpace[0].currentMainWindowNode.currentColumn == 0)
+  status.bufStatus[0].moveToFirstOfNextLine(currentMainWindowNode)
+  check(currentMainWindowNode.currentLine == 1)
+  check(currentMainWindowNode.currentColumn == 0)
 
 test "Jump line":
   var status = initEditorStatus()
@@ -110,55 +110,55 @@ test "Jump line":
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"efg", ru"hij", ru"klm", ru"nop", ru"qrs"])
   status.jumpLine(1)
   status.jumpLine(4)
-  check(status.workSpace[0].currentMainWindowNode.currentLine == 4)
+  check(currentMainWindowNode.currentLine == 4)
 
 test "Move to first line":
   var status = initEditorStatus()
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"efg", ru"hij", ru"klm", ru"nop", ru"qrs"])
-  status.workSpace[0].currentMainWindowNode.currentLine = 4
+  currentMainWindowNode.currentLine = 4
   status.moveToFirstLine
-  check(status.workSpace[0].currentMainWindowNode.currentLine == 0)
+  check(currentMainWindowNode.currentLine == 0)
 
 test "Move to last line":
   var status = initEditorStatus()
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"efg", ru"hij", ru"klm", ru"nop", ru"qrs"])
-  status.workSpace[0].currentMainWindowNode.currentLine = 1
+  currentMainWindowNode.currentLine = 1
   status.moveToLastLine
-  check(status.workSpace[0].currentMainWindowNode.currentLine == 5)
+  check(currentMainWindowNode.currentLine == 5)
 
 test "Move to forward word":
   var status = initEditorStatus()
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc efg"])
-  status.bufStatus[0].moveToForwardWord(status.workSpace[0].currentMainWindowNode)
-  check(status.workSpace[0].currentMainWindowNode.currentColumn == 4)
+  status.bufStatus[0].moveToForwardWord(currentMainWindowNode)
+  check(currentMainWindowNode.currentColumn == 4)
 
 test "Move to backward word":
   var status = initEditorStatus()
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc efg"])
-  status.workSpace[0].currentMainWindowNode.currentColumn = 5
+  currentMainWindowNode.currentColumn = 5
   for i in 0 ..< 2:
-    status.bufStatus[0].moveToBackwardWord(status.workSpace[0].currentMainWindowNode)
-  check(status.workSpace[0].currentMainWindowNode.currentColumn == 0)
+    status.bufStatus[0].moveToBackwardWord(currentMainWindowNode)
+  check(currentMainWindowNode.currentColumn == 0)
 
 test "Move to forward end of word":
   var status = initEditorStatus()
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc efg"])
   for i in 0 ..< 2:
-    status.bufStatus[0].moveToForwardEndOfWord(status.workSpace[0].currentMainWindowNode)
-  check(status.workSpace[0].currentMainWindowNode.currentColumn == 6)
+    status.bufStatus[0].moveToForwardEndOfWord(currentMainWindowNode)
+  check(currentMainWindowNode.currentColumn == 6)
 
 test "Move to forward end of word":
   var status = initEditorStatus()
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc efg"])
   for i in 0 ..< 2:
-    status.bufStatus[0].moveToForwardEndOfWord(status.workSpace[0].currentMainWindowNode)
-  check(status.workSpace[0].currentMainWindowNode.currentColumn == 6)
+    status.bufStatus[0].moveToForwardEndOfWord(currentMainWindowNode)
+  check(currentMainWindowNode.currentColumn == 6)
 
 test "Move to previous blank line":
   var status = initEditorStatus()
@@ -166,7 +166,7 @@ test "Move to previous blank line":
   currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"def", ru"ghi"])
   currentMainWindowNode.currentLine = currentBufStatus.buffer.high
 
-  currentBufStatus.moveToPreviousBlankLine(status, currentMainWindowNode)
+  status.moveToPreviousBlankLine
 
   check currentMainWindowNode.currentLine == 1
   check currentMainWindowNode.currentColumn == 0
@@ -176,7 +176,7 @@ test "Move to next blank line":
   status.addNewBuffer
   currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"", ru"ghi"])
 
-  currentBufStatus.moveToNextBlankLine(status, currentMainWindowNode)
+  status.moveToNextBlankLine
 
   check currentMainWindowNode.currentLine == 2
   check currentMainWindowNode.currentColumn == 0

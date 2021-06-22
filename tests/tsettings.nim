@@ -58,9 +58,6 @@ const tomlStr = """
   showGitInactive = true
   showModeInactive = true
 
-  [WorkSpace]
-  workSpaceLine = true
-
   [Highlight]
   currentLine = true
   reservedWord = ["TEST", "TEST2"]
@@ -101,8 +98,6 @@ const tomlStr = """
   deleteLogNotify = false
   saveScreenNotify = false
   saveLogNotify = false
-  workspaceScreenNotify = false
-  workspaceLogNotify = false
   quickRunScreenNotify = false
   quickRunLogNotify = false
   buildOnSaveScreenNotify = false
@@ -122,11 +117,6 @@ const tomlStr = """
   exCommand = false
   search = false
   cursorPosition = false
-
-  [Debug.WorkSpace]
-  enable = false
-  numOfWorkSpaces = false
-  currentWorkSpaceIndex = false
 
   [Debug.WindowNode]
   enable = false
@@ -260,8 +250,6 @@ const tomlStr = """
   highlightFullWidthSpaceBg = "pink1"
   highlightTrailingSpaces = "pink1"
   highlightTrailingSpacesBg = "pink1"
-  workSpaceBar = "pink1"
-  workSpaceBarBg = "pink1"
   reservedWord = "pink1"
   reservedWordBg = "pink1"
   currentHistory = "pink1"
@@ -285,7 +273,7 @@ suite "Parse configuration file":
     check not settings.view.currentLineNumber
     check settings.view.cursorLine
     check not settings.statusLine.enable
-    check not settings.tabLine.useTab
+    check not settings.tabLine.enable
     check not settings.syntax
     check not settings.view.indentationLines
     check settings.view.tabStop == 4
@@ -329,8 +317,6 @@ suite "Parse configuration file":
     check settings.statusLine.showGitInactive
     check settings.statusLine.showModeInactive
 
-    check settings.workSpace.workSpaceLine
-
     check settings.view.highlightCurrentLine
     check not settings.highlightSettings.replaceText
     check not settings.highlightSettings.pairOfParen
@@ -368,8 +354,6 @@ suite "Parse configuration file":
     check not settings.notificationSettings.deleteLogNotify
     check not settings.notificationSettings.saveScreenNotify
     check not settings.notificationSettings.saveLogNotify
-    check not settings.notificationSettings.workspaceScreenNotify
-    check not settings.notificationSettings.workspaceLogNotify
     check not settings.notificationSettings.quickRunScreenNotify
     check not settings.notificationSettings.quickRunLogNotify
     check not settings.notificationSettings.buildOnSaveScreenNotify
@@ -386,10 +370,6 @@ suite "Parse configuration file":
     check not settings.persist.exCommand
     check not settings.persist.search
     check not settings.persist.cursorPosition
-
-    check not settings.debugModeSettings.workSpace.enable
-    check not settings.debugModeSettings.workSpace.numOfWorkSpaces
-    check not settings.debugModeSettings.workSpace.currentWorkSpaceIndex
 
     check not settings.debugModeSettings.windowNode.enable
     check not settings.debugModeSettings.windowNode.currentWindow
@@ -511,8 +491,6 @@ suite "Parse configuration file":
     check ColorThemeTable[theme].highlightFullWidthSpaceBg == Color.pink1
     check ColorThemeTable[theme].highlightTrailingSpaces == Color.pink1
     check ColorThemeTable[theme].highlightTrailingSpacesBg == Color.pink1
-    check ColorThemeTable[theme].workSpaceBar == Color.pink1
-    check ColorThemeTable[theme].workSpaceBarBg == Color.pink1
     check ColorThemeTable[theme].reservedWord == Color.pink1
     check ColorThemeTable[theme].reservedWordBg == Color.pink1
     check ColorThemeTable[theme].currentHistory == Color.pink1

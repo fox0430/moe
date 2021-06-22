@@ -94,6 +94,29 @@ Ctrl-w c   - Close current window
 \r         - QuickRun
 ga         - Show current character info
 
+# Register
+
+"-any key-yy
+"-any key-yl
+"-any key-yw
+"-any key-y}
+"-any key-y{
+"-any key-p
+"-any key-P
+"-any key-dd
+"-any key-dw
+"-any key-d$
+"-any key-d0
+"-any key-dG
+"-any key-dgg
+"-any key-d{
+"-any key-d}
+"-any key-di-any key
+"-any key-dh
+"-any key-cl
+"-any key-s
+"-any key-ci-any key
+
 # Visual mode
 
 d or x  - Delete text
@@ -180,11 +203,6 @@ vs filename - Open in a vertical split window
 sv          - Horizontal split window
 sp filename - Open in a horizontal split window
 
-cws       - Create a new work space
-ws number - Change the current work space; for example ws 2
-dws       - Delete the current work space
-lsw       - Show the workspace list in the status line
-
 livereload on or livereload on - Change setting of live reload of configuration file
 theme themeName - Change color theme; for example theme dark
 tab on or tab off - Change setting to tab line
@@ -242,31 +260,29 @@ proc initHelpModeBuffer(status: var Editorstatus) =
 
 proc isHelpMode(status: Editorstatus): bool =
   let
-    currentMode = status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].mode
-    prevMode = status.bufStatus[status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex].prevMode
+    bufferIndex = status.mainWindow.currentMainWindowNode.bufferIndex
+    currentMode = status.bufStatus[bufferIndex].mode
+    prevMode = status.bufStatus[bufferIndex].prevMode
+
   result = currentMode == Mode.help or (prevMode == Mode.help and currentMode == Mode.ex)
 
 proc helpMode*(status: var Editorstatus) =
   status.initHelpModeBuffer
   status.resize(terminalHeight(), terminalWidth())
 
-  let
-    currentBufferIndex = status.bufferIndexInCurrentWindow
-    currentWorkSpace = status.currentWorkSpaceIndex
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
 
-  while status.isHelpMode and currentWorkSpace == status.currentWorkSpaceIndex and
+  while status.isHelpMode and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
+
     let currentBufferIndex = status.bufferIndexInCurrentWindow
 
     status.update
 
-    var windowNode = status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode
-
     var key = errorKey
     while key == errorKey:
       status.eventLoopTask
-      key = getKey(
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+      key = getKey(currentMainWindowNode)
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
@@ -280,19 +296,20 @@ proc helpMode*(status: var Editorstatus) =
       status.changeMode(Mode.ex)
 
     elif key == ord('k') or isUpKey(key):
-      status.bufStatus[currentBufferIndex].keyUp(windowNode)
+      status.bufStatus[currentBufferIndex].keyUp(currentMainWindowNode)
     elif key == ord('j') or isDownKey(key):
-      status.bufStatus[currentBufferIndex].keyDown(windowNode)
+      status.bufStatus[currentBufferIndex].keyDown(currentMainWindowNode)
     elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
-      windowNode.keyLeft
+      currentMainWindowNode.keyLeft
     elif key == ord('l') or isRightKey(key):
-      status.bufStatus[currentBufferIndex].keyRight(windowNode)
+      status.bufStatus[currentBufferIndex].keyRight(currentMainWindowNode)
     elif key == ord('0') or isHomeKey(key):
-      windowNode.moveToFirstOfLine
+      currentMainWindowNode.moveToFirstOfLine
     elif key == ord('$') or isEndKey(key):
-      status.bufStatus[currentBufferIndex].moveToLastOfLine(windowNode)
+      status.bufStatus[currentBufferIndex].moveToLastOfLine(
+        currentMainWindowNode)
     elif key == ord('g'):
-      if getKey(status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode) == 'g':
+      if getKey(currentMainWindowNode) == 'g':
         status.moveToFirstLine
     elif key == ord('G'):
       status.moveToLastLine

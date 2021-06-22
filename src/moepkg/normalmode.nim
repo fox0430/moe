@@ -1,8 +1,13 @@
 from strutils import parseInt
-import terminal, times
+import terminal, times, strutils
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, undoredostack,
-       window, movement, editor, search, color, bufferstatus, quickrun,
-       messages, commandline
+       window, movement, editor, search, bufferstatus, quickrun,
+       messages
+
+type InputState = enum
+  Continue
+  Valid
+  Invalid
 
 proc searchOneCharactorToEndOfLine(bufStatus: var BufferStatus,
                                    windowNode: WindowNode,
@@ -32,9 +37,7 @@ proc searchOneCharactorToBeginOfLine(bufStatus: var BufferStatus,
       break
 
 proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
-  let
-    currentBufferIndex = status.bufferIndexInCurrentWindow
-    workspaceIndex = status.currentWorkSpaceIndex
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
 
   status.isSearchHighlight = true
 
@@ -46,9 +49,7 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
     status.searchHistory,
     status.settings)
 
-  var windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
-
-  status.bufStatus[currentBufferIndex].keyRight(windowNode)
+  status.bufStatus[currentBufferIndex].keyRight(currentMainWindowNode)
   let
     ignorecase = status.settings.ignorecase
     smartcase = status.settings.smartcase
@@ -56,8 +57,8 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
   if searchResult.line > -1:
     status.jumpLine(searchResult.line)
     for column in 0 ..< searchResult.column:
-      status.bufStatus[currentBufferIndex].keyRight(windowNode)
-  elif searchResult.line == -1: windowNode.keyLeft
+      status.bufStatus[currentBufferIndex].keyRight(currentMainWindowNode)
+  elif searchResult.line == -1: currentMainWindowNode.keyLeft
 
 proc searchNextOccurrence(status: var EditorStatus) =
   if status.searchHistory.len < 1: return
@@ -118,21 +119,13 @@ proc writeFileAndExit(status: var EditorStatus, height, width: int) =
 proc forceExit(status: var Editorstatus, height, width: int) {.inline.} =
   status.closeWindow(currentMainWindowNode, height, width)
 
-proc toggleCase(ch: Rune): Rune =
-  result = ch
-  if result.isUpper():
-    result = result.toLower()
-  elif result.isLower():
-    result = result.toUpper()
-  return result
-
 proc runQuickRunCommand(status: var Editorstatus) =
   let
     buffer = runQuickRun(status.bufStatus[currentMainWindowNode.bufferIndex],
                          status.commandLine,
                          status.messageLog,
                          status.settings)
-    quickRunWindowIndex = status.bufStatus.getQuickRunBufferIndex(currentWorkSpace)
+    quickRunWindowIndex = status.bufStatus.getQuickRunBufferIndex(mainWindowNode)
 
   if quickRunWindowIndex == -1:
     status.verticalSplitWindow
@@ -148,6 +141,36 @@ proc runQuickRunCommand(status: var Editorstatus) =
   else:
     status.bufStatus[quickRunWindowIndex].buffer = initGapBuffer(buffer)
 
+proc yankWord(status: var EditorStatus) =
+  currentBufStatus.yankWord(status.registers,
+                            currentMainWindowNode,
+                            currentBufStatus.cmdLoop,
+                            status.settings)
+
+proc yankWord(status: var EditorStatus, registerName: string) =
+  currentBufStatus.yankWord(status.registers,
+                            currentMainWindowNode,
+                            currentBufStatus.cmdLoop,
+                            registerName,
+                            status.settings)
+
+proc deleteWord(status: var EditorStatus) =
+  const registerName = ""
+  currentBufStatus.deleteWord(
+    currentMainWindowNode,
+    currentBufStatus.cmdLoop,
+    status.registers,
+    registerName,
+    status.settings)
+
+proc deleteWord(status: var EditorStatus, registerName: string) =
+  currentBufStatus.deleteWord(
+    currentMainWindowNode,
+    currentBufStatus.cmdLoop,
+    status.registers,
+    registerName,
+    status.settings)
+
 # ci command
 proc changeInnerCommand(status: var EditorStatus, key: Rune) =
   let
@@ -156,9 +179,11 @@ proc changeInnerCommand(status: var EditorStatus, key: Rune) =
 
   # Delete inside paren and enter insert mode
   if isParen(key):
-    currentBufStatus.yankAndDeleteInsideOfParen(currentMainWindowNode,
-                                                status.registers,
-                                                key)
+    currentBufStatus.deleteInsideOfParen(
+      currentMainWindowNode,
+      status.registers,
+      key,
+      status.settings)
 
     if oldLine != currentBufStatus.buffer[currentLine]:
       currentMainWindowNode.currentColumn.inc
@@ -167,26 +192,72 @@ proc changeInnerCommand(status: var EditorStatus, key: Rune) =
   elif key == ru'w':
     if oldLine.len > 0:
       currentBufStatus.moveToBackwardWord(currentMainWindowNode)
-      currentBufStatus.deleteWord(currentMainWindowNode, status.registers)
+      status.deleteWord
+    status.changeMode(Mode.insert)
+  else:
+    discard
+
+# ci command
+proc changeInnerCommand(status: var EditorStatus,
+                        key: Rune,
+                        registerName: string) =
+
+  let
+    currentLine = currentMainWindowNode.currentLine
+    oldLine = currentBufStatus.buffer[currentLine]
+
+  # Delete inside paren and enter insert mode
+  if isParen(key):
+    currentBufStatus.deleteInsideOfParen(
+      currentMainWindowNode,
+      status.registers,
+      registerName,
+      key,
+      status.settings)
+
+    if oldLine != currentBufStatus.buffer[currentLine]:
+      currentMainWindowNode.currentColumn.inc
+      status.changeMode(Mode.insert)
+  # Delete current word and enter insert mode
+  elif key == ru'w':
+    if oldLine.len > 0:
+      currentBufStatus.moveToBackwardWord(currentMainWindowNode)
+      status.deleteWord
     status.changeMode(Mode.insert)
   else:
     discard
 
 # di command
-proc yankAndDeleteInnerCommand(status: var EditorStatus, key: Rune) =
+proc deleteInnerCommand(status: var EditorStatus, key: Rune, registerName: string) =
   # Delete inside paren and enter insert mode
   if isParen(key):
-    currentBufStatus.yankAndDeleteInsideOfParen(currentMainWindowNode,
-                                                status.registers,
-                                                key)
+    if registerName.len > 0:
+      currentBufStatus.deleteInsideOfParen(
+        currentMainWindowNode,
+        status.registers,
+        registerName,
+        key,
+       status.settings)
+    else:
+      currentBufStatus.deleteInsideOfParen(
+        currentMainWindowNode,
+        status.registers,
+        key,
+       status.settings)
+
     currentBufStatus.keyRight(currentMainWindowNode)
   # Delete current word and enter insert mode
   elif key == ru'w':
     if currentBufStatus.buffer[currentMainWindowNode.currentLine].len > 0:
       currentBufStatus.moveToBackwardWord(currentMainWindowNode)
-      currentBufStatus.deleteWord(currentMainWindowNode, status.registers)
+      status.deleteWord
   else:
     discard
+
+# di command
+proc deleteInnerCommand(status: var EditorStatus, key: Rune) =
+  const registerName = ""
+  status.deleteInnerCommand(key, registerName)
 
 proc showCurrentCharInfoCommand(status: var EditorStatus,
                                 windowNode: WindowNode) =
@@ -208,263 +279,529 @@ proc repeatNormalModeCommand(status: var Editorstatus, height, width: int) =
   let commands  = status.normalCommandHistory[^1]
   status.normalCommand(commands, height, width)
 
+proc yankLines(status: var Editorstatus, start, last: int) =
+  let lastLine = min(last,
+                     currentBufStatus.buffer.high)
+
+  currentBufStatus.yankLines(status.registers,
+                             status.commandLine,
+                             status.messageLog,
+                             status.settings.notificationSettings,
+                             start, lastLine,
+                             status.settings)
+
+proc yankLines(status: var Editorstatus, start, last: int, registerName: string) =
+  let lastLine = min(last,
+                     currentBufStatus.buffer.high)
+
+  currentBufStatus.yankLines(status.registers,
+                             status.commandLine,
+                             status.messageLog,
+                             status.settings.notificationSettings,
+                             start, lastLine,
+                             registerName,
+                             status.settings)
+
+# yy command
+# Ynak lines from the current line
+proc yankLines(status: var Editorstatus) =
+  const registerName = ""
+  let
+    cmdLoop = currentBufStatus.cmdLoop
+    currentLine = currentMainWindowNode.currentLine
+    lastLine = min(currentLine + cmdLoop - 1, currentBufStatus.buffer.high)
+  currentBufStatus.yankLines(status.registers,
+                             status.commandLine,
+                             status.messageLog,
+                             status.settings.notificationSettings,
+                             currentLine, lastLine,
+                             registerName,
+                             status.settings)
+
+# Ynak lines from the current line
+proc yankLines(status: var Editorstatus, registerName: string) =
+  let
+    cmdLoop = currentBufStatus.cmdLoop
+    currentLine = currentMainWindowNode.currentLine
+    lastLine = min(currentLine + cmdLoop - 1, currentBufStatus.buffer.high)
+  currentBufStatus.yankLines(status.registers,
+                             status.commandLine,
+                             status.messageLog,
+                             status.settings.notificationSettings,
+                             currentLine, lastLine,
+                             registerName,
+                             status.settings)
+
+# y{ command
+proc yankToPreviousBlankLine(status: var EditorStatus, registerName: string) =
+  let
+    currentLine = currentMainWindowNode.currentLine
+    previousBlankLine = currentBufStatus.findPreviousBlankLine(currentLine)
+  status.yankLines(max(previousBlankLine, 0), currentLine, registerName)
+  if previousBlankLine >= 0: status.jumpLine(previousBlankLine)
+
+# y{ command
+proc yankToPreviousBlankLine(status: var EditorStatus) =
+  let
+    currentLine = currentMainWindowNode.currentLine
+    previousBlankLine = currentBufStatus.findPreviousBlankLine(currentLine)
+  status.yankLines(max(previousBlankLine, 0), currentLine)
+  if previousBlankLine >= 0: status.jumpLine(previousBlankLine)
+
+# y} command
+proc yankToNextBlankLine(status: var EditorStatus, registerName: string) =
+  let
+    currentLine = currentMainWindowNode.currentLine
+    buffer = currentBufStatus.buffer
+    nextBlankLine = currentBufStatus.findNextBlankLine(currentLine)
+  status.yankLines(currentLine, min(nextBlankLine, buffer.high), registerName)
+  if nextBlankLine >= 0: status.jumpLine(nextBlankLine)
+
+# y} command
+proc yankToNextBlankLine(status: var EditorStatus) =
+  let
+    currentLine = currentMainWindowNode.currentLine
+    buffer = currentBufStatus.buffer
+    nextBlankLine = currentBufStatus.findNextBlankLine(currentLine)
+  status.yankLines(currentLine, min(nextBlankLine, buffer.high))
+  if nextBlankLine >= 0: status.jumpLine(nextBlankLine)
+
+# dd command
+proc deleteLines(status: var EditorStatus) =
+  const registerName = ""
+  let
+    startLine = currentMainWindowNode.currentLine
+    count = min(
+      currentBufStatus.cmdLoop - 1,
+      currentBufStatus.buffer.len - currentMainWindowNode.currentLine)
+  currentBufStatus.deleteLines(status.registers,
+                               currentMainWindowNode,
+                               registerName,
+                               startLine,
+                               count,
+                               status.settings)
+
+proc deleteLines(status: var EditorStatus, registerName: string) =
+  let
+    startLine = currentMainWindowNode.currentLine
+    count = min(
+      currentBufStatus.cmdLoop - 1,
+      currentBufStatus.buffer.len - currentMainWindowNode.currentLine)
+  currentBufStatus.deleteLines(status.registers,
+                               currentMainWindowNode,
+                               registerName,
+                               startLine,
+                               count,
+                               status.settings)
+
+proc yankCharacters(status: var Editorstatus) =
+  const
+    registerName = ""
+    isDelete = false
+  let
+    buffer = currentBufStatus.buffer
+    lineLen = buffer[currentMainWindowNode.currentLine].len
+    width = lineLen - currentMainWindowNode.currentColumn
+    length = if width > currentBufStatus.cmdLoop: currentBufStatus.cmdLoop
+             else: width
+
+  currentBufStatus.yankCharacters(
+    status.registers,
+    currentMainWindowNode,
+    status.commandLine,
+    status.messageLog,
+    status.settings,
+    length,
+    registerName,
+    isDelete)
+
+# name is the register name
+proc yankCharacters(status: var Editorstatus, registerName: string) =
+  const isDelete = false
+  let
+    buffer = currentBufStatus.buffer
+    lineLen = buffer[currentMainWindowNode.currentLine].len
+    width = lineLen - currentMainWindowNode.currentColumn
+    length = if width > currentBufStatus.cmdLoop: currentBufStatus.cmdLoop
+             else: width
+
+  currentBufStatus.yankCharacters(
+    status.registers,
+    currentMainWindowNode,
+    status.commandLine,
+    status.messageLog,
+    status.settings,
+    length,
+    registerName,
+    isDelete)
+
+proc deleteCharacters(status: var EditorStatus, registerName: string) =
+  currentBufStatus.deleteCharacters(
+    status.registers,
+    registerName,
+    currentMainWindowNode.currentLine,
+    currentMainWindowNode.currentColumn,
+    currentBufStatus.cmdLoop,
+    status.settings)
+
+proc deleteCharacters(status: var EditorStatus) =
+  const registerName = ""
+  currentBufStatus.deleteCharacters(
+    status.registers,
+    registerName,
+    currentMainWindowNode.currentLine,
+    currentMainWindowNode.currentColumn,
+    currentBufStatus.cmdLoop,
+    status.settings)
+
+# d$ command
+proc deleteCharactersUntilEndOfLine(status: var EditorStatus,
+                                    registerName: string) =
+
+  let lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
+  currentBufStatus.cmdLoop = lineWidth - currentMainWindowNode.currentColumn
+
+  currentBufStatus.deleteCharacterUntilEndOfLine(
+    status.registers,
+    registerName,
+    currentMainWindowNode,
+    status.settings)
+
+# d$ command
+proc deleteCharactersUntilEndOfLine(status: var EditorStatus) =
+  let lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
+  currentBufStatus.cmdLoop = lineWidth - currentMainWindowNode.currentColumn
+
+  const registerName = ""
+  currentBufStatus.deleteCharacterUntilEndOfLine(
+    status.registers,
+    registerName,
+    currentMainWindowNode,
+    status.settings)
+
+# d0 command
+proc deleteCharacterBeginningOfLine(status: var EditorStatus,
+                                    registerName: string) =
+
+  currentBufStatus.deleteCharacterBeginningOfLine(
+    status.registers,
+    currentMainWindowNode,
+    registerName,
+    status.settings)
+
+# d0 command
+proc deleteCharacterBeginningOfLine(status: var EditorStatus) =
+  const registerName = ""
+  status.deleteCharacterBeginningOfLine(registerName)
+
+# dG command
+# Yank and delete the line from current line to last line
+proc deleteFromCurrentLineToLastLine(status: var EditorStatus,
+                                     registerName: string) =
+
+  let
+    startLine = currentMainWindowNode.currentLine
+    count = currentBufStatus.buffer.len - currentMainWindowNode.currentLine
+  currentBufStatus.deleteLines(status.registers,
+                               currentMainWindowNode,
+                               registerName,
+                               startLine,
+                               count,
+                               status.settings)
+
+# dgg command
+# Delete the line from first line to current line
+proc deleteLineFromFirstLineToCurrentLine(status: var EditorStatus,
+                                          registerName: string) =
+
+  const startLine = 0
+  let count = currentMainWindowNode.currentLine
+  currentBufStatus.deleteLines(status.registers,
+                               currentMainWindowNode,
+                               registerName,
+                               startLine,
+                               count,
+                               status.settings)
+
+  status.moveToFirstLine
+
+# d{ command
+proc deleteTillPreviousBlankLine(status: var EditorStatus,
+                                 registerName: string) =
+
+  currentBufStatus.deleteTillPreviousBlankLine(
+    status.registers,
+    currentMainWindowNode,
+    registerName,
+    status.settings)
+
+proc deleteTillPreviousBlankLine(status: var EditorStatus) =
+  const registerName = ""
+  status.deleteTillPreviousBlankLine(registerName)
+
+# d} command
+proc deleteTillNextBlankLine(status: var EditorStatus,
+                             registerName: string) =
+
+  currentBufStatus.deleteTillNextBlankLine(
+    status.registers,
+    currentMainWindowNode,
+    registerName,
+    status.settings)
+
+# X and dh command
+proc cutCharacterBeforeCursor(status: var EditorStatus, registerName: string) =
+  if currentMainWindowNode.currentColumn > 0:
+    let
+      currentColumn = currentMainWindowNode.currentColumn
+      cmdLoop = currentBufStatus.cmdLoop
+      loop = if currentColumn - cmdLoop > 0: cmdLoop
+             else: currentColumn
+    currentMainWindowNode.currentColumn = currentColumn - loop
+    currentBufStatus.cmdLoop = loop
+
+    status.deleteCharacters(registerName)
+
+# X and dh command
+proc cutCharacterBeforeCursor(status: var EditorStatus) =
+  const registerName = ""
+  status.cutCharacterBeforeCursor(registerName)
+
+proc deleteTillNextBlankLine(status: var EditorStatus) =
+  const registerName = ""
+  status.deleteTillNextBlankLine(registerName)
+
+proc deleteLineFromFirstLineToCurrentLine(status: var EditorStatus) =
+  const registerName = ""
+  status.deleteLineFromFirstLineToCurrentLine(registerName)
+
+proc deleteFromCurrentLineToLastLine(status: var EditorStatus) =
+  const registerName = ""
+  status.deleteFromCurrentLineToLastLine(registerName)
+
+# s and cl commands
+proc deleteCharacterAndEnterInsertMode(status: var EditorStatus) =
+  if currentBufStatus.buffer[currentMainWindowNode.currentLine].len > 0:
+    let
+      lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
+      cmdLoop = currentBufStatus.cmdLoop
+      loop = min(cmdLoop, lineWidth - currentMainWindowNode.currentColumn)
+    currentBufStatus.cmdLoop = loop
+
+    status.deleteCharacters
+
+  status.changeMode(Mode.insert)
+
+# s and cl commands
+proc deleteCharacterAndEnterInsertMode(status: var EditorStatus,
+                                       registerName: string) =
+
+  if currentBufStatus.buffer[currentMainWindowNode.currentLine].len > 0:
+    let
+      lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
+      cmdLoop = currentBufStatus.cmdLoop
+      loop = min(cmdLoop, lineWidth - currentMainWindowNode.currentColumn)
+    currentBufStatus.cmdLoop = loop
+
+    status.deleteCharacters
+
+  status.changeMode(Mode.insert)
+
+# cc/S command
+proc deleteCharactersAfterBlankInLine(status: var EditorStatus) =
+  const registerName = ""
+  currentBufStatus.deleteCharactersAfterBlankInLine(
+    status.registers,
+    currentMainWindowNode,
+    registerName,
+    status.settings)
+
+proc enterInsertModeAfterCursor(status: var EditorStatus) =
+  let lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
+  if lineWidth == 0: discard
+  elif lineWidth == currentMainWindowNode.currentColumn: discard
+  else: inc(currentMainWindowNode.currentColumn)
+  status.changeMode(Mode.insert)
+
+proc toggleCharacterAndMoveRight(status: var EditorStatus) =
+  currentBufStatus.toggleCharacters(
+    currentMainWindowNode,
+    currentBufStatus.cmdLoop)
+
+proc replaceCurrentCharacter(status: var EditorStatus, newCharacter: Rune) =
+  currentBufStatus.replaceCharacters(
+    currentMainWindowNode,
+    status.settings.autoIndent,
+    status.settings.autoDeleteParen,
+    status.settings.tabStop,
+    currentBufStatus.cmdLoop,
+    newCharacter)
+
+proc openBlankLineBelowAndEnterInsertMode(status: var EditorStatus) =
+  currentBufStatus.openBlankLineBelow(currentMainWindowNode)
+  status.changeMode(Mode.insert)
+
+proc openBlankLineAboveAndEnterInsertMode(status: var EditorStatus) =
+  currentBufStatus.openBlankLineAbove(currentMainWindowNode)
+
+  var highlight = currentMainWindowNode.highlight
+  highlight.updateHighlight(
+    currentBufStatus,
+    currentMainWindowNode,
+    status.isSearchHighlight,
+    status.searchHistory,
+    status.settings)
+
+  status.changeMode(Mode.insert)
+
+proc closeCurrentWindow(status: var EditorStatus, height, width: int) =
+  if status.mainWindow.numOfMainWindow == 1: return
+
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+
+  if currentBufStatus.countChange == 0 or
+     mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
+    status.closeWindow(currentMainWindowNode, height, width)
+
+proc addRegister(status: var EditorStatus, command, registerName: string) =
+  if command == "yy":
+    status.yankLines(registerName)
+  elif command == "yl":
+    status.yankCharacters(registerName)
+  elif command == "yw":
+    status.yankWord(registerName)
+  elif command == "y{":
+    status.yankToPreviousBlankLine(registerName)
+  elif command == "y}":
+    status.yankToNextBlankLine(registerName)
+  elif command == "dd":
+    status.deleteLines(registerName)
+  elif command == "dw":
+    status.deleteWord(registerName)
+  elif command == "d$" or (command.len == 1 and isEndKey(command[0].toRune)):
+    status.deleteCharactersUntilEndOfLine(registerName)
+  elif command == "d0":
+    status.deleteCharacterBeginningOfLine(registerName)
+  elif command == "dG":
+    status.deleteFromCurrentLineToLastLine(registerName)
+  elif command == "dgg":
+    status.deleteLineFromFirstLineToCurrentLine(registerName)
+  elif command == "d{":
+    status.deleteTillPreviousBlankLine(registerName)
+  elif command == "d}":
+    status.deleteTillNextBlankLine(registerName)
+  elif command.len == 3 and command[0 .. 1] == "di":
+    status.deleteInnerCommand(command[2].toRune, registerName)
+  elif command == "dh":
+    status.cutCharacterBeforeCursor(registerName)
+  elif command == "cl" or command == "s":
+    status.deleteCharacterAndEnterInsertMode(registerName)
+  elif command.len == 3 and command[0 .. 1] == "ci":
+    status.changeInnerCommand(command[2].toRune, registerName)
+  else:
+    discard
+
+proc pasteFromRegister(status: var EditorStatus, command, name: string) =
+  if name.len == 0: return
+
+  case command:
+    of "p":
+      currentBufStatus.pasteAfterCursor(
+        currentMainWindowNode,
+        status.registers,
+        name)
+    of "P":
+      currentBufStatus.pasteBeforeCursor(
+        currentMainWindowNode,
+        status.registers,
+        name)
+    else:
+      discard
+
+proc registerCommand(status: var EditorStatus, command: seq[Rune]) =
+  var
+    numberStr = ""
+    currentIndex = 2
+    registerName = command[1]
+
+  # Check the number of times the command is repeated
+  if isDigit(command[2]):
+    while isDigit(command[currentIndex]):
+      numberStr &= $command[currentIndex]
+      inc(currentIndex)
+
+  let cmd = $command[currentIndex .. ^1]
+  currentBufStatus.cmdLoop = if numberStr == "": 1
+                             else: numberStr.parseInt
+
+  if cmd == "p" or cmd == "P":
+    status.pasteFromRegister(cmd, $registerName)
+  elif cmd == "yy" or
+       cmd == "yw" or
+       cmd == "yl" or
+       cmd == "y{" or
+       cmd == "y}" or
+       cmd == "dd" or
+       cmd == "dw" or
+       cmd == "d$" or (cmd.len == 1 and isEndKey(command[0])) or
+       cmd == "d0" or
+       cmd == "dG" or
+       cmd == "dgg" or
+       cmd == "d{" or
+       cmd == "d}" or
+       cmd.len == 3 and cmd[0 .. 1] == "di" or
+       cmd == "dh" or
+       cmd == "cl" or cmd == "s" or
+       cmd.len == 3 and cmd[0 .. 1] == "ci":
+    status.addRegister(cmd, $registerName)
+
+proc isMovementKey(key: Rune): bool =
+  return isControlK(key) or
+         isControlJ(key) or
+         isControlV(key) or
+         key == ord('h') or isLeftKey(key) or isBackspaceKey(key) or
+         key == ord('l') or isRightKey(key) or
+         key == ord('k') or isUpKey(key) or
+         key == ord('j') or isDownKey(key) or
+         isEnterKey(key) or
+         key == ord('^') or key == ord('_') or
+         key == ord('0') or isHomeKey(key) or
+         key == ord('$') or isEndKey(key) or
+         key == ord('-') or
+         key == ord('+') or
+         key == ord('G') or
+         isControlU(key) or
+         isControlD(key) or
+         isPageUpkey(key) or
+         isPageDownKey(key) or
+         key == ord('w') or
+         key == ord('b') or
+         key == ord('e') or
+         key == ord('{') or
+         key == ord('}')
+
+proc isChangeModeKey(key: Rune): bool =
+   return key == ord('v') or
+          isControlV(key) or
+          key == ord('R') or
+          key == ord('i') or
+          key == ord('I') or
+          key == ord('a') or
+          key == ord('A')
+
 proc normalCommand(status: var EditorStatus,
                    commands: seq[Rune],
                    height, width: int) =
 
   if commands.len == 0: return
 
+  if currentBufStatus.cmdLoop == 0: currentBufStatus.cmdLoop = 1
+
   let
     currentBufferIndex = status.bufferIndexInCurrentWindow
-    workspaceIndex = status.currentWorkSpaceIndex
+    cmdLoop = currentBufStatus.cmdLoop
 
-  if status.bufStatus[currentBufferIndex].cmdLoop == 0:
-    status.bufStatus[currentBufferIndex].cmdLoop = 1
-
-  let cmdLoop = status.bufStatus[currentBufferIndex].cmdLoop
-  var windowNode = status.workSpace[workspaceIndex].currentMainWindowNode
-
-  template getWordUnderCursor(): (int, seq[Rune]) =
-    let line = currentBufStatus.buffer[windowNode.currentLine]
-    if line.len() <= windowNode.currentColumn:
-      return
-
-    let atCursorRune = line[windowNode.currentColumn]
-    if not atCursorRune.isAlpha() and not (char(atCursorRune) in '0'..'9'):
-      return
-
-    var beginCol = -1
-    var endCol = -1
-    for i in countdown(windowNode.currentColumn, 0):
-      if not line[i].isAlpha() and not (char(line[i]) in '0'..'9'):
-        break
-      beginCol = i
-    for i in windowNode.currentColumn..line.len()-1:
-      if not line[i].isAlpha() and not (char(line[i]) in '0'..'9'):
-        break
-      endCol = i
-    if endCol == -1 or beginCol == -1:
-      (-1, seq[Rune].default)
-    else:
-      (beginCol, line[beginCol..endCol])
-
-  template getCharacterUnderCursor(): Rune =
-    let line = currentBufStatus.buffer[windowNode.currentLine]
-    if line.len() <= windowNode.currentColumn:
-      return
-
-    line[windowNode.currentColumn]
-
-  template insertAfterCursor() =
-    let lineWidth = currentBufStatus.buffer[windowNode.currentLine].len
-    if lineWidth == 0: discard
-    elif lineWidth == windowNode.currentColumn: discard
-    else: inc(windowNode.currentColumn)
-    status.changeMode(Mode.insert)
-
-  template insertCharacter(rune: Rune) =
-    currentBufStatus.insertCharacter(
-      windowNode,
-      status.settings.autoCloseParen,
-      rune)
-
-  # d$ command
-  template yankAndDeleteCharactersUntilEndOfLine() =
-    let
-      lineWidth = currentBufStatus.buffer[windowNode.currentLine].len
-      count = lineWidth - windowNode.currentColumn
-    status.yankString(count)
-
-    currentBufStatus.deleteCharacterUntilEndOfLine(
-      status.settings.autoDeleteParen, windowNode)
-
-  template deleteCharactersOfLine() =
-    currentBufStatus.deleteCharactersOfLine(
-      status.settings.autoDeleteParen,
-      windowNode)
-
-  template deleteCurrentCharacter() =
-    currentBufStatus.deleteCurrentCharacter(
-      windowNode,
-      status.settings.autoDeleteParen)
-
-  template replaceCurrentCharacter(newCharacter: Rune) =
-    currentBufStatus.replaceCurrentCharacter(
-      currentWorkSpace.currentMainWindowNode,
-      status.settings.autoIndent,
-      status.settings.autoDeleteParen,
-      status.settings.tabStop,
-      newCharacter)
-
-  template modifyWordUnderCursor(amount: int) =
-    let wordUnderCursor      = getWordUnderCursor()
-    var theWord              = wordUnderCursor[1]
-    var beginCol             = wordUnderCursor[0]
-    var num                  = 0
-    var runeBefore           : Rune
-    var currentColumnBefore  = windowNode.currentColumn
-    var expandedColumnBefore = windowNode.expandedColumn
-    try:
-      # first we check if there could possibly be a
-      # minus sign before our word
-      if beginCol > 0:
-        windowNode.currentColumn  = beginCol - 1
-        windowNode.expandedColumn = windowNode.currentColumn - 1
-        runeBefore = getCharacterUnderCursor()
-        if runeBefore == toRune('-'):
-          # there is a minus sign
-          theWord.insert(runeBefore, 0)
-          beginCol = beginCol - 1
-
-      # if the word is a number, this will be successful,
-      # if not we land in the exception case
-      num               = parseInt($theWord) + amount
-
-      # delete the old word/number
-      windowNode.currentColumn  = beginCol
-      windowNode.expandedColumn = windowNode.currentColumn
-      for _ in 1..len(theWord):
-        deleteCurrentCharacter()
-
-      # change the word to the new number
-      theWord = toRunes($num)
-
-      # insert the new number
-      for i in 0..len(theWord)-1:
-        insertCharacter(theWord[i])
-
-      # put the cursor on the last character of the number
-      windowNode.currentColumn  = beginCol + len(theWord)-1
-      windowNode.expandedColumn = windowNode.currentColumn
-    except:
-      windowNode.currentColumn  = currentColumnBefore
-      windowNode.expandedColumn = expandedColumnBefore
-
-  template closeWindow() =
-    let currentBufferIndex = status.bufferIndexInCurrentWindow
-    let workspaceIndex = status.currentWorkSpaceIndex
-
-    if status.workspace[workspaceIndex].numOfMainWindow == 1: return
-
-    if currentBufStatus.countChange == 0 or
-       mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
-        status.closeWindow(currentWorkSpace.currentMainWindowNode, height, width)
-
-  # dgg command
-  # Delete the line from first line to current line
-  template yankAndDeleteLineFromFirstLineToCurrentLine() =
-    let currentLine = windowNode.currentLine
-    status.yankLines(0, currentLine)
-    status.moveToFirstLine
-    for i in 0 ..< currentLine + 1:
-      currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
-
-  # s and cl commands
-  template deleteCharacterAndEnterInsertMode() =
-    if currentBufStatus.buffer[windowNode.currentLine].len > 0:
-      let
-        lineWidth = currentBufStatus.buffer[windowNode.currentLine].len
-        loop = min(cmdLoop, lineWidth - windowNode.currentColumn)
-      status.yankString(loop)
-
-      for i in 0 ..< loop:
-        currentBufStatus.deleteCurrentCharacter(
-          windowNode,
-          status.settings.autoDeleteParen)
-
-    status.changeMode(Mode.insert)
-
-  # d{ command
-  template yankAndDeleteTillPreviousBlankLine() =
-    let
-      blankLine = currentBufStatus.findPreviousBlankLine(windowNode.currentLine)
-    status.yankLines(blankLine + 1, windowNode.currentLine)
-    currentBufStatus.deleteTillPreviousBlankLine(windowNode)
-
-  # d} command
-  template yankAndDeleteTillNextBlankLine() =
-    let blankLine = currentBufStatus.findNextBlankLine(windowNode.currentLine)
-    status.yankLines(windowNode.currentLine, blankLine - 1)
-    currentBufStatus.deleteTillNextBlankLine(windowNode)
-
-  # y{ command
-  template yankToPreviousBlankLine() =
-    let
-      currentLine = windowNode.currentLine
-      previousBlankLine = currentBufStatus.findPreviousBlankLine(currentLine)
-    status.yankLines(max(previousBlankLine, 0), currentLine)
-    if previousBlankLine >= 0: status.jumpLine(previousBlankLine)
-
-  # y} command
-  template yankToNextBlankLine() =
-    let
-      currentLine = windowNode.currentLine
-      buffer = currentBufStatus.buffer
-      nextBlankLine = currentBufStatus.findNextBlankLine(currentLine)
-    status.yankLines(currentLine, max(nextBlankLine, buffer.high))
-    if nextBlankLine >= 0: status.jumpLine(nextBlankLine)
-
-  # dd command
-  template yankAndDeleteLines() =
-    let lastLine = min(windowNode.currentLine + cmdLoop - 1,
-                       currentBufStatus.buffer.high)
-    status.yankLines(windowNode.currentLine, lastLine)
-    let count = min(cmdLoop,
-                    currentBufStatus.buffer.len - windowNode.currentLine)
-    for i in 0 ..< count:
-      currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
-
-  # d0 command
-  template yankAndDeleteCharacterBeginningOfLine() =
-    let currentColumn = windowNode.currentColumn
-    windowNode.currentColumn = 0
-    status.yankString(currentColumn)
-    windowNode.currentColumn = currentColumn
-
-    currentBufStatus.deleteCharacterBeginningOfLine(
-      status.settings.autoDeleteParen,
-      windowNode)
-
-  # dG command
-  # Yank and delete the line from current line to last line
-  template yankAndDeleteFromCurrentLineToLastLine() =
-    let lastLine = currentBufStatus.buffer.high
-    status.yankLines(windowNode.currentLine, lastLine)
-    let count = currentBufStatus.buffer.len - windowNode.currentLine
-
-    for i in 0 ..< count:
-      currentBufStatus.deleteLine(windowNode, windowNode.currentLine)
-
-  ## yy command
-  template yankLines() =
-    let lastLine = min(windowNode.currentLine + cmdLoop - 1,
-                       currentBufStatus.buffer.high)
-    status.yankLines(windowNode.currentLine, lastLine)
-
-  # yl command
-  # Yank characters in the current line
-  template yankCharacters() =
-    let
-      buffer = currentBufStatus.buffer
-      width = buffer[windowNode.currentLine].len - windowNode.currentColumn
-      count = if  width > cmdLoop: cmdLoop
-              else: width
-    status.yankString(count)
-
-  # X and dh command
-  template cutCharacterBeforeCursor() =
-    if windowNode.currentColumn > 0:
-      let
-        currentColumn = windowNode.currentColumn
-        loop = if currentColumn - cmdLoop > 0: cmdLoop
-               else: currentColumn
-      currentMainWindowNode.currentColumn = currentColumn - loop
-
-      status.yankString(loop)
-      for i in 0 ..< loop:
-        deleteCurrentCharacter()
-
-  let key = commands[0]
+    key = commands[0]
 
   if isControlK(key):
     status.moveNextWindow
@@ -473,63 +810,58 @@ proc normalCommand(status: var EditorStatus,
   elif isControlV(key):
     status.changeMode(Mode.visualBlock)
   elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
-    for i in 0 ..< cmdLoop: windowNode.keyLeft
+    for i in 0 ..< cmdLoop: currentMainWindowNode.keyLeft
   elif key == ord('l') or isRightKey(key):
-    for i in 0 ..< cmdLoop: currentBufStatus.keyRight(windowNode)
+    for i in 0 ..< cmdLoop: currentBufStatus.keyRight(currentMainWindowNode)
   elif key == ord('k') or isUpKey(key):
-    for i in 0 ..< cmdLoop: currentBufStatus.keyUp(windowNode)
+    for i in 0 ..< cmdLoop: currentBufStatus.keyUp(currentMainWindowNode)
   elif key == ord('j') or isDownKey(key) or isEnterKey(key):
-    for i in 0 ..< cmdLoop: currentBufStatus.keyDown(windowNode)
+    for i in 0 ..< cmdLoop: currentBufStatus.keyDown(currentMainWindowNode)
   elif key == ord('x') or isDcKey(key):
-    let
-      lineWidth = currentBufStatus.buffer[windowNode.currentLine].len
-      loop = min(cmdLoop, lineWidth - windowNode.currentColumn)
-    status.yankString(loop)
-    for i in 0 ..< loop:
-      deleteCurrentCharacter()
+    status.deleteCharacters
   elif key == ord('X'):
-    cutCharacterBeforeCursor()
+    status.cutCharacterBeforeCursor
   elif key == ord('^') or key == ord('_'):
-    currentBufStatus.moveToFirstNonBlankOfLine(windowNode)
+    currentBufStatus.moveToFirstNonBlankOfLine(currentMainWindowNode)
   elif key == ord('0') or isHomeKey(key):
-    windowNode.moveToFirstOfLine
+    currentMainWindowNode.moveToFirstOfLine
   elif key == ord('$') or isEndKey(key):
-    currentBufStatus.moveToLastOfLine(windowNode)
+    currentBufStatus.moveToLastOfLine(currentMainWindowNode)
   elif key == ord('-'):
-    currentBufStatus.moveToFirstOfPreviousLine(windowNode)
+    currentBufStatus.moveToFirstOfPreviousLine(currentMainWindowNode)
   elif key == ord('+'):
-    currentBufStatus.moveToFirstOfNextLine(windowNode)
+    currentBufStatus.moveToFirstOfNextLine(currentMainWindowNode)
   elif key == ord('{'):
-    currentBufStatus.moveToPreviousBlankLine(status, windowNode)
+    status.moveToPreviousBlankLine
   elif key == ord('}'):
-    currentBufStatus.moveToNextBlankLine(status, windowNode)
+    status.moveToNextBlankLine
   elif key == ord('g'):
     let secondKey = commands[1]
     if secondKey == ord('g'):
       status.jumpLine(cmdLoop - 1)
     elif secondKey == ord('_'):
-      currentBufStatus.moveToLastNonBlankOfLine(windowNode)
+      currentBufStatus.moveToLastNonBlankOfLine(currentMainWindowNode)
     elif secondKey == ord('a'):
-      status.showCurrentCharInfoCommand(windowNode)
+      status.showCurrentCharInfoCommand(currentMainWindowNode)
   elif key == ord('G'):
     moveToLastLine(status)
   elif isControlU(key):
     for i in 0 ..< cmdLoop: status.halfPageUp
   elif isControlD(key):
-    for i in 0 ..< cmdLoop: halfPageDown(status)
+    for i in 0 ..< cmdLoop: status.halfPageDown
   elif isPageUpkey(key):
     for i in 0 ..< cmdLoop: status.pageUp
   elif isPageDownKey(key): ## Page down and Ctrl - F
     for i in 0 ..< cmdLoop: status.pageDown
   elif key == ord('w'):
     for i in 0 ..< cmdLoop:
-      currentBufStatus.moveToForwardWord(windowNode)
+      currentBufStatus.moveToForwardWord(currentMainWindowNode)
   elif key == ord('b'):
     for i in 0 ..< cmdLoop:
-      currentBufStatus.moveToBackwardWord(windowNode)
+      currentBufStatus.moveToBackwardWord(currentMainWindowNode)
   elif key == ord('e'):
     for i in 0 ..< cmdLoop:
-      currentBufStatus.moveToForwardEndOfWord(windowNode)
+      currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
   elif key == ord('z'):
     let secondKey = commands[1]
     if secondKey == ord('.'):
@@ -539,29 +871,16 @@ proc normalCommand(status: var EditorStatus,
     elif secondKey == ord('b'):
       currentBufStatus.scrollScreenBottom(currentMainWindowNode)
   elif key == ord('o'):
-    for i in 0 ..< cmdLoop:
-      currentBufStatus.openBlankLineBelow(currentMainWindowNode)
-    status.changeMode(Mode.insert)
+    status.openBlankLineBelowAndEnterInsertMode
   elif key == ord('O'):
-    for i in 0 ..< cmdLoop:
-      currentBufStatus.openBlankLineAbove(currentMainWindowNode)
-
-    var highlight = currentMainWindowNode.highlight
-    highlight.updateHighlight(
-      currentBufStatus,
-      currentMainWindowNode,
-      status.isSearchHighlight,
-      status.searchHistory,
-      status.settings)
-
-    status.changeMode(Mode.insert)
+    status.openBlankLineAboveAndEnterInsertMode
   elif key == ord('c'):
     let secondKey = commands[1]
     if secondKey == ord('c'):
-      deleteCharactersOfLine()
-      insertAfterCursor()
+      status.deleteCharactersAfterBlankInLine
+      status.enterInsertModeAfterCursor
     if secondKey == ord('l'):
-      deleteCharacterAndEnterInsertMode()
+      status.deleteCharacterAndEnterInsertMode
     elif secondKey == ord('i'):
       let thirdKey = commands[2]
       if isParen(thirdKey) or
@@ -570,56 +889,56 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('d'):
     let secondKey = commands[1]
     if secondKey == ord('d'):
-      yankAndDeleteLines()
+      status.deleteLines
     elif secondKey == ord('w'):
-      currentBufStatus.deleteWord(windowNode, status.registers)
+      status.deleteWord
     elif secondKey == ('$') or isEndKey(secondKey):
-      yankAndDeleteCharactersUntilEndOfLine()
+      status.deleteCharactersUntilEndOfLine
     elif secondKey == ('0') or isHomeKey(secondKey):
-     yankAndDeleteCharacterBeginningOfLine()
+     status.deleteCharacterBeginningOfLine
     elif secondKey == ord('G'):
-      yankAndDeleteFromCurrentLineToLastLine()
+      status.deleteFromCurrentLineToLastLine
     elif secondKey == ord('g'):
       let thirdKey = commands[2]
       if thirdKey == ord('g'):
-        yankAndDeleteLineFromFirstLineToCurrentLine()
+        status.deleteLineFromFirstLineToCurrentLine
     elif secondKey == ord('{'):
-      yankAndDeleteTillPreviousBlankLine()
+      status.deleteTillPreviousBlankLine
     elif secondKey == ord('}'):
-      yankAndDeleteTillNextBlankLine()
+      status.deleteTillNextBlankLine
     elif secondKey == ord('i'):
       let thirdKey = commands[2]
-      status.yankAndDeleteInnerCommand(thirdKey)
+      status.deleteInnerCommand(thirdKey)
     elif secondKey == ord('h'):
-      cutCharacterBeforeCursor()
+      status.cutCharacterBeforeCursor
   elif key == ord('D'):
-     yankAndDeleteCharactersUntilEndOfLine()
+     status.deleteCharactersUntilEndOfLine
   elif key == ord('S'):
-     deleteCharactersOfLine()
-     insertAfterCursor()
+     status.deleteCharactersAfterBlankInLine
+     status.enterInsertModeAfterCursor
   elif key == ord('s'):
-    deleteCharacterAndEnterInsertMode()
+    status.deleteCharacterAndEnterInsertMode
   elif key == ord('y'):
     let secondKey = commands[1]
     if secondKey == ord('y'):
-      yankLines()
+      status.yankLines
     elif secondKey == ord('w'):
-      status.yankWord(cmdLoop)
+      status.yankWord
     elif secondKey == ord('{'):
-      yankToPreviousBlankLine()
+      status.yankToPreviousBlankLine
     elif secondKey == ord('}'):
-      yankToNextBlankLine()
+      status.yankToNextBlankLine
     elif secondKey == ord('l'):
-      yankCharacters()
+      status.yankCharacters
   elif key == ord('Y'):
-    yankLines()
+    status.yankLines
   elif key == ord('p'):
-    currentBufStatus.pasteAfterCursor(windowNode, status.registers)
+    currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
   elif key == ord('P'):
-    currentBufStatus.pasteBeforeCursor(windowNode, status.registers)
+    currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
   elif key == ord('>'):
     for i in 0 ..< cmdLoop:
-      currentBufStatus.addIndent(windowNode, status.settings.tabStop)
+      currentBufStatus.addIndent(currentMainWindowNode, status.settings.tabStop)
   elif key == ord('<'):
     for i in 0 ..< cmdLoop:
       currentBufStatus.deleteIndent(currentMainWindowNode, status.settings.tabStop)
@@ -630,55 +949,51 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('J'):
     currentBufStatus.joinLine(currentMainWindowNode)
   elif isControlA(key):
-    modifyWordUnderCursor(cmdLoop)
+    currentBufStatus.modifyNumberTextUnderCurosr(currentMainWindowNode, cmdLoop)
   elif isControlX(key):
-    modifyWordUnderCursor(-cmdLoop)
+    currentBufStatus.modifyNumberTextUnderCurosr(currentMainWindowNode,
+                                                 -cmdLoop)
   elif key == ord('~'):
-    for i in 0 ..< cmdLoop:
-      replaceCurrentCharacter(toggleCase(getCharacterUnderCursor()))
-      currentBufStatus.keyRight(windowNode)
+    status.toggleCharacterAndMoveRight
   elif key == ord('r'):
-    let
-      lineWidth = currentBufStatus.buffer[windowNode.currentLine].len
-      loop = lineWidth - windowNode.currentColumn
-    if cmdLoop > loop: return
-
-    let secondKey = commands[1]
-    for i in 0 ..< cmdLoop:
-      if i > 0:
-        inc(windowNode.currentColumn)
-        windowNode.expandedColumn = windowNode.currentColumn
-      replaceCurrentCharacter(secondKey)
+    status.replaceCurrentCharacter(commands[1])
   elif key == ord('n'):
     status.searchNextOccurrence
   elif key == ord('N'):
     status.searchNextOccurrenceReversely
   elif key == ord('*'):
-    status.searchNextOccurrence(getWordUnderCursor()[1])
+    let word = currentBufStatus.getWordUnderCursor(currentMainWindowNode)[1]
+    status.searchNextOccurrence(word)
   elif key == ord('#'):
-    status.searchNextOccurrenceReversely(getWordUnderCursor()[1])
+    let word = currentBufStatus.getWordUnderCursor(currentMainWindowNode)[1]
+    status.searchNextOccurrenceReversely(word)
   elif key == ord('f'):
     let secondKey = commands[1]
-    currentBufStatus.searchOneCharactorToEndOfLine(windowNode, secondKey)
+    currentBufStatus.searchOneCharactorToEndOfLine(
+      currentMainWindowNode,
+      secondKey)
   elif key == ord('F'):
     let secondKey = commands[1]
-    currentBufStatus.searchOneCharactorToBeginOfLine(windowNode, secondKey)
+    currentBufStatus.searchOneCharactorToBeginOfLine(
+      currentMainWindowNode,
+      secondKey)
   elif key == ord('R'):
     status.changeMode(Mode.replace)
   elif key == ord('i'):
     status.changeMode(Mode.insert)
   elif key == ord('I'):
-    currentBufStatus.moveToFirstNonBlankOfLine(windowNode)
+    currentBufStatus.moveToFirstNonBlankOfLine(currentMainWindowNode)
     status.changeMode(Mode.insert)
   elif key == ord('v'):
     status.changeMode(Mode.visual)
   elif key == ord('a'):
-    insertAfterCursor()
+    status.enterInsertModeAfterCursor
   elif key == ord('A'):
-    windowNode.currentColumn = currentBufStatus.buffer[windowNode.currentLine].len
+    let lineLen = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
+    currentMainWindowNode.currentColumn = lineLen
     status.changeMode(Mode.insert)
   elif key == ord('u'):
-    status.bufStatus[currentBufferIndex].undo(windowNode)
+    status.bufStatus[currentBufferIndex].undo(currentMainWindowNode)
   elif isControlR(key):
     currentBufStatus.redo(currentMainWindowNode)
   elif key == ord('Z'):
@@ -689,189 +1004,256 @@ proc normalCommand(status: var EditorStatus,
       status.forceExit(height, width)
   elif isControlW(key):
     let secondKey = commands[1]
-    if secondKey == ord('c'): closeWindow()
+    if secondKey == ord('c'):
+      status.closeCurrentWindow(height, width)
   elif key == ord('.'):
     status.repeatNormalModeCommand(height, width)
   elif key == ord('\\'):
     let secondKey = commands[1]
     if secondKey == ord('r'): status.runQuickRunCommand
+  elif key == ord('"'):
+    status.registerCommand(commands)
   else:
-    discard
-
-proc isNormalModeCommand(status: var Editorstatus, key: Rune): seq[Rune] =
-  template getAnotherKey(): Rune =
-    let workspaceIndex = status.currentWorkSpaceIndex
-    getKey(status.workSpace[workspaceIndex].currentMainWindowNode)
-
-  # Single key commands
-  if isControlK(key) or
-     isControlJ(key) or
-     isControlV(key) or
-     key == ord('h') or isLeftKey(key) or isBackspaceKey(key) or
-     key == ord('l') or isRightKey(key) or
-     key == ord('k') or isUpKey(key) or
-     key == ord('j') or isDownKey(key) or
-     isEnterKey(key) or
-     key == ord('x') or isDcKey(key) or
-     key == ord('X') or
-     key == ord('^') or key == ord('_') or
-     key == ord('0') or isHomeKey(key) or
-     key == ord('$') or isEndKey(key) or
-     key == ord('{') or
-     key == ord('}') or
-     key == ord('-') or
-     key == ord('+') or
-     key == ord('G') or
-     isControlU(key) or
-     isControlD(key) or
-     isPageUpkey(key) or
-     ## Page down and Ctrl - F
-     isPageDownKey(key) or
-     key == ord('w') or
-     key == ord('b') or
-     key == ord('e') or
-     key == ord('o') or
-     key == ord('O') or
-     key == ord('D') or
-     key == ord('S') or
-     key == ord('s') or
-     key == ord('p') or
-     key == ord('P') or
-     key == ord('>') or
-     key == ord('<') or
-     key == ord('J') or
-     isControlA(key) or
-     isControlX(key) or
-     key == ord('~') or
-     key == ord('n') or
-     key == ord('N') or
-     key == ord('*') or
-     key == ord('#') or
-     key == ord('R') or
-     key == ord('i') or
-     key == ord('I') or
-     key == ord('v') or
-     key == ord('a') or
-     key == ord('A') or
-     key == ord('u') or
-     isControlR(key) or
-     key == ord('.'): result = @[key]
-  # Multiple key commands
-  # TODO: Refactor
-  elif key == ord('g'):
-      let secondKey = getAnotherKey()
-      if secondKey == ord('g') or
-         secondKey == ord('_') or
-         secondKey == ord('a'): result = @[key, secondKey]
-  elif key == ord('z'):
-    let secondKey = getAnotherKey()
-    if secondKey == ord('.') or key == ord('t') or key == ord('b'):
-      result = @[key, secondKey]
-  elif key == ord('c'):
-    let secondKey = getAnotherKey()
-    if secondKey == ord('c') or secondKey == ('l'):
-      result = @[key, secondKey]
-    elif secondKey == ('i'):
-      let thirdKey = getAnotherKey()
-      if isParen(thirdKey) or
-         thirdKey == ('w'):
-        result = @[key, secondKey, thirdKey]
-  elif key == ord('d'):
-    let secondKey = getAnotherKey()
-    if secondKey == ord('d') or
-       secondKey == ord('w') or
-       secondKey == ord('$') or isEndKey(secondKey) or
-       secondKey == ord('0') or isHomeKey(secondKey) or
-       secondKey == ord('G') or
-       secondKey == ord('{') or
-       secondKey == ord('}'): result = @[key, secondKey]
-    elif secondKey == ord('g'):
-      let thirdKey = getAnotherKey()
-      if thirdKey == ord('g'): result = @[key, secondKey, thirdKey]
-    elif secondKey == ord('i'):
-      let thirdKey = getAnotherKey()
-      if isParen(thirdKey) or
-         thirdKey == ('w'):
-        result = @[key, secondKey, thirdKey]
-  elif key == ord('y'):
-    let secondKey = getAnotherKey()
-    if key == ord('y') or
-       key == ord('w') or
-       key == ord('{') or
-       key == ord('}') or
-       key == ord('l'):
-      result = @[key, secondKey]
-  elif key == ord('Y'):
-      result = @[key]
-  elif key == ord('='):
-    let secondKey = getAnotherKey()
-    if secondKey == ord('='):
-      result = @[key, secondKey]
-  elif key == ord('r'):
-    let secondKey = getAnotherKey()
-    result = @[key, secondKey]
-  elif key == ord('f'):
-    let secondKey = getAnotherKey()
-    result = @[key, secondKey]
-  elif key == ord('F'):
-    let secondKey = getAnotherKey()
-    result = @[key, secondKey]
-  elif key == ord('Z'):
-    let secondKey = getAnotherKey()
-    if  secondKey == ord('Z') or secondKey == ord('Q'):
-      result = @[key, secondKey]
-  elif isControlW(key):
-    let secondKey = getAnotherKey()
-    if secondKey == ord('c'):
-      result = @[key, secondKey]
-  elif key == ('\\'):
-    let secondKey = getAnotherKey()
-    if secondKey == ord('r'): result = @[key, secondKey]
-  else: discard
-
-  proc isMovementKey(key: Rune): bool =
-    return isControlK(key) or
-           isControlJ(key) or
-           isControlV(key) or
-           key == ord('h') or isLeftKey(key) or isBackspaceKey(key) or
-           key == ord('l') or isRightKey(key) or
-           key == ord('k') or isUpKey(key) or
-           key == ord('j') or isDownKey(key) or
-           isEnterKey(key) or
-           key == ord('^') or key == ord('_') or
-           key == ord('0') or isHomeKey(key) or
-           key == ord('$') or isEndKey(key) or
-           key == ord('-') or
-           key == ord('+') or
-           key == ord('G') or
-           isControlU(key) or
-           isControlD(key) or
-           isPageUpkey(key) or
-           isPageDownKey(key) or
-           key == ord('w') or
-           key == ord('b') or
-           key == ord('e') or
-           key == ord('{') or
-           key == ord('}')
-
-  proc isChangeModeKey(key: Rune): bool =
-     return key == ord('v') or
-            isControlV(key) or
-            key == ord('R') or
-            key == ord('i') or
-            key == ord('I') or
-            key == ord('a') or
-            key == ord('A')
+    return
 
   # Record normal mode commands
-  if result.len > 0 and
-     key != ord('.') and
-     not isMovementKey(key) and
-     not isChangeModeKey(key): status.normalCommandHistory.add(@[result])
+  if commands[0] != ord('.') and
+     not isMovementKey(commands[0]) and
+     not isChangeModeKey(commands[0]):
+    status.normalCommandHistory.add commands
+
+# Get a key and execute the event loop
+proc getKey(status: var Editorstatus): Rune =
+  result = errorKey
+  while result == errorKey:
+    if not pressCtrlC:
+      status.eventLoopTask
+      result = getKey(currentMainWindowNode)
+    else:
+      pressCtrlC = false
+      status.commandLine.writeExitHelp
+      status.update
+
+proc isNormalModeCommand(command: seq[Rune]): InputState =
+  result = InputState.Invalid
+
+  if command.len == 0:
+    result = InputState.Continue
+  else:
+    if isControlK(command[0]) or
+       isControlJ(command[0]) or
+       isControlV(command[0]) or
+       command[0] == ord('h') or isLeftKey(command[0]) or isBackspaceKey(command[0]) or
+       command[0] == ord('l') or isRightKey(command[0]) or
+       command[0] == ord('k') or isUpKey(command[0]) or
+       command[0] == ord('j') or isDownKey(command[0]) or
+       isEnterKey(command[0]) or
+       command[0] == ord('x') or isDcKey(command[0]) or
+       command[0] == ord('X') or
+       command[0] == ord('^') or command[0] == ord('_') or
+       command[0] == ord('0') or isHomeKey(command[0]) or
+       command[0] == ord('$') or isEndKey(command[0]) or
+       command[0] == ord('{') or
+       command[0] == ord('}') or
+       command[0] == ord('-') or
+       command[0] == ord('+') or
+       command[0] == ord('G') or
+       isControlU(command[0]) or
+       isControlD(command[0]) or
+       isPageUpKey(command[0]) or
+       ## Page down and Ctrl - F
+       isPageDownKey(command[0]) or
+       command[0] == ord('w') or
+       command[0] == ord('b') or
+       command[0] == ord('e') or
+       command[0] == ord('o') or
+       command[0] == ord('O') or
+       command[0] == ord('D') or
+       command[0] == ord('S') or
+       command[0] == ord('s') or
+       command[0] == ord('p') or
+       command[0] == ord('P') or
+       command[0] == ord('>') or
+       command[0] == ord('<') or
+       command[0] == ord('J') or
+       isControlA(command[0]) or
+       isControlX(command[0]) or
+       command[0] == ord('~') or
+       command[0] == ord('n') or
+       command[0] == ord('N') or
+       command[0] == ord('*') or
+       command[0] == ord('#') or
+       command[0] == ord('R') or
+       command[0] == ord('i') or
+       command[0] == ord('I') or
+       command[0] == ord('v') or
+       command[0] == ord('a') or
+       command[0] == ord('A') or
+       command[0] == ord('u') or
+       isControlR(command[0]) or
+       command[0] == ord('.') or
+       command[0] == ord('Y'):
+      result = InputState.Valid
+
+    elif command[0] == ord('g'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        if command[1] == ord('g') or
+           command[1] == ord('_') or
+           command[1] == ord('a'):
+          result = InputState.Valid
+
+    elif command[0] == ord('z'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        if command[1] == ord('.') or
+           command[1] == ord('t') or
+           command[1] == ord('b'):
+          result = InputState.Valid
+
+    elif command[0] == ord('c'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        if command[1] == ord('i'):
+          result = InputState.Continue
+        elif command[1] == ord('c') or command[1] == ('l'):
+          result = InputState.Valid
+      elif command.len == 3:
+        if command[1] == ord('i'):
+          if isParen(command[2]) or
+             command[2] == ord('w'):
+            result = InputState.Valid
+
+    elif command[0] == ord('d'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        if command[1] == ord('d') or
+           command[1] == ord('w') or
+           command[1] == ord('$') or isEndKey(command[1]) or
+           command[1] == ord('0') or isHomeKey(command[1]) or
+           command[1] == ord('G') or
+           command[1] == ord('{') or
+           command[1] == ord('}'):
+          result = InputState.Valid
+        elif command[1] == ord('g') or command[1] == ord('i'):
+          result = InputState.Continue
+      elif command.len == 3:
+        if command[2] == ord('g'):
+          result = InputState.Valid
+        elif command[1] == ord('i'):
+          if isParen(command[2]) or
+             command[2] == ord('w'):
+            result = InputState.Valid
+
+    elif command[0] == ord('y'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        if command[1] == ord('y') or
+           command[1] == ord('w') or
+           command[1] == ord('{') or
+           command[1] == ord('}') or
+           command[1] == ord('l'):
+          result = InputState.Valid
+
+    elif command[0] == ord('='):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command[1] == ord('='):
+        result = InputState.Valid
+
+    elif command[0] == ord('r'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        result = InputState.Valid
+
+    elif command[0] == ord('f'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        result = InputState.Valid
+
+    elif command[0] == ord('F'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        result = InputState.Valid
+
+    elif command[0] == ord('Z'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        if command[1] == ord('Z') or command[1] == ord('Q'):
+          result = InputState.Valid
+
+    elif isControlW(command[0]):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        if command[1] == ord('c'):
+          result = InputState.Valid
+
+    elif command[0] == ('\\'):
+      if command.len == 1:
+        result = InputState.Continue
+      if command[1] == ord('r'):
+        result = InputState.Valid
+
+    elif command[0] == ord('"'):
+      if command.len < 3:
+        result = InputState.Continue
+      else:
+        block:
+          let ch = char(command[2])
+          if not (ch in Letters and isDigit(ch)):
+            result = InputState.Invalid
+
+        var
+          currentIndex = 2
+          ch = char(command[currentIndex])
+        while ch in Digits and currentIndex < command.len:
+          inc(currentIndex)
+          ch = char(command[currentIndex])
+
+        let cmd = $command[currentIndex .. ^1]
+        if cmd == "y" or
+           cmd == "d" or
+           cmd == "dg" or
+           cmd == "di" or
+           cmd == "c" or
+           cmd == "ci":
+          result = InputState.Continue
+        elif cmd == "p" or
+             cmd == "P" or
+             cmd == "yy" or
+             cmd == "yw" or
+             cmd == "yl" or
+             cmd == "y{" or
+             cmd == "y}" or
+             cmd == "dd" or
+             cmd == "dw" or
+             cmd == "d$" or (cmd.len == 1 and isEndKey(cmd[0].toRune)) or
+             cmd == "d0" or
+             cmd == "dG" or
+             cmd == "dgg" or
+             cmd == "d{" or
+             cmd == "d}" or
+             (cmd.len == 3 and cmd[0 .. 1] == "di") or
+             cmd == "dh" or
+             cmd == "cl" or cmd == "s" or
+             (cmd.len == 3 and cmd[0 .. 1] == "ci"):
+          result = InputState.Valid
+
+    else:
+      discard
 
 proc isNormalMode(status: Editorstatus): bool =
-  let index =
-    status.workspace[status.currentWorkSpaceIndex].currentMainWindowNode.bufferIndex
+  let index = currentMainWindowNode.bufferIndex
   status.bufStatus[index].mode == Mode.normal
 
 proc normalMode*(status: var EditorStatus) =
@@ -880,13 +1262,12 @@ proc normalMode*(status: var EditorStatus) =
 
   status.resize(terminalHeight(), terminalWidth())
 
-  let
-    currentBufferIndex = status.bufferIndexInCurrentWindow
-    currentWorkSpaceIndex = status.currentWorkSpaceIndex
-  var countChange = 0
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  var
+    countChange = 0
+    command = ru ""
 
   while status.isNormalMode and
-        currentWorkSpaceIndex == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
 
     if currentBufStatus.countChange > countChange:
@@ -894,15 +1275,7 @@ proc normalMode*(status: var EditorStatus) =
 
     status.update
 
-    var key = errorKey
-    while key == errorKey:
-      if not pressCtrlC:
-        status.eventLoopTask
-        key = getKey(currentMainWindowNode)
-      else:
-        pressCtrlC = false
-        status.commandLine.writeExitHelp
-        status.update
+    var key = status.getKey
 
     status.lastOperatingTime = now()
 
@@ -910,11 +1283,15 @@ proc normalMode*(status: var EditorStatus) =
     currentBufStatus.tryRecordCurrentPosition(currentMainWindowNode)
 
     if isEscKey(key):
+      command = ru ""
+      currentBufStatus.cmdLoop = 0
+
       let keyAfterEsc = getKey(currentMainWindowNode)
       if isEscKey(keyAfterEsc):
         status.turnOffHighlighting
         continue
-      else: key = keyAfterEsc
+      else:
+        key = keyAfterEsc
 
     if isResizekey(key):
       status.resize(terminalHeight(), terminalWidth())
@@ -924,20 +1301,26 @@ proc normalMode*(status: var EditorStatus) =
       status.searchBackwards
     elif key == ord(':'):
       status.changeMode(Mode.ex)
-    elif isDigit(key):
+    elif isDigit(command) and
+         isDigit(key) and
+         not (currentBufStatus.cmdLoop == 0 and ($key)[0] == '0'):
+
       let num = ($key)[0]
-      if status.bufStatus[currentBufferIndex].cmdLoop == 0 and num == '0':
-        let commands = status.isNormalModeCommand(key)
-        status.normalCommand(commands, terminalHeight(), terminalWidth())
-        continue
 
       currentBufStatus.cmdLoop *= 10
-      currentBufStatus.cmdLoop += ord(num)-ord('0')
+      currentBufStatus.cmdLoop += ord(num) - ord('0')
       currentBufStatus.cmdLoop = min(
         100000,
         currentBufStatus.cmdLoop)
       continue
     else:
-      let commands = status.isNormalModeCommand(key)
-      status.normalCommand(commands, terminalHeight(), terminalWidth())
-      currentBufStatus.cmdLoop = 0
+      command &= key
+
+      let state = isNormalModeCommand(command)
+      if state == InputState.Continue:
+        continue
+      elif state == InputState.Valid:
+        status.normalCommand(command, terminalHeight(), terminalWidth())
+
+    command = ru ""
+    currentBufStatus.cmdLoop = 0

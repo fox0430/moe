@@ -1,4 +1,4 @@
-import strutils, math
+import strutils, math, random
 
 proc numberOfDigits*(x: int): int {.inline.} = x.intToStr.len
 
@@ -13,3 +13,15 @@ proc normalizeHex*(s: string): string =
       break
 
   result = s[count .. ^1]
+
+proc isInt*(str: string): bool =
+  try:
+    discard str.parseInt
+    return true
+  except:
+    discard
+
+proc genDelimiterStr*(buffer: string): string =
+  while true:
+    for _ in 0 .. 10: add(result, char(rand(int('A') .. int('Z'))))
+    if buffer != result: break

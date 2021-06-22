@@ -4,8 +4,9 @@
 
 |                               |                             |                               |                             |                                   |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|:---------------------------------:|
-| [Normal Mode](#normal-mode)   | [Visual Mode](#visual-block-mode) | [Replace Mode](#replace-mode) | [Insert Mode](#insert-mode) | [History Mode](#history-mode)     |
-| [Ex Mode](#ex-mode)       | [Diff Mode](#diff-mode)     | [Filer Mode](#filer-mode)     | [Exiting](#exiting)         | [Changing Modes](#changing-modes) |
+| [Normal Mode](#normal-mode)   | [Register](#register) | [Visual Mode](#visual-block-mode) | [Replace Mode](#replace-mode) | [Insert Mode](#insert-mode) | 
+| [History Mode](#history-mode)     | [Ex Mode](#ex-mode)       | [Diff Mode](#diff-mode)     | [Filer Mode](#filer-mode)     | [Exiting](#exiting)         |
+| [Changing Modes](#changing-modes) |
 
 
 ## Exiting
@@ -62,6 +63,20 @@
 
 </details>
 
+## Register
+
+<details open>
+  <summary>Register operations</summary>
+
+  |                               |                             |                               |                             |
+  |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
+  | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**y**</kbd> <kbd>**y**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**y**</kbd> <kbd>**l**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**y**</kbd> <kbd>**w**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**y**</kbd> <kbd>**{**</kbd> |
+  | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**y**</kbd> <kbd>**}**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**p**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**P**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**d**</kbd> <kbd>**d**</kbd> |
+  | <kbd>**"**</kbd> <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**d**</kbd> <kbd>**w**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**d**</kbd> <kbd>**$**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**d**</kbd> <kbd>**0**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**d**</kbd> <kbd>**G**</kbd> |
+  | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**d**</kbd> <kbd>**g**</kbd> <kbd>**g**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**d**</kbd> <kbd>**{**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**d**</kbd> <kbd>**}**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**any key**</kbd> |
+  | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**d**</kbd> <kbd>**h**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**c**</kbd> <kbd>**l**</kbd> OR <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**s**</kbd> | <kbd>**"**</kbd> <kbd>**register name**</kbd> <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**any key**</kbd> |
+ 
+</details>
 
 ## Visual block mode
 
@@ -72,9 +87,12 @@
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|:---------------------------------:|
 | <kbd>**d**</kbd> OR <kbd>**x**</kbd><br> Delete text | <kbd>**y**</kbd><br> Copy text | <kbd>**r**</kbd><br> Replace character | <kbd>**J**</kbd><br> Join lines | <kbd>**J**</kbd><br> Join lines |
 | <kbd>**u**</kbd><br> Convert to Lowercase | <kbd>**U**</kbd><br> Convert to Uppercase | <kbd>**>**</kbd><br> Indent | <kbd>**<**</kbd><br> Unindent | <kbd>**~**</kbd><br> Toggle case of character under cursor |
-| <kbd>**Ctrl**</kbd> <kbd>**a**</kbd><br> Increase number under cursor | <kbd>**Ctrl**</kbd> <kbd>**x**</kbd><br> Decrease number under cursor | <kbd>**I**</kbd><br> Insert character, multiple lines | <kbd>**Esc**</kbd><br> Go to Normal mode |  |
+| <kbd>**Ctrl**</kbd> <kbd>**a**</kbd><br> Increase number under cursor | <kbd>**Ctrl**</kbd> <kbd>**x**</kbd><br> Decrease number under cursor | <kbd>**I**</kbd><br> Insert character, multiple lines | <kbd>**Esc**</kbd><br> Go to Normal mode | <kbd>**j**</kbd><br> Go Down :arrow_down: |
+| <kbd>**k**</kbd><br> Go Up :arrow_up: | <kbd>**j**</kbd><br> Go Left :arrow_left: | <kbd>**k**</kbd><br> Go Up :arrow_up: |
 
-</details>| <kbd>**j**</kbd><br> Go Down :arrow_down: | <kbd>**k**</kbd><br> Go Up :arrow_up: | <kbd>**j**</kbd><br> Go Left :arrow_left: | <kbd>**k**</kbd><br> Go Up :arrow_up: |
+</details>
+
+## Replace mode
 
 <details open>
   <summary>Replace Text</summary>
@@ -174,11 +192,6 @@
 ```vs filename``` - Open in vertical split window  
 ```sv``` - Horizontal split window  
 ```sp filename``` - Open in horizontal split window  
-
-```cws``` - Create new work space  
-```ws number``` - Change current work space : Example ```ws 2```  
-```dws``` - Delete current work space  
-```lsw``` - Show workspace list in status line
 
 ```livereload on``` or ```livereload on``` - Change setting of live reload of configuration file  
 ```theme themeName``` - Change color theme : Example ```theme dark```  

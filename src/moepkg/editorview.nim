@@ -203,26 +203,45 @@ proc writeCurrentLine(win: var Window,
 
   if viewSettings.highlightCurrentLine and
      not (isVisualMode(mode) or isConfigMode(mode, prevMode)):
-    # Change background color to white
+    # Change background color to white if background color is editorBg
     let
       defaultCharColor = EditorColorPair.defaultChar
       colors = if i > -1 and i < highlight.len:
                  theme.getColorFromEditorColorPair(highlight[i].color)
                else:
                  theme.getColorFromEditorColorPair(defaultCharColor)
-    setColorPair(currentLineColorPair,
-                 colors[0],
-                 ColorThemeTable[theme].EditorColor.currentLineBg)
+
+      theme = ColorThemeTable[theme]
+
+    block:
+      let
+        fg = colors[0]
+        bg = if colors[1] == theme.EditorColor.editorBg:
+               theme.EditorColor.currentLineBg
+             else:
+               colors[1]
+
+      setColorPair(currentLineColorPair, fg, bg)
 
     view.write(win, y, x, str, currentLineColorPair)
 
     currentLineColorPair.inc
 
     # Write spaces after text in the current line
+    block:
+      let
+        fg = theme.EditorColor.defaultChar
+        bg = theme.EditorColor.currentLineBg
+
+      setColorPair(currentLineColorPair, fg, bg)
     let
       spaces = ru" ".repeat(view.width - view.lines[y].width)
       x = view.widthOfLineNum + view.lines[y].width
+
     view.write(win, y, x, spaces, currentLineColorPair)
+
+    currentLineColorPair.inc
+
   else:
     view.write(win, y, x, str, highlight[i].color)
 

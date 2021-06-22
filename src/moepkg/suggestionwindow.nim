@@ -1,6 +1,6 @@
-import critbits, unicode, sugar, options, sequtils
-import ui, window, generalautocomplete, bufferstatus, gapbuffer, unicodeext,
-       color, editorstatus
+import critbits, unicode, sugar, options, sequtils, unicode
+import ui, window, generalautocomplete, bufferstatus, gapbuffer, color,
+       editorstatus
 
 type SuggestionWindow* = object
   wordDictionary: CritBitTree[void]
@@ -70,6 +70,7 @@ proc handleKeyInSuggestionWindow*(
                             windowNode.currentLine,
                             false)
     windowNode.currentColumn = suggestionWindow.firstColumn + suggestionWindow.selectedWordOrInputWord.len
+    bufStatus.isUpdate = true
 
 proc initSuggestionWindow*(
   text, word, currentLineText: seq[Rune],

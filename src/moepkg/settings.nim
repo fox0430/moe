@@ -9,11 +9,6 @@ when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
 
 import ui, color, unicodeext, highlight
 
-type DebugWorkSpaceSettings* = object
-  enable*: bool
-  numOfWorkSpaces*: bool
-  currentWorkSpaceIndex*: bool
-
 type DebugWindowNodeSettings* = object
   enable*: bool
   currentWindow*: bool
@@ -47,9 +42,18 @@ type DebugBufferStatusSettings* = object
   lastSaveTime*: bool
   bufferLen*: bool
 
+type DebugEditorViewSettings* = object
+  enable*: bool
+  widthOfLineNum*: bool
+  height*: bool
+  width*: bool
+  originalLine*: bool
+  start*: bool
+  length*: bool
+
 type DebugModeSettings* = object
-  workSpace*: DebugWorkSpaceSettings
   windowNode*: DebugWindowNodeSettings
+  editorview*: DebugEditorViewSettings
   bufStatus*: DebugBufferStatusSettings
 
 type NotificationSettings* = object
@@ -65,8 +69,6 @@ type NotificationSettings* = object
   deleteLogNotify*: bool
   saveScreenNotify*: bool
   saveLogNotify*: bool
-  workspaceScreenNotify*: bool
-  workspaceLogNotify*: bool
   quickRunScreenNotify*: bool
   quickRunLogNotify*: bool
   buildOnSaveScreenNotify*: bool
@@ -102,9 +104,6 @@ type AutoBackupSettings* = object
 type FilerSettings* = object
   showIcons*: bool
 
-type WorkSpaceSettings* = object
-  workSpaceLine*: bool
-
 type StatusLineSettings* = object
   enable*: bool
   merge*: bool
@@ -122,7 +121,7 @@ type StatusLineSettings* = object
   showModeInactive*: bool
 
 type TabLineSettings* = object
-  useTab*: bool
+  enable*: bool
   allbuffer*: bool
 
 type EditorViewSettings* = object
@@ -182,7 +181,6 @@ type EditorSettings* = object
   smoothScrollSpeed*: int
   clipboard*: ClipBoardSettings
   buildOnSave*: BuildOnSaveSettings
-  workSpace*: WorkSpaceSettings
   filerSettings*: FilerSettings
   autocompleteSettings*: AutocompleteSettings
   autoBackupSettings*: AutoBackupSettings
@@ -197,11 +195,6 @@ type EditorSettings* = object
 type InvalidItemError* = object of ValueError
 
 proc initDebugModeSettings(): DebugModeSettings =
-  result.workSpace = DebugWorkSpaceSettings(
-    enable: true,
-    numOfWorkSpaces: true,
-    currentWorkSpaceIndex: true)
-
   result.windowNode = DebugWindowNodeSettings(
     enable: true,
     currentWindow: true,
@@ -220,6 +213,12 @@ proc initDebugModeSettings(): DebugModeSettings =
     currentColumn: true,
     expandedColumn: true,
     cursor: true)
+
+  result.editorview = DebugEditorViewSettings(
+    enable: true,
+    widthOfLineNum: true,
+    height: true,
+    width: true)
 
   result.bufStatus = DebugBufferStatusSettings(
     enable: true,
@@ -248,8 +247,6 @@ proc initNotificationSettings(): NotificationSettings =
   result.deleteLogNotify = true
   result.saveScreenNotify = true
   result.saveLogNotify = true
-  result.workspaceScreenNotify = true
-  result.workspaceLogNotify = true
   result.quickRunScreenNotify = true
   result.quickRunLogNotify = true
   result.buildOnSaveScreenNotify = true
@@ -277,7 +274,7 @@ proc initAutocompleteSettings*(): AutocompleteSettings {.inline.} =
   result.enable = true
 
 proc initTabBarSettings*(): TabLineSettings {.inline.} =
-  result.useTab = true
+  result.enable = true
 
 proc initStatusLineSettings*(): StatusLineSettings =
   result.enable = true
@@ -291,9 +288,6 @@ proc initStatusLineSettings*(): StatusLineSettings =
   result.directory = true
   result.multipleStatusLine = true
   result.gitbranchName = true
-
-proc initWorkSpaceSettings(): WorkSpaceSettings {.inline.} =
-  result.workSpaceLine = false
 
 proc initEditorViewSettings*(): EditorViewSettings =
   result.highlightCurrentLine = true
@@ -348,7 +342,6 @@ proc initEditorSettings*(): EditorSettings =
   result.smoothScrollSpeed = 15
   result.clipboard = initClipboardSettings()
   result.buildOnSave = BuildOnSaveSettings()
-  result.workSpace= initWorkSpaceSettings()
   result.filerSettings = initFilerSettings()
   result.autocompleteSettings = initAutocompleteSettings()
   result.autoBackupSettings = initAutoBackupSettings()
@@ -749,19 +742,6 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
     background:
       colorFromNode(jsonNode{"colors", "editor.background"})
 
-  # work space bar
-  setEditorColor workSpaceBar:
-    foreground:
-      colorFromNode(jsonNode{"colors", "activityBar.foreground"})
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "activityBar.background"})
-  setEditorColor reservedWord:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "activityBarBadge.background"})
-
   # search result highlighting
   setEditorColor searchResult:
     foreground:
@@ -882,7 +862,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       result.statusLine.enable = settings["Standard"]["statusLine"].getbool()
 
     if settings["Standard"].contains("tabLine"):
-      result.tabLine.useTab = settings["Standard"]["tabLine"].getbool()
+      result.tabLine.enable = settings["Standard"]["tabLine"].getbool()
 
     if settings["Standard"].contains("syntax"):
       result.syntax = settings["Standard"]["syntax"].getbool()
@@ -1011,10 +991,6 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["BuildOnSave"].contains("command"):
       result.buildOnSave.command = settings["BuildOnSave"]["command"].getStr().toRunes
 
-  if settings.contains("WorkSpace"):
-    if settings["WorkSpace"].contains("workSpaceLine"):
-      result.workSpace.workSpaceLine = settings["WorkSpace"]["workSpaceLine"].getbool()
-
   if settings.contains("Highlight"):
     if settings["Highlight"].contains("reservedWord"):
       let reservedWords = settings["Highlight"]["reservedWord"]
@@ -1128,12 +1104,6 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Notification"].contains("saveLogNotify"):
       result.notificationSettings.saveLogNotify = settings["Notification"]["saveLogNotify"].getBool
 
-    if settings["Notification"].contains("workspaceScreenNotify"):
-      result.notificationSettings.workspaceScreenNotify = settings["Notification"]["workspaceScreenNotify"].getBool
-
-    if settings["Notification"].contains("workspaceLogNotify"):
-      result.notificationSettings.workspaceLogNotify = settings["Notification"]["workspaceLogNotify"].getBool
-
     if settings["Notification"].contains("quickRunScreenNotify"):
       result.notificationSettings.quickRunScreenNotify = settings["Notification"]["quickRunScreenNotify"].getBool
 
@@ -1177,21 +1147,6 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       result.persist.cursorPosition = settings["Persist"]["cursorPosition"].getBool
 
   if settings.contains("Debug"):
-    if settings["Debug"].contains("WorkSpace"):
-      let workSpaceSettings = settings["Debug"]["WorkSpace"]
-
-      if workSpaceSettings.contains("enable"):
-        let setting = workSpaceSettings["enable"].getbool
-        result.debugModeSettings.workSpace.enable = setting
-
-      if workSpaceSettings.contains("numOfWorkSpaces"):
-        let setting = workSpaceSettings["numOfWorkSpaces"].getbool
-        result.debugModeSettings.workSpace.numOfWorkSpaces = setting
-
-      if workSpaceSettings.contains("currentWorkSpaceIndex"):
-        let setting = workSpaceSettings["currentWorkSpaceIndex"].getbool
-        result.debugModeSettings.workSpace.currentWorkSpaceIndex = setting
-
     if settings["Debug"].contains("WindowNode"):
       let windowNodeSettings = settings["Debug"]["WindowNode"]
 
@@ -1266,6 +1221,37 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       if windowNodeSettings.contains("cursor"):
         let setting = windowNodeSettings["cursor"].getbool
         result.debugModeSettings.windowNode.cursor = setting
+
+    if settings["Debug"].contains("EditorView"):
+      let editorViewSettings = settings["Debug"]["EditorView"]
+
+      if editorViewSettings.contains("enable"):
+        let setting = editorViewSettings["enable"].getbool
+        result.debugModeSettings.editorview.enable = setting
+
+      if editorViewSettings.contains("widthOfLineNum"):
+        let setting = editorViewSettings["widthOfLineNum"].getbool
+        result.debugModeSettings.editorview.widthOfLineNum = setting
+
+      if editorViewSettings.contains("height"):
+        let setting = editorViewSettings["height"].getbool
+        result.debugModeSettings.editorview.height = setting
+
+      if editorViewSettings.contains("width"):
+        let setting = editorViewSettings["width"].getbool
+        result.debugModeSettings.editorview.width = setting
+
+      if editorViewSettings.contains("originalLine"):
+        let setting = editorViewSettings["originalLine"].getbool
+        result.debugModeSettings.editorview.originalLine = setting
+
+      if editorViewSettings.contains("start"):
+        let setting = editorViewSettings["start"].getbool
+        result.debugModeSettings.editorview.start = setting
+
+      if editorViewSettings.contains("length"):
+        let setting = editorViewSettings["length"].getbool
+        result.debugModeSettings.editorview.length = setting
 
     if settings["Debug"].contains("BufferStatus"):
       let bufStatusSettings = settings["Debug"]["BufferStatus"]
@@ -1594,12 +1580,6 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("highlightTrailingSpacesBg"):
       ColorThemeTable[ColorTheme.config].highlightTrailingSpacesBg = color("highlightTrailingSpacesBg")
 
-    if settings["Theme"].contains("workSpaceBar"):
-      ColorThemeTable[ColorTheme.config].workSpaceBar = color("workSpaceBar")
-
-    if settings["Theme"].contains("workSpaceBarBg"):
-      ColorThemeTable[ColorTheme.config].workSpaceBarBg = color("workSpaceBarBg")
-
     if settings["Theme"].contains("reservedWord"):
       ColorThemeTable[ColorTheme.config].reservedWord = color("reservedWord")
 
@@ -1745,15 +1725,6 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         else:
             return some($item)
 
-  template validateWorkSpaceTable() =
-    for item in json["WorkSpace"].pairs:
-      case item.key:
-        of "workSpaceLine":
-          if not (item.val["type"].getStr == "bool"):
-            return some($item)
-        else:
-            return some($item)
-
   template validateHighlightTable() =
     for item in json["Highlight"].pairs:
       case item.key:
@@ -1830,8 +1801,6 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
            "deleteLogNotify",
            "saveScreenNotify",
            "saveLogNotify",
-           "workspaceScreenNotify",
-           "workspaceLogNotify",
            "quickRunScreenNotify",
            "quickRunLogNotify",
            "buildOnSaveScreenNotify",
@@ -1875,17 +1844,6 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
   template validateDebugTable() =
     for item in json["Debug"].pairs:
       case item.key:
-        of "WorkSpace":
-        # Check [Debug.WorkSpace]
-          for item in json["Debug"]["WorkSpace"].pairs:
-            case item.key:
-              of "enable",
-                  "numOfWorkSpaces",
-                  "currentWorkSpaceIndex":
-                if item.val["type"].getStr != "bool":
-                  return some($item)
-              else:
-                return some($item)
         # Check [Debug.WindowNode]
         of "WindowNode":
           for item in json["Debug"]["WindowNode"].pairs:
@@ -1907,6 +1865,21 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
                  "currentColumn",
                  "expandedColumn",
                  "cursor":
+                if item.val["type"].getStr != "bool":
+                  return some($item)
+              else:
+                return some($item)
+        # Check [Debug.EditorView]
+        of "EditorView":
+          for item in json["Debug"]["EditorView"].pairs:
+            case item.key:
+              of "enable",
+                 "widthOfLineNum",
+                 "height",
+                 "width",
+                 "originalLine",
+                 "start",
+                 "length":
                 if item.val["type"].getStr != "bool":
                   return some($item)
               else:
@@ -1972,8 +1945,6 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         validateStatusLineTable()
       of "BuildOnSave":
         validateBuildOnSaveTable()
-      of "WorkSpace":
-        validateWorkSpaceTable
       of "Highlight":
         validateHighlightTable()
       of "AutoBackup":
@@ -2020,7 +1991,7 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "number = {$settings.view.lineNumber}"
   result.addLine fmt "currentNumber = {$settings.view.currentLineNumber}"
   result.addLine fmt "statusLine = {$settings.statusLine.enable}"
-  result.addLine fmt "tabLine = {$settings.tabLine.useTab}"
+  result.addLine fmt "tabLine = {$settings.tabLine.enable}"
   result.addLine fmt "syntax = {$settings.syntax}"
   result.addLine fmt "indentationLines = {$settings.view.indentationLines}"
   result.addLine fmt "tabStop = {$settings.tabStop}"
@@ -2077,11 +2048,6 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "gitbranchName = {$settings.statusLine.gitbranchName}"
   result.addLine fmt "showGitInactive = {$settings.statusLine.showGitInactive}"
   result.addLine fmt "showModeInactive = {$settings.statusLine.showModeInactive}"
-
-  result.addLine ""
-
-  result.addLine fmt "[WorkSpace]"
-  result.addLine fmt "workSpaceLine = {$settings.workSpace.workSpaceLine}"
 
   result.addLine ""
 
@@ -2147,8 +2113,6 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "deleteLogNotify = {$settings.notificationSettings.deleteLogNotify}"
   result.addLine fmt "saveScreenNotify = {$settings.notificationSettings.saveScreenNotify}"
   result.addLine fmt "saveLogNotify = {$settings.notificationSettings.saveLogNotify}"
-  result.addLine fmt "workspaceScreenNotify = {$settings.notificationSettings.workspaceScreenNotify}"
-  result.addLine fmt "workspaceLogNotify = {$settings.notificationSettings.workspaceLogNotify}"
   result.addLine fmt "quickRunScreenNotify = {$settings.notificationSettings.quickRunScreenNotify}"
   result.addLine fmt "quickRunLogNotify  = {$settings.notificationSettings.quickRunLogNotify}"
   result.addLine fmt "buildOnSaveScreenNotify = {$settings.notificationSettings.buildOnSaveScreenNotify}"
@@ -2177,13 +2141,6 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine ""
 
-  result.addLine fmt "[Debug.WorkSpace]"
-  result.addLine fmt "enable = {$settings.debugModeSettings.workSpace.enable}"
-  result.addLine fmt "numOfWorkSpaces = {$settings.debugModeSettings.workSpace.numOfWorkSpaces}"
-  result.addLine fmt "currentWorkSpaceIndex = {$settings.debugModeSettings.workSpace.currentWorkSpaceIndex}"
-
-  result.addLine ""
-
   result.addLine fmt "[Debug.WindowNode]"
   result.addLine fmt "enable = {$settings.debugModeSettings.windowNode.enable}"
   result.addLine fmt "currentWindow = {$settings.debugModeSettings.windowNode.currentWindow}"
@@ -2204,6 +2161,15 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "cursor = {$settings.debugModeSettings.windowNode.cursor}"
 
   result.addLine ""
+
+  result.addLine fmt "[Debug.EditorView]"
+  result.addLine fmt "enable = {$settings.debugModeSettings.editorview.enable}"
+  result.addLine fmt "widthOfLineNum = {$settings.debugModeSettings.editorview.widthOfLineNum}"
+  result.addLine fmt "height = {$settings.debugModeSettings.editorview.height}"
+  result.addLine fmt "width = {$settings.debugModeSettings.editorview.width}"
+  result.addLine fmt "originalLine = {$settings.debugModeSettings.editorview.originalLine}"
+  result.addLine fmt "start = {$settings.debugModeSettings.editorview.start}"
+  result.addLine fmt "length = {$settings.debugModeSettings.editorview.length}"
 
   result.addLine fmt "[Debug.BufferStatus]"
   result.addLine fmt "enable = {$settings.debugModeSettings.bufStatus.enable}"
@@ -2313,8 +2279,6 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "highlightFullWidthSpaceBg = \"{$theme.highlightFullWidthSpaceBg}\""
   result.addLine fmt "highlightTrailingSpaces = \"{$theme.highlightTrailingSpaces}\""
   result.addLine fmt "highlightTrailingSpacesBg = \"{$theme.highlightTrailingSpacesBg}\""
-  result.addLine fmt "workSpaceBar = \"{$theme.workSpaceBar}\""
-  result.addLine fmt "workSpaceBarBg = \"{$theme.workSpaceBarBg}\""
   result.addLine fmt "reservedWord = \"{$theme.reservedWord}\""
   result.addLine fmt "reservedWordBg = \"{$theme.reservedWordBg}\""
   result.addLine fmt "currentSetting = \"{$theme.currentSetting}\""

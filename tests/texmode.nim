@@ -51,7 +51,7 @@ suite "Ex mode: Change next buffer command":
     var status = initEditorStatus()
     for i in 0 ..< 2: status.addNewBuffer
 
-    status.workSpace[0].currentMainWindowNode.bufferIndex = 1
+    currentMainWindowNode.bufferIndex = 1
     const command = @[ru"bprev"]
     for i in 0 ..< 3: status.exModeCommand(command, 100, 100)
 
@@ -77,21 +77,21 @@ suite "Ex mode: Change to first buffer command":
     var status = initEditorStatus()
     for i in 0 ..< 3: status.addNewBuffer
 
-    status.workSpace[0].currentMainWindowNode.bufferIndex = 2
+    currentMainWindowNode.bufferIndex = 2
     const command = @[ru"bfirst"]
     status.exModeCommand(command, 100, 100)
 
-    check(status.workSpace[0].currentMainWindowNode.bufferIndex == 0)
+    check(currentMainWindowNode.bufferIndex == 0)
 
 suite "Ex mode: Change to last buffer command":
   test "Change to last buffer command":
     var status = initEditorStatus()
     for i in 0 ..< 3: status.addNewBuffer
 
-    status.workSpace[0].currentMainWindowNode.bufferIndex = 0
+    currentMainWindowNode.bufferIndex = 0
     const command = @[ru"blast"]
     status.exModeCommand(command, 100, 100)
-    check(status.workSpace[0].currentMainWindowNode.bufferIndex == 2)
+    check(currentMainWindowNode.bufferIndex == 2)
 
 suite "Ex mode: Replace buffer command":
   test "Replace buffer command":
@@ -120,11 +120,11 @@ suite "Ex mode: Tab line setting command":
     block:
       const command = @[ru"tab", ru"off"]
       status.exModeCommand(command, 100, 100)
-    check(status.settings.tabLine.useTab == false)
+    check(status.settings.tabLine.enable == false)
     block:
       const command = @[ru"tab", ru"on"]
       status.exModeCommand(command, 100, 100)
-    check(status.settings.tabLine.useTab == true)
+    check(status.settings.tabLine.enable == true)
 
 suite "Ex mode: StatusLine setting command":
   test "StatusLine setting command":
@@ -232,7 +232,7 @@ suite "Ex mode: Split window command":
 
     const command = @[ru"vs"]
     status.exModeCommand(command, 100, 100)
-    check(status.workSpace[0].numOfMainWindow == 2)
+    check(status.mainWindow.numOfMainWindow == 2)
 
 suite "Ex mode: Live reload of configuration file setting command":
   test "Live reload of configuration file setting command":
@@ -401,51 +401,7 @@ suite "Ex mode: Highlight full width space command":
       status.exModeCommand(command, 100, 100)
       check(status.settings.highlightSettings.fullWidthSpace == true)
 
-suite "Ex mode: Create work space command":
-  test "Create work space command":
-    var status = initEditorStatus()
-    status.addNewBuffer
-
-    const command = @[ru"cws"]
-    status.exModeCommand(command, 100, 100)
-
-    check(status.workspace.len == 2)
-
-suite "Ex mode: Change work space command":
-  test "Change work space command":
-    var status = initEditorStatus()
-    status.addNewBuffer
-
-    status.createWrokSpace
-
-    const command = @[ru"ws", ru"1"]
-    status.exModeCommand(command, 100, 100)
-
-    check(status.currentWorkSpaceIndex == 0)
-
-suite "Ex mode: Delete work space command":
-  test "Delete work space command":
-    var status = initEditorStatus()
-    status.addNewBuffer
-
-    status.createWrokSpace
-
-    const command = @[ru"dws"]
-    status.exModeCommand(command, 100, 100)
-
-    check(status.workspace.len == 1)
-
-suite "Ex mode: Delete work space command":
-  test "Tab stop setting command":
-    var status = initEditorStatus()
-    status.addNewBuffer
-
-    const command = @[ru"tabstop", ru"4"]
-    status.exModeCommand(command, 100, 100)
-
-    check(status.settings.tabStop == 4)
-
-  test "Tab stop setting command 2":
+  test "Ex mode: Tab stop setting command 2":
     var status = initEditorStatus()
     status.addNewBuffer
 
@@ -529,7 +485,7 @@ suite "Ex mode: Open help command":
     status.resize(100, 100)
     status.update
 
-    check(status.workSpace[0].numOfMainWindow == 2)
+    check(status.mainWindow.numOfMainWindow == 2)
     check(status.bufferIndexInCurrentWindow == 1)
 
     check(status.bufStatus[1].mode == Mode.help)
@@ -548,7 +504,7 @@ suite "Ex mode: Open in horizontal split window":
     status.resize(100, 100)
     status.update
 
-    check(status.workSpace[0].numOfMainWindow == 2)
+    check(status.mainWindow.numOfMainWindow == 2)
     check(status.bufStatus.len == 2)
 
   test "Open in horizontal split window 2":
@@ -564,7 +520,7 @@ suite "Ex mode: Open in horizontal split window":
     status.resize(100, 100)
     status.update
 
-    check(status.workSpace[0].numOfMainWindow == 2)
+    check(status.mainWindow.numOfMainWindow == 2)
     check(status.bufStatus.len == 1)
 
 suite "Ex mode: Open in vertical split window":
@@ -581,7 +537,7 @@ suite "Ex mode: Open in vertical split window":
     status.resize(100, 100)
     status.update
 
-    check(status.workSpace[0].numOfMainWindow == 2)
+    check(status.mainWindow.numOfMainWindow == 2)
     check(status.bufStatus.len == 2)
 
 suite "Ex mode: Create new empty buffer":
@@ -634,7 +590,7 @@ suite "Ex mode: New empty buffer in split window horizontally":
     check status.bufStatus[0].path == ru"a"
     check status.bufStatus[1].path == ru""
 
-    check status.workspace[0].numOfMainWindow == 2
+    check status.mainWindow.numOfMainWindow == 2
 
 suite "Ex mode: New empty buffer in split window vertically":
   test "New empty buffer in split window vertically":
@@ -654,7 +610,7 @@ suite "Ex mode: New empty buffer in split window vertically":
     check status.bufStatus[0].path == ru"a"
     check status.bufStatus[1].path == ru""
 
-    check status.workspace[0].numOfMainWindow == 2
+    check status.mainWindow.numOfMainWindow == 2
 
 suite "Ex mode: Filer icon setting command":
   test "Filer icon setting command":
@@ -825,7 +781,7 @@ suite "Ex mode: wq! command":
 
     const command = @[ru"wq!"]
     status.exModeCommand(command, 100, 100)
-    check status.workspace[0].numOfMainWindow == 1
+    check status.mainWindow.numOfMainWindow == 1
 
     let entireFile = readFile(filename)
     check entireFile == "abc"
@@ -847,7 +803,7 @@ suite "Ex mode: debug command":
     status.resize(100, 100)
     status.update
 
-    check status.workspace[0].numOfMainWindow == 2
+    check status.mainWindow.numOfMainWindow == 2
 
     check status.bufStatus[0].mode == Mode.normal
     check status.bufStatus[0].prevMode == Mode.ex
@@ -855,7 +811,7 @@ suite "Ex mode: debug command":
     check status.bufStatus[1].mode == Mode.debug
     check status.bufStatus[1].prevMode == Mode.normal
 
-    check status.workspace[0].currentMainWindowNode.bufferIndex == 0
+    check currentMainWindowNode.bufferIndex == 0
 
   test "Start debug mode (Disable all info)":
     var status = initEditorStatus()
@@ -874,7 +830,7 @@ suite "Ex mode: debug command":
     status.resize(100, 100)
     status.update
 
-    check status.workspace[0].numOfMainWindow == 2
+    check status.mainWindow.numOfMainWindow == 2
 
     check status.bufStatus[0].mode == Mode.normal
     check status.bufStatus[0].prevMode == Mode.ex
@@ -882,7 +838,7 @@ suite "Ex mode: debug command":
     check status.bufStatus[1].mode == Mode.debug
     check status.bufStatus[1].prevMode == Mode.normal
 
-    check status.workspace[0].currentMainWindowNode.bufferIndex == 0
+    check currentMainWindowNode.bufferIndex == 0
 
 suite "Ex mode: highlight current line setting command":
   test "Enable current line highlighting":

@@ -59,7 +59,7 @@ proc deleteSelectedBuffer(status: var Editorstatus, height, width: int) =
 
   status.resize(terminalHeight(), terminalWidth())
 
-  if currentWorkSpace.numOfMainWindow > 0:
+  if status.mainWindow.numOfMainWindow > 0:
     status.bufStatus.delete(deleteIndex)
 
     var qeue = initHeapQueue[WindowNode]()
@@ -78,7 +78,7 @@ proc deleteSelectedBuffer(status: var Editorstatus, height, width: int) =
     if currentMainWindowNode.currentLine > 0:
       dec(currentMainWindowNode.currentLine)
 
-    let index = currentWorkSpace.numOfMainWindow - 1
+    let index = status.mainWindow.numOfMainWindow - 1
     currentMainWindowNode = mainWindowNode.searchByWindowIndex(index)
     status.setBufferList
 
@@ -97,12 +97,9 @@ proc bufferManager*(status: var Editorstatus) =
   status.setBufferList
   status.resize(terminalHeight(), terminalWidth())
 
-  let
-    currentBufferIndex = status.bufferIndexInCurrentWindow
-    currentWorkSpace = status.currentWorkSpaceIndex
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
 
   while isBufferManagerMode(currentBufStatus.mode) and
-        currentWorkSpace == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
 
     block:

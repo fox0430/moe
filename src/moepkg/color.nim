@@ -520,10 +520,6 @@ type EditorColor* = object
   highlightTrailingSpaces*: Color
   highlightTrailingSpacesBg*: Color
 
-  # work space bar
-  workSpaceBar*: Color
-  workSpaceBarBg*: Color
-
   # highlight reserved words
   reservedWord*: Color
   reservedWordBg*: Color
@@ -613,17 +609,15 @@ type EditorColorPair* = enum
   highlightFullWidthSpace = 49
   # highlight trailing spaces
   highlightTrailingSpaces = 50
-  # work space bar
-  workSpaceBar = 51
   # highlight reserved words
-  reservedWord = 52
+  reservedWord = 51
   # highlight history manager
-  currentHistory = 53
+  currentHistory = 52
   # highlight diff
-  addedLine = 54
-  deletedLine = 55
+  addedLine = 53
+  deletedLine = 54
   # configuration mode
-  currentSetting = 56
+  currentSetting = 55
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -738,9 +732,6 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight trailing spaces
     highlightTrailingSpaces: red,
     highlightTrailingSpacesBg: red,
-    # work space bar
-    workSpaceBar: white,
-    workSpaceBarBg: blue,
     # highlight reserved words
     reservedWord: white,
     reservedWordBg: gray,
@@ -870,9 +861,6 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight trailing spaces
     highlightTrailingSpaces: red,
     highlightTrailingSpacesBg: red,
-    # work space bar
-    workSpaceBar: white,
-    workSpaceBarBg: blue,
     # highlight reserved words
     reservedWord: white,
     reservedWordBg: gray,
@@ -1002,9 +990,6 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight trailing spaces
     highlightTrailingSpaces: red,
     highlightTrailingSpacesBg: red,
-    # work space bar
-    workSpaceBar: white,
-    workSpaceBarBg: blue,
     # highlight reserved words
     reservedWord: white,
     reservedWordBg: gray,
@@ -1134,9 +1119,6 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight trailing spaces
     highlightTrailingSpaces: red,
     highlightTrailingSpacesBg: red,
-    # work space bar
-    workSpaceBar: blue,
-    workSpaceBarBg: gray54,
     # highlight reserved words
     reservedWord: white,
     reservedWordBg: gray,
@@ -1266,9 +1248,6 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight trailing spaces
     highlightTrailingSpaces: red,
     highlightTrailingSpacesBg: red,
-    # work space bar
-    workSpaceBar: black,
-    workSpaceBarBg: deepPink1_1,
     # highlight reserved words
     reservedWord: deepPink1_1,
     reservedWordBg: black,
@@ -1472,11 +1451,6 @@ proc setCursesColor*(editorColor: EditorColor) =
                  editorColor.highlightTrailingSpaces,
                  editorColor.highlightTrailingSpacesBg)
 
-    # work space bar
-    setColorPair(EditorColorPair.workSpaceBar,
-                 editorColor.workSpaceBar,
-                 editorColor.workSpaceBarBg)
-
     # highlight reserved words
     setColorPair(EditorColorPair.reservedWord,
                  editorColor.reservedWord,
@@ -1617,8 +1591,6 @@ proc getColorFromEditorColorPair*(theme: ColorTheme,
   of EditorColorPair.highlightTrailingSpaces:
     return (editorColor.highlightTrailingSpaces,
             editorColor.highlightTrailingSpacesBg)
-  of EditorColorPair.workSpaceBar:
-    return (editorColor.workSpaceBar, editorColor.workSpaceBarBg)
   of EditorColorPair.reservedWord:
     return (editorColor.reservedWord, editorColor.reservedWordBg)
   of EditorColorPair.addedLine:

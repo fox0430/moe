@@ -1,10 +1,9 @@
-import terminal, times, options
-import ui, editorstatus, gapbuffer, unicodeext, undoredostack, window,
-       movement, editor, bufferstatus, suggestionwindow, settings
+import terminal, times, options, unicode
+import ui, editorstatus, gapbuffer, undoredostack, window, movement, editor,
+       bufferstatus, suggestionwindow, settings
 
-proc calcMainWindowY(isEnableTabLine, isEnableWorkSpaceLine: bool): int =
+proc calcMainWindowY(isEnableTabLine: bool): int =
   if isEnableTabLine: result.inc
-  if isEnableWorkSpaceLine: result.inc
 
 proc insertMode*(status: var EditorStatus) =
   if not status.settings.disableChangeCursor:
@@ -19,8 +18,7 @@ proc insertMode*(status: var EditorStatus) =
 
     if suggestionWindow.isSome:
       let
-        mainWindowY = calcMainWindowY(status.settings.tabLine.useTab,
-                                      status.settings.workSpace.workSpaceLine)
+        mainWindowY = calcMainWindowY(status.settings.tabLine.enable)
         mainWindowHeight = status.settings.getMainWindowHeight(terminalHeight())
         (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
           currentMainWindowNode,
@@ -124,10 +122,12 @@ proc insertMode*(status: var EditorStatus) =
       currentBufStatus.insertCharacterAboveCursor(
         currentMainWindowNode)
     elif isControlW(key):
+      const loop = 1
       currentBufStatus.deleteWordBeforeCursor(
         currentMainWindowNode,
         status.registers,
-        status.settings.tabStop)
+        loop,
+        status.settings)
     elif isControlU(key):
       currentBufStatus.deleteCharactersBeforeCursorInCurrentLine(
         currentMainWindowNode)

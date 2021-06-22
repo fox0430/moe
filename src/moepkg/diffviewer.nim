@@ -3,9 +3,7 @@ import editorstatus, unicodeext, bufferstatus, highlight, color, gapbuffer, ui,
        movement, window
 
 proc isDiffViewerMode(status: Editorstatus): bool =
-  let
-    workspaceIndex = status.currentWorkSpaceIndex
-    index = status.workspace[workspaceIndex].currentMainWindowNode.bufferIndex
+  let index = currentMainWindowNode.bufferIndex
   status.bufStatus[index].mode == Mode.diff
 
 proc initDiffHighlight(bufStatus: BufferStatus): Highlight =
@@ -30,23 +28,20 @@ proc diffViewer*(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
 
   while status.isDiffViewerMode:
-    let
-      bufferIndex = status.bufferIndexInCurrentWindow
-      workspaceIndex = status.currentWorkSpaceIndex
+    let bufferIndex = status.bufferIndexInCurrentWindow
 
     block:
       let
         bufferIndex = status.bufferIndexInCurrentWindow
         bufStatus = status.bufStatus[bufferIndex]
-        workspaceIndex = status.currentWorkSpaceIndex
-      status.workspace[workspaceIndex].currentMainWindowNode.highlight = initDiffHighlight(bufStatus)
+      currentMainWindowNode.highlight = initDiffHighlight(bufStatus)
 
     status.update
 
     var key = errorKey
     while key == errorKey:
       status.eventLoopTask
-      key = getKey(status.workSpace[workspaceIndex].currentMainWindowNode)
+      key = getKey(currentMainWindowNode)
 
     status.lastOperatingTime = now()
 
@@ -59,14 +54,11 @@ proc diffViewer*(status: var Editorstatus) =
     elif key == ord(':'):
       status.changeMode(Mode.ex)
     elif key == ord('k') or isUpKey(key):
-      status.bufStatus[bufferIndex].keyUp(
-        status.workSpace[workspaceIndex].currentMainWindowNode)
+      status.bufStatus[bufferIndex].keyUp(currentMainWindowNode)
     elif key == ord('j') or isDownKey(key):
-      status.bufStatus[bufferIndex].keyDown(
-        status.workSpace[workspaceIndex].currentMainWindowNode)
+      status.bufStatus[bufferIndex].keyDown(currentMainWindowNode)
     elif key == ord('g'):
-      let secondKey = getKey(
-        status.workSpace[status.currentWorkSpaceIndex].currentMainWindowNode)
+      let secondKey = getKey(currentMainWindowNode)
       if  secondKey == ord('g'):
         status.moveToFirstLine
       else:

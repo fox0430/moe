@@ -95,9 +95,6 @@ showGitInactive = false
 
 showModeInactive = false
 
-[WorkSpace]
-
-workSpaceLine = false
 
 [Highlight]
 
@@ -176,10 +173,6 @@ saveScreenNotify = true
 
 saveLogNotify = true
 
-workspaceScreenNotify = true
-
-workspaceLogNotify = true
-
 quickRunScreenNotify = true
 
 quickRunLogNotify = true
@@ -212,11 +205,6 @@ search = true
 
 cursorPosition = true
 
-[Debug.WorkSpace]
-enable = true
-numOfWorkSpaces = true
-currentWorkSpaceIndex = true
-
 [Debug.WindowNode]
 enable = true
 currentWindow = true
@@ -235,6 +223,15 @@ currentLine = true
 currentColumn = true
 expandedColumn = true
 cursor = true
+
+[Debug.EditorView]
+enable = true
+widthOfLineNum = true
+height = true
+width = true
+originalLine = false
+start = false
+length = false
 
 [Debug.BufferStatus]
 enable = true
@@ -376,10 +373,6 @@ highlightFullWidthSpaceBg = "red"
 # highlight trailing spaces
 highlightTrailingSpaces = "red"
 highlightTrailingSpacesBg = "red"
-
-# work space bar
-workSpaceBar = "white"
-workSpaceBarBg = "blue"
 
 # highlight reserved words
 reservedWord = "white"

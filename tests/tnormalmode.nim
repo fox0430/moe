@@ -1,6 +1,7 @@
 import unittest
 import ncurses
-import moepkg/[editorstatus, gapbuffer, unicodeext, editor, bufferstatus]
+import moepkg/[editorstatus, gapbuffer, unicodeext, editor, bufferstatus,
+               register]
 
 include moepkg/normalmode
 
@@ -18,14 +19,14 @@ suite "Normal mode: Move to the right":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 2)
+    check(currentMainWindowNode.currentColumn == 2)
 
 suite "Normal mode: Move to the left":
   test "Move one to the left":
     var status = initEditorStatus()
     status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
-    status.workspace[0].currentMainWindowNode.currentColumn = 2
+    currentMainWindowNode.currentColumn = 2
 
     status.resize(100, 100)
     status.update
@@ -34,7 +35,7 @@ suite "Normal mode: Move to the left":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 1)
+    check(currentMainWindowNode.currentColumn == 1)
 
 suite "Normal mode: Move to the down":
   test "Move two to the down":
@@ -50,14 +51,14 @@ suite "Normal mode: Move to the down":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentLine == 2)
+    check(currentMainWindowNode.currentLine == 2)
 
 suite "Normal mode: Move to the up":
   test "Move two to the up":
     var status = initEditorStatus()
     status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b", ru"c"])
-    status.workspace[0].currentMainWindowNode.currentLine = 2
+    currentMainWindowNode.currentLine = 2
 
     status.resize(100, 100)
     status.update
@@ -67,7 +68,7 @@ suite "Normal mode: Move to the up":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentLine == 0)
+    check(currentMainWindowNode.currentLine == 0)
 
 suite "Normal mode: Delete current character":
   test "Delete two current character":
@@ -84,7 +85,10 @@ suite "Normal mode: Delete current character":
     status.update
 
     check status.bufStatus[0].buffer[0] == ru"c"
-    check status.registers.yankedStr == ru"ab"
+
+    let registers = status.registers
+    check registers.noNameRegister.buffer[0] == ru"ab"
+    check registers.smallDeleteRegister == registers.noNameRegister
 
 suite "Normal mode: Move to last of line":
   test "Move to last of line":
@@ -99,14 +103,14 @@ suite "Normal mode: Move to last of line":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 2)
+    check(currentMainWindowNode.currentColumn == 2)
 
 suite "Normal mode: Move to first of line":
   test "Move to first of line":
     var status = initEditorStatus()
     status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
-    status.workspace[0].currentMainWindowNode.currentColumn = 2
+    currentMainWindowNode.currentColumn = 2
 
     status.resize(100, 100)
     status.update
@@ -115,14 +119,14 @@ suite "Normal mode: Move to first of line":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 0)
+    check(currentMainWindowNode.currentColumn == 0)
 
 suite "Normal mode: Move to first non blank of line":
   test "Move to first non blank of line":
     var status = initEditorStatus()
     status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc"])
-    status.workspace[0].currentMainWindowNode.currentColumn = 4
+    currentMainWindowNode.currentColumn = 4
 
     status.resize(100, 100)
     status.update
@@ -131,14 +135,14 @@ suite "Normal mode: Move to first non blank of line":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 2)
+    check(currentMainWindowNode.currentColumn == 2)
 
 suite "Normal mode: Move to first of previous line":
   test "Move to first of previous line":
     var status = initEditorStatus()
     status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc", ru"def", ru"ghi"])
-    status.workspace[0].currentMainWindowNode.currentLine = 2
+    currentMainWindowNode.currentLine = 2
 
     status.resize(100, 100)
     status.update
@@ -146,13 +150,13 @@ suite "Normal mode: Move to first of previous line":
     const key = @[ru'-']
     status.normalCommand(key, 100, 100)
     status.update
-    check(status.workspace[0].currentMainWindowNode.currentLine == 1)
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 0)
+    check(currentMainWindowNode.currentLine == 1)
+    check(currentMainWindowNode.currentColumn == 0)
 
     status.normalCommand(key, 100, 100)
     status.update
-    check(status.workspace[0].currentMainWindowNode.currentLine == 0)
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 0)
+    check(currentMainWindowNode.currentLine == 0)
+    check(currentMainWindowNode.currentColumn == 0)
 
 suite "Normal mode: Move to first of next line":
   test "Move to first of next line":
@@ -167,8 +171,8 @@ suite "Normal mode: Move to first of next line":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentLine == 1)
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 0)
+    check(currentMainWindowNode.currentLine == 1)
+    check(currentMainWindowNode.currentColumn == 0)
 
 suite "Normal mode: Move to last line":
   test "Move to last line":
@@ -183,7 +187,7 @@ suite "Normal mode: Move to last line":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentLine == 2)
+    check(currentMainWindowNode.currentLine == 2)
 
 suite "Normal mode: Page down":
   test "Page down":
@@ -202,8 +206,8 @@ suite "Normal mode: Page down":
     status.update
 
     let
-      currentLine = status.workspace[0].currentMainWindowNode.currentLine
-      viewHeight = status.workspace[0].currentMainWindowNode.view.height
+      currentLine = currentMainWindowNode.currentLine
+      viewHeight = currentMainWindowNode.view.height
 
     check currentLine == viewHeight
 
@@ -229,7 +233,7 @@ suite "Normal mode: Page up":
       status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentLine == 0)
+    check(currentMainWindowNode.currentLine == 0)
 
 suite "Normal mode: Move to forward word":
   test "Move to forward word":
@@ -245,14 +249,14 @@ suite "Normal mode: Move to forward word":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 8)
+    check(currentMainWindowNode.currentColumn == 8)
 
 suite "Normal mode: Move to backward word":
   test "Move to backward word":
     var status = initEditorStatus()
     status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc def ghi"])
-    status.workspace[0].currentMainWindowNode.currentColumn = 8
+    currentMainWindowNode.currentColumn = 8
 
     status.resize(100, 100)
     status.update
@@ -262,7 +266,7 @@ suite "Normal mode: Move to backward word":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 4)
+    check(currentMainWindowNode.currentColumn == 4)
 
 suite "Normal mode: Move to forward end of word":
   test "Move to forward end of word":
@@ -278,7 +282,7 @@ suite "Normal mode: Move to forward end of word":
     status.normalCommand(key, 100, 100)
     status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 6)
+    check(currentMainWindowNode.currentColumn == 6)
 
 suite "Normal mode: Open blank line below":
   test "Open blank line below":
@@ -297,7 +301,7 @@ suite "Normal mode: Open blank line below":
     check(status.bufStatus[0].buffer[0] == ru"a")
     check(status.bufStatus[0].buffer[1] == ru"")
 
-    check(status.workspace[0].currentMainWindowNode.currentLine == 1)
+    check(currentMainWindowNode.currentLine == 1)
 
     check(status.bufStatus[0].mode == Mode.insert)
 
@@ -318,7 +322,7 @@ suite "Normal mode: Open blank line below":
     check(status.bufStatus[0].buffer[0] == ru"")
     check(status.bufStatus[0].buffer[1] == ru"a")
 
-    check(status.workspace[0].currentMainWindowNode.currentLine == 0)
+    check(currentMainWindowNode.currentLine == 0)
 
     check(status.bufStatus[0].mode == Mode.insert)
 
@@ -396,7 +400,7 @@ suite "Normal mode: Move right and enter insert mode":
     status.update
 
     check(status.bufStatus[0].mode == Mode.insert)
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 1)
+    check(currentMainWindowNode.currentColumn == 1)
 
 suite "Normal mode: Move last of line and enter insert mode":
   test "Move last of line and enter insert mode":
@@ -412,7 +416,7 @@ suite "Normal mode: Move last of line and enter insert mode":
     status.update
 
     check(status.bufStatus[0].mode == Mode.insert)
-    check(status.workspace[0].currentMainWindowNode.currentColumn == 3)
+    check(currentMainWindowNode.currentColumn == 3)
 
 suite "Normal mode: Repeat last command":
   test "Repeat last command":
@@ -424,9 +428,11 @@ suite "Normal mode: Repeat last command":
     status.update
 
     block:
-      const key = ru'x'
-      let commands = status.isNormalModeCommand(key)
-      status.normalCommand(commands, 100, 100)
+      const command = ru "x"
+
+      check isNormalModeCommand(command) == InputState.Valid
+
+      status.normalCommand(command, 100, 100)
       status.update
 
     block:
@@ -434,8 +440,8 @@ suite "Normal mode: Repeat last command":
       status.normalCommand(key, 100, 100)
       status.update
 
-    check(status.bufStatus[0].buffer.len == 1)
-    check(status.bufStatus[0].buffer[0].len == 1)
+    check(currentBufStatus.buffer.len == 1)
+    check(currentBufStatus.buffer[0].len == 1)
 
   test "Repeat last command 2":
     var status = initEditorStatus()
@@ -446,26 +452,30 @@ suite "Normal mode: Repeat last command":
     status.update
 
     block:
-      const key = ru'>'
-      let commands = status.isNormalModeCommand(key)
-      status.normalCommand(commands, 100, 100)
+      const command = ru ">"
+
+      check isNormalModeCommand(command) == InputState.Valid
+
+      status.normalCommand(command, 100, 100)
       status.update
 
-    status.workspace[0].currentMainWindowNode.currentColumn = 0
+    currentMainWindowNode.currentColumn = 0
 
     block:
-      const key = ru'x'
-      let commands = status.isNormalModeCommand(key)
-      status.normalCommand(commands, 100, 100)
+      const command = ru "x"
+
+      check isNormalModeCommand(command) == InputState.Valid
+
+      status.normalCommand(command, 100, 100)
       status.update
 
     block:
-      const key = @[ru'.']
-      status.normalCommand(key, 100, 100)
+      const command = ru "."
+      status.normalCommand(command, 100, 100)
       status.update
 
-    check(status.bufStatus[0].buffer.len == 1)
-    check(status.bufStatus[0].buffer[0] == ru"abc")
+    check(currentBufStatus.buffer.len == 1)
+    check(currentBufStatus.buffer[0] == ru"abc")
 
   test "Repeat last command 3":
     var status = initEditorStatus()
@@ -476,43 +486,73 @@ suite "Normal mode: Repeat last command":
     status.update
 
     block:
-      const key = ru'j'
-      let commands = status.isNormalModeCommand(key)
-      status.normalCommand(commands, 100, 100)
+      const command = ru "j"
+
+      check isNormalModeCommand(command) == InputState.Valid
+
+      status.normalCommand(command, 100, 100)
       status.update
 
     block:
-      const key = @[ru'.']
-      status.normalCommand(key, 100, 100)
+      const command = @[ru'.']
+
+      check isNormalModeCommand(command) == InputState.Valid
+
+      status.normalCommand(command, 100, 100)
       status.update
 
-    check(status.workspace[0].currentMainWindowNode.currentLine == 1)
+    check(currentMainWindowNode.currentLine == 1)
+
+suite "Normal mode: Delete the current line":
+  test "Delete the current line":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
+
+    status.resize(100, 100)
+    status.update
+
+    let command = @[ru'd', ru'd']
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 3
+    check currentBufStatus.buffer[0] == ru "b"
+    check currentBufStatus.buffer[1] == ru "c"
+    check currentBufStatus.buffer[2] == ru "d"
+
+    check status.registers.noNameRegister == Register(buffer: @[ru "a"], isLine: true)
+
+    check status.registers.numberRegister[1] == Register(buffer: @[ru "a"], isLine: true)
 
 suite "Normal mode: Delete the line from current line to last line":
   test "Delete the line from current line to last line":
     var status = initEditorStatus()
     status.addNewBuffer
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
-    status.workspace[0].currentMainWindowNode.currentLine = 1
+    currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
+    currentMainWindowNode.currentLine = 1
 
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'd', ru'G']
-    status.normalCommand(commands, 100, 100)
+    let command = @[ru'd', ru'G']
+
+    check isNormalModeCommand(command) == InputState.Valid
+
+    status.normalCommand(command, 100, 100)
     status.update
 
-    let buffer = status.bufStatus[0].buffer
+    let buffer = currentBufStatus.buffer
     check buffer.len == 1 and buffer[0] == ru"a"
 
-    check status.registers.yankedLines == @[ru"b", ru"c", ru"d"]
+    check status.registers.noNameRegister.buffer == @[ru"b", ru"c", ru"d"]
 
 suite "Normal mode: Delete the line from first line to current line":
   test "Delete the line from first line to current line":
     var status = initEditorStatus()
     status.addNewBuffer
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
-    status.workspace[0].currentMainWindowNode.currentLine = 2
+    currentMainWindowNode.currentLine = 2
 
     status.resize(100, 100)
     status.update
@@ -524,7 +564,7 @@ suite "Normal mode: Delete the line from first line to current line":
     let buffer = status.bufStatus[0].buffer
     check buffer.len == 1 and buffer[0] == ru"d"
 
-    check status.registers.yankedLines == @[ru"a", ru"b", ru"c"]
+    check status.registers.noNameRegister.buffer == @[ru "a", ru "b", ru "c"]
 
 suite "Normal mode: Delete inside paren and enter insert mode":
   test "Delete inside double quotes and enter insert mode (ci\" command)":
@@ -545,7 +585,7 @@ suite "Normal mode: Delete inside paren and enter insert mode":
 
     check currentMainWindowNode.currentColumn == 5
 
-    check status.registers.yankedStr == ru"def"
+    check status.registers.noNameRegister.buffer[0] == ru"def"
 
   test "Delete inside double quotes and enter insert mode (ci' command)":
     var status = initEditorStatus()
@@ -565,7 +605,7 @@ suite "Normal mode: Delete inside paren and enter insert mode":
 
     check currentMainWindowNode.currentColumn == 5
 
-    check status.registers.yankedStr == ru"def"
+    check status.registers.noNameRegister.buffer[0] == ru"def"
 
   test "Delete inside curly brackets and enter insert mode (ci{ command)":
     var status = initEditorStatus()
@@ -585,7 +625,7 @@ suite "Normal mode: Delete inside paren and enter insert mode":
 
     check currentMainWindowNode.currentColumn == 5
 
-    check status.registers.yankedStr == ru"def"
+    check status.registers.noNameRegister.buffer[0] == ru"def"
 
   test "Delete inside round brackets and enter insert mode (ci( command)":
     var status = initEditorStatus()
@@ -605,7 +645,7 @@ suite "Normal mode: Delete inside paren and enter insert mode":
 
     check currentMainWindowNode.currentColumn == 5
 
-    check status.registers.yankedStr == ru"def"
+    check status.registers.noNameRegister.buffer[0] == ru"def"
 
   test "Delete inside square brackets and enter insert mode (ci[ command)":
     var status = initEditorStatus()
@@ -625,7 +665,7 @@ suite "Normal mode: Delete inside paren and enter insert mode":
 
     check currentMainWindowNode.currentColumn == 5
 
-    check status.registers.yankedStr == ru"def"
+    check status.registers.noNameRegister.buffer[0] == ru"def"
 
 suite "Normal mode: Delete current word and enter insert mode":
   test "Delete current word and enter insert mode (ciw command)":
@@ -645,7 +685,7 @@ suite "Normal mode: Delete current word and enter insert mode":
 
     check currentMainWindowNode.currentColumn == 0
 
-    check status.registers.yankedStr == ru"abc "
+    check status.registers.noNameRegister.buffer[0] == ru"abc "
 
   test "Delete current word and enter insert mode when empty line (ciw command)":
     var status = initEditorStatus()
@@ -684,7 +724,7 @@ suite "Normal mode: Delete inside paren":
 
     check currentMainWindowNode.currentColumn == 5
 
-    check status.registers.yankedStr == ru"def"
+    check status.registers.noNameRegister.buffer[0] == ru"def"
 
   test "Delete inside double quotes (di' command)":
     var status = initEditorStatus()
@@ -703,7 +743,7 @@ suite "Normal mode: Delete inside paren":
 
     check currentMainWindowNode.currentColumn == 5
 
-    check status.registers.yankedStr == ru"def"
+    check status.registers.noNameRegister.buffer[0] == ru"def"
 
   test "Delete inside curly brackets (di{ command)":
     var status = initEditorStatus()
@@ -722,7 +762,7 @@ suite "Normal mode: Delete inside paren":
 
     check currentMainWindowNode.currentColumn == 5
 
-    check status.registers.yankedStr == ru"def"
+    check status.registers.noNameRegister.buffer[0] == ru"def"
 
   test "Delete inside round brackets (di( command)":
     var status = initEditorStatus()
@@ -741,7 +781,7 @@ suite "Normal mode: Delete inside paren":
 
     check currentMainWindowNode.currentColumn == 5
 
-    check status.registers.yankedStr == ru"def"
+    check status.registers.noNameRegister.buffer[0] == ru"def"
 
   test "Delete inside square brackets (di[ command)":
     var status = initEditorStatus()
@@ -760,7 +800,7 @@ suite "Normal mode: Delete inside paren":
 
     check currentMainWindowNode.currentColumn == 5
 
-    check status.registers.yankedStr == ru"def"
+    check status.registers.noNameRegister.buffer[0] == ru"def"
 
 suite "Normal mode: Delete current word":
   test "Delete current word and (diw command)":
@@ -779,7 +819,7 @@ suite "Normal mode: Delete current word":
 
     check currentMainWindowNode.currentColumn == 0
 
-    check status.registers.yankedStr == ru"abc "
+    check status.registers.noNameRegister.buffer[0] == ru"abc "
 
   test "Delete current word when empty line (diw command)":
     var status = initEditorStatus()
@@ -815,7 +855,7 @@ suite "Normal mode: Delete current character and enter insert mode":
     check currentBufStatus.buffer[0] == ru"bc"
     check currentBufStatus.mode == Mode.insert
 
-    check status.registers.yankedStr == ru"a"
+    check status.registers.noNameRegister.buffer[0] == ru"a"
 
   test "Delete current character and enter insert mode when empty line (s command)":
     var status = initEditorStatus()
@@ -853,7 +893,7 @@ suite "Normal mode: Delete current character and enter insert mode":
     check currentBufStatus.buffer[0] == ru"def"
     check currentBufStatus.mode == Mode.insert
 
-    check status.registers.yankedStr == ru"abc"
+    check status.registers.noNameRegister.buffer[0] == ru"abc"
 
   test "Delete current character and enter insert mode (cu command)":
     var status = initEditorStatus()
@@ -904,8 +944,9 @@ suite "Normal mode: Yank lines":
     status.normalCommand(commands, 100, 100)
     status.update
 
-    check status.registers.yankedLines.len == 4
-    check status.registers.yankedLines == @[ru "", ru"def", ru"ghi", ru""]
+    check status.registers.noNameRegister.isLine
+    check status.registers.noNameRegister.buffer.len == 4
+    check status.registers.noNameRegister.buffer == @[ru "", ru"def", ru"ghi", ru""]
 
   test "Yank to the first line (y{ command)":
     var status = initEditorStatus()
@@ -920,8 +961,9 @@ suite "Normal mode: Yank lines":
     status.normalCommand(commands, 100, 100)
     status.update
 
-    check status.registers.yankedLines.len == 3
-    check status.registers.yankedLines == @[ru "abc", ru"def", ru""]
+    check status.registers.noNameRegister.isLine
+    check status.registers.noNameRegister.buffer.len == 3
+    check status.registers.noNameRegister.buffer == @[ru "abc", ru"def", ru""]
 
   test "Yank to the next blank line (y} command)":
     var status = initEditorStatus()
@@ -935,13 +977,14 @@ suite "Normal mode: Yank lines":
     status.normalCommand(commands, 100, 100)
     status.update
 
-    check status.registers.yankedLines.len == 4
-    check status.registers.yankedLines == @[ru"", ru "abc", ru"def", ru""]
+    check status.registers.noNameRegister.isLine
+    check status.registers.noNameRegister.buffer.len == 4
+    check status.registers.noNameRegister.buffer == @[ru"", ru "abc", ru"def", ru""]
 
   test "Yank to the last line (y} command)":
     var status = initEditorStatus()
     status.addNewBuffer
-    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc", ru"def"])
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru ""])
 
     status.resize(100, 100)
     status.update
@@ -950,8 +993,9 @@ suite "Normal mode: Yank lines":
     status.normalCommand(commands, 100, 100)
     status.update
 
-    check status.registers.yankedLines.len == 3
-    check status.registers.yankedLines == @[ru"", ru "abc", ru"def"]
+    check status.registers.noNameRegister.isLine
+    check status.registers.noNameRegister.buffer.len == 3
+    check status.registers.noNameRegister.buffer == @[ru "abc", ru"def", ru""]
 
   test "Yank a line (yy command)":
     var status = initEditorStatus()
@@ -966,7 +1010,8 @@ suite "Normal mode: Yank lines":
     status.normalCommand(commands, 100, 100)
     status.update
 
-    check status.registers.yankedLines == @[ru "abc"]
+    check status.registers.noNameRegister.isLine
+    check status.registers.noNameRegister.buffer[0] ==  ru "abc"
 
   test "Yank a line (Y command)":
     var status = initEditorStatus()
@@ -981,7 +1026,8 @@ suite "Normal mode: Yank lines":
     status.normalCommand(commands, 100, 100)
     status.update
 
-    check status.registers.yankedLines == @[ru "abc"]
+    check status.registers.noNameRegister.isLine
+    check status.registers.noNameRegister.buffer[0] == ru "abc"
 
 suite "Normal mode: Delete the characters from current column to end of line":
   test "Delete 5 characters (d$ command)":
@@ -999,7 +1045,7 @@ suite "Normal mode: Delete the characters from current column to end of line":
 
     check currentBufStatus.buffer[0] == ru"abc"
 
-    check status.registers.yankedStr == ru"defgh"
+    check status.registers.noNameRegister.buffer[0] == ru"defgh"
 
 suite "Normal mode: delete from the beginning of the line to current column":
   test "Delete 5 characters (d0 command)":
@@ -1017,7 +1063,7 @@ suite "Normal mode: delete from the beginning of the line to current column":
 
     check currentBufStatus.buffer[0] == ru"fgh"
 
-    check status.registers.yankedStr == ru"abcde"
+    check status.registers.noNameRegister.buffer[0] == ru"abcde"
 
 suite "Normal mode: Yank string":
   test "yank character (yl command)":
@@ -1029,7 +1075,7 @@ suite "Normal mode: Yank string":
     status.normalCommand(commands, 100, 100)
     status.update
 
-    check status.registers.yankedStr == ru"a"
+    check status.registers.noNameRegister.buffer[0] == ru"a"
 
   test "yank 3 characters (3yl command)":
     var status = initEditorStatus()
@@ -1041,7 +1087,7 @@ suite "Normal mode: Yank string":
     status.normalCommand(commands, 100, 100)
     status.update
 
-    check status.registers.yankedStr == ru"abc"
+    check status.registers.noNameRegister.buffer[0] == ru"abc"
 
   test "yank 5 characters (10yl command)":
     var status = initEditorStatus()
@@ -1053,7 +1099,7 @@ suite "Normal mode: Yank string":
     status.normalCommand(commands, 100, 100)
     status.update
 
-    check status.registers.yankedStr == ru"abcde"
+    check status.registers.noNameRegister.buffer[0] == ru"abcde"
 
 suite "Normal mode: Cut character before cursor":
   test "Cut character before cursor (X command)":
@@ -1068,7 +1114,7 @@ suite "Normal mode: Cut character before cursor":
 
     check currentBufStatus.buffer[0] == ru"bcde"
 
-    check status.registers.yankedStr == ru"a"
+    check status.registers.noNameRegister.buffer[0] == ru"a"
 
   test "Cut 3 characters before cursor (3X command)":
     var status = initEditorStatus()
@@ -1083,7 +1129,7 @@ suite "Normal mode: Cut character before cursor":
 
     check currentBufStatus.buffer[0] == ru"de"
 
-    check status.registers.yankedStr == ru"abc"
+    check status.registers.noNameRegister.buffer[0] == ru"abc"
 
   test "Do nothing (X command)":
     var status = initEditorStatus()
@@ -1096,7 +1142,7 @@ suite "Normal mode: Cut character before cursor":
 
     check currentBufStatus.buffer[0] == ru"abcde"
 
-    check status.registers.yankedStr == ru""
+    check status.registers.noNameRegister.buffer.len == 0
 
   test "Cut character before cursor (dh command)":
     var status = initEditorStatus()
@@ -1110,4 +1156,439 @@ suite "Normal mode: Cut character before cursor":
 
     check currentBufStatus.buffer[0] == ru"bcde"
 
-    check status.registers.yankedStr == ru"a"
+    check status.registers.noNameRegister.buffer[0] == ru"a"
+
+suite "Add buffer to the register":
+  test "Add a character to the register (\"\"ayl\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+
+    let commands = ru "\"ayl"
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.noNameRegister == Register(
+      buffer: @[ru "a"], isLine: false, name: "a")
+
+  test "Add 2 characters to the register (\"\"a2yl\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+
+    let commands = ru "\"a2yl"
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.noNameRegister == Register(
+      buffer: @[ru "ab"], isLine: false, name: "a")
+
+  test "Add a word to the register (\"\"ayw\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc def"])
+
+    let commands = ru "\"ayw"
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.noNameRegister == Register(
+      buffer: @[ru "abc "], isLine: false, name: "a")
+
+  test "Add 2 words to the register (\"\"a2yw\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc def"])
+
+    let commands = ru "\"a2yw"
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.noNameRegister == Register(
+      buffer: @[ru "abc def"], isLine: false, name: "a")
+
+  test "Add a line to the register (\"\"ayy\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
+
+    let commands = ru "\"ayy"
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.noNameRegister == Register(
+      buffer: @[ru "abc"], isLine: true, name: "a")
+
+  test "Add a line to the register (\"\"ayy\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
+
+    let commands = ru "\"a2yy"
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.noNameRegister == Register(
+      buffer: @[ru "abc", ru "def"], isLine: true, name: "a")
+
+  test "Add 2 lines to the register (\"\"a2yy\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
+
+    let commands = ru "\"a2yy"
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.noNameRegister == Register(
+      buffer: @[ru "abc", ru "def"], isLine: true, name: "a")
+
+  test "Add up to the next blank line to the register (\"ay} command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"", ru "ghi"])
+
+    status.resize(100, 100)
+
+    let commands = ru "\"ay}"
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.noNameRegister == Register(
+      buffer: @[ru "abc", ru "def", ru ""], isLine: true, name: "a")
+
+  test "Delete and ynak a line (\"add command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
+
+    status.resize(100, 100)
+
+    let commands = ru "\"add"
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "def"
+
+    check status.registers.noNameRegister == Register(
+      buffer: @[ru "abc"], isLine: true, name: "a")
+
+  test "Add to the named register up to the previous blank line (\"ay{ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"def", ru"ghi"])
+    currentMainWindowNode.currentLine = 3
+
+    status.resize(100, 100)
+    status.update
+
+    let commands = ru "\"ay{"
+    status.normalCommand(commands, 100, 100)
+    status.update
+
+    check status.registers.noNameRegister == Register(
+      buffer: @[ru "", ru "def", ru "ghi"], isLine: true, name: "a")
+
+  test "Delete and yank a word (\"adw command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc def"])
+
+    status.resize(100, 100)
+
+    let command = ru "\"adw"
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "def"
+
+    check status.registers.noNameRegister == Register(
+      buffer: @[ru "abc "], isLine: false, name: "a")
+
+  test "Delete and yank characters to the end of the line (\"ad$ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc def", ru"ghi"])
+
+    status.resize(100, 100)
+
+    let command = ru "\"ad$"
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer[1] == ru "ghi"
+
+    check status.registers.noNameRegister == Register(
+      buffer: @[ru "abc def"], isLine: false, name: "a")
+
+  test "Delete and yank characters to the beginning of the line (\"ad0 command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc def"])
+    currentMainWindowNode.currentColumn = 4
+
+    status.resize(100, 100)
+
+    let command = ru "\"ad0"
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "def"
+
+    check status.registers.noNameRegister == Register(
+      buffer: @[ru "abc "], isLine: false, name: "a")
+
+  test "Delete and yank lines to the last line (\"adG command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
+    currentMainWindowNode.currentLine = 1
+
+    status.resize(100, 100)
+
+    let command = ru "\"adG"
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "a"
+
+    check status.registers.noNameRegister == Register(
+      buffer: @[ru "b", ru "c", ru "d"], isLine: true, name: "a")
+
+  test "Delete and yank lines from the first line to the current line (\"adgg command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
+    currentMainWindowNode.currentLine = 2
+
+    status.resize(100, 100)
+
+    let command = ru "\"adgg"
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "d"
+
+    check status.registers.noNameRegister == Register(
+      buffer: @[ru "a", ru "b", ru "c"], isLine: true, name: "a")
+
+  test "Delete and yank lines from the previous blank line to the current line (\"ad{ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"", ru"b", ru"c"])
+    currentMainWindowNode.currentLine = 3
+
+    status.resize(100, 100)
+
+    let command = ru "\"ad{"
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "a"
+
+    echo status.registers.noNameRegister
+    check status.registers.noNameRegister == Register(
+      buffer: @[ru "", ru "b"], isLine: true, name: "a")
+
+  test "Delete and yank lines from the current linet o the next blank line (\"ad} command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"", ru"c"])
+
+    status.resize(100, 100)
+
+    let command = ru "\"ad}"
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer[1] == ru "c"
+
+    check status.registers.noNameRegister == Register(
+      buffer: @[ru "a", ru "b"], isLine: true, name: "a")
+
+  test "Delete and yank characters in the paren (\"adi[ command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"a[abc]"])
+    currentMainWindowNode.currentColumn = 1
+
+    status.resize(100, 100)
+
+    let command = ru "\"adi["
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "a[]"
+
+    check status.registers.noNameRegister == Register(
+      buffer: @[ru "abc"], isLine: false, name: "a")
+
+  test "Delete and yank characters befor cursor (\"adh command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+    currentMainWindowNode.currentColumn = 1
+
+    status.resize(100, 100)
+
+    let command = ru "\"adh"
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "bc"
+
+    check status.registers.noNameRegister == Register(
+      buffer: @[ru "a"], isLine: false, name: "a")
+
+suite "Normal mode: Validate normal mode command":
+  test "\" (Expect to continue)":
+    const command = ru "\""
+    check isNormalModeCommand(command) == InputState.Continue
+
+  test "\"a (Expect to continue)":
+    const command = ru "\"a"
+    check isNormalModeCommand(command) == InputState.Continue
+
+  test "\"ay (Expect to continue)":
+    const command = ru "\"ay"
+    check isNormalModeCommand(command) == InputState.Continue
+
+  test "\"ayy (Expect to validate)":
+    const command = ru "\"ayy"
+    check isNormalModeCommand(command) == InputState.Valid
+
+suite "Normal mode: Yank and delete words":
+  test "Ynak and delete a word (dw command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc def ghi"])
+
+    const command = ru"dw"
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "def ghi"
+
+    check status.registers.noNameRegister == Register(buffer: @[ru "abc "])
+    check status.registers.noNameRegister == status.registers.smallDeleteRegister
+
+  test "Ynak and delete 2 words (2dw command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc def ghi"])
+
+    const command = ru"dw"
+    currentBufStatus.cmdLoop = 2
+    status.normalCommand(command, 100, 100)
+    status.update
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "ghi"
+
+    check status.registers.noNameRegister == Register(buffer: @[ru "abc def "])
+    check status.registers.noNameRegister == status.registers.smallDeleteRegister
+
+suite "Editor: Yank characters in the current line":
+  test "Yank characters in the currentLine (cc command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc def", ru "ghi"])
+
+    const command = ru "cc"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer[1] == ru "ghi"
+
+    check status.registers.noNameRegister == Register(buffer: @[ru "abc def"])
+    check status.registers.smallDeleteRegister ==  status.registers.noNameRegister
+
+  test "Yank characters in the currentLine (S command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc def", ru "ghi"])
+
+    const command = ru "S"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer[1] == ru "ghi"
+
+    check status.registers.noNameRegister == Register(buffer: @[ru "abc def"])
+    check status.registers.smallDeleteRegister ==  status.registers.noNameRegister
+
+suite "Normal mode: Open the blank line below and enter insert mode":
+  test "Open the blank line (\"o\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "o"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "abc"
+    check currentBufStatus.buffer[1] == ru ""
+
+    check currentMainWindowNode.currentLine == 1
+
+  test "Open the blank line 2 (\"3o\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "o"
+    currentBufStatus.cmdLoop = 3
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "abc"
+    check currentBufStatus.buffer[1] == ru ""
+
+    check currentMainWindowNode.currentLine == 1
+
+suite "Normal mode: Open the blank line above and enter insert mode":
+  test "Open the blank line (\"O\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "O"
+    currentBufStatus.cmdLoop = 1
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer[1] == ru "abc"
+
+    check currentMainWindowNode.currentLine == 0
+
+  test "Open the blank line (\"3O\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "O"
+    currentBufStatus.cmdLoop = 3
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer[1] == ru "abc"
+
+    check currentMainWindowNode.currentLine == 0

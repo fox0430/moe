@@ -1,7 +1,7 @@
 import osproc, terminal, times
 import syntax/highlite
 import unicodeext, settings, bufferstatus, gapbuffer, messages, ui,
-       editorstatus, movement, window, workspace, fileutils, commandline
+       editorstatus, movement, window, fileutils, commandline
 
 proc generateCommand(bufStatus: BufferStatus,
                      settings: QuickRunSettings): string =
@@ -27,10 +27,10 @@ proc generateCommand(bufStatus: BufferStatus,
     result = ""
 
 proc getQuickRunBufferIndex*(bufStatus: seq[BufferStatus],
-                             workspace: WorkSpace): int =
+                             mainWindowNode: WindowNode): int =
 
   result = -1
-  let allBufferIndex = workspace.mainWindowNode.getAllBufferIndex
+  let allBufferIndex = mainWindowNode.getAllBufferIndex
   for index in allBufferIndex:
     if bufStatus[index].mode == Mode.quickRun: return index
 
@@ -67,12 +67,9 @@ proc runQuickRun*(bufStatus: var BufferStatus,
 proc quickRunMode*(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
 
-  let
-    currentBufferIndex = status.bufferIndexInCurrentWindow
-    currentWorkSpace = status.currentWorkSpaceIndex
+  let currentBufferIndex = status.bufferIndexInCurrentWindow
 
   while isQuickRunMode(currentBufStatus.mode) and
-        currentWorkSpace == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
 
     status.update

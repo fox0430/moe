@@ -10,18 +10,12 @@ suite "Init debug mode buffer":
     status.addNewBuffer(Mode.debug)
 
     status.bufStatus.initDebugModeBuffer(
-      status.workspace[0].mainWindowNode,
-      status.workspace[0].currentMainWindowNode.windowIndex,
-      status.workspace.len,
-      status.currentWorkSpaceindex,
+      mainWindow.mainWindowNode,
+      currentMainWindowNode.windowIndex,
       status.settings.debugModeSettings)
 
     let correctBuf = initGapBuffer[seq[Rune]](@[
       ru "",
-      ru"-- WorkSpace --",
-      ru"  Number of workspaces    : 1",
-      ru"  Current workspace index : 0",
-      ru"",
       ru"-- WindowNode --",
       ru"  currentWindow           : true",
       ru"  index                   : 0",
@@ -39,6 +33,11 @@ suite "Init debug mode buffer":
       ru"  currentColumn           : 0",
       ru"  expandedColumn          : 0",
       ru"  cursor                  : (y: 0, x: 0)",
+      ru"",
+      ru"-- editorview --",
+      ru"  widthOfLineNum          : 2",
+      ru"  height                  : 1",
+      ru"  width                   : 1",
       ru"",
       ru"-- bufStatus --",
       ru"buffer Index: 0",
@@ -63,10 +62,11 @@ suite "Init debug mode buffer":
       ru"  countChange             : 0",
       ru"  cmdLoop                 : 0",
       ru fmt"  lastSaveTime            : {$status.bufStatus[1].lastSaveTime}",
-      ru"  buffer length           : 46",
+      ru"  buffer length           : 47",
       ru""])
 
     for i in 0 ..< status.bufStatus[1].buffer.len:
+      if status.bufStatus[1].buffer[i] != correctBuf[i]: echo status.bufStatus[1].buffer[i]
       check status.bufStatus[1].buffer[i] == correctBuf[i]
 
   test "Init highlight":
@@ -75,10 +75,8 @@ suite "Init debug mode buffer":
     status.addNewBuffer(Mode.debug)
 
     status.bufStatus.initDebugModeBuffer(
-      status.workspace[0].mainWindowNode,
-      status.workspace[0].currentMainWindowNode.windowIndex,
-      status.workspace.len,
-      status.currentWorkSpaceindex,
+      mainWindow.mainWindowNode,
+      currentMainWindowNode.windowIndex,
       status.settings.debugModeSettings)
 
     let

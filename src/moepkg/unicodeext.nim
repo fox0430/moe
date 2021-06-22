@@ -237,6 +237,8 @@ proc toRunes*(buffer: GapBuffer[seq[Rune]]): seq[Rune] =
     result.add(buffer[i])
     if i+1 < buffer.len: result.add(ru'\n')
 
+proc toRunes*(num: int): seq[Rune] {.inline.} = toRunes($num)
+
 proc startsWith*(runes1, runes2: seq[Rune]): bool =
   result = true
   for i in 0 ..< min(runes1.len, runes2.len):
@@ -352,6 +354,18 @@ iterator split*(runes: seq[Rune], isSep: proc (r: Rune): bool, removeEmptyEntrie
     if not removeEmptyEntries or first < last:
       yield runes[first ..< last]
     first = last + 1
+
+proc parseInt*(rune: Rune): int {.inline.} = parseInt($rune)
+
+proc parseInt*(runes: seq[Rune]): int {.inline.} = parseInt($runes)
+
+proc toggleCase*(ch: Rune): Rune =
+  result = ch
+  if result.isUpper():
+    result = result.toLower()
+  elif result.isLower():
+    result = result.toUpper()
+  return result
 
 from os import `/`
 proc `/`*(runes1, runes2: seq[Rune]): seq[Rune] {.inline.} =

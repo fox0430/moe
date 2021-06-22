@@ -1,4 +1,4 @@
-# developer documentation
+# Developer documentation
 
 ## How to debug moe 
 ### printf debug
@@ -99,9 +99,6 @@ Messages displayed in the command line window.
 ### ```src/moepkg/window.nim```
 Management of the main window node.
 
-### ```src/moepkg/workspaceWorkSpace.nim```
-Define WorkSpace object.
-
 ### ```src/moepkg/tabline.nim```
 Write Tab line.
 
@@ -186,3 +183,12 @@ Implementation of Automatic backups.
 
 ### ```src/moepkg/buffermanager.nim```
 Buffer manager mode and commands. (```:buf```)
+
+### ```src/moepkg/register.nim```
+Definition of the registers and utils for the register.
+
+###  ```src/moepkg/clipboard.nim```
+Utils for the clipboard.
+
+###  ```src/moepkg/platform.nim```
+Check and definition the platform.

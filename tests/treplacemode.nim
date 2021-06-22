@@ -1,11 +1,10 @@
 import unittest
-import moepkg/[editorstatus, bufferstatus]
+import moepkg/[editorstatus, bufferstatus, unicodeext]
 include moepkg/replacemode
 
 template recordCurrentPosition() =
   let
-    workspaceIndex = status.currentWorkSpaceIndex
-    windowNode = status.workspace[workspaceIndex].currentMainWindowNode
+    windowNode = currentMainWindowNode
     bufferIndex = windowNode.bufferIndex
 
   status.bufStatus[bufferIndex].buffer.beginNewSuitIfNeeded
@@ -22,10 +21,10 @@ suite "Replace mode: Replace current Character":
       isMoved = false
       undoLastSuitId =
         status.bufStatus[0].buffer.lastSuitId
-    const key = ru'z' 
+    const key = ru'z'
 
     status.bufStatus[0].replaceCurrentCharacter(
-      status.workSpace[0].currentMainWindowNode,
+      currentMainWindowNode,
       isMoved,
       key,
       status.settings)
@@ -42,11 +41,11 @@ suite "Replace mode: Replace current Character":
       isMoved = false
       undoLastSuitId =
         status.bufStatus[0].buffer.lastSuitId
-    const key = ru'z' 
+    const key = ru'z'
 
     for i in 0 ..< 5:
       status.bufStatus[0].replaceCurrentCharacter(
-        status.workSpace[0].currentMainWindowNode,
+        currentMainWindowNode,
         isMoved,
         key,
         status.settings)
@@ -64,12 +63,12 @@ suite "Replace mode: Undo":
       isMoved = false
       undoLastSuitId =
         status.bufStatus[0].buffer.lastSuitId
-    const key = ru'z' 
+    const key = ru'z'
 
     recordCurrentPosition()
 
     status.bufStatus[0].replaceCurrentCharacter(
-      status.workSpace[0].currentMainWindowNode,
+      currentMainWindowNode,
       isMoved,
       key,
       status.settings)
@@ -77,7 +76,7 @@ suite "Replace mode: Undo":
     recordCurrentPosition()
 
     status.bufStatus[0].undoOrMoveCursor(
-      status.workspace[0].currentMainWindowNode,
+      currentMainWindowNode,
       isMoved,
       undoLastSuitId)
 
@@ -93,24 +92,24 @@ suite "Replace mode: Undo":
       isMoved = false
       undoLastSuitId =
         status.bufStatus[0].buffer.lastSuitId
-    const key = ru'z' 
+    const key = ru'z'
 
     recordCurrentPosition()
 
     status.bufStatus[0].replaceCurrentCharacter(
-      status.workSpace[0].currentMainWindowNode,
+      currentMainWindowNode,
       isMoved,
       key,
       status.settings)
 
     recordCurrentPosition()
 
-    status.bufStatus[0].moveRight(status.workspace[0].currentMainWindowNode,
+    status.bufStatus[0].moveRight(currentMainWindowNode,
                                   isMoved,
                                   undoLastSuitId)
 
     status.bufStatus[0].undoOrMoveCursor(
-      status.workspace[0].currentMainWindowNode,
+      currentMainWindowNode,
       isMoved,
       undoLastSuitId)
 
@@ -121,30 +120,30 @@ suite "Replace mode: Undo":
     status.addNewBuffer
     status.bufStatus[0].mode = Mode.replace
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
-    status.workspace[0].currentMainWindowNode.currentColumn = 2
+    currentMainWindowNode.currentColumn = 2
 
     var
       isMoved = false
       undoLastSuitId =
         status.bufStatus[0].buffer.lastSuitId
-    const key = ru'z' 
+    const key = ru'z'
 
     recordCurrentPosition()
 
     status.bufStatus[0].replaceCurrentCharacter(
-      status.workSpace[0].currentMainWindowNode,
+      currentMainWindowNode,
       isMoved,
       key,
       status.settings)
 
     recordCurrentPosition()
 
-    status.bufStatus[0].moveRight(status.workspace[0].currentMainWindowNode,
+    status.bufStatus[0].moveRight(currentMainWindowNode,
                                   isMoved,
                                   undoLastSuitId)
 
     status.bufStatus[0].undoOrMoveCursor(
-      status.workspace[0].currentMainWindowNode,
+      currentMainWindowNode,
       isMoved,
       undoLastSuitId)
 
@@ -156,23 +155,23 @@ suite "Replace mode: New line":
     status.addNewBuffer
     status.bufStatus[0].mode = Mode.replace
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
-    status.workspace[0].currentMainWindowNode.currentColumn = 1
+    currentMainWindowNode.currentColumn = 1
 
     recordCurrentPosition()
 
-    status.bufStatus[0].keyEnter(status.workspace[0].currentMainWindowNode,
+    status.bufStatus[0].keyEnter(currentMainWindowNode,
                                  status.settings.autoIndent,
                                  status.settings.tabStop)
 
     var isMoved = false
-    const key = ru'z' 
+    const key = ru'z'
 
     status.bufStatus[0].replaceCurrentCharacter(
-      status.workSpace[0].currentMainWindowNode,
+      currentMainWindowNode,
       isMoved,
       key,
       status.settings)
 
-    check status.bufStatus[0].buffer.len == 2 
+    check status.bufStatus[0].buffer.len == 2
     check status.bufStatus[0].buffer[0] == ru"a"
     check status.bufStatus[0].buffer[1] == ru"zc"

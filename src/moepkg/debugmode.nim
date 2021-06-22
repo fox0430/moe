@@ -1,6 +1,6 @@
 import terminal, times, strformat, options
 import gapbuffer, ui, unicodeext, highlight, color, window, bufferstatus,
-       movement, workspace, settings
+       movement, settings
 
 proc getDebugModeBufferIndex*(bufStatus: seq[BufferStatus]): int =
   result = -1
@@ -19,7 +19,7 @@ proc initDebugModeHighlight*[T](buffer: T): Highlight =
 proc updateDebugModeBuffer*(
   bufStatus: var seq[BufferStatus],
   root: WindowNode,
-  currentWindowIndex, numOfWorkSpaces, currentWorkSpaceIndex: int,
+  currentWindowIndex: int,
   debugModeSettings: DebugModeSettings) =
 
   template debugModeBuffer: var GapBuffer[seq[Rune]] =
@@ -27,21 +27,12 @@ proc updateDebugModeBuffer*(
 
   debugModeBuffer = initGapBuffer[seq[Rune]](@[ru""])
 
-  # Add WorkSpace info
-  if debugModeSettings.workSpace.enable:
-    debugModeBuffer.add(ru fmt"-- WorkSpace --")
-    if debugModeSettings.workSpace.numOfWorkSpaces:
-      debugModeBuffer.add(ru fmt"  Number of workspaces    : {numOfWorkSpaces}")
-    if debugModeSettings.workSpace.currentWorkSpaceIndex:
-      debugModeBuffer.add(ru fmt"  Current workspace index : {currentWorkSpaceIndex}")
-
-    debugModeBuffer.add(ru "")
-
   # Add WindowNode info
   if debugModeSettings.windowNode.enable:
     let windowNodes = root.getAllWindowNode
-    debugModeBuffer.add(ru fmt"-- WindowNode --")
     for n in windowNodes:
+      debugModeBuffer.add(ru fmt"-- WindowNode --")
+
       let
         haveCursesWin = if n.window.isSome: true else: false
         isCurrentWindow = if n.windowIndex == currentWindowIndex: true else: false
@@ -80,6 +71,24 @@ proc updateDebugModeBuffer*(
 
       debugModeBuffer.add(ru "")
 
+      # Add Editorview info
+      if debugModeSettings.editorview.enable:
+        debugModeBuffer.add(ru fmt"-- editorview --")
+      if debugModeSettings.editorview.widthOfLineNum:
+        debugModeBuffer.add(ru fmt"  widthOfLineNum          : {n.view.widthOfLineNum}")
+      if debugModeSettings.editorview.height:
+        debugModeBuffer.add(ru fmt"  height                  : {n.view.height}")
+      if debugModeSettings.editorview.width:
+        debugModeBuffer.add(ru fmt"  width                   : {n.view.width}")
+      if debugModeSettings.editorview.originalLine:
+        debugModeBuffer.add(ru fmt"  originalLine            : {n.view.originalLine}")
+      if debugModeSettings.editorview.start:
+        debugModeBuffer.add(ru fmt"  start                   : {n.view.start}")
+      if debugModeSettings.editorview.length:
+        debugModeBuffer.add(ru fmt"  length                  : {n.view.length}")
+
+      debugModeBuffer.add(ru "")
+
   # Add BufferStatus info
   if debugModeSettings.bufStatus.enable:
     debugModeBuffer.add(ru fmt"-- bufStatus --")
@@ -112,28 +121,23 @@ proc updateDebugModeBuffer*(
 proc initDebugModeBuffer*(
   bufStatus: var seq[BufferStatus],
   root: WindowNode,
-  currentWindowIndex, numOfWorkSpaces, currentWorkSpaceIndex: int,
+  currentWindowIndex: int,
   debugModeSettings: DebugModeSettings) =
 
   bufStatus[bufStatus.getDebugModeBufferIndex].path = ru"Debug mode"
   bufStatus.updateDebugModeBuffer(
     root,
     currentWindowIndex,
-    numOfWorkSpaces,
-    currentWorkSpaceIndex,
     debugModeSettings)
 
 import editorstatus
 
 proc debugMode*(status: var Editorstatus) =
-  let
-    currentBufferIndex = currentMainWindowNode.bufferIndex
-    currentWorkSpace = status.currentWorkSpaceIndex
+  let currentBufferIndex = currentMainWindowNode.bufferIndex
 
   status.resize(terminalHeight(), terminalWidth())
 
   while currentBufStatus.mode == Mode.debug and
-        currentWorkSpace == status.currentWorkSpaceIndex and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
 
     status.update

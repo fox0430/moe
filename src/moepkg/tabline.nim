@@ -1,5 +1,5 @@
-import strutils, terminal
-import ui, window, color, bufferstatus, workspace, independentutils, unicodeext
+import strutils, terminal, unicode
+import ui, window, color, bufferstatus, independentutils
 
 proc writeTab*(tabWin: var Window,
               start, tabWidth: int,
@@ -16,7 +16,7 @@ proc writeTab*(tabWin: var Window,
 proc writeTabLineBuffer*(tabWin: var Window,
                          allBufStatus: seq[BufferStatus],
                          currentBufferIndex: int,
-                         workspace: WorkSpace,
+                         mainWindowNode: WindowNode,
                          isAllbuffer: bool) =
 
   let
@@ -43,7 +43,7 @@ proc writeTabLineBuffer*(tabWin: var Window,
   else:
     ## Displays only the buffer currently displayed in the window
     let allBufferIndex =
-      workSpace.mainWindowNode.getAllBufferIndex
+      mainWindowNode.getAllBufferIndex
     for index, bufIndex in allBufferIndex:
       let
         color = if currentBufferIndex == bufIndex: currentTabColor
@@ -55,27 +55,8 @@ proc writeTabLineBuffer*(tabWin: var Window,
                    elif isHistoryManagerMode(currentMode, prevMode): "HISOTY"
                    elif isConfigMode(currentMode, prevMode): "CONFIG"
                    else: $bufStatus.path
-        numOfbuffer = workSpace.mainWindowNode.getAllBufferIndex.len
+        numOfbuffer = mainWindowNode.getAllBufferIndex.len
         tabWidth = numOfbuffer.calcTabWidth(terminalWidth())
       tabWin.writeTab(index * tabWidth, tabWidth, filename, color)
-
-  tabWin.refresh
-
-proc writeTabLineWorkSpace*(tabWin: var Window,
-                            workSpaceLen: int,
-                            currentWorkSpaceIndex: int) =
-
-  tabWin.erase
-
-  let
-    defaultColor = EditorColorPair.tab
-    currentTabColor = EditorColorPair.currentTab
-
-  for i in 0 ..< workSpaceLen:
-    let
-      color = if i == currentWorkSpaceIndex: currentTabColor else: defaultColor
-      tabWidth = workSpaceLen.calcTabWidth(terminalWidth())
-      buffer = "WorkSpace: " & $i
-    tabWin.writeTab(i * tabWidth, tabWidth, buffer, color)
 
   tabWin.refresh

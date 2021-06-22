@@ -1,5 +1,5 @@
-import terminal, times
-import editorstatus, ui, unicodeext, movement, editor, bufferstatus, gapbuffer,
+import terminal, times, unicode
+import editorstatus, ui, movement, editor, bufferstatus, gapbuffer,
        undoredostack, window, settings
 
 proc moveRight(bufStatus: var BufferStatus,
@@ -58,6 +58,7 @@ proc moveDown(bufStatus: var BufferStatus,
     isMoved = true
     undoLastSuitId = bufStatus.buffer.lastSuitId
 
+# Repace the current chracter or insert the character and move to the right
 proc replaceCurrentCharacter(bufStatus: var BufferStatus,
                              windowNode: var WindowNode,
                              isMoved: var bool,
@@ -65,11 +66,14 @@ proc replaceCurrentCharacter(bufStatus: var BufferStatus,
                              settings: EditorSettings) =
 
   if windowNode.currentColumn < bufStatus.buffer[windowNode.currentLine].len:
-    bufStatus.replaceCurrentCharacter(windowNode,
-                                      settings.autoIndent,
-                                      settings.autoDeleteParen,
-                                      settings.tabStop,
-                                      key)
+    let
+      currentLine = windowNode.currentLine
+      currentColumn = windowNode.currentColumn
+      oldLine = bufStatus.buffer[currentLine]
+    var newLine = bufStatus.buffer[currentLine]
+    newLine[currentColumn] = key
+
+    if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
   else:
     insertCharacter(bufStatus, windowNode, settings.autoCloseParen, key)
 

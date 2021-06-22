@@ -159,18 +159,16 @@ proc findPreviousBlankLine*(bufStatus: BufferStatus, currentLine: int): int =
 
   return -1
 
-proc moveToNextBlankLine*(bufStatus: BufferStatus,
-                          status: var EditorStatus,
-                          windowNode: WindowNode) =
-
-  let nextBlankLine = bufStatus.findNextBlankLine(windowNode.currentLine)
+proc moveToNextBlankLine*(status: var EditorStatus) =
+  let
+    currentLine = currentMainWindowNode.currentLine
+    nextBlankLine = currentBufStatus.findNextBlankLine(currentLine)
   if nextBlankLine >= 0: status.jumpLine(nextBlankLine)
 
-proc moveToPreviousBlankLine*(bufStatus: BufferStatus,
-                              status: var EditorStatus,
-                              windowNode: WindowNode) =
-
-  let previousBlankLine = bufStatus.findPreviousBlankLine(windowNode.currentLine)
+proc moveToPreviousBlankLine*(status: var EditorStatus) =
+  let
+    currentLine = currentMainWindowNode.currentLine
+    previousBlankLine = currentBufStatus.findPreviousBlankLine(currentLine)
   if previousBlankLine >= 0: status.jumpLine(previousBlankLine)
 
 proc moveToFirstLine*(status: var EditorStatus) {.inline.} = status.jumpLine(0)

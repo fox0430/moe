@@ -2,8 +2,8 @@ import sequtils, strutils, os, terminal, times, options
 import syntax/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
         unicodeext, independentutils, search, highlight, commandview,
-        window, movement, color, build, bufferstatus, editor,
-        settings, quickrun, messages, commandline, debugmode
+        window, movement, color, build, bufferstatus, editor, settings,
+        quickrun, messages, commandline, debugmode, platform
 
 type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
 
@@ -229,20 +229,6 @@ proc isReplaceCommand(command: seq[seq[Rune]]): bool {.inline.} =
          command[0].len > 4 and
          command[0][0 .. 2] == ru"%s/"
 
-proc isWorkspaceListCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "lsw") == 0
-
-proc isCreateWorkSpaceCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "cws") == 0
-
-proc isDeleteCurrentWorkSpaceCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "dws") == 0
-
-proc isChangeCurrentWorkSpace(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and
-         cmpIgnoreCase($command[0], "ws") == 0 and
-         isDigit(command[1])
-
 proc isCreateNewEmptyBufferCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 1 and cmpIgnoreCase($command[0], "ene") == 0
 
@@ -288,8 +274,6 @@ proc startDebugMode(status: var Editorstatus) =
   status.bufStatus.initDebugModeBuffer(
     mainWindowNode,
     currentMainWindowNode.windowIndex,
-    status.workSpace.len,
-    status.currentWorkSpaceIndex,
     status.settings.debugModeSettings)
   let buffer = currentBufStatus.buffer
   currentMainWindowNode.highlight = buffer.initDebugmodeHighlight
@@ -328,7 +312,7 @@ proc startRecentFileMode(status: var Editorstatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   # :recent is only supported on GNU/Linux
-  if status.platform != Platform.linux: return
+  if CURRENT_PLATFORM != Platforms.linux: return
 
   if not fileExists(getHomeDir() / ".local/share/recently-used.xbel"):
     status.commandLine.writeOpenRecentlyUsedXbelError(status.messageLog)
@@ -352,7 +336,7 @@ proc runQuickRunCommand(status: var Editorstatus) =
                          status.settings)
 
     quickRunBufferIndex = status.bufStatus.getQuickRunBufferIndex(
-      currentWorkSpace)
+      currentMainWindowNode)
 
   if quickRunBufferIndex == -1:
     status.verticalSplitWindow
@@ -493,8 +477,8 @@ proc changeThemeSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   status.changeMode(currentBufStatus.prevMode)
 
 proc tabLineSettingCommand(status: var EditorStatus, command: seq[Rune]) =
-  if command == ru"on": status.settings.tabLine.useTab = true
-  elif command == ru"off": status.settings.tabLine.useTab = false
+  if command == ru"on": status.settings.tabLine.enable = true
+  elif command == ru"off": status.settings.tabLine.enable = false
 
   status.resize(terminalHeight(), terminalWidth())
   status.commandLine.erase
@@ -1011,7 +995,7 @@ proc forceQuitCommand(status: var EditorStatus, height, width: int) =
   status.closeWindow(currentMainWindowNode, height, width)
 
 proc allBufferQuitCommand(status: var EditorStatus) =
-  for i in 0 ..< currentWorkSpace.numOfMainWindow:
+  for i in 0 ..< status.mainWindow.numOfMainWindow:
     let
       node = mainWindowNode.searchByWindowIndex(i)
       bufStatus = status.bufStatus[node.bufferIndex]
@@ -1106,12 +1090,12 @@ proc listAllBufferCommand(status: var Editorstatus) =
 
   let
     useStatusLine = if status.settings.statusLine.enable: 1 else: 0
-    useTab = if status.settings.tabLine.useTab: 1 else: 0
+    enable = if status.settings.tabLine.enable: 1 else: 0
     swapCurrentLineNumStting = status.settings.view.currentLineNumber
 
   status.settings.view.currentLineNumber = false
   currentMainWindowNode.view = currentBufStatus.buffer.initEditorView(
-    terminalHeight() - useStatusLine - useTab - 1,
+    terminalHeight() - useStatusLine - enable - 1,
     terminalWidth())
 
   currentMainWindowNode.currentLine = 0
@@ -1174,40 +1158,6 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
   inc(currentBufStatus.countChange)
   status.commandLine.erase
   status.changeMode(currentBufStatus.prevMode)
-
-proc createWrokSpaceCommand(status: var Editorstatus) =
-  status.changeMode(currentBufStatus.prevMode)
-  status.createWrokSpace
-
-proc workspaceListCommand(status: var Editorstatus) =
-  status.changeMode(currentBufStatus.prevMode)
-
-  var buffer = "workspaces: "
-  for i in 0 ..< status.workspace.len:
-    if i == status.currentWorkSpaceIndex:
-      buffer &= "*" & $i & " "
-    else:
-      buffer &= $i & " "
-
-  status.commandLine.writeWorkspaceList(buffer)
-
-proc changeCurrentWorkSpaceCommand(status: var Editorstatus, index: int) =
-  status.changeMode(currentBufStatus.prevMode)
-
-  status.changeCurrentWorkSpace(index)
-
-proc deleteCurrentWorkSpaceCommand*(status: var Editorstatus) =
-  let index = status.currentWorkSpaceIndex
-  if 0 <= index and index < status.workSpace.len:
-    for i in 0 ..< currentWorkSpace.numOfMainWindow:
-      let node = mainWindowNode.searchByWindowIndex(i)
-      ## Check if buffer has changed
-      if status.bufStatus[node.bufferIndex].countChange > 0:
-        status.commandLine.writeNoWriteError(status.messageLog)
-        status.changeMode(bufferstatus.Mode.normal)
-        return
-
-    status.deleteWorkSpace(index)
 
 proc createNewEmptyBufferCommand*(status: var Editorstatus) =
 
@@ -1365,12 +1315,6 @@ proc exModeCommand*(status: var EditorStatus,
     status.multipleStatusLineSettingCommand(command[1])
   elif isBuildOnSaveSettingCommand(command):
     status.buildOnSaveSettingCommand(command[1])
-  elif isCreateWorkSpaceCommand(command):
-    status.createWrokSpaceCommand
-  elif isChangeCurrentWorkSpace(command):
-    status.changeCurrentWorkSpaceCommand(($command[1]).parseInt)
-  elif isDeleteCurrentWorkSpaceCommand(command):
-    status.deleteCurrentWorkSpaceCommand
   elif isOpenHelpCommand(command):
     status.openHelp
   elif isCreateNewEmptyBufferCommand(command):
@@ -1391,8 +1335,6 @@ proc exModeCommand*(status: var EditorStatus,
     status.runQuickRunCommand
   elif isRecentFileModeCommand(command):
     status.startRecentFileMode
-  elif isWorkspaceListCommand(command):
-    status.workspaceListCommand
   elif isHistoryManagerCommand(command):
     status.startHistoryManager
   elif isStartConfigMode(command):
