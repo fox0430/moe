@@ -477,8 +477,8 @@ proc changeThemeSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   status.changeMode(currentBufStatus.prevMode)
 
 proc tabLineSettingCommand(status: var EditorStatus, command: seq[Rune]) =
-  if command == ru"on": status.settings.tabLine.useTab = true
-  elif command == ru"off": status.settings.tabLine.useTab = false
+  if command == ru"on": status.settings.tabLine.enable = true
+  elif command == ru"off": status.settings.tabLine.enable = false
 
   status.resize(terminalHeight(), terminalWidth())
   status.commandLine.erase
@@ -1090,12 +1090,12 @@ proc listAllBufferCommand(status: var Editorstatus) =
 
   let
     useStatusLine = if status.settings.statusLine.enable: 1 else: 0
-    useTab = if status.settings.tabLine.useTab: 1 else: 0
+    enable = if status.settings.tabLine.enable: 1 else: 0
     swapCurrentLineNumStting = status.settings.view.currentLineNumber
 
   status.settings.view.currentLineNumber = false
   currentMainWindowNode.view = currentBufStatus.buffer.initEditorView(
-    terminalHeight() - useStatusLine - useTab - 1,
+    terminalHeight() - useStatusLine - enable - 1,
     terminalWidth())
 
   currentMainWindowNode.currentLine = 0

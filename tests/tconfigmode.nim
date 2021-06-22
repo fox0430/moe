@@ -527,7 +527,7 @@ suite "Config mode: Get standard table setting values":
 
     const name = "tabLine"
     let
-      default = settings.tabLine.useTab
+      default = settings.tabLine.enable
       values = settings.getStandardTableSettingValues(name)
 
     checkBoolSettingValue(default, values)
@@ -1558,10 +1558,10 @@ suite "Config mode: Chaging Standard table settings":
   test "Chaging tabLine":
     var settings = initEditorSettings()
 
-    let val = not settings.tabLine.useTab
+    let val = not settings.tabLine.enable
     settings.changeStandardTableSetting("tabLine", $val)
 
-    check val == settings.tabLine.useTab
+    check val == settings.tabLine.enable
 
   test "Chaging syntax":
     var settings = initEditorSettings()
