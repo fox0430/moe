@@ -273,7 +273,7 @@ suite "Parse configuration file":
     check not settings.view.currentLineNumber
     check settings.view.cursorLine
     check not settings.statusLine.enable
-    check not settings.tabLine.useTab
+    check not settings.tabLine.enable
     check not settings.syntax
     check not settings.view.indentationLines
     check settings.view.tabStop == 4

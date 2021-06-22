@@ -120,11 +120,11 @@ suite "Ex mode: Tab line setting command":
     block:
       const command = @[ru"tab", ru"off"]
       status.exModeCommand(command, 100, 100)
-    check(status.settings.tabLine.useTab == false)
+    check(status.settings.tabLine.enable == false)
     block:
       const command = @[ru"tab", ru"on"]
       status.exModeCommand(command, 100, 100)
-    check(status.settings.tabLine.useTab == true)
+    check(status.settings.tabLine.enable == true)
 
 suite "Ex mode: StatusLine setting command":
   test "StatusLine setting command":
