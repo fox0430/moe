@@ -121,7 +121,7 @@ type StatusLineSettings* = object
   showModeInactive*: bool
 
 type TabLineSettings* = object
-  useTab*: bool
+  enable*: bool
   allbuffer*: bool
 
 type EditorViewSettings* = object
@@ -274,7 +274,7 @@ proc initAutocompleteSettings*(): AutocompleteSettings {.inline.} =
   result.enable = true
 
 proc initTabBarSettings*(): TabLineSettings {.inline.} =
-  result.useTab = true
+  result.enable = true
 
 proc initStatusLineSettings*(): StatusLineSettings =
   result.enable = true
@@ -862,7 +862,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       result.statusLine.enable = settings["Standard"]["statusLine"].getbool()
 
     if settings["Standard"].contains("tabLine"):
-      result.tabLine.useTab = settings["Standard"]["tabLine"].getbool()
+      result.tabLine.enable = settings["Standard"]["tabLine"].getbool()
 
     if settings["Standard"].contains("syntax"):
       result.syntax = settings["Standard"]["syntax"].getbool()
@@ -1991,7 +1991,7 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "number = {$settings.view.lineNumber}"
   result.addLine fmt "currentNumber = {$settings.view.currentLineNumber}"
   result.addLine fmt "statusLine = {$settings.statusLine.enable}"
-  result.addLine fmt "tabLine = {$settings.tabLine.useTab}"
+  result.addLine fmt "tabLine = {$settings.tabLine.enable}"
   result.addLine fmt "syntax = {$settings.syntax}"
   result.addLine fmt "indentationLines = {$settings.view.indentationLines}"
   result.addLine fmt "tabStop = {$settings.tabStop}"

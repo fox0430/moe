@@ -243,7 +243,7 @@ proc getStandardTableSettingValues(settings: EditorSettings,
       of "statusLine":
         currentVal = settings.statusLine.enable
       of "tabLine":
-        currentVal = settings.tabLine.useTab
+        currentVal = settings.tabLine.enable
       of "syntax":
         currentVal = settings.syntax
       of "indentationLines":
@@ -679,7 +679,7 @@ proc changeStandardTableSetting(settings: var EditorSettings,
     of "statusLine":
       settings.statusLine.enable = parseBool(settingVal)
     of "tabLine":
-      settings.tabline.useTab = parseBool(settingVal)
+      settings.tabline.enable = parseBool(settingVal)
     of "syntax":
       settings.syntax = parseBool(settingVal)
     of "indentationLines":
@@ -1614,7 +1614,7 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       of "statusLine":
         result.add(ru nameStr & space & $settings.statusLine.enable)
       of "tabLine":
-        result.add(ru nameStr & space & $settings.tabLine.useTab)
+        result.add(ru nameStr & space & $settings.tabLine.enable)
       of "syntax":
         result.add(ru nameStr & space & $settings.syntax)
       of "indentationLines":

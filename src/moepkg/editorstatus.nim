@@ -42,7 +42,7 @@ proc initEditorStatus*(): EditorStatus =
   result.statusLine = @[initStatusLine()]
 
   # Init tab line
-  if result.settings.tabLine.useTab:
+  if result.settings.tabLine.enable:
     const
       h = 1
       w = 1
@@ -235,7 +235,7 @@ proc exitEditor*(status: EditorStatus) =
 
 proc getMainWindowHeight*(settings: EditorSettings, h: int): int =
   let
-    tabHeight = if settings.tabLine.useTab: 1 else: 0
+    tabHeight = if settings.tabLine.enable: 1 else: 0
     statusHeight = if settings.statusLine.enable: 1 else: 0
     commandHeight = if settings.statusLine.merge: 1 else: 0
 
@@ -243,7 +243,7 @@ proc getMainWindowHeight*(settings: EditorSettings, h: int): int =
 
 proc resizeMainWindowNode(status: var EditorStatus, height, width: int) =
   let
-    tabLineHeight = if status.settings.tabLine.useTab: 1 else: 0
+    tabLineHeight = if status.settings.tabLine.enable: 1 else: 0
     statusLineHeight = if status.settings.statusLine.enable: 1 else: 0
     commandLineHeight = if status.settings.statusLine.merge: 1 else: 0
 
@@ -335,7 +335,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
       x)
 
   ## Resize tab line window
-  if status.settings.tabLine.useTab:
+  if status.settings.tabLine.enable:
     const
       tabLineHeight = 1
       x = 0
@@ -447,7 +447,7 @@ proc updateDebugModeBuffer(status: var EditorStatus)
 proc update*(status: var EditorStatus) =
   setCursor(false)
 
-  if status.settings.tabLine.useTab:
+  if status.settings.tabLine.enable:
     status.tabWindow.writeTabLineBuffer(
       status.bufStatus,
       status.bufferIndexInCurrentWindow,
