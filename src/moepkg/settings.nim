@@ -837,8 +837,6 @@ proc loadVSCodeTheme*(): ColorTheme =
 proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
   result = initEditorSettings()
 
-  var vscodeTheme = false
-
   if settings.contains("Standard"):
     template cursorType(str: string): untyped =
       parseEnum[CursorType](str)
@@ -846,8 +844,6 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Standard"].contains("theme"):
       let themeString = settings["Standard"]["theme"].getStr()
       result.editorColorTheme = getTheme(themeString)
-      if result.editorColorTheme == ColorTheme.vscode:
-        vscodeTheme = true
 
     if settings["Standard"].contains("number"):
       result.view.lineNumber = settings["Standard"]["number"].getbool()
@@ -1304,7 +1300,8 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
         let setting = bufStatusSettings["bufferLen"].getbool
         result.debugModeSettings.bufStatus.bufferLen = setting
 
-  if not vscodeTheme and settings.contains("Theme"):
+  if result.editorColorTheme == ColorTheme.config and
+     settings.contains("Theme"):
     if settings["Theme"].contains("baseTheme"):
       let themeString = settings["Theme"]["baseTheme"].getStr()
       if fileExists(themeString):
@@ -1615,7 +1612,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
     result.editorColorTheme = ColorTheme.config
 
-  if vscodeTheme:
+  if result.editorColorTheme == ColorTheme.vscode:
     result.editorColorTheme = loadVSCodeTheme()
 
 proc validateTomlConfig(toml: TomlValueRef): Option[string] =
