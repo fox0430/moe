@@ -605,6 +605,9 @@ proc deleteCharacters*(bufStatus: var BufferStatus,
     else:
       registers.addRegister(deletedBuffer, isLine, isDelete, settings)
 
+    inc(bufStatus.countChange)
+    bufStatus.isUpdate = true
+
 # No yank buffer
 proc deleteCharacters*(bufStatus: var BufferStatus,
                        autoDeleteParen: bool,
@@ -639,6 +642,9 @@ proc deleteCharacters*(bufStatus: var BufferStatus,
 
   if oldLine != newLine:
     bufStatus.buffer[line] = newLine
+
+    inc(bufStatus.countChange)
+    bufStatus.isUpdate = true
 
 # TODO: Delete deleteCurrentCharacter()
 proc deleteCurrentCharacter*(bufStatus: var BufferStatus,
