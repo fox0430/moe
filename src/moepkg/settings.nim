@@ -152,7 +152,7 @@ type ClipboardToolOnLinux* = enum
   xsel
   xclip
 
-type ClipBoardSettings* = object
+type ClipboardSettings* = object
   enable*: bool
   toolOnLinux*: ClipboardToolOnLinux
 
@@ -179,7 +179,7 @@ type EditorSettings* = object
   autoDeleteParen*: bool
   smoothScroll*: bool
   smoothScrollSpeed*: int
-  clipboard*: ClipBoardSettings
+  clipboard*: ClipboardSettings
   buildOnSave*: BuildOnSaveSettings
   filerSettings*: FilerSettings
   autocompleteSettings*: AutocompleteSettings
@@ -316,7 +316,7 @@ proc initPersistSettings(): PersistSettings =
   result.search = true
   result.cursorPosition = true
 
-proc initClipboardSettings(): ClipBoardSettings =
+proc initClipboardSettings(): ClipboardSettings =
   result.enable = true
   result.toolOnLinux = ClipboardToolOnLinux.xsel
 
@@ -922,12 +922,12 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       result.view.indentationLines = settings["Standard"]["indentationLines"].getbool()
 
 
-  if settings.contains("ClipBoard"):
-    if settings["ClipBoard"].contains("enable"):
-      result.clipboard.enable = settings["ClipBoard"]["enable"].getbool()
+  if settings.contains("Clipboard"):
+    if settings["Clipboard"].contains("enable"):
+      result.clipboard.enable = settings["Clipboard"]["enable"].getbool()
 
-    if settings["ClipBoard"].contains("toolOnLinux"):
-      let str = settings["ClipBoard"]["toolOnLinux"].getStr
+    if settings["Clipboard"].contains("toolOnLinux"):
+      let str = settings["Clipboard"]["toolOnLinux"].getStr
       case str:
         of "xsel": result.clipboard.toolOnLinux = ClipboardToolOnLinux.xsel
         of "xclip": result.clipboard.toolOnLinux = ClipboardToolOnLinux.xclip
@@ -1667,8 +1667,8 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         else:
           return some($item)
 
-  template validateClipBoardTable() =
-    for item in json["ClipBoard"].pairs:
+  template validateClipboardTable() =
+    for item in json["Clipboard"].pairs:
       case item.key:
         of "enable":
           if not (item.val["type"].getStr == "bool"):
@@ -1934,8 +1934,8 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
     case table:
       of "Standard":
         validateStandardTable()
-      of "ClipBoard":
-        validateClipBoardTable()
+      of "Clipboard":
+        validateClipboardTable()
       of "TabLine":
         validateTabLineTable()
       of "StatusLine":
