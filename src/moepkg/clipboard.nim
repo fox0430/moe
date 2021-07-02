@@ -27,8 +27,10 @@ proc sendToClipboard*(buffer: seq[seq[Rune]],
       if exitCode == 0:
         let cmd = if tool == ClipboardToolOnLinux.xclip:
                     "xclip -r <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
-                  else:
+                  elif tool == ClipboardToolOnLinux.xsel:
                     "xsel <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
+                  else:
+                    "xl-copy <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
         discard execShellCmd(cmd)
     of wsl:
       let cmd = "clip.exe <<" & "'" & delimiterStr & "'" & "\n" & str & "\n"  & delimiterStr & "\n"
