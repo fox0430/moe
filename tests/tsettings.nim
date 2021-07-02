@@ -505,7 +505,7 @@ suite "Parse configuration file":
 
   test "Parse Clipboard setting 1":
     const str = """
-      [ClipBoard]
+      [Clipboard]
       enable = true
       toolOnLinux = "xclip""""
 
@@ -517,7 +517,7 @@ suite "Parse configuration file":
 
   test "Parse Clipboard setting 2":
     const str = """
-      [ClipBoard]
+      [Clipboard]
       enable = true
       toolOnLinux = "xsel""""
 
@@ -529,7 +529,7 @@ suite "Parse configuration file":
 
   test "Parse Clipboard setting 3":
     const str = """
-      [ClipBoard]
+      [Clipboard]
       enable = true
       toolOnLinux = "wl-clipboard""""
 
