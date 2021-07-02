@@ -1213,13 +1213,16 @@ proc replaceCharacters*(bufStatus: var BufferStatus,
     let oldLine = bufStatus.buffer[windowNode.currentLine]
     var newLine = bufStatus.buffer[windowNode.currentLine]
 
-    for i in windowNode.currentColumn ..< min(newLine.len, loop):
-      newLine[i] = character
+    block:
+      let currentColumn = windowNode.currentColumn
+      for i in currentColumn ..< min(newLine.len, currentColumn + loop):
+        newLine[i] = character
 
     if oldLine != newLine:
       bufStatus.buffer[windowNode.currentLine] = newLine
 
-      windowNode.currentColumn = min(newLine.high, loop)
+      let currentColumn = windowNode.currentColumn
+      windowNode.currentColumn = min(newLine.high, currentColumn + loop - 1)
 
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
