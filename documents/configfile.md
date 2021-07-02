@@ -157,6 +157,9 @@ enable
 
 Set clipboard tool for Linux (string)  
 default is xsel
+
+```xsel``` or ```xclip``` or ```wl-clipboard```.
+
 ```
 toolOnLinux
 ```
