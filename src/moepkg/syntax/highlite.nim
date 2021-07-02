@@ -76,7 +76,7 @@ type
     gtOperator, gtPunctuation, gtComment, gtLongComment, gtRegularExpression,
     gtTagStart, gtTagEnd, gtKey, gtValue, gtRawData, gtAssembler,
     gtPreprocessor, gtDirective, gtCommand, gtRule, gtHyperlink, gtLabel,
-    gtReference, gtOther, gtBoolean, gtSpecialVar, gtBuiltin
+    gtReference, gtOther, gtBoolean, gtSpecialVar, gtBuiltin, gtFunctionName, gtTypeName
 
   GeneralTokenizer* = object of RootObj
     kind*: TokenClass
