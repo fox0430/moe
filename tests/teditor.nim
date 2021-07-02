@@ -633,7 +633,7 @@ suite "Editor: Replace characters":
       character)
 
     check currentBufStatus.buffer[0] == ru "zbcdef"
-    check currentMainWindowNode.currentColumn == 1
+    check currentMainWindowNode.currentColumn == 0
 
   test "Repace characters":
     var status = initEditorStatus()
@@ -656,7 +656,7 @@ suite "Editor: Replace characters":
       character)
 
     check currentBufStatus.buffer[0] == ru "zzzdef"
-    check currentMainWindowNode.currentColumn == 3
+    check currentMainWindowNode.currentColumn == 2
 
   test "Repace characters 2":
     var status = initEditorStatus()
@@ -728,6 +728,30 @@ suite "Editor: Replace characters":
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru ""
     check currentBufStatus.buffer[1] == ru "def"
+
+  test "Fix #1384":
+    var status = initEditorStatus()
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
+    currentMainWindowNode.currentColumn = 2
+
+    const
+      autoIndent = false
+      autoDeleteParen = false
+      tabStop = 2
+      loop = 1
+    let character = toRune('z')
+
+    currentBufStatus.replaceCharacters(
+      currentMainWindowNode,
+      autoIndent,
+      autoDeleteParen,
+      tabStop,
+      loop,
+      character)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abzdef"
 
 suite "Editor: Toggle characters":
   test "Toggle a character":

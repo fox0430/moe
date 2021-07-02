@@ -31,7 +31,7 @@ const tomlStr = """
   smoothScroll = false
   smoothScrollSpeed = 1
 
-  [ClipBoard]
+  [Clipboard]
   enable = false
   toolOnLinux = "xclip"
 
