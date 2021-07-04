@@ -151,6 +151,7 @@ type PersistSettings* = object
 type ClipboardToolOnLinux* = enum
   xsel
   xclip
+  wlClipboard
 
 type ClipboardSettings* = object
   enable*: bool
@@ -929,9 +930,14 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Clipboard"].contains("toolOnLinux"):
       let str = settings["Clipboard"]["toolOnLinux"].getStr
       case str:
-        of "xsel": result.clipboard.toolOnLinux = ClipboardToolOnLinux.xsel
-        of "xclip": result.clipboard.toolOnLinux = ClipboardToolOnLinux.xclip
-        else: result.clipboard.toolOnLinux = ClipboardToolOnLinux.xsel
+        of "xsel":
+          result.clipboard.toolOnLinux = ClipboardToolOnLinux.xsel
+        of "xclip":
+          result.clipboard.toolOnLinux = ClipboardToolOnLinux.xclip
+        of "wl-clipboard":
+          result.clipboard.toolOnLinux = ClipboardToolOnLinux.wlClipboard
+        else:
+          result.clipboard.toolOnLinux = ClipboardToolOnLinux.xsel
 
   if settings.contains("TabLine"):
     if settings["TabLine"].contains("allBuffer"):

@@ -264,7 +264,7 @@ const tomlStr = """
 """
 
 suite "Parse configuration file":
-  test "Parse toml configuration file":
+  test "Parse all settings":
     let toml = parsetoml.parseString(tomlStr)
     var settings = parseSettingsFile(toml)
 
@@ -502,6 +502,42 @@ suite "Parse configuration file":
     check ColorThemeTable[theme].currentSetting == Color.pink1
     check ColorThemeTable[theme].currentSettingBg == Color.pink1
     check ColorThemeTable[theme].currentLineBg == Color.pink1
+
+  test "Parse Clipboard setting 1":
+    const str = """
+      [Clipboard]
+      enable = true
+      toolOnLinux = "xclip""""
+
+    let toml = parsetoml.parseString(str)
+    let settings = parseSettingsFile(toml)
+
+    check settings.clipboard.enable
+    check settings.clipboard.toolOnLinux == ClipboardToolOnLinux.xclip
+
+  test "Parse Clipboard setting 2":
+    const str = """
+      [Clipboard]
+      enable = true
+      toolOnLinux = "xsel""""
+
+    let toml = parsetoml.parseString(str)
+    let settings = parseSettingsFile(toml)
+
+    check settings.clipboard.enable
+    check settings.clipboard.toolOnLinux == ClipboardToolOnLinux.xsel
+
+  test "Parse Clipboard setting 3":
+    const str = """
+      [Clipboard]
+      enable = true
+      toolOnLinux = "wl-clipboard""""
+
+    let toml = parsetoml.parseString(str)
+    let settings = parseSettingsFile(toml)
+
+    check settings.clipboard.enable
+    check settings.clipboard.toolOnLinux == ClipboardToolOnLinux.wlClipboard
 
 suite "Validate toml config":
   test "Except for success":
