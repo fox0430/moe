@@ -2,6 +2,7 @@ import sequtils, os, strformat, parseutils
 import syntax/highlite
 import unicodeext, color
 from strutils import find
+import syntax/syntaxnim2
 
 type ColorSegment* = object
   firstRow*, firstColumn*, lastRow*, lastColumn*: int
@@ -145,13 +146,13 @@ iterator parseReservedWord(
     yield (buffer[pos ..< last], reservedWord.color)
     buffer = buffer[last ..^ 1]
 
-proc getEditorColorPairInNim(kind: TokenClass,
-                             isProcName: bool): EditorColorPair =
+proc getEditorColorPairInNim(kind: TokenClass ): EditorColorPair =
 
   case kind:
     of gtKeyword: EditorColorPair.keyword
     of gtBoolean: EditorColorPair.boolean
     of gtSpecialVar: EditorColorPair.specialVar
+    of gtOperator: EditorColorPair.functionName
     of gtBuiltin: EditorColorPair.builtin
     of gtStringLit: EditorColorPair.stringLit
     of gtDecNumber: EditorColorPair.decNumber
@@ -159,9 +160,9 @@ proc getEditorColorPairInNim(kind: TokenClass,
     of gtLongComment: EditorColorPair.longComment
     of gtPreprocessor: EditorColorPair.preprocessor
     of gtWhitespace, gtPunctuation: EditorColorPair.defaultChar
+    of gtFunctionName: EditorColorPair.functionName
     else:
-      if isProcName: EditorColorPair.functionName
-      else: EditorColorPair.defaultChar
+      EditorColorPair.defaultChar
 
 proc getEditorColorPair(kind: TokenClass,
                         language: SourceLanguage): EditorColorPair =
@@ -225,15 +226,18 @@ proc initHighlight*(buffer: string,
      language == SourceLanguage.langMarkDown:
     splitByNewline(buffer, EditorColorPair.defaultChar)
     return result
-
+  
   var token = GeneralTokenizer()
-  token.initGeneralTokenizer(buffer)
+
+  if language == SourceLanguage.langNim:
+    splitByNewline(buffer, EditorColorPair.defaultChar)
+    var tokens = parseTokens(buffer)
+    return result
+  else:
+    token.initGeneralTokenizer(buffer)
   var pad: string
   if buffer.parseWhile(pad, {' ', '\x09'..'\x0D'}) > 0:
     splitByNewline(pad, EditorColorPair.defaultChar)
-
-  # Only use in nim
-  var isProcName = false
 
   while true:
     try:
@@ -251,20 +255,7 @@ proc initHighlight*(buffer: string,
       currentColumn = 0
       continue
 
-    let color = if language == SourceLanguage.langNim:
-                  getEditorColorPairInNim(token.kind, isProcName)
-                else:
-                  getEditorColorPair(token.kind, language)
-
-    isProcName = if (language == SourceLanguage.langNim) and
-                   (buffer[first.. last] == "proc" or
-                   buffer[first.. last] == "macro" or
-                   buffer[first.. last] == "template" or
-                   buffer[first.. last] == "func"): true
-                  elif language == SourceLanguage.langNim and
-                       isProcName and
-                       token.kind == gtWhitespace: true
-                 else: false
+    let color = getEditorColorPair(token.kind, language)
 
     if token.kind == gtComment:
       for r in buffer[first..last].parseReservedWord(reservedWords, color):
@@ -324,3 +315,6 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langMarkDown
   else:
     return SourceLanguage.langNone
+
+when isMainModule:
+  echo initHighlight(readFile(currentSourcePath),@[],langNim).colorSegments
