@@ -84,6 +84,9 @@ type
     buf*: cstring
     pos*: int
     state*: TokenClass
+    # for nim
+    line*: uint16
+    col*: int16
 
   SourceLanguage* = enum
     langNone, langNim, langCpp, langCsharp, langC, langJava,

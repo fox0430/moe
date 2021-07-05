@@ -152,6 +152,7 @@ proc getEditorColorPairInNim(kind: TokenClass ): EditorColorPair =
     of gtKeyword: EditorColorPair.keyword
     of gtBoolean: EditorColorPair.boolean
     of gtSpecialVar: EditorColorPair.specialVar
+    of gtOperator: EditorColorPair.functionName
     of gtBuiltin: EditorColorPair.builtin
     of gtStringLit: EditorColorPair.stringLit
     of gtDecNumber: EditorColorPair.decNumber
@@ -225,14 +226,18 @@ proc initHighlight*(buffer: string,
      language == SourceLanguage.langMarkDown:
     splitByNewline(buffer, EditorColorPair.defaultChar)
     return result
-  if language == SourceLanguage.langNim:
-    let tokens = parseTokens(buffer)
+  
   var token = GeneralTokenizer()
-  token.initGeneralTokenizer(buffer)
+
+  if language == SourceLanguage.langNim:
+    splitByNewline(buffer, EditorColorPair.defaultChar)
+    var tokens = parseTokens(buffer)
+    return result
+  else:
+    token.initGeneralTokenizer(buffer)
   var pad: string
   if buffer.parseWhile(pad, {' ', '\x09'..'\x0D'}) > 0:
     splitByNewline(pad, EditorColorPair.defaultChar)
-
 
   while true:
     try:
@@ -251,7 +256,6 @@ proc initHighlight*(buffer: string,
       continue
 
     let color = getEditorColorPair(token.kind, language)
-
 
     if token.kind == gtComment:
       for r in buffer[first..last].parseReservedWord(reservedWords, color):
@@ -311,3 +315,6 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langMarkDown
   else:
     return SourceLanguage.langNone
+
+when isMainModule:
+  echo initHighlight(readFile(currentSourcePath),@[],langNim).colorSegments
