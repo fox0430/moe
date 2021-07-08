@@ -490,6 +490,9 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
   setEditorColor gtFunctionName:
     foreground:
       colorFromNode(getScope("entity"){"foreground"})
+  setEditorColor gtTypeName:
+    foreground:
+      colorFromNode(getScope("entity"){"foreground"})
   setEditorColor gtBoolean:
     foreground:
       colorFromNode(getScope("entity"){"foreground"})
@@ -1493,6 +1496,9 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("gtFunctionName"):
       ColorThemeTable[ColorTheme.config].gtFunctionName = color("gtFunctionName")
 
+    if settings["Theme"].contains("gtTypeName"):
+      ColorThemeTable[ColorTheme.config].gtTypeName = color("gtTypeName")
+
     if settings["Theme"].contains("gtBoolean"):
       ColorThemeTable[ColorTheme.config].gtBoolean = color("gtBoolean")
 
@@ -2251,6 +2257,7 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "defaultChar = \"{$theme.defaultChar}\""
   result.addLine fmt "gtKeyword = \"{$theme.gtKeyword}\""
   result.addLine fmt "gtFunctionName = \"{$theme.gtFunctionName}\""
+  result.addLine fmt "gtTypeName= \"{$theme.gtTypeName}\""
   result.addLine fmt "gtBoolean = \"{$theme.gtBoolean}\""
   result.addLine fmt "gtStringLit = \"{$theme.gtStringLit}\""
   result.addLine fmt "gtSpecialVar = \"{$theme.gtSpecialVar}\""

@@ -148,6 +148,7 @@ type themeTableNames {.pure.} = enum
   defaultChar
   keyword
   functionName
+  typeName
   boolean
   specialVar
   builtin
