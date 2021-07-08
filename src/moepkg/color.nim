@@ -476,6 +476,7 @@ type EditorColor* = object
   defaultChar*: Color
   gtKeyword*: Color
   gtFunctionName*: Color
+  gtTypeName*: Color
   gtBoolean*: Color
   gtStringLit*: Color
   gtSpecialVar*: Color
@@ -618,6 +619,7 @@ type EditorColorPair* = enum
   deletedLine = 54
   # configuration mode
   currentSetting = 55
+  typeName = 56
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -693,6 +695,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     defaultChar: white,
     gtKeyword: skyBlue1,
     gtFunctionName: gold1,
+    gtTypeName: green,
     gtBoolean: yellow,
     gtStringLit: yellow,
     gtSpecialVar: green,
@@ -822,6 +825,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     defaultChar: white,
     gtKeyword: skyBlue1,
     gtFunctionName: gold1,
+    gtTypeName: green,
     gtBoolean: yellow,
     gtStringLit: yellow,
     gtSpecialVar: green,
@@ -951,6 +955,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     defaultChar: white,
     gtKeyword: skyBlue1,
     gtFunctionName: gold1,
+    gtTypeName: green,
     gtBoolean: yellow,
     gtStringLit: yellow,
     gtSpecialVar: green,
@@ -1080,6 +1085,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     defaultChar: gray100,
     gtKeyword: seaGreen1_2,
     gtFunctionName: gold1,
+    gtTypeName: green,
     gtBoolean: yellow,
     gtStringLit: purple_1,
     gtSpecialVar: green,
@@ -1209,6 +1215,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     defaultChar: gray100,
     gtKeyword: deepPink1_1,
     gtFunctionName: gold1,
+    gtTypeName: green,
     gtBoolean: yellow,
     gtStringLit: purple_1,
     gtSpecialVar: green,
@@ -1383,6 +1390,9 @@ proc setCursesColor*(editorColor: EditorColor) =
     setColorPair(EditorColorPair.functionName,
                  editorColor.gtFunctionName,
                  editorColor.editorBg)
+    setColorPair(EditorColorPair.typeName,
+                 editorColor.gtTypeName,
+                 editorColor.editorBg)
     setColorPair(EditorColorPair.boolean,
                  editorColor.gtBoolean,
                  editorColor.editorBg)
@@ -1556,6 +1566,8 @@ proc getColorFromEditorColorPair*(theme: ColorTheme,
     return (editorColor.gtKeyword, editorColor.editorBg)
   of EditorColorPair.functionName:
     return (editorColor.gtFunctionName, editorColor.editorBg)
+  of EditorColorPair.typeName:
+    return (editorColor.gtTypeName, editorColor.editorBg)
   of EditorColorPair.boolean:
     return (editorColor.gtBoolean, editorColor.editorBg)
   of EditorColorPair.specialVar:
