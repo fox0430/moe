@@ -1307,6 +1307,11 @@ gtFunctionName
 
 Syntax highlighting color
 ```
+gtTypeName
+```
+
+Syntax highlighting color
+```
 gtBoolean
 ```
 
