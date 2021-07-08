@@ -104,6 +104,7 @@ proc nimGetKeyword(id: string): TokenClass =
     if cmpIgnoreStyle(id, k) == 0: return gtKeyword
   if binarySearch(nimBooleans, id) > -1: return gtBoolean
   if binarySearch(nimSpecialVars, id) > -1: return gtSpecialVar
+  if id[0] in 'A'..'Z': return gtTypeName
   if binarySearch(nimBuiltins, id) > -1: return gtBuiltin
   result = gtIdentifier
 
@@ -253,7 +254,10 @@ proc nimNextToken*(g: var GeneralTokenizer) =
             inc(pos)
           if g.buf[pos] == '\"': inc(pos)
       else:
-        g.kind = nimGetKeyword(id)
+        if (g.buf[pos] == '(' or g.buf[pos] == '*') and nimGetKeyword(id) == gtIdentifier:
+          g.kind = gtFunctionName
+        else:
+          g.kind = nimGetKeyword(id)
     of '0':
       inc(pos)
       case g.buf[pos]
@@ -324,8 +328,12 @@ proc nimNextToken*(g: var GeneralTokenizer) =
       g.kind = gtEof
     else:
       if g.buf[pos] in OpChars:
+        let sp = pos
         g.kind = gtOperator
         while g.buf[pos] in OpChars: inc(pos)
+        let ep = pos
+        if sp + 1 == ep  and g.buf[sp] == '*' and g.buf[ep] == '(' :
+          g.kind = gtSpecialVar
       else:
         inc(pos)
         g.kind = gtNone
