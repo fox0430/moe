@@ -1,4 +1,4 @@
-import unicode, os
+import unicode, os, osproc
 import independentutils, platform, settings
 
 proc runesToStrings(runes: seq[seq[Rune]]): string =
@@ -31,7 +31,7 @@ proc sendToClipboard*(buffer: seq[seq[Rune]],
                 else:
                   ""
       if cmd.len > 0:
-        discard execCmdExNoOutput(cmd)
+        discard execShellCmd(cmd)
     of wsl:
       let cmd = "clip.exe <<" & "'" & delimiterStr & "'" & "\n" & str & "\n"  & delimiterStr & "\n"
       discard execShellCmd(cmd)
