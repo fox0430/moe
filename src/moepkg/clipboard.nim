@@ -31,7 +31,7 @@ proc sendToClipboard*(buffer: seq[seq[Rune]],
                 else:
                   ""
       if cmd.len > 0:
-        discard execShellCmd(cmd)
+        discard execCmdExNoOutput(cmd)
     of wsl:
       let cmd = "clip.exe <<" & "'" & delimiterStr & "'" & "\n" & str & "\n"  & delimiterStr & "\n"
       discard execShellCmd(cmd)

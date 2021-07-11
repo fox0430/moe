@@ -7,7 +7,7 @@ when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
   from strutils import nimIdentNormalize
   export strutils.nimIdentNormalize
 
-import ui, color, unicodeext, highlight, platform
+import ui, color, unicodeext, highlight, platform, independentutils
 
 type DebugWindowNodeSettings* = object
   enable*: bool
@@ -325,11 +325,11 @@ proc autoSetClipboardTool(): ClipboardToolOnLinux =
   case CURRENT_PLATFORM:
     of linux:
       ## Check if X server is running
-      if execShellCmd("xset q") == 0:
+      if execCmdExNoOutput("xset q") == 0:
 
-        if execShellCmd("xsel --version") == 0:
+        if execCmdExNoOutput("xsel --version") == 0:
           result = ClipboardToolOnLinux.xsel
-        elif execShellCmd("xclip -version") == 0:
+        elif execCmdExNoOutput("xclip -version") == 0:
           let (output, _) = execCmdEx("xclip -version")
           # Check xclip version
           let
@@ -337,7 +337,7 @@ proc autoSetClipboardTool(): ClipboardToolOnLinux =
             versionStr = (strutils.splitWhitespace(lines[0]))[2]
           if parseFloat(versionStr) >= 0.13:
             result = ClipboardToolOnLinux.xclip
-        elif execShellCmd("wl-copy -v") == 0:
+        elif execCmdExNoOutput("wl-copy -v") == 0:
           result = ClipboardToolOnLinux.wlClipboard
     else:
       discard
