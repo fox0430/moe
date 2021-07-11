@@ -26,5 +26,5 @@ proc genDelimiterStr*(buffer: string): string =
     for _ in 0 .. 10: add(result, char(rand(int('A') .. int('Z'))))
     if buffer != result: break
 
-proc execCmdExNoOutput*(cmd: string): int =
+proc execCmdExNoOutput*(cmd: string): int {.inline.} =
   (execCmdEx(cmd)).exitCode
