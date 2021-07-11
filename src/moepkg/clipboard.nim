@@ -1,4 +1,4 @@
-import unicode, os, osproc
+import unicode, os
 import independentutils, platform, settings
 
 proc runesToStrings(runes: seq[seq[Rune]]): string =
