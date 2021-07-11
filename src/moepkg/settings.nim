@@ -1,4 +1,4 @@
-import parsetoml, os, json, macros, times, options, strformat
+import parsetoml, os, json, macros, times, options, strformat, osproc, strutils
 from strutils import parseEnum, endsWith, parseInt
 export TomlError
 
@@ -7,7 +7,7 @@ when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
   from strutils import nimIdentNormalize
   export strutils.nimIdentNormalize
 
-import ui, color, unicodeext, highlight
+import ui, color, unicodeext, highlight, platform, independentutils
 
 type DebugWindowNodeSettings* = object
   enable*: bool
@@ -149,6 +149,7 @@ type PersistSettings* = object
   cursorPosition*: bool
 
 type ClipboardToolOnLinux* = enum
+  none
   xsel
   xclip
   wlClipboard
@@ -317,9 +318,33 @@ proc initPersistSettings(): PersistSettings =
   result.search = true
   result.cursorPosition = true
 
+# Automatically set the clipboard tool on GNU/Linux
+proc autoSetClipboardTool(): ClipboardToolOnLinux =
+  result = ClipboardToolOnLinux.none
+
+  case CURRENT_PLATFORM:
+    of linux:
+      ## Check if X server is running
+      if execCmdExNoOutput("xset q") == 0:
+
+        if execCmdExNoOutput("xsel --version") == 0:
+          result = ClipboardToolOnLinux.xsel
+        elif execCmdExNoOutput("xclip -version") == 0:
+          let (output, _) = execCmdEx("xclip -version")
+          # Check xclip version
+          let
+            lines = output.splitLines
+            versionStr = (strutils.splitWhitespace(lines[0]))[2]
+          if parseFloat(versionStr) >= 0.13:
+            result = ClipboardToolOnLinux.xclip
+        elif execCmdExNoOutput("wl-copy -v") == 0:
+          result = ClipboardToolOnLinux.wlClipboard
+    else:
+      discard
+
 proc initClipboardSettings(): ClipboardSettings =
   result.enable = true
-  result.toolOnLinux = ClipboardToolOnLinux.xsel
+  result.toolOnLinux = autoSetClipboardTool()
 
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = ColorTheme.dark

@@ -1,6 +1,6 @@
 import terminal, times, options, unicode
-import ui, editorstatus, gapbuffer, undoredostack, window, movement, editor,
-       bufferstatus, suggestionwindow, settings
+import ui, editorstatus, gapbuffer, window, movement, editor, bufferstatus,
+       suggestionwindow, settings
 
 proc calcMainWindowY(isEnableTabLine: bool): int =
   if isEnableTabLine: result.inc
