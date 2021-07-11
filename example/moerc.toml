@@ -53,7 +53,7 @@ smoothScrollSpeed = 15
 [Clipboard]
 enable = true
 
-toolOnLinux = "xsel"
+# toolOnLinux = "xsel"
 
 [BuildOnSave]
 
