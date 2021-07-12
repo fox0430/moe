@@ -1,4 +1,5 @@
 import strutils, sequtils, strformat, options
+import syntax/highlite
 import editorstatus, ui, gapbuffer, unicodeext, undoredostack, window,
        bufferstatus, movement, messages, settings, register, commandline
 
@@ -186,32 +187,72 @@ proc deleteBeforeCursorToFirstNonBlank*(bufStatus: var BufferStatus,
   for _ in firstNonBlank..max(0, windowNode.currentColumn-1):
     currentLineDeleteCharacterBeforeCursor(bufStatus, windowNode, false)
 
+proc insertIndentInNim(bufStatus: var BufferStatus,
+                       windowNode: WindowNode,
+                       tabStop: int) =
+
+  let
+    currentLine = windowNode.currentLine
+    line = bufStatus.buffer[currentLine]
+
+  if line.len > 0:
+    # Auto indent if the current line are "var", "let", "const".
+    # And, if finish the current line with ':', "object", the unclosed paren.
+    if line.splitWhitespace == @[ru "var"] or
+       line.splitWhitespace == @[ru "let"] or
+       line.splitWhitespace == @[ru "const"] or
+       (line.len > 6 and line[line.len - 6 .. ^1] == ru "object") or
+       isOpenParen(line[^1]) or
+       line[^1] == ru ':':
+      let
+        count = countRepeat(line, Whitespace, 0) + tabStop
+        oldLine = bufStatus.buffer[windowNode.currentLine + 1]
+      var newLine = bufStatus.buffer[currentLine + 1]
+      newLine &= repeat(' ', count).toRunes
+      if oldLine != newLine:
+        bufStatus.buffer[currentLine + 1] = newLine
+
+    # Auto indent if finish the current line with "or" and "and" in Nim
+    elif (line.len > 2 and line[line.len - 2 .. ^1] == ru "or") or
+         (line.len > 3 and line[line.len - 3 .. ^1] == ru "and"):
+      let
+        count = countRepeat(line, Whitespace, 0)
+        oldLine = bufStatus.buffer[windowNode.currentLine + 1]
+      var newLine = bufStatus.buffer[currentLine + 1]
+      newLine &= repeat(' ', count).toRunes
+      if oldLine != newLine:
+        bufStatus.buffer[currentLine + 1] = newLine
+  else:
+    let
+      count = countRepeat(bufStatus.buffer[currentLine], Whitespace, 0)
+      indent = min(count, windowNode.currentColumn)
+
+      oldLine = bufStatus.buffer[currentLine + 1]
+    var newLine = bufStatus.buffer[currentLine + 1]
+
+    newLine &= repeat(' ', indent).toRunes
+    if oldLine != newLine:
+      bufStatus.buffer[currentLine + 1] = newLine
+
+# Insert indent to the next line
 proc insertIndent(bufStatus: var BufferStatus,
                   windowNode: WindowNode,
                   tabStop: int) =
 
-  # Auto indent if finish a previous line with ':'
-  if bufStatus.buffer[windowNode.currentLine].len > 0 and
-     bufStatus.buffer[windowNode.currentLine][^1] == ru':':
-    let oldLine = bufStatus.buffer[windowNode.currentLine + 1]
-    var newLine = bufStatus.buffer[windowNode.currentLine + 1]
-    newLine &= repeat(' ', tabStop).toRunes
-    if oldLine != newLine:
-      bufStatus.buffer[windowNode.currentLine + 1] = newLine
-
+  if bufStatus.language == SourceLanguage.langNim:
+    bufStatus.insertIndentInNim(windowNode, tabStop)
   else:
     let
-      count = countRepeat(
-        bufStatus.buffer[windowNode.currentLine],
-        Whitespace,
-        0)
+      currentLine = windowNode.currentLine
+      count = countRepeat(bufStatus.buffer[currentLine], Whitespace, 0)
       indent = min(count, windowNode.currentColumn)
 
-    let oldLine = bufStatus.buffer[windowNode.currentLine + 1]
-    var newLine = bufStatus.buffer[windowNode.currentLine + 1]
+      oldLine = bufStatus.buffer[currentLine + 1]
+    var newLine = bufStatus.buffer[currentLine + 1]
+
     newLine &= repeat(' ', indent).toRunes
     if oldLine != newLine:
-      bufStatus.buffer[windowNode.currentLine + 1] = newLine
+      bufStatus.buffer[currentLine + 1] = newLine
 
 proc isWhiteSpaceLine(line: seq[Rune]): bool =
   result = true
@@ -263,8 +304,9 @@ proc keyEnter*(bufStatus: var BufferStatus,
   inc(windowNode.currentLine)
 
   if autoIndent:
-    windowNode.currentColumn =
-      countRepeat(bufStatus.buffer[windowNode.currentLine], Whitespace, 0)
+    block:
+      let line = bufStatus.buffer[windowNode.currentLine]
+      windowNode.currentColumn = countRepeat(line, Whitespace, 0)
 
     # Delete all characters in the previous line if only whitespaces.
     if windowNode.currentLine > 0 and
