@@ -414,24 +414,187 @@ suite "Editor: keyEnter":
                                  status.settings.tabStop)
 
 
-    check status.bufStatus[0].buffer[0] == ru"if true or"
-    check status.bufStatus[0].buffer[1] == ru"  "
+    check currentBufStatus.buffer[0] == ru"if true or"
+    check currentBufStatus.buffer[1] == ru"  "
 
   test "New line":
     var status = initEditorStatus()
     status.addNewBuffer
 
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"test "])
-    status.bufStatus[0].mode = Mode.insert
+    currentBufStatus.buffer = initGapBuffer(@[ru"test "])
+    currentBufStatus.mode = Mode.insert
     currentMainWindowNode.currentColumn = 5
 
     const isAutoIndent = true
-    status.bufStatus[0].keyEnter(currentMainWindowNode,
-                                 isAutoIndent,
-                                 status.settings.tabStop)
+    currentBufStatus.keyEnter(currentMainWindowNode,
+                              isAutoIndent,
+                              status.settings.tabStop)
 
-    check status.bufStatus[0].buffer[0] == ru"test "
-    check status.bufStatus[0].buffer[1] == ru""
+    check currentBufStatus.buffer[0] == ru"test "
+    check currentBufStatus.buffer[1] == ru""
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+  test "New line in Nim":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    currentBufStatus.buffer = initGapBuffer(@[ru"test "])
+    currentBufStatus.language = SourceLanguage.langNim
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
+
+    const isAutoIndent = true
+    currentBufStatus.keyEnter(currentMainWindowNode,
+                              isAutoIndent,
+                              status.settings.tabStop)
+
+    check currentBufStatus.buffer[0] == ru"test "
+    check currentBufStatus.buffer[1] == ru""
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+  test "New line in C":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    currentBufStatus.buffer = initGapBuffer(@[ru"test "])
+    currentBufStatus.language = SourceLanguage.langC
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
+
+    const isAutoIndent = true
+    currentBufStatus.keyEnter(currentMainWindowNode,
+                              isAutoIndent,
+                              status.settings.tabStop)
+
+    check currentBufStatus.buffer[0] == ru"test "
+    check currentBufStatus.buffer[1] == ru""
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+  test "New line in C++":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    currentBufStatus.buffer = initGapBuffer(@[ru"test "])
+    currentBufStatus.language = SourceLanguage.langCpp
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
+
+    const isAutoIndent = true
+    currentBufStatus.keyEnter(currentMainWindowNode,
+                              isAutoIndent,
+                              status.settings.tabStop)
+
+    check currentBufStatus.buffer[0] == ru"test "
+    check currentBufStatus.buffer[1] == ru""
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+  test "New line in C#":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    currentBufStatus.buffer = initGapBuffer(@[ru"test "])
+    currentBufStatus.language = SourceLanguage.langCsharp
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
+
+    const isAutoIndent = true
+    currentBufStatus.keyEnter(currentMainWindowNode,
+                              isAutoIndent,
+                              status.settings.tabStop)
+
+    check currentBufStatus.buffer[0] == ru"test "
+    check currentBufStatus.buffer[1] == ru""
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+  test "New line in Java":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    currentBufStatus.buffer = initGapBuffer(@[ru"test "])
+    currentBufStatus.language = SourceLanguage.langJava
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
+
+    const isAutoIndent = true
+    currentBufStatus.keyEnter(currentMainWindowNode,
+                              isAutoIndent,
+                              status.settings.tabStop)
+
+    check currentBufStatus.buffer[0] == ru"test "
+    check currentBufStatus.buffer[1] == ru""
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+  test "New line in JavaScript":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    currentBufStatus.buffer = initGapBuffer(@[ru"test "])
+    currentBufStatus.language = SourceLanguage.langJavaScript
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
+
+    const isAutoIndent = true
+    currentBufStatus.keyEnter(currentMainWindowNode,
+                              isAutoIndent,
+                              status.settings.tabStop)
+
+    check currentBufStatus.buffer[0] == ru"test "
+    check currentBufStatus.buffer[1] == ru""
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+  test "New line in Yaml":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    currentBufStatus.buffer = initGapBuffer(@[ru"test "])
+    currentBufStatus.language = SourceLanguage.langYaml
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
+
+    const isAutoIndent = true
+    currentBufStatus.keyEnter(currentMainWindowNode,
+                              isAutoIndent,
+                              status.settings.tabStop)
+
+    check currentBufStatus.buffer[0] == ru"test "
+    check currentBufStatus.buffer[1] == ru""
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+  test "New line in Python":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    currentBufStatus.buffer = initGapBuffer(@[ru"test "])
+    currentBufStatus.language = SourceLanguage.langPython
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
+
+    const isAutoIndent = true
+    currentBufStatus.keyEnter(currentMainWindowNode,
+                              isAutoIndent,
+                              status.settings.tabStop)
+
+    check currentBufStatus.buffer[0] == ru"test "
+    check currentBufStatus.buffer[1] == ru""
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
 
   test "Fix #1370":
     var status = initEditorStatus()
