@@ -274,7 +274,9 @@ proc insertIndetWhenPairOfParen(bufStatus: var BufferStatus,
     currentLine = windowNode.currentLine
     line = bufStatus.buffer[currentLine]
     count = countRepeat(line, Whitespace, 0) + tabStop
-    oldLine = bufStatus.buffer[windowNode.currentLine + 1]
+    openParen = line[windowNode.currentColumn - 1]
+
+  let oldLine = bufStatus.buffer[windowNode.currentLine + 1]
   var newLine = bufStatus.buffer[currentLine + 1]
   newLine &= repeat(' ', count).toRunes
   if oldLine != newLine:
@@ -283,9 +285,7 @@ proc insertIndetWhenPairOfParen(bufStatus: var BufferStatus,
   bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
 
   # Add the new line and move the close paren if finish the next line with the close paren.
-  let
-    nextLine = bufStatus.buffer[currentLine + 1]
-    openParen = line[^1]
+  let nextLine = bufStatus.buffer[currentLine + 1]
   if isCloseParen(nextLine[^1]) and
      isCorrespondingParen(openParen, nextLine[^1]):
     let closeParen = nextLine[^1]
