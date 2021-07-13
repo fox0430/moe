@@ -187,8 +187,72 @@ proc deleteBeforeCursorToFirstNonBlank*(bufStatus: var BufferStatus,
   for _ in firstNonBlank..max(0, windowNode.currentColumn-1):
     currentLineDeleteCharacterBeforeCursor(bufStatus, windowNode, false)
 
+proc isWhiteSpaceLine(line: seq[Rune]): bool =
+  result = true
+  for r in line:
+    if not isWhiteSpace(r): return false
+
+proc deleteAllCharInLine(line: var seq[Rune]) =
+  for i in 0 ..< line.len: line.delete(0)
+
+proc basicNewLine(bufStatus: var BufferStatus,
+                  windowNode: WindowNode,
+                  autoIndent: bool,
+                  tabStop: int) =
+
+  var startOfCopy = max(
+    countRepeat(bufStatus.buffer[windowNode.currentLine], Whitespace, 0),
+    windowNode.currentColumn)
+  startOfCopy += countRepeat(bufStatus.buffer[windowNode.currentLine],
+                             Whitespace, startOfCopy)
+
+  block:
+    let oldLine = bufStatus.buffer[windowNode.currentLine + 1]
+    var newLine = bufStatus.buffer[windowNode.currentLine + 1]
+
+    let
+      line = windowNode.currentLine
+      startCol = startOfCopy
+      endCol = bufStatus.buffer[windowNode.currentLine].len
+    newLine &= bufStatus.buffer[line][startCol ..< endCol]
+
+    if oldLine != newLine:
+      bufStatus.buffer[windowNode.currentLine + 1] = newLine
+
+  block:
+    let
+      first = windowNode.currentColumn
+      last = bufStatus.buffer[windowNode.currentLine].high
+    if first <= last:
+      let oldLine = bufStatus.buffer[windowNode.currentLine]
+      var newLine = bufStatus.buffer[windowNode.currentLine]
+      newLine.delete(first, last)
+      if oldLine != newLine:
+        bufStatus.buffer[windowNode.currentLine] = newLine
+
+  inc(windowNode.currentLine)
+
+  if autoIndent:
+    block:
+      let line = bufStatus.buffer[windowNode.currentLine]
+      windowNode.currentColumn = countRepeat(line, Whitespace, 0)
+
+    # Delete all characters in the previous line if only whitespaces.
+    if windowNode.currentLine > 0 and
+       isWhiteSpaceLine(bufStatus.buffer[windowNode.currentLine - 1]):
+
+      let oldLine = bufStatus.buffer[windowNode.currentLine - 1]
+      var newLine = bufStatus.buffer[windowNode.currentLine - 1]
+      newLine.deleteAllCharInLine
+      if newLine != oldLine:
+        bufStatus.buffer[windowNode.currentLine - 1] = newLine
+  else:
+    windowNode.currentColumn = 0
+    windowNode.expandedColumn = 0
+
 proc insertIndentInNim(bufStatus: var BufferStatus,
                        windowNode: WindowNode,
+                       autoIndent: bool,
                        tabStop: int) =
 
   let
@@ -233,6 +297,8 @@ proc insertIndentInNim(bufStatus: var BufferStatus,
     newLine &= repeat(' ', indent).toRunes
     if oldLine != newLine:
       bufStatus.buffer[currentLine + 1] = newLine
+
+  bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
 
 proc insertIndentInPython(bufStatus: var BufferStatus,
                           windowNode: WindowNode,
@@ -325,16 +391,36 @@ proc insertIndentInYaml(bufStatus: var BufferStatus,
       if oldLine != newLine:
         bufStatus.buffer[currentLine + 1] = newLine
 
+proc insertIndentInPlanText(bufStatus: var BufferStatus,
+                            windowNode: WindowNode,
+                            autoIndent: bool,
+                            tabStop: int) =
+
+  let
+    currentLine = windowNode.currentLine
+    count = countRepeat(bufStatus.buffer[currentLine], Whitespace, 0)
+    indent = min(count, windowNode.currentColumn)
+
+    oldLine = bufStatus.buffer[currentLine + 1]
+  var newLine = bufStatus.buffer[currentLine + 1]
+
+  newLine &= repeat(' ', indent).toRunes
+  if oldLine != newLine:
+   bufStatus.buffer[currentLine + 1] = newLine
+
+  bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
+
 # Insert indent to the next line
 proc insertIndent(bufStatus: var BufferStatus,
                   windowNode: WindowNode,
+                  autoIndent:bool,
                   tabStop: int) =
 
   let language = bufStatus.language
 
   case language:
     of SourceLanguage.langNim:
-      bufStatus.insertIndentInNim(windowNode, tabStop)
+      bufStatus.insertIndentInNim(windowNode, autoIndent, tabStop)
     of SourceLanguage.langC:
       bufStatus.insertIndentInClang(windowNode, tabStop)
     of SourceLanguage.langCpp:
@@ -350,25 +436,7 @@ proc insertIndent(bufStatus: var BufferStatus,
     of SourceLanguage.langYaml:
       bufStatus.insertIndentInYaml(windowNode, tabStop)
     else:
-      let
-        currentLine = windowNode.currentLine
-        count = countRepeat(bufStatus.buffer[currentLine], Whitespace, 0)
-        indent = min(count, windowNode.currentColumn)
-
-        oldLine = bufStatus.buffer[currentLine + 1]
-      var newLine = bufStatus.buffer[currentLine + 1]
-
-      newLine &= repeat(' ', indent).toRunes
-      if oldLine != newLine:
-        bufStatus.buffer[currentLine + 1] = newLine
-
-proc isWhiteSpaceLine(line: seq[Rune]): bool =
-  result = true
-  for r in line:
-    if not isWhiteSpace(r): return false
-
-proc deleteAllCharInLine(line: var seq[Rune]) =
-  for i in 0 ..< line.len: line.delete(0)
+      bufStatus.insertIndentInPlanText(windowNode, autoIndent, tabStop)
 
 proc keyEnter*(bufStatus: var BufferStatus,
                windowNode: WindowNode,
@@ -377,71 +445,24 @@ proc keyEnter*(bufStatus: var BufferStatus,
 
   bufStatus.buffer.insert(ru"", windowNode.currentLine + 1)
 
-  bufStatus.insertIndent(windowNode, tabStop)
-
-  var startOfCopy = max(
-    countRepeat(bufStatus.buffer[windowNode.currentLine], Whitespace, 0),
-    windowNode.currentColumn)
-  startOfCopy += countRepeat(bufStatus.buffer[windowNode.currentLine],
-                             Whitespace, startOfCopy)
-
-  block:
-    let oldLine = bufStatus.buffer[windowNode.currentLine + 1]
-    var newLine = bufStatus.buffer[windowNode.currentLine + 1]
-
-    let
-      line = windowNode.currentLine
-      startCol = startOfCopy
-      endCol = bufStatus.buffer[windowNode.currentLine].len
-    newLine &= bufStatus.buffer[line][startCol ..< endCol]
-
-    if oldLine != newLine:
-      bufStatus.buffer[windowNode.currentLine + 1] = newLine
-
-  block:
-    let
-      first = windowNode.currentColumn
-      last = bufStatus.buffer[windowNode.currentLine].high
-    if first <= last:
-      let oldLine = bufStatus.buffer[windowNode.currentLine]
-      var newLine = bufStatus.buffer[windowNode.currentLine]
-      newLine.delete(first, last)
-      if oldLine != newLine:
-        bufStatus.buffer[windowNode.currentLine] = newLine
-
-  inc(windowNode.currentLine)
-
   if autoIndent:
-    block:
-      let line = bufStatus.buffer[windowNode.currentLine]
-      windowNode.currentColumn = countRepeat(line, Whitespace, 0)
-
-    # Delete all characters in the previous line if only whitespaces.
-    if windowNode.currentLine > 0 and
-       isWhiteSpaceLine(bufStatus.buffer[windowNode.currentLine - 1]):
-
-      let oldLine = bufStatus.buffer[windowNode.currentLine - 1]
-      var newLine = bufStatus.buffer[windowNode.currentLine - 1]
-      newLine.deleteAllCharInLine
-      if newLine != oldLine:
-        bufStatus.buffer[windowNode.currentLine - 1] = newLine
+    bufStatus.insertIndent(windowNode, autoIndent, tabStop)
   else:
-    windowNode.currentColumn = 0
-    windowNode.expandedColumn = 0
+    bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
 
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
 
 proc insertTab*(bufStatus: var BufferStatus,
-               windowNode: WindowNode,
-               tabStop: int,
-               autoCloseParen: bool) {.inline.} =
+                windowNode: WindowNode,
+                tabStop: int,
+                autoCloseParen: bool) {.inline.} =
 
   for i in 0 ..< tabStop:
     insertCharacter(bufStatus, windowNode, autoCloseParen, ru' ')
 
 proc insertCharacterBelowCursor*(bufStatus: var BufferStatus,
-                              windowNode: WindowNode) =
+                                 windowNode: WindowNode) =
 
   let
     currentLine = windowNode.currentLine
@@ -462,7 +483,7 @@ proc insertCharacterBelowCursor*(bufStatus: var BufferStatus,
     inc windowNode.currentColumn
 
 proc insertCharacterAboveCursor*(bufStatus: var BufferStatus,
-                              windowNode: WindowNode) =
+                                 windowNode: WindowNode) =
 
   let
     currentLine = windowNode.currentLine
