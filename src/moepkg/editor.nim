@@ -347,6 +347,7 @@ proc insertIndentInPython(bufStatus: var BufferStatus,
 
 proc insertIndentInClang(bufStatus: var BufferStatus,
                          windowNode: WindowNode,
+                         autoIndent: bool,
                          tabStop: int) =
 
   let
@@ -354,9 +355,9 @@ proc insertIndentInClang(bufStatus: var BufferStatus,
     currentColumn = windowNode.currentColumn
     line = bufStatus.buffer[currentLine]
 
-  if line.len > 0:
+  if currentColumn > 0 :
     # if previous col is the unclosed paren.
-    if currentColumn > 0 and isOpenParen(line[currentColumn - 1]):
+    if line.len > 0 and isOpenParen(line[currentColumn - 1]):
       let
         count = countRepeat(line, Whitespace, 0) + tabStop
         oldLine = bufStatus.buffer[windowNode.currentLine + 1]
@@ -364,17 +365,39 @@ proc insertIndentInClang(bufStatus: var BufferStatus,
       newLine &= repeat(' ', count).toRunes
       if oldLine != newLine:
         bufStatus.buffer[currentLine + 1] = newLine
+
+      bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
+
+      # Add the new line and move '}' if finish the next line with '}'.
+      let nextLine = bufStatus.buffer[currentLine + 1]
+      if nextLine[^1] == ru '}':
+        # Delete '}' in the nextLine
+        block:
+          let oldLine = nextLine
+          var newLine = nextLine
+          newLine = oldLine[0 .. newLine.high - 1]
+          if oldLine != newLine:
+            bufStatus.buffer[currentLine + 1] = newLine
+        # Add '}' in the buffer[nextLine + 1]
+        block:
+          let count = countRepeat(line, Whitespace, 0)
+          var newLine = repeat(' ', count).toRunes & ru "}"
+          bufStatus.buffer.insert(newLine, windowNode.currentLine + 1)
+    else:
+      let
+        count = countRepeat(bufStatus.buffer[currentLine], Whitespace, 0)
+        indent = min(count, windowNode.currentColumn)
+
+        oldLine = bufStatus.buffer[currentLine + 1]
+      var newLine = bufStatus.buffer[currentLine + 1]
+
+      newLine &= repeat(' ', indent).toRunes
+      if oldLine != newLine:
+        bufStatus.buffer[currentLine + 1] = newLine
+
+      bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
   else:
-    let
-      count = countRepeat(bufStatus.buffer[currentLine], Whitespace, 0)
-      indent = min(count, windowNode.currentColumn)
-
-      oldLine = bufStatus.buffer[currentLine + 1]
-    var newLine = bufStatus.buffer[currentLine + 1]
-
-    newLine &= repeat(' ', indent).toRunes
-    if oldLine != newLine:
-      bufStatus.buffer[currentLine + 1] = newLine
+      bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
 
 proc insertIndentInYaml(bufStatus: var BufferStatus,
                         windowNode: WindowNode,
@@ -429,15 +452,15 @@ proc insertIndent(bufStatus: var BufferStatus,
     of SourceLanguage.langNim:
       bufStatus.insertIndentInNim(windowNode, autoIndent, tabStop)
     of SourceLanguage.langC:
-      bufStatus.insertIndentInClang(windowNode, tabStop)
+      bufStatus.insertIndentInClang(windowNode, autoIndent, tabStop)
     of SourceLanguage.langCpp:
-      bufStatus.insertIndentInClang(windowNode, tabStop)
+      bufStatus.insertIndentInClang(windowNode, autoIndent, tabStop)
     of SourceLanguage.langCsharp:
-      bufStatus.insertIndentInClang(windowNode, tabStop)
+      bufStatus.insertIndentInClang(windowNode, autoIndent, tabStop)
     of SourceLanguage.langJava:
-      bufStatus.insertIndentInClang(windowNode, tabStop)
+      bufStatus.insertIndentInClang(windowNode, autoIndent, tabStop)
     of SourceLanguage.langJavaScript:
-      bufStatus.insertIndentInClang(windowNode, tabStop)
+      bufStatus.insertIndentInClang(windowNode, autoIndent, tabStop)
     of SourceLanguage.langPython:
       bufStatus.insertIndentInPython(windowNode, autoIndent, tabStop)
     of SourceLanguage.langYaml:
