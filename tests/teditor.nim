@@ -150,7 +150,7 @@ suite "Editor: keyEnter":
       of SourceLanguage.langMarkDown:
         "Markdown"
       else:
-        "Plan text"
+        "Plain text"
 
   # Generate test code
   # Enable/Disable autoindent

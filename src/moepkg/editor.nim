@@ -432,10 +432,10 @@ proc insertIndentInYaml(bufStatus: var BufferStatus,
 
   bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
 
-proc insertIndentInPlanText(bufStatus: var BufferStatus,
-                            windowNode: WindowNode,
-                            autoIndent: bool,
-                            tabStop: int) =
+proc insertIndentInPlainText(bufStatus: var BufferStatus,
+                             windowNode: WindowNode,
+                             autoIndent: bool,
+                             tabStop: int) =
 
   let
     currentLine = windowNode.currentLine
@@ -477,7 +477,7 @@ proc insertIndent(bufStatus: var BufferStatus,
     of SourceLanguage.langYaml:
       bufStatus.insertIndentInYaml(windowNode, autoIndent, tabStop)
     else:
-      bufStatus.insertIndentInPlanText(windowNode, autoIndent, tabStop)
+      bufStatus.insertIndentInPlainText(windowNode, autoIndent, tabStop)
 
 proc keyEnter*(bufStatus: var BufferStatus,
                windowNode: WindowNode,
