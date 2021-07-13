@@ -251,6 +251,20 @@ proc basicNewLine(bufStatus: var BufferStatus,
     windowNode.currentColumn = 0
     windowNode.expandedColumn = 0
 
+proc basicInsrtIndent(bufStatus: var BufferStatus,
+                      windowNode: WindowNode) =
+
+  let
+    currentLine = windowNode.currentLine
+    count = countRepeat(bufStatus.buffer[currentLine], Whitespace, 0)
+    indent = min(count, windowNode.currentColumn)
+
+    oldLine = bufStatus.buffer[currentLine + 1]
+  var newLine = bufStatus.buffer[currentLine + 1]
+
+  newLine &= repeat(' ', indent).toRunes
+  if oldLine != newLine:
+        bufStatus.buffer[currentLine + 1] = newLine
 proc insertIndentInNim(bufStatus: var BufferStatus,
                        windowNode: WindowNode,
                        autoIndent: bool,
@@ -287,17 +301,10 @@ proc insertIndentInNim(bufStatus: var BufferStatus,
       newLine &= repeat(' ', count).toRunes
       if oldLine != newLine:
         bufStatus.buffer[currentLine + 1] = newLine
+    else:
+      bufStatus.basicInsrtIndent(windowNode)
   else:
-    let
-      count = countRepeat(bufStatus.buffer[currentLine], Whitespace, 0)
-      indent = min(count, windowNode.currentColumn)
-
-      oldLine = bufStatus.buffer[currentLine + 1]
-    var newLine = bufStatus.buffer[currentLine + 1]
-
-    newLine &= repeat(' ', indent).toRunes
-    if oldLine != newLine:
-      bufStatus.buffer[currentLine + 1] = newLine
+    bufStatus.basicInsrtIndent(windowNode)
 
   bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
 
@@ -332,16 +339,7 @@ proc insertIndentInPython(bufStatus: var BufferStatus,
       if oldLine != newLine:
         bufStatus.buffer[currentLine + 1] = newLine
   else:
-    let
-      count = countRepeat(bufStatus.buffer[currentLine], Whitespace, 0)
-      indent = min(count, windowNode.currentColumn)
-
-      oldLine = bufStatus.buffer[currentLine + 1]
-    var newLine = bufStatus.buffer[currentLine + 1]
-
-    newLine &= repeat(' ', indent).toRunes
-    if oldLine != newLine:
-      bufStatus.buffer[currentLine + 1] = newLine
+    bufStatus.basicInsrtIndent(windowNode)
 
   bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
 
@@ -384,17 +382,7 @@ proc insertIndentInClang(bufStatus: var BufferStatus,
           var newLine = repeat(' ', count).toRunes & ru "}"
           bufStatus.buffer.insert(newLine, windowNode.currentLine + 1)
     else:
-      let
-        count = countRepeat(bufStatus.buffer[currentLine], Whitespace, 0)
-        indent = min(count, windowNode.currentColumn)
-
-        oldLine = bufStatus.buffer[currentLine + 1]
-      var newLine = bufStatus.buffer[currentLine + 1]
-
-      newLine &= repeat(' ', indent).toRunes
-      if oldLine != newLine:
-        bufStatus.buffer[currentLine + 1] = newLine
-
+      bufStatus.basicInsrtIndent(windowNode)
       bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
   else:
       bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
