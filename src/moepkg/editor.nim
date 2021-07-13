@@ -265,6 +265,43 @@ proc basicInsrtIndent(bufStatus: var BufferStatus,
   newLine &= repeat(' ', indent).toRunes
   if oldLine != newLine:
         bufStatus.buffer[currentLine + 1] = newLine
+
+proc insertIndetWhenPairOfParen(bufStatus: var BufferStatus,
+                                windowNode: WindowNode,
+                                autoIndent: bool,
+                                tabStop: int) =
+  let
+    currentLine = windowNode.currentLine
+    line = bufStatus.buffer[currentLine]
+    count = countRepeat(line, Whitespace, 0) + tabStop
+    oldLine = bufStatus.buffer[windowNode.currentLine + 1]
+  var newLine = bufStatus.buffer[currentLine + 1]
+  newLine &= repeat(' ', count).toRunes
+  if oldLine != newLine:
+    bufStatus.buffer[currentLine + 1] = newLine
+
+  bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
+
+  # Add the new line and move the close paren if finish the next line with the close paren.
+  let
+    nextLine = bufStatus.buffer[currentLine + 1]
+    openParen = line[^1]
+  if isCloseParen(nextLine[^1]) and
+     isCorrespondingParen(openParen, nextLine[^1]):
+    let closeParen = nextLine[^1]
+    # Delete the close paren in the nextLine
+    block:
+      let oldLine = nextLine
+      var newLine = nextLine
+      newLine = oldLine[0 .. newLine.high - 1]
+      if oldLine != newLine:
+        bufStatus.buffer[currentLine + 1] = newLine
+    # Add the close paren in the buffer[nextLine + 1]
+    block:
+      let count = countRepeat(line, Whitespace, 0)
+      var newLine = repeat(' ', count).toRunes & closeParen
+      bufStatus.buffer.insert(newLine, windowNode.currentLine + 1)
+
 proc insertIndentInNim(bufStatus: var BufferStatus,
                        windowNode: WindowNode,
                        autoIndent: bool,
@@ -272,16 +309,16 @@ proc insertIndentInNim(bufStatus: var BufferStatus,
 
   let
     currentLine = windowNode.currentLine
+    currentColumn = windowNode.currentColumn
     line = bufStatus.buffer[currentLine]
 
   if line.len > 0:
     # Auto indent if the current line are "var", "let", "const".
-    # And, if finish the current line with ':', "object", the unclosed paren.
+    # And, if finish the current line with ':', "object"
     if line.splitWhitespace == @[ru "var"] or
        line.splitWhitespace == @[ru "let"] or
        line.splitWhitespace == @[ru "const"] or
        (line.len > 6 and line[line.len - 6 .. ^1] == ru "object") or
-       isOpenParen(line[^1]) or
        line[^1] == ru ':':
       let
         count = countRepeat(line, Whitespace, 0) + tabStop
@@ -291,7 +328,9 @@ proc insertIndentInNim(bufStatus: var BufferStatus,
       if oldLine != newLine:
         bufStatus.buffer[currentLine + 1] = newLine
 
-    # Auto indent if finish the current line with "or" and "and" in Nim
+      bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
+
+    # Auto indent if finish the current line with "or", "and"
     elif (line.len > 2 and line[line.len - 2 .. ^1] == ru "or") or
          (line.len > 3 and line[line.len - 3 .. ^1] == ru "and"):
       let
@@ -301,12 +340,18 @@ proc insertIndentInNim(bufStatus: var BufferStatus,
       newLine &= repeat(' ', count).toRunes
       if oldLine != newLine:
         bufStatus.buffer[currentLine + 1] = newLine
+
+      bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
+
+    # if previous col is the unclosed paren.
+    elif currentColumn > 0 and isOpenParen(line[currentColumn - 1]):
+      bufStatus.insertIndetWhenPairOfParen(windowNode, autoIndent, tabStop)
     else:
       bufStatus.basicInsrtIndent(windowNode)
+      bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
   else:
     bufStatus.basicInsrtIndent(windowNode)
-
-  bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
+    bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
 
 proc insertIndentInPython(bufStatus: var BufferStatus,
                           windowNode: WindowNode,
@@ -356,31 +401,7 @@ proc insertIndentInClang(bufStatus: var BufferStatus,
   if currentColumn > 0 :
     # if previous col is the unclosed paren.
     if line.len > 0 and isOpenParen(line[currentColumn - 1]):
-      let
-        count = countRepeat(line, Whitespace, 0) + tabStop
-        oldLine = bufStatus.buffer[windowNode.currentLine + 1]
-      var newLine = bufStatus.buffer[currentLine + 1]
-      newLine &= repeat(' ', count).toRunes
-      if oldLine != newLine:
-        bufStatus.buffer[currentLine + 1] = newLine
-
-      bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
-
-      # Add the new line and move '}' if finish the next line with '}'.
-      let nextLine = bufStatus.buffer[currentLine + 1]
-      if nextLine[^1] == ru '}':
-        # Delete '}' in the nextLine
-        block:
-          let oldLine = nextLine
-          var newLine = nextLine
-          newLine = oldLine[0 .. newLine.high - 1]
-          if oldLine != newLine:
-            bufStatus.buffer[currentLine + 1] = newLine
-        # Add '}' in the buffer[nextLine + 1]
-        block:
-          let count = countRepeat(line, Whitespace, 0)
-          var newLine = repeat(' ', count).toRunes & ru "}"
-          bufStatus.buffer.insert(newLine, windowNode.currentLine + 1)
+      bufStatus.insertIndetWhenPairOfParen(windowNode, autoIndent, tabStop)
     else:
       bufStatus.basicInsrtIndent(windowNode)
       bufStatus.basicNewLine(windowNode, autoIndent, tabStop)

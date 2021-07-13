@@ -269,6 +269,16 @@ proc correspondingCloseParen*(r: Rune): Rune =
   of ru'\'': return ru'\''
   else: doAssert(false, fmt"Invalid parentheses: {r}")
 
+proc isCorrespondingParen*(openParen, closeParen: Rune): bool =
+  let
+    open = char(openParen)
+    close = char(closeParen)
+  if (open == '(' and close == ')') or
+     (open == '{' and close == '}') or
+     (open == '[' and close == ']') or
+     (open == '"' and close == '\"') or
+     (open == '\'' and close == '\''): return true
+
 proc isOpenParen*(r: Rune): bool =
   case r
   of ru'(', ru'{', ru'[', ru'\"', ru'\'': return true
