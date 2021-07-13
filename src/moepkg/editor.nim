@@ -216,7 +216,7 @@ proc insertIndentInNim(bufStatus: var BufferStatus,
     elif (line.len > 2 and line[line.len - 2 .. ^1] == ru "or") or
          (line.len > 3 and line[line.len - 3 .. ^1] == ru "and"):
       let
-        count = countRepeat(line, Whitespace, 0)
+        count = countRepeat(line, Whitespace, 0) + tabStop
         oldLine = bufStatus.buffer[windowNode.currentLine + 1]
       var newLine = bufStatus.buffer[currentLine + 1]
       newLine &= repeat(' ', count).toRunes
