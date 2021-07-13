@@ -214,6 +214,7 @@ proc basicNewLine(bufStatus: var BufferStatus,
       line = windowNode.currentLine
       startCol = startOfCopy
       endCol = bufStatus.buffer[windowNode.currentLine].len
+
     newLine &= bufStatus.buffer[line][startCol ..< endCol]
 
     if oldLine != newLine:
@@ -373,8 +374,9 @@ proc insertIndentInClang(bufStatus: var BufferStatus,
       bufStatus.buffer[currentLine + 1] = newLine
 
 proc insertIndentInYaml(bufStatus: var BufferStatus,
-                          windowNode: WindowNode,
-                          tabStop: int) =
+                        windowNode: WindowNode,
+                        autoIndent: bool,
+                        tabStop: int) =
 
   let
     currentLine = windowNode.currentLine
@@ -390,6 +392,8 @@ proc insertIndentInYaml(bufStatus: var BufferStatus,
       newLine &= repeat(' ', count).toRunes
       if oldLine != newLine:
         bufStatus.buffer[currentLine + 1] = newLine
+
+  bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
 
 proc insertIndentInPlanText(bufStatus: var BufferStatus,
                             windowNode: WindowNode,
@@ -434,7 +438,7 @@ proc insertIndent(bufStatus: var BufferStatus,
     of SourceLanguage.langPython:
       bufStatus.insertIndentInPython(windowNode, tabStop)
     of SourceLanguage.langYaml:
-      bufStatus.insertIndentInYaml(windowNode, tabStop)
+      bufStatus.insertIndentInYaml(windowNode, autoIndent, tabStop)
     else:
       bufStatus.insertIndentInPlanText(windowNode, autoIndent, tabStop)
 
