@@ -303,6 +303,7 @@ proc insertIndentInNim(bufStatus: var BufferStatus,
 
 proc insertIndentInPython(bufStatus: var BufferStatus,
                           windowNode: WindowNode,
+                          autoIndent: bool,
                           tabStop: int) =
 
   let
@@ -341,6 +342,8 @@ proc insertIndentInPython(bufStatus: var BufferStatus,
     newLine &= repeat(' ', indent).toRunes
     if oldLine != newLine:
       bufStatus.buffer[currentLine + 1] = newLine
+
+  bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
 
 proc insertIndentInClang(bufStatus: var BufferStatus,
                          windowNode: WindowNode,
@@ -436,7 +439,7 @@ proc insertIndent(bufStatus: var BufferStatus,
     of SourceLanguage.langJavaScript:
       bufStatus.insertIndentInClang(windowNode, tabStop)
     of SourceLanguage.langPython:
-      bufStatus.insertIndentInPython(windowNode, tabStop)
+      bufStatus.insertIndentInPython(windowNode, autoIndent, tabStop)
     of SourceLanguage.langYaml:
       bufStatus.insertIndentInYaml(windowNode, autoIndent, tabStop)
     else:
