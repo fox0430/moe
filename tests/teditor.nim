@@ -1,4 +1,4 @@
-import unittest
+import unittest, macros
 import moepkg/register
 include moepkg/[editor, editorstatus, ui, platform]
 
@@ -107,6 +107,226 @@ suite "Editor: keyEnter":
     check status.bufStatus[0].buffer[2] == ru""
     check status.bufStatus[0].buffer[3] == ru"  "
 
+  test "Fix #1370":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    currentBufStatus.buffer = initGapBuffer(@[ru""])
+    currentBufStatus.mode = Mode.insert
+
+    const isAutoIndent = false
+    currentBufStatus.keyEnter(
+      currentMainWindowNode,
+      isAutoIndent,
+      status.settings.tabStop)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer[1] == ru ""
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+  proc sourceLangToStr(lang: SourceLanguage): string =
+    case lang:
+      of SourceLanguage.langNim:
+        "Nim"
+      of SourceLanguage.langC:
+        "C"
+      of SourceLanguage.langCpp:
+        "C++"
+      of SourceLanguage.langCsharp:
+        "C#"
+      of SourceLanguage.langJava:
+        "Java"
+      of SourceLanguage.langYaml:
+        "Yaml"
+      of SourceLanguage.langPython:
+        "Python"
+      of SourceLanguage.langJavaScript:
+        "JavaScript"
+      of SourceLanguage.langShell:
+        "Shell"
+      of SourceLanguage.langMarkDown:
+        "Markdown"
+      else:
+        "Plan text"
+
+  # Generate test code
+  # Enable/Disable autoindent and New line in some languages
+  macro newLineTestCase1(lang: SourceLanguage, isAutoIndent: bool): untyped =
+    quote do:
+      # Generate test title
+      let
+        langStr = sourceLangToStr(`lang`)
+        testTitle = if `isAutoIndent`: "Case 1: Enable autoindent: New line in " & langStr
+                    else: "Case 1: Disable autoindent: New line in " & langStr
+
+      # Generate test code
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBuffer
+
+        status.bufStatus[0].buffer = initGapBuffer(@[ru"test"])
+        status.bufStatus[0].language = `lang`
+        status.bufStatus[0].mode = Mode.insert
+
+        block:
+          let buffer = status.bufStatus[0].buffer
+          status.mainWindow.currentMainWindowNode.currentColumn = buffer[0].len
+
+        const isAutoIndent = `isAutoIndent`
+        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
+                                     isAutoIndent,
+                                     status.settings.tabStop)
+
+        let currentBufStatus = status.bufStatus[0]
+        check currentBufStatus.buffer.len == 2
+        check currentBufStatus.buffer[0] == ru"test"
+        check currentBufStatus.buffer[1] == ru""
+
+        let currentMainWindowNode = status.mainWindow.currentMainWindowNode
+        check currentMainWindowNode.currentLine == 1
+        check currentMainWindowNode.currentColumn == 0
+
+  # Generate test code by macro
+  for l in SourceLanguage:
+    block:
+      const isAutoIndent = false
+      newLineTestCase1(l, isAutoIndent)
+    block:
+      const isAutoIndent = true
+      newLineTestCase1(l, isAutoIndent)
+
+  # Generate test code
+  # Enable/Disable autoindent and New line in some languages
+  macro newLineTestCase2(lang: SourceLanguage, isAutoIndent: bool): untyped =
+    quote do:
+      # Generate test title
+      let
+        langStr = sourceLangToStr(`lang`)
+        testTitle = if `isAutoIndent`: "Case 2: Enable autoindent: New line in " & langStr
+                    else: "Case 2: Disable autoindent: New line in " & langStr
+
+      # Generate test code
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBuffer
+
+        status.bufStatus[0].buffer = initGapBuffer(@[ru"test"])
+        status.bufStatus[0].language = `lang`
+        status.bufStatus[0].mode = Mode.insert
+
+        status.mainWindow.currentMainWindowNode.currentColumn = 2
+
+        const isAutoIndent = `isAutoIndent`
+        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
+                                     isAutoIndent,
+                                     status.settings.tabStop)
+
+        let currentBufStatus = status.bufStatus[0]
+        check currentBufStatus.buffer.len == 2
+        check currentBufStatus.buffer[0] == ru"te"
+        check currentBufStatus.buffer[1] == ru"st"
+
+        let currentMainWindowNode = status.mainWindow.currentMainWindowNode
+        check currentMainWindowNode.currentLine == 1
+        check currentMainWindowNode.currentColumn == 0
+
+  # Generate test code by macro
+  for l in SourceLanguage:
+    block:
+      const isAutoIndent = false
+      newLineTestCase2(l, isAutoIndent)
+    block:
+      const isAutoIndent = true
+      newLineTestCase2(l, isAutoIndent)
+
+  # Generate test code
+  # Enable/Disable autoindent and New line in some languages
+  macro newLineTestCase3(lang: SourceLanguage, isAutoIndent: bool): untyped =
+    quote do:
+      # Generate test title
+      let
+        langStr = sourceLangToStr(`lang`)
+        testTitle = if `isAutoIndent`: "Case 3: Enable autoindent: New line in " & langStr
+                    else: "Case 3: Disable autoindent: New line in " & langStr
+
+      # Generate test code
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBuffer
+
+        status.bufStatus[0].buffer = initGapBuffer(@[ru"test"])
+        status.bufStatus[0].language = `lang`
+        status.bufStatus[0].mode = Mode.insert
+
+        const isAutoIndent = `isAutoIndent`
+        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
+                                     isAutoIndent,
+                                     status.settings.tabStop)
+
+        let currentBufStatus = status.bufStatus[0]
+        check currentBufStatus.buffer.len == 2
+        check currentBufStatus.buffer[0] == ru""
+        check currentBufStatus.buffer[1] == ru"test"
+
+        let currentMainWindowNode = status.mainWindow.currentMainWindowNode
+        check currentMainWindowNode.currentLine == 1
+        check currentMainWindowNode.currentColumn == 0
+
+  # Generate test code by macro
+  for l in SourceLanguage:
+    block:
+      const isAutoIndent = false
+      newLineTestCase3(l, isAutoIndent)
+    block:
+      const isAutoIndent = true
+      newLineTestCase3(l, isAutoIndent)
+
+  # Generate test code
+  # Enable/Disable autoindent and New line in some languages
+  macro newLineTestCase4(lang: SourceLanguage, isAutoIndent: bool): untyped =
+    quote do:
+      # Generate test title
+      let
+        langStr = sourceLangToStr(`lang`)
+        testTitle = if `isAutoIndent`: "Case 4: Enable autoindent: New line in " & langStr
+                    else: "Case 4: Disable autoindent: New line in " & langStr
+
+      # Generate test code
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBuffer
+
+        status.bufStatus[0].buffer = initGapBuffer(@[ru""])
+        status.bufStatus[0].language = `lang`
+        status.bufStatus[0].mode = Mode.insert
+
+        const isAutoIndent = `isAutoIndent`
+        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
+                                     isAutoIndent,
+                                     status.settings.tabStop)
+
+        let currentBufStatus = status.bufStatus[0]
+        check currentBufStatus.buffer.len == 2
+        check currentBufStatus.buffer[0] == ru""
+        check currentBufStatus.buffer[1] == ru""
+
+        let currentMainWindowNode = status.mainWindow.currentMainWindowNode
+        check currentMainWindowNode.currentLine == 1
+        check currentMainWindowNode.currentColumn == 0
+
+  # Generate test code by macro
+  for l in SourceLanguage:
+    block:
+      const isAutoIndent = false
+      newLineTestCase4(l, isAutoIndent)
+    block:
+      const isAutoIndent = true
+      newLineTestCase4(l, isAutoIndent)
+
+suite "Editor: keyEnter and autoindent in Nim":
   test "Auto indent if finish th current line with ':' in Nim":
     var status = initEditorStatus()
     status.addNewBuffer
@@ -363,6 +583,7 @@ suite "Editor: keyEnter":
     check status.bufStatus[0].buffer[0] == ru"test:"
     check status.bufStatus[0].buffer[1] == ru"  "
 
+suite "Editor: keyEnter and autoindent in Python":
   test "Auto indent if finish th current line with ':' in Python":
     var status = initEditorStatus()
     status.addNewBuffer
@@ -416,205 +637,6 @@ suite "Editor: keyEnter":
 
     check currentBufStatus.buffer[0] == ru"if true or"
     check currentBufStatus.buffer[1] == ru"  "
-
-  test "New line":
-    var status = initEditorStatus()
-    status.addNewBuffer
-
-    currentBufStatus.buffer = initGapBuffer(@[ru"test "])
-    currentBufStatus.mode = Mode.insert
-    currentMainWindowNode.currentColumn = 5
-
-    const isAutoIndent = true
-    currentBufStatus.keyEnter(currentMainWindowNode,
-                              isAutoIndent,
-                              status.settings.tabStop)
-
-    check currentBufStatus.buffer[0] == ru"test "
-    check currentBufStatus.buffer[1] == ru""
-
-    check currentMainWindowNode.currentLine == 1
-    check currentMainWindowNode.currentColumn == 0
-
-  test "New line in Nim":
-    var status = initEditorStatus()
-    status.addNewBuffer
-
-    currentBufStatus.buffer = initGapBuffer(@[ru"test "])
-    currentBufStatus.language = SourceLanguage.langNim
-    currentBufStatus.mode = Mode.insert
-    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
-
-    const isAutoIndent = true
-    currentBufStatus.keyEnter(currentMainWindowNode,
-                              isAutoIndent,
-                              status.settings.tabStop)
-
-    check currentBufStatus.buffer[0] == ru"test "
-    check currentBufStatus.buffer[1] == ru""
-
-    check currentMainWindowNode.currentLine == 1
-    check currentMainWindowNode.currentColumn == 0
-
-  test "New line in C":
-    var status = initEditorStatus()
-    status.addNewBuffer
-
-    currentBufStatus.buffer = initGapBuffer(@[ru"test "])
-    currentBufStatus.language = SourceLanguage.langC
-    currentBufStatus.mode = Mode.insert
-    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
-
-    const isAutoIndent = true
-    currentBufStatus.keyEnter(currentMainWindowNode,
-                              isAutoIndent,
-                              status.settings.tabStop)
-
-    check currentBufStatus.buffer[0] == ru"test "
-    check currentBufStatus.buffer[1] == ru""
-
-    check currentMainWindowNode.currentLine == 1
-    check currentMainWindowNode.currentColumn == 0
-
-  test "New line in C++":
-    var status = initEditorStatus()
-    status.addNewBuffer
-
-    currentBufStatus.buffer = initGapBuffer(@[ru"test "])
-    currentBufStatus.language = SourceLanguage.langCpp
-    currentBufStatus.mode = Mode.insert
-    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
-
-    const isAutoIndent = true
-    currentBufStatus.keyEnter(currentMainWindowNode,
-                              isAutoIndent,
-                              status.settings.tabStop)
-
-    check currentBufStatus.buffer[0] == ru"test "
-    check currentBufStatus.buffer[1] == ru""
-
-    check currentMainWindowNode.currentLine == 1
-    check currentMainWindowNode.currentColumn == 0
-
-  test "New line in C#":
-    var status = initEditorStatus()
-    status.addNewBuffer
-
-    currentBufStatus.buffer = initGapBuffer(@[ru"test "])
-    currentBufStatus.language = SourceLanguage.langCsharp
-    currentBufStatus.mode = Mode.insert
-    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
-
-    const isAutoIndent = true
-    currentBufStatus.keyEnter(currentMainWindowNode,
-                              isAutoIndent,
-                              status.settings.tabStop)
-
-    check currentBufStatus.buffer[0] == ru"test "
-    check currentBufStatus.buffer[1] == ru""
-
-    check currentMainWindowNode.currentLine == 1
-    check currentMainWindowNode.currentColumn == 0
-
-  test "New line in Java":
-    var status = initEditorStatus()
-    status.addNewBuffer
-
-    currentBufStatus.buffer = initGapBuffer(@[ru"test "])
-    currentBufStatus.language = SourceLanguage.langJava
-    currentBufStatus.mode = Mode.insert
-    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
-
-    const isAutoIndent = true
-    currentBufStatus.keyEnter(currentMainWindowNode,
-                              isAutoIndent,
-                              status.settings.tabStop)
-
-    check currentBufStatus.buffer[0] == ru"test "
-    check currentBufStatus.buffer[1] == ru""
-
-    check currentMainWindowNode.currentLine == 1
-    check currentMainWindowNode.currentColumn == 0
-
-  test "New line in JavaScript":
-    var status = initEditorStatus()
-    status.addNewBuffer
-
-    currentBufStatus.buffer = initGapBuffer(@[ru"test "])
-    currentBufStatus.language = SourceLanguage.langJavaScript
-    currentBufStatus.mode = Mode.insert
-    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
-
-    const isAutoIndent = true
-    currentBufStatus.keyEnter(currentMainWindowNode,
-                              isAutoIndent,
-                              status.settings.tabStop)
-
-    check currentBufStatus.buffer[0] == ru"test "
-    check currentBufStatus.buffer[1] == ru""
-
-    check currentMainWindowNode.currentLine == 1
-    check currentMainWindowNode.currentColumn == 0
-
-  test "New line in Yaml":
-    var status = initEditorStatus()
-    status.addNewBuffer
-
-    currentBufStatus.buffer = initGapBuffer(@[ru"test "])
-    currentBufStatus.language = SourceLanguage.langYaml
-    currentBufStatus.mode = Mode.insert
-    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
-
-    const isAutoIndent = true
-    currentBufStatus.keyEnter(currentMainWindowNode,
-                              isAutoIndent,
-                              status.settings.tabStop)
-
-    check currentBufStatus.buffer[0] == ru"test "
-    check currentBufStatus.buffer[1] == ru""
-
-    check currentMainWindowNode.currentLine == 1
-    check currentMainWindowNode.currentColumn == 0
-
-  test "New line in Python":
-    var status = initEditorStatus()
-    status.addNewBuffer
-
-    currentBufStatus.buffer = initGapBuffer(@[ru"test "])
-    currentBufStatus.language = SourceLanguage.langPython
-    currentBufStatus.mode = Mode.insert
-    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
-
-    const isAutoIndent = true
-    currentBufStatus.keyEnter(currentMainWindowNode,
-                              isAutoIndent,
-                              status.settings.tabStop)
-
-    check currentBufStatus.buffer[0] == ru"test "
-    check currentBufStatus.buffer[1] == ru""
-
-    check currentMainWindowNode.currentLine == 1
-    check currentMainWindowNode.currentColumn == 0
-
-  test "Fix #1370":
-    var status = initEditorStatus()
-    status.addNewBuffer
-
-    currentBufStatus.buffer = initGapBuffer(@[ru""])
-    currentBufStatus.mode = Mode.insert
-
-    const isAutoIndent = false
-    currentBufStatus.keyEnter(
-      currentMainWindowNode,
-      isAutoIndent,
-      status.settings.tabStop)
-
-    check currentBufStatus.buffer.len == 2
-    check currentBufStatus.buffer[0] == ru ""
-    check currentBufStatus.buffer[1] == ru ""
-
-    check currentMainWindowNode.currentLine == 1
-    check currentMainWindowNode.currentColumn == 0
 
 suite "Delete character before cursor":
   test "Delete one character":
