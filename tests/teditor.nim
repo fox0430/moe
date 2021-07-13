@@ -512,28 +512,6 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     const keyword = "object"
     newLineTestInNimCase3(keyword)
 
-  test "Auto indent if finish the current line with the unclosed paren in Nim":
-    var status = initEditorStatus()
-    status.addNewBuffer
-
-    currentBufStatus.buffer = initGapBuffer(@[ru"test("])
-    currentBufStatus.language = SourceLanguage.langNim
-    currentBufStatus.mode = Mode.insert
-    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
-
-    const isAutoIndent = true
-    currentBufStatus.keyEnter(
-      currentMainWindowNode,
-      isAutoIndent,
-      status.settings.tabStop)
-
-    check currentBufStatus.buffer.len == 2
-    check currentBufStatus.buffer[0] == ru "test("
-    check currentBufStatus.buffer[1] == ru "  "
-
-    check currentMainWindowNode.currentLine == 1
-    check currentMainWindowNode.currentColumn == status.settings.tabStop
-
 suite "Editor: keyEnter: Enable autoindent in Yaml":
   test "Auto indent if finish th current line with ':' in Yaml":
     var status = initEditorStatus()
