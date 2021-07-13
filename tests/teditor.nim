@@ -107,11 +107,12 @@ suite "Editor: keyEnter":
     check status.bufStatus[0].buffer[2] == ru""
     check status.bufStatus[0].buffer[3] == ru"  "
 
-  test "Auto indent if finish a previous line with ':'":
+  test "Auto indent if finish th current line with ':' in Nim":
     var status = initEditorStatus()
     status.addNewBuffer
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"block:"])
+    currentBufStatus.language = SourceLanguage.langNim
     status.bufStatus[0].mode = Mode.insert
     currentMainWindowNode.currentColumn = 6
 
@@ -123,6 +124,204 @@ suite "Editor: keyEnter":
 
     check status.bufStatus[0].buffer[0] == ru"block:"
     check status.bufStatus[0].buffer[1] == ru"  "
+
+  test "Auto indent if the current line is \"var\" in Nim":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    currentBufStatus.buffer = initGapBuffer(@[ru"var"])
+    currentBufStatus.language = SourceLanguage.langNim
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
+
+    const isAutoIndent = true
+    currentBufStatus.keyEnter(
+      currentMainWindowNode,
+      isAutoIndent,
+      status.settings.tabStop)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "var"
+    check currentBufStatus.buffer[1] == ru "  "
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == status.settings.tabStop
+
+  test "Auto indent if the current line is \"var\" in Nim 2":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    currentBufStatus.buffer = initGapBuffer(@[ru"  var"])
+    currentBufStatus.language = SourceLanguage.langNim
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
+
+    const isAutoIndent = true
+    currentBufStatus.keyEnter(
+      currentMainWindowNode,
+      isAutoIndent,
+      status.settings.tabStop)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "  var"
+    check currentBufStatus.buffer[1] == ru "    "
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == status.settings.tabStop * 2
+
+  test "Auto indent if the current line is \"let\" in Nim":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    currentBufStatus.buffer = initGapBuffer(@[ru"let"])
+    currentBufStatus.language = SourceLanguage.langNim
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
+
+    const isAutoIndent = true
+    currentBufStatus.keyEnter(
+      currentMainWindowNode,
+      isAutoIndent,
+      status.settings.tabStop)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "let"
+    check currentBufStatus.buffer[1] == ru "  "
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == status.settings.tabStop
+
+  test "Auto indent if the current line is \"let\" in Nim 2":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    currentBufStatus.buffer = initGapBuffer(@[ru"  let"])
+    currentBufStatus.language = SourceLanguage.langNim
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
+
+    const isAutoIndent = true
+    currentBufStatus.keyEnter(
+      currentMainWindowNode,
+      isAutoIndent,
+      status.settings.tabStop)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "  let"
+    check currentBufStatus.buffer[1] == ru "    "
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == status.settings.tabStop * 2
+
+  test "Auto indent if the current line is \"const\" in Nim":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    currentBufStatus.buffer = initGapBuffer(@[ru"const"])
+    currentBufStatus.language = SourceLanguage.langNim
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
+
+    const isAutoIndent = true
+    currentBufStatus.keyEnter(
+      currentMainWindowNode,
+      isAutoIndent,
+      status.settings.tabStop)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "const"
+    check currentBufStatus.buffer[1] == ru "  "
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == status.settings.tabStop
+
+  test "Auto indent if the current line is \"const\" in Nim 2":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    currentBufStatus.buffer = initGapBuffer(@[ru"  const"])
+    currentBufStatus.language = SourceLanguage.langNim
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
+
+    const isAutoIndent = true
+    currentBufStatus.keyEnter(
+      currentMainWindowNode,
+      isAutoIndent,
+      status.settings.tabStop)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "  const"
+    check currentBufStatus.buffer[1] == ru "    "
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == status.settings.tabStop * 2
+
+  test "Auto indent if finish the current line with \"object\" in Nim":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    currentBufStatus.buffer = initGapBuffer(@[ru"type Obj = object"])
+    currentBufStatus.language = SourceLanguage.langNim
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
+
+    const isAutoIndent = true
+    currentBufStatus.keyEnter(
+      currentMainWindowNode,
+      isAutoIndent,
+      status.settings.tabStop)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "type Obj = object"
+    check currentBufStatus.buffer[1] == ru "  "
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == status.settings.tabStop
+
+  test "Auto indent if finish the current line with \"or\" in Nim":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    currentBufStatus.buffer = initGapBuffer(@[ru"if true or"])
+    currentBufStatus.language = SourceLanguage.langNim
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
+
+    const isAutoIndent = true
+    currentBufStatus.keyEnter(
+      currentMainWindowNode,
+      isAutoIndent,
+      status.settings.tabStop)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "if true or"
+    check currentBufStatus.buffer[1] == ru "  "
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == status.settings.tabStop
+
+  test "Auto indent if finish the current line with \"and\" in Nim":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    currentBufStatus.buffer = initGapBuffer(@[ru"if true and"])
+    currentBufStatus.language = SourceLanguage.langNim
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].len
+
+    const isAutoIndent = true
+    currentBufStatus.keyEnter(
+      currentMainWindowNode,
+      isAutoIndent,
+      status.settings.tabStop)
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "if true and"
+    check currentBufStatus.buffer[1] == ru "  "
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == status.settings.tabStop
 
   test "New line":
     var status = initEditorStatus()
