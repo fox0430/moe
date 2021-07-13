@@ -345,6 +345,78 @@ suite "Editor: keyEnter":
     check currentMainWindowNode.currentLine == 1
     check currentMainWindowNode.currentColumn == status.settings.tabStop
 
+  test "Auto indent if finish th current line with ':' in Yaml":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"test:"])
+    currentBufStatus.language = SourceLanguage.langYaml
+    status.bufStatus[0].mode = Mode.insert
+    currentMainWindowNode.currentColumn = status.bufStatus[0].buffer[0].len
+
+    const isAutoIndent = true
+    status.bufStatus[0].keyEnter(currentMainWindowNode,
+                                 isAutoIndent,
+                                 status.settings.tabStop)
+
+
+    check status.bufStatus[0].buffer[0] == ru"test:"
+    check status.bufStatus[0].buffer[1] == ru"  "
+
+  test "Auto indent if finish th current line with ':' in Python":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"if true:"])
+    currentBufStatus.language = SourceLanguage.langPython
+    status.bufStatus[0].mode = Mode.insert
+    currentMainWindowNode.currentColumn = status.bufStatus[0].buffer[0].len
+
+    const isAutoIndent = true
+    status.bufStatus[0].keyEnter(currentMainWindowNode,
+                                 isAutoIndent,
+                                 status.settings.tabStop)
+
+
+    check status.bufStatus[0].buffer[0] == ru"if true:"
+    check status.bufStatus[0].buffer[1] == ru"  "
+
+  test "Auto indent if finish th current line with 'and' in Python":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"if true and"])
+    currentBufStatus.language = SourceLanguage.langPython
+    status.bufStatus[0].mode = Mode.insert
+    currentMainWindowNode.currentColumn = status.bufStatus[0].buffer[0].len
+
+    const isAutoIndent = true
+    status.bufStatus[0].keyEnter(currentMainWindowNode,
+                                 isAutoIndent,
+                                 status.settings.tabStop)
+
+
+    check status.bufStatus[0].buffer[0] == ru"if true and"
+    check status.bufStatus[0].buffer[1] == ru"  "
+
+  test "Auto indent if finish th current line with 'or' in Python":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"if true or"])
+    currentBufStatus.language = SourceLanguage.langPython
+    status.bufStatus[0].mode = Mode.insert
+    currentMainWindowNode.currentColumn = status.bufStatus[0].buffer[0].len
+
+    const isAutoIndent = true
+    status.bufStatus[0].keyEnter(currentMainWindowNode,
+                                 isAutoIndent,
+                                 status.settings.tabStop)
+
+
+    check status.bufStatus[0].buffer[0] == ru"if true or"
+    check status.bufStatus[0].buffer[1] == ru"  "
+
   test "New line":
     var status = initEditorStatus()
     status.addNewBuffer
