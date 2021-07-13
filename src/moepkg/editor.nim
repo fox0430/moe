@@ -315,11 +315,12 @@ proc insertIndentInNim(bufStatus: var BufferStatus,
   if line.len > 0:
     # Auto indent if the current line are "var", "let", "const".
     # And, if finish the current line with ':', "object"
-    if line.splitWhitespace == @[ru "var"] or
+    if (currentColumn == line.len) and
+       (line.splitWhitespace == @[ru "var"] or
        line.splitWhitespace == @[ru "let"] or
        line.splitWhitespace == @[ru "const"] or
        (line.len > 6 and line[line.len - 6 .. ^1] == ru "object") or
-       line[^1] == ru ':':
+       line[^1] == ru ':'):
       let
         count = countRepeat(line, Whitespace, 0) + tabStop
         oldLine = bufStatus.buffer[windowNode.currentLine + 1]
@@ -331,8 +332,9 @@ proc insertIndentInNim(bufStatus: var BufferStatus,
       bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
 
     # Auto indent if finish the current line with "or", "and"
-    elif (line.len > 2 and line[line.len - 2 .. ^1] == ru "or") or
-         (line.len > 3 and line[line.len - 3 .. ^1] == ru "and"):
+    elif (currentColumn == line.len) and
+         ((line.len > 2 and line[line.len - 2 .. ^1] == ru "or") or
+         (line.len > 3 and line[line.len - 3 .. ^1] == ru "and")):
       let
         count = countRepeat(line, Whitespace, 0) + tabStop
         oldLine = bufStatus.buffer[windowNode.currentLine + 1]
