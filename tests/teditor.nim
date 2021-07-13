@@ -470,11 +470,56 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
 
   # Generate test code
   # Disable autoindent
-  # Line break test when the current line ends with "or", "and", ':', "object".
+  # currentColumn is 0
+  # Line break test that case there are some keyword and an indent on the current line.
+  # keywords: "var", "let", "const"
   macro newLineTestInNimCase3(keyword: string): untyped =
     quote do:
       # Generate test title
-      let testTitle = "Case 3: When the current line ends with " & $`keyword` & " in Nim"
+      let testTitle = "Case 3: if the current line is " & $`keyword` & " in Nim"
+
+      # Generate test code
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBuffer
+
+        const buffer = $`keyword`
+        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer])
+        status.bufStatus[0].language = SourceLanguage.langNim
+        status.bufStatus[0].mode = Mode.insert
+
+        const isAutoIndent = true
+        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
+                                     isAutoIndent,
+                                     status.settings.tabStop)
+
+        let currentBufStatus = status.bufStatus[0]
+        check currentBufStatus.buffer.len == 2
+        check currentBufStatus.buffer[0] == ru ""
+        check $currentBufStatus.buffer[1] == $`keyword`
+
+        let currentMainWindowNode = status.mainWindow.currentMainWindowNode
+        check currentMainWindowNode.currentLine == 1
+        check currentMainWindowNode.currentColumn == 0
+
+  # Generate test code by macro
+  block:
+    const keyword = "var"
+    newLineTestInNimCase3(keyword)
+  block:
+    const keyword = "let"
+    newLineTestInNimCase3(keyword)
+  block:
+    const keyword = "const"
+    newLineTestInNimCase3(keyword)
+
+  # Generate test code
+  # Disable autoindent
+  # Line break test when the current line ends with "or", "and", ':', "object".
+  macro newLineTestInNimCase4(keyword: string): untyped =
+    quote do:
+      # Generate test title
+      let testTitle = "Case 4: When the current line ends with " & $`keyword` & " in Nim"
 
       # Generate test code
       test testTitle:
@@ -501,16 +546,58 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
   # Generate test code
   block:
     const keyword = "or"
-    newLineTestInNimCase3(keyword)
+    newLineTestInNimCase4(keyword)
   block:
     const keyword = "and"
-    newLineTestInNimCase3(keyword)
+    newLineTestInNimCase4(keyword)
   block:
     const keyword = ":"
-    newLineTestInNimCase3(keyword)
+    newLineTestInNimCase4(keyword)
   block:
     const keyword = "object"
-    newLineTestInNimCase3(keyword)
+    newLineTestInNimCase4(keyword)
+
+  # Generate test code
+  # Disable autoindent
+  # currentColumn is 0
+  # Line break test when the current line ends with "or", "and", ':', "object".
+  macro newLineTestInNimCase5(keyword: string): untyped =
+    quote do:
+      # Generate test title
+      let testTitle = "Case 5: When the current line ends with " & $`keyword` & " in Nim"
+
+      # Generate test code
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBuffer
+
+        const buffer = "test " & $`keyword`
+        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer])
+        status.bufStatus[0].language = SourceLanguage.langNim
+        status.bufStatus[0].mode = Mode.insert
+
+        const isAutoIndent = true
+        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
+                                     isAutoIndent,
+                                     status.settings.tabStop)
+
+        let currentBufStatus = status.bufStatus[0]
+        check currentBufStatus.buffer[0] == ru ""
+        check currentBufStatus.buffer[1] == ru buffer
+
+  # Generate test code
+  block:
+    const keyword = "or"
+    newLineTestInNimCase5(keyword)
+  block:
+    const keyword = "and"
+    newLineTestInNimCase5(keyword)
+  block:
+    const keyword = ":"
+    newLineTestInNimCase5(keyword)
+  block:
+    const keyword = "object"
+    newLineTestInNimCase5(keyword)
 
 suite "Editor: keyEnter: Enable autoindent in Yaml":
   test "Auto indent if finish th current line with ':' in Yaml":
