@@ -723,6 +723,131 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     const keyword = "()"
     newLineTestInNimCase8(keyword)
 
+suite "Editor: keyEnter: Enable autoindent in C":
+  # Generate test code
+  # Disable autoindent
+  # currentColumn is 1
+  # Line break test when the current line ends with pair of paren.
+  macro newLineTestInCcase1(pair: string): untyped =
+    quote do:
+      # Generate test title
+      let testTitle = "Case 1: When the current line ends with " & `pair` & " in C"
+
+      # Generate test code
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBuffer
+
+        const buffer = `pair`
+        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer])
+        status.bufStatus[0].language = SourceLanguage.langC
+        status.bufStatus[0].mode = Mode.insert
+        status.mainWindow.currentMainWindowNode.currentColumn = 1
+
+        const isAutoIndent = true
+        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
+                                     isAutoIndent,
+                                     status.settings.tabStop)
+
+        let currentBufStatus = status.bufStatus[0]
+        check currentBufStatus.buffer.len == 3
+        check $currentBufStatus.buffer[0] == $(`pair`[0])
+        check $currentBufStatus.buffer[1] == "  "
+        check $currentBufStatus.buffer[2] == $(`pair`[1])
+
+  # Generate test code
+  block:
+    const keyword = "{}"
+    newLineTestInCcase1(keyword)
+  block:
+    const keyword = "[]"
+    newLineTestInCcase1(keyword)
+  block:
+    const keyword = "()"
+    newLineTestInCcase1(keyword)
+
+  # Generate test code
+  # Disable autoindent
+  # currentColumn is 0
+  # Line break test when the current line ends with pair of paren.
+  macro newLineTestInCcase2(pair: string): untyped =
+    quote do:
+      # Generate test title
+      let testTitle = "Case 2: When the current line ends with " & `pair` & " in C"
+
+      # Generate test code
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBuffer
+
+        const buffer = `pair`
+        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer])
+        status.bufStatus[0].language = SourceLanguage.langC
+        status.bufStatus[0].mode = Mode.insert
+
+        const isAutoIndent = true
+        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
+                                     isAutoIndent,
+                                     status.settings.tabStop)
+
+        let currentBufStatus = status.bufStatus[0]
+        check currentBufStatus.buffer.len == 2
+        check $currentBufStatus.buffer[0] == ""
+        check $currentBufStatus.buffer[1] == `pair`
+
+  # Generate test code
+  block:
+    const keyword = "{}"
+    newLineTestInCcase2(keyword)
+  block:
+    const keyword = "[]"
+    newLineTestInCcase2(keyword)
+  block:
+    const keyword = "()"
+    newLineTestInCcase2(keyword)
+
+  # Generate test code
+  # Disable autoindent
+  # currentColumn is 1
+  # Line break test when the current line ends with the close paren.
+  macro newLineTestInCcase3(pair: string): untyped =
+    quote do:
+      # Generate test title
+      let testTitle = "Case 3: When the current line ends with " & `pair` & " in C"
+
+      # Generate test code
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBuffer
+
+        const buffer = `pair`[0] & "a" & `pair`[1]
+        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer])
+        status.bufStatus[0].language = SourceLanguage.langC
+        status.bufStatus[0].mode = Mode.insert
+        status.mainWindow.currentMainWindowNode.currentColumn = 1
+
+        const isAutoIndent = true
+        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
+                                     isAutoIndent,
+                                     status.settings.tabStop)
+
+        let currentBufStatus = status.bufStatus[0]
+        check currentBufStatus.buffer.len == 3
+        check $currentBufStatus.buffer[0] == $`pair`[0]
+        check $currentBufStatus.buffer[1] == "  a"
+        check $currentBufStatus.buffer[2] == $`pair`[1]
+
+  # Generate test code
+  block:
+    const keyword = "{}"
+    newLineTestInCcase3(keyword)
+  block:
+    const keyword = "[]"
+    newLineTestInCcase3(keyword)
+  block:
+    const keyword = "()"
+    newLineTestInCcase3(keyword)
+
 suite "Editor: keyEnter: Enable autoindent in Yaml":
   test "Auto indent if finish th current line with ':' in Yaml":
     var status = initEditorStatus()
