@@ -1394,7 +1394,6 @@ suite "Add buffer to the register":
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru "a"
 
-    echo status.registers.noNameRegister
     check status.registers.noNameRegister == Register(
       buffer: @[ru "", ru "b"], isLine: true, name: "a")
 
