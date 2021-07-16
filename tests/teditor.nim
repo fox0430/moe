@@ -625,10 +625,9 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
                                      status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
-        check currentBufStatus.buffer.len == 3
+        check currentBufStatus.buffer.len == 2
         check $currentBufStatus.buffer[0] == $(`pair`[0])
-        check $currentBufStatus.buffer[1] == "  "
-        check $currentBufStatus.buffer[2] == $(`pair`[1])
+        check $currentBufStatus.buffer[1] == "  " & $(`pair`[1])
 
   # Generate test code
   block:
@@ -707,10 +706,9 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
                                      status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
-        check currentBufStatus.buffer.len == 3
+        check currentBufStatus.buffer.len == 2
         check $currentBufStatus.buffer[0] == $`pair`[0]
-        check $currentBufStatus.buffer[1] == "  a"
-        check $currentBufStatus.buffer[2] == $`pair`[1]
+        check $currentBufStatus.buffer[1] == "  a" & `pair`[1]
 
   # Generate test code
   block:
