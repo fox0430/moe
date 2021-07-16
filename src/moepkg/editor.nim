@@ -285,22 +285,25 @@ proc insertIndetWhenPairOfParen(bufStatus: var BufferStatus,
   bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
 
   # Add the new line and move the close paren if finish the next line with the close paren.
-  let nextLine = bufStatus.buffer[currentLine + 1]
-  if isCloseParen(nextLine[^1]) and
-     isCorrespondingParen(openParen, nextLine[^1]):
-    let closeParen = nextLine[^1]
-    # Delete the close paren in the nextLine
-    block:
-      let oldLine = nextLine
-      var newLine = nextLine
-      newLine = oldLine[0 .. newLine.high - 1]
-      if oldLine != newLine:
-        bufStatus.buffer[currentLine + 1] = newLine
-    # Add the close paren in the buffer[nextLine + 1]
-    block:
-      let count = countRepeat(line, Whitespace, 0)
-      var newLine = repeat(' ', count).toRunes & closeParen
-      bufStatus.buffer.insert(newLine, windowNode.currentLine + 1)
+  # If Nim or Python, Don't insert the new line.
+  if bufStatus.language != SourceLanguage.langNim and
+     bufStatus.language != SourceLanguage.langPython:
+    let nextLine = bufStatus.buffer[currentLine + 1]
+    if isCloseParen(nextLine[^1]) and
+       isCorrespondingParen(openParen, nextLine[^1]):
+      let closeParen = nextLine[^1]
+      # Delete the close paren in the nextLine
+      block:
+        let oldLine = nextLine
+        var newLine = nextLine
+        newLine = oldLine[0 .. newLine.high - 1]
+        if oldLine != newLine:
+          bufStatus.buffer[currentLine + 1] = newLine
+      # Add the close paren in the buffer[nextLine + 1]
+      block:
+        let count = countRepeat(line, Whitespace, 0)
+        var newLine = repeat(' ', count).toRunes & closeParen
+        bufStatus.buffer.insert(newLine, windowNode.currentLine + 1)
 
 proc insertIndentInNim(bufStatus: var BufferStatus,
                        windowNode: WindowNode,
