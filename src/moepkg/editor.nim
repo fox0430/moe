@@ -893,89 +893,79 @@ proc insertIndentNimForOpenBlankLine(bufStatus: var BufferStatus,
                                      tabStop: int) =
 
   let
-    currentLine = windowNode.currentLine
-    nextLine = currentLine + 1
+    currentLineNum = windowNode.currentLine
+    abaveLine = bufStatus.buffer[currentLineNum - 1]
     currentColumn = windowNode.currentColumn
-    line = bufStatus.buffer[currentLine]
 
-  bufStatus.buffer.insert(ru "", nextLine)
-
-  if line.len > 0:
+  if abaveLine.len > 0:
     # Auto indent if the current line are "var", "let", "const".
     # And, if finish the current line with ':', "object"
-    if (line.splitWhitespace == @[ru "var"] or
-       line.splitWhitespace == @[ru "let"] or
-       line.splitWhitespace == @[ru "const"] or
-       (line.len > 6 and line[line.len - 6 .. ^1] == ru "object") or
-       line[^1] == ru ':'):
+    if (abaveLine.splitWhitespace == @[ru "var"] or
+       abaveLine.splitWhitespace == @[ru "let"] or
+       abaveLine.splitWhitespace == @[ru "const"] or
+       (abaveLine.len > 6 and abaveLine[abaveLine.len - 6 .. ^1] == ru "object") or
+       abaveLine[^1] == ru ':'):
       let
-        count = countRepeat(line, Whitespace, 0) + tabStop
-        oldLine = bufStatus.buffer[nextLine]
-      var newLine = bufStatus.buffer[nextLine]
+        count = countRepeat(abaveLine, Whitespace, 0) + tabStop
+        oldLine = bufStatus.buffer[currentLineNum]
+      var newLine = bufStatus.buffer[currentLineNum]
 
       newLine &= repeat(' ', count).toRunes
       if oldLine != newLine:
-        bufStatus.buffer[nextLine] = newLine
+        bufStatus.buffer[currentLineNum] = newLine
 
     # Auto indent if finish the current line with "or", "and"
-    elif ((line.len > 2 and line[line.len - 2 .. ^1] == ru "or") or
-         (line.len > 3 and line[line.len - 3 .. ^1] == ru "and")):
+    elif ((abaveLine.len > 2 and abaveLine[abaveLine.len - 2 .. ^1] == ru "or") or
+         (abaveLine.len > 3 and abaveLine[abaveLine.len - 3 .. ^1] == ru "and")):
       let
-        count = countRepeat(line, Whitespace, 0) + tabStop
-        oldLine = bufStatus.buffer[nextLine]
-      var newLine = bufStatus.buffer[nextLine]
+        count = countRepeat(abaveLine, Whitespace, 0) + tabStop
+        oldLine = bufStatus.buffer[currentLineNum]
+      var newLine = bufStatus.buffer[currentLineNum]
 
       newLine &= repeat(' ', count).toRunes
       if oldLine != newLine:
-        bufStatus.buffer[nextLine] = newLine
+        bufStatus.buffer[currentLineNum] = newLine
     else:
       let
-        count = countRepeat(line, Whitespace, 0)
-        oldLine = bufStatus.buffer[nextLine]
-      var newLine = bufStatus.buffer[nextLine]
+        count = countRepeat(abaveLine, Whitespace, 0)
+        oldLine = bufStatus.buffer[currentLineNum]
+      var newLine = bufStatus.buffer[currentLineNum]
 
       newLine &= repeat(' ', count).toRunes
       if oldLine != newLine:
-        bufStatus.buffer[nextLine] = newLine
-
-  windowNode.currentLine = nextLine
+        bufStatus.buffer[currentLineNum] = newLine
 
 proc insertIndentInPythonForOpenBlankLine(bufStatus: var BufferStatus,
                                           windowNode: WindowNode,
                                           tabStop: int) =
 
   let
-    currentLine = windowNode.currentLine
-    nextLine = currentLine + 1
-    line = bufStatus.buffer[currentLine]
+    currentLineNum = windowNode.currentLine
+    abaveLine = bufStatus.buffer[currentLineNum - 1]
 
-  bufStatus.buffer.insert(ru "", nextLine)
-
-  if line.len > 0:
+  if abaveLine.len > 0:
     # if finish the current line with ':', "or", "and" in Python
-    if (line.len > 2 and line[line.len - 2 .. ^1] == ru "or") or
-       (line.len > 3 and line[line.len - 3 .. ^1] == ru "and") or
-       (line[^1] == ru ':'):
+    if (abaveLine.len > 2 and abaveLine[abaveLine.len - 2 .. ^1] == ru "or") or
+       (abaveLine.len > 3 and abaveLine[abaveLine.len - 3 .. ^1] == ru "and") or
+       (abaveLine[^1] == ru ':'):
       let
-        count = countRepeat(line, Whitespace, 0) + tabStop
-        oldLine = bufStatus.buffer[nextLine]
-      var newLine = bufStatus.buffer[nextLine]
+        count = countRepeat(abaveLine, Whitespace, 0) + tabStop
+        oldLine = bufStatus.buffer[currentLineNum]
+      var newLine = bufStatus.buffer[currentLineNum]
 
       newLine &= repeat(' ', count).toRunes
       if oldLine != newLine:
-        bufStatus.buffer[nextLine] = newLine
+        bufStatus.buffer[currentLineNum] = newLine
 
     else:
       let
-        count = countRepeat(line, Whitespace, 0)
-        oldLine = bufStatus.buffer[nextLine]
-      var newLine = bufStatus.buffer[nextLine]
+        count = countRepeat(abaveLine, Whitespace, 0)
+        oldLine = bufStatus.buffer[currentLineNum]
+      var newLine = bufStatus.buffer[currentLineNum]
 
       newLine &= repeat(' ', count).toRunes
       if oldLine != newLine:
-        bufStatus.buffer[nextLine] = newLine
-
-  windowNode.currentLine = nextLine
+        bufStatus.buffer[currentLineNum] = newLine
 
 # Add the new line and insert indent in the plain text
 proc insertIndentPlainTextForOpenBlankLine(bufStatus: var BufferStatus,
@@ -983,16 +973,23 @@ proc insertIndentPlainTextForOpenBlankLine(bufStatus: var BufferStatus,
                                            tabStop: int) =
 
   let
-    line = bufStatus.buffer[windowNode.currentLine]
-    indent = sequtils.repeat(ru' ', countRepeat(line, Whitespace, 0))
-  bufStatus.buffer.insert(indent, windowNode.currentLine + 1)
+    currentLineNum = windowNode.currentLine
+    abaveLine = bufStatus.buffer[currentLineNum - 1]
+    count = countRepeat(abaveLine, Whitespace, 0)
+    oldLine = bufStatus.buffer[currentLineNum]
+  var newLine = bufStatus.buffer[currentLineNum]
 
-  inc(windowNode.currentLine)
-  windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].high
+  newLine &= repeat(' ', count).toRunes
+  if oldLine != newLine:
+    bufStatus.buffer[currentLineNum] = newLine
+    windowNode.currentColumn = bufStatus.buffer[currentLineNum].high
 
 proc insertIndentForOpenBlankLine(bufStatus: var BufferStatus,
                                   windowNode: var WindowNode,
                                   tabStop: int) =
+
+  bufStatus.buffer.insert(ru "", windowNode.currentLine + 1)
+  inc(windowNode.currentLine)
 
   let language = bufStatus.language
 
