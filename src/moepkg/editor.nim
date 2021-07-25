@@ -940,6 +940,43 @@ proc insertIndentNimForOpenBlankLine(bufStatus: var BufferStatus,
 
   windowNode.currentLine = nextLine
 
+proc insertIndentInPythonForOpenBlankLine(bufStatus: var BufferStatus,
+                                          windowNode: WindowNode,
+                                          tabStop: int) =
+
+  let
+    currentLine = windowNode.currentLine
+    nextLine = currentLine + 1
+    line = bufStatus.buffer[currentLine]
+
+  bufStatus.buffer.insert(ru "", nextLine)
+
+  if line.len > 0:
+    # if finish the current line with ':', "or", "and" in Python
+    if (line.len > 2 and line[line.len - 2 .. ^1] == ru "or") or
+       (line.len > 3 and line[line.len - 3 .. ^1] == ru "and") or
+       (line[^1] == ru ':'):
+      let
+        count = countRepeat(line, Whitespace, 0) + tabStop
+        oldLine = bufStatus.buffer[nextLine]
+      var newLine = bufStatus.buffer[nextLine]
+
+      newLine &= repeat(' ', count).toRunes
+      if oldLine != newLine:
+        bufStatus.buffer[nextLine] = newLine
+
+    else:
+      let
+        count = countRepeat(line, Whitespace, 0)
+        oldLine = bufStatus.buffer[nextLine]
+      var newLine = bufStatus.buffer[nextLine]
+
+      newLine &= repeat(' ', count).toRunes
+      if oldLine != newLine:
+        bufStatus.buffer[nextLine] = newLine
+
+  windowNode.currentLine = nextLine
+
 # Add the new line and insert indent in the plain text
 proc insertIndentPlainTextForOpenBlankLine(bufStatus: var BufferStatus,
                                            windowNode: var WindowNode,
@@ -962,6 +999,8 @@ proc insertIndentForOpenBlankLine(bufStatus: var BufferStatus,
   case language:
     of SourceLanguage.langNim:
       bufStatus.insertIndentNimForOpenBlankLine(windowNode, tabStop)
+    of SourceLanguage.langPython:
+      bufStatus.insertIndentInPythonForOpenBlankLine(windowNode, tabStop)
     else:
       bufStatus.insertIndentPlainTextForOpenBlankLine(windowNode, tabStop)
 
