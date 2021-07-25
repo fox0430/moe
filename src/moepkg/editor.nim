@@ -1015,15 +1015,17 @@ proc openBlankLineBelow*(bufStatus: var BufferStatus,
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
 
-proc openBlankLineAbove*(bufStatus: var BufferStatus, windowNode: WindowNode) =
-  let
-    indent = sequtils.repeat(ru' ',
-                             countRepeat(bufStatus.buffer[windowNode.currentLine],
-                             Whitespace,
-                             0))
+proc openBlankLineAbove*(bufStatus: var BufferStatus,
+                         windowNode: var WindowNode,
+                         autoIndent: bool,
+                         tabStop: int) =
 
-  bufStatus.buffer.insert(indent, windowNode.currentLine)
-  windowNode.currentColumn = indent.len
+  bufStatus.buffer.insert(ru "", windowNode.currentLine)
+
+  if autoIndent and windowNode.currentLine > 0:
+    bufStatus.insertIndentForOpenBlankLine(windowNode, tabStop)
+
+  windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].len
 
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true

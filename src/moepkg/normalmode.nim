@@ -644,7 +644,9 @@ proc openBlankLineBelowAndEnterInsertMode(status: var EditorStatus) =
   status.changeMode(Mode.insert)
 
 proc openBlankLineAboveAndEnterInsertMode(status: var EditorStatus) =
-  currentBufStatus.openBlankLineAbove(currentMainWindowNode)
+  currentBufStatus.openBlankLineAbove(currentMainWindowNode,
+                                      status.settings.autoIndent,
+                                      status.settings.tabStop)
 
   var highlight = currentMainWindowNode.highlight
   highlight.updateHighlight(
