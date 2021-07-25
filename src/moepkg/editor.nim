@@ -1008,7 +1008,7 @@ proc openBlankLineBelow*(bufStatus: var BufferStatus,
     bufStatus.insertIndentForOpenBlankLine(windowNode, tabStop)
 
   if bufStatus.buffer[windowNode.currentLine].high > 0:
-    windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].high
+    windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].len
   else:
     windowNode.currentColumn = 0
 
