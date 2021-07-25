@@ -1584,7 +1584,7 @@ suite "Editor: Open the blank line below":
           check currentBufStatus.buffer[1] == ru "  "
 
           check currentMainWindowNode.currentLine == 1
-          check currentMainWindowNode.currentColumn == 1
+          check currentMainWindowNode.currentColumn == 2
         else:
           check currentBufStatus.buffer[1] == ru ""
 
@@ -1631,7 +1631,7 @@ suite "Editor: Open the blank line below":
 
         let currentMainWindowNode = status.mainWindow.currentMainWindowNode
         check currentMainWindowNode.currentLine == 1
-        check currentMainWindowNode.currentColumn == 1
+        check currentMainWindowNode.currentColumn == 2
 
   # Generate test code by macro
   block:
@@ -1674,7 +1674,7 @@ suite "Editor: Open the blank line below":
 
         let currentMainWindowNode = status.mainWindow.currentMainWindowNode
         check currentMainWindowNode.currentLine == 1
-        check currentMainWindowNode.currentColumn == currentBufStatus.buffer[1].high
+        check currentMainWindowNode.currentColumn == currentBufStatus.buffer[1].len
 
   # Generate test code by macro
   block:
@@ -1769,7 +1769,7 @@ suite "Editor: Open the blank line below":
 
         let currentMainWindowNode = status.mainWindow.currentMainWindowNode
         check currentMainWindowNode.currentLine == 1
-        check currentMainWindowNode.currentColumn == currentBufStatus.buffer[1].high
+        check currentMainWindowNode.currentColumn == currentBufStatus.buffer[1].len
 
   # Generate test code by macro
   block:
