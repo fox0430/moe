@@ -988,12 +988,7 @@ proc insertIndentForOpenBlankLine(bufStatus: var BufferStatus,
                                   windowNode: var WindowNode,
                                   tabStop: int) =
 
-  bufStatus.buffer.insert(ru "", windowNode.currentLine + 1)
-  inc(windowNode.currentLine)
-
-  let language = bufStatus.language
-
-  case language:
+  case bufStatus.language:
     of SourceLanguage.langNim:
       bufStatus.insertIndentNimForOpenBlankLine(windowNode, tabStop)
     of SourceLanguage.langPython:
@@ -1006,11 +1001,11 @@ proc openBlankLineBelow*(bufStatus: var BufferStatus,
                          autoIndent: bool,
                          tabStop: int) =
 
+  bufStatus.buffer.insert(ru "", windowNode.currentLine + 1)
+  inc(windowNode.currentLine)
+
   if autoIndent:
     bufStatus.insertIndentForOpenBlankLine(windowNode, tabStop)
-  else:
-    bufStatus.buffer.insert(ru "", windowNode.currentLine + 1)
-    inc(windowNode.currentLine)
 
   if bufStatus.buffer[windowNode.currentLine].high > 0:
     windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].high
