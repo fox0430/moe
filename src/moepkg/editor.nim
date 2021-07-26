@@ -895,7 +895,6 @@ proc insertIndentNimForOpenBlankLine(bufStatus: var BufferStatus,
   let
     currentLineNum = windowNode.currentLine
     aboveLine = bufStatus.buffer[currentLineNum - 1]
-    currentColumn = windowNode.currentColumn
 
   if aboveLine.len > 0:
     # Auto indent if the current line are "var", "let", "const".

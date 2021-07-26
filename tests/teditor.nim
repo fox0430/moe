@@ -386,7 +386,6 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
         var status = initEditorStatus()
         status.addNewBuffer
 
-        const buffer = `keyword`
         status.bufStatus[0].buffer = initGapBuffer(@[keyword.ru])
         status.bufStatus[0].language = SourceLanguage.langNim
         status.bufStatus[0].mode = Mode.insert
@@ -1156,10 +1155,7 @@ suite "Editor: Yank words":
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
 
-    const
-      length = 1
-      name = ""
-      loop = 1
+    const loop = 1
     currentBufStatus.yankWord(status.registers,
                               currentMainWindowNode,
                               loop,
