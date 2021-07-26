@@ -894,19 +894,19 @@ proc insertIndentNimForOpenBlankLine(bufStatus: var BufferStatus,
 
   let
     currentLineNum = windowNode.currentLine
-    abaveLine = bufStatus.buffer[currentLineNum - 1]
+    aboveLine = bufStatus.buffer[currentLineNum - 1]
     currentColumn = windowNode.currentColumn
 
-  if abaveLine.len > 0:
+  if aboveLine.len > 0:
     # Auto indent if the current line are "var", "let", "const".
     # And, if finish the current line with ':', "object"
-    if (abaveLine.splitWhitespace == @[ru "var"] or
-       abaveLine.splitWhitespace == @[ru "let"] or
-       abaveLine.splitWhitespace == @[ru "const"] or
-       (abaveLine.len > 6 and abaveLine[abaveLine.len - 6 .. ^1] == ru "object") or
-       abaveLine[^1] == ru ':'):
+    if (aboveLine.splitWhitespace == @[ru "var"] or
+       aboveLine.splitWhitespace == @[ru "let"] or
+       aboveLine.splitWhitespace == @[ru "const"] or
+       (aboveLine.len > 6 and aboveLine[aboveLine.len - 6 .. ^1] == ru "object") or
+       aboveLine[^1] == ru ':'):
       let
-        count = countRepeat(abaveLine, Whitespace, 0) + tabStop
+        count = countRepeat(aboveLine, Whitespace, 0) + tabStop
         oldLine = bufStatus.buffer[currentLineNum]
       var newLine = bufStatus.buffer[currentLineNum]
 
@@ -915,10 +915,10 @@ proc insertIndentNimForOpenBlankLine(bufStatus: var BufferStatus,
         bufStatus.buffer[currentLineNum] = newLine
 
     # Auto indent if finish the current line with "or", "and"
-    elif ((abaveLine.len > 2 and abaveLine[abaveLine.len - 2 .. ^1] == ru "or") or
-         (abaveLine.len > 3 and abaveLine[abaveLine.len - 3 .. ^1] == ru "and")):
+    elif ((aboveLine.len > 2 and aboveLine[aboveLine.len - 2 .. ^1] == ru "or") or
+         (aboveLine.len > 3 and aboveLine[aboveLine.len - 3 .. ^1] == ru "and")):
       let
-        count = countRepeat(abaveLine, Whitespace, 0) + tabStop
+        count = countRepeat(aboveLine, Whitespace, 0) + tabStop
         oldLine = bufStatus.buffer[currentLineNum]
       var newLine = bufStatus.buffer[currentLineNum]
 
@@ -927,7 +927,7 @@ proc insertIndentNimForOpenBlankLine(bufStatus: var BufferStatus,
         bufStatus.buffer[currentLineNum] = newLine
     else:
       let
-        count = countRepeat(abaveLine, Whitespace, 0)
+        count = countRepeat(aboveLine, Whitespace, 0)
         oldLine = bufStatus.buffer[currentLineNum]
       var newLine = bufStatus.buffer[currentLineNum]
 
@@ -941,15 +941,15 @@ proc insertIndentInPythonForOpenBlankLine(bufStatus: var BufferStatus,
 
   let
     currentLineNum = windowNode.currentLine
-    abaveLine = bufStatus.buffer[currentLineNum - 1]
+    aboveLine = bufStatus.buffer[currentLineNum - 1]
 
-  if abaveLine.len > 0:
+  if aboveLine.len > 0:
     # if finish the current line with ':', "or", "and" in Python
-    if (abaveLine.len > 2 and abaveLine[abaveLine.len - 2 .. ^1] == ru "or") or
-       (abaveLine.len > 3 and abaveLine[abaveLine.len - 3 .. ^1] == ru "and") or
-       (abaveLine[^1] == ru ':'):
+    if (aboveLine.len > 2 and aboveLine[aboveLine.len - 2 .. ^1] == ru "or") or
+       (aboveLine.len > 3 and aboveLine[aboveLine.len - 3 .. ^1] == ru "and") or
+       (aboveLine[^1] == ru ':'):
       let
-        count = countRepeat(abaveLine, Whitespace, 0) + tabStop
+        count = countRepeat(aboveLine, Whitespace, 0) + tabStop
         oldLine = bufStatus.buffer[currentLineNum]
       var newLine = bufStatus.buffer[currentLineNum]
 
@@ -959,7 +959,7 @@ proc insertIndentInPythonForOpenBlankLine(bufStatus: var BufferStatus,
 
     else:
       let
-        count = countRepeat(abaveLine, Whitespace, 0)
+        count = countRepeat(aboveLine, Whitespace, 0)
         oldLine = bufStatus.buffer[currentLineNum]
       var newLine = bufStatus.buffer[currentLineNum]
 
@@ -974,8 +974,8 @@ proc insertIndentPlainTextForOpenBlankLine(bufStatus: var BufferStatus,
 
   let
     currentLineNum = windowNode.currentLine
-    abaveLine = bufStatus.buffer[currentLineNum - 1]
-    count = countRepeat(abaveLine, Whitespace, 0)
+    aboveLine = bufStatus.buffer[currentLineNum - 1]
+    count = countRepeat(aboveLine, Whitespace, 0)
     oldLine = bufStatus.buffer[currentLineNum]
   var newLine = bufStatus.buffer[currentLineNum]
 
