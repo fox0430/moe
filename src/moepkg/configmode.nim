@@ -148,6 +148,7 @@ type themeTableNames {.pure.} = enum
   defaultChar
   keyword
   functionName
+  typeName
   boolean
   specialVar
   builtin
@@ -290,7 +291,10 @@ proc getClipboardTableSettingsValues(settings: ClipBoardSettings,
         result = @[ru "false", ru "true"]
     of "toolOnLinux":
       for toolName in ClipboardToolOnLinux:
-        result.add ($toolName).ru
+        if $toolName == "wlClipboard":
+          result.add ru "wl-clipboard"
+        else:
+          result.add ($toolName).ru
     else:
       return
 
@@ -722,7 +726,8 @@ proc changeClipBoardTableSettings(settings: var ClipBoardSettings,
     of "enable":
       settings.enable = parseBool(settingVal)
     of "toolOnLinux":
-      settings.toolOnLinux = parseEnum[ClipboardToolOnLinux](settingVal)
+      let name = if settingVal == "wl-clipboard": "wlClipboard" else: settingVal
+      settings.toolOnLinux = parseEnum[ClipboardToolOnLinux](name)
     else:
       discard
 

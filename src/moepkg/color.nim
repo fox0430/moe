@@ -476,6 +476,7 @@ type EditorColor* = object
   defaultChar*: Color
   gtKeyword*: Color
   gtFunctionName*: Color
+  gtTypeName*: Color
   gtBoolean*: Color
   gtStringLit*: Color
   gtSpecialVar*: Color
@@ -581,43 +582,44 @@ type EditorColorPair* = enum
   defaultChar = 28
   keyword = 29
   functionName = 30
-  boolean = 31
-  specialVar = 32
-  builtin = 33
-  stringLit = 34
-  decNumber = 35
-  comment = 36
-  longComment = 37
-  whitespace = 38
-  preprocessor = 39
+  typeName = 31
+  boolean = 32
+  specialVar = 33
+  builtin = 34
+  stringLit = 35
+  decNumber = 36
+  comment = 37
+  longComment = 38
+  whitespace = 39
+  preprocessor = 40
 
   # filer mode
-  currentFile = 40
-  file = 41
-  dir = 42
-  pcLink = 43
+  currentFile = 41
+  file = 42
+  dir = 43
+  pcLink = 44
   # pop up window
-  popUpWindow = 44
-  popUpWinCurrentLine = 45
+  popUpWindow = 45
+  popUpWinCurrentLine = 46
   # replace text highlighting
-  replaceText = 46
+  replaceText = 47
   # pair of paren highlighting
-  parenText = 47
+  parenText = 48
   # highlight other uses current word
-  currentWord = 48
+  currentWord = 49
   # highlight full width space
-  highlightFullWidthSpace = 49
+  highlightFullWidthSpace = 50
   # highlight trailing spaces
-  highlightTrailingSpaces = 50
+  highlightTrailingSpaces = 51
   # highlight reserved words
-  reservedWord = 51
+  reservedWord = 52
   # highlight history manager
-  currentHistory = 52
+  currentHistory = 53
   # highlight diff
-  addedLine = 53
-  deletedLine = 54
+  addedLine = 54
+  deletedLine = 55
   # configuration mode
-  currentSetting = 55
+  currentSetting = 56
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -693,6 +695,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     defaultChar: white,
     gtKeyword: skyBlue1,
     gtFunctionName: gold1,
+    gtTypeName: green,
     gtBoolean: yellow,
     gtStringLit: yellow,
     gtSpecialVar: green,
@@ -822,6 +825,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     defaultChar: white,
     gtKeyword: skyBlue1,
     gtFunctionName: gold1,
+    gtTypeName: green,
     gtBoolean: yellow,
     gtStringLit: yellow,
     gtSpecialVar: green,
@@ -951,6 +955,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     defaultChar: white,
     gtKeyword: skyBlue1,
     gtFunctionName: gold1,
+    gtTypeName: green,
     gtBoolean: yellow,
     gtStringLit: yellow,
     gtSpecialVar: green,
@@ -1080,6 +1085,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     defaultChar: gray100,
     gtKeyword: seaGreen1_2,
     gtFunctionName: gold1,
+    gtTypeName: green,
     gtBoolean: yellow,
     gtStringLit: purple_1,
     gtSpecialVar: green,
@@ -1209,6 +1215,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     defaultChar: gray100,
     gtKeyword: deepPink1_1,
     gtFunctionName: gold1,
+    gtTypeName: green,
     gtBoolean: yellow,
     gtStringLit: purple_1,
     gtSpecialVar: green,
@@ -1383,6 +1390,9 @@ proc setCursesColor*(editorColor: EditorColor) =
     setColorPair(EditorColorPair.functionName,
                  editorColor.gtFunctionName,
                  editorColor.editorBg)
+    setColorPair(EditorColorPair.typeName,
+                 editorColor.gtTypeName,
+                 editorColor.editorBg)
     setColorPair(EditorColorPair.boolean,
                  editorColor.gtBoolean,
                  editorColor.editorBg)
@@ -1556,6 +1566,8 @@ proc getColorFromEditorColorPair*(theme: ColorTheme,
     return (editorColor.gtKeyword, editorColor.editorBg)
   of EditorColorPair.functionName:
     return (editorColor.gtFunctionName, editorColor.editorBg)
+  of EditorColorPair.typeName:
+    return (editorColor.gtTypeName, editorColor.editorBg)
   of EditorColorPair.boolean:
     return (editorColor.gtBoolean, editorColor.editorBg)
   of EditorColorPair.specialVar:

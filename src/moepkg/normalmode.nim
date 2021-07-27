@@ -638,11 +638,15 @@ proc replaceCurrentCharacter(status: var EditorStatus, newCharacter: Rune) =
     newCharacter)
 
 proc openBlankLineBelowAndEnterInsertMode(status: var EditorStatus) =
-  currentBufStatus.openBlankLineBelow(currentMainWindowNode)
+  currentBufStatus.openBlankLineBelow(currentMainWindowNode,
+                                      status.settings.autoIndent,
+                                      status.settings.tabStop)
   status.changeMode(Mode.insert)
 
 proc openBlankLineAboveAndEnterInsertMode(status: var EditorStatus) =
-  currentBufStatus.openBlankLineAbove(currentMainWindowNode)
+  currentBufStatus.openBlankLineAbove(currentMainWindowNode,
+                                      status.settings.autoIndent,
+                                      status.settings.tabStop)
 
   var highlight = currentMainWindowNode.highlight
   highlight.updateHighlight(

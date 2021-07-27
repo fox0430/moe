@@ -145,23 +145,24 @@ iterator parseReservedWord(
     yield (buffer[pos ..< last], reservedWord.color)
     buffer = buffer[last ..^ 1]
 
-proc getEditorColorPairInNim(kind: TokenClass,
-                             isProcName: bool): EditorColorPair =
+proc getEditorColorPairInNim(kind: TokenClass ): EditorColorPair =
 
   case kind:
     of gtKeyword: EditorColorPair.keyword
     of gtBoolean: EditorColorPair.boolean
     of gtSpecialVar: EditorColorPair.specialVar
+    of gtOperator: EditorColorPair.functionName
     of gtBuiltin: EditorColorPair.builtin
     of gtStringLit: EditorColorPair.stringLit
     of gtDecNumber: EditorColorPair.decNumber
     of gtComment: EditorColorPair.comment
     of gtLongComment: EditorColorPair.longComment
     of gtPreprocessor: EditorColorPair.preprocessor
+    of gtFunctionName: EditorColorPair.functionName
+    of gtTypeName: EditorColorPair.typeName
     of gtWhitespace, gtPunctuation: EditorColorPair.defaultChar
     else:
-      if isProcName: EditorColorPair.functionName
-      else: EditorColorPair.defaultChar
+      EditorColorPair.defaultChar
 
 proc getEditorColorPair(kind: TokenClass,
                         language: SourceLanguage): EditorColorPair =
@@ -225,15 +226,12 @@ proc initHighlight*(buffer: string,
      language == SourceLanguage.langMarkDown:
     splitByNewline(buffer, EditorColorPair.defaultChar)
     return result
-
+  
   var token = GeneralTokenizer()
   token.initGeneralTokenizer(buffer)
   var pad: string
   if buffer.parseWhile(pad, {' ', '\x09'..'\x0D'}) > 0:
     splitByNewline(pad, EditorColorPair.defaultChar)
-
-  # Only use in nim
-  var isProcName = false
 
   while true:
     try:
@@ -252,19 +250,9 @@ proc initHighlight*(buffer: string,
       continue
 
     let color = if language == SourceLanguage.langNim:
-                  getEditorColorPairInNim(token.kind, isProcName)
+                  getEditorColorPairInNim(token.kind)
                 else:
                   getEditorColorPair(token.kind, language)
-
-    isProcName = if (language == SourceLanguage.langNim) and
-                   (buffer[first.. last] == "proc" or
-                   buffer[first.. last] == "macro" or
-                   buffer[first.. last] == "template" or
-                   buffer[first.. last] == "func"): true
-                  elif language == SourceLanguage.langNim and
-                       isProcName and
-                       token.kind == gtWhitespace: true
-                 else: false
 
     if token.kind == gtComment:
       for r in buffer[first..last].parseReservedWord(reservedWords, color):
@@ -324,3 +312,6 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langMarkDown
   else:
     return SourceLanguage.langNone
+
+when isMainModule:
+  echo initHighlight(readFile(currentSourcePath),@[],langNim).colorSegments

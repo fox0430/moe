@@ -1,4 +1,4 @@
-import unicode, os, osproc
+import unicode, os
 import independentutils, platform, settings
 
 proc runesToStrings(runes: seq[seq[Rune]]): string =
@@ -22,13 +22,15 @@ proc sendToClipboard*(buffer: seq[seq[Rune]],
 
   case CURRENT_PLATFORM:
     of linux:
-      ## Check if X server is running
-      let (_, exitCode) = execCmdEx("xset q")
-      if exitCode == 0:
-        let cmd = if tool == ClipboardToolOnLinux.xclip:
-                    "xclip -r <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
-                  else:
-                    "xsel <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
+      let cmd = if tool == ClipboardToolOnLinux.xclip:
+                  "xclip -r <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
+                elif tool == ClipboardToolOnLinux.xsel:
+                  "xsel <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
+                elif tool == ClipboardToolOnLinux.wlClipboard:
+                  "wl-copy <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
+                else:
+                  ""
+      if cmd.len > 0:
         discard execShellCmd(cmd)
     of wsl:
       let cmd = "clip.exe <<" & "'" & delimiterStr & "'" & "\n" & str & "\n"  & delimiterStr & "\n"

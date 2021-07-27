@@ -53,7 +53,7 @@ smoothScrollSpeed = 15
 [Clipboard]
 enable = true
 
-toolOnLinux = "xsel"
+# toolOnLinux = "xsel"
 
 [BuildOnSave]
 
@@ -328,6 +328,7 @@ visualModeBg = "purple_1"
 defaultChar = "white"
 gtKeyword = "skyBlue1"
 gtFunctionName = "gold1"
+gtTypeName = "green"
 gtBoolean = "yellow"
 gtStringLit = "yellow"
 gtSpecialVar = "green"

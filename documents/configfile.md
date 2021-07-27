@@ -157,6 +157,9 @@ enable
 
 Set clipboard tool for Linux (string)  
 default is xsel
+
+```xsel``` or ```xclip``` or ```wl-clipboard```.
+
 ```
 toolOnLinux
 ```
@@ -1300,6 +1303,11 @@ gtKeyword
 Syntax highlighting color
 ```
 gtFunctionName
+```
+
+Syntax highlighting color
+```
+gtTypeName
 ```
 
 Syntax highlighting color

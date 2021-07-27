@@ -1,4 +1,4 @@
-import parsetoml, os, json, macros, times, options, strformat
+import parsetoml, os, json, macros, times, options, strformat, osproc, strutils
 from strutils import parseEnum, endsWith, parseInt
 export TomlError
 
@@ -7,7 +7,7 @@ when (NimMajor, NimMinor, NimPatch) > (1, 3, 0):
   from strutils import nimIdentNormalize
   export strutils.nimIdentNormalize
 
-import ui, color, unicodeext, highlight
+import ui, color, unicodeext, highlight, platform, independentutils
 
 type DebugWindowNodeSettings* = object
   enable*: bool
@@ -149,10 +149,12 @@ type PersistSettings* = object
   cursorPosition*: bool
 
 type ClipboardToolOnLinux* = enum
+  none
   xsel
   xclip
+  wlClipboard
 
-type ClipBoardSettings* = object
+type ClipboardSettings* = object
   enable*: bool
   toolOnLinux*: ClipboardToolOnLinux
 
@@ -179,7 +181,7 @@ type EditorSettings* = object
   autoDeleteParen*: bool
   smoothScroll*: bool
   smoothScrollSpeed*: int
-  clipboard*: ClipBoardSettings
+  clipboard*: ClipboardSettings
   buildOnSave*: BuildOnSaveSettings
   filerSettings*: FilerSettings
   autocompleteSettings*: AutocompleteSettings
@@ -316,9 +318,33 @@ proc initPersistSettings(): PersistSettings =
   result.search = true
   result.cursorPosition = true
 
-proc initClipboardSettings(): ClipBoardSettings =
+# Automatically set the clipboard tool on GNU/Linux
+proc autoSetClipboardTool(): ClipboardToolOnLinux =
+  result = ClipboardToolOnLinux.none
+
+  case CURRENT_PLATFORM:
+    of linux:
+      ## Check if X server is running
+      if execCmdExNoOutput("xset q") == 0:
+
+        if execCmdExNoOutput("xsel --version") == 0:
+          result = ClipboardToolOnLinux.xsel
+        elif execCmdExNoOutput("xclip -version") == 0:
+          let (output, _) = execCmdEx("xclip -version")
+          # Check xclip version
+          let
+            lines = output.splitLines
+            versionStr = (strutils.splitWhitespace(lines[0]))[2]
+          if parseFloat(versionStr) >= 0.13:
+            result = ClipboardToolOnLinux.xclip
+        elif execCmdExNoOutput("wl-copy -v") == 0:
+          result = ClipboardToolOnLinux.wlClipboard
+    else:
+      discard
+
+proc initClipboardSettings(): ClipboardSettings =
   result.enable = true
-  result.toolOnLinux = ClipboardToolOnLinux.xsel
+  result.toolOnLinux = autoSetClipboardTool()
 
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = ColorTheme.dark
@@ -487,6 +513,9 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
     foreground:
       colorFromNode(getScope("keyword"){"foreground"})
   setEditorColor gtFunctionName:
+    foreground:
+      colorFromNode(getScope("entity"){"foreground"})
+  setEditorColor gtTypeName:
     foreground:
       colorFromNode(getScope("entity"){"foreground"})
   setEditorColor gtBoolean:
@@ -837,8 +866,6 @@ proc loadVSCodeTheme*(): ColorTheme =
 proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
   result = initEditorSettings()
 
-  var vscodeTheme = false
-
   if settings.contains("Standard"):
     template cursorType(str: string): untyped =
       parseEnum[CursorType](str)
@@ -846,8 +873,6 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Standard"].contains("theme"):
       let themeString = settings["Standard"]["theme"].getStr()
       result.editorColorTheme = getTheme(themeString)
-      if result.editorColorTheme == ColorTheme.vscode:
-        vscodeTheme = true
 
     if settings["Standard"].contains("number"):
       result.view.lineNumber = settings["Standard"]["number"].getbool()
@@ -926,16 +951,21 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       result.view.indentationLines = settings["Standard"]["indentationLines"].getbool()
 
 
-  if settings.contains("ClipBoard"):
-    if settings["ClipBoard"].contains("enable"):
-      result.clipboard.enable = settings["ClipBoard"]["enable"].getbool()
+  if settings.contains("Clipboard"):
+    if settings["Clipboard"].contains("enable"):
+      result.clipboard.enable = settings["Clipboard"]["enable"].getbool()
 
-    if settings["ClipBoard"].contains("toolOnLinux"):
-      let str = settings["ClipBoard"]["toolOnLinux"].getStr
+    if settings["Clipboard"].contains("toolOnLinux"):
+      let str = settings["Clipboard"]["toolOnLinux"].getStr
       case str:
-        of "xsel": result.clipboard.toolOnLinux = ClipboardToolOnLinux.xsel
-        of "xclip": result.clipboard.toolOnLinux = ClipboardToolOnLinux.xclip
-        else: result.clipboard.toolOnLinux = ClipboardToolOnLinux.xsel
+        of "xsel":
+          result.clipboard.toolOnLinux = ClipboardToolOnLinux.xsel
+        of "xclip":
+          result.clipboard.toolOnLinux = ClipboardToolOnLinux.xclip
+        of "wl-clipboard":
+          result.clipboard.toolOnLinux = ClipboardToolOnLinux.wlClipboard
+        else:
+          result.clipboard.toolOnLinux = ClipboardToolOnLinux.xsel
 
   if settings.contains("TabLine"):
     if settings["TabLine"].contains("allBuffer"):
@@ -1304,7 +1334,8 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
         let setting = bufStatusSettings["bufferLen"].getbool
         result.debugModeSettings.bufStatus.bufferLen = setting
 
-  if not vscodeTheme and settings.contains("Theme"):
+  if result.editorColorTheme == ColorTheme.config and
+     settings.contains("Theme"):
     if settings["Theme"].contains("baseTheme"):
       let themeString = settings["Theme"]["baseTheme"].getStr()
       if fileExists(themeString):
@@ -1490,6 +1521,9 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("gtFunctionName"):
       ColorThemeTable[ColorTheme.config].gtFunctionName = color("gtFunctionName")
 
+    if settings["Theme"].contains("gtTypeName"):
+      ColorThemeTable[ColorTheme.config].gtTypeName = color("gtTypeName")
+
     if settings["Theme"].contains("gtBoolean"):
       ColorThemeTable[ColorTheme.config].gtBoolean = color("gtBoolean")
 
@@ -1615,7 +1649,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
     result.editorColorTheme = ColorTheme.config
 
-  if vscodeTheme:
+  if result.editorColorTheme == ColorTheme.vscode:
     result.editorColorTheme = loadVSCodeTheme()
 
 proc validateTomlConfig(toml: TomlValueRef): Option[string] =
@@ -1670,8 +1704,8 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         else:
           return some($item)
 
-  template validateClipBoardTable() =
-    for item in json["ClipBoard"].pairs:
+  template validateClipboardTable() =
+    for item in json["Clipboard"].pairs:
       case item.key:
         of "enable":
           if not (item.val["type"].getStr == "bool"):
@@ -1937,8 +1971,8 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
     case table:
       of "Standard":
         validateStandardTable()
-      of "ClipBoard":
-        validateClipBoardTable()
+      of "Clipboard":
+        validateClipboardTable()
       of "TabLine":
         validateTabLineTable()
       of "StatusLine":
@@ -2248,6 +2282,7 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "defaultChar = \"{$theme.defaultChar}\""
   result.addLine fmt "gtKeyword = \"{$theme.gtKeyword}\""
   result.addLine fmt "gtFunctionName = \"{$theme.gtFunctionName}\""
+  result.addLine fmt "gtTypeName= \"{$theme.gtTypeName}\""
   result.addLine fmt "gtBoolean = \"{$theme.gtBoolean}\""
   result.addLine fmt "gtStringLit = \"{$theme.gtStringLit}\""
   result.addLine fmt "gtSpecialVar = \"{$theme.gtSpecialVar}\""

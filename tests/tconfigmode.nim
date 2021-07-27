@@ -47,11 +47,12 @@ suite "Config mode: Init buffer":
 
   test "Init ClipBoard table buffer":
     var status = initEditorStatus()
+    status.settings.clipboard.toolOnLinux = ClipboardToolOnLinux.none
     let buffer = status.settings.clipboard.initClipBoardTableBuffer
 
     const sample = @[ru "ClipBoard",
                      ru "  enable                         true",
-                     ru "  toolOnLinux                    xsel"]
+                     ru "  toolOnLinux                    none"]
 
     for index, line in buffer:
       check sample[index] == line
@@ -336,6 +337,10 @@ suite "Config mode: Init buffer":
                      ru "",
                      ru "  functionName",
                      ru "    foreground                   gold1",
+                     ru "    background                   default",
+                     ru "",
+                     ru "  typeName",
+                     ru "    foreground                   green",
                      ru "    background                   default",
                      ru "",
                      ru "  boolean",
@@ -698,6 +703,7 @@ suite "Config mode: Get ClipBoard table setting values":
 
   test "Get toolOnLinux value":
     var status = initEditorStatus()
+    status.settings.clipboard.toolOnLinux = ClipboardToolOnLinux.none
     let clipboardSettings = status.settings.clipboard
 
     const name = "toolOnLinux"
