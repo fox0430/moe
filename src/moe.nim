@@ -17,6 +17,20 @@ proc loadPersistData(status: var EditorStatus) =
     currentMainWindowNode.restoreCursorPostion(currentBufStatus,
                                                status.lastPosition)
 
+proc addBufferStatus(status: var EditorStatus,
+                     parsedList: CmdParsedList) =
+
+  if parsedList.path.len > 0:
+    for path in parsedList.path:
+      if dirExists(path):
+        status.addNewBuffer(path, Mode.filer)
+      else:
+        status.addNewBuffer(path)
+        if parsedList.isReadonly:
+          status.bufStatus[^1].isReadonly = true
+  else:
+    status.addNewBuffer
+
 proc initEditor(): EditorStatus =
   let parsedList = parseCommandLineOption(commandLineParams())
 
@@ -33,16 +47,10 @@ proc initEditor(): EditorStatus =
     exitUi()
     quit())
 
-  if parsedList.len > 0:
-    for p in parsedList:
-      if dirExists(p.filename):
-        result.addNewBuffer(p.filename, Mode.filer)
-      else:
-        result.addNewBuffer(p.filename)
-  else:
-    result.addNewBuffer
+  result.addBufferStatus(parsedList)
 
   result.loadPersistData
+
 
   disableControlC()
 

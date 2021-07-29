@@ -1,6 +1,8 @@
 import parseopt, pegs, os, strformat
 
-type CmdParsedList* = seq[tuple[filename: string]]
+type CmdParsedList* = object
+  path*: seq[string]
+  isReadonly*: bool
 
 proc staticReadVersionFromNimble: string {.compileTime.} =
   let peg = """@ "version" \s* "=" \s* \" {[0-9.]+} \" @ $""".peg
@@ -59,11 +61,12 @@ proc parseCommandLineOption*(line: seq[string]): CmdParsedList =
   for kind, key, val in parsedLine.getopt():
     case kind:
       of cmdArgument:
-        result.add((filename: key))
+        result.path.add(key)
       of cmdShortOption:
         case key:
           of "v": writeVersion()
           of "h": writeHelp()
+          of "R": result.isReadonly = true
           else: writeCmdLineError(kind, key)
       of cmdLongOption:
         case key:

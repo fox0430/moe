@@ -155,6 +155,8 @@ proc yankWord(status: var EditorStatus, registerName: string) =
                             status.settings)
 
 proc deleteWord(status: var EditorStatus) =
+  if currentBufStatus.isReadonly: return
+
   const registerName = ""
   currentBufStatus.deleteWord(
     currentMainWindowNode,
@@ -173,6 +175,8 @@ proc deleteWord(status: var EditorStatus, registerName: string) =
 
 # ci command
 proc changeInnerCommand(status: var EditorStatus, key: Rune) =
+  if currentBufStatus.isReadonly: return
+
   let
     currentLine = currentMainWindowNode.currentLine
     oldLine = currentBufStatus.buffer[currentLine]
@@ -202,6 +206,8 @@ proc changeInnerCommand(status: var EditorStatus,
                         key: Rune,
                         registerName: string) =
 
+  if currentBufStatus.isReadonly: return
+
   let
     currentLine = currentMainWindowNode.currentLine
     oldLine = currentBufStatus.buffer[currentLine]
@@ -229,6 +235,8 @@ proc changeInnerCommand(status: var EditorStatus,
 
 # di command
 proc deleteInnerCommand(status: var EditorStatus, key: Rune, registerName: string) =
+  if currentBufStatus.isReadonly: return
+
   # Delete inside paren and enter insert mode
   if isParen(key):
     if registerName.len > 0:
@@ -256,6 +264,8 @@ proc deleteInnerCommand(status: var EditorStatus, key: Rune, registerName: strin
 
 # di command
 proc deleteInnerCommand(status: var EditorStatus, key: Rune) =
+  if currentBufStatus.isReadonly: return
+
   const registerName = ""
   status.deleteInnerCommand(key, registerName)
 
@@ -368,6 +378,8 @@ proc yankToNextBlankLine(status: var EditorStatus) =
 
 # dd command
 proc deleteLines(status: var EditorStatus) =
+  if currentBufStatus.isReadonly: return
+
   const registerName = ""
   let
     startLine = currentMainWindowNode.currentLine
@@ -382,6 +394,10 @@ proc deleteLines(status: var EditorStatus) =
                                status.settings)
 
 proc deleteLines(status: var EditorStatus, registerName: string) =
+  if currentBufStatus.isReadonly: return
+
+  if currentBufStatus.isReadonly: return
+
   let
     startLine = currentMainWindowNode.currentLine
     count = min(
@@ -436,6 +452,8 @@ proc yankCharacters(status: var Editorstatus, registerName: string) =
     isDelete)
 
 proc deleteCharacters(status: var EditorStatus, registerName: string) =
+  if currentBufStatus.isReadonly: return
+
   currentBufStatus.deleteCharacters(
     status.registers,
     registerName,
@@ -445,6 +463,8 @@ proc deleteCharacters(status: var EditorStatus, registerName: string) =
     status.settings)
 
 proc deleteCharacters(status: var EditorStatus) =
+  if currentBufStatus.isReadonly: return
+
   const registerName = ""
   currentBufStatus.deleteCharacters(
     status.registers,
@@ -458,6 +478,8 @@ proc deleteCharacters(status: var EditorStatus) =
 proc deleteCharactersUntilEndOfLine(status: var EditorStatus,
                                     registerName: string) =
 
+  if currentBufStatus.isReadonly: return
+
   let lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
   currentBufStatus.cmdLoop = lineWidth - currentMainWindowNode.currentColumn
 
@@ -469,6 +491,8 @@ proc deleteCharactersUntilEndOfLine(status: var EditorStatus,
 
 # d$ command
 proc deleteCharactersUntilEndOfLine(status: var EditorStatus) =
+  if currentBufStatus.isReadonly: return
+
   let lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
   currentBufStatus.cmdLoop = lineWidth - currentMainWindowNode.currentColumn
 
@@ -483,6 +507,8 @@ proc deleteCharactersUntilEndOfLine(status: var EditorStatus) =
 proc deleteCharacterBeginningOfLine(status: var EditorStatus,
                                     registerName: string) =
 
+  if currentBufStatus.isReadonly: return
+
   currentBufStatus.deleteCharacterBeginningOfLine(
     status.registers,
     currentMainWindowNode,
@@ -491,6 +517,8 @@ proc deleteCharacterBeginningOfLine(status: var EditorStatus,
 
 # d0 command
 proc deleteCharacterBeginningOfLine(status: var EditorStatus) =
+  if currentBufStatus.isReadonly: return
+
   const registerName = ""
   status.deleteCharacterBeginningOfLine(registerName)
 
@@ -498,6 +526,8 @@ proc deleteCharacterBeginningOfLine(status: var EditorStatus) =
 # Yank and delete the line from current line to last line
 proc deleteFromCurrentLineToLastLine(status: var EditorStatus,
                                      registerName: string) =
+
+  if currentBufStatus.isReadonly: return
 
   let
     startLine = currentMainWindowNode.currentLine
@@ -514,6 +544,8 @@ proc deleteFromCurrentLineToLastLine(status: var EditorStatus,
 proc deleteLineFromFirstLineToCurrentLine(status: var EditorStatus,
                                           registerName: string) =
 
+  if currentBufStatus.isReadonly: return
+
   const startLine = 0
   let count = currentMainWindowNode.currentLine
   currentBufStatus.deleteLines(status.registers,
@@ -529,6 +561,8 @@ proc deleteLineFromFirstLineToCurrentLine(status: var EditorStatus,
 proc deleteTillPreviousBlankLine(status: var EditorStatus,
                                  registerName: string) =
 
+  if currentBufStatus.isReadonly: return
+
   currentBufStatus.deleteTillPreviousBlankLine(
     status.registers,
     currentMainWindowNode,
@@ -536,12 +570,16 @@ proc deleteTillPreviousBlankLine(status: var EditorStatus,
     status.settings)
 
 proc deleteTillPreviousBlankLine(status: var EditorStatus) =
+  if currentBufStatus.isReadonly: return
+
   const registerName = ""
   status.deleteTillPreviousBlankLine(registerName)
 
 # d} command
 proc deleteTillNextBlankLine(status: var EditorStatus,
                              registerName: string) =
+
+  if currentBufStatus.isReadonly: return
 
   currentBufStatus.deleteTillNextBlankLine(
     status.registers,
@@ -551,6 +589,8 @@ proc deleteTillNextBlankLine(status: var EditorStatus,
 
 # X and dh command
 proc cutCharacterBeforeCursor(status: var EditorStatus, registerName: string) =
+  if currentBufStatus.isReadonly: return
+
   if currentMainWindowNode.currentColumn > 0:
     let
       currentColumn = currentMainWindowNode.currentColumn
@@ -564,23 +604,33 @@ proc cutCharacterBeforeCursor(status: var EditorStatus, registerName: string) =
 
 # X and dh command
 proc cutCharacterBeforeCursor(status: var EditorStatus) =
+  if currentBufStatus.isReadonly: return
+
   const registerName = ""
   status.cutCharacterBeforeCursor(registerName)
 
 proc deleteTillNextBlankLine(status: var EditorStatus) =
+  if currentBufStatus.isReadonly: return
+
   const registerName = ""
   status.deleteTillNextBlankLine(registerName)
 
 proc deleteLineFromFirstLineToCurrentLine(status: var EditorStatus) =
+  if currentBufStatus.isReadonly: return
+
   const registerName = ""
   status.deleteLineFromFirstLineToCurrentLine(registerName)
 
 proc deleteFromCurrentLineToLastLine(status: var EditorStatus) =
+  if currentBufStatus.isReadonly: return
+
   const registerName = ""
   status.deleteFromCurrentLineToLastLine(registerName)
 
 # s and cl commands
 proc deleteCharacterAndEnterInsertMode(status: var EditorStatus) =
+  if currentBufStatus.isReadonly: return
+
   if currentBufStatus.buffer[currentMainWindowNode.currentLine].len > 0:
     let
       lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
@@ -596,6 +646,8 @@ proc deleteCharacterAndEnterInsertMode(status: var EditorStatus) =
 proc deleteCharacterAndEnterInsertMode(status: var EditorStatus,
                                        registerName: string) =
 
+  if currentBufStatus.isReadonly: return
+
   if currentBufStatus.buffer[currentMainWindowNode.currentLine].len > 0:
     let
       lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
@@ -609,6 +661,8 @@ proc deleteCharacterAndEnterInsertMode(status: var EditorStatus,
 
 # cc/S command
 proc deleteCharactersAfterBlankInLine(status: var EditorStatus) =
+  if currentBufStatus.isReadonly: return
+
   const registerName = ""
   currentBufStatus.deleteCharactersAfterBlankInLine(
     status.registers,
@@ -617,6 +671,8 @@ proc deleteCharactersAfterBlankInLine(status: var EditorStatus) =
     status.settings)
 
 proc enterInsertModeAfterCursor(status: var EditorStatus) =
+  if currentBufStatus.isReadonly: return
+
   let lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
   if lineWidth == 0: discard
   elif lineWidth == currentMainWindowNode.currentColumn: discard
@@ -624,11 +680,15 @@ proc enterInsertModeAfterCursor(status: var EditorStatus) =
   status.changeMode(Mode.insert)
 
 proc toggleCharacterAndMoveRight(status: var EditorStatus) =
+  if currentBufStatus.isReadonly: return
+
   currentBufStatus.toggleCharacters(
     currentMainWindowNode,
     currentBufStatus.cmdLoop)
 
 proc replaceCurrentCharacter(status: var EditorStatus, newCharacter: Rune) =
+  if currentBufStatus.isReadonly: return
+
   currentBufStatus.replaceCharacters(
     currentMainWindowNode,
     status.settings.autoIndent,
@@ -638,12 +698,16 @@ proc replaceCurrentCharacter(status: var EditorStatus, newCharacter: Rune) =
     newCharacter)
 
 proc openBlankLineBelowAndEnterInsertMode(status: var EditorStatus) =
+  if currentBufStatus.isReadonly: return
+
   currentBufStatus.openBlankLineBelow(currentMainWindowNode,
                                       status.settings.autoIndent,
                                       status.settings.tabStop)
   status.changeMode(Mode.insert)
 
 proc openBlankLineAboveAndEnterInsertMode(status: var EditorStatus) =
+  if currentBufStatus.isReadonly: return
+
   currentBufStatus.openBlankLineAbove(currentMainWindowNode,
                                       status.settings.autoIndent,
                                       status.settings.tabStop)
@@ -656,6 +720,19 @@ proc openBlankLineAboveAndEnterInsertMode(status: var EditorStatus) =
     status.searchHistory,
     status.settings)
 
+  status.changeMode(Mode.insert)
+
+proc moveToFirstNonBlankOfLineAndEnterInsertMode(status: var EditorStatus) =
+  if currentBufStatus.isReadonly: return
+
+  currentBufStatus.moveToFirstNonBlankOfLine(currentMainWindowNode)
+  status.changeMode(Mode.insert)
+
+proc moveToEndOfLineAndEnterInsertMode(status: var EditorStatus) =
+  if currentBufStatus.isReadonly: return
+
+  let lineLen = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
+  currentMainWindowNode.currentColumn = lineLen
   status.changeMode(Mode.insert)
 
 proc closeCurrentWindow(status: var EditorStatus, height, width: int) =
@@ -706,6 +783,8 @@ proc addRegister(status: var EditorStatus, command, registerName: string) =
     discard
 
 proc pasteFromRegister(status: var EditorStatus, command, name: string) =
+  if currentBufStatus.isReadonly: return
+
   if name.len == 0: return
 
   case command:
@@ -793,6 +872,22 @@ proc isChangeModeKey(key: Rune): bool =
           key == ord('a') or
           key == ord('A')
 
+proc changeModeToInsertMode(status: var EditorStatus) {.inline.} =
+  if not currentBufStatus.isReadonly:
+    status.changeMode(Mode.insert)
+
+proc changeModeToReplaceMode(status: var EditorStatus) {.inline.} =
+  if not currentBufStatus.isReadonly:
+    status.changeMode(Mode.replace)
+
+proc changeModeToVisualMode(status: var EditorStatus) {.inline.} =
+  if not currentBufStatus.isReadonly:
+    status.changeMode(Mode.visual)
+
+proc changeModeToVisualBlockMode(status: var EditorStatus) {.inline.} =
+  if not currentBufStatus.isReadonly:
+    status.changeMode(Mode.visualBlock)
+
 proc normalCommand(status: var EditorStatus,
                    commands: seq[Rune],
                    height, width: int) =
@@ -812,7 +907,7 @@ proc normalCommand(status: var EditorStatus,
   elif isControlJ(key):
     status.movePrevWindow
   elif isControlV(key):
-    status.changeMode(Mode.visualBlock)
+    status.changeModeToVisualBlockMode
   elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
     for i in 0 ..< cmdLoop: currentMainWindowNode.keyLeft
   elif key == ord('l') or isRightKey(key):
@@ -982,20 +1077,17 @@ proc normalCommand(status: var EditorStatus,
       currentMainWindowNode,
       secondKey)
   elif key == ord('R'):
-    status.changeMode(Mode.replace)
+    status.changeModeToReplaceMode
   elif key == ord('i'):
-    status.changeMode(Mode.insert)
+    status.changeModeToInsertMode
   elif key == ord('I'):
-    currentBufStatus.moveToFirstNonBlankOfLine(currentMainWindowNode)
-    status.changeMode(Mode.insert)
+    status.moveToFirstNonBlankOfLineAndEnterInsertMode
   elif key == ord('v'):
-    status.changeMode(Mode.visual)
+    status.changeModeToVisualMode
   elif key == ord('a'):
     status.enterInsertModeAfterCursor
   elif key == ord('A'):
-    let lineLen = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
-    currentMainWindowNode.currentColumn = lineLen
-    status.changeMode(Mode.insert)
+    status.moveToEndOfLineAndEnterInsertMode
   elif key == ord('u'):
     status.bufStatus[currentBufferIndex].undo(currentMainWindowNode)
   elif isControlR(key):
