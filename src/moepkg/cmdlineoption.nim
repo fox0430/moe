@@ -36,6 +36,7 @@ Usage:
   moe [file]       Edit file
 
 Arguments:
+  -R               Readonly mode
   -h, --help       Print this help
   -v, --version    Print version
 """
