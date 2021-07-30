@@ -26,8 +26,6 @@ proc addBufferStatus(status: var EditorStatus,
         status.addNewBuffer(path, Mode.filer)
       else:
         status.addNewBuffer(path)
-        if parsedList.isReadonly:
-          status.bufStatus[^1].isReadonly = true
   else:
     status.addNewBuffer
 
@@ -47,10 +45,12 @@ proc initEditor(): EditorStatus =
     exitUi()
     quit())
 
+  if parsedList.isReadonly:
+    result.isReadonly = true
+
   result.addBufferStatus(parsedList)
 
   result.loadPersistData
-
 
   disableControlC()
 
