@@ -31,6 +31,7 @@ type EditorStatus* = object
   autoBackupStatus*: AutoBackupStatus
   isSearchHighlight*: bool
   lastPosition*: seq[LastPosition]
+  isReadonly*: bool
 
 proc initEditorStatus*(): EditorStatus =
   result.currentDir = getCurrentDir().toRunes
@@ -722,6 +723,8 @@ proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode) =
   status.bufStatus.add(initBufferStatus(path, mode))
 
   let index = status.bufStatus.high
+
+  status.bufStatus[index].isReadonly = status.isReadonly
 
   if mode != Mode.filer:
     if not fileExists(filename):
