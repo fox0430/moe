@@ -1,7 +1,7 @@
 import unittest
 import ncurses
 import moepkg/[editorstatus, gapbuffer, unicodeext, editor, bufferstatus,
-               register]
+               register, settings]
 
 include moepkg/normalmode
 
@@ -1591,3 +1591,116 @@ suite "Normal mode: Open the blank line above and enter insert mode":
     check currentBufStatus.buffer[1] == ru "abc"
 
     check currentMainWindowNode.currentLine == 0
+
+suite "Normal mode: Run command when Readonly mode":
+  test "Enter insert mode (\"i\") command":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "i"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.mode == Mode.normal
+
+  test "Enter insert mode (\"I\") command":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "I"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.mode == Mode.normal
+
+  test "Open the blank line and enter insert mode (\"o\") command":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "o"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.mode == Mode.normal
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
+  test "Open the blank line and enter insert mode (\"O\") command":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "O"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.mode == Mode.normal
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
+  test "Enter visual mode (\"v\") command":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "v"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.mode == Mode.normal
+
+  test "Enter visual block mode (\"V\") command":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "V"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.mode == Mode.normal
+
+  test "Enter replace mode (\"R\") command":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "R"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.mode == Mode.normal
+
+  test "Delete lines (\"dd\") command":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "dd"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
+  test "Paste lines (\"p\") command":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    var settings = initEditorSettings()
+    settings.clipboard.enable = false
+
+    status.registers.addRegister(ru "def", settings)
+
+    const command = ru "p"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
