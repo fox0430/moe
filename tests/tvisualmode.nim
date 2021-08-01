@@ -467,7 +467,8 @@ suite "Visual block mode: Delete buffer (Disable clipboard)":
     currentBufStatus.deleteBufferBlock(status.registers,
                                        currentMainWindowNode,
                                        area,
-                                       status.settings)
+                                       status.settings,
+                                       status.commandLine)
 
     check(currentBufStatus.buffer[0] == ru"bc")
     check(currentBufStatus.buffer[1] == ru"ef")
@@ -695,7 +696,8 @@ suite "Visual block mode: Delete buffer":
     currentBufStatus.deleteBufferBlock(status.registers,
                                        currentMainWindowNode,
                                        area,
-                                       status.settings)
+                                       status.settings,
+                                       status.commandLine)
 
     if CURRENT_PLATFORM == Platforms.linux:
       let (output, exitCode) = execCmdEx("xclip -o")
@@ -733,7 +735,8 @@ suite "Visual block mode: Delete buffer":
     currentBufStatus.deleteBufferBlock(status.registers,
                                        currentMainWindowNode,
                                        area,
-                                       status.settings)
+                                       status.settings,
+                                       status.commandLine)
 
   test "Fix #885":
     var status = initEditorStatus()
@@ -765,10 +768,12 @@ suite "Visual block mode: Delete buffer":
 
     let area = currentBufStatus.selectArea
     status.settings.clipboard.enable = true
-    currentBufStatus.deleteBufferBlock(status.registers,
+    currentBufStatus.deleteBufferBlock(
+      status.registers,
       currentMainWindowNode,
       area,
-      status.settings)
+      status.settings,
+      status.commandLine)
 
     check currentBufStatus.buffer[0] == ru"c"
     check currentBufStatus.buffer[1] == ru""
@@ -805,7 +810,7 @@ suite "Visual mode: Join lines":
     let area = currentBufStatus.selectArea
 
     status.update
-    currentBufStatus.joinLines(currentMainWindowNode, area)
+    currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)
 
     check(currentBufStatus.buffer.len == 1)
     check(currentBufStatus.buffer[0] == ru"abcdefghi")
@@ -841,7 +846,7 @@ suite "Visual block mode: Join lines":
     let area = currentBufStatus.selectArea
 
     status.update
-    currentBufStatus.joinLines(currentMainWindowNode, area)
+    currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)
 
     check(currentBufStatus.buffer.len == 1)
     check(currentBufStatus.buffer[0] == ru"abcdefghi")
@@ -1401,7 +1406,8 @@ suite "Visual block mode: Insert buffer":
         insertBuffer,
         area,
         status.settings.tabStop,
-        status.settings.autoCloseParen)
+        status.settings.autoCloseParen,
+        status.commandLine)
 
     check currentBufStatus.buffer[0] == ru"  abc"
     check currentBufStatus.buffer[1] == ru"  def"
