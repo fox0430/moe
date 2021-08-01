@@ -904,6 +904,18 @@ proc registerCommand(status: var EditorStatus, command: seq[Rune]) =
        cmd.len == 3 and cmd[0 .. 1] == "ci":
     status.addRegister(cmd, $registerName)
 
+proc pasteAfterCursor(status: var EditorStatus) {.inline.} =
+  if currentBufStatus.isReadonly:
+    status.commandLine.writeReadonlyModeWarning
+  else:
+    currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
+
+proc pasteBeforeCursor(status: var EditorStatus) {.inline.} =
+  if currentBufStatus.isReadonly:
+    status.commandLine.writeReadonlyModeWarning
+  else:
+    currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
+
 proc isMovementKey(key: Rune): bool =
   return isControlK(key) or
          isControlJ(key) or
@@ -1106,9 +1118,9 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('Y'):
     status.yankLines
   elif key == ord('p'):
-    currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
+    status.pasteAfterCursor
   elif key == ord('P'):
-    currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
+    status.pasteBeforeCursor
   elif key == ord('>'):
     for i in 0 ..< cmdLoop:
       currentBufStatus.addIndent(currentMainWindowNode, status.settings.tabStop)
