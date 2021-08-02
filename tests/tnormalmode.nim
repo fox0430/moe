@@ -1643,28 +1643,6 @@ suite "Normal mode: Run command when Readonly mode":
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
 
-  test "Enter visual mode (\"v\") command":
-    var status = initEditorStatus()
-    status.isReadonly = true
-    status.addNewBuffer
-    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
-
-    const command = ru "v"
-    status.normalCommand(command, 100, 100)
-
-    check currentBufStatus.mode == Mode.normal
-
-  test "Enter visual block mode (\"V\") command":
-    var status = initEditorStatus()
-    status.isReadonly = true
-    status.addNewBuffer
-    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
-
-    const command = ru "V"
-    status.normalCommand(command, 100, 100)
-
-    check currentBufStatus.mode == Mode.normal
-
   test "Enter replace mode (\"R\") command":
     var status = initEditorStatus()
     status.isReadonly = true
