@@ -1,6 +1,6 @@
 import terminal, strutils, sequtils, times
 import editorstatus, ui, gapbuffer, unicodeext, window, movement, editor,
-       bufferstatus, settings, register
+       bufferstatus, settings, register, messages, commandline
 
 proc initSelectArea(startLine, startColumn: int): SelectArea =
   result.startLine = startLine
@@ -78,7 +78,12 @@ proc deleteBuffer(bufStatus: var BufferStatus,
                   registers: var Registers,
                   windowNode: WindowNode,
                   area: SelectArea,
-                  settings: EditorSettings) =
+                  settings: EditorSettings,
+                  commandLine: var CommandLine) =
+
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
 
   if bufStatus.buffer.len == 1 and
      bufStatus.buffer[windowNode.currentLine].len < 1: return
@@ -125,7 +130,12 @@ proc deleteBufferBlock(bufStatus: var BufferStatus,
                        registers: var Registers,
                        windowNode: WindowNode,
                        area: SelectArea,
-                       settings: EditorSettings) =
+                       settings: EditorSettings,
+                       commandLine: var CommandLine) =
+
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
 
   if bufStatus.buffer.len == 1 and
      bufStatus.buffer[windowNode.currentLine].len < 1: return
@@ -153,7 +163,12 @@ proc deleteBufferBlock(bufStatus: var BufferStatus,
 proc addIndent(bufStatus: var BufferStatus,
                windowNode: WindowNode,
                area: SelectArea,
-               tabStop: int) =
+               tabStop: int,
+               commandLine: var CommandLine) =
+
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
 
   windowNode.currentLine = area.startLine
   for i in area.startLine .. area.endLine:
@@ -165,7 +180,12 @@ proc addIndent(bufStatus: var BufferStatus,
 proc deleteIndent(bufStatus: var BufferStatus,
                   windowNode: WindowNode,
                   area: SelectArea,
-                  tabStop: int) =
+                  tabStop: int,
+                  commandLine: var CommandLine) =
+
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
 
   windowNode.currentLine = area.startLine
   for i in area.startLine .. area.endLine:
@@ -174,7 +194,15 @@ proc deleteIndent(bufStatus: var BufferStatus,
 
   windowNode.currentLine = area.startLine
 
-proc insertIndent(bufStatus: var BufferStatus, area: SelectArea, tabStop: int) =
+proc insertIndent(bufStatus: var BufferStatus,
+                  area: SelectArea,
+                  tabStop: int,
+                  commandLine: var CommandLine) =
+
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
+
   for i in area.startLine .. area.endLine:
     let oldLine = bufStatus.buffer[i]
     var newLine = bufStatus.buffer[i]
@@ -183,7 +211,15 @@ proc insertIndent(bufStatus: var BufferStatus, area: SelectArea, tabStop: int) =
                    bufStatus.buffer[i].high))
     if oldLine != newLine: bufStatus.buffer[i] = newLine
 
-proc replaceCharacter(bufStatus: var BufferStatus, area: SelectArea, ch: Rune) =
+proc replaceCharacter(bufStatus: var BufferStatus,
+                      area: SelectArea,
+                      ch: Rune,
+                      commandLine: var CommandLine) =
+
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
+
   for i in area.startLine .. area.endLine:
     let oldLine = bufStatus.buffer[i]
     var newLine = bufStatus.buffer[i]
@@ -201,7 +237,12 @@ proc replaceCharacter(bufStatus: var BufferStatus, area: SelectArea, ch: Rune) =
 
 proc replaceCharacterBlock(bufStatus: var BufferStatus,
                            area: SelectArea,
-                           ch: Rune) =
+                           ch: Rune,
+                           commandLine: var CommandLine) =
+
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
 
   for i in area.startLine .. area.endLine:
     let oldLine = bufStatus.buffer[i]
@@ -212,13 +253,25 @@ proc replaceCharacterBlock(bufStatus: var BufferStatus,
 
 proc joinLines(bufStatus: var BufferStatus,
                windowNode: WindowNode,
-               area: SelectArea) =
+               area: SelectArea,
+               commandLine: var CommandLine) =
+
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
 
   for i in area.startLine .. area.endLine:
     windowNode.currentLine = area.startLine
     bufStatus.joinLine(windowNode)
 
-proc toLowerString(bufStatus: var BufferStatus, area: SelectArea) =
+proc toLowerString(bufStatus: var BufferStatus,
+                   area: SelectArea,
+                   commandLine: var CommandLine) =
+
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
+
   for i in area.startLine .. area.endLine:
     let oldLine = bufStatus.buffer[i]
     var newLine = bufStatus.buffer[i]
@@ -237,7 +290,14 @@ proc toLowerString(bufStatus: var BufferStatus, area: SelectArea) =
 
   inc(bufStatus.countChange)
 
-proc toLowerStringBlock(bufStatus: var BufferStatus, area: SelectArea) =
+proc toLowerStringBlock(bufStatus: var BufferStatus,
+                        area: SelectArea,
+                        commandLine: var CommandLine) =
+
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
+
   for i in area.startLine .. area.endLine:
     let oldLine = bufStatus.buffer[i]
     var newLine = bufStatus.buffer[i]
@@ -245,7 +305,14 @@ proc toLowerStringBlock(bufStatus: var BufferStatus, area: SelectArea) =
       newLine[j] = oldLine[j].toLower
     if oldLine != newLine: bufStatus.buffer[i] = newLine
 
-proc toUpperString(bufStatus: var BufferStatus, area: SelectArea) =
+proc toUpperString(bufStatus: var BufferStatus,
+                   area: SelectArea,
+                   commandLine: var CommandLine) =
+
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
+
   for i in area.startLine .. area.endLine:
     let oldLine = bufStatus.buffer[i]
     var newLine = bufStatus.buffer[i]
@@ -264,7 +331,14 @@ proc toUpperString(bufStatus: var BufferStatus, area: SelectArea) =
 
   inc(bufStatus.countChange)
 
-proc toUpperStringBlock(bufStatus: var BufferStatus, area: SelectArea) =
+proc toUpperStringBlock(bufStatus: var BufferStatus,
+                        area: SelectArea,
+                        commandLine: var CommandLine) =
+
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
+
   for i in area.startLine .. area.endLine:
     let oldLine = bufStatus.buffer[i]
     var newLine = bufStatus.buffer[i]
@@ -316,12 +390,25 @@ proc getInsertBuffer(status: var Editorstatus): seq[Rune] =
         status.settings.autoCloseParen,
         key)
 
+proc enterInsertMode(status: var EditorStatus) =
+  if currentBufStatus.isReadonly:
+    status.commandLine.writeReadonlyModeWarning
+  else:
+    currentMainWindowNode.currentLine = currentBufStatus.selectArea.startLine
+    currentMainWindowNode.currentColumn = 0
+    status.changeMode(Mode.insert)
+
 proc insertCharBlock(bufStatus: var BufferStatus,
                      windowNode: var WindowNode,
                      insertBuffer: seq[Rune],
                      area: SelectArea,
                      tabStop: int,
-                     autoCloseParen: bool) =
+                     autoCloseParen: bool,
+                     commandLine: var CommandLine) =
+
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
 
   if area.startLine == area.endLine: return
 
@@ -356,35 +443,40 @@ proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
     currentBufStatus.deleteBuffer(status.registers,
                                   currentMainWindowNode,
                                   area,
-                                  status.settings)
+                                  status.settings,
+                                  status.commandLine)
   elif key == ord('>'):
     currentBufStatus.addIndent(currentMainWindowNode,
                                area,
-                               status.settings.tabStop)
+                               status.settings.tabStop,
+                               status.commandLine)
   elif key == ord('<'):
     currentBufStatus.deleteIndent(currentMainWindowNode,
                                   area,
-                                  status.settings.tabStop)
+                                  status.settings.tabStop,
+                                  status.commandLine)
   elif key == ord('J'):
-    currentBufStatus.joinLines(currentMainWindowNode, area)
+    currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)
   elif key == ord('u'):
-    currentBufStatus.toLowerString(area)
+    currentBufStatus.toLowerString(area, status.commandLine)
   elif key == ord('U'):
-    currentBufStatus.toUpperString(area)
+    currentBufStatus.toUpperString(area, status.commandLine)
   elif key == ord('r'):
     let ch = currentMainWindowNode.getKey
     if not isEscKey(ch):
-      currentBufStatus.replaceCharacter(area, ch)
+      currentBufStatus.replaceCharacter(area, ch, status.commandLine)
   elif key == ord('I'):
-    currentMainWindowNode.currentLine = currentBufStatus.selectArea.startLine
-    currentMainWindowNode.currentColumn = 0
-    status.changeMode(Mode.insert)
+    status.enterInsertMode
   else: discard
 
 proc visualBlockCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSelectArea
 
   template insertCharacterMultipleLines() =
+    if currentBufStatus.isReadonly:
+      status.commandLine.writeReadonlyModeWarning
+      return
+
     status.changeMode(Mode.insert)
 
     currentMainWindowNode.currentLine = area.startLine
@@ -398,7 +490,8 @@ proc visualBlockCommand(status: var EditorStatus, area: var SelectArea, key: Run
         insertBuffer,
         area,
         status.settings.tabStop,
-        status.settings.autoCloseParen)
+        status.settings.autoCloseParen,
+        status.commandLine)
     else:
       currentMainWindowNode.currentLine = area.startLine
       currentMainWindowNode.currentColumn = area.startColumn
@@ -412,22 +505,28 @@ proc visualBlockCommand(status: var EditorStatus, area: var SelectArea, key: Run
     currentBufStatus.deleteBufferBlock(status.registers,
                                        currentMainWindowNode,
                                        area,
-                                       status.settings)
+                                       status.settings,
+                                       status.commandLine)
   elif key == ord('>'):
-    currentBufStatus.insertIndent(area, status.settings.tabStop)
+    currentBufStatus.insertIndent(
+      area,
+      status.settings.tabStop,
+      status.commandLine)
   elif key == ord('<'):
     currentBufStatus.deleteIndent(currentMainWindowNode,
                                   area,
-                                  status.settings.tabStop)
+                                  status.settings.tabStop,
+                                  status.commandLine)
   elif key == ord('J'):
-    currentBufStatus.joinLines(currentMainWindowNode, area)
+    currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)
   elif key == ord('u'):
-    currentBufStatus.toLowerStringBlock(area)
+    currentBufStatus.toLowerStringBlock(area, status.commandLine)
   elif key == ord('U'):
-    currentBufStatus.toUpperStringBlock(area)
+    currentBufStatus.toUpperStringBlock(area, status.commandLine)
   elif key == ord('r'):
     let ch = currentMainWindowNode.getKey
-    if not isEscKey(ch): currentBufStatus.replaceCharacterBlock(area, ch)
+    if not isEscKey(ch):
+      currentBufStatus.replaceCharacterBlock(area, ch, status.commandLine)
   elif key == ord('I'):
     insertCharacterMultipleLines()
   else: discard
@@ -504,8 +603,11 @@ proc visualMode*(status: var EditorStatus) =
       if getKey(currentMainWindowNode) == ord('g'):
         moveToFirstLine(status)
     elif key == ord('i'):
-      currentMainWindowNode.currentLine = currentBufStatus.selectArea.startLine
-      status.changeMode(Mode.insert)
+      if currentBufStatus.isReadonly:
+        status.commandLine.writeReadonlyModeWarning
+      else:
+        currentMainWindowNode.currentLine = currentBufStatus.selectArea.startLine
+        status.changeMode(Mode.insert)
     else:
       if isVisualBlockMode(currentBufStatus.mode):
         status.visualBlockCommand(currentBufStatus.selectArea, key)
