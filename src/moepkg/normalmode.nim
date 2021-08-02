@@ -963,16 +963,10 @@ proc changeModeToReplaceMode(status: var EditorStatus) {.inline.} =
     status.changeMode(Mode.replace)
 
 proc changeModeToVisualMode(status: var EditorStatus) {.inline.} =
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-  else:
-    status.changeMode(Mode.visual)
+  status.changeMode(Mode.visual)
 
 proc changeModeToVisualBlockMode(status: var EditorStatus) {.inline.} =
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-  else:
-    status.changeMode(Mode.visualBlock)
+  status.changeMode(Mode.visualBlock)
 
 proc normalCommand(status: var EditorStatus,
                    commands: seq[Rune],
