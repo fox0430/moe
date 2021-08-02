@@ -121,10 +121,13 @@ proc deleteBuffer(bufStatus: var BufferStatus,
                elif area.startColumn > 0:
                  area.startColumn - 1
                else: 0
+
   windowNode.currentColumn = column
   windowNode.expandedColumn = column
 
   inc(bufStatus.countChange)
+
+  bufStatus.isUpdate = true
 
 proc deleteBufferBlock(bufStatus: var BufferStatus,
                        registers: var Registers,
@@ -158,7 +161,10 @@ proc deleteBufferBlock(bufStatus: var BufferStatus,
 
   windowNode.currentLine = min(area.startLine, bufStatus.buffer.high)
   windowNode.currentColumn = area.startColumn
+
   inc(bufStatus.countChange)
+
+  bufStatus.isUpdate = true
 
 proc addIndent(bufStatus: var BufferStatus,
                windowNode: WindowNode,
