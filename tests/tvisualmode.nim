@@ -1504,7 +1504,7 @@ suite "Visual block mode: Run command when Readonly mode":
 
     status.resize(100, 100)
 
-    status.changeMode(Mode.visual)
+    status.changeMode(Mode.visualblock)
 
     currentBufStatus.selectArea = initSelectArea(
       currentMainWindowNode.currentLine,
@@ -1514,4 +1514,4 @@ suite "Visual block mode: Run command when Readonly mode":
 
     status.visualCommand(currentBufStatus.selectArea, ru'I')
 
-    check currentBufStatus.mode == Mode.visual
+    check currentBufStatus.mode == Mode.visualblock
