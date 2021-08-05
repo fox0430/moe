@@ -1439,6 +1439,31 @@ suite "Visual mode: Run command when Readonly mode":
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
 
+  test "Enter insert mode (\"I\" command)":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    currentBufStatus.selectArea = initSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectArea, ru'I')
+
+    check currentBufStatus.mode == Mode.visual
+
 suite "Visual block mode: Run command when Readonly mode":
   test "Delete buffer (\"x\" command)":
     var status = initEditorStatus()
@@ -1465,3 +1490,28 @@ suite "Visual block mode: Run command when Readonly mode":
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
+
+  test "Enter insert mode (\"I\" command)":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    currentBufStatus.selectArea = initSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectArea, ru'I')
+
+    check currentBufStatus.mode == Mode.visual
