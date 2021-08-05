@@ -608,9 +608,6 @@ proc visualMode*(status: var EditorStatus) =
     elif key == ord('g'):
       if getKey(currentMainWindowNode) == ord('g'):
         moveToFirstLine(status)
-    elif key == ord('i'):
-      if currentBufStatus.isReadonly:
-        status.commandLine.writeReadonlyModeWarning
       else:
         currentMainWindowNode.currentLine = currentBufStatus.selectArea.startLine
         status.changeMode(Mode.insert)
@@ -619,5 +616,8 @@ proc visualMode*(status: var EditorStatus) =
         status.visualBlockCommand(currentBufStatus.selectArea, key)
       else:
         status.visualCommand(currentBufStatus.selectArea, key)
+
       status.update
-      status.changeMode(Mode.normal)
+
+      if isNormalMode(currentBufStatus.mode, currentBufStatus.prevMode):
+        status.changeMode(Mode.normal)
