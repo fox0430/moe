@@ -438,6 +438,8 @@ proc insertCharBlock(bufStatus: var BufferStatus,
   windowNode.currentLine = beforeLine
 
 proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
+  exitUi()
+  echo key
   area.swapSelectArea
 
   if key == ord('y') or isDcKey(key):
@@ -608,9 +610,6 @@ proc visualMode*(status: var EditorStatus) =
     elif key == ord('g'):
       if getKey(currentMainWindowNode) == ord('g'):
         moveToFirstLine(status)
-    elif key == ord('i'):
-      if currentBufStatus.isReadonly:
-        status.commandLine.writeReadonlyModeWarning
       else:
         currentMainWindowNode.currentLine = currentBufStatus.selectArea.startLine
         status.changeMode(Mode.insert)
@@ -619,5 +618,8 @@ proc visualMode*(status: var EditorStatus) =
         status.visualBlockCommand(currentBufStatus.selectArea, key)
       else:
         status.visualCommand(currentBufStatus.selectArea, key)
+
       status.update
-      status.changeMode(Mode.normal)
+
+      if isNormalMode(currentBufStatus.mode, currentBufStatus.prevMode):
+        status.changeMode(Mode.normal)
