@@ -438,8 +438,6 @@ proc insertCharBlock(bufStatus: var BufferStatus,
   windowNode.currentLine = beforeLine
 
 proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
-  exitUi()
-  echo key
   area.swapSelectArea
 
   if key == ord('y') or isDcKey(key):
