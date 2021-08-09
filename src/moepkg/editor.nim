@@ -227,7 +227,8 @@ proc basicNewLine(bufStatus: var BufferStatus,
     if first <= last:
       let oldLine = bufStatus.buffer[windowNode.currentLine]
       var newLine = bufStatus.buffer[windowNode.currentLine]
-      newLine.delete(first, last)
+      for _ in first .. last:
+        newLine.delete(first)
       if oldLine != newLine:
         bufStatus.buffer[windowNode.currentLine] = newLine
 
@@ -702,7 +703,7 @@ proc deleteIndent*(bufStatus: var BufferStatus,
   if numOfDeleteSpace > 0:
     var newLine = bufStatus.buffer[windowNode.currentLine]
 
-    for i in 0 ..< numOfDeleteSpace: newLine.delete(0, 0)
+    for i in 0 ..< numOfDeleteSpace: newLine.delete(0)
 
     if oldLine != newLine:
       bufStatus.buffer[windowNode.currentLine] = newLine
@@ -720,7 +721,8 @@ proc deleteCharactersBeforeCursorInCurrentLine*(bufStatus: var BufferStatus,
     oldLine = bufStatus.buffer[currentLine]
   var newLine = bufStatus.buffer[currentLine]
 
-  newLine.delete(0, currentColumn - 1)
+  for _ in 0 ..< currentColumn:
+    newLine.delete(0)
 
   if newLine != oldLine: bufStatus.buffer[currentLine] = newLine
 
@@ -1164,7 +1166,8 @@ proc deleteTillPreviousBlankLine*(bufStatus: var BufferStatus,
       for i in 0 ..< currentColumn: deletedLine.add oldLine[i]
       if deletedLine.len > 0: deletedBuffer.add deletedLine
 
-      newLine.delete(0, currentColumn - 1)
+      for _ in 0 ..< currentColumn:
+        newLine.delete(0)
 
       if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
 
@@ -1206,7 +1209,8 @@ proc deleteTillNextBlankLine*(bufStatus: var BufferStatus,
       var deletedLine: seq[Rune]
       for i in currentColumn ..< oldLine.len : deletedLine.add oldLine[i]
 
-      newLine.delete(currentColumn, oldLine.high)
+      for _ in currentColumn .. oldLine.high:
+        newLine.delete(currentColumn)
 
       if oldLine != newLine:
         bufStatus.buffer[currentLine] = newLine
@@ -1597,7 +1601,7 @@ proc autoIndentCurrentLine*(bufStatus: var BufferStatus,
   # Delete current indent
   for i in 0 ..< oldLine.len:
     if oldLine[i] == ru' ':
-      newLine.delete(0, 0)
+      newLine.delete(0)
     else: break
 
   newLine.insert(indent, 0)
@@ -1800,7 +1804,7 @@ proc modifyNumberTextUnderCurosr*(bufStatus: var BufferStatus,
   block:
     var col = currentColumn
     while newLine.len > 0 and isDigit(newLine[col]):
-      newLine.delete(col, col)
+      newLine.delete(col)
       if col > newLine.high: col = newLine.high
 
   # Insert the new number string to newLine
