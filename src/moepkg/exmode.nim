@@ -1149,8 +1149,10 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
       if searchResult.line > -1:
         let oldLine = currentBufStatus.buffer[searchResult.line]
         var newLine = currentBufStatus.buffer[searchResult.line]
-        newLine.delete(searchResult.column,
-                       searchResult.column + replaceInfo.searhWord.high)
+
+        for _ in searchResult.column .. searchResult.column + replaceInfo.searhWord.high:
+          newLine.delete(searchResult.column)
+
         newLine.insert(replaceInfo.replaceWord, searchResult.column)
         if oldLine != newLine:
           currentBufStatus.buffer[searchResult.line] = newLine

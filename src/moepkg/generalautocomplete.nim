@@ -1,4 +1,4 @@
-import sugar, critbits, options, sequtils
+import sugar, critbits, options
 import unicodedb/properties
 import unicodeext, bufferstatus
 
@@ -55,7 +55,9 @@ proc getTextInBuffers*(
   for i, buf in bufStatus:
     # 0 is current bufStatus
     if i == 0:
-      result = buf.buffer.toRunes.dup(
-        delete(firstDeletedIndex, lastDeletedIndex))
+      var runeBuf = buf.buffer.toRunes
+      for _ in firstDeletedIndex .. lastDeletedIndex:
+        runeBuf.delete(firstDeletedIndex)
+      result = runeBuf
     else:
       result.add buf.buffer.toRunes
