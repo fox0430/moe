@@ -324,7 +324,8 @@ proc insertIndentInNimForKeyEnter(bufStatus: var BufferStatus,
        line.splitWhitespace == @[ru "let"] or
        line.splitWhitespace == @[ru "const"] or
        (line.len > 6 and line[line.len - 6 .. ^1] == ru "object") or
-       line[^1] == ru ':'):
+       line[^1] == (ru ':') or
+       line[^1] == ru '='):
       let
         count = countRepeat(line, Whitespace, 0) + tabStop
         oldLine = bufStatus.buffer[windowNode.currentLine + 1]
