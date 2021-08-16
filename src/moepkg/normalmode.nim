@@ -1377,7 +1377,7 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
     elif command[0] == ('\\'):
       if command.len == 1:
         result = InputState.Continue
-      if command[1] == ord('r'):
+      elif command[1] == ord('r'):
         result = InputState.Valid
 
     elif command[0] == ord('"'):
