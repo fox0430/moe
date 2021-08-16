@@ -555,6 +555,9 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
   block:
     const keyword = "object"
     newLineTestInNimCase4(keyword)
+  block:
+    const keyword = "="
+    newLineTestInNimCase4(keyword)
 
   # Generate test code
   # Enable autoindent
@@ -597,6 +600,9 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
   block:
     const keyword = "object"
     newLineTestInNimCase5(keyword)
+  block:
+    const keyword = "="
+    newLineTestInNimCase4(keyword)
 
   # Generate test code
   # Enable autoindent
