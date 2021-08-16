@@ -267,7 +267,7 @@ proc basicInsrtIndent(bufStatus: var BufferStatus,
   if oldLine != newLine:
         bufStatus.buffer[currentLine + 1] = newLine
 
-proc insertIndetWhenPairOfParen(bufStatus: var BufferStatus,
+proc insertIndentWhenPairOfParen(bufStatus: var BufferStatus,
                                 windowNode: WindowNode,
                                 autoIndent: bool,
                                 tabStop: int) =
@@ -323,7 +323,7 @@ proc insertIndentInNimForKeyEnter(bufStatus: var BufferStatus,
         line.splitWhitespace == @[ru "var"] or
         line.splitWhitespace == @[ru "let"] or
         line.splitWhitespace == @[ru "const"] or
-        line.len > 6 and line[line.len - 6 .. ^1] == (ru "object") or
+        line.splitWhitespace[^1] == (ru "object") or
         line[^1] == (ru ':') or
         line[^1] == (ru '=')
       ):
@@ -353,7 +353,7 @@ proc insertIndentInNimForKeyEnter(bufStatus: var BufferStatus,
 
     # if previous col is the unclosed paren.
     elif currentColumn > 0 and isOpenParen(line[currentColumn - 1]):
-      bufStatus.insertIndetWhenPairOfParen(windowNode, autoIndent, tabStop)
+      bufStatus.insertIndentWhenPairOfParen(windowNode, autoIndent, tabStop)
     else:
       bufStatus.basicInsrtIndent(windowNode)
       bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
@@ -409,7 +409,7 @@ proc insertIndentInClangForKeyEnter(bufStatus: var BufferStatus,
   if currentColumn > 0 :
     # if previous col is the unclosed paren.
     if line.len > 0 and isOpenParen(line[currentColumn - 1]):
-      bufStatus.insertIndetWhenPairOfParen(windowNode, autoIndent, tabStop)
+      bufStatus.insertIndentWhenPairOfParen(windowNode, autoIndent, tabStop)
     else:
       bufStatus.basicInsrtIndent(windowNode)
       bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
