@@ -319,13 +319,14 @@ proc insertIndentInNimForKeyEnter(bufStatus: var BufferStatus,
   if line.len > 0:
     # Auto indent if the current line are "var", "let", "const".
     # And, if finish the current line with ':', "object"
-    if (currentColumn == line.len) and
-       (line.splitWhitespace == @[ru "var"] or
-       line.splitWhitespace == @[ru "let"] or
-       line.splitWhitespace == @[ru "const"] or
-       (line.len > 6 and line[line.len - 6 .. ^1] == ru "object") or
-       line[^1] == (ru ':') or
-       line[^1] == ru '='):
+    if currentColumn == line.len and (
+        line.splitWhitespace == @[ru "var"] or
+        line.splitWhitespace == @[ru "let"] or
+        line.splitWhitespace == @[ru "const"] or
+        line.len > 6 and line[line.len - 6 .. ^1] == (ru "object") or
+        line[^1] == (ru ':') or
+        line[^1] == (ru '=')
+      ):
       let
         count = countRepeat(line, Whitespace, 0) + tabStop
         oldLine = bufStatus.buffer[windowNode.currentLine + 1]
