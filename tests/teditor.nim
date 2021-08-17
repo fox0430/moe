@@ -602,7 +602,7 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     newLineTestInNimCase5(keyword)
   block:
     const keyword = "="
-    newLineTestInNimCase4(keyword)
+    newLineTestInNimCase5(keyword)
 
   # Generate test code
   # Enable autoindent
