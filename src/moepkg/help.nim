@@ -79,10 +79,10 @@ di[ or di] - Delete the inside of square brackets
 di{ or di} - Delete the inside of curly brackets
 *          - Search forwards for the word under cursor
 #          - Search backwards for the word under cursor
-f          - Jump to next any character on the current line
-F          - Jump to previous any character on the current line
-t          - Jump to the character just before the next any character on the current line
-T          - Jump to the character just next the previous any character on the current line
+f          - Move to next any character on the current line
+F          - Move to previous any character on the current line
+t          - Move to the left of the any character on the current line
+T          - Move to the right of the back any character on the current line
 Ctrl-k     - Move to the next window
 Ctrl-j     - Move to the previous window
 zt         - Scroll the screen so the cursor is at the top
