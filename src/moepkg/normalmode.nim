@@ -9,7 +9,7 @@ type InputState = enum
   Valid
   Invalid
 
-proc searchOneCharactorToEndOfLine(bufStatus: var BufferStatus,
+proc searchOneCharacterToEndOfLine(bufStatus: var BufferStatus,
                                    windowNode: WindowNode,
                                    rune: Rune): int =
   result = -1
@@ -24,7 +24,7 @@ proc searchOneCharactorToEndOfLine(bufStatus: var BufferStatus,
       result = col
       break
 
-proc searchOneCharactorToBeginOfLine(bufStatus: var BufferStatus,
+proc searchOneCharacterToBeginOfLine(bufStatus: var BufferStatus,
                                      windowNode: WindowNode,
                                      rune: Rune): int =
   result = -1
@@ -1151,7 +1151,7 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('f'):
     let secondKey = commands[1]
     let pos =
-      currentBufStatus.searchOneCharactorToEndOfLine(
+      currentBufStatus.searchOneCharacterToEndOfLine(
         currentMainWindowNode,
         secondKey)
     if pos != -1:
@@ -1159,7 +1159,7 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('t'):
     let secondKey = commands[1]
     let pos =
-      currentBufStatus.searchOneCharactorToEndOfLine(
+      currentBufStatus.searchOneCharacterToEndOfLine(
         currentMainWindowNode,
         secondKey)
     if pos != -1:
@@ -1167,7 +1167,7 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('F'):
     let secondKey = commands[1]
     let pos =
-      currentBufStatus.searchOneCharactorToBeginOfLine(
+      currentBufStatus.searchOneCharacterToBeginOfLine(
         currentMainWindowNode,
         secondKey)
     if pos != -1:
@@ -1175,7 +1175,7 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('T'):
     let secondKey = commands[1]
     let pos =
-      currentBufStatus.searchOneCharactorToBeginOfLine(
+      currentBufStatus.searchOneCharacterToBeginOfLine(
         currentMainWindowNode,
         secondKey)
     if pos != -1:
