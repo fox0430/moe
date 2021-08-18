@@ -11,7 +11,8 @@ type InputState = enum
 
 proc searchOneCharactorToEndOfLine(bufStatus: var BufferStatus,
                                    windowNode: WindowNode,
-                                   rune: Rune) =
+                                   rune: Rune): int =
+  result = -1
 
   let line = bufStatus.buffer[windowNode.currentLine]
 
@@ -20,7 +21,7 @@ proc searchOneCharactorToEndOfLine(bufStatus: var BufferStatus,
 
   for col in windowNode.currentColumn + 1 ..< line.len:
     if line[col] == rune:
-      windowNode.currentColumn = col
+      result = col
       break
 
 proc searchOneCharactorToBeginOfLine(bufStatus: var BufferStatus,
@@ -1148,9 +1149,20 @@ proc normalCommand(status: var EditorStatus,
     status.searchNextOccurrenceReversely(word)
   elif key == ord('f'):
     let secondKey = commands[1]
-    currentBufStatus.searchOneCharactorToEndOfLine(
-      currentMainWindowNode,
-      secondKey)
+    let pos =
+      currentBufStatus.searchOneCharactorToEndOfLine(
+        currentMainWindowNode,
+        secondKey)
+    if pos >= 0:
+      currentMainWindowNode.currentColumn = pos
+  elif key == ord('t'):
+    let secondKey = commands[1]
+    let pos =
+      currentBufStatus.searchOneCharactorToEndOfLine(
+        currentMainWindowNode,
+        secondKey)
+    if pos > 0:
+      currentMainWindowNode.currentColumn = pos - 1
   elif key == ord('F'):
     let secondKey = commands[1]
     currentBufStatus.searchOneCharactorToBeginOfLine(
@@ -1349,6 +1361,12 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
         result = InputState.Valid
 
     elif command[0] == ord('f'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        result = InputState.Valid
+
+    elif command[0] == ord('t'):
       if command.len == 1:
         result = InputState.Continue
       elif command.len == 2:
