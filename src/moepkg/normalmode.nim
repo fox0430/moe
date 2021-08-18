@@ -9,9 +9,10 @@ type InputState = enum
   Valid
   Invalid
 
-proc searchOneCharactorToEndOfLine(bufStatus: var BufferStatus,
+proc searchOneCharacterToEndOfLine(bufStatus: var BufferStatus,
                                    windowNode: WindowNode,
-                                   rune: Rune) =
+                                   rune: Rune): int =
+  result = -1
 
   let line = bufStatus.buffer[windowNode.currentLine]
 
@@ -20,12 +21,13 @@ proc searchOneCharactorToEndOfLine(bufStatus: var BufferStatus,
 
   for col in windowNode.currentColumn + 1 ..< line.len:
     if line[col] == rune:
-      windowNode.currentColumn = col
+      result = col
       break
 
-proc searchOneCharactorToBeginOfLine(bufStatus: var BufferStatus,
+proc searchOneCharacterToBeginOfLine(bufStatus: var BufferStatus,
                                      windowNode: WindowNode,
-                                     rune: Rune) =
+                                     rune: Rune): int =
+  result = -1
 
   let line = bufStatus.buffer[windowNode.currentLine]
 
@@ -33,7 +35,7 @@ proc searchOneCharactorToBeginOfLine(bufStatus: var BufferStatus,
 
   for col in countdown(windowNode.currentColumn - 1, 0):
     if line[col] == rune:
-      windowNode.currentColumn = col
+      result = col
       break
 
 proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
@@ -1148,14 +1150,36 @@ proc normalCommand(status: var EditorStatus,
     status.searchNextOccurrenceReversely(word)
   elif key == ord('f'):
     let secondKey = commands[1]
-    currentBufStatus.searchOneCharactorToEndOfLine(
-      currentMainWindowNode,
-      secondKey)
+    let pos =
+      currentBufStatus.searchOneCharacterToEndOfLine(
+        currentMainWindowNode,
+        secondKey)
+    if pos != -1:
+      currentMainWindowNode.currentColumn = pos
+  elif key == ord('t'):
+    let secondKey = commands[1]
+    let pos =
+      currentBufStatus.searchOneCharacterToEndOfLine(
+        currentMainWindowNode,
+        secondKey)
+    if pos != -1:
+      currentMainWindowNode.currentColumn = pos - 1
   elif key == ord('F'):
     let secondKey = commands[1]
-    currentBufStatus.searchOneCharactorToBeginOfLine(
-      currentMainWindowNode,
-      secondKey)
+    let pos =
+      currentBufStatus.searchOneCharacterToBeginOfLine(
+        currentMainWindowNode,
+        secondKey)
+    if pos != -1:
+      currentMainWindowNode.currentColumn = pos
+  elif key == ord('T'):
+    let secondKey = commands[1]
+    let pos =
+      currentBufStatus.searchOneCharacterToBeginOfLine(
+        currentMainWindowNode,
+        secondKey)
+    if pos != -1:
+      currentMainWindowNode.currentColumn = pos + 1
   elif key == ord('R'):
     status.changeModeToReplaceMode
   elif key == ord('i'):
@@ -1354,7 +1378,19 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
       elif command.len == 2:
         result = InputState.Valid
 
+    elif command[0] == ord('t'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        result = InputState.Valid
+
     elif command[0] == ord('F'):
+      if command.len == 1:
+        result = InputState.Continue
+      elif command.len == 2:
+        result = InputState.Valid
+
+    elif command[0] == ord('T'):
       if command.len == 1:
         result = InputState.Continue
       elif command.len == 2:
