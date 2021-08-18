@@ -1732,6 +1732,43 @@ suite "Normal mode: Jump to the next any character on the current line":
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
 
+suite "Normal mode: Jump to the before any character on the current line":
+  test "Jump to the before 'e' (\"Fe\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    currentMainWindowNode.currentColumn = buffer.high
+
+    const command = ru "Fe"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 5
+
+  test "Do nothing (\"Fz\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    currentMainWindowNode.currentColumn = buffer.high
+
+    const command = ru "Fz"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == buffer.high
+
 suite "Normal mode: Jump to the character before the next any character on the current line":
   test "Jump to the character before the next e (\"tf\" command)":
     var status = initEditorStatus()
