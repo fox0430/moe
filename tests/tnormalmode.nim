@@ -1683,8 +1683,8 @@ suite "Normal mode: Run command when Readonly mode":
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
 
-suite "Normal mode: Jump to the next any character on the current line":
-  test "Jump to the next 'c' (\"fc\" command)":
+suite "Normal mode: Move to the next any character on the current line":
+  test "Move to the next 'c' (\"fc\" command)":
     var status = initEditorStatus()
     status.addNewBuffer
 
@@ -1700,7 +1700,7 @@ suite "Normal mode: Jump to the next any character on the current line":
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 2
 
-  test "Jump to the next 'i' (\"fi\" command)":
+  test "Move to the next 'i' (\"fi\" command)":
     var status = initEditorStatus()
     status.addNewBuffer
 
@@ -1732,8 +1732,8 @@ suite "Normal mode: Jump to the next any character on the current line":
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
 
-suite "Normal mode: Jump to the before any character on the current line":
-  test "Jump to the before 'e' (\"Fe\" command)":
+suite "Normal mode: Move to forward word in the current line":
+  test "Move to the before 'e' (\"Fe\" command)":
     var status = initEditorStatus()
     status.addNewBuffer
 
@@ -1769,8 +1769,8 @@ suite "Normal mode: Jump to the before any character on the current line":
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == buffer.high
 
-suite "Normal mode: Jump to the character before the next any character on the current line":
-  test "Jump to the character before the next e (\"tf\" command)":
+suite "Normal mode: Move to the left of the previous any character":
+  test "Move to the character next the next 'e' (\"tf\" command)":
     var status = initEditorStatus()
     status.addNewBuffer
 
@@ -1802,8 +1802,8 @@ suite "Normal mode: Jump to the character before the next any character on the c
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
 
-suite "Normal mode: Jump to the character before the next any character on the current line":
-  test "Jump to the character before the next f (\"Te\" command)":
+suite "Normal mode: Move to the right of the back character":
+  test "Move to the character before the next 'f' (\"Te\" command)":
     var status = initEditorStatus()
     status.addNewBuffer
 
