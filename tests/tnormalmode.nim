@@ -1682,3 +1682,157 @@ suite "Normal mode: Run command when Readonly mode":
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
+
+suite "Normal mode: Move to the next any character on the current line":
+  test "Move to the next 'c' (\"fc\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "fc"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 2
+
+  test "Move to the next 'i' (\"fi\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "fi"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == buffer.high
+
+  test "Do nothing (\"fz\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "fz"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+suite "Normal mode: Move to forward word in the current line":
+  test "Move to the before 'e' (\"Fe\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    currentMainWindowNode.currentColumn = buffer.high
+
+    const command = ru "Fe"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 5
+
+  test "Do nothing (\"Fz\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    currentMainWindowNode.currentColumn = buffer.high
+
+    const command = ru "Fz"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == buffer.high
+
+suite "Normal mode: Move to the left of the next any character":
+  test "Move to the character next the next 'e' (\"tf\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "tf"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 5
+
+  test "Do nothing (\"tz\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "tz"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+suite "Normal mode: Move to the right of the back character":
+  test "Move to the character before the next 'f' (\"Te\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    currentMainWindowNode.currentColumn = buffer.high
+
+    const command = ru "Te"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 6
+
+  test "Do nothing (\"Tz\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "Tz"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
