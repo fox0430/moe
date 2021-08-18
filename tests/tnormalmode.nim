@@ -1769,7 +1769,7 @@ suite "Normal mode: Move to forward word in the current line":
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == buffer.high
 
-suite "Normal mode: Move to the left of the previous any character":
+suite "Normal mode: tove to the left of the next any character":
   test "Move to the character next the next 'e' (\"tf\" command)":
     var status = initEditorStatus()
     status.addNewBuffer
