@@ -1682,3 +1682,36 @@ suite "Normal mode: Run command when Readonly mode":
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
+
+suite "Normal mode: Jump to the next any character on the current line":
+  test "Jump to the next 'c' (\"fc\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "fc"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 2
+
+  test "Jump to the next 'i' (\"fi\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "fi"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == buffer.high
