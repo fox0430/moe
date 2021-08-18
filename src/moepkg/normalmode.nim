@@ -1154,7 +1154,7 @@ proc normalCommand(status: var EditorStatus,
       currentBufStatus.searchOneCharactorToEndOfLine(
         currentMainWindowNode,
         secondKey)
-    if pos >= 0:
+    if pos != -1:
       currentMainWindowNode.currentColumn = pos
   elif key == ord('t'):
     let secondKey = commands[1]
@@ -1162,7 +1162,7 @@ proc normalCommand(status: var EditorStatus,
       currentBufStatus.searchOneCharactorToEndOfLine(
         currentMainWindowNode,
         secondKey)
-    if pos > 0:
+    if pos != -1:
       currentMainWindowNode.currentColumn = pos - 1
   elif key == ord('F'):
     let secondKey = commands[1]
@@ -1170,7 +1170,7 @@ proc normalCommand(status: var EditorStatus,
       currentBufStatus.searchOneCharactorToBeginOfLine(
         currentMainWindowNode,
         secondKey)
-    if pos >= 0:
+    if pos != -1:
       currentMainWindowNode.currentColumn = pos
   elif key == ord('T'):
     let secondKey = commands[1]
@@ -1178,7 +1178,7 @@ proc normalCommand(status: var EditorStatus,
       currentBufStatus.searchOneCharactorToBeginOfLine(
         currentMainWindowNode,
         secondKey)
-    if pos >= 0:
+    if pos != -1:
       currentMainWindowNode.currentColumn = pos + 1
   elif key == ord('R'):
     status.changeModeToReplaceMode
