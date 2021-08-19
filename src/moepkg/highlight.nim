@@ -1,5 +1,4 @@
-#import sequtils, os, strformat, parseutils
-import sequtils, os, parseutils
+import sequtils, os, strformat, parseutils
 import syntax/highlite
 import unicodeext, color
 from strutils import find
