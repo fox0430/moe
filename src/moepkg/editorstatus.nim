@@ -1,5 +1,5 @@
 import strutils, terminal, os, strformat, tables, times, heapqueue, deques,
-       times, options
+       options
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        undoredostack, window, color, settings, statusline, bufferstatus, cursor,
@@ -1178,8 +1178,6 @@ proc autoSave(status: var Editorstatus) =
         status.settings.notificationSettings,
         status.messageLog)
       status.bufStatus[index].lastSaveTime = now()
-
-from settings import TomlError, loadSettingFile
 
 proc loadConfigurationFile*(status: var EditorStatus) =
   status.settings =

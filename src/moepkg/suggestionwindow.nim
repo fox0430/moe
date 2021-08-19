@@ -1,4 +1,4 @@
-import critbits, unicode, sugar, options, sequtils, unicode
+import critbits, sugar, options, sequtils, unicode
 import ui, window, generalautocomplete, bufferstatus, gapbuffer, color,
        editorstatus
 
