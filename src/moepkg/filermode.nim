@@ -1,7 +1,6 @@
 import os, terminal, strutils, unicodeext, times, algorithm, sequtils, options
 import editorstatus, ui, fileutils, editorview, gapbuffer, highlight,
-       commandview, highlight, window, color, bufferstatus, settings, messages,
-       commandline
+       commandview, window, color, bufferstatus, settings, messages, commandline
 
 type PathInfo = tuple[kind: PathComponent,
                       path: string,
