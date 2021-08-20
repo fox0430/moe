@@ -1649,7 +1649,7 @@ suite "Editor: Open the blank line below":
   # Generate test code
   # Enable autoindent
   # open the blank line below in Nim
-  # When the current line ends with "or", "and", ':', "object".
+  # When the current line ends with "or", "and", ':', "object", '='.
   macro openLineBelowTestCase3(keyword: string): untyped =
     quote do:
       # Generate test title
@@ -1690,6 +1690,9 @@ suite "Editor: Open the blank line below":
     openLineBelowTestCase3(keyword)
   block:
     const keyword = "object"
+    openLineBelowTestCase3(keyword)
+  block:
+    const keyword = "="
     openLineBelowTestCase3(keyword)
 
   # Generate test code
@@ -1932,7 +1935,7 @@ suite "Editor: Open the blank line abave":
   # Generate test code
   # Enable autoindent
   # open the blank line above in Nim
-  # When the current line ends with "or", "and", ':', "object".
+  # When the current line ends with "or", "and", ':', "object", "=".
   macro openLineAboveTestCase4(keyword: string): untyped =
     quote do:
       # Generate test title
@@ -1979,6 +1982,9 @@ suite "Editor: Open the blank line abave":
     openLineAboveTestCase4(keyword)
   block:
     const keyword = "object"
+    openLineAboveTestCase4(keyword)
+  block:
+    const keyword = "="
     openLineAboveTestCase4(keyword)
 
   # Generate test code
@@ -2027,5 +2033,3 @@ suite "Editor: Open the blank line abave":
   block:
     const keyword = ":"
     openLineAboveTestCase5(keyword)
-
-

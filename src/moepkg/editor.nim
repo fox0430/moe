@@ -902,12 +902,13 @@ proc insertIndentNimForOpenBlankLine(bufStatus: var BufferStatus,
 
   if aboveLine.len > 0:
     # Auto indent if the current line are "var", "let", "const".
-    # And, if finish the current line with ':', "object"
+    # And, if finish the current line with ':', "object, '='"
     if (aboveLine.splitWhitespace == @[ru "var"] or
        aboveLine.splitWhitespace == @[ru "let"] or
        aboveLine.splitWhitespace == @[ru "const"] or
-       (aboveLine.len > 6 and aboveLine[aboveLine.len - 6 .. ^1] == ru "object") or
-       aboveLine[^1] == ru ':'):
+       aboveLine.splitWhitespace[^1] == (ru "object") or
+       aboveLine[^1] == (ru ':') or
+       aboveLine[^1] == (ru '=')):
       let
         count = countRepeat(aboveLine, Whitespace, 0) + tabStop
         oldLine = bufStatus.buffer[currentLineNum]
@@ -918,8 +919,8 @@ proc insertIndentNimForOpenBlankLine(bufStatus: var BufferStatus,
         bufStatus.buffer[currentLineNum] = newLine
 
     # Auto indent if finish the current line with "or", "and"
-    elif ((aboveLine.len > 2 and aboveLine[aboveLine.len - 2 .. ^1] == ru "or") or
-         (aboveLine.len > 3 and aboveLine[aboveLine.len - 3 .. ^1] == ru "and")):
+    elif ((aboveLine.len > 2 and (aboveLine.splitWhitespace)[^1] == ru "or") or
+         (aboveLine.len > 3 and (aboveLine.splitWhitespace)[^1] == ru "and")):
       let
         count = countRepeat(aboveLine, Whitespace, 0) + tabStop
         oldLine = bufStatus.buffer[currentLineNum]
@@ -948,8 +949,8 @@ proc insertIndentInPythonForOpenBlankLine(bufStatus: var BufferStatus,
 
   if aboveLine.len > 0:
     # if finish the current line with ':', "or", "and" in Python
-    if (aboveLine.len > 2 and aboveLine[aboveLine.len - 2 .. ^1] == ru "or") or
-       (aboveLine.len > 3 and aboveLine[aboveLine.len - 3 .. ^1] == ru "and") or
+    if (aboveLine.len > 2 and (aboveLine.splitWhitespace)[^1] == ru "or") or
+       (aboveLine.len > 3 and (aboveLine.splitWhitespace)[^1] == ru "and") or
        (aboveLine[^1] == ru ':'):
       let
         count = countRepeat(aboveLine, Whitespace, 0) + tabStop
