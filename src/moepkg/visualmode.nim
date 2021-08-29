@@ -372,8 +372,9 @@ proc getInsertBuffer(status: var Editorstatus): seq[Rune] =
         status.settings.tabStop)
       break
     elif isDcKey(key):
-      currentBufStatus.deleteCurrentCharacter(
-        currentMainWindowNode,
+      currentBufStatus.deleteCharacter(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn,
         status.settings.autoDeleteParen)
       break
     elif isBackspaceKey(key):

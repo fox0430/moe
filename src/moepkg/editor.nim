@@ -866,30 +866,17 @@ proc deleteCharacters*(bufStatus: var BufferStatus,
     inc(bufStatus.countChange)
     bufStatus.isUpdate = true
 
-# TODO: Delete deleteCurrentCharacter()
-proc deleteCurrentCharacter*(bufStatus: var BufferStatus,
-                             windowNode: WindowNode,
-                             autoDeleteParen: bool) =
-
-  let oldLine = bufStatus.buffer[windowNode.currentLine]
-
-  deleteCharacter(bufStatus,
-                  windowNode.currentLine,
-                  windowNode.currentColumn,
-                  autoDeleteParen)
-
-  if oldLine != bufStatus.buffer[windowNode.currentLine]:
-    if bufStatus.buffer[windowNode.currentLine].len < 1:
-      windowNode.currentColumn = 0
-      windowNode.expandedColumn = 0
-    elif bufStatus.buffer[windowNode.currentLine].len > 0 and
-         windowNode.currentColumn > bufStatus.buffer[windowNode.currentLine].high and
-         bufStatus.mode != Mode.insert:
-      windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].len - 1
-      windowNode.expandedColumn = bufStatus.buffer[windowNode.currentLine].len - 1
-
-    inc(bufStatus.countChange)
-    bufStatus.isUpdate = true
+# Delete a character in the current position
+#proc deleteCurrentCharacter*(bufStatus: var BufferStatus,
+#                             windowNode: WindowNode,
+#                             autoDeleteParen: bool) =
+#
+#  const loop = 1
+#  bufStatus.deleteCharacters(
+#    autoDeleteParen,
+#    windowNode.currentLine,
+#    windowNode.currentColumn,
+#    loop)
 
 # Add the new line and insert indent in Nim
 proc insertIndentNimForOpenBlankLine(bufStatus: var BufferStatus,
@@ -1542,9 +1529,12 @@ proc replaceCharacters*(bufStatus: var BufferStatus,
                         character: Rune) =
 
   if isEnterKey(character):
-    let line = bufStatus.buffer[windowNode.currentLine]
+    let
+      line = bufStatus.buffer[windowNode.currentLine]
+      currentLine = windowNode.currentLine
+      currentColumn = windowNode.currentColumn
     for _ in windowNode.currentColumn ..< min(line.len, loop):
-      bufStatus.deleteCurrentCharacter(windowNode, autoDeleteParen)
+      bufStatus.deleteCharacter(currentLine, currentColumn, autoDeleteParen)
     keyEnter(bufStatus, windowNode, autoIndent, tabStop)
   else:
     let oldLine = bufStatus.buffer[windowNode.currentLine]
