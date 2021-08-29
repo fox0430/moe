@@ -1,0 +1,71 @@
+name: Build
+
+on:
+  push:
+    paths-ignore:
+      - 'LICENSE'
+      - '*.md'
+      - 'documents/'
+      - 'docs/'
+    branches:
+      - develop
+      - master
+  pull_request:
+    paths-ignore:
+      - 'LICENSE'
+      - '*.md'
+      - 'documents/'
+      - 'docs/'
+
+jobs:
+  skip:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Skip job"
+
+  before:
+    runs-on: ubuntu-latest
+    if: "! contains(github.event.head_commit.message, '[skip ci]')"
+    steps:
+      - run: echo "Before job"
+
+  build:
+    name: build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    needs: before
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          # - macOS-latest
+          # - windows-latest
+    env:
+      NIM_VERSION: 1.4.8
+    steps:
+    - uses: actions/checkout@v1
+    - run: |
+        sudo apt-get update -yqq
+        sudo apt-get install -y gcc libncursesw5-dev build-essential
+    - name: Cache choosenim
+      id: cache-choosenim
+      uses: actions/cache@v1
+      with:
+        path: ~/.choosenim
+        key: ${{ runner.os }}-choosenim-${{ env.NIM_VERSION }}
+    - name: Cache nimble
+      id: cache-nimble
+      uses: actions/cache@v1
+      with:
+        path: ~/.nimble
+        key: ${{ runner.os }}-nimble-${{ env.NIM_VERSION }}
+    - uses: jiro4989/setup-nim-action@v1
+      with:
+        nim-version: ${{ env.NIM_VERSION }}
+
+    - name: Build on Nim stable
+      run: nimble build
+
+    - name: Build on Nim devel
+      run: |
+        choosenim -y devel
+        nimble build
