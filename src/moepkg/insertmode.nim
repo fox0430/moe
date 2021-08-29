@@ -97,8 +97,9 @@ proc insertMode*(status: var EditorStatus) =
     elif isEndKey(key):
       currentBufStatus.moveToLastOfLine(windowNode)
     elif isDcKey(key):
-      currentBufStatus.deleteCurrentCharacter(
-        currentMainWindowNode,
+      currentBufStatus.deleteCharacter(
+        windowNode.currentLine,
+        windowNode.currentColumn,
         status.settings.autoDeleteParen)
     elif isBackspaceKey(key) or isControlH(key):
       currentBufStatus.keyBackspace(
