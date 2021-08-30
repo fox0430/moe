@@ -1836,3 +1836,83 @@ suite "Normal mode: Move to the right of the back character":
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
+
+suite "Normal mode: Yank characters to any character":
+  test "Case 1: Yank characters before 'd' (\"ytd\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abcd"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "ytd"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check not status.registers.noNameRegister.isLine
+    check status.registers.noNameRegister.buffer[0] == ru "abc"
+
+  test "Case 2: Yank characters before 'd' (\"ytd\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "ab c d"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "ytd"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check not status.registers.noNameRegister.isLine
+    check status.registers.noNameRegister.buffer[0] == ru "ab c "
+
+  test "Case 1: Do nothing (\"ytd\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "ytd"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check status.registers.noNameRegister.buffer.len == 0
+
+  test "Case 2: Do nothing (\"ytd\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abcd efg"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+    currentMainWindowNode.currentColumn = 3
+
+    const command = ru "ytd"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check status.registers.noNameRegister.buffer.len == 0
+
+  test "Case 3: Do nothing (\"ytd\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abcd efg"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+    currentMainWindowNode.currentColumn = buffer.high
+
+    const command = ru "ytd"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check status.registers.noNameRegister.buffer.len == 0

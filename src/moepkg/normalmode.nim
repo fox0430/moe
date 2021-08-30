@@ -464,6 +464,55 @@ proc yankCharacters(status: var Editorstatus, registerName: string) =
     registerName,
     isDelete)
 
+# yt command
+proc yankCharactersToCharacter(status: var EditorStatus,
+                               rune: Rune) =
+
+  let
+    currentColumn = currentMainWindowNode.currentColumn
+    # Get the position of a character
+    position = currentBufStatus.searchOneCharacterToEndOfLine(
+      currentMainWindowNode,
+      rune)
+
+  if position > currentColumn:
+    const
+      isDelete = false
+      registerName = ""
+    currentBufStatus.yankCharacters(
+      status.registers,
+      currentMainWindowNode,
+      status.commandLine,
+      status.messageLog,
+      status.settings,
+      position,
+      registerName,
+      isDelete)
+
+# yt command
+proc yankCharactersToCharacter(status: var EditorStatus,
+                               rune: Rune,
+                               registerName: string) =
+
+  let
+    currentColumn = currentMainWindowNode.currentColumn
+    # Get the position of a character
+    position = currentBufStatus.searchOneCharacterToEndOfLine(
+      currentMainWindowNode,
+      rune)
+
+  if position > currentColumn:
+    const isDelete = false
+    currentBufStatus.yankCharacters(
+      status.registers,
+      currentMainWindowNode,
+      status.commandLine,
+      status.messageLog,
+      status.settings,
+      position,
+      registerName,
+      isDelete)
+
 proc deleteCharacters(status: var EditorStatus, registerName: string) =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
@@ -844,6 +893,8 @@ proc addRegister(status: var EditorStatus, command, registerName: string) =
     status.deleteCharacterAndEnterInsertMode(registerName)
   elif command.len == 3 and command[0 .. 1] == "ci":
     status.changeInnerCommand(command[2].toRune, registerName)
+  elif command.len == 3 and command[0 .. 1] == "yt":
+    status.yankCharactersToCharacter(command[2].toRune, registerName)
   else:
     discard
 
@@ -899,10 +950,11 @@ proc registerCommand(status: var EditorStatus, command: seq[Rune]) =
        cmd == "dgg" or
        cmd == "d{" or
        cmd == "d}" or
-       cmd.len == 3 and cmd[0 .. 1] == "di" or
+       (cmd.len == 3 and cmd[0 .. 1] == "di") or
        cmd == "dh" or
        cmd == "cl" or cmd == "s" or
-       cmd.len == 3 and cmd[0 .. 1] == "ci":
+       (cmd.len == 3 and cmd[0 .. 1] == "ci") or
+       (cmd.len == 3 and cmd[0 .. 1] == "yt"):
     status.addRegister(cmd, $registerName)
 
 proc pasteAfterCursor(status: var EditorStatus) {.inline.} =
@@ -1110,6 +1162,9 @@ proc normalCommand(status: var EditorStatus,
       status.yankToNextBlankLine
     elif secondKey == ord('l'):
       status.yankCharacters
+    elif secondKey == ord('t'):
+      let thirdKey = commands[2]
+      status.yankCharactersToCharacter(thirdKey)
   elif key == ord('Y'):
     status.yankLines
   elif key == ord('p'):
@@ -1357,6 +1412,11 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
            command[1] == ord('{') or
            command[1] == ord('}') or
            command[1] == ord('l'):
+          result = InputState.Valid
+        elif command == "yt".ru:
+          result = InputState.Continue
+      elif command.len == 3:
+        if command[0 .. 1] == "yt".ru:
           result = InputState.Valid
 
     elif command[0] == ord('='):
