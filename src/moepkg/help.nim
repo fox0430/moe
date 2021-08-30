@@ -52,6 +52,7 @@ yy or Y    - Copy a line
 y{         - Yank to the previous blank line
 y}         - Yank to the next blank line
 yl         - Yank a character
+yt any     - Ynak characters to a any character
 p          - Paste the clipboard
 n          - Search forwards
 :          - Start Ex mode
