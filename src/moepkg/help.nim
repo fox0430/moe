@@ -72,6 +72,7 @@ ciw        - Delete the current word and enter insert mode
 ci( or ci) - Delete the inside of round brackets and enter insert mode
 ci[ or ci] - Delete the inside of square brackets and enter insert mode
 ci{ or ci} - Delete the inside of curly brackets and enter insert mode
+cf any     - Delete characters to the any character and enter insert mode
 di"        - Delete the inside of double quotes
 di'        - Delete the inside of single quotes
 diw        - Delete the current word

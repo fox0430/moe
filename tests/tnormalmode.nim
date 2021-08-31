@@ -1916,3 +1916,39 @@ suite "Normal mode: Yank characters to any character":
     check currentBufStatus.buffer[0] == buffer
 
     check status.registers.noNameRegister.buffer.len == 0
+
+suite "Normal mode: Delete characters to any characters and Enter insert mode":
+  test "Case 1: Delete characters to 'd' and enter insert mode (\"cfd\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abcd"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "cfd"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru ""
+
+    check not status.registers.noNameRegister.isLine
+    check status.registers.noNameRegister.buffer[0] == ru "abcd"
+
+    check currentBufStatus.mode == Mode.insert
+
+  test "Case 1: Do nothing (\"cfz\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abcd"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "cfz"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check status.registers.noNameRegister.buffer.len == 0
+
+    check currentBufStatus.mode == Mode.normal
