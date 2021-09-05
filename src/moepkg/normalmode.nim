@@ -722,23 +722,6 @@ proc deleteFromCurrentLineToLastLine(status: var EditorStatus) =
   status.deleteFromCurrentLineToLastLine(registerName)
 
 # s and cl commands
-proc deleteCharacterAndEnterInsertMode(status: var EditorStatus) =
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-    return
-
-  if currentBufStatus.buffer[currentMainWindowNode.currentLine].len > 0:
-    let
-      lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
-      cmdLoop = currentBufStatus.cmdLoop
-      loop = min(cmdLoop, lineWidth - currentMainWindowNode.currentColumn)
-    currentBufStatus.cmdLoop = loop
-
-    status.deleteCharacters
-
-  status.changeMode(Mode.insert)
-
-# s and cl commands
 proc deleteCharacterAndEnterInsertMode(status: var EditorStatus,
                                        registerName: string) =
 
@@ -753,9 +736,14 @@ proc deleteCharacterAndEnterInsertMode(status: var EditorStatus,
       loop = min(cmdLoop, lineWidth - currentMainWindowNode.currentColumn)
     currentBufStatus.cmdLoop = loop
 
-    status.deleteCharacters
+    status.deleteCharacters(registerName)
 
   status.changeMode(Mode.insert)
+
+# s and cl commands
+proc deleteCharacterAndEnterInsertMode(status: var EditorStatus) =
+  const registerName = ""
+  status.deleteCharacterAndEnterInsertMode(registerName)
 
 # cc/S command
 proc deleteCharactersAfterBlankInLine(status: var EditorStatus) =
