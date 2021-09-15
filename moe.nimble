@@ -15,5 +15,4 @@ requires "unicodedb >= 0.9.0"
 requires "parsetoml >= 0.4.0"
 
 task release, "Build for release":
-  exec "nim c -o:moe -d:release src/moe"
-
+  exec "nimble build -d:release"
