@@ -63,9 +63,9 @@ jobs:
         nim-version: ${{ env.NIM_VERSION }}
 
     - name: Build on Nim stable
-      run: nimble build
+      run: nimble build -y
 
     - name: Build on Nim devel
       run: |
         choosenim -y devel
-        nimble build
+        nimble build -y
