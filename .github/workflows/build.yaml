@@ -23,7 +23,7 @@ jobs:
     strategy:
       matrix:
         nim: [ 'stable', 'devel' ]
-    name: Nim ${{ matrix.nim }} sample
+    name: Build on ${{ matrix.nim }}
     steps:
       - uses: actions/checkout@v2
       - name: Setup nim
