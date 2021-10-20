@@ -311,8 +311,10 @@ proc startHistoryManager(status: var Editorstatus) =
 proc startRecentFileMode(status: var Editorstatus) =
   status.changeMode(currentBufStatus.prevMode)
 
-  # :recent is only supported on GNU/Linux
-  if CURRENT_PLATFORM != Platforms.linux: return
+  # :recent is only supported on Unix or Unix-like (BSD and Linux)
+  if not (CURRENT_PLATFORM == Platforms.linux or
+          CURRENT_PLATFORM == Platforms.freebsd or
+          CURRENT_PLATFORM == Platforms.openbsd): return
 
   if not fileExists(getHomeDir() / ".local/share/recently-used.xbel"):
     status.commandLine.writeOpenRecentlyUsedXbelError(status.messageLog)
