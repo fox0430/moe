@@ -925,6 +925,22 @@ suite "Editor: keyEnter and autoindent in Python":
     check currentBufStatus.buffer[0] == ru"if true or"
     check currentBufStatus.buffer[1] == ru"  "
 
+  test "Insert a new line in Nim (Fix #1450)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"block:", ru"  const a = 0"])
+    currentBufStatus.language = SourceLanguage.langNim
+    status.bufStatus[0].mode = Mode.insert
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[1].len
+
+    const isAutoIndent = true
+    for i in 0 ..< 2:
+      currentBufStatus.keyEnter(currentMainWindowNode,
+                                isAutoIndent,
+                                status.settings.tabStop)
+
 suite "Delete character before cursor":
   test "Delete one character":
     var status = initEditorStatus()
