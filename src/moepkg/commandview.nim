@@ -656,6 +656,9 @@ proc getKeyOnceAndWriteCommandView*(
       status.commandLine.window.moveLeft(exStatus)
     elif isRightkey(key):
       exStatus.moveRight
+      if status.settings.popUpWindowInExmode:
+        status.deletePopUpWindow
+        status.update
     elif isUpKey(key):
       if isSearch: setPrevSearchHistory()
       else: setPrevCommandHistory()
