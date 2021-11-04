@@ -320,10 +320,13 @@ proc insertIndentInNimForKeyEnter(bufStatus: var BufferStatus,
     # Auto indent if the current line are "var", "let", "const".
     # And, if finish the current line with ':', "object"
     if currentColumn == line.len and (
-        line.splitWhitespace == @[ru "var"] or
-        line.splitWhitespace == @[ru "let"] or
-        line.splitWhitespace == @[ru "const"] or
-        line.splitWhitespace[^1] == (ru "object") or
+        (line.len > 2 and
+          line.splitWhitespace == @[ru "var"] or
+          line.splitWhitespace == @[ru "let"]) or
+        (line.len > 4 and
+          line.splitWhitespace == @[ru "const"]) or
+        (line.len > 4 and
+        line.splitWhitespace[^1] == (ru "object")) or
         line[^1] == (ru ':') or
         line[^1] == (ru '=')
       ):
