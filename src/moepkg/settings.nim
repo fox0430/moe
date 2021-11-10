@@ -944,7 +944,6 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Standard"].contains("indentationLines"):
       result.view.indentationLines = settings["Standard"]["indentationLines"].getbool()
 
-
   if settings.contains("Clipboard"):
     if settings["Clipboard"].contains("enable"):
       result.clipboard.enable = settings["Clipboard"]["enable"].getbool()
@@ -1693,6 +1692,21 @@ proc validateStandardTable(table: TomlValueRef): Option[string] =
             correctValue = true
             break
 
+proc validateClipboardTable(table: TomlValueRef): Option[string] =
+  for key, val in table.getTable:
+    case key:
+      of "enable":
+        if not (val.kind == TomlValueKind.Bool):
+          return some($key)
+      of "toolOnLinux":
+        if not (
+          (val.kind == TomlValueKind.String) and
+          (val.getStr == "xclip" or
+           val.getStr == "xsel" or
+           val.getStr == "wl-clipboard")): return some($key)
+      else:
+        return some($key)
+
 proc validateTabLineTable(table: TomlValueRef): Option[string] =
   for key, val in table.getTable:
     case key:
@@ -1970,6 +1984,9 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
       of "Standard":
         let r = validateStandardTable(val)
         if r.isSome: return r
+      of "Clipboard":
+        let r = validateClipboardTable(val)
+        if r.isSome: return r
       of "TabLine":
         let r = validateTabLineTable(val)
         if r.isSome: return r
@@ -2003,11 +2020,15 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
       of "Autocomplete":
         let r = validateAutocompleteTable(val)
         if r.isSome: return r
+      of "Persist":
+        let r = validatePersistTable(val)
+        if r.isSome: return r
       of "Debug":
         let r = validateDebugTable(val)
         if r.isSome: return r
       else:
-        discard
+        return some(key)
+
 proc loadSettingFile*(): EditorSettings =
   let filename = getConfigDir() / "moe" / "moerc.toml"
 
@@ -2075,8 +2096,8 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine ""
 
-  result.addLine fmt "[StatusBar]"
-  result.addLine fmt "multipleStatusBar = {$settings.statusLine.multipleStatusLine}"
+  result.addLine fmt "[StatusLine]"
+  result.addLine fmt "multipleStatusLine = {$settings.statusLine.multipleStatusLine}"
   result.addLine fmt "merge = {$settings.statusLine.merge }"
   result.addLine fmt "mode = {$settings.statusLine.mode }"
   result.addLine fmt "filename = {$settings.statusLine.filename}"
