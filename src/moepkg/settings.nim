@@ -1646,355 +1646,368 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
   if result.editorColorTheme == ColorTheme.vscode:
     result.editorColorTheme = loadVSCodeTheme()
 
-proc validateTomlConfig(toml: TomlValueRef): Option[string] =
-  template validateStandardTable() =
-    for item in json["Standard"].pairs:
-      case item.key:
-        of "theme":
-          var correctValue = false
-          if item.val["value"].getStr == "vscode":
-            correctValue = true
-          else:
-            for theme in ColorTheme:
-              if $theme == item.val["value"].getStr:
-                correctValue = true
-          if not correctValue:
-            return some($item)
-        of "number",
-           "currentNumber",
-           "cursorLine",
-           "statusLine",
-           "tabLine",
-           "syntax",
-           "indentationLines",
-           "autoCloseParen",
-           "autoIndent",
-           "ignorecase",
-           "smartcase",
-           "disableChangeCursor",
-           "autoSave",
-           "liveReloadOfConf",
-           "incrementalSearch",
-           "popUpWindowInExmode",
-           "autoDeleteParen",
-           "smoothScroll":
-          if not (item.val["type"].getStr == "bool"):
-            return some($item)
-        of "tabStop", "autoSaveInterval", "smoothScrollSpeed":
-          if not (item.val["type"].getStr == "integer" and
-                  parseInt(item.val["value"].getStr) > 0): return some($item)
-        of "defaultCursor",
-           "normalModeCursor",
-           "insertModeCursor":
-          let val = item.val["value"].getStr
-          var correctValue = false
-          for cursorType in CursorType:
-            if val == $cursorType:
-              correctValue = true
-              break
-
-          if not correctValue:
-            return some($item)
+proc validateStandardTable(table: TomlValueRef): Option[string] =
+  for key, val in table.getTable:
+    case key:
+      of "theme":
+        var correctValue = false
+        if val.getStr == "vscode":
+          correctValue = true
         else:
-          return some($item)
-
-  template validateClipboardTable() =
-    for item in json["Clipboard"].pairs:
-      case item.key:
-        of "enable":
-          if not (item.val["type"].getStr == "bool"):
-            return some($item)
-        of "toolOnLinux":
-          if not (item.val["type"].getStr == "string"):
-            return some($item)
-        else:
-          return some($item)
-
-  template validateTabLineTable() =
-    for item in json["TabLine"].pairs:
-      case item.key:
-        of "allBuffer":
-          if not (item.val["type"].getStr == "bool"):
-            return some($item)
-        else:
-          return some($item)
-
-  template validateStatusLineTable() =
-    for item in json["StatusLine"].pairs:
-      case item.key:
-        of "multipleStatusLine",
-           "merge",
-           "mode",
-           "filename",
-           "chanedMark",
-           "line",
-           "column",
-           "encoding",
-           "language",
-           "directory",
-           "gitbranchName",
-           "showGitInactive",
-           "showModeInactive":
-          if not (item.val["type"].getStr == "bool"):
-            return some($item)
-        else:
-          return some($item)
-
-  template validateBuildOnSaveTable() =
-    for item in json["BuildOnSave"].pairs:
-      case item.key:
-        of "enable":
-          if not (item.val["type"].getStr == "bool"):
-            return some($item)
-        of "workspaceRoot",
-           "command":
-          if not (item.val["type"].getStr == "string"):
-            return some($item)
-        else:
-            return some($item)
-
-  template validateHighlightTable() =
-    for item in json["Highlight"].pairs:
-      case item.key:
-        of "reservedWord":
-          if item.val["type"].getStr == "array":
-            for word in item.val["value"]:
-              if word["type"].getStr != "string":
-                return some($item)
-        of "currentLine",
-           "fullWidthSpace",
-           "trailingSpaces",
-           "replaceText",
-           "pairOfParen",
-           "currentWord":
-          if not (item.val["type"].getStr == "bool"):
-            return some($item)
-        else:
-          return some($item)
-
-  template validateAutoBackupTable() =
-    for item in json["AutoBackup"].pairs:
-      case item.key:
-        of "enable", "showMessages":
-          if item.val["type"].getStr != "bool":
-            return some($item)
-        of "idleTime",
-           "interval":
-          if item.val["type"].getStr != "integer":
-            return some($item)
-        of "backupDir":
-          if item.val["type"].getStr != "string":
-            return some($item)
-        of "dirToExclude":
-          if item.val["type"].getStr == "array":
-            for word in item.val["value"]:
-              if word["type"].getStr != "string":
-                return some($item)
-        else:
-          return some($item)
-
-  template validateQuickRunTable() =
-    for item in json["QuickRun"].pairs:
-      case item.key:
-        of "saveBufferWhenQuickRun":
-          if item.val["type"].getStr != "bool":
-            return some($item)
-        of "command",
-           "nimAdvancedCommand",
-           "ClangOptions",
-           "CppOptions",
-           "NimOptions",
-           "shOptions",
-           "bashOptions":
-          if item.val["type"].getStr != "string":
-            return some($item)
-        of "timeout":
-          if item.val["type"].getStr != "integer":
-            return some($item)
-        else:
-          return some($item)
-
-  template validateNotificationTable() =
-    for item in json["Notification"].pairs:
-      case item.key:
-        of "screenNotifications",
-           "logNotifications",
-           "autoBackupScreenNotify",
-           "autoBackupLogNotify",
-           "autoSaveScreenNotify",
-           "autoSaveLogNotify",
-           "yankScreenNotify",
-           "yankLogNotify",
-           "deleteScreenNotify",
-           "deleteLogNotify",
-           "saveScreenNotify",
-           "saveLogNotify",
-           "quickRunScreenNotify",
-           "quickRunLogNotify",
-           "buildOnSaveScreenNotify",
-           "buildOnSaveLogNotify",
-           "filerScreenNotify",
-           "filerLogNotify",
-           "restoreScreenNotify",
-           "restoreLogNotify":
-          if item.val["type"].getStr != "bool":
-            return some($item)
-        else:
-          return some($item)
-
-  template validateFilerTable() =
-    for item in json["Filer"].pairs:
-      case item.key:
-        of "showIcons":
-          if item.val["type"].getStr != "bool":
-            return some($item)
-        else:
-          return some($item)
-
-  template validateAutocompleteTable() =
-    for item in json["Autocomplete"].pairs:
-      case item.key:
-        of "enable":
-          if item.val["type"].getStr != "bool":
-            return some($item)
-        else:
-          return some($item)
-
-  template validatePersistTable() =
-    for item in json["Persist"].pairs:
-      case item.key:
-        of "exCommand", "search", "cursorPosition":
-          if item.val["type"].getStr != "bool":
-            return some($item)
-        else:
-          return some($item)
-
-  template validateDebugTable() =
-    for item in json["Debug"].pairs:
-      case item.key:
-        # Check [Debug.WindowNode]
-        of "WindowNode":
-          for item in json["Debug"]["WindowNode"].pairs:
-            case item.key:
-              of "enable",
-                 "currentWindow",
-                 "index",
-                 "windowIndex",
-                 "bufferIndex",
-                 "parentIndex",
-                 "childLen",
-                 "splitType",
-                 "haveCursesWin",
-                 "y",
-                 "x",
-                 "h",
-                 "w",
-                 "currentLine",
-                 "currentColumn",
-                 "expandedColumn",
-                 "cursor":
-                if item.val["type"].getStr != "bool":
-                  return some($item)
-              else:
-                return some($item)
-        # Check [Debug.EditorView]
-        of "EditorView":
-          for item in json["Debug"]["EditorView"].pairs:
-            case item.key:
-              of "enable",
-                 "widthOfLineNum",
-                 "height",
-                 "width",
-                 "originalLine",
-                 "start",
-                 "length":
-                if item.val["type"].getStr != "bool":
-                  return some($item)
-              else:
-                return some($item)
-        # Check [Debug.BufferStatus]
-        of "BufferStatus":
-          for item in json["Debug"]["BufferStatus"].pairs:
-            case item.key:
-              of "enable",
-                 "bufferIndex",
-                 "path",
-                 "openDir",
-                 "currentMode",
-                 "prevMode",
-                 "language",
-                 "encoding",
-                 "countChange",
-                 "cmdLoop",
-                 "lastSaveTime",
-                 "bufferLen":
-                if item.val["type"].getStr != "bool":
-                  return some($item)
-              else:
-                return some($item)
-        else:
-          return some($item)
-
-  template validateThemeTable() =
-    let editorColors = ColorThemeTable[ColorTheme.config].EditorColor
-    for item in json["Theme"].pairs:
-      case item.key:
-        of "baseTheme":
-          var correctKey = false
           for theme in ColorTheme:
-            if $theme == item.val["value"].getStr:
-              correctKey = true
-          if not correctKey: return some($item)
+            if $theme == val.getStr:
+              correctValue = true
+        if not correctValue:
+          return some($key)
+      of "number",
+         "currentNumber",
+         "cursorLine",
+         "statusLine",
+         "tabLine",
+         "syntax",
+         "indentationLines",
+         "autoCloseParen",
+         "autoIndent",
+         "ignorecase",
+         "smartcase",
+         "disableChangeCursor",
+         "autoSave",
+         "liveReloadOfConf",
+         "incrementalSearch",
+         "popUpWindowInExmode",
+         "autoDeleteParen",
+         "systemClipboard",
+         "smoothScroll":
+        if not (val.kind == TomlValueKind.Bool):
+          return some($key)
+      of "tabStop", "autoSaveInterval", "smoothScrollSpeed":
+        if not (val.kind == TomlValueKind.Int and val.getInt > 0):
+          return some($key)
+      of "defaultCursor",
+         "normalModeCursor",
+         "insertModeCursor":
+        let val = val.getStr
+        var correctValue = false
+        for cursorType in CursorType:
+          if val == $cursorType:
+            correctValue = true
+            break
+
+proc validateTabLineTable(table: TomlValueRef): Option[string] =
+  for key, val in table.getTable:
+    case key:
+      of "allBuffer":
+        if not (val.kind == TomlValueKind.Bool):
+          return some($key)
+      else:
+        return some($key)
+
+proc validateBuildOnSaveTable(table: TomlValueRef): Option[string] =
+  for key, val in table.getTable:
+    case key:
+      of "enable":
+        if not (val.kind == TomlValueKind.Bool):
+          return some($key)
+      of "workspaceRoot",
+         "command":
+        if not (val.kind == TomlValueKind.String):
+          return some($key)
+      else:
+          return some($key)
+
+proc validateStatusLineTable(table: TomlValueRef): Option[string] =
+  for key, val in table.getTable:
+    case key:
+      of "multipleStatusLine",
+         "merge",
+         "mode",
+         "filename",
+         "chanedMark",
+         "line",
+         "column",
+         "encoding",
+         "language",
+         "directory",
+         "gitbranchName",
+         "showGitInactive",
+         "showModeInactive":
+        if not (val.kind == TomlValueKind.Bool):
+          return some($key)
+      else:
+        return some($key)
+
+proc validateWorkSpaceTable(table: TomlValueRef): Option[string] =
+  for key, val in table.getTable:
+    case key:
+      of "workSpaceLine":
+        if not (val.kind == TomlValueKind.Bool):
+          return some($key)
+      else:
+          return some($key)
+
+proc validateHighlightTable(table: TomlValueRef): Option[string] =
+  for key, val in table.getTable:
+    case key:
+      of "reservedWord":
+        if val.kind == TomlValueKind.Array:
+          for key, val in val.getTable:
+            if val.kind != TomlValueKind.String:
+              return some($key)
+      of "currentLine",
+         "fullWidthSpace",
+         "trailingSpaces",
+         "replaceText",
+         "pairOfParen",
+         "currentWord":
+        if not (val.kind == TomlValueKind.Bool):
+          return some($key)
+      else:
+        return some($key)
+
+proc validateAutoBackupTable(table: TomlValueRef): Option[string] =
+  for key, val in table.getTable:
+    case key:
+      of "enable", "showMessages":
+        if val.kind != TomlValueKind.Bool:
+          return some($key)
+      of "idleTime",
+         "interval":
+        if val.kind != TomlValueKind.Int:
+          return some($key)
+      of "backupDir":
+        if val.kind != TomlValueKind.String:
+          return some($key)
+      of "dirToExclude":
+        if val.kind != TomlValueKind.Array:
+          for item in val.getElems:
+            if item.kind != TomlValueKind.String:
+              return some($item)
+      else:
+        return some($key)
+
+proc validateQuickRunTable(table: TomlValueRef): Option[string] =
+  for key, val in table.getTable:
+    case key:
+      of "saveBufferWhenQuickRun":
+        if val.kind != TomlValueKind.Bool:
+          return some($key)
+      of "command",
+         "nimAdvancedCommand",
+         "ClangOptions",
+         "CppOptions",
+         "NimOptions",
+         "shOptions",
+         "bashOptions":
+        if val.kind != TomlValueKind.String:
+          return some($key)
+      of "timeout":
+        if val.kind != TomlValueKind.Int:
+          return some($key)
+      else:
+        return some($key)
+
+proc validateNotificationTable(table: TomlValueRef): Option[string] =
+  for key, val in table.getTable:
+    case key:
+      of "screenNotifications",
+         "logNotifications",
+         "autoBackupScreenNotify",
+         "autoBackupLogNotify",
+         "autoSaveScreenNotify",
+         "autoSaveLogNotify",
+         "yankScreenNotify",
+         "yankLogNotify",
+         "deleteScreenNotify",
+         "deleteLogNotify",
+         "saveScreenNotify",
+         "saveLogNotify",
+         "workspaceScreenNotify",
+         "workspaceLogNotify",
+         "quickRunScreenNotify",
+         "quickRunLogNotify",
+         "buildOnSaveScreenNotify",
+         "buildOnSaveLogNotify",
+         "filerScreenNotify",
+         "filerLogNotify",
+         "restoreScreenNotify",
+         "restoreLogNotify":
+        if val.kind != TomlValueKind.Bool:
+          return some($key)
+      else:
+        return some($key)
+
+proc validateFilerTable(table: TomlValueRef): Option[string] =
+  for key, val in table.getTable:
+    case key:
+      of "showIcons":
+        if val.kind !=  TomlValueKind.Bool:
+          return some($key)
+      else:
+        return some($key)
+
+proc validateAutocompleteTable(table: TomlValueRef): Option[string] =
+    for key, val in table.getTable:
+      case key:
+        of "enable":
+          if val.kind != TomlValueKind.Bool:
+            return some($key)
         else:
-          # Check color names
-          var correctKey = false
-          for field, val in editorColors.fieldPairs:
-            if item.key == field and
-               item.val["type"].getStr == "string":
-              for color in Color:
-                if item.val["value"].getStr == $color:
-                  correctKey = true
-                  break
-              if correctKey: break
-          if not correctKey:
-            return some($item)
+          return some($key)
 
-  let json = toml.toJson
+proc validatePersistTable(table: TomlValueRef): Option[string] =
+  for key, val in table.getTable:
+    case key:
+      of "exCommand", "search", "cursorPosition":
+        if val.kind != TomlValueKind.Bool:
+          return some($key)
+      else:
+        return some($key)
 
-  for table in json.keys:
-    case table:
+proc validateDebugTable(table: TomlValueRef): Option[string] =
+  for key, val in table.getTable:
+    case key:
+      of "WorkSpace":
+      # Check [Debug.WorkSpace]
+        for key,val in table["WorkSpace"].getTable:
+          case key:
+            of "enable",
+                "numOfWorkSpaces",
+                "currentWorkSpaceIndex":
+              if val.kind != TomlValueKind.Bool:
+                return some($key)
+            else:
+              return some($key)
+      # Check [Debug.WindowNode]
+      of "WindowNode":
+        for key, val in table["WindowNode"].getTable:
+          case key:
+            of "enable",
+               "currentWindow",
+               "index",
+               "windowIndex",
+               "bufferIndex",
+               "parentIndex",
+               "childLen",
+               "splitType",
+               "haveCursesWin",
+               "y",
+               "x",
+               "h",
+               "w",
+               "currentLine",
+               "currentColumn",
+               "expandedColumn",
+               "cursor":
+              if val.kind != TomlValueKind.Bool:
+                return some($key)
+            else:
+              return some($key)
+      # Check [Debug.EditorView]
+      of "EditorView":
+        for key, val in table["EditorView"].getTable:
+          case key:
+            of "enable",
+               "widthOfLineNum",
+               "height",
+               "width",
+               "originalLine",
+               "start",
+               "length":
+              if val.kind != TomlValueKind.Bool:
+                return some($key)
+            else:
+              return some($key)
+      # Check [Debug.BufferStatus]
+      of "BufferStatus":
+        for key, val in table["BufferStatus"].getTable:
+          case key:
+            of "enable",
+               "bufferIndex",
+               "path",
+               "openDir",
+               "currentMode",
+               "prevMode",
+               "language",
+               "encoding",
+               "countChange",
+               "cmdLoop",
+               "lastSaveTime",
+               "bufferLen":
+              if val.kind != TomlValueKind.Bool:
+                return some($key)
+            else:
+              return some($key)
+      else:
+        return some($key)
+
+proc validateThemeTable(table: TomlValueRef): Option[string] =
+  let editorColors = ColorThemeTable[ColorTheme.config].EditorColor
+  for key, val in table.getTable:
+    case key:
+      of "baseTheme":
+        var correctKey = false
+        for theme in ColorTheme:
+          if $theme == val.getStr:
+            correctKey = true
+        if not correctKey: return some($key)
+      else:
+        # Check color names
+        var correctKey = false
+        for field, fieldVal in editorColors.fieldPairs:
+          if key == field and
+             val.kind == TomlValueKind.String:
+            for color in Color:
+              if val.getStr == $color:
+                correctKey = true
+                break
+            if correctKey: break
+        if not correctKey:
+          return some($key)
+
+proc validateTomlConfig(toml: TomlValueRef): Option[string] =
+  for key, val in toml.getTable:
+    case key:
       of "Standard":
-        validateStandardTable()
-      of "Clipboard":
-        validateClipboardTable()
+        let r = validateStandardTable(val)
+        if r.isSome: return r
       of "TabLine":
-        validateTabLineTable()
+        let r = validateTabLineTable(val)
+        if r.isSome: return r
       of "StatusLine":
-        validateStatusLineTable()
+        let r = validateStatusLineTable(val)
+        if r.isSome: return r
       of "BuildOnSave":
-        validateBuildOnSaveTable()
+        let r = validateBuildOnSaveTable(val)
+        if r.isSome: return r
+      of "WorkSpace":
+        let r = validateWorkSpaceTable(val)
+        if r.isSome: return r
       of "Highlight":
-        validateHighlightTable()
+        let r = validateHighlightTable(val)
+        if r.isSome: return r
       of "AutoBackup":
-        validateAutoBackupTable()
+        let r = validateAutoBackupTable(val)
+        if r.isSome: return r
       of "QuickRun":
-        validateQuickRunTable()
+        let r = validateQuickRunTable(val)
+        if r.isSome: return r
       of "Notification":
-        validateNotificationTable()
+        let r = validateNotificationTable(val)
+        if r.isSome: return r
       of "Filer":
-        validateFilerTable()
+        let r = validateFilerTable(val)
+        if r.isSome: return r
       of "Theme":
-        validateThemeTable()
+        let r = validateThemeTable(val)
+        if r.isSome: return r
       of "Autocomplete":
-        validateAutocompleteTable()
+        let r = validateAutocompleteTable(val)
+        if r.isSome: return r
       of "Debug":
-        validateDebugTable()
-      of "Persist":
-        validatePersistTable()
-      else: discard
-
-  return none(string)
-
+        let r = validateDebugTable(val)
+        if r.isSome: return r
+      else:
+        discard
 proc loadSettingFile*(): EditorSettings =
   let filename = getConfigDir() / "moe" / "moerc.toml"
 
