@@ -16,3 +16,6 @@ requires "parsetoml >= 0.6.0"
 
 task release, "Build for release":
   exec "nimble build -d:release"
+
+task debug, "Build for debug":
+  exec "nimble build -d:debug --debugger:native --verbose -y"
