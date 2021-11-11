@@ -1691,6 +1691,10 @@ proc validateStandardTable(table: TomlValueRef): Option[string] =
           if val == $cursorType:
             correctValue = true
             break
+        if not correctValue:
+          return some($key)
+      else:
+        return some($key)
 
 proc validateClipboardTable(table: TomlValueRef): Option[string] =
   for key, val in table.getTable:
