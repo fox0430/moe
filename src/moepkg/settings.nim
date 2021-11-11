@@ -186,6 +186,10 @@ type EditorSettings* = object
   highlightSettings*: HighlightSettings
   persist*: PersistSettings
 
+type InvalidItem = object
+  name: string
+  val: string
+
 # Warning: inherit from a more precise exception type like ValueError, IOError or OSError.
 # If these don't suit, inherit from CatchableError or Defect. [InheritFromException]
 type InvalidItemError* = object of ValueError
@@ -1645,7 +1649,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
   if result.editorColorTheme == ColorTheme.vscode:
     result.editorColorTheme = loadVSCodeTheme()
 
-proc validateStandardTable(table: TomlValueRef): Option[string] =
+proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
       of "theme":
@@ -1657,7 +1661,7 @@ proc validateStandardTable(table: TomlValueRef): Option[string] =
             if $theme == val.getStr:
               correctValue = true
         if not correctValue:
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
       of "number",
          "currentNumber",
          "cursorLine",
@@ -1678,10 +1682,10 @@ proc validateStandardTable(table: TomlValueRef): Option[string] =
          "systemClipboard",
          "smoothScroll":
         if not (val.kind == TomlValueKind.Bool):
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
       of "tabStop", "autoSaveInterval", "smoothScrollSpeed":
         if not (val.kind == TomlValueKind.Int and val.getInt > 0):
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
       of "defaultCursor",
          "normalModeCursor",
          "insertModeCursor":
@@ -1692,49 +1696,49 @@ proc validateStandardTable(table: TomlValueRef): Option[string] =
             correctValue = true
             break
         if not correctValue:
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
       else:
-        return some($key)
+        return some(InvalidItem(name: $key, val: $val))
 
-proc validateClipboardTable(table: TomlValueRef): Option[string] =
+proc validateClipboardTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
       of "enable":
         if not (val.kind == TomlValueKind.Bool):
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
       of "toolOnLinux":
         if not (
           (val.kind == TomlValueKind.String) and
           (val.getStr == "none" or
            val.getStr == "xclip" or
            val.getStr == "xsel" or
-           val.getStr == "wl-clipboard")): return some($key)
+           val.getStr == "wl-clipboard")): return some(InvalidItem(name: $key, val: $val))
       else:
-        return some($key)
+        return some(InvalidItem(name: $key, val: $val))
 
-proc validateTabLineTable(table: TomlValueRef): Option[string] =
+proc validateTabLineTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
       of "allBuffer":
         if not (val.kind == TomlValueKind.Bool):
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
       else:
-        return some($key)
+        return some(InvalidItem(name: $key, val: $val))
 
-proc validateBuildOnSaveTable(table: TomlValueRef): Option[string] =
+proc validateBuildOnSaveTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
       of "enable":
         if not (val.kind == TomlValueKind.Bool):
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
       of "workspaceRoot",
          "command":
         if not (val.kind == TomlValueKind.String):
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
       else:
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
 
-proc validateStatusLineTable(table: TomlValueRef): Option[string] =
+proc validateStatusLineTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
       of "multipleStatusLine",
@@ -1751,27 +1755,27 @@ proc validateStatusLineTable(table: TomlValueRef): Option[string] =
          "showGitInactive",
          "showModeInactive":
         if not (val.kind == TomlValueKind.Bool):
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
       else:
-        return some($key)
+        return some(InvalidItem(name: $key, val: $val))
 
-proc validateWorkSpaceTable(table: TomlValueRef): Option[string] =
+proc validateWorkSpaceTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
       of "workSpaceLine":
         if not (val.kind == TomlValueKind.Bool):
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
       else:
-          return some($key)
+        return some(InvalidItem(name: $key, val: $val))
 
-proc validateHighlightTable(table: TomlValueRef): Option[string] =
+proc validateHighlightTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
       of "reservedWord":
         if val.kind == TomlValueKind.Array:
           for key, val in val.getTable:
             if val.kind != TomlValueKind.String:
-              return some($key)
+              return some(InvalidItem(name: $key, val: $val))
       of "currentLine",
          "fullWidthSpace",
          "trailingSpaces",
@@ -1779,37 +1783,37 @@ proc validateHighlightTable(table: TomlValueRef): Option[string] =
          "pairOfParen",
          "currentWord":
         if not (val.kind == TomlValueKind.Bool):
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
       else:
-        return some($key)
+        return some(InvalidItem(name: $key, val: $val))
 
-proc validateAutoBackupTable(table: TomlValueRef): Option[string] =
+proc validateAutoBackupTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
       of "enable", "showMessages":
         if val.kind != TomlValueKind.Bool:
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
       of "idleTime",
          "interval":
         if val.kind != TomlValueKind.Int:
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
       of "backupDir":
         if val.kind != TomlValueKind.String:
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
       of "dirToExclude":
         if val.kind != TomlValueKind.Array:
           for item in val.getElems:
             if item.kind != TomlValueKind.String:
-              return some($item)
+              return some(InvalidItem(name: $key, val: $val))
       else:
-        return some($key)
+        return some(InvalidItem(name: $key, val: $val))
 
-proc validateQuickRunTable(table: TomlValueRef): Option[string] =
+proc validateQuickRunTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
       of "saveBufferWhenQuickRun":
         if val.kind != TomlValueKind.Bool:
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
       of "command",
          "nimAdvancedCommand",
          "ClangOptions",
@@ -1818,14 +1822,14 @@ proc validateQuickRunTable(table: TomlValueRef): Option[string] =
          "shOptions",
          "bashOptions":
         if val.kind != TomlValueKind.String:
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
       of "timeout":
         if val.kind != TomlValueKind.Int:
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
       else:
-        return some($key)
+        return some(InvalidItem(name: $key, val: $val))
 
-proc validateNotificationTable(table: TomlValueRef): Option[string] =
+proc validateNotificationTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
       of "screenNotifications",
@@ -1851,38 +1855,38 @@ proc validateNotificationTable(table: TomlValueRef): Option[string] =
          "restoreScreenNotify",
          "restoreLogNotify":
         if val.kind != TomlValueKind.Bool:
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
       else:
-        return some($key)
+        return some(InvalidItem(name: $key, val: $val))
 
-proc validateFilerTable(table: TomlValueRef): Option[string] =
+proc validateFilerTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
       of "showIcons":
         if val.kind !=  TomlValueKind.Bool:
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
       else:
-        return some($key)
+        return some(InvalidItem(name: $key, val: $val))
 
-proc validateAutocompleteTable(table: TomlValueRef): Option[string] =
+proc validateAutocompleteTable(table: TomlValueRef): Option[InvalidItem] =
     for key, val in table.getTable:
       case key:
         of "enable":
           if val.kind != TomlValueKind.Bool:
-            return some($key)
+            return some(InvalidItem(name: $key, val: $val))
         else:
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
 
-proc validatePersistTable(table: TomlValueRef): Option[string] =
+proc validatePersistTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
       of "exCommand", "search", "cursorPosition":
         if val.kind != TomlValueKind.Bool:
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
       else:
-        return some($key)
+        return some(InvalidItem(name: $key, val: $val))
 
-proc validateDebugTable(table: TomlValueRef): Option[string] =
+proc validateDebugTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
       of "WorkSpace":
@@ -1893,9 +1897,9 @@ proc validateDebugTable(table: TomlValueRef): Option[string] =
                 "numOfWorkSpaces",
                 "currentWorkSpaceIndex":
               if val.kind != TomlValueKind.Bool:
-                return some($key)
+                return some(InvalidItem(name: $key, val: $val))
             else:
-              return some($key)
+              return some(InvalidItem(name: $key, val: $val))
       # Check [Debug.WindowNode]
       of "WindowNode":
         for key, val in table["WindowNode"].getTable:
@@ -1918,9 +1922,9 @@ proc validateDebugTable(table: TomlValueRef): Option[string] =
                "expandedColumn",
                "cursor":
               if val.kind != TomlValueKind.Bool:
-                return some($key)
+                return some(InvalidItem(name: $key, val: $val))
             else:
-              return some($key)
+              return some(InvalidItem(name: $key, val: $val))
       # Check [Debug.EditorView]
       of "EditorView":
         for key, val in table["EditorView"].getTable:
@@ -1933,9 +1937,9 @@ proc validateDebugTable(table: TomlValueRef): Option[string] =
                "start",
                "length":
               if val.kind != TomlValueKind.Bool:
-                return some($key)
+                return some(InvalidItem(name: $key, val: $val))
             else:
-              return some($key)
+              return some(InvalidItem(name: $key, val: $val))
       # Check [Debug.BufferStatus]
       of "BufferStatus":
         for key, val in table["BufferStatus"].getTable:
@@ -1953,13 +1957,13 @@ proc validateDebugTable(table: TomlValueRef): Option[string] =
                "lastSaveTime",
                "bufferLen":
               if val.kind != TomlValueKind.Bool:
-                return some($key)
+                return some(InvalidItem(name: $key, val: $val))
             else:
-              return some($key)
+              return some(InvalidItem(name: $key, val: $val))
       else:
-        return some($key)
+        return some(InvalidItem(name: $key, val: $val))
 
-proc validateThemeTable(table: TomlValueRef): Option[string] =
+proc validateThemeTable(table: TomlValueRef): Option[InvalidItem] =
   let editorColors = ColorThemeTable[ColorTheme.config].EditorColor
   for key, val in table.getTable:
     case key:
@@ -1968,7 +1972,7 @@ proc validateThemeTable(table: TomlValueRef): Option[string] =
         for theme in ColorTheme:
           if $theme == val.getStr:
             correctKey = true
-        if not correctKey: return some($key)
+        if not correctKey: return some(InvalidItem(name: $key, val: $val))
       else:
         # Check color names
         var correctKey = false
@@ -1981,9 +1985,9 @@ proc validateThemeTable(table: TomlValueRef): Option[string] =
                 break
             if correctKey: break
         if not correctKey:
-          return some($key)
+          return some(InvalidItem(name: $key, val: $val))
 
-proc validateTomlConfig(toml: TomlValueRef): Option[string] =
+proc validateTomlConfig(toml: TomlValueRef): Option[InvalidItem] =
   for key, val in toml.getTable:
     case key:
       of "Standard":
@@ -2032,7 +2036,13 @@ proc validateTomlConfig(toml: TomlValueRef): Option[string] =
         let r = validateDebugTable(val)
         if r.isSome: return r
       else:
-        return some(key)
+        return some(InvalidItem(name: $key, val: $val))
+
+proc toValidateErrorMessage(invalidItem: InvalidItem): string =
+  # Remove '\n'
+  let val = invalidItem.val.splitLines.join
+
+  result = fmt"(name: {invalidItem.name}, val: {val})"
 
 proc loadSettingFile*(): EditorSettings =
   let filename = getConfigDir() / "moe" / "moerc.toml"
@@ -2044,8 +2054,9 @@ proc loadSettingFile*(): EditorSettings =
     toml = parsetoml.parseFile(filename)
     invalidItem = toml.validateTomlConfig
 
-  if invalidItem != none(string):
-    raise newException(InvalidItemError, $invalidItem)
+  if invalidItem != none(InvalidItem):
+    let errorMessage = toValidateErrorMessage(invalidItem.get)
+    raise newException(InvalidItemError, $errorMessage)
   else:
     return parseSettingsFile(toml)
 
