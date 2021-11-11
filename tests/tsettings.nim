@@ -544,7 +544,7 @@ suite "Validate toml config":
     let toml = parsetoml.parseString(tomlStr)
     let result = toml.validateTomlConfig
 
-    check result == none(string)
+    check result == none(InvalidItem)
 
   test "Validate vscode theme":
     const tomlThemeConfig ="""
@@ -554,7 +554,7 @@ suite "Validate toml config":
     let toml = parsetoml.parseString(tomlThemeConfig)
     let result = toml.validateTomlConfig
 
-    check result == none(string)
+    check result == none(InvalidItem)
 
   test "Except to fail":
     const tomlThemeConfig ="""
@@ -572,7 +572,7 @@ suite "Configuration example":
       filename = "./example/moerc.toml"
       toml = parsetoml.parseFile(filename)
 
-    check toml.validateTomlConfig == none(string)
+    check toml.validateTomlConfig == none(InvalidItem)
 
 suite "Generate toml config":
   test "Generate current config":
@@ -583,4 +583,4 @@ suite "Generate toml config":
       toml = parsetoml.parseString(str)
       result = toml.validateTomlConfig
 
-    check result == none(string)
+    check result == none(InvalidItem)
