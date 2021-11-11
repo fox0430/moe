@@ -1705,7 +1705,8 @@ proc validateClipboardTable(table: TomlValueRef): Option[string] =
       of "toolOnLinux":
         if not (
           (val.kind == TomlValueKind.String) and
-          (val.getStr == "xclip" or
+          (val.getStr == "none" or
+           val.getStr == "xclip" or
            val.getStr == "xsel" or
            val.getStr == "wl-clipboard")): return some($key)
       else:
