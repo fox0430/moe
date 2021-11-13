@@ -584,3 +584,44 @@ suite "Generate toml config":
       result = toml.validateTomlConfig
 
     check result == none(InvalidItem)
+
+suite "Error message":
+  test "Single line":
+    const TOML_STR = """
+      [test]
+      test = "test"
+    """
+
+    let
+      toml = parseString(TOML_STR)
+      result = toml.validateTomlConfig
+      errorMessage = result.get.toValidateErrorMessage
+
+    check errorMessage == """(name: test, val: test = "test")"""
+
+  test "Single line 2":
+    const TOML_STR = """
+      [Standard]
+      test = "test"
+    """
+
+    let
+      toml = parseString(TOML_STR)
+      result = toml.validateTomlConfig
+      errorMessage = result.get.toValidateErrorMessage
+
+    check errorMessage == """(name: test, val: test)"""
+
+  test "Multiple lines":
+    const TOML_STR = """
+      [test]
+      test1 = "test1"
+      test2 = "test2"
+    """
+
+    let
+      toml = parseString(TOML_STR)
+      result = toml.validateTomlConfig
+      errorMessage = result.get.toValidateErrorMessage
+
+    check errorMessage == """(name: test, val: test1 = "test1" test2 = "test2")"""
