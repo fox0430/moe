@@ -67,9 +67,9 @@ enable = false
 
 allBuffer = false
 
-[StatusBar]
+[StatusLine]
 
-multipleStatusBar = true
+multipleStatusLine = true
 
 merge = false
 
