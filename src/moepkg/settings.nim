@@ -2040,7 +2040,12 @@ proc validateTomlConfig(toml: TomlValueRef): Option[InvalidItem] =
 
 proc toValidateErrorMessage(invalidItem: InvalidItem): string =
   # Remove '\n'
-  let val = invalidItem.val.splitLines.join
+  let lines = invalidItem.val.splitLines
+
+  var val = ""
+  for i in 0 ..< lines.len:
+    val &= lines[i]
+    if i < lines.high - 1: val &= " "
 
   result = fmt"(name: {invalidItem.name}, val: {val})"
 
