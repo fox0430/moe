@@ -1,4 +1,4 @@
-import os
+import std/os
 
 type Bookmark* = object
   path*: string

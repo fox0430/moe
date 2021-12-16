@@ -1,4 +1,4 @@
-import deques, strutils, math, strformat
+import std/[deques, strutils, math, strformat]
 import gapbuffer, ui, unicodeext, independentutils, color, settings,
        bufferstatus, highlight
 

@@ -1,5 +1,5 @@
-import strutils, terminal, os, strformat, tables, times, heapqueue, deques,
-       options
+import std/[strutils, terminal, os, strformat, tables, times, heapqueue, deques,
+            options]
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        undoredostack, window, color, settings, statusline, bufferstatus, cursor,

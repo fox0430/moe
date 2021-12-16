@@ -1,4 +1,4 @@
-import sugar, critbits, options
+import std/[sugar, critbits, options]
 import unicodedb/properties
 import unicodeext, bufferstatus
 

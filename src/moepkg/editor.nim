@@ -1,4 +1,4 @@
-import strutils, sequtils, strformat, options
+import std/[strutils, sequtils, strformat, options]
 import syntax/highlite
 import editorstatus, ui, gapbuffer, unicodeext, undoredostack, window,
        bufferstatus, movement, messages, settings, register, commandline

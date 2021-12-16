@@ -1,6 +1,6 @@
-import ui, strutils, strformat, os, osproc
+import std/[strutils, strformat, os, osproc]
 import syntax/highlite
-import bufferstatus, color, unicodeext, settings, window, gapbuffer
+import ui, bufferstatus, color, unicodeext, settings, window, gapbuffer
 
 type StatusLine* = object
   window*: Window

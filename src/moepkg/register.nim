@@ -1,4 +1,4 @@
-import options, strutils, unicode
+import std/[options, strutils, unicode]
 import independentutils, clipboard, settings
 
 type Register* = object

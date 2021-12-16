@@ -31,8 +31,8 @@
 #    distribution, for details about the copyright.
 #
 
-import strutils
-from algorithm import binarySearch
+import std/strutils
+from std/algorithm import binarySearch
 
 import highlite
 

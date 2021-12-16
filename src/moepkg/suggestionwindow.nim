@@ -1,4 +1,4 @@
-import critbits, sugar, options, sequtils, unicode
+import std/[critbits, sugar, options, sequtils, unicode]
 import ui, window, generalautocomplete, bufferstatus, gapbuffer, color,
        editorstatus
 

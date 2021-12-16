@@ -1,4 +1,4 @@
-import terminal
+import std/terminal
 import ui, unicodeext, color
 
 type CommandLine* = object

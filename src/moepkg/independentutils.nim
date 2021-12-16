@@ -1,4 +1,4 @@
-import strutils, math, random, osproc
+import std/[strutils, math, random, osproc]
 
 proc numberOfDigits*(x: int): int {.inline.} = x.intToStr.len
 

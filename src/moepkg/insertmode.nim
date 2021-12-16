@@ -1,4 +1,4 @@
-import terminal, times, options, unicode
+import std/[terminal, times, options, unicode]
 import ui, editorstatus, gapbuffer, window, movement, editor, bufferstatus,
        suggestionwindow, settings
 

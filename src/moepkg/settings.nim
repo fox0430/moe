@@ -1,7 +1,9 @@
-import parsetoml, os, json, macros, times, options, strformat, osproc, strutils
-export TomlError
-
+import std/[os, json, macros, times, options, strformat, osproc,
+            strutils]
 import ui, color, unicodeext, highlight, platform, independentutils
+import parsetoml
+
+export TomlError
 
 type DebugWindowNodeSettings* = object
   enable*: bool

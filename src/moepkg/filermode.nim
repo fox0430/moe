@@ -1,6 +1,8 @@
-import os, terminal, strutils, unicodeext, times, algorithm, sequtils, options
+import std/[os, terminal, strutils, times, algorithm, sequtils,
+            options]
 import editorstatus, ui, fileutils, editorview, gapbuffer, highlight,
-       commandview, window, color, bufferstatus, settings, messages, commandline
+       commandview, window, color, bufferstatus, settings, messages,
+       commandline, unicodeext
 
 type PathInfo = tuple[kind: PathComponent,
                       path: string,
@@ -76,8 +78,8 @@ proc sortDirList(dirList: seq[PathInfo], sortBy: Sort): seq[PathInfo] =
     result.add dirList.sortedByIt(it.lastWriteTime)
 
 when defined(posix):
-  from posix import nil
-  from posix_utils import nil
+  from std/posix import nil
+  from std/posix_utils import nil
 
   proc isFifo(file: string): bool {.inline.} =
     posix.S_ISFIFO(posix_utils.stat(file).st_mode)

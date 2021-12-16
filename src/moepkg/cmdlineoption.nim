@@ -1,4 +1,4 @@
-import parseopt, pegs, os, strformat
+import std/[parseopt, pegs, os, strformat]
 
 type CmdParsedList* = object
   path*: seq[string]
