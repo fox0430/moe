@@ -1,4 +1,4 @@
-import unittest
+import std/unittest
 import ncurses
 import moepkg/[editorstatus, gapbuffer, unicodeext, editor, bufferstatus,
                register, settings]

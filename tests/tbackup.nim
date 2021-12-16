@@ -1,4 +1,4 @@
-import unittest, times, os
+import std/[unittest, times, os]
 import moepkg/unicodeext
 include moepkg/backup
 

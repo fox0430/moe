@@ -1,4 +1,4 @@
-import unittest, os, strutils
+import std/[unittest, os, strutils]
 import moepkg/[editorstatus, unicodeext]
 include moepkg/commandview
 

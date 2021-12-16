@@ -1,4 +1,4 @@
-import unittest
+import std/unittest
 import moepkg/[editorstatus, bufferstatus, unicodeext]
 include moepkg/replacemode
 

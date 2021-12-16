@@ -1,5 +1,5 @@
-import unittest
-import moepkg/[editorstatus]
+import std/unittest
+import moepkg/editorstatus
 
 include moepkg/search
 
