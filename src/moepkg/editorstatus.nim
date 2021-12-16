@@ -1,9 +1,9 @@
-import strutils, terminal, os, strformat, tables, times, heapqueue, deques,
-       options
+import std/[strutils, terminal, os, strformat, tables, times, heapqueue, deques,
+            options]
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
-       undoredostack, window, color, settings, statusline, bufferstatus, cursor,
-       tabline, backup, messages, commandline, register, platform
+       window, color, settings, statusline, bufferstatus, cursor, tabline,
+       backup, messages, commandline, register, platform
 
 # Save cursor position when a buffer for a window(file) gets closed.
 type LastPosition* = object

@@ -1,4 +1,4 @@
-import unittest, options, strutils
+import std/[unittest, options, strutils]
 import moepkg/[color, ui, highlight, unicodeext]
 
 include moepkg/settings

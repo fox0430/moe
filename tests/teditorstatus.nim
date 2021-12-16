@@ -1,7 +1,8 @@
-import unittest
-import moepkg/[ui, highlight, editorview, gapbuffer, unicodeext, insertmode,
-               movement, editor, window, color, bufferstatus,
-               settings]
+import std/unittest
+import moepkg/[ui, highlight, editorview, gapbuffer, unicodeext,
+               editor, window, color, bufferstatus, settings]
+
+from moepkg/movement import keyDown, keyRight
 
 include moepkg/editorstatus
 

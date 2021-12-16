@@ -1,4 +1,4 @@
-import terminal, times, strutils
+import std/[terminal, times, strutils]
 import gapbuffer, ui, editorstatus, unicodeext, window, movement, settings,
        bufferstatus, color, highlight, search, editor
 

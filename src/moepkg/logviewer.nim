@@ -1,4 +1,4 @@
-import terminal, times
+import std/[terminal, times]
 import ui, editorstatus, unicodeext, movement, bufferstatus, window
 
 proc exitLogViewer*(status: var Editorstatus, height, width: int) {.inline.} =

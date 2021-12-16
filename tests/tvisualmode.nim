@@ -1,4 +1,4 @@
-import unittest, osproc
+import std/[unittest, osproc]
 import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, movement, bufferstatus,
                register]
 include moepkg/[visualmode, platform]

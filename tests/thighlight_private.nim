@@ -1,4 +1,4 @@
-import unittest, sequtils
+import std/[unittest, sequtils]
 
 include moepkg/highlight
 

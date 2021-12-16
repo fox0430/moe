@@ -1,4 +1,4 @@
-import unittest
+import std/unittest
 import moepkg/[settings, unicodeext, register, clipboard]
 include moepkg/[platform]
 

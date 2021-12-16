@@ -1,4 +1,4 @@
-import os, osproc, strformat, unicode
+import std/[os, osproc, strformat, unicode]
 import syntax/highlite
 
 proc build*(filename, workspaceRoot,

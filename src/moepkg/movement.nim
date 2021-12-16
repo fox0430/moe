@@ -1,4 +1,4 @@
-import deques
+import std/deques
 import editorstatus, ui, editorview, gapbuffer, unicodeext, window, bufferstatus
 
 template currentLineLen: int = bufStatus.buffer[windowNode.currentLine].len

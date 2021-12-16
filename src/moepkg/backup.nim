@@ -1,4 +1,4 @@
-import os, times, re
+import std/[os, times, re]
 import settings, unicodeext, fileutils, bufferstatus, gapbuffer, messages,
        commandline
 

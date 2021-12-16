@@ -1,4 +1,4 @@
-import terminal, strutils, sequtils, strformat, os, algorithm
+import std/[terminal, strutils, sequtils, strformat, os, algorithm]
 import ui, unicodeext, fileutils, color, commandline
 
 type ExModeViewStatus = object

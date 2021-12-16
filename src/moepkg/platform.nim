@@ -1,4 +1,4 @@
-import osproc, strutils
+import std/[osproc, strutils]
 
 type Platforms* = enum
   linux, wsl, mac, freebsd, openbsd, other

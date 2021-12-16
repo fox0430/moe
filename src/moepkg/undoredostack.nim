@@ -1,4 +1,4 @@
-import sequtils, tables
+import std/[sequtils, tables]
 
 type
   CommandKind = enum

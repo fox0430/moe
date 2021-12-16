@@ -1,4 +1,4 @@
-import tables, times, options
+import std/[tables, times, options]
 import syntax/highlite
 import gapbuffer, unicodeext
 

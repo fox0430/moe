@@ -1,4 +1,4 @@
-import deques, strformat
+import std/[deques, strformat]
 import editorview, unicodeext
 
 type CursorPosition* = object

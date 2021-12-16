@@ -1,8 +1,8 @@
-import strformat, osproc, strutils
+import std/[strformat, osproc, strutils]
 when not defined unitTest:
-  import posix
+  import std/posix
 
-from os import execShellCmd
+from std/os import execShellCmd
 import ncurses
 import unicodeext, color
 

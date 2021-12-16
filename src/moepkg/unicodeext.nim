@@ -1,4 +1,4 @@
-import unicode, sequtils, strutils, strformat, os
+import std/[unicode, sequtils, strutils, strformat, os]
 import unicodedb/widths
 import gapbuffer
 export unicode

@@ -1,4 +1,4 @@
-import sequtils, strutils, os, terminal, times, options
+import std/[sequtils, strutils, os, terminal, times, options]
 import syntax/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
         unicodeext, independentutils, search, highlight, commandview,

@@ -1,4 +1,4 @@
-import unittest
+import std/unittest
 import moepkg/[editorstatus, unicodeext, exmode]
 
 test "Force quit command":

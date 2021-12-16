@@ -1,4 +1,4 @@
-import unittest, deques
+import std/[unittest, deques]
 import moepkg/[editorview, gapbuffer, unicodeext]
 
 test "initEditorView 1":

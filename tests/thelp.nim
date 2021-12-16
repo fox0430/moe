@@ -1,4 +1,4 @@
-import unittest, strutils
+import std/[unittest, strutils]
 import moepkg/[editorstatus, gapbuffer, unicodeext, movement, window,
                bufferstatus]
 
