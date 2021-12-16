@@ -438,10 +438,20 @@ proc initSyntaxHighlight(windowNode: var WindowNode,
 proc isLogViewerMode(mode, prevMode: Mode): bool {.inline.} =
   (mode == logViewer) or (mode == ex and prevMode == logViewer)
 
-proc updateLogViewer(status: var Editorstatus, bufferIndex: int) =
-  status.bufStatus[bufferIndex].buffer = initGapBuffer(@[ru""])
-  for i in 0 ..< status.messageLog.len:
-    status.bufStatus[bufferIndex].buffer.insert(status.messageLog[i], i)
+proc updateLogViewer(bufStatus: var BufferStatus,
+                     node: var WindowNode,
+                     messageLog: seq[seq[Rune]]) =
+
+  bufStatus.buffer = initGapBuffer(@[ru""])
+  for i in 0 ..< messageLog.len:
+    bufStatus.buffer.insert(messageLog[i], i)
+
+  const EMPTY_RESERVEDWORD: seq[ReservedWord] = @[]
+
+  node.highlight = initHighlight(
+      $bufStatus.buffer,
+      EMPTY_RESERVEDWORD,
+      SourceLanguage.langNone)
 
 proc updateDebugModeBuffer(status: var EditorStatus)
 
@@ -508,14 +518,14 @@ proc update*(status: var EditorStatus) =
            not isConfigMode(currentMode, prevMode):
 
           if isLogViewerMode(currentMode, prevMode):
-            status.updateLogViewer(node.bufferIndex)
-
-          highlight.updateHighlight(
-            bufStatus,
-            node,
-            status.isSearchHighlight,
-            status.searchHistory,
-            settings)
+            status.bufStatus[node.bufferIndex].updateLogViewer(node, status.messageLog)
+          else:
+            highlight.updateHighlight(
+              bufStatus,
+              node,
+              status.isSearchHighlight,
+              status.searchHistory,
+              settings)
 
         let
           startSelectedLine = bufStatus.selectArea.startLine
