@@ -424,4 +424,6 @@ proc encodeUTF8*(r: Rune): seq[uint32] =
     result.add mbLead or i and mbMask
 
 proc absolutePath*(runes: seq[Rune]): seq[Rune] {.inline.} =
-  absolutePath($runes).ru
+  result = absolutePath($runes).ru
+  if result.len > 0 and dirExists($runes) and result[^1] != ru '/':
+    result &= ru "/"

@@ -12,12 +12,26 @@ template initHighlight() =
     status.settings.highlightSettings.reservedWords,
     currentBufStatus.language)
 
-test "Add new buffer":
-  var status = initEditorStatus()
-  status.addNewBuffer
-  status.addNewBuffer
-  status.resize(100, 100)
-  check(status.bufStatus.len == 2)
+suite "Add new buffer":
+  test "Add 2 uffers":
+    var status = initEditorStatus()
+
+    status.addNewBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    status.addNewBuffer
+
+    check status.bufStatus.len == 2
+
+  test "Add new buffer (Dir)":
+    var status = initEditorStatus()
+
+    status.addNewBuffer("./")
+
+    status.resize(100, 100)
+    status.update
 
 test "Add new buffer and update editor view when disabling current line highlighting (Fix #1189)":
   var status = initEditorStatus()
