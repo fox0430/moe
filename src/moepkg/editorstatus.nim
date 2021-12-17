@@ -204,7 +204,7 @@ proc saveSearchHistory(history: seq[seq[Rune]]) =
     f.writeLine($line)
 
 # Save the cursor position to the file
-proc saveLastPosition(lastPosition: seq[LastPosition]) =
+proc saveLastCursorPosition(lastPosition: seq[LastPosition]) =
   let
     chaheDir = getHomeDir() / ".cache/moe"
     chaheFile = chaheDir / "lastPosition"
@@ -226,7 +226,7 @@ proc exitEditor*(status: EditorStatus) =
     saveSearchHistory(status.searchHistory)
 
   if status.settings.persist.cursorPosition:
-    saveLastPosition(status.lastPosition)
+    saveLastCursorPosition(status.lastPosition)
 
   exitUi()
 
@@ -647,7 +647,8 @@ proc closeWindow*(status: var EditorStatus,
                   node: WindowNode,
                   height, width: int) =
 
-  if currentBufStatus.mode == Mode.normal:
+  if isNormalMode(currentBufStatus.mode, currentBufStatus.prevMode) or
+     isFilerMode(currentBufStatus.mode, currentBufStatus.prevMode):
     status.updateLastCursorPostion
 
   if status.mainWindow.numOfMainWindow == 1:
@@ -728,7 +729,7 @@ proc deletePopUpWindow*(status: var Editorstatus) =
 
 proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode) =
 
-  let path = if mode == Mode.filer: ru absolutePath(filename) else: ru filename
+  let path = if isFilerMode(mode): ru absolutePath(filename) else: ru filename
 
   status.bufStatus.add(initBufferStatus(path, mode))
 
@@ -736,7 +737,9 @@ proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode) =
 
   status.bufStatus[index].isReadonly = status.isReadonly
 
-  if mode != Mode.filer:
+  if mode == Mode.filer:
+    status.bufStatus[index].buffer = initGapBuffer(@[ru ""])
+  else:
     if not fileExists(filename):
       status.bufStatus[index].buffer = newFile()
     else:

@@ -516,6 +516,19 @@ proc filerMode*(status: var EditorStatus) =
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
+  block:
+    filerStatus = filerStatus.updateDirList(currentBufStatus.path)
+    filerStatus.dirlistUpdate = false
+
+    status.updateFilerView(filerStatus, terminalHeight(), terminalWidth())
+
+    currentMainWindowNode.restoreCursorPostion(
+      currentBufStatus,
+      status.lastPosition)
+
+    status.updateFilerView(filerStatus, terminalHeight(), terminalWidth())
+    filerStatus.viewUpdate = false
+
   while isFilerMode(currentBufStatus.mode) and
         currentBufferIndex == status.bufferIndexInCurrentWindow:
 
