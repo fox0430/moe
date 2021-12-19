@@ -105,7 +105,7 @@ This project's goal is a very customizable, high productivity, user friendly, hi
 
 ### Requires
 
-- Nim 1.6.0 or higher
+- Nim 1.4.2 or higher
 
 - ncurses
 
