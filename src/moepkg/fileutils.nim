@@ -1,4 +1,4 @@
-import os, encodings
+import std/[os, encodings]
 import gapbuffer, unicodeext
 
 proc normalizePath*(path: seq[Rune]): seq[Rune] =

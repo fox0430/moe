@@ -1,4 +1,4 @@
-import strutils, sequtils, strformat, options
+import std/[strutils, sequtils, strformat, options]
 import syntax/highlite
 import editorstatus, ui, gapbuffer, unicodeext, undoredostack, window,
        bufferstatus, movement, messages, settings, register, commandline
@@ -227,7 +227,8 @@ proc basicNewLine(bufStatus: var BufferStatus,
     if first <= last:
       let oldLine = bufStatus.buffer[windowNode.currentLine]
       var newLine = bufStatus.buffer[windowNode.currentLine]
-      newLine.delete(first, last)
+      for _ in first .. last:
+        newLine.delete(first)
       if oldLine != newLine:
         bufStatus.buffer[windowNode.currentLine] = newLine
 
@@ -266,7 +267,7 @@ proc basicInsrtIndent(bufStatus: var BufferStatus,
   if oldLine != newLine:
         bufStatus.buffer[currentLine + 1] = newLine
 
-proc insertIndetWhenPairOfParen(bufStatus: var BufferStatus,
+proc insertIndentWhenPairOfParen(bufStatus: var BufferStatus,
                                 windowNode: WindowNode,
                                 autoIndent: bool,
                                 tabStop: int) =
@@ -318,12 +319,17 @@ proc insertIndentInNimForKeyEnter(bufStatus: var BufferStatus,
   if line.len > 0:
     # Auto indent if the current line are "var", "let", "const".
     # And, if finish the current line with ':', "object"
-    if (currentColumn == line.len) and
-       (line.splitWhitespace == @[ru "var"] or
-       line.splitWhitespace == @[ru "let"] or
-       line.splitWhitespace == @[ru "const"] or
-       (line.len > 6 and line[line.len - 6 .. ^1] == ru "object") or
-       line[^1] == ru ':'):
+    if currentColumn == line.len and (
+        (line.len > 2 and
+          line.splitWhitespace == @[ru "var"] or
+          line.splitWhitespace == @[ru "let"]) or
+        (line.len > 4 and
+          line.splitWhitespace == @[ru "const"]) or
+        (line.len > 4 and
+        line.splitWhitespace[^1] == (ru "object")) or
+        line[^1] == (ru ':') or
+        line[^1] == (ru '=')
+      ):
       let
         count = countRepeat(line, Whitespace, 0) + tabStop
         oldLine = bufStatus.buffer[windowNode.currentLine + 1]
@@ -350,7 +356,7 @@ proc insertIndentInNimForKeyEnter(bufStatus: var BufferStatus,
 
     # if previous col is the unclosed paren.
     elif currentColumn > 0 and isOpenParen(line[currentColumn - 1]):
-      bufStatus.insertIndetWhenPairOfParen(windowNode, autoIndent, tabStop)
+      bufStatus.insertIndentWhenPairOfParen(windowNode, autoIndent, tabStop)
     else:
       bufStatus.basicInsrtIndent(windowNode)
       bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
@@ -406,7 +412,7 @@ proc insertIndentInClangForKeyEnter(bufStatus: var BufferStatus,
   if currentColumn > 0 :
     # if previous col is the unclosed paren.
     if line.len > 0 and isOpenParen(line[currentColumn - 1]):
-      bufStatus.insertIndetWhenPairOfParen(windowNode, autoIndent, tabStop)
+      bufStatus.insertIndentWhenPairOfParen(windowNode, autoIndent, tabStop)
     else:
       bufStatus.basicInsrtIndent(windowNode)
       bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
@@ -702,7 +708,7 @@ proc deleteIndent*(bufStatus: var BufferStatus,
   if numOfDeleteSpace > 0:
     var newLine = bufStatus.buffer[windowNode.currentLine]
 
-    for i in 0 ..< numOfDeleteSpace: newLine.delete(0, 0)
+    for i in 0 ..< numOfDeleteSpace: newLine.delete(0)
 
     if oldLine != newLine:
       bufStatus.buffer[windowNode.currentLine] = newLine
@@ -720,7 +726,8 @@ proc deleteCharactersBeforeCursorInCurrentLine*(bufStatus: var BufferStatus,
     oldLine = bufStatus.buffer[currentLine]
   var newLine = bufStatus.buffer[currentLine]
 
-  newLine.delete(0, currentColumn - 1)
+  for _ in 0 ..< currentColumn:
+    newLine.delete(0)
 
   if newLine != oldLine: bufStatus.buffer[currentLine] = newLine
 
@@ -862,30 +869,17 @@ proc deleteCharacters*(bufStatus: var BufferStatus,
     inc(bufStatus.countChange)
     bufStatus.isUpdate = true
 
-# TODO: Delete deleteCurrentCharacter()
-proc deleteCurrentCharacter*(bufStatus: var BufferStatus,
-                             windowNode: WindowNode,
-                             autoDeleteParen: bool) =
-
-  let oldLine = bufStatus.buffer[windowNode.currentLine]
-
-  deleteCharacter(bufStatus,
-                  windowNode.currentLine,
-                  windowNode.currentColumn,
-                  autoDeleteParen)
-
-  if oldLine != bufStatus.buffer[windowNode.currentLine]:
-    if bufStatus.buffer[windowNode.currentLine].len < 1:
-      windowNode.currentColumn = 0
-      windowNode.expandedColumn = 0
-    elif bufStatus.buffer[windowNode.currentLine].len > 0 and
-         windowNode.currentColumn > bufStatus.buffer[windowNode.currentLine].high and
-         bufStatus.mode != Mode.insert:
-      windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].len - 1
-      windowNode.expandedColumn = bufStatus.buffer[windowNode.currentLine].len - 1
-
-    inc(bufStatus.countChange)
-    bufStatus.isUpdate = true
+# Delete a character in the current position
+#proc deleteCurrentCharacter*(bufStatus: var BufferStatus,
+#                             windowNode: WindowNode,
+#                             autoDeleteParen: bool) =
+#
+#  const loop = 1
+#  bufStatus.deleteCharacters(
+#    autoDeleteParen,
+#    windowNode.currentLine,
+#    windowNode.currentColumn,
+#    loop)
 
 # Add the new line and insert indent in Nim
 proc insertIndentNimForOpenBlankLine(bufStatus: var BufferStatus,
@@ -898,12 +892,13 @@ proc insertIndentNimForOpenBlankLine(bufStatus: var BufferStatus,
 
   if aboveLine.len > 0:
     # Auto indent if the current line are "var", "let", "const".
-    # And, if finish the current line with ':', "object"
+    # And, if finish the current line with ':', "object, '='"
     if (aboveLine.splitWhitespace == @[ru "var"] or
        aboveLine.splitWhitespace == @[ru "let"] or
        aboveLine.splitWhitespace == @[ru "const"] or
-       (aboveLine.len > 6 and aboveLine[aboveLine.len - 6 .. ^1] == ru "object") or
-       aboveLine[^1] == ru ':'):
+       aboveLine.splitWhitespace[^1] == (ru "object") or
+       aboveLine[^1] == (ru ':') or
+       aboveLine[^1] == (ru '=')):
       let
         count = countRepeat(aboveLine, Whitespace, 0) + tabStop
         oldLine = bufStatus.buffer[currentLineNum]
@@ -914,8 +909,8 @@ proc insertIndentNimForOpenBlankLine(bufStatus: var BufferStatus,
         bufStatus.buffer[currentLineNum] = newLine
 
     # Auto indent if finish the current line with "or", "and"
-    elif ((aboveLine.len > 2 and aboveLine[aboveLine.len - 2 .. ^1] == ru "or") or
-         (aboveLine.len > 3 and aboveLine[aboveLine.len - 3 .. ^1] == ru "and")):
+    elif ((aboveLine.len > 2 and (aboveLine.splitWhitespace)[^1] == ru "or") or
+         (aboveLine.len > 3 and (aboveLine.splitWhitespace)[^1] == ru "and")):
       let
         count = countRepeat(aboveLine, Whitespace, 0) + tabStop
         oldLine = bufStatus.buffer[currentLineNum]
@@ -944,8 +939,8 @@ proc insertIndentInPythonForOpenBlankLine(bufStatus: var BufferStatus,
 
   if aboveLine.len > 0:
     # if finish the current line with ':', "or", "and" in Python
-    if (aboveLine.len > 2 and aboveLine[aboveLine.len - 2 .. ^1] == ru "or") or
-       (aboveLine.len > 3 and aboveLine[aboveLine.len - 3 .. ^1] == ru "and") or
+    if (aboveLine.len > 2 and (aboveLine.splitWhitespace)[^1] == ru "or") or
+       (aboveLine.len > 3 and (aboveLine.splitWhitespace)[^1] == ru "and") or
        (aboveLine[^1] == ru ':'):
       let
         count = countRepeat(aboveLine, Whitespace, 0) + tabStop
@@ -1164,7 +1159,8 @@ proc deleteTillPreviousBlankLine*(bufStatus: var BufferStatus,
       for i in 0 ..< currentColumn: deletedLine.add oldLine[i]
       if deletedLine.len > 0: deletedBuffer.add deletedLine
 
-      newLine.delete(0, currentColumn - 1)
+      for _ in 0 ..< currentColumn:
+        newLine.delete(0)
 
       if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
 
@@ -1206,7 +1202,8 @@ proc deleteTillNextBlankLine*(bufStatus: var BufferStatus,
       var deletedLine: seq[Rune]
       for i in currentColumn ..< oldLine.len : deletedLine.add oldLine[i]
 
-      newLine.delete(currentColumn, oldLine.high)
+      for _ in currentColumn .. oldLine.high:
+        newLine.delete(currentColumn)
 
       if oldLine != newLine:
         bufStatus.buffer[currentLine] = newLine
@@ -1535,9 +1532,12 @@ proc replaceCharacters*(bufStatus: var BufferStatus,
                         character: Rune) =
 
   if isEnterKey(character):
-    let line = bufStatus.buffer[windowNode.currentLine]
+    let
+      line = bufStatus.buffer[windowNode.currentLine]
+      currentLine = windowNode.currentLine
+      currentColumn = windowNode.currentColumn
     for _ in windowNode.currentColumn ..< min(line.len, loop):
-      bufStatus.deleteCurrentCharacter(windowNode, autoDeleteParen)
+      bufStatus.deleteCharacter(currentLine, currentColumn, autoDeleteParen)
     keyEnter(bufStatus, windowNode, autoIndent, tabStop)
   else:
     let oldLine = bufStatus.buffer[windowNode.currentLine]
@@ -1597,7 +1597,7 @@ proc autoIndentCurrentLine*(bufStatus: var BufferStatus,
   # Delete current indent
   for i in 0 ..< oldLine.len:
     if oldLine[i] == ru' ':
-      newLine.delete(0, 0)
+      newLine.delete(0)
     else: break
 
   newLine.insert(indent, 0)
@@ -1800,7 +1800,7 @@ proc modifyNumberTextUnderCurosr*(bufStatus: var BufferStatus,
   block:
     var col = currentColumn
     while newLine.len > 0 and isDigit(newLine[col]):
-      newLine.delete(col, col)
+      newLine.delete(col)
       if col > newLine.high: col = newLine.high
 
   # Insert the new number string to newLine

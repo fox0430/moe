@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.2.8.0"
+version       = "0.3.0"
 author        = "fox0430"
 description   = "A command lined based text editor"
 license       = "GPLv3"
@@ -10,10 +10,12 @@ bin           = @["moe"]
 # Dependencies
 
 requires "nim >= 1.4.2"
-requires "https://github.com/walkre-niboshi/nim-ncurses >= 1.0.2"
-requires "unicodedb >= 0.9.0"
-requires "parsetoml >= 0.4.0"
+requires "ncurses >= 1.0.2"
+requires "unicodedb >= 0.10.0"
+requires "parsetoml >= 0.6.0"
 
 task release, "Build for release":
-  exec "nim c -o:moe -d:release src/moe"
+  exec "nimble build -d:release"
 
+task debug, "Build for debug":
+  exec "nimble build -d:debug --debugger:native --verbose -y"

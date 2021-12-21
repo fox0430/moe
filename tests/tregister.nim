@@ -1,4 +1,4 @@
-import unittest, options
+import std/[unittest, options]
 import moepkg/[unicodeext, settings]
 include moepkg/[register]
 

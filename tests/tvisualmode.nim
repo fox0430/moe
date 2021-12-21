@@ -1,4 +1,4 @@
-import unittest, osproc
+import std/[unittest, osproc]
 import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, movement, bufferstatus,
                register]
 include moepkg/[visualmode, platform]
@@ -467,7 +467,8 @@ suite "Visual block mode: Delete buffer (Disable clipboard)":
     currentBufStatus.deleteBufferBlock(status.registers,
                                        currentMainWindowNode,
                                        area,
-                                       status.settings)
+                                       status.settings,
+                                       status.commandLine)
 
     check(currentBufStatus.buffer[0] == ru"bc")
     check(currentBufStatus.buffer[1] == ru"ef")
@@ -695,7 +696,8 @@ suite "Visual block mode: Delete buffer":
     currentBufStatus.deleteBufferBlock(status.registers,
                                        currentMainWindowNode,
                                        area,
-                                       status.settings)
+                                       status.settings,
+                                       status.commandLine)
 
     if CURRENT_PLATFORM == Platforms.linux:
       let (output, exitCode) = execCmdEx("xclip -o")
@@ -733,7 +735,8 @@ suite "Visual block mode: Delete buffer":
     currentBufStatus.deleteBufferBlock(status.registers,
                                        currentMainWindowNode,
                                        area,
-                                       status.settings)
+                                       status.settings,
+                                       status.commandLine)
 
   test "Fix #885":
     var status = initEditorStatus()
@@ -765,10 +768,12 @@ suite "Visual block mode: Delete buffer":
 
     let area = currentBufStatus.selectArea
     status.settings.clipboard.enable = true
-    currentBufStatus.deleteBufferBlock(status.registers,
+    currentBufStatus.deleteBufferBlock(
+      status.registers,
       currentMainWindowNode,
       area,
-      status.settings)
+      status.settings,
+      status.commandLine)
 
     check currentBufStatus.buffer[0] == ru"c"
     check currentBufStatus.buffer[1] == ru""
@@ -805,7 +810,7 @@ suite "Visual mode: Join lines":
     let area = currentBufStatus.selectArea
 
     status.update
-    currentBufStatus.joinLines(currentMainWindowNode, area)
+    currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)
 
     check(currentBufStatus.buffer.len == 1)
     check(currentBufStatus.buffer[0] == ru"abcdefghi")
@@ -841,7 +846,7 @@ suite "Visual block mode: Join lines":
     let area = currentBufStatus.selectArea
 
     status.update
-    currentBufStatus.joinLines(currentMainWindowNode, area)
+    currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)
 
     check(currentBufStatus.buffer.len == 1)
     check(currentBufStatus.buffer[0] == ru"abcdefghi")
@@ -1401,7 +1406,434 @@ suite "Visual block mode: Insert buffer":
         insertBuffer,
         area,
         status.settings.tabStop,
-        status.settings.autoCloseParen)
+        status.settings.autoCloseParen,
+        status.commandLine)
 
     check currentBufStatus.buffer[0] == ru"  abc"
     check currentBufStatus.buffer[1] == ru"  def"
+
+suite "Visual mode: Run command when Readonly mode":
+  test "Delete buffer (\"x\" command)":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    currentBufStatus.selectArea = initSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectArea, ru'x')
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
+  test "Add the indent (\">\" command)":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    currentBufStatus.selectArea = initSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectArea, ru'>')
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
+  test "Add the indent (\"<\" command)":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    currentBufStatus.selectArea = initSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectArea, ru'<')
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
+  test "Join lines (\"J\" command)":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru "def"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].high
+
+    currentBufStatus.selectArea = initSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    currentBufStatus.selectArea.endLine = 1
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectArea, ru'J')
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "abc"
+    check currentBufStatus.buffer[1] == ru "def"
+
+  test "To lower case (\"u\" command)":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    currentBufStatus.selectArea = initSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectArea, ru'u')
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
+  test "To upper case (\"U\" command)":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    currentBufStatus.selectArea = initSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectArea, ru'U')
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
+  test "Replace characters (\"r\" command)":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    currentBufStatus.selectArea = initSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    currentBufStatus.replaceCharacter(currentBufStatus.selectArea, ru 'z', status.commandLine)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
+  test "Enter insert mode (\"I\" command)":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    currentBufStatus.selectArea = initSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectArea, ru'I')
+
+    check currentBufStatus.mode == Mode.visual
+
+suite "Visual block mode: Run command when Readonly mode":
+  test "Delete buffer (\"x\" command)":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visualblock)
+
+    currentBufStatus.selectArea = initSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectArea, ru'x')
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
+  test "Enter insert mode (\"I\" command)":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visualblock)
+
+    currentBufStatus.selectArea = initSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectArea, ru'I')
+
+    check currentBufStatus.mode == Mode.visualblock
+
+  test "Add the indent (\">\" command)":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visualBlock)
+
+    currentBufStatus.selectArea = initSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectArea, ru'>')
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
+  test "Add the indent (\"<\" command)":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visualBlock)
+
+    currentBufStatus.selectArea = initSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectArea, ru'<')
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
+  test "Join lines (\"J\" command)":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru "def"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visualBlock)
+
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].high
+
+    currentBufStatus.selectArea = initSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    currentBufStatus.selectArea.endLine = 1
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectArea, ru'J')
+
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer[0] == ru "abc"
+    check currentBufStatus.buffer[1] == ru "def"
+
+  test "To lower case (\"u\" command)":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visualBlock)
+
+    currentBufStatus.selectArea = initSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectArea, ru'u')
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
+  test "To upper case (\"U\" command)":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visualBlock)
+
+    currentBufStatus.selectArea = initSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectArea, ru'U')
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
+  test "Replace characters (\"r\" command)":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlightSettings.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visualBlock)
+
+    currentBufStatus.selectArea = initSelectArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    currentBufStatus.replaceCharacter(currentBufStatus.selectArea, ru 'z', status.commandLine)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"

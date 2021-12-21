@@ -1,4 +1,4 @@
-import unittest, strformat
+import std/[unittest, strformat]
 import moepkg/[editorstatus, unicodeext, bufferstatus]
 
 include moepkg/debugmode

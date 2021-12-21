@@ -1,4 +1,4 @@
-import system, terminal, strutils
+import std/[terminal, strutils]
 import editorstatus, gapbuffer, commandview, movement, commandline, unicodeext
 
 type

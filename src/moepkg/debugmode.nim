@@ -1,4 +1,4 @@
-import terminal, times, strformat, options
+import std/[terminal, times, strformat, options]
 import gapbuffer, ui, unicodeext, highlight, color, window, bufferstatus,
        movement, settings
 

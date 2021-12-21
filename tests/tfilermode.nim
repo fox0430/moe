@@ -1,4 +1,4 @@
-import unittest, os, algorithm, strutils
+import std/[unittest, os, algorithm, strutils]
 import moepkg/[filermode, editorstatus, highlight, color, bufferstatus,
                unicodeext, gapbuffer]
 

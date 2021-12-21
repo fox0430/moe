@@ -1,13 +1,15 @@
-import strformat, os, strutils
+import std/[strformat, os, strutils]
 import color, unicodeext, settings, commandline, independentutils
 
 proc writeMessageOnCommandWindow*(commandLine: var CommandLine,
                                   message: string,
                                   color: EditorColorPair) {.inline.} =
+
   commandLine.updateCommandBuffer(ru message, color)
 
 proc writeMessageOnCommandWindow*(commandLine: var CommandLine,
                                   message: string) {.inline.} =
+
   commandLine.writeMessageOnCommandWindow(message, EditorColorPair.commandBar)
 
 proc writeNoWriteError*(commandLine: var CommandLine, messageLog: var seq[seq[Rune]]) =
@@ -296,3 +298,7 @@ proc writeCurrentCharInfo*(commandLine: var CommandLine, r: Rune) {.inline.} =
     eOct = int64(e[0]).toOct(5)
     mess = fmt "<{$r}>  {e[0]}  Hex {normalizeHex($eHex)}  Oct {$eOct}"
   commandLine.writeMessageOnCommandWindow(mess)
+
+proc writeReadonlyModeWarning*(commandLine: var CommandLine) {.inline.} =
+  const mess = "Warning: Readonly mode"
+  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)

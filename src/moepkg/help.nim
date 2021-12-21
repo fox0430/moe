@@ -1,4 +1,4 @@
-import terminal
+import std/[terminal]
 import editorstatus, bufferstatus, ui, movement, unicodeext, gapbuffer, window
 
 const helpsentences = """
@@ -52,6 +52,7 @@ yy or Y    - Copy a line
 y{         - Yank to the previous blank line
 y}         - Yank to the next blank line
 yl         - Yank a character
+yt any     - Ynak characters to a any character
 p          - Paste the clipboard
 n          - Search forwards
 :          - Start Ex mode
@@ -71,6 +72,7 @@ ciw        - Delete the current word and enter insert mode
 ci( or ci) - Delete the inside of round brackets and enter insert mode
 ci[ or ci] - Delete the inside of square brackets and enter insert mode
 ci{ or ci} - Delete the inside of curly brackets and enter insert mode
+cf any     - Delete characters to the any character and enter insert mode
 di"        - Delete the inside of double quotes
 di'        - Delete the inside of single quotes
 diw        - Delete the current word
@@ -79,8 +81,10 @@ di[ or di] - Delete the inside of square brackets
 di{ or di} - Delete the inside of curly brackets
 *          - Search forwards for the word under cursor
 #          - Search backwards for the word under cursor
-f          - Jump to next occurrence
-F          - Jump to previous occurence
+f          - Move to next any character on the current line
+F          - Move to previous any character on the current line
+t          - Move to the left of the any character on the current line
+T          - Move to the right of the back any character on the current line
 Ctrl-k     - Move to the next window
 Ctrl-j     - Move to the previous window
 zt         - Scroll the screen so the cursor is at the top

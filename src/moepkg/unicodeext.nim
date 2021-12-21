@@ -1,4 +1,4 @@
-import unicode, strutils, sequtils, strutils, strformat
+import std/[unicode, sequtils, strutils, strformat, os]
 import unicodedb/widths
 import gapbuffer
 export unicode
@@ -377,7 +377,6 @@ proc toggleCase*(ch: Rune): Rune =
     result = result.toUpper()
   return result
 
-from os import `/`
 proc `/`*(runes1, runes2: seq[Rune]): seq[Rune] {.inline.} =
   toRunes($runes1 / $runes2)
 
@@ -424,6 +423,7 @@ proc encodeUTF8*(r: Rune): seq[uint32] =
     result.add mbLead or i shl 6
     result.add mbLead or i and mbMask
 
-from os import absolutePath
 proc absolutePath*(runes: seq[Rune]): seq[Rune] {.inline.} =
-  absolutePath($runes).ru
+  result = absolutePath($runes).ru
+  if result.len > 0 and dirExists($runes) and result[^1] != ru '/':
+    result &= ru "/"

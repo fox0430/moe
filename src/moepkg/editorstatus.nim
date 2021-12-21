@@ -1,9 +1,9 @@
-import strutils, terminal, os, strformat, tables, times, heapqueue, deques,
-       times, options
+import std/[strutils, terminal, os, strformat, tables, times, heapqueue, deques,
+            options]
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
-       undoredostack, window, color, settings, statusline, bufferstatus, cursor,
-       tabline, backup, messages, commandline, register, platform
+       window, color, settings, statusline, bufferstatus, cursor, tabline,
+       backup, messages, commandline, register, platform
 
 # Save cursor position when a buffer for a window(file) gets closed.
 type LastPosition* = object
@@ -31,6 +31,7 @@ type EditorStatus* = object
   autoBackupStatus*: AutoBackupStatus
   isSearchHighlight*: bool
   lastPosition*: seq[LastPosition]
+  isReadonly*: bool
 
 proc initEditorStatus*(): EditorStatus =
   result.currentDir = getCurrentDir().toRunes
@@ -203,7 +204,7 @@ proc saveSearchHistory(history: seq[seq[Rune]]) =
     f.writeLine($line)
 
 # Save the cursor position to the file
-proc saveLastPosition(lastPosition: seq[LastPosition]) =
+proc saveLastCursorPosition(lastPosition: seq[LastPosition]) =
   let
     chaheDir = getHomeDir() / ".cache/moe"
     chaheFile = chaheDir / "lastPosition"
@@ -225,7 +226,7 @@ proc exitEditor*(status: EditorStatus) =
     saveSearchHistory(status.searchHistory)
 
   if status.settings.persist.cursorPosition:
-    saveLastPosition(status.lastPosition)
+    saveLastCursorPosition(status.lastPosition)
 
   exitUi()
 
@@ -437,10 +438,20 @@ proc initSyntaxHighlight(windowNode: var WindowNode,
 proc isLogViewerMode(mode, prevMode: Mode): bool {.inline.} =
   (mode == logViewer) or (mode == ex and prevMode == logViewer)
 
-proc updateLogViewer(status: var Editorstatus, bufferIndex: int) =
-  status.bufStatus[bufferIndex].buffer = initGapBuffer(@[ru""])
-  for i in 0 ..< status.messageLog.len:
-    status.bufStatus[bufferIndex].buffer.insert(status.messageLog[i], i)
+proc updateLogViewer(bufStatus: var BufferStatus,
+                     node: var WindowNode,
+                     messageLog: seq[seq[Rune]]) =
+
+  bufStatus.buffer = initGapBuffer(@[ru""])
+  for i in 0 ..< messageLog.len:
+    bufStatus.buffer.insert(messageLog[i], i)
+
+  const EMPTY_RESERVEDWORD: seq[ReservedWord] = @[]
+
+  node.highlight = initHighlight(
+      $bufStatus.buffer,
+      EMPTY_RESERVEDWORD,
+      SourceLanguage.langNone)
 
 proc updateDebugModeBuffer(status: var EditorStatus)
 
@@ -507,14 +518,14 @@ proc update*(status: var EditorStatus) =
            not isConfigMode(currentMode, prevMode):
 
           if isLogViewerMode(currentMode, prevMode):
-            status.updateLogViewer(node.bufferIndex)
-
-          highlight.updateHighlight(
-            bufStatus,
-            node,
-            status.isSearchHighlight,
-            status.searchHistory,
-            settings)
+            status.bufStatus[node.bufferIndex].updateLogViewer(node, status.messageLog)
+          else:
+            highlight.updateHighlight(
+              bufStatus,
+              node,
+              status.isSearchHighlight,
+              status.searchHistory,
+              settings)
 
         let
           startSelectedLine = bufStatus.selectArea.startLine
@@ -636,7 +647,8 @@ proc closeWindow*(status: var EditorStatus,
                   node: WindowNode,
                   height, width: int) =
 
-  if currentBufStatus.mode == Mode.normal:
+  if isNormalMode(currentBufStatus.mode, currentBufStatus.prevMode) or
+     isFilerMode(currentBufStatus.mode, currentBufStatus.prevMode):
     status.updateLastCursorPostion
 
   if status.mainWindow.numOfMainWindow == 1:
@@ -717,13 +729,17 @@ proc deletePopUpWindow*(status: var Editorstatus) =
 
 proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode) =
 
-  let path = if mode == Mode.filer: ru absolutePath(filename) else: ru filename
+  let path = if isFilerMode(mode): ru absolutePath(filename) else: ru filename
 
   status.bufStatus.add(initBufferStatus(path, mode))
 
   let index = status.bufStatus.high
 
-  if mode != Mode.filer:
+  status.bufStatus[index].isReadonly = status.isReadonly
+
+  if mode == Mode.filer:
+    status.bufStatus[index].buffer = initGapBuffer(@[ru ""])
+  else:
     if not fileExists(filename):
       status.bufStatus[index].buffer = newFile()
     else:
@@ -1175,8 +1191,6 @@ proc autoSave(status: var Editorstatus) =
         status.settings.notificationSettings,
         status.messageLog)
       status.bufStatus[index].lastSaveTime = now()
-
-from settings import TomlError, loadSettingFile
 
 proc loadConfigurationFile*(status: var EditorStatus) =
   status.settings =

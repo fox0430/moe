@@ -1,7 +1,7 @@
-import sequtils, os, strformat, parseutils
+import std/[sequtils, os, strformat, parseutils]
 import syntax/highlite
 import unicodeext, color
-from strutils import find
+from std/strutils import find
 
 type ColorSegment* = object
   firstRow*, firstColumn*, lastRow*, lastColumn*: int

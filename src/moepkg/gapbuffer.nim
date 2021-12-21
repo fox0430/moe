@@ -1,4 +1,4 @@
-import macros, strformat
+import std/[macros, strformat]
 import undoredostack
 export undoredostack
 

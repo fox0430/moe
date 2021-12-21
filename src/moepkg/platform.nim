@@ -1,7 +1,7 @@
-import osproc, strutils
+import std/[osproc, strutils]
 
 type Platforms* = enum
-  linux, wsl, mac, other
+  linux, wsl, mac, freebsd, openbsd, other
 
 proc initPlatform(): Platforms =
   if defined linux:
@@ -10,6 +10,10 @@ proc initPlatform(): Platforms =
     else: result = Platforms.linux
   elif defined macosx:
     result = Platforms.mac
+  elif defined freebsd:
+    result = Platforms.freebsd
+  elif defined openbsd:
+    result = Platforms.openbsd
   else:
     result = Platforms.other
 

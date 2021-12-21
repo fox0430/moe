@@ -1,4 +1,4 @@
-import unittest, strutils
+import std/[unittest, strutils]
 import moepkg/[highlight, color]
 import moepkg/syntax/highlite
 

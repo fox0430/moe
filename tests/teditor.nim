@@ -1,4 +1,4 @@
-import unittest, macros
+import std/[unittest, macros]
 import moepkg/register
 include moepkg/[editor, editorstatus, ui, platform]
 
@@ -555,6 +555,9 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
   block:
     const keyword = "object"
     newLineTestInNimCase4(keyword)
+  block:
+    const keyword = "="
+    newLineTestInNimCase4(keyword)
 
   # Generate test code
   # Enable autoindent
@@ -596,6 +599,9 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     newLineTestInNimCase5(keyword)
   block:
     const keyword = "object"
+    newLineTestInNimCase5(keyword)
+  block:
+    const keyword = "="
     newLineTestInNimCase5(keyword)
 
   # Generate test code
@@ -918,6 +924,22 @@ suite "Editor: keyEnter and autoindent in Python":
 
     check currentBufStatus.buffer[0] == ru"if true or"
     check currentBufStatus.buffer[1] == ru"  "
+
+  test "Insert a new line in Nim (Fix #1450)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"block:", ru"  const a = 0"])
+    currentBufStatus.language = SourceLanguage.langNim
+    status.bufStatus[0].mode = Mode.insert
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[1].len
+
+    const isAutoIndent = true
+    for i in 0 ..< 2:
+      currentBufStatus.keyEnter(currentMainWindowNode,
+                                isAutoIndent,
+                                status.settings.tabStop)
 
 suite "Delete character before cursor":
   test "Delete one character":
@@ -1643,7 +1665,7 @@ suite "Editor: Open the blank line below":
   # Generate test code
   # Enable autoindent
   # open the blank line below in Nim
-  # When the current line ends with "or", "and", ':', "object".
+  # When the current line ends with "or", "and", ':', "object", '='.
   macro openLineBelowTestCase3(keyword: string): untyped =
     quote do:
       # Generate test title
@@ -1684,6 +1706,9 @@ suite "Editor: Open the blank line below":
     openLineBelowTestCase3(keyword)
   block:
     const keyword = "object"
+    openLineBelowTestCase3(keyword)
+  block:
+    const keyword = "="
     openLineBelowTestCase3(keyword)
 
   # Generate test code
@@ -1926,7 +1951,7 @@ suite "Editor: Open the blank line abave":
   # Generate test code
   # Enable autoindent
   # open the blank line above in Nim
-  # When the current line ends with "or", "and", ':', "object".
+  # When the current line ends with "or", "and", ':', "object", "=".
   macro openLineAboveTestCase4(keyword: string): untyped =
     quote do:
       # Generate test title
@@ -1973,6 +1998,9 @@ suite "Editor: Open the blank line abave":
     openLineAboveTestCase4(keyword)
   block:
     const keyword = "object"
+    openLineAboveTestCase4(keyword)
+  block:
+    const keyword = "="
     openLineAboveTestCase4(keyword)
 
   # Generate test code
@@ -2021,5 +2049,3 @@ suite "Editor: Open the blank line abave":
   block:
     const keyword = ":"
     openLineAboveTestCase5(keyword)
-
-

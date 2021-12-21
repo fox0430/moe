@@ -1,7 +1,8 @@
-import unittest
-import moepkg/[ui, highlight, editorview, gapbuffer, unicodeext, insertmode,
-               movement, editor, window, color, bufferstatus,
-               settings]
+import std/unittest
+import moepkg/[ui, highlight, editorview, gapbuffer, unicodeext,
+               editor, window, color, bufferstatus, settings]
+
+from moepkg/movement import keyDown, keyRight
 
 include moepkg/editorstatus
 
@@ -11,12 +12,26 @@ template initHighlight() =
     status.settings.highlightSettings.reservedWords,
     currentBufStatus.language)
 
-test "Add new buffer":
-  var status = initEditorStatus()
-  status.addNewBuffer
-  status.addNewBuffer
-  status.resize(100, 100)
-  check(status.bufStatus.len == 2)
+suite "Add new buffer":
+  test "Add 2 uffers":
+    var status = initEditorStatus()
+
+    status.addNewBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    status.addNewBuffer
+
+    check status.bufStatus.len == 2
+
+  test "Add new buffer (Dir)":
+    var status = initEditorStatus()
+
+    status.addNewBuffer("./")
+
+    status.resize(100, 100)
+    status.update
 
 test "Add new buffer and update editor view when disabling current line highlighting (Fix #1189)":
   var status = initEditorStatus()
@@ -209,8 +224,9 @@ test "Auto delete paren 1":
 
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru"()"])
-    currentBufStatus.deleteCurrentCharacter(
-      currentMainWindowNode,
+    currentBufStatus.deleteCharacter(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn,
       status.settings.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"")
@@ -223,8 +239,9 @@ test "Auto delete paren 1":
     currentBufStatus.buffer = initGapBuffer(@[ru"()"])
     currentBufStatus.keyRight(currentMainWindowNode)
 
-    currentBufStatus.deleteCurrentCharacter(
-      currentMainWindowNode,
+    currentBufStatus.deleteCharacter(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn,
       status.settings.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"")
@@ -237,8 +254,9 @@ test "Auto delete paren 2":
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
 
-    currentBufStatus.deleteCurrentCharacter(
-      currentMainWindowNode,
+    currentBufStatus.deleteCharacter(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn,
       status.settings.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"()")
@@ -251,8 +269,9 @@ test "Auto delete paren 2":
     currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
     currentBufStatus.keyRight(currentMainWindowNode)
 
-    currentBufStatus.deleteCurrentCharacter(
-      currentMainWindowNode,
+    currentBufStatus.deleteCharacter(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn,
       status.settings.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"()")
@@ -267,8 +286,9 @@ test "Auto delete paren 2":
     for i in 0 ..< 2:
      currentBufStatus.keyRight(currentMainWindowNode)
 
-    currentBufStatus.deleteCurrentCharacter(
-      currentMainWindowNode,
+    currentBufStatus.deleteCharacter(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn,
       status.settings.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"()")
@@ -282,8 +302,9 @@ test "Auto delete paren 2":
     for i in 0 ..< 3:
       currentBufStatus.keyRight(currentMainWindowNode)
 
-    currentBufStatus.deleteCurrentCharacter(
-      currentMainWindowNode,
+    currentBufStatus.deleteCharacter(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn,
       status.settings.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"()")
@@ -297,8 +318,9 @@ test "Auto delete paren 3":
 
     currentBufStatus.buffer = initGapBuffer(@[ru"(()"])
 
-    currentBufStatus.deleteCurrentCharacter(
-      currentMainWindowNode,
+    currentBufStatus.deleteCharacter(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn,
       status.settings.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"()")
@@ -311,8 +333,9 @@ test "Auto delete paren 3":
     currentBufStatus.buffer = initGapBuffer(@[ru"(()"])
     currentBufStatus.keyRight(currentMainWindowNode)
 
-    currentBufStatus.deleteCurrentCharacter(
-      currentMainWindowNode,
+    currentBufStatus.deleteCharacter(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn,
       status.settings.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"(")
@@ -326,8 +349,9 @@ test "Auto delete paren 3":
     for i in 0 ..< 2:
       currentBufStatus.keyRight(currentMainWindowNode)
 
-    currentBufStatus.deleteCurrentCharacter(
-      currentMainWindowNode,
+    currentBufStatus.deleteCharacter(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn,
       status.settings.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"(")
@@ -339,8 +363,9 @@ test "Auto delete paren 3":
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru"())"])
 
-    currentBufStatus.deleteCurrentCharacter(
-      currentMainWindowNode,
+    currentBufStatus.deleteCharacter(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn,
       status.settings.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru")")
@@ -353,8 +378,9 @@ test "Auto delete paren 3":
     currentBufStatus.buffer = initGapBuffer(@[ru"())"])
     currentBufStatus.keyRight(currentMainWindowNode)
 
-    currentBufStatus.deleteCurrentCharacter(
-      currentMainWindowNode,
+    currentBufStatus.deleteCharacter(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn,
       status.settings.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru")")
@@ -369,8 +395,9 @@ test "Auto delete paren 3":
     for i in 0 ..< 3:
       currentBufStatus.keyRight(currentMainWindowNode)
 
-    currentBufStatus.deleteCurrentCharacter(
-      currentMainWindowNode,
+    currentBufStatus.deleteCharacter(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn,
       status.settings.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"()")
@@ -383,8 +410,9 @@ test "Auto delete paren 4":
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru"(", ru")"])
 
-    currentBufStatus.deleteCurrentCharacter(
-      currentMainWindowNode,
+    currentBufStatus.deleteCharacter(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn,
       status.settings.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"")
@@ -398,8 +426,9 @@ test "Auto delete paren 4":
     currentBufStatus.buffer = initGapBuffer(@[ru"(", ru")"])
     currentBufStatus.keyDown(currentMainWindowNode)
 
-    currentBufStatus.deleteCurrentCharacter(
-      currentMainWindowNode,
+    currentBufStatus.deleteCharacter(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn,
       status.settings.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"")

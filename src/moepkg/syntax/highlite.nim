@@ -65,8 +65,8 @@
 ##
 
 import
-  strutils
-from algorithm import binarySearch
+  std/strutils
+from std/algorithm import binarySearch
 
 type
   TokenClass* = enum

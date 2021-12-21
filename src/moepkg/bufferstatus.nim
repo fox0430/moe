@@ -1,4 +1,4 @@
-import tables, times, options
+import std/[tables, times, options]
 import syntax/highlite
 import gapbuffer, unicodeext
 
@@ -40,6 +40,7 @@ type BufferStatus* = object
   mode* : Mode
   prevMode* : Mode
   lastSaveTime*: DateTime
+  isReadonly*: bool
 
 proc initBufferStatus*(path: seq[Rune], mode: Mode): BufferStatus {.inline.} =
   BufferStatus(isUpdate: true, path: path, mode: mode, lastSaveTime: now())

@@ -1,4 +1,4 @@
-import strutils, unittest, encodings, sequtils, sugar
+import std/[strutils, unittest, encodings, sequtils, sugar]
 import moepkg/unicodeext
 
 test "width 1":

@@ -1,0 +1,33 @@
+name: Build
+
+on:
+  push:
+    paths-ignore:
+      - 'LICENSE'
+      - '*.md'
+      - 'documents/'
+      - 'docs/'
+    branches:
+      - develop
+      - master
+  pull_request:
+    paths-ignore:
+      - 'LICENSE'
+      - '*.md'
+      - 'documents/'
+      - 'docs/'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        nim: [ '1.4.2', 'stable', 'devel' ]
+    name: Build on ${{ matrix.nim }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup nim
+        uses: jiro4989/setup-nim-action@v1
+        with:
+          nim-version: ${{ matrix.nim }}
+      - run: nimble build -y

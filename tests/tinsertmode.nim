@@ -1,4 +1,4 @@
-import unittest, options, sequtils, sugar, random
+import std/[unittest, options, sequtils, sugar, random]
 import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, settings]
 include moepkg/[insertmode, suggestionwindow]
 

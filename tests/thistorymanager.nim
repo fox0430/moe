@@ -1,4 +1,4 @@
-import unittest, os
+import std/[unittest, os]
 import moepkg/[unicodeext, settings]
 include moepkg/[historymanager]
 

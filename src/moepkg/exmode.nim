@@ -1,4 +1,4 @@
-import sequtils, strutils, os, terminal, times, options
+import std/[sequtils, strutils, os, terminal, times, options]
 import syntax/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
         unicodeext, independentutils, search, highlight, commandview,
@@ -311,8 +311,10 @@ proc startHistoryManager(status: var Editorstatus) =
 proc startRecentFileMode(status: var Editorstatus) =
   status.changeMode(currentBufStatus.prevMode)
 
-  # :recent is only supported on GNU/Linux
-  if CURRENT_PLATFORM != Platforms.linux: return
+  # :recent is only supported on Unix or Unix-like (BSD and Linux)
+  if not (CURRENT_PLATFORM == Platforms.linux or
+          CURRENT_PLATFORM == Platforms.freebsd or
+          CURRENT_PLATFORM == Platforms.openbsd): return
 
   if not fileExists(getHomeDir() / ".local/share/recently-used.xbel"):
     status.commandLine.writeOpenRecentlyUsedXbelError(status.messageLog)
@@ -779,8 +781,10 @@ proc editCommand(status: var EditorStatus, path: seq[Rune]) =
 
     status.changeCurrentBuffer(bufferIndex.get)
 
-    currentMainWindowNode.restoreCursorPostion(currentBufStatus,
-                                               status.lastPosition)
+    if not isFilerMode(currentBufStatus.mode):
+      currentMainWindowNode.restoreCursorPostion(
+        currentBufStatus,
+        status.lastPosition)
 
 proc openInHorizontalSplitWindow(status: var Editorstatus, filename: seq[Rune]) =
   status.horizontalSplitWindow
@@ -1149,8 +1153,10 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
       if searchResult.line > -1:
         let oldLine = currentBufStatus.buffer[searchResult.line]
         var newLine = currentBufStatus.buffer[searchResult.line]
-        newLine.delete(searchResult.column,
-                       searchResult.column + replaceInfo.searhWord.high)
+
+        for _ in searchResult.column .. searchResult.column + replaceInfo.searhWord.high:
+          newLine.delete(searchResult.column)
+
         newLine.insert(replaceInfo.replaceWord, searchResult.column)
         if oldLine != newLine:
           currentBufStatus.buffer[searchResult.line] = newLine

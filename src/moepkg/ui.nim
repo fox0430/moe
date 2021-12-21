@@ -1,8 +1,8 @@
-import strformat, osproc, strutils
+import std/[strformat, osproc, strutils]
 when not defined unitTest:
-  import posix
+  import std/posix
 
-from os import execShellCmd
+from std/os import execShellCmd
 import ncurses
 import unicodeext, color
 
@@ -162,7 +162,7 @@ proc append*(win: var Window,
   # Not write when running unit tests
   when not defined unitTest:
     win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
-    mvwaddstr(win.cursesWindow, cint(win.y), cint(win.x), $str)
+    mvwaddstr(win.cursesWindow, cint(win.y), cint(win.x), str)
 
     win.x += str.toRunes.width
 

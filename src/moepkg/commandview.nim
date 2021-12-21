@@ -1,4 +1,4 @@
-import terminal, strutils, sequtils, strformat, os, algorithm
+import std/[terminal, strutils, sequtils, strformat, os, algorithm]
 import ui, unicodeext, fileutils, color, commandline
 
 type ExModeViewStatus = object
@@ -239,13 +239,12 @@ proc clearCommandBuffer(exStatus: var ExModeViewStatus) =
 proc deleteCommandBuffer(exStatus: var ExModeViewStatus) =
   if exStatus.buffer.len > 0:
     if exStatus.buffer.len < terminalWidth(): dec(exStatus.cursorX)
-    exStatus.buffer.delete(exStatus.currentPosition - 1,
-                           exStatus.currentPosition - 1)
+    exStatus.buffer.delete(exStatus.currentPosition - 1)
     dec(exStatus.currentPosition)
 
 proc deleteCommandBufferCurrentPosition(exStatus: var ExModeViewStatus) =
   if exStatus.buffer.len > 0 and exStatus.currentPosition < exStatus.buffer.len:
-    exStatus.buffer.delete(exStatus.cursorX - 1, exStatus.cursorX - 1)
+    exStatus.buffer.delete(exStatus.cursorX - 1)
     if exStatus.currentPosition > exStatus.buffer.len:
       dec(exStatus.currentPosition)
 
@@ -657,6 +656,9 @@ proc getKeyOnceAndWriteCommandView*(
       status.commandLine.window.moveLeft(exStatus)
     elif isRightkey(key):
       exStatus.moveRight
+      if status.settings.popUpWindowInExmode:
+        status.deletePopUpWindow
+        status.update
     elif isUpKey(key):
       if isSearch: setPrevSearchHistory()
       else: setPrevCommandHistory()

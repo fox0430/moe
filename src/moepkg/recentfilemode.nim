@@ -1,4 +1,4 @@
-import os, re, terminal
+import std/[os, re, terminal]
 import editorstatus, ui, unicodeext, bufferstatus, movement, gapbuffer,
        messages, window
 

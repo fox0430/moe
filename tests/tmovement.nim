@@ -1,4 +1,4 @@
-import unittest
+import std/unittest
 import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, movement,
                bufferstatus]
 

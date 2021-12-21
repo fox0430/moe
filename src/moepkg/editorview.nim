@@ -1,5 +1,5 @@
-import deques, strutils, math, strformat
-import gapbuffer, ui, unicodeext, highlight, independentutils, color, settings,
+import std/[deques, strutils, math, strformat]
+import gapbuffer, ui, unicodeext, independentutils, color, settings,
        bufferstatus, highlight
 
 type EditorView* = object

@@ -40,7 +40,7 @@ jobs:
           # - macOS-latest
           # - windows-latest
     env:
-      NIM_VERSION: 1.4.8
+      NIM_VERSION: stable
     steps:
     - uses: actions/checkout@v1
     - run: |
@@ -88,8 +88,3 @@ jobs:
 
     - name: Run integtation test
       run: shpec ./shpec.sh
-
-    - name: Build on Nim devel
-      run: |
-        choosenim -y devel
-        nimble build

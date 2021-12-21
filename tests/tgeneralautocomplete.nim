@@ -1,4 +1,4 @@
-import unittest, sugar, sequtils
+import std/[unittest, sugar, sequtils]
 import moepkg/unicodeext
 
 include moepkg/generalautocomplete

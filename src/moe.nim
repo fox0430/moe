@@ -1,4 +1,4 @@
-import os, times
+import std/[os, times]
 import moepkg/[ui, editorstatus, normalmode, insertmode, visualmode,
                replacemode, filermode, exmode, buffermanager, logviewer,
                cmdlineoption, bufferstatus, help, recentfilemode, quickrun,
@@ -17,6 +17,18 @@ proc loadPersistData(status: var EditorStatus) =
     currentMainWindowNode.restoreCursorPostion(currentBufStatus,
                                                status.lastPosition)
 
+proc addBufferStatus(status: var EditorStatus,
+                     parsedList: CmdParsedList) =
+
+  if parsedList.path.len > 0:
+    for path in parsedList.path:
+      if dirExists(path):
+        status.addNewBuffer(path, Mode.filer)
+      else:
+        status.addNewBuffer(path)
+  else:
+    status.addNewBuffer
+
 proc initEditor(): EditorStatus =
   let parsedList = parseCommandLineOption(commandLineParams())
 
@@ -33,14 +45,10 @@ proc initEditor(): EditorStatus =
     exitUi()
     quit())
 
-  if parsedList.len > 0:
-    for p in parsedList:
-      if dirExists(p.filename):
-        result.addNewBuffer(p.filename, Mode.filer)
-      else:
-        result.addNewBuffer(p.filename)
-  else:
-    result.addNewBuffer
+  if parsedList.isReadonly:
+    result.isReadonly = true
+
+  result.addBufferStatus(parsedList)
 
   result.loadPersistData
 

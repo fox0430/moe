@@ -1,7 +1,7 @@
-import unittest
+import std/unittest
 import ncurses
 import moepkg/[editorstatus, gapbuffer, unicodeext, editor, bufferstatus,
-               register]
+               register, settings]
 
 include moepkg/normalmode
 
@@ -1591,3 +1591,364 @@ suite "Normal mode: Open the blank line above and enter insert mode":
     check currentBufStatus.buffer[1] == ru "abc"
 
     check currentMainWindowNode.currentLine == 0
+
+suite "Normal mode: Run command when Readonly mode":
+  test "Enter insert mode (\"i\") command":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "i"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.mode == Mode.normal
+
+  test "Enter insert mode (\"I\") command":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "I"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.mode == Mode.normal
+
+  test "Open the blank line and enter insert mode (\"o\") command":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "o"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.mode == Mode.normal
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
+  test "Open the blank line and enter insert mode (\"O\") command":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "O"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.mode == Mode.normal
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
+  test "Enter replace mode (\"R\") command":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "R"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.mode == Mode.normal
+
+  test "Delete lines (\"dd\") command":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    const command = ru "dd"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
+  test "Paste lines (\"p\") command":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+
+    var settings = initEditorSettings()
+    settings.clipboard.enable = false
+
+    status.registers.addRegister(ru "def", settings)
+
+    const command = ru "p"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
+suite "Normal mode: Move to the next any character on the current line":
+  test "Move to the next 'c' (\"fc\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "fc"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 2
+
+  test "Move to the next 'i' (\"fi\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "fi"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == buffer.high
+
+  test "Do nothing (\"fz\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "fz"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+suite "Normal mode: Move to forward word in the current line":
+  test "Move to the before 'e' (\"Fe\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    currentMainWindowNode.currentColumn = buffer.high
+
+    const command = ru "Fe"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 5
+
+  test "Do nothing (\"Fz\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    currentMainWindowNode.currentColumn = buffer.high
+
+    const command = ru "Fz"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == buffer.high
+
+suite "Normal mode: Move to the left of the next any character":
+  test "Move to the character next the next 'e' (\"tf\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "tf"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 5
+
+  test "Do nothing (\"tz\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "tz"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+suite "Normal mode: Move to the right of the back character":
+  test "Move to the character before the next 'f' (\"Te\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    currentMainWindowNode.currentColumn = buffer.high
+
+    const command = ru "Te"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 6
+
+  test "Do nothing (\"Tz\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "Tz"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+suite "Normal mode: Yank characters to any character":
+  test "Case 1: Yank characters before 'd' (\"ytd\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abcd"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "ytd"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check not status.registers.noNameRegister.isLine
+    check status.registers.noNameRegister.buffer[0] == ru "abc"
+
+  test "Case 2: Yank characters before 'd' (\"ytd\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "ab c d"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "ytd"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check not status.registers.noNameRegister.isLine
+    check status.registers.noNameRegister.buffer[0] == ru "ab c "
+
+  test "Case 1: Do nothing (\"ytd\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abc"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "ytd"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check status.registers.noNameRegister.buffer.len == 0
+
+  test "Case 2: Do nothing (\"ytd\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abcd efg"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+    currentMainWindowNode.currentColumn = 3
+
+    const command = ru "ytd"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check status.registers.noNameRegister.buffer.len == 0
+
+  test "Case 3: Do nothing (\"ytd\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abcd efg"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+    currentMainWindowNode.currentColumn = buffer.high
+
+    const command = ru "ytd"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check status.registers.noNameRegister.buffer.len == 0
+
+suite "Normal mode: Delete characters to any characters and Enter insert mode":
+  test "Case 1: Delete characters to 'd' and enter insert mode (\"cfd\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abcd"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "cfd"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru ""
+
+    check not status.registers.noNameRegister.isLine
+    check status.registers.noNameRegister.buffer[0] == ru "abcd"
+
+    check currentBufStatus.mode == Mode.insert
+
+  test "Case 1: Do nothing (\"cfz\" command)":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    const buffer = ru "abcd"
+    currentBufStatus.buffer = initGapBuffer(@[buffer])
+
+    const command = ru "cfz"
+    status.normalCommand(command, 100, 100)
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == buffer
+
+    check status.registers.noNameRegister.buffer.len == 0
+
+    check currentBufStatus.mode == Mode.normal
