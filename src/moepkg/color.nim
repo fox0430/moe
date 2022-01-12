@@ -486,6 +486,7 @@ type EditorColor* = object
   gtLongComment*: Color
   gtWhitespace*: Color
   gtPreprocessor*: Color
+  gtPragma*: Color
 
   # filer mode
   currentFile*: Color
@@ -592,34 +593,35 @@ type EditorColorPair* = enum
   longComment = 38
   whitespace = 39
   preprocessor = 40
+  pragma = 41
 
   # filer mode
-  currentFile = 41
-  file = 42
-  dir = 43
-  pcLink = 44
+  currentFile = 42
+  file = 43
+  dir = 44
+  pcLink = 45
   # pop up window
-  popUpWindow = 45
-  popUpWinCurrentLine = 46
+  popUpWindow = 46
+  popUpWinCurrentLine = 47
   # replace text highlighting
-  replaceText = 47
+  replaceText = 48
   # pair of paren highlighting
-  parenText = 48
+  parenText = 49
   # highlight other uses current word
-  currentWord = 49
+  currentWord = 50
   # highlight full width space
-  highlightFullWidthSpace = 50
+  highlightFullWidthSpace = 51
   # highlight trailing spaces
-  highlightTrailingSpaces = 51
+  highlightTrailingSpaces = 52
   # highlight reserved words
-  reservedWord = 52
+  reservedWord = 53
   # highlight history manager
-  currentHistory = 53
+  currentHistory = 54
   # highlight diff
-  addedLine = 54
-  deletedLine = 55
+  addedLine = 55
+  deletedLine = 56
   # configuration mode
-  currentSetting = 56
+  currentSetting = 57
 
 var ColorThemeTable*: array[ColorTheme, EditorColor] = [
   config: EditorColor(
@@ -705,6 +707,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
+    gtPragma: yellow,
 
     # filer mode
     currentFile: gray100,
@@ -835,6 +838,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
+    gtPragma: yellow,
 
     # filer mode
     currentFile: gray100,
@@ -965,6 +969,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
+    gtPragma: yellow,
 
     # filer mode
     currentFile: gray100,
@@ -1095,6 +1100,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
+    gtPragma: yellow,
 
     # filer mode
     currentFile: black,
@@ -1225,6 +1231,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     gtLongComment: gray,
     gtWhitespace: gray,
     gtPreprocessor: green,
+    gtPragma: aqua,
 
     # filer mode
     currentFile: gray100,
@@ -1420,6 +1427,9 @@ proc setCursesColor*(editorColor: EditorColor) =
     setColorPair(EditorColorPair.preprocessor,
                  editorColor.gtPreprocessor,
                  editorColor.editorBg)
+    setColorPair(EditorColorPair.pragma,
+                 editorColor.gtPragma,
+                 editorColor.editorBg)
 
     # filer
     setColorPair(EditorColorPair.currentFile,
@@ -1560,6 +1570,7 @@ proc getColorFromEditorColorPair*(theme: ColorTheme,
     return (editorColor.searchResult, editorColor.searchResultBg)
   of EditorColorPair.visualMode:
     return (editorColor.visualMode, editorColor.visualModeBg)
+
   of EditorColorPair.defaultChar:
     return (editorColor.defaultChar, editorColor.editorBg)
   of EditorColorPair.keyword:
@@ -1586,6 +1597,9 @@ proc getColorFromEditorColorPair*(theme: ColorTheme,
     return (editorColor.gtWhitespace, editorColor.editorBg)
   of EditorColorPair.preprocessor:
     return (editorColor.gtPreprocessor, editorColor.editorBg)
+  of EditorColorPair.pragma:
+    return (editorColor.gtPragma, editorColor.editorBg)
+
   of EditorColorPair.currentFile:
     return (editorColor.currentFile, editorColor.currentFileBg)
   of EditorColorPair.file:

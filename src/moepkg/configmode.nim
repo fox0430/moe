@@ -158,6 +158,7 @@ type themeTableNames {.pure.} = enum
   longComment
   whitespace
   preprocessor
+  pragma
   currentFile
   file
   dir
