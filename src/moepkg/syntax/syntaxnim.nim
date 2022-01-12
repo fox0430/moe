@@ -55,21 +55,21 @@ const
 
   nimSpecialVars = ["result"]
 
-  nimPragmas = ["deprecated", "noSideEffect", "compileTime", "noReturn",
-    "acyclic", "final", "shallow", "pure", "asmNoStackFrame", "error", "fatal",
-    "warning", "hint", "line", "linearScanEnd", "computedGoto", "unroll",
-    "checks", "boundChecks", "overflowChecks", "nilChecks", "assertions",
-    "warnings", "hints", "optimization", "patterns", "callconv", "push", "pop",
-    "register", "global", "pragma", "hint", "used", "experimental", "bitsize",
-    "voliatile", "nodecl", "header", "incompletestruct", "compile", "link",
-    "passC", "passL", "emit", "importcpp", "importobjc", "codegendecl",
-    "injectstmt", "intdefine", "strdefine", "cdecl", "importc", "exportc",
-    "extern", "bycopy", "byref", "varargs", "union", "packed", "dynlib",
-    "threadvar", "gcsafe", "locks", "guard", "inline", "borrow", "booldefine",
-    "discardable", "noInit", "requiresInit", "closure", "nimcall", "stdcall",
-    "safecall", "fastcall", "syscall", "noconv", "nanChecks", "infChecks",
-    "floatChecks", "size", "base", "raises", "tags", "effects", "inject",
-    "gensym", "explain", "noRewrite", "package", "inheritable", "constructor"]
+  nimPragmas = ["acyclic", "asmNoStackFrame", "assertions", "base", "bitsize",
+    "booldefine", "borrow", "boundChecks", "bycopy", "byref", "callconv",
+    "cdecl", "checks", "closure", "codegendecl", "compile", "compileTime",
+    "computedGoto", "constructor", "deprecated", "discardable", "dynlib",
+    "effects", "emit", "error", "experimental", "explain", "exportc", "extern",
+    "fastcall", "fatal", "final", "floatChecks", "gcsafe", "gensym", "global",
+    "guard", "header", "hint", "hint", "hints", "importc", "importcpp",
+    "importobjc", "incompletestruct", "infChecks", "inheritable", "inject",
+    "injectstmt", "inline", "intdefine", "line", "linearScanEnd", "link",
+    "locks", "nanChecks", "nilChecks", "nimcall", "noInit", "noReturn",
+    "noRewrite", "noSideEffect", "noconv", "nodecl", "optimization",
+    "overflowChecks", "package", "packed", "passC", "passL", "patterns", "pop",
+    "pragma", "pure", "push", "raises", "register", "requiresInit", "safecall",
+    "shallow", "size", "stdcall", "strdefine", "syscall", "tags", "threadvar",
+    "union", "unroll", "used", "varargs", "voliatile", "warning", "warnings"]
 
   # Builtin types, objects, and exceptions
   nimBuiltins = ["AccessViolationError", "AlignType", "ArithmeticError",
