@@ -79,3 +79,12 @@ test "initHighlight shell script (Fix #1166)":
                         SourceLanguage.langShell)
 
   check r.len > 0
+
+test "Nim pragma":
+  const code = """{.pragma.}""""
+  let highlight = initHighlight(
+    code,
+    reservedWords,
+    SourceLanguage.langNim)
+
+  check highlight[2] == ColorSegment(firstRow: 0, firstColumn: 2, lastRow: 0, lastColumn: 7, color: pragma)

@@ -50,8 +50,27 @@ const
     "ptr", "raise", "ref", "return", "shl", "shr", "static",
     "template", "try", "tuple", "type", "using", "var", "when", "while",
     "xor", "yield"]
+
   nimBooleans = ["true", "false"]
+
   nimSpecialVars = ["result"]
+
+  nimPragmas = ["acyclic", "asmNoStackFrame", "assertions", "base", "bitsize",
+    "booldefine", "borrow", "boundChecks", "bycopy", "byref", "callconv",
+    "cdecl", "checks", "closure", "codegendecl", "compile", "compileTime",
+    "computedGoto", "constructor", "deprecated", "discardable", "dynlib",
+    "effects", "emit", "error", "experimental", "explain", "exportc", "extern",
+    "fastcall", "fatal", "final", "floatChecks", "gcsafe", "gensym", "global",
+    "guard", "header", "hint", "hint", "hints", "importc", "importcpp",
+    "importobjc", "incompletestruct", "infChecks", "inheritable", "inject",
+    "injectstmt", "inline", "intdefine", "line", "linearScanEnd", "link",
+    "locks", "nanChecks", "nilChecks", "nimcall", "noInit", "noReturn",
+    "noRewrite", "noSideEffect", "noconv", "nodecl", "optimization",
+    "overflowChecks", "package", "packed", "passC", "passL", "patterns", "pop",
+    "pragma", "pure", "push", "raises", "register", "requiresInit", "safecall",
+    "shallow", "size", "stdcall", "strdefine", "syscall", "tags", "threadvar",
+    "union", "unroll", "used", "varargs", "voliatile", "warning", "warnings"]
+
   # Builtin types, objects, and exceptions
   nimBuiltins = ["AccessViolationError", "AlignType", "ArithmeticError",
     "AssertionError", "BiggestFloat", "BiggestInt", "Byte", "ByteAddress",
@@ -106,6 +125,7 @@ proc nimGetKeyword(id: string): TokenClass =
   if binarySearch(nimSpecialVars, id) > -1: return gtSpecialVar
   if id[0] in 'A'..'Z': return gtTypeName
   if binarySearch(nimBuiltins, id) > -1: return gtBuiltin
+  if binarySearch(nimPragmas, id) > -1: return gtPragma
   result = gtIdentifier
 
   when false:

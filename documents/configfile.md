@@ -1355,6 +1355,11 @@ Syntax highlighting color
 gtPreprocessor
 ```
 
+Syntax highlighting color
+```
+gtPragma
+```
+
 Character color of current file name in filer mode
 ```
 currentFile

@@ -161,6 +161,7 @@ proc getEditorColorPairInNim(kind: TokenClass ): EditorColorPair =
     of gtFunctionName: EditorColorPair.functionName
     of gtTypeName: EditorColorPair.typeName
     of gtWhitespace, gtPunctuation: EditorColorPair.defaultChar
+    of gtPragma: EditorColorPair.pragma
     else:
       EditorColorPair.defaultChar
 
@@ -180,6 +181,7 @@ proc getEditorColorPair(kind: TokenClass,
     of gtLongComment: EditorColorPair.longComment
     of gtPreprocessor: EditorColorPair.preprocessor
     of gtWhitespace: EditorColorPair.defaultChar
+    of gtPragma: EditorColorPair.pragma
     else: EditorColorPair.defaultChar
 
 proc initHighlight*(buffer: string,
