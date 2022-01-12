@@ -338,6 +338,7 @@ gtComment = "gray"
 gtLongComment = "gray"
 gtWhitespace = "gray"
 gtPreprocessor = "green"
+gtPragma = "yellow"
 
 # filer mode
 currentFile = "gray100"
