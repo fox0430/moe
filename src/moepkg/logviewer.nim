@@ -51,6 +51,6 @@ proc messageLogViewer*(status: var Editorstatus) =
       status.exitLogViewer(terminalHeight(), terminalWidth())
     elif key == ord('g'):
       let secondKey = getKey(currentMainWindowNode)
-      if secondKey == 'g': status.moveToFirstLine
+      if secondKey == 'g': currentBufStatus.moveToFirstLine(currentMainWindowNode)
     elif key == ord('G'):
-      status.moveToLastLine
+      currentBufStatus.moveToLastLine(currentMainWindowNode)

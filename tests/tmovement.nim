@@ -108,8 +108,8 @@ test "Jump line":
   var status = initEditorStatus()
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"efg", ru"hij", ru"klm", ru"nop", ru"qrs"])
-  status.jumpLine(1)
-  status.jumpLine(4)
+  currentBufStatus.jumpLine(currentMainWindowNode, 1)
+  currentBufStatus.jumpLine(currentMainWindowNode, 4)
   check(currentMainWindowNode.currentLine == 4)
 
 test "Move to first line":
@@ -117,7 +117,7 @@ test "Move to first line":
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"efg", ru"hij", ru"klm", ru"nop", ru"qrs"])
   currentMainWindowNode.currentLine = 4
-  status.moveToFirstLine
+  currentBufStatus.moveToFirstLine(currentMainWindowNode)
   check(currentMainWindowNode.currentLine == 0)
 
 test "Move to last line":
@@ -125,7 +125,7 @@ test "Move to last line":
   status.addNewBuffer
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"efg", ru"hij", ru"klm", ru"nop", ru"qrs"])
   currentMainWindowNode.currentLine = 1
-  status.moveToLastLine
+  currentBufStatus.moveToLastLine(currentMainWindowNode)
   check(currentMainWindowNode.currentLine == 5)
 
 test "Move to forward word":
@@ -166,7 +166,7 @@ test "Move to previous blank line":
   currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"def", ru"ghi"])
   currentMainWindowNode.currentLine = currentBufStatus.buffer.high
 
-  status.moveToPreviousBlankLine
+  currentBufStatus.moveToPreviousBlankLine(currentMainWindowNode)
 
   check currentMainWindowNode.currentLine == 1
   check currentMainWindowNode.currentColumn == 0
@@ -176,7 +176,7 @@ test "Move to next blank line":
   status.addNewBuffer
   currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"", ru"ghi"])
 
-  status.moveToNextBlankLine
+  currentBufStatus.moveToNextBlankLine(currentMainWindowNode)
 
   check currentMainWindowNode.currentLine == 2
   check currentMainWindowNode.currentColumn == 0

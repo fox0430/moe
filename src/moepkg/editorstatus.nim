@@ -3,7 +3,8 @@ import std/[strutils, terminal, os, strformat, tables, times, heapqueue, deques,
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        window, color, settings, statusline, bufferstatus, cursor, tabline,
-       backup, messages, commandline, register, platform
+       backup, messages, commandline, register, platform, searchutils,
+       movement
 
 # Save cursor position when a buffer for a window(file) gets closed.
 type LastPosition* = object
@@ -1071,7 +1072,76 @@ proc highlightTrailingSpaces(highlight: var Highlight,
   for colorSegment in colorSegments:
     highlight = highlight.overwrite(colorSegment)
 
-from search import searchAllOccurrence
+# TODO: Move
+proc scrollUpNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
+  let destination = max(currentMainWindowNode.currentLine - numberOfLines, 0)
+
+  if status.settings.smoothScroll:
+    let currentLine = currentMainWindowNode.currentLine
+    for i in countdown(currentLine, destination):
+      if i == 0: break
+
+      currentBufStatus.keyUp(currentMainWindowNode)
+      status.update
+      currentMainWindowNode.setTimeout(status.settings.smoothScrollSpeed)
+      var key = errorKey
+      key = getKey(currentMainWindowNode)
+      if key != errorKey: break
+
+    ## Set default time out setting
+    currentMainWindowNode.setTimeout
+
+  else:
+    currentBufStatus.jumpLine(currentMainWindowNode, destination)
+
+# TODO: Move
+proc pageUp*(status: var EditorStatus) =
+  status.scrollUpNumberOfLines(currentMainWindowNode.view.height)
+
+# TODO: Move
+proc halfPageUp*(status: var EditorStatus) =
+  status.scrollUpNumberOfLines(Natural(currentMainWindowNode.view.height / 2))
+
+# TODO: Move
+proc scrollDownNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
+  let
+    destination = min(currentMainWindowNode.currentLine + numberOfLines,
+                      currentBufStatus.buffer.len - 1)
+    currentLine = currentMainWindowNode.currentLine
+
+  if status.settings.smoothScroll:
+    for i in currentLine ..< destination:
+      if i == currentBufStatus.buffer.high: break
+
+      currentBufStatus.keyDown(currentMainWindowNode)
+      status.update
+      currentMainWindowNode.setTimeout(status.settings.smoothScrollSpeed)
+      var key = errorKey
+      key = getKey(currentMainWindowNode)
+      if key != errorKey: break
+
+    ## Set default time out setting
+    currentMainWindowNode.setTimeout
+
+  else:
+    let view = currentMainWindowNode.view
+    currentMainWindowNode.currentLine = destination
+    currentMainWindowNode.currentColumn = 0
+    currentMainWindowNode.expandedColumn = 0
+
+    if not (view.originalLine[0] <= destination and
+       (view.originalLine[view.height - 1] == -1 or
+       destination <= view.originalLine[view.height - 1])):
+      let startOfPrintedLines = max(destination - (currentLine - currentMainWindowNode.view.originalLine[0]), 0)
+      currentMainWindowNode.view.reload(currentBufStatus.buffer, startOfPrintedLines)
+
+# TODO: Move
+proc pageDown*(status: var EditorStatus) =
+  status.scrollDownNumberOfLines(currentMainWindowNode.view.height)
+
+# TODO: Move
+proc halfPageDown*(status: var EditorStatus) =
+  status.scrollDownNumberOfLines(Natural(currentMainWindowNode.view.height / 2))
 
 proc highlightFullWidthSpace(highlight: var Highlight,
                              windowNode: WindowNode,

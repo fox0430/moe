@@ -1,6 +1,6 @@
 import std/[terminal, times, strutils]
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, undoredostack,
-       window, movement, editor, search, bufferstatus, quickrun,
+       window, movement, editor, searchutils, search, bufferstatus, quickrun,
        messages
 
 type InputState = enum
@@ -54,9 +54,10 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
   let
     ignorecase = status.settings.ignorecase
     smartcase = status.settings.smartcase
-    searchResult = status.searchBuffer(keyword, ignorecase, smartcase)
+    searchResult = currentBufStatus.searchBuffer(
+      currentMainWindowNode, keyword, ignorecase, smartcase)
   if searchResult.line > -1:
-    status.jumpLine(searchResult.line)
+    currentBufStatus.jumpLine(currentMainWindowNode, searchResult.line)
     for column in 0 ..< searchResult.column:
       status.bufStatus[currentBufferIndex].keyRight(currentMainWindowNode)
   elif searchResult.line == -1: currentMainWindowNode.keyLeft
@@ -85,9 +86,10 @@ proc searchNextOccurrenceReversely(status: var EditorStatus, keyword: seq[Rune])
   let
     ignorecase = status.settings.ignorecase
     smartcase = status.settings.smartcase
-    searchResult = status.searchBufferReversely(keyword, ignorecase, smartcase)
+    searchResult = currentBufStatus.searchBufferReversely(
+      currentMainWindowNode, keyword, ignorecase, smartcase)
   if searchResult.line > -1:
-    status.jumpLine(searchResult.line)
+    currentBufStatus.jumpLine(currentMainWindowNode, searchResult.line)
     for column in 0 ..< searchResult.column:
       currentBufStatus.keyRight(windowNode)
   elif searchResult.line == -1:
@@ -359,7 +361,8 @@ proc yankToPreviousBlankLine(status: var EditorStatus, registerName: string) =
     currentLine = currentMainWindowNode.currentLine
     previousBlankLine = currentBufStatus.findPreviousBlankLine(currentLine)
   status.yankLines(max(previousBlankLine, 0), currentLine, registerName)
-  if previousBlankLine >= 0: status.jumpLine(previousBlankLine)
+  if previousBlankLine >= 0:
+    currentBufStatus.jumpLine(currentMainWindowNode, previousBlankLine)
 
 # y{ command
 proc yankToPreviousBlankLine(status: var EditorStatus) =
@@ -367,7 +370,8 @@ proc yankToPreviousBlankLine(status: var EditorStatus) =
     currentLine = currentMainWindowNode.currentLine
     previousBlankLine = currentBufStatus.findPreviousBlankLine(currentLine)
   status.yankLines(max(previousBlankLine, 0), currentLine)
-  if previousBlankLine >= 0: status.jumpLine(previousBlankLine)
+  if previousBlankLine >= 0:
+    currentBufStatus.jumpLine(currentMainWindowNode, previousBlankLine)
 
 # y} command
 proc yankToNextBlankLine(status: var EditorStatus, registerName: string) =
@@ -376,7 +380,8 @@ proc yankToNextBlankLine(status: var EditorStatus, registerName: string) =
     buffer = currentBufStatus.buffer
     nextBlankLine = currentBufStatus.findNextBlankLine(currentLine)
   status.yankLines(currentLine, min(nextBlankLine, buffer.high), registerName)
-  if nextBlankLine >= 0: status.jumpLine(nextBlankLine)
+  if nextBlankLine >= 0:
+    currentBufStatus.jumpLine(currentMainWindowNode, nextBlankLine)
 
 # y} command
 proc yankToNextBlankLine(status: var EditorStatus) =
@@ -385,7 +390,8 @@ proc yankToNextBlankLine(status: var EditorStatus) =
     buffer = currentBufStatus.buffer
     nextBlankLine = currentBufStatus.findNextBlankLine(currentLine)
   status.yankLines(currentLine, min(nextBlankLine, buffer.high))
-  if nextBlankLine >= 0: status.jumpLine(nextBlankLine)
+  if nextBlankLine >= 0:
+    currentBufStatus.jumpLine(currentMainWindowNode, nextBlankLine)
 
 # dd command
 proc deleteLines(status: var EditorStatus) =
@@ -633,7 +639,7 @@ proc deleteLineFromFirstLineToCurrentLine(status: var EditorStatus,
                                count,
                                status.settings)
 
-  status.moveToFirstLine
+  currentBufStatus.moveToFirstLine(currentMainWindowNode)
 
 # d{ command
 proc deleteTillPreviousBlankLine(status: var EditorStatus,
@@ -1086,19 +1092,19 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('+'):
     currentBufStatus.moveToFirstOfNextLine(currentMainWindowNode)
   elif key == ord('{'):
-    status.moveToPreviousBlankLine
+    currentBufStatus.moveToPreviousBlankLine(currentMainWindowNode)
   elif key == ord('}'):
-    status.moveToNextBlankLine
+    currentBufStatus.moveToNextBlankLine(currentMainWindowNode)
   elif key == ord('g'):
     let secondKey = commands[1]
     if secondKey == ord('g'):
-      status.jumpLine(cmdLoop - 1)
+      currentBufStatus.jumpLine(currentMainWindowNode, cmdLoop - 1)
     elif secondKey == ord('_'):
       currentBufStatus.moveToLastNonBlankOfLine(currentMainWindowNode)
     elif secondKey == ord('a'):
       status.showCurrentCharInfoCommand(currentMainWindowNode)
   elif key == ord('G'):
-    moveToLastLine(status)
+    currentBufStatus.moveToLastLine(currentMainWindowNode)
   elif isControlU(key):
     for i in 0 ..< cmdLoop: status.halfPageUp
   elif isControlD(key):

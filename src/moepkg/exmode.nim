@@ -1,9 +1,9 @@
 import std/[sequtils, strutils, os, terminal, times, options]
 import syntax/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
-        unicodeext, independentutils, search, highlight, commandview,
+        unicodeext, independentutils, searchutils, highlight, commandview,
         window, movement, color, build, bufferstatus, editor, settings,
-        quickrun, messages, commandline, debugmode, platform
+        quickrun, messages, commandline, debugmode, platform, commandviewutils
 
 type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
 
@@ -754,7 +754,7 @@ proc changePreveBufferCommand(status: var EditorStatus) =
   status.changeMode(bufferstatus.Mode.normal)
 
 proc jumpCommand(status: var EditorStatus, line: int) =
-  status.jumpLine(line)
+  currentBufStatus.jumpLine(currentMainWindowNode, line)
 
   status.commandLine.erase
   status.changeMode(bufferstatus.Mode.normal)
@@ -1149,7 +1149,8 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
       ignorecase = status.settings.ignorecase
       smartcase = status.settings.smartcase
     for i in 0 .. currentBufStatus.buffer.high:
-      let searchResult = status.searchBuffer(replaceInfo.searhWord, ignorecase, smartcase)
+      let searchResult = currentBufStatus.searchBuffer(
+        currentMainWindowNode, replaceInfo.searhWord, ignorecase, smartcase)
       if searchResult.line > -1:
         let oldLine = currentBufStatus.buffer[searchResult.line]
         var newLine = currentBufStatus.buffer[searchResult.line]
@@ -1402,7 +1403,11 @@ proc exMode*(status: var EditorStatus) =
       status.searchHistory[status.searchHistory.high] = keyword
       status.isSearchHighlight = true
 
-      status.jumpToSearchForwardResults(keyword)
+      currentBufStatus.jumpToSearchForwardResults(
+        currentMainWindowNode,
+        keyword,
+        status.settings.ignorecase,
+        status.settings.smartcase)
     else:
       if command.len > 0:
         if isReplaceCommand:

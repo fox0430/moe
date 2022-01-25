@@ -1,7 +1,7 @@
 import std/unittest
 import moepkg/editorstatus
 
-include moepkg/search
+include moepkg/[search, searchutils]
 
 suite "search.nim: searchLine":
   test "searchLine":
@@ -56,9 +56,9 @@ suite "search.nim: searchLine":
       ignorecase = false
       smartcase = false
       position = line.searchLine(ru"editor", ignorecase, smartcase)
-  
+
     check(position == -1)
-  
+
 suite "search.nim: searchLineReversely":
   test "searchLineReversely":
     let
@@ -66,9 +66,9 @@ suite "search.nim: searchLineReversely":
       ignorecase = true
       smartcase = true
       position = line.searchLineReversely(ru"ijk", ignorecase, smartcase)
-  
+
     check(position == 9)
-  
+
   test "searchLineReversely 2":
       let
         line = ru"abc efg hijkl"
@@ -76,7 +76,7 @@ suite "search.nim: searchLineReversely":
         ignorecase = true
         smartcase = true
         position = line.searchLineReversely(keyword, ignorecase, smartcase)
-  
+
       check(position == -1)
 
 suite "search.nim: searchBuffer":
@@ -94,7 +94,8 @@ suite "search.nim: searchBuffer":
       keyword = ru"i j"
       ignorecase = true
       smartcase = true
-      searchResult = status.searchBuffer(keyword, ignorecase, smartcase)
+      searchResult = currentBufStatus.searchBuffer(
+        currentMainWindowNode, keyword, ignorecase, smartcase)
 
     check(searchResult.line == 1)
     check(searchResult.column == 2)
@@ -113,7 +114,8 @@ suite "search.nim: searchBuffer":
       keyword = ru"xyz"
       ignorecase = true
       smartcase = true
-      searchResult = status.searchBuffer(keyword, ignorecase, smartcase)
+      searchResult = currentBufStatus.searchBuffer(
+        currentMainWindowNode, keyword, ignorecase, smartcase)
 
     check(searchResult.line == -1)
     check(searchResult.column == -1)
@@ -133,7 +135,8 @@ suite "search.nim: searchBufferReversely":
       keyword = ru"i j"
       ignorecase = true
       smartcase = true
-      searchResult = status.searchBufferReversely(
+      searchResult = currentBufStatus.searchBufferReversely(
+        currentMainWindowNode,
         keyword,
         ignorecase,
         smartcase)
@@ -155,7 +158,8 @@ suite "search.nim: searchBufferReversely":
       keyword = ru"xyz"
       ignorecase = true
       smartcase = true
-      searchResult = status.searchBufferReversely(
+      searchResult = currentBufStatus.searchBufferReversely(
+        currentMainWindowNode,
         keyword,
         ignorecase,
         smartcase)
@@ -225,7 +229,11 @@ suite "search.nim: jumpToSearchForwardResults":
     status.bufStatus[0].buffer = initGapBuffer(@[line1, line2, line3])
 
     let keyword = ru"jkl"
-    status.jumpToSearchForwardResults(keyword)
+    currentBufStatus.jumpToSearchForwardResults(
+      currentMainWindowNode,
+      keyword,
+      status.settings.ignorecase,
+      status.settings.smartcase)
 
     check(currentMainWindowNode.currentLine == 1)
     check(currentMainWindowNode.currentColumn == 4)
@@ -243,7 +251,11 @@ suite "search.nim: jumpToSearchForwardResults":
     status.bufStatus[0].buffer = initGapBuffer(@[line1, line2, line3])
 
     let keyword = ru"xyz"
-    status.jumpToSearchForwardResults(keyword)
+    currentBufStatus.jumpToSearchForwardResults(
+      currentMainWindowNode,
+      keyword,
+      status.settings.ignorecase,
+      status.settings.smartcase)
 
     check(currentMainWindowNode.currentLine == 0)
     check(currentMainWindowNode.currentColumn == 1)
@@ -262,7 +274,11 @@ suite "search.nim: jumpToSearchBackwordResults":
     status.bufStatus[0].buffer = initGapBuffer(@[line1, line2, line3])
 
     let keyword = ru"abc"
-    status.jumpToSearchBackwordResults(keyword)
+    currentBufStatus.jumpToSearchBackwordResults(
+      currentMainWindowNode,
+      keyword,
+      status.settings.ignorecase,
+      status.settings.smartcase)
 
     check(currentMainWindowNode.currentLine == 0)
     check(currentMainWindowNode.currentColumn == 0)
@@ -280,7 +296,11 @@ suite "search.nim: jumpToSearchBackwordResults":
     status.bufStatus[0].buffer = initGapBuffer(@[line1, line2, line3])
 
     let keyword = ru"xyz"
-    status.jumpToSearchBackwordResults(keyword)
+    currentBufStatus.jumpToSearchBackwordResults(
+      currentMainWindowNode,
+      keyword,
+      status.settings.ignorecase,
+      status.settings.smartcase)
 
     check(currentMainWindowNode.currentLine == 0)
     check(currentMainWindowNode.currentColumn == 1)

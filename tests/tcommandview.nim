@@ -1,6 +1,6 @@
 import std/[unittest, os, strutils]
-import moepkg/[editorstatus, unicodeext]
-include moepkg/commandview
+import moepkg/unicodeext
+include moepkg/[commandview, commandviewutils, editorstatus]
 
 suite "commandview: getCandidatesFilePath":
   test "Expect file and dir in current path":
@@ -64,7 +64,7 @@ suite "commandview: getCandidatesExCommandOption":
     ]
 
     for c in commands:
-      let r = status.getCandidatesExCommandOption(exStatus, c)
+      let r = exStatus.getCandidatesExCommandOption(c)
       check r == @[ru"", ru"on", ru"off"]
 
   test "Expect \"vivid\", \"dark\", \"light\", \"config\", \"vscode\"":
@@ -75,7 +75,7 @@ suite "commandview: getCandidatesExCommandOption":
     var exStatus = initExModeViewStatus(prompt)
 
     const command = "theme"
-    let r = status.getCandidatesExCommandOption(exStatus, command)
+    let r = exStatus.getCandidatesExCommandOption(command)
     check r == @[ru"", ru"vivid", ru"dark", ru"light", ru"config", ru"vscode"]
 
   test "Expect file and dir in current path":
@@ -101,7 +101,7 @@ suite "commandview: getCandidatesExCommandOption":
 
     for c in commands:
       exStatus.buffer = c.ru & ru" "
-      let r = status.getCandidatesExCommandOption(exStatus, c)
+      let r = exStatus.getCandidatesExCommandOption(c)
 
       # r[0] is empty string
       for i, path in r[1 .. ^1]:

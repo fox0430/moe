@@ -60,8 +60,8 @@ proc recentFileMode*(status: var Editorstatus) =
     elif key == ord('l') or isRightKey(key):
       status.bufStatus[currentBufferIndex].keyRight(currentMainWindowNode)
     elif key == ord('G'):
-      status.moveToLastLine
+      currentBufStatus.moveToLastLine(currentMainWindowNode)
     elif key == ord('g') and getKey(currentMainWindowNode) == ord('g'):
-      status.moveToFirstLine
+      currentBufStatus.moveToFirstLine(currentMainWindowNode)
     elif isEnterKey(key):
       status.openSelectedBuffer
