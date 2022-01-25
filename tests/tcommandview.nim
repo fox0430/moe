@@ -1,6 +1,6 @@
 import std/[unittest, os, strutils]
-import moepkg/[editorstatus, unicodeext]
-include moepkg/commandview
+import moepkg/unicodeext
+include moepkg/[commandview, editorstatus]
 
 suite "commandview: getCandidatesFilePath":
   test "Expect file and dir in current path":
