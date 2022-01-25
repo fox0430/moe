@@ -389,3 +389,70 @@ proc initDisplayBuffer*(suggestlist: seq[seq[Rune]],
           result.add suggestlist[i] & list.description.ru
   else:
     result = suggestlist[1 ..< suggestlist.len]
+
+proc getCandidatesExCommandOption*(exStatus: var ExModeViewStatus,
+                                   command: string): seq[seq[Rune]] =
+
+  var argList: seq[string] = @[]
+  case toLowerAscii($command):
+    of "cursorline",
+       "highlightparen",
+       "indent",
+       "linenum",
+       "livereload",
+       "realtimesearch",
+       "statusline",
+       "syntax",
+       "tabstop",
+       "smoothscroll",
+       "clipboard",
+       "highlightCurrentLine",
+       "highlightcurrentword",
+       "highlightfullspace",
+       "multiplestatusline",
+       "buildonsave",
+       "indentationlines",
+       "icon",
+       "showgitinactive",
+       "ignorecase",
+       "smartcase": argList = @["on", "off"]
+    of "theme": argList= @["vivid", "dark", "light", "config", "vscode"]
+    of "e",
+       "sp",
+       "vs",
+       "sv": argList = getCandidatesFilePath(exStatus.buffer, command)
+    else: discard
+
+  if argList[0] != "":
+    let arg = if (splitWhitespace(exStatus.buffer)).len > 1:
+                (splitWhitespace(exStatus.buffer))[1]
+              else: ru""
+    result = @[arg]
+
+  for i in 0 ..< argList.len:
+    result.add(argList[i].toRunes)
+
+proc getSuggestList*(exStatus: var ExModeViewStatus,
+                     suggestType: SuggestType): seq[seq[Rune]] =
+
+  if isSuggestTypeExCommand(suggestType):
+    result = getCandidatesExCommand(exStatus.buffer)
+  elif isSuggestTypeExCommandOption(suggestType):
+    let cmd = $(splitWhitespace(exStatus.buffer))[0]
+    result = exStatus.getCandidatesExCommandOption(cmd)
+  else:
+    let
+      cmd = (splitWhitespace(exStatus.buffer))[0]
+      pathList = getCandidatesFilePath(exStatus.buffer, $cmd)
+    for path in pathList: result.add(path.ru)
+
+proc calcXWhenSuggestPath*(buffer: seq[Rune]): int =
+  let
+    cmd = (splitWhitespace(buffer))[0]
+    inputPath = getInputPath(buffer, cmd)
+    positionInInputPath = if inputPath.rfind(ru"/") > 0:
+                            inputPath.rfind(ru"/")
+                          else:
+                            0
+  # +2 is pronpt and space
+  return cmd.len + 2 + positionInInputPath
