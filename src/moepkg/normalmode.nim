@@ -1,6 +1,6 @@
 import std/[terminal, times, strutils]
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, undoredostack,
-       window, movement, editor, search, bufferstatus, quickrun,
+       window, movement, editor, searchutils, search, bufferstatus, quickrun,
        messages
 
 type InputState = enum

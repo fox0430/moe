@@ -1,7 +1,7 @@
 import std/[sequtils, strutils, os, terminal, times, options]
 import syntax/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
-        unicodeext, independentutils, search, highlight, commandview,
+        unicodeext, independentutils, searchutils, highlight, commandview,
         window, movement, color, build, bufferstatus, editor, settings,
         quickrun, messages, commandline, debugmode, platform
 

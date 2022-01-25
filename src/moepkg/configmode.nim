@@ -1,6 +1,6 @@
 import std/[terminal, times, strutils]
 import gapbuffer, ui, editorstatus, unicodeext, window, movement, settings,
-       bufferstatus, color, highlight, editor
+       bufferstatus, color, highlight, editor, search
 
 type standardTableNames {.pure.} = enum
   theme

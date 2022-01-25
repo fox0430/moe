@@ -1,149 +1,180 @@
-import std/strutils
-import gapbuffer, movement, unicodeext, bufferstatus, window
+import std/terminal
+import editorstatus, searchutils, unicodeext, commandview, color, ui,
+       commandline
 
-type
-  SearchResult* = tuple[line: int, column: int]
+# Search text in buffer
+proc getKeyword*(status: var EditorStatus,
+                 prompt: string,
+                 isSearch: bool): (seq[Rune], bool) =
 
-type Direction* = enum
-  forward = 0
-  backward = 1
+  var
+    exStatus = initExModeViewStatus(prompt)
+    cancelSearch = false
+    searchHistoryIndex = status.searchHistory.high
 
-proc compare(rune, sub: seq[Rune], ignorecase, smartcase: bool): bool =
-  proc isContainUpper(sub: seq[Rune]): bool =
-    for r in sub:
-      let ch = ($r)[0]
-      if isUpperAscii(ch): return true
+  template setPrevSearchHistory() =
+    if searchHistoryIndex > 0:
+      exStatus.clearCommandBuffer
+      dec searchHistoryIndex
+      exStatus.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
 
-  if ignorecase and not smartcase:
-    if cmpIgnoreCase($rune, $sub) == 0: return true
-  elif smartcase and ignorecase:
-    if isContainUpper(sub):
-      return rune == sub
-    else:
-      if cmpIgnoreCase($rune, $sub) == 0: return true
+  template setNextSearchHistory() =
+    if searchHistoryIndex < status.searchHistory.high:
+      exStatus.clearCommandBuffer
+      inc searchHistoryIndex
+      exStatus.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
+
+  while true:
+    status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
+
+    var key = status.commandLine.getKey
+
+    if isEnterKey(key): break
+    elif isEscKey(key):
+      cancelSearch = true
+      break
+    elif isResizeKey(key):
+      status.resize(terminalHeight(), terminalWidth())
+      status.update
+    elif isLeftKey(key): status.commandLine.window.moveLeft(exStatus)
+    elif isRightkey(key): exStatus.moveRight
+    elif isUpKey(key) and isSearch: setPrevSearchHistory()
+    elif isDownKey(key) and isSearch: setNextSearchHistory()
+    elif isHomeKey(key): exStatus.moveTop
+    elif isEndKey(key): exStatus.moveEnd
+    elif isBackspaceKey(key): exStatus.deleteCommandBuffer
+    elif isDcKey(key): exStatus.deleteCommandBufferCurrentPosition
+    else: exStatus.insertCommandBuffer(key)
+
+  return (exStatus.buffer, cancelSearch)
+
+proc searchFirstOccurrence(status: var EditorStatus) =
+  var
+    exitSearch = false
+    cancelSearch = false
+    keyword = ru""
+
+  const
+    prompt = "/"
+    isSuggest = false
+    isSearch = true
+
+  while exitSearch == false:
+    let returnWord = status.getKeyOnceAndWriteCommandView(
+      prompt,
+      keyword,
+      isSuggest,
+      isSearch)
+
+    keyword = returnWord[0]
+    exitSearch = returnWord[1]
+    cancelSearch = returnWord[2]
+
+    if exitSearch or cancelSearch: break
+
+  if cancelSearch:
+    status.isSearchHighlight = false
+
   else:
-    return rune == sub
+    if keyword.len > 0:
+      status.isSearchHighlight = true
 
-proc searchLine(line: seq[Rune],
-                keyword: seq[Rune],
-                ignorecase, smartcase: bool): int =
+      # Save keyword in search history
+      status.searchHistory.addSearchHistory(keyword)
 
-  result = -1
-  for startPostion in 0 .. (line.len - keyword.len):
-    let
-      endPosition = startPostion + keyword.len
-      rune = line[startPostion ..< endPosition]
+      var highlight = currentMainWindowNode.highlight
+      highlight.updateHighlight(
+        currentBufStatus,
+        currentMainWindowNode,
+        status.isSearchHighlight,
+        status.searchHistory,
+        status.settings)
 
-    if compare(rune, keyword, ignorecase, smartcase): return startPostion
+proc incrementalSearch(status: var Editorstatus, direction: Direction) =
+  let prompt = if direction == Direction.forward: "/" else: "?"
 
-proc searchLineReversely(line: seq[Rune],
-                         keyword: seq[Rune],
-                         ignorecase, smartcase: bool): int =
+  status.searchHistory.add ru""
 
-  result = -1
-  for startPostion in countdown((line.len - keyword.len), 0):
-    let
-      endPosition = startPostion + keyword.len
-      rune = line[startPostion ..< endPosition]
+  var
+    exitSearch = false
+    cancelSearch = false
 
-    if compare(rune, keyword, ignorecase, smartcase): return startPostion
-
-proc searchBuffer*(bufStatus: BufferStatus,
-                   win: var WindowNode,
-                   keyword: seq[Rune],
-                   ignorecase, smartcase: bool): SearchResult =
-
-  result = (-1, -1)
+  # For jumpToSearchBackwordResults
   let
-    startLine = win.currentLine
-    buffer = bufStatus.buffer
-  for i in 0 ..< buffer.len:
-    let
-      lineNumber = (startLine + i) mod buffer.len
-      begin = if lineNumber == startLine and
-                 i == 0: win.currentColumn
-              else: 0
-      `end` = buffer[lineNumber].len
-      line = buffer[lineNumber]
-      position = searchLine(line[begin ..< `end`],
-                            keyword,
-                            ignorecase,
-                            smartcase)
+    currentLine = currentMainWindowNode.currentLine
+    currentColumn = currentMainWindowNode.currentColumn
 
-    if position > -1: return (lineNumber, begin + position)
+  while exitSearch == false:
+    const
+      isSuggest = false
+      isSearch = true
+    let returnWord = status.getKeyOnceAndWriteCommandView(
+      prompt,
+      status.searchHistory[^1],
+      isSuggest,
+      isSearch)
 
-proc searchBufferReversely*(bufStatus: BufferStatus,
-                            win: WindowNode,
-                            keyword: seq[Rune],
-                            ignorecase, smartcase: bool): SearchResult =
+    status.searchHistory[^1] = returnWord[0]
+    exitSearch = returnWord[1]
+    cancelSearch = returnWord[2]
 
-  result = (-1, -1)
-  let
-    startLine = win.currentLine
-    buffer = bufStatus.buffer
-  for i in 0 ..< bufStatus.buffer.len + 1:
-    var lineNumber = (startLine - i) mod buffer.len
-    if lineNumber < 0: lineNumber = buffer.len - i
-    let
-      endPosition = if lineNumber == startLine and i == 0:
-                      win.currentColumn
-                    else:
-                      buffer[lineNumber].len
-      position = searchLineReversely(buffer[lineNumber][0 ..< endPosition],
-                                     keyword,
-                                     ignorecase,
-                                     smartcase)
+    if exitSearch or cancelSearch: break
 
-    if position > -1: return (lineNumber, position)
+    if status.searchHistory[^1].len > 0:
+      let keyword = status.searchHistory[^1]
+      status.isSearchHighlight = true
 
-proc searchAllOccurrence*(buffer: GapBuffer[seq[Rune]],
-                          keyword: seq[Rune],
-                          ignorecase, smartcase: bool): seq[SearchResult] =
+      if direction == Direction.forward:
+        currentBufStatus.jumpToSearchForwardResults(
+          currentMainWindowNode,
+          keyword,
+          status.settings.ignorecase,
+          status.settings.smartcase)
+      else:
+        currentMainWindowNode.currentLine = currentLine
+        currentMainWindowNode.currentColumn = currentColumn
+        currentBufStatus.jumpToSearchBackwordResults(
+          currentMainWindowNode,
+          keyword,
+          status.settings.ignorecase,
+          status.settings.smartcase)
+    else:
+      status.isSearchHighlight = false
 
-  if keyword.len < 1: return
+    var highlight = currentMainWindowNode.highlight
+    highlight.updateHighlight(
+      currentBufStatus,
+      currentMainWindowNode,
+      status.isSearchHighlight,
+      status.searchHistory,
+      status.settings)
 
-  for lineNumber in 0 ..< buffer.len:
-    var begin = 0
-    while begin < buffer[lineNumber].len:
-      let
-        `end` = buffer[lineNumber].len
-        line = buffer[lineNumber]
-        position = searchLine(line[begin ..< `end`],
-                              keyword,
-                              ignorecase,
-                              smartcase)
-      if position == -1: break
-      result.add((lineNumber, begin + position))
-      begin += position + keyword.len
+    status.resize(terminalHeight(), terminalWidth())
+    status.update
 
-proc jumpToSearchForwardResults*(bufStatus: var BufferStatus,
-                                 windowNode: var WindowNode,
-                                 keyword: seq[Rune],
-                                 ignorecase, smartcase: bool) =
-  let
-    searchResult = bufStatus.searchBuffer(windowNode, keyword, ignorecase, smartcase)
-  if searchResult.line > -1:
-    bufStatus.jumpLine(windowNode, searchResult.line)
-    for column in 0 ..< searchResult.column:
-      bufStatus.keyRight(windowNode)
+  if cancelSearch:
+    status.searchHistory.delete(status.searchHistory.high)
 
-proc jumpToSearchBackwordResults*(bufStatus: var BufferStatus,
-                                  windowNode: var WindowNode,
-                                  keyword: seq[Rune],
-                                  ignorecase, smartcase: bool) =
+    status.isSearchHighlight = false
 
-  let
-    searchResult = bufStatus.searchBufferReversely(
-      windowNode, keyword, ignorecase, smartcase)
-  if searchResult.line > -1:
-    bufStatus.jumpLine(windowNode, searchResult.line)
-    for column in 0 ..< searchResult.column:
-      bufStatus.keyRight(windowNode)
+    var highlight = currentMainWindowNode.highlight
+    highlight.updateHighlight(
+      currentBufStatus,
+      currentMainWindowNode,
+      status.isSearchHighlight,
+      status.searchHistory,
+      status.settings)
 
-proc addSearchHistory*(searchHistory: var seq[seq[Rune]],
-                       keyword: seq[Rune]) =
+    status.commandLine.erase
 
-  if searchHistory.len == 0 or keyword != searchHistory[^1]:
-    searchHistory.add(keyword)
+proc searchFordwards*(status: var EditorStatus) =
+  if status.settings.incrementalSearch:
+      status.incrementalSearch(Direction.forward)
+  else:
+      status.searchFirstOccurrence
 
-
+proc searchBackwards*(status: var EditorStatus) =
+  if status.settings.incrementalSearch:
+      status.incrementalSearch(Direction.backward)
+  else:
+      status.searchFirstOccurrence
