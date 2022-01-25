@@ -3,7 +3,7 @@ import syntax/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
         unicodeext, independentutils, searchutils, highlight, commandview,
         window, movement, color, build, bufferstatus, editor, settings,
-        quickrun, messages, commandline, debugmode, platform
+        quickrun, messages, commandline, debugmode, platform, commandviewutils
 
 type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
 

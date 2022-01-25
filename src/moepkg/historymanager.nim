@@ -2,8 +2,8 @@
 
 import std/[re, os, times, terminal, osproc]
 import editorstatus, bufferstatus, unicodeext, ui, movement, gapbuffer,
-       highlight, color, settings, messages, backup, commandview, fileutils,
-       editorview, window
+       highlight, color, settings, messages, backup, fileutils, editorview,
+       window, commandviewutils
 
 proc generateFilenamePatern(path: seq[Rune]): seq[Rune] =
   let splitPath = splitPath($path)
