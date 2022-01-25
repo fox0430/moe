@@ -605,10 +605,10 @@ proc visualMode*(status: var EditorStatus) =
     elif key == ord('e'):
       currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
     elif key == ord('G'):
-      moveToLastLine(status)
+      currentBufStatus.moveToLastLine(currentMainWindowNode)
     elif key == ord('g'):
       if getKey(currentMainWindowNode) == ord('g'):
-        moveToFirstLine(status)
+        currentBufStatus.moveToFirstLine(currentMainWindowNode)
       else:
         currentMainWindowNode.currentLine = currentBufStatus.selectArea.startLine
         status.changeMode(Mode.insert)

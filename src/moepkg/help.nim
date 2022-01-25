@@ -314,6 +314,6 @@ proc helpMode*(status: var Editorstatus) =
         currentMainWindowNode)
     elif key == ord('g'):
       if getKey(currentMainWindowNode) == 'g':
-        status.moveToFirstLine
+        currentBufStatus.moveToFirstLine(currentMainWindowNode)
     elif key == ord('G'):
-      status.moveToLastLine
+      currentBufStatus.moveToLastLine(currentMainWindowNode)

@@ -3,7 +3,8 @@ import std/[strutils, terminal, os, strformat, tables, times, heapqueue, deques,
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        window, color, settings, statusline, bufferstatus, cursor, tabline,
-       backup, messages, commandline, register, platform, commandview
+       backup, messages, commandline, register, platform, commandview, search,
+       movement
 
 # Save cursor position when a buffer for a window(file) gets closed.
 type LastPosition* = object
@@ -1400,7 +1401,210 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
 
   return splitCommand($exStatus.buffer)
 
-from search import searchAllOccurrence
+# TODO: Move
+proc searchFirstOccurrence(status: var EditorStatus) =
+  var
+    exitSearch = false
+    cancelSearch = false
+    keyword = ru""
+
+  const
+    prompt = "/"
+    isSuggest = false
+    isSearch = true
+
+  while exitSearch == false:
+    let returnWord = status.getKeyOnceAndWriteCommandView(
+      prompt,
+      keyword,
+      isSuggest,
+      isSearch)
+
+    keyword = returnWord[0]
+    exitSearch = returnWord[1]
+    cancelSearch = returnWord[2]
+
+    if exitSearch or cancelSearch: break
+
+  if cancelSearch:
+    status.isSearchHighlight = false
+
+  else:
+    if keyword.len > 0:
+      status.isSearchHighlight = true
+
+      # Save keyword in search history
+      status.searchHistory.addSearchHistory(keyword)
+
+      var highlight = currentMainWindowNode.highlight
+      highlight.updateHighlight(
+        currentBufStatus,
+        currentMainWindowNode,
+        status.isSearchHighlight,
+        status.searchHistory,
+        status.settings)
+
+# TODO: Move
+proc incrementalSearch(status: var Editorstatus, direction: Direction) =
+  let prompt = if direction == Direction.forward: "/" else: "?"
+
+  status.searchHistory.add ru""
+
+  var
+    exitSearch = false
+    cancelSearch = false
+
+  # For jumpToSearchBackwordResults
+  let
+    currentLine = currentMainWindowNode.currentLine
+    currentColumn = currentMainWindowNode.currentColumn
+
+  while exitSearch == false:
+    const
+      isSuggest = false
+      isSearch = true
+    let returnWord = status.getKeyOnceAndWriteCommandView(
+      prompt,
+      status.searchHistory[^1],
+      isSuggest,
+      isSearch)
+
+    status.searchHistory[^1] = returnWord[0]
+    exitSearch = returnWord[1]
+    cancelSearch = returnWord[2]
+
+    if exitSearch or cancelSearch: break
+
+    if status.searchHistory[^1].len > 0:
+      let keyword = status.searchHistory[^1]
+      status.isSearchHighlight = true
+
+      if direction == Direction.forward:
+        currentBufStatus.jumpToSearchForwardResults(
+          currentMainWindowNode,
+          keyword,
+          status.settings.ignorecase,
+          status.settings.smartcase)
+      else:
+        currentMainWindowNode.currentLine = currentLine
+        currentMainWindowNode.currentColumn = currentColumn
+        currentBufStatus.jumpToSearchBackwordResults(
+          currentMainWindowNode,
+          keyword,
+          status.settings.ignorecase,
+          status.settings.smartcase)
+    else:
+      status.isSearchHighlight = false
+
+    var highlight = currentMainWindowNode.highlight
+    highlight.updateHighlight(
+      currentBufStatus,
+      currentMainWindowNode,
+      status.isSearchHighlight,
+      status.searchHistory,
+      status.settings)
+
+    status.resize(terminalHeight(), terminalWidth())
+    status.update
+
+  if cancelSearch:
+    status.searchHistory.delete(status.searchHistory.high)
+
+    status.isSearchHighlight = false
+
+    var highlight = currentMainWindowNode.highlight
+    highlight.updateHighlight(
+      currentBufStatus,
+      currentMainWindowNode,
+      status.isSearchHighlight,
+      status.searchHistory,
+      status.settings)
+
+    status.commandLine.erase
+# TODO: Move
+proc searchFordwards*(status: var EditorStatus) =
+  if status.settings.incrementalSearch:
+      status.incrementalSearch(Direction.forward)
+  else:
+      status.searchFirstOccurrence
+
+# TODO: Move
+proc searchBackwards*(status: var EditorStatus) =
+  if status.settings.incrementalSearch:
+      status.incrementalSearch(Direction.backward)
+  else:
+      status.searchFirstOccurrence
+
+# TODO: Move
+proc scrollUpNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
+  let destination = max(currentMainWindowNode.currentLine - numberOfLines, 0)
+
+  if status.settings.smoothScroll:
+    let currentLine = currentMainWindowNode.currentLine
+    for i in countdown(currentLine, destination):
+      if i == 0: break
+
+      currentBufStatus.keyUp(currentMainWindowNode)
+      status.update
+      currentMainWindowNode.setTimeout(status.settings.smoothScrollSpeed)
+      var key = errorKey
+      key = getKey(currentMainWindowNode)
+      if key != errorKey: break
+
+    ## Set default time out setting
+    currentMainWindowNode.setTimeout
+
+  else:
+    currentBufStatus.jumpLine(currentMainWindowNode, destination)
+
+# TODO: Move
+proc pageUp*(status: var EditorStatus) =
+  status.scrollUpNumberOfLines(currentMainWindowNode.view.height)
+
+# TODO: Move
+proc halfPageUp*(status: var EditorStatus) =
+  status.scrollUpNumberOfLines(Natural(currentMainWindowNode.view.height / 2))
+
+# TODO: Move
+proc scrollDownNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
+  let
+    destination = min(currentMainWindowNode.currentLine + numberOfLines,
+                      currentBufStatus.buffer.len - 1)
+    currentLine = currentMainWindowNode.currentLine
+
+  if status.settings.smoothScroll:
+    for i in currentLine ..< destination:
+      if i == currentBufStatus.buffer.high: break
+
+      currentBufStatus.keyDown(currentMainWindowNode)
+      status.update
+      currentMainWindowNode.setTimeout(status.settings.smoothScrollSpeed)
+      var key = errorKey
+      key = getKey(currentMainWindowNode)
+      if key != errorKey: break
+
+    ## Set default time out setting
+    currentMainWindowNode.setTimeout
+
+  else:
+    let view = currentMainWindowNode.view
+    currentMainWindowNode.currentLine = destination
+    currentMainWindowNode.currentColumn = 0
+    currentMainWindowNode.expandedColumn = 0
+
+    if not (view.originalLine[0] <= destination and
+       (view.originalLine[view.height - 1] == -1 or
+       destination <= view.originalLine[view.height - 1])):
+      let startOfPrintedLines = max(destination - (currentLine - currentMainWindowNode.view.originalLine[0]), 0)
+      currentMainWindowNode.view.reload(currentBufStatus.buffer, startOfPrintedLines)
+
+# TODO: Move
+proc pageDown*(status: var EditorStatus) =
+  status.scrollDownNumberOfLines(currentMainWindowNode.view.height)
+
+# TODO: Move
+proc halfPageDown*(status: var EditorStatus) =
+  status.scrollDownNumberOfLines(Natural(currentMainWindowNode.view.height / 2))
 
 proc highlightFullWidthSpace(highlight: var Highlight,
                              windowNode: WindowNode,

@@ -168,10 +168,11 @@ proc debugMode*(status: var Editorstatus) =
 
     elif key == ord('g'):
       let secondKey = getKey(currentMainWindowNode)
-      if secondKey == ord('g'): status.moveToFirstLine
+      if secondKey == ord('g'):
+        currentBufStatus.moveToFirstLine(currentMainWindowNode)
       else: discard
     elif key == ord('G'):
-      status.moveToLastLine
+      currentBufStatus.moveToLastLine(currentMainWindowNode)
 
     else:
       discard

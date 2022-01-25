@@ -1,5 +1,5 @@
 import std/deques
-import editorstatus, ui, editorview, gapbuffer, unicodeext, window, bufferstatus
+import editorview, gapbuffer, unicodeext, window, bufferstatus
 
 template currentLineLen: int = bufStatus.buffer[windowNode.currentLine].len
 
@@ -111,25 +111,25 @@ proc moveToFirstOfNextLine*(bufStatus: var BufferStatus,
   bufStatus.keyDown(windowNode)
   windowNode.moveToFirstOfLine
 
-proc jumpLine*(status: var EditorStatus, destination: int) =
+proc jumpLine*(bufStatus: BufferStatus, windowNode: var WindowNode, destination: int) =
   let
-    currentLine = currentMainWindowNode.currentLine
-    view = currentMainWindowNode.view
+    currentLine = windowNode.currentLine
+    view = windowNode.view
 
-  currentMainWindowNode.currentLine = destination
-  currentMainWindowNode.currentColumn = 0
-  currentMainWindowNode.expandedColumn = 0
+  windowNode.currentLine = destination
+  windowNode.currentColumn = 0
+  windowNode.expandedColumn = 0
 
   if not (view.originalLine[0] <= destination and
      (view.originalLine[view.height - 1] == -1 or
      destination <= view.originalLine[view.height - 1])):
     var startOfPrintedLines = 0
-    if destination > currentBufStatus.buffer.high - currentMainWindowNode.getHeight - 1:
-      startOfPrintedLines = currentBufStatus.buffer.high - currentMainWindowNode.getHeight - 1
+    if destination > bufStatus.buffer.high - windowNode.getHeight - 1:
+      startOfPrintedLines = bufStatus.buffer.high - windowNode.getHeight - 1
     else:
-      startOfPrintedLines = max(destination - (currentLine - currentMainWindowNode.view.originalLine[0]), 0)
+      startOfPrintedLines = max(destination - (currentLine - windowNode.view.originalLine[0]), 0)
 
-    currentMainWindowNode.view.reload(currentBufStatus.buffer, startOfPrintedLines)
+    windowNode.view.reload(bufStatus.buffer, startOfPrintedLines)
 
 proc findNextBlankLine*(bufStatus: BufferStatus, currentLine: int): int =
   result = -1
@@ -159,89 +159,26 @@ proc findPreviousBlankLine*(bufStatus: BufferStatus, currentLine: int): int =
 
   return -1
 
-proc moveToNextBlankLine*(status: var EditorStatus) =
+proc moveToNextBlankLine*(bufStatus: BufferStatus, windowNode: var WindowNode) =
+  let nextBlankLine = bufStatus.findNextBlankLine(windowNode.currentLine)
+  if nextBlankLine >= 0: bufStatus.jumpLine(windowNode, nextBlankLine)
+
+proc moveToPreviousBlankLine*(bufStatus: BufferStatus,
+                              windowNode: var WindowNode) =
+
   let
-    currentLine = currentMainWindowNode.currentLine
-    nextBlankLine = currentBufStatus.findNextBlankLine(currentLine)
-  if nextBlankLine >= 0: status.jumpLine(nextBlankLine)
+    currentLine = windowNode.currentLine
+    previousBlankLine = bufStatus.findPreviousBlankLine(currentLine)
+  if previousBlankLine >= 0: bufStatus.jumpLine(windowNode, previousBlankLine)
 
-proc moveToPreviousBlankLine*(status: var EditorStatus) =
-  let
-    currentLine = currentMainWindowNode.currentLine
-    previousBlankLine = currentBufStatus.findPreviousBlankLine(currentLine)
-  if previousBlankLine >= 0: status.jumpLine(previousBlankLine)
+proc moveToFirstLine*(bufStatus: BufferStatus, windowNode: var WindowNode) {.inline.} =
+  const DIRECTION = 0
+  bufStatus.jumpLine(windowNode, DIRECTION)
 
-proc moveToFirstLine*(status: var EditorStatus) {.inline.} = status.jumpLine(0)
-
-proc moveToLastLine*(status: var EditorStatus) =
-  if currentBufStatus.cmdLoop > 1:
-    status.jumpLine(currentBufStatus.cmdLoop - 1)
-  else: status.jumpLine(currentBufStatus.buffer.high)
-
-proc scrollUpNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
-  let destination = max(currentMainWindowNode.currentLine - numberOfLines, 0)
-
-  if status.settings.smoothScroll:
-    let currentLine = currentMainWindowNode.currentLine
-    for i in countdown(currentLine, destination):
-      if i == 0: break
-
-      currentBufStatus.keyUp(currentMainWindowNode)
-      status.update
-      currentMainWindowNode.setTimeout(status.settings.smoothScrollSpeed)
-      var key = errorKey
-      key = getKey(currentMainWindowNode)
-      if key != errorKey: break
-
-    ## Set default time out setting
-    currentMainWindowNode.setTimeout
-
-  else:
-    status.jumpLine(destination)
-
-proc pageUp*(status: var EditorStatus) =
-  status.scrollUpNumberOfLines(currentMainWindowNode.view.height)
-
-proc halfPageUp*(status: var EditorStatus) =
-  status.scrollUpNumberOfLines(Natural(currentMainWindowNode.view.height / 2))
-
-proc scrollDownNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
-  let
-    destination = min(currentMainWindowNode.currentLine + numberOfLines,
-                      currentBufStatus.buffer.len - 1)
-    currentLine = currentMainWindowNode.currentLine
-
-  if status.settings.smoothScroll:
-    for i in currentLine ..< destination:
-      if i == currentBufStatus.buffer.high: break
-
-      currentBufStatus.keyDown(currentMainWindowNode)
-      status.update
-      currentMainWindowNode.setTimeout(status.settings.smoothScrollSpeed)
-      var key = errorKey
-      key = getKey(currentMainWindowNode)
-      if key != errorKey: break
-
-    ## Set default time out setting
-    currentMainWindowNode.setTimeout
-
-  else:
-    let view = currentMainWindowNode.view
-    currentMainWindowNode.currentLine = destination
-    currentMainWindowNode.currentColumn = 0
-    currentMainWindowNode.expandedColumn = 0
-
-    if not (view.originalLine[0] <= destination and
-       (view.originalLine[view.height - 1] == -1 or
-       destination <= view.originalLine[view.height - 1])):
-      let startOfPrintedLines = max(destination - (currentLine - currentMainWindowNode.view.originalLine[0]), 0)
-      currentMainWindowNode.view.reload(currentBufStatus.buffer, startOfPrintedLines)
-
-proc pageDown*(status: var EditorStatus) =
-  status.scrollDownNumberOfLines(currentMainWindowNode.view.height)
-
-proc halfPageDown*(status: var EditorStatus) =
-  status.scrollDownNumberOfLines(Natural(currentMainWindowNode.view.height / 2))
+proc moveToLastLine*(bufStatus: BufferStatus, windowNode: var WindowNode) =
+  if bufStatus.cmdLoop > 1:
+    bufStatus.jumpLine(windowNode, bufStatus.cmdLoop - 1)
+  else: bufStatus.jumpLine(windowNode, bufStatus.buffer.high)
 
 proc moveToForwardWord*(bufStatus: var BufferStatus,
                         windowNode: var WindowNode) =

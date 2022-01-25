@@ -95,6 +95,7 @@ proc quickRunMode*(status: var Editorstatus) =
       currentBufStatus.keyDown(currentMainWindowNode)
     elif key == ord('g'):
       let secondKey = getKey(currentMainWindowNode)
-      if secondKey == 'g': status.moveToFirstLine
+      if secondKey == 'g':
+        currentBufStatus.moveToFirstLine(currentMainWindowNode)
     elif key == ord('G'):
-      status.moveToLastLine
+      currentBufStatus.moveToLastLine(currentMainWindowNode)
