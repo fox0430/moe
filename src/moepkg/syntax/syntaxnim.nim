@@ -39,7 +39,7 @@ import highlite
 const
   # The following list comes from doc/keywords.txt, make sure it is
   # synchronized with this array by running the module itself as a test case.
-  nimKeywords = ["addr", "and", "as", "asm", "bind", "block",
+  nimKeywords* = ["addr", "and", "as", "asm", "bind", "block",
     "break", "case", "cast", "concept", "const", "continue", "converter",
     "defer", "discard", "distinct", "div", "do",
     "elif", "else", "end", "enum", "except", "export",
@@ -51,11 +51,11 @@ const
     "template", "try", "tuple", "type", "using", "var", "when", "while",
     "xor", "yield"]
 
-  nimBooleans = ["true", "false"]
+  nimBooleans* = ["true", "false"]
 
-  nimSpecialVars = ["result"]
+  nimSpecialVars* = ["result"]
 
-  nimPragmas = ["acyclic", "asmNoStackFrame", "assertions", "base", "bitsize",
+  nimPragmas* = ["acyclic", "asmNoStackFrame", "assertions", "base", "bitsize",
     "booldefine", "borrow", "boundChecks", "bycopy", "byref", "callconv",
     "cdecl", "checks", "closure", "codegendecl", "compile", "compileTime",
     "computedGoto", "constructor", "deprecated", "discardable", "dynlib",
@@ -72,7 +72,7 @@ const
     "union", "unroll", "used", "varargs", "voliatile", "warning", "warnings"]
 
   # Builtin types, objects, and exceptions
-  nimBuiltins = ["AccessViolationError", "AlignType", "ArithmeticError",
+  nimBuiltins* = ["AccessViolationError", "AlignType", "ArithmeticError",
     "AssertionError", "BiggestFloat", "BiggestInt", "Byte", "ByteAddress",
     "CloseFile", "CompileDate", "CompileTime", "Conversion", "DeadThreadError",
     "DivByZeroError", "EndOfFile", "Endianness", "Exception", "ExecIOEffect",

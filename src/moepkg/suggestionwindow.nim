@@ -134,9 +134,13 @@ proc buildSuggestionWindow*(
   for i in bufferIndexList:
     if i != currentBufferIndex: checkBuffers.add bufStatus[i]
 
-  let text = getTextInBuffers(checkBuffers,
-                              firstDeletedIndex,
-                              lastDeletedIndex)
+  let
+    keywordText = getTextInLangKeywords(bufStatus[currentBufferIndex].language)
+    bufferText = getTextInBuffers(
+      checkBuffers,
+      firstDeletedIndex,
+      lastDeletedIndex)
+    text = bufferText & keywordText
 
   initSuggestionWindow(
     text,

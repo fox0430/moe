@@ -34,7 +34,7 @@
 import highlite
 
 const
-  keywords = ["Array", "ArrayBuffer", "Attr", "BigInt64Array",
+  javaScriptkeywords* = ["Array", "ArrayBuffer", "Attr", "BigInt64Array",
     "BigUint64Array", "Boolean", "Buffer", "CDATASection", "CharacterData",
     "Collator", "Comment", "DOMException", "DOMImplementation",
     "DOMSTRING_SIZE_ERR", "DataViewDate", "DateTimeFormat", "Document",
@@ -135,7 +135,7 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
       while g.buf[pos] in symChars:
         add(id, g.buf[pos])
         inc(pos)
-      if isKeyword(keywords, id) >= 0: g.kind = gtKeyword
+      if isKeyword(javaScriptkeywords, id) >= 0: g.kind = gtKeyword
       else: g.kind = gtIdentifier
     of '0':
       inc(pos)

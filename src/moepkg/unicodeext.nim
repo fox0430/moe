@@ -143,8 +143,10 @@ proc `==`*(c: Rune, x: int): bool {.inline.} = c == toRune(x)
 proc `==`*(c: Rune, x: char): bool {.inline.} = c == toRune(x)
 
 proc ru*(c: char): Rune {.inline.} = toRune(c)
-
 proc ru*(s: string): seq[Rune] {.inline.} = s.toRunes
+proc ru*(array: seq[string]): seq[Rune] =
+  for s in array:
+    result.add s.toRunes
 
 proc canConvertToChar*(c: Rune): bool {.inline.} =
   return ($c).len == 1
