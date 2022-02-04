@@ -1,10 +1,9 @@
-import std/[strformat, osproc, strutils]
+import std/[strformat, osproc, strutils, os]
+import pkg/ncurses
+import unicodeext, color
+
 when not defined unitTest:
   import std/posix
-
-from std/os import execShellCmd
-import ncurses
-import unicodeext, color
 
 type Attributes* = enum
   normal = A_NORMAL

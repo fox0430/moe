@@ -1,5 +1,5 @@
 import std/[strutils, tables, macros, strformat]
-import ncurses
+import pkg/ncurses
 
 # maps annotations of the enum to a hexToColor table
 macro mapAnnotationToTable(args: varargs[untyped]): untyped =
