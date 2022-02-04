@@ -1,5 +1,5 @@
 import std/[sugar, critbits, options]
-import unicodedb/properties
+import pkg/unicodedb/properties
 import unicodeext, bufferstatus
 
 const

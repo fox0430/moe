@@ -1,6 +1,7 @@
 import std/[unicode, sequtils, strutils, strformat, os]
-import unicodedb/widths
+import pkg/unicodedb/widths
 import gapbuffer
+
 export unicode
 
 type CharacterEncoding* = enum

@@ -1,7 +1,7 @@
 import std/[os, json, macros, times, options, strformat, osproc,
             strutils]
+import pkg/parsetoml
 import ui, color, unicodeext, highlight, platform, independentutils
-import parsetoml
 
 export TomlError
 
