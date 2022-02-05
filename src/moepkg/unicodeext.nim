@@ -353,6 +353,12 @@ proc substr*(runes: seq[Rune], first = 0): seq[Rune] {.inline.} =
 proc contains*(runes, sub: seq[Rune]): bool {.inline.} =
   find(runes, sub) >= 0
 
+proc contains*(runes: seq[seq[Rune]], sub: seq[Rune]): bool {.inline.} =
+  find(runes, sub) >= 0
+
+proc `in`*(runes: seq[seq[Rune]], sub: seq[Rune]): bool {.inline.} =
+  find(runes, sub) >= 0
+
 proc splitWhitespace*(runes: seq[Rune]): seq[seq[Rune]] =
   for s in unicode.split($runes):
     if not s.isEmptyOrWhitespace:
