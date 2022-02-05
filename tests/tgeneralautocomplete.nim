@@ -43,3 +43,68 @@ test "extractNeighborWord":
   validate(8, "a")
   validate(20, "text")
   validate(21, "")
+
+suite "getTextInLangKeywords":
+  test "Nim":
+    let
+      r = getTextInLangKeywords(SourceLanguage.langNim)
+      splited = r.split(' '.ru)
+
+    for s in nimKeywords:
+      check splited.in s.ru
+    for s in nimBooleans:
+      check splited.in s.ru
+    for s in nimSpecialVars:
+      check splited.in s.ru
+    for s in nimPragmas:
+      check splited.in s.ru
+    for s in nimBuiltins:
+      check splited.in s.ru
+
+  test "C":
+    let
+      r = getTextInLangKeywords(SourceLanguage.langC)
+      splited = r.split(' '.ru)
+
+    for s in cKeywords:
+      check splited.in s.ru
+
+  test "C++":
+    let
+      r = getTextInLangKeywords(SourceLanguage.langCpp)
+      splited = r.split(' '.ru)
+
+    for s in cppKeywords:
+      check splited.in s.ru
+
+  test "C#":
+    let
+      r = getTextInLangKeywords(SourceLanguage.langCsharp)
+      splited = r.split(' '.ru)
+
+    for s in csharpKeywords:
+      check splited.in s.ru
+
+  test "Java":
+    let
+      r = getTextInLangKeywords(SourceLanguage.langJava)
+      splited = r.split(' '.ru)
+
+    for s in javaKeywords:
+      check splited.in s.ru
+
+  test "Python":
+    let
+      r = getTextInLangKeywords(SourceLanguage.langPython)
+      splited = r.split(' '.ru)
+
+    for s in pythonKeywords:
+      check splited.in s.ru
+
+  test "JavaScript":
+    let
+      r = getTextInLangKeywords(SourceLanguage.langJavaScript)
+      splited = r.split(' '.ru)
+
+    for s in javaScriptkeywords:
+      check splited.in s.ru

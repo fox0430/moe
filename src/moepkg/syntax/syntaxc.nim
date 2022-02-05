@@ -33,6 +33,14 @@
 
 import highlite
 
+const
+  cKeywords* = ["_Bool", "_Complex", "_Imaginary", "auto",
+    "break", "case", "char", "const", "continue", "default", "do", "double",
+    "else", "enum", "extern", "float", "for", "goto", "if", "inline", "int",
+    "long", "register", "restrict", "return", "short", "signed", "sizeof",
+    "static", "struct", "switch", "typedef", "union", "unsigned", "void",
+    "volatile", "while"]
+
 proc clikeNextToken*(g: var GeneralTokenizer, keywords: openArray[string],
                     flags: TokenizerFlags) =
   const
@@ -168,11 +176,4 @@ proc clikeNextToken*(g: var GeneralTokenizer, keywords: openArray[string],
   g.pos = pos
 
 proc cNextToken*(g: var GeneralTokenizer) =
-  const
-    keywords: array[0..36, string] = ["_Bool", "_Complex", "_Imaginary", "auto",
-      "break", "case", "char", "const", "continue", "default", "do", "double",
-      "else", "enum", "extern", "float", "for", "goto", "if", "inline", "int",
-      "long", "register", "restrict", "return", "short", "signed", "sizeof",
-      "static", "struct", "switch", "typedef", "union", "unsigned", "void",
-      "volatile", "while"]
-  clikeNextToken(g, keywords, {hasPreprocessor})
+  clikeNextToken(g, cKeywords, {hasPreprocessor})
