@@ -7,7 +7,7 @@ Currently you can use normal mode, visual mode, replace mode, insert mode, ex mo
 # Install and compile
 
 ## Requires
-- Nim 1.4.2 or higher
+- Nim 1.6.2 or higher
 - ncurses
 
 ### Install
