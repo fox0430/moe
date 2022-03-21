@@ -1,6 +1,6 @@
 import std/[terminal, times, options, unicode]
 import ui, editorstatus, gapbuffer, window, movement, editor, bufferstatus,
-       suggestionwindow, settings
+       suggestionwindow, settings, generalautocomplete
 
 proc calcMainWindowY(isEnableTabLine: bool): int =
   if isEnableTabLine: result.inc
@@ -64,6 +64,14 @@ proc insertMode*(status: var EditorStatus) =
         if suggestionWindow.get.isLineChanged:
           currentBufStatus.buffer[currentMainWindowNode.currentLine] = suggestionWindow.get.newLine
           windowNode.expandedColumn = windowNode.currentColumn
+
+        # Update WordDictionary
+        block:
+          let selectedWord = suggestionWindow.get.getSelectedWord
+          if selectedWord.len > 0:
+            status.wordDictionary.incNumOfUsed(selectedWord)
+
+        # Close suggestionWindow
         suggestionWindow.get.close
         suggestionWindow = none(SuggestionWindow)
 
@@ -150,7 +158,9 @@ proc insertMode*(status: var EditorStatus) =
        prevLine != currentBufStatus.buffer[currentMainWindowNode.currentLine]:
 
       let currentBufferIndex =currentMainWindowNode.bufferIndex
-      suggestionWindow = tryOpenSuggestionWindow(status.bufStatus,
-                                                 currentBufferIndex,
-                                                 mainWindowNode,
-                                                 currentMainWindowNode)
+      suggestionWindow = tryOpenSuggestionWindow(
+        status.wordDictionary,
+        status.bufStatus,
+        currentBufferIndex,
+        mainWindowNode,
+        currentMainWindowNode)

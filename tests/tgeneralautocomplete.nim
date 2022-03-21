@@ -17,9 +17,10 @@ test "enumerateWords":
 
   check actualResult == expectedResult
 
-test "makeWordDictionary":
+test "addWordToDictionary":
+  var dictionary: WordDictionary
   const allWords = @["proc", "fibonacci", "n", "int", "int", "if", "n", "return", "if", "n", "return", "return", "fibonacci", "n", "fibonacci", "n"].deduplicate
-  let dictionary = makeWordDictionary(code)
+  dictionary.addWordToDictionary(code)
 
   for x in allWords:
     check dictionary.contains(x)
