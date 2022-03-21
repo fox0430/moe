@@ -1,9 +1,9 @@
-import std/[critbits, sugar, options, sequtils, unicode]
+import std/[sugar, options, sequtils, unicode]
 import ui, window, generalautocomplete, bufferstatus, gapbuffer, color,
        editorstatus
 
 type SuggestionWindow* = object
-  wordDictionary: CritBitTree[void]
+  wordDictionary: WordDictionary
   oldLine: seq[Rune]
   inputWord: seq[Rune]
   firstColumn, lastColumn: int
@@ -20,7 +20,10 @@ proc selectedWordOrInputWord(suggestionWindow: SuggestionWindow): seq[Rune] =
 proc newLine*(suggestionWindow: SuggestionWindow): seq[Rune] =
   suggestionWindow.oldLine.dup(
     proc (r: var seq[Rune]) =
-      r[suggestionWindow.firstColumn .. suggestionWindow.lastColumn] = suggestionWindow.selectedWordOrInputWord)
+      let
+        firstColumn = suggestionWindow.firstColumn
+        lastColumn = suggestionWindow.lastColumn
+      r[firstColumn .. lastColumn] = suggestionWindow.selectedWordOrInputWord)
 
 proc close*(suggestionWindow: var SuggestionWindow) =
   suggestionWindow.popUpWindow.deleteWindow
@@ -59,9 +62,8 @@ proc handleKeyInSuggestionWindow*(
   elif isPageUpKey(key):
     suggestionWindow.selectedSuggestion -= suggestionWindow.popUpWindow.height - 1
 
-  suggestionWindow.selectedSuggestion = suggestionWindow.selectedSuggestion.clamp(
-    0,
-    suggestionWindow.suggestoins.high)
+  suggestionWindow.selectedSuggestion =
+    suggestionWindow.selectedSuggestion.clamp(0, suggestionWindow.suggestoins.high)
 
   if suggestionWindow.selectedSuggestion != prevSuggestion:
     # The selected suggestoin is changed.
@@ -69,16 +71,23 @@ proc handleKeyInSuggestionWindow*(
     bufStatus.buffer.assign(suggestionWindow.newLine,
                             windowNode.currentLine,
                             false)
-    windowNode.currentColumn = suggestionWindow.firstColumn + suggestionWindow.selectedWordOrInputWord.len
+
+    let
+      firstColumn = suggestionWindow.firstColumn
+      wordLen = suggestionWindow.selectedWordOrInputWord.len
+    windowNode.currentColumn = firstColumn + wordLen
+
     bufStatus.isUpdate = true
 
 proc initSuggestionWindow*(
+  wordDictionary: var WordDictionary,
   text, word, currentLineText: seq[Rune],
   firstColumn, lastColumn: int): Option[SuggestionWindow] =
 
-  var suggestionWindow: SuggestionWindow
+  wordDictionary.addWordToDictionary(text)
 
-  suggestionwindow.wordDictionary = makeWordDictionary(text)
+  var suggestionWindow: SuggestionWindow
+  suggestionwindow.wordDictionary = wordDictionary
   suggestionwindow.inputWord = word
   suggestionwindow.firstColumn = firstColumn
   suggestionwindow.lastColumn = lastColumn
@@ -109,6 +118,7 @@ proc wordExistsBeforeCursor(bufStatus: BufferStatus,
   wordFirstLast.isSome and wordFirstLast.get.word.len > 0
 
 proc buildSuggestionWindow*(
+  wordDictionary: var WordDictionary,
   bufStatus: seq[BufferStatus],
   currentBufferIndex: int,
   root, currenWindowNode: WindowNode): Option[SuggestionWindow] =
@@ -143,6 +153,7 @@ proc buildSuggestionWindow*(
     text = bufferText & keywordText
 
   initSuggestionWindow(
+    wordDictionary,
     text,
     word,
     currentBufStatus.buffer[currenWindowNode.currentLine],
@@ -150,15 +161,18 @@ proc buildSuggestionWindow*(
     lastColumn)
 
 proc tryOpenSuggestionWindow*(
+  wordDictionary: var WordDictionary,
   bufStatus: seq[BufferStatus],
   currentBufferIndex: int,
   root, currenWindowNode: WindowNode): Option[SuggestionWindow] =
 
   if wordExistsBeforeCursor(bufStatus[currentBufferIndex], currenWindowNode):
-    return buildSuggestionWindow(bufStatus,
-                                 currentBufferIndex,
-                                 root,
-                                 currenWindowNode)
+    return buildSuggestionWindow(
+      wordDictionary,
+      bufStatus,
+      currentBufferIndex,
+      root,
+      currenWindowNode)
 
 proc calcSuggestionWindowPosition*(
   suggestionWindow: SuggestionWindow,
@@ -243,3 +257,7 @@ proc writeSuggestionWindow*(suggestionWindow: var SuggestionWindow,
 
 proc isLineChanged*(suggestionWindow: SuggestionWindow): bool {.inline.} =
   suggestionWindow.newLine != suggestionWindow.oldLine
+
+proc getSelectedWord*(suggestionWindow: SuggestionWindow): seq[Rune] {.inline.} =
+  if suggestionWindow.selectedSuggestion >= 0:
+    return suggestionWindow.suggestoins[suggestionWindow.selectedSuggestion]

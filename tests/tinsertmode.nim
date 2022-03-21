@@ -284,11 +284,14 @@ suite "Insert mode":
       100,
       100)
 
+    var dictionary: WordDictionary
     let currentBufferIndex =currentMainWindowNode.bufferIndex
-    var suggestionWindow = tryOpenSuggestionWindow(status.bufStatus,
-                                                   currentBufferIndex,
-                                                   mainWindowNode,
-                                                   currentMainWindowNode)
+    var suggestionWindow = tryOpenSuggestionWindow(
+      dictionary,
+      status.bufStatus,
+      currentBufferIndex,
+      mainWindowNode,
+      currentMainWindowNode)
 
     let
       mainWindowHeight = status.settings.getMainWindowHeight(100)
@@ -319,11 +322,14 @@ suite "Insert mode":
                                    terminalHeight,
                                    100)
 
+    var dictionary: WordDictionary
     let currentBufferIndex =currentMainWindowNode.bufferIndex
-    var suggestionWindow = tryOpenSuggestionWindow(status.bufStatus,
-                                                   currentBufferIndex,
-                                                   mainWindowNode,
-                                                   currentMainWindowNode)
+    var suggestionWindow = tryOpenSuggestionWindow(
+      dictionary,
+      status.bufStatus,
+      currentBufferIndex,
+      mainWindowNode,
+      currentMainWindowNode)
 
     let
       mainWindowHeight = status.settings.getMainWindowHeight(terminalHeight)
@@ -355,11 +361,14 @@ suite "Insert mode":
       100,
       100)
 
+    var dictionary: WordDictionary
     let currentBufferIndex =currentMainWindowNode.bufferIndex
-    var suggestionWindow = tryOpenSuggestionWindow(status.bufStatus,
-                                                   currentBufferIndex,
-                                                   mainWindowNode,
-                                                   currentMainWindowNode)
+    var suggestionWindow = tryOpenSuggestionWindow(
+      dictionary,
+      status.bufStatus,
+      currentBufferIndex,
+      mainWindowNode,
+      currentMainWindowNode)
 
     let
       mainWindowHeight = status.settings.getMainWindowHeight(100)
@@ -391,11 +400,14 @@ suite "Insert mode":
                     status.settings.autoCloseParen,
                     ru'a')
 
+    var dictionary: WordDictionary
     let currentBufferIndex =currentMainWindowNode.bufferIndex
-    var suggestionWindow = tryOpenSuggestionWindow(status.bufStatus,
-                                                   currentBufferIndex,
-                                                   mainWindowNode,
-                                                   currentMainWindowNode)
+    var suggestionWindow = tryOpenSuggestionWindow(
+      dictionary,
+      status.bufStatus,
+      currentBufferIndex,
+      mainWindowNode,
+      currentMainWindowNode)
 
     status.update
 
@@ -419,11 +431,14 @@ suite "Insert mode":
                     status.settings.autoCloseParen,
                     ru'a')
 
+    var dictionary: WordDictionary
     let currentBufferIndex =currentMainWindowNode.bufferIndex
-    var suggestionWindow = tryOpenSuggestionWindow(status.bufStatus,
-                                                   currentBufferIndex,
-                                                   mainWindowNode,
-                                                   currentMainWindowNode)
+    var suggestionWindow = tryOpenSuggestionWindow(
+      dictionary,
+      status.bufStatus,
+      currentBufferIndex,
+      mainWindowNode,
+      currentMainWindowNode)
 
     status.update
 
@@ -458,11 +473,14 @@ suite "Insert mode":
     status.settings.tabLine.enable = true
     status.settings.statusLine.enable = true
 
+    var dictionary: WordDictionary
     let currentBufferIndex =currentMainWindowNode.bufferIndex
-    var suggestionWindow = tryOpenSuggestionWindow(status.bufStatus,
-                                                   currentBufferIndex,
-                                                   mainWindowNode,
-                                                   currentMainWindowNode)
+    var suggestionWindow = tryOpenSuggestionWindow(
+      dictionary,
+      status.bufStatus,
+      currentBufferIndex,
+      mainWindowNode,
+      currentMainWindowNode)
 
     let
       mainWindowHeight = status.settings.getMainWindowHeight(100)

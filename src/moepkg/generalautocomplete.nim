@@ -1,8 +1,12 @@
-import std/[sugar, critbits, options]
+import std/[sugar, critbits, options, sequtils]
 import pkg/unicodedb/properties
-import unicodeext, bufferstatus
+import unicodeext, bufferstatus, algorithm
 import syntax/[highlite, syntaxnim, syntaxc, syntaxcpp, syntaxcsharp,
                syntaxjava, syntaxpython, syntaxjavascript]
+
+type
+  # `WordDictionary.val` is number of times used in the autocomplete.
+  WordDictionary* = CritBitTree[int]
 
 const
   letterCharacter = ctgLu + ctgLl + ctgLt + ctgLm + ctgLo + ctgNl
@@ -24,12 +28,31 @@ iterator enumerateWords*(runes: seq[Rune]): seq[Rune] =
     if word[0].unicodeCategory notin firstCharacter: continue
     yield word
 
-proc makeWordDictionary*(runes: seq[Rune]): CritBitTree[void] =
-  for word in enumerateWords(runes):
-    result.incl($word)
+# Returns true if `word` is in `WordDictionary.word` or false if not found.
+proc contains(wordDictionary: WordDictionary, word: seq[Rune]): bool {.inline.} =
+  wordDictionary.contains($word)
 
-proc extractNeighborWord*(runes: seq[Rune], pos: int): Option[tuple[word: seq[Rune], first, last: int]] =
-  if runes.len == 0 or pos notin runes.low .. runes.high or runes[pos].unicodeCategory notin succeedingCharacter: return
+# Get `WordDictionary.numOfUsed` by `word`
+proc getNumOfUsed(wordDictionary: WordDictionary, word: seq[Rune]): int {.inline.} =
+  wordDictionary[$word]
+
+# Add words to the wordDictionary.
+proc addWordToDictionary*(wordDictionary: var WordDictionary, text: seq[Rune]) =
+  for word in enumerateWords(text):
+    if not wordDictionary.contains(word):
+      wordDictionary[$word] = 0
+
+# Increment `WordDictionary.numOfUsed`
+proc incNumOfUsed*(wordDictionary: var WordDictionary, word: seq[Rune]) =
+  wordDictionary.inc($word)
+
+proc extractNeighborWord*(
+  runes: seq[Rune],
+  pos: int): Option[tuple[word: seq[Rune], first, last: int]] =
+
+  if runes.len == 0 or pos notin
+     runes.low .. runes.high or runes[pos].unicodeCategory notin
+     succeedingCharacter: return
 
   var
     first = pos
@@ -45,10 +68,12 @@ proc extractNeighborWord*(runes: seq[Rune], pos: int): Option[tuple[word: seq[Ru
 proc isCharacterInWord*(r: Rune): bool =
   r.unicodeCategory in succeedingCharacter
 
-proc collectSuggestions*(wordDictionary: CritBitTree[void], word: seq[Rune]): seq[seq[Rune]] =
-  collect(newSeq):
-    for item in itemsWithPrefix(wordDictionary, $word):
-      item.toRunes
+# Collect words for suggestion from `wordDictionary`
+proc collectSuggestions*(wordDictionary: CritBitTree[int], word: seq[Rune]): seq[seq[Rune]] =
+  let pairs = collect:
+    for item in wordDictionary.pairsWithPrefix($word): item
+
+  result.add pairs.sortedByIt(it.val).reversed.mapIt(it.key.toRunes)
 
 proc getTextInBuffers*(
   bufStatus: seq[BufferStatus],
