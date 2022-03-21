@@ -8,42 +8,68 @@ const code = ru"""proc fibonacci(n: int): int =
   if n == 1: return 1
   return fibonacci(n - 1) + fibonacci(n - 2)"""
 
-test "enumerateWords":
-  const
-    expectedResult = @["proc", "fibonacci", "n", "int", "int", "if", "n", "return", "if", "n", "return", "return", "fibonacci", "n", "fibonacci", "n"].map(s => s.ru)
-    actualResult = collect(newSeq):
-      for x in enumerateWords(code):
-        x
+suite "generalautocomplete":
+  test "enumerateWords":
+    const
+      expectedResult = @["proc", "fibonacci", "n", "int", "int", "if", "n", "return", "if", "n", "return", "return", "fibonacci", "n", "fibonacci", "n"].map(s => s.ru)
+      actualResult = collect(newSeq):
+        for x in enumerateWords(code):
+          x
 
-  check actualResult == expectedResult
+    check actualResult == expectedResult
 
-test "addWordToDictionary":
-  var dictionary: WordDictionary
-  const allWords = @["proc", "fibonacci", "n", "int", "int", "if", "n", "return", "if", "n", "return", "return", "fibonacci", "n", "fibonacci", "n"].deduplicate
-  dictionary.addWordToDictionary(code)
+  test "addWordToDictionary":
+    var dictionary: WordDictionary
+    const allWords = @["proc", "fibonacci", "n", "int", "int", "if", "n", "return", "if", "n", "return", "return", "fibonacci", "n", "fibonacci", "n"].deduplicate
+    dictionary.addWordToDictionary(code)
 
-  for x in allWords:
-    check dictionary.contains(x)
-  for x in dictionary.items:
-    check allWords.contains(x)
+    for x in allWords:
+      check dictionary.contains(x)
+    for x in dictionary.items:
+      check allWords.contains(x)
 
-test "extractNeighborWord":
-  const text = ru"This is a sample text."
+  test "extractNeighborWord":
+    const text = ru"This is a sample text."
 
-  proc validate(pos: int, expected: string) =
-    let wordFirstLast = extractNeighborWord(text, pos)
-    if expected.len > 0:
-      check wordFirstLast.get.word == expected.ru
-    else:
-      check wordFirstLast.isNone
+    proc validate(pos: int, expected: string) =
+      let wordFirstLast = extractNeighborWord(text, pos)
+      if expected.len > 0:
+        check wordFirstLast.get.word == expected.ru
+      else:
+        check wordFirstLast.isNone
 
-  validate(0, "This")
-  validate(3, "This")
-  validate(4, "")
-  validate(7, "")
-  validate(8, "a")
-  validate(20, "text")
-  validate(21, "")
+    validate(0, "This")
+    validate(3, "This")
+    validate(4, "")
+    validate(7, "")
+    validate(8, "a")
+    validate(20, "text")
+    validate(21, "")
+
+  test "collectSuggestions":
+    var dictionary: WordDictionary
+    const allWords = @["proc", "pass", "parse", "paste", "pop", "path"]
+    dictionary.addWordToDictionary(code)
+
+    dictionary.incNumOfUsed("proc".toRunes)
+
+    block:
+      let suggestions = dictionary.collectSuggestions("p".toRunes)
+      check suggestions[0] == "proc".toRunes
+
+    dictionary.incNumOfUsed("pop".toRunes)
+
+    block:
+      let suggestions = dictionary.collectSuggestions("p".toRunes)
+      check suggestions[0] == "proc".toRunes
+      check suggestions[1] == "pop".toRunes
+
+    dictionary.incNumOfUsed("pop".toRunes)
+
+    block:
+      let suggestions = dictionary.collectSuggestions("p".toRunes)
+      check suggestions[0] == "pop".toRunes
+      check suggestions[1] == "proc".toRunes
 
 suite "getTextInLangKeywords":
   test "Nim":
