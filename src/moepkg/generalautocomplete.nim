@@ -1,6 +1,6 @@
-import std/[sugar, critbits, options, sequtils]
+import std/[sugar, critbits, options, sequtils, strutils]
 import pkg/unicodedb/properties
-import unicodeext, bufferstatus, algorithm
+import unicodeext, bufferstatus, algorithm, osext
 import syntax/[highlite, syntaxnim, syntaxc, syntaxcpp, syntaxcsharp,
                syntaxjava, syntaxpython, syntaxjavascript]
 
@@ -46,22 +46,62 @@ proc addWordToDictionary*(wordDictionary: var WordDictionary, text: seq[Rune]) =
 proc incNumOfUsed*(wordDictionary: var WordDictionary, word: seq[Rune]) =
   wordDictionary.inc($word)
 
+# Extract a word from `runes` based on position.
 proc extractNeighborWord*(
   runes: seq[Rune],
   pos: int): Option[tuple[word: seq[Rune], first, last: int]] =
 
-  if runes.len == 0 or pos notin
-     runes.low .. runes.high or runes[pos].unicodeCategory notin
-     succeedingCharacter: return
+  block:
+    let
+      r = runes[pos]
+      unicodeCategory = r.unicodeCategory
+    if (runes.len == 0) or
+       (pos notin runes.low .. runes.high) or
+       ((r != '/'.ru) and (unicodeCategory notin succeedingCharacter)): return
 
   var
     first = pos
     last = pos
 
-  while first-1 >= 0 and runes[first-1].unicodeCategory in succeedingCharacter:
-    dec(first)
-  while last+1 <= runes.high and runes[last+1].unicodeCategory in succeedingCharacter:
-    inc(last)
+  block:
+    template r: Rune = runes[first - 1]
+
+    while first - 1 >= 0 and r.unicodeCategory in succeedingCharacter:
+      dec(first)
+
+  block:
+    template r: Rune = runes[last + 1]
+
+    while last + 1 <= runes.high and r.unicodeCategory in succeedingCharacter:
+      inc(last)
+
+  return some((runes[first .. last], first, last))
+
+# Extract a path from `runes` based on position.
+proc extractNeighborPath*(
+  runes: seq[Rune],
+  pos: int): Option[tuple[path: seq[Rune], first, last: int]] =
+
+  if (runes.len == 0) or (pos notin runes.low .. runes.high):
+    return
+
+  var
+    first = pos
+    last = pos
+
+  block:
+    template r: Rune = runes[first - 1]
+
+    # The starting point of the path is after '"' or ''' or spaces.
+    while (first - 1 >= 0) and
+          ((r != '"') and (r != '\'') and (r.toCh notin Whitespace)): dec(first)
+
+  block:
+    template r: Rune = runes[last + 1]
+
+    # The ending point of the path is before '"' or ''' or spaces.
+    while (last + 1 <= runes.high) and
+          ((r != '"') and (r != '\'') and (r.toCh notin Whitespace)): inc(last)
 
   return some((runes[first..last], first, last))
 
@@ -69,7 +109,10 @@ proc isCharacterInWord*(r: Rune): bool =
   r.unicodeCategory in succeedingCharacter
 
 # Collect words for suggestion from `wordDictionary`
-proc collectSuggestions*(wordDictionary: CritBitTree[int], word: seq[Rune]): seq[seq[Rune]] =
+proc collectSuggestions*(
+  wordDictionary: CritBitTree[int],
+  word: seq[Rune]): seq[seq[Rune]] =
+
   let pairs = collect:
     for item in wordDictionary.pairsWithPrefix($word): item
 
@@ -132,3 +175,13 @@ proc getTextInLangKeywords*(lang: SourceLanguage): seq[Rune] =
       result = getJavaScriptKeywords()
     else:
       discard
+
+# Return Path list for the autocomplete.
+proc getPathList*(path: seq[Rune]): seq[Rune] =
+  let
+    (head, tail) = splitPathExt($path)
+    paths = walkDir(head.expandTilde).toSeq.mapIt(it.path.getPathTail)
+
+  for item in paths:
+    if item.startsWith(tail):
+      result &= (item & " ").ru
