@@ -1,14 +1,14 @@
 import std/[unittest, sugar, sequtils]
 import moepkg/unicodeext
 
-include moepkg/generalautocomplete
+include moepkg/autocomplete
 
 const code = ru"""proc fibonacci(n: int): int =
   if n == 0: return 0
   if n == 1: return 1
   return fibonacci(n - 1) + fibonacci(n - 2)"""
 
-suite "generalautocomplete":
+suite "autocomplete":
   test "enumerateWords":
     const
       expectedResult = @["proc", "fibonacci", "n", "int", "int", "if", "n", "return", "if", "n", "return", "return", "fibonacci", "n", "fibonacci", "n"].map(s => s.ru)

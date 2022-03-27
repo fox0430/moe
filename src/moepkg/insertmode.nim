@@ -1,6 +1,6 @@
 import std/[terminal, times, options, unicode]
 import ui, editorstatus, gapbuffer, window, movement, editor, bufferstatus,
-       suggestionwindow, settings, generalautocomplete
+       suggestionwindow, settings, autocomplete
 
 proc calcMainWindowY(isEnableTabLine: bool): int =
   if isEnableTabLine: result.inc

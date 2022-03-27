@@ -1,5 +1,5 @@
 import std/[sugar, options, sequtils]
-import ui, window, generalautocomplete, bufferstatus, gapbuffer, color,
+import ui, window, autocomplete, bufferstatus, gapbuffer, color,
        editorstatus, unicodeext, osext
 import syntax/highlite
 
