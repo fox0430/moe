@@ -11,7 +11,9 @@ const code = ru"""proc fibonacci(n: int): int =
 suite "autocomplete":
   test "enumerateWords":
     const
-      expectedResult = @["proc", "fibonacci", "n", "int", "int", "if", "n", "return", "if", "n", "return", "return", "fibonacci", "n", "fibonacci", "n"].map(s => s.ru)
+      expectedResult = @["proc", "fibonacci", "n", "int", "int", "if", "n",
+        "return", "if", "n", "return", "return", "fibonacci", "n", "fibonacci", "n"].map(s => s.ru)
+
       actualResult = collect(newSeq):
         for x in enumerateWords(code):
           x
@@ -20,7 +22,9 @@ suite "autocomplete":
 
   test "addWordToDictionary":
     var dictionary: WordDictionary
-    const allWords = @["proc", "fibonacci", "n", "int", "int", "if", "n", "return", "if", "n", "return", "return", "fibonacci", "n", "fibonacci", "n"].deduplicate
+    const allWords = @["proc", "fibonacci", "n", "int", "int", "if", "n",
+      "return", "if", "n", "return", "return", "fibonacci", "n", "fibonacci", "n"].deduplicate
+
     dictionary.addWordToDictionary(code)
 
     for x in allWords:
