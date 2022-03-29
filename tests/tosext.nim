@@ -30,7 +30,7 @@ suite "osext: isPath":
 
 suite "osext: splitPathExt":
   # Generate test code
-  # Check return values of suggestionwindow.isPath
+  # Check return values of suggestionwindow.splitPathExtTest
   macro splitPathExtTest(
     testIndex: int,
     expectVal: tuple[head, tail: seq[Rune]],
