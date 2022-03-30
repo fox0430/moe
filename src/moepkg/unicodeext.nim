@@ -148,6 +148,9 @@ proc ru*(array: seq[string]): seq[Rune] =
   for s in array:
     result.add s.toRunes
 
+proc toCh*(r: Rune): char {.inline.} =
+  result = ($r)[0]
+
 proc canConvertToChar*(c: Rune): bool {.inline.} =
   return ($c).len == 1
 
@@ -254,6 +257,10 @@ proc startsWith*(runes1: seq[Rune], r: Rune): bool {.inline.} = runes1[0] == r
 proc `$`*(seqRunes: seq[seq[Rune]]): string =
   for runes in seqRunes: result = result & $runes
 
+proc `&`*(runes1, runes2: seq[Rune]): seq[Rune] {.inline.} =
+  result = runes1
+  result.add runes2
+
 proc correspondingOpenParen*(r: Rune): Rune =
   case r
   of ru')': return ru'('
@@ -350,10 +357,19 @@ proc substr*(runes: seq[Rune], first, last: int): seq[Rune] {.inline.} =
 proc substr*(runes: seq[Rune], first = 0): seq[Rune] {.inline.} =
   substr(runes, first, runes.high)
 
+proc contains*(runes: seq[Rune], sub: Rune): bool {.inline.} =
+  find(runes, sub) >= 0
+
 proc contains*(runes, sub: seq[Rune]): bool {.inline.} =
   find(runes, sub) >= 0
 
 proc contains*(runes: seq[seq[Rune]], sub: seq[Rune]): bool {.inline.} =
+  find(runes, sub) >= 0
+
+proc `in`*(runes: seq[Rune], sub: Rune): bool {.inline.} =
+  find(runes, sub) >= 0
+
+proc `in`*(runes, sub: seq[Rune]): bool {.inline.} =
   find(runes, sub) >= 0
 
 proc `in`*(runes: seq[seq[Rune]], sub: seq[Rune]): bool {.inline.} =
@@ -436,3 +452,13 @@ proc absolutePath*(runes: seq[Rune]): seq[Rune] {.inline.} =
   result = absolutePath($runes).ru
   if result.len > 0 and dirExists($runes) and result[^1] != ru '/':
     result &= ru "/"
+
+proc removePrefix*(runes: seq[Rune], prefix: seq[Rune]): seq[Rune] {.inline.} =
+  var str = $runes
+  removePrefix(str, $prefix)
+  return str.ru
+
+# Count `r` contained in `runes`
+proc count*(runes: seq[Rune], r: Rune): int {.inline.} =
+  for r2 in runes:
+    if r2 == r: result.inc
