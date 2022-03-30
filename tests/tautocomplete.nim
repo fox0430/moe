@@ -144,6 +144,8 @@ suite "getTextInLangKeywords":
       check splited.in s.ru
     for s in nimBuiltins:
       check splited.in s.ru
+    for s in nimStdLibs:
+      check splited.in s.ru
 
   test "C":
     let

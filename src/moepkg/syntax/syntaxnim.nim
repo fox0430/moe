@@ -118,6 +118,30 @@ const
     "writeBuffer", "writeBytes", "writeChars", "writeLine", "writeLn", "ze",
     "ze64", "zeroMem"]
 
+  # Nim Standard Library names
+  nimStdLibs* = ["algorithm", "asyncdispatch", "asyncfile", "asyncftpclient",
+    "asynchttpserver", "asyncjs", "asyncnet", "asyncstreams", "atomics",
+    "base64", "bitops", "browsers", "cgi", "channels_builtin", "colors",
+    "complex", "cookies", "coro", "cpuinfo", "critbits", "cstrutils",
+    "db_mysql", "db_postgres", "db_sqlite", "deques", "distros", "docutils",
+    "dom", "dynlib", "editdistance", "encodings", "endians", "enumerate",
+    "enumutils", "fenv", "hashes", "heapqueue", "highlite", "htmlgen",
+    "htmlparser", "httpclient", "intsets", "jsbigints", "jsconsole",
+    "jscore", "jsffi", "json", "jsonutils", "lenientops", "lexbase", "lists",
+    "locks", "logging", "macrocache", "macros", "marshal", "math", "md5",
+    "memfiles", "mimetypes", "monotimes", "mysql", "nativesockets", "net",
+    "odbcsql", "oids", "openssl", "options", "os", "osproc", "packages",
+    "packedsets", "parsecfg", "parsecsv", "parsejson", "parseopt", "parsesql",
+    "parseutils", "parsexml", "pcre", "pegs", "posix", "posix_utils", "postgres",
+    "punycode", "random", "rationals", "rdstdin", "re", "registry", "rlocks",
+    "ropes", "rst", "rstast", "rstgen", "segfaults", "selectors", "sequtils",
+    "sets", "setutils", "sha1", "sharedlist", "sharedtables", "smtp",
+    "sqlite3", "stats", "std", "strbasics", "streams", "strformat", "strmisc",
+    "strscans", "strtabs", "strutils", "sugar", "sums", "sysrand", "tables",
+    "terminal", "threadpool", "threads", "times", "typeinfo", "typetraits",
+    "unicode", "unidecode", "unittest", "uri", "varints", "volatile",
+    "winlean", "with", "wordwrap", "xmlparser", "xmltree"]
+
 proc nimGetKeyword(id: string): TokenClass =
   for k in nimKeywords:
     if cmpIgnoreStyle(id, k) == 0: return gtKeyword
@@ -125,6 +149,7 @@ proc nimGetKeyword(id: string): TokenClass =
   if binarySearch(nimSpecialVars, id) > -1: return gtSpecialVar
   if id[0] in 'A'..'Z': return gtTypeName
   if binarySearch(nimBuiltins, id) > -1: return gtBuiltin
+  if binarySearch(nimStdLibs, id) > -1: return gtBuiltin
   if binarySearch(nimPragmas, id) > -1: return gtPragma
   result = gtIdentifier
 
