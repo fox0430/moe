@@ -138,6 +138,7 @@ proc getNimKeywords(): seq[Rune] {.compiletime.} =
   for s in nimSpecialVars: result.add toRunes(s & " ")
   for s in nimPragmas: result.add toRunes(s & " ")
   for s in nimBuiltins: result.add toRunes(s & " ")
+  for s in nimStdLibs: result.add toRunes(s & " ")
 
 proc getCKeywords(): seq[Rune] {.compiletime.} =
   for s in cKeywords: result.add toRunes(s & " ")
