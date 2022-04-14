@@ -140,7 +140,7 @@ Esc     - Go to Normal mode
 # Replace mode
 
 Esc       - Go to Normal mode
-Backdpace - Undo
+Backspace - Undo
 
 # Insert mode
 
@@ -213,8 +213,8 @@ tab on or tab off - Change setting to tab line
 syntax on or syntax off - Change setting to syntax highlighting
 tabstop number - Change setting to tabStop; for example tabstop 2
 paren on or paren off - Change setting to auto close paren
-indent on or indent off - Chnage sestting to auto indent
-linenum on or linenum off - Change setting to dispaly line number
+indent on or indent off - Change setting to auto indent
+linenum on or linenum off - Change setting to display line number
 statusLine on or statusLine on - Change setting to display stattus bar
 realtimesearch on or realtimesearch off - Change setting to real-time search
 deleteparen on or deleteparen off - Change setting to auto delete paren
