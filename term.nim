@@ -1,5 +1,6 @@
 import std/[terminal, assertions, strutils, os, strformat]
 import illwill
+export illwill.Key
 
 type
   CursorPosition* = tuple[x, y: int]
@@ -44,7 +45,7 @@ proc initColorPair*(fgColorStr, bgColorStr: string): ColorPair {.inline.} =
 
 proc initWindow*(x, y, w, h: int): TermWindow =
   let
-    fgStr = "	ffffff"
+    fgStr = "ffffff"
     # TODO: Fix to the terminal default color?.
     bgStr = "000000"
 
@@ -115,6 +116,9 @@ proc erase*(win: var TermWindow) =
   for i in 0 ..< win.h:
     win.buffer[i] = " ".repeat(win.w)
 
+  win.cursorPosition.x = 0
+  win.cursorPosition.y = 0
+
   win.update
 
 proc move*(win: var TermWindow, x, y: int) =
@@ -126,12 +130,6 @@ proc move*(win: var TermWindow, x, y: int) =
   eraseScreen()
   win.update
 
-proc moveCursor*(win: var TermWindow, x, y: int) =
-  assert(x >= 0 and x <= terminalWidth() and y >= 0 and y <= terminalHeight())
-
-  win.cursorPosition.x = x
-  win.cursorPosition.y = y
-
 proc resize*(win: var TermWindow, w, h: int) =
   assert(w >= 0 and h >= 0)
 
@@ -140,3 +138,17 @@ proc resize*(win: var TermWindow, w, h: int) =
 
   eraseScreen()
   win.update
+
+proc moveCursor*(win: var TermWindow) =
+  win.tb.setCursorPos(win.cursorPosition.x, win.cursorPosition.y)
+
+proc moveCursor*(win: var TermWindow, x, y: int) =
+  assert(x >= 0 and x <= win.w and y >= 0 and y <= win.h)
+
+  win.cursorPosition.x = x
+  win.cursorPosition.y = y
+  win.tb.setCursorPos(win.cursorPosition.x, win.cursorPosition.y)
+
+proc getKey*(win: var TermWindow): Key =
+  win.moveCursor
+  result = getKey()
