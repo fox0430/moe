@@ -1060,14 +1060,14 @@ proc buildCommand(status: var Editorstatus) =
   status.openMessageLogViewer
 
 proc shellCommand(status: var EditorStatus, shellCommand: string) =
-  saveCurrentTerminalModes()
+  #saveCurrentTerminalModes()
   exitUi()
 
   discard execShellCmd(shellCommand)
   discard execShellCmd("printf \"\nPress Enter\"")
   discard execShellCmd("read _")
 
-  restoreTerminalModes()
+  #restoreTerminalModes()
   status.commandLine.erase
 
   status.changeMode(currentBufStatus.prevMode)

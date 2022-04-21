@@ -72,7 +72,7 @@ proc insertMode*(status: var EditorStatus) =
             status.wordDictionary.incNumOfUsed(selectedWord)
 
         # Close suggestionWindow
-        suggestionWindow.get.close
+        #suggestionWindow.get.close
         suggestionWindow = none(SuggestionWindow)
 
     let

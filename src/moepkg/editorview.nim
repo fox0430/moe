@@ -197,9 +197,9 @@ proc writeCurrentLine(win: var Window,
                       mode, prevMode: Mode,
                       viewSettings: EditorViewSettings) =
 
-  if viewSettings.cursorLine:
+  #if viewSettings.cursorLine:
     # Enable underline
-    win.attron(Attributes.underline)
+    #win.attron(Attributes.underline)
 
   if viewSettings.highlightCurrentLine and
      not (isVisualMode(mode) or isConfigMode(mode, prevMode)):
@@ -245,9 +245,9 @@ proc writeCurrentLine(win: var Window,
   else:
     view.write(win, y, x, str, highlight[i].color)
 
-  if viewSettings.cursorLine:
+  #if viewSettings.cursorLine:
     # Disable underline
-    win.attroff(Attributes.underline)
+    #win.attroff(Attributes.underline)
 
 proc writeAllLines*[T](view: var EditorView,
                        win: var Window,

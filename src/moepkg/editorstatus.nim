@@ -311,7 +311,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
             width,
             y,
             x)
-          status.statusLine[statusLineIndex].window.refresh
+          #status.statusLine[statusLineIndex].window.refresh
 
           # Update status line info
           status.statusLine[statusLineIndex].bufferIndex =
@@ -726,7 +726,7 @@ proc writePopUpWindow*(popUpWindow: var Window,
 
 proc deletePopUpWindow*(status: var Editorstatus) =
   if status.popUpWindow != nil:
-    status.popUpWindow.deleteWindow
+    #status.popUpWindow.deleteWindow
     status.update
 
 proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode) =

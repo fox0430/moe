@@ -45,12 +45,12 @@ proc updateCommandLineBuffer*(commndLine: var CommandLine,
 proc updateCommandLineView*(commndLine: var CommandLine) =
   commndLine.window.erase
   commndLine.window.write(0, 0, commndLine.buffer, commndLine.color)
-  commndLine.window.refresh
+  #commndLine.window.refresh
 
 proc erase*(commndLine: var CommandLine) =
   commndLine.buffer = ru""
   commndLine.window.erase
-  commndLine.window.refresh
+  #commndLine.window.refresh
 
 proc getKey*(commndLine: var CommandLine): Rune {.inline.} =
   commndLine.window.getkey

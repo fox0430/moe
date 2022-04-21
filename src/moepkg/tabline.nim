@@ -59,4 +59,4 @@ proc writeTabLineBuffer*(tabWin: var Window,
         tabWidth = numOfbuffer.calcTabWidth(terminalWidth())
       tabWin.writeTab(index * tabWidth, tabWidth, filename, color)
 
-  tabWin.refresh
+  #tabWin.refresh

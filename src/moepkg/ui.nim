@@ -1,22 +1,23 @@
 import std/[strformat, osproc, strutils, os]
-import pkg/ncurses
-import unicodeext, color
+#import pkg/ncurses
+import unicodeext, color, term
+export term.Key
 
 when not defined unitTest:
   import std/posix
 
-type Attributes* = enum
-  normal = A_NORMAL
-  standout = A_STANDOUT
-  underline = A_UNDERLINE
-  reverse = A_REVERSE
-  blink = A_BLINK
-  dim = A_DIM
-  bold = A_BOLD
-  altcharet = A_ALT_CHARSET
-  invis = A_INVIS
-  protect = A_PROTECT
-  #chartext = A_CHAR_TEXT
+#type Attributes* = enum
+#  normal = A_NORMAL
+#  standout = A_STANDOUT
+#  underline = A_UNDERLINE
+#  reverse = A_REVERSE
+#  blink = A_BLINK
+#  dim = A_DIM
+#  bold = A_BOLD
+#  altcharet = A_ALT_CHARSET
+#  invis = A_INVIS
+#  protect = A_PROTECT
+#  #chartext = A_CHAR_TEXT
 
 type CursorType* = enum
   blinkBlock = 0
@@ -25,7 +26,7 @@ type CursorType* = enum
   noneBlinkIbeam = 3
 
 type Window* = ref object
-  cursesWindow*: PWindow
+  cursesWindow*: TermWindow
   height*, width*: int
   y*, x*: int
 
@@ -52,21 +53,27 @@ proc changeCursorType*(cursorType: CursorType) =
 proc disableControlC*() {.inline.} =
   setControlCHook(proc() {.noconv.} = pressCtrlC = true)
 
-proc restoreTerminalModes*() {.inline.} = reset_prog_mode()
-
-proc saveCurrentTerminalModes*() {.inline.} = def_prog_mode()
+#proc restoreTerminalModes*() {.inline.} = reset_prog_mode()
+#
+#proc saveCurrentTerminalModes*() {.inline.} = def_prog_mode()
 
 proc setCursor*(cursor: bool) =
-  if cursor == true: curs_set(1)      ## enable cursor
-  elif cursor == false: curs_set(0)   ## disable cursor
+  if cursor:
+    showCursor()
+  else:
+    hideCursor()
 
-proc keyEcho*(keyecho: bool) =
-  if keyecho == true: echo()
-  elif keyecho == false: noecho()
+#proc keyEcho*(keyecho: bool) =
+#  if keyecho == true: echo()
+#  elif keyecho == false: noecho()
 
-proc setTimeout*(win: var Window) {.inline.} = win.cursesWindow.wtimeout(cint(1000)) # 500mm sec
+#proc setTimeout*(win: var Window) {.inline.} = win.cursesWindow.wtimeout(cint(1000)) # 500mm sec
+proc setTimeout*(win: var Window) =
+  discard
 
-proc setTimeout*(win: var Window, time: int) {.inline.} = win.cursesWindow.wtimeout(cint(time))
+#proc setTimeout*(win: var Window, time: int) {.inline.} = win.cursesWindow.wtimeout(cint(time))
+proc setTimeout*(win: var Window, time: int) =
+  discard
 
 # Check how many colors are supported on the terminal
 proc checkColorSupportedTerminal*(): int =
@@ -78,24 +85,27 @@ proc checkColorSupportedTerminal*(): int =
     result = -1
 
 proc startUi*() =
+  term.startUi()
+
   # Not start when running unit tests
-  when not defined unitTest:
-    discard setLocale(LC_ALL, "")   # enable UTF-8
+  #when not defined unitTest:
+  #  discard setLocale(LC_ALL, "")   # enable UTF-8
 
-    initscr()   ## start terminal control
-    cbreak()    ## enable cbreak mode
-    nonl()      ## exit new line mode and improve move cursor performance
-    setCursor(true)
+  #  initscr()   ## start terminal control
+  #  cbreak()    ## enable cbreak mode
+  #  nonl()      ## exit new line mode and improve move cursor performance
+  #  setCursor(true)
 
-    if can_change_color():
-      ## default is dark
-      setCursesColor(ColorThemeTable[ColorTheme.dark])
+  #  if can_change_color():
+  #    ## default is dark
+  #    setCursesColor(ColorThemeTable[ColorTheme.dark])
 
-    erase()
-    keyEcho(false)
-    set_escdelay(25)
+  #  erase()
+  #  keyEcho(false)
+  #  set_escdelay(25)
 
-proc exitUi*() {.inline.} = endwin()
+#proc exitUi*() {.inline.} = endwin()
+proc exitUi*() {.inline.} = term.exitUi()
 
 proc initWindow*(height, width, y, x: int, color: EditorColorPair): Window =
   result = Window()
@@ -103,9 +113,9 @@ proc initWindow*(height, width, y, x: int, color: EditorColorPair): Window =
   result.x = x
   result.height = height
   result.width = width
-  result.cursesWindow = newwin(cint(height), cint(width), cint(y), cint(x))
-  keypad(result.cursesWindow, true)
-  discard wbkgd(result.cursesWindow, ncurses.COLOR_PAIR(color))
+  result.cursesWindow = initWindow(x, y,width, height)
+  #keypad(result.cursesWindow, true)
+  #discard wbkgd(result.cursesWindow, ncurses.COLOR_PAIR(color))
 
 proc write*(win: var Window,
             y, x: int,
@@ -116,8 +126,9 @@ proc write*(win: var Window,
   #
   # Not write when running unit tests
   when not defined unitTest:
-    win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
-    mvwaddstr(win.cursesWindow, cint(y), cint(x), str)
+    win.cursesWindow.write(x, y, str)
+    #win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
+    #mvwaddstr(win.cursesWindow, cint(y), cint(x), str)
 
     if storeX:
       win.y = y
@@ -132,8 +143,9 @@ proc write*(win: var Window,
   #
   # Not write when running unit tests
   when not defined unitTest:
-    win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
-    mvwaddstr(win.cursesWindow, cint(y), cint(x), str)
+    win.cursesWindow.write(x, y, str)
+    #win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
+    #mvwaddstr(win.cursesWindow, cint(y), cint(x), str)
 
     if storeX:
       win.y = y
@@ -141,18 +153,19 @@ proc write*(win: var Window,
 
 proc write*(win: var Window,
             y, x: int,
-            str: seq[Rune],
+            runes: seq[Rune],
             color: EditorColorPair = EditorColorPair.defaultChar,
             storeX: bool = true) =
   # WARNING: If `storeX` is true, this procedure will change the window position. Should we remove the default parameter?
   #
   # Not write when running unit tests
   when not defined unitTest:
-    write(win, y, x, $str, color, false)
+    win.cursesWindow.write(x, y, $runes)
+    #write(win, y, x, $str, color, false)
 
     if storeX:
       win.y = y
-      win.x = x+str.width
+      win.x = x+runes.width
 
 proc append*(win: var Window,
               str: string,
@@ -160,51 +173,57 @@ proc append*(win: var Window,
 
   # Not write when running unit tests
   when not defined unitTest:
-    win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
-    mvwaddstr(win.cursesWindow, cint(win.y), cint(win.x), str)
+    win.cursesWindow.append(str)
+    #win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
+    #mvwaddstr(win.cursesWindow, cint(win.y), cint(win.x), str)
 
     win.x += str.toRunes.width
 
 proc append*(win: var Window,
-            str: seq[Rune],
+            runes: seq[Rune],
             color: EditorColorPair = EditorColorPair.defaultChar) =
 
   # Not write when running unit tests
   when not defined unitTest:
-    append(win, $str, color)
+    win.cursesWindow.append($runes)
+    #append(win, $str, color)
 
 proc erase*(win: var Window) =
-  werase(win.cursesWindow)
+  win.cursesWindow.erase
+  #werase(win.cursesWindow)
   win.y = 0
   win.x = 0
 
-proc refresh*(win: Window) {.inline.} = wrefresh(win.cursesWindow)
+#proc refresh*(win: Window) {.inline.} = wrefresh(win.cursesWindow)
+proc refresh*(win: Window) = discard
 
-proc move*(win: Window, y, x: int) {.inline.} = mvwin(win.cursesWindow, cint(y), cint(x))
+#proc move*(win: Window, y, x: int) {.inline.} = mvwin(win.cursesWindow, cint(y), cint(x))
+proc move*(win: Window, y, x: int) {.inline.} = win.cursesWindow.move(y, x)
 
 proc resize*(win: var Window, height, width: int) =
-  wresize(win.cursesWindow, cint(height), cint(width))
+  #wresize(win.cursesWindow, cint(height), cint(width))
 
   win.height = height
   win.width = width
 
 proc resize*(win: var Window, height, width, y, x: int) =
-  win.resize(height, width)
+  win.cursesWindow.resize(height, width)
   win.move(y, x)
 
   win.y = y
   win.x = x
 
-proc attron*(win: var Window, attributes: Attributes) {.inline.} =
-  win.cursesWindow.wattron(cint(attributes))
-
-proc attroff*(win: var Window, attributes: Attributes) {.inline.} =
-  win.cursesWindow.wattroff(cint(attributes))
+#proc attron*(win: var Window, attributes: Attributes) {.inline.} =
+#  win.cursesWindow.wattron(cint(attributes))
+#
+#proc attroff*(win: var Window, attributes: Attributes) {.inline.} =
+#  win.cursesWindow.wattroff(cint(attributes))
 
 proc moveCursor*(win: Window, y, x: int) {.inline.} =
-  wmove(win.cursesWindow, cint(y), cint(x))
+  win.cursesWindow.move(x, y)
+  #wmove(win.cursesWindow, cint(y), cint(x))
 
-proc deleteWindow*(win: var Window) {.inline.} = delwin(win.cursesWindow)
+#proc deleteWindow*(win: var Window) {.inline.} = delwin(win.cursesWindow)
 
 const KEY_ESC = 27
 var KEY_RESIZE {.header: "<ncurses.h>", importc: "KEY_RESIZE".}: int
@@ -219,23 +238,26 @@ var KEY_DC {.header: "<ncurses.h>", importc: "KEY_DC".}: int
 var KEY_ENTER {.header: "<ncurses.h>", importc: "KEY_ENTER".}: int
 var KEY_PPAGE {.header: "<ncurses.h>", importc: "KEY_PPAGE".}: int
 var KEY_NPAGE {.header: "<ncurses.h>", importc: "KEY_NPAGE".}: int
-const errorKey* = Rune(ERR)
+const errorKey* = Rune(-1)
 
 proc getKey*(win: Window): Rune =
-  var
-    s = ""
-    len: int
-  block getfirst:
-    let key = wgetch(win.cursesWindow)
-    if Rune(key) == errorKey: return errorKey
-    if not (key <= 0x7F or (0xC2 <= key and key <= 0xF0) or key == 0xF3): return Rune(key)
-    s.add(char(key))
-    len = numberOfBytes(char(key))
-  for i in 0 ..< len-1: s.add(char(wgetch(win.cursesWindow)))
+  let key = win.cursesWindow.getKey
+  return toRunes($key)[0]
 
-  let runes = toRunes(s)
-  doAssert(runes.len == 1, fmt"runes length shoud be 1.")
-  return runes[0]
+#  var
+#    s = ""
+#    len: int
+#  block getfirst:
+#    let key = wgetch(win.cursesWindow)
+#    if Rune(key) == errorKey: return errorKey
+#    if not (key <= 0x7F or (0xC2 <= key and key <= 0xF0) or key == 0xF3): return Rune(key)
+#    s.add(char(key))
+#    len = numberOfBytes(char(key))
+#  for i in 0 ..< len-1: s.add(char(wgetch(win.cursesWindow)))
+#
+#  let runes = toRunes(s)
+#  doAssert(runes.len == 1, fmt"runes length shoud be 1.")
+#  return runes[0]
 
 proc isEscKey*(key: Rune): bool {.inline.} = key == KEY_ESC
 proc isResizeKey*(key: Rune): bool {.inline.} = key == KEY_RESIZE

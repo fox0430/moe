@@ -275,4 +275,4 @@ proc writeStatusLine*(bufStatus: var BufferStatus,
       isActiveWindow,
       settings)
 
-  statusLine.window.refresh
+  #statusLine.window.refresh

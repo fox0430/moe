@@ -31,8 +31,8 @@ proc newLine*(suggestionWindow: SuggestionWindow): seq[Rune] =
         else:
           suggestionWindow.selectedWordOrInputWord)
 
-proc close*(suggestionWindow: var SuggestionWindow) =
-  suggestionWindow.popUpWindow.deleteWindow
+#proc close*(suggestionWindow: var SuggestionWindow) =
+#  suggestionWindow.popUpWindow.deleteWindow
 
 proc canHandleInSuggestionWindow*(key: Rune): bool {.inline.} =
   isTabKey(key) or
