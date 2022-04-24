@@ -4,7 +4,7 @@ import gapbuffer, ui, unicodeext, independentutils, color, settings,
        bufferstatus, highlight, term
 
 type EditorView* = object
-  height*, width*, widthOfLineNum*: int
+  y, x, height*, width*, widthOfLineNum*: int
   lines*: Deque[seq[Rune]]
   originalLine*, start*, length*: Deque[int]
   updated*: bool
@@ -70,9 +70,11 @@ proc reload*[T](view: var EditorView, buffer: T, topLine: int) =
       inc(lineNumber)
       start = 0
 
-proc initEditorView*[T](buffer: T, height, width: int): EditorView =
+proc initEditorView*[T](buffer: T, y, x, height, width: int): EditorView =
   ## width/heightでEditorViewを初期化し,バッファの0行0文字目からロードする.widthは画面幅ではなくEditorViewの1ラインの文字数である(従って行番号分の長さは考慮しなくてよい).
 
+  result.y = y
+  result.x = x
   result.height = height
   result.width = width
   result.widthOfLineNum = buffer.len.intToStr.len+1
@@ -91,7 +93,7 @@ proc initEditorView*[T](buffer: T, height, width: int): EditorView =
 
 proc resize*[T](view: var EditorView,
                 buffer: T,
-                height, width, widthOfLineNum: int) =
+                y, x, height, width, widthOfLineNum: int) =
   ## 指定されたwidth/heightでEditorViewを更新する.表示される部分はなるべくリサイズ前と同じになるようになっている.
 
   let topline = view.originalLine[0]
@@ -99,6 +101,8 @@ proc resize*[T](view: var EditorView,
   view.lines = initDeque[seq[Rune]]()
   for i in 0..height-1: view.lines.addlast(ru"")
 
+  view.y = y
+  view.x = x
   view.height = height
   view.width = width
   view.widthOfLineNum = widthOfLineNum
@@ -179,7 +183,7 @@ proc scrollDown*[T](view: var EditorView, buffer: T) =
 proc writeLineNum(view: EditorView, y, line: int, colorPair: EditorColorPair) {.inline.} =
   #win.write(y, 0, strutils.align($(line+1), view.widthOfLineNum-1), colorPair, false)
   const x = 0
-  tb.write(x, y, strutils.align($(line+1), view.widthOfLineNum-1))
+  write(x, y, strutils.align($(line+1), view.widthOfLineNum-1))
 
 proc write(view: EditorView,
            y, x: int,
@@ -190,7 +194,7 @@ proc write(view: EditorView,
   const tab = "    "
   # TODO: Enable color
   #win.write(y, x, ($str).replace("\t", tab), color, false)
-  tb.write(x, y, ($str).replace("\t", tab))
+  write(x, y, ($str).replace("\t", tab))
 
 proc writeCurrentLine(view: EditorView,
                       highlight: Highlight,
@@ -250,6 +254,7 @@ proc writeCurrentLine(view: EditorView,
   else:
     view.write(y, x, str, highlight[i].color)
 
+  # TODO: Fix
   #if viewSettings.cursorLine:
     # Disable underline
     #win.attroff(Attributes.underline)
@@ -264,7 +269,6 @@ proc writeAllLines*[T](view: var EditorView,
                        currentLine, startSelectedLine, endSelectedLine: int,
                        currentLineColorPair: var int) =
 
-  eraseScreen()
   view.widthOfLineNum = if viewSettings.lineNumber: buffer.len.numberOfDigits + 1
                         else: 0
 
@@ -290,7 +294,7 @@ proc writeAllLines*[T](view: var EditorView,
                               EditorColorPair.currentLineNum
                             else:
                               EditorColorPair.lineNum
-      view.writeLineNum(y, view.originalLine[y], lineNumberColor)
+      view.writeLineNum(view.y + y, view.originalLine[y], lineNumberColor)
 
     var x = view.widthOfLineNum
     if view.length[y] == 0:
@@ -391,6 +395,8 @@ proc update*[T](view: var EditorView,
   let widthOfLineNum = buffer.len.intToStr.len + 1
   if viewSettings.lineNumber and widthOfLineNum != view.widthOfLineNum:
     view.resize(buffer,
+                view.y,
+                view.x,
                 view.height,
                 view.width + view.widthOfLineNum - widthOfLineNum,
                 widthOfLineNum)

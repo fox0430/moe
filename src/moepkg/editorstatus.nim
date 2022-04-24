@@ -267,6 +267,8 @@ proc resize*(status: var EditorStatus, height, width: int) =
   status.resizeMainWindowNode(height, width)
 
   const statusLineHeight = 1
+  let
+    tabLineHeight = if status.settings.tabLine.enable: 1 else: 0
   var
     statusLineIndex = 0
     queue = initHeapQueue[WindowNode]()
@@ -287,6 +289,8 @@ proc resize*(status: var EditorStatus, height, width: int) =
 
         node.view.resize(
           status.bufStatus[bufIndex].buffer,
+          tabLineHeight,
+          0,
           adjustedHeight,
           adjustedWidth,
           widthOfLineNum)
@@ -314,7 +318,6 @@ proc resize*(status: var EditorStatus, height, width: int) =
             width,
             y,
             x)
-          #status.statusLine[statusLineIndex].window.refresh
 
           # Update status line info
           status.statusLine[statusLineIndex].bufferIndex =
@@ -341,7 +344,6 @@ proc resize*(status: var EditorStatus, height, width: int) =
       x)
 
   ## Resize tab line window
-  ## TODO: Enable tab line
   #if status.settings.tabLine.enable:
   #  const
   #    tabLineHeight = 1
@@ -444,35 +446,35 @@ proc initSyntaxHighlight(windowNode: var WindowNode,
 proc isLogViewerMode(mode, prevMode: Mode): bool {.inline.} =
   (mode == logViewer) or (mode == ex and prevMode == logViewer)
 
-#proc updateLogViewer(bufStatus: var BufferStatus,
-#                     node: var WindowNode,
-#                     messageLog: seq[seq[Rune]]) =
-#
-#  bufStatus.buffer = initGapBuffer(@[ru""])
-#  for i in 0 ..< messageLog.len:
-#    bufStatus.buffer.insert(messageLog[i], i)
-#
-#  const EMPTY_RESERVEDWORD: seq[ReservedWord] = @[]
-#
-#  node.highlight = initHighlight(
-#      $bufStatus.buffer,
-#      EMPTY_RESERVEDWORD,
-#      SourceLanguage.langNone)
-#
-#proc updateDebugModeBuffer(status: var EditorStatus)
-#
+proc updateLogViewer(bufStatus: var BufferStatus,
+                     node: var WindowNode,
+                     messageLog: seq[seq[Rune]]) =
+
+  bufStatus.buffer = initGapBuffer(@[ru""])
+  for i in 0 ..< messageLog.len:
+    bufStatus.buffer.insert(messageLog[i], i)
+
+  const EMPTY_RESERVEDWORD: seq[ReservedWord] = @[]
+
+  node.highlight = initHighlight(
+      $bufStatus.buffer,
+      EMPTY_RESERVEDWORD,
+      SourceLanguage.langNone)
+
+proc updateDebugModeBuffer(status: var EditorStatus)
+
 proc update*(status: var EditorStatus) =
   setCursor(false)
 
   # TODO: Enable tab line
-  #if status.settings.tabLine.enable:
-  #  writeTabLineBuffer(
-  #    status.bufStatus,
-  #    status.bufferIndexInCurrentWindow,
-  #    status.mainWindow.mainWindowNode,
-  #    status.settings.tabline.allBuffer)
+  if status.settings.tabLine.enable:
+    writeTabLineBuffer(
+      status.bufStatus,
+      status.bufferIndexInCurrentWindow,
+      status.mainWindow.mainWindowNode,
+      status.settings.tabline.allBuffer)
 
-  #status.updateDebugModeBuffer
+  status.updateDebugModeBuffer
 
   mainWindowNode.initSyntaxHighlight(
     status.bufStatus,
@@ -525,8 +527,7 @@ proc update*(status: var EditorStatus) =
            not isConfigMode(currentMode, prevMode):
 
           if isLogViewerMode(currentMode, prevMode):
-            discard
-            #status.bufStatus[node.bufferIndex].updateLogViewer(node, status.messageLog)
+            status.bufStatus[node.bufferIndex].updateLogViewer(node, status.messageLog)
           else:
             highlight.updateHighlight(
               bufStatus,
@@ -762,7 +763,7 @@ proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode) =
       status.bufStatus[index].language = detectLanguage(filename)
 
   let buffer = status.bufStatus[index].buffer
-  currentMainWindowNode.view = buffer.initEditorView(1, 1)
+  currentMainWindowNode.view = buffer.initEditorView(0, 0, 1, 1)
 
   status.changeCurrentBuffer(index)
 
@@ -811,26 +812,26 @@ proc addNewBuffer*(status: var EditorStatus) {.inline.} =
 #                         else: beforeWindowIndex
 #  currentMainWindowNode = mainWindowNode.searchByWindowIndex(afterWindowIndex)
 #
-#proc tryRecordCurrentPosition*(bufStatus: var BufferStatus,
-#                               windowNode: WindowNode) {.inline.} =
-#
-#  bufStatus.positionRecord[bufStatus.buffer.lastSuitId] = (windowNode.currentLine,
-#                                                           windowNode.currentColumn,
-#                                                           windowNode.expandedColumn)
-#
-#proc revertPosition*(bufStatus: var BufferStatus,
-#                     windowNode: WindowNode,
-#                     id: int) =
-#
-#  let mess = fmt"The id not recorded was requested. [bufStatus.positionRecord = {bufStatus.positionRecord}, id = {id}]"
-#  doAssert(bufStatus.positionRecord.contains(id), mess)
-#
-#  windowNode.currentLine = bufStatus.positionRecord[id].line
-#  windowNode.currentColumn = bufStatus.positionRecord[id].column
-#  windowNode.expandedColumn = bufStatus.positionRecord[id].expandedColumn
-#
-#proc eventLoopTask*(status: var Editorstatus)
-#
+proc tryRecordCurrentPosition*(bufStatus: var BufferStatus,
+                               windowNode: WindowNode) {.inline.} =
+
+  bufStatus.positionRecord[bufStatus.buffer.lastSuitId] = (windowNode.currentLine,
+                                                           windowNode.currentColumn,
+                                                           windowNode.expandedColumn)
+
+proc revertPosition*(bufStatus: var BufferStatus,
+                     windowNode: WindowNode,
+                     id: int) =
+
+  let mess = fmt"The id not recorded was requested. [bufStatus.positionRecord = {bufStatus.positionRecord}, id = {id}]"
+  doAssert(bufStatus.positionRecord.contains(id), mess)
+
+  windowNode.currentLine = bufStatus.positionRecord[id].line
+  windowNode.currentColumn = bufStatus.positionRecord[id].column
+  windowNode.expandedColumn = bufStatus.positionRecord[id].expandedColumn
+
+proc eventLoopTask*(status: var Editorstatus)
+
 proc initSelectedAreaColorSegment(startLine, startColumn: int): ColorSegment =
   result.firstRow = startLine
   result.firstColumn = startColumn

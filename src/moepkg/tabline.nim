@@ -4,15 +4,15 @@ import window, color, bufferstatus, independentutils, term
 
 # TODO: Enable Color
 proc writeTab*(start, tabWidth: int,
-              filename: string,
-              color: EditorColorPair) =
+               filename: string,
+               color: EditorColorPair) =
 
   let
     title = if filename == "": "New file" else: filename
     buffer = if filename.len < tabWidth:
                " " & title & " ".repeat(tabWidth - title.len)
              else: " " & (title).substr(0, tabWidth - 3) & "~"
-  tb.write(0, start, buffer)
+  write(0, start, buffer)
 
 # TODO: Enable Color
 proc writeTabLineBuffer*(allBufStatus: seq[BufferStatus],
@@ -24,8 +24,6 @@ proc writeTabLineBuffer*(allBufStatus: seq[BufferStatus],
     isAllBuffer = isAllbuffer
     defaultColor = EditorColorPair.tab
     currentTabColor = EditorColorPair.currentTab
-
-  eraseScreen()
 
   if isAllBuffer:
     ## Display all buffer

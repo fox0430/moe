@@ -35,6 +35,7 @@ proc initEditor(): EditorStatus =
   result = initEditorStatus()
   result.loadConfigurationFile
   result.timeConfFileLastReloaded = now()
+  # TODO: Fix
   #result.changeTheme
 
   setControlCHook(proc() {.noconv.} =
@@ -54,15 +55,10 @@ proc initEditor(): EditorStatus =
 proc test(status: var EditorStatus) =
   status.resize(terminalHeight(), terminalWidth())
 
-  initTerminalBuffer()
-  status.update
-  tb.display
-  sleep 1000
-
-  initTerminalBuffer()
-  status.update
-  tb.display
-  sleep 1000
+  while true:
+    status.update
+    tb.display
+    sleep 1000
 
 proc main() =
   var status = initEditor()
