@@ -1,21 +1,33 @@
 import std/[strutils, strformat, os, osproc]
 import syntax/highlite
-import ui, bufferstatus, color, unicodeext, settings, window, gapbuffer
+import ui, bufferstatus, color, unicodeext, settings, window, gapbuffer, term
 
 type StatusLine* = object
-  window*: Window
+  # Absolute position
+  x: int
+  y: int
+
+  # Status line size
+  w: int
+  h: int
+
+  # TODO: Rename
   windowIndex*: int
+
   bufferIndex*: int
 
 proc initStatusLine*(): StatusLine {.inline.} =
-  const
-    h = 1
-    w = 1
-    t = 1
-    l = 1
-    color = EditorColorPair.defaultChar
+  result.x = 1
+  result.y = 1
+  result.w = 1
+  result.h = 1
+  #color = EditorColorPair.defaultChar
 
-  result.window = initWindow(h, w, t, l, color)
+proc resize*(statusLine: var StatusLine, height, width, y, x: int) =
+  statusLine.h = height
+  statusLine.w = width
+  statusLine.y = y
+  statusLine.x = x
 
 proc showFilename(mode, prevMode: Mode): bool {.inline.} =
   not isHistoryManagerMode(mode, prevMode) and
@@ -23,7 +35,6 @@ proc showFilename(mode, prevMode: Mode): bool {.inline.} =
 
 proc appendFileName(statusLineBuffer: var seq[Rune],
                     bufStatus: BufferStatus,
-                    statusLineWindow: var Window,
                     color: EditorColorPair) =
 
   let
@@ -41,7 +52,8 @@ proc appendFileName(statusLineBuffer: var seq[Rune],
     else:
       filename = ru"~/" & filename
   statusLineBuffer.add(filename)
-  statusLineWindow.append(filename, color)
+  # TODO: Fix
+  #statusLineWindow.append(filename, color)
 
 proc writeStatusLineNormalModeInfo(bufStatus: var BufferStatus,
                                    statusLine: var StatusLine,
@@ -70,20 +82,23 @@ proc writeStatusLineNormalModeInfo(bufStatus: var BufferStatus,
 
   let
     color = setStatusLineColor(bufStatus.mode)
-    statusLineWidth = statusLine.window.width
+    statusLineWidth = statusLine.w
 
   statusLineBuffer.add(ru" ")
-  statusLine.window.append(ru" ", color)
+  # TODO: Fix
+  #statusLine.window.append(ru" ", color)
 
   if settings.statusLine.filename:
-    statusLineBuffer.appendFileName(bufStatus, statusLine.window, color)
+    statusLineBuffer.appendFileName(bufStatus, color)
 
   if bufStatus.countChange > 0 and settings.statusLine.chanedMark:
     statusLineBuffer.add(ru" [+]")
-    statusLine.window.append(ru" [+]", color)
+    # TODO: Fix
+    #statusLine.window.append(ru" [+]", color)
 
   if statusLineWidth - statusLineBuffer.len < 0: return
-  statusLine.window.append(ru " ".repeat(statusLineWidth - statusLineBuffer.len), color)
+  # TODO: Fix
+  #statusLine.window.append(ru " ".repeat(statusLineWidth - statusLineBuffer.len), color)
 
   let
     line = if settings.statusLine.line:
@@ -97,7 +112,10 @@ proc writeStatusLineNormalModeInfo(bufStatus: var BufferStatus,
     language = if bufStatus.language == SourceLanguage.langNone: "Plain"
                else: sourceLanguageToStr[bufStatus.language]
     info = fmt"{line} {column} {encoding} {language} "
-  statusLine.window.write(0, statusLineWidth - info.len, info, color)
+  #statusLine.window.write(0, statusLineWidth - info.len, info, color)
+  # TODO: Enable color
+  let x = statusLineWidth - info.len
+  write(x, statusLine.y, info)
 
 proc writeStatusLineFilerModeInfo(bufStatus: var BufferStatus,
                                  statusLine: var StatusLine,
@@ -109,13 +127,16 @@ proc writeStatusLineFilerModeInfo(bufStatus: var BufferStatus,
   let
     color = if isActiveWindow: EditorColorPair.statusLineFilerMode
             else: EditorColorPair.statusLineFilerModeInactive
-    statusLineWidth = statusLine.window.width
+    statusLineWidth = statusLine.w
 
   if settings.statusLine.directory:
-    statusLine.window.append(ru" ", color)
-    statusLine.window.append(bufStatus.path, color)
+    discard
+    # TODO: Fix
+    #statusLine.window.append(ru" ", color)
+    #statusLine.window.append(bufStatus.path, color)
 
-  statusLine.window.append(ru " ".repeat(statusLineWidth - 5), color)
+  # TODO: Fix
+  #statusLine.window.append(ru " ".repeat(statusLineWidth - 5), color)
 
 proc writeStatusLineBufferManagerModeInfo(bufStatus: var BufferStatus,
                                          statusLine: var StatusLine,
@@ -128,11 +149,13 @@ proc writeStatusLineBufferManagerModeInfo(bufStatus: var BufferStatus,
     color = if isActiveWindow: EditorColorPair.statusLineNormalMode
             else: EditorColorPair.statusLineNormalModeInactive
     info = fmt"{windowNode.currentLine + 1}/{bufStatus.buffer.len - 1}"
-    statusLineWidth = statusLine.window.width
+    statusLineWidth = statusLine.w
 
-  statusLine.window.append(ru " ".repeat(statusLineWidth - statusLineBuffer.len),
-                                        color)
-  statusLine.window.write(0, statusLineWidth - info.len - 1, info, color)
+  # TODO: Fix
+  #statusLine.window.append(ru " ".repeat(statusLineWidth - statusLineBuffer.len),
+                                        #color)
+  #statusLine.window.write(0, statusLineWidth - info.len - 1, info, color)
+  write(0, statusLineWidth - info.len - 1, info)
 
 proc writeStatusLineLogViewerModeInfo(bufStatus: var BufferStatus,
                                   statusLine: var StatusLine,
@@ -145,11 +168,13 @@ proc writeStatusLineLogViewerModeInfo(bufStatus: var BufferStatus,
     color = if isActiveWindow: EditorColorPair.statusLineNormalMode
             else: EditorColorPair.statusLineNormalModeInactive
     info = fmt"{windowNode.currentLine + 1}/{bufStatus.buffer.len - 1}"
-    statusLineWidth = statusLine.window.width
+    statusLineWidth = statusLine.w
 
-  statusLine.window.append(ru " ".repeat(statusLineWidth - statusLineBuffer.len),
-                          color)
-  statusLine.window.write(0, statusLineWidth - info.len - 1, info, color)
+  # TODO: Fix
+  #statusLine.window.append(ru " ".repeat(statusLineWidth - statusLineBuffer.len),
+                          #color)
+  #statusLine.window.write(0, statusLineWidth - info.len - 1, info, color)
+  write(0, statusLineWidth - info.len - 1, info)
 
 proc writeStatusLineCurrentGitBranchName(statusLine: var StatusLine,
                                         statusLineBuffer: var seq[Rune],
@@ -166,7 +191,8 @@ proc writeStatusLineCurrentGitBranchName(statusLine: var StatusLine,
     color = EditorColorPair.statusLineGitBranch
 
   statusLineBuffer.add(buffer)
-  statusLine.window.append(buffer, color)
+  # TODO: Fix
+  #statusLine.window.append(buffer, color)
 
 proc setModeStr(mode: Mode, isActiveWindow, showModeInactive: bool): string =
   if not isActiveWindow and not showModeInactive: result = ""
@@ -224,8 +250,6 @@ proc writeStatusLine*(bufStatus: var BufferStatus,
                      isActiveWindow: bool,
                      settings: EditorSettings) =
 
-  statusLine.window.erase
-
   let
     currentMode = bufStatus.mode
     prevMode = bufStatus.prevMode
@@ -239,7 +263,9 @@ proc writeStatusLine*(bufStatus: var BufferStatus,
 
   ## Write current mode
   if settings.statusLine.mode:
-    statusLine.window.write(0, 0, statusLineBuffer, color)
+    # TODO: Enable color
+    #statusLine.window.write(0, 0, statusLineBuffer, color)
+    write(statusLine.x, statusLine.y, $statusLineBuffer)
 
   if isShowGitBranchName(currentMode, prevMode, isActiveWindow, settings):
     statusLine.writeStatusLineCurrentGitBranchName(
@@ -274,5 +300,3 @@ proc writeStatusLine*(bufStatus: var BufferStatus,
       windowNode,
       isActiveWindow,
       settings)
-
-  #statusLine.window.refresh

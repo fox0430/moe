@@ -26,7 +26,7 @@ type CursorType* = enum
   noneBlinkIbeam = 3
 
 type Window* = ref object
-  cursesWindow*: TermWindow
+  #cursesWindow*: TermWindow
   height*, width*: int
   y*, x*: int
 
@@ -113,7 +113,7 @@ proc initWindow*(height, width, y, x: int, color: EditorColorPair): Window =
   result.x = x
   result.height = height
   result.width = width
-  result.cursesWindow = initWindow(x, y,width, height)
+  #result.cursesWindow = initWindow(x, y,width, height)
   #keypad(result.cursesWindow, true)
   #discard wbkgd(result.cursesWindow, ncurses.COLOR_PAIR(color))
 
@@ -126,7 +126,8 @@ proc write*(win: var Window,
   #
   # Not write when running unit tests
   when not defined unitTest:
-    win.cursesWindow.write(x, y, str)
+    discard
+    #win.cursesWindow.write(x, y, str)
     #win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
     #mvwaddstr(win.cursesWindow, cint(y), cint(x), str)
 
@@ -143,7 +144,8 @@ proc write*(win: var Window,
   #
   # Not write when running unit tests
   when not defined unitTest:
-    win.cursesWindow.write(x, y, str)
+    discard
+    #win.cursesWindow.write(x, y, str)
     #win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
     #mvwaddstr(win.cursesWindow, cint(y), cint(x), str)
 
@@ -160,7 +162,8 @@ proc write*(win: var Window,
   #
   # Not write when running unit tests
   when not defined unitTest:
-    win.cursesWindow.write(x, y, $runes)
+    discard
+    #win.cursesWindow.write(x, y, $runes)
     #write(win, y, x, $str, color, false)
 
     if storeX:
@@ -173,7 +176,8 @@ proc append*(win: var Window,
 
   # Not write when running unit tests
   when not defined unitTest:
-    win.cursesWindow.append(str)
+    discard
+    #win.cursesWindow.append(str)
     #win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
     #mvwaddstr(win.cursesWindow, cint(win.y), cint(win.x), str)
 
@@ -185,11 +189,13 @@ proc append*(win: var Window,
 
   # Not write when running unit tests
   when not defined unitTest:
-    win.cursesWindow.append($runes)
+    discard
+    #win.cursesWindow.append($runes)
     #append(win, $str, color)
 
 proc erase*(win: var Window) =
-  win.cursesWindow.erase
+  discard
+  #win.cursesWindow.erase
   #werase(win.cursesWindow)
   win.y = 0
   win.x = 0
@@ -198,7 +204,7 @@ proc erase*(win: var Window) =
 proc refresh*(win: Window) = discard
 
 #proc move*(win: Window, y, x: int) {.inline.} = mvwin(win.cursesWindow, cint(y), cint(x))
-proc move*(win: Window, y, x: int) {.inline.} = win.cursesWindow.move(y, x)
+#proc move*(win: Window, y, x: int) {.inline.} = win.cursesWindow.move(y, x)
 
 proc resize*(win: var Window, height, width: int) =
   #wresize(win.cursesWindow, cint(height), cint(width))
@@ -207,8 +213,8 @@ proc resize*(win: var Window, height, width: int) =
   win.width = width
 
 proc resize*(win: var Window, height, width, y, x: int) =
-  win.cursesWindow.resize(height, width)
-  win.move(y, x)
+  #win.cursesWindow.resize(height, width)
+  #win.move(y, x)
 
   win.y = y
   win.x = x
@@ -220,7 +226,8 @@ proc resize*(win: var Window, height, width, y, x: int) =
 #  win.cursesWindow.wattroff(cint(attributes))
 
 proc moveCursor*(win: Window, y, x: int) {.inline.} =
-  win.cursesWindow.move(x, y)
+  discard
+  #win.cursesWindow.move(x, y)
   #wmove(win.cursesWindow, cint(y), cint(x))
 
 #proc deleteWindow*(win: var Window) {.inline.} = delwin(win.cursesWindow)
@@ -241,8 +248,9 @@ var KEY_NPAGE {.header: "<ncurses.h>", importc: "KEY_NPAGE".}: int
 const errorKey* = Rune(-1)
 
 proc getKey*(win: Window): Rune =
-  let key = win.cursesWindow.getKey
-  return toRunes($key)[0]
+  discard
+  #let key = win.cursesWindow.getKey
+  #return toRunes($key)[0]
 
 #  var
 #    s = ""

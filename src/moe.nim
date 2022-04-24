@@ -1,8 +1,6 @@
-import std/[os, times]
-import moepkg/[ui, editorstatus, normalmode, insertmode, visualmode,
-               replacemode, filermode, exmode, buffermanager, logviewer,
-               cmdlineoption, bufferstatus, help, recentfilemode, quickrun,
-               historymanager, diffviewer, configmode, debugmode]
+import std/[os, times, terminal]
+import illwill
+import moepkg/[editorstatus, cmdlineoption, bufferstatus, term]
 
 # Load persisted data (Ex command history, search history and cursor postion)
 proc loadPersistData(status: var EditorStatus) =
@@ -32,14 +30,12 @@ proc addBufferStatus(status: var EditorStatus,
 proc initEditor(): EditorStatus =
   let parsedList = parseCommandLineOption(commandLineParams())
 
-  defer: exitUi()
-
   startUi()
 
   result = initEditorStatus()
   result.loadConfigurationFile
   result.timeConfFileLastReloaded = now()
-  result.changeTheme
+  #result.changeTheme
 
   setControlCHook(proc() {.noconv.} =
     exitUi()
@@ -52,30 +48,46 @@ proc initEditor(): EditorStatus =
 
   result.loadPersistData
 
-  disableControlC()
+  # TODO: Fix
+  #disableControlC()
+
+proc test(status: var EditorStatus) =
+  status.resize(terminalHeight(), terminalWidth())
+
+  initTerminalBuffer()
+  status.update
+  tb.display
+  sleep 1000
+
+  initTerminalBuffer()
+  status.update
+  tb.display
+  sleep 1000
 
 proc main() =
   var status = initEditor()
 
-  while status.mainWindow.numOfMainWindow > 0:
+  status.test
 
-    case currentBufStatus.mode:
-    of Mode.normal: status.normalMode
-    of Mode.insert: status.insertMode
-    of Mode.visual, Mode.visualBlock: status.visualMode
-    of Mode.replace: status.replaceMode
-    of Mode.ex: status.exMode
-    of Mode.filer: status.filerMode
-    of Mode.bufManager: status.bufferManager
-    of Mode.logViewer: status.messageLogViewer
-    of Mode.help: status.helpMode
-    of Mode.recentFile: status.recentFileMode
-    of Mode.quickRun: status.quickRunMode
-    of Mode.history: status.historyManager
-    of Mode.diff: status.diffViewer
-    of Mode.config: status.configMode
-    of Mode.debug: status.debugMode
+  #while status.mainWindow.numOfMainWindow > 0:
 
-  status.exitEditor
+  #  case currentBufStatus.mode:
+  #  of Mode.normal: status.normalMode
+  #  of Mode.insert: status.insertMode
+  #  of Mode.visual, Mode.visualBlock: status.visualMode
+  #  of Mode.replace: status.replaceMode
+  #  of Mode.ex: status.exMode
+  #  of Mode.filer: status.filerMode
+  #  of Mode.bufManager: status.bufferManager
+  #  of Mode.logViewer: status.messageLogViewer
+  #  of Mode.help: status.helpMode
+  #  of Mode.recentFile: status.recentFileMode
+  #  of Mode.quickRun: status.quickRunMode
+  #  of Mode.history: status.historyManager
+  #  of Mode.diff: status.diffViewer
+  #  of Mode.config: status.configMode
+  #  of Mode.debug: status.debugMode
+
+  #status.exitEditor
 
 when isMainModule: main()

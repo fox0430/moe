@@ -1,8 +1,9 @@
 import std/[strutils, terminal, unicode]
-import ui, window, color, bufferstatus, independentutils
+import illwill
+import window, color, bufferstatus, independentutils, term
 
-proc writeTab*(tabWin: var Window,
-              start, tabWidth: int,
+# TODO: Enable Color
+proc writeTab*(start, tabWidth: int,
               filename: string,
               color: EditorColorPair) =
 
@@ -11,10 +12,10 @@ proc writeTab*(tabWin: var Window,
     buffer = if filename.len < tabWidth:
                " " & title & " ".repeat(tabWidth - title.len)
              else: " " & (title).substr(0, tabWidth - 3) & "~"
-  tabWin.write(0, start, buffer, color)
+  tb.write(0, start, buffer)
 
-proc writeTabLineBuffer*(tabWin: var Window,
-                         allBufStatus: seq[BufferStatus],
+# TODO: Enable Color
+proc writeTabLineBuffer*(allBufStatus: seq[BufferStatus],
                          currentBufferIndex: int,
                          mainWindowNode: WindowNode,
                          isAllbuffer: bool) =
@@ -24,7 +25,7 @@ proc writeTabLineBuffer*(tabWin: var Window,
     defaultColor = EditorColorPair.tab
     currentTabColor = EditorColorPair.currentTab
 
-  tabWin.erase
+  eraseScreen()
 
   if isAllBuffer:
     ## Display all buffer
@@ -39,7 +40,7 @@ proc writeTabLineBuffer*(tabWin: var Window,
                    elif isConfigMode(currentMode, prevMode): "CONFIG"
                    else: $bufStatus.path
         tabWidth = allBufStatus.len.calcTabWidth(terminalWidth())
-      tabWin.writeTab(index * tabWidth, tabWidth, filename, color)
+      writeTab(index * tabWidth, tabWidth, filename, color)
   else:
     ## Displays only the buffer currently displayed in the window
     let allBufferIndex =
@@ -57,6 +58,4 @@ proc writeTabLineBuffer*(tabWin: var Window,
                    else: $bufStatus.path
         numOfbuffer = mainWindowNode.getAllBufferIndex.len
         tabWidth = numOfbuffer.calcTabWidth(terminalWidth())
-      tabWin.writeTab(index * tabWidth, tabWidth, filename, color)
-
-  #tabWin.refresh
+      writeTab(index * tabWidth, tabWidth, filename, color)
