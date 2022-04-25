@@ -19,6 +19,9 @@ type
 
 var tb*: TerminalBuffer
 
+proc initTerminalBuffer*() =
+  tb = newTerminalBuffer(terminalWidth(), terminalHeight())
+
 proc exitUi*() {.noconv.} =
   illwillDeinit()
   showCursor()
@@ -27,7 +30,7 @@ proc exitUi*() {.noconv.} =
 proc startUi*() =
   illwillInit(fullscreen = true)
   setControlCHook(exitUi)
-  tb = newTerminalBuffer(terminalWidth(), terminalHeight())
+  initTerminalBuffer()
 
 proc initColorCode*(str: string): ColorCode =
   assert(str.len == 6)

@@ -49,17 +49,18 @@ proc suggestCommandLine(status: var Editorstatus,
     elif isShiftTab(key) and suggestIndex == 0: suggestIndex = suggestlist.high
     else: suggestIndex = 0
 
-    if status.settings.popUpWindowInExmode:
-      let
-        currentLine = if suggestIndex == 0: -1 else: suggestIndex - 1
-        displayBuffer = initDisplayBuffer(suggestlist, suggestType)
-      # Pop up window size
-      var (h, w) = displayBuffer.calcPopUpWindowSize
+    # TODO: Enable popupwindow
+    #if status.settings.popUpWindowInExmode:
+    #  let
+    #    currentLine = if suggestIndex == 0: -1 else: suggestIndex - 1
+    #    displayBuffer = initDisplayBuffer(suggestlist, suggestType)
+    #  # Pop up window size
+    #  var (h, w) = displayBuffer.calcPopUpWindowSize
 
-      popUpWindow.writePopUpWindow(h, w, y, x,
-                                   terminalHeight(), terminalWidth(),
-                                   currentLine,
-                                   displayBuffer)
+    #  popUpWindow.writePopUpWindow(h, w, y, x,
+    #                               terminalHeight(), terminalWidth(),
+    #                               currentLine,
+    #                               displayBuffer)
 
     if isSuggestTypeExCommandOption(suggestType):
       exStatus.insertCommandBuffer(command & ru' ')
@@ -76,7 +77,8 @@ proc suggestCommandLine(status: var Editorstatus,
     exStatus.cursorX = exStatus.currentPosition + 1
 
   status.commandLine.window.moveCursor(exStatus.cursorY, exStatus.cursorX)
-  if status.settings.popUpWindowInExmode: status.deletePopUpWindow
+  # TODO: Enable popUpWindow
+  #if status.settings.popUpWindowInExmode: status.deletePopUpWindow
 
 proc getKeyOnceAndWriteCommandView*(
   status: var Editorstatus,
@@ -151,9 +153,10 @@ proc getKeyOnceAndWriteCommandView*(
       status.commandLine.window.moveLeft(exStatus)
     elif isRightkey(key):
       exStatus.moveRight
-      if status.settings.popUpWindowInExmode:
-        status.deletePopUpWindow
-        status.update
+      # TODO: Enable popupwindow
+      #if status.settings.popUpWindowInExmode:
+      #  status.deletePopUpWindow
+      #  status.update
     elif isUpKey(key):
       if isSearch: setPrevSearchHistory()
       else: setPrevCommandHistory()

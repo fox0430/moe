@@ -104,7 +104,6 @@ proc startUi*() =
   #  keyEcho(false)
   #  set_escdelay(25)
 
-#proc exitUi*() {.inline.} = endwin()
 proc exitUi*() {.inline.} = term.exitUi()
 
 proc initWindow*(height, width, y, x: int, color: EditorColorPair): Window =

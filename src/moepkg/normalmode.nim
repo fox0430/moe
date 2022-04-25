@@ -120,29 +120,29 @@ proc writeFileAndExit(status: var EditorStatus, height, width: int) =
       status.commandLine.writeSaveError(status.messageLog)
 
 proc forceExit(status: var Editorstatus, height, width: int) {.inline.} =
-  status.closeWindow(currentMainWindowNode, height, width)
+ status.closeWindow(currentMainWindowNode, height, width)
 
-proc runQuickRunCommand(status: var Editorstatus) =
-  let
-    buffer = runQuickRun(status.bufStatus[currentMainWindowNode.bufferIndex],
-                         status.commandLine,
-                         status.messageLog,
-                         status.settings)
-    quickRunWindowIndex = status.bufStatus.getQuickRunBufferIndex(mainWindowNode)
-
-  if quickRunWindowIndex == -1:
-    status.verticalSplitWindow
-    status.resize(terminalHeight(), terminalWidth())
-    status.moveNextWindow
-
-    status.addNewBuffer("")
-    status.bufStatus[^1].buffer = initGapBuffer(buffer)
-
-    status.changeCurrentBuffer(status.bufStatus.high)
-
-    status.changeMode(Mode.quickRun)
-  else:
-    status.bufStatus[quickRunWindowIndex].buffer = initGapBuffer(buffer)
+#proc runQuickRunCommand(status: var Editorstatus) =
+#  let
+#    buffer = runQuickRun(status.bufStatus[currentMainWindowNode.bufferIndex],
+#                         status.commandLine,
+#                         status.messageLog,
+#                         status.settings)
+#    quickRunWindowIndex = status.bufStatus.getQuickRunBufferIndex(mainWindowNode)
+#
+#  if quickRunWindowIndex == -1:
+#    status.verticalSplitWindow
+#    status.resize(terminalHeight(), terminalWidth())
+#    status.moveNextWindow
+#
+#    status.addNewBuffer("")
+#    status.bufStatus[^1].buffer = initGapBuffer(buffer)
+#
+#    status.changeCurrentBuffer(status.bufStatus.high)
+#
+#    status.changeMode(Mode.quickRun)
+#  else:
+#    status.bufStatus[quickRunWindowIndex].buffer = initGapBuffer(buffer)
 
 proc yankWord(status: var EditorStatus) =
   currentBufStatus.yankWord(status.registers,
@@ -1295,7 +1295,8 @@ proc normalCommand(status: var EditorStatus,
     status.repeatNormalModeCommand(height, width)
   elif key == ord('\\'):
     let secondKey = commands[1]
-    if secondKey == ord('r'): status.runQuickRunCommand
+    # TODO: Enable
+    #if secondKey == ord('r'): status.runQuickRunCommand
   elif key == ord('"'):
     status.registerCommand(commands)
   else:

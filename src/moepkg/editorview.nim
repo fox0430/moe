@@ -269,8 +269,9 @@ proc writeAllLines*[T](view: var EditorView,
                        currentLine, startSelectedLine, endSelectedLine: int,
                        currentLineColorPair: var int) =
 
-  view.widthOfLineNum = if viewSettings.lineNumber: buffer.len.numberOfDigits + 1
-                        else: 0
+  view.widthOfLineNum =
+    if viewSettings.lineNumber: buffer.len.numberOfDigits + 1
+    else: 0
 
   var
     indents          = 0
@@ -303,7 +304,7 @@ proc writeAllLines*[T](view: var EditorView,
          endSelectedLine >= view.originalLine[y]):
         # TODO: Enable color
         #view.write(win, y, x, ru" ", EditorColorPair.visualMode)
-        tb.write(x, y, " ")
+        write(x, y, " ")
       else:
         if viewSettings.highlightCurrentLine and isCurrentLine and
            currentLine < buffer.len:
@@ -316,7 +317,7 @@ proc writeAllLines*[T](view: var EditorView,
                            mode, prevMode,
                            viewSettings)
         else:
-          view.write(y, x, view.lines[y], EditorColorPair.defaultChar)
+          view.write(view.y + y, x, view.lines[y], EditorColorPair.defaultChar)
       continue
 
     if viewSettings.indentationLines and not isConfigMode(mode, prevMode):
@@ -370,7 +371,7 @@ proc writeAllLines*[T](view: var EditorView,
                          mode, prevMode,
                          viewSettings)
       else:
-        view.write(y, x, str, highlight[i].color)
+        view.write(view.y + y, x, str, highlight[i].color)
       x += width(str)
       if last == highlight[i].lastColumn - view.start[y]: inc(i) # consumed a whole segment
       else: break
