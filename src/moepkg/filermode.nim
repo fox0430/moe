@@ -491,10 +491,10 @@ proc writefileDetail(status: var Editorstatus,
 
   status.update
   setCursor(false)
-  while isResizekey(currentMainWindowNode.getKey):
-    status.resize(terminalHeight, terminalWidth)
-    status.update
-    setCursor(false)
+  #while isResizekey(currentMainWindowNode.getKey):
+  #  status.resize(terminalHeight, terminalWidth)
+  #  status.update
+  #  setCursor(false)
 
   windowNode.currentLine = tmpCurrentLine
 
@@ -519,7 +519,7 @@ proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
     #currentMainWindowNode.window.get.write(0, 0, "not found", EditorColorPair.commandBar)
     write(0, 0, "not found")
     currentMainWindowNode.refreshWindow
-    discard status.commandLine.getKey
+    discard getKey()
     status.commandLine.erase
     filerStatus.dirlistUpdate = true
 
@@ -557,8 +557,8 @@ proc filerMode*(status: var EditorStatus) =
 
     setCursor(false)
 
-    var key = errorKey
-    while key == errorKey:
+    var key = NONE_KEY
+    while key == NONE_KEY:
       status.eventLoopTask
       key = getKey(currentMainWindowNode)
 
@@ -569,9 +569,9 @@ proc filerMode*(status: var EditorStatus) =
 
     if key == ord(':'): status.changeMode(Mode.ex)
 
-    elif isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-      filerStatus.viewUpdate = true
+    #elif isResizekey(key):
+    #  status.resize(terminalHeight(), terminalWidth())
+    #  filerStatus.viewUpdate = true
 
     elif key == ord('/'): status.searchFileMode(filerStatus)
 

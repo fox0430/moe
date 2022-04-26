@@ -1,4 +1,4 @@
-import std/[terminal, times, strutils]
+import std/[terminal, times, strutils, os]
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, undoredostack,
        window, movement, editor, searchutils, search, bufferstatus, quickrun,
        messages
@@ -1077,7 +1077,7 @@ proc normalCommand(status: var EditorStatus,
     for i in 0 ..< cmdLoop: currentBufStatus.keyUp(currentMainWindowNode)
   elif key == ord('j') or isDownKey(key) or isEnterKey(key):
     for i in 0 ..< cmdLoop: currentBufStatus.keyDown(currentMainWindowNode)
-  elif key == ord('x') or isDcKey(key):
+  elif key == ord('x') or isDeleteKey(key):
     status.deleteCharacters
   elif key == ord('X'):
     status.cutCharacterBeforeCursor
@@ -1310,8 +1310,8 @@ proc normalCommand(status: var EditorStatus,
 
 # Get a key and execute the event loop
 proc getKey(status: var Editorstatus): Rune =
-  result = errorKey
-  while result == errorKey:
+  result = NONE_KEY
+  while result == NONE_KEY:
     if not pressCtrlC:
       status.eventLoopTask
       result = getKey(currentMainWindowNode)
@@ -1334,7 +1334,7 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
        command[0] == ord('k') or isUpKey(command[0]) or
        command[0] == ord('j') or isDownKey(command[0]) or
        isEnterKey(command[0]) or
-       command[0] == ord('x') or isDcKey(command[0]) or
+       command[0] == ord('x') or isDeleteKey(command[0]) or
        command[0] == ord('X') or
        command[0] == ord('^') or command[0] == ord('_') or
        command[0] == ord('0') or isHomeKey(command[0]) or
@@ -1565,6 +1565,7 @@ proc normalMode*(status: var EditorStatus) =
     changeCursorType(status.settings.normalModeCursor)
 
   status.resize(terminalHeight(), terminalWidth())
+  status.update
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   var
@@ -1577,12 +1578,16 @@ proc normalMode*(status: var EditorStatus) =
     if currentBufStatus.countChange > countChange:
       countChange = currentBufStatus.countChange
 
-    while true:
-      status.update
+    var key = NONE_KEY
+    while key == NONE_KEY:
+      if isResizedWindow:
+        status.resize(terminalHeight(), terminalWidth())
+        status.update
 
-    var key = status.getKey
+      key = getKey()
 
-    status.lastOperatingTime = now()
+      status.lastOperatingTime = now()
+      sleep 100
 
     currentBufStatus.buffer.beginNewSuitIfNeeded
     currentBufStatus.tryRecordCurrentPosition(currentMainWindowNode)
@@ -1598,9 +1603,9 @@ proc normalMode*(status: var EditorStatus) =
       else:
         key = keyAfterEsc
 
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-    elif key == ord('/'):
+    #if isResizekey(key):
+    #  status.resize(terminalHeight(), terminalWidth())
+    if key == ord('/'):
       status.searchFordwards
     elif key == ord('?'):
       status.searchBackwards

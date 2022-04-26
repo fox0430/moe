@@ -30,8 +30,8 @@ proc insertMode*(status: var EditorStatus) =
         mainWindowY,
         status.settings.statusLine.enable)
 
-    var key = errorKey
-    while key == errorKey:
+    var key = NONE_KEY
+    while key == NONE_KEY:
       if not pressCtrlC:
         status.eventLoopTask
         key = getKey(currentMainWindowNode)
@@ -79,9 +79,9 @@ proc insertMode*(status: var EditorStatus) =
       prevLine = currentBufStatus.buffer[currentMainWindowNode.currentLine]
       prevLineNumber = currentMainWindowNode.currentLine
 
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-    elif isEscKey(key) or isControlSquareBracketsRight(key):
+    #if isResizekey(key):
+    #  status.resize(terminalHeight(), terminalWidth())
+    if isEscKey(key) or isControlLeftSquareBracket(key):
       if windowNode.currentColumn > 0: dec(windowNode.currentColumn)
       windowNode.expandedColumn = windowNode.currentColumn
       status.changeMode(Mode.normal)
@@ -104,7 +104,7 @@ proc insertMode*(status: var EditorStatus) =
       windowNode.moveToFirstOfLine
     elif isEndKey(key):
       currentBufStatus.moveToLastOfLine(windowNode)
-    elif isDcKey(key):
+    elif isDeleteKey(key):
       currentBufStatus.deleteCharacter(
         windowNode.currentLine,
         windowNode.currentColumn,

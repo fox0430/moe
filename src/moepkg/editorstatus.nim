@@ -339,6 +339,8 @@ proc resize*(status: var EditorStatus, height, width: int) =
 
   setCursor(true)
 
+  isResizedWindow = false
+
 proc highlightPairOfParen(highlight: var Highlight,
                           bufStatus: BufferStatus,
                           windowNode: WindowNode)
@@ -1072,9 +1074,9 @@ proc scrollUpNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
       currentBufStatus.keyUp(currentMainWindowNode)
       status.update
       currentMainWindowNode.setTimeout(status.settings.smoothScrollSpeed)
-      var key = errorKey
+      var key = NONE_KEY
       key = getKey(currentMainWindowNode)
-      if key != errorKey: break
+      if key != NONE_KEY: break
 
     ## Set default time out setting
     currentMainWindowNode.setTimeout
@@ -1104,9 +1106,9 @@ proc scrollDownNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
       currentBufStatus.keyDown(currentMainWindowNode)
       status.update
       currentMainWindowNode.setTimeout(status.settings.smoothScrollSpeed)
-      var key = errorKey
+      var key = NONE_KEY
       key = getKey(currentMainWindowNode)
-      if key != errorKey: break
+      if key != NONE_KEY: break
 
     ## Set default time out setting
     currentMainWindowNode.setTimeout

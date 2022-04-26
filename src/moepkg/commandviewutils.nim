@@ -91,7 +91,7 @@ proc askCreateDirPrompt*(commndLine: var CommandLine,
   commndLine.updateCommandLineView
   messageLog.add(mess.toRunes)
 
-  let key = commndLine.getKey
+  let key = getKey()
 
   if key == ord('y'): result = true
   else: result = false
@@ -105,7 +105,7 @@ proc askBackupRestorePrompt*(commndLine: var CommandLine,
   commndLine.updateCommandLineView
   messageLog.add(mess.toRunes)
 
-  let key = commndLine.getKey
+  let key = getKey()
 
   if key == ord('y'): result = true
   else: result = false
@@ -119,7 +119,7 @@ proc askDeleteBackupPrompt*(commndLine: var CommandLine,
   commndLine.updateCommandLineView
   messageLog.add(mess.toRunes)
 
-  let key = commndLine.getKey
+  let key = getKey()
 
   if key == ord('y'): result = true
   else: result = false
@@ -132,14 +132,14 @@ proc askFileChangedSinceReading*(commndLine: var CommandLine,
     commndLine.updateCommandLineBuffer(warnMess)
     commndLine.updateCommandLineView
     messageLog.add(warnMess.toRunes)
-    discard commndLine.getKey
+    discard getKey()
 
   block:
     const askMess = "Do you really want to write to it: y/n ?"
     commndLine.updateCommandLineBuffer(askMess)
     commndLine.updateCommandLineView
     messageLog.add(askMess.toRunes)
-    let key = commndLine.getKey
+    let key = getKey()
 
     if key == ord('y'): result = true
     else: result = false

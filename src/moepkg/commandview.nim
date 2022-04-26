@@ -70,9 +70,9 @@ proc suggestCommandLine(status: var Editorstatus,
 
     status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
 
-    key = errorKey
-    while key == errorKey:
-      key = status.commandLine.getKey
+    key = NONE_KEY
+    while key == NONE_KEY:
+      key = getKey()
 
     exStatus.cursorX = exStatus.currentPosition + 1
 
@@ -121,10 +121,10 @@ proc getKeyOnceAndWriteCommandView*(
   while true:
     status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
 
-    var key = errorKey
-    while key == errorKey:
+    var key = NONE_KEY
+    while key == NONE_KEY:
       if not pressCtrlC:
-        key = status.commandLine.getKey
+        key = getKey()
       else:
         # Exit command line mode
         pressCtrlC = false
@@ -146,9 +146,9 @@ proc getKeyOnceAndWriteCommandView*(
     elif isEscKey(key):
       cancelSearch = true
       break
-    elif isResizeKey(key):
-      status.resize(terminalHeight(), terminalWidth())
-      status.update
+    #elif isResizeKey(key):
+    #  status.resize(terminalHeight(), terminalWidth())
+    #  status.update
     elif isLeftKey(key):
       status.commandLine.window.moveLeft(exStatus)
     elif isRightkey(key):
@@ -170,7 +170,7 @@ proc getKeyOnceAndWriteCommandView*(
     elif isBackspaceKey(key):
       exStatus.deleteCommandBuffer
       break
-    elif isDcKey(key):
+    elif isDeleteKey(key):
       exStatus.deleteCommandBufferCurrentPosition
       break
     else:
@@ -187,28 +187,28 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
   while true:
     status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
 
-    var key = status.commandLine.getKey
+    var key = getKey()
 
     # Suggestion mode
     if isTabKey(key) or isShiftTab(key):
       status.suggestCommandLine(exStatus, key)
       if status.settings.popUpWindowInExmode and isEnterKey(key):
           status.commandLine.window.moveCursor(exStatus.cursorY, exStatus.cursorX)
-          key = status.commandLine.getKey
+          key = getKey()
 
     if isEnterKey(key): break
     elif isEscKey(key):
       status.commandLine.erase
       return @[ru""]
-    elif isResizeKey(key):
-      status.resize(terminalHeight(), terminalWidth())
-      status.update
+    #elif isResizeKey(key):
+    #  status.resize(terminalHeight(), terminalWidth())
+    #  status.update
     elif isLeftKey(key): status.commandLine.window.moveLeft(exStatus)
     elif isRightkey(key): moveRight(exStatus)
     elif isHomeKey(key): moveTop(exStatus)
     elif isEndKey(key): moveEnd(exStatus)
     elif isBackspaceKey(key): deleteCommandBuffer(exStatus)
-    elif isDcKey(key): deleteCommandBufferCurrentPosition(exStatus)
+    elif isDeleteKey(key): deleteCommandBufferCurrentPosition(exStatus)
     else: insertCommandBuffer(exStatus, key)
 
   return splitCommand($exStatus.buffer)

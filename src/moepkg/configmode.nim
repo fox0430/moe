@@ -1271,13 +1271,13 @@ proc editFiguresSetting(status: var EditorStatus,
   while not isBreak and not isCancel:
     status.update
 
-    var key = errorKey
-    while key == errorKey:
+    var key = NONE_KEY
+    while key == NONE_KEY:
       key = currentMainWindowNode.getKey
 
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-    elif isEscKey(key):
+    #if isResizekey(key):
+    #  status.resize(terminalHeight(), terminalWidth())
+    if isEscKey(key):
       isCancel = true
     elif isEnterKey(key):
       isBreak = true
@@ -1426,13 +1426,13 @@ proc editStringSetting(status: var EditorStatus,
   while not isBreak and not isCancel:
     status.update
 
-    var key = errorKey
-    while key == errorKey:
+    var key = NONE_KEY
+    while key == NONE_KEY:
       key = currentMainWindowNode.getKey
 
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-    elif isEscKey(key):
+    #if isResizekey(key):
+    #  status.resize(terminalHeight(), terminalWidth())
+    if isEscKey(key):
       isCancel = true
     elif isEnterKey(key):
       isBreak = true
@@ -1533,10 +1533,10 @@ proc editEnumAndBoolSettings(status: var EditorStatus,
     popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
     suggestIndex = 0
 
-    key = errorKey
+    key = NONE_KEY
 
   while (isTabKey(key) or isShiftTab(key) or isDownKey(key) or isUpKey(key) or
-         errorKey == key) and settingValues.len > 1:
+         NONE_KEY == key) and settingValues.len > 1:
 
     if (isTabKey(key) or isDownKey(key)) and
        suggestIndex < settingValues.high: inc(suggestIndex)
@@ -2058,9 +2058,9 @@ proc configMode*(status: var Editorstatus) =
          arrayIndex > getNumOfValueOfArraySetting():
         arrayIndex = getNumOfValueOfArraySetting() - 1
 
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-    elif isControlK(key):
+    #if isResizekey(key):
+    #  status.resize(terminalHeight(), terminalWidth())
+    if isControlK(key):
       status.moveNextWindow
     elif isControlJ(key):
       status.movePrevWindow

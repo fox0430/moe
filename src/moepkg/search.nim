@@ -27,15 +27,15 @@ proc getKeyword*(status: var EditorStatus,
   while true:
     status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
 
-    var key = status.commandLine.getKey
+    var key = getKey()
 
     if isEnterKey(key): break
     elif isEscKey(key):
       cancelSearch = true
       break
-    elif isResizeKey(key):
-      status.resize(terminalHeight(), terminalWidth())
-      status.update
+    #elif isResizeKey(key):
+    #  status.resize(terminalHeight(), terminalWidth())
+    #  status.update
     elif isLeftKey(key): status.commandLine.window.moveLeft(exStatus)
     elif isRightkey(key): exStatus.moveRight
     elif isUpKey(key) and isSearch: setPrevSearchHistory()
@@ -43,7 +43,7 @@ proc getKeyword*(status: var EditorStatus,
     elif isHomeKey(key): exStatus.moveTop
     elif isEndKey(key): exStatus.moveEnd
     elif isBackspaceKey(key): exStatus.deleteCommandBuffer
-    elif isDcKey(key): exStatus.deleteCommandBufferCurrentPosition
+    elif isDeleteKey(key): exStatus.deleteCommandBufferCurrentPosition
     else: exStatus.insertCommandBuffer(key)
 
   return (exStatus.buffer, cancelSearch)

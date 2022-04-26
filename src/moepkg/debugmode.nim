@@ -143,17 +143,17 @@ proc debugMode*(status: var Editorstatus) =
     status.update
     setCursor(false)
 
-    var key = errorKey
-    while key == errorKey:
+    var key = NONE_KEY
+    while key == NONE_KEY:
       status.eventLoopTask
-      key = getKey(currentMainWindowNode)
+      key = getKey()
 
     status.lastOperatingTime = now()
 
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
+    #if isResizekey(key):
+    #  status.resize(terminalHeight(), terminalWidth())
 
-    elif key == ord(':'):
+    if key == ord(':'):
       status.changeMode(Mode.ex)
 
     elif isControlK(key):

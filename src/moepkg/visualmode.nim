@@ -356,22 +356,22 @@ proc getInsertBuffer(status: var Editorstatus): seq[Rune] =
   while true:
     status.update
 
-    var key = errorKey
-    while key == errorKey:
+    var key = NONE_KEY
+    while key == NONE_KEY:
       status.eventLoopTask
       key = getKey(currentMainWindowNode)
 
     if isEscKey(key):
       break
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
+    #if isResizekey(key):
+    #  status.resize(terminalHeight(), terminalWidth())
     elif isEnterKey(key):
       currentBufStatus.keyEnter(
         currentMainWindowNode,
         status.settings.autoIndent,
         status.settings.tabStop)
       break
-    elif isDcKey(key):
+    elif isDeleteKey(key):
       currentBufStatus.deleteCharacter(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn,
@@ -441,7 +441,7 @@ proc insertCharBlock(bufStatus: var BufferStatus,
 proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   area.swapSelectArea
 
-  if key == ord('y') or isDcKey(key):
+  if key == ord('y') or isDeleteKey(key):
     currentBufStatus.yankBuffer(status.registers,
                                 currentMainWindowNode,
                                 area,
@@ -503,7 +503,7 @@ proc visualBlockCommand(status: var EditorStatus, area: var SelectArea, key: Run
       currentMainWindowNode.currentLine = area.startLine
       currentMainWindowNode.currentColumn = area.startColumn
 
-  if key == ord('y') or isDcKey(key):
+  if key == ord('y') or isDeleteKey(key):
     currentBufStatus.yankBufferBlock(status.registers,
                                      currentMainWindowNode,
                                      area,
@@ -553,8 +553,8 @@ proc visualMode*(status: var EditorStatus) =
 
     status.update
 
-    var key = errorKey
-    while key == errorKey:
+    var key = NONE_KEY
+    while key == NONE_KEY:
       if not pressCtrlC:
         status.eventLoopTask
         key = getKey(currentMainWindowNode)
@@ -570,9 +570,9 @@ proc visualMode*(status: var EditorStatus) =
     currentBufStatus.buffer.beginNewSuitIfNeeded
     currentBufStatus.tryRecordCurrentPosition(currentMainWindowNode)
 
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-    elif isEscKey(key) or isControlSquareBracketsRight(key):
+    #if isResizekey(key):
+    #  status.resize(terminalHeight(), terminalWidth())
+    if isEscKey(key) or isControlLeftSquareBracket(key):
 
       var highlight = currentMainWindowNode.highlight
       highlight.updateHighlight(

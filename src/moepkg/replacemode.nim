@@ -109,8 +109,8 @@ proc replaceMode*(status: var EditorStatus) =
 
     status.update
 
-    var key = errorKey
-    while key == errorKey:
+    var key = NONE_KEY
+    while key == NONE_KEY:
       if not pressCtrlC:
         status.eventLoopTask
         key = getKey(currentMainWindowNode)
@@ -131,9 +131,9 @@ proc replaceMode*(status: var EditorStatus) =
     currentBufStatus.buffer.beginNewSuitIfNeeded
     currentBufStatus.tryRecordCurrentPosition(currentMainWindowNode)
 
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-    elif isEscKey(key) or isControlSquareBracketsRight(key):
+    #if isResizekey(key):
+    #  status.resize(terminalHeight(), terminalWidth())
+    if isEscKey(key) or isControlLeftSquareBracket(key):
       status.changeMode(Mode.normal)
     elif isRightKey(key):
       currentBufStatus.moveRight(currentMainWindowNode, isMoved, undoLastSuitId)

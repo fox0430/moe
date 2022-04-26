@@ -52,5 +52,5 @@ proc erase*(commndLine: var CommandLine) =
   commndLine.window.erase
   #commndLine.window.refresh
 
-proc getKey*(commndLine: var CommandLine): Rune {.inline.} =
-  commndLine.window.getkey
+#proc getKey*(commndLine: var CommandLine): Rune {.inline.} =
+#  commndLine.window.getkey

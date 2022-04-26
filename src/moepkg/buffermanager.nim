@@ -111,17 +111,17 @@ proc bufferManager*(status: var Editorstatus) =
     status.update
     setCursor(false)
 
-    var key = errorKey
-    while key == errorKey:
+    var key = NONE_KEY
+    while key == NONE_KEY:
       status.eventLoopTask
       key = getKey(currentMainWindowNode)
 
     status.lastOperatingTime = now()
 
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
+    #if isResizekey(key):
+    #  status.resize(terminalHeight(), terminalWidth())
 
-    elif isControlK(key):
+    if isControlK(key):
       status.moveNextWindow
     elif isControlJ(key):
       status.movePrevWindow

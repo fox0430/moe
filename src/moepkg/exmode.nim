@@ -998,7 +998,7 @@ proc forceWriteAndQuitCommand(status: var EditorStatus, height, width: int) =
     status.commandLine.writeSaveError(status.messageLog)
     return
 
-  discard status.commandLine.getKey
+  discard getKey()
 
   status.writeAndQuitCommand(height, width)
 
@@ -1130,8 +1130,8 @@ proc listAllBufferCommand(status: var Editorstatus) =
     status.update
     setCursor(false)
     let key = getKey(currentMainWindowNode)
-    if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
-    elif key.int == 0: discard
+    #if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
+    if key.int == 0: discard
     else: break
 
   status.settings.view.currentLineNumber = swapCurrentLineNumStting
