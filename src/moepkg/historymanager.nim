@@ -135,11 +135,12 @@ proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
   if not isRestore: return
 
   # Backup files before restore
-  currentBufStatus.backupBuffer(currentBufStatus.characterEncoding,
-                                status.settings.autoBackupSettings,
-                                status.settings.notificationSettings,
-                                status.commandLine,
-                                status.messageLog)
+  currentBufStatus.backupBuffer(
+    currentBufStatus.characterEncoding,
+    status.settings.autoBackupSettings,
+    status.settings.notificationSettings,
+    status.commandLine,
+    status.messageLog)
 
   try:
     copyFile($backupFilePath, $sourcePath)
@@ -151,24 +152,34 @@ proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
   for i in 0 ..< status.bufStatus.len:
     if status.bufStatus[i].path == sourcePath:
       let lang = status.bufStatus[i].language
-      status.bufStatus[i] = BufferStatus(path: sourcePath,
-                                         mode: Mode.normal,
-                                         language: lang,
-                                         lastSaveTime: now())
+      status.bufStatus[i] = BufferStatus(
+        path: sourcePath,
+        mode: Mode.normal,
+        language: lang,
+        lastSaveTime: now())
       let textAndEncoding = openFile(sourcePath)
       status.bufStatus[i].buffer = textAndEncoding.text.toGapBuffer
       status.bufStatus[i].characterEncoding = textAndEncoding.encoding
 
-      currentMainWindowNode.view =
-        status.bufStatus[i].buffer.initEditorView(terminalHeight(),
-                                                  terminalWidth())
+      block:
+        let
+          y = 0
+          x = 0
+          h = terminalHeight()
+          w = terminalWidth()
+        currentMainWindowNode.view = status.bufStatus[i].buffer.initEditorView(
+          y,
+          x,
+          h,
+          w)
 
   status.resize(terminalHeight(), terminalWidth())
 
   let settings = status.settings.notificationSettings
-  status.commandLine.writeRestoreFileSuccessMessage(backupFilename,
-                                                    settings,
-                                                    status.messageLog)
+  status.commandLine.writeRestoreFileSuccessMessage(
+    backupFilename,
+    settings,
+    status.messageLog)
 
 proc deleteBackupFiles(status: var EditorStatus, sourcePath: seq[Rune]) =
   let

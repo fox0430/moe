@@ -1577,7 +1577,8 @@ proc normalMode*(status: var EditorStatus) =
     if currentBufStatus.countChange > countChange:
       countChange = currentBufStatus.countChange
 
-    status.update
+    while true:
+      status.update
 
     var key = status.getKey
 

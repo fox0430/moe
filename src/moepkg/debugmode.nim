@@ -132,47 +132,47 @@ proc initDebugModeBuffer*(
 
 import editorstatus
 
-#proc debugMode*(status: var Editorstatus) =
-#  let currentBufferIndex = currentMainWindowNode.bufferIndex
-#
-#  status.resize(terminalHeight(), terminalWidth())
-#
-#  while currentBufStatus.mode == Mode.debug and
-#        currentBufferIndex == status.bufferIndexInCurrentWindow:
-#
-#    status.update
-#    setCursor(false)
-#
-#    var key = errorKey
-#    while key == errorKey:
-#      status.eventLoopTask
-#      key = getKey(currentMainWindowNode)
-#
-#    status.lastOperatingTime = now()
-#
-#    if isResizekey(key):
-#      status.resize(terminalHeight(), terminalWidth())
-#
-#    elif key == ord(':'):
-#      status.changeMode(Mode.ex)
-#
-#    elif isControlK(key):
-#      status.moveNextWindow
-#    elif isControlJ(key):
-#      status.movePrevWindow
-#
-#    elif key == ord('k') or isUpKey(key):
-#      currentBufStatus.keyUp(currentMainWindowNode)
-#    elif key == ord('j') or isDownKey(key):
-#      currentBufStatus.keyDown(currentMainWindowNode)
-#
-#    elif key == ord('g'):
-#      let secondKey = getKey(currentMainWindowNode)
-#      if secondKey == ord('g'):
-#        currentBufStatus.moveToFirstLine(currentMainWindowNode)
-#      else: discard
-#    elif key == ord('G'):
-#      currentBufStatus.moveToLastLine(currentMainWindowNode)
-#
-#    else:
-#      discard
+proc debugMode*(status: var Editorstatus) =
+  let currentBufferIndex = currentMainWindowNode.bufferIndex
+
+  status.resize(terminalHeight(), terminalWidth())
+
+  while currentBufStatus.mode == Mode.debug and
+        currentBufferIndex == status.bufferIndexInCurrentWindow:
+
+    status.update
+    setCursor(false)
+
+    var key = errorKey
+    while key == errorKey:
+      status.eventLoopTask
+      key = getKey(currentMainWindowNode)
+
+    status.lastOperatingTime = now()
+
+    if isResizekey(key):
+      status.resize(terminalHeight(), terminalWidth())
+
+    elif key == ord(':'):
+      status.changeMode(Mode.ex)
+
+    elif isControlK(key):
+      status.moveNextWindow
+    elif isControlJ(key):
+      status.movePrevWindow
+
+    elif key == ord('k') or isUpKey(key):
+      currentBufStatus.keyUp(currentMainWindowNode)
+    elif key == ord('j') or isDownKey(key):
+      currentBufStatus.keyDown(currentMainWindowNode)
+
+    elif key == ord('g'):
+      let secondKey = getKey(currentMainWindowNode)
+      if secondKey == ord('g'):
+        currentBufStatus.moveToFirstLine(currentMainWindowNode)
+      else: discard
+    elif key == ord('G'):
+      currentBufStatus.moveToLastLine(currentMainWindowNode)
+
+    else:
+      discard

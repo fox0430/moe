@@ -540,12 +540,16 @@ proc lineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
                           else: 0
     useStatusLine = if status.settings.statusLine.enable: 1 else: 0
 
-  currentMainWindowNode.view = initEditorView(
-    status.bufStatus[0].buffer,
-    terminalHeight() - useStatusLine - 1,
-    terminalWidth() - numberOfDigitsLen)
+    buffer = status.bufStatus[0].buffer
 
-  status.commandLine.erase
+    y = useStatusLine
+    x = numberOfDigitsLen
+    h = terminalHeight() - useStatusLine - 1
+    w = terminalWidth() - numberOfDigitsLen
+
+  currentMainWindowNode.view = initEditorView(buffer, y, x, h, w)
+
+  #status.commandLine.erase
 
   status.changeMode(currentBufStatus.prevMode)
 
@@ -559,12 +563,16 @@ proc statusLineSettingCommand(status: var EditorStatus, command: seq[Rune]) =
                           else: 0
     useStatusLine = if status.settings.statusLine.enable : 1 else: 0
 
-  currentMainWindowNode.view = initEditorView(
-    status.bufStatus[0].buffer,
-    terminalHeight() - useStatusLine - 1,
-    terminalWidth() - numberOfDigitsLen)
+    buffer = status.bufStatus[0].buffer
 
-  status.commandLine.erase
+    y = useStatusLine
+    x = numberOfDigitsLen
+    h = terminalHeight() - useStatusLine - 1
+    w = terminalWidth() - numberOfDigitsLen
+
+  currentMainWindowNode.view = initEditorView(buffer, y, x, h, w)
+
+  #status.commandLine.erase
 
   status.changeMode(currentBufStatus.prevMode)
 
@@ -1092,15 +1100,21 @@ proc listAllBufferCommand(status: var Editorstatus) =
     if i == 0: currentBufStatus.buffer[0] = line
     else: currentBufStatus.buffer.insert(line, i)
 
-  let
-    useStatusLine = if status.settings.statusLine.enable: 1 else: 0
-    enable = if status.settings.tabLine.enable: 1 else: 0
-    swapCurrentLineNumStting = status.settings.view.currentLineNumber
+  let swapCurrentLineNumStting = status.settings.view.currentLineNumber
 
   status.settings.view.currentLineNumber = false
-  currentMainWindowNode.view = currentBufStatus.buffer.initEditorView(
-    terminalHeight() - useStatusLine - enable - 1,
-    terminalWidth())
+
+  block:
+    let
+      statusLineLen = if status.settings.statusLine.enable: 1 else: 0
+      tablineLen = if status.settings.tabLine.enable: 1 else: 0
+
+      y = statusLineLen
+      x = 0
+      h = terminalHeight() - statusLineLen - tablineLen - 1
+      w = terminalWidth()
+    currentMainWindowNode.view =
+      currentBufStatus.buffer.initEditorView(y, x, h, w)
 
   currentMainWindowNode.currentLine = 0
 

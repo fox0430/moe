@@ -2,7 +2,7 @@ import std/[os, terminal, strutils, times, algorithm, sequtils,
             options]
 import editorstatus, ui, fileutils, editorview, gapbuffer, highlight, window,
        color, bufferstatus, settings, messages, commandline, unicodeext,
-       commandview
+       commandview, term
 
 type PathInfo = tuple[kind: PathComponent,
                       path: string,
@@ -410,12 +410,17 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus,
 
   let useStatusBar = if settings.statusLine.enable: 1 else: 0
   let numOfFile = filerStatus.dirList.len
-  windowNode.highlight = initFilelistHighlight(filerStatus.dirList,
-                                               bufStatus.buffer,
-                                               windowNode.currentLine)
-  windowNode.view = initEditorView(bufStatus.buffer,
-                                   terminalHeight - useStatusBar - 1,
-                                   terminalWidth - numOfFile)
+  windowNode.highlight = initFilelistHighlight(
+    filerStatus.dirList,
+    bufStatus.buffer,
+    windowNode.currentLine)
+
+  let
+    y = useStatusBar
+    x = numOfFile
+    h = terminalHeight - useStatusBar - 1
+    w = terminalWidth - numOfFile
+  windowNode.view = initEditorView(bufStatus.buffer, y, x, w, h)
 
 proc updateFilerView*(status: var EditorStatus,
                       filerStatus: var FilerStatus,
@@ -474,9 +479,14 @@ proc writefileDetail(status: var Editorstatus,
     useStatusBar = if status.settings.statusLine.enable: 1 else: 0
     tmpCurrentLine = windowNode.currentLine
 
-  windowNode.view = initEditorView(currentBufStatus.buffer,
-                                   terminalHeight - useStatusBar - 1,
-                                   terminalWidth - numOfFile)
+  block:
+    let
+      y = useStatusBar
+      x = numOfFile
+      h = terminalHeight - useStatusBar - 1
+      w = terminalWidth - numOfFile
+    windowNode.view = initEditorView(currentBufStatus.buffer, y, x, h, w)
+
   windowNode.currentLine = 0
 
   status.update
@@ -505,7 +515,9 @@ proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
 
   if filerStatus.dirList.len == 0:
     currentMainWindowNode.eraseWindow
-    currentMainWindowNode.window.get.write(0, 0, "not found", EditorColorPair.commandBar)
+    # TDO: Enable color
+    #currentMainWindowNode.window.get.write(0, 0, "not found", EditorColorPair.commandBar)
+    write(0, 0, "not found")
     currentMainWindowNode.refreshWindow
     discard status.commandLine.getKey
     status.commandLine.erase

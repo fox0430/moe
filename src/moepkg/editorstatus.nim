@@ -26,8 +26,6 @@ type EditorStatus* = object
   currentDir: seq[Rune]
   messageLog*: seq[seq[Rune]]
   commandLine*: CommandLine
-  # TODO: Enable popUpWindow
-  #popUpWindow*: Window
   lastOperatingTime*: DateTime
   autoBackupStatus*: AutoBackupStatus
   isSearchHighlight*: bool
@@ -560,6 +558,8 @@ proc update*(status: var EditorStatus) =
   # TODO: Enable command view
   #status.commandLine.updateCommandLineView
 
+  display()
+
   setCursor(true)
 
 proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode)
@@ -681,41 +681,41 @@ proc movePrevWindow*(status: var EditorStatus) {.inline.} =
 
   status.moveCurrentMainWindow(currentMainWindowNode.windowIndex - 1)
 
-#proc writePopUpWindow*(popUpWindow: var Window,
-#                       h, w, y, x: int,
-#                       terminalHeight, terminalWidth: int,
-#                       currentLine: int,
-#                       buffer: seq[seq[Rune]]) =
-#  # TODO: Probably, the parameter `y` means the bottom of the window,
-#  #       but it should change to the top of the window for consistency.
-#
-#  popUpWindow.erase
-#
-#  # Pop up window position
-#  let
-#    actualY = y.clamp(0, terminalHeight - 1 - h)
-#    actualX = x.clamp(0, terminalWidth - w)
-#
-#  popUpWindow.resize(h, w, actualY, actualX)
-#
-#  let startLine = if currentLine == -1: 0
-#                  elif currentLine - h + 1 > 0: currentLine - h + 1
-#                  else: 0
-#  for i in 0 ..< h:
-#    if currentLine != -1 and i + startLine == currentLine:
-#      let color = EditorColorPair.popUpWinCurrentLine
-#      popUpWindow.write(i, 1, buffer[i + startLine], color, false)
-#    else:
-#      let color = EditorColorPair.popUpWindow
-#      popUpWindow.write(i, 1, buffer[i + startLine], color, false)
-#
-#  popUpWindow.refresh
-#
+# TODO: Move
+proc writePopUpWindow*(popUpWindow: var Window,
+                       h, w, y, x: int,
+                       terminalHeight, terminalWidth: int,
+                       currentLine: int,
+                       buffer: seq[seq[Rune]]) =
+  # TODO: Probably, the parameter `y` means the bottom of the window,
+  #       but it should change to the top of the window for consistency.
+
+  # Pop up window position
+  let
+    actualY = y.clamp(0, terminalHeight - 1 - h)
+    actualX = x.clamp(0, terminalWidth - w)
+
+  popUpWindow.resize(h, w, actualY, actualX)
+
+  let startLine = if currentLine == -1: 0
+                  elif currentLine - h + 1 > 0: currentLine - h + 1
+                  else: 0
+  for i in 0 ..< h:
+    if currentLine != -1 and i + startLine == currentLine:
+      # TODO: Enable color
+      #let color = EditorColorPair.popUpWinCurrentLine
+      #popUpWindow.write(i, 1, buffer[i + startLine], color, false)
+      write(i, 1, $buffer[i + startLine])
+    else:
+      # TODO: Enable color
+      write(i, 1, $buffer[i + startLine])
+
+# TODO: Move
 #proc deletePopUpWindow*(status: var Editorstatus) =
 #  if status.popUpWindow != nil:
-#    #status.popUpWindow.deleteWindow
+#    status.popUpWindow.deleteWindow
 #    status.update
-#
+
 proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode) =
 
   let path = if isFilerMode(mode): ru absolutePath(filename) else: ru filename

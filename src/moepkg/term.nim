@@ -156,3 +156,6 @@ proc moveCursor*(win: var TermWindow, x, y: int) =
 proc getKey*(win: var TermWindow): Key =
   win.moveCursor
   result = getKey()
+
+proc display*() =
+  tb.display
