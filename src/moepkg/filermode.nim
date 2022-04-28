@@ -35,7 +35,7 @@ proc searchFiles(status: var EditorStatus,
   let command = status.getCommand("/")
 
   if command.len == 0:
-    status.commandLine.erase
+    status.commandLine.clear
     return @[]
 
   let str = command[0].join("")
@@ -48,7 +48,7 @@ proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
   let command = getCommand(status, "Delete file? 'y' or 'n': ")
 
   if command.len == 0:
-    status.commandLine.erase
+    status.commandLine.clear
   elif (command[0] == ru"y" or command[0] == ru"yes") and command.len == 1:
     if filerStatus.dirList[currentMainWindowNode.currentLine].kind == pcDir:
       try:
@@ -520,7 +520,7 @@ proc searchFileMode(status: var EditorStatus, filerStatus: var FilerStatus) =
     write(0, 0, "not found")
     currentMainWindowNode.refreshWindow
     discard getKey()
-    status.commandLine.erase
+    status.commandLine.clear
     filerStatus.dirlistUpdate = true
 
 proc filerMode*(status: var EditorStatus) =

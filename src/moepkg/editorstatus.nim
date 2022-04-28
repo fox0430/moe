@@ -77,7 +77,8 @@ proc bufferIndexInCurrentWindow*(status: Editorstatus): int {.inline.} =
 proc changeMode*(status: var EditorStatus, mode: Mode) =
   let currentMode = currentBufStatus.mode
 
-  if currentMode != Mode.ex: status.commandLine.erase
+  if currentMode != Mode.ex:
+    status.commandLine.clear
 
   currentBufStatus.prevMode = currentMode
   currentBufStatus.mode = mode
@@ -330,13 +331,6 @@ proc resize*(status: var EditorStatus, height, width: int) =
       y,
       x)
 
-  ## Resize command window
-  const
-    commandWindowHeight = 1
-    x = 0
-  let y = max(height, 4) - 1
-  status.commandLine.resize(y, x, commandWindowHeight, width)
-
   setCursor(true)
 
   isResizedWindow = false
@@ -557,8 +551,7 @@ proc update*(status: var EditorStatus) =
 
   if status.settings.statusLine.enable: status.updateStatusLine
 
-  # TODO: Enable command view
-  #status.commandLine.updateCommandLineView
+  status.commandLine.updateCommandLineView
 
   display()
 

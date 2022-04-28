@@ -1,4 +1,4 @@
-import std/terminal
+import std/[terminal, os, times]
 import editorstatus, searchutils, unicodeext, commandview, color, ui,
        commandline, commandviewutils
 
@@ -8,45 +8,57 @@ proc getKeyword*(status: var EditorStatus,
                  isSearch: bool): (seq[Rune], bool) =
 
   var
-    exStatus = initExModeViewStatus(prompt)
+    commandLine = initExModeViewStatus(prompt)
     cancelSearch = false
     searchHistoryIndex = status.searchHistory.high
 
   template setPrevSearchHistory() =
     if searchHistoryIndex > 0:
-      exStatus.clearCommandBuffer
+      commandLine.clearCommandBuffer
       dec searchHistoryIndex
-      exStatus.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
+      commandLine.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
 
   template setNextSearchHistory() =
     if searchHistoryIndex < status.searchHistory.high:
-      exStatus.clearCommandBuffer
+      commandLine.clearCommandBuffer
       inc searchHistoryIndex
-      exStatus.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
+      commandLine.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
 
   while true:
-    status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
+    status.commandLine.writeExModeView(EditorColorPair.commandBar)
 
-    var key = getKey()
+    var key = NONE_KEY
+    while key == NONE_KEY:
+      if isResizedWindow:
+        status.resize(terminalHeight(), terminalWidth())
+        status.update
+
+      key = getKey()
+
+      status.lastOperatingTime = now()
+      sleep 100
 
     if isEnterKey(key): break
     elif isEscKey(key):
       cancelSearch = true
       break
-    #elif isResizeKey(key):
-    #  status.resize(terminalHeight(), terminalWidth())
-    #  status.update
-    elif isLeftKey(key): status.commandLine.window.moveLeft(exStatus)
-    elif isRightkey(key): exStatus.moveRight
+    elif isLeftKey(key):
+      discard
+      # TODO: Enable cursor
+      #status.commandLine.window.moveLeft(commandLine.
+    elif isRightkey(key):
+      discard
+      # TODO: Enable cursor
+      #commandLine.moveRight
     elif isUpKey(key) and isSearch: setPrevSearchHistory()
     elif isDownKey(key) and isSearch: setNextSearchHistory()
-    elif isHomeKey(key): exStatus.moveTop
-    elif isEndKey(key): exStatus.moveEnd
-    elif isBackspaceKey(key): exStatus.deleteCommandBuffer
-    elif isDeleteKey(key): exStatus.deleteCommandBufferCurrentPosition
-    else: exStatus.insertCommandBuffer(key)
+    elif isHomeKey(key): commandLine.moveTop
+    elif isEndKey(key): commandLine.moveEnd
+    elif isBackspaceKey(key): commandLine.deleteCommandBuffer
+    elif isDeleteKey(key): commandLine.deleteCommandBufferCurrentPosition
+    else: commandLine.insertCommandBuffer(key)
 
-  return (exStatus.buffer, cancelSearch)
+  return (commandLine.buffer, cancelSearch)
 
 proc searchFirstOccurrence(status: var EditorStatus) =
   var
@@ -165,7 +177,7 @@ proc incrementalSearch(status: var Editorstatus, direction: Direction) =
       status.searchHistory,
       status.settings)
 
-    status.commandLine.erase
+    status.commandLine.clear
 
 proc searchFordwards*(status: var EditorStatus) =
   if status.settings.incrementalSearch:

@@ -52,7 +52,7 @@ proc runQuickRun*(bufStatus: var BufferStatus,
 
   commandLine.writeRunQuickRunMessage(settings.notificationSettings, messageLog)
   let cmdResult = execCmdEx(command)
-  commandLine.erase
+  commandLine.clear
 
   result = @[ru""]
 

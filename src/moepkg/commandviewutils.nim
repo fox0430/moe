@@ -1,18 +1,20 @@
 import std/[terminal, strutils, sequtils, strformat, os, algorithm]
-import ui, unicodeext, fileutils, color, commandline
+import ui, unicodeext, fileutils, color, term, commandline
 
-type ExModeViewStatus* = object
+type
+  CommandLine* = object
     buffer*: seq[Rune]
     prompt*: string
     cursorY*: int
     cursorX*: int
     currentPosition*: int
     startPosition*: int
+    color*: EditorColorPair
 
-type SuggestType* = enum
-  exCommand
-  exCommandOption
-  filePath
+  SuggestType* = enum
+    exCommand
+    exCommandOption
+    filePath
 
 const exCommandList: array[65, tuple[command, description: string]] = [
   (command: "!", description: "                    | Shell command execution"),
@@ -182,83 +184,92 @@ proc splitCommand*(command: string): seq[seq[Rune]] =
     return strutils.splitWhitespace(command)
                     .map(proc(s: string): seq[Rune] = toRunes(s))
 
-proc writeExModeView*(commandLine: var CommandLine,
-                      exStatus: ExModeViewStatus,
+# Clear the buffer
+proc clear*(commndLine: var CommandLine) =
+  commndLine.buffer = @[]
+
+proc writeExModeView*(commandLine: CommandLine,
                       color: EditorColorPair) =
 
-  let buffer = ($exStatus.buffer).substr(exStatus.startPosition,
-                                         exStatus.buffer.len)
+  let buffer = ($commandLine.buffer).substr(
+    commandLine.startPosition,
+    commandLine.buffer.len)
 
-  commandLine.erase
-  commandLine.window.write(exStatus.cursorY,
-                           0,
-                           fmt"{exStatus.prompt}{buffer}",
-                           color)
-  commandLine.window.moveCursor(0, exStatus.cursorX)
-  commandLine.window.refresh
+  # TODO: Enable color
+  #commandLine.write(
+  #  commandLine.cursorY,
+  #  0,
+  #  fmt"{commandLine.prompt}{buffer}",
+  #  color)
 
-proc initExModeViewStatus*(prompt: string): ExModeViewStatus =
+  const x = 0
+  write(x, terminalHeight() - 1, fmt"{commandLine.prompt}{buffer}")
+
+  # TODO: Enable cursor
+  #commandLine.window.moveCursor(0, commandLine.cursorX)
+
+proc initExModeViewStatus*(prompt: string):CommandLine =
   result.buffer = ru""
   result.prompt = prompt
   result.cursorY = 0
   result.cursorX = 1
 
-proc moveLeft*(commandWindow: Window, exStatus: var ExModeViewStatus) =
-  if exStatus.currentPosition > 0:
-    dec(exStatus.currentPosition)
-    if exStatus.cursorX > exStatus.prompt.len: dec(exStatus.cursorX)
-    else: dec(exStatus.startPosition)
+proc moveLeft*(commandWindow: Window, commandLine: var CommandLine) =
+  if commandLine.currentPosition > 0:
+    dec(commandLine.currentPosition)
+    if commandLine.cursorX > commandLine.prompt.len: dec(commandLine.cursorX)
+    else: dec(commandLine.startPosition)
 
-proc moveRight*(exStatus: var ExModeViewStatus) =
-  if exStatus.currentPosition < exStatus.buffer.len:
-    inc(exStatus.currentPosition)
-    if exStatus.cursorX < terminalWidth() - 1: inc(exStatus.cursorX)
-    else: inc(exStatus.startPosition)
+proc moveRight*(commandLine: var CommandLine) =
+  if commandLine.currentPosition < commandLine.buffer.len:
+    inc(commandLine.currentPosition)
+    if commandLine.cursorX < terminalWidth() - 1: inc(commandLine.cursorX)
+    else: inc(commandLine.startPosition)
 
-proc moveTop*(exStatus: var ExModeViewStatus) =
-  exStatus.cursorX = exStatus.prompt.len
-  exStatus.currentPosition = 0
-  exStatus.startPosition = 0
+proc moveTop*(commandLine: var CommandLine) =
+  commandLine.cursorX = commandLine.prompt.len
+  commandLine.currentPosition = 0
+  commandLine.startPosition = 0
 
-proc moveEnd*(exStatus: var ExModeViewStatus) =
-  exStatus.currentPosition = exStatus.buffer.len - 1
-  if exStatus.buffer.len > terminalWidth():
-    exStatus.startPosition = exStatus.buffer.len - terminalWidth()
-    exStatus.cursorX = terminalWidth()
+proc moveEnd*(commandLine: var CommandLine) =
+  commandLine.currentPosition = commandLine.buffer.len - 1
+  if commandLine.buffer.len > terminalWidth():
+    commandLine.startPosition = commandLine.buffer.len - terminalWidth()
+    commandLine.cursorX = terminalWidth()
   else:
-    exStatus.startPosition = 0
-    exStatus.cursorX = exStatus.prompt.len + exStatus.buffer.len - 1
+    commandLine.startPosition = 0
+    commandLine.cursorX = commandLine.prompt.len + commandLine.buffer.len - 1
 
-proc clearCommandBuffer*(exStatus: var ExModeViewStatus) =
-  exStatus.buffer = ru""
-  exStatus.cursorY = 0
-  exStatus.cursorX = 1
-  exStatus.currentPosition = 0
-  exStatus.startPosition = 0
+proc clearCommandBuffer*(commandLine: var CommandLine) =
+  commandLine.buffer = ru""
+  commandLine.cursorY = 0
+  commandLine.cursorX = 1
+  commandLine.currentPosition = 0
+  commandLine.startPosition = 0
 
-proc deleteCommandBuffer*(exStatus: var ExModeViewStatus) =
-  if exStatus.buffer.len > 0:
-    if exStatus.buffer.len < terminalWidth(): dec(exStatus.cursorX)
-    exStatus.buffer.delete(exStatus.currentPosition - 1)
-    dec(exStatus.currentPosition)
+proc deleteCommandBuffer*(commandLine: var CommandLine) =
+  if commandLine.buffer.len > 0:
+    if commandLine.buffer.len < terminalWidth(): dec(commandLine.cursorX)
+    commandLine.buffer.delete(commandLine.currentPosition - 1)
+    dec(commandLine.currentPosition)
 
-proc deleteCommandBufferCurrentPosition*(exStatus: var ExModeViewStatus) =
-  if exStatus.buffer.len > 0 and exStatus.currentPosition < exStatus.buffer.len:
-    exStatus.buffer.delete(exStatus.cursorX - 1)
-    if exStatus.currentPosition > exStatus.buffer.len:
-      dec(exStatus.currentPosition)
+proc deleteCommandBufferCurrentPosition*(commandLine: var CommandLine) =
+  if commandLine.buffer.len > 0 and commandLine.currentPosition < commandLine.buffer.len:
+    commandLine.buffer.delete(commandLine.cursorX - 1)
+    if commandLine.currentPosition > commandLine.buffer.len:
+      dec(commandLine.currentPosition)
 
-proc insertCommandBuffer*(exStatus: var ExModeViewStatus, r: Rune) =
-  exStatus.buffer.insert(r, exStatus.currentPosition)
-  inc(exStatus.currentPosition)
-  if exStatus.cursorX < terminalWidth() - 1: inc(exStatus.cursorX)
-  else: inc(exStatus.startPosition)
+proc insertCommandBuffer*(commandLine: var CommandLine, r: Rune) =
+  commandLine.buffer.insert(r, commandLine.currentPosition)
+  inc(commandLine.currentPosition)
+  if commandLine.cursorX < terminalWidth() - 1: inc(commandLine.cursorX)
+  else: inc(commandLine.startPosition)
 
-proc insertCommandBuffer*(exStatus: var ExModeViewStatus,
+proc insertCommandBuffer*(commandLine: var CommandLine,
                           runes: seq[Rune]) {.inline.} =
 
   for r in runes:
-    exStatus.insertCommandBuffer(r)
+    commandLine.insertCommandBuffer(r)
 
 proc calcPopUpWindowSize*(buffer: seq[seq[Rune]]): (int, int) =
   var maxBufferLen = 0
@@ -390,7 +401,7 @@ proc initDisplayBuffer*(suggestlist: seq[seq[Rune]],
   else:
     result = suggestlist[1 ..< suggestlist.len]
 
-proc getCandidatesExCommandOption*(exStatus: var ExModeViewStatus,
+proc getCandidatesExCommandOption*(commandLine: var CommandLine,
                                    command: string): seq[seq[Rune]] =
 
   var argList: seq[string] = @[]
@@ -420,30 +431,30 @@ proc getCandidatesExCommandOption*(exStatus: var ExModeViewStatus,
     of "e",
        "sp",
        "vs",
-       "sv": argList = getCandidatesFilePath(exStatus.buffer, command)
+       "sv": argList = getCandidatesFilePath(commandLine.buffer, command)
     else: discard
 
   if argList[0] != "":
-    let arg = if (splitWhitespace(exStatus.buffer)).len > 1:
-                (splitWhitespace(exStatus.buffer))[1]
+    let arg = if (splitWhitespace(commandLine.buffer)).len > 1:
+                (splitWhitespace(commandLine.buffer))[1]
               else: ru""
     result = @[arg]
 
   for i in 0 ..< argList.len:
     result.add(argList[i].toRunes)
 
-proc getSuggestList*(exStatus: var ExModeViewStatus,
+proc getSuggestList*(commandLine: var CommandLine,
                      suggestType: SuggestType): seq[seq[Rune]] =
 
   if isSuggestTypeExCommand(suggestType):
-    result = getCandidatesExCommand(exStatus.buffer)
+    result = getCandidatesExCommand(commandLine.buffer)
   elif isSuggestTypeExCommandOption(suggestType):
-    let cmd = $(splitWhitespace(exStatus.buffer))[0]
-    result = exStatus.getCandidatesExCommandOption(cmd)
+    let cmd = $(splitWhitespace(commandLine.buffer))[0]
+    result = commandLine.getCandidatesExCommandOption(cmd)
   else:
     let
-      cmd = (splitWhitespace(exStatus.buffer))[0]
-      pathList = getCandidatesFilePath(exStatus.buffer, $cmd)
+      cmd = (splitWhitespace(commandLine.buffer))[0]
+      pathList = getCandidatesFilePath(commandLine.buffer, $cmd)
     for path in pathList: result.add(path.ru)
 
 proc calcXWhenSuggestPath*(buffer: seq[Rune]): int =

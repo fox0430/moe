@@ -1,13 +1,12 @@
-import std/[terminal]
+import std/[terminal, os, times]
 import editorstatus, unicodeext, commandviewutils, ui, color, commandline
 
 proc suggestCommandLine(status: var Editorstatus,
-                        exStatus: var ExModeViewStatus,
                         key: var Rune) =
 
   let
-    suggestType = getSuggestType(exStatus.buffer)
-    suggestlist = exStatus.getSuggestList(suggestType)
+    suggestType = getSuggestType(status.commandLine.buffer)
+    suggestlist = status.commandLine.getSuggestList(suggestType)
 
   var
     suggestIndex = 0
@@ -17,26 +16,27 @@ proc suggestCommandLine(status: var Editorstatus,
     x = 0
     y = terminalHeight() - 1
 
-  let command = if exStatus.buffer.len > 0:
-                  (splitWhitespace(exStatus.buffer))[0]
+  let command = if status.commandLine.buffer.len > 0:
+                  (splitWhitespace(status.commandLine.buffer))[0]
                 else: ru""
 
   if isSuggestTypeFilePath(suggestType):
-    x = calcXWhenSuggestPath(exStatus.buffer)
+    x = calcXWhenSuggestPath(status.commandLine.buffer)
   elif isSuggestTypeExCommandOption(suggestType):
     x = command.len + 1
 
-  var popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
+  # TODO: Enable popUpWindow
+  #var popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
 
   template updateExModeViewStatus() =
     if isSuggestTypeFilePath(suggestType):
-      exStatus.buffer = command & ru" "
-      exStatus.currentPosition = command.len + exStatus.prompt.len
-      exStatus.cursorX = exStatus.currentPosition
+      status.commandLine.buffer = command & ru" "
+      status.commandLine.currentPosition = command.len + status.commandLine.prompt.len
+      status.commandLine.cursorX = status.commandLine.currentPosition
     else:
-      exStatus.buffer = ru""
-      exStatus.currentPosition = 0
-      exStatus.cursorX = 0
+      status.commandLine.buffer = ru""
+      status.commandLine.currentPosition = 0
+      status.commandLine.cursorX = 0
 
   # TODO: I don't know why yet,
   #       but there is a bug which is related to scrolling of the pup-up window.
@@ -63,20 +63,21 @@ proc suggestCommandLine(status: var Editorstatus,
     #                               displayBuffer)
 
     if isSuggestTypeExCommandOption(suggestType):
-      exStatus.insertCommandBuffer(command & ru' ')
+      status.commandLine.insertCommandBuffer(command & ru' ')
 
-    exStatus.insertCommandBuffer(suggestlist[suggestIndex])
-    exStatus.cursorX.inc
+    status.commandLine.insertCommandBuffer(suggestlist[suggestIndex])
+    status.commandLine.cursorX.inc
 
-    status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
+    status.commandLine.writeExModeView(EditorColorPair.commandBar)
 
     key = NONE_KEY
     while key == NONE_KEY:
       key = getKey()
 
-    exStatus.cursorX = exStatus.currentPosition + 1
+    status.commandLine.cursorX = status.commandLine.currentPosition + 1
 
-  status.commandLine.window.moveCursor(exStatus.cursorY, exStatus.cursorX)
+  # TODO: Enable cursor
+  #status.commandLine.window.moveCursor(commandLine.cursorY, commandLine.cursorX)
   # TODO: Enable popUpWindow
   #if status.settings.popUpWindowInExmode: status.deletePopUpWindow
 
@@ -86,59 +87,67 @@ proc getKeyOnceAndWriteCommandView*(
   buffer: seq[Rune],
   isSuggest, isSearch : bool): (seq[Rune], bool, bool) =
 
+  status.commandLine = initExModeViewStatus(prompt)
+
   var
-    exStatus = initExModeViewStatus(prompt)
     exitSearch = false
     cancelSearch = false
     searchHistoryIndex = status.searchHistory.high
     commandHistoryIndex = status.exCommandHistory.high
-  for rune in buffer: exStatus.insertCommandBuffer(rune)
+  for rune in buffer: status.commandLine.insertCommandBuffer(rune)
 
   template setPrevSearchHistory() =
     if searchHistoryIndex > 0:
-      exStatus.clearCommandBuffer
+      status.commandLine.clearCommandBuffer
       dec searchHistoryIndex
-      exStatus.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
+      status.commandLine.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
 
   template setNextSearchHistory() =
     if searchHistoryIndex < status.searchHistory.high:
-      exStatus.clearCommandBuffer
+      status.commandLine.clearCommandBuffer
       inc searchHistoryIndex
-      exStatus.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
+      status.commandLine.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
 
   template setNextCommandHistory() =
     if commandHistoryIndex < status.exCommandHistory.high:
-      exStatus.clearCommandBuffer
+      status.commandLine.clearCommandBuffer
       inc commandHistoryIndex
-      exStatus.insertCommandBuffer(status.exCommandHistory[commandHistoryIndex])
+      status.commandLine.insertCommandBuffer(status.exCommandHistory[commandHistoryIndex])
 
   template setPrevCommandHistory() =
     if commandHistoryIndex > 0:
-      exStatus.clearCommandBuffer
+      status.commandLine.clearCommandBuffer
       dec commandHistoryIndex
-      exStatus.insertCommandBuffer(status.exCommandHistory[commandHistoryIndex])
+      status.commandLine.insertCommandBuffer(status.exCommandHistory[commandHistoryIndex])
 
   while true:
-    status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
-
     var key = NONE_KEY
     while key == NONE_KEY:
-      if not pressCtrlC:
-        key = getKey()
-      else:
+      if pressCtrlC:
         # Exit command line mode
         pressCtrlC = false
 
-        status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
         exitSearch = true
 
-        return (exStatus.buffer, exitSearch, cancelSearch)
+        return (status.commandLine.buffer, exitSearch, cancelSearch)
+
+      if isResizedWindow:
+        status.resize(terminalHeight(), terminalWidth())
+
+      status.update
+
+      key = getKey()
+
+      status.lastOperatingTime = now()
+      sleep 100
 
     # Suggestion mode
     if isTabKey(key) or isShiftTab(key):
-      status.suggestCommandLine(exStatus, key)
+      status.suggestCommandLine(key)
       if status.settings.popUpWindowInExmode and isEnterKey(key):
-        status.commandLine.window.moveCursor(exStatus.cursorY, exStatus.cursorX)
+        discard
+        # TODO: Enable cursor
+        #status.commandLine.window.moveCursor(commandLine.cursorY, commandLine.cursorX)
 
     if isEnterKey(key):
       exitSearch = true
@@ -146,13 +155,14 @@ proc getKeyOnceAndWriteCommandView*(
     elif isEscKey(key):
       cancelSearch = true
       break
-    #elif isResizeKey(key):
-    #  status.resize(terminalHeight(), terminalWidth())
-    #  status.update
     elif isLeftKey(key):
-      status.commandLine.window.moveLeft(exStatus)
+      discard
+      # TODO: Enable cursor
+      #status.commandLine.window.moveLeft(commandLine.
     elif isRightkey(key):
-      exStatus.moveRight
+      discard
+      # TODO: Enable cursor
+      #commandLine.moveRight
       # TODO: Enable popupwindow
       #if status.settings.popUpWindowInExmode:
       #  status.deletePopUpWindow
@@ -164,51 +174,76 @@ proc getKeyOnceAndWriteCommandView*(
       if isSearch: setNextSearchHistory()
       else: setNextCommandHistory()
     elif isHomeKey(key):
-      exStatus.moveTop
+      status.commandLine.moveTop
     elif isEndKey(key):
-      exStatus.moveEnd
+      status.commandLine.moveEnd
     elif isBackspaceKey(key):
-      exStatus.deleteCommandBuffer
+      status.commandLine.deleteCommandBuffer
       break
     elif isDeleteKey(key):
-      exStatus.deleteCommandBufferCurrentPosition
+      status.commandLine.deleteCommandBufferCurrentPosition
       break
     else:
-      exStatus.insertCommandBuffer(key)
+      status.commandLine.insertCommandBuffer(key)
+      # TODO: Fix
+      status.commandLine.buffer = status.commandLine.buffer
+      status.update
       break
 
-  status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
-  return (exStatus.buffer, exitSearch, cancelSearch)
+  status.commandLine.writeExModeView(EditorColorPair.commandBar)
+  return (status.commandLine.buffer, exitSearch, cancelSearch)
 
 proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
-  var exStatus = initExModeViewStatus(prompt)
+  var commandLine = initExModeViewStatus(prompt)
   status.resize(terminalHeight(), terminalWidth())
 
   while true:
-    status.commandLine.writeExModeView(exStatus, EditorColorPair.commandBar)
+    status.commandLine.writeExModeView(EditorColorPair.commandBar)
 
-    var key = getKey()
+    var key = NONE_KEY
+    while key == NONE_KEY:
+      if isResizedWindow:
+        status.resize(terminalHeight(), terminalWidth())
+        status.update
+
+      key = getKey()
+
+      status.lastOperatingTime = now()
+      sleep 100
 
     # Suggestion mode
     if isTabKey(key) or isShiftTab(key):
-      status.suggestCommandLine(exStatus, key)
+      status.suggestCommandLine(key)
       if status.settings.popUpWindowInExmode and isEnterKey(key):
-          status.commandLine.window.moveCursor(exStatus.cursorY, exStatus.cursorX)
-          key = getKey()
+        discard
+        # TODO: Enable cursor
+          #status.commandLine.window.moveCursor(commandLine.cursorY, commandLine.cursorX)
+          #key = getKey()
 
     if isEnterKey(key): break
     elif isEscKey(key):
-      status.commandLine.erase
+      status.commandLine.clear
       return @[ru""]
-    #elif isResizeKey(key):
-    #  status.resize(terminalHeight(), terminalWidth())
-    #  status.update
-    elif isLeftKey(key): status.commandLine.window.moveLeft(exStatus)
-    elif isRightkey(key): moveRight(exStatus)
-    elif isHomeKey(key): moveTop(exStatus)
-    elif isEndKey(key): moveEnd(exStatus)
-    elif isBackspaceKey(key): deleteCommandBuffer(exStatus)
-    elif isDeleteKey(key): deleteCommandBufferCurrentPosition(exStatus)
-    else: insertCommandBuffer(exStatus, key)
+    elif isLeftKey(key):
+      discard
+      # TODO: Enable cursor
+      #status.commandLine.window.moveLeft(commandLine.
+    elif isRightkey(key):
+      discard
+      # TODO: Enable cursor
+      #moveRight(commandLine.
+    elif isHomeKey(key):
+      moveTop(commandLine)
+    elif isEndKey(key):
+      moveEnd(commandLine)
+    elif isBackspaceKey(key):
+      deleteCommandBuffer(commandLine)
+    elif isDeleteKey(key):
+      deleteCommandBufferCurrentPosition(commandLine)
+    else:
+      insertCommandBuffer(commandLine, key)
+      # TODO: Fix
+      status.commandLine.buffer = commandLine.buffer
+      status.update
 
-  return splitCommand($exStatus.buffer)
+  return splitCommand($commandLine.buffer)
