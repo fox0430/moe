@@ -204,7 +204,8 @@ proc writeExModeView*(commandLine: CommandLine,
   #  color)
 
   const x = 0
-  write(x, terminalHeight() - 1, fmt"{commandLine.prompt}{buffer}")
+  let y = terminalHeight() - 1
+  write(x, y, fmt"{commandLine.prompt}{buffer}")
 
   # TODO: Enable cursor
   #commandLine.window.moveCursor(0, commandLine.cursorX)

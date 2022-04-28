@@ -4,7 +4,7 @@ import syntax/highlite
 import ui, gapbuffer, editorview, unicodeext, highlight, fileutils,
        window, color, settings, statusline, bufferstatus, cursor, tabline,
        backup, messages, register, platform, searchutils,
-       movement, autocomplete, term, commandview
+       movement, autocomplete, term, commandview, commandviewutils
 
 # Save cursor position when a buffer for a window(file) gets closed.
 type LastPosition* = object
@@ -38,9 +38,12 @@ proc initEditorStatus*(): EditorStatus =
   result.settings = initEditorSettings()
   result.lastOperatingTime = now()
   result.autoBackupStatus = initAutoBackupStatus()
-  result.commandLine = initCommandLine()
   result.mainWindow = initMainWindow()
   result.statusLine = @[initStatusLine()]
+
+  block:
+    const prompt = ""
+    result.commandLine = initExModeViewStatus("")
 
 template currentBufStatus*: var BufferStatus =
   mixin status
@@ -551,7 +554,7 @@ proc update*(status: var EditorStatus) =
 
   if status.settings.statusLine.enable: status.updateStatusLine
 
-  status.commandLine.updateCommandLineView
+  status.commandLine.writeExModeView(EditorColorPair.defaultChar)
 
   display()
 
@@ -1303,6 +1306,175 @@ proc eventLoopTask(status: var Editorstatus) =
                                status.messageLog)
 
         status.autoBackupStatus.lastBackupTime = now()
+
+# TODO: Move
+proc getKeyOnceAndWriteCommandView*(
+  status: var Editorstatus,
+  prompt: string,
+  buffer: seq[Rune],
+  isSuggest, isSearch : bool): (seq[Rune], bool, bool) =
+
+  status.commandLine = initExModeViewStatus(prompt)
+
+  var
+    exitSearch = false
+    cancelSearch = false
+    searchHistoryIndex = status.searchHistory.high
+    commandHistoryIndex = status.exCommandHistory.high
+  for rune in buffer: status.commandLine.insertCommandBuffer(rune)
+
+  template setPrevSearchHistory() =
+    if searchHistoryIndex > 0:
+      status.commandLine.clearCommandBuffer
+      dec searchHistoryIndex
+      status.commandLine.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
+
+  template setNextSearchHistory() =
+    if searchHistoryIndex < status.searchHistory.high:
+      status.commandLine.clearCommandBuffer
+      inc searchHistoryIndex
+      status.commandLine.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
+
+  template setNextCommandHistory() =
+    if commandHistoryIndex < status.exCommandHistory.high:
+      status.commandLine.clearCommandBuffer
+      inc commandHistoryIndex
+      status.commandLine.insertCommandBuffer(status.exCommandHistory[commandHistoryIndex])
+
+  template setPrevCommandHistory() =
+    if commandHistoryIndex > 0:
+      status.commandLine.clearCommandBuffer
+      dec commandHistoryIndex
+      status.commandLine.insertCommandBuffer(status.exCommandHistory[commandHistoryIndex])
+
+  while true:
+    var key = NONE_KEY
+    while key == NONE_KEY:
+      if pressCtrlC:
+        # Exit command line mode
+        pressCtrlC = false
+
+        exitSearch = true
+
+        return (status.commandLine.buffer, exitSearch, cancelSearch)
+
+      if isResizedWindow:
+        status.resize(terminalHeight(), terminalWidth())
+
+      status.update
+
+      key = getKey()
+
+      status.lastOperatingTime = now()
+      sleep 100
+
+    # Suggestion mode
+    if isTabKey(key) or isShiftTab(key):
+      status.commandLine.suggestCommandLine(key)
+      if status.settings.popUpWindowInExmode and isEnterKey(key):
+        discard
+        # TODO: Enable cursor
+        #status.commandLine.window.moveCursor(commandLine.cursorY, commandLine.cursorX)
+
+    if isEnterKey(key):
+      exitSearch = true
+      break
+    elif isEscKey(key):
+      cancelSearch = true
+      break
+    elif isLeftKey(key):
+      discard
+      # TODO: Enable cursor
+      #status.commandLine.window.moveLeft(commandLine.
+    elif isRightkey(key):
+      discard
+      # TODO: Enable cursor
+      #commandLine.moveRight
+      # TODO: Enable popupwindow
+      #if status.settings.popUpWindowInExmode:
+      #  status.deletePopUpWindow
+      #  status.update
+    elif isUpKey(key):
+      if isSearch: setPrevSearchHistory()
+      else: setPrevCommandHistory()
+    elif isDownKey(key):
+      if isSearch: setNextSearchHistory()
+      else: setNextCommandHistory()
+    elif isHomeKey(key):
+      status.commandLine.moveTop
+    elif isEndKey(key):
+      status.commandLine.moveEnd
+    elif isBackspaceKey(key):
+      status.commandLine.deleteCommandBuffer
+      break
+    elif isDeleteKey(key):
+      status.commandLine.deleteCommandBufferCurrentPosition
+      break
+    else:
+      status.commandLine.insertCommandBuffer(key)
+      # TODO: Fix
+      status.commandLine.buffer = status.commandLine.buffer
+      status.update
+      break
+
+  status.commandLine.writeExModeView(EditorColorPair.commandBar)
+  return (status.commandLine.buffer, exitSearch, cancelSearch)
+
+# TODO: Move
+proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
+  var commandLine = initExModeViewStatus(prompt)
+  status.resize(terminalHeight(), terminalWidth())
+
+  while true:
+    status.commandLine.writeExModeView(EditorColorPair.commandBar)
+
+    var key = NONE_KEY
+    while key == NONE_KEY:
+      if isResizedWindow:
+        status.resize(terminalHeight(), terminalWidth())
+        status.update
+
+      key = getKey()
+
+      status.lastOperatingTime = now()
+      sleep 100
+
+    # Suggestion mode
+    if isTabKey(key) or isShiftTab(key):
+      status.commandLine.suggestCommandLine(key)
+      if status.settings.popUpWindowInExmode and isEnterKey(key):
+        discard
+        # TODO: Enable cursor
+          #status.commandLine.window.moveCursor(commandLine.cursorY, commandLine.cursorX)
+          #key = getKey()
+
+    if isEnterKey(key): break
+    elif isEscKey(key):
+      status.commandLine.clear
+      return @[ru""]
+    elif isLeftKey(key):
+      discard
+      # TODO: Enable cursor
+      #status.commandLine.window.moveLeft(commandLine.
+    elif isRightkey(key):
+      discard
+      # TODO: Enable cursor
+      #moveRight(commandLine.
+    elif isHomeKey(key):
+      moveTop(commandLine)
+    elif isEndKey(key):
+      moveEnd(commandLine)
+    elif isBackspaceKey(key):
+      deleteCommandBuffer(commandLine)
+    elif isDeleteKey(key):
+      deleteCommandBufferCurrentPosition(commandLine)
+    else:
+      insertCommandBuffer(commandLine, key)
+      # TODO: Fix
+      status.commandLine.buffer = commandLine.buffer
+      status.update
+
+  return splitCommand($commandLine.buffer)
 
 import debugmode
 

@@ -129,10 +129,11 @@ proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
     backupDir = getBackupDir(sourcePath, status.settings.autoBackupSettings)
     backupFilePath = backupDir / backupFilename
 
-  let isRestore = status.commandLine.askBackupRestorePrompt(
-    status.messageLog,
-    backupFilename)
-  if not isRestore: return
+  # TODO: Enable
+  #let isRestore = status.commandLine.askBackupRestorePrompt(
+  #  status.messageLog,
+  #  backupFilename)
+  #if not isRestore: return
 
   # Backup files before restore
   currentBufStatus.backupBuffer(
@@ -187,11 +188,12 @@ proc deleteBackupFiles(status: var EditorStatus, sourcePath: seq[Rune]) =
     backupDir = getBackupDir(sourcePath, status.settings.autoBackupSettings)
     backupFilePath = backupDir / backupFilename
 
-  let isDelete = status.commandLine.askDeleteBackupPrompt(
-    status.messageLog,
-    backupFilename)
+  # TODO: Enable
+  #let isDelete = status.commandLine.askDeleteBackupPrompt(
+  #  status.messageLog,
+  #  backupFilename)
 
-  if not isDelete: return
+  #if not isDelete: return
 
   try:
     removeFile($backupFilePath)

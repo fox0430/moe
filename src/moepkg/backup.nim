@@ -1,6 +1,6 @@
 import std/[os, times, re]
 import settings, unicodeext, fileutils, bufferstatus, gapbuffer, messages,
-       commandview
+       commandviewutils
 
 type AutoBackupStatus* = object
   lastBackupTime*: DateTime

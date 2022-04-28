@@ -1,7 +1,7 @@
 import std/[osproc, terminal, times]
 import syntax/highlite
 import unicodeext, settings, bufferstatus, gapbuffer, messages, ui,
-       editorstatus, movement, window, fileutils, commandline
+       editorstatus, movement, window, fileutils, commandviewutils
 
 proc generateCommand(bufStatus: BufferStatus,
                      settings: QuickRunSettings): string =

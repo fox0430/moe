@@ -1,11 +1,16 @@
-import std/[strformat, os, strutils]
-import color, unicodeext, settings, commandview, independentutils
+import std/[strformat, os, strutils, terminal]
+import color, unicodeext, settings, commandview, independentutils,
+       commandviewutils, term
 
 proc writeMessageOnCommandWindow*(commandLine: var CommandLine,
                                   message: string,
                                   color: EditorColorPair) {.inline.} =
 
-  commandLine.updateCommandBuffer(ru message, color)
+  const x = 0
+  let y = terminalHeight() - 1
+  # TODO: Enable color
+  #write(x,y, message, color)
+  write(x,y, message)
 
 proc writeMessageOnCommandWindow*(commandLine: var CommandLine,
                                   message: string) {.inline.} =

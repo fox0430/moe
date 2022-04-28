@@ -3,7 +3,7 @@ import syntax/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
         unicodeext, independentutils, searchutils, highlight, commandview,
         window, movement, color, build, bufferstatus, editor, settings,
-        quickrun, messages, commandline, debugmode, platform, commandviewutils
+        quickrun, messages, debugmode, platform, commandviewutils
 
 type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
 
@@ -837,21 +837,22 @@ proc buildOnSave(status: var Editorstatus) =
       status.settings.notificationSettings,
       status.messageLog)
 
-proc checkAndCreateDir(commandLine: var CommandLine,
-                       messageLog: var seq[seq[Rune]],
-                       filename: seq[Rune]): bool =
-
-  ## Not include directory
-  if not filename.contains(ru"/"): return true
-
-  let pathSplit = splitPath($filename)
-
-  result = true
-  if not dirExists(pathSplit.head):
-    let isCreateDir = commandLine.askCreateDirPrompt(messageLog, pathSplit.head)
-    if isCreateDir:
-      try: createDir(pathSplit.head)
-      except OSError: result = false
+# TODO: Enable
+#proc checkAndCreateDir(commandLine: var CommandLine,
+#                       messageLog: var seq[seq[Rune]],
+#                       filename: seq[Rune]): bool =
+#
+#  ## Not include directory
+#  if not filename.contains(ru"/"): return true
+#
+#  let pathSplit = splitPath($filename)
+#
+#  result = true
+#  if not dirExists(pathSplit.head):
+#    let isCreateDir = commandLine.askCreateDirPrompt(messageLog, pathSplit.head)
+#    if isCreateDir:
+#      try: createDir(pathSplit.head)
+#      except OSError: result = false
 
 # Write current editor settings to configuration file
 proc writeConfigurationFile(status: var EditorStatus) =
@@ -890,18 +891,20 @@ proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
       let
         lastSaveTimeOfBuffer = currentBufStatus.lastSaveTime.toTime
         lastModificationTimeOfFile = getLastModificationTime($path)
-      if lastModificationTimeOfFile > lastSaveTimeOfBuffer:
-        if not status.commandLine.askFileChangedSinceReading(status.messageLog):
-          # Cancel overwrite
-          status.changeMode(currentBufStatus.prevMode)
-          status.commandLine.clear
-          return
+      # TODO: Enable
+      #if lastModificationTimeOfFile > lastSaveTimeOfBuffer:
+      #  if not status.commandLine.askFileChangedSinceReading(status.messageLog):
+      #    # Cancel overwrite
+      #    status.changeMode(currentBufStatus.prevMode)
+      #    status.commandLine.clear
+      #    return
 
+    # TODO: Enable
     ## Ask if you want to create a directory that does not exist
-    if not status.commandLine.checkAndCreateDir(status.messageLog, path):
-      status.changeMode(currentBufStatus.prevMode)
-      status.commandLine.writeSaveError(status.messageLog)
-      return
+    #if not status.commandLine.checkAndCreateDir(status.messageLog, path):
+    #  status.changeMode(currentBufStatus.prevMode)
+    #  status.commandLine.writeSaveError(status.messageLog)
+    #  return
 
     try:
       saveFile(path,
@@ -966,18 +969,20 @@ proc writeAndQuitCommand(status: var EditorStatus, height, width: int) =
     let
       lastSaveTimeOfBuffer = currentBufStatus.lastSaveTime.toTime
       lastModificationTimeOfFile = getLastModificationTime($path)
-    if lastModificationTimeOfFile > lastSaveTimeOfBuffer:
-      if not status.commandLine.askFileChangedSinceReading(status.messageLog):
-        # Cancel overwrite
-        status.changeMode(currentBufStatus.prevMode)
-        status.commandLine.clear
-        return
+    # TODO: Enable
+    #if lastModificationTimeOfFile > lastSaveTimeOfBuffer:
+    #  if not status.commandLine.askFileChangedSinceReading(status.messageLog):
+    #    # Cancel overwrite
+    #    status.changeMode(currentBufStatus.prevMode)
+    #    status.commandLine.clear
+    #    return
 
+  # TODO: Enable
   ## Ask if you want to create a directory that does not exist
-  if not status.commandLine.checkAndCreateDir(status.messageLog, path):
-    status.changeMode(currentBufStatus.prevMode)
-    status.commandLine.writeSaveError(status.messageLog)
-    return
+  #if not status.commandLine.checkAndCreateDir(status.messageLog, path):
+  #  status.changeMode(currentBufStatus.prevMode)
+  #  status.commandLine.writeSaveError(status.messageLog)
+  #  return
 
   try:
     saveFile(path,
@@ -1031,18 +1036,20 @@ proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
       let
         lastSaveTimeOfBuffer = currentBufStatus.lastSaveTime.toTime
         lastModificationTimeOfFile = getLastModificationTime($path)
-      if lastModificationTimeOfFile > lastSaveTimeOfBuffer:
-        if not status.commandLine.askFileChangedSinceReading(status.messageLog):
-          # Cancel overwrite
-          status.changeMode(currentBufStatus.prevMode)
-          status.commandLine.clear
-          return
+      # TODO: Enable
+      #if lastModificationTimeOfFile > lastSaveTimeOfBuffer:
+      #  if not status.commandLine.askFileChangedSinceReading(status.messageLog):
+      #    # Cancel overwrite
+      #    status.changeMode(currentBufStatus.prevMode)
+      #    status.commandLine.clear
+      #    return
 
+    # TODO: Enable
     ## Ask if you want to create a directory that does not exist
-    if not status.commandLine.checkAndCreateDir(status.messageLog, path):
-      status.changeMode(currentBufStatus.prevMode)
-      status.commandLine.writeSaveError(status.messageLog)
-      return
+    #if not status.commandLine.checkAndCreateDir(status.messageLog, path):
+    #  status.changeMode(currentBufStatus.prevMode)
+    #  status.commandLine.writeSaveError(status.messageLog)
+    #  return
 
     try:
       saveFile(path,

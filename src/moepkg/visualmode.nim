@@ -1,6 +1,6 @@
 import std/[terminal, strutils, sequtils, times]
 import editorstatus, ui, gapbuffer, unicodeext, window, movement, editor,
-       bufferstatus, settings, register, messages, commandline
+       bufferstatus, settings, register, messages, commandviewutils
 
 proc initSelectArea(startLine, startColumn: int): SelectArea =
   result.startLine = startLine

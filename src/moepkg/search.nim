@@ -1,6 +1,6 @@
 import std/[terminal, os, times]
 import editorstatus, searchutils, unicodeext, commandview, color, ui,
-       commandline, commandviewutils
+       commandviewutils
 
 # Search text in buffer
 proc getKeyword*(status: var EditorStatus,
