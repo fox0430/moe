@@ -1,5 +1,5 @@
 import std/[terminal, strutils, sequtils, strformat, os, algorithm]
-import ui, unicodeext, fileutils, color, term
+import ui, unicodeext, fileutils, color, term, editorview
 
 type
   CommandLine* = object
@@ -84,68 +84,109 @@ const exCommandList: array[65, tuple[command, description: string]] = [
   (command: "wqa", description: "                  | Write all file in current workspace")
 ]
 
-# TODO: Enable
-#proc askCreateDirPrompt*(commndLine: var CommandLine,
-#                         messageLog: var seq[seq[Rune]],
-#                         path: string): bool =
-#
-#  let mess = fmt"{path} does not exists. Create it now?: y/n"
-#  commndLine.updateCommandLineBuffer(mess)
-#  commndLine.updateCommandLineView
-#  messageLog.add(mess.toRunes)
-#
-#  let key = getKey()
-#
-#  if key == ord('y'): result = true
-#  else: result = false
-#
-#proc askBackupRestorePrompt*(commndLine: var CommandLine,
-#                             messageLog: var seq[seq[Rune]],
-#                             filename: seq[Rune]): bool =
-#
-#  let mess = fmt"Restore {filename}?: y/n"
-#  commndLine.updateCommandLineBuffer(mess)
-#  commndLine.updateCommandLineView
-#  messageLog.add(mess.toRunes)
-#
-#  let key = getKey()
-#
-#  if key == ord('y'): result = true
-#  else: result = false
-#
-#proc askDeleteBackupPrompt*(commndLine: var CommandLine,
-#                            messageLog: var seq[seq[Rune]],
-#                            filename: seq[Rune]): bool =
-#
-#  let mess = fmt"Delete {filename}?: y/n"
-#  commndLine.updateCommandLineBuffer(mess)
-#  commndLine.updateCommandLineView
-#  messageLog.add(mess.toRunes)
-#
-#  let key = getKey()
-#
-#  if key == ord('y'): result = true
-#  else: result = false
-#
-#proc askFileChangedSinceReading*(commndLine: var CommandLine,
-#                                 messageLog: var seq[seq[Rune]]): bool =
-#
-#  block:
-#    const warnMess = "WARNING: The file has been changed since reading it!: Press any key"
-#    commndLine.updateCommandLineBuffer(warnMess)
-#    commndLine.updateCommandLineView
-#    messageLog.add(warnMess.toRunes)
-#    discard getKey()
-#
-#  block:
-#    const askMess = "Do you really want to write to it: y/n ?"
-#    commndLine.updateCommandLineBuffer(askMess)
-#    commndLine.updateCommandLineView
-#    messageLog.add(askMess.toRunes)
-#    let key = getKey()
-#
-#    if key == ord('y'): result = true
-#    else: result = false
+# Clear the buffer
+proc clear*(commndLine: var CommandLine) =
+  commndLine.buffer = @[]
+
+proc writeExModeView*(commandLine: CommandLine,
+                      color: EditorColorPair) =
+
+  let buffer = ($commandLine.buffer).substr(
+    commandLine.startPosition,
+    commandLine.buffer.len)
+
+  # TODO: Enable color
+  #commandLine.write(
+  #  commandLine.cursorY,
+  #  0,
+  #  fmt"{commandLine.prompt}{buffer}",
+  #  color)
+
+  const x = 0
+  let y = terminalHeight() - 1
+  write(x, y, fmt"{commandLine.prompt}{buffer}")
+
+  # TODO: Enable cursor
+  #commandLine.window.moveCursor(0, commandLine.cursorX)
+
+proc askCreateDirPrompt*(commndLine: var CommandLine,
+                         messageLog: var seq[seq[Rune]],
+                         path: string): bool =
+
+  let mess = fmt"{path} does not exists. Create it now?: y/n"
+  commndLine.buffer = mess.toRunes
+  commndLine.writeExModeView(EditorColorPair.defaultChar)
+  messageLog.add(mess.toRunes)
+
+  var key = NONE_KEY
+  while key == NONE_KEY:
+    key = getKey()
+    sleep 100
+
+  if key == ord('y'): result = true
+  else: result = false
+
+proc askBackupRestorePrompt*(commndLine: var CommandLine,
+                             messageLog: var seq[seq[Rune]],
+                             filename: seq[Rune]): bool =
+
+  let mess = fmt"Restore {filename}?: y/n"
+  commndLine.buffer = mess.toRunes
+  commndLine.writeExModeView(EditorColorPair.defaultChar)
+  messageLog.add(mess.toRunes)
+
+  var key = NONE_KEY
+  while key == NONE_KEY:
+    key = getKey()
+    sleep 100
+
+  if key == ord('y'): result = true
+  else: result = false
+
+proc askDeleteBackupPrompt*(commndLine: var CommandLine,
+                            messageLog: var seq[seq[Rune]],
+                            filename: seq[Rune]): bool =
+
+  let mess = fmt"Delete {filename}?: y/n"
+  commndLine.buffer = mess.toRunes
+  commndLine.writeExModeView(EditorColorPair.defaultChar)
+  messageLog.add(mess.toRunes)
+
+  var key = NONE_KEY
+  while key == NONE_KEY:
+    key = getKey()
+    sleep 100
+
+  if key == ord('y'): result = true
+  else: result = false
+
+proc askFileChangedSinceReading*(commndLine: var CommandLine,
+                                 messageLog: var seq[seq[Rune]]): bool =
+
+  block:
+    const warnMess = "WARNING: The file has been changed since reading it!: Press any key".toRunes
+    commndLine.buffer = warnMess
+    commndLine.writeExModeView(EditorColorPair.defaultChar)
+    messageLog.add(warnMess)
+
+  var key = NONE_KEY
+  while key == NONE_KEY:
+    key = getKey()
+    sleep 100
+
+  block:
+    const askMess = "Do you really want to write to it: y/n ?".toRunes
+    commndLine.buffer = askMess
+    commndLine.writeExModeView(EditorColorPair.defaultChar)
+    messageLog.add(askMess)
+
+    var key = NONE_KEY
+    while key == NONE_KEY:
+      key = getKey()
+      sleep 100
+
+    if key == ord('y'): result = true
+    else: result = false
 
 proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
   for i in 0 .. r.high:
@@ -184,31 +225,6 @@ proc splitCommand*(command: string): seq[seq[Rune]] =
   else:
     return strutils.splitWhitespace(command)
                     .map(proc(s: string): seq[Rune] = toRunes(s))
-
-# Clear the buffer
-proc clear*(commndLine: var CommandLine) =
-  commndLine.buffer = @[]
-
-proc writeExModeView*(commandLine: CommandLine,
-                      color: EditorColorPair) =
-
-  let buffer = ($commandLine.buffer).substr(
-    commandLine.startPosition,
-    commandLine.buffer.len)
-
-  # TODO: Enable color
-  #commandLine.write(
-  #  commandLine.cursorY,
-  #  0,
-  #  fmt"{commandLine.prompt}{buffer}",
-  #  color)
-
-  const x = 0
-  let y = terminalHeight() - 1
-  write(x, y, fmt"{commandLine.prompt}{buffer}")
-
-  # TODO: Enable cursor
-  #commandLine.window.moveCursor(0, commandLine.cursorX)
 
 proc initExModeViewStatus*(prompt: string):CommandLine =
   result.buffer = ru""
