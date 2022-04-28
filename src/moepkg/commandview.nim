@@ -1,5 +1,5 @@
 import std/[terminal, os, times]
-import editorstatus, unicodeext, commandviewutils, ui, color, commandline
+import editorstatus, unicodeext, commandviewutils, ui, color
 
 proc suggestCommandLine(status: var Editorstatus,
                         key: var Rune) =

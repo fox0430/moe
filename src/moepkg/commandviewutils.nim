@@ -1,5 +1,5 @@
 import std/[terminal, strutils, sequtils, strformat, os, algorithm]
-import ui, unicodeext, fileutils, color, term, commandline
+import ui, unicodeext, fileutils, color, term
 
 type
   CommandLine* = object
@@ -84,67 +84,68 @@ const exCommandList: array[65, tuple[command, description: string]] = [
   (command: "wqa", description: "                  | Write all file in current workspace")
 ]
 
-proc askCreateDirPrompt*(commndLine: var CommandLine,
-                         messageLog: var seq[seq[Rune]],
-                         path: string): bool =
-
-  let mess = fmt"{path} does not exists. Create it now?: y/n"
-  commndLine.updateCommandLineBuffer(mess)
-  commndLine.updateCommandLineView
-  messageLog.add(mess.toRunes)
-
-  let key = getKey()
-
-  if key == ord('y'): result = true
-  else: result = false
-
-proc askBackupRestorePrompt*(commndLine: var CommandLine,
-                             messageLog: var seq[seq[Rune]],
-                             filename: seq[Rune]): bool =
-
-  let mess = fmt"Restore {filename}?: y/n"
-  commndLine.updateCommandLineBuffer(mess)
-  commndLine.updateCommandLineView
-  messageLog.add(mess.toRunes)
-
-  let key = getKey()
-
-  if key == ord('y'): result = true
-  else: result = false
-
-proc askDeleteBackupPrompt*(commndLine: var CommandLine,
-                            messageLog: var seq[seq[Rune]],
-                            filename: seq[Rune]): bool =
-
-  let mess = fmt"Delete {filename}?: y/n"
-  commndLine.updateCommandLineBuffer(mess)
-  commndLine.updateCommandLineView
-  messageLog.add(mess.toRunes)
-
-  let key = getKey()
-
-  if key == ord('y'): result = true
-  else: result = false
-
-proc askFileChangedSinceReading*(commndLine: var CommandLine,
-                                 messageLog: var seq[seq[Rune]]): bool =
-
-  block:
-    const warnMess = "WARNING: The file has been changed since reading it!: Press any key"
-    commndLine.updateCommandLineBuffer(warnMess)
-    commndLine.updateCommandLineView
-    messageLog.add(warnMess.toRunes)
-    discard getKey()
-
-  block:
-    const askMess = "Do you really want to write to it: y/n ?"
-    commndLine.updateCommandLineBuffer(askMess)
-    commndLine.updateCommandLineView
-    messageLog.add(askMess.toRunes)
-    let key = getKey()
-
-    if key == ord('y'): result = true
-    else: result = false
+# TODO: Enable
+#proc askCreateDirPrompt*(commndLine: var CommandLine,
+#                         messageLog: var seq[seq[Rune]],
+#                         path: string): bool =
+#
+#  let mess = fmt"{path} does not exists. Create it now?: y/n"
+#  commndLine.updateCommandLineBuffer(mess)
+#  commndLine.updateCommandLineView
+#  messageLog.add(mess.toRunes)
+#
+#  let key = getKey()
+#
+#  if key == ord('y'): result = true
+#  else: result = false
+#
+#proc askBackupRestorePrompt*(commndLine: var CommandLine,
+#                             messageLog: var seq[seq[Rune]],
+#                             filename: seq[Rune]): bool =
+#
+#  let mess = fmt"Restore {filename}?: y/n"
+#  commndLine.updateCommandLineBuffer(mess)
+#  commndLine.updateCommandLineView
+#  messageLog.add(mess.toRunes)
+#
+#  let key = getKey()
+#
+#  if key == ord('y'): result = true
+#  else: result = false
+#
+#proc askDeleteBackupPrompt*(commndLine: var CommandLine,
+#                            messageLog: var seq[seq[Rune]],
+#                            filename: seq[Rune]): bool =
+#
+#  let mess = fmt"Delete {filename}?: y/n"
+#  commndLine.updateCommandLineBuffer(mess)
+#  commndLine.updateCommandLineView
+#  messageLog.add(mess.toRunes)
+#
+#  let key = getKey()
+#
+#  if key == ord('y'): result = true
+#  else: result = false
+#
+#proc askFileChangedSinceReading*(commndLine: var CommandLine,
+#                                 messageLog: var seq[seq[Rune]]): bool =
+#
+#  block:
+#    const warnMess = "WARNING: The file has been changed since reading it!: Press any key"
+#    commndLine.updateCommandLineBuffer(warnMess)
+#    commndLine.updateCommandLineView
+#    messageLog.add(warnMess.toRunes)
+#    discard getKey()
+#
+#  block:
+#    const askMess = "Do you really want to write to it: y/n ?"
+#    commndLine.updateCommandLineBuffer(askMess)
+#    commndLine.updateCommandLineView
+#    messageLog.add(askMess.toRunes)
+#    let key = getKey()
+#
+#    if key == ord('y'): result = true
+#    else: result = false
 
 proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
   for i in 0 .. r.high:

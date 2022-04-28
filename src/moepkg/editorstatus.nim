@@ -3,8 +3,8 @@ import std/[strutils, terminal, os, strformat, tables, times, heapqueue, deques,
 import syntax/highlite
 import ui, gapbuffer, editorview, unicodeext, highlight, fileutils,
        window, color, settings, statusline, bufferstatus, cursor, tabline,
-       backup, messages, commandline, register, platform, searchutils,
-       movement, autocomplete, term
+       backup, messages, register, platform, searchutils,
+       movement, autocomplete, term, commandview
 
 # Save cursor position when a buffer for a window(file) gets closed.
 type LastPosition* = object
