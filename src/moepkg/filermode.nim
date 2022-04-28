@@ -1,8 +1,8 @@
 import std/[os, terminal, strutils, times, algorithm, sequtils,
             options]
 import editorstatus, ui, fileutils, editorview, gapbuffer, highlight, window,
-       color, bufferstatus, settings, messages, unicodeext, commandview,
-       commandviewutils, term
+       color, bufferstatus, settings, messages, unicodeext, commandviewutils,
+       term
 
 type PathInfo = tuple[kind: PathComponent,
                       path: string,

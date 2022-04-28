@@ -1,9 +1,9 @@
 import std/[sequtils, strutils, os, terminal, times, options]
 import syntax/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
-        unicodeext, independentutils, searchutils, highlight, commandview,
-        window, movement, color, build, bufferstatus, editor, settings,
-        quickrun, messages, debugmode, platform, commandviewutils
+        unicodeext, independentutils, searchutils, highlight, window, movement,
+        color, build, bufferstatus, editor, settings, quickrun, messages,
+        debugmode, platform, commandviewutils
 
 type replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
 

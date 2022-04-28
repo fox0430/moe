@@ -4,7 +4,7 @@ import syntax/highlite
 import ui, gapbuffer, editorview, unicodeext, highlight, fileutils,
        window, color, settings, statusline, bufferstatus, cursor, tabline,
        backup, messages, register, platform, searchutils,
-       movement, autocomplete, term, commandview, commandviewutils
+       movement, autocomplete, term, commandviewutils
 
 # Save cursor position when a buffer for a window(file) gets closed.
 type LastPosition* = object
