@@ -32,8 +32,6 @@ proc addBufferStatus(status: var EditorStatus,
 proc initEditor(): EditorStatus =
   let parsedList = parseCommandLineOption(commandLineParams())
 
-  defer: exitUi()
-
   startUi()
 
   result = initEditorStatus()
