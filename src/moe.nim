@@ -1,5 +1,4 @@
-import std/[os, times, terminal]
-import illwill
+import std/[os, times]
 import moepkg/[editorstatus, cmdlineoption, bufferstatus, term, normalmode,
                insertmode, visualmode, exmode, replacemode, filermode,
                buffermanager, logviewer, help, recentfilemode, quickrun,

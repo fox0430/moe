@@ -35,7 +35,7 @@ proc getKeyword*(status: var EditorStatus,
       key = getKey()
 
       status.lastOperatingTime = now()
-      sleep 100
+      sleep 20
 
     if isEnterKey(key): break
     elif isEscKey(key):
@@ -43,12 +43,9 @@ proc getKeyword*(status: var EditorStatus,
       break
     elif isLeftKey(key):
       discard
-      # TODO: Enable cursor
-      #status.commandLine.window.moveLeft(commandLine.
+      status.commandLine.moveLeft
     elif isRightkey(key):
-      discard
-      # TODO: Enable cursor
-      #commandLine.moveRight
+      commandLine.moveRight
     elif isUpKey(key) and isSearch: setPrevSearchHistory()
     elif isDownKey(key) and isSearch: setNextSearchHistory()
     elif isHomeKey(key): commandLine.moveTop

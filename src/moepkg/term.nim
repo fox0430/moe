@@ -1,6 +1,6 @@
 import std/[terminal, assertions, strutils, os, strformat]
 import illwill
-export illwill.Key, illwill.showCursor, illwill.hideCursor
+export illwill.Key
 
 type
   # Hex color code
@@ -142,19 +142,12 @@ proc resize*(win: var TermWindow, w, h: int) =
   eraseScreen()
   win.update
 
-proc moveCursor*(win: var TermWindow) =
-  discard
-  #win.tb.setCursorPos(win.cursorPosition.x, win.cursorPosition.y)
-
-proc moveCursor*(win: var TermWindow, x, y: int) =
-  assert(x >= 0 and x <= win.w and y >= 0 and y <= win.h)
-
-  #win.cursorPosition.x = x
-  #win.cursorPosition.y = y
-  #win.tb.setCursorPos(win.cursorPosition.x, win.cursorPosition.y)
+proc moveCursor*(x, y: int) =
+  let cmd = """printf '\033[""" & $y & ";" & $x & "H'"
+  discard execShellCmd(cmd)
 
 proc getKey*(win: var TermWindow): Key =
-  win.moveCursor
+  #win.moveCursor
   result = getKey()
 
 proc display*() =

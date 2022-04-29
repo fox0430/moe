@@ -1,4 +1,4 @@
-import std/[strformat, osproc, strutils, os]
+import std/[strformat, osproc, strutils, os, terminal]
 import pkg/illwill
 import unicodeext, color, term
 #export term.Key
@@ -70,9 +70,9 @@ proc disableControlC*() {.inline.} =
 
 proc setCursor*(cursor: bool) =
   if cursor:
-    showCursor()
+    discard execShellCmd("printf '\e[?25h'")
   else:
-    hideCursor()
+    discard execShellCmd("printf '\e[?25l'")
 
 #proc keyEcho*(keyecho: bool) =
 #  if keyecho == true: echo()
@@ -235,8 +235,8 @@ proc resize*(win: var Window, height, width, y, x: int) =
 #proc attroff*(win: var Window, attributes: Attributes) {.inline.} =
 #  win.cursesWindow.wattroff(cint(attributes))
 
-proc moveCursor*(win: Window, y, x: int) {.inline.} =
-  discard
+proc moveCursor*(y, x: int) {.inline.} =
+  term.moveCursor(x, y)
   #win.cursesWindow.move(x, y)
   #wmove(win.cursesWindow, cint(y), cint(x))
 

@@ -1565,7 +1565,6 @@ proc normalMode*(status: var EditorStatus) =
     changeCursorType(status.settings.normalModeCursor)
 
   status.resize(terminalHeight(), terminalWidth())
-  status.update
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   var
@@ -1578,6 +1577,8 @@ proc normalMode*(status: var EditorStatus) =
     if currentBufStatus.countChange > countChange:
       countChange = currentBufStatus.countChange
 
+    status.update
+
     var key = NONE_KEY
     while key == NONE_KEY:
       if isResizedWindow:
@@ -1587,7 +1588,7 @@ proc normalMode*(status: var EditorStatus) =
       key = getKey()
 
       status.lastOperatingTime = now()
-      sleep 100
+      sleep 20
 
     currentBufStatus.buffer.beginNewSuitIfNeeded
     currentBufStatus.tryRecordCurrentPosition(currentMainWindowNode)
@@ -1603,8 +1604,6 @@ proc normalMode*(status: var EditorStatus) =
       else:
         key = keyAfterEsc
 
-    #if isResizekey(key):
-    #  status.resize(terminalHeight(), terminalWidth())
     if key == ord('/'):
       status.searchFordwards
     elif key == ord('?'):

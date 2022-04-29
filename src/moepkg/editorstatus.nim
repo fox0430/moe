@@ -444,7 +444,6 @@ proc updateDebugModeBuffer(status: var EditorStatus)
 proc update*(status: var EditorStatus) =
   setCursor(false)
 
-  # TODO: Enable tab line
   if status.settings.tabLine.enable:
     writeTabLineBuffer(
       status.bufStatus,
@@ -540,6 +539,14 @@ proc update*(status: var EditorStatus) =
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
+  if status.settings.statusLine.enable: status.updateStatusLine
+
+  status.commandLine.writeExModeView(EditorColorPair.defaultChar)
+
+  display()
+
+  setCursor(true)
+
   let
     currentMode = currentBufStatus.mode
     prevMode = currentBufStatus.prevMode
@@ -549,16 +556,7 @@ proc update*(status: var EditorStatus) =
     let
       y = currentMainWindowNode.cursor.y
       x = currentMainWindowNode.view.widthOfLineNum + currentMainWindowNode.cursor.x
-    # TODO: Enable move cursor
-    #currentMainWindowNode.window.get.moveCursor(y, x)
-
-  if status.settings.statusLine.enable: status.updateStatusLine
-
-  status.commandLine.writeExModeView(EditorColorPair.defaultChar)
-
-  display()
-
-  setCursor(true)
+    term.moveCursor(x, y)
 
 proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode)
 
@@ -1366,7 +1364,7 @@ proc getKeyOnceAndWriteCommandView*(
       key = getKey()
 
       status.lastOperatingTime = now()
-      sleep 100
+      sleep 20
 
     # Suggestion mode
     if isTabKey(key) or isShiftTab(key):
@@ -1383,13 +1381,10 @@ proc getKeyOnceAndWriteCommandView*(
       cancelSearch = true
       break
     elif isLeftKey(key):
-      discard
-      # TODO: Enable cursor
-      #status.commandLine.window.moveLeft(commandLine.
+      status.commandLine.moveLeft
     elif isRightkey(key):
       discard
-      # TODO: Enable cursor
-      #commandLine.moveRight
+      status.commandLine.moveRight
       # TODO: Enable popupwindow
       #if status.settings.popUpWindowInExmode:
       #  status.deletePopUpWindow
@@ -1422,7 +1417,7 @@ proc getKeyOnceAndWriteCommandView*(
 
 # TODO: Move
 proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
-  var commandLine = initExModeViewStatus(prompt)
+  status.commandLine = initExModeViewStatus(prompt)
   status.resize(terminalHeight(), terminalWidth())
 
   while true:
@@ -1437,7 +1432,7 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
       key = getKey()
 
       status.lastOperatingTime = now()
-      sleep 100
+      sleep 20
 
     # Suggestion mode
     if isTabKey(key) or isShiftTab(key):
@@ -1454,27 +1449,25 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
       return @[ru""]
     elif isLeftKey(key):
       discard
-      # TODO: Enable cursor
-      #status.commandLine.window.moveLeft(commandLine.
+      status.commandLine.moveLeft
     elif isRightkey(key):
       discard
-      # TODO: Enable cursor
-      #moveRight(commandLine.
+      status.commandLine.moveRight
     elif isHomeKey(key):
-      moveTop(commandLine)
+      status.commandLine.moveTop
     elif isEndKey(key):
-      moveEnd(commandLine)
+      moveEnd(status.commandLine)
     elif isBackspaceKey(key):
-      deleteCommandBuffer(commandLine)
+      status.commandLine.deleteCommandBuffer
     elif isDeleteKey(key):
-      deleteCommandBufferCurrentPosition(commandLine)
+      status.commandLine.deleteCommandBufferCurrentPosition
     else:
-      insertCommandBuffer(commandLine, key)
+      status.commandLine.insertCommandBuffer(key)
       # TODO: Fix
-      status.commandLine.buffer = commandLine.buffer
+      status.commandLine.buffer = status.commandLine.buffer
       status.update
 
-  return splitCommand($commandLine.buffer)
+  return splitCommand($status.commandLine.buffer)
 
 import debugmode
 

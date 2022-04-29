@@ -84,11 +84,41 @@ const exCommandList: array[65, tuple[command, description: string]] = [
   (command: "wqa", description: "                  | Write all file in current workspace")
 ]
 
+proc moveLeft*(commandLine: var CommandLine) =
+  if commandLine.currentPosition > 0:
+    dec(commandLine.currentPosition)
+    if commandLine.cursorX > commandLine.prompt.len: dec(commandLine.cursorX)
+    else: dec(commandLine.startPosition)
+
+proc moveRight*(commandLine: var CommandLine) =
+  if commandLine.currentPosition < commandLine.buffer.len:
+    inc(commandLine.currentPosition)
+    if commandLine.cursorX < terminalWidth() - 1: inc(commandLine.cursorX)
+    else: inc(commandLine.startPosition)
+
+proc moveTop*(commandLine: var CommandLine) =
+  commandLine.cursorX = commandLine.prompt.len
+  commandLine.currentPosition = 0
+  commandLine.startPosition = 0
+
+proc moveEnd*(commandLine: var CommandLine) =
+  commandLine.currentPosition = commandLine.buffer.len - 1
+  if commandLine.buffer.len > terminalWidth():
+    commandLine.startPosition = commandLine.buffer.len - terminalWidth()
+    commandLine.cursorX = terminalWidth()
+  else:
+    commandLine.startPosition = 0
+    commandLine.cursorX = commandLine.prompt.len + commandLine.buffer.len - 1
+
+proc moveCursor*(commandLine: var CommandLine, y, x: int) =
+  commandLine.cursorX = x
+  commandLine.cursorY = y
+
 # Clear the buffer
 proc clear*(commndLine: var CommandLine) =
   commndLine.buffer = @[]
 
-proc writeExModeView*(commandLine: CommandLine,
+proc writeExModeView*(commandLine: var CommandLine,
                       color: EditorColorPair) =
 
   let buffer = ($commandLine.buffer).substr(
@@ -106,8 +136,7 @@ proc writeExModeView*(commandLine: CommandLine,
   let y = terminalHeight() - 1
   write(x, y, fmt"{commandLine.prompt}{buffer}")
 
-  # TODO: Enable cursor
-  #commandLine.window.moveCursor(0, commandLine.cursorX)
+  commandLine.moveCursor(0, commandLine.cursorX)
 
 proc askCreateDirPrompt*(commndLine: var CommandLine,
                          messageLog: var seq[seq[Rune]],
@@ -121,7 +150,7 @@ proc askCreateDirPrompt*(commndLine: var CommandLine,
   var key = NONE_KEY
   while key == NONE_KEY:
     key = getKey()
-    sleep 100
+    sleep 20
 
   if key == ord('y'): result = true
   else: result = false
@@ -138,7 +167,7 @@ proc askBackupRestorePrompt*(commndLine: var CommandLine,
   var key = NONE_KEY
   while key == NONE_KEY:
     key = getKey()
-    sleep 100
+    sleep 20
 
   if key == ord('y'): result = true
   else: result = false
@@ -155,7 +184,7 @@ proc askDeleteBackupPrompt*(commndLine: var CommandLine,
   var key = NONE_KEY
   while key == NONE_KEY:
     key = getKey()
-    sleep 100
+    sleep 20
 
   if key == ord('y'): result = true
   else: result = false
@@ -172,7 +201,7 @@ proc askFileChangedSinceReading*(commndLine: var CommandLine,
   var key = NONE_KEY
   while key == NONE_KEY:
     key = getKey()
-    sleep 100
+    sleep 20
 
   block:
     const askMess = "Do you really want to write to it: y/n ?".toRunes
@@ -183,7 +212,7 @@ proc askFileChangedSinceReading*(commndLine: var CommandLine,
     var key = NONE_KEY
     while key == NONE_KEY:
       key = getKey()
-      sleep 100
+      sleep 20
 
     if key == ord('y'): result = true
     else: result = false
@@ -231,32 +260,6 @@ proc initExModeViewStatus*(prompt: string):CommandLine =
   result.prompt = prompt
   result.cursorY = 0
   result.cursorX = 1
-
-proc moveLeft*(commandWindow: Window, commandLine: var CommandLine) =
-  if commandLine.currentPosition > 0:
-    dec(commandLine.currentPosition)
-    if commandLine.cursorX > commandLine.prompt.len: dec(commandLine.cursorX)
-    else: dec(commandLine.startPosition)
-
-proc moveRight*(commandLine: var CommandLine) =
-  if commandLine.currentPosition < commandLine.buffer.len:
-    inc(commandLine.currentPosition)
-    if commandLine.cursorX < terminalWidth() - 1: inc(commandLine.cursorX)
-    else: inc(commandLine.startPosition)
-
-proc moveTop*(commandLine: var CommandLine) =
-  commandLine.cursorX = commandLine.prompt.len
-  commandLine.currentPosition = 0
-  commandLine.startPosition = 0
-
-proc moveEnd*(commandLine: var CommandLine) =
-  commandLine.currentPosition = commandLine.buffer.len - 1
-  if commandLine.buffer.len > terminalWidth():
-    commandLine.startPosition = commandLine.buffer.len - terminalWidth()
-    commandLine.cursorX = terminalWidth()
-  else:
-    commandLine.startPosition = 0
-    commandLine.cursorX = commandLine.prompt.len + commandLine.buffer.len - 1
 
 proc clearCommandBuffer*(commandLine: var CommandLine) =
   commandLine.buffer = ru""
@@ -561,7 +564,6 @@ proc suggestCommandLine*(commandLine: var CommandLine,
 
     commandLine.cursorX = commandLine.currentPosition + 1
 
-  # TODO: Enable cursor
-  #status.commandLine.window.moveCursor(commandLine.cursorY, commandLine.cursorX)
+  commandLine.moveCursor(commandLine.cursorY, commandLine.cursorX)
   # TODO: Enable popUpWindow
   #if status.settings.popUpWindowInExmode: status.deletePopUpWindow
