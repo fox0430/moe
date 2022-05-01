@@ -4,7 +4,7 @@ import gapbuffer, ui, unicodeext, independentutils, color, settings,
        bufferstatus, highlight, term
 
 type EditorView* = object
-  y, x, height*, width*, widthOfLineNum*: int
+  y*, x*, height*, width*, widthOfLineNum*: int
   lines*: Deque[seq[Rune]]
   originalLine*, start*, length*: Deque[int]
   updated*: bool
@@ -183,7 +183,7 @@ proc scrollDown*[T](view: var EditorView, buffer: T) =
 proc writeLineNum(view: EditorView, y, line: int, colorPair: EditorColorPair) {.inline.} =
   #win.write(y, 0, strutils.align($(line+1), view.widthOfLineNum-1), colorPair, false)
   const x = 0
-  write(x, y, strutils.align($(line+1), view.widthOfLineNum-1))
+  write(x, view.y + y, strutils.align($(line+1), view.widthOfLineNum-1))
 
 proc write(view: EditorView,
            y, x: int,
@@ -194,7 +194,7 @@ proc write(view: EditorView,
   const tab = "    "
   # TODO: Enable color
   #win.write(y, x, ($str).replace("\t", tab), color, false)
-  write(x, y, ($str).replace("\t", tab))
+  write(x, view.y + y, ($str).replace("\t", tab))
 
 proc writeCurrentLine(view: EditorView,
                       highlight: Highlight,
@@ -295,7 +295,7 @@ proc writeAllLines*[T](view: var EditorView,
                               EditorColorPair.currentLineNum
                             else:
                               EditorColorPair.lineNum
-      view.writeLineNum(view.y + y, view.originalLine[y], lineNumberColor)
+      view.writeLineNum(y, view.originalLine[y], lineNumberColor)
 
     var x = view.widthOfLineNum
     if view.length[y] == 0:
@@ -317,7 +317,7 @@ proc writeAllLines*[T](view: var EditorView,
                            mode, prevMode,
                            viewSettings)
         else:
-          view.write(view.y + y, x, view.lines[y], EditorColorPair.defaultChar)
+          view.write(y, x, view.lines[y], EditorColorPair.defaultChar)
       continue
 
     if viewSettings.indentationLines and not isConfigMode(mode, prevMode):
@@ -371,7 +371,7 @@ proc writeAllLines*[T](view: var EditorView,
                          mode, prevMode,
                          viewSettings)
       else:
-        view.write(view.y + y, x, str, highlight[i].color)
+        view.write(y, x, str, highlight[i].color)
       x += width(str)
       if last == highlight[i].lastColumn - view.start[y]: inc(i) # consumed a whole segment
       else: break
