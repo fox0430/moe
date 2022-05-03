@@ -1,4 +1,5 @@
 import std/[parseopt, pegs, os, strformat]
+import logger
 
 type CmdParsedList* = object
   path*: seq[string]
@@ -37,6 +38,7 @@ Usage:
 
 Arguments:
   -R               Readonly mode
+  --log            Start logger
   -h, --help       Print this help
   -v, --version    Print version
 """
@@ -71,6 +73,7 @@ proc parseCommandLineOption*(line: seq[string]): CmdParsedList =
           else: writeCmdLineError(kind, key)
       of cmdLongOption:
         case key:
+          of "log": initLogger()
           of "version": writeVersion()
           of "help": writeHelp()
           else: writeCmdLineError(kind, key)
