@@ -1,5 +1,5 @@
 import std/[strutils, terminal, os, strformat, tables, times, heapqueue, deques,
-            options]
+            options, logging]
 import syntax/highlite
 import ui, gapbuffer, editorview, unicodeext, highlight, fileutils,
        window, color, settings, statusline, bufferstatus, cursor, tabline,
@@ -255,6 +255,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
 
   initTerminalBuffer()
 
+  # Resize mainWindowNode
   status.resizeMainWindowNode(height, width)
 
   const statusLineHeight = 1
@@ -278,19 +279,27 @@ proc resize*(status: var EditorStatus, height, width: int) =
           adjustedHeight = max(h, 4)
           adjustedWidth = max(node.w - widthOfLineNum, 4)
 
-        node.view.resize(
-          status.bufStatus[bufIndex].buffer,
-          tabLineHeight,
-          0,
-          adjustedHeight,
-          adjustedWidth,
-          widthOfLineNum)
+        # Resize editorview
+        block:
+          let
+            y = node.y
+            x = node.x
+            h = node.h
+            w = node.w
+          debug(x)
+          node.view.resize(
+            status.bufStatus[bufIndex].buffer,
+            y,
+            x,
+            h,
+            w,
+            widthOfLineNum)
         node.view.seekCursor(
           status.bufStatus[bufIndex].buffer,
           node.currentLine,
           node.currentColumn)
 
-        ## Resize status line window
+        ## Resize status line
         let
           isMergeStatusLine = status.settings.statusLine.merge
           enableStatusLine = status.settings.statusLine.enable
@@ -320,7 +329,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
-  # Resize status line window
+  # Resize status line
   if status.settings.statusLine.enable and
      not status.settings.statusLine.multipleStatusLine:
     const

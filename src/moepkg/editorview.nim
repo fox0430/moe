@@ -194,7 +194,7 @@ proc write(view: EditorView,
   const tab = "    "
   # TODO: Enable color
   #win.write(y, x, ($str).replace("\t", tab), color, false)
-  write(x, view.y + y, ($str).replace("\t", tab))
+  write(view.x + x, view.y + y, ($str).replace("\t", tab))
 
 proc writeCurrentLine(view: EditorView,
                       highlight: Highlight,
