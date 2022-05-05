@@ -359,3 +359,11 @@ proc getHeight*(node: var WindowNode): int {.inline.} = node.h
 
 proc getWidth*(node: var WindowNode): int {.inline.} = node.w
 
+# Move cursor position to the selected window
+proc moveCursor*(win: var WindowNode, y, x: int) =
+  let
+    widthOfLineNum = win.view.widthOfLineNum
+    abosluteX = win.x + widthOfLineNum + x
+    abosluteY = win.y + y
+
+  term.moveCursor(x, y)

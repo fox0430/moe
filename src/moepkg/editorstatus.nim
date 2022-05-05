@@ -565,7 +565,7 @@ proc update*(status: var EditorStatus) =
     let
       y = currentMainWindowNode.view.y + currentMainWindowNode.cursor.y + 1
       x =  currentMainWindowNode.view.x + currentMainWindowNode.view.widthOfLineNum + currentMainWindowNode.cursor.x + 1
-    term.moveCursor(x, y)
+    currentMainWindowNode.moveCursor(y, x)
 
 proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode)
 

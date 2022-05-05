@@ -1,4 +1,4 @@
-import std/[terminal, assertions, strutils, os, strformat]
+import std/[terminal, strutils, os, strformat]
 import illwill
 export illwill.Key
 
