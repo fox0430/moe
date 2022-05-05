@@ -253,14 +253,16 @@ proc resizeMainWindowNode(status: var EditorStatus, height, width: int) =
 proc resize*(status: var EditorStatus, height, width: int) =
   setCursor(false)
 
-  initTerminalBuffer()
-
-  # Resize mainWindowNode
-  status.resizeMainWindowNode(height, width)
-
+  # TODO: Fix statusLineHeight
   const statusLineHeight = 1
   let
     tabLineHeight = if status.settings.tabLine.enable: 1 else: 0
+    nodeHeight = height - tabLineHeight
+
+  # TODO: Fix statusLineHeight
+  # Resize mainWindowNode
+  status.resizeMainWindowNode(nodeHeight, width)
+
   var
     statusLineIndex = 0
     queue = initHeapQueue[WindowNode]()
@@ -286,7 +288,6 @@ proc resize*(status: var EditorStatus, height, width: int) =
             x = node.x
             h = node.h
             w = node.w
-          debug(x)
           node.view.resize(
             status.bufStatus[bufIndex].buffer,
             y,
@@ -311,7 +312,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
           const statusLineHeight = 1
           let
             width = node.w
-            y = node.y + adjustedHeight
+            y = node.y + adjustedHeight + 1
             x = node.x
           status.statusLine[statusLineIndex].resize(
             statusLineHeight,
@@ -332,11 +333,8 @@ proc resize*(status: var EditorStatus, height, width: int) =
   # Resize status line
   if status.settings.statusLine.enable and
      not status.settings.statusLine.multipleStatusLine:
-    const
-      statusLineHeight = 1
-      x = 0
-    let
-      y = max(height, 4) - 1 - (if status.settings.statusLine.merge: 0 else: 1)
+    const  x = 0
+    let y = max(height, 4) - 1 - (if status.settings.statusLine.merge: 0 else: 1)
     status.statusLine[0].resize(
       statusLineHeight,
       width,

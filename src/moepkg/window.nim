@@ -1,4 +1,4 @@
-import std/[heapqueue, options]
+import std/[heapqueue, options, logging]
 import illwill
 import ui, editorview, gapbuffer, color, cursor, highlight, unicodeext, term
 
@@ -170,7 +170,6 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
   var
     qeue = initHeapQueue[WindowNode]()
     windowIndex = 0
-  const statusBarLineHeight = 1
 
   for index, node in root.child:
     if root.splitType == SplitType.vertical:
@@ -205,8 +204,6 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
       node.x = x
 
     if node.isWindow:
-      ## Resize curses window
-      #node.window.get.resize(node.h - statusBarLineHeight, node.w, node.y, node.x)
       ## Set windowIndex
       node.windowIndex = windowIndex
       inc(windowIndex)
@@ -254,12 +251,6 @@ proc resize*(root: WindowNode, y, x, height, width: int) =
         child.x = parent.x
 
       if child.isWindow:
-        # Resize curses window
-        #child.window.get.resize(
-        #  child.h - statusBarLineHeight,
-        #  child.w,
-        #  child.y,
-        #  child.x)
         # Set windowIndex
         child.windowIndex = windowIndex
         inc(windowIndex)
