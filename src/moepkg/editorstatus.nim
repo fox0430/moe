@@ -449,6 +449,8 @@ proc updateLogViewer(bufStatus: var BufferStatus,
 proc updateDebugModeBuffer(status: var EditorStatus)
 
 proc update*(status: var EditorStatus) =
+  initTerminalBuffer()
+
   setCursor(false)
 
   if status.settings.tabLine.enable:
