@@ -1396,6 +1396,8 @@ proc exMode*(status: var EditorStatus) =
     isSuggest = true
     isReplaceCommand = false
 
+  status.commandLine.setPrompt(prompt)
+
   status.update
 
   var highlight = currentMainWindowNode.highlight
@@ -1415,7 +1417,9 @@ proc exMode*(status: var EditorStatus) =
       isReplaceCommand = true
       status.searchHistory.add(ru"")
 
-    if cancelInput or exitInput: break
+    if cancelInput or exitInput:
+      status.commandLine = initCommandLine(prompt)
+      break
     elif isReplaceCommand and status.settings.highlightSettings.replaceText:
       var keyword = ru""
       for i in 3 ..< command.len :

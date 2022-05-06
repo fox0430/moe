@@ -43,7 +43,7 @@ proc initEditorStatus*(): EditorStatus =
 
   block:
     const prompt = ""
-    result.commandLine = initExModeViewStatus("")
+    result.commandLine = initCommandLine()
 
 template currentBufStatus*: var BufferStatus =
   mixin status
@@ -550,7 +550,7 @@ proc update*(status: var EditorStatus) =
 
   if status.settings.statusLine.enable: status.updateStatusLine
 
-  status.commandLine.writeExModeView(EditorColorPair.defaultChar)
+  status.commandLine.writeCommandLine(EditorColorPair.defaultChar)
 
   display()
 
@@ -559,7 +559,9 @@ proc update*(status: var EditorStatus) =
   let
     currentMode = currentBufStatus.mode
     prevMode = currentBufStatus.prevMode
-  if (currentMode != Mode.filer) and
+  if isExmode(currentMode):
+    status.commandLine.moveCursor
+  elif (currentMode != Mode.filer) and
      (not (currentMode == Mode.ex and prevMode == Mode.filer)):
     let
       y = currentMainWindowNode.view.y + currentMainWindowNode.cursor.y + 1
@@ -1320,14 +1322,14 @@ proc getKeyOnceAndWriteCommandView*(
   buffer: seq[Rune],
   isSuggest, isSearch : bool): (seq[Rune], bool, bool) =
 
-  status.commandLine = initExModeViewStatus(prompt)
+  status.commandLine.clear
 
   var
     exitSearch = false
     cancelSearch = false
     searchHistoryIndex = status.searchHistory.high
     commandHistoryIndex = status.exCommandHistory.high
-  for rune in buffer: status.commandLine.insertCommandBuffer(rune)
+  status.commandLine.buffer = buffer
 
   template setPrevSearchHistory() =
     if searchHistoryIndex > 0:
@@ -1415,21 +1417,19 @@ proc getKeyOnceAndWriteCommandView*(
       break
     else:
       status.commandLine.insertCommandBuffer(key)
-      # TODO: Fix
-      status.commandLine.buffer = status.commandLine.buffer
       status.update
       break
 
-  status.commandLine.writeExModeView(EditorColorPair.commandBar)
+  status.commandLine.writeCommandLine(EditorColorPair.commandBar)
   return (status.commandLine.buffer, exitSearch, cancelSearch)
 
 # TODO: Move
 proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
-  status.commandLine = initExModeViewStatus(prompt)
+  status.commandLine = initCommandLine(prompt)
   status.resize(terminalHeight(), terminalWidth())
 
   while true:
-    status.commandLine.writeExModeView(EditorColorPair.commandBar)
+    status.commandLine.writeCommandLine(EditorColorPair.commandBar)
 
     var key = NONE_KEY
     while key == NONE_KEY:

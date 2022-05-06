@@ -80,6 +80,8 @@ proc isBufferManagerMode*(mode: Mode): bool {.inline.} = mode == Mode.bufManager
 
 proc isVisualBlockMode*(mode: Mode): bool {.inline.} = mode == Mode.visualBlock
 
+proc isExMode*(mode: Mode): bool {.inline.} = mode == Mode.ex
+
 proc checkBufferExist*(bufStatus: seq[BufferStatus], path: seq[Rune]): Option[int] =
   for index, buf in bufStatus:
     if buf.path == path:

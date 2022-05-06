@@ -7,7 +7,7 @@ proc getKeyword*(status: var EditorStatus,
                  isSearch: bool): (seq[Rune], bool) =
 
   var
-    commandLine = initExModeViewStatus(prompt)
+    commandLine = initCommandLine(prompt)
     cancelSearch = false
     searchHistoryIndex = status.searchHistory.high
 
@@ -24,7 +24,7 @@ proc getKeyword*(status: var EditorStatus,
       commandLine.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
 
   while true:
-    status.commandLine.writeExModeView(EditorColorPair.commandBar)
+    status.commandLine.writeCommandLine(EditorColorPair.commandBar)
 
     var key = NONE_KEY
     while key == NONE_KEY:

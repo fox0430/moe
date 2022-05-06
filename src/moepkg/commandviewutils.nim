@@ -1,4 +1,4 @@
-import std/[terminal, strutils, sequtils, strformat, os, algorithm]
+import std/[terminal, strutils, sequtils, strformat, os, algorithm, logging]
 import ui, unicodeext, fileutils, color, term
 
 type
@@ -110,16 +110,15 @@ proc moveEnd*(commandLine: var CommandLine) =
     commandLine.startPosition = 0
     commandLine.cursorX = commandLine.prompt.len + commandLine.buffer.len - 1
 
-proc moveCursor*(commandLine: var CommandLine, y, x: int) =
-  commandLine.cursorX = x
-  commandLine.cursorY = y
+proc moveCursor*(commandLine: CommandLine) {.inline.} =
+  term.moveCursor(commandLine.cursorX + 1, commandLine.cursorY)
 
-# Clear the buffer
+# Clear the command line buffer
 proc clear*(commndLine: var CommandLine) =
   commndLine.buffer = @[]
 
-proc writeExModeView*(commandLine: var CommandLine,
-                      color: EditorColorPair) =
+proc writeCommandLine*(commandLine: var CommandLine,
+                       color: EditorColorPair) =
 
   let buffer = ($commandLine.buffer).substr(
     commandLine.startPosition,
@@ -136,7 +135,7 @@ proc writeExModeView*(commandLine: var CommandLine,
   let y = terminalHeight() - 1
   write(x, y, fmt"{commandLine.prompt}{buffer}")
 
-  commandLine.moveCursor(0, commandLine.cursorX)
+  commandLine.moveCursor
 
 proc askCreateDirPrompt*(commndLine: var CommandLine,
                          messageLog: var seq[seq[Rune]],
@@ -144,7 +143,7 @@ proc askCreateDirPrompt*(commndLine: var CommandLine,
 
   let mess = fmt"{path} does not exists. Create it now?: y/n"
   commndLine.buffer = mess.toRunes
-  commndLine.writeExModeView(EditorColorPair.defaultChar)
+  commndLine.writeCommandLine(EditorColorPair.defaultChar)
   messageLog.add(mess.toRunes)
 
   var key = NONE_KEY
@@ -161,7 +160,7 @@ proc askBackupRestorePrompt*(commndLine: var CommandLine,
 
   let mess = fmt"Restore {filename}?: y/n"
   commndLine.buffer = mess.toRunes
-  commndLine.writeExModeView(EditorColorPair.defaultChar)
+  commndLine.writeCommandLine(EditorColorPair.defaultChar)
   messageLog.add(mess.toRunes)
 
   var key = NONE_KEY
@@ -178,7 +177,7 @@ proc askDeleteBackupPrompt*(commndLine: var CommandLine,
 
   let mess = fmt"Delete {filename}?: y/n"
   commndLine.buffer = mess.toRunes
-  commndLine.writeExModeView(EditorColorPair.defaultChar)
+  commndLine.writeCommandLine(EditorColorPair.defaultChar)
   messageLog.add(mess.toRunes)
 
   var key = NONE_KEY
@@ -195,7 +194,7 @@ proc askFileChangedSinceReading*(commndLine: var CommandLine,
   block:
     const warnMess = "WARNING: The file has been changed since reading it!: Press any key".toRunes
     commndLine.buffer = warnMess
-    commndLine.writeExModeView(EditorColorPair.defaultChar)
+    commndLine.writeCommandLine(EditorColorPair.defaultChar)
     messageLog.add(warnMess)
 
   var key = NONE_KEY
@@ -206,7 +205,7 @@ proc askFileChangedSinceReading*(commndLine: var CommandLine,
   block:
     const askMess = "Do you really want to write to it: y/n ?".toRunes
     commndLine.buffer = askMess
-    commndLine.writeExModeView(EditorColorPair.defaultChar)
+    commndLine.writeCommandLine(EditorColorPair.defaultChar)
     messageLog.add(askMess)
 
     var key = NONE_KEY
@@ -255,15 +254,22 @@ proc splitCommand*(command: string): seq[seq[Rune]] =
     return strutils.splitWhitespace(command)
                     .map(proc(s: string): seq[Rune] = toRunes(s))
 
-proc initExModeViewStatus*(prompt: string):CommandLine =
+proc initCommandLine*(prompt: string): CommandLine =
   result.buffer = ru""
-  result.prompt = prompt
-  result.cursorY = 0
+  # TODO: Fix to commandLine.y?
+  result.cursorY = terminalHeight()
   result.cursorX = 1
+
+proc initCommandLine*(): CommandLine {.inline.} =
+  initCommandLine("")
+
+proc setPrompt*(commandLine: var CommandLine, prompt: string) {.inline.} =
+  commandLine.prompt = prompt
 
 proc clearCommandBuffer*(commandLine: var CommandLine) =
   commandLine.buffer = ru""
-  commandLine.cursorY = 0
+  # TODO: Fix to commandLine.y?
+  commandLine.cursorY = terminalHeight()
   commandLine.cursorX = 1
   commandLine.currentPosition = 0
   commandLine.startPosition = 0
@@ -516,7 +522,7 @@ proc suggestCommandLine*(commandLine: var CommandLine,
   # TODO: Enable popUpWindow
   #var popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
 
-  template updateExModeViewStatus() =
+  template updateCommandLine() =
     if isSuggestTypeFilePath(suggestType):
       commandLine.buffer = command & ru" "
       commandLine.currentPosition = command.len + commandLine.prompt.len
@@ -530,7 +536,7 @@ proc suggestCommandLine*(commandLine: var CommandLine,
   #       but there is a bug which is related to scrolling of the pup-up window.
 
   while (isTabKey(key) or isShiftTab(key)) and suggestlist.len > 1:
-    updateExModeViewStatus()
+    updateCommandLine()
 
     if isTabKey(key) and suggestIndex < suggestlist.high: inc(suggestIndex)
     elif isShiftTab(key) and suggestIndex > 0: dec(suggestIndex)
@@ -556,7 +562,7 @@ proc suggestCommandLine*(commandLine: var CommandLine,
     commandLine.insertCommandBuffer(suggestlist[suggestIndex])
     commandLine.cursorX.inc
 
-    commandLine.writeExModeView(EditorColorPair.commandBar)
+    commandLine.writeCommandLine(EditorColorPair.commandBar)
 
     key = NONE_KEY
     while key == NONE_KEY:
@@ -564,6 +570,6 @@ proc suggestCommandLine*(commandLine: var CommandLine,
 
     commandLine.cursorX = commandLine.currentPosition + 1
 
-  commandLine.moveCursor(commandLine.cursorY, commandLine.cursorX)
+  commandLine.moveCursor
   # TODO: Enable popUpWindow
   #if status.settings.popUpWindowInExmode: status.deletePopUpWindow
