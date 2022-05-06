@@ -449,6 +449,8 @@ proc updateLogViewer(bufStatus: var BufferStatus,
 proc updateDebugModeBuffer(status: var EditorStatus)
 
 proc update*(status: var EditorStatus) =
+  initTerminalBuffer()
+
   setCursor(false)
 
   if status.settings.tabLine.enable:
@@ -558,8 +560,7 @@ proc update*(status: var EditorStatus) =
     currentMode = currentBufStatus.mode
     prevMode = currentBufStatus.prevMode
   if (currentMode != Mode.filer) and
-     not (currentMode == Mode.ex and
-     prevMode == Mode.filer):
+     (not (currentMode == Mode.ex and prevMode == Mode.filer)):
     let
       y = currentMainWindowNode.view.y + currentMainWindowNode.cursor.y + 1
       x =  currentMainWindowNode.view.x + currentMainWindowNode.view.widthOfLineNum + currentMainWindowNode.cursor.x + 1
