@@ -1530,7 +1530,8 @@ proc editEnumAndBoolSettings(status: var EditorStatus,
     x = absoluteX + positionOfSetVal + numOfIndent - margin
 
   var
-    popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
+    # TODO: Enable popUpWindow
+    #popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
     suggestIndex = 0
 
     key = NONE_KEY
@@ -1547,10 +1548,11 @@ proc editEnumAndBoolSettings(status: var EditorStatus,
     else:
       suggestIndex = 0
 
-    popUpWindow.writePopUpWindow(h, w, y, x,
-                                 terminalHeight(), terminalWidth(),
-                                 suggestIndex,
-                                 settingValues)
+    # TODO: Enable popUpWindow
+    #popUpWindow.writePopUpWindow(h, w, y, x,
+    #                             terminalHeight(), terminalWidth(),
+    #                             suggestIndex,
+    #                             settingValues)
 
     key = currentMainWindowNode.getKey
 

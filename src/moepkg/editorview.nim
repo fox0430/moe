@@ -1,7 +1,7 @@
-import std/[deques, strutils, math, strformat, terminal]
+import std/[deques, strutils, math, strformat]
 import illwill
 import gapbuffer, ui, unicodeext, independentutils, color, settings,
-       bufferstatus, highlight, term
+       bufferstatus, highlight
 
 type EditorView* = object
   y*, x*, height*, width*, widthOfLineNum*: int

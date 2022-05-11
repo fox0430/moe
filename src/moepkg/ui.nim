@@ -1,7 +1,6 @@
-import std/[strformat, osproc, strutils, os, terminal]
+import std/[osproc, strutils, os, terminal]
 import pkg/illwill
-import unicodeext, color, term
-#export term.Key
+import unicodeext, color
 
 when not defined unitTest:
   import std/posix
@@ -30,8 +29,9 @@ type Window* = ref object
   height*, width*: int
   y*, x*: int
 
-# if press ctrl-c key, set true in setControlCHook()
 var
+  tb*: TerminalBuffer
+
   pressCtrlC* = false
   isResizedWindow* = false
 
@@ -61,6 +61,7 @@ proc changeCursorType*(cursorType: CursorType) =
   of blinkIbeam: setBkinkingIbeamCursor()
   of noneBlinkIbeam: setNoneBlinkingIbeamCursor()
 
+# if press ctrl-c key, set true in setControlCHook()
 proc disableControlC*() {.inline.} =
   setControlCHook(proc() {.noconv.} = pressCtrlC = true)
 
@@ -86,7 +87,7 @@ proc setTimeout*(win: var Window) =
 proc setTimeout*(win: var Window, time: int) =
   discard
 
-# Check how many colors are supported on the terminal
+# Check how many colors are supported on the terminal.
 proc checkColorSupportedTerminal*(): int =
   let (output, exitCode) = execCmdEx("tput colors")
 
@@ -95,8 +96,26 @@ proc checkColorSupportedTerminal*(): int =
   else:
     result = -1
 
+# Clear the screen.
+proc initTerminalBuffer*() =
+  tb = newTerminalBuffer(terminalWidth(), terminalHeight())
+
+proc exitUi*() {.noconv.} =
+  illwillDeinit()
+  showCursor()
+  eraseScreen()
+
 proc startUi*() =
-  term.startUi()
+  illwillInit(fullscreen = true)
+  setControlCHook(exitUi)
+
+# Display buffer in the terminal buffer.
+proc display*() {.inline.} = tb.display
+
+# Write to the terminal buffer.
+proc write*(x, y: int, buf: string) {.inline.} = tb.write(x, y, buf)
+
+proc write*(x, y: int, buf: seq[Rune]) {.inline.} = tb.write(x, y, $buf)
 
   # Not start when running unit tests
   #when not defined unitTest:
@@ -114,18 +133,6 @@ proc startUi*() =
   #  erase()
   #  keyEcho(false)
   #  set_escdelay(25)
-
-proc exitUi*() {.inline.} = term.exitUi()
-
-proc initWindow*(height, width, y, x: int, color: EditorColorPair): Window =
-  result = Window()
-  result.y = y
-  result.x = x
-  result.height = height
-  result.width = width
-  #result.cursesWindow = initWindow(x, y,width, height)
-  #keypad(result.cursesWindow, true)
-  #discard wbkgd(result.cursesWindow, ncurses.COLOR_PAIR(color))
 
 proc write*(win: var Window,
             y, x: int,
@@ -235,10 +242,10 @@ proc resize*(win: var Window, height, width, y, x: int) =
 #proc attroff*(win: var Window, attributes: Attributes) {.inline.} =
 #  win.cursesWindow.wattroff(cint(attributes))
 
-proc moveCursor*(y, x: int) {.inline.} =
-  term.moveCursor(x, y)
-  #win.cursesWindow.move(x, y)
-  #wmove(win.cursesWindow, cint(y), cint(x))
+# Move cursor position on the terminal.
+proc moveCursor*(x, y: int) =
+  let cmd = """printf '\033[""" & $y & ";" & $x & "H'"
+  discard execShellCmd(cmd)
 
 #proc deleteWindow*(win: var Window) {.inline.} = delwin(win.cursesWindow)
 

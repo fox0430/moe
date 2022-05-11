@@ -1,5 +1,5 @@
-import std/[terminal, strutils, sequtils, strformat, os, algorithm, logging]
-import ui, unicodeext, fileutils, color, term
+import std/[terminal, strutils, sequtils, strformat, os, algorithm]
+import ui, unicodeext, fileutils, color
 
 type
   CommandLine* = object
@@ -111,7 +111,7 @@ proc moveEnd*(commandLine: var CommandLine) =
     commandLine.cursorX = commandLine.prompt.len + commandLine.buffer.len - 1
 
 proc moveCursor*(commandLine: CommandLine) {.inline.} =
-  term.moveCursor(commandLine.cursorX + 1, commandLine.cursorY)
+  moveCursor(commandLine.cursorX + 1, commandLine.cursorY)
 
 # Clear the command line buffer
 proc clear*(commndLine: var CommandLine) =

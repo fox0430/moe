@@ -1,6 +1,6 @@
-import std/[strutils, strformat, os, osproc]
+import std/[strformat, os, osproc]
 import syntax/highlite
-import ui, bufferstatus, color, unicodeext, settings, window, gapbuffer, term
+import ui, bufferstatus, color, unicodeext, settings, window, gapbuffer
 
 type StatusLine* = object
   # Absolute position

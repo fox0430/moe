@@ -1,5 +1,5 @@
 import std/[strformat, os, strutils, terminal]
-import color, unicodeext, settings, independentutils, commandviewutils, term
+import color, unicodeext, settings, independentutils, commandviewutils, ui
 
 proc writeMessageOnCommandWindow*(commandLine: var CommandLine,
                                   message: string,

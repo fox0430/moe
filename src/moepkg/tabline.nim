@@ -1,6 +1,6 @@
 import std/[strutils, terminal, unicode]
 import illwill
-import window, color, bufferstatus, independentutils, term
+import window, color, bufferstatus, independentutils, ui
 
 # TODO: Enable Color
 proc writeTab*(start, tabWidth: int,

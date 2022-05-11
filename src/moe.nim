@@ -1,8 +1,8 @@
 import std/[os, times]
-import moepkg/[editorstatus, cmdlineoption, bufferstatus, term, normalmode,
+import moepkg/[editorstatus, cmdlineoption, bufferstatus, normalmode,
                insertmode, visualmode, exmode, replacemode, filermode,
                buffermanager, logviewer, help, recentfilemode, quickrun,
-               historymanager, diffviewer, configmode, debugmode]
+               historymanager, diffviewer, configmode, debugmode, ui]
 
 # Load persisted data (Ex command history, search history and cursor postion)
 proc loadPersistData(status: var EditorStatus) =

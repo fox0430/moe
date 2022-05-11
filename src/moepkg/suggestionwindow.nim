@@ -1,6 +1,6 @@
 import std/[sugar, options, sequtils]
-import ui, window, autocomplete, bufferstatus, gapbuffer, color,
-       editorstatus, unicodeext, osext
+import ui, window, autocomplete, bufferstatus, gapbuffer, editorstatus,
+       unicodeext, osext
 import syntax/highlite
 
 type SuggestionWindow* = object
@@ -322,18 +322,19 @@ proc writeSuggestionWindow*(
     height = min(suggestionwindow.suggestoins.len, maxHeight)
     width = suggestionwindow.suggestoins.map(item => item.len).max + 2
 
-  if suggestionwindow.popUpWindow == nil:
-    suggestionwindow.popUpWindow = initWindow(
-      height,
-      width,
-      if y < mainWindowNodeY: mainWindowNodeY else: y,
-      x,
-      EditorColorPair.popUpWindow)
-  else:
-    suggestionwindow.popUpWindow.height = height
-    suggestionwindow.popUpWindow.width = width
-    suggestionwindow.popUpWindow.y = y
-    suggestionwindow.popUpWindow.x = x
+  # TODO: Enable suggestionwindow
+  #if suggestionwindow.popUpWindow == nil:
+  #  suggestionwindow.popUpWindow = initWindow(
+  #    height,
+  #    width,
+  #    if y < mainWindowNodeY: mainWindowNodeY else: y,
+  #    x,
+  #    EditorColorPair.popUpWindow)
+  #else:
+  #  suggestionwindow.popUpWindow.height = height
+  #  suggestionwindow.popUpWindow.width = width
+  #  suggestionwindow.popUpWindow.y = y
+  #  suggestionwindow.popUpWindow.x = x
 
   var popUpWindow = suggestionWindow.popUpWindow
   popUpWindow.writePopUpWindow(

@@ -1,6 +1,6 @@
-import std/[heapqueue, options, logging]
+import std/[heapqueue, options]
 import illwill
-import ui, editorview, gapbuffer, color, cursor, highlight, unicodeext, term
+import ui, editorview, gapbuffer, cursor, highlight, unicodeext
 
 # vertical is default
 type SplitType* = enum
@@ -31,10 +31,6 @@ type MainWindow* = object
   mainWindowNode*: WindowNode
   currentMainWindowNode*: WindowNode
   numOfMainWindow*: int
-
-proc newWindow(): Window {.inline.} =
-  result = initWindow(1, 1, 0, 0, EditorColorPair.defaultChar)
-  result.setTimeout()
 
 proc initWindowNode*(): WindowNode =
   var
@@ -357,4 +353,4 @@ proc moveCursor*(win: var WindowNode, y, x: int) =
     abosluteX = win.x + widthOfLineNum + x
     abosluteY = win.y + y
 
-  term.moveCursor(x, y)
+  moveCursor(x, y)
