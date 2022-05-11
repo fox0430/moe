@@ -181,9 +181,10 @@ proc scrollDown*[T](view: var EditorView, buffer: T) =
 
 # TODO: Enable color
 proc writeLineNum(view: EditorView, y, line: int, colorPair: EditorColorPair) {.inline.} =
+  # TODO: Enalbe color
   #win.write(y, 0, strutils.align($(line+1), view.widthOfLineNum-1), colorPair, false)
   const x = 0
-  write(x, view.y + y, strutils.align($(line+1), view.widthOfLineNum-1))
+  write(view.x + x, view.y + y, strutils.align($(line+1), view.widthOfLineNum-1))
 
 proc write(view: EditorView,
            y, x: int,
