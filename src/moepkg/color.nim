@@ -1,400 +1,336 @@
 import std/[strutils, tables, macros, strformat]
 import pkg/ncurses
 
-# maps annotations of the enum to a hexToColor table
-macro mapAnnotationToTable(args: varargs[untyped]): untyped =
-  var lines: seq[string]
-  let original = args[0]
-  # read source file at compile time into string
-  # and put all ines in the lines sequence
-  for line in staticRead(original.lineInfoObj.filename).splitLines():
-    lines.add line
-  let typeDef           = original[0][0]
-  let enumTy            = typeDef[2]
-  let tableIdent        = ident"hexToColorTable"
-  let tableReverseIdent = ident"colorToHexTable"
-  let tableRGBIdent     = ident"colorToRGBTable"
+type
+  # Hex color code
+  ColorCode* = array[6, char]
 
-  # create filling lines for the hexToColor table
-  var fillTable: NimNode = quote do: discard
-  for child in enumTy:
-    if child.kind != nnkEnumFieldDef:
-      continue
-    let line = lines[child.lineInfoObj.line-1].strip()
-    # check for annotations
-    if "##" notIn line:
-      continue
+  ColorPair* = tuple[fg, bg: ColorCode]
 
-    let hexCode = line[line.len()-6..line.len()-1]
-    let red     = parseHexInt(hexCode[0..1])
-    let green   = parseHexInt(hexCode[2..3])
-    let blue    = parseHexInt(hexCode[4..5])
-    if hexCode.len() == 6:
-      let intLit = child[1]
-      fillTable = quote do:
-        `fillTable`
-        `tableIdent`[`hexCode`]       = `intLit`
-        `tableReverseIdent`[`intLit`] = `hexCode`
-        `tableRGBIdent`[`intLit`]     = (`red`, `green`, `blue`)
+proc hexStrToIntStr(hexStr: string): string =
+  result = $(fromHex[int](hexStr))
 
-  # emit source code
-  return quote do:
-    var `tableIdent`        = initTable[string, int]()
-    var `tableReverseIdent` = initTable[int, string]()
-    var `tableRGBIdent`     = initTable[int, (int, int, int)]()
-    `original`
-    `fillTable`
+proc toColorCode*(str: string): ColorCode =
+  assert(str.len == 6)
 
-mapAnnotationToTable:
-  type Color* = enum
-    default             = -1
-    black               = 0    ## hex: #000000
-    maroon              = 1    ## hex: #800000
-    green               = 2    ## hex: #008000
-    olive               = 3    ## hex: #808000
-    navy                = 4    ## hex: #000080
-    purple_1            = 5    ## hex: #800080
-    teal                = 6    ## hex: #008080
-    silver              = 7    ## hex: #c0c0c0
-    gray                = 8    ## hex: #808080
-    red                 = 9    ## hex: #ff0000
-    lime                = 10   ## hex: #00ff00
-    yellow              = 11   ## hex: #ffff00
-    blue                = 12   ## hex: #0000ff
-    fuchsia             = 13   ## hex: #ff00ff
-    aqua                = 14   ## hex: #00ffff
-    white               = 15   ## hex: #ffffff
-    gray0               = 16   ## hex: #000000
-    navyBlue            = 17   ## hex: #00005f
-    darkBlue            = 18   ## hex: #000087
-    blue3_1             = 19   ## hex: #0000af
-    blue3_2             = 20   ## hex: #0000d7
-    blue1               = 21   ## hex: #0000ff
-    darkGreen           = 22   ## hex: #005f00
-    deepSkyBlue4_1      = 23   ## hex: #005f5f
-    deepSkyBlue4_2      = 24   ## hex: #005f87
-    deepSkyBlue4_3      = 25   ## hex: #005faf
-    dodgerBlue3_1       = 26   ## hex: #005fd7
-    dodgerBlue3_2       = 27   ## hex: #005fff
-    green4              = 28   ## hex: #008700
-    springGreen4        = 29   ## hex: #00875f
-    turquoise4          = 30   ## hex: #008787
-    deepSkyBlue3_1      = 31   ## hex: #0087af
-    deepSkyBlue3_2      = 32   ## hex: #0087d7
-    dodgerBlue1         = 33   ## hex: #0087ff
-    green3_1            = 34   ## hex: #00af00
-    springGreen3_1      = 35   ## hex: #00af5f
-    darkCyan            = 36   ## hex: #00af87
-    lightSeaGreen       = 37   ## hex: #00afaf
-    deepSkyBlue2        = 38   ## hex: #00afd7
-    deepSkyBlue1        = 39   ## hex: #00afff
-    green3_2            = 40   ## hex: #00d700
-    springGreen3_3      = 41   ## hex: #00d75f
-    springGreen2_1      = 42   ## hex: #00d787
-    cyan3               = 43   ## hex: #00d7af
-    darkTurquoise       = 44   ## hex: #00d7df
-    turquoise2          = 45   ## hex: #00d7ff
-    green1              = 46   ## hex: #00ff00
-    springGreen2_2      = 47   ## hex: #00ff5f
-    springGreen1        = 48   ## hex: #00ff87
-    mediumSpringGreen   = 49   ## hex: #00ffaf
-    cyan2               = 50   ## hex: #00ffd7
-    cyan1               = 51   ## hex: #00ffff
-    darkRed_1           = 52   ## hex: #5f0000
-    deepPink4_1         = 53   ## hex: #5f005f
-    purple4_1           = 54   ## hex: #5f0087
-    purple4_2           = 55   ## hex: #5f00af
-    purple3             = 56   ## hex: #5f00df
-    blueViolet          = 57   ## hex: #5f00ff
-    orange4_1           = 58   ## hex: #5f5f00
-    gray37              = 59   ## hex: #5f5f5f
-    mediumPurple4       = 60   ## hex: #5f5f87
-    slateBlue3_1        = 61   ## hex: #5f5faf
-    slateBlue3_2        = 62   ## hex: #5f5fd7
-    royalBlue1          = 63   ## hex: #5f5fff
-    chartreuse4         = 64   ## hex: #5f8700
-    darkSeaGreen4_1     = 65   ## hex: #5f875f
-    paleTurquoise4      = 66   ## hex: #5f8787
-    steelBlue           = 67   ## hex: #5f87af
-    steelBlue3          = 68   ## hex: #5f87d7
-    cornflowerBlue      = 69   ## hex: #5f87ff
-    chartreuse3_1       = 70   ## hex: #5faf00
-    darkSeaGreen4_2     = 71   ## hex: #5faf5f
-    cadetBlue_1         = 72   ## hex: #5faf87
-    cadetBlue_2         = 73   ## hex: #5fafaf
-    skyBlue3            = 74   ## hex: #5fafd7
-    steelBlue1_1        = 75   ## hex: #5fafff
-    chartreuse3_2       = 76   ## hex: #5fd000
-    paleGreen3_1        = 77   ## hex: #5fd75f
-    seaGreen3           = 78   ## hex: #5fd787
-    aquamarine3         = 79   ## hex: #5fd7af
-    mediumTurquoise     = 80   ## hex: #5fd7d7
-    steelBlue1_2        = 81   ## hex: #5fd7ff
-    chartreuse2_1       = 82   ## hex: #5fff00
-    seaGreen2           = 83   ## hex: #5fff5f
-    seaGreen1_1         = 84   ## hex: #5fff87
-    seaGreen1_2         = 85   ## hex: #5fffaf
-    aquamarine1_1       = 86   ## hex: #5fffd7
-    darkSlateGray2      = 87   ## hex: #5fffff
-    darkRed_2           = 88   ## hex: #870000
-    deepPink4_2         = 89   ## hex: #87005f
-    darkMagenta_1       = 90   ## hex: #870087
-    darkMagenta_2       = 91   ## hex: #8700af
-    darkViolet_1        = 92   ## hex: #8700d7
-    purple_2            = 93   ## hex: #8700ff
-    orange4_2           = 94   ## hex: #875f00
-    lightPink4          = 95   ## hex: #875f5f
-    plum4               = 96   ## hex: #875f87
-    mediumPurple3_1     = 97   ## hex: #875faf
-    mediumPurple3_2     = 98   ## hex: #875fd7
-    slateBlue1          = 99   ## hex: #875fff
-    yellow4_1           = 100  ## hex: #878700
-    wheat4              = 101  ## hex: #87875f
-    gray53              = 102  ## hex: #878787
-    lightSlategray      = 103  ## hex: #8787af
-    mediumPurple        = 104  ## hex: #8787d7
-    lightSlateBlue      = 105  ## hex: #8787ff
-    yellow4_2           = 106  ## hex: #87af00
-    Wheat4              = 107  ## hex: #87af5f
-    darkSeaGreen        = 108  ## hex: #87af87
-    lightSkyBlue3_1     = 109  ## hex: #87afaf
-    lightSkyBlue3_2     = 110  ## hex: #87afd7
-    skyBlue2            = 111  ## hex: #87afff
-    chartreuse2_2       = 112  ## hex: #87d700
-    darkOliveGreen3_1   = 113  ## hex: #87d75f
-    paleGreen3_2        = 114  ## hex: #87d787
-    darkSeaGreen3_1     = 115  ## hex: #87d7af
-    darkSlateGray3      = 116  ## hex: #87d7d7
-    skyBlue1            = 117  ## hex: #87d7ff
-    chartreuse1         = 118  ## hex: #87ff00
-    lightGreen_1        = 119  ## hex: #87ff5f
-    lightGreen_2        = 120  ## hex: #87ff87
-    paleGreen1_1        = 121  ## hex: #87ffaf
-    aquamarine1_2       = 122  ## hex: #87ffd7
-    darkSlateGray1      = 123  ## hex: #87ffff
-    red3_1              = 124  ## hex: #af0000
-    deepPink4           = 125  ## hex: #af005f
-    mediumVioletRed     = 126  ## hex: #af0087
-    magenta3            = 127  ## hex: #af00af
-    darkViolet_2        = 128  ## hex: #af00d7
-    purple              = 129  ## hex: #af00ff
-    darkOrange3_1       = 130  ## hex: #af5f00
-    indianRed_1         = 131  ## hex: #af5f5f
-    hotPink3_1          = 132  ## hex: #af5f87
-    mediumOrchid3       = 133  ## hex: #af5faf
-    mediumOrchid        = 134  ## hex: #af5fd7
-    mediumPurple2_1     = 135  ## hex: #af5fff
-    darkGoldenrod       = 136  ## hex: #af8700
-    lightSalmon3_1      = 137  ## hex: #af875f
-    rosyBrown           = 138  ## hex: #af8787
-    gray63              = 139  ## hex: #af87af
-    mediumPurple2_2     = 140  ## hex: #af87d7
-    mediumPurple1       = 141  ## hex: #af87ff
-    gold3_1             = 142  ## hex: #afaf00
-    darkKhaki           = 143  ## hex: #afaf5f
-    navajoWhite3        = 144  ## hex: #afaf87
-    gray69              = 145  ## hex: #afafaf
-    lightSteelBlue3     = 146  ## hex: #afafd7
-    lightSteelBlue      = 147  ## hex: #afafff
-    yellow3_1           = 148  ## hex: #afd700
-    darkOliveGreen3_2   = 149  ## hex: #afd75f
-    darkSeaGreen3_2     = 150  ## hex: #afd787
-    darkSeaGreen2_1     = 151  ## hex: #afd7af
-    lightCyan3          = 152  ## hex: #afafd7
-    lightSkyBlue1       = 153  ## hex: #afd7ff
-    greenYellow         = 154  ## hex: #afff00
-    darkOliveGreen2     = 155  ## hex: #afff5f
-    paleGreen1_2        = 156  ## hex: #afff87
-    darkSeaGreen2_2     = 157  ## hex: #afffaf
-    darkSeaGreen1_1     = 158  ## hex: #afffd7
-    paleTurquoise1      = 159  ## hex: #afffff
-    red3_2              = 160  ## hex: #d70000
-    deepPink3_1         = 161  ## hex: #d7005f
-    deepPink3_2         = 162  ## hex: #d70087
-    magenta3_1          = 163  ## hex: #d700af
-    magenta3_2          = 164  ## hex: #d700d7
-    magenta2_1          = 165  ## hex: #d700ff
-    darkOrange3_2       = 166  ## hex: #d75f00
-    indianRed_2         = 167  ## hex: #d75f5f
-    hotPink3_2          = 168  ## hex: #d75f87
-    hotPink2            = 169  ## hex: #d75faf
-    orchid              = 170  ## hex: #d75fd7
-    mediumOrchid1_1     = 171  ## hex: #d75fff
-    orange3             = 172  ## hex: #d78700
-    lightSalmon3_2      = 173  ## hex: #d7875f
-    lightPink3          = 174  ## hex: #d78787
-    pink3               = 175  ## hex: #d787af
-    plum3               = 176  ## hex: #d787d7
-    violet              = 177  ## hex: #d787ff
-    gold3_2             = 178  ## hex: #d7af00
-    lightGoldenrod3     = 179  ## hex: #d7af5f
-    tan                 = 180  ## hex: #d7af87
-    mistyRose3          = 181  ## hex: #d7afaf
-    thistle3            = 182  ## hex: #d7afd7
-    plum2               = 183  ## hex: #d7afff
-    yellow3_2           = 184  ## hex: #d7d700
-    khaki3              = 185  ## hex: #d7d75f
-    lightGoldenrod2     = 186  ## hex: #d7d787
-    lightYellow3        = 187  ## hex: #d7d7af
-    gray84              = 188  ## hex: #d7d7d7
-    lightSteelBlue1     = 189  ## hex: #d7d7ff
-    yellow2             = 190  ## hex: #d7ff00
-    darkOliveGreen1_1   = 191  ## hex: #d7ff5f
-    darkOliveGreen1_2   = 192  ## hex: #d7ff87
-    darkSeaGreen1_2     = 193  ## hex: #d7ffaf
-    honeydew2           = 194  ## hex: #d7ffd7
-    lightCyan1          = 195  ## hex: #d7ffff
-    red1                = 196  ## hex: #ff0000
-    deepPink2           = 197  ## hex: #ff005f
-    deepPink1_1         = 198  ## hex: #ff0087
-    deepPink1_2         = 199  ## hex: #ff00af
-    magenta2_2          = 200  ## hex: #ff00d7
-    magenta1            = 201  ## hex: #ff00ff
-    orangeRed1          = 202  ## hex: #ff5f00
-    indianRed1_1        = 203  ## hex: #ff5f5f
-    indianRed1_2        = 204  ## hex: #ff5f87
-    hotPink1_1          = 205  ## hex: #ff5faf
-    hotPink1_2          = 206  ## hex: #ff5fd7
-    mediumOrchid1_2     = 207  ## hex: #ff5fff
-    darkOrange          = 208  ## hex: #ff8700
-    salmon1             = 209  ## hex: #ff875f
-    lightCoral          = 210  ## hex: #ff8787
-    paleVioletRed1      = 211  ## hex: #ff87af
-    orchid2             = 212  ## hex: #ff87d7
-    orchid1             = 213  ## hex: #ff87ff
-    orange1             = 214  ## hex: #ffaf00
-    sandyBrown          = 215  ## hex: #ffaf5f
-    lightSalmon1        = 216  ## hex: #ffaf87
-    lightPink1          = 217  ## hex: #ffafaf
-    pink1               = 218  ## hex: #ffafd7
-    plum1               = 219  ## hex: #ffafff
-    gold1               = 220  ## hex: #ffd700
-    lightGoldenrod2_1   = 221  ## hex: #ffd75f
-    lightGoldenrod2_2   = 222  ## hex: #ffd787
-    navajoWhite1        = 223  ## hex: #ffd7af
-    mistyRose1          = 224  ## hex: #ffd7d7
-    thistle1            = 225  ## hex: #ffd7ff
-    yellow1             = 226  ## hex: #ffff00
-    lightGoldenrod1     = 227  ## hex: #ffff5f
-    khaki1              = 228  ## hex: #ffff87
-    wheat1              = 229  ## hex: #ffffaf
-    cornsilk1           = 230  ## hex: #ffffd7
-    gray100             = 231  ## hex: #ffffff
-    gray3               = 232  ## hex: #080808
-    gray7               = 233  ## hex: #121212
-    gray11              = 234  ## hex: #1c1c1c
-    gray15              = 235  ## hex: #262626
-    gray19              = 236  ## hex: #303030
-    gray23              = 237  ## hex: #3a3a3a
-    gray27              = 238  ## hex: #444444
-    gray30              = 239  ## hex: #4e4e4e
-    gray35              = 240  ## hex: #585858
-    gray39              = 241  ## hex: #626262
-    gray42              = 242  ## hex: #6c6c6c
-    gray46              = 243  ## hex: #767676
-    gray50              = 244  ## hex: #808080
-    gray54              = 245  ## hex: #8a8a8a
-    gray58              = 246  ## hex: #949494
-    gray62              = 247  ## hex: #9e9e9e
-    gray66              = 248  ## hex: #a8a8a8
-    gray70              = 249  ## hex: #b2b2b2
-    gray74              = 250  ## hex: #bcbcbc
-    gray78              = 251  ## hex: #c6c6c6
-    gray82              = 252  ## hex: #d0d0d0
-    gray85              = 253  ## hex: #dadada
-    gray89              = 254  ## hex: #e4e4e4
-    gray93              = 255  ## hex: #eeeeee
+  var code: ColorCode
+  for i, c in str:
+    code[i] = c
 
-# Calculates the difference between two rgb colors
-template calcRGBDifference(col1: (int, int, int), col2: (int, int, int)): int =
-  abs(col1[0] - col2[0]) + abs(col1[1] - col2[1]) + abs(col1[2] - col2[2])
+  return code
 
-# Converts an rgb value to a color,
-# the closest color is approximated
-proc RGBToColor*(red, green, blue: int): Color =
-  var closestColor     : Color
-  var lowestDifference : int    = 100000
-  for key, value in colorToRGBTable:
-    let keyRed   = value[0]
-    let keyGreen = value[1]
-    let keyBlue  = value[2]
-    let difference = calcRGBDifference((red, green, blue),
-                                       (keyRed, keyGreen, keyBlue))
-    if difference < lowestDifference:
-      lowestDifference = difference
-      closestColor     = Color(key)
-      if difference == 0:
-        break
-  return closestColor
+proc initColorPair*(fgColorStr, bgColorStr: string): ColorPair {.inline.} =
+  result = (
+    fg: toColorCode(fgColorStr),
+    bg: toColorCode(bgColorStr))
 
-# Note: this takes a hex string of the form
-# f0f0f0 as opposed to #f0f0f0
-proc hexToColor*(hex: string): Color =
-  let red   = parseHexInt(hex[0..1])
-  let green = parseHexInt(hex[2..3])
-  let blue  = parseHexInt(hex[4..5])
-  return RGBToColor(red, green, blue)
-
-# Returns the closest inverse Color
-# for col.
-proc inverseColor*(col: Color): Color =
-  if not colorToHexTable.hasKey(int(col)):
-    return Color.default
-
-  var rgb      = colorToRGBTable[int(col)]
-  rgb[0] = abs(rgb[0] - 255)
-  rgb[1] = abs(rgb[1] - 255)
-  rgb[2] = abs(rgb[2] - 255)
-  return RGBToColor(rgb[0], rgb[1], rgb[2])
+type Color* = enum
+  default             = -1
+  black               = 0    ## hex: #000000
+  maroon              = 1    ## hex: #800000
+  green               = 2    ## hex: #008000
+  olive               = 3    ## hex: #808000
+  navy                = 4    ## hex: #000080
+  purple_1            = 5    ## hex: #800080
+  teal                = 6    ## hex: #008080
+  silver              = 7    ## hex: #c0c0c0
+  gray                = 8    ## hex: #808080
+  red                 = 9    ## hex: #ff0000
+  lime                = 10   ## hex: #00ff00
+  yellow              = 11   ## hex: #ffff00
+  blue                = 12   ## hex: #0000ff
+  fuchsia             = 13   ## hex: #ff00ff
+  aqua                = 14   ## hex: #00ffff
+  white               = 15   ## hex: #ffffff
+  gray0               = 16   ## hex: #000000
+  navyBlue            = 17   ## hex: #00005f
+  darkBlue            = 18   ## hex: #000087
+  blue3_1             = 19   ## hex: #0000af
+  blue3_2             = 20   ## hex: #0000d7
+  blue1               = 21   ## hex: #0000ff
+  darkGreen           = 22   ## hex: #005f00
+  deepSkyBlue4_1      = 23   ## hex: #005f5f
+  deepSkyBlue4_2      = 24   ## hex: #005f87
+  deepSkyBlue4_3      = 25   ## hex: #005faf
+  dodgerBlue3_1       = 26   ## hex: #005fd7
+  dodgerBlue3_2       = 27   ## hex: #005fff
+  green4              = 28   ## hex: #008700
+  springGreen4        = 29   ## hex: #00875f
+  turquoise4          = 30   ## hex: #008787
+  deepSkyBlue3_1      = 31   ## hex: #0087af
+  deepSkyBlue3_2      = 32   ## hex: #0087d7
+  dodgerBlue1         = 33   ## hex: #0087ff
+  green3_1            = 34   ## hex: #00af00
+  springGreen3_1      = 35   ## hex: #00af5f
+  darkCyan            = 36   ## hex: #00af87
+  lightSeaGreen       = 37   ## hex: #00afaf
+  deepSkyBlue2        = 38   ## hex: #00afd7
+  deepSkyBlue1        = 39   ## hex: #00afff
+  green3_2            = 40   ## hex: #00d700
+  springGreen3_3      = 41   ## hex: #00d75f
+  springGreen2_1      = 42   ## hex: #00d787
+  cyan3               = 43   ## hex: #00d7af
+  darkTurquoise       = 44   ## hex: #00d7df
+  turquoise2          = 45   ## hex: #00d7ff
+  green1              = 46   ## hex: #00ff00
+  springGreen2_2      = 47   ## hex: #00ff5f
+  springGreen1        = 48   ## hex: #00ff87
+  mediumSpringGreen   = 49   ## hex: #00ffaf
+  cyan2               = 50   ## hex: #00ffd7
+  cyan1               = 51   ## hex: #00ffff
+  darkRed_1           = 52   ## hex: #5f0000
+  deepPink4_1         = 53   ## hex: #5f005f
+  purple4_1           = 54   ## hex: #5f0087
+  purple4_2           = 55   ## hex: #5f00af
+  purple3             = 56   ## hex: #5f00df
+  blueViolet          = 57   ## hex: #5f00ff
+  orange4_1           = 58   ## hex: #5f5f00
+  gray37              = 59   ## hex: #5f5f5f
+  mediumPurple4       = 60   ## hex: #5f5f87
+  slateBlue3_1        = 61   ## hex: #5f5faf
+  slateBlue3_2        = 62   ## hex: #5f5fd7
+  royalBlue1          = 63   ## hex: #5f5fff
+  chartreuse4         = 64   ## hex: #5f8700
+  darkSeaGreen4_1     = 65   ## hex: #5f875f
+  paleTurquoise4      = 66   ## hex: #5f8787
+  steelBlue           = 67   ## hex: #5f87af
+  steelBlue3          = 68   ## hex: #5f87d7
+  cornflowerBlue      = 69   ## hex: #5f87ff
+  chartreuse3_1       = 70   ## hex: #5faf00
+  darkSeaGreen4_2     = 71   ## hex: #5faf5f
+  cadetBlue_1         = 72   ## hex: #5faf87
+  cadetBlue_2         = 73   ## hex: #5fafaf
+  skyBlue3            = 74   ## hex: #5fafd7
+  steelBlue1_1        = 75   ## hex: #5fafff
+  chartreuse3_2       = 76   ## hex: #5fd000
+  paleGreen3_1        = 77   ## hex: #5fd75f
+  seaGreen3           = 78   ## hex: #5fd787
+  aquamarine3         = 79   ## hex: #5fd7af
+  mediumTurquoise     = 80   ## hex: #5fd7d7
+  steelBlue1_2        = 81   ## hex: #5fd7ff
+  chartreuse2_1       = 82   ## hex: #5fff00
+  seaGreen2           = 83   ## hex: #5fff5f
+  seaGreen1_1         = 84   ## hex: #5fff87
+  seaGreen1_2         = 85   ## hex: #5fffaf
+  aquamarine1_1       = 86   ## hex: #5fffd7
+  darkSlateGray2      = 87   ## hex: #5fffff
+  darkRed_2           = 88   ## hex: #870000
+  deepPink4_2         = 89   ## hex: #87005f
+  darkMagenta_1       = 90   ## hex: #870087
+  darkMagenta_2       = 91   ## hex: #8700af
+  darkViolet_1        = 92   ## hex: #8700d7
+  purple_2            = 93   ## hex: #8700ff
+  orange4_2           = 94   ## hex: #875f00
+  lightPink4          = 95   ## hex: #875f5f
+  plum4               = 96   ## hex: #875f87
+  mediumPurple3_1     = 97   ## hex: #875faf
+  mediumPurple3_2     = 98   ## hex: #875fd7
+  slateBlue1          = 99   ## hex: #875fff
+  yellow4_1           = 100  ## hex: #878700
+  wheat4              = 101  ## hex: #87875f
+  gray53              = 102  ## hex: #878787
+  lightSlategray      = 103  ## hex: #8787af
+  mediumPurple        = 104  ## hex: #8787d7
+  lightSlateBlue      = 105  ## hex: #8787ff
+  yellow4_2           = 106  ## hex: #87af00
+  Wheat4              = 107  ## hex: #87af5f
+  darkSeaGreen        = 108  ## hex: #87af87
+  lightSkyBlue3_1     = 109  ## hex: #87afaf
+  lightSkyBlue3_2     = 110  ## hex: #87afd7
+  skyBlue2            = 111  ## hex: #87afff
+  chartreuse2_2       = 112  ## hex: #87d700
+  darkOliveGreen3_1   = 113  ## hex: #87d75f
+  paleGreen3_2        = 114  ## hex: #87d787
+  darkSeaGreen3_1     = 115  ## hex: #87d7af
+  darkSlateGray3      = 116  ## hex: #87d7d7
+  skyBlue1            = 117  ## hex: #87d7ff
+  chartreuse1         = 118  ## hex: #87ff00
+  lightGreen_1        = 119  ## hex: #87ff5f
+  lightGreen_2        = 120  ## hex: #87ff87
+  paleGreen1_1        = 121  ## hex: #87ffaf
+  aquamarine1_2       = 122  ## hex: #87ffd7
+  darkSlateGray1      = 123  ## hex: #87ffff
+  red3_1              = 124  ## hex: #af0000
+  deepPink4           = 125  ## hex: #af005f
+  mediumVioletRed     = 126  ## hex: #af0087
+  magenta3            = 127  ## hex: #af00af
+  darkViolet_2        = 128  ## hex: #af00d7
+  purple              = 129  ## hex: #af00ff
+  darkOrange3_1       = 130  ## hex: #af5f00
+  indianRed_1         = 131  ## hex: #af5f5f
+  hotPink3_1          = 132  ## hex: #af5f87
+  mediumOrchid3       = 133  ## hex: #af5faf
+  mediumOrchid        = 134  ## hex: #af5fd7
+  mediumPurple2_1     = 135  ## hex: #af5fff
+  darkGoldenrod       = 136  ## hex: #af8700
+  lightSalmon3_1      = 137  ## hex: #af875f
+  rosyBrown           = 138  ## hex: #af8787
+  gray63              = 139  ## hex: #af87af
+  mediumPurple2_2     = 140  ## hex: #af87d7
+  mediumPurple1       = 141  ## hex: #af87ff
+  gold3_1             = 142  ## hex: #afaf00
+  darkKhaki           = 143  ## hex: #afaf5f
+  navajoWhite3        = 144  ## hex: #afaf87
+  gray69              = 145  ## hex: #afafaf
+  lightSteelBlue3     = 146  ## hex: #afafd7
+  lightSteelBlue      = 147  ## hex: #afafff
+  yellow3_1           = 148  ## hex: #afd700
+  darkOliveGreen3_2   = 149  ## hex: #afd75f
+  darkSeaGreen3_2     = 150  ## hex: #afd787
+  darkSeaGreen2_1     = 151  ## hex: #afd7af
+  lightCyan3          = 152  ## hex: #afafd7
+  lightSkyBlue1       = 153  ## hex: #afd7ff
+  greenYellow         = 154  ## hex: #afff00
+  darkOliveGreen2     = 155  ## hex: #afff5f
+  paleGreen1_2        = 156  ## hex: #afff87
+  darkSeaGreen2_2     = 157  ## hex: #afffaf
+  darkSeaGreen1_1     = 158  ## hex: #afffd7
+  paleTurquoise1      = 159  ## hex: #afffff
+  red3_2              = 160  ## hex: #d70000
+  deepPink3_1         = 161  ## hex: #d7005f
+  deepPink3_2         = 162  ## hex: #d70087
+  magenta3_1          = 163  ## hex: #d700af
+  magenta3_2          = 164  ## hex: #d700d7
+  magenta2_1          = 165  ## hex: #d700ff
+  darkOrange3_2       = 166  ## hex: #d75f00
+  indianRed_2         = 167  ## hex: #d75f5f
+  hotPink3_2          = 168  ## hex: #d75f87
+  hotPink2            = 169  ## hex: #d75faf
+  orchid              = 170  ## hex: #d75fd7
+  mediumOrchid1_1     = 171  ## hex: #d75fff
+  orange3             = 172  ## hex: #d78700
+  lightSalmon3_2      = 173  ## hex: #d7875f
+  lightPink3          = 174  ## hex: #d78787
+  pink3               = 175  ## hex: #d787af
+  plum3               = 176  ## hex: #d787d7
+  violet              = 177  ## hex: #d787ff
+  gold3_2             = 178  ## hex: #d7af00
+  lightGoldenrod3     = 179  ## hex: #d7af5f
+  tan                 = 180  ## hex: #d7af87
+  mistyRose3          = 181  ## hex: #d7afaf
+  thistle3            = 182  ## hex: #d7afd7
+  plum2               = 183  ## hex: #d7afff
+  yellow3_2           = 184  ## hex: #d7d700
+  khaki3              = 185  ## hex: #d7d75f
+  lightGoldenrod2     = 186  ## hex: #d7d787
+  lightYellow3        = 187  ## hex: #d7d7af
+  gray84              = 188  ## hex: #d7d7d7
+  lightSteelBlue1     = 189  ## hex: #d7d7ff
+  yellow2             = 190  ## hex: #d7ff00
+  darkOliveGreen1_1   = 191  ## hex: #d7ff5f
+  darkOliveGreen1_2   = 192  ## hex: #d7ff87
+  darkSeaGreen1_2     = 193  ## hex: #d7ffaf
+  honeydew2           = 194  ## hex: #d7ffd7
+  lightCyan1          = 195  ## hex: #d7ffff
+  red1                = 196  ## hex: #ff0000
+  deepPink2           = 197  ## hex: #ff005f
+  deepPink1_1         = 198  ## hex: #ff0087
+  deepPink1_2         = 199  ## hex: #ff00af
+  magenta2_2          = 200  ## hex: #ff00d7
+  magenta1            = 201  ## hex: #ff00ff
+  orangeRed1          = 202  ## hex: #ff5f00
+  indianRed1_1        = 203  ## hex: #ff5f5f
+  indianRed1_2        = 204  ## hex: #ff5f87
+  hotPink1_1          = 205  ## hex: #ff5faf
+  hotPink1_2          = 206  ## hex: #ff5fd7
+  mediumOrchid1_2     = 207  ## hex: #ff5fff
+  darkOrange          = 208  ## hex: #ff8700
+  salmon1             = 209  ## hex: #ff875f
+  lightCoral          = 210  ## hex: #ff8787
+  paleVioletRed1      = 211  ## hex: #ff87af
+  orchid2             = 212  ## hex: #ff87d7
+  orchid1             = 213  ## hex: #ff87ff
+  orange1             = 214  ## hex: #ffaf00
+  sandyBrown          = 215  ## hex: #ffaf5f
+  lightSalmon1        = 216  ## hex: #ffaf87
+  lightPink1          = 217  ## hex: #ffafaf
+  pink1               = 218  ## hex: #ffafd7
+  plum1               = 219  ## hex: #ffafff
+  gold1               = 220  ## hex: #ffd700
+  lightGoldenrod2_1   = 221  ## hex: #ffd75f
+  lightGoldenrod2_2   = 222  ## hex: #ffd787
+  navajoWhite1        = 223  ## hex: #ffd7af
+  mistyRose1          = 224  ## hex: #ffd7d7
+  thistle1            = 225  ## hex: #ffd7ff
+  yellow1             = 226  ## hex: #ffff00
+  lightGoldenrod1     = 227  ## hex: #ffff5f
+  khaki1              = 228  ## hex: #ffff87
+  wheat1              = 229  ## hex: #ffffaf
+  cornsilk1           = 230  ## hex: #ffffd7
+  gray100             = 231  ## hex: #ffffff
+  gray3               = 232  ## hex: #080808
+  gray7               = 233  ## hex: #121212
+  gray11              = 234  ## hex: #1c1c1c
+  gray15              = 235  ## hex: #262626
+  gray19              = 236  ## hex: #303030
+  gray23              = 237  ## hex: #3a3a3a
+  gray27              = 238  ## hex: #444444
+  gray30              = 239  ## hex: #4e4e4e
+  gray35              = 240  ## hex: #585858
+  gray39              = 241  ## hex: #626262
+  gray42              = 242  ## hex: #6c6c6c
+  gray46              = 243  ## hex: #767676
+  gray50              = 244  ## hex: #808080
+  gray54              = 245  ## hex: #8a8a8a
+  gray58              = 246  ## hex: #949494
+  gray62              = 247  ## hex: #9e9e9e
+  gray66              = 248  ## hex: #a8a8a8
+  gray70              = 249  ## hex: #b2b2b2
+  gray74              = 250  ## hex: #bcbcbc
+  gray78              = 251  ## hex: #c6c6c6
+  gray82              = 252  ## hex: #d0d0d0
+  gray85              = 253  ## hex: #dadada
+  gray89              = 254  ## hex: #e4e4e4
+  gray93              = 255  ## hex: #eeeeee
 
 # Make Color col readable on the background.
 # This tries to preserve the color of col as much as
 # possible, but adjusts it when needed for
 # becoming readable on the background.
 # Returns col without changes, if it's already readable.
-proc readableOnBackground*(col: Color, background: Color): Color =
-  template incDiff(val1: untyped, val2: untyped) =
-    if val1 > val2:
-      let newVal = val1 + (val1 - val2) * 1
-      if newVal > 255:
-        val1 = 255
-      else:
-        val1 = newVal
-    elif val1 < val2:
-      let newVal = val1 - (val2 - val1) * 1
-      if newVal < 0:
-        val1 = 0
-      else:
-        val1 = newVal
-
-  let minDiff = 255
-
-  var
-    rgb1 : (int, int, int)
-    rgb2 : (int, int, int)
-  if colorToRGBTable.hasKey(int(col)):
-    rgb1 = colorToRGBTable[int(col)]
-  else:
-    #rgb1 = (128,128,128)
-    rgb1 = (0, 0, 0)
-  if colorToRGBTable.hasKey(int(background)):
-    rgb2 = colorToRGBTable[int(background)]
-  else:
-    #rgb2 = (128,128,128)
-    rgb2 = (0, 0, 0)
-
-  var diff = calcRGBDifference((rgb1[0], rgb1[1], rgb1[2]),
-                               (rgb2[0], rgb2[1], rgb2[2]))
-  if diff < minDiff:
-    let missingDiff = minDiff - diff
-    incDiff(rgb1[0], rgb2[0])
-    incDiff(rgb1[1], rgb2[1])
-    incDiff(rgb1[2], rgb2[2])
-  diff = calcRGBDifference((rgb1[0], rgb1[1], rgb1[2]),
-                           (rgb2[0], rgb2[1], rgb2[2]))
-  if diff < minDiff:
-    return inverseColor(col)
-  return RGBToColor(rgb1[0], rgb1[1], rgb1[2])
+#proc readableOnBackground*(col: Color, background: Color): Color =
+#  template incDiff(val1: untyped, val2: untyped) =
+#    if val1 > val2:
+#      let newVal = val1 + (val1 - val2) * 1
+#      if newVal > 255:
+#        val1 = 255
+#      else:
+#        val1 = newVal
+#    elif val1 < val2:
+#      let newVal = val1 - (val2 - val1) * 1
+#      if newVal < 0:
+#        val1 = 0
+#      else:
+#        val1 = newVal
+#
+#  let minDiff = 255
+#
+#  var
+#    rgb1 : (int, int, int)
+#    rgb2 : (int, int, int)
+#  if colorToRGBTable.hasKey(int(col)):
+#    rgb1 = colorToRGBTable[int(col)]
+#  else:
+#    #rgb1 = (128,128,128)
+#    rgb1 = (0, 0, 0)
+#  if colorToRGBTable.hasKey(int(background)):
+#    rgb2 = colorToRGBTable[int(background)]
+#  else:
+#    #rgb2 = (128,128,128)
+#    rgb2 = (0, 0, 0)
+#
+#  var diff = calcRGBDifference((rgb1[0], rgb1[1], rgb1[2]),
+#                               (rgb2[0], rgb2[1], rgb2[2]))
+#  if diff < minDiff:
+#    let missingDiff = minDiff - diff
+#    incDiff(rgb1[0], rgb2[0])
+#    incDiff(rgb1[1], rgb2[1])
+#    incDiff(rgb1[2], rgb2[2])
+#  diff = calcRGBDifference((rgb1[0], rgb1[1], rgb1[2]),
+#                           (rgb2[0], rgb2[1], rgb2[2]))
+#  if diff < minDiff:
+#    return inverseColor(col)
+#  return RGBToColor(rgb1[0], rgb1[1], rgb1[2])
 
 type ColorTheme* = enum
   config  = 0
@@ -403,145 +339,145 @@ type ColorTheme* = enum
   light   = 3
   vivid   = 4
 
-type EditorColor* = object
-  editorBg*: Color
-  lineNum*: Color
-  lineNumBg*: Color
-  currentLineNum*: Color
-  currentLineNumBg*: Color
+type EditorColorCode* = object
+  editorBg*: ColorCode
+  lineNum*: ColorCode
+  lineNumBg*: ColorCode
+  currentLineNum*: ColorCode
+  currentLineNumBg*: ColorCode
   # status line
-  statusLineNormalMode*: Color
-  statusLineNormalModeBg*: Color
-  statusLineModeNormalMode*: Color
-  statusLineModeNormalModeBg*: Color
-  statusLineNormalModeInactive*: Color
-  statusLineNormalModeInactiveBg*: Color
+  statusLineNormalMode*: ColorCode
+  statusLineNormalModeBg*: ColorCode
+  statusLineModeNormalMode*: ColorCode
+  statusLineModeNormalModeBg*: ColorCode
+  statusLineNormalModeInactive*: ColorCode
+  statusLineNormalModeInactiveBg*: ColorCode
 
-  statusLineInsertMode*: Color
-  statusLineInsertModeBg*: Color
-  statusLineModeInsertMode*: Color
-  statusLineModeInsertModeBg*: Color
-  statusLineInsertModeInactive*: Color
-  statusLineInsertModeInactiveBg*: Color
+  statusLineInsertMode*: ColorCode
+  statusLineInsertModeBg*: ColorCode
+  statusLineModeInsertMode*: ColorCode
+  statusLineModeInsertModeBg*: ColorCode
+  statusLineInsertModeInactive*: ColorCode
+  statusLineInsertModeInactiveBg*: ColorCode
 
-  statusLineVisualMode*: Color
-  statusLineVisualModeBg*: Color
-  statusLineModeVisualMode*: Color
-  statusLineModeVisualModeBg*: Color
-  statusLineVisualModeInactive*: Color
-  statusLineVisualModeInactiveBg*: Color
+  statusLineVisualMode*: ColorCode
+  statusLineVisualModeBg*: ColorCode
+  statusLineModeVisualMode*: ColorCode
+  statusLineModeVisualModeBg*: ColorCode
+  statusLineVisualModeInactive*: ColorCode
+  statusLineVisualModeInactiveBg*: ColorCode
 
-  statusLineReplaceMode*: Color
-  statusLineReplaceModeBg*: Color
-  statusLineModeReplaceMode*: Color
-  statusLineModeReplaceModeBg*: Color
-  statusLineReplaceModeInactive*: Color
-  statusLineReplaceModeInactiveBg*: Color
+  statusLineReplaceMode*: ColorCode
+  statusLineReplaceModeBg*: ColorCode
+  statusLineModeReplaceMode*: ColorCode
+  statusLineModeReplaceModeBg*: ColorCode
+  statusLineReplaceModeInactive*: ColorCode
+  statusLineReplaceModeInactiveBg*: ColorCode
 
-  statusLineFilerMode*: Color
-  statusLineFilerModeBg*: Color
-  statusLineModeFilerMode*: Color
-  statusLineModeFilerModeBg*: Color
-  statusLineFilerModeInactive*: Color
-  statusLineFilerModeInactiveBg*: Color
+  statusLineFilerMode*: ColorCode
+  statusLineFilerModeBg*: ColorCode
+  statusLineModeFilerMode*: ColorCode
+  statusLineModeFilerModeBg*: ColorCode
+  statusLineFilerModeInactive*: ColorCode
+  statusLineFilerModeInactiveBg*: ColorCode
 
-  statusLineExMode*: Color
-  statusLineExModeBg*: Color
-  statusLineModeExMode*: Color
-  statusLineModeExModeBg*: Color
-  statusLineExModeInactive*: Color
-  statusLineExModeInactiveBg*: Color
+  statusLineExMode*: ColorCode
+  statusLineExModeBg*: ColorCode
+  statusLineModeExMode*: ColorCode
+  statusLineModeExModeBg*: ColorCode
+  statusLineExModeInactive*: ColorCode
+  statusLineExModeInactiveBg*: ColorCode
 
-  statusLineGitBranch*: Color
-  statusLineGitBranchBg*: Color
+  statusLineGitBranch*: ColorCode
+  statusLineGitBranchBg*: ColorCode
   # tab line
-  tab*: Color
-  tabBg*: Color
-  currentTab*: Color
-  currentTabBg*: Color
+  tab*: ColorCode
+  tabBg*: ColorCode
+  currentTab*: ColorCode
+  currentTabBg*: ColorCode
   # command bar
-  commandBar*: Color
-  commandBarBg*: Color
+  commandBar*: ColorCode
+  commandBarBg*: ColorCode
   # error message
-  errorMessage*: Color
-  errorMessageBg*: Color
+  errorMessage*: ColorCode
+  errorMessageBg*: ColorCode
   # search result highlighting
-  searchResult*: Color
-  searchResultBg*: Color
+  searchResult*: ColorCode
+  searchResultBg*: ColorCode
   # selected area in visual mode
-  visualMode*: Color
-  visualModeBg*: Color
+  visualMode*: ColorCode
+  visualModeBg*: ColorCode
 
   # color scheme
-  defaultChar*: Color
-  gtKeyword*: Color
-  gtFunctionName*: Color
-  gtTypeName*: Color
-  gtBoolean*: Color
-  gtStringLit*: Color
-  gtSpecialVar*: Color
-  gtBuiltin*: Color
-  gtDecNumber*: Color
-  gtComment*: Color
-  gtLongComment*: Color
-  gtWhitespace*: Color
-  gtPreprocessor*: Color
-  gtPragma*: Color
+  defaultChar*: ColorCode
+  gtKeyword*: ColorCode
+  gtFunctionName*: ColorCode
+  gtTypeName*: ColorCode
+  gtBoolean*: ColorCode
+  gtStringLit*: ColorCode
+  gtSpecialVar*: ColorCode
+  gtBuiltin*: ColorCode
+  gtDecNumber*: ColorCode
+  gtComment*: ColorCode
+  gtLongComment*: ColorCode
+  gtWhitespace*: ColorCode
+  gtPreprocessor*: ColorCode
+  gtPragma*: ColorCode
 
   # filer mode
-  currentFile*: Color
-  currentFileBg*: Color
-  file*: Color
-  fileBg*: Color
-  dir*: Color
-  dirBg*: Color
-  pcLink*: Color
-  pcLinkBg*: Color
+  currentFile*: ColorCode
+  currentFileBg*: ColorCode
+  file*: ColorCode
+  fileBg*: ColorCode
+  dir*: ColorCode
+  dirBg*: ColorCode
+  pcLink*: ColorCode
+  pcLinkBg*: ColorCode
   # pop up window
-  popUpWindow*: Color
-  popUpWindowBg*: Color
-  popUpWinCurrentLine*: Color
-  popUpWinCurrentLineBg*: Color
+  popUpWindow*: ColorCode
+  popUpWindowBg*: ColorCode
+  popUpWinCurrentLine*: ColorCode
+  popUpWinCurrentLineBg*: ColorCode
   # replace text highlighting
-  replaceText*: Color
-  replaceTextBg*: Color
+  replaceText*: ColorCode
+  replaceTextBg*: ColorCode
 
   # pair of paren highlighting
-  parenText*: Color
-  parenTextBg*: Color
+  parenText*: ColorCode
+  parenTextBg*: ColorCode
 
   # highlight other uses current word
-  currentWord*: Color
-  currentWordBg*: Color
+  currentWord*: ColorCode
+  currentWordBg*: ColorCode
 
   # highlight full width space
-  highlightFullWidthSpace*: Color
-  highlightFullWidthSpaceBg*: Color
+  highlightFullWidthSpace*: ColorCode
+  highlightFullWidthSpaceBg*: ColorCode
 
   # highlight trailing spaces
-  highlightTrailingSpaces*: Color
-  highlightTrailingSpacesBg*: Color
+  highlightTrailingSpaces*: ColorCode
+  highlightTrailingSpacesBg*: ColorCode
 
   # highlight reserved words
-  reservedWord*: Color
-  reservedWordBg*: Color
+  reservedWord*: ColorCode
+  reservedWordBg*: ColorCode
 
   # highlight history manager
-  currentHistory*: Color
-  currentHistoryBg*: Color
+  currentHistory*: ColorCode
+  currentHistoryBg*: ColorCode
 
   # highlight diff
-  addedLine*: Color
-  addedLineBg*: Color
-  deletedLine*: Color
-  deletedLineBg*: Color
+  addedLine*: ColorCode
+  addedLineBg*: ColorCode
+  deletedLine*: ColorCode
+  deletedLineBg*: ColorCode
 
   # configuration mode
-  currentSetting*: Color
-  currentSettingBg*: Color
+  currentSetting*: ColorCode
+  currentSettingBg*: ColorCode
 
   # highlight curent line background
-  currentLineBg*: Color
+  currentLineBg*: ColorCode
 
 type EditorColorPair* = enum
   lineNum = 1
@@ -623,661 +559,691 @@ type EditorColorPair* = enum
   # configuration mode
   currentSetting = 57
 
-var ColorThemeTable*: array[ColorTheme, EditorColor] = [
-  config: EditorColor(
-    editorBg: default,
-    lineNum: gray54,
-    lineNumBg: default,
-    currentLineNum: teal,
-    currentLineNumBg: default,
+var ColorThemeTable*: array[ColorTheme, EditorColorCode] = [
+  config: EditorColorCode(
+    # TODO: Fix color code. (default)
+    editorBg: toColorCode("000000"),
+    lineNum: toColorCode("8a8a8a"),
+    # TODO: Fix color code. (default)
+    lineNumBg: toColorCode("000000"),
+    currentLineNum: toColorCode("008080"),
+    # TODO: Fix color code. (default)
+    currentLineNumBg: toColorCode("000000"),
     # statsu bar
-    statusLineNormalMode: white,
-    statusLineNormalModeBg: blue,
-    statusLineModeNormalMode: black,
-    statusLineModeNormalModeBg: white,
-    statusLineNormalModeInactive: blue,
-    statusLineNormalModeInactiveBg: white,
+    statusLineNormalMode: toColorCode("ffffff"),
+    statusLineNormalModeBg: toColorCode("0000ff"),
+    statusLineModeNormalMode: toColorCode("000000"),
+    statusLineModeNormalModeBg: toColorCode("ffffff"),
+    statusLineNormalModeInactive: toColorCode("0000ff"),
+    statusLineNormalModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineInsertMode: white,
-    statusLineInsertModeBg: blue,
-    statusLineModeInsertMode: black,
-    statusLineModeInsertModeBg: white,
-    statusLineInsertModeInactive: blue,
-    statusLineInsertModeInactiveBg: white,
+    statusLineInsertMode: toColorCode("ffffff"),
+    statusLineInsertModeBg: toColorCode("0000ff"),
+    statusLineModeInsertMode: toColorCode("000000"),
+    statusLineModeInsertModeBg: toColorCode("ffffff"),
+    statusLineInsertModeInactive: toColorCode("0000ff"),
+    statusLineInsertModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineVisualMode: white,
-    statusLineVisualModeBg: blue,
-    statusLineModeVisualMode: black,
-    statusLineModeVisualModeBg: white,
-    statusLineVisualModeInactive: blue,
-    statusLineVisualModeInactiveBg: white,
+    statusLineVisualMode: toColorCode("ffffff"),
+    statusLineVisualModeBg: toColorCode("0000ff"),
+    statusLineModeVisualMode: toColorCode("000000"),
+    statusLineModeVisualModeBg: toColorCode("ffffff"),
+    statusLineVisualModeInactive: toColorCode("0000ff"),
+    statusLineVisualModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineReplaceMode: white,
-    statusLineReplaceModeBg: blue,
-    statusLineModeReplaceMode: black,
-    statusLineModeReplaceModeBg: white,
-    statusLineReplaceModeInactive: blue,
-    statusLineReplaceModeInactiveBg: white,
+    statusLineReplaceMode: toColorCode("ffffff"),
+    statusLineReplaceModeBg: toColorCode("0000ff"),
+    statusLineModeReplaceMode: toColorCode("000000"),
+    statusLineModeReplaceModeBg: toColorCode("ffffff"),
+    statusLineReplaceModeInactive: toColorCode("0000ff"),
+    statusLineReplaceModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineFilerMode: white,
-    statusLineFilerModeBg: blue,
-    statusLineModeFilerMode: black,
-    statusLineModeFilerModeBg: white,
-    statusLineFilerModeInactive: blue,
-    statusLineFilerModeInactiveBg: white,
+    statusLineFilerMode: toColorCode("ffffff"),
+    statusLineFilerModeBg: toColorCode("0000ff"),
+    statusLineModeFilerMode: toColorCode("000000"),
+    statusLineModeFilerModeBg: toColorCode("ffffff"),
+    statusLineFilerModeInactive: toColorCode("0000ff"),
+    statusLineFilerModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineExMode: white,
-    statusLineExModeBg: blue,
-    statusLineModeExMode: black,
-    statusLineModeExModeBg: white,
-    statusLineExModeInactive: blue,
-    statusLineExModeInactiveBg: white,
+    statusLineExMode: toColorCode("ffffff"),
+    statusLineExModeBg: toColorCode("0000ff"),
+    statusLineModeExMode: toColorCode("000000"),
+    statusLineModeExModeBg: toColorCode("ffffff"),
+    statusLineExModeInactive: toColorCode("0000ff"),
+    statusLineExModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineGitBranch: white,
-    statusLineGitBranchBg: blue,
+    statusLineGitBranch: toColorCode("ffffff"),
+    statusLineGitBranchBg: toColorCode("0000ff"),
     # tab line
-    tab: white,
-    tabBg: default,
-    currentTab: white,
-    currentTabBg: blue,
+    tab: toColorCode("ffffff"),
+    # TODO: Fix color code. (default)
+    tabBg: toColorCode("000000"),
+    currentTab: toColorCode("ffffff"),
+    currentTabBg: toColorCode("0000ff"),
     # command  bar
-    commandBar: gray100,
-    commandBarBg: default,
+    commandBar: toColorCode("ffffff"),
+    # TODO: Fix color code. (default)
+    commandBarBg: toColorCode("000000"),
     # error message
-    errorMessage: red,
-    errorMessageBg: default,
+    errorMessage: toColorCode("ff0000"),
+    # TODO: Fix color code. (default)
+    errorMessageBg: toColorCode("000000"),
     # search result highlighting
-    searchResult: default,
-    searchResultBg: red,
+    # TODO: Fix color code. (default)
+    searchResult: toColorCode("ffffff"),
+    searchResultBg: toColorCode("ff0000"),
     # selected area in visual mode
-    visualMode: gray100,
-    visualModeBg: purple_1,
+    visualMode: toColorCode("ffffff"),
+    visualModeBg: toColorCode("800080"),
 
     # color scheme
-    defaultChar: white,
-    gtKeyword: skyBlue1,
-    gtFunctionName: gold1,
-    gtTypeName: green,
-    gtBoolean: yellow,
-    gtStringLit: yellow,
-    gtSpecialVar: green,
-    gtBuiltin: yellow,
-    gtDecNumber: aqua,
-    gtComment: gray,
-    gtLongComment: gray,
-    gtWhitespace: gray,
-    gtPreprocessor: green,
-    gtPragma: yellow,
+    defaultChar: toColorCode("ffffff"),
+    gtKeyword: toColorCode("87d7ff"),
+    gtFunctionName: toColorCode("ffd700"),
+    gtTypeName: toColorCode("008000"),
+    gtBoolean: toColorCode("ffff00"),
+    gtStringLit: toColorCode("ffff00"),
+    gtSpecialVar: toColorCode("008000"),
+    gtBuiltin: toColorCode("ffff00"),
+    gtDecNumber: toColorCode("00ffff"),
+    gtComment: toColorCode("808080"),
+    gtLongComment: toColorCode("808080"),
+    gtWhitespace: toColorCode("808080"),
+    gtPreprocessor: toColorCode("008000"),
+    gtPragma: toColorCode("ffff00"),
 
     # filer mode
-    currentFile: gray100,
-    currentFileBg: teal,
-    file: gray100,
-    fileBg: default,
-    dir: blue,
-    dirBg: default,
-    pcLink: teal,
-    pcLinkBg: default,
+    currentFile: toColorCode("ffffff"),
+    currentFileBg: toColorCode("008080"),
+    file: toColorCode("ffffff"),
+    # TODO: Fix color code. (default)
+    fileBg: toColorCode("000000"),
+    dir: toColorCode("0000ff"),
+    # TODO: Fix color code. (default)
+    dirBg: toColorCode("000000"),
+    pcLink: toColorCode("008080"),
+    pcLinkBg:toColorCode("000000") ,
     # pop up window
-    popUpWindow: gray100,
-    popUpWindowBg: black,
-    popUpWinCurrentLine: blue,
-    popUpWinCurrentLineBg: black,
+    popUpWindow: toColorCode("ffffff"),
+    popUpWindowBg: toColorCode("000000"),
+    popUpWinCurrentLine: toColorCode("0000ff"),
+    popUpWinCurrentLineBg: toColorCode("000000"),
     # replace text highlighting
-    replaceText: default,
-    replaceTextBg: red,
+    # TODO: Fix color code. (default)
+    replaceText: toColorCode("ffffff"),
+    replaceTextBg: toColorCode("ff0000"),
     # pair of paren highlighting
-    parenText: default,
-    parenTextBg: blue,
+    # TODO: Fix color code. (default)
+    parenText: toColorCode("ffffff"),
+    parenTextBg: toColorCode("0000ff"),
     # highlight other uses current word
-    currentWord: default,
-    currentWordBg: gray,
+    # TODO: Fix color code. (default)
+    currentWord: toColorCode("ffffff"),
+    currentWordBg: toColorCode("808080"),
     # highlight full width space
-    highlightFullWidthSpace: red,
-    highlightFullWidthSpaceBg: red,
+    highlightFullWidthSpace: toColorCode("ff0000"),
+    highlightFullWidthSpaceBg: toColorCode("ff0000"),
     # highlight trailing spaces
-    highlightTrailingSpaces: red,
-    highlightTrailingSpacesBg: red,
+    highlightTrailingSpaces: toColorCode("ff0000"),
+    highlightTrailingSpacesBg: toColorCode("ff0000"),
     # highlight reserved words
-    reservedWord: white,
-    reservedWordBg: gray,
+    reservedWord: toColorCode("ffffff"),
+    reservedWordBg: toColorCode("808080"),
     # highlight history manager
-    currentHistory: gray100,
-    currentHistoryBg: teal,
+    currentHistory: toColorCode("ffffff"),
+    currentHistoryBg: toColorCode("008080"),
     # highlight diff
-    addedLine: green,
-    addedLineBg: default,
-    deletedLine: red,
-    deletedLineBg: default,
+    addedLine: toColorCode("008000"),
+    # TODO: Fix color code. (default)
+    addedLineBg: toColorCode("000000"),
+    deletedLine: toColorCode("ff0000"),
+    # TODO: Fix color code. (default)
+    deletedLineBg: toColorCode("000000"),
     # configuration mode
-    currentSetting: gray100,
-    currentSettingBg: teal,
+    currentSetting: toColorCode("ffffff"),
+    currentSettingBg: toColorCode("008080"),
     # Highlight current line background
-    currentLineBg: gray27
+    currentLineBg: toColorCode("444444")
   ),
-  vscode: EditorColor(
-    editorBg: default,
-    lineNum: gray54,
-    lineNumBg: default,
-    currentLineNum: teal,
-    currentLineNumBg: default,
+  vscode: EditorColorCode(
+    # TODO: Fix color code. (default)
+    editorBg: toColorCode("000000"),
+    lineNum: toColorCode("8a8a8a"),
+    # TODO: Fix color code. (default)
+    lineNumBg: toColorCode("000000"),
+    currentLineNum: toColorCode("008080"),
+    # TODO: Fix color code. (default)
+    currentLineNumBg: toColorCode("000000"),
     # statsu line
-    statusLineNormalMode: white,
-    statusLineNormalModeBg: blue,
-    statusLineModeNormalMode: black,
-    statusLineModeNormalModeBg: white,
-    statusLineNormalModeInactive: blue,
-    statusLineNormalModeInactiveBg: white,
+    statusLineNormalMode: toColorCode("ffffff"),
+    statusLineNormalModeBg: toColorCode("0000ff"),
+    statusLineModeNormalMode: toColorCode("000000"),
+    statusLineModeNormalModeBg: toColorCode("ffffff"),
+    statusLineNormalModeInactive: toColorCode("0000ff"),
+    statusLineNormalModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineInsertMode: white,
-    statusLineInsertModeBg: blue,
-    statusLineModeInsertMode: black,
-    statusLineModeInsertModeBg: white,
-    statusLineInsertModeInactive: blue,
-    statusLineInsertModeInactiveBg: white,
+    statusLineInsertMode: toColorCode("ffffff"),
+    statusLineInsertModeBg: toColorCode("0000ff"),
+    statusLineModeInsertMode: toColorCode("000000"),
+    statusLineModeInsertModeBg: toColorCode("ffffff"),
+    statusLineInsertModeInactive: toColorCode("0000ff"),
+    statusLineInsertModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineVisualMode: white,
-    statusLineVisualModeBg: blue,
-    statusLineModeVisualMode: black,
-    statusLineModeVisualModeBg: white,
-    statusLineVisualModeInactive: blue,
-    statusLineVisualModeInactiveBg: white,
+    statusLineVisualMode: toColorCode("ffffff"),
+    statusLineVisualModeBg: toColorCode("0000ff"),
+    statusLineModeVisualMode: toColorCode("000000"),
+    statusLineModeVisualModeBg: toColorCode("ffffff"),
+    statusLineVisualModeInactive: toColorCode("0000ff"),
+    statusLineVisualModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineReplaceMode: white,
-    statusLineReplaceModeBg: blue,
-    statusLineModeReplaceMode: black,
-    statusLineModeReplaceModeBg: white,
-    statusLineReplaceModeInactive: blue,
-    statusLineReplaceModeInactiveBg: white,
+    statusLineReplaceMode: toColorCode("ffffff"),
+    statusLineReplaceModeBg: toColorCode("0000ff"),
+    statusLineModeReplaceMode: toColorCode("000000"),
+    statusLineModeReplaceModeBg: toColorCode("ffffff"),
+    statusLineReplaceModeInactive: toColorCode("0000ff"),
+    statusLineReplaceModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineFilerMode: white,
-    statusLineFilerModeBg: blue,
-    statusLineModeFilerMode: black,
-    statusLineModeFilerModeBg: white,
-    statusLineFilerModeInactive: blue,
-    statusLineFilerModeInactiveBg: white,
+    statusLineFilerMode: toColorCode("ffffff"),
+    statusLineFilerModeBg: toColorCode("0000ff"),
+    statusLineModeFilerMode: toColorCode("000000"),
+    statusLineModeFilerModeBg: toColorCode("ffffff"),
+    statusLineFilerModeInactive: toColorCode("0000ff"),
+    statusLineFilerModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineExMode: white,
-    statusLineExModeBg: blue,
-    statusLineModeExMode: black,
-    statusLineModeExModeBg: white,
-    statusLineExModeInactive: blue,
-    statusLineExModeInactiveBg: white,
+    statusLineExMode: toColorCode("ffffff"),
+    statusLineExModeBg: toColorCode("0000ff"),
+    statusLineModeExMode: toColorCode("000000"),
+    statusLineModeExModeBg: toColorCode("ffffff"),
+    statusLineExModeInactive: toColorCode("0000ff"),
+    statusLineExModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineGitBranch: white,
-    statusLineGitBranchBg: blue,
+    statusLineGitBranch: toColorCode("ffffff"),
+    statusLineGitBranchBg: toColorCode("0000ff"),
     # tab line
-    tab: white,
-    tabBg: default,
-    currentTab: white,
-    currentTabBg: blue,
+    tab: toColorCode("ffffff"),
+    # TODO: Fix color code. (default)
+    tabBg: toColorCode("000000"),
+    currentTab: toColorCode("ffffff"),
+    currentTabBg: toColorCode("0000ff"),
     # command  bar
-    commandBar: gray100,
-    commandBarBg: default,
+    commandBar: toColorCode("ffffff"),
+    # TODO: Fix color code. (default)
+    commandBarBg: toColorCode("000000"),
     # error message
-    errorMessage: red,
-    errorMessageBg: default,
+    errorMessage: toColorCode("ff0000"),
+    # TODO: Fix color code. (default)
+    errorMessageBg: toColorCode("000000"),
     # search result highlighting
-    searchResult: default,
-    searchResultBg: red,
+    # TODO: Fix color code. (default)
+    searchResult: toColorCode("ffffff"),
+    searchResultBg: toColorCode("ff0000"),
     # selected area in visual mode
-    visualMode: gray100,
-    visualModeBg: purple_1,
+    visualMode: toColorCode("ffffff"),
+    visualModeBg: toColorCode("800080"),
 
     # color scheme
-    defaultChar: white,
-    gtKeyword: skyBlue1,
-    gtFunctionName: gold1,
-    gtTypeName: green,
-    gtBoolean: yellow,
-    gtStringLit: yellow,
-    gtSpecialVar: green,
-    gtBuiltin: yellow,
-    gtDecNumber: aqua,
-    gtComment: gray,
-    gtLongComment: gray,
-    gtWhitespace: gray,
-    gtPreprocessor: green,
-    gtPragma: yellow,
+    defaultChar: toColorCode("ffffff"),
+    gtKeyword: toColorCode("87d7ff"),
+    gtFunctionName: toColorCode("ffd700"),
+    gtTypeName: toColorCode("008000"),
+    gtBoolean: toColorCode("ffff00"),
+    gtStringLit: toColorCode("ffff00"),
+    gtSpecialVar: toColorCode("008000"),
+    gtBuiltin: toColorCode("ffff00"),
+    gtDecNumber: toColorCode("00ffff"),
+    gtComment: toColorCode("808080"),
+    gtLongComment: toColorCode("808080"),
+    gtWhitespace: toColorCode("808080"),
+    gtPreprocessor: toColorCode("008000"),
+    gtPragma: toColorCode("ffff00"),
 
     # filer mode
-    currentFile: gray100,
-    currentFileBg: teal,
-    file: gray100,
-    fileBg: default,
-    dir: blue,
-    dirBg: default,
-    pcLink: teal,
-    pcLinkBg: default,
+    currentFile: toColorCode("ffffff"),
+    currentFileBg: toColorCode("008080"),
+    file: toColorCode("ffffff"),
+    # TODO: Fix color code. (default)
+    fileBg: toColorCode("000000"),
+    dir: toColorCode("0000ff"),
+    # TODO: Fix color code. (default)
+    dirBg: toColorCode("000000"),
+    pcLink: toColorCode("008080"),
+    # TODO: Fix color code. (default)
+    pcLinkBg: toColorCode("000000"),
     # pop up window
-    popUpWindow: gray100,
-    popUpWindowBg: black,
-    popUpWinCurrentLine: blue,
-    popUpWinCurrentLineBg: black,
+    popUpWindow: toColorCode("ffffff"),
+    popUpWindowBg: toColorCode("000000"),
+    popUpWinCurrentLine: toColorCode("0000ff"),
+    popUpWinCurrentLineBg: toColorCode("000000"),
     # replace text highlighting
-    replaceText: default,
-    replaceTextBg: red,
+    # TODO: Fix color code. (default)
+    replaceText: toColorCode("ffffff"),
+    replaceTextBg: toColorCode("ff0000"),
     # pair of paren highlighting
-    parenText: default,
-    parenTextBg: blue,
+    # TODO: Fix color code. (default)
+    parenText: toColorCode("ffffff"),
+    parenTextBg: toColorCode("0000ff"),
     # highlight other uses current word
-    currentWord: default,
-    currentWordBg: gray,
+    # TODO: Fix color code. (default)
+    currentWord: toColorCode("ffffff"),
+    currentWordBg: toColorCode("808080"),
     # highlight full width space
-    highlightFullWidthSpace: red,
-    highlightFullWidthSpaceBg: red,
+    highlightFullWidthSpace: toColorCode("ff0000"),
+    highlightFullWidthSpaceBg: toColorCode("ff0000"),
     # highlight trailing spaces
-    highlightTrailingSpaces: red,
-    highlightTrailingSpacesBg: red,
+    highlightTrailingSpaces: toColorCode("ff0000"),
+    highlightTrailingSpacesBg: toColorCode("ff0000"),
     # highlight reserved words
-    reservedWord: white,
-    reservedWordBg: gray,
+    reservedWord: toColorCode("ffffff"),
+    reservedWordBg: toColorCode("808080"),
     # highlight history manager
-    currentHistory: gray100,
-    currentHistoryBg: teal,
+    currentHistory: toColorCode("ffffff"),
+    currentHistoryBg: toColorCode("008080"),
     # highlight diff
-    addedLine: green,
-    addedLineBg: default,
-    deletedLine: red,
-    deletedLineBg: default,
+    addedLine: toColorCode("008000"),
+    # TODO: Fix color code. (default)
+    addedLineBg: toColorCode("000000"),
+    deletedLine: toColorCode("ff0000"),
+    # TODO: Fix color code. (default)
+    deletedLineBg: toColorCode("000000"),
     # configuration mode
-    currentSetting: gray100,
-    currentSettingBg: teal,
+    currentSetting: toColorCode("ffffff"),
+    currentSettingBg: toColorCode("008080"),
     # Highlight current line background
-    currentLineBg: gray27
+    currentLineBg: toColorCode("444444")
   ),
-  dark: EditorColor(
-    editorBg: default,
-    lineNum: gray54,
-    lineNumBg: default,
-    currentLineNum: teal,
-    currentLineNumBg: default,
+  dark: EditorColorCode(
+    # TODO: Fix color code. (default)
+    editorBg: toColorCode("000000"),
+    lineNum: toColorCode("8a8a8a"),
+    lineNumBg: toColorCode(""),
+    currentLineNum: toColorCode("008080"),
+    currentLineNumBg: toColorCode(""),
     # statsu line
-    statusLineNormalMode: white,
-    statusLineNormalModeBg: blue,
-    statusLineModeNormalMode: black,
-    statusLineModeNormalModeBg: white,
-    statusLineNormalModeInactive: blue,
-    statusLineNormalModeInactiveBg: white,
+    statusLineNormalMode: toColorCode("ffffff"),
+    statusLineNormalModeBg: toColorCode("0000ff"),
+    statusLineModeNormalMode: toColorCode("000000"),
+    statusLineModeNormalModeBg: toColorCode("ffffff"),
+    statusLineNormalModeInactive: toColorCode("0000ff"),
+    statusLineNormalModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineInsertMode: white,
-    statusLineInsertModeBg: blue,
-    statusLineModeInsertMode: black,
-    statusLineModeInsertModeBg: white,
-    statusLineInsertModeInactive: blue,
-    statusLineInsertModeInactiveBg: white,
+    statusLineInsertMode: toColorCode("ffffff"),
+    statusLineInsertModeBg: toColorCode("0000ff"),
+    statusLineModeInsertMode: toColorCode("000000"),
+    statusLineModeInsertModeBg: toColorCode("ffffff"),
+    statusLineInsertModeInactive: toColorCode("0000ff"),
+    statusLineInsertModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineVisualMode: white,
-    statusLineVisualModeBg: blue,
-    statusLineModeVisualMode: black,
-    statusLineModeVisualModeBg: white,
-    statusLineVisualModeInactive: blue,
-    statusLineVisualModeInactiveBg: white,
+    statusLineVisualMode: toColorCode("ffffff"),
+    statusLineVisualModeBg: toColorCode("0000ff"),
+    statusLineModeVisualMode: toColorCode("000000"),
+    statusLineModeVisualModeBg: toColorCode("ffffff"),
+    statusLineVisualModeInactive: toColorCode("0000ff"),
+    statusLineVisualModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineReplaceMode: white,
-    statusLineReplaceModeBg: blue,
-    statusLineModeReplaceMode: black,
-    statusLineModeReplaceModeBg: white,
-    statusLineReplaceModeInactive: blue,
-    statusLineReplaceModeInactiveBg: white,
+    statusLineReplaceMode: toColorCode("ffffff"),
+    statusLineReplaceModeBg: toColorCode("0000ff"),
+    statusLineModeReplaceMode: toColorCode("000000"),
+    statusLineModeReplaceModeBg: toColorCode("ffffff"),
+    statusLineReplaceModeInactive: toColorCode("0000ff"),
+    statusLineReplaceModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineFilerMode: white,
-    statusLineFilerModeBg: blue,
-    statusLineModeFilerMode: black,
-    statusLineModeFilerModeBg: white,
-    statusLineFilerModeInactive: blue,
-    statusLineFilerModeInactiveBg: white,
+    statusLineFilerMode: toColorCode("ffffff"),
+    statusLineFilerModeBg: toColorCode("0000ff"),
+    statusLineModeFilerMode: toColorCode("000000"),
+    statusLineModeFilerModeBg: toColorCode("ffffff"),
+    statusLineFilerModeInactive: toColorCode("0000ff"),
+    statusLineFilerModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineExMode: white,
-    statusLineExModeBg: blue,
-    statusLineModeExMode: black,
-    statusLineModeExModeBg: white,
-    statusLineExModeInactive: blue,
-    statusLineExModeInactiveBg: white,
+    statusLineExMode: toColorCode("ffffff"),
+    statusLineExModeBg: toColorCode("0000ff"),
+    statusLineModeExMode: toColorCode("000000"),
+    statusLineModeExModeBg: toColorCode("ffffff"),
+    statusLineExModeInactive: toColorCode("0000ff"),
+    statusLineExModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineGitBranch: white,
-    statusLineGitBranchBg: blue,
+    statusLineGitBranch: toColorCode("ffffff"),
+    statusLineGitBranchBg: toColorCode("0000ff"),
     # tab line
-    tab: white,
-    tabBg: default,
-    currentTab: white,
-    currentTabBg: blue,
+    tab: toColorCode("ffffff"),
+    tabBg: toColorCode(""),
+    currentTab: toColorCode("ffffff"),
+    currentTabBg: toColorCode("0000ff"),
     # command bar
-    commandBar: gray100,
-    commandBarBg: default,
+    commandBar: toColorCode("ffffff"),
+    commandBarBg: toColorCode(""),
     # error message
-    errorMessage: red,
-    errorMessageBg: default,
+    errorMessage: toColorCode("ff0000"),
+    errorMessageBg: toColorCode(""),
     # search result highlighting
-    searchResult: default,
-    searchResultBg: red,
+    searchResult: toColorCode(""),
+    searchResultBg: toColorCode("ff0000"),
     # selected area in visual mode
-    visualMode: gray100,
-    visualModeBg: purple_1,
+    visualMode: toColorCode("ffffff"),
+    visualModeBg: toColorCode("800080"),
 
     # color scheme
-    defaultChar: white,
-    gtKeyword: skyBlue1,
-    gtFunctionName: gold1,
-    gtTypeName: green,
-    gtBoolean: yellow,
-    gtStringLit: yellow,
-    gtSpecialVar: green,
-    gtBuiltin: yellow,
-    gtDecNumber: aqua,
-    gtComment: gray,
-    gtLongComment: gray,
-    gtWhitespace: gray,
-    gtPreprocessor: green,
-    gtPragma: yellow,
+    defaultChar: toColorCode("ffffff"),
+    gtKeyword: toColorCode("87d7ff"),
+    gtFunctionName: toColorCode("ffd700"),
+    gtTypeName: toColorCode("008000"),
+    gtBoolean: toColorCode("ffff00"),
+    gtStringLit: toColorCode("ffff00"),
+    gtSpecialVar: toColorCode("008000"),
+    gtBuiltin: toColorCode("ffff00"),
+    gtDecNumber: toColorCode("00ffff"),
+    gtComment: toColorCode("808080"),
+    gtLongComment: toColorCode("808080"),
+    gtWhitespace: toColorCode("808080"),
+    gtPreprocessor: toColorCode("008000"),
+    gtPragma: toColorCode("ffff00"),
 
     # filer mode
-    currentFile: gray100,
-    currentFileBg: teal,
-    file: gray100,
-    fileBg: default,
-    dir: blue,
-    dirBg: default,
-    pcLink: teal,
-    pcLinkBg: default,
+    currentFile: toColorCode("ffffff"),
+    currentFileBg: toColorCode("008080"),
+    file: toColorCode("ffffff"),
+    fileBg: toColorCode(""),
+    dir: toColorCode("0000ff"),
+    dirBg: toColorCode(""),
+    pcLink: toColorCode("008080"),
+    pcLinkBg: toColorCode(""),
     # pop up window
-    popUpWindow: gray100,
-    popUpWindowBg: black,
-    popUpWinCurrentLine: blue,
-    popUpWinCurrentLineBg: black,
+    popUpWindow: toColorCode("ffffff"),
+    popUpWindowBg: toColorCode("000000"),
+    popUpWinCurrentLine: toColorCode("0000ff"),
+    popUpWinCurrentLineBg: toColorCode("000000"),
     # replace text highlighting
-    replaceText: default,
-    replaceTextBg: red,
+    replaceText: toColorCode(""),
+    replaceTextBg: toColorCode("ff0000"),
     # pair of paren highlighting
-    parenText: default,
-    parenTextBg: blue,
+    parenText: toColorCode(""),
+    parenTextBg: toColorCode("0000ff"),
     # highlight other uses current word
-    currentWord: default,
-    currentWordBg: gray,
+    currentWord: toColorCode(""),
+    currentWordBg: toColorCode("808080"),
     # highlight full width space
-    highlightFullWidthSpace: red,
-    highlightFullWidthSpaceBg: red,
+    highlightFullWidthSpace: toColorCode("ff0000"),
+    highlightFullWidthSpaceBg: toColorCode("ff0000"),
     # highlight trailing spaces
-    highlightTrailingSpaces: red,
-    highlightTrailingSpacesBg: red,
+    highlightTrailingSpaces: toColorCode("ff0000"),
+    highlightTrailingSpacesBg: toColorCode("ff0000"),
     # highlight reserved words
-    reservedWord: white,
-    reservedWordBg: gray,
+    reservedWord: toColorCode("ffffff"),
+    reservedWordBg: toColorCode("808080"),
     # highlight history manager
-    currentHistory: gray100,
-    currentHistoryBg: teal,
+    currentHistory: toColorCode("ffffff"),
+    currentHistoryBg: toColorCode("008080"),
     # highlight diff
-    addedLine: green,
-    addedLineBg: default,
-    deletedLine: red,
-    deletedLineBg: default,
+    addedLine: toColorCode("008000"),
+    addedLineBg: toColorCode(""),
+    deletedLine: toColorCode("ff0000"),
+    deletedLineBg: toColorCode(""),
     # configuration mode
-    currentSetting: gray100,
-    currentSettingBg: teal,
+    currentSetting: toColorCode("ffffff"),
+    currentSettingBg: toColorCode("008080"),
     # Highlight current line background
-    currentLineBg: gray27
+    currentLineBg: toColorCode("444444")
   ),
-  light: EditorColor(
-    editorBg: default,
-    lineNum: gray54,
-    lineNumBg: default,
-    currentLineNum: black,
-    currentLineNumBg: default,
+  light: EditorColorCode(
+    editorBg: toColorCode(""),
+    lineNum: toColorCode("8a8a8a"),
+    lineNumBg: toColorCode(""),
+    currentLineNum: toColorCode("000000"),
+    currentLineNumBg: toColorCode(""),
     # statsu line
-    statusLineNormalMode: blue,
-    statusLineNormalModeBg: gray54,
-    statusLineModeNormalMode: white,
-    statusLineModeNormalModeBg: teal,
-    statusLineNormalModeInactive: gray54,
-    statusLineNormalModeInactiveBg: blue,
+    statusLineNormalMode: toColorCode("0000ff"),
+    statusLineNormalModeBg: toColorCode("8a8a8a"),
+    statusLineModeNormalMode: toColorCode("ffffff"),
+    statusLineModeNormalModeBg: toColorCode("008080"),
+    statusLineNormalModeInactive: toColorCode("8a8a8a"),
+    statusLineNormalModeInactiveBg: toColorCode("0000ff"),
 
-    statusLineInsertMode: blue,
-    statusLineInsertModeBg: gray54,
-    statusLineModeInsertMode: white,
-    statusLineModeInsertModeBg: teal,
-    statusLineInsertModeInactive: gray54,
-    statusLineInsertModeInactiveBg: blue,
+    statusLineInsertMode: toColorCode("0000ff"),
+    statusLineInsertModeBg: toColorCode("8a8a8a"),
+    statusLineModeInsertMode: toColorCode("ffffff"),
+    statusLineModeInsertModeBg: toColorCode("008080"),
+    statusLineInsertModeInactive: toColorCode("8a8a8a"),
+    statusLineInsertModeInactiveBg: toColorCode("0000ff"),
 
-    statusLineVisualMode: blue,
-    statusLineVisualModeBg: gray54,
-    statusLineModeVisualMode: white,
-    statusLineModeVisualModeBg: teal,
-    statusLineVisualModeInactive: gray54,
-    statusLineVisualModeInactiveBg: blue,
+    statusLineVisualMode: toColorCode("0000ff"),
+    statusLineVisualModeBg: toColorCode("8a8a8a"),
+    statusLineModeVisualMode: toColorCode("ffffff"),
+    statusLineModeVisualModeBg: toColorCode("008080"),
+    statusLineVisualModeInactive: toColorCode("8a8a8a"),
+    statusLineVisualModeInactiveBg: toColorCode("0000ff"),
 
-    statusLineReplaceMode: blue,
-    statusLineReplaceModeBg: gray54,
-    statusLineModeReplaceMode: white,
-    statusLineModeReplaceModeBg: teal,
-    statusLineReplaceModeInactive: gray54,
-    statusLineReplaceModeInactiveBg: blue,
+    statusLineReplaceMode: toColorCode("0000ff"),
+    statusLineReplaceModeBg: toColorCode("8a8a8a"),
+    statusLineModeReplaceMode: toColorCode("ffffff"),
+    statusLineModeReplaceModeBg: toColorCode("008080"),
+    statusLineReplaceModeInactive: toColorCode("8a8a8a"),
+    statusLineReplaceModeInactiveBg: toColorCode("0000ff"),
 
-    statusLineFilerMode: blue,
-    statusLineFilerModeBg: gray54,
-    statusLineModeFilerMode: white,
-    statusLineModeFilerModeBg: teal,
-    statusLineFilerModeInactive: gray54,
-    statusLineFilerModeInactiveBg: blue,
+    statusLineFilerMode: toColorCode("0000ff"),
+    statusLineFilerModeBg: toColorCode("8a8a8a"),
+    statusLineModeFilerMode: toColorCode("ffffff"),
+    statusLineModeFilerModeBg: toColorCode("008080"),
+    statusLineFilerModeInactive: toColorCode("8a8a8a"),
+    statusLineFilerModeInactiveBg: toColorCode("0000ff"),
 
-    statusLineExMode: blue,
-    statusLineExModeBg: gray54,
-    statusLineModeExMode: white,
-    statusLineModeExModeBg: teal,
-    statusLineExModeInactive: gray54,
-    statusLineExModeInactiveBg: blue,
+    statusLineExMode: toColorCode("0000ff"),
+    statusLineExModeBg: toColorCode("8a8a8a"),
+    statusLineModeExMode: toColorCode("ffffff"),
+    statusLineModeExModeBg: toColorCode("008080"),
+    statusLineExModeInactive: toColorCode("8a8a8a"),
+    statusLineExModeInactiveBg: toColorCode("0000ff"),
 
-    statusLineGitBranch: blue,
-    statusLineGitBranchBg: gray54,
+    statusLineGitBranch: toColorCode("0000ff"),
+    statusLineGitBranchBg: toColorCode("8a8a8a"),
     # tab line
-    tab: blue,
-    tabBg: gray54,
-    currentTab: white,
-    currentTabBg: blue,
+    tab: toColorCode("0000ff"),
+    tabBg: toColorCode("8a8a8a"),
+    currentTab: toColorCode("ffffff"),
+    currentTabBg: toColorCode("0000ff"),
     # command bar
-    commandBar: black,
-    commandBarBg: default,
+    commandBar: toColorCode("000000"),
+    commandBarBg: toColorCode(""),
     # error message
-    errorMessage: red,
-    errorMessageBg: default,
+    errorMessage: toColorCode("ff0000"),
+    errorMessageBg: toColorCode(""),
     # search result highlighting
-    searchResult: default,
-    searchResultBg: red,
+    searchResult: toColorCode(""),
+    searchResultBg: toColorCode("ff0000"),
     # selected area in visual mode
-    visualMode: black,
-    visualModeBg: purple_1,
+    visualMode: toColorCode("000000"),
+    visualModeBg: toColorCode("800080"),
 
     # color scheme
-    defaultChar: gray100,
-    gtKeyword: seaGreen1_2,
-    gtFunctionName: gold1,
-    gtTypeName: green,
-    gtBoolean: yellow,
-    gtStringLit: purple_1,
-    gtSpecialVar: green,
-    gtBuiltin: yellow,
-    gtDecNumber: aqua,
-    gtComment: gray,
-    gtLongComment: gray,
-    gtWhitespace: gray,
-    gtPreprocessor: green,
-    gtPragma: yellow,
+    defaultChar: toColorCode("ffffff"),
+    gtKeyword: toColorCode("5fffaf"),
+    gtFunctionName: toColorCode("ffd700"),
+    gtTypeName: toColorCode("008000"),
+    gtBoolean: toColorCode("ffff00"),
+    gtStringLit: toColorCode("800080"),
+    gtSpecialVar: toColorCode("008000"),
+    gtBuiltin: toColorCode("ffff00"),
+    gtDecNumber: toColorCode("00ffff"),
+    gtComment: toColorCode("808080"),
+    gtLongComment: toColorCode("808080"),
+    gtWhitespace: toColorCode("808080"),
+    gtPreprocessor: toColorCode("008000"),
+    gtPragma: toColorCode("ffff00"),
 
     # filer mode
-    currentFile: black,
-    currentFileBg: deepPink1_1,
-    file: black,
-    fileBg: default,
-    dir: deepPink1_1,
-    dirBg: default,
-    pcLink: teal,
-    pcLinkBg: default,
+    currentFile: toColorCode("000000"),
+    currentFileBg: toColorCode("ff0087"),
+    file: toColorCode("000000"),
+    fileBg: toColorCode(""),
+    dir: toColorCode("ff0087"),
+    dirBg: toColorCode(""),
+    pcLink: toColorCode("008080"),
+    pcLinkBg: toColorCode(""),
     # pop up window
-    popUpWindow: black,
-    popUpWindowBg: gray,
-    popUpWinCurrentLine: blue,
-    popUpWinCurrentLineBg: gray,
+    popUpWindow: toColorCode("000000"),
+    popUpWindowBg: toColorCode("808080"),
+    popUpWinCurrentLine: toColorCode("0000ff"),
+    popUpWinCurrentLineBg: toColorCode("808080"),
     # replace text highlighting
-    replaceText: default,
-    replaceTextBg: red,
+    replaceText: toColorCode(""),
+    replaceTextBg: toColorCode("ff0000"),
     # pair of paren highlighting
-    parenText: default,
-    parenTextBg: gray,
+    parenText: toColorCode(""),
+    parenTextBg: toColorCode("808080"),
     # highlight other uses current word
-    currentWord: default,
-    currentWordBg: gray,
+    currentWord: toColorCode(""),
+    currentWordBg: toColorCode("808080"),
     # highlight full width space
-    highlightFullWidthSpace: red,
-    highlightFullWidthSpaceBg: red,
+    highlightFullWidthSpace: toColorCode("ff0000"),
+    highlightFullWidthSpaceBg: toColorCode("ff0000"),
     # highlight trailing spaces
-    highlightTrailingSpaces: red,
-    highlightTrailingSpacesBg: red,
+    highlightTrailingSpaces: toColorCode("ff0000"),
+    highlightTrailingSpacesBg: toColorCode("ff0000"),
     # highlight reserved words
-    reservedWord: white,
-    reservedWordBg: gray,
+    reservedWord: toColorCode("ffffff"),
+    reservedWordBg: toColorCode("808080"),
     # highlight history manager
-    currentHistory: black,
-    currentHistoryBg: deepPink1_1,
+    currentHistory: toColorCode("000000"),
+    currentHistoryBg: toColorCode("ff0087"),
     # highlight diff
-    addedLine: green,
-    addedLineBg: default,
-    deletedLine: red,
-    deletedLineBg: default,
+    addedLine: toColorCode("008000"),
+    addedLineBg: toColorCode(""),
+    deletedLine: toColorCode("ff0000"),
+    deletedLineBg: toColorCode(""),
     # configuration mode
-    currentSetting: black,
-    currentSettingBg: deepPink1_1,
+    currentSetting: toColorCode("000000"),
+    currentSettingBg: toColorCode("ff0087"),
     # Highlight current line background
-    currentLineBg: gray27
+    currentLineBg: toColorCode("444444")
   ),
-  vivid: EditorColor(
-    editorBg: default,
-    lineNum: gray54,
-    lineNumBg: default,
-    currentLineNum: deepPink1_1,
-    currentLineNumBg: default,
+  vivid: EditorColorCode(
+    editorBg: toColorCode(""),
+    lineNum: toColorCode("8a8a8a"),
+    lineNumBg: toColorCode(""),
+    currentLineNum: toColorCode("ff0087"),
+    currentLineNumBg: toColorCode(""),
     # statsu line
-    statusLineNormalMode: black,
-    statusLineNormalModeBg: deepPink1_1,
-    statusLineModeNormalMode: black,
-    statusLineModeNormalModeBg: gray100,
-    statusLineNormalModeInactive: deepPink1_1,
-    statusLineNormalModeInactiveBg: white,
+    statusLineNormalMode: toColorCode("000000"),
+    statusLineNormalModeBg: toColorCode("ff0087"),
+    statusLineModeNormalMode: toColorCode("000000"),
+    statusLineModeNormalModeBg: toColorCode("ffffff"),
+    statusLineNormalModeInactive: toColorCode("ff0087"),
+    statusLineNormalModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineInsertMode: black,
-    statusLineInsertModeBg: deepPink1_1,
-    statusLineModeInsertMode: black,
-    statusLineModeInsertModeBg: gray100,
-    statusLineInsertModeInactive: deepPink1_1,
-    statusLineInsertModeInactiveBg: white,
+    statusLineInsertMode: toColorCode("000000"),
+    statusLineInsertModeBg: toColorCode("ff0087"),
+    statusLineModeInsertMode: toColorCode("000000"),
+    statusLineModeInsertModeBg: toColorCode("ffffff"),
+    statusLineInsertModeInactive: toColorCode("ff0087"),
+    statusLineInsertModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineVisualMode: black,
-    statusLineVisualModeBg: deepPink1_1,
-    statusLineModeVisualMode: black,
-    statusLineModeVisualModeBg: gray100,
-    statusLineVisualModeInactive: deepPink1_1,
-    statusLineVisualModeInactiveBg: white,
+    statusLineVisualMode: toColorCode("000000"),
+    statusLineVisualModeBg: toColorCode("ff0087"),
+    statusLineModeVisualMode: toColorCode("000000"),
+    statusLineModeVisualModeBg: toColorCode("ffffff"),
+    statusLineVisualModeInactive: toColorCode("ff0087"),
+    statusLineVisualModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineReplaceMode: black,
-    statusLineReplaceModeBg: deepPink1_1,
-    statusLineModeReplaceMode: black,
-    statusLineModeReplaceModeBg: gray100,
-    statusLineReplaceModeInactive: deepPink1_1,
-    statusLineReplaceModeInactiveBg: white,
+    statusLineReplaceMode: toColorCode("000000"),
+    statusLineReplaceModeBg: toColorCode("ff0087"),
+    statusLineModeReplaceMode: toColorCode("000000"),
+    statusLineModeReplaceModeBg: toColorCode("ffffff"),
+    statusLineReplaceModeInactive: toColorCode("ff0087"),
+    statusLineReplaceModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineFilerMode: black,
-    statusLineFilerModeBg: deepPink1_1,
-    statusLineModeFilerMode: black,
-    statusLineModeFilerModeBg: gray100,
-    statusLineFilerModeInactive: deepPink1_1,
-    statusLineFilerModeInactiveBg: white,
+    statusLineFilerMode: toColorCode("000000"),
+    statusLineFilerModeBg: toColorCode("ff0087"),
+    statusLineModeFilerMode: toColorCode("000000"),
+    statusLineModeFilerModeBg: toColorCode("ffffff"),
+    statusLineFilerModeInactive: toColorCode("ff0087"),
+    statusLineFilerModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineExMode: black,
-    statusLineExModeBg: deepPink1_1,
-    statusLineModeExMode: black,
-    statusLineModeExModeBg: gray100,
-    statusLineExModeInactive: deepPink1_1,
-    statusLineExModeInactiveBg: white,
+    statusLineExMode: toColorCode("000000"),
+    statusLineExModeBg: toColorCode("ff0087"),
+    statusLineModeExMode: toColorCode("000000"),
+    statusLineModeExModeBg: toColorCode("ffffff"),
+    statusLineExModeInactive: toColorCode("ff0087"),
+    statusLineExModeInactiveBg: toColorCode("ffffff"),
 
-    statusLineGitBranch: deepPink1_1,
-    statusLineGitBranchBg: black,
+    statusLineGitBranch: toColorCode("ff0087"),
+    statusLineGitBranchBg: toColorCode("000000"),
     # tab line
-    tab: white,
-    tabBg: default,
-    currentTab: black,
-    currentTabBg: deepPink1_1,
+    tab: toColorCode("ffffff"),
+    tabBg: toColorCode(""),
+    currentTab: toColorCode("000000"),
+    currentTabBg: toColorCode("ff0087"),
     # command bar
-    commandBar: gray100,
-    commandBarBg: default,
+    commandBar: toColorCode("ffffff"),
+    commandBarBg: toColorCode(""),
     # error message
-    errorMessage: red,
-    errorMessageBg: default,
+    errorMessage: toColorCode("ff0000"),
+    errorMessageBg: toColorCode(""),
     # search result highlighting
-    searchResult: default,
-    searchResultBg: red,
+    searchResult: toColorCode(""),
+    searchResultBg: toColorCode("ff0000"),
     # selected area in visual mode
-    visualMode: gray100,
-    visualModeBg: purple_1,
+    visualMode: toColorCode("ffffff"),
+    visualModeBg: toColorCode("800080"),
 
     # color scheme
-    defaultChar: gray100,
-    gtKeyword: deepPink1_1,
-    gtFunctionName: gold1,
-    gtTypeName: green,
-    gtBoolean: yellow,
-    gtStringLit: purple_1,
-    gtSpecialVar: green,
-    gtBuiltin: aqua,
-    gtDecNumber: aqua,
-    gtComment: gray,
-    gtLongComment: gray,
-    gtWhitespace: gray,
-    gtPreprocessor: green,
-    gtPragma: aqua,
+    defaultChar: toColorCode("ffffff"),
+    gtKeyword: toColorCode("ff0087"),
+    gtFunctionName: toColorCode("ffd700"),
+    gtTypeName: toColorCode("008000"),
+    gtBoolean: toColorCode("ffff00"),
+    gtStringLit: toColorCode("800080"),
+    gtSpecialVar: toColorCode("008000"),
+    gtBuiltin: toColorCode("00ffff"),
+    gtDecNumber: toColorCode("00ffff"),
+    gtComment: toColorCode("808080"),
+    gtLongComment: toColorCode("808080"),
+    gtWhitespace: toColorCode("808080"),
+    gtPreprocessor: toColorCode("008000"),
+    gtPragma: toColorCode("00ffff"),
 
     # filer mode
-    currentFile: gray100,
-    currentFileBg: deepPink1_1,
-    file: gray100,
-    fileBg: default,
-    dir: deepPink1_1,
-    dirBg: default,
-    pcLink: cyan1,
-    pcLinkBg: default,
+    currentFile: toColorCode("ffffff"),
+    currentFileBg: toColorCode("ff0087"),
+    file: toColorCode("ffffff"),
+    fileBg: toColorCode(""),
+    dir: toColorCode("ff0087"),
+    dirBg: toColorCode(""),
+    pcLink:  toColorCode("00ffff"),
+    pcLinkBg: toColorCode(""),
     # pop up window
-    popUpWindow: gray100,
-    popUpWindowBg: black,
-    popUpWinCurrentLine: deepPink1_1,
-    popUpWinCurrentLineBg: black,
+    popUpWindow: toColorCode("ffffff"),
+    popUpWindowBg: toColorCode("000000"),
+    popUpWinCurrentLine: toColorCode("ff0087"),
+    popUpWinCurrentLineBg: toColorCode("000000"),
     # replace text highlighting
-    replaceText: default,
-    replaceTextBg: red,
+    replaceText: toColorCode(""),
+    replaceTextBg: toColorCode("ff0000"),
     # pair of paren highlighting
-    parenText: default,
-    parenTextBg: deepPink1_1,
+    parenText: toColorCode(""),
+    parenTextBg: toColorCode("ff0087"),
     # highlight other uses current word
-    currentWord: default,
-    currentWordBg: gray,
+    currentWord: toColorCode(""),
+    currentWordBg: toColorCode("808080"),
     # highlight full width space
-    highlightFullWidthSpace: red,
-    highlightFullWidthSpaceBg: red,
+    highlightFullWidthSpace: toColorCode("ff0000"),
+    highlightFullWidthSpaceBg: toColorCode("ff0000"),
     # highlight trailing spaces
-    highlightTrailingSpaces: red,
-    highlightTrailingSpacesBg: red,
+    highlightTrailingSpaces: toColorCode("ff0000"),
+    highlightTrailingSpacesBg: toColorCode("ff0000"),
     # highlight reserved words
-    reservedWord: deepPink1_1,
-    reservedWordBg: black,
+    reservedWord: toColorCode("ff0087"),
+    reservedWordBg: toColorCode("000000"),
     # highlight history manager
-    currentHistory: gray100,
-    currentHistoryBg: deepPink1_1,
+    currentHistory: toColorCode("ffffff"),
+    currentHistoryBg: toColorCode("ff0087"),
     # highlight diff
-    addedLine: green,
-    addedLineBg: default,
-    deletedLine: red,
-    deletedLineBg: default,
+    addedLine: toColorCode("008000"),
+    addedLineBg: toColorCode(""),
+    deletedLine: toColorCode("ff0000"),
+    deletedLineBg: toColorCode(""),
     # configuration mode
-    currentSetting: gray100,
-    currentSettingBg: deepPink1_1,
+    currentSetting: toColorCode("ffffff"),
+    currentSettingBg: toColorCode("ff0087"),
     # Highlight current line background
-    currentLineBg: gray27
+    currentLineBg: toColorCode("444444")
   ),
 ]
 
@@ -1288,7 +1254,7 @@ proc setColorPair*(colorPair: EditorColorPair | int,
             cshort(ord(character)),
             cshort(ord(background)))
 
-proc setCursesColor*(editorColor: EditorColor) =
+proc setCursesColor*(editorColor: EditorColorCode) =
   # Not set when running unit tests
   when not defined unitTest:
     start_color()   # enable color
