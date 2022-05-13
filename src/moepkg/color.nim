@@ -1,5 +1,4 @@
 import std/[strutils, tables, macros, strformat, options]
-import pkg/ncurses
 
 type
   # Hex color code
