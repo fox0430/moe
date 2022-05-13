@@ -539,27 +539,29 @@ proc getPersistTableSettingsValues(settings: PersistSettings,
   else:
     result = @[ru "false", ru "true"]
 
-proc getThemeTableSettingValues(settings: EditorSettings,
-                                name, position: string): seq[seq[Rune]] =
-
-  proc getCurrentVal(theme: ColorTheme, name, position: string): Color =
-    if name == "editorBg":
-      result = ColorThemeTable[theme].editorBg
-    else:
-      let
-        colorPair = parseEnum[EditorColorPair]($name)
-        (fg, bg) = getColorFromEditorColorPair(theme, colorPair)
-      result = if position == "foreground": fg else: bg
-
-  if name != "" or position != "":
-    let
-      theme = settings.editorColorTheme
-      currentVal = getCurrentVal(theme, name, position)
-
-    result.add ru $currentVal
-    for color in Color:
-      if $color != $currentVal:
-        result.add ru $color
+# TODO: Enable getThemeTableSettingValues
+#proc getThemeTableSettingValues(settings: EditorSettings,
+#                                name, position: string): seq[seq[Rune]] =
+#
+#  proc getCurrentVal(theme: ColorTheme, name, position: string): Color =
+#    if name == "editorBg":
+#      result = ColorThemeTable[theme].editorBg
+#    else:
+#      discard
+#      let
+#        colorPair = parseEnum[EditorColorPair]($name)
+#        (fg, bg) = getColorFromEditorColorPair(theme, colorPair)
+#      result = if position == "foreground": fg else: bg
+#
+#  if name != "" or position != "":
+#    let
+#      theme = settings.editorColorTheme
+#      currentVal = getCurrentVal(theme, name, position)
+#
+#    result.add ru $currentVal
+#    for color in Color:
+#      if $color != $currentVal:
+#        result.add ru $color
 
 proc getSettingValues(settings: EditorSettings,
                       settingType: SettingType,
@@ -596,7 +598,9 @@ proc getSettingValues(settings: EditorSettings,
       let persistSettings = settings.persist
       result = persistSettings.getPersistTableSettingsValues(name)
     of "Theme":
-      result = settings.getThemeTableSettingValues(name, position)
+      discard
+      # TODO: Enable getThemeTableSettingValues
+      #result = settings.getThemeTableSettingValues(name, position)
 
 proc maxLen(list: seq[seq[Rune]]): int =
   for r in list:
@@ -898,24 +902,25 @@ proc changePerSistTableSettings(settings: var PersistSettings,
     else:
       discard
 
-proc changeThemeTableSetting(settings: var EditorSettings,
-                             settingName, position, settingVal: string) =
-
-  let theme = settings.editorColorTheme
-  case settingName:
-    of "editorBg":
-      ColorThemeTable[theme].editorBg = parseEnum[Color](settingVal)
-    else:
-      let
-        color = parseEnum[Color](settingVal)
-        editoColor = if position == "background" and settingVal != "editorBg":
-                       settingName & "Bg"
-                     else:
-                       settingName
-
-      for name, _ in ColorThemeTable[theme].fieldPairs:
-        if editoColor == name:
-          setColor(theme, name, color)
+# TODO: Enable changeThemeTableSetting
+#proc changeThemeTableSetting(settings: var EditorSettings,
+#                             settingName, position, settingVal: string) =
+#
+#  let theme = settings.editorColorTheme
+#  case settingName:
+#    of "editorBg":
+#      ColorThemeTable[theme].editorBg = parseEnum[Color](settingVal)
+#    else:
+#      let
+#        color = parseEnum[Color](settingVal)
+#        editoColor = if position == "background" and settingVal != "editorBg":
+#                       settingName & "Bg"
+#                     else:
+#                       settingName
+#
+#      for name, _ in ColorThemeTable[theme].fieldPairs:
+#        if editoColor == name:
+#          setColor(theme, name, color)
 
 proc changeEditorSettings(status: var EditorStatus,
                           table, settingName, position, settingVal: string) =
@@ -987,8 +992,10 @@ proc changeEditorSettings(status: var EditorStatus,
     of "Persist":
       persistSettings.changePerSistTableSettings(settingName, settingVal)
     of "Theme":
-      settings.changeThemeTableSetting(settingName, position, settingVal)
-      status.changeTheme
+      discard
+      # TODO: Enable changeThemeTableSetting
+      #settings.changeThemeTableSetting(settingName, position, settingVal)
+      #status.changeTheme
     else:
       discard
 
@@ -1898,39 +1905,40 @@ proc initPersistTableBuffer(persistSettings: PersistSettings): seq[seq[Rune]] =
       of "cursorPosition":
         result.add(ru nameStr & space & $persistSettings.cursorPosition)
 
-proc initThemeTableBuffer*(settings: EditorSettings): seq[seq[Rune]] =
-  result.add(ru"Theme")
-
-  let theme = settings.editorColorTheme
-
-  template addColorPairSettingLine() =
-    let
-      # 11 is "foreground " and "background " length
-      space = " ".repeat(positionOfSetVal - indent.len - 11)
-      (fg, bg) = getColorFromEditorColorPair(theme, colorPair)
-
-    result.add(ru indent & nameStr)
-    result.add(ru indent.repeat(2) & "foreground " & space & $fg)
-    result.add(ru indent.repeat(2) & "background " & space & $bg)
-
-    result.add(ru "")
-
-  for name in themeTableNames:
-    let nameStr = $name
-    case $name:
-      of "editorBg":
-        let
-          # 11 is "background " length
-          space = " ".repeat(positionOfSetVal - indent.len - 11)
-          editorBg = $ColorThemeTable[theme].editorBg
-
-        result.add(ru indent & nameStr)
-        result.add(ru indent.repeat(2) & "background " & space & editorBg)
-
-        result.add(ru "")
-      else:
-        let colorPair = parseEnum[EditorColorPair]($name)
-        addColorPairSettingLine()
+# TODO: Enable initThemeTableBuffer
+#proc initThemeTableBuffer*(settings: EditorSettings): seq[seq[Rune]] =
+#  result.add(ru"Theme")
+#
+#  let theme = settings.editorColorTheme
+#
+#  template addColorPairSettingLine() =
+#    let
+#      # 11 is "foreground " and "background " length
+#      space = " ".repeat(positionOfSetVal - indent.len - 11)
+#      (fg, bg) = getColorFromEditorColorPair(theme, colorPair)
+#
+#    result.add(ru indent & nameStr)
+#    result.add(ru indent.repeat(2) & "foreground " & space & $fg)
+#    result.add(ru indent.repeat(2) & "background " & space & $bg)
+#
+#    result.add(ru "")
+#
+#  for name in themeTableNames:
+#    let nameStr = $name
+#    case $name:
+#      of "editorBg":
+#        let
+#          # 11 is "background " length
+#          space = " ".repeat(positionOfSetVal - indent.len - 11)
+#          editorBg = $ColorThemeTable[theme].editorBg
+#
+#        result.add(ru indent & nameStr)
+#        result.add(ru indent.repeat(2) & "background " & space & editorBg)
+#
+#        result.add(ru "")
+#      else:
+#        let colorPair = parseEnum[EditorColorPair]($name)
+#        addColorPairSettingLine()
 
 proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
   var buffer: seq[seq[Rune]]
@@ -1969,8 +1977,9 @@ proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
   buffer.add(ru"")
   buffer.add(initPersistTableBuffer(settings.persist))
 
-  buffer.add(ru"")
-  buffer.add(initThemeTableBuffer(settings))
+  # TODO: Enable initThemeTableBuffer
+  #buffer.add(ru"")
+  #buffer.add(initThemeTableBuffer(settings))
 
   result = initGapBuffer(buffer)
 

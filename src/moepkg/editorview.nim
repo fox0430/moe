@@ -211,46 +211,48 @@ proc writeCurrentLine(view: EditorView,
     # Enable underline
     #win.attron(Attributes.underline)
 
+  # TODO: Enable highlightCurrentLine
   if viewSettings.highlightCurrentLine and
      not (isVisualMode(mode) or isConfigMode(mode, prevMode)):
-    # Change background color to white if background color is editorBg
-    let
-      defaultCharColor = EditorColorPair.defaultChar
-      colors = if i > -1 and i < highlight.len:
-                 theme.getColorFromEditorColorPair(highlight[i].color)
-               else:
-                 theme.getColorFromEditorColorPair(defaultCharColor)
+       discard
+  #  # Change background color to white if background color is editorBg
+  #  let
+  #    defaultCharColor = EditorColorPair.defaultChar
+  #    colors = if i > -1 and i < highlight.len:
+  #               theme.getColorFromEditorColorPair(highlight[i].color)
+  #             else:
+  #               theme.getColorFromEditorColorPair(defaultCharColor)
 
-      theme = ColorThemeTable[theme]
+  #    theme = ColorThemeTable[theme]
 
-    block:
-      let
-        fg = colors[0]
-        bg = if colors[1] == theme.EditorColor.editorBg:
-               theme.EditorColor.currentLineBg
-             else:
-               colors[1]
+  #  block:
+  #    let
+  #      fg = colors[0]
+  #      bg = if colors[1] == theme.EditorColor.editorBg:
+  #             theme.EditorColor.currentLineBg
+  #           else:
+  #             colors[1]
 
-      setColorPair(currentLineColorPair, fg, bg)
+  #    setColorPair(currentLineColorPair, fg, bg)
 
-    view.write(y, x, str, currentLineColorPair)
+  #  view.write(y, x, str, currentLineColorPair)
 
-    currentLineColorPair.inc
+  #  currentLineColorPair.inc
 
-    # Write spaces after text in the current line
-    block:
-      let
-        fg = theme.EditorColor.defaultChar
-        bg = theme.EditorColor.currentLineBg
+  #  # Write spaces after text in the current line
+  #  block:
+  #    let
+  #      fg = theme.EditorColor.defaultChar
+  #      bg = theme.EditorColor.currentLineBg
 
-      setColorPair(currentLineColorPair, fg, bg)
-    let
-      spaces = ru" ".repeat(view.width - view.lines[y].width)
-      x = view.widthOfLineNum + view.lines[y].width
+  #    setColorPair(currentLineColorPair, fg, bg)
+  #  let
+  #    spaces = ru" ".repeat(view.width - view.lines[y].width)
+  #    x = view.widthOfLineNum + view.lines[y].width
 
-    view.write(y, x, spaces, currentLineColorPair)
+  #  view.write(y, x, spaces, currentLineColorPair)
 
-    currentLineColorPair.inc
+  #  currentLineColorPair.inc
 
   else:
     view.write(y, x, str, highlight[i].color)

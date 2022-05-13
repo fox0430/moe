@@ -1009,23 +1009,25 @@ proc highlightOtherUsesCurrentWord(highlight: var Highlight,
 
             # Do not highlight current word on the cursor
             if not isWordAtCursor(highlightWord.len, i, j):
+              discard
+              # TODO: Fix
               # Set color
-              let
-                originalColorPair =
-                  highlight.getColorPair(i, j)
-                colors = theme.getColorFromEditorColorPair(originalColorPair)
-              setColorPair(EditorColorPair.currentWord,
-                           colors[0],
-                           ColorThemeTable[theme].currentWordBg)
+              #let
+              #  originalColorPair =
+              #    highlight.getColorPair(i, j)
+              #  colors = theme.getColorFromEditorColorPair(originalColorPair)
+              #setColorPair(EditorColorPair.currentWord,
+              #             colors[0],
+              #             ColorThemeTable[theme].currentWordBg)
 
-              let
-                color = EditorColorPair.currentWord
-                colorSegment = ColorSegment(firstRow: i,
-                                            firstColumn: j,
-                                            lastRow: i,
-                                            lastColumn: j + highlightWord.high,
-                                            color: color)
-              highlight = highlight.overwrite(colorSegment)
+              #let
+              #  color = EditorColorPair.currentWord
+              #  colorSegment = ColorSegment(firstRow: i,
+              #                              firstColumn: j,
+              #                              lastRow: i,
+              #                              lastColumn: j + highlightWord.high,
+              #                              color: color)
+              #highlight = highlight.overwrite(colorSegment)
 
 proc highlightTrailingSpaces(highlight: var Highlight,
                              bufStatus: BufferStatus,
@@ -1235,13 +1237,15 @@ proc updateHighlight*(highlight: var Highlight,
       isSearchHighlight)
 
 proc changeTheme*(status: var EditorStatus) =
-  if status.settings.editorColorTheme == ColorTheme.vscode:
-    status.settings.editorColorTheme = loadVSCodeTheme()
+  discard
+  # TODO: Enable VSCode theme
+  #if status.settings.editorColorTheme == ColorTheme.vscode:
+  #  status.settings.editorColorTheme = loadVSCodeTheme()
 
-  setCursesColor(ColorThemeTable[status.settings.editorColorTheme])
+  #setCursesColor(ColorThemeTable[status.settings.editorColorTheme])
 
-  if checkColorSupportedTerminal() == 8:
-    convertToConsoleEnvironmentColor(status.settings.editorColorTheme)
+  #if checkColorSupportedTerminal() == 8:
+  #  convertToConsoleEnvironmentColor(status.settings.editorColorTheme)
 
 proc autoSave(status: var Editorstatus) =
   let interval = status.settings.autoSaveInterval.minutes
