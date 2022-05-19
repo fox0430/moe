@@ -145,8 +145,7 @@ iterator parseReservedWord(
     yield (buffer[pos ..< last], reservedWord.color)
     buffer = buffer[last ..^ 1]
 
-proc getEditorColorPairInNim(kind: TokenClass ): EditorColorPair =
-
+proc getEditorColorPairInNim(kind: TokenClass): EditorColorPair =
   case kind:
     of gtKeyword: EditorColorPair.keyword
     of gtBoolean: EditorColorPair.boolean

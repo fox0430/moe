@@ -22,6 +22,17 @@ proc toColorCode*(str: string): Option[ColorCode] =
   else:
     assert(false)
 
+# TODO: Remove?
+#proc toString(colorCode: ColorCode): string =
+#  result = newString(6)
+#  for i in 0 ..< 6:
+#    result[i] = colorCode[i]
+
+proc toRGBInt*(colorCode: ColorCode): tuple[r, g, b: int] =
+  result.r = fromHex[int]($colorCode[0..1])
+  result.g = fromHex[int]($colorCode[2..3])
+  result.b = fromHex[int]($colorCode[4..5])
+
 proc initColorPair*(fgColorStr, bgColorStr: string): ColorPair {.inline.} =
   result = (
     fg: toColorCode(fgColorStr),
@@ -482,85 +493,86 @@ type EditorColorCode* = object
   # highlight curent line background
   currentLineBg*: Option[ColorCode]
 
-type EditorColorPair* = enum
-  lineNum = 1
-  currentLineNum = 2
-  # status line
-  statusLineNormalMode = 3
-  statusLineModeNormalMode = 4
-  statusLineNormalModeInactive = 5
-  statusLineInsertMode = 6
-  statusLineModeInsertMode = 7
-  statusLineInsertModeInactive = 8
-  statusLineVisualMode = 9
-  statusLineModeVisualMode = 10
-  statusLineVisualModeInactive = 11
-  statusLineReplaceMode = 12
-  statusLineModeReplaceMode = 13
-  statusLineReplaceModeInactive = 14
-  statusLineFilerMode = 15
-  statusLineModeFilerMode = 16
-  statusLineFilerModeInactive = 17
-  statusLineExMode = 18
-  statusLineModeExMode = 19
-  statusLineExModeInactive = 20
-  statusLineGitBranch = 21
-  # tab lnie
-  tab = 22
-  # tab line
-  currentTab = 23
-  # command bar
-  commandBar = 24
-  # error message
-  errorMessage = 25
-  # search result highlighting
-  searchResult = 26
-  # selected area in visual mode
-  visualMode = 27
+type
+  EditorColorPair* = object
+    lineNum*: ColorPair
+    currentLineNum*: ColorPair
+    # status line
+    statusLineNormalMode*: ColorPair
+    statusLineModeNormalMode*: ColorPair
+    statusLineNormalModeInactive*: ColorPair
+    statusLineInsertMode*: ColorPair
+    statusLineModeInsertMode*: ColorPair
+    statusLineInsertModeInactive*: ColorPair
+    statusLineVisualMode*: ColorPair
+    statusLineModeVisualMode*: ColorPair
+    statusLineVisualModeInactive*: ColorPair
+    statusLineReplaceMode*: ColorPair
+    statusLineModeReplaceMode*: ColorPair
+    statusLineReplaceModeInactive*: ColorPair
+    statusLineFilerMode*: ColorPair
+    statusLineModeFilerMode*: ColorPair
+    statusLineFilerModeInactive*: ColorPair
+    statusLineExMode*: ColorPair
+    statusLineModeExMode*: ColorPair
+    statusLineExModeInactive*: ColorPair
+    statusLineGitBranch*: ColorPair
+    # tab lnie
+    tab*: ColorPair
+    # tab line
+    currentTab*: ColorPair
+    # command bar
+    commandBar*: ColorPair
+    # error message
+    errorMessage*: ColorPair
+    # search result highlighting
+    searchResult*: ColorPair
+    # selected area in visual mode
+    visualMode*: ColorPair
 
-  # color scheme
-  defaultChar = 28
-  keyword = 29
-  functionName = 30
-  typeName = 31
-  boolean = 32
-  specialVar = 33
-  builtin = 34
-  stringLit = 35
-  decNumber = 36
-  comment = 37
-  longComment = 38
-  whitespace = 39
-  preprocessor = 40
-  pragma = 41
+    # color scheme
+    defaultChar*: ColorPair
+    keyword*: ColorPair
+    functionName*: ColorPair
+    typeName*: ColorPair
+    boolean*:  ColorPair
+    specialVar*: ColorPair
+    builtin*: ColorPair
+    stringLit*: ColorPair
+    decNumber*: ColorPair
+    comment*: ColorPair
+    longComment*: ColorPair
+    whitespace*: ColorPair
+    preprocessor*: ColorPair
+    pragma*: ColorPair
 
-  # filer mode
-  currentFile = 42
-  file = 43
-  dir = 44
-  pcLink = 45
-  # pop up window
-  popUpWindow = 46
-  popUpWinCurrentLine = 47
-  # replace text highlighting
-  replaceText = 48
-  # pair of paren highlighting
-  parenText = 49
-  # highlight other uses current word
-  currentWord = 50
-  # highlight full width space
-  highlightFullWidthSpace = 51
-  # highlight trailing spaces
-  highlightTrailingSpaces = 52
-  # highlight reserved words
-  reservedWord = 53
-  # highlight history manager
-  currentHistory = 54
-  # highlight diff
-  addedLine = 55
-  deletedLine = 56
-  # configuration mode
-  currentSetting = 57
+    # filer mode
+    currentFile*: ColorPair
+    file*: ColorPair
+    dir*: ColorPair
+    pcLink*: ColorPair
+    # pop up window
+    popUpWindow*: ColorPair
+    popUpWinCurrentLine*: ColorPair
+    # replace text highlighting
+    replaceText*: ColorPair
+    # pair of paren highlighting
+    parenText*: ColorPair
+    # highlight other uses current word
+    currentWord*: ColorPair
+    # highlight full width space
+    highlightFullWidthSpace*: ColorPair
+    # highlight trailing spaces
+    highlightTrailingSpaces*: ColorPair
+    # highlight reserved words
+    reservedWord*: ColorPair
+    # highlight history manager
+    currentHistory*: ColorPair
+    # highlight diff
+    addedLine*: ColorPair
+    deletedLine*: ColorPair
+    # configuration mode
+    currentSetting*: ColorPair
 
 var ColorThemeTable*: array[ColorTheme, EditorColorCode] = [
   config: EditorColorCode(
@@ -1264,6 +1276,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColorCode] = [
   ),
 ]
 
+proc setColorPair*(colorPair: var ColorPair, foreground, background: ColorCode) =
+  colorPair.fg = some(foreground)
+  colorPair.bg = some(background)
+
 #proc setColorPair*(colorPair: EditorColorPair | int,
 #                   character, background: ColorCode) {.inline.} =
 #
@@ -1554,6 +1570,268 @@ var ColorThemeTable*: array[ColorTheme, EditorColorCode] = [
 #  of EditorColorPair.visualMode:
 #    return (editorColor.visualMode, editorColor.visualModeBg)
 #
+#  of EditorColorPair.defaultChar:
+#    return (editorColor.defaultChar, editorColor.editorBg)
+#  of EditorColorPair.keyword:
+#    return (editorColor.gtKeyword, editorColor.editorBg)
+#  of EditorColorPair.functionName:
+#    return (editorColor.gtFunctionName, editorColor.editorBg)
+#  of EditorColorPair.typeName:
+#    return (editorColor.gtTypeName, editorColor.editorBg)
+#  of EditorColorPair.boolean:
+#    return (editorColor.gtBoolean, editorColor.editorBg)
+#  of EditorColorPair.specialVar:
+#    return (editorColor.gtSpecialVar, editorColor.editorBg)
+#  of EditorColorPair.builtin:
+#    return (editorColor.gtBuiltin, editorColor.editorBg)
+#  of EditorColorPair.stringLit:
+#    return (editorColor.gtStringLit, editorColor.editorBg)
+#  of EditorColorPair.decNumber:
+#    return (editorColor.gtDecNumber, editorColor.editorBg)
+#  of EditorColorPair.comment:
+#    return (editorColor.gtComment, editorColor.editorBg)
+#  of EditorColorPair.longComment:
+#    return (editorColor.gtLongComment, editorColor.editorBg)
+#  of EditorColorPair.whitespace:
+#    return (editorColor.gtWhitespace, editorColor.editorBg)
+#  of EditorColorPair.preprocessor:
+#    return (editorColor.gtPreprocessor, editorColor.editorBg)
+#  of EditorColorPair.pragma:
+#    return (editorColor.gtPragma, editorColor.editorBg)
+#
+#  of EditorColorPair.currentFile:
+#    return (editorColor.currentFile, editorColor.currentFileBg)
+#  of EditorColorPair.file:
+#    return (editorColor.file, editorColor.fileBg)
+#  of EditorColorPair.dir:
+#    return (editorColor.dir, editorColor.dirBg)
+#  of EditorColorPair.pcLink:
+#    return (editorColor.pcLink, editorColor.pcLinkBg)
+#  of EditorColorPair.popUpWindow:
+#    return (editorColor.popUpWindow, editorColor.popUpWindowBg)
+#  of EditorColorPair.popUpWinCurrentLine:
+#    return (editorColor.popUpWinCurrentLine, editorColor.popUpWinCurrentLineBg)
+#  of EditorColorPair.replaceText:
+#    return (editorColor.replaceText, editorColor.replaceTextBg)
+#  of EditorColorPair.highlightTrailingSpaces:
+#    return (editorColor.highlightTrailingSpaces,
+#            editorColor.highlightTrailingSpacesBg)
+#  of EditorColorPair.reservedWord:
+#    return (editorColor.reservedWord, editorColor.reservedWordBg)
+#  of EditorColorPair.addedLine:
+#    return (editorColor.addedLine, editorColor.addedLineBg)
+#  of EditorColorPair.deletedLine:
+#    return (editorColor.deletedLine, editorColor.deletedLineBg)
+#  of EditorColorPair.currentHistory:
+#    return (editorColor.currentHistory, editorColor.currentHistoryBg)
+#  of EditorColorPair.currentSetting:
+#    return (editorColor.currentSetting, editorColor.currentSettingBg)
+#  of EditorColorPair.parenText:
+#    return (editorColor.parenText, editorColor.parenTextBg)
+#  of EditorColorPair.currentWord:
+#    return (editorColor.currentWord, editorColor.currentWordBg)
+#  of EditorColorPair.highlightFullWidthSpace:
+#    return (editorColor.highlightFullWidthSpace, editorColor.highlightFullWidthSpaceBg)
+#
+#macro setColor*(theme: ColorTheme,
+#                editorColor: string,
+#                color: Color): untyped =
+#
+#    parseStmt(fmt"""
+#      ColorThemeTable[{repr(theme)}].{editorColor} = {repr(color)}
+#    """)
+#
+## Environment where only 8 colors can be used
+#proc convertToConsoleEnvironmentColor*(theme: ColorTheme) =
+#  proc isDefault(color: Color): bool {.inline.} = color == Color.default
+#
+#  proc isBlack(color: Color): bool =
+#    case color:
+#      of black, gray3, gray7, gray11, gray15, gray19, gray23, gray27, gray30,
+#         gray35, gray39, gray42, gray46, gray50, gray54, gray58, gray62, gray66,
+#         gray70, gray74, gray78: true
+#      else: false
+#
+#  # is maroon (red)
+#  proc isMaroon(color: Color): bool =
+#    case color:
+#      of maroon, red, darkRed_1, darkRed_2, red3_1, mediumVioletRed,
+#         indianRed_1, red3_2, indianRed_2, red1, orangeRed1, indianRed1_1,
+#         indianRed1_2, paleVioletRed1, deepPink4_1, deepPink4_2, deepPink4,
+#         magenta3: true
+#      else: false
+#
+#  proc isGreen(color: Color): bool =
+#    case color:
+#      of green, darkGreen, green4, springGreen4, green3_1, springGreen3_1,
+#         lightSeaGreen, green3_2, springGreen3_3, springGreen2_1, green1,
+#         springGreen2_2, springGreen1, mediumSpringGreen, darkSeaGreen4_1,
+#         darkSeaGreen4_2, paleGreen3_1, seaGreen3, seaGreen2, seaGreen1_1,
+#         seaGreen1_2, darkSeaGreen, darkOliveGreen3_1, paleGreen3_2,
+#         darkSeaGreen3_1, lightGreen_1, lightGreen_2, paleGreen1_1,
+#         darkOliveGreen3_2, darkSeaGreen3_2, darkSeaGreen2_1, greenYellow,
+#         darkOliveGreen2, paleGreen1_2, darkSeaGreen2_2, darkSeaGreen1_1,
+#         darkOliveGreen1_1, darkOliveGreen1_2, darkSeaGreen1_2,
+#         lime, orange4_1, chartreuse4, paleTurquoise4, chartreuse3_1,
+#         chartreuse3_2, chartreuse2_1, Wheat4, chartreuse2_2, chartreuse1,
+#         darkGoldenrod, lightSalmon3_1, rosyBrown, gold3_1, darkKhaki,
+#         navajoWhite3: true
+#      else: false
+#
+#  # is olive (yellow)
+#  proc isOlive(color: Color): bool =
+#    case color:
+#      of olive,
+#         yellow, yellow4_1, yellow4_2, yellow3_1, yellow3_2, lightYellow3,
+#         yellow2, yellow1, orange4_2, lightPink4, plum4, wheat4, darkOrange3_1,
+#         darkOrange3_2, orange3, lightSalmon3_2, gold3_2, lightGoldenrod3, tan,
+#         mistyRose3, khaki3, lightGoldenrod2, darkOrange, salmon1, orange1,
+#         sandyBrown, lightSalmon1, gold1, lightGoldenrod2_1, lightGoldenrod2_2,
+#         navajoWhite1, lightGoldenrod1, khaki1, wheat1, cornsilk1: true
+#      else: false
+#
+#  # is navy (blue)
+#  proc isNavy(color: Color): bool =
+#    case color:
+#      of navy,
+#         blue, navyBlue, darkBlue, blue3_1, blue3_2, blue1, deepSkyBlue4_1,
+#         deepSkyBlue4_2, deepSkyBlue4_3, dodgerBlue3_1, dodgerBlue3_2,
+#         deepSkyBlue3_1, deepSkyBlue3_2, dodgerBlue1, deepSkyBlue2,
+#         deepSkyBlue1, blueViolet, slateBlue3_1, slateBlue3_2, royalBlue1,
+#         steelBlue, steelBlue3, cornflowerBlue, cadetBlue_1, cadetBlue_2,
+#         skyBlue3, steelBlue1_1, steelBlue1_2, slateBlue1, lightSlateBlue,
+#         lightSkyBlue3_1, lightSkyBlue3_2, skyBlue2, skyBlue1,
+#         lightSteelBlue3, lightSteelBlue, lightSkyBlue1, lightSteelBlue1,
+#         aqua, darkTurquoise, turquoise2, aquamarine1_1: true
+#      else: false
+#
+#  proc isPurple(color: Color): bool =
+#    case color:
+#      of purple_1,
+#         purple4_1, purple4_2, purple3, mediumPurple4, purple_2,
+#         mediumPurple3_1, mediumPurple3_2, mediumPurple, purple,
+#         mediumPurple2_1, mediumPurple2_2, mediumPurple1, fuchsia,
+#         darkMagenta_1, darkMagenta_2, darkViolet_1, darkViolet_2, hotPink3_1,
+#         mediumOrchid3, mediumOrchid, deepPink3_1, deepPink3_2, magenta3_1,
+#         magenta3_2, magenta2_1, hotPink3_2, hotPink2, orchid, mediumOrchid1_1,
+#         lightPink3, pink3, plum3, violet, thistle3, plum2, deepPink2,
+#         deepPink1_1, deepPink1_2, magenta2_2, magenta1, hotPink1_1,
+#         hotPink1_2, mediumOrchid1_2, lightCoral, orchid2, orchid1, lightPink1,
+#         pink1, plum1, mistyRose1, thistle1: true
+#      else: false
+#
+#  # is teal (cyan)
+#  proc isTeal(color: Color): bool =
+#    case color:
+#      of teal, darkCyan, cyan3, cyan2, cyan1, lightCyan3, lightCyan1,
+#         turquoise4, turquoise2, aquamarine3, mediumTurquoise, aquamarine1_2,
+#         paleTurquoise1, honeydew2: true
+#      else: false
+#
+#  for name, color in ColorThemeTable[theme].fieldPairs:
+#    if isDefault(color):
+#      setColor(theme, name, Color.default)
+#    elif isBlack(color):
+#      setColor(theme, name, Color.black)
+#    elif isMaroon(color):
+#      setColor(theme, name, Color.maroon)
+#    elif isGreen(color):
+#      setColor(theme, name, Color.green)
+#    elif isOlive(color):
+#      setColor(theme, name, Color.olive)
+#    elif isNavy(color):
+#      setColor(theme, name, Color.navy)
+#    elif isPurple(color):
+#      setColor(theme, name, Color.purple_1)
+#    elif isTeal(color):
+#      setColor(theme, name, Color.teal)
+#    else:
+#      # is silver (white)
+#      setColor(theme, name, Color.silver)
+#
+#    setCursesColor(ColorThemeTable[theme])
+
+
+#proc getColorFromEditorColorPair*(theme: ColorTheme,
+#                                  pair: EditorColorPair): (Color, Color) =
+#
+#  let editorColor = ColorThemeTable[theme]
+#
+#  case pair
+#  of EditorColorPair.lineNum:
+#    return (editorColor.lineNum, editorColor.lineNumBg)
+#  of EditorColorPair.currentLineNum:
+#    return (editorColor.currentLineNum, editorColor.currentLineNumBg)
+#  of EditorColorPair.statusLineNormalMode:
+#    return (editorColor.statusLineNormalMode,
+#            editorColor.statusLineNormalModeBg)
+#  of EditorColorPair.statusLineModeNormalMode:
+#    return (editorColor.statusLineModeNormalMode,
+#            editorColor.statusLineModeNormalModeBg)
+#  of EditorColorPair.statusLineNormalModeInactive:
+#    return (editorColor.statusLineNormalModeInactive,
+#            editorColor.statusLineNormalModeInactiveBg)
+#  of EditorColorPair.statusLineInsertMode:
+#    return (editorColor.statusLineInsertMode,
+#            editorColor.statusLineInsertModeBg)
+#  of EditorColorPair.statusLineModeInsertMode:
+#    return (editorColor.statusLineModeInsertMode,
+#            editorColor.statusLineModeInsertModeBg)
+#  of EditorColorPair.statusLineInsertModeInactive:
+#    return (editorColor.statusLineInsertModeInactive,
+#            editorColor.statusLineInsertModeInactiveBg)
+#  of EditorColorPair.statusLineVisualMode:
+#    return (editorColor.statusLineVisualMode,
+#            editorColor.statusLineVisualModeBg)
+#  of EditorColorPair.statusLineModeVisualMode:
+#    return (editorColor.statusLineModeVisualMode,
+#            editorColor.statusLineModeVisualModeBg)
+#  of EditorColorPair.statusLineVisualModeInactive:
+#    return (editorColor.statusLineVisualModeInactive,
+#            editorColor.statusLineVisualModeInactiveBg)
+#  of EditorColorPair.statusLineReplaceMode:
+#    return (editorColor.statusLineReplaceMode,
+#            editorColor.statusLineReplaceModeBg)
+#  of EditorColorPair.statusLineModeReplaceMode:
+#    return (editorColor.statusLineModeReplaceMode,
+#            editorColor.statusLineModeReplaceModeBg)
+#  of EditorColorPair.statusLineReplaceModeInactive:
+#    return (editorColor.statusLineReplaceModeInactive,
+#            editorColor.statusLineReplaceModeInactiveBg)
+#  of EditorColorPair.statusLineExMode:
+#    return (editorColor.statusLineExMode, editorColor.statusLineExModeBg)
+#  of EditorColorPair.statusLineModeExMode:
+#    return (editorColor.statusLineModeExMode,
+#            editorColor.statusLineModeExModeBg)
+#  of EditorColorPair.statusLineExModeInactive:
+#    return (editorColor.statusLineExModeInactive,
+#            editorColor.statusLineExModeInactiveBg)
+#  of EditorColorPair.statusLineFilerMode:
+#    return (editorColor.statusLineFilerMode, editorColor.statusLineFilerModeBg)
+#  of EditorColorPair.statusLineModeFilerMode:
+#    return (editorColor.statusLineModeFilerMode,
+#            editorColor.statusLineModeFilerModeBg)
+#  of EditorColorPair.statusLineFilerModeInactive:
+#    return (editorColor.statusLineFilerModeInactive,
+#            editorColor.statusLineFilerModeInactiveBg)
+#  of EditorColorPair.statusLineGitBranch:
+#    return (editorColor.statusLineGitBranch, editorColor.statusLineGitBranchBg)
+#  of EditorColorPair.tab:
+#    return (editorColor.tab, editorColor.tabBg)
+#  of EditorColorPair.currentTab:
+#    return (editorColor.currentTab, editorColor.currentTabBg)
+#  of EditorColorPair.commandBar:
+#    return (editorColor.commandBar, editorColor.commandBarBg)
+#  of EditorColorPair.errorMessage:
+#    return (editorColor.errorMessage, editorColor.errorMessageBg)
+#  of EditorColorPair.searchResult:
+#    return (editorColor.searchResult, editorColor.searchResultBg)
+#  of EditorColorPair.visualMode:
+#    return (editorColor.visualMode, editorColor.visualModeBg)
+#
+#proc setColorPair*(colorPair: var ColorPair, foreground, background: Color) =
+#  colorPair.fg = foreground
+#  colorPair.bg = background
 #  of EditorColorPair.defaultChar:
 #    return (editorColor.defaultChar, editorColor.editorBg)
 #  of EditorColorPair.keyword:
