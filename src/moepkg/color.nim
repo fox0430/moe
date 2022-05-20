@@ -5,7 +5,9 @@ type
   ColorCode* = array[6, char]
 
   # None is the terminal default color
-  ColorPair* = tuple[fg, bg: Option[ColorCode]]
+  ColorPair* = object
+    fg*: Option[ColorCode]
+    bg*: Option[ColorCode]
 
 proc hexStrToIntStr(hexStr: string): string =
   result = $(fromHex[int](hexStr))
@@ -34,9 +36,8 @@ proc toRGBInt*(colorCode: ColorCode): tuple[r, g, b: int] =
   result.b = fromHex[int]($colorCode[4..5])
 
 proc initColorPair*(fgColorStr, bgColorStr: string): ColorPair {.inline.} =
-  result = (
-    fg: toColorCode(fgColorStr),
-    bg: toColorCode(bgColorStr))
+  result.fg = toColorCode(fgColorStr)
+  result.bg = toColorCode(bgColorStr)
 
 type Color* = enum
   default             = -1
@@ -495,6 +496,7 @@ type EditorColorCode* = object
 
 type
   EditorColorPair* = object
+    default*: ColorPair
     lineNum*: ColorPair
     currentLineNum*: ColorPair
     # status line
@@ -573,706 +575,473 @@ type
     deletedLine*: ColorPair
     # configuration mode
     currentSetting*: ColorPair
+    # Highlight current line background
+    currentLine*: ColorPair
 
-var ColorThemeTable*: array[ColorTheme, EditorColorCode] = [
-  config: EditorColorCode(
-    # TODO: Fix color code. (default)
-    editorBg: toColorCode("000000"),
-    lineNum: toColorCode("8a8a8a"),
-    # TODO: Fix color code. (default)
-    lineNumBg: toColorCode("000000"),
-    currentLineNum: toColorCode("008080"),
-    # TODO: Fix color code. (default)
-    currentLineNumBg: toColorCode("000000"),
-    # statsu bar
-    statusLineNormalMode: toColorCode("ffffff"),
-    statusLineNormalModeBg: toColorCode("0000ff"),
-    statusLineModeNormalMode: toColorCode("000000"),
-    statusLineModeNormalModeBg: toColorCode("ffffff"),
-    statusLineNormalModeInactive: toColorCode("0000ff"),
-    statusLineNormalModeInactiveBg: toColorCode("ffffff"),
+var ColorThemeTable*: array[ColorTheme, EditorColorPair] = [
+  config: EditorColorPair(
+    default: ColorPair(fg: none(ColorCode),  bg: none(ColorCode)),
 
-    statusLineInsertMode: toColorCode("ffffff"),
-    statusLineInsertModeBg: toColorCode("0000ff"),
-    statusLineModeInsertMode: toColorCode("000000"),
-    statusLineModeInsertModeBg: toColorCode("ffffff"),
-    statusLineInsertModeInactive: toColorCode("0000ff"),
-    statusLineInsertModeInactiveBg: toColorCode("ffffff"),
+    # Line number
+    lineNum: ColorPair(fg: toColorCode("8a8a8a"), bg: none(ColorCode)),
+    currentLineNum: ColorPair(fg: toColorCode("008080"), bg: none(ColorCode)),
 
-    statusLineVisualMode: toColorCode("ffffff"),
-    statusLineVisualModeBg: toColorCode("0000ff"),
-    statusLineModeVisualMode: toColorCode("000000"),
-    statusLineModeVisualModeBg: toColorCode("ffffff"),
-    statusLineVisualModeInactive: toColorCode("0000ff"),
-    statusLineVisualModeInactiveBg: toColorCode("ffffff"),
+    # Status line
+    statusLineNormalMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
+    statusLineModeNormalMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineNormalModeInactive: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("ffffff")),
 
-    statusLineReplaceMode: toColorCode("ffffff"),
-    statusLineReplaceModeBg: toColorCode("0000ff"),
-    statusLineModeReplaceMode: toColorCode("000000"),
-    statusLineModeReplaceModeBg: toColorCode("ffffff"),
-    statusLineReplaceModeInactive: toColorCode("0000ff"),
-    statusLineReplaceModeInactiveBg: toColorCode("ffffff"),
+    statusLineInsertMode: ColorPair(fg: toColorCode("ffffff"), bg:toColorCode("0000ff")),
+    statusLineModeInsertMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineInsertModeInactive: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("ffffff")),
 
-    statusLineFilerMode: toColorCode("ffffff"),
-    statusLineFilerModeBg: toColorCode("0000ff"),
-    statusLineModeFilerMode: toColorCode("000000"),
-    statusLineModeFilerModeBg: toColorCode("ffffff"),
-    statusLineFilerModeInactive: toColorCode("0000ff"),
-    statusLineFilerModeInactiveBg: toColorCode("ffffff"),
+    statusLineVisualMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
+    statusLineModeVisualMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineVisualModeInactive: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("ffffff")),
 
-    statusLineExMode: toColorCode("ffffff"),
-    statusLineExModeBg: toColorCode("0000ff"),
-    statusLineModeExMode: toColorCode("000000"),
-    statusLineModeExModeBg: toColorCode("ffffff"),
-    statusLineExModeInactive: toColorCode("0000ff"),
-    statusLineExModeInactiveBg: toColorCode("ffffff"),
+    statusLineReplaceMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
+    statusLineModeReplaceMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineReplaceModeInactive: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("ffffff")),
 
-    statusLineGitBranch: toColorCode("ffffff"),
-    statusLineGitBranchBg: toColorCode("0000ff"),
+    statusLineFilerMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
+    statusLineModeFilerMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineFilerModeInactive: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("ffffff")),
+
+    statusLineExMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
+    statusLineModeExMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineExModeInactive: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("ffffff")),
+
+    statusLineGitBranch: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
     # tab line
-    tab: toColorCode("ffffff"),
-    # TODO: Fix color code. (default)
-    tabBg: toColorCode("000000"),
-    currentTab: toColorCode("ffffff"),
-    currentTabBg: toColorCode("0000ff"),
+    tab: ColorPair(fg: toColorCode("ffffff"), bg: none(ColorCode)),
+    currentTab: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
     # command  bar
-    commandBar: toColorCode("ffffff"),
-    # TODO: Fix color code. (default)
-    commandBarBg: toColorCode("000000"),
+    commandBar: ColorPair(fg: toColorCode("ffffff"), bg: none(ColorCode)),
     # error message
-    errorMessage: toColorCode("ff0000"),
-    # TODO: Fix color code. (default)
-    errorMessageBg: toColorCode("000000"),
+    errorMessage: ColorPair(fg: toColorCode("ff0000"), bg: none(ColorCode)),
     # search result highlighting
-    # TODO: Fix color code. (default)
-    searchResult: toColorCode("ffffff"),
-    searchResultBg: toColorCode("ff0000"),
+    searchResult: ColorPair(fg: none(ColorCode), bg: toColorCode("ff0000")),
     # selected area in visual mode
-    visualMode: toColorCode("ffffff"),
-    visualModeBg: toColorCode("800080"),
+    visualMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("800080")),
 
     # color scheme
-    defaultChar: toColorCode("ffffff"),
-    gtKeyword: toColorCode("87d7ff"),
-    gtFunctionName: toColorCode("ffd700"),
-    gtTypeName: toColorCode("008000"),
-    gtBoolean: toColorCode("ffff00"),
-    gtStringLit: toColorCode("ffff00"),
-    gtSpecialVar: toColorCode("008000"),
-    gtBuiltin: toColorCode("ffff00"),
-    gtDecNumber: toColorCode("00ffff"),
-    gtComment: toColorCode("808080"),
-    gtLongComment: toColorCode("808080"),
-    gtWhitespace: toColorCode("808080"),
-    gtPreprocessor: toColorCode("008000"),
-    gtPragma: toColorCode("ffff00"),
+    defaultChar: ColorPair(fg: toColorCode("ffffff"), bg: none(ColorCode)),
+    keyword: ColorPair(fg: toColorCode("87d7ff"), bg: none(ColorCode)),
+    functionName: ColorPair(fg: toColorCode("ffd700"), bg: none(ColorCode)),
+    typeName: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+    boolean: ColorPair(fg: toColorCode("ffff00"), bg: none(ColorCode)),
+    stringLit: ColorPair(fg: toColorCode("ffff00"), bg: none(ColorCode)),
+    specialVar: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+    builtin: ColorPair(fg: toColorCode("ffff00"), bg: none(ColorCode)),
+    decNumber: ColorPair(fg: toColorCode("00ffff"), bg: none(ColorCode)),
+    comment: ColorPair(fg: toColorCode("808080"), bg: none(ColorCode)),
+    longComment: ColorPair(fg: toColorCode("808080"), bg: none(ColorCode)),
+    whitespace: ColorPair(fg: toColorCode("808080"), bg: none(ColorCode)),
+    preprocessor: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+    pragma: ColorPair(fg: toColorCode("ffff00"), bg: none(ColorCode)),
 
     # filer mode
-    currentFile: toColorCode("ffffff"),
-    currentFileBg: toColorCode("008080"),
-    file: toColorCode("ffffff"),
-    # TODO: Fix color code. (default)
-    fileBg: toColorCode("000000"),
-    dir: toColorCode("0000ff"),
-    # TODO: Fix color code. (default)
-    dirBg: toColorCode("000000"),
-    pcLink: toColorCode("008080"),
-    pcLinkBg:toColorCode("000000") ,
+    currentFile: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("008080")),
+    file: ColorPair(fg: toColorCode("ffffff"), bg: none(ColorCode)),
+    dir: ColorPair(fg: toColorCode("0000ff"), bg: none(ColorCode)),
+    pcLink: ColorPair(fg: toColorCode("008080"), bg: toColorCode("000000")),
     # pop up window
-    popUpWindow: toColorCode("ffffff"),
-    popUpWindowBg: toColorCode("000000"),
-    popUpWinCurrentLine: toColorCode("0000ff"),
-    popUpWinCurrentLineBg: toColorCode("000000"),
+    popUpWindow: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("000000")),
+    popUpWinCurrentLine: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("000000")),
     # replace text highlighting
     # TODO: Fix color code. (default)
-    replaceText: toColorCode("ffffff"),
-    replaceTextBg: toColorCode("ff0000"),
+    replaceText: ColorPair(fg: none(ColorCode), bg: toColorCode("ff0000")),
     # pair of paren highlighting
     # TODO: Fix color code. (default)
-    parenText: toColorCode("ffffff"),
-    parenTextBg: toColorCode("0000ff"),
+    parenText: ColorPair(fg: none(ColorCode), bg: toColorCode("0000ff")),
     # highlight other uses current word
-    # TODO: Fix color code. (default)
-    currentWord: toColorCode("ffffff"),
-    currentWordBg: toColorCode("808080"),
+    currentWord: ColorPair(fg: none(ColorCode), bg: toColorCode("808080")),
     # highlight full width space
-    highlightFullWidthSpace: toColorCode("ff0000"),
-    highlightFullWidthSpaceBg: toColorCode("ff0000"),
+    highlightFullWidthSpace: ColorPair(fg: toColorCode("ff0000"), bg: toColorCode("ff0000")),
     # highlight trailing spaces
-    highlightTrailingSpaces: toColorCode("ff0000"),
-    highlightTrailingSpacesBg: toColorCode("ff0000"),
+    highlightTrailingSpaces: ColorPair(fg: toColorCode("ff0000"), bg: toColorCode("ff0000")),
     # highlight reserved words
-    reservedWord: toColorCode("ffffff"),
-    reservedWordBg: toColorCode("808080"),
+    reservedWord: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("808080")),
     # highlight history manager
-    currentHistory: toColorCode("ffffff"),
-    currentHistoryBg: toColorCode("008080"),
+    currentHistory: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("008080")),
     # highlight diff
-    addedLine: toColorCode("008000"),
-    # TODO: Fix color code. (default)
-    addedLineBg: toColorCode("000000"),
-    deletedLine: toColorCode("ff0000"),
-    # TODO: Fix color code. (default)
-    deletedLineBg: toColorCode("000000"),
+    addedLine: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+    deletedLine: ColorPair(fg: toColorCode("ff0000"), bg: none(ColorCode)),
     # configuration mode
-    currentSetting: toColorCode("ffffff"),
-    currentSettingBg: toColorCode("008080"),
+    currentSetting: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("008080")),
     # Highlight current line background
-    currentLineBg: toColorCode("444444")
+    currentLine: ColorPair(fg: none(ColorCode), bg: toColorCode("444444"))
   ),
-  vscode: EditorColorCode(
-    # TODO: Fix color code. (default)
-    editorBg: toColorCode("000000"),
-    lineNum: toColorCode("8a8a8a"),
-    # TODO: Fix color code. (default)
-    lineNumBg: toColorCode("000000"),
-    currentLineNum: toColorCode("008080"),
-    # TODO: Fix color code. (default)
-    currentLineNumBg: toColorCode("000000"),
-    # statsu line
-    statusLineNormalMode: toColorCode("ffffff"),
-    statusLineNormalModeBg: toColorCode("0000ff"),
-    statusLineModeNormalMode: toColorCode("000000"),
-    statusLineModeNormalModeBg: toColorCode("ffffff"),
-    statusLineNormalModeInactive: toColorCode("0000ff"),
-    statusLineNormalModeInactiveBg: toColorCode("ffffff"),
+  vscode: EditorColorPair(
+    default: ColorPair(fg: none(ColorCode), bg: none(ColorCode)),
 
-    statusLineInsertMode: toColorCode("ffffff"),
-    statusLineInsertModeBg: toColorCode("0000ff"),
-    statusLineModeInsertMode: toColorCode("000000"),
-    statusLineModeInsertModeBg: toColorCode("ffffff"),
-    statusLineInsertModeInactive: toColorCode("0000ff"),
-    statusLineInsertModeInactiveBg: toColorCode("ffffff"),
+    # Line number
+    lineNum: ColorPair(fg: toColorCode("8a8a8a"), bg: none(ColorCode)),
+    currentLineNum: ColorPair(fg: toColorCode("008080"), bg: none(ColorCode)),
 
-    statusLineVisualMode: toColorCode("ffffff"),
-    statusLineVisualModeBg: toColorCode("0000ff"),
-    statusLineModeVisualMode: toColorCode("000000"),
-    statusLineModeVisualModeBg: toColorCode("ffffff"),
-    statusLineVisualModeInactive: toColorCode("0000ff"),
-    statusLineVisualModeInactiveBg: toColorCode("ffffff"),
+    # Status line
+    statusLineNormalMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
+    statusLineModeNormalMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineNormalModeInactive: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("ffffff")),
 
-    statusLineReplaceMode: toColorCode("ffffff"),
-    statusLineReplaceModeBg: toColorCode("0000ff"),
-    statusLineModeReplaceMode: toColorCode("000000"),
-    statusLineModeReplaceModeBg: toColorCode("ffffff"),
-    statusLineReplaceModeInactive: toColorCode("0000ff"),
-    statusLineReplaceModeInactiveBg: toColorCode("ffffff"),
+    statusLineInsertMode: ColorPair(fg: toColorCode("ffffff"), bg:toColorCode("0000ff")),
+    statusLineModeInsertMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineInsertModeInactive: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("ffffff")),
 
-    statusLineFilerMode: toColorCode("ffffff"),
-    statusLineFilerModeBg: toColorCode("0000ff"),
-    statusLineModeFilerMode: toColorCode("000000"),
-    statusLineModeFilerModeBg: toColorCode("ffffff"),
-    statusLineFilerModeInactive: toColorCode("0000ff"),
-    statusLineFilerModeInactiveBg: toColorCode("ffffff"),
+    statusLineVisualMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
+    statusLineModeVisualMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineVisualModeInactive: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("ffffff")),
 
-    statusLineExMode: toColorCode("ffffff"),
-    statusLineExModeBg: toColorCode("0000ff"),
-    statusLineModeExMode: toColorCode("000000"),
-    statusLineModeExModeBg: toColorCode("ffffff"),
-    statusLineExModeInactive: toColorCode("0000ff"),
-    statusLineExModeInactiveBg: toColorCode("ffffff"),
+    statusLineReplaceMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
+    statusLineModeReplaceMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineReplaceModeInactive: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("ffffff")),
 
-    statusLineGitBranch: toColorCode("ffffff"),
-    statusLineGitBranchBg: toColorCode("0000ff"),
+    statusLineFilerMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
+    statusLineModeFilerMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineFilerModeInactive: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("ffffff")),
+
+    statusLineExMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
+    statusLineModeExMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineExModeInactive: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("ffffff")),
+
+    statusLineGitBranch: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
     # tab line
-    tab: toColorCode("ffffff"),
-    # TODO: Fix color code. (default)
-    tabBg: toColorCode("000000"),
-    currentTab: toColorCode("ffffff"),
-    currentTabBg: toColorCode("0000ff"),
+    tab: ColorPair(fg: toColorCode("ffffff"), bg: none(ColorCode)),
+    currentTab: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
     # command  bar
-    commandBar: toColorCode("ffffff"),
-    # TODO: Fix color code. (default)
-    commandBarBg: toColorCode("000000"),
+    commandBar: ColorPair(fg: toColorCode("ffffff"), bg: none(ColorCode)),
     # error message
-    errorMessage: toColorCode("ff0000"),
-    # TODO: Fix color code. (default)
-    errorMessageBg: toColorCode("000000"),
+    errorMessage: ColorPair(fg: toColorCode("ff0000"), bg: none(ColorCode)),
     # search result highlighting
-    # TODO: Fix color code. (default)
-    searchResult: toColorCode("ffffff"),
-    searchResultBg: toColorCode("ff0000"),
+    searchResult: ColorPair(fg: none(ColorCode), bg: toColorCode("ff0000")),
     # selected area in visual mode
-    visualMode: toColorCode("ffffff"),
-    visualModeBg: toColorCode("800080"),
+    visualMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("800080")),
 
     # color scheme
-    defaultChar: toColorCode("ffffff"),
-    gtKeyword: toColorCode("87d7ff"),
-    gtFunctionName: toColorCode("ffd700"),
-    gtTypeName: toColorCode("008000"),
-    gtBoolean: toColorCode("ffff00"),
-    gtStringLit: toColorCode("ffff00"),
-    gtSpecialVar: toColorCode("008000"),
-    gtBuiltin: toColorCode("ffff00"),
-    gtDecNumber: toColorCode("00ffff"),
-    gtComment: toColorCode("808080"),
-    gtLongComment: toColorCode("808080"),
-    gtWhitespace: toColorCode("808080"),
-    gtPreprocessor: toColorCode("008000"),
-    gtPragma: toColorCode("ffff00"),
+    defaultChar: ColorPair(fg: toColorCode("ffffff"), bg: none(ColorCode)),
+    keyword: ColorPair(fg: toColorCode("87d7ff"), bg: none(ColorCode)),
+    functionName: ColorPair(fg: toColorCode("ffd700"), bg: none(ColorCode)),
+    typeName: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+    boolean: ColorPair(fg: toColorCode("ffff00"), bg: none(ColorCode)),
+    stringLit: ColorPair(fg: toColorCode("ffff00"), bg: none(ColorCode)),
+    specialVar: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+    builtin: ColorPair(fg: toColorCode("ffff00"), bg: none(ColorCode)),
+    decNumber: ColorPair(fg: toColorCode("00ffff"), bg: none(ColorCode)),
+    comment: ColorPair(fg: toColorCode("808080"), bg: none(ColorCode)),
+    longComment: ColorPair(fg: toColorCode("808080"), bg: none(ColorCode)),
+    whitespace: ColorPair(fg: toColorCode("808080"), bg: none(ColorCode)),
+    preprocessor: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+    pragma: ColorPair(fg: toColorCode("ffff00"), bg: none(ColorCode)),
 
     # filer mode
-    currentFile: toColorCode("ffffff"),
-    currentFileBg: toColorCode("008080"),
-    file: toColorCode("ffffff"),
-    # TODO: Fix color code. (default)
-    fileBg: toColorCode("000000"),
-    dir: toColorCode("0000ff"),
-    # TODO: Fix color code. (default)
-    dirBg: toColorCode("000000"),
-    pcLink: toColorCode("008080"),
-    # TODO: Fix color code. (default)
-    pcLinkBg: toColorCode("000000"),
+    currentFile: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("008080")),
+    file: ColorPair(fg: toColorCode("ffffff"), bg: none(ColorCode)),
+    dir: ColorPair(fg: toColorCode("0000ff"), bg: none(ColorCode)),
+    pcLink: ColorPair(fg: toColorCode("008080"), bg: toColorCode("000000")),
     # pop up window
-    popUpWindow: toColorCode("ffffff"),
-    popUpWindowBg: toColorCode("000000"),
-    popUpWinCurrentLine: toColorCode("0000ff"),
-    popUpWinCurrentLineBg: toColorCode("000000"),
+    popUpWindow: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("000000")),
+    popUpWinCurrentLine: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("000000")),
     # replace text highlighting
     # TODO: Fix color code. (default)
-    replaceText: toColorCode("ffffff"),
-    replaceTextBg: toColorCode("ff0000"),
+    replaceText: ColorPair(fg: none(ColorCode), bg: toColorCode("ff0000")),
     # pair of paren highlighting
     # TODO: Fix color code. (default)
-    parenText: toColorCode("ffffff"),
-    parenTextBg: toColorCode("0000ff"),
+    parenText: ColorPair(fg: none(ColorCode), bg: toColorCode("0000ff")),
     # highlight other uses current word
-    # TODO: Fix color code. (default)
-    currentWord: toColorCode("ffffff"),
-    currentWordBg: toColorCode("808080"),
+    currentWord: ColorPair(fg: none(ColorCode), bg: toColorCode("808080")),
     # highlight full width space
-    highlightFullWidthSpace: toColorCode("ff0000"),
-    highlightFullWidthSpaceBg: toColorCode("ff0000"),
+    highlightFullWidthSpace: ColorPair(fg: toColorCode("ff0000"), bg: toColorCode("ff0000")),
     # highlight trailing spaces
-    highlightTrailingSpaces: toColorCode("ff0000"),
-    highlightTrailingSpacesBg: toColorCode("ff0000"),
+    highlightTrailingSpaces: ColorPair(fg: toColorCode("ff0000"), bg: toColorCode("ff0000")),
     # highlight reserved words
-    reservedWord: toColorCode("ffffff"),
-    reservedWordBg: toColorCode("808080"),
+    reservedWord: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("808080")),
     # highlight history manager
-    currentHistory: toColorCode("ffffff"),
-    currentHistoryBg: toColorCode("008080"),
+    currentHistory: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("008080")),
     # highlight diff
-    addedLine: toColorCode("008000"),
-    # TODO: Fix color code. (default)
-    addedLineBg: toColorCode("000000"),
-    deletedLine: toColorCode("ff0000"),
-    # TODO: Fix color code. (default)
-    deletedLineBg: toColorCode("000000"),
+    addedLine: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+    deletedLine: ColorPair(fg: toColorCode("ff0000"), bg: none(ColorCode)),
     # configuration mode
-    currentSetting: toColorCode("ffffff"),
-    currentSettingBg: toColorCode("008080"),
+    currentSetting: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("008080")),
     # Highlight current line background
-    currentLineBg: toColorCode("444444")
+    currentLine: ColorPair(fg: none(ColorCode), bg: toColorCode("444444"))
   ),
-  dark: EditorColorCode(
-    # TODO: Fix color code. (default)
-    editorBg: toColorCode("000000"),
-    lineNum: toColorCode("8a8a8a"),
-    # TODO: Fix color code. (default)
-    lineNumBg: toColorCode("000000"),
-    currentLineNum: toColorCode("008080"),
-    # TODO: Fix color code. (default)
-    currentLineNumBg: toColorCode("000000"),
-    # statsu line
-    statusLineNormalMode: toColorCode("ffffff"),
-    statusLineNormalModeBg: toColorCode("0000ff"),
-    statusLineModeNormalMode: toColorCode("000000"),
-    statusLineModeNormalModeBg: toColorCode("ffffff"),
-    statusLineNormalModeInactive: toColorCode("0000ff"),
-    statusLineNormalModeInactiveBg: toColorCode("ffffff"),
+  dark: EditorColorPair(
+    default: ColorPair(fg: none(ColorCode),  bg: none(ColorCode)),
 
-    statusLineInsertMode: toColorCode("ffffff"),
-    statusLineInsertModeBg: toColorCode("0000ff"),
-    statusLineModeInsertMode: toColorCode("000000"),
-    statusLineModeInsertModeBg: toColorCode("ffffff"),
-    statusLineInsertModeInactive: toColorCode("0000ff"),
-    statusLineInsertModeInactiveBg: toColorCode("ffffff"),
+    # Line number
+    lineNum: ColorPair(fg: toColorCode("8a8a8a"), bg: none(ColorCode)),
+    currentLineNum: ColorPair(fg: toColorCode("008080"), bg: none(ColorCode)),
 
-    statusLineVisualMode: toColorCode("ffffff"),
-    statusLineVisualModeBg: toColorCode("0000ff"),
-    statusLineModeVisualMode: toColorCode("000000"),
-    statusLineModeVisualModeBg: toColorCode("ffffff"),
-    statusLineVisualModeInactive: toColorCode("0000ff"),
-    statusLineVisualModeInactiveBg: toColorCode("ffffff"),
+    # Status line
+    statusLineNormalMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
+    statusLineModeNormalMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineNormalModeInactive: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("ffffff")),
 
-    statusLineReplaceMode: toColorCode("ffffff"),
-    statusLineReplaceModeBg: toColorCode("0000ff"),
-    statusLineModeReplaceMode: toColorCode("000000"),
-    statusLineModeReplaceModeBg: toColorCode("ffffff"),
-    statusLineReplaceModeInactive: toColorCode("0000ff"),
-    statusLineReplaceModeInactiveBg: toColorCode("ffffff"),
+    statusLineInsertMode: ColorPair(fg: toColorCode("ffffff"), bg:toColorCode("0000ff")),
+    statusLineModeInsertMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineInsertModeInactive: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("ffffff")),
 
-    statusLineFilerMode: toColorCode("ffffff"),
-    statusLineFilerModeBg: toColorCode("0000ff"),
-    statusLineModeFilerMode: toColorCode("000000"),
-    statusLineModeFilerModeBg: toColorCode("ffffff"),
-    statusLineFilerModeInactive: toColorCode("0000ff"),
-    statusLineFilerModeInactiveBg: toColorCode("ffffff"),
+    statusLineVisualMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
+    statusLineModeVisualMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineVisualModeInactive: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("ffffff")),
 
-    statusLineExMode: toColorCode("ffffff"),
-    statusLineExModeBg: toColorCode("0000ff"),
-    statusLineModeExMode: toColorCode("000000"),
-    statusLineModeExModeBg: toColorCode("ffffff"),
-    statusLineExModeInactive: toColorCode("0000ff"),
-    statusLineExModeInactiveBg: toColorCode("ffffff"),
+    statusLineReplaceMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
+    statusLineModeReplaceMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineReplaceModeInactive: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("ffffff")),
 
-    statusLineGitBranch: toColorCode("ffffff"),
-    statusLineGitBranchBg: toColorCode("0000ff"),
+    statusLineFilerMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
+    statusLineModeFilerMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineFilerModeInactive: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("ffffff")),
+
+    statusLineExMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
+    statusLineModeExMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineExModeInactive: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("ffffff")),
+
+    statusLineGitBranch: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
     # tab line
-    tab: toColorCode("ffffff"),
-    # TODO: Fix color code. (default)
-    tabBg: toColorCode("000000"),
-    currentTab: toColorCode("ffffff"),
-    currentTabBg: toColorCode("0000ff"),
-    # command bar
-    commandBar: toColorCode("ffffff"),
-    # TODO: Fix color code. (default)
-    commandBarBg: toColorCode("000000"),
+    tab: ColorPair(fg: toColorCode("ffffff"), bg: none(ColorCode)),
+    currentTab: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
+    # command  bar
+    commandBar: ColorPair(fg: toColorCode("ffffff"), bg: none(ColorCode)),
     # error message
-    errorMessage: toColorCode("ff0000"),
-    # TODO: Fix color code. (default)
-    errorMessageBg: toColorCode("000000"),
+    errorMessage: ColorPair(fg: toColorCode("ff0000"), bg: none(ColorCode)),
     # search result highlighting
-    # TODO: Fix color code. (default)
-    searchResult: toColorCode("ffffff"),
-    searchResultBg: toColorCode("ff0000"),
+    searchResult: ColorPair(fg: none(ColorCode), bg: toColorCode("ff0000")),
     # selected area in visual mode
-    visualMode: toColorCode("ffffff"),
-    visualModeBg: toColorCode("800080"),
+    visualMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("800080")),
 
     # color scheme
-    defaultChar: toColorCode("ffffff"),
-    gtKeyword: toColorCode("87d7ff"),
-    gtFunctionName: toColorCode("ffd700"),
-    gtTypeName: toColorCode("008000"),
-    gtBoolean: toColorCode("ffff00"),
-    gtStringLit: toColorCode("ffff00"),
-    gtSpecialVar: toColorCode("008000"),
-    gtBuiltin: toColorCode("ffff00"),
-    gtDecNumber: toColorCode("00ffff"),
-    gtComment: toColorCode("808080"),
-    gtLongComment: toColorCode("808080"),
-    gtWhitespace: toColorCode("808080"),
-    gtPreprocessor: toColorCode("008000"),
-    gtPragma: toColorCode("ffff00"),
+    defaultChar: ColorPair(fg: toColorCode("ffffff"), bg: none(ColorCode)),
+    keyword: ColorPair(fg: toColorCode("87d7ff"), bg: none(ColorCode)),
+    functionName: ColorPair(fg: toColorCode("ffd700"), bg: none(ColorCode)),
+    typeName: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+    boolean: ColorPair(fg: toColorCode("ffff00"), bg: none(ColorCode)),
+    stringLit: ColorPair(fg: toColorCode("ffff00"), bg: none(ColorCode)),
+    specialVar: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+    builtin: ColorPair(fg: toColorCode("ffff00"), bg: none(ColorCode)),
+    decNumber: ColorPair(fg: toColorCode("00ffff"), bg: none(ColorCode)),
+    comment: ColorPair(fg: toColorCode("808080"), bg: none(ColorCode)),
+    longComment: ColorPair(fg: toColorCode("808080"), bg: none(ColorCode)),
+    whitespace: ColorPair(fg: toColorCode("808080"), bg: none(ColorCode)),
+    preprocessor: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+    pragma: ColorPair(fg: toColorCode("ffff00"), bg: none(ColorCode)),
 
     # filer mode
-    currentFile: toColorCode("ffffff"),
-    currentFileBg: toColorCode("008080"),
-    file: toColorCode("ffffff"),
-    # TODO: Fix color code. (default)
-    fileBg: toColorCode("000000"),
-    dir: toColorCode("0000ff"),
-    # TODO: Fix color code. (default)
-    dirBg: toColorCode("000000"),
-    pcLink: toColorCode("008080"),
-    # TODO: Fix color code. (default)
-    pcLinkBg: toColorCode("000000"),
+    currentFile: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("008080")),
+    file: ColorPair(fg: toColorCode("ffffff"), bg: none(ColorCode)),
+    dir: ColorPair(fg: toColorCode("0000ff"), bg: none(ColorCode)),
+    pcLink: ColorPair(fg: toColorCode("008080"), bg: toColorCode("000000")),
     # pop up window
-    popUpWindow: toColorCode("ffffff"),
-    popUpWindowBg: toColorCode("000000"),
-    popUpWinCurrentLine: toColorCode("0000ff"),
-    popUpWinCurrentLineBg: toColorCode("000000"),
+    popUpWindow: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("000000")),
+    popUpWinCurrentLine: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("000000")),
     # replace text highlighting
     # TODO: Fix color code. (default)
-    replaceText: toColorCode("ffffff"),
-    replaceTextBg: toColorCode("ff0000"),
+    replaceText: ColorPair(fg: none(ColorCode), bg: toColorCode("ff0000")),
     # pair of paren highlighting
     # TODO: Fix color code. (default)
-    parenText: toColorCode("ffffff"),
-    parenTextBg: toColorCode("0000ff"),
+    parenText: ColorPair(fg: none(ColorCode), bg: toColorCode("0000ff")),
     # highlight other uses current word
-    # TODO: Fix color code. (default)
-    currentWord: toColorCode("ffffff"),
-    currentWordBg: toColorCode("808080"),
+    currentWord: ColorPair(fg: none(ColorCode), bg: toColorCode("808080")),
     # highlight full width space
-    highlightFullWidthSpace: toColorCode("ff0000"),
-    highlightFullWidthSpaceBg: toColorCode("ff0000"),
+    highlightFullWidthSpace: ColorPair(fg: toColorCode("ff0000"), bg: toColorCode("ff0000")),
     # highlight trailing spaces
-    highlightTrailingSpaces: toColorCode("ff0000"),
-    highlightTrailingSpacesBg: toColorCode("ff0000"),
+    highlightTrailingSpaces: ColorPair(fg: toColorCode("ff0000"), bg: toColorCode("ff0000")),
     # highlight reserved words
-    reservedWord: toColorCode("ffffff"),
-    reservedWordBg: toColorCode("808080"),
+    reservedWord: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("808080")),
     # highlight history manager
-    currentHistory: toColorCode("ffffff"),
-    currentHistoryBg: toColorCode("008080"),
+    currentHistory: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("008080")),
     # highlight diff
-    addedLine: toColorCode("008000"),
-    # TODO: Fix color code. (default)
-    addedLineBg: toColorCode("000000"),
-    deletedLine: toColorCode("ff0000"),
-    # TODO: Fix color code. (default)
-    deletedLineBg: toColorCode("000000"),
+    addedLine: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+    deletedLine: ColorPair(fg: toColorCode("ff0000"), bg: none(ColorCode)),
     # configuration mode
-    currentSetting: toColorCode("ffffff"),
-    currentSettingBg: toColorCode("008080"),
+    currentSetting: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("008080")),
     # Highlight current line background
-    currentLineBg: toColorCode("444444")
+    currentLine: ColorPair(fg: none(ColorCode), bg: toColorCode("444444"))
   ),
-  light: EditorColorCode(
-    editorBg: toColorCode(""),
-    lineNum: toColorCode("8a8a8a"),
-    lineNumBg: toColorCode(""),
-    currentLineNum: toColorCode("000000"),
-    currentLineNumBg: toColorCode(""),
+  light: EditorColorPair(
+    default: ColorPair(fg: none(ColorCode),  bg: none(ColorCode)),
+
+    # Line number
+    lineNum: ColorPair(fg: toColorCode("8a8a8a"), bg: none(ColorCode)),
+    currentLineNum: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+
     # statsu line
-    statusLineNormalMode: toColorCode("0000ff"),
-    statusLineNormalModeBg: toColorCode("8a8a8a"),
-    statusLineModeNormalMode: toColorCode("ffffff"),
-    statusLineModeNormalModeBg: toColorCode("008080"),
-    statusLineNormalModeInactive: toColorCode("8a8a8a"),
-    statusLineNormalModeInactiveBg: toColorCode("0000ff"),
+    statusLineNormalMode: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("8a8a8a")),
+    statusLineModeNormalMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("008080")),
+    statusLineNormalModeInactive: ColorPair(fg: toColorCode("8a8a8a"), bg: toColorCode("0000ff")),
 
-    statusLineInsertMode: toColorCode("0000ff"),
-    statusLineInsertModeBg: toColorCode("8a8a8a"),
-    statusLineModeInsertMode: toColorCode("ffffff"),
-    statusLineModeInsertModeBg: toColorCode("008080"),
-    statusLineInsertModeInactive: toColorCode("8a8a8a"),
-    statusLineInsertModeInactiveBg: toColorCode("0000ff"),
+    statusLineInsertMode: ColorPair(fg: toColorCode("0000ff"), bg:toColorCode("8a8a8a")),
+    statusLineModeInsertMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("008080")),
+    statusLineInsertModeInactive: ColorPair(fg: toColorCode("8a8a8a"), bg: toColorCode("0000ff")),
 
-    statusLineVisualMode: toColorCode("0000ff"),
-    statusLineVisualModeBg: toColorCode("8a8a8a"),
-    statusLineModeVisualMode: toColorCode("ffffff"),
-    statusLineModeVisualModeBg: toColorCode("008080"),
-    statusLineVisualModeInactive: toColorCode("8a8a8a"),
-    statusLineVisualModeInactiveBg: toColorCode("0000ff"),
 
-    statusLineReplaceMode: toColorCode("0000ff"),
-    statusLineReplaceModeBg: toColorCode("8a8a8a"),
-    statusLineModeReplaceMode: toColorCode("ffffff"),
-    statusLineModeReplaceModeBg: toColorCode("008080"),
-    statusLineReplaceModeInactive: toColorCode("8a8a8a"),
-    statusLineReplaceModeInactiveBg: toColorCode("0000ff"),
+    statusLineVisualMode: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("8a8a8a")),
+    statusLineModeVisualMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("008080")),
+    statusLineVisualModeInactive: ColorPair(fg: toColorCode("8a8a8a"), bg: toColorCode("0000ff")),
 
-    statusLineFilerMode: toColorCode("0000ff"),
-    statusLineFilerModeBg: toColorCode("8a8a8a"),
-    statusLineModeFilerMode: toColorCode("ffffff"),
-    statusLineModeFilerModeBg: toColorCode("008080"),
-    statusLineFilerModeInactive: toColorCode("8a8a8a"),
-    statusLineFilerModeInactiveBg: toColorCode("0000ff"),
+    statusLineReplaceMode: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("8a8a8a")),
+    statusLineModeReplaceMode: ColorPair(fg: toColorCode("008080"), bg: toColorCode("8a8a8a")),
+    statusLineReplaceModeInactive: ColorPair(fg: toColorCode("8a8a8a"), bg: toColorCode("0000ff")),
 
-    statusLineExMode: toColorCode("0000ff"),
-    statusLineExModeBg: toColorCode("8a8a8a"),
-    statusLineModeExMode: toColorCode("ffffff"),
-    statusLineModeExModeBg: toColorCode("008080"),
-    statusLineExModeInactive: toColorCode("8a8a8a"),
-    statusLineExModeInactiveBg: toColorCode("0000ff"),
+    statusLineFilerMode: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("8a8a8a")),
+    statusLineModeFilerMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("008080")),
+    statusLineFilerModeInactive: ColorPair(fg: toColorCode("8a8a8a"), bg: toColorCode("0000ff")),
 
-    statusLineGitBranch: toColorCode("0000ff"),
-    statusLineGitBranchBg: toColorCode("8a8a8a"),
+    statusLineExMode: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("8a8a8a")),
+    statusLineModeExMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("008080")),
+    statusLineExModeInactive: ColorPair(fg: toColorCode("8a8a8a"), bg: toColorCode("0000ff")),
+
+    statusLineGitBranch: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("8a8a8a")),
     # tab line
-    tab: toColorCode("0000ff"),
-    tabBg: toColorCode("8a8a8a"),
-    currentTab: toColorCode("ffffff"),
-    currentTabBg: toColorCode("0000ff"),
+    tab: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("8a8a8a")),
+    currentTab: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
     # command bar
-    commandBar: toColorCode("000000"),
-    commandBarBg: toColorCode(""),
+    commandBar: ColorPair(fg: toColorCode("000000"), bg: none(ColorCode)),
     # error message
-    errorMessage: toColorCode("ff0000"),
-    errorMessageBg: toColorCode(""),
+    errorMessage: ColorPair(fg: toColorCode("ff0000"), bg: none(ColorCode)),
     # search result highlighting
-    searchResult: toColorCode(""),
-    searchResultBg: toColorCode("ff0000"),
+    searchResult: ColorPair(fg: none(ColorCode), bg: toColorCode("ff0000")),
     # selected area in visual mode
-    visualMode: toColorCode("000000"),
-    visualModeBg: toColorCode("800080"),
+    visualMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("800080")),
 
     # color scheme
-    defaultChar: toColorCode("ffffff"),
-    gtKeyword: toColorCode("5fffaf"),
-    gtFunctionName: toColorCode("ffd700"),
-    gtTypeName: toColorCode("008000"),
-    gtBoolean: toColorCode("ffff00"),
-    gtStringLit: toColorCode("800080"),
-    gtSpecialVar: toColorCode("008000"),
-    gtBuiltin: toColorCode("ffff00"),
-    gtDecNumber: toColorCode("00ffff"),
-    gtComment: toColorCode("808080"),
-    gtLongComment: toColorCode("808080"),
-    gtWhitespace: toColorCode("808080"),
-    gtPreprocessor: toColorCode("008000"),
-    gtPragma: toColorCode("ffff00"),
+    defaultChar: ColorPair(fg: toColorCode("ffffff"), bg: none(ColorCode)),
+    keyword: ColorPair(fg: toColorCode("5fffaf"), bg: none(ColorCode)),
+    functionName: ColorPair(fg: toColorCode("ffd700"), bg: none(ColorCode)),
+    typeName: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+    boolean: ColorPair(fg: toColorCode("ffff00"), bg: none(ColorCode)),
+    stringLit: ColorPair(fg: toColorCode("800080"), bg: none(ColorCode)),
+    specialVar: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+    builtin: ColorPair(fg: toColorCode("ffff00"), bg: none(ColorCode)),
+    decNumber: ColorPair(fg: toColorCode("00ffff"), bg: none(ColorCode)),
+    comment: ColorPair(fg: toColorCode("808080"), bg: none(ColorCode)),
+    longComment: ColorPair(fg: toColorCode("808080"), bg: none(ColorCode)),
+    whitespace: ColorPair(fg: toColorCode("808080"), bg: none(ColorCode)),
+    preprocessor: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+    pragma: ColorPair(fg: toColorCode("ffff00"), bg: none(ColorCode)),
 
     # filer mode
-    currentFile: toColorCode("000000"),
-    currentFileBg: toColorCode("ff0087"),
-    file: toColorCode("000000"),
-    fileBg: toColorCode(""),
-    dir: toColorCode("ff0087"),
-    dirBg: toColorCode(""),
-    pcLink: toColorCode("008080"),
-    pcLinkBg: toColorCode(""),
+    currentFile: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ff0087")),
+    file: ColorPair(fg: toColorCode("000000"), bg: none(ColorCode)),
+    dir: ColorPair(fg: toColorCode("ff0087"), bg: none(ColorCode)),
+    pcLink: ColorPair(fg: toColorCode("008080"), bg: toColorCode("000000")),
+
     # pop up window
-    popUpWindow: toColorCode("000000"),
-    popUpWindowBg: toColorCode("808080"),
-    popUpWinCurrentLine: toColorCode("0000ff"),
-    popUpWinCurrentLineBg: toColorCode("808080"),
+    popUpWindow: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("808080")),
+    popUpWinCurrentLine: ColorPair(fg: toColorCode("0000ff"), bg: toColorCode("000000")),
+
     # replace text highlighting
-    replaceText: toColorCode(""),
-    replaceTextBg: toColorCode("ff0000"),
+    replaceText: ColorPair(fg: none(ColorCode), bg: toColorCode("ff0000")),
     # pair of paren highlighting
-    parenText: toColorCode(""),
-    parenTextBg: toColorCode("808080"),
+    parenText: ColorPair(fg: none(ColorCode), bg: toColorCode("808080")),
     # highlight other uses current word
-    currentWord: toColorCode(""),
-    currentWordBg: toColorCode("808080"),
+    currentWord: ColorPair(fg: none(ColorCode), bg: toColorCode("808080")),
     # highlight full width space
-    highlightFullWidthSpace: toColorCode("ff0000"),
-    highlightFullWidthSpaceBg: toColorCode("ff0000"),
+    highlightFullWidthSpace: ColorPair(fg: toColorCode("ff0000"), bg: toColorCode("ff0000")),
     # highlight trailing spaces
-    highlightTrailingSpaces: toColorCode("ff0000"),
-    highlightTrailingSpacesBg: toColorCode("ff0000"),
+    highlightTrailingSpaces: ColorPair(fg: toColorCode("ff0000"), bg: toColorCode("ff0000")),
     # highlight reserved words
-    reservedWord: toColorCode("ffffff"),
-    reservedWordBg: toColorCode("808080"),
+    reservedWord: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("808080")),
     # highlight history manager
-    currentHistory: toColorCode("000000"),
-    currentHistoryBg: toColorCode("ff0087"),
+    currentHistory: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ff0087")),
     # highlight diff
-    addedLine: toColorCode("008000"),
-    addedLineBg: toColorCode(""),
-    deletedLine: toColorCode("ff0000"),
-    deletedLineBg: toColorCode(""),
+    addedLine: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+    deletedLine: ColorPair(fg: toColorCode("ff0000"), bg: none(ColorCode)),
     # configuration mode
-    currentSetting: toColorCode("000000"),
-    currentSettingBg: toColorCode("ff0087"),
+    currentSetting: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ff0087")),
     # Highlight current line background
-    currentLineBg: toColorCode("444444")
+    currentLine: ColorPair(fg: none(ColorCode), bg: toColorCode("444444"))
   ),
-  vivid: EditorColorCode(
-    editorBg: toColorCode(""),
-    lineNum: toColorCode("8a8a8a"),
-    lineNumBg: toColorCode(""),
-    currentLineNum: toColorCode("ff0087"),
-    currentLineNumBg: toColorCode(""),
+  vivid: EditorColorPair(
+    default: ColorPair(fg: none(ColorCode),  bg: none(ColorCode)),
+
+    # Line number
+    lineNum: ColorPair(fg: toColorCode("8a8a8a"), bg: none(ColorCode)),
+    currentLineNum: ColorPair(fg: toColorCode("ff0087"), bg: none(ColorCode)),
+
     # statsu line
-    statusLineNormalMode: toColorCode("000000"),
-    statusLineNormalModeBg: toColorCode("ff0087"),
-    statusLineModeNormalMode: toColorCode("000000"),
-    statusLineModeNormalModeBg: toColorCode("ffffff"),
-    statusLineNormalModeInactive: toColorCode("ff0087"),
-    statusLineNormalModeInactiveBg: toColorCode("ffffff"),
+    statusLineNormalMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ff0087")),
+    statusLineModeNormalMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineNormalModeInactive: ColorPair(fg: toColorCode("ff0087"), bg: toColorCode("ffffff")),
 
-    statusLineInsertMode: toColorCode("000000"),
-    statusLineInsertModeBg: toColorCode("ff0087"),
-    statusLineModeInsertMode: toColorCode("000000"),
-    statusLineModeInsertModeBg: toColorCode("ffffff"),
-    statusLineInsertModeInactive: toColorCode("ff0087"),
-    statusLineInsertModeInactiveBg: toColorCode("ffffff"),
+    statusLineInsertMode: ColorPair(fg: toColorCode("000000"), bg:toColorCode("ff0087")),
+    statusLineModeInsertMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineInsertModeInactive: ColorPair(fg: toColorCode("ff0087"), bg: toColorCode("ffffff")),
 
-    statusLineVisualMode: toColorCode("000000"),
-    statusLineVisualModeBg: toColorCode("ff0087"),
-    statusLineModeVisualMode: toColorCode("000000"),
-    statusLineModeVisualModeBg: toColorCode("ffffff"),
-    statusLineVisualModeInactive: toColorCode("ff0087"),
-    statusLineVisualModeInactiveBg: toColorCode("ffffff"),
+    statusLineVisualMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ff0087")),
+    statusLineModeVisualMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineVisualModeInactive: ColorPair(fg: toColorCode("ff0087"), bg: toColorCode("ffffff")),
 
-    statusLineReplaceMode: toColorCode("000000"),
-    statusLineReplaceModeBg: toColorCode("ff0087"),
-    statusLineModeReplaceMode: toColorCode("000000"),
-    statusLineModeReplaceModeBg: toColorCode("ffffff"),
-    statusLineReplaceModeInactive: toColorCode("ff0087"),
-    statusLineReplaceModeInactiveBg: toColorCode("ffffff"),
+    statusLineReplaceMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ff0087")),
+    statusLineModeReplaceMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineReplaceModeInactive: ColorPair(fg: toColorCode("ff0087"), bg: toColorCode("ffffff")),
 
-    statusLineFilerMode: toColorCode("000000"),
-    statusLineFilerModeBg: toColorCode("ff0087"),
-    statusLineModeFilerMode: toColorCode("000000"),
-    statusLineModeFilerModeBg: toColorCode("ffffff"),
-    statusLineFilerModeInactive: toColorCode("ff0087"),
-    statusLineFilerModeInactiveBg: toColorCode("ffffff"),
+    statusLineFilerMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ff0087")),
+    statusLineModeFilerMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineFilerModeInactive: ColorPair(fg: toColorCode("ff0087"), bg: toColorCode("ffffff")),
 
-    statusLineExMode: toColorCode("000000"),
-    statusLineExModeBg: toColorCode("ff0087"),
-    statusLineModeExMode: toColorCode("000000"),
-    statusLineModeExModeBg: toColorCode("ffffff"),
-    statusLineExModeInactive: toColorCode("ff0087"),
-    statusLineExModeInactiveBg: toColorCode("ffffff"),
+    statusLineExMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ff0087")),
+    statusLineModeExMode: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ffffff")),
+    statusLineExModeInactive: ColorPair(fg: toColorCode("ff0087"), bg: toColorCode("ffffff")),
 
-    statusLineGitBranch: toColorCode("ff0087"),
-    statusLineGitBranchBg: toColorCode("000000"),
+    statusLineGitBranch: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("0000ff")),
     # tab line
-    tab: toColorCode("ffffff"),
-    tabBg: toColorCode(""),
-    currentTab: toColorCode("000000"),
-    currentTabBg: toColorCode("ff0087"),
+    tab: ColorPair(fg: toColorCode("ffffff"), bg: none(ColorCode)),
+    currentTab: ColorPair(fg: toColorCode("000000"), bg: toColorCode("ff0087")),
     # command bar
-    commandBar: toColorCode("ffffff"),
-    commandBarBg: toColorCode(""),
+    commandBar: ColorPair(fg: toColorCode("ffffff"), bg: none(ColorCode)),
     # error message
-    errorMessage: toColorCode("ff0000"),
-    errorMessageBg: toColorCode(""),
+    errorMessage: ColorPair(fg: toColorCode("ff0000"), bg: none(ColorCode)),
     # search result highlighting
-    searchResult: toColorCode(""),
-    searchResultBg: toColorCode("ff0000"),
+    searchResult: ColorPair(fg: none(ColorCode), bg: toColorCode("ff0000")),
     # selected area in visual mode
-    visualMode: toColorCode("ffffff"),
-    visualModeBg: toColorCode("800080"),
+    visualMode: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("800080")),
 
     # color scheme
-    defaultChar: toColorCode("ffffff"),
-    gtKeyword: toColorCode("ff0087"),
-    gtFunctionName: toColorCode("ffd700"),
-    gtTypeName: toColorCode("008000"),
-    gtBoolean: toColorCode("ffff00"),
-    gtStringLit: toColorCode("800080"),
-    gtSpecialVar: toColorCode("008000"),
-    gtBuiltin: toColorCode("00ffff"),
-    gtDecNumber: toColorCode("00ffff"),
-    gtComment: toColorCode("808080"),
-    gtLongComment: toColorCode("808080"),
-    gtWhitespace: toColorCode("808080"),
-    gtPreprocessor: toColorCode("008000"),
-    gtPragma: toColorCode("00ffff"),
+    defaultChar: ColorPair(fg: toColorCode("ffffff"), bg: none(ColorCode)),
+    keyword: ColorPair(fg: toColorCode("ffffff"), bg: none(ColorCode)),
+    functionName: ColorPair(fg: toColorCode("ff0087"), bg: none(ColorCode)),
+    typeName: ColorPair(fg: toColorCode("ffd700"), bg: none(ColorCode)),
+    boolean: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+    stringLit: ColorPair(fg: toColorCode("ffff00"), bg: none(ColorCode)),
+    specialVar: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+    builtin: ColorPair(fg: toColorCode("00ffff"), bg: none(ColorCode)),
+    decNumber: ColorPair(fg: toColorCode("00ffff"), bg: none(ColorCode)),
+    comment: ColorPair(fg: toColorCode("808080"), bg: none(ColorCode)),
+    longComment: ColorPair(fg: toColorCode("808080"), bg: none(ColorCode)),
+    whitespace: ColorPair(fg: toColorCode("808080"), bg: none(ColorCode)),
+    preprocessor: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+    pragma: ColorPair(fg: toColorCode("00ffff"), bg: none(ColorCode)),
 
     # filer mode
-    currentFile: toColorCode("ffffff"),
-    currentFileBg: toColorCode("ff0087"),
-    file: toColorCode("ffffff"),
-    fileBg: toColorCode(""),
-    dir: toColorCode("ff0087"),
-    dirBg: toColorCode(""),
-    pcLink:  toColorCode("00ffff"),
-    pcLinkBg: toColorCode(""),
+    currentFile: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("ff0087")),
+    file: ColorPair(fg: toColorCode("ffffff"), bg: none(ColorCode)),
+    dir: ColorPair(fg: toColorCode("ff0087"), bg: none(ColorCode)),
+    pcLink: ColorPair(fg: toColorCode("00ffff"), bg: toColorCode("000000")),
     # pop up window
-    popUpWindow: toColorCode("ffffff"),
-    popUpWindowBg: toColorCode("000000"),
-    popUpWinCurrentLine: toColorCode("ff0087"),
-    popUpWinCurrentLineBg: toColorCode("000000"),
+    popUpWindow: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("000000")),
+    popUpWinCurrentLine: ColorPair(fg: toColorCode("ff0087"), bg: toColorCode("000000")),
     # replace text highlighting
-    replaceText: toColorCode(""),
-    replaceTextBg: toColorCode("ff0000"),
+    replaceText: ColorPair(fg: none(ColorCode), bg: toColorCode("ff0000")),
     # pair of paren highlighting
-    parenText: toColorCode(""),
-    parenTextBg: toColorCode("ff0087"),
+    parenText: ColorPair(fg: none(ColorCode), bg: toColorCode("ff0087")),
     # highlight other uses current word
-    currentWord: toColorCode(""),
-    currentWordBg: toColorCode("808080"),
+    currentWord: ColorPair(fg: none(ColorCode), bg: toColorCode("808080")),
     # highlight full width space
-    highlightFullWidthSpace: toColorCode("ff0000"),
-    highlightFullWidthSpaceBg: toColorCode("ff0000"),
+    highlightFullWidthSpace: ColorPair(fg: toColorCode("ff0000"), bg: toColorCode("ff0000")),
     # highlight trailing spaces
-    highlightTrailingSpaces: toColorCode("ff0000"),
-    highlightTrailingSpacesBg: toColorCode("ff0000"),
+    highlightTrailingSpaces: ColorPair(fg: toColorCode("ff0000"), bg: toColorCode("ff0000")),
     # highlight reserved words
-    reservedWord: toColorCode("ff0087"),
-    reservedWordBg: toColorCode("000000"),
+    reservedWord: ColorPair(fg: toColorCode("ff0087"), bg: toColorCode("000000")),
     # highlight history manager
-    currentHistory: toColorCode("ffffff"),
-    currentHistoryBg: toColorCode("ff0087"),
+    currentHistory: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("ff0087")),
     # highlight diff
-    addedLine: toColorCode("008000"),
-    addedLineBg: toColorCode(""),
-    deletedLine: toColorCode("ff0000"),
-    deletedLineBg: toColorCode(""),
+    addedLine: ColorPair(fg: toColorCode("008000"), bg: none(ColorCode)),
+    deletedLine: ColorPair(fg: toColorCode("ff0000"), bg: none(ColorCode)),
     # configuration mode
-    currentSetting: toColorCode("ffffff"),
-    currentSettingBg: toColorCode("ff0087"),
+    currentSetting: ColorPair(fg: toColorCode("ffffff"), bg: toColorCode("ff0087")),
     # Highlight current line background
-    currentLineBg: toColorCode("444444")
+    currentLine: ColorPair(fg: none(ColorCode), bg: toColorCode("444444"))
   ),
 ]
 
@@ -1285,7 +1054,7 @@ proc setColorPair*(colorPair: var ColorPair, foreground, background: ColorCode) 
 #
 #  init_pair(cshort(ord(colorPair)),
 #            cshort(ord(character)),
-#            cshort(ord(background)))
+#            cshort(ord(background))
 #
 #proc setCursesColor*(editorColor: EditorColorPair) =
 #  # Not set when running unit tests
