@@ -372,6 +372,7 @@ proc updateStatusLine(status: var Editorstatus) =
     status.bufStatus[index].writeStatusLine(
       status.statusLine[0],
       currentMainWindowNode,
+      currentColorTheme,
       isActiveWindow,
       status.settings)
   else:
@@ -385,6 +386,7 @@ proc updateStatusLine(status: var Editorstatus) =
       status.bufStatus[bufferIndex].writeStatusLine(
         status.statusLine[i],
         node,
+        currentColorTheme,
         isActiveWindow,
         status.settings)
 
@@ -409,7 +411,7 @@ proc initSyntaxHighlight(windowNode: var WindowNode,
         let
           lang = if isSyntaxHighlight: buf.language
                  else: SourceLanguage.langNone
-          h = ($buf.buffer).initHighlight(reservedWords, lang)
+          h = initHighlight(currentColorTheme, $buf.buffer,reservedWords, lang)
 
         updatedHighlights.add((index, h))
 
@@ -442,6 +444,7 @@ proc updateLogViewer(bufStatus: var BufferStatus,
   const EMPTY_RESERVEDWORD: seq[ReservedWord] = @[]
 
   node.highlight = initHighlight(
+      currentColorTheme,
       $bufStatus.buffer,
       EMPTY_RESERVEDWORD,
       SourceLanguage.langNone)
@@ -458,6 +461,7 @@ proc update*(status: var EditorStatus) =
       status.bufStatus,
       status.bufferIndexInCurrentWindow,
       status.mainWindow.mainWindowNode,
+      currentColorTheme,
       status.settings.tabline.allBuffer)
 
   status.updateDebugModeBuffer
@@ -467,9 +471,10 @@ proc update*(status: var EditorStatus) =
     status.settings.highlightSettings.reservedWords,
     status.settings.syntax)
 
+  # TODO: Fix
   # Set editor Color Pair for current line highlight.
   # New color pairs are set to Number larger than the maximum value of EditorColorPiar.
-  var currentLineColorPair = ord(EditorColorPair.high) + 1
+  # var currentLineColorPair = ord(ColorThemeTable[currentColorTheme].EditorColorPair.high) + 1
 
   var queue = initHeapQueue[WindowNode]()
   for node in mainWindowNode.child:
@@ -539,8 +544,7 @@ proc update*(status: var EditorStatus) =
                          status.settings.editorColorTheme,
                          node.currentLine,
                          startSelectedLine,
-                         endSelectedLine,
-                         currentLineColorPair)
+                         endSelectedLine)
 
         if isCurrentMainWin:
           node.cursor.update(node.view, node.currentLine, node.currentColumn)
@@ -550,7 +554,8 @@ proc update*(status: var EditorStatus) =
 
   if status.settings.statusLine.enable: status.updateStatusLine
 
-  status.commandLine.writeCommandLine(EditorColorPair.defaultChar)
+  let color = ColorThemeTable[currentColorTheme].EditorColorPair.defaultChar
+  status.commandLine.writeCommandLine(color)
 
   display()
 
@@ -824,7 +829,7 @@ proc initSelectedAreaColorSegment(startLine, startColumn: int): ColorSegment =
   result.firstColumn = startColumn
   result.lastRow = startLine
   result.lastColumn = startColumn
-  result.color = EditorColorPair.visualMode
+  result.color = ColorThemeTable[currentColorTheme].EditorColorPair.visualMode
 
 proc overwriteColorSegmentBlock[T](highlight: var Highlight,
                                    area: SelectArea,
@@ -839,11 +844,12 @@ proc overwriteColorSegmentBlock[T](highlight: var Highlight,
   if startColumn > endColumn: swap(startColumn, endColumn)
 
   for i in startLine .. endLine:
-    let colorSegment = ColorSegment(firstRow: i,
-                                    firstColumn: startColumn,
-                                    lastRow: i,
-                                    lastColumn: min(endColumn, buffer[i].high),
-                                    color: EditorColorPair.visualMode)
+    let colorSegment = ColorSegment(
+      firstRow: i,
+      firstColumn: startColumn,
+      lastRow: i,
+      lastColumn: min(endColumn, buffer[i].high),
+      color: ColorThemeTable[currentColorTheme].EditorColorPair.visualMode)
     highlight = highlight.overwrite(colorSegment)
 
 proc highlightSelectedArea(highlight: var Highlight,
@@ -918,7 +924,7 @@ proc highlightPairOfParen(highlight: var Highlight,
         elif buffer[i][j] == closeParen: dec(depth)
         if depth == 0:
           let
-            color = EditorColorPair.parenText
+            color = ColorThemeTable[currentColorTheme].EditorColorPair.parenText
             colorSegment = ColorSegment(firstRow: i,
                                         firstColumn: j,
                                         lastRow: i,
@@ -940,7 +946,7 @@ proc highlightPairOfParen(highlight: var Highlight,
         elif buffer[i][j] == openParen: dec(depth)
         if depth == 0:
           let
-            color = EditorColorPair.parenText
+            color = ColorThemeTable[currentColorTheme].EditorColorPair.parenText
             colorSegment = ColorSegment(firstRow: i,
                                         firstColumn: j,
                                         lastRow: i,
@@ -1039,7 +1045,7 @@ proc highlightTrailingSpaces(highlight: var Highlight,
   let
     currentLine = windowNode.currentLine
 
-    color = EditorColorPair.highlightTrailingSpaces
+    color = ColorThemeTable[currentColorTheme].EditorColorPair.highlightTrailingSpaces
 
     range = windowNode.view.rangeOfOriginalLineInView
     buffer = bufStatus.buffer
@@ -1153,7 +1159,7 @@ proc highlightFullWidthSpace(highlight: var Highlight,
       fullWidthSpace,
       ignorecase,
       smartcase)
-    color = EditorColorPair.highlightFullWidthSpace
+    color = ColorThemeTable[currentColorTheme].EditorColorPair.highlightFullWidthSpace
   for pos in allOccurrence:
     let colorSegment = ColorSegment(firstRow: range[0] + pos.line,
                                     firstColumn: pos.column,
@@ -1178,8 +1184,12 @@ proc highlightSearchResults(highlight: var Highlight,
       keyword,
       ignorecase,
       smartcase)
-    color = if isSearchHighlight: EditorColorPair.searchResult
-            else: EditorColorPair.replaceText
+    color =
+      if isSearchHighlight:
+        ColorThemeTable[currentColorTheme].EditorColorPair.searchResult
+      else:
+        ColorThemeTable[currentColorTheme].EditorColorPair.replaceText
+
   for pos in allOccurrence:
     let colorSegment = ColorSegment(firstRow: range[0] + pos.line,
                                     firstColumn: pos.column,
@@ -1382,7 +1392,7 @@ proc getKeyOnceAndWriteCommandView*(
 
     # Suggestion mode
     if isTabKey(key) or isShiftTab(key):
-      status.commandLine.suggestCommandLine(key)
+      status.commandLine.suggestCommandLine(currentColorTheme, key)
       if status.settings.popUpWindowInExmode and isEnterKey(key):
         discard
         # TODO: Enable cursor
@@ -1424,7 +1434,7 @@ proc getKeyOnceAndWriteCommandView*(
       status.update
       break
 
-  status.commandLine.writeCommandLine(EditorColorPair.commandBar)
+  status.commandLine.writeCommandLine(ColorThemeTable[currentColorTheme].EditorColorPair.commandBar)
   return (status.commandLine.buffer, exitSearch, cancelSearch)
 
 # TODO: Move
@@ -1433,7 +1443,7 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
   status.resize(terminalHeight(), terminalWidth())
 
   while true:
-    status.commandLine.writeCommandLine(EditorColorPair.commandBar)
+    status.commandLine.writeCommandLine(ColorThemeTable[currentColorTheme].EditorColorPair.commandBar)
 
     var key = NONE_KEY
     while key == NONE_KEY:
@@ -1448,7 +1458,7 @@ proc getCommand*(status: var EditorStatus, prompt: string): seq[seq[Rune]] =
 
     # Suggestion mode
     if isTabKey(key) or isShiftTab(key):
-      status.commandLine.suggestCommandLine(key)
+      status.commandLine.suggestCommandLine(currentColorTheme, key)
       if status.settings.popUpWindowInExmode and isEnterKey(key):
         discard
         # TODO: Enable cursor

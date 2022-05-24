@@ -3,7 +3,7 @@ import color, unicodeext, settings, independentutils, commandviewutils, ui
 
 proc writeMessageOnCommandWindow*(commandLine: var CommandLine,
                                   message: string,
-                                  color: EditorColorPair) {.inline.} =
+                                  color: ColorPair) {.inline.} =
 
   const x = 0
   let y = terminalHeight() - 1
@@ -14,31 +14,31 @@ proc writeMessageOnCommandWindow*(commandLine: var CommandLine,
 proc writeMessageOnCommandWindow*(commandLine: var CommandLine,
                                   message: string) {.inline.} =
 
-  commandLine.writeMessageOnCommandWindow(message, EditorColorPair.commandBar)
+  commandLine.writeMessageOnCommandWindow(message, ColorThemeTable[currentColorTheme].commandBar)
 
 proc writeNoWriteError*(commandLine: var CommandLine, messageLog: var seq[seq[Rune]]) =
   let mess = "Error: No write since last change"
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)
   messageLog.add(mess.toRunes)
 
 proc writeSaveError*(commandLine: var CommandLine, messageLog: var seq[seq[Rune]]) =
   let mess = "Error: Failed to save the file"
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)
   messageLog.add(mess.toRunes)
 
 proc writeRemoveFileError*(commandLine: var CommandLine, messageLog: var seq[seq[Rune]]) =
   let mess = "Error: Can not remove file"
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)
   messageLog.add(mess.toRunes)
 
 proc writeRemoveDirError*(commandLine: var CommandLine, messageLog: var seq[seq[Rune]]) =
   let mess = "Error: Can not remove directory"
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)
   messageLog.add(mess.toRunes)
 
 proc writeCopyFileError*(commandLine: var CommandLine, messageLog: var seq[seq[Rune]]) =
   let mess = "Error: Can not copy file"
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)
   messageLog.add(mess.toRunes)
 
 proc writeFileOpenError*(commandLine: var CommandLine,
@@ -46,7 +46,7 @@ proc writeFileOpenError*(commandLine: var CommandLine,
                          messageLog: var seq[seq[Rune]]) =
 
   let mess = "Error: Can not open: " & fileName
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)
   messageLog.add(mess.toRunes)
 
 proc writeCreateDirError*(commandLine: var CommandLine, messageLog: var seq[seq[Rune]]) {.inline.} =
@@ -67,7 +67,7 @@ proc writeMessageDeletedFile*(commandLine: var CommandLine,
 proc writeNoFileNameError*(commandLine: var CommandLine, messageLog: var seq[seq[Rune]]) =
 
   let mess = "Error: No file name"
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)
   messageLog.add(mess.toRunes)
 
 proc writeMessageYankedLine*(commandLine: var CommandLine,
@@ -136,7 +136,7 @@ proc writeNotEditorCommandError*(commandLine: var CommandLine,
   var cmd = ""
   for i in 0 ..< command.len: cmd = cmd & $command[i] & " "
   let mess = fmt"Error: Not an editor command: {cmd}"
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)
   messageLog.add(mess.toRunes)
 
 proc writeMessageSaveFile*(commandLine: var CommandLine,
@@ -155,7 +155,7 @@ proc writeNoBufferDeletedError*(commandLine: var CommandLine,
                                 messageLog: var seq[seq[Rune]]) =
 
   let mess = "Error: No buffers were deleted"
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)
   messageLog.add(mess.toRunes)
 
 proc writePutConfigFile*(commandLine: var CommandLine,
@@ -170,21 +170,21 @@ proc writePutConfigFileError*(commandLine: var CommandLine,
                               messageLog: var seq[seq[Rune]]) =
 
   const mess = "Error: Failed to put configuration file"
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)
   messageLog.add(mess.toRunes)
 
 proc writePutConfigFileAlreadyExistError*(commandLine: var CommandLine,
                                           messageLog: var seq[seq[Rune]]) =
 
   const mess = "Error: Configuration file already exists"
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)
   messageLog.add(mess.toRunes)
 
 proc writeOpenRecentlyUsedXbelError*(commandLine: var CommandLine,
                                      messageLog: var seq[seq[Rune]]) =
 
   const mess = "Error: " & getHomeDir() / ".local/share/recently-used.xbel" & " Not found"
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)
   messageLog.add(mess.toRunes)
 
 proc writeFileNotFoundError*(commandLine: var CommandLine,
@@ -192,7 +192,7 @@ proc writeFileNotFoundError*(commandLine: var CommandLine,
                              messageLog: var seq[seq[Rune]]) =
 
   let mess = "Error: " & $filename & " not found"
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)
   messageLog.add(mess.toRunes)
 
 proc writeStartAutoBackupMessage*(commandLine: var CommandLine,
@@ -222,7 +222,7 @@ proc writeAutoBackupFailedMessage*(commandLine: var CommandLine,
 
   let message = fmt"Error: Automatic backups failed: {$filename}"
   if settings.screenNotifications and settings.autoBackupScreenNotify:
-    commandLine.writeMessageOnCommandWindow(message, EditorColorPair.errorMessage)
+    commandLine.writeMessageOnCommandWindow(message, ColorThemeTable[currentColorTheme].errorMessage)
   if settings.logNotifications and settings.autoBackupLogNotify:
     messageLog.add(message.toRunes)
 
@@ -238,12 +238,12 @@ proc writeRunQuickRunTimeoutMessage*(commandLine: var CommandLine,
                                      messageLog: var seq[seq[Rune]]) =
 
   const mess = "Quick run timeout"
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)
   messageLog.add(mess.toRunes)
 
 proc writeRunQuickRunFailedMessage*(commandLine: var CommandLine, messageLog: var seq[seq[Rune]]) =
   const mess = "Quick run failed"
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)
   messageLog.add(mess.toRunes)
 
 proc writeInvalidItemInConfigurationFileError*(commandLine: var CommandLine,
@@ -252,14 +252,14 @@ proc writeInvalidItemInConfigurationFileError*(commandLine: var CommandLine,
 
   let mess = "Error: Failed to load configuration file: Invalid item: " &
              message
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)
   messageLog.add(message.toRunes)
 
 proc writeFailedToLoadConfigurationFileError*(commandLine: var CommandLine,
                            message: string,
                            messageLog: var seq[seq[Rune]]) =
   let mess = fmt"Error: Failed to load configuration file: {message}"
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)
   messageLog.add(message.toRunes)
 
 proc writeNotExistWorkspaceError*(commandLine: var CommandLine,
@@ -267,14 +267,14 @@ proc writeNotExistWorkspaceError*(commandLine: var CommandLine,
                                   messageLog: var seq[seq[Rune]]) =
 
   let mess = "Error: Workspace " & $workspaceIndex & " not exist"
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)
 
 proc writeWorkspaceList*(commandLine: var CommandLine, buffer: string) {.inline.} =
-  commandLine.writeMessageOnCommandWindow(buffer, EditorColorPair.commandBar)
+  commandLine.writeMessageOnCommandWindow(buffer, ColorThemeTable[currentColorTheme].commandBar)
 
 proc writeBackupRestoreError*(commandLine: var CommandLine) {.inline.} =
   const mess = "Error: Restore failed"
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)
 
 proc writeRestoreFileSuccessMessage*(commandLine: var CommandLine,
                                      filename: seq[Rune],
@@ -289,7 +289,7 @@ proc writeRestoreFileSuccessMessage*(commandLine: var CommandLine,
 
 proc writeDeleteBackupError*(commandLine: var CommandLine) {.inline.} =
   const mess = "Error: Delete backup file failed"
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)
 
 proc writeExitHelp*(commandLine: var CommandLine) {.inline.} =
   const mess = "Type  :qa  and press <Enter> to exit moe"
@@ -305,4 +305,4 @@ proc writeCurrentCharInfo*(commandLine: var CommandLine, r: Rune) {.inline.} =
 
 proc writeReadonlyModeWarning*(commandLine: var CommandLine) {.inline.} =
   const mess = "Warning: Readonly mode"
-  commandLine.writeMessageOnCommandWindow(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandWindow(mess, ColorThemeTable[currentColorTheme].errorMessage)

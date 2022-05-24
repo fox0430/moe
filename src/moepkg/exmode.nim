@@ -492,9 +492,11 @@ proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   let sourceLang = if status.settings.syntax: currentBufStatus.language
                    else: SourceLanguage.langNone
 
-  currentMainWindowNode.highlight = initHighlight($currentBufStatus.buffer,
-                                                  status.settings.highlightSettings.reservedWords,
-                                                  sourceLang)
+  currentMainWindowNode.highlight = initHighlight(
+    currentColorTheme,
+    $currentBufStatus.buffer,
+    status.settings.highlightSettings.reservedWords,
+    sourceLang)
 
   status.commandLine.clear
   status.changeMode(currentBufStatus.prevMode)

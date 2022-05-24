@@ -299,10 +299,12 @@ proc initEditorViewSettings*(): EditorViewSettings =
   result.tabStop = 2
 
 proc initReservedWords*(): seq[ReservedWord] =
+    # TODO: Fix color?
+  let colorPair = ColorThemeTable[ColorTheme.dark].EditorColorPair.reservedWord
   result = @[
-    ReservedWord(word: "TODO", color: EditorColorPair.reservedWord),
-    ReservedWord(word: "WIP", color: EditorColorPair.reservedWord),
-    ReservedWord(word: "NOTE", color: EditorColorPair.reservedWord),
+    ReservedWord(word: "TODO", color: colorPair),
+    ReservedWord(word: "WIP", color: colorPair),
+    ReservedWord(word: "NOTE", color: colorPair),
   ]
 
 proc initHighlightSettings(): HighlightSettings =
@@ -1026,7 +1028,9 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       for i in 0 ..< reservedWords.len:
         let
           word = reservedWords[i].getStr
-          reservedWord = ReservedWord(word: word, color: EditorColorPair.reservedWord)
+          # TODO: Fix color?
+          colorPair = ColorThemeTable[ColorTheme.dark].EditorColorPair.reservedWord
+          reservedWord = ReservedWord(word: word, color: colorPair)
         result.highlightSettings.reservedWords.add(reservedWord)
 
     if settings["Highlight"].contains("currentLine"):
@@ -1348,305 +1352,305 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     template getColorCode(str: string): untyped =
       settings["Theme"][str].getStr.toColorCode
 
-    if settings["Theme"].contains("editorBg"):
-      ColorThemeTable[ColorTheme.config].editorBg = getColorCode("editorBg")
+    if settings["Theme"].contains("default"):
+      ColorThemeTable[ColorTheme.config].default.bg = getColorCode("default")
 
     if settings["Theme"].contains("lineNum"):
-      ColorThemeTable[ColorTheme.config].lineNum = getColorCode("lineNum")
+      ColorThemeTable[ColorTheme.config].lineNum.fg = getColorCode("lineNum")
 
     if settings["Theme"].contains("lineNumBg"):
-      ColorThemeTable[ColorTheme.config].lineNumBg = getColorCode("lineNumBg")
+      ColorThemeTable[ColorTheme.config].lineNum.bg = getColorCode("lineNumBg")
 
     if settings["Theme"].contains("currentLineNum"):
-      ColorThemeTable[ColorTheme.config].currentLineNum = getColorCode("currentLineNum")
+      ColorThemeTable[ColorTheme.config].currentLineNum.fg = getColorCode("currentLineNum")
 
     if settings["Theme"].contains("currentLineNumBg"):
-      ColorThemeTable[ColorTheme.config].currentLineNumBg = getColorCode("currentLineNumBg")
+      ColorThemeTable[ColorTheme.config].currentLineNum.bg = getColorCode("currentLineNumBg")
 
     if settings["Theme"].contains("statusLineNormalMode"):
-      ColorThemeTable[ColorTheme.config].statusLineNormalMode = getColorCode("statusLineNormalMode")
+      ColorThemeTable[ColorTheme.config].statusLineNormalMode.fg = getColorCode("statusLineNormalMode")
 
     if settings["Theme"].contains("statusLineNormalModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineNormalModeBg = getColorCode("statusLineNormalModeBg")
+      ColorThemeTable[ColorTheme.config].statusLineNormalMode.bg = getColorCode("statusLineNormalModeBg")
 
     if settings["Theme"].contains("statusLineModeNormalMode"):
-      ColorThemeTable[ColorTheme.config].statusLineModeNormalMode = getColorCode("statusLineModeNormalMode")
+      ColorThemeTable[ColorTheme.config].statusLineModeNormalMode.fg = getColorCode("statusLineModeNormalMode")
 
     if settings["Theme"].contains("statusLineModeNormalModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineModeNormalModeBg = getColorCode("statusLineModeNormalModeBg")
+      ColorThemeTable[ColorTheme.config].statusLineModeNormalMode.bg = getColorCode("statusLineModeNormalModeBg")
 
     if settings["Theme"].contains("statusLineNormalModeInactive"):
-      ColorThemeTable[ColorTheme.config].statusLineNormalModeInactive = getColorCode("statusLineNormalModeInactive")
+      ColorThemeTable[ColorTheme.config].statusLineNormalModeInactive.fg = getColorCode("statusLineNormalModeInactive")
 
     if settings["Theme"].contains("statusLineNormalModeInactiveBg"):
-      ColorThemeTable[ColorTheme.config].statusLineNormalModeInactiveBg = getColorCode("statusLineNormalModeInactiveBg")
+      ColorThemeTable[ColorTheme.config].statusLineNormalModeInactive.bg = getColorCode("statusLineNormalModeInactiveBg")
 
     if settings["Theme"].contains("statusLineInsertMode"):
-      ColorThemeTable[ColorTheme.config].statusLineInsertMode = getColorCode("statusLineInsertMode")
+      ColorThemeTable[ColorTheme.config].statusLineInsertMode.fg = getColorCode("statusLineInsertMode")
 
     if settings["Theme"].contains("statusLineInsertModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineInsertModeBg = getColorCode("statusLineInsertModeBg")
+      ColorThemeTable[ColorTheme.config].statusLineInsertMode.bg = getColorCode("statusLineInsertModeBg")
 
     if settings["Theme"].contains("statusLineModeInsertMode"):
-      ColorThemeTable[ColorTheme.config].statusLineModeInsertMode = getColorCode("statusLineModeInsertMode")
+      ColorThemeTable[ColorTheme.config].statusLineModeInsertMode.fg = getColorCode("statusLineModeInsertMode")
 
     if settings["Theme"].contains("statusLineModeInsertModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineModeInsertModeBg = getColorCode("statusLineModeInsertModeBg")
+      ColorThemeTable[ColorTheme.config].statusLineModeInsertMode.bg = getColorCode("statusLineModeInsertModeBg")
 
     if settings["Theme"].contains("statusLineInsertModeInactive"):
-      ColorThemeTable[ColorTheme.config].statusLineInsertModeInactive = getColorCode("statusLineInsertModeInactive")
+      ColorThemeTable[ColorTheme.config].statusLineInsertModeInactive.fg = getColorCode("statusLineInsertModeInactive")
 
     if settings["Theme"].contains("statusLineInsertModeInactiveBg"):
-      ColorThemeTable[ColorTheme.config].statusLineInsertModeInactiveBg = getColorCode("statusLineInsertModeInactiveBg")
+      ColorThemeTable[ColorTheme.config].statusLineInsertModeInactive.bg = getColorCode("statusLineInsertModeInactiveBg")
 
     if settings["Theme"].contains("statusLineVisualMode"):
-      ColorThemeTable[ColorTheme.config].statusLineVisualMode = getColorCode("statusLineVisualMode")
+      ColorThemeTable[ColorTheme.config].statusLineVisualMode.fg = getColorCode("statusLineVisualMode")
 
     if settings["Theme"].contains("statusLineVisualModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineVisualModeBg = getColorCode("statusLineVisualModeBg")
+      ColorThemeTable[ColorTheme.config].statusLineVisualMode.bg = getColorCode("statusLineVisualModeBg")
 
     if settings["Theme"].contains("statusLineModeVisualMode"):
-      ColorThemeTable[ColorTheme.config].statusLineModeVisualMode = getColorCode("statusLineModeVisualMode")
+      ColorThemeTable[ColorTheme.config].statusLineModeVisualMode.fg = getColorCode("statusLineModeVisualMode")
 
     if settings["Theme"].contains("statusLineModeVisualModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineModeVisualModeBg = getColorCode("statusLineModeVisualModeBg")
+      ColorThemeTable[ColorTheme.config].statusLineModeVisualMode.bg = getColorCode("statusLineModeVisualModeBg")
 
     if settings["Theme"].contains("statusLineVisualModeInactive"):
-      ColorThemeTable[ColorTheme.config].statusLineVisualModeInactive = getColorCode("statusLineVisualModeInactive")
+      ColorThemeTable[ColorTheme.config].statusLineVisualModeInactive.fg = getColorCode("statusLineVisualModeInactive")
 
     if settings["Theme"].contains("statusLineVisualModeInactiveBg"):
-      ColorThemeTable[ColorTheme.config].statusLineVisualModeInactiveBg = getColorCode("statusLineVisualModeInactiveBg")
+      ColorThemeTable[ColorTheme.config].statusLineVisualModeInactive.bg = getColorCode("statusLineVisualModeInactiveBg")
 
     if settings["Theme"].contains("statusLineReplaceMode"):
-      ColorThemeTable[ColorTheme.config].statusLineReplaceMode = getColorCode("statusLineReplaceMode")
+      ColorThemeTable[ColorTheme.config].statusLineReplaceMode.fg = getColorCode("statusLineReplaceMode")
 
     if settings["Theme"].contains("statusLineReplaceModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineReplaceModeBg = getColorCode("statusLineReplaceModeBg")
+      ColorThemeTable[ColorTheme.config].statusLineReplaceMode.bg = getColorCode("statusLineReplaceModeBg")
 
     if settings["Theme"].contains("statusLineModeReplaceMode"):
-      ColorThemeTable[ColorTheme.config].statusLineModeReplaceMode = getColorCode("statusLineModeReplaceMode")
+      ColorThemeTable[ColorTheme.config].statusLineModeReplaceMode.fg = getColorCode("statusLineModeReplaceMode")
 
     if settings["Theme"].contains("statusLineModeReplaceModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineModeReplaceModeBg = getColorCode("statusLineModeReplaceModeBg")
+      ColorThemeTable[ColorTheme.config].statusLineModeReplaceMode.bg = getColorCode("statusLineModeReplaceModeBg")
 
     if settings["Theme"].contains("statusLineReplaceModeInactive"):
-      ColorThemeTable[ColorTheme.config].statusLineReplaceModeInactive = getColorCode("statusLineReplaceModeInactive")
+      ColorThemeTable[ColorTheme.config].statusLineReplaceModeInactive.fg = getColorCode("statusLineReplaceModeInactive")
 
     if settings["Theme"].contains("statusLineReplaceModeInactiveBg"):
-      ColorThemeTable[ColorTheme.config].statusLineReplaceModeInactiveBg = getColorCode("statusLineReplaceModeInactiveBg")
+      ColorThemeTable[ColorTheme.config].statusLineReplaceModeInactive.bg = getColorCode("statusLineReplaceModeInactiveBg")
 
     if settings["Theme"].contains("statusLineFilerMode"):
-      ColorThemeTable[ColorTheme.config].statusLineFilerMode = getColorCode("statusLineFilerMode")
+      ColorThemeTable[ColorTheme.config].statusLineFilerMode.fg = getColorCode("statusLineFilerMode")
 
     if settings["Theme"].contains("statusLineFilerModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineFilerModeBg = getColorCode("statusLineFilerModeBg")
+      ColorThemeTable[ColorTheme.config].statusLineFilerMode.bg = getColorCode("statusLineFilerModeBg")
 
     if settings["Theme"].contains("statusLineModeFilerMode"):
-      ColorThemeTable[ColorTheme.config].statusLineModeFilerMode = getColorCode("statusLineModeFilerMode")
+      ColorThemeTable[ColorTheme.config].statusLineModeFilerMode.fg = getColorCode("statusLineModeFilerMode")
 
     if settings["Theme"].contains("statusLineModeFilerModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineModeFilerModeBg = getColorCode("statusLineModeFilerModeBg")
+      ColorThemeTable[ColorTheme.config].statusLineModeFilerMode.bg = getColorCode("statusLineModeFilerModeBg")
 
     if settings["Theme"].contains("statusLineFilerModeInactive"):
-      ColorThemeTable[ColorTheme.config].statusLineFilerModeInactive = getColorCode("statusLineFilerModeInactive")
+      ColorThemeTable[ColorTheme.config].statusLineFilerModeInactive.fg = getColorCode("statusLineFilerModeInactive")
 
     if settings["Theme"].contains("statusLineFilerModeInactiveBg"):
-      ColorThemeTable[ColorTheme.config].statusLineFilerModeInactiveBg = getColorCode("statusLineFilerModeInactiveBg")
+      ColorThemeTable[ColorTheme.config].statusLineFilerModeInactive.bg = getColorCode("statusLineFilerModeInactiveBg")
 
     if settings["Theme"].contains("statusLineExMode"):
-      ColorThemeTable[ColorTheme.config].statusLineExMode = getColorCode("statusLineExMode")
+      ColorThemeTable[ColorTheme.config].statusLineExMode.fg = getColorCode("statusLineExMode")
 
     if settings["Theme"].contains("statusLineExModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineExModeBg = getColorCode("statusLineExModeBg")
+      ColorThemeTable[ColorTheme.config].statusLineExMode.bg = getColorCode("statusLineExModeBg")
 
     if settings["Theme"].contains("statusLineModeExMode"):
-      ColorThemeTable[ColorTheme.config].statusLineModeExMode = getColorCode("statusLineModeExMode")
+      ColorThemeTable[ColorTheme.config].statusLineModeExMode.fg = getColorCode("statusLineModeExMode")
 
     if settings["Theme"].contains("statusLineModeExModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineModeExModeBg = getColorCode("statusLineModeExModeBg")
+      ColorThemeTable[ColorTheme.config].statusLineModeExMode.bg = getColorCode("statusLineModeExModeBg")
 
     if settings["Theme"].contains("statusLineExModeInactive"):
-      ColorThemeTable[ColorTheme.config].statusLineExModeInactive = getColorCode("statusLineExModeInactive")
+      ColorThemeTable[ColorTheme.config].statusLineExModeInactive.fg = getColorCode("statusLineExModeInactive")
 
     if settings["Theme"].contains("statusLineExModeInactiveBg"):
-      ColorThemeTable[ColorTheme.config].statusLineExModeInactiveBg = getColorCode("statusLineExModeInactiveBg")
+      ColorThemeTable[ColorTheme.config].statusLineExModeInactive.bg = getColorCode("statusLineExModeInactiveBg")
 
     if settings["Theme"].contains("statusLineGitBranch"):
-      ColorThemeTable[ColorTheme.config].statusLineGitBranch = getColorCode("statusLineGitBranch")
+      ColorThemeTable[ColorTheme.config].statusLineGitBranch.fg = getColorCode("statusLineGitBranch")
 
     if settings["Theme"].contains("statusLineGitBranchBg"):
-      ColorThemeTable[ColorTheme.config].statusLineGitBranchBg = getColorCode("statusLineGitBranchBg")
+      ColorThemeTable[ColorTheme.config].statusLineGitBranch.bg = getColorCode("statusLineGitBranchBg")
 
     if settings["Theme"].contains("tab"):
-      ColorThemeTable[ColorTheme.config].tab = getColorCode("tab")
+      ColorThemeTable[ColorTheme.config].tab.fg = getColorCode("tab")
 
     if settings["Theme"].contains("tabBg"):
-      ColorThemeTable[ColorTheme.config].tabBg = getColorCode("tabBg")
+      ColorThemeTable[ColorTheme.config].tab.bg = getColorCode("tabBg")
 
     if settings["Theme"].contains("currentTab"):
-      ColorThemeTable[ColorTheme.config].currentTab = getColorCode("currentTab")
+      ColorThemeTable[ColorTheme.config].currentTab.fg = getColorCode("currentTab")
 
     if settings["Theme"].contains("currentTabBg"):
-      ColorThemeTable[ColorTheme.config].currentTabBg = getColorCode("currentTabBg")
+      ColorThemeTable[ColorTheme.config].currentTab.bg = getColorCode("currentTabBg")
 
     if settings["Theme"].contains("commandBar"):
-      ColorThemeTable[ColorTheme.config].commandBar = getColorCode("commandBar")
+      ColorThemeTable[ColorTheme.config].commandBar.fg = getColorCode("commandBar")
 
     if settings["Theme"].contains("commandBarBg"):
-      ColorThemeTable[ColorTheme.config].commandBarBg = getColorCode("commandBarBg")
+      ColorThemeTable[ColorTheme.config].commandBar.bg = getColorCode("commandBarBg")
 
     if settings["Theme"].contains("errorMessage"):
-      ColorThemeTable[ColorTheme.config].errorMessage = getColorCode("errorMessage")
+      ColorThemeTable[ColorTheme.config].errorMessage.fg = getColorCode("errorMessage")
 
     if settings["Theme"].contains("errorMessageBg"):
-      ColorThemeTable[ColorTheme.config].errorMessageBg = getColorCode("errorMessageBg")
+      ColorThemeTable[ColorTheme.config].errorMessage.bg = getColorCode("errorMessageBg")
 
     if settings["Theme"].contains("searchResult"):
-      ColorThemeTable[ColorTheme.config].searchResult = getColorCode("searchResult")
+      ColorThemeTable[ColorTheme.config].searchResult.fg = getColorCode("searchResult")
 
     if settings["Theme"].contains("searchResultBg"):
-      ColorThemeTable[ColorTheme.config].searchResultBg = getColorCode("searchResultBg")
+      ColorThemeTable[ColorTheme.config].searchResult.bg = getColorCode("searchResultBg")
 
     if settings["Theme"].contains("visualMode"):
-      ColorThemeTable[ColorTheme.config].visualMode = getColorCode("visualMode")
+      ColorThemeTable[ColorTheme.config].visualMode.fg = getColorCode("visualMode")
 
     if settings["Theme"].contains("visualModeBg"):
-      ColorThemeTable[ColorTheme.config].visualModeBg = getColorCode("visualModeBg")
+      ColorThemeTable[ColorTheme.config].visualMode.bg = getColorCode("visualModeBg")
 
     if settings["Theme"].contains("defaultChar"):
-      ColorThemeTable[ColorTheme.config].defaultChar = getColorCode("defaultChar")
+      ColorThemeTable[ColorTheme.config].defaultChar.fg = getColorCode("defaultChar")
 
-    if settings["Theme"].contains("gtKeyword"):
-      ColorThemeTable[ColorTheme.config].gtKeyword = getColorCode("gtKeyword")
+    if settings["Theme"].contains("keyword"):
+      ColorThemeTable[ColorTheme.config].keyword.fg = getColorCode("keyword")
 
-    if settings["Theme"].contains("gtFunctionName"):
-      ColorThemeTable[ColorTheme.config].gtFunctionName = getColorCode("gtFunctionName")
+    if settings["Theme"].contains("functionName"):
+      ColorThemeTable[ColorTheme.config].functionName.fg = getColorCode("functionName")
 
-    if settings["Theme"].contains("gtTypeName"):
-      ColorThemeTable[ColorTheme.config].gtTypeName = getColorCode("gtTypeName")
+    if settings["Theme"].contains("typeName"):
+      ColorThemeTable[ColorTheme.config].typeName.fg = getColorCode("typeName")
 
-    if settings["Theme"].contains("gtBoolean"):
-      ColorThemeTable[ColorTheme.config].gtBoolean = getColorCode("gtBoolean")
+    if settings["Theme"].contains("boolean"):
+      ColorThemeTable[ColorTheme.config].boolean.fg = getColorCode("boolean")
 
-    if settings["Theme"].contains("gtSpecialVar"):
-      ColorThemeTable[ColorTheme.config].gtSpecialVar = getColorCode("gtSpecialVar")
+    if settings["Theme"].contains("specialVar"):
+      ColorThemeTable[ColorTheme.config].specialVar.fg = getColorCode("specialVar")
 
-    if settings["Theme"].contains("gtBuiltin"):
-      ColorThemeTable[ColorTheme.config].gtBuiltin = getColorCode("gtBuiltin")
+    if settings["Theme"].contains("builtin"):
+      ColorThemeTable[ColorTheme.config].builtin.fg = getColorCode("builtin")
 
-    if settings["Theme"].contains("gtStringLit"):
-      ColorThemeTable[ColorTheme.config].gtStringLit = getColorCode("gtStringLit")
+    if settings["Theme"].contains("stringLit"):
+      ColorThemeTable[ColorTheme.config].stringLit.fg = getColorCode("stringLit")
 
-    if settings["Theme"].contains("gtDecNumber"):
-      ColorThemeTable[ColorTheme.config].gtDecNumber = getColorCode("gtDecNumber")
+    if settings["Theme"].contains("decNumber"):
+      ColorThemeTable[ColorTheme.config].decNumber.fg = getColorCode("decNumber")
 
-    if settings["Theme"].contains("gtComment"):
-      ColorThemeTable[ColorTheme.config].gtComment = getColorCode("gtComment")
+    if settings["Theme"].contains("comment"):
+      ColorThemeTable[ColorTheme.config].comment.fg = getColorCode("comment")
 
-    if settings["Theme"].contains("gtLongComment"):
-      ColorThemeTable[ColorTheme.config].gtLongComment = getColorCode("gtLongComment")
+    if settings["Theme"].contains("longComment"):
+      ColorThemeTable[ColorTheme.config].longComment.fg = getColorCode("longComment")
 
-    if settings["Theme"].contains("gtWhitespace"):
-      ColorThemeTable[ColorTheme.config].gtWhitespace = getColorCode("gtWhitespace")
+    if settings["Theme"].contains("whitespace"):
+      ColorThemeTable[ColorTheme.config].whitespace.fg = getColorCode("whitespace")
 
-    if settings["Theme"].contains("gtPreprocessor"):
-      ColorThemeTable[ColorTheme.config].gtPreprocessor = getColorCode("gtPreprocessor")
+    if settings["Theme"].contains("preprocessor"):
+      ColorThemeTable[ColorTheme.config].preprocessor.fg = getColorCode("preprocessor")
 
     if settings["Theme"].contains("currentFile"):
-      ColorThemeTable[ColorTheme.config].currentFile = getColorCode("currentFile")
+      ColorThemeTable[ColorTheme.config].currentFile.fg = getColorCode("currentFile")
 
     if settings["Theme"].contains("currentFileBg"):
-      ColorThemeTable[ColorTheme.config].currentFileBg = getColorCode("currentFileBg")
+      ColorThemeTable[ColorTheme.config].currentFile.bg = getColorCode("currentFileBg")
 
     if settings["Theme"].contains("file"):
-      ColorThemeTable[ColorTheme.config].file = getColorCode("file")
+      ColorThemeTable[ColorTheme.config].file.fg = getColorCode("file")
 
     if settings["Theme"].contains("fileBg"):
-      ColorThemeTable[ColorTheme.config].fileBg = getColorCode("fileBg")
+      ColorThemeTable[ColorTheme.config].file.bg = getColorCode("fileBg")
 
     if settings["Theme"].contains("dir"):
-      ColorThemeTable[ColorTheme.config].dir = getColorCode("dir")
+      ColorThemeTable[ColorTheme.config].dir.fg = getColorCode("dir")
 
     if settings["Theme"].contains("dirBg"):
-      ColorThemeTable[ColorTheme.config].dirBg = getColorCode("dirBg")
+      ColorThemeTable[ColorTheme.config].dir.bg = getColorCode("dirBg")
 
     if settings["Theme"].contains("pcLink"):
-      ColorThemeTable[ColorTheme.config].pcLink = getColorCode("pcLink")
+      ColorThemeTable[ColorTheme.config].pcLink.fg = getColorCode("pcLink")
 
     if settings["Theme"].contains("pcLinkBg"):
-      ColorThemeTable[ColorTheme.config].pcLinkBg = getColorCode("pcLinkBg")
+      ColorThemeTable[ColorTheme.config].pcLink.bg = getColorCode("pcLinkBg")
 
     if settings["Theme"].contains("popUpWindow"):
-      ColorThemeTable[ColorTheme.config].popUpWindow = getColorCode("popUpWindow")
+      ColorThemeTable[ColorTheme.config].popUpWindow.fg = getColorCode("popUpWindow")
 
     if settings["Theme"].contains("popUpWindowBg"):
-      ColorThemeTable[ColorTheme.config].popUpWindowBg = getColorCode("popUpWindowBg")
+      ColorThemeTable[ColorTheme.config].popUpWindow.bg = getColorCode("popUpWindowBg")
 
     if settings["Theme"].contains("popUpWinCurrentLine"):
-      ColorThemeTable[ColorTheme.config].popUpWinCurrentLine = getColorCode("popUpWinCurrentLine")
+      ColorThemeTable[ColorTheme.config].popUpWinCurrentLine.fg = getColorCode("popUpWinCurrentLine")
 
     if settings["Theme"].contains("popUpWinCurrentLineBg"):
-      ColorThemeTable[ColorTheme.config].popUpWinCurrentLineBg = getColorCode("popUpWinCurrentLineBg")
+      ColorThemeTable[ColorTheme.config].popUpWinCurrentLine.bg = getColorCode("popUpWinCurrentLineBg")
 
     if settings["Theme"].contains("replaceText"):
-      ColorThemeTable[ColorTheme.config].replaceText = getColorCode("replaceText")
+      ColorThemeTable[ColorTheme.config].replaceText.fg = getColorCode("replaceText")
 
     if settings["Theme"].contains("replaceTextBg"):
-      ColorThemeTable[ColorTheme.config].replaceTextBg = getColorCode("replaceTextBg")
+      ColorThemeTable[ColorTheme.config].replaceText.bg = getColorCode("replaceTextBg")
 
     if settings["Theme"].contains("parenText"):
-      ColorThemeTable[ColorTheme.config].parenText = getColorCode("parenText")
+      ColorThemeTable[ColorTheme.config].parenText.fg = getColorCode("parenText")
 
     if settings["Theme"].contains("parenTextBg"):
-      ColorThemeTable[ColorTheme.config].parenTextBg = getColorCode("parenTextBg")
+      ColorThemeTable[ColorTheme.config].parenText.bg = getColorCode("parenTextBg")
 
     if settings["Theme"].contains("currentWordBg"):
-      ColorThemeTable[ColorTheme.config].currentWordBg = getColorCode("currentWordBg")
+      ColorThemeTable[ColorTheme.config].currentWord.bg = getColorCode("currentWordBg")
 
     if settings["Theme"].contains("highlightFullWidthSpace"):
-      ColorThemeTable[ColorTheme.config].highlightFullWidthSpace = getColorCode("highlightFullWidthSpace")
+      ColorThemeTable[ColorTheme.config].highlightFullWidthSpace.fg = getColorCode("highlightFullWidthSpace")
 
     if settings["Theme"].contains("highlightFullWidthSpaceBg"):
-      ColorThemeTable[ColorTheme.config].highlightFullWidthSpaceBg = getColorCode("highlightFullWidthSpaceBg")
+      ColorThemeTable[ColorTheme.config].highlightFullWidthSpace.bg = getColorCode("highlightFullWidthSpaceBg")
 
     if settings["Theme"].contains("highlightTrailingSpaces"):
-      ColorThemeTable[ColorTheme.config].highlightTrailingSpaces = getColorCode("highlightTrailingSpaces")
+      ColorThemeTable[ColorTheme.config].highlightTrailingSpaces.fg = getColorCode("highlightTrailingSpaces")
 
     if settings["Theme"].contains("highlightTrailingSpacesBg"):
-      ColorThemeTable[ColorTheme.config].highlightTrailingSpacesBg = getColorCode("highlightTrailingSpacesBg")
+      ColorThemeTable[ColorTheme.config].highlightTrailingSpaces.bg = getColorCode("highlightTrailingSpacesBg")
 
     if settings["Theme"].contains("reservedWord"):
-      ColorThemeTable[ColorTheme.config].reservedWord = getColorCode("reservedWord")
+      ColorThemeTable[ColorTheme.config].reservedWord.fg = getColorCode("reservedWord")
 
     if settings["Theme"].contains("reservedWordBg"):
-      ColorThemeTable[ColorTheme.config].reservedWordBg = getColorCode("reservedWordBg")
+      ColorThemeTable[ColorTheme.config].reservedWord.bg = getColorCode("reservedWordBg")
 
     if settings["Theme"].contains("currentHistory"):
-      ColorThemeTable[ColorTheme.config].currentHistory = getColorCode("currentHistory")
+      ColorThemeTable[ColorTheme.config].currentHistory.fg = getColorCode("currentHistory")
 
     if settings["Theme"].contains("currentHistoryBg"):
-      ColorThemeTable[ColorTheme.config].currentHistoryBg = getColorCode("currentHistoryBg")
+      ColorThemeTable[ColorTheme.config].currentHistory.bg = getColorCode("currentHistoryBg")
 
     if settings["Theme"].contains("addedLine"):
-      ColorThemeTable[ColorTheme.config].addedLine = getColorCode("addedLine")
+      ColorThemeTable[ColorTheme.config].addedLine.fg = getColorCode("addedLine")
 
     if settings["Theme"].contains("addedLineBg"):
-      ColorThemeTable[ColorTheme.config].addedLineBg = getColorCode("addedLineBg")
+      ColorThemeTable[ColorTheme.config].addedLine.bg = getColorCode("addedLineBg")
 
     if settings["Theme"].contains("deletedLine"):
-      ColorThemeTable[ColorTheme.config].deletedLine = getColorCode("deletedLine")
+      ColorThemeTable[ColorTheme.config].deletedLine.fg = getColorCode("deletedLine")
 
     if settings["Theme"].contains("deletedLineBg"):
-      ColorThemeTable[ColorTheme.config].deletedLineBg = getColorCode("deletedLineBg")
+      ColorThemeTable[ColorTheme.config].deletedLine.bg = getColorCode("deletedLineBg")
 
     if settings["Theme"].contains("currentSetting"):
-      ColorThemeTable[ColorTheme.config].currentSetting = getColorCode("currentSetting")
+      ColorThemeTable[ColorTheme.config].currentSetting.fg = getColorCode("currentSetting")
 
     if settings["Theme"].contains("currentSettingBg"):
-      ColorThemeTable[ColorTheme.config].currentSettingBg = getColorCode("currentSettingBg")
+      ColorThemeTable[ColorTheme.config].currentSetting.bg = getColorCode("currentSettingBg")
 
     if settings["Theme"].contains("currentLineBg"):
-      ColorThemeTable[ColorTheme.config].currentLineBg = getColorCode("currentLineBg")
+      ColorThemeTable[ColorTheme.config].currentLine.bg = getColorCode("currentLineBg")
 
     result.editorColorTheme = ColorTheme.config
 
@@ -2282,98 +2286,98 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   let theme = ColorThemeTable[ColorTheme.config]
   result.addLine fmt "[Theme]"
   result.addLine fmt "baseTheme = \"{$settings.editorColorTheme}\""
-  result.addLine fmt "editorBg = \"{$theme.editorBg}\""
-  result.addLine fmt "lineNum = \"{$theme.lineNum}\""
-  result.addLine fmt "lineNumBg = \"{$theme.lineNumBg}\""
+  result.addLine fmt "editorBg = \"{$theme.default}\""
+  result.addLine fmt "lineNum = \"{$theme.lineNum.fg}\""
+  result.addLine fmt "lineNumBg = \"{$theme.lineNum.bg}\""
   result.addLine fmt "currentLineNum = \"{$theme.currentLineNum}\""
-  result.addLine fmt "currentLineNumBg = \"{$theme.currentLineNumBg}\""
+  result.addLine fmt "currentLineNumBg = \"{$theme.currentLineNum.bg}\""
   result.addLine fmt "statusLineNormalMode = \"{$theme.statusLineNormalMode}\""
-  result.addLine fmt "statusLineNormalModeBg = \"{$theme.statusLineNormalModeBg}\""
+  result.addLine fmt "statusLineNormalModeBg = \"{$theme.statusLineNormalMode.bg}\""
   result.addLine fmt "statusLineModeNormalMode = \"{$theme.statusLineNormalMode}\""
-  result.addLine fmt "statusLineModeNormalModeBg = \"{$theme.statusLineNormalModeBg}\""
+  result.addLine fmt "statusLineModeNormalModeBg = \"{$theme.statusLineNormalMode.bg}\""
   result.addLine fmt "statusLineNormalModeInactive = \"{$theme.statusLineNormalModeInactive}\""
-  result.addLine fmt "statusLineNormalModeInactiveBg = \"{$theme.statusLineNormalModeInactiveBg}\""
+  result.addLine fmt "statusLineNormalModeInactiveBg = \"{$theme.statusLineNormalModeInactive.bg}\""
   result.addLine fmt "statusLineInsertMode = \"{$theme.statusLineInsertMode}\""
-  result.addLine fmt "statusLineInsertModeBg = \"{$theme.statusLineInsertModeBg}\""
+  result.addLine fmt "statusLineInsertModeBg = \"{$theme.statusLineInsertMode.bg}\""
   result.addLine fmt "statusLineModeInsertMode = \"{$theme.statusLineModeInsertMode}\""
-  result.addLine fmt "statusLineModeInsertModeBg = \"{$theme.statusLineModeInsertModeBg}\""
+  result.addLine fmt "statusLineModeInsertModeBg = \"{$theme.statusLineModeInsertMode.bg}\""
   result.addLine fmt "statusLineInsertModeInactive = \"{$theme.statusLineInsertModeInactive}\""
-  result.addLine fmt "statusLineInsertModeInactiveBg = \"{$theme.statusLineInsertModeInactiveBg}\""
+  result.addLine fmt "statusLineInsertModeInactiveBg = \"{$theme.statusLineInsertModeInactive.bg}\""
   result.addLine fmt "statusLineVisualMode = \"{$theme.statusLineVisualMode}\""
-  result.addLine fmt "statusLineVisualModeBg = \"{$theme.statusLineVisualModeBg}\""
+  result.addLine fmt "statusLineVisualModeBg = \"{$theme.statusLineVisualMode.bg}\""
   result.addLine fmt "statusLineModeVisualMode = \"{$theme.statusLineModeVisualMode}\""
-  result.addLine fmt "statusLineModeVisualModeBg = \"{$theme.statusLineModeVisualModeBg}\""
+  result.addLine fmt "statusLineModeVisualModeBg = \"{$theme.statusLineModeVisualMode.bg}\""
   result.addLine fmt "statusLineVisualModeInactive = \"{$theme.statusLineVisualModeInactive}\""
-  result.addLine fmt "statusLineVisualModeInactiveBg = \"{$theme.statusLineVisualModeInactiveBg}\""
+  result.addLine fmt "statusLineVisualModeInactiveBg = \"{$theme.statusLineVisualModeInactive.bg}\""
   result.addLine fmt "statusLineReplaceMode = \"{$theme.statusLineReplaceMode}\""
-  result.addLine fmt "statusLineReplaceModeBg = \"{$theme.statusLineReplaceModeBg}\""
+  result.addLine fmt "statusLineReplaceModeBg = \"{$theme.statusLineReplaceMode.bg}\""
   result.addLine fmt "statusLineModeReplaceMode = \"{$theme.statusLineModeReplaceMode}\""
-  result.addLine fmt "statusLineModeReplaceModeBg = \"{$theme.statusLineModeReplaceModeBg}\""
+  result.addLine fmt "statusLineModeReplaceModeBg = \"{$theme.statusLineModeReplaceMode.bg}\""
   result.addLine fmt "statusLineReplaceModeInactive = \"{$theme.statusLineReplaceModeInactive}\""
-  result.addLine fmt "statusLineReplaceModeInactiveBg = \"{$theme.statusLineReplaceModeInactiveBg}\""
+  result.addLine fmt "statusLineReplaceModeInactiveBg = \"{$theme.statusLineReplaceModeInactive.bg}\""
   result.addLine fmt "statusLineFilerMode = \"{$theme.statusLineFilerMode}\""
-  result.addLine fmt "statusLineFilerModeBg = \"{$theme.statusLineFilerModeBg}\""
+  result.addLine fmt "statusLineFilerModeBg = \"{$theme.statusLineFilerMode.bg}\""
   result.addLine fmt "statusLineModeFilerMode = \"{$theme.statusLineModeFilerMode}\""
-  result.addLine fmt "statusLineModeFilerModeBg = \"{$theme.statusLineModeFilerModeBg}\""
+  result.addLine fmt "statusLineModeFilerModeBg = \"{$theme.statusLineModeFilerMode.bg}\""
   result.addLine fmt "statusLineFilerModeInactive = \"{$theme.statusLineFilerModeInactive}\""
-  result.addLine fmt "statusLineFilerModeInactiveBg = \"{$theme.statusLineFilerModeInactiveBg}\""
+  result.addLine fmt "statusLineFilerModeInactiveBg = \"{$theme.statusLineFilerModeInactive.bg}\""
   result.addLine fmt "statusLineExMode = \"{$theme.statusLineExMode}\""
-  result.addLine fmt "statusLineExModeBg = \"{$theme.statusLineExModeBg}\""
+  result.addLine fmt "statusLineExModeBg = \"{$theme.statusLineExMode.bg}\""
   result.addLine fmt "statusLineModeExMode = \"{$theme.statusLineModeExMode}\""
-  result.addLine fmt "statusLineModeExModeBg = \"{$theme.statusLineModeExModeBg}\""
+  result.addLine fmt "statusLineModeExModeBg = \"{$theme.statusLineModeExMode.bg}\""
   result.addLine fmt "statusLineExModeInactive = \"{$theme.statusLineExModeInactive}\""
-  result.addLine fmt "statusLineExModeInactiveBg = \"{$theme.statusLineExModeInactiveBg}\""
+  result.addLine fmt "statusLineExModeInactiveBg = \"{$theme.statusLineExModeInactive.bg}\""
   result.addLine fmt "statusLineGitBranch = \"{$theme.statusLineGitBranch}\""
-  result.addLine fmt "statusLineGitBranchBg = \"{$theme.statusLineGitBranchBg}\""
+  result.addLine fmt "statusLineGitBranchBg = \"{$theme.statusLineGitBranch.bg}\""
   result.addLine fmt "tab = \"{$theme.tab}\""
-  result.addLine fmt "tabBg = \"{$theme.tabBg}\""
+  result.addLine fmt "tabBg = \"{$theme.tab.bg}\""
   result.addLine fmt "currentTab = \"{$theme.currentTab}\""
-  result.addLine fmt "currentTabBg = \"{$theme.currentTabBg}\""
+  result.addLine fmt "currentTabBg = \"{$theme.currentTab.bg}\""
   result.addLine fmt "commandBar = \"{$theme.commandBar}\""
-  result.addLine fmt "commandBarBg = \"{$theme.currentTabBg}\""
+  result.addLine fmt "commandBarBg = \"{$theme.currentTab.bg}\""
   result.addLine fmt "errorMessage = \"{$theme.errorMessage}\""
-  result.addLine fmt "errorMessageBg = \"{$theme.errorMessageBg}\""
+  result.addLine fmt "errorMessageBg = \"{$theme.errorMessage.bg}\""
   result.addLine fmt "searchResult = \"{$theme.searchResult}\""
-  result.addLine fmt "searchResultBg = \"{$theme.searchResultBg}\""
+  result.addLine fmt "searchResultBg = \"{$theme.searchResult.bg}\""
   result.addLine fmt "visualMode = \"{$theme.visualMode}\""
-  result.addLine fmt "visualModeBg = \"{$theme.visualModeBg}\""
+  result.addLine fmt "visualModeBg = \"{$theme.visualMode.bg}\""
   result.addLine fmt "defaultChar = \"{$theme.defaultChar}\""
-  result.addLine fmt "gtKeyword = \"{$theme.gtKeyword}\""
-  result.addLine fmt "gtFunctionName = \"{$theme.gtFunctionName}\""
-  result.addLine fmt "gtTypeName= \"{$theme.gtTypeName}\""
-  result.addLine fmt "gtBoolean = \"{$theme.gtBoolean}\""
-  result.addLine fmt "gtStringLit = \"{$theme.gtStringLit}\""
-  result.addLine fmt "gtSpecialVar = \"{$theme.gtSpecialVar}\""
-  result.addLine fmt "gtBuiltin = \"{$theme.gtBuiltin}\""
-  result.addLine fmt "gtDecNumber = \"{$theme.gtDecNumber}\""
-  result.addLine fmt "gtComment = \"{$theme.gtComment}\""
-  result.addLine fmt "gtLongComment = \"{$theme.gtLongComment}\""
-  result.addLine fmt "gtWhitespace = \"{$theme.gtWhitespace}\""
-  result.addLine fmt "gtPreprocessor = \"{$theme.gtPreprocessor}\""
+  result.addLine fmt "keyword = \"{$theme.keyword}\""
+  result.addLine fmt "functionName = \"{$theme.functionName}\""
+  result.addLine fmt "typeName= \"{$theme.typeName}\""
+  result.addLine fmt "boolean = \"{$theme.boolean}\""
+  result.addLine fmt "stringLit = \"{$theme.stringLit}\""
+  result.addLine fmt "specialVar = \"{$theme.specialVar}\""
+  result.addLine fmt "builtin = \"{$theme.builtin}\""
+  result.addLine fmt "decNumber = \"{$theme.decNumber}\""
+  result.addLine fmt "comment = \"{$theme.comment}\""
+  result.addLine fmt "longComment = \"{$theme.longComment}\""
+  result.addLine fmt "whitespace = \"{$theme.whitespace}\""
+  result.addLine fmt "preprocessor = \"{$theme.preprocessor}\""
   result.addLine fmt "currentFile = \"{$theme.currentFile}\""
-  result.addLine fmt "currentFileBg = \"{$theme.currentFileBg}\""
+  result.addLine fmt "currentFileBg = \"{$theme.currentFile.bg}\""
   result.addLine fmt "file = \"{$theme.file}\""
-  result.addLine fmt "fileBg = \"{$theme.fileBg}\""
+  result.addLine fmt "fileBg = \"{$theme.file.bg}\""
   result.addLine fmt "dir = \"{$theme.dir}\""
-  result.addLine fmt "dirBg = \"{$theme.dirBg}\""
+  result.addLine fmt "dirBg = \"{$theme.dir.bg}\""
   result.addLine fmt "pcLink = \"{$theme.pcLink}\""
-  result.addLine fmt "pcLinkBg = \"{$theme.pcLinkBg}\""
+  result.addLine fmt "pcLinkBg = \"{$theme.pcLink.bg}\""
   result.addLine fmt "popUpWindow = \"{$theme.popUpWindow}\""
-  result.addLine fmt "popUpWindowBg = \"{$theme.popUpWindowBg}\""
+  result.addLine fmt "popUpWindowBg = \"{$theme.popUpWindow.bg}\""
   result.addLine fmt "popUpWinCurrentLine = \"{$theme.popUpWinCurrentLine}\""
-  result.addLine fmt "popUpWinCurrentLineBg = \"{$theme.popUpWinCurrentLineBg}\""
+  result.addLine fmt "popUpWinCurrentLineBg = \"{$theme.popUpWinCurrentLine.bg}\""
   result.addLine fmt "replaceText = \"{$theme.replaceText}\""
-  result.addLine fmt "replaceTextBg = \"{$theme.replaceTextBg}\""
+  result.addLine fmt "replaceTextBg = \"{$theme.replaceText.bg}\""
   result.addLine fmt "parenText = \"{$theme.parenText}\""
-  result.addLine fmt "parenTextBg = \"{$theme.parenTextBg}\""
+  result.addLine fmt "parenTextBg = \"{$theme.parenText.bg}\""
   result.addLine fmt "currentWord = \"{$theme.currentWord}\""
-  result.addLine fmt "currentWordBg = \"{$theme.currentFileBg}\""
+  result.addLine fmt "currentWordBg = \"{$theme.currentFile.bg}\""
   result.addLine fmt "highlightFullWidthSpace = \"{$theme.highlightFullWidthSpace}\""
-  result.addLine fmt "highlightFullWidthSpaceBg = \"{$theme.highlightFullWidthSpaceBg}\""
+  result.addLine fmt "highlightFullWidthSpaceBg = \"{$theme.highlightFullWidthSpace.bg}\""
   result.addLine fmt "highlightTrailingSpaces = \"{$theme.highlightTrailingSpaces}\""
-  result.addLine fmt "highlightTrailingSpacesBg = \"{$theme.highlightTrailingSpacesBg}\""
+  result.addLine fmt "highlightTrailingSpacesBg = \"{$theme.highlightTrailingSpaces.bg}\""
   result.addLine fmt "reservedWord = \"{$theme.reservedWord}\""
-  result.addLine fmt "reservedWordBg = \"{$theme.reservedWordBg}\""
+  result.addLine fmt "reservedWordBg = \"{$theme.reservedWord.bg}\""
   result.addLine fmt "currentSetting = \"{$theme.currentSetting}\""
-  result.addLine fmt "currentSettingBg = \"{$theme.currentSettingBg}\""
-  result.addLine fmt "currentLineBg = \"{$theme.currentLineBg}\""
+  result.addLine fmt "currentSettingBg = \"{$theme.currentSetting.bg}\""
+  result.addLine fmt "currentLineBg = \"{$theme.currentLine.bg}\""

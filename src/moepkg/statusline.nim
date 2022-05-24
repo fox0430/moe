@@ -35,7 +35,7 @@ proc showFilename(mode, prevMode: Mode): bool {.inline.} =
 
 proc appendFileName(statusLineBuffer: var seq[Rune],
                     bufStatus: BufferStatus,
-                    color: EditorColorPair) =
+                    color: ColorPair) =
 
   let
     mode = bufStatus.mode
@@ -55,33 +55,45 @@ proc appendFileName(statusLineBuffer: var seq[Rune],
   # TODO: Fix
   #statusLineWindow.append(filename, color)
 
-proc writeStatusLineNormalModeInfo(bufStatus: var BufferStatus,
-                                   statusLine: var StatusLine,
-                                   statusLineBuffer: var seq[Rune],
-                                   windowNode: WindowNode,
-                                   isActiveWindow: bool,
-                                   settings: EditorSettings) =
+proc writeStatusLineNormalModeInfo(
+  bufStatus: var BufferStatus,
+  statusLine: var StatusLine,
+  statusLineBuffer: var seq[Rune],
+  windowNode: WindowNode,
+  theme: ColorTheme,
+  isActiveWindow: bool,
+  settings: EditorSettings) =
 
-  proc setStatusLineColor(mode: Mode): EditorColorPair =
+  proc setStatusLineColor(theme: ColorTheme, mode: Mode): ColorPair =
     case mode:
       of Mode.insert:
-        if isActiveWindow: return EditorColorPair.statusLineInsertMode
-        else: return EditorColorPair.statusLineInsertModeInactive
+        if isActiveWindow:
+          return ColorThemeTable[theme].EditorColorPair.statusLineInsertMode
+        else:
+          return ColorThemeTable[theme].EditorColorPair.statusLineInsertModeInactive
       of Mode.visual:
-        if isActiveWindow: return EditorColorPair.statusLineVisualMode
-        else: return EditorColorPair.statusLineVisualModeInactive
+        if isActiveWindow:
+          return ColorThemeTable[theme].EditorColorPair.statusLineVisualMode
+        else:
+          return ColorThemeTable[theme].EditorColorPair.statusLineVisualModeInactive
       of Mode.replace:
-        if isActiveWindow: return EditorColorPair.statusLineReplaceMode
-        else: return EditorColorPair.statusLineReplaceModeInactive
+        if isActiveWindow:
+          return ColorThemeTable[theme].EditorColorPair.statusLineReplaceMode
+        else:
+          return ColorThemeTable[theme].EditorColorPair.statusLineReplaceModeInactive
       of Mode.ex:
-        if isActiveWindow: return EditorColorPair.statusLineExMode
-        else: return EditorColorPair.statusLineExModeInactive
+        if isActiveWindow:
+          return ColorThemeTable[theme].EditorColorPair.statusLineExMode
+        else:
+          return ColorThemeTable[theme].EditorColorPair.statusLineExModeInactive
       else:
-        if isActiveWindow: return EditorColorPair.statusLineNormalMode
-        else: return EditorColorPair.statusLineNormalModeInactive
+        if isActiveWindow:
+          return ColorThemeTable[theme].EditorColorPair.statusLineNormalMode
+        else:
+          return ColorThemeTable[theme].EditorColorPair.statusLineNormalModeInactive
 
   let
-    color = setStatusLineColor(bufStatus.mode)
+    color = setStatusLineColor(theme, bufStatus.mode)
     statusLineWidth = statusLine.w
 
   statusLineBuffer.add(ru" ")
@@ -117,16 +129,21 @@ proc writeStatusLineNormalModeInfo(bufStatus: var BufferStatus,
   let x = statusLineWidth - info.len
   write(x, statusLine.y, info)
 
-proc writeStatusLineFilerModeInfo(bufStatus: var BufferStatus,
-                                 statusLine: var StatusLine,
-                                 statusLineBuffer: var seq[Rune],
-                                 windowNode: WindowNode,
-                                 isActiveWindow: bool,
-                                 settings: EditorSettings) =
+proc writeStatusLineFilerModeInfo(
+  bufStatus: var BufferStatus,
+  statusLine: var StatusLine,
+  statusLineBuffer: var seq[Rune],
+  windowNode: WindowNode,
+  theme: ColorTheme,
+  isActiveWindow: bool,
+  settings: EditorSettings) =
 
   let
-    color = if isActiveWindow: EditorColorPair.statusLineFilerMode
-            else: EditorColorPair.statusLineFilerModeInactive
+    color =
+      if isActiveWindow:
+        ColorThemeTable[theme].EditorColorPair.statusLineFilerMode
+      else:
+        ColorThemeTable[theme].EditorColorPair.statusLineFilerModeInactive
     statusLineWidth = statusLine.w
 
   if settings.statusLine.directory:
@@ -138,16 +155,21 @@ proc writeStatusLineFilerModeInfo(bufStatus: var BufferStatus,
   # TODO: Fix
   #statusLine.window.append(ru " ".repeat(statusLineWidth - 5), color)
 
-proc writeStatusLineBufferManagerModeInfo(bufStatus: var BufferStatus,
-                                         statusLine: var StatusLine,
-                                         statusLineBuffer: var seq[Rune],
-                                         windowNode: WindowNode,
-                                         isActiveWindow: bool,
-                                         settings: EditorSettings) =
+proc writeStatusLineBufferManagerModeInfo(
+  bufStatus: var BufferStatus,
+  statusLine: var StatusLine,
+  statusLineBuffer: var seq[Rune],
+  windowNode: WindowNode,
+  theme: ColorTheme,
+  isActiveWindow: bool,
+  settings: EditorSettings) =
 
   let
-    color = if isActiveWindow: EditorColorPair.statusLineNormalMode
-            else: EditorColorPair.statusLineNormalModeInactive
+    color =
+      if isActiveWindow:
+        ColorThemeTable[theme].EditorColorPair.statusLineNormalMode
+      else:
+        ColorThemeTable[theme].EditorColorPair.statusLineNormalModeInactive
     info = fmt"{windowNode.currentLine + 1}/{bufStatus.buffer.len - 1}"
     statusLineWidth = statusLine.w
 
@@ -157,16 +179,21 @@ proc writeStatusLineBufferManagerModeInfo(bufStatus: var BufferStatus,
   #statusLine.window.write(0, statusLineWidth - info.len - 1, info, color)
   write(0, statusLineWidth - info.len - 1, info)
 
-proc writeStatusLineLogViewerModeInfo(bufStatus: var BufferStatus,
-                                  statusLine: var StatusLine,
-                                  statusLineBuffer: var seq[Rune],
-                                  windowNode: WindowNode,
-                                  isActiveWindow: bool,
-                                  settings: EditorSettings) =
+proc writeStatusLineLogViewerModeInfo(
+  bufStatus: var BufferStatus,
+  statusLine: var StatusLine,
+  statusLineBuffer: var seq[Rune],
+  windowNode: WindowNode,
+  theme: ColorTheme,
+  isActiveWindow: bool,
+  settings: EditorSettings) =
 
   let
-    color = if isActiveWindow: EditorColorPair.statusLineNormalMode
-            else: EditorColorPair.statusLineNormalModeInactive
+    color =
+      if isActiveWindow:
+        ColorThemeTable[theme].EditorColorPair.statusLineNormalMode
+      else:
+        ColorThemeTable[theme].EditorColorPair.statusLineNormalModeInactive
     info = fmt"{windowNode.currentLine + 1}/{bufStatus.buffer.len - 1}"
     statusLineWidth = statusLine.w
 
@@ -176,9 +203,11 @@ proc writeStatusLineLogViewerModeInfo(bufStatus: var BufferStatus,
   #statusLine.window.write(0, statusLineWidth - info.len - 1, info, color)
   write(0, statusLineWidth - info.len - 1, info)
 
-proc writeStatusLineCurrentGitBranchName(statusLine: var StatusLine,
-                                        statusLineBuffer: var seq[Rune],
-                                        isActiveWindow: bool) =
+proc writeStatusLineCurrentGitBranchName(
+  statusLine: var StatusLine,
+  statusLineBuffer: var seq[Rune],
+  theme: ColorTheme,
+  isActiveWindow: bool) =
 
   # Get current git branch name
   let cmdResult = execCmdEx("git rev-parse --abbrev-ref HEAD")
@@ -188,7 +217,7 @@ proc writeStatusLineCurrentGitBranchName(statusLine: var StatusLine,
     branchName = cmdResult.output
     ## Add symbol and delete newline
     buffer = ru"  " & branchName[0 .. branchName.high - 1].toRunes & ru" "
-    color = EditorColorPair.statusLineGitBranch
+    color = ColorThemeTable[theme].EditorColorPair.statusLineGitBranch
 
   statusLineBuffer.add(buffer)
   # TODO: Fix
@@ -213,18 +242,25 @@ proc setModeStr(mode: Mode, isActiveWindow, showModeInactive: bool): string =
     of Mode.debug: result = " DEBUG "
     else: result = " NORMAL "
 
-proc setModeStrColor(mode: Mode): EditorColorPair =
+proc setModeStrColor(theme: ColorTheme, mode: Mode): ColorPair =
   case mode
-    of Mode.insert: return EditorColorPair.statusLineModeInsertMode
-    of Mode.visual: return EditorColorPair.statusLineModeVisualMode
-    of Mode.replace: return EditorColorPair.statusLineModeReplaceMode
-    of Mode.filer: return EditorColorPair.statusLineModeFilerMode
-    of Mode.ex: return EditorColorPair.statusLineModeExMode
-    else: return EditorColorPair.statusLineModeNormalMode
+    of Mode.insert:
+      return ColorThemeTable[theme].EditorColorPair.statusLineModeInsertMode
+    of Mode.visual:
+      return ColorThemeTable[theme].EditorColorPair.statusLineModeVisualMode
+    of Mode.replace:
+      return ColorThemeTable[theme].EditorColorPair.statusLineModeReplaceMode
+    of Mode.filer:
+      return ColorThemeTable[theme].EditorColorPair.statusLineModeFilerMode
+    of Mode.ex:
+      return ColorThemeTable[theme].EditorColorPair.statusLineModeExMode
+    else:
+      return ColorThemeTable[theme].EditorColorPair.statusLineModeNormalMode
 
-proc isShowGitBranchName(mode, prevMode: Mode,
-                         isActiveWindow: bool,
-                         settings: EditorSettings): bool =
+proc isShowGitBranchName(
+  mode, prevMode: Mode,
+  isActiveWindow: bool,
+  settings: EditorSettings): bool =
 
   if settings.statusLine.gitbranchName:
     let showGitInactive = settings.statusLine.showGitInactive
@@ -244,19 +280,22 @@ proc isShowGitBranchName(mode, prevMode: Mode,
   else:
     result = false
 
-proc writeStatusLine*(bufStatus: var BufferStatus,
-                     statusLine: var StatusLine,
-                     windowNode: WindowNode,
-                     isActiveWindow: bool,
-                     settings: EditorSettings) =
+proc writeStatusLine*(
+  bufStatus: var BufferStatus,
+  statusLine: var StatusLine,
+  windowNode: WindowNode,
+  theme: ColorTheme,
+  isActiveWindow: bool,
+  settings: EditorSettings) =
 
   let
     currentMode = bufStatus.mode
     prevMode = bufStatus.prevMode
-    color = setModeStrColor(currentMode)
-    modeStr = setModeStr(currentMode,
-                         isActiveWindow,
-                         settings.statusLine.showModeInactive)
+    color = setModeStrColor(theme, currentMode)
+    modeStr = setModeStr(
+      currentMode,
+      isActiveWindow,
+      settings.statusLine.showModeInactive)
 
   var statusLineBuffer = if windowNode.x > 0: ru" " & modeStr.toRunes
                          else: modeStr.toRunes
@@ -270,6 +309,7 @@ proc writeStatusLine*(bufStatus: var BufferStatus,
   if isShowGitBranchName(currentMode, prevMode, isActiveWindow, settings):
     statusLine.writeStatusLineCurrentGitBranchName(
       statusLineBuffer,
+      theme,
       isActiveWindow)
 
   if isFilerMode(currentMode, prevMode):
@@ -277,6 +317,7 @@ proc writeStatusLine*(bufStatus: var BufferStatus,
       statusLine,
       statusLineBuffer,
       windowNode,
+      theme,
       isActiveWindow,
       settings)
   elif currentMode == Mode.bufManager:
@@ -284,6 +325,7 @@ proc writeStatusLine*(bufStatus: var BufferStatus,
       statusLine,
       statusLineBuffer,
       windowNode,
+      theme,
       isActiveWindow,
       settings)
   elif currentMode == Mode.logViewer:
@@ -291,6 +333,7 @@ proc writeStatusLine*(bufStatus: var BufferStatus,
       statusLine,
       statusLineBuffer,
       windowNode,
+      theme,
       isActiveWindow,
       settings)
   else:
@@ -298,5 +341,6 @@ proc writeStatusLine*(bufStatus: var BufferStatus,
       statusLine,
       statusLineBuffer,
       windowNode,
+      theme,
       isActiveWindow,
       settings)

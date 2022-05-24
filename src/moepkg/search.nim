@@ -24,7 +24,7 @@ proc getKeyword*(status: var EditorStatus,
       commandLine.insertCommandBuffer(status.searchHistory[searchHistoryIndex])
 
   while true:
-    status.commandLine.writeCommandLine(EditorColorPair.commandBar)
+    status.commandLine.writeCommandLine(ColorThemeTable[currentColorTheme].EditorColorPair.commandBar)
 
     var key = NONE_KEY
     while key == NONE_KEY:

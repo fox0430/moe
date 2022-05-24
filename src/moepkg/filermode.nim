@@ -270,14 +270,18 @@ proc openNewWinAndOpenFilerOrDir(status: var EditorStatus,
     status.changeCurrentBuffer(status.bufStatus.high)
 
 proc setDirListColor(kind: PathComponent,
-                     isCurrentLine: bool): EditorColorPair =
+                     isCurrentLine: bool): ColorPair =
 
-  if isCurrentLine: result = EditorColorPair.currentFile
+  if isCurrentLine:
+    result = ColorThemeTable[currentColorTheme].EditorColorPair.currentFile
   else:
     case kind
-    of pcFile: result = EditorColorPair.file
-    of pcDir: result = EditorColorPair.dir
-    of pcLinkToDir, pcLinkToFile: result = EditorColorPair.pcLink
+    of pcFile:
+      result = ColorThemeTable[currentColorTheme].EditorColorPair.file
+    of pcDir:
+      result = ColorThemeTable[currentColorTheme].EditorColorPair.dir
+    of pcLinkToDir, pcLinkToFile:
+      result = ColorThemeTable[currentColorTheme].EditorColorPair.pcLink
 
 proc initFilelistHighlight[T](dirList: seq[PathInfo],
                               buffer: T,
@@ -437,11 +441,13 @@ proc updateFilerView*(status: var EditorStatus,
 
 proc initFileDeitalHighlight[T](buffer: T): Highlight =
   for i in 0 ..< buffer.len:
-    result.colorSegments.add(ColorSegment(firstRow: i,
-                                          firstColumn: 0,
-                                          lastRow: i,
-                                          lastColumn: buffer[i].len,
-                                          color: EditorColorPair.defaultChar))
+    result.colorSegments.add(
+      ColorSegment(
+        firstRow: i,
+        firstColumn: 0,
+        lastRow: i,
+        lastColumn: buffer[i].len,
+        color: ColorThemeTable[currentColorTheme].EditorColorPair.defaultChar))
 
 proc writefileDetail(status: var Editorstatus,
                      numOfFile: int,

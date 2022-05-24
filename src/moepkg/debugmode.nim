@@ -14,7 +14,7 @@ proc initDebugModeHighlight*[T](buffer: T): Highlight =
       firstColumn: 0,
       lastRow: i,
       lastColumn: buffer[i].len,
-      color: EditorColorPair.defaultChar))
+      color: ColorThemeTable[currentColorTheme].EditorColorPair.defaultChar))
 
 proc updateDebugModeBuffer*(
   bufStatus: var seq[BufferStatus],

@@ -354,145 +354,145 @@ type ColorTheme* = enum
   light   = 3
   vivid   = 4
 
-type EditorColorCode* = object
-  editorBg*: Option[ColorCode]
-  lineNum*: Option[ColorCode]
-  lineNumBg*: Option[ColorCode]
-  currentLineNum*: Option[ColorCode]
-  currentLineNumBg*: Option[ColorCode]
-  # status line
-  statusLineNormalMode*: Option[ColorCode]
-  statusLineNormalModeBg*: Option[ColorCode]
-  statusLineModeNormalMode*: Option[ColorCode]
-  statusLineModeNormalModeBg*: Option[ColorCode]
-  statusLineNormalModeInactive*: Option[ColorCode]
-  statusLineNormalModeInactiveBg*: Option[ColorCode]
-
-  statusLineInsertMode*: Option[ColorCode]
-  statusLineInsertModeBg*: Option[ColorCode]
-  statusLineModeInsertMode*: Option[ColorCode]
-  statusLineModeInsertModeBg*: Option[ColorCode]
-  statusLineInsertModeInactive*: Option[ColorCode]
-  statusLineInsertModeInactiveBg*: Option[ColorCode]
-
-  statusLineVisualMode*: Option[ColorCode]
-  statusLineVisualModeBg*: Option[ColorCode]
-  statusLineModeVisualMode*: Option[ColorCode]
-  statusLineModeVisualModeBg*: Option[ColorCode]
-  statusLineVisualModeInactive*: Option[ColorCode]
-  statusLineVisualModeInactiveBg*: Option[ColorCode]
-
-  statusLineReplaceMode*: Option[ColorCode]
-  statusLineReplaceModeBg*: Option[ColorCode]
-  statusLineModeReplaceMode*: Option[ColorCode]
-  statusLineModeReplaceModeBg*: Option[ColorCode]
-  statusLineReplaceModeInactive*: Option[ColorCode]
-  statusLineReplaceModeInactiveBg*: Option[ColorCode]
-
-  statusLineFilerMode*: Option[ColorCode]
-  statusLineFilerModeBg*: Option[ColorCode]
-  statusLineModeFilerMode*: Option[ColorCode]
-  statusLineModeFilerModeBg*: Option[ColorCode]
-  statusLineFilerModeInactive*: Option[ColorCode]
-  statusLineFilerModeInactiveBg*: Option[ColorCode]
-
-  statusLineExMode*: Option[ColorCode]
-  statusLineExModeBg*: Option[ColorCode]
-  statusLineModeExMode*: Option[ColorCode]
-  statusLineModeExModeBg*: Option[ColorCode]
-  statusLineExModeInactive*: Option[ColorCode]
-  statusLineExModeInactiveBg*: Option[ColorCode]
-
-  statusLineGitBranch*: Option[ColorCode]
-  statusLineGitBranchBg*: Option[ColorCode]
-  # tab line
-  tab*: Option[ColorCode]
-  tabBg*: Option[ColorCode]
-  currentTab*: Option[ColorCode]
-  currentTabBg*: Option[ColorCode]
-  # command bar
-  commandBar*: Option[ColorCode]
-  commandBarBg*: Option[ColorCode]
-  # error message
-  errorMessage*: Option[ColorCode]
-  errorMessageBg*: Option[ColorCode]
-  # search result highlighting
-  searchResult*: Option[ColorCode]
-  searchResultBg*: Option[ColorCode]
-  # selected area in visual mode
-  visualMode*: Option[ColorCode]
-  visualModeBg*: Option[ColorCode]
-
-  # color scheme
-  defaultChar*: Option[ColorCode]
-  gtKeyword*: Option[ColorCode]
-  gtFunctionName*: Option[ColorCode]
-  gtTypeName*: Option[ColorCode]
-  gtBoolean*: Option[ColorCode]
-  gtStringLit*: Option[ColorCode]
-  gtSpecialVar*: Option[ColorCode]
-  gtBuiltin*: Option[ColorCode]
-  gtDecNumber*: Option[ColorCode]
-  gtComment*: Option[ColorCode]
-  gtLongComment*: Option[ColorCode]
-  gtWhitespace*: Option[ColorCode]
-  gtPreprocessor*: Option[ColorCode]
-  gtPragma*: Option[ColorCode]
-
-  # filer mode
-  currentFile*: Option[ColorCode]
-  currentFileBg*: Option[ColorCode]
-  file*: Option[ColorCode]
-  fileBg*: Option[ColorCode]
-  dir*: Option[ColorCode]
-  dirBg*: Option[ColorCode]
-  pcLink*: Option[ColorCode]
-  pcLinkBg*: Option[ColorCode]
-  # pop up window
-  popUpWindow*: Option[ColorCode]
-  popUpWindowBg*: Option[ColorCode]
-  popUpWinCurrentLine*: Option[ColorCode]
-  popUpWinCurrentLineBg*: Option[ColorCode]
-  # replace text highlighting
-  replaceText*: Option[ColorCode]
-  replaceTextBg*: Option[ColorCode]
-
-  # pair of paren highlighting
-  parenText*: Option[ColorCode]
-  parenTextBg*: Option[ColorCode]
-
-  # highlight other uses current word
-  currentWord*: Option[ColorCode]
-  currentWordBg*: Option[ColorCode]
-
-  # highlight full width space
-  highlightFullWidthSpace*: Option[ColorCode]
-  highlightFullWidthSpaceBg*: Option[ColorCode]
-
-  # highlight trailing spaces
-  highlightTrailingSpaces*: Option[ColorCode]
-  highlightTrailingSpacesBg*: Option[ColorCode]
-
-  # highlight reserved words
-  reservedWord*: Option[ColorCode]
-  reservedWordBg*: Option[ColorCode]
-
-  # highlight history manager
-  currentHistory*: Option[ColorCode]
-  currentHistoryBg*: Option[ColorCode]
-
-  # highlight diff
-  addedLine*: Option[ColorCode]
-  addedLineBg*: Option[ColorCode]
-  deletedLine*: Option[ColorCode]
-  deletedLineBg*: Option[ColorCode]
-
-  # configuration mode
-  currentSetting*: Option[ColorCode]
-  currentSettingBg*: Option[ColorCode]
-
-  # highlight curent line background
-  currentLineBg*: Option[ColorCode]
+#type EditorColorCode* = object
+#  editorBg*: Option[ColorCode]
+#  lineNum*: Option[ColorCode]
+#  lineNumBg*: Option[ColorCode]
+#  currentLineNum*: Option[ColorCode]
+#  currentLineNumBg*: Option[ColorCode]
+#  # status line
+#  statusLineNormalMode*: Option[ColorCode]
+#  statusLineNormalModeBg*: Option[ColorCode]
+#  statusLineModeNormalMode*: Option[ColorCode]
+#  statusLineModeNormalModeBg*: Option[ColorCode]
+#  statusLineNormalModeInactive*: Option[ColorCode]
+#  statusLineNormalModeInactiveBg*: Option[ColorCode]
+#
+#  statusLineInsertMode*: Option[ColorCode]
+#  statusLineInsertModeBg*: Option[ColorCode]
+#  statusLineModeInsertMode*: Option[ColorCode]
+#  statusLineModeInsertModeBg*: Option[ColorCode]
+#  statusLineInsertModeInactive*: Option[ColorCode]
+#  statusLineInsertModeInactiveBg*: Option[ColorCode]
+#
+#  statusLineVisualMode*: Option[ColorCode]
+#  statusLineVisualModeBg*: Option[ColorCode]
+#  statusLineModeVisualMode*: Option[ColorCode]
+#  statusLineModeVisualModeBg*: Option[ColorCode]
+#  statusLineVisualModeInactive*: Option[ColorCode]
+#  statusLineVisualModeInactiveBg*: Option[ColorCode]
+#
+#  statusLineReplaceMode*: Option[ColorCode]
+#  statusLineReplaceModeBg*: Option[ColorCode]
+#  statusLineModeReplaceMode*: Option[ColorCode]
+#  statusLineModeReplaceModeBg*: Option[ColorCode]
+#  statusLineReplaceModeInactive*: Option[ColorCode]
+#  statusLineReplaceModeInactiveBg*: Option[ColorCode]
+#
+#  statusLineFilerMode*: Option[ColorCode]
+#  statusLineFilerModeBg*: Option[ColorCode]
+#  statusLineModeFilerMode*: Option[ColorCode]
+#  statusLineModeFilerModeBg*: Option[ColorCode]
+#  statusLineFilerModeInactive*: Option[ColorCode]
+#  statusLineFilerModeInactiveBg*: Option[ColorCode]
+#
+#  statusLineExMode*: Option[ColorCode]
+#  statusLineExModeBg*: Option[ColorCode]
+#  statusLineModeExMode*: Option[ColorCode]
+#  statusLineModeExModeBg*: Option[ColorCode]
+#  statusLineExModeInactive*: Option[ColorCode]
+#  statusLineExModeInactiveBg*: Option[ColorCode]
+#
+#  statusLineGitBranch*: Option[ColorCode]
+#  statusLineGitBranchBg*: Option[ColorCode]
+#  # tab line
+#  tab*: Option[ColorCode]
+#  tabBg*: Option[ColorCode]
+#  currentTab*: Option[ColorCode]
+#  currentTabBg*: Option[ColorCode]
+#  # command bar
+#  commandBar*: Option[ColorCode]
+#  commandBarBg*: Option[ColorCode]
+#  # error message
+#  errorMessage*: Option[ColorCode]
+#  errorMessageBg*: Option[ColorCode]
+#  # search result highlighting
+#  searchResult*: Option[ColorCode]
+#  searchResultBg*: Option[ColorCode]
+#  # selected area in visual mode
+#  visualMode*: Option[ColorCode]
+#  visualModeBg*: Option[ColorCode]
+#
+#  # color scheme
+#  defaultChar*: Option[ColorCode]
+#  gtKeyword*: Option[ColorCode]
+#  gtFunctionName*: Option[ColorCode]
+#  gtTypeName*: Option[ColorCode]
+#  gtBoolean*: Option[ColorCode]
+#  gtStringLit*: Option[ColorCode]
+#  gtSpecialVar*: Option[ColorCode]
+#  gtBuiltin*: Option[ColorCode]
+#  gtDecNumber*: Option[ColorCode]
+#  gtComment*: Option[ColorCode]
+#  gtLongComment*: Option[ColorCode]
+#  gtWhitespace*: Option[ColorCode]
+#  gtPreprocessor*: Option[ColorCode]
+#  gtPragma*: Option[ColorCode]
+#
+#  # filer mode
+#  currentFile*: Option[ColorCode]
+#  currentFileBg*: Option[ColorCode]
+#  file*: Option[ColorCode]
+#  fileBg*: Option[ColorCode]
+#  dir*: Option[ColorCode]
+#  dirBg*: Option[ColorCode]
+#  pcLink*: Option[ColorCode]
+#  pcLinkBg*: Option[ColorCode]
+#  # pop up window
+#  popUpWindow*: Option[ColorCode]
+#  popUpWindowBg*: Option[ColorCode]
+#  popUpWinCurrentLine*: Option[ColorCode]
+#  popUpWinCurrentLineBg*: Option[ColorCode]
+#  # replace text highlighting
+#  replaceText*: Option[ColorCode]
+#  replaceTextBg*: Option[ColorCode]
+#
+#  # pair of paren highlighting
+#  parenText*: Option[ColorCode]
+#  parenTextBg*: Option[ColorCode]
+#
+#  # highlight other uses current word
+#  currentWord*: Option[ColorCode]
+#  currentWordBg*: Option[ColorCode]
+#
+#  # highlight full width space
+#  highlightFullWidthSpace*: Option[ColorCode]
+#  highlightFullWidthSpaceBg*: Option[ColorCode]
+#
+#  # highlight trailing spaces
+#  highlightTrailingSpaces*: Option[ColorCode]
+#  highlightTrailingSpacesBg*: Option[ColorCode]
+#
+#  # highlight reserved words
+#  reservedWord*: Option[ColorCode]
+#  reservedWordBg*: Option[ColorCode]
+#
+#  # highlight history manager
+#  currentHistory*: Option[ColorCode]
+#  currentHistoryBg*: Option[ColorCode]
+#
+#  # highlight diff
+#  addedLine*: Option[ColorCode]
+#  addedLineBg*: Option[ColorCode]
+#  deletedLine*: Option[ColorCode]
+#  deletedLineBg*: Option[ColorCode]
+#
+#  # configuration mode
+#  currentSetting*: Option[ColorCode]
+#  currentSettingBg*: Option[ColorCode]
+#
+#  # highlight curent line background
+#  currentLineBg*: Option[ColorCode]
 
 type
   EditorColorPair* = object
@@ -577,6 +577,9 @@ type
     currentSetting*: ColorPair
     # Highlight current line background
     currentLine*: ColorPair
+
+# TODO: Fix
+var currentColorTheme* = ColorTheme.dark
 
 var ColorThemeTable*: array[ColorTheme, EditorColorPair] = [
   config: EditorColorPair(

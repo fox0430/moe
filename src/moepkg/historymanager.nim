@@ -71,8 +71,11 @@ proc initHistoryManagerHighlight(bufStatus: BufferStatus,
   for i in 0 ..< bufStatus.buffer.len:
     let
       line = bufStatus.buffer[i]
-      color = if i == currentLine: EditorColorPair.currentHistory
-              else: EditorColorPair.defaultChar
+      color =
+        if i == currentLine:
+          ColorThemeTable[currentColorTheme].EditorColorPair.currentHistory
+        else:
+          ColorThemeTable[currentColorTheme].EditorColorPair.defaultChar
 
     result.colorSegments.add(ColorSegment(
       firstRow: i,

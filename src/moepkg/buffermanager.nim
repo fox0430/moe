@@ -7,8 +7,10 @@ proc initFilelistHighlight[T](buffer: T,
 
   for i in 0 ..< buffer.len:
     let color =
-      if i == currentLine: EditorColorPair.currentLineNum
-      else: EditorColorPair.defaultChar
+      if i == currentLine:
+        ColorThemeTable[currentColorTheme].EditorColorPair.currentLineNum
+      else:
+        ColorThemeTable[currentColorTheme].EditorColorPair.defaultChar
 
     let colorSegment = ColorSegment(
       firstRow: i,

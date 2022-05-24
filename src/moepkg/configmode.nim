@@ -640,7 +640,7 @@ proc initConfigModeHighlight[T](buffer: T,
             firstColumn: 0,
             lastRow: i,
             lastColumn: buffer[i].len,
-            color: EditorColorPair.defaultChar))
+            color: ColorThemeTable[currentColorTheme].EditorColorPair.defaultChar))
 
         if buffer[currentLine].splitWhitespace.len > 1 and
            SettingType.Array == buffer.getSettingType(currentLine):
@@ -655,7 +655,7 @@ proc initConfigModeHighlight[T](buffer: T,
               firstColumn: start,
               lastRow: i,
               lastColumn: `end`,
-              color: EditorColorPair.currentSetting))
+              color: ColorThemeTable[currentColorTheme].EditorColorPair.currentSetting))
         else:
           result = result.overwrite(
             ColorSegment(
@@ -663,7 +663,7 @@ proc initConfigModeHighlight[T](buffer: T,
               firstColumn: numOfIndent + positionOfSetVal,
               lastRow: i,
               lastColumn: buffer[i].len,
-              color: EditorColorPair.currentSetting))
+              color: ColorThemeTable[currentColorTheme].EditorColorPair.currentSetting))
     else:
       result.colorSegments.add(
         ColorSegment(
@@ -671,7 +671,7 @@ proc initConfigModeHighlight[T](buffer: T,
           firstColumn: 0,
           lastRow: i,
           lastColumn: buffer[i].len,
-          color: EditorColorPair.defaultChar))
+          color: ColorThemeTable[currentColorTheme].EditorColorPair.defaultChar))
 
 proc changeStandardTableSetting(settings: var EditorSettings,
                                 settingName, settingVal: string) =

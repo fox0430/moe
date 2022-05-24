@@ -180,7 +180,7 @@ proc scrollDown*[T](view: var EditorView, buffer: T) =
     view.length.addLast(singleLine.length)
 
 # TODO: Enable color
-proc writeLineNum(view: EditorView, y, line: int, colorPair: EditorColorPair) {.inline.} =
+proc writeLineNum(view: EditorView, y, line: int, colorPair: ColorPair) {.inline.} =
   # TODO: Enalbe color
   #win.write(y, 0, strutils.align($(line+1), view.widthOfLineNum-1), colorPair, false)
   const x = 0
@@ -189,7 +189,7 @@ proc writeLineNum(view: EditorView, y, line: int, colorPair: EditorColorPair) {.
 proc write(view: EditorView,
            y, x: int,
            str: seq[Rune],
-           color: EditorColorPair | int) {.inline.} =
+           color: ColorPair | int) {.inline.} =
 
   # TODO: use settings file (tab size)
   const tab = "    "
@@ -201,7 +201,7 @@ proc writeCurrentLine(view: EditorView,
                       highlight: Highlight,
                       theme: ColorTheme,
                       str: seq[Rune],
-                      currentLineColorPair: var int,
+                      #currentLineColorPair: var int,
                       y, x, i, last: int,
                       mode, prevMode: Mode,
                       viewSettings: EditorViewSettings) =
@@ -269,8 +269,7 @@ proc writeAllLines*[T](view: var EditorView,
                        buffer: T,
                        highlight: Highlight,
                        theme: ColorTheme,
-                       currentLine, startSelectedLine, endSelectedLine: int,
-                       currentLineColorPair: var int) =
+                       currentLine, startSelectedLine, endSelectedLine: int) =
 
   view.widthOfLineNum =
     if viewSettings.lineNumber: buffer.len.numberOfDigits + 1
@@ -293,11 +292,11 @@ proc writeAllLines*[T](view: var EditorView,
 
     let isCurrentLine = view.originalLine[y] == currentLine
     if viewSettings.lineNumber and view.start[y] == 0:
-      let lineNumberColor = if isCurrentLine and isCurrentWin and
-                               viewSettings.currentLineNumber:
-                              EditorColorPair.currentLineNum
-                            else:
-                              EditorColorPair.lineNum
+      let lineNumberColor =
+        if isCurrentLine and isCurrentWin and viewSettings.currentLineNumber:
+          ColorThemeTable[currentColorTheme].EditorColorPair.currentLineNum
+        else:
+          ColorThemeTable[currentColorTheme].EditorColorPair.lineNum
       view.writeLineNum(y, view.originalLine[y], lineNumberColor)
 
     var x = view.widthOfLineNum
@@ -315,12 +314,13 @@ proc writeAllLines*[T](view: var EditorView,
                            highlight,
                            theme,
                            ru"",
-                           currentLineColorPair,
+                           #currentLineColorPair,
                            y, x, i, 0,
                            mode, prevMode,
                            viewSettings)
         else:
-          view.write(y, x, view.lines[y], EditorColorPair.defaultChar)
+          let color = ColorThemeTable[currentColorTheme].EditorColorPair.defaultChar
+          view.write(y, x, view.lines[y], color)
       continue
 
     if viewSettings.indentationLines and not isConfigMode(mode, prevMode):
@@ -369,7 +369,7 @@ proc writeAllLines*[T](view: var EditorView,
                          highlight,
                          theme,
                          str,
-                         currentLineColorPair,
+                         #currentLineColorPair,
                          y, x, i, last,
                          mode, prevMode,
                          viewSettings)
@@ -381,10 +381,11 @@ proc writeAllLines*[T](view: var EditorView,
 
     if viewSettings.indentationLines:
       for i in 0..<indents:
-        view.write(y,
-                   lineStart+(viewSettings.tabStop*i),
-                   ru("┊"),
-                   EditorColorPair.whitespace)
+        view.write(
+          y,
+          lineStart+(viewSettings.tabStop*i),
+          ru("┊"),
+          ColorThemeTable[currentColorTheme].EditorColorPair.whitespace)
 
 proc update*[T](view: var EditorView,
                 viewSettings: EditorViewSettings,
@@ -393,8 +394,7 @@ proc update*[T](view: var EditorView,
                 buffer: T,
                 highlight: Highlight,
                 theme: ColorTheme,
-                currentLine, startSelectedLine, endSelectedLine: int,
-                currentLineColorPair: var int) =
+                currentLine, startSelectedLine, endSelectedLine: int) =
 
   let widthOfLineNum = buffer.len.intToStr.len + 1
   if viewSettings.lineNumber and widthOfLineNum != view.widthOfLineNum:
@@ -414,8 +414,7 @@ proc update*[T](view: var EditorView,
                      theme,
                      currentLine,
                      startSelectedLine,
-                     endSelectedLine,
-                     currentLineColorPair)
+                     endSelectedLine)
 
   view.updated = false
 

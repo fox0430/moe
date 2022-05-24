@@ -3,9 +3,10 @@ import illwill
 import window, color, bufferstatus, independentutils, ui
 
 # TODO: Enable Color
-proc writeTab*(start, tabWidth: int,
-               filename: string,
-               color: EditorColorPair) =
+proc writeTab*(
+  start, tabWidth: int,
+  filename: string,
+  color: ColorPair) =
 
   let
     title = if filename == "": "New file" else: filename
@@ -15,15 +16,17 @@ proc writeTab*(start, tabWidth: int,
   write(0, start, buffer)
 
 # TODO: Enable Color
-proc writeTabLineBuffer*(allBufStatus: seq[BufferStatus],
-                         currentBufferIndex: int,
-                         mainWindowNode: WindowNode,
-                         isAllbuffer: bool) =
+proc writeTabLineBuffer*(
+  allBufStatus: seq[BufferStatus],
+  currentBufferIndex: int,
+  mainWindowNode: WindowNode,
+  theme: ColorTheme,
+  isAllbuffer: bool) =
 
   let
     isAllBuffer = isAllbuffer
-    defaultColor = EditorColorPair.tab
-    currentTabColor = EditorColorPair.currentTab
+    defaultColor = ColorThemeTable[theme].EditorColorPair.tab
+    currentTabColor = ColorThemeTable[theme].EditorColorPair.currentTab
 
   if isAllBuffer:
     ## Display all buffer

@@ -11,11 +11,11 @@ proc initDiffHighlight(bufStatus: BufferStatus): Highlight =
     let
       line = bufStatus.buffer[i]
       color = if line.len > 0 and line[0] == ru'+':
-                  EditorColorPair.addedLine
+                  ColorThemeTable[currentColorTheme].EditorColorPair.addedLine
                 elif line.len > 0 and line[0] == ru'-':
-                  EditorColorPair.deletedLine
+                  ColorThemeTable[currentColorTheme].EditorColorPair.deletedLine
                 else:
-                  EditorColorPair.defaultChar
+                  ColorThemeTable[currentColorTheme].EditorColorPair.defaultChar
 
     result.colorSegments.add(ColorSegment(
       firstRow: i,

@@ -5,7 +5,7 @@ from std/strutils import find
 
 type ColorSegment* = object
   firstRow*, firstColumn*, lastRow*, lastColumn*: int
-  color*: EditorColorPair
+  color*: ColorPair
 
 type Highlight* = object
   colorSegments*: seq[ColorSegment]
@@ -13,7 +13,7 @@ type Highlight* = object
 type
   ReservedWord* = object
     word*: string
-    color*: EditorColorPair
+    color*: ColorPair
 
 proc len*(highlight: Highlight): int {.inline.} = highlight.colorSegments.len
 
@@ -25,7 +25,7 @@ proc `[]`*(highlight: Highlight, i: int): ColorSegment {.inline.} =
 proc `[]`*(highlight: Highlight, i: BackwardsIndex): ColorSegment {.inline.} =
   highlight.colorSegments[highlight.colorSegments.len - int(i)]
 
-proc getColorPair*(highlight: Highlight, line, col: int): EditorColorPair =
+proc getColorPair*(highlight: Highlight, line, col: int): ColorPair =
   for colorSegment in highlight.colorSegments:
     if line >= colorSegment.firstRow and
        colorSegment.lastRow >= line and
@@ -115,7 +115,7 @@ proc overwrite*(highlight: Highlight, colorSegment: ColorSegment): Highlight =
 iterator parseReservedWord(
   buffer: string,
   reservedWords: seq[ReservedWord],
-  color: EditorColorPair): (string, EditorColorPair) =
+  color: ColorPair): (string, ColorPair) =
 
   var
     buffer = buffer
@@ -145,69 +145,106 @@ iterator parseReservedWord(
     yield (buffer[pos ..< last], reservedWord.color)
     buffer = buffer[last ..^ 1]
 
-proc getEditorColorPairInNim(kind: TokenClass): EditorColorPair =
-  case kind:
-    of gtKeyword: EditorColorPair.keyword
-    of gtBoolean: EditorColorPair.boolean
-    of gtSpecialVar: EditorColorPair.specialVar
-    of gtOperator: EditorColorPair.functionName
-    of gtBuiltin: EditorColorPair.builtin
-    of gtStringLit: EditorColorPair.stringLit
-    of gtDecNumber: EditorColorPair.decNumber
-    of gtComment: EditorColorPair.comment
-    of gtLongComment: EditorColorPair.longComment
-    of gtPreprocessor: EditorColorPair.preprocessor
-    of gtFunctionName: EditorColorPair.functionName
-    of gtTypeName: EditorColorPair.typeName
-    of gtWhitespace, gtPunctuation: EditorColorPair.defaultChar
-    of gtPragma: EditorColorPair.pragma
-    else:
-      EditorColorPair.defaultChar
-
-proc getEditorColorPair(kind: TokenClass,
-                        language: SourceLanguage): EditorColorPair =
+proc getEditorColorPairInNim(
+  theme: ColorTheme,
+  kind: TokenClass): ColorPair =
 
   case kind:
-    of gtKeyword: EditorColorPair.keyword
-    of gtBoolean: EditorColorPair.boolean
-    of gtSpecialVar: EditorColorPair.specialVar
-    of gtBuiltin: EditorColorPair.builtin
+    of gtKeyword:
+      ColorThemeTable[theme].EditorColorPair.keyword
+    of gtBoolean:
+      ColorThemeTable[theme].EditorColorPair.boolean
+    of gtSpecialVar:
+      ColorThemeTable[theme].EditorColorPair.specialVar
+    of gtOperator:
+      ColorThemeTable[theme].EditorColorPair.functionName
+    of gtBuiltin:
+      ColorThemeTable[theme].EditorColorPair.builtin
     of gtStringLit:
-      if language == SourceLanguage.langYaml: EditorColorPair.defaultChar
-      else: EditorColorPair.stringLit
-    of gtDecNumber: EditorColorPair.decNumber
-    of gtComment: EditorColorPair.comment
-    of gtLongComment: EditorColorPair.longComment
-    of gtPreprocessor: EditorColorPair.preprocessor
-    of gtWhitespace: EditorColorPair.defaultChar
-    of gtPragma: EditorColorPair.pragma
-    else: EditorColorPair.defaultChar
+      ColorThemeTable[theme].EditorColorPair.stringLit
+    of gtDecNumber:
+      ColorThemeTable[theme].EditorColorPair.decNumber
+    of gtComment:
+      ColorThemeTable[theme].EditorColorPair.comment
+    of gtLongComment:
+      ColorThemeTable[theme].EditorColorPair.longComment
+    of gtPreprocessor:
+      ColorThemeTable[theme].EditorColorPair.preprocessor
+    of gtFunctionName:
+      ColorThemeTable[theme].EditorColorPair.functionName
+    of gtTypeName:
+      ColorThemeTable[theme].EditorColorPair.typeName
+    of gtWhitespace, gtPunctuation:
+      ColorThemeTable[theme].EditorColorPair.defaultChar
+    of gtPragma:
+      ColorThemeTable[theme].EditorColorPair.pragma
+    else:
+      ColorThemeTable[theme].EditorColorPair.defaultChar
 
-proc initHighlight*(buffer: string,
-                    reservedWords: seq[ReservedWord],
-                    language: SourceLanguage): Highlight =
+proc getEditorColorPair(
+  theme: ColorTheme,
+  kind: TokenClass,
+  language: SourceLanguage): ColorPair =
+
+  case kind:
+    of gtKeyword:
+      ColorThemeTable[theme].EditorColorPair.keyword
+    of gtBoolean:
+      ColorThemeTable[theme].EditorColorPair.boolean
+    of gtSpecialVar:
+      ColorThemeTable[theme].EditorColorPair.specialVar
+    of gtBuiltin:
+      ColorThemeTable[theme].EditorColorPair.builtin
+    of gtStringLit:
+      if language == SourceLanguage.langYaml:
+        ColorThemeTable[theme].EditorColorPair.defaultChar
+      else:
+        ColorThemeTable[theme].EditorColorPair.stringLit
+    of gtDecNumber:
+      ColorThemeTable[theme].EditorColorPair.decNumber
+    of gtComment:
+      ColorThemeTable[theme].EditorColorPair.comment
+    of gtLongComment:
+      ColorThemeTable[theme].EditorColorPair.longComment
+    of gtPreprocessor:
+      ColorThemeTable[theme].EditorColorPair.preprocessor
+    of gtWhitespace:
+      ColorThemeTable[theme].EditorColorPair.defaultChar
+    of gtPragma:
+      ColorThemeTable[theme].EditorColorPair.pragma
+    else:
+      ColorThemeTable[theme].EditorColorPair.defaultChar
+
+proc initHighlight*(
+  theme: ColorTheme,
+  buffer: string,
+  reservedWords: seq[ReservedWord],
+  language: SourceLanguage): Highlight =
 
   var currentRow, currentColumn: int
 
   template splitByNewline(str, c: typed) =
     const newline = Rune('\n')
     var
-      cs = ColorSegment(firstRow: currentRow,
-                        firstColumn: currentColumn,
-                        lastRow: currentRow,
-                        lastColumn: currentColumn,
-                        color: c)
+      cs = ColorSegment(
+        firstRow: currentRow,
+        firstColumn: currentColumn,
+        lastRow: currentRow,
+        lastColumn: currentColumn,
+        color: c)
+
       empty = true
     for r in runes(str):
       if r == newline:
         # push an empty segment
         if empty:
-          let color = EditorColorPair.defaultChar
-          result.colorSegments.add(ColorSegment(firstRow: currentRow,
-                                                firstColumn: currentColumn,
-                                                lastRow: currentRow,
-                                                lastColumn: currentColumn - 1,
-                                                color: color))
+          let color = ColorThemeTable[theme].EditorColorPair.defaultChar
+          result.colorSegments.add(ColorSegment(
+            firstRow: currentRow,
+            firstColumn: currentColumn,
+            lastRow: currentRow,
+            lastColumn: currentColumn - 1,
+            color: color))
         else: result.colorSegments.add(cs)
         inc(currentRow)
         currentColumn = 0
@@ -225,14 +262,14 @@ proc initHighlight*(buffer: string,
   if language == SourceLanguage.langNone or
      language == SourceLanguage.langShell or
      language == SourceLanguage.langMarkDown:
-    splitByNewline(buffer, EditorColorPair.defaultChar)
+    splitByNewline(buffer, ColorThemeTable[theme].EditorColorPair.defaultChar)
     return result
-  
+
   var token = GeneralTokenizer()
   token.initGeneralTokenizer(buffer)
   var pad: string
   if buffer.parseWhile(pad, {' ', '\x09'..'\x0D'}) > 0:
-    splitByNewline(pad, EditorColorPair.defaultChar)
+    splitByNewline(pad,ColorThemeTable[theme].EditorColorPair.defaultChar)
 
   while true:
     try:
@@ -251,9 +288,9 @@ proc initHighlight*(buffer: string,
       continue
 
     let color = if language == SourceLanguage.langNim:
-                  getEditorColorPairInNim(token.kind)
+                  getEditorColorPairInNim(theme, token.kind)
                 else:
-                  getEditorColorPair(token.kind, language)
+                  getEditorColorPair(theme, token.kind, language)
 
     if token.kind == gtComment:
       for r in buffer[first..last].parseReservedWord(reservedWords, color):

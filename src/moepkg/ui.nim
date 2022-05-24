@@ -177,7 +177,7 @@ proc applyColorPair(colorPair: ColorPair) =
 proc write*(win: var Window,
             y, x: int,
             str: string,
-            color: EditorColorPair,
+            color: ColorPair,
             storeX: bool = true) =
   # WARNING: If `storeX` is true, this procedure will change the window position. Should we remove the default parameter?
 
@@ -211,7 +211,7 @@ proc write*(win: var Window,
 proc write*(win: var Window,
             y, x: int,
             runes: seq[Rune],
-            color: EditorColorPair,
+            color: ColorPair,
             storeX: bool = true) =
   # WARNING: If `storeX` is true, this procedure will change the window position. Should we remove the default parameter?
   #

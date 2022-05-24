@@ -117,8 +117,9 @@ proc moveCursor*(commandLine: CommandLine) {.inline.} =
 proc clear*(commndLine: var CommandLine) =
   commndLine.buffer = @[]
 
-proc writeCommandLine*(commandLine: var CommandLine,
-                       color: EditorColorPair) =
+proc writeCommandLine*(
+  commandLine: var CommandLine,
+  color: ColorPair) =
 
   let buffer = ($commandLine.buffer).substr(
     commandLine.startPosition,
@@ -137,13 +138,17 @@ proc writeCommandLine*(commandLine: var CommandLine,
 
   commandLine.moveCursor
 
-proc askCreateDirPrompt*(commndLine: var CommandLine,
-                         messageLog: var seq[seq[Rune]],
-                         path: string): bool =
+proc askCreateDirPrompt*(
+  commndLine: var CommandLine,
+  messageLog: var seq[seq[Rune]],
+  theme: ColorTheme,
+  path: string): bool =
 
-  let mess = fmt"{path} does not exists. Create it now?: y/n"
+  let
+    mess = fmt"{path} does not exists. Create it now?: y/n"
+    color = ColorThemeTable[theme].EditorColorPair.defaultChar
   commndLine.buffer = mess.toRunes
-  commndLine.writeCommandLine(EditorColorPair.defaultChar)
+  commndLine.writeCommandLine(color)
   messageLog.add(mess.toRunes)
 
   var key = NONE_KEY
@@ -154,13 +159,17 @@ proc askCreateDirPrompt*(commndLine: var CommandLine,
   if key == ord('y'): result = true
   else: result = false
 
-proc askBackupRestorePrompt*(commndLine: var CommandLine,
-                             messageLog: var seq[seq[Rune]],
-                             filename: seq[Rune]): bool =
+proc askBackupRestorePrompt*(
+  commndLine: var CommandLine,
+  messageLog: var seq[seq[Rune]],
+  theme: ColorTheme,
+  filename: seq[Rune]): bool =
 
-  let mess = fmt"Restore {filename}?: y/n"
+  let
+    mess = fmt"Restore {filename}?: y/n"
+    color = ColorThemeTable[theme].EditorColorPair.defaultChar
   commndLine.buffer = mess.toRunes
-  commndLine.writeCommandLine(EditorColorPair.defaultChar)
+  commndLine.writeCommandLine(color)
   messageLog.add(mess.toRunes)
 
   var key = NONE_KEY
@@ -171,13 +180,17 @@ proc askBackupRestorePrompt*(commndLine: var CommandLine,
   if key == ord('y'): result = true
   else: result = false
 
-proc askDeleteBackupPrompt*(commndLine: var CommandLine,
-                            messageLog: var seq[seq[Rune]],
-                            filename: seq[Rune]): bool =
+proc askDeleteBackupPrompt*(
+  commndLine: var CommandLine,
+  messageLog: var seq[seq[Rune]],
+  theme: ColorTheme,
+  filename: seq[Rune]): bool =
 
-  let mess = fmt"Delete {filename}?: y/n"
+  let
+    mess = fmt"Delete {filename}?: y/n"
+    color = ColorThemeTable[theme].EditorColorPair.defaultChar
   commndLine.buffer = mess.toRunes
-  commndLine.writeCommandLine(EditorColorPair.defaultChar)
+  commndLine.writeCommandLine(color)
   messageLog.add(mess.toRunes)
 
   var key = NONE_KEY
@@ -188,13 +201,16 @@ proc askDeleteBackupPrompt*(commndLine: var CommandLine,
   if key == ord('y'): result = true
   else: result = false
 
-proc askFileChangedSinceReading*(commndLine: var CommandLine,
-                                 messageLog: var seq[seq[Rune]]): bool =
+proc askFileChangedSinceReading*(
+  commndLine: var CommandLine,
+  messageLog: var seq[seq[Rune]],
+  theme: ColorTheme): bool =
 
   block:
     const warnMess = "WARNING: The file has been changed since reading it!: Press any key".toRunes
+    let color = ColorThemeTable[theme].EditorColorPair.defaultChar
     commndLine.buffer = warnMess
-    commndLine.writeCommandLine(EditorColorPair.defaultChar)
+    commndLine.writeCommandLine(color)
     messageLog.add(warnMess)
 
   var key = NONE_KEY
@@ -204,8 +220,9 @@ proc askFileChangedSinceReading*(commndLine: var CommandLine,
 
   block:
     const askMess = "Do you really want to write to it: y/n ?".toRunes
+    let color = ColorThemeTable[theme].EditorColorPair.defaultChar
     commndLine.buffer = askMess
-    commndLine.writeCommandLine(EditorColorPair.defaultChar)
+    commndLine.writeCommandLine(color)
     messageLog.add(askMess)
 
     var key = NONE_KEY
@@ -495,8 +512,10 @@ proc calcXWhenSuggestPath*(buffer: seq[Rune]): int =
   # +2 is pronpt and space
   return cmd.len + 2 + positionInInputPath
 
-proc suggestCommandLine*(commandLine: var CommandLine,
-                        key: var Rune) =
+proc suggestCommandLine*(
+  commandLine: var CommandLine,
+  theme: ColorTheme,
+  key: var Rune) =
 
   let
     suggestType = getSuggestType(commandLine.buffer)
@@ -562,7 +581,9 @@ proc suggestCommandLine*(commandLine: var CommandLine,
     commandLine.insertCommandBuffer(suggestlist[suggestIndex])
     commandLine.cursorX.inc
 
-    commandLine.writeCommandLine(EditorColorPair.commandBar)
+    block:
+      let color = ColorThemeTable[theme].EditorColorPair.commandBar
+      commandLine.writeCommandLine(color)
 
     key = NONE_KEY
     while key == NONE_KEY:
