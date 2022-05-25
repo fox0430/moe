@@ -127,8 +127,6 @@ proc resetColor() {.inline.} =
 
 # Set the terminal color.
 proc applyColorPair(colorPair: ColorPair) =
-  # TODO: Remove
-  let n = now()
   # None is the terminal default color.
   if colorPair.fg.isNone or colorPair.bg.isNone:
     resetColor()
@@ -138,8 +136,6 @@ proc applyColorPair(colorPair: ColorPair) =
 
   if colorPair.bg.isSome:
     applyBackgroundColor(colorPair.fg.get)
-
-  debug now() - n
 
 # Display buffer in the terminal buffer.
 proc display*() {.inline.} = tb.display

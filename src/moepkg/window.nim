@@ -327,8 +327,7 @@ proc refreshWindow*(node: var WindowNode) {.inline.} =
   #if node.isWindow: node.window.get.refresh
 
 proc getKey*(node: var WindowNode): Rune {.inline.} =
-  discard
-  #if node.isWindow: result = node.window.get.getKey
+  if node.isWindow: result = ui.getKey()
 
 proc eraseWindow*(node: var WindowNode) {.inline.} =
   discard
