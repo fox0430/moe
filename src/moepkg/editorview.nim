@@ -179,23 +179,20 @@ proc scrollDown*[T](view: var EditorView, buffer: T) =
     view.start.addLast(singleLine.start)
     view.length.addLast(singleLine.length)
 
-# TODO: Enable color
 proc writeLineNum(view: EditorView, y, line: int, colorPair: ColorPair) {.inline.} =
-  # TODO: Enalbe color
-  #win.write(y, 0, strutils.align($(line+1), view.widthOfLineNum-1), colorPair, false)
   const x = 0
-  write(view.x + x, view.y + y, strutils.align($(line+1), view.widthOfLineNum-1))
+  write(view.x + x, view.y + y, strutils.align($(line+1), view.widthOfLineNum-1), colorPair)
 
-proc write(view: EditorView,
-           y, x: int,
-           str: seq[Rune],
-           color: ColorPair | int) {.inline.} =
+proc write(
+  view: EditorView,
+  y, x: int,
+  buf: seq[Rune],
+  color: ColorPair) {.inline.} =
 
   # TODO: use settings file (tab size)
   const tab = "    "
-  # TODO: Enable color
-  #win.write(y, x, ($str).replace("\t", tab), color, false)
-  write(view.x + x, view.y + y, ($str).replace("\t", tab))
+  let str = $buf
+  write(view.x + x, view.y + y, str.replace("\t", tab), color)
 
 proc writeCurrentLine(view: EditorView,
                       highlight: Highlight,
@@ -305,8 +302,7 @@ proc writeAllLines*[T](view: var EditorView,
          (view.originalLine[y] >= startSelectedLine and
          endSelectedLine >= view.originalLine[y]):
         # TODO: Enable color
-        #view.write(win, y, x, ru" ", EditorColorPair.visualMode)
-        write(x, y, " ")
+        view.write(x, y, ru" ", ColorThemeTable[currentColorTheme].EditorColorPair.visualMode)
       else:
         if viewSettings.highlightCurrentLine and isCurrentLine and
            currentLine < buffer.len:

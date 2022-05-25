@@ -1,4 +1,4 @@
-import std/[osproc, strutils, os, terminal, strformat, options]
+import std/[osproc, strutils, os, terminal, strformat, options, logging, times]
 import pkg/illwill
 import unicodeext, color
 
@@ -79,11 +79,9 @@ proc setCursor*(cursor: bool) =
 #  if keyecho == true: echo()
 #  elif keyecho == false: noecho()
 
-#proc setTimeout*(win: var Window) {.inline.} = win.cursesWindow.wtimeout(cint(1000)) # 500mm sec
 proc setTimeout*(win: var Window) =
   discard
 
-#proc setTimeout*(win: var Window, time: int) {.inline.} = win.cursesWindow.wtimeout(cint(time))
 proc setTimeout*(win: var Window, time: int) =
   discard
 
@@ -109,13 +107,59 @@ proc startUi*() =
   illwillInit(fullscreen = true)
   setControlCHook(exitUi)
 
+# Set the terminal background color.
+proc applyBackgroundColor(colorCode: ColorCode) =
+  let
+    colors = colorCode.toRGBInt
+    cmd = """printf "\x1b[48;2;""" & fmt"{colors.r};{colors.g};{colors.b}" & """""m""""
+  discard execShellCmd(cmd)
+
+# Set the terminal foreground color.
+proc applyForegroundColor(colorCode: ColorCode) =
+  let
+    colors = colorCode.toRGBInt
+    cmd = """printf "\x1b[38;2;""" & fmt"{colors.r};{colors.g};{colors.b}" & """""m""""
+  discard execShellCmd(cmd)
+
+# Reset the terminal color.
+proc resetColor() {.inline.} =
+  discard execShellCmd("""printf "\x1b[0m\n"""")
+
+# Set the terminal color.
+proc applyColorPair(colorPair: ColorPair) =
+  # TODO: Remove
+  let n = now()
+  # None is the terminal default color.
+  if colorPair.fg.isNone or colorPair.bg.isNone:
+    resetColor()
+
+  if colorPair.fg.isSome:
+    applyForegroundColor(colorPair.fg.get)
+
+  if colorPair.bg.isSome:
+    applyBackgroundColor(colorPair.fg.get)
+
+  debug now() - n
+
 # Display buffer in the terminal buffer.
 proc display*() {.inline.} = tb.display
 
 # Write to the terminal buffer.
-proc write*(x, y: int, buf: string) {.inline.} = tb.write(x, y, buf)
+proc write*(x, y: int, buf: string) {.inline.} =
+  # Don't write when running unit tests
+  when not defined unitTest:
+    tb.write(x, y, buf)
 
-proc write*(x, y: int, buf: seq[Rune]) {.inline.} = tb.write(x, y, $buf)
+proc write*(x, y: int, buf: seq[Rune]) {.inline.} =
+  # Don't write when running unit tests
+  when not defined unitTest:
+    tb.write(x, y, $buf)
+
+proc write*(x, y: int, buf: string | seq[Rune], color: ColorPair) =
+  # Don't write when running unit tests
+  when not defined unitTest:
+    applyColorPair(color)
+    tb.write(x, y, buf)
 
   # Not start when running unit tests
   #when not defined unitTest:
@@ -143,87 +187,6 @@ proc initWindow*(height, width, y, x: int, color: EditorColorPair): Window =
   #result.cursesWindow = initWindow(x, y,width, height)
   #keypad(result.cursesWindow, true)
   #discard wbkgd(result.cursesWindow, ncurses.COLOR_PAIR(color))
-
-# Set the terminal background color.
-proc applyBackgroundColor(colorCode: ColorCode) =
-  let
-    colors = colorCode.toRGBInt
-    cmd = """printf "\x1b[48;2;""" & fmt"{colors.r};{colors.g};{colors.b}" & """""m""""
-  discard execShellCmd(cmd)
-
-# Set the terminal foreground color.
-proc applyForegroundColor(colorCode: ColorCode) =
-  let
-    colors = colorCode.toRGBInt
-    cmd = """printf "\x1b[38;2;""" & fmt"{colors.r};{colors.g};{colors.b}" & """""m""""
-  discard execShellCmd(cmd)
-
-# Reset the terminal color.
-proc resetColor() {.inline.} =
-  discard execShellCmd("""printf "\x1b[0m\n"""")
-
-# Set the terminal color.
-proc applyColorPair(colorPair: ColorPair) =
-  # None is the terminal default color.
-  if colorPair.fg.isNone or colorPair.bg.isNone:
-    resetColor()
-
-  if colorPair.fg.isSome:
-    applyForegroundColor(colorPair.fg.get)
-
-  if colorPair.bg.isSome:
-    applyBackgroundColor(colorPair.fg.get)
-
-proc write*(win: var Window,
-            y, x: int,
-            str: string,
-            color: ColorPair,
-            storeX: bool = true) =
-  # WARNING: If `storeX` is true, this procedure will change the window position. Should we remove the default parameter?
-
-  # Don't write when running unit tests
-  when not defined unitTest:
-    #win.cursesWindow.write(x, y, str)
-    #win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
-    #mvwaddstr(win.cursesWindow, cint(y), cint(x), str)
-
-    if storeX:
-      win.y = y
-      win.x = x+str.toRunes.width
-
-proc write*(win: var Window,
-            y, x: int,
-            str: string,
-            color: int,
-            storeX: bool = true) =
-  # WARNING: If `storeX` is true, this procedure will change the window position. Should we remove the default parameter?
-  #
-  # Not write when running unit tests
-  when not defined unitTest:
-    #win.cursesWindow.write(x, y, str)
-    #win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
-    #mvwaddstr(win.cursesWindow, cint(y), cint(x), str)
-
-    if storeX:
-      win.y = y
-      win.x = x+str.toRunes.width
-
-proc write*(win: var Window,
-            y, x: int,
-            runes: seq[Rune],
-            color: ColorPair,
-            storeX: bool = true) =
-  # WARNING: If `storeX` is true, this procedure will change the window position. Should we remove the default parameter?
-  #
-  # Not write when running unit tests
-  when not defined unitTest:
-    discard
-    #win.cursesWindow.write(x, y, $runes)
-    #write(win, y, x, $str, color, false)
-
-    if storeX:
-      win.y = y
-      win.x = x+runes.width
 
 proc append*(win: var Window,
               str: string,

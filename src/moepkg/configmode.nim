@@ -1154,11 +1154,12 @@ proc getSettingType(table, name: string): SettingType =
       else:
         result = SettingType.None
 
-  template themeTable() =
-    for color in Color:
-      if name == $color:
-        return SettingType.Enum
-    result = SettingType.None
+  # TODO: Enable themeTable
+  #template themeTable() =
+  #  for color in Color:
+  #    if name == $color:
+  #      return SettingType.Enum
+  #  result = SettingType.None
 
   case table:
     of "Standard":
@@ -1184,11 +1185,14 @@ proc getSettingType(table, name: string): SettingType =
     of "Autocomplete":
       autocompleteTable()
     of "Theme":
-      themeTable()
+      # TODO: Enable themeTable
+      #themeTable()
+      discard
 
-proc getEditorColorPairStr(buffer: GapBuffer[seq[Rune]],
-                             lineSplit: seq[seq[Rune]],
-                             currentLine: int): string =
+proc getEditorColorPairStr(
+  buffer: GapBuffer[seq[Rune]],
+  lineSplit: seq[seq[Rune]],
+  currentLine: int): string =
 
   if (lineSplit[0] == ru "foreground") or
      (buffer[currentLine - 2] == ru "Theme"):
