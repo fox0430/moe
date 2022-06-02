@@ -456,13 +456,14 @@ proc update*(status: var EditorStatus) =
 
   setCursor(false)
 
-  if status.settings.tabLine.enable:
-    writeTabLineBuffer(
-      status.bufStatus,
-      status.bufferIndexInCurrentWindow,
-      status.mainWindow.mainWindowNode,
-      currentColorTheme,
-      status.settings.tabline.allBuffer)
+  # TODO: Enable
+  #if status.settings.tabLine.enable:
+  #  writeTabLineBuffer(
+  #    status.bufStatus,
+  #    status.bufferIndexInCurrentWindow,
+  #    status.mainWindow.mainWindowNode,
+  #    currentColorTheme,
+  #    status.settings.tabline.allBuffer)
 
   status.updateDebugModeBuffer
 
@@ -552,10 +553,12 @@ proc update*(status: var EditorStatus) =
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
-  if status.settings.statusLine.enable: status.updateStatusLine
+  # TODO: Enable
+  #if status.settings.statusLine.enable: status.updateStatusLine
 
+  # TODO: Enable
   let color = ColorThemeTable[currentColorTheme].EditorColorPair.defaultChar
-  status.commandLine.writeCommandLine(color)
+  #status.commandLine.writeCommandLine(color)
 
   display()
 

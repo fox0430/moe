@@ -1,5 +1,5 @@
-import std/[deques, strutils, math, strformat]
-import illwill
+import std/[deques, strutils, math, strformat, logging]
+import illwill, termtools
 import gapbuffer, ui, unicodeext, independentutils, color, settings,
        bufferstatus, highlight
 
@@ -179,29 +179,32 @@ proc scrollDown*[T](view: var EditorView, buffer: T) =
     view.start.addLast(singleLine.start)
     view.length.addLast(singleLine.length)
 
-proc writeLineNum(view: EditorView, y, line: int, colorPair: ColorPair) {.inline.} =
-  const x = 0
-  write(view.x + x, view.y + y, strutils.align($(line+1), view.widthOfLineNum-1), colorPair)
+# TODO: Remove?
+#proc writeLineNum(view: EditorView, y, line: int, colorPair: ColorPair) {.inline.} =
+#  const x = 0
+#  write(view.x + x, view.y + y, strutils.align($(line+1), view.widthOfLineNum-1), colorPair)
 
-proc write(
+# TODO: Remove?
+#proc write(
+#  view: EditorView,
+#  y, x: int,
+#  buf: seq[Rune],
+#  color: ColorPair) {.inline.} =
+#
+#  # TODO: use settings file (tab size)
+#  const tab = "    "
+#  let str = $buf
+#  write(view.x + x, view.y + y, str.replace("\t", tab), color)
+
+proc currentLineWithColor(
   view: EditorView,
-  y, x: int,
-  buf: seq[Rune],
-  color: ColorPair) {.inline.} =
-
-  # TODO: use settings file (tab size)
-  const tab = "    "
-  let str = $buf
-  write(view.x + x, view.y + y, str.replace("\t", tab), color)
-
-proc writeCurrentLine(view: EditorView,
-                      highlight: Highlight,
-                      theme: ColorTheme,
-                      str: seq[Rune],
-                      #currentLineColorPair: var int,
-                      y, x, i, last: int,
-                      mode, prevMode: Mode,
-                      viewSettings: EditorViewSettings) =
+  highlight: Highlight,
+  theme: ColorTheme,
+  str: seq[Rune],
+  #currentLineColorPair: var int,
+  y, x, i, last: int,
+  mode, prevMode: Mode,
+  viewSettings: EditorViewSettings): string =
 
   # TODO: Enable underline
   #if viewSettings.cursorLine:
@@ -252,7 +255,10 @@ proc writeCurrentLine(view: EditorView,
   #  currentLineColorPair.inc
 
   else:
-    view.write(y, x, str, highlight[i].color)
+    # TODO: use settings file (tab size)
+    const tab = "    "
+    let buf = ($str).replace("\t", tab)
+    result = buf.withColor(highlight[i].color)
 
   # TODO: Fix
   #if viewSettings.cursorLine:
@@ -267,6 +273,8 @@ proc writeAllLines*[T](view: var EditorView,
                        highlight: Highlight,
                        theme: ColorTheme,
                        currentLine, startSelectedLine, endSelectedLine: int) =
+
+  var displayBuffer: seq[string] = @[]
 
   view.widthOfLineNum =
     if viewSettings.lineNumber: buffer.len.numberOfDigits + 1
@@ -285,6 +293,9 @@ proc writeAllLines*[T](view: var EditorView,
   var i = if useHighlight: highlight.indexOf(view.originalLine[0], view.start[0])
           else: -1
   for y in 0 ..< view.height:
+    # Add lines with colors to `displayBuffer`.
+    var line = ""
+
     if view.originalLine[y] == -1: break
 
     let isCurrentLine = view.originalLine[y] == currentLine
@@ -294,29 +305,32 @@ proc writeAllLines*[T](view: var EditorView,
           ColorThemeTable[currentColorTheme].EditorColorPair.currentLineNum
         else:
           ColorThemeTable[currentColorTheme].EditorColorPair.lineNum
-      view.writeLineNum(y, view.originalLine[y], lineNumberColor)
+      let buf = strutils.align($(view.originalLine[y] + 1), view.widthOfLineNum - 1)  & " "
+      line = buf.withColor(lineNumberColor)
 
     var x = view.widthOfLineNum
     if view.length[y] == 0:
       if isVisualMode(mode) and
          (view.originalLine[y] >= startSelectedLine and
          endSelectedLine >= view.originalLine[y]):
-        # TODO: Enable color
-        view.write(x, y, ru" ", ColorThemeTable[currentColorTheme].EditorColorPair.visualMode)
+          let color = ColorThemeTable[currentColorTheme].EditorColorPair.visualMode
+          write(view.x + x, view.y + y, " ".withColor(color))
       else:
         if viewSettings.highlightCurrentLine and isCurrentLine and
            currentLine < buffer.len:
-          writeCurrentLine(view,
-                           highlight,
-                           theme,
-                           ru"",
-                           #currentLineColorPair,
-                           y, x, i, 0,
-                           mode, prevMode,
-                           viewSettings)
+          let buf = currentLineWithColor(
+            view,
+            highlight,
+            theme,
+            ru"",
+            #currentLineColorPair,
+            y, x, i, 0,
+            mode, prevMode,
+            viewSettings)
+          line.add buf
         else:
           let color = ColorThemeTable[currentColorTheme].EditorColorPair.defaultChar
-          view.write(y, x, view.lines[y], color)
+          write(view.x + x, view.y + y, view.lines[y].withColor(color))
       continue
 
     if viewSettings.indentationLines and not isConfigMode(mode, prevMode):
@@ -361,27 +375,35 @@ proc writeAllLines*[T](view: var EditorView,
       let str = view.lines[y][first .. last]
 
       if isCurrentLine:
-        writeCurrentLine(view,
-                         highlight,
-                         theme,
-                         str,
-                         #currentLineColorPair,
-                         y, x, i, last,
-                         mode, prevMode,
-                         viewSettings)
+        line.add currentLineWithColor(
+          view,
+          highlight,
+          theme,
+          str,
+          #currentLineColorPair,
+          y, x, i, last,
+          mode, prevMode,
+          viewSettings)
       else:
-        view.write(y, x, str, highlight[i].color)
+        line.add str.withColor(highlight[i].color)
+
       x += width(str)
       if last == highlight[i].lastColumn - view.start[y]: inc(i) # consumed a whole segment
       else: break
 
     if viewSettings.indentationLines:
-      for i in 0..<indents:
-        view.write(
-          y,
-          lineStart+(viewSettings.tabStop*i),
-          ru("┊"),
-          ColorThemeTable[currentColorTheme].EditorColorPair.whitespace)
+      for i in 0 ..< indents:
+        let
+          x = lineStart + (viewSettings.tabStop * i)
+          color = ColorThemeTable[currentColorTheme].EditorColorPair.whitespace
+        write(x, y, "┊".withColor(color))
+
+    displayBuffer.add line
+
+  let
+    startX = view.x
+    startY = view.y
+  write(startX, startY, displayBuffer)
 
 proc update*[T](view: var EditorView,
                 viewSettings: EditorViewSettings,

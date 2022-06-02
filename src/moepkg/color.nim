@@ -1,4 +1,6 @@
 import std/[strutils, tables, macros, strformat, options, sequtils]
+import pkg/termtools
+import unicodeext
 
 type
   # Hex color code
@@ -24,7 +26,7 @@ proc toColorCode*(str: string): Option[ColorCode] =
   else:
     assert(false)
 
-proc `$`(colorCode: ColorCode): string =
+proc `$`*(colorCode: ColorCode): string =
   for ch in colorCode: result &= ch
 
 proc toRGBInt*(colorCode: ColorCode): tuple[r, g, b: int] =
@@ -790,6 +792,23 @@ var ColorThemeTable*: array[ColorTheme, EditorColorPair] = [
 proc setColorPair*(colorPair: var ColorPair, foreground, background: ColorCode) =
   colorPair.fg = some(foreground)
   colorPair.bg = some(background)
+
+# Return text with color escape seqences.
+proc withColor*(buf: seq[Rune], colorPair: ColorPair): string =
+  if colorPair.fg.isSome:
+    let b = ($buf).multiReplace([("[", """[""")])
+    #let b = $buf
+    return b.fgColor("#" & $colorPair.fg.get)
+  else:
+    return $buf
+
+proc withColor*(buf: string, colorPair: ColorPair): string =
+  if colorPair.fg.isSome:
+    let b = buf.multiReplace([("[", """[""")])
+    #let b = buf
+    return b.fgColor("#" & $colorPair.fg.get)
+  else:
+    return buf
 
 #proc setColorPair*(colorPair: EditorColorPair | int,
 #                   character, background: ColorCode) {.inline.} =

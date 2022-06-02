@@ -126,7 +126,9 @@ proc writeStatusLineNormalModeInfo(
     info = fmt"{line} {column} {encoding} {language} "
   #statusLine.window.write(0, statusLineWidth - info.len, info, color)
   # TODO: Enable color
-  let x = statusLineWidth - info.len
+  let
+    buf = info.withColor(color)
+    x = statusLineWidth - info.len
   write(x, statusLine.y, info)
 
 proc writeStatusLineFilerModeInfo(
@@ -302,9 +304,7 @@ proc writeStatusLine*(
 
   ## Write current mode
   if settings.statusLine.mode:
-    # TODO: Enable color
-    #statusLine.window.write(0, 0, statusLineBuffer, color)
-    write(statusLine.x, statusLine.y, $statusLineBuffer)
+    write(statusLine.x, statusLine.y, statusLineBuffer.withColor(color))
 
   if isShowGitBranchName(currentMode, prevMode, isActiveWindow, settings):
     statusLine.writeStatusLineCurrentGitBranchName(

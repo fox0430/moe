@@ -1,5 +1,5 @@
 import std/[osproc, strutils, os, terminal, strformat, options, logging, times]
-import pkg/illwill
+import pkg/[illwill, termtools]
 import unicodeext, color
 
 when not defined unitTest:
@@ -107,72 +107,44 @@ proc startUi*() =
   illwillInit(fullscreen = true)
   setControlCHook(exitUi)
 
-# Set the terminal background color.
-proc applyBackgroundColor(colorCode: ColorCode) =
-  let
-    colors = colorCode.toRGBInt
-    cmd = """printf "\x1b[48;2;""" & fmt"{colors.r};{colors.g};{colors.b}" & """""m""""
-  discard execShellCmd(cmd)
-
-# Set the terminal foreground color.
-proc applyForegroundColor(colorCode: ColorCode) =
-  let
-    colors = colorCode.toRGBInt
-    cmd = """printf "\x1b[38;2;""" & fmt"{colors.r};{colors.g};{colors.b}" & """""m""""
-  discard execShellCmd(cmd)
-
 # Reset the terminal color.
 proc resetColor() {.inline.} =
-  discard execShellCmd("""printf "\x1b[0m\n"""")
-
-# Set the terminal color.
-proc applyColorPair(colorPair: ColorPair) =
-  # None is the terminal default color.
-  if colorPair.fg.isNone or colorPair.bg.isNone:
-    resetColor()
-
-  if colorPair.fg.isSome:
-    applyForegroundColor(colorPair.fg.get)
-
-  if colorPair.bg.isSome:
-    applyBackgroundColor(colorPair.fg.get)
+  discard execShellCmd("""printf '\033[0m'""")
 
 # Display buffer in the terminal buffer.
 proc display*() {.inline.} = tb.display
 
-# Write to the terminal buffer.
-proc write*(x, y: int, buf: string) {.inline.} =
+## Write to the terminal buffer.
+#proc write*(x, y: int, buf: string) {.inline.} =
+#  # Don't write when running unit tests
+#  when not defined unitTest:
+#    tb.write(x, y, buf)
+#
+#proc write*(x, y: int, buf: seq[Rune]) {.inline.} =
+#  # Don't write when running unit tests
+#  when not defined unitTest:
+#    tb.write(x, y, $buf)
+
+#proc write*(x, y: int, buf: string, color: ColorPair) =
+#  # Don't write when running unit tests
+#  when not defined unitTest:
+#    #applyColorPair(color)
+#    let
+#      bufStr = $buf
+#      colorStr = "#fff"
+#    tb.write(x, y, bufStr.fgColor(colorStr))
+#
+proc write*(x, y: int, buf: string) =
   # Don't write when running unit tests
   when not defined unitTest:
+    #applyColorPair(color)
     tb.write(x, y, buf)
 
-proc write*(x, y: int, buf: seq[Rune]) {.inline.} =
+proc write*(startX, startY: int, buf: seq[string]) =
   # Don't write when running unit tests
   when not defined unitTest:
-    tb.write(x, y, $buf)
-
-proc write*(x, y: int, buf: string | seq[Rune], color: ColorPair) =
-  # Don't write when running unit tests
-  when not defined unitTest:
-    applyColorPair(color)
-    tb.write(x, y, buf)
-
-  # Not start when running unit tests
-  #when not defined unitTest:
-  #  discard setLocale(LC_ALL, "")   # enable UTF-8
-
-  #  initscr()   ## start terminal control
-  #  cbreak()    ## enable cbreak mode
-  #  nonl()      ## exit new line mode and improve move cursor performance
-  #  setCursor(true)
-
-  #  if can_change_color():
-  #    ## default is dark
-  #    setCursesColor(ColorThemeTable[ColorTheme.dark])
-
-  #  erase()
-  #  keyEcho(false)
-  #  set_escdelay(25)
+    for y, l in buf:
+      tb.write(startX, startY + y, l)
 
 proc initWindow*(height, width, y, x: int, color: EditorColorPair): Window =
   result = Window()
