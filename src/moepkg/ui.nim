@@ -1,5 +1,5 @@
-import std/[osproc, strutils, os, terminal, strformat, options, logging, times]
-import pkg/[illwill, termtools]
+import std/[osproc, termios, strutils, os, terminal, strformat, options, logging, times]
+import pkg/termtools
 import unicodeext, color
 
 when not defined unitTest:
@@ -30,14 +30,11 @@ type Window* = ref object
   y*, x*: int
 
 var
-  tb*: TerminalBuffer
-
+  orig_termios*: Termios
   pressCtrlC* = false
   isResizedWindow* = false
 
 const
-  NONE_KEY* = Rune(int(illwill.Key.None))
-
   SIGWINCH = cint(28)
 
 # SIGWINCH will be sent when the terminal emulator is resized on the X11.
@@ -60,6 +57,21 @@ proc changeCursorType*(cursorType: CursorType) =
   of noneBlinkBlock: setNoneBlinkingBlockCursor()
   of blinkIbeam: setBkinkingIbeamCursor()
   of noneBlinkIbeam: setNoneBlinkingIbeamCursor()
+
+proc enableRawMode*() =
+  var raw = orig_termios
+  discard tcgetattr(STDIN_FILENO, addr(raw))
+  raw.c_iflag = raw.c_iflag and not (IXON)
+  raw.c_iflag = raw.c_iflag and not (ICRNL or IXON)
+  raw.c_oflag = raw.c_oflag and not (OPOST)
+  raw.c_lflag = raw.c_lflag and not (ECHO or ICANON or IEXTEN or ISIG)
+  raw.c_cc[VMIN] = char(0);
+  raw.c_cc[VTIME] = char(0.1);
+
+  discard tcsetattr(STDIN_FILENO, TCSAFLUSH, addr(raw))
+
+proc disableRawMode*() =
+  discard tcsetattr(STDIN_FILENO, TCSAFLUSH, addr(orig_termios))
 
 # if press ctrl-c key, set true in setControlCHook()
 proc disableControlC*() {.inline.} =
@@ -94,17 +106,12 @@ proc checkColorSupportedTerminal*(): int =
   else:
     result = -1
 
-# Clear the screen.
-proc initTerminalBuffer*() =
-  tb = newTerminalBuffer(terminalWidth(), terminalHeight())
-
 proc exitUi*() {.noconv.} =
-  illwillDeinit()
-  showCursor()
+  disableRawMode()
   eraseScreen()
+  showCursor()
 
 proc startUi*() =
-  illwillInit(fullscreen = true)
   setControlCHook(exitUi)
 
 # Reset the terminal color.
@@ -138,13 +145,20 @@ proc write*(x, y: int, buf: string) =
   # Don't write when running unit tests
   when not defined unitTest:
     #applyColorPair(color)
-    tb.write(x, y, buf)
+    setCursorPos(x, y)
+    stdout.write(buf)
+    # TODO: Move flushFile
+    stdout.flushFile
 
 proc write*(startX, startY: int, buf: seq[string]) =
   # Don't write when running unit tests
   when not defined unitTest:
     for y, l in buf:
-      tb.write(startX, startY + y, l)
+      setCursorPos(startX, startY + y)
+      stdout.write(l)
+
+    # TODO: Move flushFile
+    stdout.flushFile
 
 proc initWindow*(height, width, y, x: int, color: EditorColorPair): Window =
   result = Window()
@@ -219,41 +233,9 @@ proc moveCursor*(x, y: int) =
 #proc deleteWindow*(win: var Window) {.inline.} = delwin(win.cursesWindow)
 
 proc getKey*(): Rune =
-  let key = illwill.getKey()
-  # Ignore a mouse
-  case key
-    of  None, Mouse:
-      return Rune(-1)
-    else:
-      return Rune(int(key))
-
-# TODO: Remove
-proc getKeyBlock*(): Rune =
-  while true:
-    let key = illwill.getKey()
-    case key
-      of  None, Mouse:
-        continue
-      else:
-        return Rune(int(key))
-
-  #let key = win.cursesWindow.getKey
-  #return toRunes($key)[0]
-
-#  var
-#    s = ""
-#    len: int
-#  block getfirst:
-#    let key = wgetch(win.cursesWindow)
-#    if Rune(key) == errorKey: return errorKey
-#    if not (key <= 0x7F or (0xC2 <= key and key <= 0xF0) or key == 0xF3): return Rune(key)
-#    s.add(char(key))
-#    len = numberOfBytes(char(key))
-#  for i in 0 ..< len-1: s.add(char(wgetch(win.cursesWindow)))
-#
-#  let runes = toRunes(s)
-#  doAssert(runes.len == 1, fmt"runes length shoud be 1.")
-#  return runes[0]
+  var c = '\0'
+  discard read(STDIN_FILENO, c.addr, 1)
+  return c.ru
 
 proc isEscKey*(key: Rune): bool {.inline.} =
   key == Rune(int(illwill.Key.Escape))
