@@ -188,18 +188,6 @@ proc write*(x, y: int, buf: string) =
     #applyColorPair(color)
     setCursorPos(x, y)
     stdout.write(buf)
-    # TODO: Move flushFile
-    stdout.flushFile
-
-proc write*(startX, startY: int, buf: seq[string]) =
-  # Don't write when running unit tests
-  when not defined unitTest:
-    for y, l in buf:
-      setCursorPos(startX, startY + y)
-      stdout.write(l)
-
-    # TODO: Move flushFile
-    stdout.flushFile
 
 # TODO: Fix append
 proc append*(win: var Window,

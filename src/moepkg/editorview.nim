@@ -276,6 +276,8 @@ proc writeAllLines*[T](view: var EditorView,
 
   var displayBuffer: seq[string] = @[]
 
+  writeFile("/home/fox/log", $view.y)
+
   view.widthOfLineNum =
     if viewSettings.lineNumber: buffer.len.numberOfDigits + 1
     else: 0
@@ -314,7 +316,8 @@ proc writeAllLines*[T](view: var EditorView,
          (view.originalLine[y] >= startSelectedLine and
          endSelectedLine >= view.originalLine[y]):
           let color = ColorThemeTable[currentColorTheme].EditorColorPair.visualMode
-          write(view.x + x, view.y + y, " ".withColor(color))
+          line.add " ".withColor(color)
+          #write(view.x + x, view.y + y, " ".withColor(color))
       else:
         if viewSettings.highlightCurrentLine and isCurrentLine and
            currentLine < buffer.len:
@@ -330,7 +333,8 @@ proc writeAllLines*[T](view: var EditorView,
           line.add buf
         else:
           let color = ColorThemeTable[currentColorTheme].EditorColorPair.defaultChar
-          write(view.x + x, view.y + y, view.lines[y].withColor(color))
+          line.add view.lines[y].withColor(color)
+          #write(view.x + x, view.y + y, view.lines[y].withColor(color))
       continue
 
     if viewSettings.indentationLines and not isConfigMode(mode, prevMode):
@@ -403,7 +407,14 @@ proc writeAllLines*[T](view: var EditorView,
   let
     startX = view.x
     startY = view.y
-  write(startX, startY, displayBuffer)
+  for i, l in displayBuffer:
+    write(startX, startY + i, l)
+
+  # TODO: Remove
+  #var b = ""
+  #for l in displayBuffer:
+  #  b.add l & "\n"
+  #writeFile("/home/fox/log", b)
 
 proc update*[T](view: var EditorView,
                 viewSettings: EditorViewSettings,

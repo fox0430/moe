@@ -795,20 +795,31 @@ proc setColorPair*(colorPair: var ColorPair, foreground, background: ColorCode) 
 
 # Return text with color escape seqences.
 proc withColor*(buf: seq[Rune], colorPair: ColorPair): string =
-  if colorPair.fg.isSome:
-    let b = ($buf).multiReplace([("[", """[""")])
-    #let b = $buf
-    return b.fgColor("#" & $colorPair.fg.get)
-  else:
-    return $buf
+  if buf.len > 0:
+    if colorPair.fg.isSome:
+      let
+        escaed = escape($buf)
+        # Remove '"'
+        str = escaed[1 .. escaed.high - 1]
+      return str.fgColor("#" & $colorPair.fg.get)
+    else:
+      let escaed = escape($buf)
+      # Remove '"'
+      return escaed[1 .. escaed.high - 1]
 
+# Return text with color escape seqences.
 proc withColor*(buf: string, colorPair: ColorPair): string =
-  if colorPair.fg.isSome:
-    let b = buf.multiReplace([("[", """[""")])
-    #let b = buf
-    return b.fgColor("#" & $colorPair.fg.get)
-  else:
-    return buf
+  if buf.len > 0:
+    if colorPair.fg.isSome:
+      let
+        escaed = buf.escape
+        # Remove '"'
+        str = escaed[1 .. escaed.high - 1]
+      return str.fgColor("#" & $colorPair.fg.get)
+    else:
+      let escaed = buf.escape
+      # Remove '"'
+      return escaed[1 .. escaed.high - 1]
 
 #proc setColorPair*(colorPair: EditorColorPair | int,
 #                   character, background: ColorCode) {.inline.} =
