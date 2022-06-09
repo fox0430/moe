@@ -1,5 +1,4 @@
 import std/[heapqueue, options]
-import illwill
 import ui, editorview, gapbuffer, cursor, highlight, unicodeext
 
 # vertical is default
@@ -318,9 +317,11 @@ proc absolutePosition*(windowNode: WindowNode,
   let (_, relativeY, relativeX) = windowNode.view.findCursorPosition(line, column)
   return (windowNode.y + relativeY, windowNode.x + relativeX + windowNode.view.widthOfLineNum)
 
+# TODO: Fix write
 proc write(windowNode: WindowNode, line, column: int, buffer: seq[Rune]) =
-  let absPosi = windowNode.absolutePosition(line, column)
-  tb.write(column, line, $buffer)
+#  let absPosi = windowNode.absolutePosition(line, column)
+#  tb.write(column, line, $buffer)
+  discard
 
 proc refreshWindow*(node: var WindowNode) {.inline.} =
   discard

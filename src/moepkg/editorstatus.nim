@@ -452,7 +452,7 @@ proc updateLogViewer(bufStatus: var BufferStatus,
 proc updateDebugModeBuffer(status: var EditorStatus)
 
 proc update*(status: var EditorStatus) =
-  initTerminalBuffer()
+  eraseScreen()
 
   setCursor(false)
 
@@ -559,8 +559,6 @@ proc update*(status: var EditorStatus) =
   # TODO: Enable
   let color = ColorThemeTable[currentColorTheme].EditorColorPair.defaultChar
   #status.commandLine.writeCommandLine(color)
-
-  display()
 
   setCursor(true)
 

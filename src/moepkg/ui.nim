@@ -1,4 +1,4 @@
-import std/[osproc, termios, strutils, os, terminal, strformat, options, logging, times]
+import std/[osproc, termios, strutils, os, terminal, strformat, options, logging, posix]
 import pkg/termtools
 import unicodeext, color
 
@@ -18,50 +18,55 @@ when not defined unitTest:
 #  protect = A_PROTECT
 #  #chartext = A_CHAR_TEXT
 
-type Key* = enum
-  CTRL_A = 1
-  CTRL_B = 2
-  CTRL_C = 3
-  CTRL_D = 4
-  CTRL_E = 5
-  CTRL_F = 6
-  CTRL_G = 7
-  CTRL_H = 8
-  CTRL_I = 9
-  CTRL_J = 10
-  CTRL_K = 11
-  CTRL_L = 12
-  CTRL_M = 13
-  CTRL_N = 14
-  CTRL_O = 15
-  CTRL_P = 16
-  CTRL_Q = 17
-  CTRL_R = 18
-  CTRL_S = 19
-  CTRL_T = 20
-  CTRL_U = 21
-  CTRL_V = 22
-  CTRL_W = 23
-  CTRL_X = 24
-  CTRL_Y = 25
-  CTRL_Z = 26
+type
+  Key* = int
 
-  KEY_TAB = 9
-  KEY_ENTER = 13
-  KEY_ESC = 27
-  KEY_BACKSPACE = 127
+const
+  NONE_KEY* = '\0'.ru
 
-  KEY_DOWN = 1000
-  KEY_UP = 1001
-  KEY_RIGHT = 1002
-  KEY_LEFT = 1003
+  CTRL_A* = 1.ru
+  CTRL_B* = 2.ru
+  CTRL_C* = 3.ru
+  CTRL_D* = 4.ru
+  CTRL_E* = 5.ru
+  CTRL_F* = 6.ru
+  CTRL_G* = 7.ru
+  CTRL_H* = 8.ru
+  CTRL_I* = 9.ru
+  CTRL_J* = 10.ru
+  CTRL_K* = 11.ru
+  CTRL_L* = 12.ru
+  CTRL_M* = 13.ru
+  CTRL_N* = 14.ru
+  CTRL_O* = 15.ru
+  CTRL_P* = 16.ru
+  CTRL_Q* = 17.ru
+  CTRL_R* = 18.ru
+  CTRL_S* = 19.ru
+  CTRL_T* = 20.ru
+  CTRL_U* = 21.ru
+  CTRL_V* = 22.ru
+  CTRL_W* = 23.ru
+  CTRL_X* = 24.ru
+  CTRL_Y* = 25.ru
+  CTRL_Z* = 26.ru
 
-  KEY_HOME = 1004
-  KEY_END = 1005
-  KEY_DELETE = 1006
+  KEY_TAB* = 9.ru
+  KEY_ENTER* = 13.ru
+  KEY_ESC* = 27.ru
+  KEY_BACKSPACE* = 127.ru
 
-  KEY_PAGEUP = 1007
-  KEY_PAGEDOWN= 1008
+  KEY_DOWN* = 1000.ru
+  KEY_UP* = 1001.ru
+  KEY_RIGHT* = 1002.ru
+  KEY_LEFT* = 1003.ru
+
+  KEY_HOME* = 1004.ru
+  KEY_END* = 1005.ru
+  KEY_DELETE* = 1006.ru
+
+  KEY_PAGEUP* = 1007.ru
+  KEY_PAGEDOWN* = 1008.ru
 
 type CursorType* = enum
   blinkBlock = 0
@@ -162,9 +167,6 @@ proc startUi*() =
 # Reset the terminal color.
 proc resetColor() {.inline.} =
   discard execShellCmd("""printf '\033[0m'""")
-
-# Display buffer in the terminal buffer.
-proc display*() {.inline.} = tb.display
 
 ## Write to the terminal buffer.
 #proc write*(x, y: int, buf: string) {.inline.} =
@@ -289,9 +291,9 @@ proc read(): char =
   discard read(0, c.addr, sizeof(c))
   return c
 
-proc getkey(): Rune =
+proc getkey*(): Rune =
   let key = read()
-  if key.int == KEY_ESC and read() == '[':
+  if key.int == KEY_ESC.int and read() == '[':
     case read():
       of 'A':
         return KEY_UP.Rune
@@ -317,113 +319,97 @@ proc getkey(): Rune =
     return key.Rune
 
 proc isEscKey*(key: Rune): bool {.inline.} =
-  key.int == KEY_ESC.int
+  key == KEY_ESC
 
 # Escape == Shift-Tab
 proc isShiftTab*(key: Rune): bool {.inline.} =
   isEscKey(key)
 
 proc isTabkey*(key: Rune): bool {.inline.} =
-  key.int == KEY_TAB.int
+  key == KEY_TAB
 
 proc isEnterKey*(key: Rune): bool {.inline.} =
-  key.int == KEY_ENTER.int
+  key == KEY_ENTER
 
 proc isBackspaceKey*(key: Rune): bool {.inline.} =
-  key.int == KEY_BACKSPACE.int
-
-proc isEscKey*(key: Rune): bool {.inline.} =
-  key.int == KEY_ESC.int
-
-# Escape == Shift-Tab
-proc isShiftTab*(key: Rune): bool {.inline.} =
-  isEscKey(key)
-
-proc isTabkey*(key: Rune): bool {.inline.} =
-  key.int == KEY_TAB.int
-
-proc isEnterKey*(key: Rune): bool {.inline.} =
-  key.int == KEY_ENTER.int
-
-proc isBackspaceKey*(key: Rune): bool {.inline.} =
-  key.int == KEY_BACKSPACE.int
+  key == KEY_BACKSPACE
 
 proc isUpKey*(key: Rune): bool {.inline.} =
-  key.int == KEY_UP
+  key == KEY_UP
 proc isDownKey*(key: Rune): bool {.inline.} =
-  key.int == KEY_DOWN.int
+  key == KEY_DOWN
 proc isRightKey*(key: Rune): bool {.inline.} =
-  key.int == KEY_RIGHT.int
+  key == KEY_RIGHT
 proc isLeftKey*(key: Rune): bool {.inline.} =
-  key.int == KEY_LEFT.int
+  key == KEY_LEFT
 
 proc isHomeKey*(key: Rune): bool {.inline.} =
-  key.int == KEY_HOME.int
+  key == KEY_HOME
 proc isEndKey*(key: Rune): bool {.inline.} =
-  key.int == KEY_END.int
+  key == KEY_END
 
 proc isDeleteKey*(key: Rune): bool {.inline.} =
-  key.int == KEY_DELETE.int
+  key == KEY_DELETE
 
 proc isPageUpKey*(key: Rune): bool {.inline.} =
-  key.int == KEY_PAGEUP.int
+  key == KEY_PAGEUP
 proc isPageDownKey*(key: Rune): bool {.inline.} =
-  key.int == KEY_PAGEDOWN.int
+  key == KEY_PAGEDOWN
 
 proc isControlA*(key: Rune): bool {.inline.} =
-  key.int == CTRL_A.int
+  key == CTRL_A
 proc isControlB*(key: Rune): bool {.inline.} =
-  key.int == CTRL_B.int
+  key == CTRL_B
 proc isControlC*(key: Rune): bool {.inline.} =
-  key.int == CTRL_C.int
+  key == CTRL_C
 proc isControlD*(key: Rune): bool {.inline.} =
-  key.int == CTRL_D.int
+  key == CTRL_D
 proc isControlE*(key: Rune): bool {.inline.} =
-  key.int == CTRL_E.int
+  key == CTRL_E
 proc isControlF*(key: Rune): bool {.inline.} =
-  key.int == CTRL_F.int
+  key == CTRL_F
 proc isControlG*(key: Rune): bool {.inline.} =
-  key.int == CTRL_G.int
+  key == CTRL_G
 proc isControlH*(key: Rune): bool {.inline.} =
-  key.int == CTRL_H.int
+  key == CTRL_H
 # Tab == Ctrl-I
 proc isControlI*(key: Rune): bool {.inline.} =
   isTabkey(key)
 proc isControlJ*(key: Rune): bool {.inline.} =
-  key.int == CTRL_J.int
+  key == CTRL_J
 proc isControlK*(key: Rune): bool {.inline.} =
-  key.int == CTRL_K.int
+  key == CTRL_K
 proc isControlL*(key: Rune): bool {.inline.} =
-  key.int == CTRL_L.int
+  key == CTRL_L
 # Enter == Ctrl-M
 proc isControlM*(key: Rune): bool {.inline.} =
   isEnterKey(key)
 proc isControlN*(key: Rune): bool {.inline.} =
-  key.int == CTRL_N.int
+  key == CTRL_N
 proc isControlO*(key: Rune): bool {.inline.} =
-  key.int == CTRL_O.int
+  key == CTRL_O
 proc isControlP*(key: Rune): bool {.inline.} =
-  key.int == CTRL_P.int
+  key == CTRL_P
 proc isControlQ*(key: Rune): bool {.inline.} =
-  key.int == CTRL_Q.int
+  key == CTRL_Q
 proc isControlR*(key: Rune): bool {.inline.} =
-  key.int == CTRL_R.int
+  key == CTRL_R
 proc isControlS*(key: Rune): bool {.inline.} =
-  key.int == CTRL_S.int
+  key == CTRL_S
 proc isControlT*(key: Rune): bool {.inline.} =
-  key.int == CTRL_T.int
+  key == CTRL_T
 proc isControlU*(key: Rune): bool {.inline.} =
-  key.int == CTRL_U.int
+  key == CTRL_U
 proc isControlV*(key: Rune): bool {.inline.} =
-  key.int == CTRL_V.int
+  key == CTRL_V
 proc isControlW*(key: Rune): bool {.inline.} =
-  key.int == CTRL_W.int
+  key == CTRL_W
 proc isControlX*(key: Rune): bool {.inline.} =
-  key.int == CTRL_X.int
+  key == CTRL_X
 proc isControlY*(key: Rune): bool {.inline.} =
-  key.int == CTRL_Y.int
+  key == CTRL_Y
 proc isControlZ*(key: Rune): bool {.inline.} =
-  key.int == CTRL_Z.int
+  key == CTRL_Z
 
 # Ctrl-[ == Enter
 proc isControlLeftSquareBracket*(key: Rune): bool {.inline.} =

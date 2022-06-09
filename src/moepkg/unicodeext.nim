@@ -142,6 +142,7 @@ proc toRune*(x: int): Rune {.inline.} = Rune(x)
 proc `==`*(c: Rune, x: int): bool {.inline.} = c == toRune(x)
 proc `==`*(c: Rune, x: char): bool {.inline.} = c == toRune(x)
 
+proc ru*(n: int): Rune {.inline.} = toRune(n)
 proc ru*(c: char): Rune {.inline.} = toRune(c)
 proc ru*(s: string): seq[Rune] {.inline.} = s.toRunes
 proc ru*(array: seq[string]): seq[Rune] =

@@ -1,5 +1,5 @@
 import std/[deques, strutils, math, strformat, logging]
-import illwill, termtools
+import termtools
 import gapbuffer, ui, unicodeext, independentutils, color, settings,
        bufferstatus, highlight
 
