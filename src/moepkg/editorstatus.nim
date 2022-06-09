@@ -707,7 +707,8 @@ proc writePopUpWindow*(popUpWindow: var Window,
     actualY = y.clamp(0, terminalHeight - 1 - h)
     actualX = x.clamp(0, terminalWidth - w)
 
-  popUpWindow.resize(h, w, actualY, actualX)
+  # TODO: Fix popUpWindow.resize
+  #popUpWindow.resize(h, w, actualY, actualX)
 
   let startLine = if currentLine == -1: 0
                   elif currentLine - h + 1 > 0: currentLine - h + 1

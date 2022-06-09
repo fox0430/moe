@@ -91,22 +91,32 @@ const
 onSignal(SIGWINCH):
   isResizedWindow = true
 
-proc setBkinkingIbeamCursor*() {.inline.} = discard execShellCmd("printf '\e[5 q'")
+proc setBkinkingIbeamCursor*() =
+  stdout.write("""\e[5 q""")
+  stdout.flushFile
 
-proc setNoneBlinkingIbeamCursor*() {.inline.} = discard execShellCmd("printf '\e[6 q'")
+proc setNoneBlinkingIbeamCursor*() =
+  stdout.write("""\e[6 q""")
+  stdout.flushFile
 
-proc setBlinkingBlockCursor*() {.inline.} = discard execShellCmd("printf '\e[1 q'")
+proc setBlinkingBlockCursor*() =
+  stdout.write("""\e[1 q""")
+  stdout.flushFile
 
-proc setNoneBlinkingBlockCursor*() {.inline.} = discard execShellCmd("printf '\e[2 q'")
+proc setNoneBlinkingBlockCursor*() =
+  stdout.write("""\e[2 q""")
+  stdout.flushFile
 
-proc unhideCursor*() {.inline.} = discard execShellCmd("printf '\e[?25h'")
+proc unhideCursor*() =
+  stdout.write("""\e[?25h""")
+  stdout.flushFile
 
 proc changeCursorType*(cursorType: CursorType) =
   case cursorType
-  of blinkBlock: setBlinkingBlockCursor()
-  of noneBlinkBlock: setNoneBlinkingBlockCursor()
-  of blinkIbeam: setBkinkingIbeamCursor()
-  of noneBlinkIbeam: setNoneBlinkingIbeamCursor()
+    of blinkBlock: setBlinkingBlockCursor()
+    of noneBlinkBlock: setNoneBlinkingBlockCursor()
+    of blinkIbeam: setBkinkingIbeamCursor()
+    of noneBlinkIbeam: setNoneBlinkingIbeamCursor()
 
 proc enableRawMode*() =
   var raw = orig_termios
@@ -114,7 +124,7 @@ proc enableRawMode*() =
   raw.c_iflag = raw.c_iflag and not (IXON)
   raw.c_iflag = raw.c_iflag and not (ICRNL or IXON)
   raw.c_oflag = raw.c_oflag and not (OPOST)
-  raw.c_lflag = raw.c_lflag and not (ECHO or ICANON or IEXTEN or ISIG)
+  raw.c_lflag = raw.c_lflag and not (ECHO or IEXTEN)
   raw.c_cc[VMIN] = char(0);
   raw.c_cc[VTIME] = char(0.1);
 
@@ -133,9 +143,11 @@ proc disableControlC*() {.inline.} =
 
 proc setCursor*(cursor: bool) =
   if cursor:
-    discard execShellCmd("printf '\e[?25h'")
+    stdout.write("""\e[?25h""")
   else:
-    discard execShellCmd("printf '\e[?25l'")
+    stdout.write("""'\e[?25l""")
+
+  stdout.flushFile
 
 #proc keyEcho*(keyecho: bool) =
 #  if keyecho == true: echo()
@@ -163,31 +175,13 @@ proc exitUi*() {.noconv.} =
 
 proc startUi*() =
   setControlCHook(exitUi)
+  enableRawMode()
 
 # Reset the terminal color.
-proc resetColor() {.inline.} =
-  discard execShellCmd("""printf '\033[0m'""")
+proc resetColor() =
+  stdout.write("""\033[0m""")
+  stdout.flushFile
 
-## Write to the terminal buffer.
-#proc write*(x, y: int, buf: string) {.inline.} =
-#  # Don't write when running unit tests
-#  when not defined unitTest:
-#    tb.write(x, y, buf)
-#
-#proc write*(x, y: int, buf: seq[Rune]) {.inline.} =
-#  # Don't write when running unit tests
-#  when not defined unitTest:
-#    tb.write(x, y, $buf)
-
-#proc write*(x, y: int, buf: string, color: ColorPair) =
-#  # Don't write when running unit tests
-#  when not defined unitTest:
-#    #applyColorPair(color)
-#    let
-#      bufStr = $buf
-#      colorStr = "#fff"
-#    tb.write(x, y, bufStr.fgColor(colorStr))
-#
 proc write*(x, y: int, buf: string) =
   # Don't write when running unit tests
   when not defined unitTest:
@@ -207,19 +201,10 @@ proc write*(startX, startY: int, buf: seq[string]) =
     # TODO: Move flushFile
     stdout.flushFile
 
-proc initWindow*(height, width, y, x: int, color: EditorColorPair): Window =
-  result = Window()
-  result.y = y
-  result.x = x
-  result.height = height
-  result.width = width
-  #result.cursesWindow = initWindow(x, y,width, height)
-  #keypad(result.cursesWindow, true)
-  #discard wbkgd(result.cursesWindow, ncurses.COLOR_PAIR(color))
-
+# TODO: Fix append
 proc append*(win: var Window,
-              str: string,
-              color: EditorColorPair) =
+             str: string,
+             color: EditorColorPair) =
 
   # Not write when running unit tests
   when not defined unitTest:
@@ -230,6 +215,7 @@ proc append*(win: var Window,
 
     win.x += str.toRunes.width
 
+# TODO: Fix append
 proc append*(win: var Window,
             runes: seq[Rune],
             color: EditorColorPair) =
@@ -240,83 +226,57 @@ proc append*(win: var Window,
     #win.cursesWindow.append($runes)
     #append(win, $str, color)
 
-proc erase*(win: var Window) =
-  discard
-  #win.cursesWindow.erase
-  #werase(win.cursesWindow)
-  win.y = 0
-  win.x = 0
-
-#proc refresh*(win: Window) {.inline.} = wrefresh(win.cursesWindow)
-proc refresh*(win: Window) = discard
-
 #proc move*(win: Window, y, x: int) {.inline.} = mvwin(win.cursesWindow, cint(y), cint(x))
 #proc move*(win: Window, y, x: int) {.inline.} = win.cursesWindow.move(y, x)
 
-proc resize*(win: var Window, height, width: int) =
-  #wresize(win.cursesWindow, cint(height), cint(width))
-
-  win.height = height
-  win.width = width
-
-proc resize*(win: var Window, height, width, y, x: int) =
-  #win.cursesWindow.resize(height, width)
-  #win.move(y, x)
-
-  win.y = y
-  win.x = x
-
-#proc attron*(win: var Window, attributes: Attributes) {.inline.} =
-#  win.cursesWindow.wattron(cint(attributes))
-#
-#proc attroff*(win: var Window, attributes: Attributes) {.inline.} =
-#  win.cursesWindow.wattroff(cint(attributes))
-
 # Move cursor position on the terminal.
 proc moveCursor*(x, y: int) =
-  let cmd = """printf '\033[""" & $y & ";" & $x & "H'"
-  discard execShellCmd(cmd)
+  stdout.write("""\033[""" & $y & ";" & $x & "H")
+  stdout.flushFile
 
 #proc deleteWindow*(win: var Window) {.inline.} = delwin(win.cursesWindow)
 
 proc kbhit(): bool =
-  var tv = Timeval(tv_sec: 0.Time, tv_usec: 0.Suseconds)
-  var tfs: TFDSet
+  var
+    tv = Timeval(tv_sec: 0.Time, tv_usec: 0.Suseconds)
+    tfs: TFDSet
   FD_ZERO(tfs);
   FD_SET(0, tfs)
+
   return select(1, tfs.addr, nil, nil, tv.addr) > 0;
 
-proc read(): char =
+proc read(): Rune =
   var c: char
+  # TODO: Add error handling?
   discard read(0, c.addr, sizeof(c))
-  return c
+  return c.ru
 
 proc getkey*(): Rune =
   let key = read()
-  if key.int == KEY_ESC.int and read() == '[':
+  if key == KEY_ESC and read() == '['.ru:
     case read():
-      of 'A':
+      of 'A'.ru:
         return KEY_UP.Rune
-      of 'B':
+      of 'B'.ru:
         return KEY_DOWN.Rune
-      of 'C':
+      of 'C'.ru:
         return KEY_RIGHT.Rune
-      of 'D':
+      of 'D'.ru:
         return KEY_LEFT.Rune
-      of '3':
+      of '3'.ru:
         return KEY_DELETE.Rune
-      of '5':
+      of '5'.ru:
         return KEY_PAGEUP.Rune
-      of '6':
+      of '6'.ru:
         return KEY_PAGEDOWN.Rune
-      of '7':
+      of '7'.ru:
         return KEY_HOME.Rune
-      of '8':
+      of '8'.ru:
         return KEY_END.Rune
       else:
         discard
   else:
-    return key.Rune
+    return key
 
 proc isEscKey*(key: Rune): bool {.inline.} =
   key == KEY_ESC
