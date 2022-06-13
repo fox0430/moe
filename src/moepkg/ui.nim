@@ -119,8 +119,9 @@ proc changeCursorType*(cursorType: CursorType) =
     of noneBlinkIbeam: setNoneBlinkingIbeamCursor()
 
 proc enableRawMode*() =
+  discard tcgetattr(STDIN_FILENO, addr(orig_termios))
+
   var raw = orig_termios
-  discard tcgetattr(STDIN_FILENO, addr(raw))
   raw.c_iflag = raw.c_iflag and not (IXON)
   raw.c_iflag = raw.c_iflag and not (ICRNL or IXON)
   raw.c_oflag = raw.c_oflag and not (OPOST)
@@ -143,11 +144,9 @@ proc disableControlC*() {.inline.} =
 
 proc setCursor*(cursor: bool) =
   if cursor:
-    stdout.write("""\e[?25h""")
+    showCursor()
   else:
-    stdout.write("""'\e[?25l""")
-
-  stdout.flushFile
+    hideCursor()
 
 #proc keyEcho*(keyecho: bool) =
 #  if keyecho == true: echo()
@@ -218,9 +217,8 @@ proc append*(win: var Window,
 #proc move*(win: Window, y, x: int) {.inline.} = win.cursesWindow.move(y, x)
 
 # Move cursor position on the terminal.
-proc moveCursor*(x, y: int) =
-  stdout.write("""\033[""" & $y & ";" & $x & "H")
-  stdout.flushFile
+proc moveCursor*(x, y: int) {.inline.} =
+  setCursorPos(x, y)
 
 #proc deleteWindow*(win: var Window) {.inline.} = delwin(win.cursesWindow)
 

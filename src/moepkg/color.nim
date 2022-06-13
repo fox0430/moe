@@ -797,29 +797,19 @@ proc setColorPair*(colorPair: var ColorPair, foreground, background: ColorCode) 
 proc withColor*(buf: seq[Rune], colorPair: ColorPair): string =
   if buf.len > 0:
     if colorPair.fg.isSome:
-      let
-        escaed = escape($buf)
-        # Remove '"'
-        str = escaed[1 .. escaed.high - 1]
+      let str = replace($buf, """\""", """\\""")
       return str.fgColor("#" & $colorPair.fg.get)
     else:
-      let escaed = escape($buf)
-      # Remove '"'
-      return escaed[1 .. escaed.high - 1]
+      return replace($buf, """\""", """\\""")
 
 # Return text with color escape seqences.
 proc withColor*(buf: string, colorPair: ColorPair): string =
   if buf.len > 0:
     if colorPair.fg.isSome:
-      let
-        escaed = buf.escape
-        # Remove '"'
-        str = escaed[1 .. escaed.high - 1]
+      let str = buf.replace("""\""", """\\""")
       return str.fgColor("#" & $colorPair.fg.get)
     else:
-      let escaed = buf.escape
-      # Remove '"'
-      return escaed[1 .. escaed.high - 1]
+      return buf.replace("""\""", """\\""")
 
 #proc setColorPair*(colorPair: EditorColorPair | int,
 #                   character, background: ColorCode) {.inline.} =
