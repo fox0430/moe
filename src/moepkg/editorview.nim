@@ -214,13 +214,12 @@ proc scrollDown*[T](view: var EditorView, buffer: T) =
 #  let str = $buf
 #  write(view.x + x, view.y + y, str.replace("\t", tab), color)
 
-# TODO: Fix too many space.
 proc currentLineWithColor(
   view: EditorView,
   highlight: Highlight,
   theme: ColorTheme,
   str: seq[Rune],
-  y, x, i, last: int,
+  y, i, last: int,
   mode, prevMode: Mode,
   viewSettings: EditorViewSettings): string =
 
@@ -241,7 +240,7 @@ proc currentLineWithColor(
 
       result = withColor($str, color)
 
-    block:
+    if last == view.lines[y].high:
       # Spaces after text in the current line.
       let
         spaces = " ".repeat(view.width - view.lines[y].width)
@@ -318,7 +317,7 @@ proc writeAllLines*[T](
             highlight,
             theme,
             ru"",
-            y, x, i, 0,
+            y, i, 0,
             mode, prevMode,
             viewSettings)
         else:
@@ -375,7 +374,7 @@ proc writeAllLines*[T](
           highlight,
           theme,
           str,
-          y, x, i, last,
+          y, i, last,
           mode, prevMode,
           viewSettings)
       else:
