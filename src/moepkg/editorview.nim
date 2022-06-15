@@ -13,10 +13,11 @@ type ViewLine = object
   line: seq[Rune]
   originalLine, start, length: int
 
-proc loadSingleViewLine[T](view: EditorView,
-                           buffer: T,
-                           originalLine,
-                           start: int): ViewLine =
+proc loadSingleViewLine[T](
+  view: EditorView,
+  buffer: T,
+  originalLine,
+  start: int): ViewLine =
 
   result.line = ru""
   result.originalLine = originalLine
@@ -34,9 +35,16 @@ proc loadSingleViewLine[T](view: EditorView,
     totalWidth += nextWidth
     nextWidth = calcNextWidth
 
+## NOTE
+## EN: Reload the EditorView from the buffer so that topLine appears as the top line of the EditorView.
+## The calculation cost is a little high because the entire EditorView is updated.
+## It is supposed to be used when synchronizing the contents of the buffer and the contents of the EditorView,
+## or after processing so that the contents of the entire EditorView are completely different.
+##
+## JP: topLineがEditorViewの一番上のラインとして表示されるようにバッファからEditorViewに対してリロードを行う.
+## EditorView全体を更新するため計算コストはやや高め.
+## バッファの内容とEditorViewの内容を同期させる時やEditorView全体が全く異なるような内容になるような処理をした後等に使用することが想定されている.
 proc reload*[T](view: var EditorView, buffer: T, topLine: int) =
-  ## topLineがEditorViewの一番上のラインとして表示されるようにバッファからEditorViewに対してリロードを行う.
-  ## EditorView全体を更新するため計算コストはやや高め.バッファの内容とEditorViewの内容を同期させる時やEditorView全体が全く異なるような内容になるような処理をした後等に使用することが想定されている.
 
   view.updated = true
 
@@ -70,8 +78,14 @@ proc reload*[T](view: var EditorView, buffer: T, topLine: int) =
       inc(lineNumber)
       start = 0
 
+## NOTE
+## EN: Initialize EditorView with width/height and load from the 0th line 0th character of the buffer.
+## width is not the screen width. The number of characters in one line of EditorView.
+## You don't have to consider the length of the line number.
+##
+## JP: width/heightでEditorViewを初期化し,バッファの0行0文字目からロードする.
+## widthは画面幅ではなくEditorViewの1ラインの文字数である(行番号分の長さは考慮しなくてよい).
 proc initEditorView*[T](buffer: T, y, x, height, width: int): EditorView =
-  ## width/heightでEditorViewを初期化し,バッファの0行0文字目からロードする.widthは画面幅ではなくEditorViewの1ラインの文字数である(従って行番号分の長さは考慮しなくてよい).
 
   result.y = y
   result.x = x
@@ -91,11 +105,16 @@ proc initEditorView*[T](buffer: T, y, x, height, width: int): EditorView =
 
   result.reload(buffer, 0)
 
-proc resize*[T](view: var EditorView,
-                buffer: T,
-                y, x, height, width, widthOfLineNum: int) =
-  ## 指定されたwidth/heightでEditorViewを更新する.表示される部分はなるべくリサイズ前と同じになるようになっている.
-
+## NOTE
+## EN: Update the EditorView with the specified width/height.
+## Make the displayed part the same as before resizing as much as possible.
+##
+## JP: 指定されたwidth/heightでEditorViewを更新する.
+## 表示される部分はなるべくリサイズ前と同じになるようになっている.
+proc resize*[T](
+  view: var EditorView,
+  buffer: T,
+  y, x, height, width, widthOfLineNum: int) =
   let topline = view.originalLine[0]
 
   view.lines = initDeque[seq[Rune]]()
@@ -117,9 +136,11 @@ proc resize*[T](view: var EditorView,
   view.updated = true
   view.reload(buffer, topLine)
 
+## NOTE
+## EN: Move the display of EditorView up one line.
+##
+## JP: EditorView表示を1ライン上にずらす.
 proc scrollUp*[T](view: var EditorView, buffer: T) =
-  ## EditorView表示を1ライン上にずらす
-
   view.updated = true
 
   view.lines.popLast
@@ -146,9 +167,11 @@ proc scrollUp*[T](view: var EditorView, buffer: T) =
       view.length.addFirst(singleLine.length)
       break
 
+## NOTE
+## EN: Move the display of EditorView down one line.
+##
+## JP: EditorViewの表示を1ライン下にずらす.
 proc scrollDown*[T](view: var EditorView, buffer: T) =
-  ## EditorViewの表示を1ライン下にずらす
-
   view.updated = true
 
   let height = view.height
@@ -180,11 +203,6 @@ proc scrollDown*[T](view: var EditorView, buffer: T) =
     view.length.addLast(singleLine.length)
 
 # TODO: Remove?
-#proc writeLineNum(view: EditorView, y, line: int, colorPair: ColorPair) {.inline.} =
-#  const x = 0
-#  write(view.x + x, view.y + y, strutils.align($(line+1), view.widthOfLineNum-1), colorPair)
-
-# TODO: Remove?
 #proc write(
 #  view: EditorView,
 #  y, x: int,
@@ -196,12 +214,12 @@ proc scrollDown*[T](view: var EditorView, buffer: T) =
 #  let str = $buf
 #  write(view.x + x, view.y + y, str.replace("\t", tab), color)
 
+# TODO: Fix too many space.
 proc currentLineWithColor(
   view: EditorView,
   highlight: Highlight,
   theme: ColorTheme,
   str: seq[Rune],
-  #currentLineColorPair: var int,
   y, x, i, last: int,
   mode, prevMode: Mode,
   viewSettings: EditorViewSettings): string =
@@ -211,69 +229,46 @@ proc currentLineWithColor(
     # Enable underline
     #win.attron(Attributes.underline)
 
-  # TODO: Enable highlightCurrentLine
   if viewSettings.highlightCurrentLine and
      not (isVisualMode(mode) or isConfigMode(mode, prevMode)):
-       discard
-  #  # Change background color to white if background color is editorBg
-  #  let
-  #    defaultCharColor = EditorColorPair.defaultChar
-  #    colors = if i > -1 and i < highlight.len:
-  #               theme.getColorFromEditorColorPair(highlight[i].color)
-  #             else:
-  #               theme.getColorFromEditorColorPair(defaultCharColor)
 
-  #    theme = ColorThemeTable[theme]
+    block:
+      let color =
+        # Reserse fg color and bg color.
+        if i > -1 and i < highlight.len: highlight[i].color.reverse
+        # Default terminal color
+        else: initColorPair()
 
-  #  block:
-  #    let
-  #      fg = colors[0]
-  #      bg = if colors[1] == theme.EditorColor.editorBg:
-  #             theme.EditorColor.currentLineBg
-  #           else:
-  #             colors[1]
+      result = withColor($str, color)
 
-  #    setColorPair(currentLineColorPair, fg, bg)
-
-  #  view.write(y, x, str, currentLineColorPair)
-
-  #  currentLineColorPair.inc
-
-  #  # Write spaces after text in the current line
-  #  block:
-  #    let
-  #      fg = theme.EditorColor.defaultChar
-  #      bg = theme.EditorColor.currentLineBg
-
-  #    setColorPair(currentLineColorPair, fg, bg)
-  #  let
-  #    spaces = ru" ".repeat(view.width - view.lines[y].width)
-  #    x = view.widthOfLineNum + view.lines[y].width
-
-  #  view.write(y, x, spaces, currentLineColorPair)
-
-  #  currentLineColorPair.inc
-
+    block:
+      # Spaces after text in the current line.
+      let
+        spaces = " ".repeat(view.width - view.lines[y].width)
+        color = ColorThemeTable[currentColorTheme].EditorColorPair.currentLine
+      result.add spaces.withColor(color)
   else:
     # TODO: use settings file (tab size)
     const tab = "    "
     let buf = ($str).replace("\t", tab)
-    result = buf.withColor(highlight[i].color)
+    return buf.withColor(highlight[i].color)
 
   # TODO: Fix
   #if viewSettings.cursorLine:
     # Disable underline
     #win.attroff(Attributes.underline)
 
-proc writeAllLines*[T](view: var EditorView,
-                       viewSettings: EditorViewSettings,
-                       isCurrentWin: bool,
-                       mode, prevMode: Mode,
-                       buffer: T,
-                       highlight: Highlight,
-                       theme: ColorTheme,
-                       currentLine, startSelectedLine, endSelectedLine: int) =
+proc writeAllLines*[T](
+  view: var EditorView,
+  viewSettings: EditorViewSettings,
+  isCurrentWin: bool,
+  mode, prevMode: Mode,
+  buffer: T,
+  highlight: Highlight,
+  theme: ColorTheme,
+  currentLine, startSelectedLine, endSelectedLine: int) =
 
+  # TODO: Remove from here.
   var displayBuffer: seq[string] = @[]
 
   view.widthOfLineNum =
@@ -287,7 +282,7 @@ proc writeAllLines*[T](view: var EditorView,
   let
     start = (view.originalLine[0], view.start[0])
     useHighlight = highlight.len > 0 and
-                   (highlight[0].firstRow, highlight[0].firstColumn) <= start and
+                   (highlight[0].firstrow, highlight[0].firstcolumn) <= start and
                    start <= (highlight[^1].lastRow, highlight[^1].lastColumn)
 
   var i = if useHighlight: highlight.indexOf(view.originalLine[0], view.start[0])
@@ -318,16 +313,14 @@ proc writeAllLines*[T](view: var EditorView,
       else:
         if viewSettings.highlightCurrentLine and isCurrentLine and
            currentLine < buffer.len:
-          let buf = currentLineWithColor(
+          line.add currentLineWithColor(
             view,
             highlight,
             theme,
             ru"",
-            #currentLineColorPair,
             y, x, i, 0,
             mode, prevMode,
             viewSettings)
-          line.add buf
         else:
           let color = ColorThemeTable[currentColorTheme].EditorColorPair.defaultChar
           line.add view.lines[y].withColor(color)
@@ -382,7 +375,6 @@ proc writeAllLines*[T](view: var EditorView,
           highlight,
           theme,
           str,
-          #currentLineColorPair,
           y, x, i, last,
           mode, prevMode,
           viewSettings)
@@ -393,12 +385,13 @@ proc writeAllLines*[T](view: var EditorView,
       if last == highlight[i].lastColumn - view.start[y]: inc(i) # consumed a whole segment
       else: break
 
-    if viewSettings.indentationLines:
-      for i in 0 ..< indents:
-        let
-          x = lineStart + (viewSettings.tabStop * i)
-          color = ColorThemeTable[currentColorTheme].EditorColorPair.whitespace
-        write(x, y, "┊".withColor(color))
+    # TODO: Fix
+    #if viewSettings.indentationLines:
+    #  for i in 0 ..< indents:
+    #    let
+    #      x = lineStart + (viewSettings.tabStop * i)
+    #      color = ColorThemeTable[currentColorTheme].EditorColorPair.whitespace
+    #    write(x, y, "┊".withColor(color))
 
     displayBuffer.add line
 
@@ -414,40 +407,44 @@ proc writeAllLines*[T](view: var EditorView,
   #  b.add l & "\n"
   #writeFile("/home/fox/log", b)
 
-proc update*[T](view: var EditorView,
-                viewSettings: EditorViewSettings,
-                isCurrentWin: bool,
-                mode, prevMode: Mode,
-                buffer: T,
-                highlight: Highlight,
-                theme: ColorTheme,
-                currentLine, startSelectedLine, endSelectedLine: int) =
+proc update*[T](
+  view: var EditorView,
+  viewSettings: EditorViewSettings,
+  isCurrentWin: bool,
+  mode, prevMode: Mode,
+  buffer: T,
+  highlight: Highlight,
+  theme: ColorTheme,
+  currentLine, startSelectedLine, endSelectedLine: int) =
 
   let widthOfLineNum = buffer.len.intToStr.len + 1
   if viewSettings.lineNumber and widthOfLineNum != view.widthOfLineNum:
-    view.resize(buffer,
-                view.y,
-                view.x,
-                view.height,
-                view.width + view.widthOfLineNum - widthOfLineNum,
-                widthOfLineNum)
+    view.resize(
+      buffer,
+      view.y,
+      view.x,
+      view.height,
+      view.width + view.widthOfLineNum - widthOfLineNum,
+      widthOfLineNum)
 
-  view.writeAllLines(viewSettings,
-                     isCurrentWin,
-                     mode,
-                     prevMode,
-                     buffer,
-                     highlight,
-                     theme,
-                     currentLine,
-                     startSelectedLine,
-                     endSelectedLine)
+  view.writeAllLines(
+    viewSettings,
+    isCurrentWin,
+    mode,
+    prevMode,
+    buffer,
+    highlight,
+    theme,
+    currentLine,
+    startSelectedLine,
+    endSelectedLine)
 
   view.updated = false
 
-proc seekCursor*[T](view: var EditorView,
-                    buffer: T,
-                    currentLine, currentColumn: int) =
+proc seekCursor*[T](
+  view: var EditorView,
+  buffer: T,
+  currentLine, currentColumn: int) =
 
   while currentLine < view.originalLine[0] or
         (currentLine == view.originalLine[0] and

@@ -472,11 +472,6 @@ proc update*(status: var EditorStatus) =
     status.settings.highlightSettings.reservedWords,
     status.settings.syntax)
 
-  # TODO: Fix
-  # Set editor Color Pair for current line highlight.
-  # New color pairs are set to Number larger than the maximum value of EditorColorPiar.
-  # var currentLineColorPair = ord(ColorThemeTable[currentColorTheme].EditorColorPair.high) + 1
-
   var queue = initHeapQueue[WindowNode]()
   for node in mainWindowNode.child:
     queue.push(node)

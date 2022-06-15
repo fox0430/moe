@@ -35,9 +35,14 @@ proc toRGBInt*(colorCode: ColorCode): tuple[r, g, b: int] =
   result.g = fromHex[int](colorCodeStr[2..3])
   result.b = fromHex[int](colorCodeStr[4..5])
 
+proc initColorPair*(): ColorPair {.inline.} =
+  ColorPair(fg: none(ColorCode), bg: none(ColorCode))
+
 proc initColorPair*(fgColorStr, bgColorStr: string): ColorPair {.inline.} =
-  result.fg = toColorCode(fgColorStr)
-  result.bg = toColorCode(bgColorStr)
+  ColorPair(fg: toColorCode(fgColorStr), bg: toColorCode(bgColorStr))
+
+proc reverse*(pair: ColorPair): ColorPair {.inline.} =
+  ColorPair(fg: pair.bg, bg: pair.fg)
 
 # Make Color col readable on the background.
 # This tries to preserve the color of col as much as
