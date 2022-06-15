@@ -369,7 +369,7 @@ proc updateStatusLine(status: var Editorstatus) =
   if not status.settings.statusLine.multipleStatusLine:
     const isActiveWindow = true
     let index = status.statusLine[0].bufferIndex
-    status.bufStatus[index].writeStatusLine(
+    status.bufStatus[index].buildStatusLine(
       status.statusLine[0],
       currentMainWindowNode,
       currentColorTheme,
@@ -383,7 +383,7 @@ proc updateStatusLine(status: var Editorstatus) =
         node = mainWindowNode.searchByWindowIndex(index)
         currentNode = status.mainWindow.currentMainWindowNode
         isActiveWindow = index == currentNode.windowIndex
-      status.bufStatus[bufferIndex].writeStatusLine(
+      status.bufStatus[bufferIndex].buildStatusLine(
         status.statusLine[i],
         node,
         currentColorTheme,
@@ -452,9 +452,7 @@ proc updateLogViewer(bufStatus: var BufferStatus,
 proc updateDebugModeBuffer(status: var EditorStatus)
 
 proc update*(status: var EditorStatus) =
-  eraseScreen()
-
-  setCursor(false)
+  ui.eraseScreen()
 
   # TODO: Enable
   #if status.settings.tabLine.enable:
@@ -548,12 +546,23 @@ proc update*(status: var EditorStatus) =
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
-  # TODO: Enable
-  #if status.settings.statusLine.enable: status.updateStatusLine
+  if status.settings.statusLine.enable:
+    status.updateStatusLine
 
   # TODO: Enable
-  let color = ColorThemeTable[currentColorTheme].EditorColorPair.defaultChar
+  #let color = ColorThemeTable[currentColorTheme].EditorColorPair.defaultChar
   #status.commandLine.writeCommandLine(color)
+
+  setCursor(false)
+
+  display()
+
+  # TODO: Remove
+  # Debug displayBuffer
+  #var b = ""
+  #for l in displayBuffer:
+  #  b.add l & "\n"
+  #writeFile("/home/fox/log", b)
 
   setCursor(true)
 

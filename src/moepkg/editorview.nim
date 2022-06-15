@@ -267,9 +267,6 @@ proc writeAllLines*[T](
   theme: ColorTheme,
   currentLine, startSelectedLine, endSelectedLine: int) =
 
-  # TODO: Remove from here.
-  var displayBuffer: seq[string] = @[]
-
   view.widthOfLineNum =
     if viewSettings.lineNumber: buffer.len.numberOfDigits + 1
     else: 0
@@ -322,7 +319,7 @@ proc writeAllLines*[T](
             viewSettings)
         else:
           let color = ColorThemeTable[currentColorTheme].EditorColorPair.defaultChar
-          line.add view.lines[y].withColor(color)
+          line.add $view.lines[y].withColor(color)
 
       displayBuffer.add line
       continue
@@ -378,7 +375,7 @@ proc writeAllLines*[T](
           mode, prevMode,
           viewSettings)
       else:
-        line.add str.withColor(highlight[i].color)
+        line.add $str.withColor(highlight[i].color)
 
       x += width(str)
       if last == highlight[i].lastColumn - view.start[y]: inc(i) # consumed a whole segment
@@ -393,18 +390,6 @@ proc writeAllLines*[T](
     #    write(x, y, "┊".withColor(color))
 
     displayBuffer.add line
-
-  let
-    startX = view.x
-    startY = view.y
-  for i, l in displayBuffer:
-    write(startX, startY + i, l)
-
-  # TODO: Remove
-  #var b = ""
-  #for l in displayBuffer:
-  #  b.add l & "\n"
-  #writeFile("/home/fox/log", b)
 
 proc update*[T](
   view: var EditorView,

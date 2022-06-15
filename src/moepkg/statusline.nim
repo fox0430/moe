@@ -1,20 +1,25 @@
-import std/[strformat, os, osproc]
+import std/[strformat, os, osproc, strutils]
 import syntax/highlite
 import ui, bufferstatus, color, unicodeext, settings, window, gapbuffer
 
-type StatusLine* = object
-  # Absolute position
-  x: int
-  y: int
+type
+  StatusLineBuffer = object
+    withColor: seq[Rune]
+    withoutColor: seq[Rune]
 
-  # Status line size
-  w: int
-  h: int
+  StatusLine* = object
+    # Absolute position
+    x: int
+    y: int
 
-  # TODO: Rename
-  windowIndex*: int
+    # Status line size
+    w: int
+    h: int
 
-  bufferIndex*: int
+    # TODO: Rename
+    windowIndex*: int
+
+    bufferIndex*: int
 
 proc initStatusLine*(): StatusLine {.inline.} =
   result.x = 1
@@ -33,9 +38,24 @@ proc showFilename(mode, prevMode: Mode): bool {.inline.} =
   not isHistoryManagerMode(mode, prevMode) and
   not isConfigMode(mode, prevMode)
 
-proc appendFileName(statusLineBuffer: var seq[Rune],
-                    bufStatus: BufferStatus,
-                    color: ColorPair) =
+proc add(
+  statusLineBuffer: var StatusLineBuffer,
+  buffer: seq[Rune],
+  color: ColorPair) {.inline.} =
+
+  statusLineBuffer.withoutColor.add buffer
+  statusLineBuffer.withColor.add buffer.withColor(color)
+
+proc len(statusLineBuffer: StatusLineBuffer): int {.inline.} =
+  statusLineBuffer.withoutColor.len
+
+proc `$`(statusLineBuffer: StatusLineBuffer): string =
+  $statusLineBuffer.withColor
+
+proc appendFileName(
+  statusLineBuffer: var StatusLineBuffer,
+  bufStatus: BufferStatus,
+  color: ColorPair) =
 
   let
     mode = bufStatus.mode
@@ -51,66 +71,63 @@ proc appendFileName(statusLineBuffer: var seq[Rune],
       filename = ru"~" & filename
     else:
       filename = ru"~/" & filename
-  statusLineBuffer.add(filename)
-  # TODO: Fix
-  #statusLineWindow.append(filename, color)
+  statusLineBuffer.add filename, color
 
-proc writeStatusLineNormalModeInfo(
+proc setStatusLineColor(
+  theme: ColorTheme,
+  mode: Mode,
+  isActiveWindow: bool): ColorPair =
+
+  case mode:
+    of Mode.insert:
+      if isActiveWindow:
+        return ColorThemeTable[theme].EditorColorPair.statusLineInsertMode
+      else:
+        return ColorThemeTable[theme].EditorColorPair.statusLineInsertModeInactive
+    of Mode.visual:
+      if isActiveWindow:
+        return ColorThemeTable[theme].EditorColorPair.statusLineVisualMode
+      else:
+        return ColorThemeTable[theme].EditorColorPair.statusLineVisualModeInactive
+    of Mode.replace:
+      if isActiveWindow:
+        return ColorThemeTable[theme].EditorColorPair.statusLineReplaceMode
+      else:
+        return ColorThemeTable[theme].EditorColorPair.statusLineReplaceModeInactive
+    of Mode.ex:
+      if isActiveWindow:
+        return ColorThemeTable[theme].EditorColorPair.statusLineExMode
+      else:
+        return ColorThemeTable[theme].EditorColorPair.statusLineExModeInactive
+    else:
+      if isActiveWindow:
+        return ColorThemeTable[theme].EditorColorPair.statusLineNormalMode
+      else:
+        return ColorThemeTable[theme].EditorColorPair.statusLineNormalModeInactive
+
+proc buildStatusLineNormalModeInfo(
   bufStatus: var BufferStatus,
   statusLine: var StatusLine,
-  statusLineBuffer: var seq[Rune],
+  statusLineBuffer: var StatusLineBuffer,
   windowNode: WindowNode,
   theme: ColorTheme,
   isActiveWindow: bool,
   settings: EditorSettings) =
 
-  proc setStatusLineColor(theme: ColorTheme, mode: Mode): ColorPair =
-    case mode:
-      of Mode.insert:
-        if isActiveWindow:
-          return ColorThemeTable[theme].EditorColorPair.statusLineInsertMode
-        else:
-          return ColorThemeTable[theme].EditorColorPair.statusLineInsertModeInactive
-      of Mode.visual:
-        if isActiveWindow:
-          return ColorThemeTable[theme].EditorColorPair.statusLineVisualMode
-        else:
-          return ColorThemeTable[theme].EditorColorPair.statusLineVisualModeInactive
-      of Mode.replace:
-        if isActiveWindow:
-          return ColorThemeTable[theme].EditorColorPair.statusLineReplaceMode
-        else:
-          return ColorThemeTable[theme].EditorColorPair.statusLineReplaceModeInactive
-      of Mode.ex:
-        if isActiveWindow:
-          return ColorThemeTable[theme].EditorColorPair.statusLineExMode
-        else:
-          return ColorThemeTable[theme].EditorColorPair.statusLineExModeInactive
-      else:
-        if isActiveWindow:
-          return ColorThemeTable[theme].EditorColorPair.statusLineNormalMode
-        else:
-          return ColorThemeTable[theme].EditorColorPair.statusLineNormalModeInactive
-
   let
-    color = setStatusLineColor(theme, bufStatus.mode)
+    color = setStatusLineColor(theme, bufStatus.mode, isActiveWindow)
     statusLineWidth = statusLine.w
 
-  statusLineBuffer.add(ru" ")
-  # TODO: Fix
-  #statusLine.window.append(ru" ", color)
+  statusLineBuffer.add ru " ", color
 
   if settings.statusLine.filename:
     statusLineBuffer.appendFileName(bufStatus, color)
 
   if bufStatus.countChange > 0 and settings.statusLine.chanedMark:
-    statusLineBuffer.add(ru" [+]")
-    # TODO: Fix
-    #statusLine.window.append(ru" [+]", color)
+    statusLineBuffer.add ru " [+]", color
+    statusLineBuffer.add ru " [+]", color
 
   if statusLineWidth - statusLineBuffer.len < 0: return
-  # TODO: Fix
-  #statusLine.window.append(ru " ".repeat(statusLineWidth - statusLineBuffer.len), color)
 
   let
     line = if settings.statusLine.line:
@@ -124,17 +141,17 @@ proc writeStatusLineNormalModeInfo(
     language = if bufStatus.language == SourceLanguage.langNone: "Plain"
                else: sourceLanguageToStr[bufStatus.language]
     info = fmt"{line} {column} {encoding} {language} "
-  #statusLine.window.write(0, statusLineWidth - info.len, info, color)
-  # TODO: Enable color
-  let
-    buf = info.withColor(color)
-    x = statusLineWidth - info.len
-  write(x, statusLine.y, info)
 
-proc writeStatusLineFilerModeInfo(
+  block:
+    let spaces = " ".repeat(statusLineWidth - (statusLineBuffer.len + info.len))
+    statusLineBuffer.add spaces.toRunes, color
+
+  statusLineBuffer.add info.toRunes, color
+
+proc buildStatusLineFilerModeInfo(
   bufStatus: var BufferStatus,
   statusLine: var StatusLine,
-  statusLineBuffer: var seq[Rune],
+  statusLineBuffer: var StatusLineBuffer,
   windowNode: WindowNode,
   theme: ColorTheme,
   isActiveWindow: bool,
@@ -149,18 +166,15 @@ proc writeStatusLineFilerModeInfo(
     statusLineWidth = statusLine.w
 
   if settings.statusLine.directory:
-    discard
-    # TODO: Fix
-    #statusLine.window.append(ru" ", color)
-    #statusLine.window.append(bufStatus.path, color)
+    statusLineBuffer.add (fmt " {bufStatus.path}").toRunes, color
 
-  # TODO: Fix
-  #statusLine.window.append(ru " ".repeat(statusLineWidth - 5), color)
+  let spaces = " ".repeat(statusLineWidth - 5)
+  statusLineBuffer.add spaces.toRunes, color
 
-proc writeStatusLineBufferManagerModeInfo(
+proc buildStatusLineBufferManagerModeInfo(
   bufStatus: var BufferStatus,
   statusLine: var StatusLine,
-  statusLineBuffer: var seq[Rune],
+  statusLineBuffer: var StatusLineBuffer,
   windowNode: WindowNode,
   theme: ColorTheme,
   isActiveWindow: bool,
@@ -175,16 +189,16 @@ proc writeStatusLineBufferManagerModeInfo(
     info = fmt"{windowNode.currentLine + 1}/{bufStatus.buffer.len - 1}"
     statusLineWidth = statusLine.w
 
-  # TODO: Fix
-  #statusLine.window.append(ru " ".repeat(statusLineWidth - statusLineBuffer.len),
-                                        #color)
-  #statusLine.window.write(0, statusLineWidth - info.len - 1, info, color)
-  write(0, statusLineWidth - info.len - 1, info)
+  block:
+    let spaces = " ".repeat(statusLineWidth - statusLineBuffer.len)
+    statusLineBuffer.add spaces.toRunes, color
 
-proc writeStatusLineLogViewerModeInfo(
+  statusLineBuffer.add info.toRunes, color
+
+proc buildStatusLineLogViewerModeInfo(
   bufStatus: var BufferStatus,
   statusLine: var StatusLine,
-  statusLineBuffer: var seq[Rune],
+  statusLineBuffer: var StatusLineBuffer,
   windowNode: WindowNode,
   theme: ColorTheme,
   isActiveWindow: bool,
@@ -199,15 +213,11 @@ proc writeStatusLineLogViewerModeInfo(
     info = fmt"{windowNode.currentLine + 1}/{bufStatus.buffer.len - 1}"
     statusLineWidth = statusLine.w
 
-  # TODO: Fix
-  #statusLine.window.append(ru " ".repeat(statusLineWidth - statusLineBuffer.len),
-                          #color)
-  #statusLine.window.write(0, statusLineWidth - info.len - 1, info, color)
-  write(0, statusLineWidth - info.len - 1, info)
+  statusLineBuffer.add info.toRunes, color
 
-proc writeStatusLineCurrentGitBranchName(
+proc buildStatusLineCurrentGitBranchName(
   statusLine: var StatusLine,
-  statusLineBuffer: var seq[Rune],
+  statusLineBuffer: var StatusLineBuffer,
   theme: ColorTheme,
   isActiveWindow: bool) =
 
@@ -221,30 +231,29 @@ proc writeStatusLineCurrentGitBranchName(
     buffer = ru"  " & branchName[0 .. branchName.high - 1].toRunes & ru" "
     color = ColorThemeTable[theme].EditorColorPair.statusLineGitBranch
 
-  statusLineBuffer.add(buffer)
-  # TODO: Fix
-  #statusLine.window.append(buffer, color)
+  statusLineBuffer.add buffer, color
 
-proc setModeStr(mode: Mode, isActiveWindow, showModeInactive: bool): string =
-  if not isActiveWindow and not showModeInactive: result = ""
+proc getModeText(mode: Mode, isActiveWindow, showModeInactive: bool): seq[Rune] =
+  if not isActiveWindow and not showModeInactive:
+    result = ru ""
   else:
     case mode:
-    of Mode.insert: result = " INSERT "
-    of Mode.visual, Mode.visualBlock: result = " VISUAL "
-    of Mode.replace: result = " REPLACE "
-    of Mode.filer: result = " FILER "
-    of Mode.bufManager: result = " BUFFER "
-    of Mode.ex: result = " EX "
-    of Mode.logViewer: result = " LOG "
-    of Mode.recentFile: result = " RECENT "
-    of Mode.quickRun: result = " QUICKRUN "
-    of Mode.history: result = " HISTORY "
-    of Mode.diff: result = "DIFF "
-    of Mode.config: result = " CONFIG "
-    of Mode.debug: result = " DEBUG "
-    else: result = " NORMAL "
+      of Mode.insert: result = ru " INSERT "
+      of Mode.visual, Mode.visualBlock: result = ru " VISUAL "
+      of Mode.replace: result = ru " REPLACE "
+      of Mode.filer: result = ru " FILER "
+      of Mode.bufManager: result = ru " BUFFER "
+      of Mode.ex: result = ru " EX "
+      of Mode.logViewer: result = ru " LOG "
+      of Mode.recentFile: result = ru " RECENT "
+      of Mode.quickRun: result = ru " QUICKRUN "
+      of Mode.history: result = ru " HISTORY "
+      of Mode.diff: result = ru "DIFF "
+      of Mode.config: result = ru " CONFIG "
+      of Mode.debug: result = ru " DEBUG "
+      else: result = ru " NORMAL "
 
-proc setModeStrColor(theme: ColorTheme, mode: Mode): ColorPair =
+proc getModeTextColor(theme: ColorTheme, mode: Mode): ColorPair =
   case mode
     of Mode.insert:
       return ColorThemeTable[theme].EditorColorPair.statusLineModeInsertMode
@@ -282,7 +291,7 @@ proc isShowGitBranchName(
   else:
     result = false
 
-proc writeStatusLine*(
+proc buildStatusLine*(
   bufStatus: var BufferStatus,
   statusLine: var StatusLine,
   windowNode: WindowNode,
@@ -293,27 +302,29 @@ proc writeStatusLine*(
   let
     currentMode = bufStatus.mode
     prevMode = bufStatus.prevMode
-    color = setModeStrColor(theme, currentMode)
-    modeStr = setModeStr(
+    color = getModeTextColor(theme, currentMode)
+    modeText = getModeText(
       currentMode,
       isActiveWindow,
       settings.statusLine.showModeInactive)
 
-  var statusLineBuffer = if windowNode.x > 0: ru" " & modeStr.toRunes
-                         else: modeStr.toRunes
+  var statusLineBuffer: StatusLineBuffer
 
-  ## Write current mode
   if settings.statusLine.mode:
-    write(statusLine.x, statusLine.y, statusLineBuffer.withColor(color))
+    ## Add current mode text
+    if windowNode.x > 0:
+      statusLineBuffer.add (ru" " & modeText), color
+    else:
+      statusLineBuffer.add modeText, color
 
   if isShowGitBranchName(currentMode, prevMode, isActiveWindow, settings):
-    statusLine.writeStatusLineCurrentGitBranchName(
+    statusLine.buildStatusLineCurrentGitBranchName(
       statusLineBuffer,
       theme,
       isActiveWindow)
 
   if isFilerMode(currentMode, prevMode):
-    bufStatus.writeStatusLineFilerModeInfo(
+    bufStatus.buildStatusLineFilerModeInfo(
       statusLine,
       statusLineBuffer,
       windowNode,
@@ -321,7 +332,7 @@ proc writeStatusLine*(
       isActiveWindow,
       settings)
   elif currentMode == Mode.bufManager:
-    bufStatus.writeStatusLineBufferManagerModeInfo(
+    bufStatus.buildStatusLineBufferManagerModeInfo(
       statusLine,
       statusLineBuffer,
       windowNode,
@@ -329,7 +340,7 @@ proc writeStatusLine*(
       isActiveWindow,
       settings)
   elif currentMode == Mode.logViewer:
-    bufStatus.writeStatusLineLogViewerModeInfo(
+    bufStatus.buildStatusLineLogViewerModeInfo(
       statusLine,
       statusLineBuffer,
       windowNode,
@@ -337,10 +348,12 @@ proc writeStatusLine*(
       isActiveWindow,
       settings)
   else:
-    bufStatus.writeStatusLineNormalModeInfo(
+    bufStatus.buildStatusLineNormalModeInfo(
       statusLine,
       statusLineBuffer,
       windowNode,
       theme,
       isActiveWindow,
       settings)
+
+  displayBuffer.add $statusLineBuffer

@@ -799,13 +799,15 @@ proc setColorPair*(colorPair: var ColorPair, foreground, background: ColorCode) 
   colorPair.bg = some(background)
 
 # Return text with color escape seqences.
-proc withColor*(buf: seq[Rune], colorPair: ColorPair): string =
+proc withColor*(buf: seq[Rune], colorPair: ColorPair): seq[Rune] =
   if buf.len > 0:
     if colorPair.fg.isSome:
-      let str = replace($buf, """\""", """\\""")
-      return str.fgColor("#" & $colorPair.fg.get)
+      let
+        str = replace($buf, """\""", """\\""")
+        withColor = str.fgColor("#" & $colorPair.fg.get)
+      return withColor.toRunes
     else:
-      return replace($buf, """\""", """\\""")
+      return toRunes(replace($buf, """\""", """\\"""))
 
 # Return text with color escape seqences.
 proc withColor*(buf: string, colorPair: ColorPair): string =

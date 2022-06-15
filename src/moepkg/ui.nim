@@ -84,6 +84,8 @@ var
   pressCtrlC* = false
   isResizedWindow* = false
 
+  displayBuffer*: seq[string]
+
 const
   SIGWINCH = cint(28)
 
@@ -169,7 +171,7 @@ proc checkColorSupportedTerminal*(): int =
 
 proc exitUi*() {.noconv.} =
   disableRawMode()
-  eraseScreen()
+  terminal.eraseScreen()
   showCursor()
 
 proc startUi*() =
@@ -180,6 +182,11 @@ proc startUi*() =
 proc resetColor() =
   stdout.write("""\033[0m""")
   stdout.flushFile
+
+# Clear displayBuffer and screen.
+proc eraseScreen*() =
+  displayBuffer = @[]
+  terminal.eraseScreen()
 
 proc write*(x, y: int, buf: string) =
   # Don't write when running unit tests
@@ -212,6 +219,11 @@ proc append*(win: var Window,
     discard
     #win.cursesWindow.append($runes)
     #append(win, $str, color)
+
+# Write displayBuffer to the screen.
+proc display*() =
+  for i, l in displayBuffer:
+    write(0, i, l)
 
 #proc move*(win: Window, y, x: int) {.inline.} = mvwin(win.cursesWindow, cint(y), cint(x))
 #proc move*(win: Window, y, x: int) {.inline.} = win.cursesWindow.move(y, x)
