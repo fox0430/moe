@@ -276,8 +276,6 @@ proc writeAllLines*[T](view: var EditorView,
 
   var displayBuffer: seq[string] = @[]
 
-  writeFile("/home/fox/log", $view.y)
-
   view.widthOfLineNum =
     if viewSettings.lineNumber: buffer.len.numberOfDigits + 1
     else: 0
@@ -317,7 +315,6 @@ proc writeAllLines*[T](view: var EditorView,
          endSelectedLine >= view.originalLine[y]):
           let color = ColorThemeTable[currentColorTheme].EditorColorPair.visualMode
           line.add " ".withColor(color)
-          #write(view.x + x, view.y + y, " ".withColor(color))
       else:
         if viewSettings.highlightCurrentLine and isCurrentLine and
            currentLine < buffer.len:
@@ -334,7 +331,8 @@ proc writeAllLines*[T](view: var EditorView,
         else:
           let color = ColorThemeTable[currentColorTheme].EditorColorPair.defaultChar
           line.add view.lines[y].withColor(color)
-          #write(view.x + x, view.y + y, view.lines[y].withColor(color))
+
+      displayBuffer.add line
       continue
 
     if viewSettings.indentationLines and not isConfigMode(mode, prevMode):
