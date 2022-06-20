@@ -1,5 +1,4 @@
-import std/[osproc, termios, strutils, os, terminal, strformat, options, logging, posix]
-import pkg/termtools
+import std/[osproc, termios, strutils, terminal, strformat, posix]
 import unicodeext, color
 
 when not defined unitTest:

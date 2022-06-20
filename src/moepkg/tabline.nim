@@ -1,7 +1,6 @@
 import std/[strutils, terminal, unicode]
 import window, color, bufferstatus, independentutils, ui
 
-# TODO: Enable Color
 proc writeTab*(
   start, tabWidth: int,
   filename: string,
@@ -12,9 +11,8 @@ proc writeTab*(
     buffer = if filename.len < tabWidth:
                " " & title & " ".repeat(tabWidth - title.len)
              else: " " & (title).substr(0, tabWidth - 3) & "~"
-  write(0, start, buffer)
+  displayBuffer.add buffer.withColor(color)
 
-# TODO: Enable Color
 proc writeTabLineBuffer*(
   allBufStatus: seq[BufferStatus],
   currentBufferIndex: int,

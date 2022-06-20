@@ -4,7 +4,7 @@ import syntax/highlite
 import ui, gapbuffer, editorview, unicodeext, highlight, fileutils,
        window, color, settings, statusline, bufferstatus, cursor, tabline,
        backup, messages, register, platform, searchutils,
-       movement, autocomplete, commandviewutils
+       movement, autocomplete, commandviewutils, logger
 
 # Save cursor position when a buffer for a window(file) gets closed.
 type LastPosition* = object
@@ -454,14 +454,15 @@ proc updateDebugModeBuffer(status: var EditorStatus)
 proc update*(status: var EditorStatus) =
   ui.eraseScreen()
 
-  # TODO: Enable
-  #if status.settings.tabLine.enable:
-  #  writeTabLineBuffer(
-  #    status.bufStatus,
-  #    status.bufferIndexInCurrentWindow,
-  #    status.mainWindow.mainWindowNode,
-  #    currentColorTheme,
-  #    status.settings.tabline.allBuffer)
+  debug "test"
+
+  if status.settings.tabLine.enable:
+    writeTabLineBuffer(
+      status.bufStatus,
+      status.bufferIndexInCurrentWindow,
+      status.mainWindow.mainWindowNode,
+      currentColorTheme,
+      status.settings.tabline.allBuffer)
 
   status.updateDebugModeBuffer
 
