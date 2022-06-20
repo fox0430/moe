@@ -19,7 +19,7 @@ proc insertMode*(status: var EditorStatus) =
     if suggestionWindow.isSome:
       let
         mainWindowY = calcMainWindowY(status.settings.tabLine.enable)
-        mainWindowHeight = status.settings.getMainWindowHeight(terminalHeight())
+        mainWindowHeight = status.getMainWindowHeight(terminalHeight())
         (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
           currentMainWindowNode,
           mainWindowHeight)

@@ -228,24 +228,23 @@ proc exitEditor*(status: EditorStatus) =
 
   quit()
 
-proc getMainWindowHeight*(settings: EditorSettings, h: int): int =
-  let
-    tabHeight = if settings.tabLine.enable: 1 else: 0
-    statusHeight = if settings.statusLine.enable: 1 else: 0
-    commandHeight = if settings.statusLine.merge: 1 else: 0
+proc tabLineHeight(s: EditorStatus): int {.inline.} =
+  if s.settings.tabLine.enable: return 1
 
-  result = h - tabHeight - statusHeight - commandHeight
+proc statusLineHeight(s: EditorStatus): int {.inline.} =
+  if s.settings.statusLine.enable: return 1
+
+proc commandLineHeight(s: EditorStatus): int {.inline.} =
+  if s.settings.statusLine.merge: return 1
+
+proc getMainWindowHeight*(s: EditorStatus, h: int): int {.inline.} =
+  h - s.tabLineHeight - s.statusLineHeight - s.commandLineHeight
 
 proc resizeMainWindowNode(status: var EditorStatus, height, width: int) =
-  let
-    tabLineHeight = if status.settings.tabLine.enable: 1 else: 0
-    statusLineHeight = if status.settings.statusLine.enable: 1 else: 0
-    commandLineHeight = if status.settings.statusLine.merge: 1 else: 0
-
   const x = 0
   let
-    y = tabLineHeight
-    h = height - tabLineHeight - statusLineHeight - commandLineHeight
+    y = status.tabLineHeight
+    h = status.getMainWindowHeight(height)
     w = width
 
   mainWindowNode.resize(y, x, h, w)
@@ -255,9 +254,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
 
   # TODO: Fix statusLineHeight
   const statusLineHeight = 1
-  let
-    tabLineHeight = if status.settings.tabLine.enable: 1 else: 0
-    nodeHeight = height - tabLineHeight
+  let nodeHeight = height - status.tabLineHeight
 
   # TODO: Fix statusLineHeight
   # Resize mainWindowNode
