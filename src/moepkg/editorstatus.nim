@@ -557,13 +557,6 @@ proc update*(status: var EditorStatus) =
 
   display()
 
-  # TODO: Remove
-  # Debug displayBuffer
-  #var b = ""
-  #for l in displayBuffer:
-  #  b.add l & "\n"
-  #writeFile("/home/fox/log", b)
-
   setCursor(true)
 
   let

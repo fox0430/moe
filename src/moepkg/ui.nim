@@ -225,56 +225,66 @@ proc display*() =
   for i, l in displayBuffer:
     write(0, i, l)
 
+  stdout.flushFile
+
 #proc move*(win: Window, y, x: int) {.inline.} = mvwin(win.cursesWindow, cint(y), cint(x))
 #proc move*(win: Window, y, x: int) {.inline.} = win.cursesWindow.move(y, x)
 
 # Move cursor position on the terminal.
-proc moveCursor*(x, y: int) {.inline.} =
+proc moveCursor*(x, y: int) =
   setCursorPos(x, y)
+
+  stdout.flushFile
 
 #proc deleteWindow*(win: var Window) {.inline.} = delwin(win.cursesWindow)
 
-proc kbhit(): bool =
-  var
-    tv = Timeval(tv_sec: 0.Time, tv_usec: 0.Suseconds)
-    tfs: TFDSet
-  FD_ZERO(tfs);
-  FD_SET(0, tfs)
+# TODO: Fix and Enable
+#proc kbhit*(): bool =
+#  var
+#    tv = Timeval(tv_sec: 0.Time, tv_usec: 0.Suseconds)
+#    tfs: TFDSet
+#  FD_ZERO(tfs);
+#  FD_SET(0, tfs)
+#
+#  return select(1, tfs.addr, nil, nil, tv.addr) > 0;
+#
+# TODO: Enable
+#proc read(): Rune =
+#  var c: char
+#  # TODO: Add error handling?
+#  discard read(0, c.addr, sizeof(c))
+#  return c.ru
 
-  return select(1, tfs.addr, nil, nil, tv.addr) > 0;
+# TODO: Remove
+proc getKey*(): Rune {.inline.} = getCh().toRune
 
-proc read(): Rune =
-  var c: char
-  # TODO: Add error handling?
-  discard read(0, c.addr, sizeof(c))
-  return c.ru
-
-proc getkey*(): Rune =
-  let key = read()
-  if key == KEY_ESC and read() == '['.ru:
-    case read():
-      of 'A'.ru:
-        return KEY_UP.Rune
-      of 'B'.ru:
-        return KEY_DOWN.Rune
-      of 'C'.ru:
-        return KEY_RIGHT.Rune
-      of 'D'.ru:
-        return KEY_LEFT.Rune
-      of '3'.ru:
-        return KEY_DELETE.Rune
-      of '5'.ru:
-        return KEY_PAGEUP.Rune
-      of '6'.ru:
-        return KEY_PAGEDOWN.Rune
-      of '7'.ru:
-        return KEY_HOME.Rune
-      of '8'.ru:
-        return KEY_END.Rune
-      else:
-        discard
-  else:
-    return key
+# TODO: Fix and Enable
+#proc getkey*(): Rune =
+#  let key = read()
+#  if key == KEY_ESC and read() == '['.ru:
+#    case read():
+#      of 'A'.ru:
+#        return KEY_UP.Rune
+#      of 'B'.ru:
+#        return KEY_DOWN.Rune
+#      of 'C'.ru:
+#        return KEY_RIGHT.Rune
+#      of 'D'.ru:
+#        return KEY_LEFT.Rune
+#      of '3'.ru:
+#        return KEY_DELETE.Rune
+#      of '5'.ru:
+#        return KEY_PAGEUP.Rune
+#      of '6'.ru:
+#        return KEY_PAGEDOWN.Rune
+#      of '7'.ru:
+#        return KEY_HOME.Rune
+#      of '8'.ru:
+#        return KEY_END.Rune
+#      else:
+#        discard
+#  else:
+#    return key
 
 proc isEscKey*(key: Rune): bool {.inline.} =
   key == KEY_ESC

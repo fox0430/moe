@@ -1585,7 +1585,7 @@ proc normalMode*(status: var EditorStatus) =
         status.resize(terminalHeight(), terminalWidth())
         status.update
 
-      key = getKey()
+      key = getKey(currentMainWindowNode)
 
       status.lastOperatingTime = now()
       sleep 20
