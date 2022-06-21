@@ -1,4 +1,4 @@
-import std/[terminal, times]
+import std/times
 import ui, editorstatus, unicodeext, movement, bufferstatus, window
 
 proc exitLogViewer*(status: var Editorstatus, height, width: int) {.inline.} =
@@ -24,6 +24,7 @@ proc messageLogViewer*(status: var Editorstatus) =
 
     status.lastOperatingTime = now()
 
+    # TODO: Fix
     #if isResizekey(key):
     #  status.resize(terminalHeight(), terminalWidth())
 

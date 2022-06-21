@@ -1,4 +1,4 @@
-import std/[terminal, os, heapqueue, times]
+import std/[os, heapqueue, times]
 import gapbuffer, ui, editorstatus, unicodeext, highlight, window, movement,
        color, bufferstatus
 

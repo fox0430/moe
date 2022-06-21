@@ -1,4 +1,3 @@
-import std/[terminal]
 import editorstatus, bufferstatus, ui, movement, unicodeext, gapbuffer, window
 
 const helpsentences = """

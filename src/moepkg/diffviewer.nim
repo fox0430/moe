@@ -1,4 +1,4 @@
-import std/[times, terminal]
+import std/times
 import editorstatus, unicodeext, bufferstatus, highlight, color, gapbuffer, ui,
        movement, window
 

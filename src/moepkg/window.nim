@@ -1,7 +1,7 @@
 import std/[heapqueue, options]
 import ui, editorview, gapbuffer, cursor, highlight, unicodeext
 
-# vertical is default
+# Default is vertical
 type SplitType* = enum
   vertical = 0
   horaizontal = 1

@@ -1,6 +1,8 @@
 import std/[osproc, termios, strutils, terminal, strformat, posix]
 import unicodeext, color
 
+export terminalWidth, terminalHeight
+
 when not defined unitTest:
   import std/posix
 

@@ -1,4 +1,4 @@
-import std/[terminal, os, times]
+import std/[os, times]
 import editorstatus, searchutils, unicodeext, color, ui, commandviewutils
 
 # Search text in buffer

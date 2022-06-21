@@ -1,5 +1,4 @@
-import std/[os, terminal, strutils, times, algorithm, sequtils,
-            options]
+import std/[os, strutils, times, algorithm, sequtils, options]
 import editorstatus, ui, fileutils, editorview, gapbuffer, highlight, window,
        color, bufferstatus, settings, messages, unicodeext, commandviewutils
 

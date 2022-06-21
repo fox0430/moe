@@ -1,4 +1,4 @@
-import std/[terminal, times, strutils, os]
+import std/[times, strutils, os]
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, undoredostack,
        window, movement, editor, searchutils, search, bufferstatus, quickrun,
        messages

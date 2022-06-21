@@ -1,4 +1,4 @@
-import std/[terminal, times, options, unicode]
+import std/[times, options, unicode]
 import ui, editorstatus, gapbuffer, window, movement, editor, bufferstatus,
        suggestionwindow, settings, autocomplete
 
@@ -19,7 +19,7 @@ proc insertMode*(status: var EditorStatus) =
     if suggestionWindow.isSome:
       let
         mainWindowY = calcMainWindowY(status.settings.tabLine.enable)
-        mainWindowHeight = status.getMainWindowHeight(terminalHeight())
+        mainWindowHeight = status.mainWindowHeight(terminalHeight())
         (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
           currentMainWindowNode,
           mainWindowHeight)

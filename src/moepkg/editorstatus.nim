@@ -1,5 +1,4 @@
-import std/[strutils, terminal, os, strformat, tables, times, heapqueue, deques,
-            options]
+import std/[strutils, os, strformat, tables, times, heapqueue, deques, options]
 import syntax/highlite
 import ui, gapbuffer, editorview, unicodeext, highlight, fileutils,
        window, color, settings, statusline, bufferstatus, cursor, tabline,
@@ -222,43 +221,38 @@ proc exitEditor*(status: EditorStatus) =
   if status.settings.persist.cursorPosition:
     saveLastCursorPosition(status.lastPosition)
 
-  ui.exitUi()
+  exitUi()
 
   executeOnExit(status.settings, CURRENT_PLATFORM)
 
   quit()
 
+proc isStatusLine(s: EditorStatus): bool {.inline.} =
+  s.settings.statusLine.enable
+
 proc tabLineHeight(s: EditorStatus): int {.inline.} =
   if s.settings.tabLine.enable: return 1
 
 proc statusLineHeight(s: EditorStatus): int {.inline.} =
-  if s.settings.statusLine.enable: return 1
+  if s.isStatusLine: return 1
 
 proc commandLineHeight(s: EditorStatus): int {.inline.} =
-  if s.settings.statusLine.merge: return 1
+  if not s.settings.statusLine.merge: return 1
 
-proc getMainWindowHeight*(s: EditorStatus, h: int): int {.inline.} =
-  h - s.tabLineHeight - s.statusLineHeight - s.commandLineHeight
+# Include a statusLine height.
+proc mainWindowHeight*(s: EditorStatus, h: int): int {.inline.} =
+  h - s.tabLineHeight - s.commandLineHeight
 
 proc resizeMainWindowNode(status: var EditorStatus, height, width: int) =
   const x = 0
-  let
-    y = status.tabLineHeight
-    h = status.getMainWindowHeight(height)
-    w = width
+  let y = status.tabLineHeight
 
-  mainWindowNode.resize(y, x, h, w)
+  mainWindowNode.resize(y, x, height, width)
 
 proc resize*(status: var EditorStatus, height, width: int) =
   setCursor(false)
 
-  # TODO: Fix statusLineHeight
-  const statusLineHeight = 1
-  let nodeHeight = height - status.tabLineHeight
-
-  # TODO: Fix statusLineHeight
-  # Resize mainWindowNode
-  status.resizeMainWindowNode(nodeHeight, width)
+  status.resizeMainWindowNode(status.mainWindowHeight(height - 1), width)
 
   var
     statusLineIndex = 0
@@ -274,23 +268,18 @@ proc resize*(status: var EditorStatus, height, width: int) =
         let
           bufIndex = node.bufferIndex
           widthOfLineNum = node.view.widthOfLineNum
-          h = node.h - statusLineHeight
+          h = node.h - status.statusLineHeight()
           adjustedHeight = max(h, 4)
           adjustedWidth = max(node.w - widthOfLineNum, 4)
 
         # Resize editorview
         block:
-          let
-            y = node.y
-            x = node.x
-            h = node.h
-            w = node.w
           node.view.resize(
             status.bufStatus[bufIndex].buffer,
-            y,
-            x,
-            h,
-            w,
+            node.y,
+            node.x,
+            node.h,
+            node.w,
             widthOfLineNum)
         node.view.seekCursor(
           status.bufStatus[bufIndex].buffer,
@@ -300,22 +289,17 @@ proc resize*(status: var EditorStatus, height, width: int) =
         ## Resize status line
         let
           isMergeStatusLine = status.settings.statusLine.merge
-          enableStatusLine = status.settings.statusLine.enable
           mode = status.bufStatus[bufIndex].mode
-        if enableStatusLine and
+        if status.isStatusLine and
            (not isMergeStatusLine or
            (isMergeStatusLine and mode != Mode.ex)):
 
-          const statusLineHeight = 1
-          let
-            width = node.w
-            y = node.y + adjustedHeight + 1
-            x = node.x
+          let y = node.y + adjustedHeight + 1
           status.statusLine[statusLineIndex].resize(
-            statusLineHeight,
-            width,
+            status.statusLineHeight,
+            node.w,
             y,
-            x)
+            node.x)
 
           # Update status line info
           status.statusLine[statusLineIndex].bufferIndex =
@@ -333,7 +317,7 @@ proc resize*(status: var EditorStatus, height, width: int) =
     const  x = 0
     let y = max(height, 4) - 1 - (if status.settings.statusLine.merge: 0 else: 1)
     status.statusLine[0].resize(
-      statusLineHeight,
+      status.statusLineHeight,
       width,
       y,
       x)
@@ -342,19 +326,23 @@ proc resize*(status: var EditorStatus, height, width: int) =
 
   isResizedWindow = false
 
+# TODO: Remove
 proc highlightPairOfParen(highlight: var Highlight,
                           bufStatus: BufferStatus,
                           windowNode: WindowNode)
 
+# TODO: Remove
 proc highlightOtherUsesCurrentWord(highlight: var Highlight,
                                    bufStatus: BufferStatus,
                                    windowNode: WindowNode,
                                    theme: ColorTheme)
 
+# TODO: Remove
 proc highlightSelectedArea(highlight: var Highlight,
                            bufStatus: BufferStatus,
                            windowNode: WindowNode)
 
+# TODO: Remove
 proc updateHighlight*(highlight: var Highlight,
                       bufStatus: BufferStatus,
                       windowNode: var WindowNode,
@@ -449,7 +437,7 @@ proc updateLogViewer(bufStatus: var BufferStatus,
 proc updateDebugModeBuffer(status: var EditorStatus)
 
 proc update*(status: var EditorStatus) =
-  ui.eraseScreen()
+  eraseScreen()
 
   debug "test"
 

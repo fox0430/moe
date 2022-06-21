@@ -1,4 +1,4 @@
-import std/[terminal, strutils, sequtils, times]
+import std/[strutils, sequtils, times]
 import editorstatus, ui, gapbuffer, unicodeext, window, movement, editor,
        bufferstatus, settings, register, messages, commandviewutils
 

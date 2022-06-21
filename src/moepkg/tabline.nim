@@ -1,4 +1,4 @@
-import std/[strutils, terminal, unicode]
+import std/[strutils, unicode]
 import window, color, bufferstatus, independentutils, ui
 
 proc writeTab*(

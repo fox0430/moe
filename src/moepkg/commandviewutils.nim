@@ -1,4 +1,4 @@
-import std/[terminal, strutils, sequtils, strformat, os, algorithm]
+import std/[strutils, sequtils, strformat, os, algorithm]
 import ui, unicodeext, fileutils, color
 
 type
