@@ -315,10 +315,12 @@ proc initHighlightSettings(): HighlightSettings =
   result.trailingSpaces = true
   result.reservedWords =  initReservedWords()
 
+# TODO: Enable all
 proc initPersistSettings(): PersistSettings =
-  result.exCommand = true
-  result.search = true
-  result.cursorPosition = true
+  discard
+  #result.exCommand = true
+  #result.search = true
+  #result.cursorPosition = true
 
 # Automatically set the clipboard tool on GNU/Linux
 proc autoSetClipboardTool(): ClipboardToolOnLinux =

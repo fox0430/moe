@@ -317,12 +317,6 @@ proc absolutePosition*(windowNode: WindowNode,
   let (_, relativeY, relativeX) = windowNode.view.findCursorPosition(line, column)
   return (windowNode.y + relativeY, windowNode.x + relativeX + windowNode.view.widthOfLineNum)
 
-# TODO: Fix write
-proc write(windowNode: WindowNode, line, column: int, buffer: seq[Rune]) =
-#  let absPosi = windowNode.absolutePosition(line, column)
-#  tb.write(column, line, $buffer)
-  discard
-
 proc refreshWindow*(node: var WindowNode) {.inline.} =
   discard
   #if node.isWindow: node.window.get.refresh
@@ -347,7 +341,7 @@ proc getHeight*(node: var WindowNode): int {.inline.} = node.h
 proc getWidth*(node: var WindowNode): int {.inline.} = node.w
 
 # Move cursor position to the selected window
-proc moveCursor*(win: var WindowNode, y, x: int) =
+proc moveCursor*(win: var WindowNode, x, y: int) =
   let
     widthOfLineNum = win.view.widthOfLineNum
     abosluteX = win.x + widthOfLineNum + x

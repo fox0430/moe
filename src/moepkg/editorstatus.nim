@@ -434,12 +434,16 @@ proc updateLogViewer(bufStatus: var BufferStatus,
       EMPTY_RESERVEDWORD,
       SourceLanguage.langNone)
 
+# TODO: Remove
 proc updateDebugModeBuffer(status: var EditorStatus)
+
+proc calcCursorPostion(status: EditorStatus): tuple[x, y: int] {.inline.} =
+  let view = currentMainWindowNode.view
+  result.y = view.y + currentMainWindowNode.cursor.y
+  result.x = view.x + view.widthOfLineNum + currentMainWindowNode.cursor.x
 
 proc update*(status: var EditorStatus) =
   eraseScreen()
-
-  debug "test"
 
   if status.settings.tabLine.enable:
     writeTabLineBuffer(
@@ -535,9 +539,8 @@ proc update*(status: var EditorStatus) =
   if status.settings.statusLine.enable:
     status.updateStatusLine
 
-  # TODO: Enable
-  #let color = ColorThemeTable[currentColorTheme].EditorColorPair.defaultChar
-  #status.commandLine.writeCommandLine(color)
+  let color = ColorThemeTable[currentColorTheme].EditorColorPair.defaultChar
+  status.commandLine.writeCommandLine(color)
 
   setCursor(false)
 
@@ -552,10 +555,8 @@ proc update*(status: var EditorStatus) =
     status.commandLine.moveCursor
   elif (currentMode != Mode.filer) and
      (not (currentMode == Mode.ex and prevMode == Mode.filer)):
-    let
-      y = currentMainWindowNode.view.y + currentMainWindowNode.cursor.y + 1
-      x =  currentMainWindowNode.view.x + currentMainWindowNode.view.widthOfLineNum + currentMainWindowNode.cursor.x + 1
-    currentMainWindowNode.moveCursor(y, x)
+    let cursorPostion = status.calcCursorPostion
+    currentMainWindowNode.moveCursor(cursorPostion.x, cursorPostion.y)
 
 proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode)
 
