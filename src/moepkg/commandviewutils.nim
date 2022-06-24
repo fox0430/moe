@@ -111,7 +111,7 @@ proc moveEnd*(commandLine: var CommandLine) =
     commandLine.cursorX = commandLine.prompt.len + commandLine.buffer.len - 1
 
 proc moveCursor*(commandLine: CommandLine) {.inline.} =
-  moveCursor(commandLine.cursorX + 1, commandLine.cursorY)
+  moveCursor(commandLine.cursorX, commandLine.cursorY)
 
 # Clear the command line buffer
 proc clear*(commndLine: var CommandLine) =
@@ -121,20 +121,16 @@ proc writeCommandLine*(
   commandLine: var CommandLine,
   color: ColorPair) =
 
-  let buffer = ($commandLine.buffer).substr(
-    commandLine.startPosition,
-    commandLine.buffer.len)
-
-  # TODO: Enable color
-  #commandLine.write(
-  #  commandLine.cursorY,
-  #  0,
-  #  fmt"{commandLine.prompt}{buffer}",
-  #  color)
+  let buffer = commandLine.prompt &
+    ($commandLine.buffer)
+      .substr(
+        commandLine.startPosition,
+        commandLine.buffer.len)
+      .withColor(color)
 
   const x = 0
   let y = terminalHeight() - 1
-  write(x, y, fmt"{commandLine.prompt}{buffer}")
+  write(x, y, buffer)
 
   commandLine.moveCursor
 

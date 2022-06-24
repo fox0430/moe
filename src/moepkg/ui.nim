@@ -95,24 +95,19 @@ onSignal(SIGWINCH):
   isResizedWindow = true
 
 proc setBkinkingIbeamCursor*() =
-  stdout.write("""\e[5 q""")
-  stdout.flushFile
+  discard execCmd("""printf '\033[5 q'""")
 
 proc setNoneBlinkingIbeamCursor*() =
-  stdout.write("""\e[6 q""")
-  stdout.flushFile
+  discard execCmd("""printf '\033[6 q'""")
 
 proc setBlinkingBlockCursor*() =
-  stdout.write("""\e[1 q""")
-  stdout.flushFile
+  discard execCmd("""printf '\033[1 q'""")
 
 proc setNoneBlinkingBlockCursor*() =
-  stdout.write("""\e[2 q""")
-  stdout.flushFile
+  discard execCmd("""printf '\033[2 q'""")
 
 proc unhideCursor*() =
-  stdout.write("""\e[?25h""")
-  stdout.flushFile
+  discard execCmd("""printf '\033[?25h'""")
 
 proc changeCursorType*(cursorType: CursorType) =
   case cursorType
