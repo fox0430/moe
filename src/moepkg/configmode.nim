@@ -645,7 +645,7 @@ proc initConfigModeHighlight[T](buffer: T,
             start = range[0]
             `end` = range[1]
 
-          result = result.overwrite(
+          result.overwrite(
             ColorSegment(
               firstRow: i,
               firstColumn: start,
@@ -653,7 +653,7 @@ proc initConfigModeHighlight[T](buffer: T,
               lastColumn: `end`,
               color: EditorColorPair.currentSetting))
         else:
-          result = result.overwrite(
+          result.overwrite(
             ColorSegment(
               firstRow: i,
               firstColumn: numOfIndent + positionOfSetVal,

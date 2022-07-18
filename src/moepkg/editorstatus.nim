@@ -851,7 +851,7 @@ proc overwriteColorSegmentBlock[T](highlight: var Highlight,
                                     lastRow: i,
                                     lastColumn: min(endColumn, buffer[i].high),
                                     color: EditorColorPair.visualMode)
-    highlight = highlight.overwrite(colorSegment)
+    highlight.overwrite(colorSegment)
 
 proc highlightSelectedArea(highlight: var Highlight,
                            bufStatus: BufferStatus,
@@ -890,7 +890,7 @@ proc highlightSelectedArea(highlight: var Highlight,
   if (currentMode == Mode.visual) or
      (currentMode == Mode.ex and
      prevMode == Mode.visual):
-    highlight = highlight.overwrite(colorSegment)
+    highlight.overwrite(colorSegment)
   elif (currentMode == Mode.visualBlock) or
        (currentMode == Mode.ex and
        prevMode == Mode.visualBlock):
@@ -931,7 +931,7 @@ proc highlightPairOfParen(highlight: var Highlight,
                                         lastRow: i,
                                         lastColumn: j,
                                         color: color)
-          highlight = highlight.overwrite(colorSegment)
+          highlight.overwrite(colorSegment)
           return
 
   elif isCloseParen(buffer[currentLine][currentColumn]):
@@ -953,7 +953,7 @@ proc highlightPairOfParen(highlight: var Highlight,
                                         lastRow: i,
                                         lastColumn: j,
                                         color: color)
-          highlight = highlight.overwrite(colorSegment)
+          highlight.overwrite(colorSegment)
           return
 
 # Highlighting other uses of the current word under the cursor
@@ -1032,7 +1032,7 @@ proc highlightOtherUsesCurrentWord(highlight: var Highlight,
                                             lastRow: i,
                                             lastColumn: j + highlightWord.high,
                                             color: color)
-              highlight = highlight.overwrite(colorSegment)
+              highlight.overwrite(colorSegment)
 
 proc highlightTrailingSpaces(highlight: var Highlight,
                              bufStatus: BufferStatus,
@@ -1071,7 +1071,7 @@ proc highlightTrailingSpaces(highlight: var Highlight,
                                        color: color))
 
   for colorSegment in colorSegments:
-    highlight = highlight.overwrite(colorSegment)
+    highlight.overwrite(colorSegment)
 
 # TODO: Move
 proc scrollUpNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
@@ -1165,7 +1165,7 @@ proc highlightFullWidthSpace(highlight: var Highlight,
                                     lastRow: range[0] + pos.line,
                                     lastColumn: pos.column,
                                     color: color)
-    highlight = highlight.overwrite(colorSegment)
+    highlight.overwrite(colorSegment)
 
 proc highlightSearchResults(highlight: var Highlight,
                             bufStatus: BufferStatus,
@@ -1191,7 +1191,7 @@ proc highlightSearchResults(highlight: var Highlight,
                                     lastRow: range[0] + pos.line,
                                     lastColumn: pos.column + keyword.high,
                                     color: color)
-    highlight = highlight.overwrite(colorSegment)
+    highlight.overwrite(colorSegment)
 
 proc updateHighlight*(highlight: var Highlight,
                       bufStatus: BufferStatus,
