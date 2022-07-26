@@ -46,24 +46,25 @@ test "indexOf: start with newline":
   check(highlight.indexOf(0, 0) == 0)
 
 test "over write":
-  let
-    code = "　"
-    highlight = initHighlight(code,
-                              reservedWords,
-                              SourceLanguage.langNone)
-    colorSegment = ColorSegment(firstRow: 0,
+  let code = "　"
+  var highlight = initHighlight(code,
+                                reservedWords,
+                                SourceLanguage.langNone)
+
+  let colorSegment = ColorSegment(firstRow: 0,
                                 firstColumn: 0,
                                 lastRow: 0,
                                 lastColumn: 0,
                                 color: EditorColorPair.highlightFullWidthSpace)
-    h = highlight.overwrite(colorSegment)
 
-  check(h.len == 1)
-  check(h[0].firstRow == 0)
-  check(h[0].firstColumn == 0)
-  check(h[0].lastRow == 0)
-  check(h[0].lastColumn == 0)
-  check(h[0].color == EditorColorPair.highlightFullWidthSpace)
+  highlight.overwrite(colorSegment)
+
+  check(highlight.len == 1)
+  check(highlight[0].firstRow == 0)
+  check(highlight[0].firstColumn == 0)
+  check(highlight[0].lastRow == 0)
+  check(highlight[0].lastColumn == 0)
+  check(highlight[0].color == EditorColorPair.highlightFullWidthSpace)
 
 # Fix #733
 test """Highlight "echo \"""":

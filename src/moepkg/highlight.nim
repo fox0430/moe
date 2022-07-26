@@ -105,12 +105,14 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
                             lastColumn: s.lastColumn,
                             color: t.color))
 
-proc overwrite*(highlight: Highlight, colorSegment: ColorSegment): Highlight =
+proc overwrite*(highlight: var Highlight, colorSegment: ColorSegment) =
   ## Overwrite `highlight` with colorSegment
 
-  for i in 0 ..< highlight.colorSegments.len:
-    let cs = highlight.colorSegments[i]
-    result.colorSegments.add(cs.overwrite(colorSegment))
+  let old = highlight
+  highlight = Highlight()
+  for i in 0 ..< old.colorSegments.len:
+    let cs = old.colorSegments[i]
+    highlight.colorSegments.add(cs.overwrite(colorSegment))
 
 iterator parseReservedWord(
   buffer: string,
