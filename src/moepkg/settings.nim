@@ -343,8 +343,10 @@ proc autoSetClipboardTool(): ClipboardToolOnLinux =
       discard
 
 proc initClipboardSettings(): ClipboardSettings =
-  result.enable = true
   result.toolOnLinux = autoSetClipboardTool()
+
+  if ClipboardToolOnLinux.none != result.toolOnLinux:
+    result.enable = true
 
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = ColorTheme.dark
