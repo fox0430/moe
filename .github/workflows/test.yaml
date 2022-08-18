@@ -62,14 +62,6 @@ jobs:
       with:
         nim-version: ${{ env.NIM_VERSION }}
 
-    - name: Install xclip and xsel
-      # Manual install xclip v0.13. Because moe required -r option
-      run: |
-        sudo apt-get install -y xsel
-
-        wget http://mirrors.kernel.org/ubuntu/pool/universe/x/xclip/xclip_0.13-1_amd64.deb
-        sudo dpkg -i xclip_0.13-1_amd64.deb
-
     - name: Install integtation tools
       run: |
         # shpec
@@ -79,9 +71,7 @@ jobs:
         sudo dpkg -i abduco_0.1-2_amd64.deb
 
     - name: Run unit test
-      run: |
-        nimble refresh
-        script -e -c "xvfb-run nimble test --verbose -Y"
+      run: nimble test --verbose -Y
 
     - name: Install moe
       run: nimble install --verbose -Y

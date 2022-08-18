@@ -47,6 +47,7 @@ suite "Config mode: Init buffer":
 
   test "Init ClipBoard table buffer":
     var status = initEditorStatus()
+    status.settings.clipboard.enable = true
     status.settings.clipboard.toolOnLinux = ClipboardToolOnLinux.none
     let buffer = status.settings.clipboard.initClipBoardTableBuffer
 

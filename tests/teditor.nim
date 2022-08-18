@@ -1,6 +1,12 @@
 import std/[unittest, macros]
 import moepkg/register
-include moepkg/[editor, editorstatus, ui, platform]
+include moepkg/[editor, editorstatus, ui, platform, independentutils]
+
+proc isXselAvailable(): bool {.inline.} =
+  execCmdExNoOutput("xset q") == 0 and execCmdExNoOutput("xsel --version") == 0
+
+proc isXclipAvailable(): bool {.inline.} =
+  execCmdExNoOutput("xset q") == 0 and execCmdExNoOutput("xclip -version") == 0
 
 proc sourceLangToStr(lang: SourceLanguage): string =
   case lang:
@@ -1149,65 +1155,67 @@ suite "Editor: Paste a string":
 
     check currentBufStatus.buffer[0] == ru "defabc"
 
-suite "Editor: Yank characters":
-  test "Yank a string with name in the empty line":
-    var status = initEditorStatus()
-    status.addNewBuffer
-    currentBufStatus.buffer = initGapBuffer(@[ru ""])
+if isXselAvailable():
+  suite "Editor: Yank characters":
+    test "Yank a string with name in the empty line":
+      var status = initEditorStatus()
+      status.addNewBuffer
+      currentBufStatus.buffer = initGapBuffer(@[ru ""])
 
-    const
-      length = 1
-      name = "a"
-      isDelete = false
-    currentBufStatus.yankCharacters(
-      status.registers,
-      currentMainWindowNode,
-      status.commandline,
-      status.messageLog,
-      status.settings,
-      length,
-      name,
-      isDelete)
+      const
+        length = 1
+        name = "a"
+        isDelete = false
+      currentBufStatus.yankCharacters(
+        status.registers,
+        currentMainWindowNode,
+        status.commandline,
+        status.messageLog,
+        status.settings,
+        length,
+        name,
+        isDelete)
 
-    check status.registers.noNameRegister.buffer.len == 0
+      check status.registers.noNameRegister.buffer.len == 0
 
-suite "Editor: Yank words":
-  test "Yank a word":
-    var status = initEditorStatus()
-    status.addNewBuffer
-    currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
+if isXselAvailable():
+  suite "Editor: Yank words":
+    test "Yank a word":
+      var status = initEditorStatus()
+      status.addNewBuffer
+      currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
 
-    const loop = 1
-    currentBufStatus.yankWord(status.registers,
-                              currentMainWindowNode,
-                              loop,
-                              status.settings)
+      const loop = 1
+      currentBufStatus.yankWord(status.registers,
+                                currentMainWindowNode,
+                                loop,
+                                status.settings)
 
-    check status.registers.noNameRegister ==  register.Register(
-      buffer: @[ru "abc "],
-      isLine: false,
-      name: "")
+      check status.registers.noNameRegister ==  register.Register(
+        buffer: @[ru "abc "],
+        isLine: false,
+        name: "")
 
-    let p = initPlatform()
-    # Check clipboad
-    if (p == Platforms.linux or
-        p == Platforms.wsl):
-      let
-        cmd = if p == Platforms.linux:
-                execCmdEx("xsel -o")
-              else:
-                # On the WSL
-                execCmdEx("powershell.exe -Command Get-Clipboard")
-        (output, exitCode) = cmd
+      let p = initPlatform()
+      # Check clipboad
+      if (p == Platforms.linux or
+          p == Platforms.wsl):
+        let
+          cmd = if p == Platforms.linux:
+                  execCmdEx("xsel -o")
+                else:
+                  # On the WSL
+                  execCmdEx("powershell.exe -Command Get-Clipboard")
+          (output, exitCode) = cmd
 
-      check exitCode == 0
+        check exitCode == 0
 
-      const str = "abc "
-      if p == Platforms.linux:
-        check output[0 .. output.high - 1] == str
-      else:
-        # On the WSL
-        check output[0 .. output.high - 2] == str
+        const str = "abc "
+        if p == Platforms.linux:
+          check output[0 .. output.high - 1] == str
+        else:
+          # On the WSL
+          check output[0 .. output.high - 2] == str
 
 suite "Editor: Modify the number string under the cursor":
   test "Increment the number string":
