@@ -1,11 +1,16 @@
 import std/[unittest, osproc]
 import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, movement, bufferstatus,
                register]
-include moepkg/[visualmode, platform]
+include moepkg/[visualmode, platform, independentutils]
+
+proc isXselAvailable(): bool {.inline.} =
+  execCmdExNoOutput("xset q") == 0 and execCmdExNoOutput("xsel --version") == 0
 
 suite "Visual mode: Delete buffer":
   test "Delete buffer 1":
     var status = initEditorStatus()
+    status.settings.clipboard.enable = false
+
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru"abcd"])
 
@@ -32,6 +37,8 @@ suite "Visual mode: Delete buffer":
 
   test "Delete buffer 2":
     var status = initEditorStatus()
+    status.settings.clipboard.enable = false
+
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c"])
 
@@ -59,6 +66,8 @@ suite "Visual mode: Delete buffer":
 
   test "Delete buffer 3":
     var status = initEditorStatus()
+    status.settings.clipboard.enable = false
+
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru"ab", ru"cdef"])
 
@@ -93,6 +102,8 @@ suite "Visual mode: Delete buffer":
 
   test "Delete buffer 4":
     var status = initEditorStatus()
+    status.settings.clipboard.enable = false
+
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"defg"])
 
@@ -135,6 +146,8 @@ suite "Visual mode: Delete buffer":
 
   test "Delete buffer 5":
     var status = initEditorStatus()
+    status.settings.clipboard.enable = false
+
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
@@ -473,255 +486,132 @@ suite "Visual block mode: Delete buffer (Disable clipboard)":
     check(currentBufStatus.buffer[0] == ru"bc")
     check(currentBufStatus.buffer[1] == ru"ef")
 
-suite "Visual mode: Yank buffer (Enable clipboard)":
-  test "Yank string":
-    var status = initEditorStatus()
-    status.addNewBuffer
-    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
+if isXselAvailable():
+  suite "Visual mode: Yank buffer (Enable clipboard)":
+    test "Yank string":
+      var status = initEditorStatus()
 
-    currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
-      currentBufStatus.language)
+      status.addNewBuffer
+      currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
-    status.resize(100, 100)
+      currentMainWindowNode.highlight = initHighlight(
+        $currentBufStatus.buffer,
+        status.settings.highlightSettings.reservedWords,
+        currentBufStatus.language)
 
-    status.changeMode(Mode.visual)
+      status.resize(100, 100)
 
-    currentBufStatus.selectArea = initSelectArea(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn)
+      status.changeMode(Mode.visual)
 
-    currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectArea(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn)
+      currentBufStatus.selectArea = initSelectArea(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn)
 
-    status.update
+      currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
+      currentBufStatus.selectArea.updateSelectArea(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn)
 
-    let area = currentBufStatus.selectArea
-    status.settings.clipboard.enable = true
-    currentBufStatus.yankBuffer(status.registers,
-                                currentMainWindowNode,
-                                area,
-                                status.settings)
+      status.update
 
-    if (CURRENT_PLATFORM == Platforms.linux or
-        CURRENT_PLATFORM == Platforms.wsl):
-      let
-        cmd = if CURRENT_PLATFORM == Platforms.linux:
-                execCmdEx("xclip -o")
-              else:
-                # On the WSL
-                execCmdEx("powershell.exe -Command Get-Clipboard")
-        (output, exitCode) = cmd
+      let area = currentBufStatus.selectArea
+      status.settings.clipboard.enable = true
+      currentBufStatus.yankBuffer(status.registers,
+                                  currentMainWindowNode,
+                                  area,
+                                  status.settings)
 
-      check exitCode == 0
-      if CURRENT_PLATFORM == Platforms.linux:
-        check output[0 .. output.high - 1] == "abc"
-      else:
-        # On the WSL
-        check output[0 .. output.high - 2] == "abc"
+      if (CURRENT_PLATFORM == Platforms.linux or
+          CURRENT_PLATFORM == Platforms.wsl):
+        let
+          cmd = if CURRENT_PLATFORM == Platforms.linux:
+                  execCmdEx("xsel -o")
+                else:
+                  # On the WSL
+                  execCmdEx("powershell.exe -Command Get-Clipboard")
+          (output, exitCode) = cmd
 
-  test "Yank lines":
-    var status = initEditorStatus()
-    status.addNewBuffer
-    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
+        check exitCode == 0
+        if CURRENT_PLATFORM == Platforms.linux:
+          check output[0 .. output.high - 1] == "abc"
+        else:
+          # On the WSL
+          check output[0 .. output.high - 2] == "abc"
 
-    currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
-      currentBufStatus.language)
+    test "Yank lines":
+      var status = initEditorStatus()
+      status.addNewBuffer
+      currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
-    status.resize(100, 100)
+      currentMainWindowNode.highlight = initHighlight(
+        $currentBufStatus.buffer,
+        status.settings.highlightSettings.reservedWords,
+        currentBufStatus.language)
 
-    status.changeMode(Mode.visual)
+      status.resize(100, 100)
 
-    currentBufStatus.selectArea = initSelectArea(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn)
+      status.changeMode(Mode.visual)
 
-    currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectArea(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn)
-    status.update
+      currentBufStatus.selectArea = initSelectArea(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn)
 
-    currentBufStatus.keyDown(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectArea(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn)
-    status.update
+      currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
+      currentBufStatus.selectArea.updateSelectArea(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn)
+      status.update
 
-    let area = currentBufStatus.selectArea
-    status.settings.clipboard.enable = true
-    currentBufStatus.yankBuffer(status.registers,
-                                currentMainWindowNode,
-                                area,
-                                status.settings)
+      currentBufStatus.keyDown(currentMainWindowNode)
+      currentBufStatus.selectArea.updateSelectArea(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn)
+      status.update
 
-    if (CURRENT_PLATFORM == Platforms.linux or
-        CURRENT_PLATFORM == Platforms.wsl):
-      let
-        cmd = if CURRENT_PLATFORM == Platforms.linux:
-                execCmdEx("xclip -o")
-              else:
-                # On the WSL
-                execCmdEx("powershell.exe -Command Get-Clipboard")
-        (output, exitCode) = cmd
+      let area = currentBufStatus.selectArea
+      status.settings.clipboard.enable = true
+      currentBufStatus.yankBuffer(status.registers,
+                                  currentMainWindowNode,
+                                  area,
+                                  status.settings)
 
-      check exitCode == 0
-      if CURRENT_PLATFORM == Platforms.linux:
-        check output[0 .. output.high - 1] == "abc\ndef"
-      else:
-        # On the WSL
-        check output[0 .. output.high - 2] == "abc\ndef"
+      if (CURRENT_PLATFORM == Platforms.linux or
+          CURRENT_PLATFORM == Platforms.wsl):
+        let
+          cmd = if CURRENT_PLATFORM == Platforms.linux:
+                  execCmdEx("xsel -o")
+                else:
+                  # On the WSL
+                  execCmdEx("powershell.exe -Command Get-Clipboard")
+          (output, exitCode) = cmd
 
-suite "Visual block mode: Yank buffer (Enable clipboard) 1":
-  test "Yank lines 1":
-    var status = initEditorStatus()
-    status.addNewBuffer
-    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
+        check exitCode == 0
+        if CURRENT_PLATFORM == Platforms.linux:
+          check output[0 .. output.high - 1] == "abc\ndef"
+        else:
+          # On the WSL
+          check output[0 .. output.high - 2] == "abc\ndef"
 
-    currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
-      currentBufStatus.language)
+if isXselAvailable():
+  suite "Visual block mode: Yank buffer (Enable clipboard) 1":
+    test "Yank lines 1":
+      var status = initEditorStatus()
+      status.addNewBuffer
+      currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
-    status.resize(100, 100)
+      currentMainWindowNode.highlight = initHighlight(
+        $currentBufStatus.buffer,
+        status.settings.highlightSettings.reservedWords,
+        currentBufStatus.language)
 
-    status.changeMode(Mode.visualBlock)
+      status.resize(100, 100)
 
-    currentBufStatus.selectArea = initSelectArea(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn)
+      status.changeMode(Mode.visualBlock)
 
-    currentBufStatus.keyDown(currentMainWindowNode)
+      currentBufStatus.selectArea = initSelectArea(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn)
 
-    currentBufStatus.selectArea.updateSelectArea(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn)
-
-    status.update
-
-    let area = currentBufStatus.selectArea
-    status.settings.clipboard.enable = true
-    currentBufStatus.yankBufferBlock(status.registers,
-                                     currentMainWindowNode,
-                                     area,
-                                     status.settings)
-
-    if CURRENT_PLATFORM == Platforms.linux:
-      let
-        cmd = execCmdEx("xclip -o")
-        (output, exitCode) = cmd
-
-      check exitCode == 0
-      check output[0 .. output.high - 1] == "a\nd"
-
-  test "Yank lines 2":
-    var status = initEditorStatus()
-    status.addNewBuffer
-    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"d"])
-
-    currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
-      currentBufStatus.language)
-
-    status.resize(100, 100)
-
-    status.changeMode(Mode.visualBlock)
-
-    currentBufStatus.selectArea = initSelectArea(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn)
-
-    currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectArea(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn)
-    status.update
-
-    currentBufStatus.keyDown(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectArea(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn)
-    status.update
-
-    let area = currentBufStatus.selectArea
-    status.settings.clipboard.enable = true
-    currentBufStatus.yankBufferBlock(status.registers,
-                                     currentMainWindowNode,
-                                     area,
-                                     status.settings)
-
-    if CURRENT_PLATFORM == Platforms.linux:
-      let
-        cmd = execCmdEx("xclip -o")
-        (output, exitCode) = cmd
-
-      check exitCode == 0
-      check output[0 .. output.high - 1] == "a\nd"
-
-suite "Visual block mode: Delete buffer":
-  test "Delete buffer (Enable clipboard) 1":
-    var status = initEditorStatus()
-    status.addNewBuffer
-    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
-
-    currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
-      currentBufStatus.language)
-
-    status.resize(100, 100)
-
-    status.changeMode(Mode.visualBlock)
-
-    currentBufStatus.selectArea = initSelectArea(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn)
-
-    currentBufStatus.keyDown(currentMainWindowNode)
-
-    currentBufStatus.selectArea.updateSelectArea(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn)
-
-    status.update
-
-    let area = currentBufStatus.selectArea
-    status.settings.clipboard.enable = true
-    currentBufStatus.deleteBufferBlock(status.registers,
-                                       currentMainWindowNode,
-                                       area,
-                                       status.settings,
-                                       status.commandLine)
-
-    if CURRENT_PLATFORM == Platforms.linux:
-      let (output, exitCode) = execCmdEx("xclip -o")
-      check(exitCode == 0 and output[0 .. output.high - 1] == "a\nd")
-
-  test "Delete buffer (Enable clipboard) 2":
-    var status = initEditorStatus()
-    status.addNewBuffer
-    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"edf"])
-
-    currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
-      currentBufStatus.language)
-
-    status.resize(100, 100)
-
-    status.changeMode(Mode.visualBlock)
-
-    currentBufStatus.selectArea = initSelectArea(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn)
-
-    for i in 0 ..< 2:
       currentBufStatus.keyDown(currentMainWindowNode)
 
       currentBufStatus.selectArea.updateSelectArea(
@@ -730,54 +620,181 @@ suite "Visual block mode: Delete buffer":
 
       status.update
 
-    let area = currentBufStatus.selectArea
-    status.settings.clipboard.enable = true
-    currentBufStatus.deleteBufferBlock(status.registers,
+      let area = currentBufStatus.selectArea
+      status.settings.clipboard.enable = true
+      currentBufStatus.yankBufferBlock(status.registers,
                                        currentMainWindowNode,
                                        area,
-                                       status.settings,
-                                       status.commandLine)
+                                       status.settings)
 
-  test "Fix #885":
-    var status = initEditorStatus()
-    status.addNewBuffer
-    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"de", ru"fgh"])
+      if CURRENT_PLATFORM == Platforms.linux:
+        let
+          cmd = execCmdEx("xsel -o")
+          (output, exitCode) = cmd
 
-    currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
-      currentBufStatus.language)
+        check exitCode == 0
+        check output[0 .. output.high - 1] == "a\nd"
 
-    status.resize(100, 100)
+    test "Yank lines 2":
+      var status = initEditorStatus()
+      status.addNewBuffer
+      currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"d"])
 
-    status.changeMode(Mode.visualBlock)
+      currentMainWindowNode.highlight = initHighlight(
+        $currentBufStatus.buffer,
+        status.settings.highlightSettings.reservedWords,
+        currentBufStatus.language)
 
-    currentBufStatus.selectArea = initSelectArea(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn)
+      status.resize(100, 100)
 
-    currentBufStatus.keyRight(currentMainWindowNode)
-    for i in 0 ..< 2:
+      status.changeMode(Mode.visualBlock)
+
+      currentBufStatus.selectArea = initSelectArea(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn)
+
+      currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
+      currentBufStatus.selectArea.updateSelectArea(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn)
+      status.update
+
+      currentBufStatus.keyDown(currentMainWindowNode)
+      currentBufStatus.selectArea.updateSelectArea(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn)
+      status.update
+
+      let area = currentBufStatus.selectArea
+      status.settings.clipboard.enable = true
+      currentBufStatus.yankBufferBlock(status.registers,
+                                       currentMainWindowNode,
+                                       area,
+                                       status.settings)
+
+      if CURRENT_PLATFORM == Platforms.linux:
+        let
+          cmd = execCmdEx("xsel -o")
+          (output, exitCode) = cmd
+
+        check exitCode == 0
+        check output[0 .. output.high - 1] == "a\nd"
+
+if isXselAvailable():
+  suite "Visual block mode: Delete buffer":
+    test "Delete buffer (Enable clipboard) 1":
+      var status = initEditorStatus()
+      status.addNewBuffer
+      currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
+
+      currentMainWindowNode.highlight = initHighlight(
+        $currentBufStatus.buffer,
+        status.settings.highlightSettings.reservedWords,
+        currentBufStatus.language)
+
+      status.resize(100, 100)
+
+      status.changeMode(Mode.visualBlock)
+
+      currentBufStatus.selectArea = initSelectArea(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn)
+
       currentBufStatus.keyDown(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectArea(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn)
+      currentBufStatus.selectArea.updateSelectArea(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn)
 
-    status.update
+      status.update
 
-    let area = currentBufStatus.selectArea
-    status.settings.clipboard.enable = true
-    currentBufStatus.deleteBufferBlock(
-      status.registers,
-      currentMainWindowNode,
-      area,
-      status.settings,
-      status.commandLine)
+      let area = currentBufStatus.selectArea
+      status.settings.clipboard.enable = true
+      currentBufStatus.deleteBufferBlock(status.registers,
+                                         currentMainWindowNode,
+                                         area,
+                                         status.settings,
+                                         status.commandLine)
 
-    check currentBufStatus.buffer[0] == ru"c"
-    check currentBufStatus.buffer[1] == ru""
-    check currentBufStatus.buffer[2] == ru"h"
+      if CURRENT_PLATFORM == Platforms.linux:
+        let (output, exitCode) = execCmdEx("xsel -o")
+        check(exitCode == 0 and output[0 .. output.high - 1] == "a\nd")
+
+    test "Delete buffer (Enable clipboard) 2":
+      var status = initEditorStatus()
+      status.addNewBuffer
+      currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"edf"])
+
+      currentMainWindowNode.highlight = initHighlight(
+        $currentBufStatus.buffer,
+        status.settings.highlightSettings.reservedWords,
+        currentBufStatus.language)
+
+      status.resize(100, 100)
+
+      status.changeMode(Mode.visualBlock)
+
+      currentBufStatus.selectArea = initSelectArea(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn)
+
+      for i in 0 ..< 2:
+        currentBufStatus.keyDown(currentMainWindowNode)
+
+        currentBufStatus.selectArea.updateSelectArea(
+          currentMainWindowNode.currentLine,
+          currentMainWindowNode.currentColumn)
+
+        status.update
+
+      let area = currentBufStatus.selectArea
+      status.settings.clipboard.enable = true
+      currentBufStatus.deleteBufferBlock(status.registers,
+                                         currentMainWindowNode,
+                                         area,
+                                         status.settings,
+                                         status.commandLine)
+
+    test "Fix #885":
+      var status = initEditorStatus()
+      status.addNewBuffer
+      currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"de", ru"fgh"])
+
+      currentMainWindowNode.highlight = initHighlight(
+        $currentBufStatus.buffer,
+        status.settings.highlightSettings.reservedWords,
+        currentBufStatus.language)
+
+      status.resize(100, 100)
+
+      status.changeMode(Mode.visualBlock)
+
+      currentBufStatus.selectArea = initSelectArea(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn)
+
+      currentBufStatus.keyRight(currentMainWindowNode)
+      for i in 0 ..< 2:
+        currentBufStatus.keyDown(currentMainWindowNode)
+
+      currentBufStatus.selectArea.updateSelectArea(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn)
+
+      status.update
+
+      let area = currentBufStatus.selectArea
+      status.settings.clipboard.enable = true
+      currentBufStatus.deleteBufferBlock(
+        status.registers,
+        currentMainWindowNode,
+        area,
+        status.settings,
+        status.commandLine)
+
+      check currentBufStatus.buffer[0] == ru"c"
+      check currentBufStatus.buffer[1] == ru""
+      check currentBufStatus.buffer[2] == ru"h"
 
 suite "Visual mode: Join lines":
   test "Join 3 lines":

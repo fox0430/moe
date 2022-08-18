@@ -1,6 +1,6 @@
 import std/unittest
 import moepkg/[settings, unicodeext, register, clipboard]
-include moepkg/[platform]
+include moepkg/[platform, independentutils]
 
 proc initRegister(
   buffer: seq[Rune],
@@ -14,157 +14,164 @@ proc initRegister(
 
   result.addRegister(buffer, settings)
 
-suite "Editor: Send to clipboad":
-  test "Send string to clipboard 1 (xsel)":
-    const
-      buffer = @[ru "Clipboard test"]
-      tool = ClipboardToolOnLinux.xsel
+proc isXselAvailable(): bool {.inline.} =
+  execCmdExNoOutput("xset q") == 0 and execCmdExNoOutput("xsel --version") == 0
 
-    sendToClipboard(buffer, tool)
+proc isXclipAvailable(): bool {.inline.} =
+  execCmdExNoOutput("xset q") == 0 and execCmdExNoOutput("xclip -version") == 0
 
-    let p = initPlatform()
-    if (p == Platforms.linux or
-        p == Platforms.wsl):
-      let
-        cmd = if p == Platforms.linux:
-                execCmdEx("xsel -o")
-              else:
-                # On the WSL
-                execCmdEx("powershell.exe -Command Get-Clipboard")
-        (output, exitCode) = cmd
+if isXselAvailable():
+  suite "Editor: Send to clipboad (xsel)":
+    test "Send string to clipboard 1 (xsel)":
+      const
+        buffer = @[ru "Clipboard test"]
+        tool = ClipboardToolOnLinux.xsel
 
-      check exitCode == 0
-      if p == Platforms.linux:
-        check output[0 .. output.high - 1] == $buffer
-      else:
-        # On the WSL
-        check output[0 .. output.high - 2] == $buffer
+      sendToClipboard(buffer, tool)
 
-  test "Send string to clipboard 1 (xclip)":
-    const
-      buffer = @[ru "Clipboard test"]
-      tool = ClipboardToolOnLinux.xclip
+      let p = initPlatform()
+      if (p == Platforms.linux or
+          p == Platforms.wsl):
+        let
+          cmd = if p == Platforms.linux:
+                  execCmdEx("xsel -o")
+                else:
+                  # On the WSL
+                  execCmdEx("powershell.exe -Command Get-Clipboard")
+          (output, exitCode) = cmd
 
-    sendToClipboard(buffer, tool)
+        check exitCode == 0
+        if p == Platforms.linux:
+          check output[0 .. output.high - 1] == $buffer
+        else:
+          # On the WSL
+          check output[0 .. output.high - 2] == $buffer
 
-    let p = initPlatform()
-    if (p == Platforms.linux or
-        p == Platforms.wsl):
-      let
-        cmd = if p == Platforms.linux:
-                execCmdEx("xclip -o")
-              else:
-                # On the WSL
-                execCmdEx("powershell.exe -Command Get-Clipboard")
-        (output, exitCode) = cmd
+    test "Send string to clipboard 1 (xclip)":
+      const
+        buffer = @[ru "Clipboard test"]
+        tool = ClipboardToolOnLinux.xclip
 
-      check exitCode == 0
-      if p == Platforms.linux:
-        check output[0 .. output.high - 1] == $buffer
-      else:
-        # On the WSL
-        check output[0 .. output.high - 2] == $buffer
+      sendToClipboard(buffer, tool)
 
-  test "Send string to clipboard 2 (xsel)":
-    const
-      buffer = @[ru "`````"]
-      tool = ClipboardToolOnLinux.xsel
+      let p = initPlatform()
+      if (p == Platforms.linux or
+          p == Platforms.wsl):
+        let
+          cmd = if p == Platforms.linux:
+                  execCmdEx("xclip -o")
+                else:
+                  # On the WSL
+                  execCmdEx("powershell.exe -Command Get-Clipboard")
+          (output, exitCode) = cmd
 
-    sendToClipboard(buffer, tool)
+        check exitCode == 0
+        if p == Platforms.linux:
+          check output[0 .. output.high - 1] == $buffer
+        else:
+          # On the WSL
+          check output[0 .. output.high - 2] == $buffer
 
-    let p = initPlatform()
-    if (p == Platforms.linux or
-        p == Platforms.wsl):
-      let
-        cmd = if p == Platforms.linux:
-                execCmdEx("xsel -o")
-              else:
-                # On the WSL
-                execCmdEx("powershell.exe -Command Get-Clipboard")
-        (output, exitCode) = cmd
+    test "Send string to clipboard 2 (xsel)":
+      const
+        buffer = @[ru "`````"]
+        tool = ClipboardToolOnLinux.xsel
 
-      check exitCode == 0
-      if p == Platforms.linux:
-        check output[0 .. output.high - 1] == $buffer
-      else:
-        # On the WSL
-        check output[0 .. output.high - 2] == $buffer
+      sendToClipboard(buffer, tool)
 
-  test "Send string to clipboard 2 (xclip)":
-    const
-      buffer = @[ru "`````"]
-      tool = ClipboardToolOnLinux.xclip
+      let p = initPlatform()
+      if (p == Platforms.linux or
+          p == Platforms.wsl):
+        let
+          cmd = if p == Platforms.linux:
+                  execCmdEx("xsel -o")
+                else:
+                  # On the WSL
+                  execCmdEx("powershell.exe -Command Get-Clipboard")
+          (output, exitCode) = cmd
 
-    sendToClipboard(buffer, tool)
+        check exitCode == 0
+        if p == Platforms.linux:
+          check output[0 .. output.high - 1] == $buffer
+        else:
+          # On the WSL
+          check output[0 .. output.high - 2] == $buffer
 
-    let p = initPlatform()
-    if (p == Platforms.linux or
-        p == Platforms.wsl):
-      let
-        cmd = if p == Platforms.linux:
-                execCmdEx("xclip -o")
-              else:
-                # On the WSL
-                execCmdEx("powershell.exe -Command Get-Clipboard")
-        (output, exitCode) = cmd
+if isXclipAvailable():
+  suite "Send string to clipboard (xclip)":
+    test "Send string to clipboard (xclip)":
+      const
+        buffer = @[ru "`````"]
+        tool = ClipboardToolOnLinux.xclip
 
-      check exitCode == 0
-      if p == Platforms.linux:
-        check output[0 .. output.high - 1] == $buffer
-      else:
-        # On the WSL
-        check output[0 .. output.high - 2] == $buffer
+      sendToClipboard(buffer, tool)
 
-  test "Send string to clipboard 3 (xsel)":
-    const
-      buffer = @[ru "$Clipboard test"]
-      tool = ClipboardToolOnLinux.xsel
+      let p = initPlatform()
+      if (p == Platforms.linux or
+          p == Platforms.wsl):
+        let
+          cmd = if p == Platforms.linux:
+                  execCmdEx("xclip -o")
+                else:
+                  # On the WSL
+                  execCmdEx("powershell.exe -Command Get-Clipboard")
+          (output, exitCode) = cmd
 
-    sendToClipboard(buffer, tool)
+        check exitCode == 0
+        if p == Platforms.linux:
+          check output[0 .. output.high - 1] == $buffer
+        else:
+          # On the WSL
+          check output[0 .. output.high - 2] == $buffer
 
-    let p = initPlatform()
-    if (p == Platforms.linux or
-        p == Platforms.wsl):
-      let
-        cmd = if p == Platforms.linux:
-                execCmdEx("xsel -o")
-              else:
+    test "Send string to clipboard 2 (xsel)":
+      const
+        buffer = @[ru "$Clipboard test"]
+        tool = ClipboardToolOnLinux.xsel
 
-                # On the WSL
-                execCmdEx("powershell.exe -Command Get-Clipboard")
-        (output, exitCode) = cmd
+      sendToClipboard(buffer, tool)
 
-      check exitCode == 0
-      if p == Platforms.linux:
-        check output[0 .. output.high - 1] == $buffer
-      else:
-        # On the WSL
-        check output[0 .. output.high - 2] == $buffer
+      let p = initPlatform()
+      if (p == Platforms.linux or
+          p == Platforms.wsl):
+        let
+          cmd = if p == Platforms.linux:
+                  execCmdEx("xsel -o")
+                else:
 
-  test "Send string to clipboard 3 (xclip)":
-    const
-      buffer = @[ru "$Clipboard test"]
-      tool = ClipboardToolOnLinux.xclip
+                  # On the WSL
+                  execCmdEx("powershell.exe -Command Get-Clipboard")
+          (output, exitCode) = cmd
 
-    sendToClipboard(buffer, tool)
+        check exitCode == 0
+        if p == Platforms.linux:
+          check output[0 .. output.high - 1] == $buffer
+        else:
+          # On the WSL
+          check output[0 .. output.high - 2] == $buffer
 
-    let p = initPlatform()
-    if (p == Platforms.linux or
-        p == Platforms.wsl):
-      let
-        cmd = if p == Platforms.linux:
-                execCmdEx("xclip -o")
-              else:
+    test "Send string to clipboard 3 (xclip)":
+      const
+        buffer = @[ru "$Clipboard test"]
+        tool = ClipboardToolOnLinux.xclip
 
-                # On the WSL
-                execCmdEx("powershell.exe -Command Get-Clipboard")
-        (output, exitCode) = cmd
+      sendToClipboard(buffer, tool)
 
-      check exitCode == 0
-      if p == Platforms.linux:
-        check output[0 .. output.high - 1] == $buffer
-      else:
-        # On the WSL
-        check output[0 .. output.high - 2] == $buffer
+      let p = initPlatform()
+      if (p == Platforms.linux or
+          p == Platforms.wsl):
+        let
+          cmd = if p == Platforms.linux:
+                  execCmdEx("xclip -o")
+                else:
 
+                  # On the WSL
+                  execCmdEx("powershell.exe -Command Get-Clipboard")
+          (output, exitCode) = cmd
 
+        check exitCode == 0
+        if p == Platforms.linux:
+          check output[0 .. output.high - 1] == $buffer
+        else:
+          # On the WSL
+          check output[0 .. output.high - 2] == $buffer
