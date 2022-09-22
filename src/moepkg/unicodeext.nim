@@ -97,20 +97,21 @@ proc count0000(s: string): int =
     i += 2
 
 proc detectCharacterEncoding*(s: string): CharacterEncoding =
-  ## sの文字符号化形式を推測する
-  ## 現時点ではUnicodeの符号化形式にしか対応してない
-  ## ASCIIの文字しか含まれてない場合にはCharacterEncoding.utf8を返す
-  ## 符号化形式が不明な場合にはCharacterEncoding.unknownを返す
+  # Guess the character encoding form of `s`.
+  # In currently, only the Unicode format is supported.
+  # Returns `CharacterEncoding.utf8` if only ASCII characters are included.
+  # Returns `CharacterEncoding.unknown` if encoding format is unknown.
 
-  # UTF-8のBOMチェック
+
+  # Check UTF-8 BOM
   if s.len >= 3 and s[0..2] == "\xEF\xBB\xBF": return CharacterEncoding.utf8
 
   if s.len >= 4:
-    # UTF-32のBOMチェック
+    # Check UTF-32 BOM
     if s[0..3] == "\x00\x00\xFE\xFF" or
        s[0..3] == "\xFF\xFE\x00\x00": return CharacterEncoding.utf32
 
-    # UTF-16のBOMチェック
+    # Check UTF-16 BOM
     if s[0..1] == "\xFE\xFF" or s[0..1] == "\xFF\xFE": return CharacterEncoding.utf16
 
   if s.validateUtf8 == -1: return CharacterEncoding.utf8
@@ -123,7 +124,7 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
 
   let threshold = (s.len / 2) * (2 / 5)
   if float(count0000(s)) >= threshold:
-    # 0x000 が多すぎる場合にはUTF-16ではないとする
+    # If there are too many 0x000, assume it is not UTF-16.
     if validEncodings.contains(CharacterEncoding.utf16Be):
       validEncodings.delete(validEncodings.find(CharacterEncoding.utf16Be))
     if validEncodings.contains(CharacterEncoding.utf16Le):
