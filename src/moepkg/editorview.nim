@@ -34,8 +34,12 @@ proc loadSingleViewLine[T](view: EditorView,
     nextWidth = calcNextWidth
 
 proc reload*[T](view: var EditorView, buffer: T, topLine: int) =
-  ## topLineがEditorViewの一番上のラインとして表示されるようにバッファからEditorViewに対してリロードを行う.
-  ## EditorView全体を更新するため計算コストはやや高め.バッファの内容とEditorViewの内容を同期させる時やEditorView全体が全く異なるような内容になるような処理をした後等に使用することが想定されている.
+  # Reload from the buffer to the EditorView so that topLine is displayed as the top line of the EditorView.
+  #
+  # The computational cost is somewhat high because the entire EditorView is updated.
+  #
+  # It is intended to be used to synchronize the contents of a buffer with the contents of an EditorView,
+  # or after the entire EditorView has become completely different.
 
   view.updated = true
 
@@ -70,7 +74,9 @@ proc reload*[T](view: var EditorView, buffer: T, topLine: int) =
       start = 0
 
 proc initEditorView*[T](buffer: T, height, width: int): EditorView =
-  ## width/heightでEditorViewを初期化し,バッファの0行0文字目からロードする.widthは画面幅ではなくEditorViewの1ラインの文字数である(従って行番号分の長さは考慮しなくてよい).
+  # Initialize EditorView with `width`/`height` and load from the first character of the first line of the buffer.
+  # `width` is not the screen width but the number of characters per line of the EditorView.
+  # So the length of the line number need not be considered.
 
   result.height = height
   result.width = width
@@ -91,7 +97,8 @@ proc initEditorView*[T](buffer: T, height, width: int): EditorView =
 proc resize*[T](view: var EditorView,
                 buffer: T,
                 height, width, widthOfLineNum: int) =
-  ## 指定されたwidth/heightでEditorViewを更新する.表示される部分はなるべくリサイズ前と同じになるようになっている.
+  # Update EditorView with width/height.
+  # The displayed content is as similar as possible to that before the resizing.
 
   let topline = view.originalLine[0]
 
@@ -113,7 +120,7 @@ proc resize*[T](view: var EditorView,
   view.reload(buffer, topLine)
 
 proc scrollUp*[T](view: var EditorView, buffer: T) =
-  ## EditorView表示を1ライン上にずらす
+  # Shift the EditorView display up one line.
 
   view.updated = true
 
@@ -142,7 +149,7 @@ proc scrollUp*[T](view: var EditorView, buffer: T) =
       break
 
 proc scrollDown*[T](view: var EditorView, buffer: T) =
-  ## EditorViewの表示を1ライン下にずらす
+  # Shift the EditorView display down one line.
 
   view.updated = true
 

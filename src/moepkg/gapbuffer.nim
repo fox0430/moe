@@ -4,9 +4,9 @@ export undoredostack
 
 type GapBuffer*[T] = object
   buffer: seq[T]
-  size: int # 意味のあるデータが実際に格納されているサイズ
+  size: int # Size at which the actual data is stored
   capacity: int # Amount of secured memory
-  gapBegin, gapEnd: int # 半開区間[gapBegin,gapEnd)を隙間とする
+  gapBegin, gapEnd: int # The half-open interval [gapBegin,gapEnd) is the gap
   undoRedoStack: UndoRedoStack[T]
 
 proc gapLen(gapBuffer: GapBuffer): int {.inline.} = gapBuffer.gapEnd - gapBuffer.gapBegin
@@ -45,8 +45,9 @@ proc insert*[T](gapBuffer: var GapBuffer,
                 element: T,
                 position: int,
                 pushToStack: bool = true) =
-  ## positionの直前に要素を挿入する.末尾に追加したい場合はpositionにバッファの要素数を渡す.
-  ## ex.空のバッファに要素を追加する場合はpositionに0を渡す.
+  ## Insert an element just before `position`.
+  ## If you want to add the element at the end, pass the number of elements in the buffer to `position`.
+  ## ex: If you want to add the element to empty buffer, pass 0 to `position`.
   doAssert(0 <= position and position <= gapBuffer.size,
            "Gapbuffer: Invalid position.")
 
