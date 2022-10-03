@@ -50,6 +50,8 @@ smoothScroll = true
 
 smoothScrollSpeed = 15
 
+liveReloadOfFile = false
+
 [Clipboard]
 enable = true
 
