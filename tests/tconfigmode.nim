@@ -40,7 +40,8 @@ suite "Config mode: Init buffer":
                      ru "  popUpWindowInExmode            true",
                      ru "  autoDeleteParen                false",
                      ru "  smoothScroll                   true",
-                     ru "  smoothScrollSpeed              15"]
+                     ru "  smoothScrollSpeed              15",
+                     ru "  liveReloadOfFile               false"]
 
     for index, line in buffer:
       check sample[index] == line

@@ -1,5 +1,5 @@
 import std/[strutils, terminal, os, strformat, tables, times, heapqueue, deques,
-            options]
+            options, encodings]
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        window, color, settings, statusline, bufferstatus, cursor, tabline,
@@ -1295,6 +1295,29 @@ proc eventLoopTask(status: var Editorstatus) =
     if beforeTheme != status.settings.editorColorTheme:
       changeTheme(status)
       status.resize(terminalHeight(), terminalWidth())
+
+  # Live reload of an open file. a current window's buffer only.
+  if status.settings.liveReloadOfFile:
+    let lastModificationTime = getLastModificationTime($currentBufStatus.path)
+    if 0 == currentBufStatus.countChange and
+       lastModificationTime > currentBufStatus.lastSaveTime.toTime:
+      let
+        encoding =
+          if currentBufStatus.characterEncoding == CharacterEncoding.unknown:
+            CharacterEncoding.utf8
+          else:
+            currentBufStatus.characterEncoding
+        buffer = convert($currentBufStatus.buffer, $encoding, "UTF-8")
+
+        newText = openFile(currentBufStatus.path)
+        newBuffer = convert(($newText.text & "\n"), $newText.encoding, "UTF-8")
+
+      # TODO: Show a warning if both are edited.
+      if buffer != newBuffer:
+        let newTextAndEncoding = openFile(currentBufStatus.path)
+        currentBufStatus.buffer = newTextAndEncoding.text.toGapBuffer
+        currentBufStatus.characterEncoding = newTextAndEncoding.encoding
+        currentBufStatus.isUpdate = true
 
   # Automatic backup
   let
