@@ -177,6 +177,7 @@ type EditorSettings* = object
   autoDeleteParen*: bool
   smoothScroll*: bool
   smoothScrollSpeed*: int
+  liveReloadOfFile*: bool
   clipboard*: ClipboardSettings
   buildOnSave*: BuildOnSaveSettings
   filerSettings*: FilerSettings
@@ -949,6 +950,9 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Standard"].contains("smoothScrollSpeed"):
       result.smoothScrollSpeed = settings["Standard"]["smoothScrollSpeed"].getint()
 
+    if settings["Standard"].contains("liveReloadOfFile"):
+      result.liveReloadOfFile = settings["Standard"]["liveReloadOfFile"].getbool()
+
     if settings["Standard"].contains("indentationLines"):
       result.view.indentationLines = settings["Standard"]["indentationLines"].getbool()
 
@@ -1684,7 +1688,8 @@ proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
          "popUpWindowInExmode",
          "autoDeleteParen",
          "systemClipboard",
-         "smoothScroll":
+         "smoothScroll",
+         "liveReloadOfFile":
         if not (val.kind == TomlValueKind.Bool):
           return some(InvalidItem(name: $key, val: $val))
       of "tabStop", "autoSaveInterval", "smoothScrollSpeed":
@@ -2098,6 +2103,7 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "autoDeleteParen = {$settings.autoDeleteParen }"
   result.addLine fmt "smoothScroll = {$settings.smoothScroll }"
   result.addLine fmt "smoothScrollSpeed = {$settings.smoothScrollSpeed}"
+  result.addLine fmt "liveReloadOfFile = {$settings.liveReloadOfFile}"
 
   result.addLine ""
 

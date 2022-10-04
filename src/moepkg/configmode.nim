@@ -28,6 +28,7 @@ type standardTableNames {.pure.} = enum
   autoDeleteParen
   smoothScroll
   smoothScrollSpeed
+  liveReloadOfFile
 
 type clipboardTableNames {.pure.} = enum
   enable
@@ -272,6 +273,8 @@ proc getStandardTableSettingValues(settings: EditorSettings,
         currentVal = settings.autoDeleteParen
       of "smoothScroll":
         currentVal = settings.smoothScroll
+      of "liveReloadOfFile":
+        currentVal = settings.liveReloadOfFile
       else:
         return
 
@@ -717,6 +720,8 @@ proc changeStandardTableSetting(settings: var EditorSettings,
       settings.autoDeleteParen = parseBool(settingVal)
     of "smoothScroll":
       settings.smoothScroll = parseBool(settingVal)
+    of "liveReloadOfFile":
+      settings.liveReloadOfFile = parseBool(settingVal)
     else:
       discard
 
@@ -1017,7 +1022,8 @@ proc getSettingType(table, name: string): SettingType =
          "popUpWindowInExmode",
          "autoDeleteParen",
          "systemClipboard",
-         "smoothScroll": result = SettingType.Bool
+         "smoothScroll",
+         "liveReloadOfFile": result = SettingType.Bool
       of "tabStop",
          "autoSaveInterval",
          "smoothScrollSpeed": result = SettingType.Number
@@ -1659,6 +1665,8 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
         result.add(ru nameStr & space & $settings.smoothScroll)
       of "smoothScrollSpeed":
         result.add(ru nameStr & space & $settings.smoothScrollSpeed)
+      of "liveReloadOfFile":
+        result.add(ru nameStr & space & $settings.liveReloadOfFile)
 
 proc initClipBoardTableBuffer(settings: ClipBoardSettings): seq[seq[Rune]] =
   result.add(ru"ClipBoard")
