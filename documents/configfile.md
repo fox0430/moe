@@ -148,6 +148,12 @@ default is 15
 smoothScrollSpeed
 ```
 
+Live reloading open files (bool)  
+default is false
+```
+liveReloadOfFile
+```
+
 ### Clipboard table
 Enable/Disable system clipboard (bool)  
 default is true
