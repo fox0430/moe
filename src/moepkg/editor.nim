@@ -326,6 +326,7 @@ proc insertIndentInNimForKeyEnter(bufStatus: var BufferStatus,
         (line.len > 4 and
           line.splitWhitespace == @[ru "const"]) or
         (line.len > 4 and
+        line.splitWhitespace.len > 0 and
         line.splitWhitespace[^1] == (ru "object")) or
         line[^1] == (ru ':') or
         line[^1] == (ru '=')
