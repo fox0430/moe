@@ -1,4 +1,4 @@
-import std/[osproc, terminal, times]
+import std/[osproc, terminal, times, os]
 import syntax/highlite
 import unicodeext, settings, bufferstatus, gapbuffer, messages, ui,
        editorstatus, movement, window, fileutils, commandline
@@ -44,8 +44,17 @@ proc runQuickRun*(bufStatus: var BufferStatus,
   let filename = bufStatus.path
 
   if settings.quickRunSettings.saveBufferWhenQuickRun:
+    block:
+      let lastModificationTime = getLastModificationTime($bufStatus.path)
+      if lastModificationTime > bufStatus.lastSaveTime.toTime:
+        # TODO: Show error message
+        # Cancel if the file was edited by a program other than moe.
+        return @["".ru]
+
     saveFile(filename, bufStatus.buffer.toRunes, bufStatus.characterEncoding)
+
     bufStatus.countChange = 0
+    bufStatus.lastSaveTime = now()
 
   let command = bufStatus.generateCommand(settings.quickRunSettings)
   if command == "": return @[ru""]

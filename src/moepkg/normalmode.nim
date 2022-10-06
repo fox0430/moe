@@ -141,8 +141,10 @@ proc runQuickRunCommand(status: var Editorstatus) =
     status.changeCurrentBuffer(status.bufStatus.high)
 
     status.changeMode(Mode.quickRun)
+
   else:
     status.bufStatus[quickRunWindowIndex].buffer = initGapBuffer(buffer)
+    status.bufStatus[quickRunWindowIndex].isUpdate = true
 
 proc yankWord(status: var EditorStatus) =
   currentBufStatus.yankWord(status.registers,
