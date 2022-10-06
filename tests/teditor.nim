@@ -158,6 +158,25 @@ suite "Editor: keyEnter":
     check currentMainWindowNode.currentLine == 1
     check currentMainWindowNode.currentColumn == 0
 
+  test "Fix #1490":
+    var status = initEditorStatus()
+    status.addNewBuffer
+
+    currentBufStatus.buffer = initGapBuffer(@[ru"import std/os",
+                                              ru"       a"])
+    currentBufStatus.mode = Mode.insert
+
+    currentBufStatus.language = SourceLanguage.langNim
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = currentBufStatus.buffer[1].len
+
+    for i in 0 ..< 2:
+      const isAutoIndent = true
+      currentBufStatus.keyEnter(
+        currentMainWindowNode,
+        isAutoIndent,
+        status.settings.tabStop)
+
   # Generate test code
   # Enable/Disable autoindent
   # Newline in some languages
