@@ -618,7 +618,6 @@ proc visualMode*(status: var EditorStatus) =
       else:
         status.visualCommand(currentBufStatus.selectArea, key)
 
-      status.update
+      status.changeMode(currentBufStatus.prevMode)
 
-      if isNormalMode(currentBufStatus.mode, currentBufStatus.prevMode):
-        status.changeMode(Mode.normal)
+      status.update
