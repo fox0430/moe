@@ -5,6 +5,13 @@ import ui, color, unicodeext, highlight, platform, independentutils
 
 export TomlError
 
+type VsCodeFlavor = enum
+  # CodeOss is an Official Arch Linux open-source release.
+  # https://archlinux.org/packages/?name=code
+  CodeOss
+  VSCodium
+  VSCode
+
 type DebugWindowNodeSettings* = object
   enable*: bool
   currentWindow*: bool
@@ -467,9 +474,7 @@ macro setEditorColor(args: varargs[untyped]): untyped =
     `bgDynamicAdjust`
     `assignColors`
 
-proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
-  let jsonNode = json.parseFile(fileName)
-
+proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): EditorColor =
   # This converts a JsonNode JString to a 256-Color-Terminal-Color
   proc colorFromNode(node: JsonNode): Color =
     if node == nil:
@@ -804,67 +809,165 @@ proc makeColorThemeFromVSCodeThemeFile(fileName: string): EditorColor =
     background:
       colorFromNode(jsonNode{"colors", "editor.background"})
 
-proc loadVSCodeTheme*(): ColorTheme =
-  # search for the vscode theme that is set in the current preferences of
-  # vscode/vscodium. Vscodium takes precedence, since you can assume that,
-  # people that install VScodium prefer it over Vscode for privacy reasons.
-  # If no vscode theme can be found, this defaults to the dark theme.
-  # The first implementation is for finding the VsCode/VsCodium config and
-  # extension folders on Linux. Hopefully other contributors will come and
-  # add support for Windows, and other systems.
-  var vsCodeThemeLoaded = false
-  block vsCodeThemeLoading:
-    let homeDir = getHomeDir()
-    var vsCodeSettingsFile = homeDir & "/.config/VSCodium/User/settings.json"
-    var vsCodeThemeFile = ""
-    var vsCodeExtensionsDir = homeDir & "/.vscode/extensions/"
-    var vsCodeThemeSetting = ""
-    if not fileExists(vsCodeSettingsFile):
-      vsCodeSettingsFile = homeDir & "/.config/Code/User/settings.json"
-    if fileExists(vsCodeSettingsFile):
-      let vsCodeSettingsJson = json.parseFile(vsCodeSettingsFile)
-      vsCodeThemeSetting = vsCodeSettingsJson{"workbench.colorTheme"}.getStr()
-      if vsCodeThemeSetting == "":
-        break vsCodeThemeLoading
+proc codeOssUserSettingsFilePath(): string {.inline.} =
+  getConfigDir() / "Code - OSS/User/settings.json"
 
+proc vsCodiumUserSettingsFilePath(): string {.inline.} =
+  getConfigDir() / "VSCodium/User/settings.json"
+
+proc vsCodeUserSettingsFilePath(): string {.inline.} =
+  getConfigDir() / "Code/User/settings.json"
+
+proc codeOssDefaultExtensionsDir(): string {.inline.} =
+  "/usr/lib/code/extensions"
+
+proc vSCodiumDefaultExtensionsDir(): string {.inline.} =
+  # TODO: Add support for non-Linux systems.
+
+  "/opt/vscodium-bin/resources/app/extensions"
+
+proc vsCodeDefaultExtensionsDir(): string {.inline.} =
+  # TODO: Add support for non-Linux systems.
+
+  "/opt/visual-studio-code/resources/app/extensions"
+
+proc codeOssUserExtensionsDir(): string {.inline.} =
+  getHomeDir() / ".vscode-oss/extensions"
+
+proc vsCodiumUserExtensionsDir(): string {.inline.} =
+  # Same as the code-oss.
+  codeOssUserExtensionsDir()
+
+proc vsCodeUserExtensionsDir(): string  {.inline.} =
+  getHomeDir() / ".vscode/extensions"
+
+proc vsCodeSettingsFilePath(flavor: VsCodeFlavor): string =
+  case flavor:
+    of VsCodeFlavor.VSCodium:
+      return vsCodiumUserSettingsFilePath()
+    of VsCodeFlavor.CodeOss:
+      return codeOssUserSettingsFilePath()
+    of VsCodeFlavor.VSCode:
+      return vsCodeUserSettingsFilePath()
+
+proc vsCodeUserExtensionsDir(flavor: VsCodeFlavor): string =
+  case flavor:
+    of VsCodeFlavor.VSCodium:
+      return vsCodiumUserExtensionsDir()
+    of VsCodeFlavor.CodeOss:
+      return codeOssUserExtensionsDir()
+    of VsCodeFlavor.VSCode:
+      return vsCodeUserExtensionsDir()
+
+proc vsCodeDefaultExtensionsDir(flavor: VsCodeFlavor): string =
+  case flavor:
+    of VsCodeFlavor.VSCodium:
+      return vSCodiumDefaultExtensionsDir()
+    of VsCodeFlavor.CodeOss:
+      return codeOssDefaultExtensionsDir()
+    of VsCodeFlavor.VSCode:
+      return vsCodeDefaultExtensionsDir()
+
+proc detectVsCodeFlavor(): Option[VsCodeFlavor] =
+  # Check settings dirs in the following order.
+  # vscodium -> code-oss -> vscode
+
+  if fileExists(vsCodiumUserSettingsFilePath()):
+    return some(VsCodeFlavor.VSCodium)
+  elif fileExists(codeOssUserSettingsFilePath()):
+    return some(VsCodeFlavor.CodeOss)
+  elif fileExists(vsCodeUserSettingsFilePath()):
+    return some(VsCodeFlavor.VSCode)
+
+proc parseVsCodeThemeJson(
+  packageJson: JsonNode,
+  themeName, extensionDir: string): Option[JsonNode] =
+
+    let themesJson = packageJson{"contributes", "themes"}
+    if themesJson != nil and themesJson.kind == JArray:
+      for theme in themesJson:
+        if theme{"id"} != nil and theme{"id"}.getStr == themeName:
+          let themePath = theme{"path"}
+
+          if themePath != nil and themePath.kind == JString:
+            let themeFilePath = parentDir(extensionDir) / themePath.getStr()
+
+            if fileExists(themeFilePath):
+              result =
+                try: some(json.parseFile(themeFilePath))
+                except: none(JsonNode)
+
+proc isCurrentVsCodeThemePackage(json: JsonNode, themeName: string): bool =
+  # Return true if `json` is the current VSCode theme.
+
+  if json{"displayName"} != nil:
+    if json{"displayName"}.getStr == "%displayName%":
+      let themes = json{"contributes", "themes"}
+      if themes != nil and themes.kind == JArray:
+        for t in themes:
+          if t{"id"} != nil and t{"id"}.getStr == themeName:
+            return true
     else:
-      break vsCodeThemeLoading
+      if json{"displayName"}.getStr == themeName: return true
 
-    if not dirExists(vsCodeExtensionsDir):
-      vsCodeExtensionsDir = homeDir & "/.vscode-oss/extensions/"
-      if not dirExists(vsCodeExtensionsDir):
-        break vsCodeThemeLoading
+proc loadVSCodeTheme*(): ColorTheme =
+  # If no vscode theme can be found, this defaults to the dark theme.
+  # Hopefully other contributors will come and add support for Windows,
+  # and other systems.
 
-    # Note: walkDirRec was first used to solve this, however
-    #       the performance at runtime was much worse
-    for file in walkPattern(vsCodeExtensionsDir & "/*/package.json"):
-      if file.endsWith("/package.json"):
-        var vsCodePackageJson: JsonNode
-        try:
-          vsCodePackageJson = json.parseFile(file)
-        except:
-          break vsCodeThemeLoading
-        let displayName = vsCodePackageJson{"displayName"}
-        if displayName == nil: continue
+  result = ColorTheme.dark
 
-        if displayName.getStr() == vsCodeThemeSetting:
-          let themesJson = vsCodePackageJson{"contributes", "themes"}
-          if themesJson != nil and themesJson.len() > 0:
-            let theTheme = themesJson[0]
-            let theThemePath = theTheme{"path"}
-            if theThemePath != nil and theThemePath.kind == JString:
-              vsCodeThemeFile = parentDir(file) / theThemePath.getStr()
-          else:
-            break vsCodeThemeLoading
-          break
+  let vsCodeFlavor = detectVsCodeFlavor()
+  if vsCodeFlavor.isNone: return ColorTheme.dark
 
-    if fileExists(vsCodeThemeFile):
-      result = ColorTheme.vscode
-      ColorThemeTable[ColorTheme.vscode] =
-        makeColorThemeFromVSCodeThemeFile(vsCodeThemeFile)
-      vsCodeThemeLoaded = true
-  if not vsCodeThemeLoaded:
-    result = ColorTheme.dark
+  let
+    # load the VSCode user settings json
+    settingsFilePath = vsCodeSettingsFilePath(vsCodeFlavor.get)
+    settingsJson =
+      try: json.parseFile(settingsFilePath)
+      except: return ColorTheme.dark
+
+  # The current theme name
+  if settingsJson{"workbench.colorTheme"} == nil or
+     settingsJson{"workbench.colorTheme"}.getStr == "": return ColorTheme.dark
+
+  let themeSetting = settingsJson{"workbench.colorTheme"}.getStr
+
+  # First, Check build in themes.
+  let defaultExtesionsDir = vsCodeDefaultExtensionsDir(vsCodeFlavor.get)
+  if dirExists(defaultExtesionsDir):
+    for file in walkPattern(defaultExtesionsDir / "*/package.json" ):
+      let packageJson =
+        try: json.parseFile(file)
+        except: continue
+
+      if isCurrentVsCodeThemePackage(packageJson, themeSetting):
+        let themeJson = parseVsCodeThemeJson(
+          packageJson,
+          themeSetting,
+          file)
+        if themeJson.isSome:
+          ColorThemeTable[ColorTheme.vscode] =
+            makeColorThemeFromVSCodeThemeFile(themeJson.get)
+          return ColorTheme.vscode
+
+  # Check user themes.
+  let userExtensionsDir = vsCodeUserExtensionsDir(vsCodeFlavor.get)
+  if dirExists(userExtensionsDir):
+    for file in walkPattern(userExtensionsDir / "*/package.json" ):
+      let packageJson =
+        try: json.parseFile(file)
+        except: continue
+
+      if isCurrentVsCodeThemePackage(packageJson, themeSetting):
+        let themeJson = parseVsCodeThemeJson(
+          packageJson,
+          themeSetting,
+          file)
+        if themeJson.isSome:
+          ColorThemeTable[ColorTheme.vscode] =
+            makeColorThemeFromVSCodeThemeFile(themeJson.get)
+          return ColorTheme.vscode
 
 proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
   result = initEditorSettings()
@@ -1344,7 +1447,15 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("baseTheme"):
       let themeString = settings["Theme"]["baseTheme"].getStr()
       if fileExists(themeString):
-        ColorThemeTable[ColorTheme.config] = makeColorThemeFromVSCodeThemeFile(themeString)
+        # TODO: Test this
+        let jsonNode =
+          try: some(json.parseFile(themeString))
+          except: none(JsonNode)
+        if jsonNode.isSome:
+          ColorThemeTable[ColorTheme.config] = makeColorThemeFromVSCodeThemeFile(jsonNode.get)
+        else:
+          let theme = parseEnum[ColorTheme](themeString)
+          ColorThemeTable[ColorTheme.config] = ColorThemeTable[theme]
       else:
         let theme = parseEnum[ColorTheme](themeString)
         ColorThemeTable[ColorTheme.config] = ColorThemeTable[theme]
