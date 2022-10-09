@@ -137,6 +137,10 @@ proc getKeyOnceAndWriteCommandView*(
       status.suggestCommandLine(exStatus, key)
       if status.settings.popUpWindowInExmode and isEnterKey(key):
         status.commandLine.window.moveCursor(exStatus.cursorY, exStatus.cursorX)
+        status.deletePopUpWindow
+        status.update
+
+        continue
 
     if isEnterKey(key):
       exitSearch = true
