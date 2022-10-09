@@ -14,19 +14,19 @@ proc normalizePath*(path: seq[Rune]): seq[Rune] =
   else:
     return path
 
-proc openFile*(filename: seq[Rune]): tuple[text: seq[Rune],
-                                           encoding: CharacterEncoding] =
+proc openFile*(filename: seq[Rune]):
+  tuple[text: seq[Rune], encoding: CharacterEncoding] =
 
-  let
-    raw = readFile($filename)
-    encoding = detectCharacterEncoding(raw)
-    text =  if encoding == CharacterEncoding.unknown or
-               encoding == CharacterEncoding.utf8:
-      # 符号化形式が不明な場合は諦めてUTF-8としてUTF-32に変換する
-      raw.toRunes
-    else:
-      convert(raw, "UTF-8", $encoding).toRunes
-  return (text, encoding)
+    let
+      raw = readFile($filename)
+      encoding = detectCharacterEncoding(raw)
+      text =  if encoding == CharacterEncoding.unknown or
+                 encoding == CharacterEncoding.utf8:
+        # If the character encoding is unknown, convert to UTF-8.
+        raw.toRunes
+      else:
+        convert(raw, "UTF-8", $encoding).toRunes
+    return (text, encoding)
 
 proc newFile*(): GapBuffer[seq[Rune]] {.inline.} =
   result = initGapBuffer[seq[Rune]]()
