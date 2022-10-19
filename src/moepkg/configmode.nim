@@ -1528,7 +1528,7 @@ proc editEnumAndBoolSettings(status: var EditorStatus,
     margin = 1
   let
     h = min(currentMainWindowNode.h, settingValues.len)
-    w = min(currentMainWindowNode.w, maxLen(settingValues))
+    w = min(currentMainWindowNode.w, maxLen(settingValues) + (margin * 2))
     (absoluteY, absoluteX) = currentMainWindowNode.absolutePosition(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
