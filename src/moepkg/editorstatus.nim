@@ -730,7 +730,6 @@ proc deletePopUpWindow*(status: var Editorstatus) =
     status.update
 
 proc addNewBuffer*(status: var EditorStatus, filename: string, mode: Mode) =
-
   let path = if isFilerMode(mode): ru absolutePath(filename) else: ru filename
 
   status.bufStatus.add(initBufferStatus(path, mode))
@@ -1337,11 +1336,11 @@ proc eventLoopTask(status: var Editorstatus) =
          isInsertMode(mode) or
          isVisualMode(mode) or
          isReplaceMode(mode):
-        bufStatus.backupBuffer(bufStatus.characterEncoding,
-                               status.settings.autoBackupSettings,
-                               status.settings.notificationSettings,
-                               status.commandLine,
-                               status.messageLog)
+        bufStatus.backupBuffer(
+          status.settings.autoBackupSettings,
+          status.settings.notificationSettings,
+          status.commandLine,
+          status.messageLog)
 
         status.autoBackupStatus.lastBackupTime = now()
 

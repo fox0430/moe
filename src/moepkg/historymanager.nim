@@ -1,102 +1,70 @@
 # History manager for automatic backup.
 
-import std/[re, os, times, terminal, osproc]
+import std/[os, times, terminal, osproc, json, strformat]
 import editorstatus, bufferstatus, unicodeext, ui, movement, gapbuffer,
        highlight, color, settings, messages, backup, fileutils, editorview,
        window, commandviewutils
 
-proc generateFilenamePatern(path: seq[Rune]): seq[Rune] =
-  let splitPath = splitPath($path)
-  result = splitPath.tail.toRunes
-  let dotPosi = result.rfind(ru".")
-  if dotPosi > 0:
-    result = result[0 ..< dotPosi] &
-             ru"_[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+[0-9]{2}:[0-9]{2}" &
-             result[dotPosi .. ^1]
-  else:
-    result &= ru"_[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+[0-9]{2}:[0-9]{2}"
+proc initHistoryManagerBuffer(
+  bufStatus: var BufferStatus,
+  baseBackupDir, sourceFilePath: seq[Rune]) =
 
-proc getBackupFiles(path: seq[Rune],
-                    settings: AutoBackupSettings): seq[seq[Rune]] =
+    let list = getBackupFiles(baseBackupDir, sourceFilePath)
+    if list.len > 0:
+      bufStatus.buffer = initGapBuffer[seq[Rune]]()
 
-  let
-    splitPath = splitPath($path)
-    patern = generateFilenamePatern(splitPath.tail.toRunes)
-    backupPath = if settings.backupDir.len > 0: $settings.backupDir
-                 else: splitPath.head / ".history"
-  for kind, path in walkDir(backupPath):
-    if kind == PathComponent.pcFile:
-      let splitPath = path.splitPath
-      if splitPath.tail.match(re($patern)):
-        let splitPath = splitPath(path)
-        result.add(splitPath.tail.toRunes)
+      for name in list:
+        bufStatus.buffer.add(name)
 
-proc generateBackUpFilePath(originalFilePath, backupFileName: seq[Rune],
-                            settings: AutoBackupSettings): seq[Rune] =
+proc initHistoryManagerHighlight(
+  bufStatus: BufferStatus,
+  currentLine: int): Highlight =
 
-  if backupFileName.len == 0: return
+    for i in 0 ..< bufStatus.buffer.len:
+      let
+        line = bufStatus.buffer[i]
+        color = if i == currentLine: EditorColorPair.currentHistory
+                else: EditorColorPair.defaultChar
 
-  let slashPosition = originalFilePath.rfind(ru"/")
-
-  if settings.backupDir.len > 0:
-    if not dirExists($settings.backupDir): return ru""
-    if slashPosition > 0:
-      result = backupFileName[0 ..< slashPosition] /
-               settings.backupDir /
-               backupFileName[slashPosition + 1 ..< ^1]
-    else:
-      result = settings.backupDir / backupFileName
-  else:
-    if slashPosition > 0:
-      let pathSplit = splitPath($originalFilePath)
-      result = pathSplit.head.ru /
-               ru".history" /
-               backupFileName
-    else:
-      result = ru".history" / backupFileName
-
-proc initHistoryManagerBuffer(status: var Editorstatus, sourcePath: seq[Rune]) =
-  let list = getBackupFiles(sourcePath, status.settings.autoBackupSettings)
-
-  if list.len == 0: return
-
-  currentBufStatus.buffer = initGapBuffer[seq[Rune]]()
-
-  for name in list:
-    currentBufStatus.buffer.add(name)
-
-proc initHistoryManagerHighlight(bufStatus: BufferStatus,
-                                 currentLine: int): Highlight =
-
-  for i in 0 ..< bufStatus.buffer.len:
-    let
-      line = bufStatus.buffer[i]
-      color = if i == currentLine: EditorColorPair.currentHistory
-              else: EditorColorPair.defaultChar
-
-    result.colorSegments.add(ColorSegment(
-      firstRow: i,
-      firstColumn: 0,
-      lastRow: i,
-      lastColumn: line.high,
-      color: color))
+      result.colorSegments.add(ColorSegment(
+        firstRow: i,
+        firstColumn: 0,
+        lastRow: i,
+        lastColumn: line.high,
+        color: color))
 
 proc isHistoryManagerMode(status: var Editorstatus): bool =
   let index = status.bufferIndexInCurrentWindow
   status.bufStatus[index].mode == Mode.history
 
-proc openDiffViewer(status: var Editorstatus, path: seq[Rune]) =
-  if currentBufStatus.buffer.len == 0 or
-     currentBufStatus.buffer[currentMainWindowNode.currentLine].len == 0: return
+template baseBackupDir(status: EditorStatus): seq[Rune] =
+  status.settings.autoBackupSettings.backupDir
 
-  # Setup backup file path and excute diff command
+template currentLineBuffer(status: EditorStatus): seq[Rune] =
+  currentBufStatus.buffer[currentMainWindowNode.currentLine]
+
+# Create an new window and open the diff viewer.
+# `sourceFilePath` and `backupFilePath` is need to absolute path.
+# Use diff command.
+proc openDiffViewer(status: var Editorstatus, sourceFilePath: string) =
+  if currentBufStatus.buffer.len == 0 or status.currentLineBuffer.len == 0:
+    return
+
   let
-    backupFilename = currentBufStatus.buffer[currentMainWindowNode.currentLine]
-    settings = status.settings.autoBackupSettings
-    backupPath = generateBackUpFilePath(path, backupFilename, settings)
-    cmdOut = execCmdEx("diff -u " & $path & " " & $backupPath)
+    backupDir = backupDir($status.baseBackupDir, sourceFilePath)
+    backupFilePath = backupDir / $status.currentLineBuffer
+
+  if not validateBackupFileName(backupFilePath.splitPath.tail):
+    return
+
+  let cmdResult = execCmdEx(fmt"diff -u {sourceFilePath} {backupFilePath}")
+  # The diff command return 2 on failure.
+  if cmdResult.exitCode == 2:
+    # TODO: Write the error message to the command window.
+    return
+
   var buffer: seq[seq[Rune]] = @[ru""]
-  for r in ru(cmdOut.output):
+  for r in ru(cmdResult.output):
     if r == '\n': buffer.add(ru"")
     else: buffer[^1].add(r)
 
@@ -108,103 +76,133 @@ proc openDiffViewer(status: var Editorstatus, path: seq[Rune]) =
   status.addNewBuffer(Mode.diff)
   status.changeCurrentBuffer(status.bufStatus.high)
 
-  currentBufStatus.path = backupPath
+  currentBufStatus.path = backupFilePath.toRunes
   currentBufStatus.buffer = initGapBuffer(buffer)
 
-proc getBackupDir(sourcePath: seq[Rune],
-                  settings: AutoBackupSettings): seq[Rune] =
+# Restore the current buffer from backupFile.
+# the filename is the curent line.
+proc restoreBackupFile(
+  status: var EditorStatus,
+  sourceFilePath: seq[Rune],
+  isForceRestore: bool) =
 
-  if settings.backupDir.len > 0:
-    result = settings.backupDir
-  else:
-    let slashPosition = sourcePath.rfind(ru"/")
-    if slashPosition > 0:
-      result = sourcePath[0 ..< slashPosition] / ru".history"
-    else:
-      result = getCurrentDir().ru / ru".history"
+    if not fileExists($sourceFilePath): return
 
-proc restoreBackupFile(status: var EditorStatus, sourcePath: seq[Rune]) =
-  let
-    backupFilename = currentBufStatus.buffer[currentMainWindowNode.currentLine]
-    backupDir = getBackupDir(sourcePath, status.settings.autoBackupSettings)
-    backupFilePath = backupDir / backupFilename
+    let
+      backupFilename = currentBufStatus.buffer[currentMainWindowNode.currentLine]
+      baseBackupDir = status.settings.autoBackupSettings.backupDir
+      backupDir = getBackupDir(baseBackupDir, sourceFilePath)
+      restoreFilePath = $backupDir / $backupFilename
 
-  let isRestore = status.commandLine.askBackupRestorePrompt(
-    status.messageLog,
-    backupFilename)
-  if not isRestore: return
+    if not fileExists(restoreFilePath): return
 
-  # Backup files before restore
-  currentBufStatus.backupBuffer(currentBufStatus.characterEncoding,
-                                status.settings.autoBackupSettings,
-                                status.settings.notificationSettings,
-                                status.commandLine,
-                                status.messageLog)
+    if not isForceRestore:
+      let isRestore = status.commandLine.askBackupRestorePrompt(
+        status.messageLog,
+        backupFilename)
+      if not isRestore: return
 
-  try:
-    copyFile($backupFilePath, $sourcePath)
-  except OSError:
+    # Backup the current buffer before restore
+    for bufStatus in status.bufStatus:
+      if bufStatus.absolutePath == sourceFilePath:
+        bufStatus.backupBuffer(
+          status.settings.autoBackupSettings,
+          status.settings.notificationSettings,
+          status.commandLine,
+          status.messageLog)
+
+    try:
+      copyFile(restoreFilePath, $sourceFilePath)
+    except OSError:
+      status.commandLine.writeBackupRestoreError
+      return
+
+    # Update restored buffer
+    for i in 0 ..< status.bufStatus.len:
+      if status.bufStatus[i].absolutePath == sourceFilePath:
+        let beforeBufStatus = status.bufStatus[i]
+
+        status.bufStatus[i] = initBufferStatus(sourceFilePath)
+
+        try:
+          let textAndEncoding = openFile(sourceFilePath)
+          status.bufStatus[i].buffer = textAndEncoding.text.toGapBuffer
+          status.bufStatus[i].characterEncoding = textAndEncoding.encoding
+        except OSError:
+          status.bufStatus[i] = beforeBufStatus
+          status.commandLine.writeBackupRestoreError
+
+        status.bufStatus[i].language = detectLanguage($sourceFilePath)
+
+        currentMainWindowNode.view =
+          status.bufStatus[i].buffer.initEditorView(1, 1)
+
+        status.resize(terminalHeight(), terminalWidth())
+
+        let settings = status.settings.notificationSettings
+        status.commandLine.writeRestoreFileSuccessMessage(
+          backupFilename,
+          settings,
+          status.messageLog)
+
+        return
+
     status.commandLine.writeBackupRestoreError
-    return
 
-  # Update restored buffer
-  for i in 0 ..< status.bufStatus.len:
-    if status.bufStatus[i].path == sourcePath:
-      let lang = status.bufStatus[i].language
-      status.bufStatus[i] = BufferStatus(path: sourcePath,
-                                         mode: Mode.normal,
-                                         language: lang,
-                                         lastSaveTime: now())
-      let textAndEncoding = openFile(sourcePath)
-      status.bufStatus[i].buffer = textAndEncoding.text.toGapBuffer
-      status.bufStatus[i].characterEncoding = textAndEncoding.encoding
+template restoreBackupFile(
+  status: var EditorStatus,
+  sourceFilePath: seq[Rune]) =
 
-      currentMainWindowNode.view =
-        status.bufStatus[i].buffer.initEditorView(terminalHeight(),
-                                                  terminalWidth())
+    const IS_FORCE_RESTORE = false
+    status.restoreBackupFile(sourceFilePath, IS_FORCE_RESTORE)
 
-  status.resize(terminalHeight(), terminalWidth())
+# Remove the backup file.
+# the filename is the curent line.
+proc removeBackupFile(
+  status: var EditorStatus,
+  sourceFilePath: seq[Rune],
+  isForceRemove: bool) =
 
-  let settings = status.settings.notificationSettings
-  status.commandLine.writeRestoreFileSuccessMessage(backupFilename,
-                                                    settings,
-                                                    status.messageLog)
+    let
+      backupFilename = currentBufStatus.buffer[currentMainWindowNode.currentLine]
+      baseBackupDir = status.settings.autoBackupSettings.backupDir
+      backupDir = backupDir($baseBackupDir, $sourceFilePath)
+      backupFilePath = backupDir / $backupFilename
 
-proc deleteBackupFiles(status: var EditorStatus, sourcePath: seq[Rune]) =
-  let
-    backupFilename = currentBufStatus.buffer[currentMainWindowNode.currentLine]
-    backupDir = getBackupDir(sourcePath, status.settings.autoBackupSettings)
-    backupFilePath = backupDir / backupFilename
+    if not fileExists(backupFilePath): return
 
-  let isDelete = status.commandLine.askDeleteBackupPrompt(
-    status.messageLog,
-    backupFilename)
+    if not isForceRemove:
+      let isRemove = status.commandLine.askDeleteBackupPrompt(
+        status.messageLog,
+        backupFilename)
+      if not isRemove: return
 
-  if not isDelete: return
+    try:
+      removeFile(backupFilePath)
+    except OSError:
+      status.commandLine.writeDeleteBackupError
+      return
 
-  try:
-    removeFile($backupFilePath)
-  except OSError:
-    status.commandLine.writeDeleteBackupError
-    return
+    let settings = status.settings.notificationSettings
+    status.commandLine.writeMessageDeletedFile(
+      $backupFilename,
+      settings,
+      status.messageLog)
 
-  let settings = status.settings.notificationSettings
-  status.commandLine.writeMessageDeletedFile($backupFilename,
-                                             settings,
-                                             status.messageLog)
+template removeBackupFile(status: var EditorStatus, sourceFilePath: seq[Rune]) =
+  const IS_FORCE_REMOVE = false
+  status.removeBackupFile(sourceFilePath, IS_FORCE_REMOVE)
 
 proc historyManager*(status: var EditorStatus) =
   status.resize(terminalHeight(), terminalWidth())
 
-  # BufferStatus.path is the path of the backup source file
-  if currentBufStatus.path.len == 0:
-    currentBufStatus.path = status.bufStatus[status.prevBufferIndex].path
+  let sourceFilePath = status.bufStatus[status.prevBufferIndex].absolutePath
 
-  status.initHistoryManagerBuffer(currentBufStatus.path)
+  currentBufStatus.initHistoryManagerBuffer(
+    status.baseBackupDir,
+    sourceFilePath)
 
   while status.isHistoryManagerMode:
-    let sourcePath = currentBufStatus.path
-
     block:
       let
         currentLine = currentMainWindowNode.currentLine
@@ -234,15 +232,19 @@ proc historyManager*(status: var EditorStatus) =
     elif key == ord('j') or isDownKey(key):
       currentBufStatus.keyDown(currentMainWindowNode)
     elif isEnterKey(key):
-      status.openDiffViewer(sourcePath)
+      status.openDiffViewer($sourceFilePath)
     elif key == ord('R'):
-      status.restoreBackupFile(sourcePath)
+      status.restoreBackupFile(sourceFilePath)
     elif key == ord('D'):
-      status.deleteBackupFiles(sourcePath)
-      status.initHistoryManagerBuffer(sourcePath)
+      status.removeBackupFile(sourceFilePath)
+      currentBufStatus.initHistoryManagerBuffer(
+        status.baseBackupDir,
+        sourceFilePath)
     elif key == ord('r'):
       # Reload backup files
-      status.initHistoryManagerBuffer(sourcePath)
+      currentBufStatus.initHistoryManagerBuffer(
+        status.baseBackupDir,
+        sourceFilePath)
     elif key == ord('g'):
       let secondKey = getKey(currentMainWindowNode)
       if  secondKey == ord('g'):

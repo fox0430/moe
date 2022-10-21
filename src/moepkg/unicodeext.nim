@@ -1,4 +1,4 @@
-import std/[unicode, sequtils, strutils, strformat, os]
+import std/[unicode, sequtils, strutils, strformat, os, times, oids]
 import pkg/unicodedb/widths
 import gapbuffer
 
@@ -245,6 +245,10 @@ proc toRunes*(buffer: GapBuffer[seq[Rune]]): seq[Rune] =
     if i+1 < buffer.len: result.add(ru'\n')
 
 proc toRunes*(num: int): seq[Rune] {.inline.} = toRunes($num)
+
+proc toRunes*(dateTime: DateTime): seq[Rune] {.inline.} = toRunes($dateTime)
+
+proc toRunes*(oid: Oid): seq[Rune] {.inline.} = toRunes($oid)
 
 proc startsWith*(runes1, runes2: seq[Rune]): bool =
   result = true

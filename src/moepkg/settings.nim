@@ -275,6 +275,7 @@ proc initAutoBackupSettings(): AutoBackupSettings =
   result.enable = true
   result.interval = 5 # 5 minutes
   result.idleTime = 10 # 10 seconds
+  result.backupDir = (getCacheDir() / "/moe/backups").toRunes
   result.dirToExclude = @[ru"/etc"]
 
 proc initFilerSettings(): FilerSettings {.inline.} =
