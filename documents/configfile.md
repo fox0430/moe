@@ -320,7 +320,7 @@ currentWord
 ### AutoBackup table
 
 Enable/Disable automatic backups (bool)  
-default is ture  
+default is false
 ```
 enable
 ```

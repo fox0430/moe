@@ -272,7 +272,6 @@ proc initQuickRunSettings(): QuickRunSettings =
   result.timeout = 30
 
 proc initAutoBackupSettings(): AutoBackupSettings =
-  result.enable = true
   result.interval = 5 # 5 minutes
   result.idleTime = 10 # 10 seconds
   result.dirToExclude = @[ru"/etc"]
