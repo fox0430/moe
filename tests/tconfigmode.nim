@@ -123,7 +123,7 @@ suite "Config mode: Init buffer":
     let buffer = status.settings.autoBackupSettings.initAutoBackupTableBuffer
 
     const sample = @[ru "AutoBackup",
-                     ru "  enable                         true",
+                     ru "  enable                         false",
                      ru "  idleTime                       10",
                      ru "  interval                       5",
                      ru "  backupDir                      ",

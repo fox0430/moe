@@ -116,7 +116,7 @@ currentWord = true
 
 [AutoBackup]
 
-enable = true
+enable = false
 
 # 10 second
 idleTime = 10
