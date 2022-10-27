@@ -118,13 +118,13 @@ currentWord = true
 
 enable = true
 
+backupDir = "/home/user/.cache/moe/backups"
+
 # 10 second
 idleTime = 10
 
 # 5 minute
 interval = 5
-
-# backupDir = "/home/fox/Nim"
 
 dirToExclude = ["/etc"]
 
