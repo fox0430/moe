@@ -4,16 +4,10 @@
 
 Automatic backups are enabled by default.
 
-moe is not yet stable. Automatic backups are recommended to keep it enabled
-A .history directory is created in the same directory as the source files and backups are regularly created in it.
+Automatic backups are recommended to keep it enabled
+Backup to `~/.cache/moe/backups` by default.
 
-if open ```~/Nim/test.nim```, a backup will be created in ```~/Nim/.history``` directory.
-
-Backup file name is Original file name + '_' + time + Original file extension.  
-
-For example, if open  ```test.nim```, a backup file name is ```test_2020-07-31T23:17:00+09:00.nim```
-
-Of course, you can set an interval to execute backups.
+You can set an interval to execute backups.
 
 ## QuickRun
 
