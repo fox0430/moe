@@ -1,4 +1,4 @@
-import std/[unittest, macros, strformat]
+import std/[unittest, macros, strformat, os]
 import moepkg/[editorstatus, gapbuffer, bufferstatus, unicodeext]
 
 include moepkg/configmode
@@ -126,7 +126,7 @@ suite "Config mode: Init buffer":
                      ru "  enable                         true",
                      ru "  idleTime                       10",
                      ru "  interval                       5",
-                     ru "  backupDir                      ",
+                     ru "  backupDir                      {getCacheDir()}/moe/backups".fmt,
                      ru "  dirToExclude                   /etc"]
 
     for index, line in buffer:

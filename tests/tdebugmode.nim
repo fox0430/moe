@@ -1,4 +1,4 @@
-import std/[unittest, strformat]
+import std/[unittest, strformat, os]
 import moepkg/[editorstatus, unicodeext, bufferstatus]
 
 include moepkg/debugmode
@@ -42,7 +42,7 @@ suite "Init debug mode buffer":
       ru"-- bufStatus --",
       ru"buffer Index: 0",
       ru"  path                    : ",
-      ru"  openDir                 : ",
+      ru fmt"  openDir                 : {getCurrentDir()}",
       ru"  currentMode             : normal",
       ru"  prevMode                : normal",
       ru"  language                : langNone",
@@ -54,7 +54,7 @@ suite "Init debug mode buffer":
       ru"",
       ru"buffer Index: 1",
       ru"  path                    : Debug mode",
-      ru"  openDir                 : ",
+      ru fmt"  openDir                 : {getCurrentDir()}",
       ru"  currentMode             : debug",
       ru"  prevMode                : normal",
       ru"  language                : langNone",
@@ -66,7 +66,6 @@ suite "Init debug mode buffer":
       ru""])
 
     for i in 0 ..< status.bufStatus[1].buffer.len:
-      if status.bufStatus[1].buffer[i] != correctBuf[i]: echo status.bufStatus[1].buffer[i]
       check status.bufStatus[1].buffer[i] == correctBuf[i]
 
   test "Init highlight":
