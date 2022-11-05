@@ -1,106 +1,206 @@
-import std/[os, times, re]
+import std/[os, times, oids, json]
 import settings, unicodeext, fileutils, bufferstatus, gapbuffer, messages,
        commandline
 
-type AutoBackupStatus* = object
-  lastBackupTime*: DateTime
+type
+  AutoBackupStatus* = object
+    lastBackupTime*: DateTime
 
 proc initAutoBackupStatus*(): AutoBackupStatus {.inline.} =
   result.lastBackupTime = now()
 
-proc generateFilename(filename: seq[Rune], time: DateTime): seq[Rune] =
-  let slashPosition = filename.rfind(ru"/")
-  if  slashPosition > 0:
-    result = filename[slashPosition + 1 .. ^1]
-  else:
-    result = filename
+template backupInfoJsonPath(backupDir: seq[Rune]): seq[Rune] =
+  backupDir / "backup.json".toRunes
 
-  let
-    dotPosi = result.rfind(ru".")
-    timeRunes = ($time).toRunes
-  if dotPosi > 0:
-    result = result[0 ..< dotPosi] & ru"_" & timeRunes & result[dotPosi .. ^1]
+# Return true if already exists or create dir successfully.
+proc createDir(dir: seq[Rune]): bool =
+  if dirExists($dir):
+    return true
   else:
-    result &= ru"_" & timeRunes
+    try: createDir($dir)
+    except: return false
 
-proc checkAndCreateBackupDir(path: seq[Rune],
-                             backupDirSetting: seq[Rune]): seq[Rune] =
+    return true
 
-  if backupDirSetting.len > 0: result = backupDirSetting
-  else:
-    let slashPosition = path.rfind(ru"/")
-    if  slashPosition > 0:
-      result = path[0 ..< slashPosition] / ru".history"
+# Return true if valid json.
+proc validateBackupInfoJson*(jsonNode: JsonNode): bool =
+  jsonNode.contains("path") and
+  jsonNode["path"].kind == JsonNodeKind.JString and
+  jsonNode["path"].getStr.len > 0
+
+# Return path of backupDir.
+# Return empty Runes if error or isn't exist.
+proc getBackupDir*(baseBackupDir, sourceFilePath: seq[Rune]): seq[Rune] =
+  if not dirExists($baseBackupDir):
+    return "".toRunes
+
+  for file in walkPattern($baseBackupDir / "*/backup.json" ):
+    let backupJson =
+      try: json.parseFile(file)
+      except: return "".toRunes
+
+    if validateBackupInfoJson(backupJson):
+      if backupJson["path"].getStr == $sourceFilePath:
+        return file.splitPath.head.toRunes
+
+# Valid filename is DateTime string.
+# Exmaple: "2022-10-26T08:28:50+09:00"
+proc validateBackupFileName*(filename: string): bool =
+  try:
+    filename.parse("yyyy-MM-dd\'T\'HH:mm:sszzz")
+  except:
+    return false
+
+  return true
+
+# Return the backup dir for `sourceFilePath`.
+# `sourceFilePath` is need to absolute path.
+proc backupDir*(baseBackupDir, sourceFilePath: string): string =
+  for jsonFilePath in walkPattern($baseBackupDir / "*/backup.json" ):
+    let backupJson =
+      try: json.parseFile(jsonFilePath)
+      except: return ""
+
+    if validateBackupInfoJson(backupJson):
+      if backupJson["path"].getStr == sourceFilePath:
+        return (jsonFilePath.splitPath).head
+
+template isPcFile*(f: tuple[kind: PathComponent, path: string]): bool =
+  f.kind == PathComponent.pcFile
+
+# `sourceFilePath` is need to absolute path.
+proc getBackupFiles*(baseBackupDir, sourceFilePath: seq[Rune]): seq[seq[Rune]] =
+  let backupDir = backupDir($baseBackupDir, $sourceFilePath)
+  if dirExists(backupDir):
+    for f in walkDir(backupDir):
+      let filename = f.path.splitPath.tail
+      if f.isPcFile and validateBackupFileName(filename):
+        result.add(filename.toRunes)
+
+# Return path of backupDir.
+# Create dirs for base dir and for the backup source.
+proc initBackupDir(baseBackupDir, sourceFilePath: seq[Rune]): seq[Rune]=
+  if createDir(baseBackupDir):
+    let backupDir = getbackupDir(baseBackupDir, sourceFilePath)
+    if backupDir.len > 0:
+      return backupDir
     else:
-      result = ru".history"
+      let
+        # `id` is the directory name for `sourceFilePath`.
+        id = genOid()
+        backupDir = baseBackupDir / id.toRunes
+      try:
+        createDir(backupDir)
+      except:
+        return "".toRunes
 
-  if not dirExists($result):
-    try: createDir($result)
-    except OSError: result = @[]
+      return backupDir
 
-proc diffWithBackup(path: seq[Rune], buffer: string): bool =
-  let
-    # filename including timestamp
-    patern = re".*_[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+[0-9]{2}:[0-9]{2}.*"
-    splitPath = splitPath($path)
-  var
-    filePath = ""
-    timeStamp: DateTime
+# Return the filename for the backup.
+template genFilename(): seq[Rune] = now().toRunes
 
-  # Get most recently backup file
-  for kind, path in walkDir($splitPath.head):
-    if kind == PathComponent.pcFile:
-      let splitPath = path.splitPath
-      if splitPath.tail.match(patern):
-        let
-          # Timestamp
-          patern = re"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+[0-9]{2}:[0-9]{2}"
-          timeStamps = splitPath.tail.findAll(patern)
-          mostRecent = parse(timeStamps[^1], "yyyy-MM-dd\'T\'HH:mm:sszzz")
+# Return true if the buffer changed after the previous backup.
+proc diff(baseBackupDir, sourceFilePath: seq[Rune], buffer: string): bool =
+  const FORMAT = "yyyy-MM-dd\'T\'HH:mm:sszzz"
+  var mostRecentFile = ""
 
-        if filePath.len == 0 or (mostRecent > timeStamp):
-          timeStamp = mostRecent
-          filePath = path
+  for f in getBackupFiles(baseBackupDir, sourceFilePath):
+    let filename = $f
+    if mostRecentFile.len == 0:
+      mostRecentFile = filename
+    else:
+      if filename.parse(FORMAT) > mostRecentFile.parse(FORMAT):
+        mostRecentFile = filename
 
-  if filePath.len > 0:
-    let mostRecentBackupBuffer = openFile(filePath.toRunes)
-    result = $mostRecentBackupBuffer.text == buffer[0 ..< ^1]
+  if fileExists(mostRecentFile):
+    try:
+      let mostRecentBuffer = openFile(mostRecentFile.toRunes)
+      return $mostRecentBuffer.text == buffer[0 ..< ^1]
+    except:
+      return false
 
-proc backupBuffer*(bufStatus: BufferStatus,
-                   encoding: CharacterEncoding,
-                   autoBackupSettings: AutoBackupSettings,
-                   notificationSettings: NotificationSettings,
-                   commandLine: var CommandLine,
-                   messageLog: var seq[seq[Rune]]) =
+# Return if successful.
+proc writeBackupFile(
+  path, buffer: seq[Rune],
+  encoding: CharacterEncoding): bool =
 
-  if bufStatus.path.len == 0: return
+    try:
+      saveFile(path, buffer, encoding)
+    except:
+      return false
 
-  let
-    sourceFilePath = absolutePath($bufStatus.path)
-    sourceFileDir = (sourceFilePath.splitPath).head
-    dirToExclude = autoBackupSettings.dirToExclude
-  if dirToExclude.contains(ru sourceFileDir): return
+    return true
 
-  let
-    backupFilename = bufStatus.path.generateFilename(now())
-    dir = bufStatus.path.checkAndCreateBackupDir(autoBackupSettings.backupDir)
-  if dir.len == 0:
-    commandLine.writeAutoBackupFailedMessage(
-      backupFilename,
-      notificationSettings,
-      messageLog)
-    return
+# Return true if successful.
+# Save json file for backup info in the same dir of backup files.
+proc writeBackupInfoJson(backupDir, sourceFilePath: seq[Rune]): bool =
+  # `path` is the absolute path of backup source file.
+  let jsonNode = %* { "path": $sourceFilePath }
 
-  let
-    path = dir / backupFilename
-    isSame = diffWithBackup(path, $bufStatus.buffer)
-  if not isSame:
-    commandLine.writeStartAutoBackupMessage(notificationSettings, messageLog)
+  try:
+    writeFile($backupInfoJsonPath(backupDir), $jsonNode)
+  except:
+    return false
 
-    saveFile(path, bufStatus.buffer.toRunes, encoding)
+  return true
 
-    let message = "Automatic backup successful: " & $path
-    commandLine.writeAutoBackupSuccessMessage(
-      message,
-      notificationSettings,
-      messageLog)
+# Backup buffer to {autoBackupStatus.backupDir}/{id}/.
+# Ignore if there is no change from the previous backup.
+proc backupBuffer*(
+  bufStatus: BufferStatus,
+  autoBackupSettings: AutoBackupSettings,
+  notificationSettings: NotificationSettings,
+  commandLine: var CommandLine,
+  messageLog: var seq[seq[Rune]]) =
+
+    if bufStatus.path.len == 0: return
+
+    let
+      sourceFilePath = absolutePath($bufStatus.path)
+      sourceFileDir = (sourceFilePath.splitPath).head
+      dirToExclude = autoBackupSettings.dirToExclude
+
+    if dirToExclude.contains(ru sourceFileDir): return
+
+    let
+      baseBackupDir = autoBackupSettings.backupDir
+      backupFilename = genFilename()
+
+    let backupDir = initBackupDir(baseBackupDir, sourceFilePath.toRunes)
+    if backupDir.len == 0:
+      commandLine.writeAutoBackupFailedMessage(
+        backupFilename,
+        notificationSettings,
+        messageLog)
+      return
+
+    let
+      isSame = diff(baseBackupDir, sourceFilePath.toRunes, $bufStatus.buffer)
+    if not isSame:
+      commandLine.writeStartAutoBackupMessage(notificationSettings, messageLog)
+
+      let
+        backupFilePath = backupDir / backupFilename
+        buffer = bufStatus.buffer.toRunes
+        encoding = bufStatus.characterEncoding
+
+      if not writeBackupFile(backupFilePath, buffer, encoding):
+        commandLine.writeAutoBackupFailedMessage(
+          backupFilename,
+          notificationSettings,
+          messageLog)
+        return
+
+      if not fileExists($backupInfoJsonPath(backupDir)):
+        if not writeBackupInfoJson(backupDir, sourceFilePath.toRunes):
+          commandLine.writeAutoBackupFailedMessage(
+            backupFilename,
+            notificationSettings,
+            messageLog)
+          return
+
+      let message = "Automatic backup successful: " & $backupFilePath
+      commandLine.writeAutoBackupSuccessMessage(
+        message,
+        notificationSettings,
+        messageLog)

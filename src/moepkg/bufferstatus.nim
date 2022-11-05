@@ -1,4 +1,4 @@
-import std/[tables, times, options]
+import std/[tables, times, options, os]
 import syntax/highlite
 import gapbuffer, unicodeext
 
@@ -43,7 +43,15 @@ type BufferStatus* = object
   isReadonly*: bool
 
 proc initBufferStatus*(path: seq[Rune], mode: Mode): BufferStatus {.inline.} =
-  BufferStatus(isUpdate: true, path: path, mode: mode, lastSaveTime: now())
+  BufferStatus(
+    isUpdate: true,
+    path: path,
+    openDir: getCurrentDir().toRunes,
+    mode: mode,
+    lastSaveTime: now())
+
+proc initBufferStatus*(path: seq[Rune]): BufferStatus {.inline.} =
+  initBufferStatus(path, Mode.normal)
 
 proc isVisualMode*(mode: Mode): bool {.inline.} =
   mode == Mode.visual or mode == Mode.visualBlock
@@ -84,3 +92,9 @@ proc checkBufferExist*(bufStatus: seq[BufferStatus], path: seq[Rune]): Option[in
   for index, buf in bufStatus:
     if buf.path == path:
       return some(index)
+
+template absolutePath*(bufStatus: BufferStatus): seq[Rune] =
+  if isAbsolute($bufStatus.path):
+    bufStatus.path
+  else:
+    bufStatus.openDir / bufStatus.path

@@ -32,12 +32,13 @@ proc newFile*(): GapBuffer[seq[Rune]] {.inline.} =
   result = initGapBuffer[seq[Rune]]()
   result.add(ru"", false)
 
-proc saveFile*(filename: seq[Rune],
-               runes: seq[Rune],
-               encoding: CharacterEncoding) =
+proc saveFile*(
+  path, runes: seq[Rune],
+  encoding: CharacterEncoding) =
 
-  let
-    encode = if encoding == CharacterEncoding.unknown: CharacterEncoding.utf8
-             else: encoding
-    buffer = convert($runes, $(encode),"UTF-8")
-  writeFile($filename, buffer)
+    let
+      encode =
+        if encoding == CharacterEncoding.unknown: CharacterEncoding.utf8
+        else: encoding
+      buffer = convert($runes, $encode, "UTF-8")
+    writeFile($path, buffer)

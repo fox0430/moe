@@ -338,10 +338,7 @@ interval
 ```
 
 Directory to save backup files (string)  
-
-If not set, it will be saved in .hisotry in the same directory as the original file.  
-
-default is "" (None)  
+default is "" (`~/.cache/moe/backups`)    
 ```
 backupDir
 ```
