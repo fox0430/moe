@@ -10,7 +10,7 @@ suite "Insert mode":
 
     currentMainWindowNode.highlight = initHighlight(
       $status.bufStatus[0].buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       status.bufStatus[0].language)
 
     status.resize(10, 10)

@@ -120,7 +120,7 @@ suite "Config mode: Init buffer":
 
   test "Init auto backup table buffer":
     var status = initEditorStatus()
-    let buffer = status.settings.autoBackupSettings.initAutoBackupTableBuffer
+    let buffer = status.settings.autoBackup.initAutoBackupTableBuffer
 
     const sample = @[ru "AutoBackup",
                      ru "  enable                         false",
@@ -134,7 +134,7 @@ suite "Config mode: Init buffer":
 
   test "Init QuickRun table buffer":
     var status = initEditorStatus()
-    let buffer = status.settings.quickRunSettings.initQuickRunTableBuffer
+    let buffer = status.settings.quickRun.initQuickRunTableBuffer
 
     const sample = @[ru "QuickRun",
                      ru "  saveBufferWhenQuickRun         true",
@@ -153,7 +153,7 @@ suite "Config mode: Init buffer":
   test "Init Notification table buffer":
     var status = initEditorStatus()
     let
-      notificationSettings = status.settings.notificationSettings
+      notificationSettings = status.settings.notification
       buffer = notificationSettings.initNotificationTableBuffer
 
     const sample = @[ru "Notification",
@@ -954,7 +954,7 @@ suite "Config mode: Get Highlight table setting values":
 
     const name = "fullWidthSpace"
     let
-      default = settings.highlightSettings.fullWidthSpace
+      default = settings.highlight.fullWidthSpace
       values = settings.getHighlightTableSettingValues(name)
 
     checkBoolSettingValue(default, values)
@@ -965,7 +965,7 @@ suite "Config mode: Get Highlight table setting values":
 
     const name = "trailingSpaces"
     let
-      default = settings.highlightSettings.trailingSpaces
+      default = settings.highlight.trailingSpaces
       values = settings.getHighlightTableSettingValues(name)
 
     checkBoolSettingValue(default, values)
@@ -976,7 +976,7 @@ suite "Config mode: Get Highlight table setting values":
 
     const name = "currentWord"
     let
-      default = settings.highlightSettings.currentWord
+      default = settings.highlight.currentWord
       values = settings.getHighlightTableSettingValues(name)
 
     checkBoolSettingValue(default, values)
@@ -987,7 +987,7 @@ suite "Config mode: Get Highlight table setting values":
 
     const name = "replaceText"
     let
-      default = settings.highlightSettings.replaceText
+      default = settings.highlight.replaceText
       values = settings.getHighlightTableSettingValues(name)
 
     checkBoolSettingValue(default, values)
@@ -998,7 +998,7 @@ suite "Config mode: Get Highlight table setting values":
 
     const name = "pairOfParen"
     let
-      default = settings.highlightSettings.pairOfParen
+      default = settings.highlight.pairOfParen
       values = settings.getHighlightTableSettingValues(name)
 
     checkBoolSettingValue(default, values)
@@ -1015,7 +1015,7 @@ suite "Config mode: Get Highlight table setting values":
 suite "Config mode: Get AutoBackup table setting values":
   test "Get enable values":
     var status = initEditorStatus()
-    let autoBackupSettings = status.settings.autoBackupSettings
+    let autoBackupSettings = status.settings.autoBackup
 
     const
       name = "enable"
@@ -1030,7 +1030,7 @@ suite "Config mode: Get AutoBackup table setting values":
 
   test "Get backupDir values":
     var status = initEditorStatus()
-    let autoBackupSettings = status.settings.autoBackupSettings
+    let autoBackupSettings = status.settings.autoBackup
 
     const
       name = "backupDir"
@@ -1045,7 +1045,7 @@ suite "Config mode: Get AutoBackup table setting values":
 
   test "Set invalid name":
     var status = initEditorStatus()
-    let autoBackupSettings = status.settings.autoBackupSettings
+    let autoBackupSettings = status.settings.autoBackup
 
     const
       name = "test"
@@ -1059,7 +1059,7 @@ suite "Config mode: Get AutoBackup table setting values":
 suite "Config mode: Get QuickRun table setting values":
   test "Get saveBufferWhenQuickRun values":
     var status = initEditorStatus()
-    let quickRunSettings = status.settings.quickRunSettings
+    let quickRunSettings = status.settings.quickRun
 
     const
       name = "saveBufferWhenQuickRun"
@@ -1072,7 +1072,7 @@ suite "Config mode: Get QuickRun table setting values":
 
   test "Get nimAdvancedCommandvalues":
     var status = initEditorStatus()
-    let quickRunSettings = status.settings.quickRunSettings
+    let quickRunSettings = status.settings.quickRun
 
     const
       name = "nimAdvancedCommand"
@@ -1085,7 +1085,7 @@ suite "Config mode: Get QuickRun table setting values":
 
   test "Get ClangOptions values":
     var status = initEditorStatus()
-    let quickRunSettings = status.settings.quickRunSettings
+    let quickRunSettings = status.settings.quickRun
 
     const
       name = "ClangOptions"
@@ -1098,7 +1098,7 @@ suite "Config mode: Get QuickRun table setting values":
 
   test "Get CppOptions values":
     var status = initEditorStatus()
-    let quickRunSettings = status.settings.quickRunSettings
+    let quickRunSettings = status.settings.quickRun
 
     const
       name = "CppOptions"
@@ -1111,7 +1111,7 @@ suite "Config mode: Get QuickRun table setting values":
 
   test "Get NimOptions values":
     var status = initEditorStatus()
-    let quickRunSettings = status.settings.quickRunSettings
+    let quickRunSettings = status.settings.quickRun
 
     const
       name = "NimOptions"
@@ -1124,7 +1124,7 @@ suite "Config mode: Get QuickRun table setting values":
 
   test "Get shOptions values":
     var status = initEditorStatus()
-    let quickRunSettings = status.settings.quickRunSettings
+    let quickRunSettings = status.settings.quickRun
 
     const
       name = "shOptions"
@@ -1137,7 +1137,7 @@ suite "Config mode: Get QuickRun table setting values":
 
   test "Get bashOptions values":
     var status = initEditorStatus()
-    let quickRunSettings = status.settings.quickRunSettings
+    let quickRunSettings = status.settings.quickRun
 
     const
       name = "bashOptions"
@@ -1150,7 +1150,7 @@ suite "Config mode: Get QuickRun table setting values":
 
   test "Set invalid name":
     var status = initEditorStatus()
-    let quickRunSettings = status.settings.quickRunSettings
+    let quickRunSettings = status.settings.quickRun
 
     const
       name = "test"
@@ -1162,7 +1162,7 @@ suite "Config mode: Get QuickRun table setting values":
 suite "Config mode: Get Notification table setting values":
   test "Get screenNotifications values":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "screenNotifications"
     let
@@ -1173,7 +1173,7 @@ suite "Config mode: Get Notification table setting values":
 
   test "Get logNotifications values":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "logNotifications"
     let
@@ -1184,7 +1184,7 @@ suite "Config mode: Get Notification table setting values":
 
   test "Get autoBackupScreenNotify values":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "autoBackupScreenNotify"
     let
@@ -1195,7 +1195,7 @@ suite "Config mode: Get Notification table setting values":
 
   test "Get autoBackupLogNotify values":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "autoBackupLogNotify"
     let
@@ -1206,7 +1206,7 @@ suite "Config mode: Get Notification table setting values":
 
   test "Get autoSaveScreenNotify values":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "autoSaveScreenNotify"
     let
@@ -1217,7 +1217,7 @@ suite "Config mode: Get Notification table setting values":
 
   test "Get autoSaveLogNotify values":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "autoSaveLogNotify"
     let
@@ -1228,7 +1228,7 @@ suite "Config mode: Get Notification table setting values":
 
   test "Get yankScreenNotify values":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "yankScreenNotify"
     let
@@ -1239,7 +1239,7 @@ suite "Config mode: Get Notification table setting values":
 
   test "Get yankLogNotify values":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "yankLogNotify"
     let
@@ -1250,7 +1250,7 @@ suite "Config mode: Get Notification table setting values":
 
   test "Get deleteScreenNotify values":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "deleteScreenNotify"
     let
@@ -1261,7 +1261,7 @@ suite "Config mode: Get Notification table setting values":
 
   test "Get deleteLogNotify values":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "deleteLogNotify"
     let
@@ -1272,7 +1272,7 @@ suite "Config mode: Get Notification table setting values":
 
   test "Get saveScreenNotify values":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "saveScreenNotify"
     let
@@ -1283,7 +1283,7 @@ suite "Config mode: Get Notification table setting values":
 
   test "Get saveLogNotify values":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "saveLogNotify"
     let
@@ -1294,7 +1294,7 @@ suite "Config mode: Get Notification table setting values":
 
   test "Get quickRunScreenNotify values":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "quickRunScreenNotify"
     let
@@ -1305,7 +1305,7 @@ suite "Config mode: Get Notification table setting values":
 
   test "Get quickRunLogNotify values":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "quickRunLogNotify"
     let
@@ -1316,7 +1316,7 @@ suite "Config mode: Get Notification table setting values":
 
   test "Get buildOnSaveScreenNotify values":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "buildOnSaveScreenNotify"
     let
@@ -1327,7 +1327,7 @@ suite "Config mode: Get Notification table setting values":
 
   test "Get values":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "buildOnSaveLogNotify"
     let
@@ -1338,7 +1338,7 @@ suite "Config mode: Get Notification table setting values":
 
   test "Get filerScreenNotify values":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "filerScreenNotify"
     let
@@ -1349,7 +1349,7 @@ suite "Config mode: Get Notification table setting values":
 
   test "Get filerLogNotify values":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "filerLogNotify"
     let
@@ -1360,7 +1360,7 @@ suite "Config mode: Get Notification table setting values":
 
   test "Get restoreScreenNotify values":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "restoreScreenNotify"
     let
@@ -1371,7 +1371,7 @@ suite "Config mode: Get Notification table setting values":
 
   test "Get restoreLogNotify values":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "restoreLogNotify"
     let
@@ -1382,7 +1382,7 @@ suite "Config mode: Get Notification table setting values":
 
   test "Set invalid name":
     var status = initEditorStatus()
-    let notificationSettings = status.settings.notificationSettings
+    let notificationSettings = status.settings.notification
 
     const name = "test"
     let values = notificationSettings.getNotificationTableSettingValues(name)
@@ -1392,7 +1392,7 @@ suite "Config mode: Get Notification table setting values":
 suite "Config mode: Get Filer table setting values":
   test "Get showIcons values":
     var status = initEditorStatus()
-    let filerSettings = status.settings.filerSettings
+    let filerSettings = status.settings.filer
 
     const name = "showIcons"
     let
@@ -1403,7 +1403,7 @@ suite "Config mode: Get Filer table setting values":
 
   test "Set invalid name":
     var status = initEditorStatus()
-    let filerSettings = status.settings.filerSettings
+    let filerSettings = status.settings.filer
 
     const name = "test"
     let values = filerSettings.getFilerTableSettingValues(name)
@@ -1413,7 +1413,7 @@ suite "Config mode: Get Filer table setting values":
 suite "Config mode: Get Autocomplete table setting values":
   test "Get enable values":
     var status = initEditorStatus()
-    let autocompleteSettings = status.settings.autocompleteSettings
+    let autocompleteSettings = status.settings.autocomplete
 
     const name = "enable"
     let
@@ -1424,7 +1424,7 @@ suite "Config mode: Get Autocomplete table setting values":
 
   test "Set invalid name":
     var status = initEditorStatus()
-    let autocompleteSettings = status.settings.autocompleteSettings
+    let autocompleteSettings = status.settings.autocomplete
 
     const name = "test"
     let values = autocompleteSettings.getAutocompleteTableSettingValues(name)
@@ -1938,42 +1938,42 @@ suite "Config mode: Chaging Highlight table settings":
   test "Chaging fullWidthSpace":
     var settings = initEditorSettings()
 
-    let val = not settings.highlightSettings.fullWidthSpace
+    let val = not settings.highlight.fullWidthSpace
     settings.changeHighlightTableSetting("fullWidthSpace", $val)
 
-    check val == settings.highlightSettings.fullWidthSpace
+    check val == settings.highlight.fullWidthSpace
 
   test "Chaging trailingSpaces":
     var settings = initEditorSettings()
 
-    let val = not settings.highlightSettings.trailingSpaces
+    let val = not settings.highlight.trailingSpaces
     settings.changeHighlightTableSetting("trailingSpaces", $val)
 
-    check val == settings.highlightSettings.trailingSpaces
+    check val == settings.highlight.trailingSpaces
 
   test "Chaging replaceText":
     var settings = initEditorSettings()
 
-    let val = not settings.highlightSettings.replaceText
+    let val = not settings.highlight.replaceText
     settings.changeHighlightTableSetting("replaceText", $val)
 
-    check val == settings.highlightSettings.replaceText
+    check val == settings.highlight.replaceText
 
   test "Chaging pairOfParen":
     var settings = initEditorSettings()
 
-    let val = not settings.highlightSettings.pairOfParen
+    let val = not settings.highlight.pairOfParen
     settings.changeHighlightTableSetting("pairOfParen", $val)
 
-    check val == settings.highlightSettings.pairOfParen
+    check val == settings.highlight.pairOfParen
 
   test "Chaging currentWord":
     var settings = initEditorSettings()
 
-    let val = not settings.highlightSettings.currentWord
+    let val = not settings.highlight.currentWord
     settings.changeHighlightTableSetting("currentWord", $val)
 
-    check val == settings.highlightSettings.currentWord
+    check val == settings.highlight.currentWord
 
   test "Set invalid value":
     var settings = initEditorSettings()
@@ -1987,7 +1987,7 @@ suite "Config mode: Chaging AutoBackup table settings":
   test "Chaging enable":
     var
       settings = initEditorSettings()
-      autoBackupSettings = settings.autoBackupSettings
+      autoBackupSettings = settings.autoBackup
 
     let val = not autoBackupSettings.enable
     autoBackupSettings.changeBackupTableSetting("enable", $val)
@@ -1997,7 +1997,7 @@ suite "Config mode: Chaging AutoBackup table settings":
   test "Set invalid value":
     var
       settings = initEditorSettings()
-      autoBackupSettings = settings.autoBackupSettings
+      autoBackupSettings = settings.autoBackup
 
     let beforeSettings = autoBackupSettings
     autoBackupSettings.changeBackupTableSetting("test", "test")
@@ -2008,7 +2008,7 @@ suite "Config mode: Chaging QuickRun table settings":
   test "Chaging saveBufferWhenQuickRun":
     var
       settings = initEditorSettings()
-      quickRunSettings = settings.quickRunSettings
+      quickRunSettings = settings.quickRun
 
     let val = not quickRunSettings.saveBufferWhenQuickRun
     quickRunSettings.changeQuickRunTableSetting("saveBufferWhenQuickRun", $val)
@@ -2018,7 +2018,7 @@ suite "Config mode: Chaging QuickRun table settings":
   test "Set invalid value":
     var
       settings = initEditorSettings()
-      quickRunSettings = settings.quickRunSettings
+      quickRunSettings = settings.quickRun
 
     let beforeSettings = quickRunSettings
     quickRunSettings.changeQuickRunTableSetting("test", "test")
@@ -2029,7 +2029,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Chaging screenNotifications":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let val = not notificationSettings.screenNotifications
     notificationSettings.changeNotificationTableSetting("screenNotifications", $val)
@@ -2039,7 +2039,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Chaging logNotifications":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let val = not notificationSettings.logNotifications
     notificationSettings.changeNotificationTableSetting("logNotifications", $val)
@@ -2049,7 +2049,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Chaging autoBackupScreenNotify":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let val = not notificationSettings.autoBackupScreenNotify
     notificationSettings.changeNotificationTableSetting("autoBackupScreenNotify", $val)
@@ -2059,7 +2059,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Chaging autoBackupLogNotify":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let val = not notificationSettings.autoBackupLogNotify
     notificationSettings.changeNotificationTableSetting("autoBackupLogNotify", $val)
@@ -2069,7 +2069,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Chaging autoSaveScreenNotify":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let val = not notificationSettings.autoSaveScreenNotify
     notificationSettings.changeNotificationTableSetting("autoSaveScreenNotify", $val)
@@ -2079,7 +2079,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Chaging autoSaveLogNotify":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let val = not notificationSettings.autoSaveLogNotify
     notificationSettings.changeNotificationTableSetting("autoSaveLogNotify", $val)
@@ -2089,7 +2089,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Chaging yankScreenNotify":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let val = not notificationSettings.yankScreenNotify
     notificationSettings.changeNotificationTableSetting("yankScreenNotify", $val)
@@ -2099,7 +2099,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Chaging yankLogNotify":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let val = not notificationSettings.yankLogNotify
     notificationSettings.changeNotificationTableSetting("yankLogNotify", $val)
@@ -2109,7 +2109,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Chaging deleteScreenNotify":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let val = not notificationSettings.deleteScreenNotify
     notificationSettings.changeNotificationTableSetting("deleteScreenNotify", $val)
@@ -2119,7 +2119,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Chaging deleteLogNotify":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let val = not notificationSettings.deleteLogNotify
     notificationSettings.changeNotificationTableSetting("deleteLogNotify", $val)
@@ -2129,7 +2129,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Chaging saveScreenNotify":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let val = not notificationSettings.saveScreenNotify
     notificationSettings.changeNotificationTableSetting("saveScreenNotify", $val)
@@ -2139,7 +2139,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Chaging saveLogNotify":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let val = not notificationSettings.saveLogNotify
     notificationSettings.changeNotificationTableSetting("saveLogNotify", $val)
@@ -2149,7 +2149,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Chaging quickRunScreenNotify":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let val = not notificationSettings.quickRunScreenNotify
     notificationSettings.changeNotificationTableSetting("quickRunScreenNotify", $val)
@@ -2159,7 +2159,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Chaging quickRunLogNotify":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let val = not notificationSettings.quickRunLogNotify
     notificationSettings.changeNotificationTableSetting("quickRunLogNotify", $val)
@@ -2169,7 +2169,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Chaging buildOnSaveScreenNotify":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let val = not notificationSettings.buildOnSaveScreenNotify
     notificationSettings.changeNotificationTableSetting("buildOnSaveScreenNotify", $val)
@@ -2179,7 +2179,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Chaging buildOnSaveLogNotify":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let val = not notificationSettings.buildOnSaveLogNotify
     notificationSettings.changeNotificationTableSetting("buildOnSaveLogNotify", $val)
@@ -2189,7 +2189,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Chaging filerScreenNotify":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let val = not notificationSettings.filerScreenNotify
     notificationSettings.changeNotificationTableSetting("filerScreenNotify", $val)
@@ -2199,7 +2199,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Chaging filerLogNotify":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let val = not notificationSettings.filerLogNotify
     notificationSettings.changeNotificationTableSetting("filerLogNotify", $val)
@@ -2209,7 +2209,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Chaging restoreScreenNotify":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let val = not notificationSettings.restoreScreenNotify
     notificationSettings.changeNotificationTableSetting("restoreScreenNotify", $val)
@@ -2219,7 +2219,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Chaging restoreLogNotify":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let val = not notificationSettings.restoreLogNotify
     notificationSettings.changeNotificationTableSetting("restoreLogNotify", $val)
@@ -2229,7 +2229,7 @@ suite "Config mode: Chaging Notification table settings":
   test "Set invalid value":
     var
       settings = initEditorSettings()
-      notificationSettings = settings.notificationSettings
+      notificationSettings = settings.notification
 
     let beforeSettings = notificationSettings
     notificationSettings.changeNotificationTableSetting("test", "test")
@@ -2240,7 +2240,7 @@ suite "Config mode: Chaging Filer table settings":
   test "Chaging showIcons":
     var
       settings = initEditorSettings()
-      filerSettings = settings.filerSettings
+      filerSettings = settings.filer
 
     let val = not filerSettings.showIcons
     filerSettings.changeFilerTableSetting("showIcons", $val)
@@ -2250,7 +2250,7 @@ suite "Config mode: Chaging Filer table settings":
   test "Set invalid value":
     var
       settings = initEditorSettings()
-      filerSettings = settings.filerSettings
+      filerSettings = settings.filer
 
     let beforeSettings = filerSettings
     filerSettings.changeFilerTableSetting("test", "test")
@@ -2261,7 +2261,7 @@ suite "Config mode: Chaging Autocomplete table settings":
   test "Chaging enable":
     var
       settings = initEditorSettings()
-      autocompleteSettings = settings.autocompleteSettings
+      autocompleteSettings = settings.autocomplete
 
     let val = not autocompleteSettings.enable
     autocompleteSettings.changeAutoCompleteTableSetting("enable", $val)
@@ -2271,7 +2271,7 @@ suite "Config mode: Chaging Autocomplete table settings":
   test "Set invalid value":
     var
       settings = initEditorSettings()
-      autocompleteSettings = settings.autocompleteSettings
+      autocompleteSettings = settings.autocomplete
 
     let beforeSettings = autocompleteSettings
     autocompleteSettings.changeAutoCompleteTableSetting("test", "test")

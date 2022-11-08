@@ -5,204 +5,205 @@ import ui, color, unicodeext, highlight, platform, independentutils
 
 export TomlError
 
-type VsCodeFlavor = enum
-  # CodeOss is an Official Arch Linux open-source release.
-  # https://archlinux.org/packages/?name=code
-  CodeOss
-  VSCodium
-  VSCode
+type
+  VsCodeFlavor = enum
+    # CodeOss is an Official Arch Linux open-source release.
+    # https://archlinux.org/packages/?name=code
+    CodeOss
+    VSCodium
+    VSCode
 
-type DebugWindowNodeSettings* = object
-  enable*: bool
-  currentWindow*: bool
-  index*: bool
-  windowIndex*: bool
-  bufferIndex*: bool
-  parentIndex*: bool
-  childLen*: bool
-  splitType*: bool
-  haveCursesWin*: bool
-  y*: bool
-  x*: bool
-  h*: bool
-  w*: bool
-  currentLine*: bool
-  currentColumn*: bool
-  expandedColumn*: bool
-  cursor*: bool
+  DebugWindowNodeSettings* = object
+    enable*: bool
+    currentWindow*: bool
+    index*: bool
+    windowIndex*: bool
+    bufferIndex*: bool
+    parentIndex*: bool
+    childLen*: bool
+    splitType*: bool
+    haveCursesWin*: bool
+    y*: bool
+    x*: bool
+    h*: bool
+    w*: bool
+    currentLine*: bool
+    currentColumn*: bool
+    expandedColumn*: bool
+    cursor*: bool
 
-type DebugBufferStatusSettings* = object
-  enable*: bool
-  bufferIndex*: bool
-  path*: bool
-  openDir*: bool
-  currentMode*: bool
-  prevMode*: bool
-  language*: bool
-  encoding*: bool
-  countChange*: bool
-  cmdLoop*: bool
-  lastSaveTime*: bool
-  bufferLen*: bool
+  DebugBufferStatusSettings* = object
+    enable*: bool
+    bufferIndex*: bool
+    path*: bool
+    openDir*: bool
+    currentMode*: bool
+    prevMode*: bool
+    language*: bool
+    encoding*: bool
+    countChange*: bool
+    cmdLoop*: bool
+    lastSaveTime*: bool
+    bufferLen*: bool
 
-type DebugEditorViewSettings* = object
-  enable*: bool
-  widthOfLineNum*: bool
-  height*: bool
-  width*: bool
-  originalLine*: bool
-  start*: bool
-  length*: bool
+  DebugEditorViewSettings* = object
+    enable*: bool
+    widthOfLineNum*: bool
+    height*: bool
+    width*: bool
+    originalLine*: bool
+    start*: bool
+    length*: bool
 
-type DebugModeSettings* = object
-  windowNode*: DebugWindowNodeSettings
-  editorview*: DebugEditorViewSettings
-  bufStatus*: DebugBufferStatusSettings
+  DebugModeSettings* = object
+    windowNode*: DebugWindowNodeSettings
+    editorview*: DebugEditorViewSettings
+    bufStatus*: DebugBufferStatusSettings
 
-type NotificationSettings* = object
-  screenNotifications*: bool
-  logNotifications*: bool
-  autoBackupScreenNotify*: bool
-  autoBackupLogNotify*: bool
-  autoSaveScreenNotify*: bool
-  autoSaveLogNotify*: bool
-  yankScreenNotify*: bool
-  yankLogNotify*: bool
-  deleteScreenNotify*: bool
-  deleteLogNotify*: bool
-  saveScreenNotify*: bool
-  saveLogNotify*: bool
-  quickRunScreenNotify*: bool
-  quickRunLogNotify*: bool
-  buildOnSaveScreenNotify*: bool
-  buildOnSaveLogNotify*: bool
-  filerScreenNotify*: bool
-  filerLogNotify*: bool
-  restoreScreenNotify*: bool
-  restoreLogNotify*: bool
+  NotificationSettings* = object
+    screenNotifications*: bool
+    logNotifications*: bool
+    autoBackupScreenNotify*: bool
+    autoBackupLogNotify*: bool
+    autoSaveScreenNotify*: bool
+    autoSaveLogNotify*: bool
+    yankScreenNotify*: bool
+    yankLogNotify*: bool
+    deleteScreenNotify*: bool
+    deleteLogNotify*: bool
+    saveScreenNotify*: bool
+    saveLogNotify*: bool
+    quickRunScreenNotify*: bool
+    quickRunLogNotify*: bool
+    buildOnSaveScreenNotify*: bool
+    buildOnSaveLogNotify*: bool
+    filerScreenNotify*: bool
+    filerLogNotify*: bool
+    restoreScreenNotify*: bool
+    restoreLogNotify*: bool
 
-type BuildOnSaveSettings* = object
-  enable*: bool
-  workspaceRoot*: seq[Rune]
-  command*: seq[Rune]
+  BuildOnSaveSettings* = object
+    enable*: bool
+    workspaceRoot*: seq[Rune]
+    command*: seq[Rune]
 
-type QuickRunSettings* = object
-  saveBufferWhenQuickRun*: bool
-  command*: string
-  timeout*: int # seconds
-  nimAdvancedCommand*: string
-  ClangOptions*: string
-  CppOptions*: string
-  NimOptions*: string
-  shOptions*: string
-  bashOptions*: string
+  QuickRunSettings* = object
+    saveBufferWhenQuickRun*: bool
+    command*: string
+    timeout*: int # seconds
+    nimAdvancedCommand*: string
+    ClangOptions*: string
+    CppOptions*: string
+    NimOptions*: string
+    shOptions*: string
+    bashOptions*: string
 
-type AutoBackupSettings* = object
-  enable*: bool
-  idleTime*: int # seconds
-  interval*: int # minutes
-  backupDir*: seq[Rune]
-  dirToExclude*: seq[seq[Rune]]
+  AutoBackupSettings* = object
+    enable*: bool
+    idleTime*: int # seconds
+    interval*: int # minutes
+    backupDir*: seq[Rune]
+    dirToExclude*: seq[seq[Rune]]
 
-type FilerSettings* = object
-  showIcons*: bool
+  FilerSettings* = object
+    showIcons*: bool
 
-type StatusLineSettings* = object
-  enable*: bool
-  merge*: bool
-  mode*: bool
-  filename*: bool
-  chanedMark*: bool
-  line*: bool
-  column*: bool
-  characterEncoding*: bool
-  language*: bool
-  directory*: bool
-  multipleStatusLine*: bool
-  gitbranchName*: bool
-  showGitInactive*: bool
-  showModeInactive*: bool
+  StatusLineSettings* = object
+    enable*: bool
+    merge*: bool
+    mode*: bool
+    filename*: bool
+    chanedMark*: bool
+    line*: bool
+    column*: bool
+    characterEncoding*: bool
+    language*: bool
+    directory*: bool
+    multipleStatusLine*: bool
+    gitbranchName*: bool
+    showGitInactive*: bool
+    showModeInactive*: bool
 
-type TabLineSettings* = object
-  enable*: bool
-  allbuffer*: bool
+  TabLineSettings* = object
+    enable*: bool
+    allbuffer*: bool
 
-type EditorViewSettings* = object
-  highlightCurrentLine*: bool
-  lineNumber*: bool
-  currentLineNumber*: bool
-  cursorLine*: bool
-  indentationLines*: bool
-  tabStop*: int
+  EditorViewSettings* = object
+    highlightCurrentLine*: bool
+    lineNumber*: bool
+    currentLineNumber*: bool
+    cursorLine*: bool
+    indentationLines*: bool
+    tabStop*: int
 
-type AutocompleteSettings* = object
-  enable*: bool
+  AutocompleteSettings* = object
+    enable*: bool
 
-type HighlightSettings* = object
-  replaceText*: bool
-  pairOfParen*: bool
-  currentWord*: bool
-  fullWidthSpace*: bool
-  trailingSpaces*: bool
-  reservedWords*: seq[ReservedWord]
+  HighlightSettings* = object
+    replaceText*: bool
+    pairOfParen*: bool
+    currentWord*: bool
+    fullWidthSpace*: bool
+    trailingSpaces*: bool
+    reservedWords*: seq[ReservedWord]
 
-type PersistSettings* = object
-  exCommand*: bool
-  search*: bool
-  cursorPosition*: bool
+  PersistSettings* = object
+    exCommand*: bool
+    search*: bool
+    cursorPosition*: bool
 
-type ClipboardToolOnLinux* = enum
-  none
-  xsel
-  xclip
-  wlClipboard
+  ClipboardToolOnLinux* = enum
+    none
+    xsel
+    xclip
+    wlClipboard
 
-type ClipboardSettings* = object
-  enable*: bool
-  toolOnLinux*: ClipboardToolOnLinux
+  ClipboardSettings* = object
+    enable*: bool
+    toolOnLinux*: ClipboardToolOnLinux
 
-type EditorSettings* = object
-  editorColorTheme*: ColorTheme
-  statusLine*: StatusLineSettings
-  tabLine*: TabLineSettings
-  view*: EditorViewSettings
-  syntax*: bool
-  autoCloseParen*: bool
-  autoIndent*: bool
-  tabStop*: int
-  ignorecase*: bool
-  smartcase*: bool
-  disableChangeCursor*: bool
-  defaultCursor*: CursorType
-  normalModeCursor*: CursorType
-  insertModeCursor*: CursorType
-  autoSave*: bool
-  autoSaveInterval*: int # minutes
-  liveReloadOfConf*: bool
-  incrementalSearch*: bool
-  popUpWindowInExmode*: bool
-  autoDeleteParen*: bool
-  smoothScroll*: bool
-  smoothScrollSpeed*: int
-  liveReloadOfFile*: bool
-  clipboard*: ClipboardSettings
-  buildOnSave*: BuildOnSaveSettings
-  filerSettings*: FilerSettings
-  autocompleteSettings*: AutocompleteSettings
-  autoBackupSettings*: AutoBackupSettings
-  quickRunSettings*: QuickRunSettings
-  notificationSettings*: NotificationSettings
-  debugModeSettings*: DebugModeSettings
-  highlightSettings*: HighlightSettings
-  persist*: PersistSettings
+  EditorSettings* = object
+    editorColorTheme*: ColorTheme
+    statusLine*: StatusLineSettings
+    tabLine*: TabLineSettings
+    view*: EditorViewSettings
+    syntax*: bool
+    autoCloseParen*: bool
+    autoIndent*: bool
+    tabStop*: int
+    ignorecase*: bool
+    smartcase*: bool
+    disableChangeCursor*: bool
+    defaultCursor*: CursorType
+    normalModeCursor*: CursorType
+    insertModeCursor*: CursorType
+    autoSave*: bool
+    autoSaveInterval*: int # minutes
+    liveReloadOfConf*: bool
+    incrementalSearch*: bool
+    popUpWindowInExmode*: bool
+    autoDeleteParen*: bool
+    smoothScroll*: bool
+    smoothScrollSpeed*: int
+    liveReloadOfFile*: bool
+    clipboard*: ClipboardSettings
+    buildOnSave*: BuildOnSaveSettings
+    filer*: FilerSettings
+    autocomplete*: AutocompleteSettings
+    autoBackup*: AutoBackupSettings
+    quickRun*: QuickRunSettings
+    notification*: NotificationSettings
+    debugMode*: DebugModeSettings
+    highlight*: HighlightSettings
+    persist*: PersistSettings
 
-type InvalidItem = object
-  name: string
-  val: string
+  InvalidItem = object
+    name: string
+    val: string
 
-# Warning: inherit from a more precise exception type like ValueError, IOError or OSError.
-# If these don't suit, inherit from CatchableError or Defect. [InheritFromException]
-type InvalidItemError* = object of ValueError
+  # Warning: inherit from a more precise exception type like ValueError, IOError or OSError.
+  # If these don't suit, inherit from CatchableError or Defect. [InheritFromException]
+  InvalidItemError* = object of ValueError
 
 proc initDebugModeSettings(): DebugModeSettings =
   result.windowNode = DebugWindowNodeSettings(
@@ -378,13 +379,13 @@ proc initEditorSettings*(): EditorSettings =
   result.smoothScrollSpeed = 15
   result.clipboard = initClipboardSettings()
   result.buildOnSave = BuildOnSaveSettings()
-  result.filerSettings = initFilerSettings()
-  result.autocompleteSettings = initAutocompleteSettings()
-  result.autoBackupSettings = initAutoBackupSettings()
-  result.quickRunSettings = initQuickRunSettings()
-  result.notificationSettings = initNotificationSettings()
-  result.debugModeSettings = initDebugModeSettings()
-  result.highlightSettings = initHighlightSettings()
+  result.filer= initFilerSettings()
+  result.autocomplete= initAutocompleteSettings()
+  result.autoBackup= initAutoBackupSettings()
+  result.quickRun= initQuickRunSettings()
+  result.notification= initNotificationSettings()
+  result.debugMode= initDebugModeSettings()
+  result.highlight= initHighlightSettings()
   result.persist = initPersistSettings()
 
 proc getTheme(theme: string): ColorTheme =
@@ -1136,143 +1137,143 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
         let
           word = reservedWords[i].getStr
           reservedWord = ReservedWord(word: word, color: EditorColorPair.reservedWord)
-        result.highlightSettings.reservedWords.add(reservedWord)
+        result.highlight.reservedWords.add(reservedWord)
 
     if settings["Highlight"].contains("currentLine"):
       result.view.highlightCurrentLine = settings["Highlight"]["currentLine"].getbool()
 
     if settings["Highlight"].contains("currentWord"):
-      result.highlightSettings.currentWord = settings["Highlight"]["currentWord"].getbool()
+      result.highlight.currentWord = settings["Highlight"]["currentWord"].getbool()
 
     if settings["Highlight"].contains("replaceText"):
-      result.highlightSettings.replaceText = settings["Highlight"]["replaceText"].getbool()
+      result.highlight.replaceText = settings["Highlight"]["replaceText"].getbool()
 
     if settings["Highlight"].contains("pairOfParen"):
-      result.highlightSettings.pairOfParen =  settings["Highlight"]["pairOfParen"].getbool()
+      result.highlight.pairOfParen =  settings["Highlight"]["pairOfParen"].getbool()
 
     if settings["Highlight"].contains("fullWidthSpace"):
-      result.highlightSettings.fullWidthSpace = settings["Highlight"]["fullWidthSpace"].getbool()
+      result.highlight.fullWidthSpace = settings["Highlight"]["fullWidthSpace"].getbool()
 
     if settings["Highlight"].contains("trailingSpaces"):
-      result.highlightSettings.trailingSpaces = settings["Highlight"]["trailingSpaces"].getbool()
+      result.highlight.trailingSpaces = settings["Highlight"]["trailingSpaces"].getbool()
 
   if settings.contains("AutoBackup"):
     if settings["AutoBackup"].contains("enable"):
-      result.autoBackupSettings.enable = settings["AutoBackup"]["enable"].getbool()
+      result.autoBackup.enable = settings["AutoBackup"]["enable"].getbool()
 
     if settings["AutoBackup"].contains("idleTime"):
-      result.autoBackupSettings.idleTime = settings["AutoBackup"]["idleTime"].getInt()
+      result.autoBackup.idleTime = settings["AutoBackup"]["idleTime"].getInt()
 
     if settings["AutoBackup"].contains("interval"):
-      result.autoBackupSettings.interval = settings["AutoBackup"]["interval"].getInt()
+      result.autoBackup.interval = settings["AutoBackup"]["interval"].getInt()
 
     if settings["AutoBackup"].contains("backupDir"):
       let dir = settings["AutoBackup"]["backupDir"].getStr()
-      result.autoBackupSettings.backupDir = dir.toRunes
+      result.autoBackup.backupDir = dir.toRunes
 
     if settings["AutoBackup"].contains("dirToExclude"):
-      result.autoBackupSettings.dirToExclude = @[]
+      result.autoBackup.dirToExclude = @[]
       let dirs = settings["AutoBackup"]["dirToExclude"]
       for i in 0 ..< dirs.len:
-        result.autoBackupSettings.dirToExclude.add(ru dirs[i].getStr)
+        result.autoBackup.dirToExclude.add(ru dirs[i].getStr)
 
   if settings.contains("QuickRun"):
     if settings["QuickRun"].contains("saveBufferWhenQuickRun"):
       let saveBufferWhenQuickRun = settings["QuickRun"]["saveBufferWhenQuickRun"].getBool()
-      result.quickRunSettings.saveBufferWhenQuickRun = saveBufferWhenQuickRun
+      result.quickRun.saveBufferWhenQuickRun = saveBufferWhenQuickRun
 
     if settings["QuickRun"].contains("command"):
-      result.quickRunSettings.command = settings["QuickRun"]["command"].getStr()
+      result.quickRun.command = settings["QuickRun"]["command"].getStr()
 
     if settings["QuickRun"].contains("timeout"):
-      result.quickRunSettings.timeout = settings["QuickRun"]["timeout"].getInt()
+      result.quickRun.timeout = settings["QuickRun"]["timeout"].getInt()
 
     if settings["QuickRun"].contains("nimAdvancedCommand"):
-      result.quickRunSettings.nimAdvancedCommand = settings["QuickRun"]["nimAdvancedCommand"].getStr()
+      result.quickRun.nimAdvancedCommand = settings["QuickRun"]["nimAdvancedCommand"].getStr()
 
     if settings["QuickRun"].contains("ClangOptions"):
-      result.quickRunSettings.ClangOptions = settings["QuickRun"]["ClangOptions"].getStr()
+      result.quickRun.ClangOptions = settings["QuickRun"]["ClangOptions"].getStr()
 
     if settings["QuickRun"].contains("CppOptions"):
-      result.quickRunSettings.CppOptions = settings["QuickRun"]["CppOptions"].getStr()
+      result.quickRun.CppOptions = settings["QuickRun"]["CppOptions"].getStr()
 
     if settings["QuickRun"].contains("NimOptions"):
-      result.quickRunSettings.NimOptions = settings["QuickRun"]["NimOptions"].getStr()
+      result.quickRun.NimOptions = settings["QuickRun"]["NimOptions"].getStr()
 
     if settings["QuickRun"].contains("shOptions"):
-      result.quickRunSettings.shOptions = settings["QuickRun"]["shOptions"].getStr()
+      result.quickRun.shOptions = settings["QuickRun"]["shOptions"].getStr()
 
     if settings["QuickRun"].contains("bashOptions"):
-      result.quickRunSettings.bashOptions = settings["QuickRun"]["bashOptions"].getStr()
+      result.quickRun.bashOptions = settings["QuickRun"]["bashOptions"].getStr()
 
   if settings.contains("Notification"):
     if settings["Notification"].contains("screenNotifications"):
-      result.notificationSettings.screenNotifications = settings["Notification"]["screenNotifications"].getBool
+      result.notification.screenNotifications = settings["Notification"]["screenNotifications"].getBool
 
     if settings["Notification"].contains("logNotifications"):
-      result.notificationSettings.logNotifications = settings["Notification"]["logNotifications"].getBool
+      result.notification.logNotifications = settings["Notification"]["logNotifications"].getBool
 
     if settings["Notification"].contains("autoBackupScreenNotify"):
-      result.notificationSettings.autoBackupScreenNotify = settings["Notification"]["autoBackupScreenNotify"].getBool
+      result.notification.autoBackupScreenNotify = settings["Notification"]["autoBackupScreenNotify"].getBool
 
     if settings["Notification"].contains("autoBackupLogNotify"):
-      result.notificationSettings.autoBackupLogNotify = settings["Notification"]["autoBackupLogNotify"].getBool
+      result.notification.autoBackupLogNotify = settings["Notification"]["autoBackupLogNotify"].getBool
 
     if settings["Notification"].contains("autoSaveScreenNotify"):
-      result.notificationSettings.autoSaveScreenNotify = settings["Notification"]["autoSaveScreenNotify"].getBool
+      result.notification.autoSaveScreenNotify = settings["Notification"]["autoSaveScreenNotify"].getBool
 
     if settings["Notification"].contains("autoSaveLogNotify"):
-      result.notificationSettings.autoSaveLogNotify = settings["Notification"]["autoSaveLogNotify"].getBool
+      result.notification.autoSaveLogNotify = settings["Notification"]["autoSaveLogNotify"].getBool
 
     if settings["Notification"].contains("yankScreenNotify"):
-      result.notificationSettings.yankScreenNotify = settings["Notification"]["yankScreenNotify"].getBool
+      result.notification.yankScreenNotify = settings["Notification"]["yankScreenNotify"].getBool
 
     if settings["Notification"].contains("yankLogNotify"):
-      result.notificationSettings.yankLogNotify = settings["Notification"]["yankLogNotify"].getBool
+      result.notification.yankLogNotify = settings["Notification"]["yankLogNotify"].getBool
 
     if settings["Notification"].contains("deleteScreenNotify"):
-      result.notificationSettings.deleteScreenNotify = settings["Notification"]["deleteScreenNotify"].getBool
+      result.notification.deleteScreenNotify = settings["Notification"]["deleteScreenNotify"].getBool
 
     if settings["Notification"].contains("deleteLogNotify"):
-      result.notificationSettings.deleteLogNotify = settings["Notification"]["deleteLogNotify"].getBool
+      result.notification.deleteLogNotify = settings["Notification"]["deleteLogNotify"].getBool
 
     if settings["Notification"].contains("saveScreenNotify"):
-      result.notificationSettings.saveScreenNotify = settings["Notification"]["saveScreenNotify"].getBool
+      result.notification.saveScreenNotify = settings["Notification"]["saveScreenNotify"].getBool
 
     if settings["Notification"].contains("saveLogNotify"):
-      result.notificationSettings.saveLogNotify = settings["Notification"]["saveLogNotify"].getBool
+      result.notification.saveLogNotify = settings["Notification"]["saveLogNotify"].getBool
 
     if settings["Notification"].contains("quickRunScreenNotify"):
-      result.notificationSettings.quickRunScreenNotify = settings["Notification"]["quickRunScreenNotify"].getBool
+      result.notification.quickRunScreenNotify = settings["Notification"]["quickRunScreenNotify"].getBool
 
     if settings["Notification"].contains("quickRunLogNotify"):
-      result.notificationSettings.quickRunLogNotify = settings["Notification"]["quickRunLogNotify"].getBool
+      result.notification.quickRunLogNotify = settings["Notification"]["quickRunLogNotify"].getBool
 
     if settings["Notification"].contains("buildOnSaveScreenNotify"):
-      result.notificationSettings.buildOnSaveScreenNotify = settings["Notification"]["buildOnSaveScreenNotify"].getBool
+      result.notification.buildOnSaveScreenNotify = settings["Notification"]["buildOnSaveScreenNotify"].getBool
 
     if settings["Notification"].contains("buildOnSaveLogNotify"):
-      result.notificationSettings.buildOnSaveLogNotify = settings["Notification"]["buildOnSaveLogNotify"].getBool
+      result.notification.buildOnSaveLogNotify = settings["Notification"]["buildOnSaveLogNotify"].getBool
 
     if settings["Notification"].contains("filerScreenNotify"):
-      result.notificationSettings.filerScreenNotify = settings["Notification"]["filerScreenNotify"].getBool
+      result.notification.filerScreenNotify = settings["Notification"]["filerScreenNotify"].getBool
 
     if settings["Notification"].contains("filerLogNotify"):
-      result.notificationSettings.filerLogNotify = settings["Notification"]["filerLogNotify"].getBool
+      result.notification.filerLogNotify = settings["Notification"]["filerLogNotify"].getBool
 
     if settings["Notification"].contains("restoreScreenNotify"):
-      result.notificationSettings.restoreScreenNotify = settings["Notification"]["restoreScreenNotify"].getBool
+      result.notification.restoreScreenNotify = settings["Notification"]["restoreScreenNotify"].getBool
 
     if settings["Notification"].contains("restoreLogNotify"):
-      result.notificationSettings.restoreLogNotify = settings["Notification"]["restoreLogNotify"].getBool
+      result.notification.restoreLogNotify = settings["Notification"]["restoreLogNotify"].getBool
 
   if settings.contains("Filer"):
     if settings["Filer"].contains("showIcons"):
-      result.filerSettings.showIcons = settings["Filer"]["showIcons"].getbool()
+      result.filer.showIcons = settings["Filer"]["showIcons"].getbool()
 
   if (const table = "Autocomplete"; settings.contains(table)):
     if (const key = "enable"; settings[table].contains(key)):
-      result.autocompleteSettings.enable = settings[table][key].getbool
+      result.autocomplete.enable = settings[table][key].getbool
 
   if settings.contains("Persist"):
     if settings["Persist"].contains("exCommand"):
@@ -1290,157 +1291,157 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
       if windowNodeSettings.contains("enable"):
         let setting = windowNodeSettings["enable"].getbool
-        result.debugModeSettings.windowNode.enable = setting
+        result.debugMode.windowNode.enable = setting
 
       if windowNodeSettings.contains("currentWindow"):
         let setting = windowNodeSettings["currentWindow"].getbool
-        result.debugModeSettings.windowNode.currentWindow = setting
+        result.debugMode.windowNode.currentWindow = setting
 
       if windowNodeSettings.contains("index"):
         let setting = windowNodeSettings["index"].getbool
-        result.debugModeSettings.windowNode.index = setting
+        result.debugMode.windowNode.index = setting
 
       if windowNodeSettings.contains("windowIndex"):
         let setting = windowNodeSettings["windowIndex"].getbool
-        result.debugModeSettings.windowNode.windowIndex = setting
+        result.debugMode.windowNode.windowIndex = setting
 
       if windowNodeSettings.contains("bufferIndex"):
         let setting = windowNodeSettings["bufferIndex"].getbool
-        result.debugModeSettings.windowNode.bufferIndex = setting
+        result.debugMode.windowNode.bufferIndex = setting
 
       if windowNodeSettings.contains("parentIndex"):
         let setting = windowNodeSettings["parentIndex"].getbool
-        result.debugModeSettings.windowNode.parentIndex = setting
+        result.debugMode.windowNode.parentIndex = setting
 
       if windowNodeSettings.contains("childLen"):
         let setting = windowNodeSettings["childLen"].getbool
-        result.debugModeSettings.windowNode.childLen = setting
+        result.debugMode.windowNode.childLen = setting
 
       if windowNodeSettings.contains("splitType"):
         let setting = windowNodeSettings["splitType"].getbool
-        result.debugModeSettings.windowNode.splitType = setting
+        result.debugMode.windowNode.splitType = setting
 
       if windowNodeSettings.contains("haveCursesWin"):
         let setting = windowNodeSettings["haveCursesWin"].getbool
-        result.debugModeSettings.windowNode.haveCursesWin = setting
+        result.debugMode.windowNode.haveCursesWin = setting
 
       if windowNodeSettings.contains("haveCursesWin"):
         let setting = windowNodeSettings["haveCursesWin"].getbool
-        result.debugModeSettings.windowNode.haveCursesWin = setting
+        result.debugMode.windowNode.haveCursesWin = setting
 
       if windowNodeSettings.contains("y"):
         let setting = windowNodeSettings["y"].getbool
-        result.debugModeSettings.windowNode.y = setting
+        result.debugMode.windowNode.y = setting
 
       if windowNodeSettings.contains("x"):
         let setting = windowNodeSettings["x"].getbool
-        result.debugModeSettings.windowNode.x = setting
+        result.debugMode.windowNode.x = setting
 
       if windowNodeSettings.contains("h"):
         let setting = windowNodeSettings["h"].getbool
-        result.debugModeSettings.windowNode.h = setting
+        result.debugMode.windowNode.h = setting
 
       if windowNodeSettings.contains("w"):
         let setting = windowNodeSettings["w"].getbool
-        result.debugModeSettings.windowNode.w = setting
+        result.debugMode.windowNode.w = setting
 
       if windowNodeSettings.contains("currentLine"):
         let setting = windowNodeSettings["currentLine"].getbool
-        result.debugModeSettings.windowNode.currentLine = setting
+        result.debugMode.windowNode.currentLine = setting
 
       if windowNodeSettings.contains("currentColumn"):
         let setting = windowNodeSettings["currentColumn"].getbool
-        result.debugModeSettings.windowNode.currentColumn = setting
+        result.debugMode.windowNode.currentColumn = setting
 
       if windowNodeSettings.contains("expandedColumn"):
         let setting = windowNodeSettings["expandedColumn"].getbool
-        result.debugModeSettings.windowNode.expandedColumn = setting
+        result.debugMode.windowNode.expandedColumn = setting
 
       if windowNodeSettings.contains("cursor"):
         let setting = windowNodeSettings["cursor"].getbool
-        result.debugModeSettings.windowNode.cursor = setting
+        result.debugMode.windowNode.cursor = setting
 
     if settings["Debug"].contains("EditorView"):
       let editorViewSettings = settings["Debug"]["EditorView"]
 
       if editorViewSettings.contains("enable"):
         let setting = editorViewSettings["enable"].getbool
-        result.debugModeSettings.editorview.enable = setting
+        result.debugMode.editorview.enable = setting
 
       if editorViewSettings.contains("widthOfLineNum"):
         let setting = editorViewSettings["widthOfLineNum"].getbool
-        result.debugModeSettings.editorview.widthOfLineNum = setting
+        result.debugMode.editorview.widthOfLineNum = setting
 
       if editorViewSettings.contains("height"):
         let setting = editorViewSettings["height"].getbool
-        result.debugModeSettings.editorview.height = setting
+        result.debugMode.editorview.height = setting
 
       if editorViewSettings.contains("width"):
         let setting = editorViewSettings["width"].getbool
-        result.debugModeSettings.editorview.width = setting
+        result.debugMode.editorview.width = setting
 
       if editorViewSettings.contains("originalLine"):
         let setting = editorViewSettings["originalLine"].getbool
-        result.debugModeSettings.editorview.originalLine = setting
+        result.debugMode.editorview.originalLine = setting
 
       if editorViewSettings.contains("start"):
         let setting = editorViewSettings["start"].getbool
-        result.debugModeSettings.editorview.start = setting
+        result.debugMode.editorview.start = setting
 
       if editorViewSettings.contains("length"):
         let setting = editorViewSettings["length"].getbool
-        result.debugModeSettings.editorview.length = setting
+        result.debugMode.editorview.length = setting
 
     if settings["Debug"].contains("BufferStatus"):
       let bufStatusSettings = settings["Debug"]["BufferStatus"]
 
       if bufStatusSettings.contains("enable"):
         let setting = bufStatusSettings["enable"].getbool
-        result.debugModeSettings.bufStatus.enable = setting
+        result.debugMode.bufStatus.enable = setting
 
       if bufStatusSettings.contains("bufferIndex"):
         let setting = bufStatusSettings["bufferIndex"].getbool
-        result.debugModeSettings.bufStatus.bufferIndex = setting
+        result.debugMode.bufStatus.bufferIndex = setting
 
       if bufStatusSettings.contains("path"):
         let setting = bufStatusSettings["path"].getbool
-        result.debugModeSettings.bufStatus.path = setting
+        result.debugMode.bufStatus.path = setting
 
       if bufStatusSettings.contains("openDir"):
         let setting = bufStatusSettings["openDir"].getbool
-        result.debugModeSettings.bufStatus.openDir = setting
+        result.debugMode.bufStatus.openDir = setting
 
       if bufStatusSettings.contains("currentMode"):
         let setting = bufStatusSettings["currentMode"].getbool
-        result.debugModeSettings.bufStatus.currentMode = setting
+        result.debugMode.bufStatus.currentMode = setting
 
       if bufStatusSettings.contains("prevMode"):
         let setting = bufStatusSettings["prevMode"].getbool
-        result.debugModeSettings.bufStatus.prevMode = setting
+        result.debugMode.bufStatus.prevMode = setting
 
       if bufStatusSettings.contains("language"):
         let setting = bufStatusSettings["language"].getbool
-        result.debugModeSettings.bufStatus.language = setting
+        result.debugMode.bufStatus.language = setting
 
       if bufStatusSettings.contains("encoding"):
         let setting = bufStatusSettings["encoding"].getbool
-        result.debugModeSettings.bufStatus.encoding = setting
+        result.debugMode.bufStatus.encoding = setting
 
       if bufStatusSettings.contains("countChange"):
         let setting = bufStatusSettings["countChange"].getbool
-        result.debugModeSettings.bufStatus.countChange = setting
+        result.debugMode.bufStatus.countChange = setting
 
       if bufStatusSettings.contains("cmdLoop"):
         let setting = bufStatusSettings["cmdLoop"].getbool
-        result.debugModeSettings.bufStatus.cmdLoop = setting
+        result.debugMode.bufStatus.cmdLoop = setting
 
       if bufStatusSettings.contains("lastSaveTime"):
         let setting = bufStatusSettings["lastSaveTime"].getbool
-        result.debugModeSettings.bufStatus.lastSaveTime = setting
+        result.debugMode.bufStatus.lastSaveTime = setting
 
       if bufStatusSettings.contains("bufferLen"):
         let setting = bufStatusSettings["bufferLen"].getbool
-        result.debugModeSettings.bufStatus.bufferLen = setting
+        result.debugMode.bufStatus.bufferLen = setting
 
   if result.editorColorTheme == ColorTheme.config and
      settings.contains("Theme"):
@@ -2257,27 +2258,27 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Highlight]"
   result.addLine fmt "currentLine = {$settings.view.highlightCurrentLine}"
-  if settings.highlightSettings.reservedWords.len > 0:
+  if settings.highlight.reservedWords.len > 0:
     result.addLine "reservedWord = ["
-    for index, reservedWord in settings.highlightSettings.reservedWords:
+    for index, reservedWord in settings.highlight.reservedWords:
       if index > 0: result.add ", "
       result.add fmt "\"{reservedWord.word}\""
     result.add "]"
-  result.addLine fmt "replaceText = {$settings.highlightSettings.replaceText }"
-  result.addLine fmt "pairOfParen = {$settings.highlightSettings.pairOfParen }"
-  result.addLine fmt "fullWidthSpace = {$settings.highlightSettings.fullWidthSpace}"
-  result.addLine fmt "trailingSpaces = {$settings.highlightSettings.trailingSpaces }"
-  result.addLine fmt "currentWord = {$settings.highlightSettings.currentWord}"
+  result.addLine fmt "replaceText = {$settings.highlight.replaceText }"
+  result.addLine fmt "pairOfParen = {$settings.highlight.pairOfParen }"
+  result.addLine fmt "fullWidthSpace = {$settings.highlight.fullWidthSpace}"
+  result.addLine fmt "trailingSpaces = {$settings.highlight.trailingSpaces }"
+  result.addLine fmt "currentWord = {$settings.highlight.currentWord}"
 
   result.addLine ""
 
   result.addLine fmt "[AutoBackup]"
-  result.addLine fmt "enable = {$settings.autoBackupSettings.enable }"
-  result.addLine fmt "idleTime = {$settings.autoBackupSettings.idleTime }"
-  result.addLine fmt "interval = {$settings.autoBackupSettings.interval }"
-  if settings.autoBackupSettings.dirToExclude.len > 0:
+  result.addLine fmt "enable = {$settings.autoBackup.enable }"
+  result.addLine fmt "idleTime = {$settings.autoBackup.idleTime }"
+  result.addLine fmt "interval = {$settings.autoBackup.interval }"
+  if settings.autoBackup.dirToExclude.len > 0:
     result.addLine "dirToExclude = ["
-    for index, dir in settings.autoBackupSettings.dirToExclude:
+    for index, dir in settings.autoBackup.dirToExclude:
       if index > 0: result.add ", "
       result.add fmt "\"{$dir}\""
     result.add "]"
@@ -2285,56 +2286,56 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine ""
 
   result.addLine fmt "[QuickRun]"
-  result.addLine fmt "saveBufferWhenQuickRun = {$settings.quickRunSettings.saveBufferWhenQuickRun}"
-  if settings.quickRunSettings.command.len > 0:
-    result.addLine fmt "command = {$settings.quickRunSettings.command}"
-  result.addLine fmt "timeout = {$settings.quickRunSettings.timeout }"
-  if settings.quickRunSettings.nimAdvancedCommand .len > 0:
-    result.addLine fmt "nimAdvancedCommand = \"{$settings.quickRunSettings.nimAdvancedCommand}\""
-  if settings.quickRunSettings.ClangOptions.len > 0:
-    result.addLine fmt "ClangOptions = \"{$settings.quickRunSettings.ClangOptions}\""
-  if settings.quickRunSettings.CppOptions.len > 0:
-    result.addLine fmt "CppOptions = \"{$settings.quickRunSettings.CppOptions}\""
-  if settings.quickRunSettings.NimOptions.len > 0:
-    result.addLine fmt "NimOptions = \"{$settings.quickRunSettings.NimOptions}\""
-  if settings.quickRunSettings.shOptions.len > 0:
-    result.addLine fmt "shOptions = \"{$settings.quickRunSettings.shOptions}\""
-  if settings.quickRunSettings.bashOptions.len > 0:
-    result.addLine fmt "shOptions = \"{$settings.quickRunSettings.bashOptions}\""
+  result.addLine fmt "saveBufferWhenQuickRun = {$settings.quickRun.saveBufferWhenQuickRun}"
+  if settings.quickRun.command.len > 0:
+    result.addLine fmt "command = {$settings.quickRun.command}"
+  result.addLine fmt "timeout = {$settings.quickRun.timeout }"
+  if settings.quickRun.nimAdvancedCommand .len > 0:
+    result.addLine fmt "nimAdvancedCommand = \"{$settings.quickRun.nimAdvancedCommand}\""
+  if settings.quickRun.ClangOptions.len > 0:
+    result.addLine fmt "ClangOptions = \"{$settings.quickRun.ClangOptions}\""
+  if settings.quickRun.CppOptions.len > 0:
+    result.addLine fmt "CppOptions = \"{$settings.quickRun.CppOptions}\""
+  if settings.quickRun.NimOptions.len > 0:
+    result.addLine fmt "NimOptions = \"{$settings.quickRun.NimOptions}\""
+  if settings.quickRun.shOptions.len > 0:
+    result.addLine fmt "shOptions = \"{$settings.quickRun.shOptions}\""
+  if settings.quickRun.bashOptions.len > 0:
+    result.addLine fmt "shOptions = \"{$settings.quickRun.bashOptions}\""
 
   result.addLine ""
 
   result.addLine fmt "[Notification]"
-  result.addLine fmt "screenNotifications = {$settings.notificationSettings.screenNotifications }"
-  result.addLine fmt "logNotifications = {$settings.notificationSettings.logNotifications }"
-  result.addLine fmt "autoBackupScreenNotify = {$settings.notificationSettings.autoBackupScreenNotify}"
-  result.addLine fmt "autoBackupLogNotify = {$settings.notificationSettings.autoBackupLogNotify}"
-  result.addLine fmt "autoSaveScreenNotify = {$settings.notificationSettings.autoSaveScreenNotify}"
-  result.addLine fmt "autoSaveLogNotify = {$settings.notificationSettings.autoSaveLogNotify}"
-  result.addLine fmt "yankScreenNotify = {$settings.notificationSettings.yankScreenNotify}"
-  result.addLine fmt "yankLogNotify = {$settings.notificationSettings.yankLogNotify}"
-  result.addLine fmt "deleteScreenNotify = {$settings.notificationSettings.deleteScreenNotify}"
-  result.addLine fmt "deleteLogNotify = {$settings.notificationSettings.deleteLogNotify}"
-  result.addLine fmt "saveScreenNotify = {$settings.notificationSettings.saveScreenNotify}"
-  result.addLine fmt "saveLogNotify = {$settings.notificationSettings.saveLogNotify}"
-  result.addLine fmt "quickRunScreenNotify = {$settings.notificationSettings.quickRunScreenNotify}"
-  result.addLine fmt "quickRunLogNotify  = {$settings.notificationSettings.quickRunLogNotify}"
-  result.addLine fmt "buildOnSaveScreenNotify = {$settings.notificationSettings.buildOnSaveScreenNotify}"
-  result.addLine fmt "buildOnSaveLogNotify = {$settings.notificationSettings.buildOnSaveLogNotify}"
-  result.addLine fmt "filerScreenNotify = {$settings.notificationSettings.filerScreenNotify}"
-  result.addLine fmt "filerLogNotify = {$settings.notificationSettings.filerLogNotify}"
-  result.addLine fmt "restoreScreenNotify = {$settings.notificationSettings.restoreScreenNotify}"
-  result.addLine fmt "restoreLogNotify = {$settings.notificationSettings.restoreLogNotify}"
+  result.addLine fmt "screenNotifications = {$settings.notification.screenNotifications }"
+  result.addLine fmt "logNotifications = {$settings.notification.logNotifications }"
+  result.addLine fmt "autoBackupScreenNotify = {$settings.notification.autoBackupScreenNotify}"
+  result.addLine fmt "autoBackupLogNotify = {$settings.notification.autoBackupLogNotify}"
+  result.addLine fmt "autoSaveScreenNotify = {$settings.notification.autoSaveScreenNotify}"
+  result.addLine fmt "autoSaveLogNotify = {$settings.notification.autoSaveLogNotify}"
+  result.addLine fmt "yankScreenNotify = {$settings.notification.yankScreenNotify}"
+  result.addLine fmt "yankLogNotify = {$settings.notification.yankLogNotify}"
+  result.addLine fmt "deleteScreenNotify = {$settings.notification.deleteScreenNotify}"
+  result.addLine fmt "deleteLogNotify = {$settings.notification.deleteLogNotify}"
+  result.addLine fmt "saveScreenNotify = {$settings.notification.saveScreenNotify}"
+  result.addLine fmt "saveLogNotify = {$settings.notification.saveLogNotify}"
+  result.addLine fmt "quickRunScreenNotify = {$settings.notification.quickRunScreenNotify}"
+  result.addLine fmt "quickRunLogNotify  = {$settings.notification.quickRunLogNotify}"
+  result.addLine fmt "buildOnSaveScreenNotify = {$settings.notification.buildOnSaveScreenNotify}"
+  result.addLine fmt "buildOnSaveLogNotify = {$settings.notification.buildOnSaveLogNotify}"
+  result.addLine fmt "filerScreenNotify = {$settings.notification.filerScreenNotify}"
+  result.addLine fmt "filerLogNotify = {$settings.notification.filerLogNotify}"
+  result.addLine fmt "restoreScreenNotify = {$settings.notification.restoreScreenNotify}"
+  result.addLine fmt "restoreLogNotify = {$settings.notification.restoreLogNotify}"
 
   result.addLine ""
 
   result.addLine fmt "[Filer]"
-  result.addLine fmt "showIcons = {$settings.filerSettings.showIcons}"
+  result.addLine fmt "showIcons = {$settings.filer.showIcons}"
 
   result.addLine ""
 
   result.addLine fmt "[Autocomplete]"
-  result.addLine fmt "enable = {$settings.autocompleteSettings.enable}"
+  result.addLine fmt "enable = {$settings.autocomplete.enable}"
 
   result.addLine ""
 
@@ -2346,48 +2347,48 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine ""
 
   result.addLine fmt "[Debug.WindowNode]"
-  result.addLine fmt "enable = {$settings.debugModeSettings.windowNode.enable}"
-  result.addLine fmt "currentWindow = {$settings.debugModeSettings.windowNode.currentWindow}"
-  result.addLine fmt "index = {$settings.debugModeSettings.windowNode.index}"
-  result.addLine fmt "windowIndex = {$settings.debugModeSettings.windowNode.windowIndex}"
-  result.addLine fmt "bufferIndex= {$settings.debugModeSettings.windowNode.bufferIndex}"
-  result.addLine fmt "parentIndex= {$settings.debugModeSettings.windowNode.parentIndex}"
-  result.addLine fmt "childLen = {$settings.debugModeSettings.windowNode.childLen}"
-  result.addLine fmt "splitType = {$settings.debugModeSettings.windowNode.splitType}"
-  result.addLine fmt "haveCursesWin= {$settings.debugModeSettings.windowNode.haveCursesWin}"
-  result.addLine fmt "y = {$settings.debugModeSettings.windowNode.y}"
-  result.addLine fmt "x = {$settings.debugModeSettings.windowNode.x}"
-  result.addLine fmt "h = {$settings.debugModeSettings.windowNode.h}"
-  result.addLine fmt "w = {$settings.debugModeSettings.windowNode.w}"
-  result.addLine fmt "currentLine = {$settings.debugModeSettings.windowNode.currentLine}"
-  result.addLine fmt "currentColumn = {$settings.debugModeSettings.windowNode.currentColumn}"
-  result.addLine fmt "expandedColumn = {$settings.debugModeSettings.windowNode.expandedColumn}"
-  result.addLine fmt "cursor = {$settings.debugModeSettings.windowNode.cursor}"
+  result.addLine fmt "enable = {$settings.debugMode.windowNode.enable}"
+  result.addLine fmt "currentWindow = {$settings.debugMode.windowNode.currentWindow}"
+  result.addLine fmt "index = {$settings.debugMode.windowNode.index}"
+  result.addLine fmt "windowIndex = {$settings.debugMode.windowNode.windowIndex}"
+  result.addLine fmt "bufferIndex= {$settings.debugMode.windowNode.bufferIndex}"
+  result.addLine fmt "parentIndex= {$settings.debugMode.windowNode.parentIndex}"
+  result.addLine fmt "childLen = {$settings.debugMode.windowNode.childLen}"
+  result.addLine fmt "splitType = {$settings.debugMode.windowNode.splitType}"
+  result.addLine fmt "haveCursesWin= {$settings.debugMode.windowNode.haveCursesWin}"
+  result.addLine fmt "y = {$settings.debugMode.windowNode.y}"
+  result.addLine fmt "x = {$settings.debugMode.windowNode.x}"
+  result.addLine fmt "h = {$settings.debugMode.windowNode.h}"
+  result.addLine fmt "w = {$settings.debugMode.windowNode.w}"
+  result.addLine fmt "currentLine = {$settings.debugMode.windowNode.currentLine}"
+  result.addLine fmt "currentColumn = {$settings.debugMode.windowNode.currentColumn}"
+  result.addLine fmt "expandedColumn = {$settings.debugMode.windowNode.expandedColumn}"
+  result.addLine fmt "cursor = {$settings.debugMode.windowNode.cursor}"
 
   result.addLine ""
 
   result.addLine fmt "[Debug.EditorView]"
-  result.addLine fmt "enable = {$settings.debugModeSettings.editorview.enable}"
-  result.addLine fmt "widthOfLineNum = {$settings.debugModeSettings.editorview.widthOfLineNum}"
-  result.addLine fmt "height = {$settings.debugModeSettings.editorview.height}"
-  result.addLine fmt "width = {$settings.debugModeSettings.editorview.width}"
-  result.addLine fmt "originalLine = {$settings.debugModeSettings.editorview.originalLine}"
-  result.addLine fmt "start = {$settings.debugModeSettings.editorview.start}"
-  result.addLine fmt "length = {$settings.debugModeSettings.editorview.length}"
+  result.addLine fmt "enable = {$settings.debugMode.editorview.enable}"
+  result.addLine fmt "widthOfLineNum = {$settings.debugMode.editorview.widthOfLineNum}"
+  result.addLine fmt "height = {$settings.debugMode.editorview.height}"
+  result.addLine fmt "width = {$settings.debugMode.editorview.width}"
+  result.addLine fmt "originalLine = {$settings.debugMode.editorview.originalLine}"
+  result.addLine fmt "start = {$settings.debugMode.editorview.start}"
+  result.addLine fmt "length = {$settings.debugMode.editorview.length}"
 
   result.addLine fmt "[Debug.BufferStatus]"
-  result.addLine fmt "enable = {$settings.debugModeSettings.bufStatus.enable}"
-  result.addLine fmt "bufferIndex = {$settings.debugModeSettings.bufStatus.bufferIndex }"
-  result.addLine fmt "path = {$settings.debugModeSettings.bufStatus.path}"
-  result.addLine fmt "openDir = {$settings.debugModeSettings.bufStatus.openDir}"
-  result.addLine fmt "currentMode = {$settings.debugModeSettings.bufStatus.currentMode}"
-  result.addLine fmt "prevMode = {$settings.debugModeSettings.bufStatus.prevMode}"
-  result.addLine fmt "language = {$settings.debugModeSettings.bufStatus.language}"
-  result.addLine fmt "encoding = {$settings.debugModeSettings.bufStatus.encoding}"
-  result.addLine fmt "countChange = {$settings.debugModeSettings.bufStatus.countChange}"
-  result.addLine fmt "cmdLoop = {$settings.debugModeSettings.bufStatus.cmdLoop}"
-  result.addLine fmt "lastSaveTime = {$settings.debugModeSettings.bufStatus.lastSaveTime}"
-  result.addLine fmt "bufferLen = {$settings.debugModeSettings.bufStatus.bufferLen}"
+  result.addLine fmt "enable = {$settings.debugMode.bufStatus.enable}"
+  result.addLine fmt "bufferIndex = {$settings.debugMode.bufStatus.bufferIndex }"
+  result.addLine fmt "path = {$settings.debugMode.bufStatus.path}"
+  result.addLine fmt "openDir = {$settings.debugMode.bufStatus.openDir}"
+  result.addLine fmt "currentMode = {$settings.debugMode.bufStatus.currentMode}"
+  result.addLine fmt "prevMode = {$settings.debugMode.bufStatus.prevMode}"
+  result.addLine fmt "language = {$settings.debugMode.bufStatus.language}"
+  result.addLine fmt "encoding = {$settings.debugMode.bufStatus.encoding}"
+  result.addLine fmt "countChange = {$settings.debugMode.bufStatus.countChange}"
+  result.addLine fmt "cmdLoop = {$settings.debugMode.bufStatus.cmdLoop}"
+  result.addLine fmt "lastSaveTime = {$settings.debugMode.bufStatus.lastSaveTime}"
+  result.addLine fmt "bufferLen = {$settings.debugMode.bufStatus.bufferLen}"
 
   result.addLine ""
 

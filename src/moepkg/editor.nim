@@ -1351,7 +1351,7 @@ proc yankCharacters*(bufStatus: BufferStatus,
 
   commandLine.writeMessageYankedCharactor(
     yankedBuffer.len,
-    settings.notificationSettings,
+    settings.notification,
     messageLog)
 
 proc yankWord*(bufStatus: var BufferStatus,

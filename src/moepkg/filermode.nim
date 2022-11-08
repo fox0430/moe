@@ -55,7 +55,7 @@ proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
         removeDir(filerStatus.dirList[currentMainWindowNode.currentLine].path)
         status.commandLine.writeMessageDeletedFile(
           filerStatus.dirList[currentMainWindowNode.currentLine].path,
-          status.settings.notificationSettings,
+          status.settings.notification,
           status.messageLog)
       except OSError:
         status.commandLine.writeRemoveDirError(status.messageLog)
@@ -63,7 +63,7 @@ proc deleteFile(status: var EditorStatus, filerStatus: var FilerStatus) =
       if tryRemoveFile(filerStatus.dirList[currentMainWindowNode.currentLine].path):
         status.commandLine.writeMessageDeletedFile(
           filerStatus.dirList[currentMainWindowNode.currentLine].path,
-          status.settings.notificationSettings,
+          status.settings.notification,
           status.messageLog)
       else:
         status.commandLine.writeRemoveFileError(status.messageLog)
@@ -404,7 +404,7 @@ proc fileNameToGapBuffer(bufStatus: var BufferStatus,
       newLine.add(ru"@ -> " & toRunes(expandSymLinkOrFilename(filename) / $DirSep))
 
     # Set icons
-    if settings.filerSettings.showIcons: newLine.insert(pathToIcon(filename), 0)
+    if settings.filer.showIcons: newLine.insert(pathToIcon(filename), 0)
 
     bufStatus.buffer.add(newLine)
 

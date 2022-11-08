@@ -38,7 +38,7 @@ proc isHistoryManagerMode(status: var Editorstatus): bool =
   status.bufStatus[index].mode == Mode.history
 
 template baseBackupDir(status: EditorStatus): seq[Rune] =
-  status.settings.autoBackupSettings.backupDir
+  status.settings.autoBackup.backupDir
 
 template currentLineBuffer(status: EditorStatus): seq[Rune] =
   currentBufStatus.buffer[currentMainWindowNode.currentLine]
@@ -90,7 +90,7 @@ proc restoreBackupFile(
 
     let
       backupFilename = currentBufStatus.buffer[currentMainWindowNode.currentLine]
-      baseBackupDir = status.settings.autoBackupSettings.backupDir
+      baseBackupDir = status.settings.autoBackup.backupDir
       backupDir = getBackupDir(baseBackupDir, sourceFilePath)
       restoreFilePath = $backupDir / $backupFilename
 
@@ -106,8 +106,8 @@ proc restoreBackupFile(
     for bufStatus in status.bufStatus:
       if bufStatus.absolutePath == sourceFilePath:
         bufStatus.backupBuffer(
-          status.settings.autoBackupSettings,
-          status.settings.notificationSettings,
+          status.settings.autoBackup,
+          status.settings.notification,
           status.commandLine,
           status.messageLog)
 
@@ -139,7 +139,7 @@ proc restoreBackupFile(
 
         status.resize(terminalHeight(), terminalWidth())
 
-        let settings = status.settings.notificationSettings
+        let settings = status.settings.notification
         status.commandLine.writeRestoreFileSuccessMessage(
           backupFilename,
           settings,
@@ -165,7 +165,7 @@ proc removeBackupFile(
 
     let
       backupFilename = currentBufStatus.buffer[currentMainWindowNode.currentLine]
-      baseBackupDir = status.settings.autoBackupSettings.backupDir
+      baseBackupDir = status.settings.autoBackup.backupDir
       backupDir = backupDir($baseBackupDir, $sourceFilePath)
       backupFilePath = backupDir / $backupFilename
 
@@ -183,7 +183,7 @@ proc removeBackupFile(
       status.commandLine.writeDeleteBackupError
       return
 
-    let settings = status.settings.notificationSettings
+    let settings = status.settings.notification
     status.commandLine.writeMessageDeletedFile(
       $backupFilename,
       settings,

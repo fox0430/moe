@@ -9,7 +9,7 @@ test "Move right":
 
   currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
-    status.settings.highlightSettings.reservedWords,
+    status.settings.highlight.reservedWords,
     status.bufStatus[0].language)
 
   for i in 0 ..< 3:
@@ -24,7 +24,7 @@ test "Move left":
 
   currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
-    status.settings.highlightSettings.reservedWords,
+    status.settings.highlight.reservedWords,
     status.bufStatus[0].language)
 
   currentMainWindowNode.currentColumn = 2
@@ -40,7 +40,7 @@ test "Move down":
 
   currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
-    status.settings.highlightSettings.reservedWords,
+    status.settings.highlight.reservedWords,
     status.bufStatus[0].language)
 
   for i in 0 ..< 3:
@@ -55,7 +55,7 @@ test "Move up":
 
   currentMainWindowNode.highlight = initHighlight(
     $status.bufStatus[0].buffer,
-    status.settings.highlightSettings.reservedWords,
+    status.settings.highlight.reservedWords,
     status.bufStatus[0].language)
 
   currentMainWindowNode.currentLine = 2

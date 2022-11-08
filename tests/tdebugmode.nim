@@ -12,7 +12,7 @@ suite "Init debug mode buffer":
     status.bufStatus.initDebugModeBuffer(
       mainWindow.mainWindowNode,
       currentMainWindowNode.windowIndex,
-      status.settings.debugModeSettings)
+      status.settings.debugMode)
 
     let correctBuf = initGapBuffer[seq[Rune]](@[
       ru "",
@@ -76,7 +76,7 @@ suite "Init debug mode buffer":
     status.bufStatus.initDebugModeBuffer(
       mainWindow.mainWindowNode,
       currentMainWindowNode.windowIndex,
-      status.settings.debugModeSettings)
+      status.settings.debugMode)
 
     let
       buffer = status.bufStatus[1].buffer
