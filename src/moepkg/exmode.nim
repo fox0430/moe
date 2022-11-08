@@ -245,8 +245,8 @@ proc isQuickRunCommand(command: seq[seq[Rune]]): bool {.inline.} =
 proc isRecentFileModeCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 1 and cmpIgnoreCase($command[0], "recent") == 0
 
-proc isHistoryManagerCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "history") == 0
+proc isBackupManagerCommand(command: seq[seq[Rune]]): bool {.inline.} =
+  return command.len == 1 and cmpIgnoreCase($command[0], "backup") == 0
 
 proc isStartConfigMode(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 1 and cmpIgnoreCase($command[0], "conf") == 0
@@ -292,20 +292,20 @@ proc startConfigMode(status: var Editorstatus) =
   status.addNewBuffer(bufferstatus.Mode.config)
   status.changeCurrentBuffer(status.bufStatus.high)
 
-proc startHistoryManager(status: var Editorstatus) =
+proc startBackupManager(status: var Editorstatus) =
   let bufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(currentBufStatus.prevMode)
   status.prevBufferIndex = bufferIndex
 
   if currentBufStatus.mode != bufferstatus.Mode.normal: return
   for bufStatus in status.bufStatus:
-    if bufStatus.mode == bufferstatus.Mode.history: return
+    if bufStatus.mode == bufferstatus.Mode.backup: return
 
   status.verticalSplitWindow
   status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
 
-  status.addNewBuffer(bufferstatus.Mode.history)
+  status.addNewBuffer(bufferstatus.Mode.backup)
   status.changeCurrentBuffer(status.bufStatus.high)
 
 proc startRecentFileMode(status: var Editorstatus) =
@@ -1342,8 +1342,8 @@ proc exModeCommand*(status: var EditorStatus,
     status.runQuickRunCommand
   elif isRecentFileModeCommand(command):
     status.startRecentFileMode
-  elif isHistoryManagerCommand(command):
-    status.startHistoryManager
+  elif isBackupManagerCommand(command):
+    status.startBackupManager
   elif isStartConfigMode(command):
     status.startConfigMode
   elif isIgnorecaseSettingCommand(command):

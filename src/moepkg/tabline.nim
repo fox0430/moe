@@ -35,7 +35,7 @@ proc writeTabLineBuffer*(tabWin: var Window,
         currentMode = bufStatus.mode
         prevMode = bufStatus.prevMode
         filename = if isFilerMode(currentMode, prevMode): $bufStatus.path
-                   elif isHistoryManagerMode(currentMode, prevMode): "HISOTY"
+                   elif isBackupManagerMode(currentMode, prevMode): "BACKUP"
                    elif isConfigMode(currentMode, prevMode): "CONFIG"
                    else: $bufStatus.path
         tabWidth = allBufStatus.len.calcTabWidth(terminalWidth())
@@ -52,7 +52,7 @@ proc writeTabLineBuffer*(tabWin: var Window,
         currentMode = bufStatus.mode
         prevMode = bufStatus.prevMode
         filename = if isFilerMode(currentMode, prevMode): $bufStatus.path
-                   elif isHistoryManagerMode(currentMode, prevMode): "HISOTY"
+                   elif isBackupManagerMode(currentMode, prevMode): "BACKUP"
                    elif isConfigMode(currentMode, prevMode): "CONFIG"
                    else: $bufStatus.path
         numOfbuffer = mainWindowNode.getAllBufferIndex.len

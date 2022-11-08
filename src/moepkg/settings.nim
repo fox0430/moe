@@ -794,8 +794,8 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): EditorColor =
     background:
       colorFromNode(jsonNode{"colors", "tab.activeBorder"})
 
-  # History manager
-  setEditorColor currentHistory:
+  # Backup manager
+  setEditorColor currentBackup:
     foreground:
       colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
       adjust: ReadableVsBackground
@@ -1737,11 +1737,11 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("reservedWordBg"):
       ColorThemeTable[ColorTheme.config].reservedWordBg = color("reservedWordBg")
 
-    if settings["Theme"].contains("currentHistory"):
-      ColorThemeTable[ColorTheme.config].currentHistory = color("currentHistory")
+    if settings["Theme"].contains("currentBackup"):
+      ColorThemeTable[ColorTheme.config].currentBackup = color("currentBackup")
 
-    if settings["Theme"].contains("currentHistoryBg"):
-      ColorThemeTable[ColorTheme.config].currentHistoryBg = color("currentHistoryBg")
+    if settings["Theme"].contains("currentBackupBg"):
+      ColorThemeTable[ColorTheme.config].currentBackupBg = color("currentBackupBg")
 
     if settings["Theme"].contains("addedLine"):
       ColorThemeTable[ColorTheme.config].addedLine = color("addedLine")

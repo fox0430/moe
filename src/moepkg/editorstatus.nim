@@ -412,7 +412,7 @@ proc initSyntaxHighlight(windowNode: var WindowNode,
         let h = buf.buffer.initDebugmodeHighlight
         updatedHighlights.add((index, h))
       elif not isFilerMode(buf.mode, buf.prevMode) and
-           not isHistoryManagerMode(buf.mode, buf.prevMode) and
+           not isBackupManagerMode(buf.mode, buf.prevMode) and
            not isDiffViewerMode(buf.mode, buf.prevMode) and
            not isConfigMode(buf.mode, buf.prevMode):
         let
@@ -515,7 +515,7 @@ proc update*(status: var EditorStatus) =
         ## Update highlight
         ## TODO: Refactor and fix
         if not isFilerMode(currentMode, prevMode) and
-           not isHistoryManagerMode(currentMode, prevMode) and
+           not isBackupManagerMode(currentMode, prevMode) and
            not isDiffViewerMode(currentMode, prevMode) and
            not isConfigMode(currentMode, prevMode):
 

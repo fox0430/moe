@@ -127,7 +127,8 @@ suite "commandview: getCandidatesExCommand":
       "bprev",
       "build",
       "buildOnSave",
-      "buf"
+      "buf",
+      "backup"
     ]
 
     for i in 0 ..< r.high:

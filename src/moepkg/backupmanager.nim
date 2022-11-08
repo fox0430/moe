@@ -1,11 +1,11 @@
-# History manager for automatic backup.
+# Manager for automatic backup.
 
 import std/[os, times, terminal, osproc, json, strformat]
 import editorstatus, bufferstatus, unicodeext, ui, movement, gapbuffer,
        highlight, color, settings, messages, backup, fileutils, editorview,
        window, commandviewutils
 
-proc initHistoryManagerBuffer(
+proc initBackupManagerBuffer(
   bufStatus: var BufferStatus,
   baseBackupDir, sourceFilePath: seq[Rune]) =
 
@@ -16,14 +16,14 @@ proc initHistoryManagerBuffer(
       for name in list:
         bufStatus.buffer.add(name)
 
-proc initHistoryManagerHighlight(
+proc initBackupManagerHighlight(
   bufStatus: BufferStatus,
   currentLine: int): Highlight =
 
     for i in 0 ..< bufStatus.buffer.len:
       let
         line = bufStatus.buffer[i]
-        color = if i == currentLine: EditorColorPair.currentHistory
+        color = if i == currentLine: EditorColorPair.currentBackup
                 else: EditorColorPair.defaultChar
 
       result.colorSegments.add(ColorSegment(
@@ -33,9 +33,9 @@ proc initHistoryManagerHighlight(
         lastColumn: line.high,
         color: color))
 
-proc isHistoryManagerMode(status: var Editorstatus): bool =
+proc isBackupManagerMode(status: var Editorstatus): bool =
   let index = status.bufferIndexInCurrentWindow
-  status.bufStatus[index].mode == Mode.history
+  status.bufStatus[index].mode == Mode.backup
 
 template baseBackupDir(status: EditorStatus): seq[Rune] =
   status.settings.autoBackup.backupDir
@@ -193,20 +193,20 @@ template removeBackupFile(status: var EditorStatus, sourceFilePath: seq[Rune]) =
   const IS_FORCE_REMOVE = false
   status.removeBackupFile(sourceFilePath, IS_FORCE_REMOVE)
 
-proc historyManager*(status: var EditorStatus) =
+proc backupManager*(status: var EditorStatus) =
   status.resize(terminalHeight(), terminalWidth())
 
   let sourceFilePath = status.bufStatus[status.prevBufferIndex].absolutePath
 
-  currentBufStatus.initHistoryManagerBuffer(
+  currentBufStatus.initBackupManagerBuffer(
     status.baseBackupDir,
     sourceFilePath)
 
-  while status.isHistoryManagerMode:
+  while status.isBackupManagerMode:
     block:
       let
         currentLine = currentMainWindowNode.currentLine
-        highlight = currentBufStatus.initHistoryManagerHighlight(currentLine)
+        highlight = currentBufStatus.initBackupManagerHighlight(currentLine)
       currentMainWindowNode.highlight = highlight
 
     status.update
@@ -237,12 +237,12 @@ proc historyManager*(status: var EditorStatus) =
       status.restoreBackupFile(sourceFilePath)
     elif key == ord('D'):
       status.removeBackupFile(sourceFilePath)
-      currentBufStatus.initHistoryManagerBuffer(
+      currentBufStatus.initBackupManagerBuffer(
         status.baseBackupDir,
         sourceFilePath)
     elif key == ord('r'):
       # Reload backup files
-      currentBufStatus.initHistoryManagerBuffer(
+      currentBufStatus.initBackupManagerBuffer(
         status.baseBackupDir,
         sourceFilePath)
     elif key == ord('g'):

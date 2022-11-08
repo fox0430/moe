@@ -40,7 +40,7 @@ const exCommandList: array[65, tuple[command, description: string]] = [
   (command: "highlightCurrentWord", description: " | Change setting to the highlightCurrentWord"),
   (command: "highlightFullSpace", description: "   | Change setting to the highlightFullSpace"),
   (command: "highlightParen", description: "       | Change setting to the highlightParen"),
-  (command: "history", description: "              | Open the history mode (Backup file manager)"),
+  (command: "backup", description: "               | Open the Backup file manager"),
   (command: "icon", description: "                 | Show/Hidden icons in filer mode"),
   (command: "ignorecase", description: "           | Change setting to ignore case in search"),
   (command: "incrementalSearch", description: "    | Enable/Disable incremental search"),
@@ -51,7 +51,7 @@ const exCommandList: array[65, tuple[command, description: string]] = [
   (command: "log", description: "                  | Open the log viewer"),
   (command: "ls", description: "                   | Show the all buffer"),
   (command: "lsw", description: "                  | Show the all workspace"),
-  (command: "multipleStatusLine", description: "    | Enable/Disable multiple status line"),
+  (command: "multipleStatusLine", description: "   | Enable/Disable multiple status line"),
   (command: "new", description: "                  | Create the new buffer in split window horizontally"),
   (command: "noh", description: "                  | Turn off highlights"),
   (command: "paren", description: "                | Enable/Disable auto close paren"),
@@ -68,7 +68,7 @@ const exCommandList: array[65, tuple[command, description: string]] = [
   (command: "smartcase", description: "            | Change setting to smart case in search"),
   (command: "smoothScroll", description: "         | Enable/Disable the smooth scroll"),
   (command: "sp", description: "                   | Open the file in horizontal split window"),
-  (command: "statusLine", description: "            | Enable/Disable the status line"),
+  (command: "statusLine", description: "           | Enable/Disable the status line"),
   (command: "syntax", description: "               | Enable/Disable the syntax highlighting"),
   (command: "tab", description: "                  | Enable/Disable the tab line"),
   (command: "tabstop", description: "              | Change setting to the tabstop"),
@@ -278,7 +278,7 @@ proc getInputPath*(buffer, cmd: seq[Rune]): seq[Rune] =
     buffer.substr(cmd.len + 1)
 
 proc getCandidatesFilePath*(buffer: seq[Rune],
-                           command: string): seq[string] =
+                            command: string): seq[string] =
 
   let inputPath = getInputPath(buffer, command.ru)
 

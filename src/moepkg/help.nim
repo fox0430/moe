@@ -154,7 +154,7 @@ Ctrl-w              - Delete the word before the cursor
 Ctrl-u              - Delete all characters before the cursor in the current line
 Esc                 - Go to Normal mode
 
-# History mode
+# Backup mode
 
 j     - Go down
 k     - Go up
@@ -244,7 +244,7 @@ run or Q - Quick run
 
 recent - Open recent file selection mode (Only supported on Linux)
 
-history - Open backup file manager
+backup - Open backup file manager
 
 conf - Open configuration mode
 
