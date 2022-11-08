@@ -63,7 +63,7 @@ suite "Filer mode":
 
   test "Open current directory":
     var status = initEditorStatus()
-    status.settings.filerSettings.showIcons = false
+    status.settings.filer.showIcons = false
 
     const path = "./"
     status.addNewBuffer(path, Mode.filer)
@@ -78,7 +78,7 @@ suite "Filer mode":
 
   test "Move directory":
     var status = initEditorStatus()
-    status.settings.filerSettings.showIcons = false
+    status.settings.filer.showIcons = false
 
     const path = "./"
     status.addNewBuffer(path, Mode.filer)

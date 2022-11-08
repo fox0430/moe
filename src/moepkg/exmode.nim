@@ -274,7 +274,7 @@ proc startDebugMode(status: var Editorstatus) =
   status.bufStatus.initDebugModeBuffer(
     mainWindowNode,
     currentMainWindowNode.windowIndex,
-    status.settings.debugModeSettings)
+    status.settings.debugMode)
   let buffer = currentBufStatus.buffer
   currentMainWindowNode.highlight = buffer.initDebugmodeHighlight
 
@@ -443,8 +443,8 @@ proc horizontalSplitWindowCommand(status: var Editorstatus) =
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
 proc filerIconSettingCommand(status: var Editorstatus, command: seq[Rune]) =
-  if command == ru "on": status.settings.filerSettings.showIcons = true
-  elif command == ru"off": status.settings.filerSettings.showIcons = false
+  if command == ru "on": status.settings.filer.showIcons = true
+  elif command == ru"off": status.settings.filer.showIcons = false
 
   status.commandLine.erase
 
@@ -493,7 +493,7 @@ proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
                    else: SourceLanguage.langNone
 
   currentMainWindowNode.highlight = initHighlight($currentBufStatus.buffer,
-                                                  status.settings.highlightSettings.reservedWords,
+                                                  status.settings.highlight.reservedWords,
                                                   sourceLang)
 
   status.commandLine.erase
@@ -579,8 +579,8 @@ proc incrementalSearchSettingCommand(status: var Editorstatus, command: seq[Rune
 proc highlightPairOfParenSettigCommand(status: var Editorstatus,
                                        command: seq[Rune]) =
 
-  if command == ru"on": status.settings.highlightSettings.pairOfParen = true
-  elif command == ru"off": status.settings.highlightSettings.pairOfParen = false
+  if command == ru"on": status.settings.highlight.pairOfParen = true
+  elif command == ru"off": status.settings.highlight.pairOfParen = false
 
   status.commandLine.erase
 
@@ -614,8 +614,8 @@ proc smoothScrollSpeedSettingCommand(status: var Editorstatus, speed: int) =
 proc highlightCurrentWordSettingCommand(status: var Editorstatus,
                                         command: seq[Rune]) =
 
-  if command == ru"on": status.settings.highlightSettings.currentWord = true
-  if command == ru"off": status.settings.highlightSettings.currentWord = false
+  if command == ru"on": status.settings.highlight.currentWord = true
+  if command == ru"off": status.settings.highlight.currentWord = false
 
   status.commandLine.erase
 
@@ -635,9 +635,9 @@ proc highlightFullWidthSpaceSettingCommand(status: var Editorstatus,
                                            command: seq[Rune]) =
 
   if command == ru"on":
-    status.settings.highlightSettings.fullWidthSpace = true
+    status.settings.highlight.fullWidthSpace = true
   elif command == ru"off":
-    status.settings.highlightSettings.fullWidthSpace = false
+    status.settings.highlight.fullWidthSpace = false
 
   status.commandLine.erase
 
@@ -810,7 +810,7 @@ proc execCmdResultToMessageLog*(output: string,
 
 proc buildOnSave(status: var Editorstatus) =
   status.commandLine.writeMessageBuildOnSave(
-    status.settings.notificationSettings,
+    status.settings.notification,
     status.messageLog)
 
   let
@@ -826,7 +826,7 @@ proc buildOnSave(status: var Editorstatus) =
     status.commandLine.writeMessageFailedBuildOnSave(status.messageLog)
   else:
     status.commandLine.writeMessageSuccessBuildOnSave(
-      status.settings.notificationSettings,
+      status.settings.notification,
       status.messageLog)
 
 proc checkAndCreateDir(commandLine: var CommandLine,
@@ -915,7 +915,7 @@ proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
     else:
         status.commandLine.writeMessageSaveFile(
           path,
-          status.settings.notificationSettings,
+          status.settings.notification,
           status.messageLog)
 
     currentBufStatus.countChange = 0
@@ -1395,7 +1395,7 @@ proc exMode*(status: var EditorStatus) =
       status.searchHistory.add(ru"")
 
     if cancelInput or exitInput: break
-    elif isReplaceCommand and status.settings.highlightSettings.replaceText:
+    elif isReplaceCommand and status.settings.highlight.replaceText:
       var keyword = ru""
       for i in 3 ..< command.len :
           if command[i] == ru'/': break

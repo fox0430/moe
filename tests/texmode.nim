@@ -310,11 +310,11 @@ suite "Ex mode: Highlight pair of paren settig command":
     block:
       const command = @[ru"highlightparen", ru"off"]
       status.exModeCommand(command, 100, 100)
-      check(status.settings.highlightSettings.pairOfParen == false)
+      check(status.settings.highlight.pairOfParen == false)
     block:
       const command = @[ru"highlightparen", ru"on"]
       status.exModeCommand(command, 100, 100)
-      check(status.settings.highlightSettings.pairOfParen == true)
+      check(status.settings.highlight.pairOfParen == true)
 
 suite "Ex mode: Auto delete paren setting command":
   test "Auto delete paren setting command":
@@ -364,12 +364,12 @@ suite "Ex mode: Highlight current word setting command":
     block:
       const command = @[ru"highlightcurrentword", ru"off"]
       status.exModeCommand(command, 100, 100)
-      check(status.settings.highlightSettings.currentWord == false)
+      check(status.settings.highlight.currentWord == false)
 
     block:
       const command = @[ru"highlightcurrentword", ru"on"]
       status.exModeCommand(command, 100, 100)
-      check(status.settings.highlightSettings.currentWord == true)
+      check(status.settings.highlight.currentWord == true)
 
 suite "Ex mode: Clipboard setting command":
   test "Clipboard setting command":
@@ -394,12 +394,12 @@ suite "Ex mode: Highlight full width space command":
     block:
       const command = @[ru"highlightfullspace", ru"off"]
       status.exModeCommand(command, 100, 100)
-      check(status.settings.highlightSettings.fullWidthSpace == false)
+      check(status.settings.highlight.fullWidthSpace == false)
 
     block:
       const command = @[ru"highlightfullspace", ru"on"]
       status.exModeCommand(command, 100, 100)
-      check(status.settings.highlightSettings.fullWidthSpace == true)
+      check(status.settings.highlight.fullWidthSpace == true)
 
   test "Ex mode: Tab stop setting command 2":
     var status = initEditorStatus()
@@ -620,7 +620,7 @@ suite "Ex mode: Filer icon setting command":
     const command = @[ru"icon", ru"on"]
     status.exModeCommand(command, 100, 100)
 
-    check status.settings.filerSettings.showIcons
+    check status.settings.filer.showIcons
 
   test "Filer icon setting command 2":
     var status = initEditorStatus()
@@ -629,7 +629,7 @@ suite "Ex mode: Filer icon setting command":
     const command = @[ru"icon", ru"off"]
     status.exModeCommand(command, 100, 100)
 
-    check status.settings.filerSettings.showIcons == false
+    check status.settings.filer.showIcons == false
 
 suite "Ex mode: Put config file command":
   test "Put config file command":
@@ -818,8 +818,8 @@ suite "Ex mode: debug command":
     status.addNewBuffer
     status.changeMode(Mode.ex)
 
-    status.settings.debugModeSettings.windowNode.enable = false
-    status.settings.debugModeSettings.bufStatus.enable = false
+    status.settings.debugMode.windowNode.enable = false
+    status.settings.debugMode.bufStatus.enable = false
 
     status.resize(100, 100)
     status.update

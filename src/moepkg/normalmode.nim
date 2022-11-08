@@ -311,7 +311,7 @@ proc yankLines(status: var Editorstatus, start, last: int) =
   currentBufStatus.yankLines(status.registers,
                              status.commandLine,
                              status.messageLog,
-                             status.settings.notificationSettings,
+                             status.settings.notification,
                              start, lastLine,
                              status.settings)
 
@@ -322,7 +322,7 @@ proc yankLines(status: var Editorstatus, start, last: int, registerName: string)
   currentBufStatus.yankLines(status.registers,
                              status.commandLine,
                              status.messageLog,
-                             status.settings.notificationSettings,
+                             status.settings.notification,
                              start, lastLine,
                              registerName,
                              status.settings)
@@ -338,7 +338,7 @@ proc yankLines(status: var Editorstatus) =
   currentBufStatus.yankLines(status.registers,
                              status.commandLine,
                              status.messageLog,
-                             status.settings.notificationSettings,
+                             status.settings.notification,
                              currentLine, lastLine,
                              registerName,
                              status.settings)
@@ -352,7 +352,7 @@ proc yankLines(status: var Editorstatus, registerName: string) =
   currentBufStatus.yankLines(status.registers,
                              status.commandLine,
                              status.messageLog,
-                             status.settings.notificationSettings,
+                             status.settings.notification,
                              currentLine, lastLine,
                              registerName,
                              status.settings)

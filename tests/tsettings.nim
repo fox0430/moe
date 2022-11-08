@@ -318,89 +318,89 @@ suite "Parse configuration file":
     check settings.statusLine.showModeInactive
 
     check settings.view.highlightCurrentLine
-    check not settings.highlightSettings.replaceText
-    check not settings.highlightSettings.pairOfParen
-    check not settings.highlightSettings.fullWidthSpace
-    check not settings.highlightSettings.trailingSpaces
-    check not settings.highlightSettings.currentWord
-    check settings.highlightSettings.reservedWords[3].word == "TEST"
-    check settings.highlightSettings.reservedWords[4].word == "TEST2"
+    check not settings.highlight.replaceText
+    check not settings.highlight.pairOfParen
+    check not settings.highlight.fullWidthSpace
+    check not settings.highlight.trailingSpaces
+    check not settings.highlight.currentWord
+    check settings.highlight.reservedWords[3].word == "TEST"
+    check settings.highlight.reservedWords[4].word == "TEST2"
 
-    check not settings.autoBackupSettings.enable
-    check settings.autoBackupSettings.idleTime == 1
-    check settings.autoBackupSettings.interval == 1
-    check settings.autoBackupSettings.backupDir == ru"/tmp"
-    check settings.autoBackupSettings.dirToExclude  == @[ru"/tmp"]
+    check not settings.autoBackup.enable
+    check settings.autoBackup.idleTime == 1
+    check settings.autoBackup.interval == 1
+    check settings.autoBackup.backupDir == ru"/tmp"
+    check settings.autoBackup.dirToExclude  == @[ru"/tmp"]
 
-    check not settings.quickRunSettings.saveBufferWhenQuickRun
-    check settings.quickRunSettings.command == "nimble build"
-    check settings.quickRunSettings.timeout == 1
-    check settings.quickRunSettings.nimAdvancedCommand == "js"
-    check settings.quickRunSettings.ClangOptions == "-Wall"
-    check settings.quickRunSettings.CppOptions == "-Wall"
-    check settings.quickRunSettings.NimOptions == "--debugger:native"
-    check settings.quickRunSettings.shOptions == "-c"
-    check settings.quickRunSettings.bashOptions == "-c"
+    check not settings.quickRun.saveBufferWhenQuickRun
+    check settings.quickRun.command == "nimble build"
+    check settings.quickRun.timeout == 1
+    check settings.quickRun.nimAdvancedCommand == "js"
+    check settings.quickRun.ClangOptions == "-Wall"
+    check settings.quickRun.CppOptions == "-Wall"
+    check settings.quickRun.NimOptions == "--debugger:native"
+    check settings.quickRun.shOptions == "-c"
+    check settings.quickRun.bashOptions == "-c"
 
-    check not settings.notificationSettings.screenNotifications
-    check not settings.notificationSettings.logNotifications
-    check not settings.notificationSettings.autoBackupScreenNotify
-    check not settings.notificationSettings.autoBackupLogNotify
-    check not settings.notificationSettings.autoSaveScreenNotify
-    check not settings.notificationSettings.autoSaveLogNotify
-    check not settings.notificationSettings.yankScreenNotify
-    check not settings.notificationSettings.yankLogNotify
-    check not settings.notificationSettings.deleteScreenNotify
-    check not settings.notificationSettings.deleteLogNotify
-    check not settings.notificationSettings.saveScreenNotify
-    check not settings.notificationSettings.saveLogNotify
-    check not settings.notificationSettings.quickRunScreenNotify
-    check not settings.notificationSettings.quickRunLogNotify
-    check not settings.notificationSettings.buildOnSaveScreenNotify
-    check not settings.notificationSettings.buildOnSaveLogNotify
-    check not settings.notificationSettings.filerScreenNotify
-    check not settings.notificationSettings.filerLogNotify
-    check not settings.notificationSettings.restoreScreenNotify
-    check not settings.notificationSettings.restoreLogNotify
+    check not settings.notification.screenNotifications
+    check not settings.notification.logNotifications
+    check not settings.notification.autoBackupScreenNotify
+    check not settings.notification.autoBackupLogNotify
+    check not settings.notification.autoSaveScreenNotify
+    check not settings.notification.autoSaveLogNotify
+    check not settings.notification.yankScreenNotify
+    check not settings.notification.yankLogNotify
+    check not settings.notification.deleteScreenNotify
+    check not settings.notification.deleteLogNotify
+    check not settings.notification.saveScreenNotify
+    check not settings.notification.saveLogNotify
+    check not settings.notification.quickRunScreenNotify
+    check not settings.notification.quickRunLogNotify
+    check not settings.notification.buildOnSaveScreenNotify
+    check not settings.notification.buildOnSaveLogNotify
+    check not settings.notification.filerScreenNotify
+    check not settings.notification.filerLogNotify
+    check not settings.notification.restoreScreenNotify
+    check not settings.notification.restoreLogNotify
 
-    check not settings.filerSettings.showIcons
+    check not settings.filer.showIcons
 
-    check settings.autocompleteSettings.enable
+    check settings.autocomplete.enable
 
     check not settings.persist.exCommand
     check not settings.persist.search
     check not settings.persist.cursorPosition
 
-    check not settings.debugModeSettings.windowNode.enable
-    check not settings.debugModeSettings.windowNode.currentWindow
-    check not settings.debugModeSettings.windowNode.index
-    check not settings.debugModeSettings.windowNode.windowIndex
-    check not settings.debugModeSettings.windowNode.bufferIndex
-    check not settings.debugModeSettings.windowNode.parentIndex
-    check not settings.debugModeSettings.windowNode.childLen
-    check not settings.debugModeSettings.windowNode.splitType
-    check not settings.debugModeSettings.windowNode.haveCursesWin
-    check not settings.debugModeSettings.windowNode.y
-    check not settings.debugModeSettings.windowNode.x
-    check not settings.debugModeSettings.windowNode.h
-    check not settings.debugModeSettings.windowNode.w
-    check not settings.debugModeSettings.windowNode.currentLine
-    check not settings.debugModeSettings.windowNode.currentColumn
-    check not settings.debugModeSettings.windowNode.expandedColumn
-    check not settings.debugModeSettings.windowNode.cursor
+    check not settings.debugMode.windowNode.enable
+    check not settings.debugMode.windowNode.currentWindow
+    check not settings.debugMode.windowNode.index
+    check not settings.debugMode.windowNode.windowIndex
+    check not settings.debugMode.windowNode.bufferIndex
+    check not settings.debugMode.windowNode.parentIndex
+    check not settings.debugMode.windowNode.childLen
+    check not settings.debugMode.windowNode.splitType
+    check not settings.debugMode.windowNode.haveCursesWin
+    check not settings.debugMode.windowNode.y
+    check not settings.debugMode.windowNode.x
+    check not settings.debugMode.windowNode.h
+    check not settings.debugMode.windowNode.w
+    check not settings.debugMode.windowNode.currentLine
+    check not settings.debugMode.windowNode.currentColumn
+    check not settings.debugMode.windowNode.expandedColumn
+    check not settings.debugMode.windowNode.cursor
 
-    check not settings.debugModeSettings.bufStatus.enable
-    check not settings.debugModeSettings.bufStatus.bufferIndex
-    check not settings.debugModeSettings.bufStatus.path
-    check not settings.debugModeSettings.bufStatus.openDir
-    check not settings.debugModeSettings.bufStatus.currentMode
-    check not settings.debugModeSettings.bufStatus.prevMode
-    check not settings.debugModeSettings.bufStatus.language
-    check not settings.debugModeSettings.bufStatus.encoding
-    check not settings.debugModeSettings.bufStatus.countChange
-    check not settings.debugModeSettings.bufStatus.cmdLoop
-    check not settings.debugModeSettings.bufStatus.lastSaveTime
-    check not settings.debugModeSettings.bufStatus.bufferLen
+    check not settings.debugMode.bufStatus.enable
+    check not settings.debugMode.bufStatus.bufferIndex
+    check not settings.debugMode.bufStatus.path
+    check not settings.debugMode.bufStatus.openDir
+    check not settings.debugMode.bufStatus.currentMode
+    check not settings.debugMode.bufStatus.prevMode
+    check not settings.debugMode.bufStatus.language
+    check not settings.debugMode.bufStatus.encoding
+    check not settings.debugMode.bufStatus.countChange
+    check not settings.debugMode.bufStatus.cmdLoop
+    check not settings.debugMode.bufStatus.lastSaveTime
+    check not settings.debugMode.bufStatus.bufferLen
 
     let theme = ColorTheme.config
     check ColorThemeTable[theme].editorBg == Color.pink1

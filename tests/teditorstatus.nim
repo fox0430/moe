@@ -9,7 +9,7 @@ include moepkg/editorstatus
 template initHighlight() =
   currentMainWindowNode.highlight = initHighlight(
     $currentBufStatus.buffer,
-    status.settings.highlightSettings.reservedWords,
+    status.settings.highlight.reservedWords,
     currentBufStatus.language)
 
 suite "Add new buffer":
@@ -61,7 +61,7 @@ test "resize 1":
 
   currentMainWindowNode.highlight =
     initHighlight($currentBufStatus.buffer,
-    status.settings.highlightSettings.reservedWords,
+    status.settings.highlight.reservedWords,
     currentBufStatus.language)
 
   currentMainWindowNode.view =
@@ -86,9 +86,10 @@ test "resize 2":
   status.changeMode(Mode.insert)
 
   for i in 0 ..< 10:
-    currentBufStatus.keyEnter(currentMainWindowNode,
-                                 status.settings.autoCloseParen,
-                                 status.settings.tabStop)
+    currentBufStatus.keyEnter(
+      currentMainWindowNode,
+      status.settings.autoCloseParen,
+      status.settings.tabStop)
     status.update
 
 test "Highlight of a pair of paren 1":
@@ -558,7 +559,7 @@ test "Highlight full width space 1":
   status.addNewBuffer
   currentBufStatus.buffer = initGapBuffer(@[ru"", ru"　"])
 
-  status.settings.highlightSettings.currentWord = false
+  status.settings.highlight.currentWord = false
   initHighlight()
   status.update
 
@@ -582,7 +583,7 @@ test "Highlight full width space 2":
   status.addNewBuffer
   currentBufStatus.buffer = initGapBuffer(@[ru"abc　"])
 
-  status.settings.highlightSettings.currentWord = false
+  status.settings.highlight.currentWord = false
   initHighlight()
   status.update
 
@@ -606,7 +607,7 @@ test "Highlight full width space 3":
   status.addNewBuffer
   currentBufStatus.buffer = initGapBuffer(@[ru"　"])
 
-  status.settings.highlightSettings.currentWord = false
+  status.settings.highlight.currentWord = false
   initHighlight()
   status.update
 
@@ -629,7 +630,7 @@ test "Highlight full width space 4":
   status.addNewBuffer
   currentBufStatus.buffer = initGapBuffer(@[ru"a　b"])
 
-  status.settings.highlightSettings.currentWord = false
+  status.settings.highlight.currentWord = false
   initHighlight()
   status.update
 
@@ -796,11 +797,11 @@ suite "editorstatus: Highlight trailing spaces":
     var status = initEditorStatus()
     status.addNewBuffer
 
-    status.settings.highlightSettings.currentWord = false
+    status.settings.highlight.currentWord = false
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -825,7 +826,7 @@ suite "editorstatus: Highlight trailing spaces":
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc  "])
 
-    status.settings.highlightSettings.currentWord = false
+    status.settings.highlight.currentWord = false
 
     initHighlight()
 
@@ -854,7 +855,7 @@ suite "editorstatus: Highlight trailing spaces":
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru" "])
 
-    status.settings.highlightSettings.currentWord = false
+    status.settings.highlight.currentWord = false
 
     initHighlight()
 

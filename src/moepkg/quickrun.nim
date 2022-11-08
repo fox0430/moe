@@ -43,7 +43,7 @@ proc runQuickRun*(bufStatus: var BufferStatus,
 
   let filename = bufStatus.path
 
-  if settings.quickRunSettings.saveBufferWhenQuickRun:
+  if settings.quickRun.saveBufferWhenQuickRun:
     block:
       let lastModificationTime = getLastModificationTime($bufStatus.path)
       if lastModificationTime > bufStatus.lastSaveTime.toTime:
@@ -56,10 +56,10 @@ proc runQuickRun*(bufStatus: var BufferStatus,
     bufStatus.countChange = 0
     bufStatus.lastSaveTime = now()
 
-  let command = bufStatus.generateCommand(settings.quickRunSettings)
+  let command = bufStatus.generateCommand(settings.quickRun)
   if command == "": return @[ru""]
 
-  commandLine.writeRunQuickRunMessage(settings.notificationSettings, messageLog)
+  commandLine.writeRunQuickRunMessage(settings.notification, messageLog)
   let cmdResult = execCmdEx(command)
   commandLine.erase
 

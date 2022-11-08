@@ -16,7 +16,7 @@ suite "Visual mode: Delete buffer":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.changeMode(Mode.visual)
@@ -44,7 +44,7 @@ suite "Visual mode: Delete buffer":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.changeMode(Mode.visual)
@@ -73,7 +73,7 @@ suite "Visual mode: Delete buffer":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.changeMode(Mode.visual)
@@ -109,7 +109,7 @@ suite "Visual mode: Delete buffer":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -153,7 +153,7 @@ suite "Visual mode: Delete buffer":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -188,7 +188,7 @@ suite "Visual mode: Delete buffer":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -217,7 +217,7 @@ suite "Visual mode: Delete buffer":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -246,7 +246,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -284,7 +284,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -316,7 +316,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -347,7 +347,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -378,7 +378,7 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -413,7 +413,7 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -457,7 +457,7 @@ suite "Visual block mode: Delete buffer (Disable clipboard)":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -496,7 +496,7 @@ if isXselAvailable():
 
       currentMainWindowNode.highlight = initHighlight(
         $currentBufStatus.buffer,
-        status.settings.highlightSettings.reservedWords,
+        status.settings.highlight.reservedWords,
         currentBufStatus.language)
 
       status.resize(100, 100)
@@ -545,7 +545,7 @@ if isXselAvailable():
 
       currentMainWindowNode.highlight = initHighlight(
         $currentBufStatus.buffer,
-        status.settings.highlightSettings.reservedWords,
+        status.settings.highlight.reservedWords,
         currentBufStatus.language)
 
       status.resize(100, 100)
@@ -601,7 +601,7 @@ if isXselAvailable():
 
       currentMainWindowNode.highlight = initHighlight(
         $currentBufStatus.buffer,
-        status.settings.highlightSettings.reservedWords,
+        status.settings.highlight.reservedWords,
         currentBufStatus.language)
 
       status.resize(100, 100)
@@ -642,7 +642,7 @@ if isXselAvailable():
 
       currentMainWindowNode.highlight = initHighlight(
         $currentBufStatus.buffer,
-        status.settings.highlightSettings.reservedWords,
+        status.settings.highlight.reservedWords,
         currentBufStatus.language)
 
       status.resize(100, 100)
@@ -689,7 +689,7 @@ if isXselAvailable():
 
       currentMainWindowNode.highlight = initHighlight(
         $currentBufStatus.buffer,
-        status.settings.highlightSettings.reservedWords,
+        status.settings.highlight.reservedWords,
         currentBufStatus.language)
 
       status.resize(100, 100)
@@ -727,7 +727,7 @@ if isXselAvailable():
 
       currentMainWindowNode.highlight = initHighlight(
         $currentBufStatus.buffer,
-        status.settings.highlightSettings.reservedWords,
+        status.settings.highlight.reservedWords,
         currentBufStatus.language)
 
       status.resize(100, 100)
@@ -762,7 +762,7 @@ if isXselAvailable():
 
       currentMainWindowNode.highlight = initHighlight(
         $currentBufStatus.buffer,
-        status.settings.highlightSettings.reservedWords,
+        status.settings.highlight.reservedWords,
         currentBufStatus.language)
 
       status.resize(100, 100)
@@ -804,7 +804,7 @@ suite "Visual mode: Join lines":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -840,7 +840,7 @@ suite "Visual block mode: Join lines":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -876,7 +876,7 @@ test "Visual mode: Add indent":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -911,7 +911,7 @@ suite "Visual block mode: Add indent":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -944,7 +944,7 @@ suite "Visual mode: Delete indent":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -979,7 +979,7 @@ suite "Visual block mode: Delete indent":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1014,7 +1014,7 @@ suite "Visual mode: Converts string into lower-case string":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1043,7 +1043,7 @@ suite "Visual mode: Converts string into lower-case string":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1072,7 +1072,7 @@ suite "Visual mode: Converts string into lower-case string":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1101,7 +1101,7 @@ suite "Visual mode: Converts string into lower-case string":
     status.addNewBuffer
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC", ru"", ru"DEF", ru""])
     currentMainWindowNode.highlight = initHighlight($currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1132,7 +1132,7 @@ test "Visual block mode: Converts string into lower-case string":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1160,7 +1160,7 @@ test "Visual block mode: Converts string into lower-case string":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1200,7 +1200,7 @@ suite "Visual mode: Converts string into upper-case string":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1230,7 +1230,7 @@ suite "Visual mode: Converts string into upper-case string":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1260,7 +1260,7 @@ suite "Visual mode: Converts string into upper-case string":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1289,7 +1289,7 @@ suite "Visual mode: Converts string into upper-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"def", ru""])
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1321,7 +1321,7 @@ suite "Visual block mode: Converts string into upper-case string":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1350,7 +1350,7 @@ suite "Visual block mode: Converts string into upper-case string":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1385,7 +1385,7 @@ suite "Visual block mode: Insert buffer":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1438,7 +1438,7 @@ suite "Visual mode: Run command when Readonly mode":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1464,7 +1464,7 @@ suite "Visual mode: Run command when Readonly mode":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1490,7 +1490,7 @@ suite "Visual mode: Run command when Readonly mode":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1516,7 +1516,7 @@ suite "Visual mode: Run command when Readonly mode":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1547,7 +1547,7 @@ suite "Visual mode: Run command when Readonly mode":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1573,7 +1573,7 @@ suite "Visual mode: Run command when Readonly mode":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1599,7 +1599,7 @@ suite "Visual mode: Run command when Readonly mode":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1625,7 +1625,7 @@ suite "Visual mode: Run command when Readonly mode":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1651,7 +1651,7 @@ suite "Visual block mode: Run command when Readonly mode":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1677,7 +1677,7 @@ suite "Visual block mode: Run command when Readonly mode":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1702,7 +1702,7 @@ suite "Visual block mode: Run command when Readonly mode":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1728,7 +1728,7 @@ suite "Visual block mode: Run command when Readonly mode":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1754,7 +1754,7 @@ suite "Visual block mode: Run command when Readonly mode":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1785,7 +1785,7 @@ suite "Visual block mode: Run command when Readonly mode":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1811,7 +1811,7 @@ suite "Visual block mode: Run command when Readonly mode":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)
@@ -1837,7 +1837,7 @@ suite "Visual block mode: Run command when Readonly mode":
 
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
-      status.settings.highlightSettings.reservedWords,
+      status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     status.resize(100, 100)

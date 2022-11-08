@@ -47,11 +47,11 @@ suite "History Manager: initHistoryManagerBuffer":
 
     var status = initEditorStatus()
     status.addNewBuffer(sourceFilePath)
-    status.settings.autoBackupSettings.backupDir = baseBackupDir.toRunes
+    status.settings.autoBackup.backupDir = baseBackupDir.toRunes
 
     currentBufStatus.backupBuffer(
-      status.settings.autoBackupSettings,
-      status.settings.notificationSettings,
+      status.settings.autoBackup,
+      status.settings.notification,
       status.commandLine,
       status.messageLog)
 
@@ -88,11 +88,11 @@ suite "History Manager: openDiffViewer":
 
     var status = initEditorStatus()
     status.addNewBuffer(sourceFilePath)
-    status.settings.autoBackupSettings.backupDir = baseBackupDir.toRunes
+    status.settings.autoBackup.backupDir = baseBackupDir.toRunes
 
     currentBufStatus.backupBuffer(
-      status.settings.autoBackupSettings,
-      status.settings.notificationSettings,
+      status.settings.autoBackup,
+      status.settings.notification,
       status.commandLine,
       status.messageLog)
 
@@ -126,11 +126,11 @@ suite "History Manager: restoreBackupFile":
 
     var status = initEditorStatus()
     status.addNewBuffer(sourceFilePath)
-    status.settings.autoBackupSettings.backupDir = baseBackupDir.toRunes
+    status.settings.autoBackup.backupDir = baseBackupDir.toRunes
 
     currentBufStatus.backupBuffer(
-      status.settings.autoBackupSettings,
-      status.settings.notificationSettings,
+      status.settings.autoBackup,
+      status.settings.notification,
       status.commandLine,
       status.messageLog)
 
@@ -166,11 +166,11 @@ suite "History Manager: removeBackupFile":
 
     var status = initEditorStatus()
     status.addNewBuffer(sourceFilePath)
-    status.settings.autoBackupSettings.backupDir = baseBackupDir.toRunes
+    status.settings.autoBackup.backupDir = baseBackupDir.toRunes
 
     currentBufStatus.backupBuffer(
-      status.settings.autoBackupSettings,
-      status.settings.notificationSettings,
+      status.settings.autoBackup,
+      status.settings.notification,
       status.commandLine,
       status.messageLog)
 

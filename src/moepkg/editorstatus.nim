@@ -471,7 +471,7 @@ proc update*(status: var EditorStatus) =
 
   mainWindowNode.initSyntaxHighlight(
     status.bufStatus,
-    status.settings.highlightSettings.reservedWords,
+    status.settings.highlight.reservedWords,
     status.settings.syntax)
 
   # Set editor Color Pair for current line highlight.
@@ -1199,7 +1199,7 @@ proc updateHighlight*(highlight: var Highlight,
                       searchHistory: seq[seq[Rune]],
                       settings: EditorSettings) =
 
-  if settings.highlightSettings.currentWord:
+  if settings.highlight.currentWord:
     highlight.highlightOtherUsesCurrentWord(
       bufStatus,
       windowNode,
@@ -1208,7 +1208,7 @@ proc updateHighlight*(highlight: var Highlight,
   if isVisualMode(bufStatus.mode):
     highlight.highlightSelectedArea(bufStatus, windowNode)
 
-  if settings.highlightSettings.pairOfParen:
+  if settings.highlight.pairOfParen:
     highlight.highlightPairOfParen(bufStatus, windowNode)
 
   let
@@ -1222,12 +1222,12 @@ proc updateHighlight*(highlight: var Highlight,
   for i in startLine ..< endLine: bufferInView.add(bufStatus.buffer[i])
 
   # highlight trailing spaces
-  if settings.highlightSettings.trailingSpaces and
+  if settings.highlight.trailingSpaces and
      bufStatus.language != SourceLanguage.langMarkDown:
     highlight.highlightTrailingSpaces(bufStatus, windowNode)
 
   # highlight full width space
-  if settings.highlightSettings.fullWidthSpace:
+  if settings.highlight.fullWidthSpace:
     highlight.highlightFullWidthSpace(windowNode, bufferInView, range)
 
   # highlight search results
@@ -1258,7 +1258,7 @@ proc autoSave(status: var Editorstatus) =
                bufStatus.characterEncoding)
       status.commandLine.writeMessageAutoSave(
         bufStatus.path,
-        status.settings.notificationSettings,
+        status.settings.notification,
         status.messageLog)
       status.bufStatus[index].lastSaveTime = now()
 
@@ -1321,10 +1321,10 @@ proc eventLoopTask(status: var Editorstatus) =
   # Automatic backup
   let
     lastBackupTime = status.autoBackupStatus.lastBackupTime
-    interval = status.settings.autoBackupSettings.interval
-    idleTime = status.settings.autoBackupSettings.idleTime
+    interval = status.settings.autoBackup.interval
+    idleTime = status.settings.autoBackup.idleTime
 
-  if status.settings.autoBackupSettings.enable and
+  if status.settings.autoBackup.enable and
      lastBackupTime + interval.minutes < now() and
      status.lastOperatingTime + idleTime.seconds < now():
     for bufStatus in status.bufStatus:
@@ -1337,8 +1337,8 @@ proc eventLoopTask(status: var Editorstatus) =
          isVisualMode(mode) or
          isReplaceMode(mode):
         bufStatus.backupBuffer(
-          status.settings.autoBackupSettings,
-          status.settings.notificationSettings,
+          status.settings.autoBackup,
+          status.settings.notification,
           status.commandLine,
           status.messageLog)
 
@@ -1356,4 +1356,4 @@ proc updateDebugModeBuffer(status: var EditorStatus) =
   status.bufStatus.updateDebugModeBuffer(
     mainWindowNode,
     currentMainWindowNode.windowIndex,
-    status.settings.debugModeSettings)
+    status.settings.debugMode)

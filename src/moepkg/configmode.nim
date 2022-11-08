@@ -381,15 +381,15 @@ proc getHighlightTableSettingValues(settings: EditorSettings,
     of "currentLine":
       currentVal = settings.view.highlightCurrentLine
     of "fullWidthSpace":
-      currentVal = settings.highlightSettings.fullWidthSpace
+      currentVal = settings.highlight.fullWidthSpace
     of "trailingSpaces":
-      currentVal = settings.highlightSettings.trailingSpaces
+      currentVal = settings.highlight.trailingSpaces
     of "currentWord":
-      currentVal = settings.highlightSettings.currentWord
+      currentVal = settings.highlight.currentWord
     of "replaceText":
-      currentVal = settings.highlightSettings.replaceText
+      currentVal = settings.highlight.replaceText
     of "pairOfParen":
-      currentVal = settings.highlightSettings.pairOfParen
+      currentVal = settings.highlight.pairOfParen
     else:
       return
 
@@ -582,18 +582,18 @@ proc getSettingValues(settings: EditorSettings,
     of "Highlight":
       result = settings.getHighlightTableSettingValues(name)
     of "AutoBackup":
-      let settings = settings.autoBackupSettings
+      let settings = settings.autoBackup
       result = settings.getAutoBackupTableSettingValues(name, settingType)
     of "QuickRun":
-      let quickRunSettings = settings.quickRunSettings
+      let quickRunSettings = settings.quickRun
       result = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
     of "Notification":
-      let notificationSettings = settings.notificationSettings
+      let notificationSettings = settings.notification
       result = notificationSettings.getNotificationTableSettingValues(name)
     of "Filer":
-      result = settings.filerSettings.getFilerTableSettingValues(name)
+      result = settings.filer.getFilerTableSettingValues(name)
     of "Autocomplete":
-      let autocompleteSettings = settings.autocompleteSettings
+      let autocompleteSettings = settings.autocomplete
       result = autocompleteSettings.getAutocompleteTableSettingValues(name)
     of "Persist":
       let persistSettings = settings.persist
@@ -795,15 +795,15 @@ proc changeHighlightTableSetting(settings: var EditorSettings,
     of "currentLine":
       settings.view.highlightCurrentLine = parseBool(settingVal)
     of "fullWidthSpace":
-      settings.highlightSettings.fullWidthSpace = parseBool(settingVal)
+      settings.highlight.fullWidthSpace = parseBool(settingVal)
     of "trailingSpaces":
-      settings.highlightSettings.trailingSpaces = parseBool(settingVal)
+      settings.highlight.trailingSpaces = parseBool(settingVal)
     of "replaceText":
-      settings.highlightSettings.replaceText = parseBool(settingVal)
+      settings.highlight.replaceText = parseBool(settingVal)
     of "pairOfParen":
-      settings.highlightSettings.pairOfParen = parseBool(settingVal)
+      settings.highlight.pairOfParen = parseBool(settingVal)
     of "currentWord":
-      settings.highlightSettings.currentWord = parseBool(settingVal)
+      settings.highlight.currentWord = parseBool(settingVal)
     of "reservedWord":
       discard
     else:
@@ -948,19 +948,19 @@ proc changeEditorSettings(status: var EditorStatus,
     status.settings.statusLine
 
   template autoBackupSettings: var AutoBackupSettings =
-    status.settings.autoBackupSettings
+    status.settings.autoBackup
 
   template quickRunSettings: var QuickRunSettings =
-    status.settings.quickRunSettings
+    status.settings.quickRun
 
   template notificationSettings: var NotificationSettings =
-    status.settings.notificationSettings
+    status.settings.notification
 
   template filerSettings: var FilerSettings =
-    status.settings.filerSettings
+    status.settings.filer
 
   template autocompleteSettings: var AutocompleteSettings =
-    status.settings.autocompleteSettings
+    status.settings.autocomplete
 
   template persistSettings: var PersistSettings =
     status.settings.persist
@@ -1255,13 +1255,13 @@ proc editFiguresSetting(status: var EditorStatus,
 
         of "AutoBackup":
           case name:
-            of "idleTime": settings.autoBackupSettings.idleTime
-            of "interval": settings.autoBackupSettings.interval
+            of "idleTime": settings.autoBackup.idleTime
+            of "interval": settings.autoBackup.interval
             else: 0
 
         of "QuickRun":
           case name:
-            of "timeout": settings.quickRunSettings.timeout
+            of "timeout": settings.quickRun.timeout
             else: 0
         else: 0
 
@@ -1306,7 +1306,7 @@ proc editFiguresSetting(status: var EditorStatus,
     else:
       numStr &= key
       currentBufStatus.insertCharacter(currentMainWindowNode, key)
-      let reservedWords = status.settings.highlightSettings.reservedWords
+      let reservedWords = status.settings.highlight.reservedWords
       currentMainWindowNode.highlight =
         currentBufStatus.buffer.initConfigModeHighlight(currentLine,
                                                         arrayIndex,
@@ -1331,16 +1331,16 @@ proc editFiguresSetting(status: var EditorStatus,
     template autoBackupTable() =
       case name:
         of "idleTime":
-          status.settings.autoBackupSettings.idleTime = number
+          status.settings.autoBackup.idleTime = number
         of "interval":
-          status.settings.autoBackupSettings.interval = number
+          status.settings.autoBackup.interval = number
         else:
           discard
 
     template quickRunTable() =
       case name:
         of "timeout":
-          status.settings.quickRunSettings.timeout = number
+          status.settings.quickRun.timeout = number
         else:
           discard
 
@@ -1394,29 +1394,29 @@ proc editStringSetting(status: var EditorStatus,
               var val = ru ""
               for i in 0 .. arrayIndex:
                 if i > 0: val &= ru " "
-                val &= settings.highlightSettings.reservedWords[i].word.ru
+                val &= settings.highlight.reservedWords[i].word.ru
               # return val
               val
             else: ru ""
         of "AutoBackup":
           case name:
             of "backupDir":
-              settings.autoBackupSettings.backupDir
+              settings.autoBackup.backupDir
             else: ru ""
         of "QuickRun":
           case name:
             of "nimAdvancedCommand":
-              ru settings.quickRunSettings.nimAdvancedCommand
+              ru settings.quickRun.nimAdvancedCommand
             of "ClangOptions":
-              ru settings.quickRunSettings.ClangOptions
+              ru settings.quickRun.ClangOptions
             of "CppOptions":
-              ru settings.quickRunSettings.CppOptions
+              ru settings.quickRun.CppOptions
             of "NimOptions":
-              ru settings.quickRunSettings.NimOptions
+              ru settings.quickRun.NimOptions
             of "shOptions":
-              ru settings.quickRunSettings.shOptions
+              ru settings.quickRun.shOptions
             of "bashOptions":
-              ru settings.quickRunSettings.bashOptions
+              ru settings.quickRun.bashOptions
             else: ru ""
         else: ru ""
 
@@ -1461,7 +1461,7 @@ proc editStringSetting(status: var EditorStatus,
     else:
       buffer &= key
       currentBufStatus.insertCharacter(currentMainWindowNode, key)
-      let reservedWords = status.settings.highlightSettings.reservedWords
+      let reservedWords = status.settings.highlight.reservedWords
       currentMainWindowNode.highlight =
         currentBufStatus.buffer.initConfigModeHighlight(currentLine, arrayIndex, reservedWords)
 
@@ -1478,31 +1478,31 @@ proc editStringSetting(status: var EditorStatus,
     template  highlightTable() =
       case name:
         of "reservedWord":
-          status.settings.highlightSettings.reservedWords[arrayIndex].word = buffer
+          status.settings.highlight.reservedWords[arrayIndex].word = buffer
         else:
           discard
 
     template autoBackupTable() =
       case name:
         of "backupDir":
-          status.settings.autoBackupSettings.backupDir = ru buffer
+          status.settings.autoBackup.backupDir = ru buffer
         else:
           discard
 
     template quickRunTable() =
       case name:
         of "nimAdvancedCommand":
-          status.settings.quickRunSettings.nimAdvancedCommand = buffer
+          status.settings.quickRun.nimAdvancedCommand = buffer
         of "ClangOptions":
-          status.settings.quickRunSettings.ClangOptions = buffer
+          status.settings.quickRun.ClangOptions = buffer
         of "CppOptions":
-          status.settings.quickRunSettings.CppOptions = buffer
+          status.settings.quickRun.CppOptions = buffer
         of "NimOptions":
-          status.settings.quickRunSettings.NimOptions = buffer
+          status.settings.quickRun.NimOptions = buffer
         of "shOptions":
-          status.settings.quickRunSettings.shOptions = buffer
+          status.settings.quickRun.shOptions = buffer
         of "bashOptions":
-          status.settings.quickRunSettings.bashOptions = buffer
+          status.settings.quickRun.bashOptions = buffer
         else:
           discard
 
@@ -1753,18 +1753,18 @@ proc initHighlightTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       of "currentLine":
         result.add(ru nameStr & space & $settings.view.highlightCurrentLine)
       of "replaceText":
-        result.add(ru nameStr & space & $settings.highlightSettings.replaceText)
+        result.add(ru nameStr & space & $settings.highlight.replaceText)
       of "highlightPairOfParen":
-        result.add(ru nameStr & space & $settings.highlightSettings.pairOfParen)
+        result.add(ru nameStr & space & $settings.highlight.pairOfParen)
       of "fullWidthSpace":
-        result.add(ru nameStr & space & $settings.highlightSettings.fullWidthSpace)
+        result.add(ru nameStr & space & $settings.highlight.fullWidthSpace)
       of "trailingSpaces":
-        result.add(ru nameStr & space & $settings.highlightSettings.trailingSpaces)
+        result.add(ru nameStr & space & $settings.highlight.trailingSpaces)
       of "currentWord":
-        result.add(ru nameStr & space & $settings.highlightSettings.currentWord)
+        result.add(ru nameStr & space & $settings.highlight.currentWord)
       of "reservedWord":
         var line = ru nameStr & space
-        for reservedWord in settings.highlightSettings.reservedWords:
+        for reservedWord in settings.highlight.reservedWords:
           line &= ru reservedWord.word & " "
 
         result.add line
@@ -1875,7 +1875,7 @@ proc initFilerTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       space = " ".repeat(positionOfSetVal - len($name))
     case $name:
       of "showIcons":
-        result.add(ru nameStr & space & $settings.filerSettings.showIcons)
+        result.add(ru nameStr & space & $settings.filer.showIcons)
 
 proc initAutocompleteTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"Autocomplete")
@@ -1886,7 +1886,7 @@ proc initAutocompleteTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       space = " ".repeat(positionOfSetVal - len($name))
     case $name:
       of "enable":
-        result.add(ru nameStr & space & $settings.autocompleteSettings.enable)
+        result.add(ru nameStr & space & $settings.autocomplete.enable)
 
 proc initPersistTableBuffer(persistSettings: PersistSettings): seq[seq[Rune]] =
   result.add(ru"Persist")
@@ -1957,13 +1957,13 @@ proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
   buffer.add(initHighlightTableBuffer(settings))
 
   buffer.add(ru"")
-  buffer.add(initAutoBackupTableBuffer(settings.autoBackupSettings))
+  buffer.add(initAutoBackupTableBuffer(settings.autoBackup))
 
   buffer.add(ru"")
-  buffer.add(initQuickRunTableBuffer(settings.quickRunSettings))
+  buffer.add(initQuickRunTableBuffer(settings.quickRun))
 
   buffer.add(ru"")
-  buffer.add(initNotificationTableBuffer(settings.notificationSettings))
+  buffer.add(initNotificationTableBuffer(settings.notification))
 
   buffer.add(ru"")
   buffer.add(initFilerTableBuffer(settings))
@@ -2024,7 +2024,7 @@ proc configMode*(status: var Editorstatus) =
 
     let
       currentLine = currentMainWindowNode.currentLine
-      reservedWords = status.settings.highlightSettings.reservedWords
+      reservedWords = status.settings.highlight.reservedWords
       highlight = currentBufStatus.buffer.initConfigModeHighlight(
         currentLine,
         arrayIndex,

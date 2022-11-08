@@ -153,7 +153,7 @@ proc insertMode*(status: var EditorStatus) =
                       currentMainWindowNode,
                       status.settings.autoCloseParen, key)
 
-    if status.settings.autocompleteSettings.enable and
+    if status.settings.autocomplete.enable and
        prevLineNumber == currentMainWindowNode.currentLine and
        prevLine != currentBufStatus.buffer[currentMainWindowNode.currentLine]:
 
