@@ -510,27 +510,27 @@ type EditorColor* = object
   parenText*: Color
   parenTextBg*: Color
 
-  # highlight other uses current word
+  # highlight for other uses current word
   currentWord*: Color
   currentWordBg*: Color
 
-  # highlight full width space
+  # full width space
   highlightFullWidthSpace*: Color
   highlightFullWidthSpaceBg*: Color
 
-  # highlight trailing spaces
+  # trailing spaces
   highlightTrailingSpaces*: Color
   highlightTrailingSpacesBg*: Color
 
-  # highlight reserved words
+  # reserved words
   reservedWord*: Color
   reservedWordBg*: Color
 
-  # highlight history manager
-  currentHistory*: Color
-  currentHistoryBg*: Color
+  # backup manager
+  currentBackup*: Color
+  currentBackupBg*: Color
 
-  # highlight diff
+  # diff viewer
   addedLine*: Color
   addedLineBg*: Color
   deletedLine*: Color
@@ -607,17 +607,17 @@ type EditorColorPair* = enum
   replaceText = 48
   # pair of paren highlighting
   parenText = 49
-  # highlight other uses current word
+  # other uses current word
   currentWord = 50
-  # highlight full width space
+  # full width space
   highlightFullWidthSpace = 51
-  # highlight trailing spaces
+  # trailing spaces
   highlightTrailingSpaces = 52
-  # highlight reserved words
+  # reserved words
   reservedWord = 53
-  # highlight history manager
-  currentHistory = 54
-  # highlight diff
+  # Backup manager
+  currentBackup = 54
+  # diff viewer
   addedLine = 55
   deletedLine = 56
   # configuration mode
@@ -741,10 +741,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight reserved words
     reservedWord: white,
     reservedWordBg: gray,
-    # highlight history manager
-    currentHistory: gray100,
-    currentHistoryBg: teal,
-    # highlight diff
+    # Backup manager
+    currentBackup: gray100,
+    currentBackupBg: teal,
+    # diff viewer
     addedLine: green,
     addedLineBg: default,
     deletedLine: red,
@@ -872,10 +872,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight reserved words
     reservedWord: white,
     reservedWordBg: gray,
-    # highlight history manager
-    currentHistory: gray100,
-    currentHistoryBg: teal,
-    # highlight diff
+    # Backup manager
+    currentBackup: gray100,
+    currentBackupBg: teal,
+    # diff viewer
     addedLine: green,
     addedLineBg: default,
     deletedLine: red,
@@ -1003,10 +1003,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight reserved words
     reservedWord: white,
     reservedWordBg: gray,
-    # highlight history manager
-    currentHistory: gray100,
-    currentHistoryBg: teal,
-    # highlight diff
+    # Backup manager
+    currentBackup: gray100,
+    currentBackupBg: teal,
+    # diff viewer
     addedLine: green,
     addedLineBg: default,
     deletedLine: red,
@@ -1134,10 +1134,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight reserved words
     reservedWord: white,
     reservedWordBg: gray,
-    # highlight history manager
-    currentHistory: black,
-    currentHistoryBg: deepPink1_1,
-    # highlight diff
+    # Backup manager
+    currentBackup: black,
+    currentBackupBg: deepPink1_1,
+    # diff viewer
     addedLine: green,
     addedLineBg: default,
     deletedLine: red,
@@ -1265,10 +1265,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     # highlight reserved words
     reservedWord: deepPink1_1,
     reservedWordBg: black,
-    # highlight history manager
-    currentHistory: gray100,
-    currentHistoryBg: deepPink1_1,
-    # highlight diff
+    # Backup manager
+    currentBackup: gray100,
+    currentBackupBg: deepPink1_1,
+    # diff viewer
     addedLine: green,
     addedLineBg: default,
     deletedLine: red,
@@ -1476,12 +1476,12 @@ proc setCursesColor*(editorColor: EditorColor) =
                  editorColor.reservedWord,
                  editorColor.reservedWordBg)
 
-    # highlight history manager
-    setColorPair(EditorColorPair.currentHistory,
-                 editorColor.currentHistory,
-                 editorColor.currentHistoryBg)
+    # Backup manager
+    setColorPair(EditorColorPair.currentBackup,
+                 editorColor.currentBackup,
+                 editorColor.currentBackupBg)
 
-    # highlight diff
+    # diff viewer
     setColorPair(EditorColorPair.addedLine,
                  editorColor.addedLine,
                  editorColor.addedLineBg)
@@ -1623,8 +1623,8 @@ proc getColorFromEditorColorPair*(theme: ColorTheme,
     return (editorColor.addedLine, editorColor.addedLineBg)
   of EditorColorPair.deletedLine:
     return (editorColor.deletedLine, editorColor.deletedLineBg)
-  of EditorColorPair.currentHistory:
-    return (editorColor.currentHistory, editorColor.currentHistoryBg)
+  of EditorColorPair.currentBackup:
+    return (editorColor.currentBackup, editorColor.currentBackupBg)
   of EditorColorPair.currentSetting:
     return (editorColor.currentSetting, editorColor.currentSettingBg)
   of EditorColorPair.parenText:

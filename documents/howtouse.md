@@ -5,7 +5,7 @@
 |                               |                             |                               |                             |                                   |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|:---------------------------------:|
 | [Normal Mode](#normal-mode)   | [Register](#register) | [Visual Mode](#visual-block-mode) | [Replace Mode](#replace-mode) | [Insert Mode](#insert-mode) | 
-| [History Mode](#history-mode)     | [Ex Mode](#ex-mode)       | [Diff Mode](#diff-mode)     | [Filer Mode](#filer-mode)     | [Exiting](#exiting)         |
+| [Backup Mode](#backpmanager-mode)     | [Ex Mode](#ex-mode)       | [Diff Mode](#diff-mode)     | [Filer Mode](#filer-mode)     | [Exiting](#exiting)         |
 | [Changing Modes](#changing-modes) |
 
 
@@ -119,7 +119,7 @@
 </details>
 
 
-## History mode
+## Backupmanager mode
 
 <details open>
   <summary>Backup File Manager</summary>
@@ -231,7 +231,7 @@
 
 ```recent``` - Open recent file selection mode (Only supported on Linux)  
 
-```history``` - Open backup file manager  
+```backup``` - Open backup manager  
 
 ```conf``` - Open configuration mode
 

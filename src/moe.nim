@@ -2,7 +2,7 @@ import std/[os, times]
 import moepkg/[ui, editorstatus, normalmode, insertmode, visualmode,
                replacemode, filermode, exmode, buffermanager, logviewer,
                cmdlineoption, bufferstatus, help, recentfilemode, quickrun,
-               historymanager, diffviewer, configmode, debugmode]
+               backupmanager, diffviewer, configmode, debugmode]
 
 # Load persisted data (Ex command history, search history and cursor postion)
 proc loadPersistData(status: var EditorStatus) =
@@ -69,7 +69,7 @@ proc main() =
     of Mode.help: status.helpMode
     of Mode.recentFile: status.recentFileMode
     of Mode.quickRun: status.quickRunMode
-    of Mode.history: status.historyManager
+    of Mode.backup: status.backupManager
     of Mode.diff: status.diffViewer
     of Mode.config: status.configMode
     of Mode.debug: status.debugMode

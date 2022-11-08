@@ -1,19 +1,19 @@
 import std/[unittest, os, oids, json, strformat]
 import moepkg/[unicodeext, settings, editorstatus, backup]
-include moepkg/historymanager
+include moepkg/backupmanager
 
 template writeBackupInfoJson(backupDir, sourceFilePath: string) =
   let jsonNode = %* { "path": sourceFilePath }
   writeFile(backupDir / "backup.json", $jsonNode)
 
-template addHistoryManagerBuffer(status: var EditorStatus) =
-    status.addNewBuffer(Mode.history)
+template addBackupManagerBuffer(status: var EditorStatus) =
+    status.addNewBuffer(Mode.backup)
     status.changeCurrentBuffer(status.bufStatus.high)
-    currentBufStatus.initHistoryManagerBuffer(
+    currentBufStatus.initBackupManagerBuffer(
       status.baseBackupDir,
       sourceFilePath.toRunes)
 
-suite "History Manager: initHistoryManagerBuffer":
+suite "Backup Manager: initbackupManagerBuffer":
   let
     baseBackupDir = getCurrentDir() / "baseBackupDirForTest"
     backupDir = baseBackupDir / $genOid()
@@ -28,19 +28,19 @@ suite "History Manager: initHistoryManagerBuffer":
     if fileExists(sourceFilePath):
       removeFile(sourceFilePath)
 
-  test "initHistoryManagerBuffer":
+  test "initBackupManagerBuffer":
     var status = initEditorStatus()
     status.addNewBuffer
 
-    status.addNewBuffer(Mode.history)
+    status.addNewBuffer(Mode.backup)
     status.changeCurrentBuffer(status.bufStatus.high)
-    currentBufStatus.initHistoryManagerBuffer(
+    currentBufStatus.initBackupManagerBuffer(
       status.baseBackupDir,
       sourceFilePath.toRunes)
 
     check currentBufStatus.buffer.toRunes == ru""
 
-  test "initHistoryManagerBuffer 2":
+  test "initBackupManagerBuffer 2":
     writeFile(sourceFilePath, "test")
 
     writeBackupInfoJson(backupDir, sourceFilePath)
@@ -55,9 +55,9 @@ suite "History Manager: initHistoryManagerBuffer":
       status.commandLine,
       status.messageLog)
 
-    status.addNewBuffer(Mode.history)
+    status.addNewBuffer(Mode.backup)
     status.changeCurrentBuffer(status.bufStatus.high)
-    currentBufStatus.initHistoryManagerBuffer(
+    currentBufStatus.initBackupManagerBuffer(
       status.baseBackupDir,
       sourceFilePath.toRunes)
 
@@ -68,7 +68,7 @@ suite "History Manager: initHistoryManagerBuffer":
     let backupFilename = $currentBufStatus.buffer[0]
     check validateBackupFileName(backupFilename)
 
-suite "History Manager: openDiffViewer":
+suite "Backup Manager: openDiffViewer":
   let
     baseBackupDir = getCurrentDir() / "baseBackupDirForTest"
     backupDir = baseBackupDir / $genOid()
@@ -99,14 +99,14 @@ suite "History Manager: openDiffViewer":
     # Update the source file.
     writeFile(sourceFilePath, "test2\n")
 
-    status.addHistoryManagerBuffer
+    status.addBackupManagerBuffer
 
     status.openDiffViewer(sourceFilePath)
 
     check status.bufStatus.len == 3
     check currentBufStatus.mode == Mode.diff
 
-suite "History Manager: restoreBackupFile":
+suite "Backup Manager: restoreBackupFile":
   let
     baseBackupDir = getCurrentDir() / "baseBackupDirForTest"
     backupDir = baseBackupDir / $genOid()
@@ -137,7 +137,7 @@ suite "History Manager: restoreBackupFile":
     # Update the source file.
     writeFile(sourceFilePath, "test2\n")
 
-    status.addHistoryManagerBuffer
+    status.addBackupManagerBuffer
 
     const IS_FORCE_RESTORE = true
     status.restoreBackupFile(sourceFilePath.toRunes, IS_FORCE_RESTORE)
@@ -146,7 +146,7 @@ suite "History Manager: restoreBackupFile":
 
     removeFile(sourceFilePath)
 
-suite "History Manager: removeBackupFile":
+suite "Backup Manager: removeBackupFile":
   let
     baseBackupDir = getCurrentDir() / "baseBackupDirForTest"
     backupDir = baseBackupDir / $genOid()
@@ -174,7 +174,7 @@ suite "History Manager: removeBackupFile":
       status.commandLine,
       status.messageLog)
 
-    status.addHistoryManagerBuffer
+    status.addBackupManagerBuffer
 
     const IS_FORCE_REMOVE = true
     status.removeBackupFile(sourceFilePath.toRunes, IS_FORCE_REMOVE)

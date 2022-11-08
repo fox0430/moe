@@ -18,7 +18,7 @@ proc initStatusLine*(): StatusLine {.inline.} =
   result.window = initWindow(h, w, t, l, color)
 
 proc showFilename(mode, prevMode: Mode): bool {.inline.} =
-  not isHistoryManagerMode(mode, prevMode) and
+  not isBackupManagerMode(mode, prevMode) and
   not isConfigMode(mode, prevMode)
 
 proc appendFileName(statusLineBuffer: var seq[Rune],
@@ -181,7 +181,7 @@ proc setModeStr(mode: Mode, isActiveWindow, showModeInactive: bool): string =
     of Mode.logViewer: result = " LOG "
     of Mode.recentFile: result = " RECENT "
     of Mode.quickRun: result = " QUICKRUN "
-    of Mode.history: result = " HISTORY "
+    of Mode.backup: result = " BACKUP "
     of Mode.diff: result = "DIFF "
     of Mode.config: result = " CONFIG "
     of Mode.debug: result = " DEBUG "

@@ -141,9 +141,9 @@ Replace mode loop and Replace mode commands.
 ### ```src/moepkg/logviwer.nim```
 moe's log viewer. (```:log```)
 
-### ```src/moepkg/historymanager.nim```
-History mode loop and History mode commands. (```:history```)
-History mode is the manager of the auto-backup files.
+### ```src/moepkg/backupmanager.nim```
+Backupmanager mode loop and History mode commands. (```:backup```)
+Backupmanger is the manager of the auto-backup files.
 
 ### ```src/moepkg/diffviewer.nim```
 Diff mode loop and Diff mode commands.

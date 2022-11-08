@@ -15,7 +15,7 @@ type Mode* = enum
   help,
   recentFile,
   quickRun,
-  history,
+  backup,
   diff,
   config,
   debug
@@ -61,8 +61,8 @@ proc isFilerMode*(mode: Mode): bool {.inline.} = mode == Mode.filer
 proc isFilerMode*(mode, prevMode: Mode): bool {.inline.} =
   (mode == Mode.filer) or (mode == Mode.ex and prevMode == Mode.filer)
 
-proc isHistoryManagerMode*(mode, prevMode: Mode): bool {.inline.} =
-  (mode == Mode.history) or (mode == Mode.ex and prevMode == Mode.history)
+proc isBackupManagerMode*(mode, prevMode: Mode): bool {.inline.} =
+  (mode == Mode.backup) or (mode == Mode.ex and prevMode == Mode.backup)
 
 proc isDiffViewerMode*(mode, prevMode: Mode): bool {.inline.} =
   (mode == Mode.diff) or (mode == Mode.ex and prevMode == Mode.diff)
