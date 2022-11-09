@@ -1,20 +1,11 @@
-import std/[terminal, times, strformat, options]
-import gapbuffer, ui, unicodeext, highlight, color, window, bufferstatus,
-       movement, settings
+import std/[times, strformat, options]
+import gapbuffer, ui, unicodeext, highlight, window, bufferstatus, movement,
+       settings, commandline
 
 proc getDebugModeBufferIndex*(bufStatus: seq[BufferStatus]): int =
   result = -1
   for index, bufStatus in bufStatus:
     if isDebugMode(bufStatus.mode, bufStatus.prevMode): result = index
-
-proc initDebugModeHighlight*[T](buffer: T): Highlight =
-  for i in 0 ..< buffer.len:
-    result.colorSegments.add(ColorSegment(
-      firstRow: i,
-      firstColumn: 0,
-      lastRow: i,
-      lastColumn: buffer[i].len,
-      color: EditorColorPair.defaultChar))
 
 proc updateDebugModeBuffer*(
   bufStatus: var seq[BufferStatus],
@@ -130,31 +121,41 @@ proc initDebugModeBuffer*(
     currentWindowIndex,
     debugModeSettings)
 
+proc isDebugModeCommand*(command: Runes): InputState =
+  result = InputState.Invalid
+
+  if command.len == 1:
+    let key = command[0]
+    if key == ord(':') or
+       isControlK(key) or
+       isControlJ(key) or
+       key == ord('k') or isUpKey(key) or
+       key == ord('j') or isDownKey(key) or
+       key == ord('g') or
+       key == ord('G'):
+         return InputState.Valid
+    elif key == ord('g'):
+      return InputState.Continue
+  elif command.len == 2:
+    if command[0] == ord('g'):
+      if command[1] == ord('g'):
+        return InputState.Valid
+
+proc changeModeToExMode(
+  bufStatus: var BufferStatus,
+  commandLine: var CommandLine)  =
+    bufStatus.changeMode(Mode.ex)
+    commandLine.clear
+    commandLine.setPrompt(exModePrompt)
+
+# TODO: Resolve the recursive module dependency and move to top.
 import editorstatus
 
-proc debugMode*(status: var Editorstatus) =
-  let currentBufferIndex = currentMainWindowNode.bufferIndex
-
-  status.resize(terminalHeight(), terminalWidth())
-
-  while currentBufStatus.mode == Mode.debug and
-        currentBufferIndex == status.bufferIndexInCurrentWindow:
-
-    status.update
-    setCursor(false)
-
-    var key = errorKey
-    while key == errorKey:
-      status.eventLoopTask
-      key = getKey(currentMainWindowNode)
-
-    status.lastOperatingTime = now()
-
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-
-    elif key == ord(':'):
-      status.changeMode(Mode.ex)
+proc execDebugModeCommand*(status: var Editorstatus, command: Runes) =
+  if command.len == 1:
+    let key = command[0]
+    if key == ord(':'):
+      currentBufStatus.changeModeToExMode(status.commandLine)
 
     elif isControlK(key):
       status.moveNextWindow
@@ -166,13 +167,9 @@ proc debugMode*(status: var Editorstatus) =
     elif key == ord('j') or isDownKey(key):
       currentBufStatus.keyDown(currentMainWindowNode)
 
-    elif key == ord('g'):
-      let secondKey = getKey(currentMainWindowNode)
-      if secondKey == ord('g'):
-        currentBufStatus.moveToFirstLine(currentMainWindowNode)
-      else: discard
     elif key == ord('G'):
       currentBufStatus.moveToLastLine(currentMainWindowNode)
-
-    else:
-      discard
+  elif command.len == 2:
+    if command[0] == ord('g'):
+      if command[1] == ord('g'):
+        currentBufStatus.moveToFirstLine(currentMainWindowNode)

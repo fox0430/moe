@@ -1,6 +1,6 @@
 import std/[sugar, critbits, options, sequtils, strutils]
 import pkg/unicodedb/properties
-import unicodeext, bufferstatus, algorithm, osext
+import unicodeext, bufferstatus, algorithm, osext, gapbuffer
 import syntax/[highlite, syntaxnim, syntaxc, syntaxcpp, syntaxcsharp,
                syntaxjava, syntaxpython, syntaxjavascript]
 

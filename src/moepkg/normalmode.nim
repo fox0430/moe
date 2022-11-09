@@ -1,12 +1,7 @@
-import std/[terminal, times, strutils]
-import editorstatus, ui, gapbuffer, unicodeext, fileutils, undoredostack,
-       window, movement, editor, searchutils, search, bufferstatus, quickrun,
-       messages
-
-type InputState = enum
-  Continue
-  Valid
-  Invalid
+import std/[terminal, times, strutils, sequtils]
+import editorstatus, ui, gapbuffer, unicodeext, fileutils, window,
+       movement, editor, searchutils, bufferstatus, quickrun, messages,
+       visualmode, commandline
 
 proc searchOneCharacterToEndOfLine(bufStatus: var BufferStatus,
                                    windowNode: WindowNode,
@@ -1045,17 +1040,54 @@ proc changeModeToReplaceMode(status: var EditorStatus) {.inline.} =
   else:
     status.changeMode(Mode.replace)
 
-proc changeModeToVisualMode(status: var EditorStatus) {.inline.} =
+proc changeModeToVisualMode(status: var EditorStatus) =
   status.changeMode(Mode.visual)
+  currentBufStatus.selectArea = initSelectArea(
+    currentMainWindowNode.currentLine,
+    currentMainWindowNode.currentColumn)
 
-proc changeModeToVisualBlockMode(status: var EditorStatus) {.inline.} =
+proc changeModeToVisualBlockMode(status: var EditorStatus) =
   status.changeMode(Mode.visualBlock)
+  currentBufStatus.selectArea = initSelectArea(
+    currentMainWindowNode.currentLine,
+    currentMainWindowNode.currentColumn)
+
+proc changeModeToExMode*(
+  bufStatus: var BufferStatus,
+  commandLine: var CommandLine) =
+
+    bufStatus.changeMode(Mode.ex)
+    commandLine.clear
+    commandLine.setPrompt(exModePrompt)
+
+proc changeModeToSearchForwardMode(
+  bufStatus: var BufferStatus,
+  commandLine: var CommandLine) =
+
+    bufStatus.changeMode(Mode.searchForward)
+    commandLine.clear
+    commandLine.setPrompt(searchForwardModePrompt)
+
+proc changeModeToSearchBackwardMode(
+  bufStatus: var BufferStatus,
+  commandLine: var CommandLine) =
+
+    bufStatus.changeMode(Mode.searchBackward)
+    commandLine.clear
+    commandLine.setPrompt(searchBackwardModePrompt)
 
 proc normalCommand(status: var EditorStatus,
                    commands: seq[Rune],
                    height, width: int) =
 
-  if commands.len == 0: return
+  if commands.len == 0:
+    return
+  elif isControlC(commands[^1]):
+    # Cnacel commands and show the exit help
+    status.commandLine.writeExitHelp
+  elif commands.len > 1 and isEscKey(commands[0]):
+    # Remove ECS key and call recursively.
+    status.normalCommand(commands[1..commands.high], height, width)
 
   if currentBufStatus.cmdLoop == 0: currentBufStatus.cmdLoop = 1
 
@@ -1309,78 +1341,88 @@ proc normalCommand(status: var EditorStatus,
      not isChangeModeKey(commands[0]):
     status.normalCommandHistory.add commands
 
-# Get a key and execute the event loop
-proc getKey(status: var Editorstatus): Rune =
-  result = errorKey
-  while result == errorKey:
-    if not pressCtrlC:
-      status.eventLoopTask
-      result = getKey(currentMainWindowNode)
-    else:
-      pressCtrlC = false
-      status.commandLine.writeExitHelp
-      status.update
-
-proc isNormalModeCommand(command: seq[Rune]): InputState =
+proc isNormalModeCommand*(command: seq[Rune]): InputState =
   result = InputState.Invalid
 
   if command.len == 0:
-    result = InputState.Continue
-  else:
-    if isControlK(command[0]) or
-       isControlJ(command[0]) or
-       isControlV(command[0]) or
-       command[0] == ord('h') or isLeftKey(command[0]) or isBackspaceKey(command[0]) or
-       command[0] == ord('l') or isRightKey(command[0]) or
-       command[0] == ord('k') or isUpKey(command[0]) or
-       command[0] == ord('j') or isDownKey(command[0]) or
-       isEnterKey(command[0]) or
-       command[0] == ord('x') or isDcKey(command[0]) or
-       command[0] == ord('X') or
-       command[0] == ord('^') or command[0] == ord('_') or
-       command[0] == ord('0') or isHomeKey(command[0]) or
-       command[0] == ord('$') or isEndKey(command[0]) or
-       command[0] == ord('{') or
-       command[0] == ord('}') or
-       command[0] == ord('-') or
-       command[0] == ord('+') or
-       command[0] == ord('G') or
-       isControlU(command[0]) or
-       isControlD(command[0]) or
-       isPageUpKey(command[0]) or
-       ## Page down and Ctrl - F
-       isPageDownKey(command[0]) or
-       command[0] == ord('w') or
-       command[0] == ord('b') or
-       command[0] == ord('e') or
-       command[0] == ord('o') or
-       command[0] == ord('O') or
-       command[0] == ord('D') or
-       command[0] == ord('S') or
-       command[0] == ord('s') or
-       command[0] == ord('p') or
-       command[0] == ord('P') or
-       command[0] == ord('>') or
-       command[0] == ord('<') or
-       command[0] == ord('J') or
-       isControlA(command[0]) or
-       isControlX(command[0]) or
-       command[0] == ord('~') or
-       command[0] == ord('n') or
-       command[0] == ord('N') or
-       command[0] == ord('*') or
-       command[0] == ord('#') or
-       command[0] == ord('R') or
-       command[0] == ord('i') or
-       command[0] == ord('I') or
-       command[0] == ord('v') or
-       command[0] == ord('a') or
-       command[0] == ord('A') or
-       command[0] == ord('u') or
-       isControlR(command[0]) or
-       command[0] == ord('.') or
-       command[0] == ord('Y'):
+    return InputState.Continue
+  elif isControlC(command[^1]):
+    result = InputState.Valid
+  elif isEscKey(command[0]):
+    if command.len == 1:
+      result = InputState.Continue
+    elif command.len == 2 and isEscKey(command[1]):
       result = InputState.Valid
+    else:
+      # Remove ECS key and call recursively.
+      return isNormalModeCommand(command[1 .. command.high])
+
+  elif isEscKey(command[^1]):
+    # Cancel commands.
+    result = InputState.Invalid
+
+  else:
+    if $command == "/" or
+       $command == "?" or
+       $command == ":" or
+       isControlK(command) or
+       isControlJ(command) or
+       isControlV(command) or
+       $command == "h" or isLeftKey(command) or isBackspaceKey(command[0]) or
+       $command == "l" or isRightKey(command) or
+       $command == "k" or isUpKey(command) or
+       $command == "j" or isDownKey(command) or
+       isEnterKey(command) or
+       $command == "x" or isDcKey(command) or
+       $command == "X" or
+       $command == "^" or $command == "_" or
+       $command == "0" or isHomeKey(command) or
+       $command == "$" or isEndKey(command) or
+       $command == "{" or
+       $command == "}" or
+       $command == "-" or
+       $command == "+" or
+       $command == "G" or
+       isControlU(command) or
+       isControlD(command) or
+       isPageUpKey(command) or
+       ## Page down and Ctrl - F
+       isPageDownKey(command) or
+       $command == "w" or
+       $command == "b" or
+       $command == "e" or
+       $command == "o" or
+       $command == "O" or
+       $command == "D" or
+       $command == "S" or
+       $command == "s" or
+       $command == "p" or
+       $command == "P" or
+       $command == ">" or
+       $command == "<" or
+       $command == "J" or
+       isControlA(command) or
+       isControlX(command) or
+       $command == "~" or
+       $command == "n" or
+       $command == "N" or
+       $command == "*" or
+       $command == "#" or
+       $command == "R" or
+       $command == "i" or
+       $command == "I" or
+       $command == "v" or
+       $command == "a" or
+       $command == "A" or
+       $command == "u" or
+       isControlR(command) or
+       $command == "." or
+       $command == "Y":
+      result = InputState.Valid
+
+    elif isDigit(command[0]):
+      # Remove numbers and call recursively.
+      return isNormalModeCommand(command[1 .. command.high])
 
     elif command[0] == ord('g'):
       if command.len == 1:
@@ -1389,7 +1431,7 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
         if command[1] == ord('g') or
            command[1] == ord('_') or
            command[1] == ord('a'):
-          result = InputState.Valid
+             result = InputState.Valid
 
     elif command[0] == ord('z'):
       if command.len == 1:
@@ -1398,7 +1440,7 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
         if command[1] == ord('.') or
            command[1] == ord('t') or
            command[1] == ord('b'):
-          result = InputState.Valid
+             result = InputState.Valid
 
     elif command[0] == ord('c'):
       if command.len == 1:
@@ -1406,14 +1448,14 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
       elif command.len == 2:
         if command[1] == ord('i') or
            command[1] == ord('f'):
-          result = InputState.Continue
+             result = InputState.Continue
         elif command[1] == ord('c') or command[1] == ('l'):
           result = InputState.Valid
       elif command.len == 3:
         if command[1] == ord('f') or
            (command[1] == ord('i') and
            (isParen(command[2]) or command[2] == ord('w'))):
-          result = InputState.Valid
+             result = InputState.Valid
 
     elif command[0] == ord('d'):
       if command.len == 1:
@@ -1426,7 +1468,7 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
            command[1] == ord('G') or
            command[1] == ord('{') or
            command[1] == ord('}'):
-          result = InputState.Valid
+             result = InputState.Valid
         elif command[1] == ord('g') or command[1] == ord('i'):
           result = InputState.Continue
       elif command.len == 3:
@@ -1435,7 +1477,7 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
         elif command[1] == ord('i'):
           if isParen(command[2]) or
              command[2] == ord('w'):
-            result = InputState.Valid
+               result = InputState.Valid
 
     elif command[0] == ord('y'):
       if command.len == 1:
@@ -1532,7 +1574,7 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
            cmd == "di" or
            cmd == "c" or
            cmd == "ci":
-          result = InputState.Continue
+             result = InputState.Continue
         elif cmd == "p" or
              cmd == "P" or
              cmd == "yy" or
@@ -1552,80 +1594,30 @@ proc isNormalModeCommand(command: seq[Rune]): InputState =
              cmd == "dh" or
              cmd == "cl" or cmd == "s" or
              (cmd.len == 3 and cmd[0 .. 1] == "ci"):
-          result = InputState.Valid
+               result = InputState.Valid
 
+proc execNormalModeCommand*(status: var Editorstatus, command: Runes) =
+  status.lastOperatingTime = now()
+
+  if $command == "/":
+    currentBufStatus.changeModeToSearchForwardMode(status.commandLine)
+  elif $command == "?":
+    currentBufStatus.changeModeToSearchBackwardMode(status.commandLine)
+  elif $command == ":":
+    currentBufStatus.changeModeToExMode(status.commandLine)
+  elif isEscKey(command[0]):
+    if command.len == 2 and isEscKey(command[1]):
+      status.turnOffHighlighting
     else:
-      discard
+      # Remove ECS key and call recursively.
+      status.execNormalModeCommand(command[1..command.high])
+  else:
+    if isDigit(command[0]):
+      currentBufStatus.cmdLoop = parseInt($command.filterIt(isDigit(it)))
 
-proc isNormalMode(status: Editorstatus): bool =
-  let index = currentMainWindowNode.bufferIndex
-  status.bufStatus[index].mode == Mode.normal
+    let cmd =
+      if isDigit(command[0]): command.filterIt(not isDigit(it))
+      else: command
+    status.normalCommand(cmd, terminalHeight(), terminalWidth())
 
-proc normalMode*(status: var EditorStatus) =
-  if not status.settings.disableChangeCursor:
-    changeCursorType(status.settings.normalModeCursor)
-
-  status.resize(terminalHeight(), terminalWidth())
-
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  var
-    countChange = 0
-    command = ru ""
-
-  while status.isNormalMode and
-        currentBufferIndex == status.bufferIndexInCurrentWindow:
-
-    if currentBufStatus.countChange > countChange:
-      countChange = currentBufStatus.countChange
-
-    status.update
-
-    var key = status.getKey
-
-    status.lastOperatingTime = now()
-
-    currentBufStatus.buffer.beginNewSuitIfNeeded
-    currentBufStatus.tryRecordCurrentPosition(currentMainWindowNode)
-
-    if isEscKey(key):
-      command = ru ""
-      currentBufStatus.cmdLoop = 0
-
-      let keyAfterEsc = getKey(currentMainWindowNode)
-      if isEscKey(keyAfterEsc):
-        status.turnOffHighlighting
-        continue
-      else:
-        key = keyAfterEsc
-
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-    elif key == ord('/'):
-      status.searchFordwards
-    elif key == ord('?'):
-      status.searchBackwards
-    elif key == ord(':'):
-      status.changeMode(Mode.ex)
-    elif isDigit(command) and
-         isDigit(key) and
-         not (currentBufStatus.cmdLoop == 0 and ($key)[0] == '0'):
-
-      let num = ($key)[0]
-
-      currentBufStatus.cmdLoop *= 10
-      currentBufStatus.cmdLoop += ord(num) - ord('0')
-      currentBufStatus.cmdLoop = min(
-        100000,
-        currentBufStatus.cmdLoop)
-      continue
-    else:
-      command &= key
-
-      let state = isNormalModeCommand(command)
-      if state == InputState.Continue:
-        continue
-      elif state == InputState.Valid:
-        status.normalCommand(command, terminalHeight(), terminalWidth())
-
-    command = ru ""
-    currentBufStatus.cmdLoop = 0
+  currentBufStatus.cmdLoop = 0

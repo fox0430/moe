@@ -1,11 +1,19 @@
-import std/[terminal, times, unicode]
-import editorstatus, ui, movement, editor, bufferstatus, gapbuffer,
-       window, settings
+import std/options
 
-proc moveRight(bufStatus: var BufferStatus,
-               windowNode: var WindowNode,
-               isMoved: var bool,
-               undoLastSuitId: var int) =
+import editorstatus
+import ui
+import movement
+import editor
+import bufferstatus
+import gapbuffer
+import window
+import settings
+import unicodeext
+
+# For undo/redo in the replace mode.
+var undoLastSuitId: Option[int]
+
+proc moveRight(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   let
     beforeLine = windowNode.currentLine
     beforeColumn = windowNode.currentColumn
@@ -13,13 +21,9 @@ proc moveRight(bufStatus: var BufferStatus,
 
   if beforeLine != windowNode.currentLine or
      beforeColumn != windowNode.currentColumn:
-    isMoved = true
-    undoLastSuitId = bufStatus.buffer.lastSuitId
+    undoLastSuitId = some(bufStatus.buffer.lastSuitId)
 
-proc moveLeft(bufStatus: var BufferStatus,
-              windowNode: var WindowNode,
-              isMoved: var bool,
-              undoLastSuitId: var int) =
+proc moveLeft(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   let
     beforeLine = windowNode.currentLine
     beforeColumn = windowNode.currentColumn
@@ -27,13 +31,9 @@ proc moveLeft(bufStatus: var BufferStatus,
 
   if beforeLine != windowNode.currentLine or
      beforeColumn != windowNode.currentColumn:
-    isMoved = true
-    undoLastSuitId = bufStatus.buffer.lastSuitId
+    undoLastSuitId = some(bufStatus.buffer.lastSuitId)
 
-proc moveUp(bufStatus: var BufferStatus,
-            windowNode: var WindowNode,
-            isMoved: var bool,
-            undoLastSuitId: var int) =
+proc moveUp(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   let
     beforeLine = windowNode.currentLine
     beforeColumn = windowNode.currentColumn
@@ -41,13 +41,9 @@ proc moveUp(bufStatus: var BufferStatus,
 
   if beforeLine != windowNode.currentLine or
      beforeColumn != windowNode.currentColumn:
-    isMoved = true
-    undoLastSuitId = bufStatus.buffer.lastSuitId
+    undoLastSuitId = some(bufStatus.buffer.lastSuitId)
 
-proc moveDown(bufStatus: var BufferStatus,
-              windowNode: var WindowNode,
-              isMoved: var bool,
-              undoLastSuitId: var int) =
+proc moveDown(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   let
     beforeLine = windowNode.currentLine
     beforeColumn = windowNode.currentColumn
@@ -55,41 +51,34 @@ proc moveDown(bufStatus: var BufferStatus,
 
   if beforeLine != windowNode.currentLine or
      beforeColumn != windowNode.currentColumn:
-    isMoved = true
-    undoLastSuitId = bufStatus.buffer.lastSuitId
+    undoLastSuitId = some(bufStatus.buffer.lastSuitId)
 
 # Repace the current chracter or insert the character and move to the right
-proc replaceCurrentCharacter(bufStatus: var BufferStatus,
-                             windowNode: var WindowNode,
-                             isMoved: var bool,
-                             key: Rune,
-                             settings: EditorSettings) =
+proc replaceCurrentCharacter(
+  bufStatus: var BufferStatus,
+  windowNode: var WindowNode,
+  settings: EditorSettings,
+  key: Rune) =
 
-  if windowNode.currentColumn < bufStatus.buffer[windowNode.currentLine].len:
-    let
-      currentLine = windowNode.currentLine
-      currentColumn = windowNode.currentColumn
-      oldLine = bufStatus.buffer[currentLine]
-    var newLine = bufStatus.buffer[currentLine]
-    newLine[currentColumn] = key
+    if windowNode.currentColumn < bufStatus.buffer[windowNode.currentLine].len:
+      let
+        currentLine = windowNode.currentLine
+        currentColumn = windowNode.currentColumn
+        oldLine = bufStatus.buffer[currentLine]
+      var newLine = bufStatus.buffer[currentLine]
+      newLine[currentColumn] = key
 
-    if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
-  else:
-    insertCharacter(bufStatus, windowNode, settings.autoCloseParen, key)
+      if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
+    else:
+      insertCharacter(bufStatus, windowNode, settings.autoCloseParen, key)
 
-  bufStatus.keyRight(windowNode)
-  isMoved = false
+    bufStatus.keyRight(windowNode)
 
-proc undoOrMoveCursor(bufStatus: var BufferStatus,
-                      windowNode: var WindowNode,
-                      isMoved: bool,
-                      undoLastSuitId: int) =
-
+proc undoOrMoveCursor(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   # Can undo until you enter Replace mode
   # Do not undo if the cursor is moved and re-enable undo if the character is replaced
-  if not isMoved and
-     bufStatus.buffer.lastSuitId > undoLastSuitId:
-    undo(bufStatus, windowNode)
+  if bufStatus.buffer.lastSuitId > undoLastSuitId.get:
+    bufStatus.undo(windowNode)
   else:
     if windowNode.currentColumn == 0 and
        windowNode.currentLine > 0:
@@ -100,60 +89,41 @@ proc undoOrMoveCursor(bufStatus: var BufferStatus,
       # Move to left once
       windowNode.keyLeft
 
-proc replaceMode*(status: var EditorStatus) =
-  var
-    isMoved = false
-    undoLastSuitId = currentBufStatus.buffer.lastSuitId
+proc isReplaceModeCommand*(command: Runes): InputState =
+  result = InputState.Invalid
 
-  while isReplaceMode(currentBufStatus.mode):
+  if pressCtrlC or command.len == 1:
+    return InputState.Valid
 
-    status.update
+# TODO: Fix replace mode
+proc execReplaceModeCommand*(status: var EditorStatus, command: Runes) =
+  if undoLastSuitId.isNone:
+    # Init undo/redo history for the replace mode.
+    undoLastSuitId = some(currentBufStatus.buffer.lastSuitId)
 
-    var key = errorKey
-    while key == errorKey:
-      if not pressCtrlC:
-        status.eventLoopTask
-        key = getKey(currentMainWindowNode)
-      else:
-        # Exit replace mode
+  let key = command[0]
 
-        pressCtrlC = false
+  if isControlC(key) or isEscKey(key) or isControlSquareBracketsRight(key):
+    undoLastSuitId = none(int)
+    status.changeMode(currentBufStatus.prevMode)
+  elif isRightKey(key):
+    currentBufStatus.moveRight(currentMainWindowNode)
+  elif isLeftKey(key):
+    currentBufStatus.moveLeft(currentMainWindowNode)
+  elif isUpKey(key):
+    currentBufStatus.moveUp(currentMainWindowNode)
+  elif isDownKey(key):
+    currentBufStatus.moveDown(currentMainWindowNode)
+  elif isEnterKey(key):
+    currentBufStatus.keyEnter(
+      currentMainWindowNode,
+      status.settings.autoIndent,
+      status.settings.tabStop)
 
-        if currentMainWindowNode.currentColumn > 0:
-          dec(currentMainWindowNode.currentColumn)
-        currentMainWindowNode.expandedColumn = currentMainWindowNode.currentColumn
-        status.changeMode(Mode.normal)
-
-        return
-
-    status.lastOperatingTime = now()
-
-    currentBufStatus.buffer.beginNewSuitIfNeeded
-    currentBufStatus.tryRecordCurrentPosition(currentMainWindowNode)
-
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-    elif isEscKey(key) or isControlSquareBracketsRight(key):
-      status.changeMode(Mode.normal)
-    elif isRightKey(key):
-      currentBufStatus.moveRight(currentMainWindowNode, isMoved, undoLastSuitId)
-    elif isLeftKey(key):
-      currentBufStatus.moveLeft(currentMainWindowNode, isMoved, undoLastSuitId)
-    elif isUpKey(key):
-      currentBufStatus.moveUp(currentMainWindowNode, isMoved, undoLastSuitId)
-    elif isDownKey(key):
-      currentBufStatus.moveDown(currentMainWindowNode, isMoved, undoLastSuitId)
-    elif isEnterKey(key):
-      currentBufStatus.keyEnter(currentMainWindowNode,
-                                status.settings.autoIndent,
-                                status.settings.tabStop)
-    elif isBackspaceKey(key):
-      currentBufStatus.undoOrMoveCursor(currentMainWindowNode,
-                                        isMoved,
-                                        undoLastSuitId)
-    else:
-      currentBufStatus.replaceCurrentCharacter(
-        currentMainWindowNode,
-        isMoved,
-        key,
-        status.settings)
+  elif isBackspaceKey(key):
+    currentBufStatus.undoOrMoveCursor(currentMainWindowNode)
+  else:
+    currentBufStatus.replaceCurrentCharacter(
+      currentMainWindowNode,
+      status.settings,
+      key)

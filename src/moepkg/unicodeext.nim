@@ -1,11 +1,20 @@
 import std/[unicode, sequtils, strutils, strformat, os, times, oids]
 import pkg/unicodedb/widths
-import gapbuffer
 
 export unicode
 
-type CharacterEncoding* = enum
-  utf8, utf16, utf16Be, utf16Le, utf32, utf32Be, utf32Le, unknown
+type
+  Runes* = seq[Rune]
+
+  CharacterEncoding* = enum
+    utf8
+    utf16
+    utf16Be
+    utf16Le
+    utf32
+    utf32Be
+    utf32Le
+    unknown
 
 proc `$`*(encoding: CharacterEncoding): string =
   case encoding
@@ -236,19 +245,14 @@ proc split*(runes: seq[Rune], sep: Rune): seq[seq[Rune]] =
     if c == sep: result.add(@[])
     else: result[result.high].add(c)
 
-proc toGapBuffer*(runes: seq[Rune]): GapBuffer[seq[Rune]] {.inline.} =
-  runes.split(ru'\n').initGapBuffer
-
-proc toRunes*(buffer: GapBuffer[seq[Rune]]): seq[Rune] =
-  for i in 0 ..< buffer.len:
-    result.add(buffer[i])
-    if i+1 < buffer.len: result.add(ru'\n')
-
 proc toRunes*(num: int): seq[Rune] {.inline.} = toRunes($num)
 
 proc toRunes*(dateTime: DateTime): seq[Rune] {.inline.} = toRunes($dateTime)
 
 proc toRunes*(oid: Oid): seq[Rune] {.inline.} = toRunes($oid)
+
+proc toRunes*(s: seq[string]): Runes =
+  for l in s: result.add l.toRunes
 
 proc startsWith*(runes1, runes2: seq[Rune]): bool =
   result = true
@@ -467,3 +471,9 @@ proc removePrefix*(runes: seq[Rune], prefix: seq[Rune]): seq[Rune] {.inline.} =
 proc count*(runes: seq[Rune], r: Rune): int {.inline.} =
   for r2 in runes:
     if r2 == r: result.inc
+
+# Assign empty rune.
+template clear*(r: var Rune) = r = "".ru
+
+# Assign empty runes.
+template clear*(r: var Runes) = r = "".ru

@@ -1,8 +1,6 @@
 import std/[os, times]
-import moepkg/[ui, editorstatus, normalmode, insertmode, visualmode,
-               replacemode, filermode, exmode, buffermanager, logviewer,
-               cmdlineoption, bufferstatus, help, recentfilemode, quickrun,
-               backupmanager, diffviewer, configmode, debugmode]
+
+import moepkg/[ui, bufferstatus, editorstatus, cmdlineoption, mainloop]
 
 # Load persisted data (Ex command history, search history and cursor postion)
 proc loadPersistData(status: var EditorStatus) =
@@ -17,9 +15,7 @@ proc loadPersistData(status: var EditorStatus) =
     currentMainWindowNode.restoreCursorPostion(currentBufStatus,
                                                status.lastPosition)
 
-proc addBufferStatus(status: var EditorStatus,
-                     parsedList: CmdParsedList) =
-
+proc addBufferStatus(status: var EditorStatus, parsedList: CmdParsedList) =
   if parsedList.path.len > 0:
     for path in parsedList.path:
       if dirExists(path):
@@ -55,25 +51,9 @@ proc initEditor(): EditorStatus =
 proc main() =
   var status = initEditor()
 
-  while status.mainWindow.numOfMainWindow > 0:
-
-    case currentBufStatus.mode:
-    of Mode.normal: status.normalMode
-    of Mode.insert: status.insertMode
-    of Mode.visual, Mode.visualBlock: status.visualMode
-    of Mode.replace: status.replaceMode
-    of Mode.ex: status.exMode
-    of Mode.filer: status.filerMode
-    of Mode.bufManager: status.bufferManager
-    of Mode.logViewer: status.messageLogViewer
-    of Mode.help: status.helpMode
-    of Mode.recentFile: status.recentFileMode
-    of Mode.quickRun: status.quickRunMode
-    of Mode.backup: status.backupManager
-    of Mode.diff: status.diffViewer
-    of Mode.config: status.configMode
-    of Mode.debug: status.debugMode
+  status.editorMainLoop
 
   status.exitEditor
 
 when isMainModule: main()
+

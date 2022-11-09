@@ -1,19 +1,13 @@
-import std/[terminal, strutils, sequtils, strformat, os, algorithm]
-import ui, unicodeext, fileutils, color, commandline
+import std/[terminal, strutils, sequtils, strformat, os, algorithm, options]
+import ui, unicodeext, fileutils, color, commandline, popupwindow
 
-type ExModeViewStatus* = object
-    buffer*: seq[Rune]
-    prompt*: string
-    cursorY*: int
-    cursorX*: int
-    currentPosition*: int
-    startPosition*: int
+type
+  SuggestType* = enum
+    exCommand
+    exCommandOption
+    filePath
 
-type SuggestType* = enum
-  exCommand
-  exCommandOption
-  filePath
-
+# TODO: Auto inserts spaces in compile time.
 const exCommandList: array[65, tuple[command, description: string]] = [
   (command: "!", description: "                    | Shell command execution"),
   (command: "deleteParen", description: "          | Enable/Disable auto delete paren"),
@@ -82,79 +76,79 @@ const exCommandList: array[65, tuple[command, description: string]] = [
   (command: "wqa", description: "                  | Write all file in current workspace")
 ]
 
-proc askCreateDirPrompt*(commndLine: var CommandLine,
-                         messageLog: var seq[seq[Rune]],
-                         path: string): bool =
+proc askCreateDirPrompt*(
+  commndLine: var CommandLine,
+  messageLog: var seq[Runes],
+  path: string): bool =
 
-  let mess = fmt"{path} does not exists. Create it now?: y/n"
-  commndLine.updateCommandLineBuffer(mess)
-  commndLine.updateCommandLineView
-  messageLog.add(mess.toRunes)
+    let mess = fmt"{path} does not exists. Create it now?: y/n"
+    commndLine.write(mess.toRunes)
+    messageLog.add(mess.toRunes)
 
-  let key = commndLine.getKey
-
-  if key == ord('y'): result = true
-  else: result = false
-
-proc askBackupRestorePrompt*(commndLine: var CommandLine,
-                             messageLog: var seq[seq[Rune]],
-                             filename: seq[Rune]): bool =
-
-  let mess = fmt"Restore {filename}?: y/n"
-  commndLine.updateCommandLineBuffer(mess)
-  commndLine.updateCommandLineView
-  messageLog.add(mess.toRunes)
-
-  let key = commndLine.getKey
-
-  if key == ord('y'): result = true
-  else: result = false
-
-proc askDeleteBackupPrompt*(commndLine: var CommandLine,
-                            messageLog: var seq[seq[Rune]],
-                            filename: seq[Rune]): bool =
-
-  let mess = fmt"Delete {filename}?: y/n"
-  commndLine.updateCommandLineBuffer(mess)
-  commndLine.updateCommandLineView
-  messageLog.add(mess.toRunes)
-
-  let key = commndLine.getKey
-
-  if key == ord('y'): result = true
-  else: result = false
-
-proc askFileChangedSinceReading*(commndLine: var CommandLine,
-                                 messageLog: var seq[seq[Rune]]): bool =
-
-  block:
-    const warnMess = "WARNING: The file has been changed since reading it!: Press any key"
-    commndLine.updateCommandLineBuffer(warnMess)
-    commndLine.updateCommandLineView
-    messageLog.add(warnMess.toRunes)
-    discard commndLine.getKey
-
-  block:
-    const askMess = "Do you really want to write to it: y/n ?"
-    commndLine.updateCommandLineBuffer(askMess)
-    commndLine.updateCommandLineView
-    messageLog.add(askMess.toRunes)
     let key = commndLine.getKey
 
     if key == ord('y'): result = true
     else: result = false
 
-proc removeSuffix(r: seq[seq[Rune]], suffix: string): seq[seq[Rune]] =
+proc askBackupRestorePrompt*(
+  commndLine: var CommandLine,
+  messageLog: var seq[Runes],
+  filename: seq[Rune]): bool =
+
+    let mess = fmt"Restore {filename}?: y/n"
+    commndLine.write(mess.toRunes)
+    messageLog.add(mess.toRunes)
+
+    let key = commndLine.getKey
+
+    if key == ord('y'): result = true
+    else: result = false
+
+proc askDeleteBackupPrompt*(
+  commndLine: var CommandLine,
+  messageLog: var seq[Runes],
+  filename: seq[Rune]): bool =
+
+    let mess = fmt"Delete {filename}?: y/n"
+    commndLine.write(mess.toRunes)
+    messageLog.add(mess.toRunes)
+
+    let key = commndLine.getKey
+
+    if key == ord('y'): result = true
+    else: result = false
+
+proc askFileChangedSinceReading*(
+  commndLine: var CommandLine,
+  messageLog: var seq[Runes]): bool =
+
+    block:
+      const mess = "WARNING: The file has been changed since reading it!: Press any key"
+      commndLine.write(mess.toRunes)
+      messageLog.add(mess.toRunes)
+      discard commndLine.getKey
+
+    block:
+      const mess = "Do you really want to write to it: y/n ?"
+      commndLine.write(mess.toRunes)
+      messageLog.add(mess.toRunes)
+      let key = commndLine.getKey
+
+      if key == ord('y'): result = true
+      else: result = false
+
+proc removeSuffix(r: seq[Runes], suffix: string): seq[Runes] =
   for i in 0 .. r.high:
     var string = $r[i]
     string.removeSuffix(suffix)
     if i == 0: result = @[string.toRunes]
     else: result.add(string.toRunes)
 
-proc splitQout(s: string): seq[seq[Rune]]=
+proc splitQout(s: string): seq[Runes]=
   result = @[ru""]
-  var quotIn = false
-  var backSlash = false
+  var
+    quotIn = false
+    backSlash = false
 
   for i in 0 .. s.high:
     if s[i] == '\\':
@@ -175,115 +169,34 @@ proc splitQout(s: string): seq[seq[Rune]]=
 
   return result.removeSuffix(" ")
 
-proc splitCommand*(command: string): seq[seq[Rune]] =
+proc splitCommand*(command: string): seq[Runes] =
   if (command).contains('"'):
     return splitQout(command)
   else:
-    return strutils.splitWhitespace(command)
-                    .map(proc(s: string): seq[Rune] = toRunes(s))
+    return strutils.splitWhitespace(command).mapIt(it.toRunes)
 
-proc writeExModeView*(commandLine: var CommandLine,
-                      exStatus: ExModeViewStatus,
-                      color: EditorColorPair) =
+# Return a path in the `buffer`.
+# Return an absolute path if path is `~`.
+proc getInputPath*(buffer: Runes): Runes =
+  let bufferSplited = strutils.splitWhitespace($buffer)
+  if bufferSplited.len > 1:
+    # Assume the last word as path.
+    let path = bufferSplited[^1]
 
-  let buffer = ($exStatus.buffer).substr(exStatus.startPosition,
-                                         exStatus.buffer.len)
+    if path == "~":
+      return getHomeDir().toRunes
+    else:
+      return path.toRunes
 
-  commandLine.erase
-  commandLine.window.write(exStatus.cursorY,
-                           0,
-                           fmt"{exStatus.prompt}{buffer}",
-                           color)
-  commandLine.window.moveCursor(0, exStatus.cursorX)
-  commandLine.window.refresh
+# Return file paths for a suggestion from `buffer`.
+# Return all file and dir in the current dir if inputPath is empty.
+proc getCandidatesFilePath*(buffer: Runes): seq[string] =
+  let inputPath = buffer.getInputPath
 
-proc initExModeViewStatus*(prompt: string): ExModeViewStatus =
-  result.buffer = ru""
-  result.prompt = prompt
-  result.cursorY = 0
-  result.cursorX = 1
+  var list: seq[Runes] = @[]
 
-proc moveLeft*(commandWindow: Window, exStatus: var ExModeViewStatus) =
-  if exStatus.currentPosition > 0:
-    dec(exStatus.currentPosition)
-    if exStatus.cursorX > exStatus.prompt.len: dec(exStatus.cursorX)
-    else: dec(exStatus.startPosition)
-
-proc moveRight*(exStatus: var ExModeViewStatus) =
-  if exStatus.currentPosition < exStatus.buffer.len:
-    inc(exStatus.currentPosition)
-    if exStatus.cursorX < terminalWidth() - 1: inc(exStatus.cursorX)
-    else: inc(exStatus.startPosition)
-
-proc moveTop*(exStatus: var ExModeViewStatus) =
-  exStatus.cursorX = exStatus.prompt.len
-  exStatus.currentPosition = 0
-  exStatus.startPosition = 0
-
-proc moveEnd*(exStatus: var ExModeViewStatus) =
-  exStatus.currentPosition = exStatus.buffer.len - 1
-  if exStatus.buffer.len > terminalWidth():
-    exStatus.startPosition = exStatus.buffer.len - terminalWidth()
-    exStatus.cursorX = terminalWidth()
-  else:
-    exStatus.startPosition = 0
-    exStatus.cursorX = exStatus.prompt.len + exStatus.buffer.len - 1
-
-proc clearCommandBuffer*(exStatus: var ExModeViewStatus) =
-  exStatus.buffer = ru""
-  exStatus.cursorY = 0
-  exStatus.cursorX = 1
-  exStatus.currentPosition = 0
-  exStatus.startPosition = 0
-
-proc deleteCommandBuffer*(exStatus: var ExModeViewStatus) =
-  if exStatus.buffer.len > 0:
-    if exStatus.buffer.len < terminalWidth(): dec(exStatus.cursorX)
-    exStatus.buffer.delete(exStatus.currentPosition - 1)
-    dec(exStatus.currentPosition)
-
-proc deleteCommandBufferCurrentPosition*(exStatus: var ExModeViewStatus) =
-  if exStatus.buffer.len > 0 and exStatus.currentPosition < exStatus.buffer.len:
-    exStatus.buffer.delete(exStatus.cursorX - 1)
-    if exStatus.currentPosition > exStatus.buffer.len:
-      dec(exStatus.currentPosition)
-
-proc insertCommandBuffer*(exStatus: var ExModeViewStatus, r: Rune) =
-  exStatus.buffer.insert(r, exStatus.currentPosition)
-  inc(exStatus.currentPosition)
-  if exStatus.cursorX < terminalWidth() - 1: inc(exStatus.cursorX)
-  else: inc(exStatus.startPosition)
-
-proc insertCommandBuffer*(exStatus: var ExModeViewStatus,
-                          runes: seq[Rune]) {.inline.} =
-
-  for r in runes:
-    exStatus.insertCommandBuffer(r)
-
-proc calcPopUpWindowSize*(buffer: seq[seq[Rune]]): (int, int) =
-  var maxBufferLen = 0
-  for runes in buffer:
-    if maxBufferLen < runes.len: maxBufferLen = runes.len
-  let
-    height = if buffer.len > terminalHeight() - 1: terminalHeight() - 1
-        else: buffer.len
-    width = maxBufferLen + 2
-
-  return (height, width)
-
-proc getInputPath*(buffer, cmd: seq[Rune]): seq[Rune] =
-  if (buffer.substr(cmd.len + 1)) == ru"~":
-    getHomeDir().toRunes
-  else:
-    buffer.substr(cmd.len + 1)
-
-proc getCandidatesFilePath*(buffer: seq[Rune],
-                            command: string): seq[string] =
-
-  let inputPath = getInputPath(buffer, command.ru)
-
-  var list: seq[seq[Rune]] = @[]
-  if inputPath.len > 0: list.add(inputPath)
+  # result[0] is input
+  result.add $inputPath
 
   if inputPath.contains(ru'/'):
     let
@@ -305,11 +218,9 @@ proc getCandidatesFilePath*(buffer: seq[Rune],
           let p = if dirExists(path): path & "/" else: path
           list.add(p.toRunes)
   else:
-    if inputPath.len == 0:
-      list.add ru ""
-
     for kind, path in walkDir("./"):
-      if path.toRunes.normalizePath.startsWith(inputPath):
+      let normalizePath = path.toRunes.normalizePath
+      if inputPath.len == 0 or normalizePath.startsWith(inputPath):
         let p = path.toRunes.normalizePath
         # If the path is a directory, add '/'
         if dirExists($p): list.add p & ru "/"
@@ -318,37 +229,37 @@ proc getCandidatesFilePath*(buffer: seq[Rune],
   for path in list: result.add($path)
   result.sort(proc (a, b: string): int = cmp(a, b))
 
-proc isExCommand*(exBuffer: seq[Rune]): bool =
-  if ($exBuffer).contains(" ") == false: return false
+proc isExCommand*(buffer: string): bool =
+  let bufferSplited = strutils.splitWhitespace(buffer)
+  if bufferSplited.len > 0:
+    for c in exCommandList:
+      if bufferSplited[0] == c.command:
+        return true
 
-  let buffer = ($exBuffer).splitWhitespace(-1)
-  for i in 0 ..< exCommandList.len:
-    if buffer[0] == exCommandList[i].command: return true
-
-proc getCandidatesExCommand*(commandLineBuffer: seq[Rune]): seq[seq[Rune]] =
-  result = @[commandLineBuffer]
+proc getCandidatesExCommand*(commandLineBuffer: Runes): seq[Runes] =
   let buffer = toLowerAscii($commandLineBuffer)
   for list in exCommandList:
     let cmd = list.command
     if cmd.len >= buffer.len and cmd.startsWith(buffer):
       result.add(cmd.toRunes)
 
-proc getSuggestType*(buffer: seq[Rune]): SuggestType =
-  template isECommand(command: seq[seq[Rune]]): bool =
+proc getSuggestType*(buffer: Runes): SuggestType =
+  proc isECommand(command: seq[Runes]): bool {.inline.} =
     cmpIgnoreCase($command[0], "e") == 0
 
-  template isVsCommand(command: seq[seq[Rune]]): bool =
+  proc isVsCommand(command: seq[Runes]): bool {.inline.} =
     cmpIgnoreCase($command[0], "vs") == 0
 
-  template isSvCommand(command: seq[seq[Rune]]): bool =
+  proc isSvCommand(command: seq[Runes]): bool {.inline.} =
     cmpIgnoreCase($command[0], "sv") == 0
 
-  template isSpCommand(command: seq[seq[Rune]]): bool =
+  proc isSpCommand(command: seq[Runes]): bool {.inline.} =
     command.len > 0 and
     command.len < 3 and
     cmpIgnoreCase($command[0], "sp") == 0
 
-  if buffer.len > 0 and buffer.isExCommand:
+
+  if buffer.len > 0 and isExCommand($buffer):
     let cmd = splitCommand($buffer)
     if isECommand(cmd) or
        isVsCommand(cmd) or
@@ -368,33 +279,44 @@ proc isSuggestTypeExCommandOption*(suggestType: SuggestType): bool {.inline.} =
 proc isSuggestTypeFilePath*(suggestType: SuggestType): bool {.inline.} =
   suggestType == SuggestType.filePath
 
-proc initDisplayBuffer*(suggestlist: seq[seq[Rune]],
-                       suggestType: SuggestType): seq[seq[Rune]] =
+proc initSuggestBuffer*(
+  suggestList: seq[Runes],
+  suggestType: SuggestType): seq[Runes] =
 
-  if isSuggestTypeFilePath(suggestType):
-    for index, path in suggestlist:
-      # suggestlist[0] is input text
-      if index > 0:
-        # Remove '/' end of the path string
-        let p = path[0 .. path.high - 1]
-        if p.contains(ru '/'):
-          result.add(path[p.rfind(ru'/') + 1 ..< path.len])
-        else:
-          result.add(path)
-  elif isSuggestTypeExCommand(suggestType):
-    # Add command description
-    for list in exCommandList:
-      for i in 1 ..< suggestlist.len:
-        if $suggestlist[i] == list.command:
-          result.add suggestlist[i] & list.description.ru
+    case suggestType:
+      of filePath:
+        for index, path in suggestList:
+          # Remove '/' end of the path string
+          let p =
+            if path.len > 0: path[0 .. path.high - 1]
+            else: "".toRunes
+          if p.contains(ru '/'):
+            result.add(path[p.rfind(ru'/') + 1 ..< path.len])
+          else:
+            result.add(path)
+      of exCommand:
+        # Add command description
+        for list in exCommandList:
+          for l in suggestList:
+            if $l == list.command:
+              result.add l & list.description.ru
+      of exCommandOption:
+        return suggestList
+
+proc firstArg(buffer: Runes): Runes =
+  let commandSplit = splitWhitespace(buffer)
+  if commandSplit.len > 0:
+    return commandSplit[0]
   else:
-    result = suggestlist[1 ..< suggestlist.len]
+    return "".toRunes
 
-proc getCandidatesExCommandOption*(exStatus: var ExModeViewStatus,
-                                   command: string): seq[seq[Rune]] =
+proc getCandidatesExCommandOption*(commandLine: CommandLine): seq[Runes] =
+  let
+    buffer = commandLine.buffer
+    command = $buffer.firstArg
 
   var argList: seq[string] = @[]
-  case toLowerAscii($command):
+  case toLowerAscii(command):
     of "cursorline",
        "highlightparen",
        "indent",
@@ -415,44 +337,147 @@ proc getCandidatesExCommandOption*(exStatus: var ExModeViewStatus,
        "icon",
        "showgitinactive",
        "ignorecase",
-       "smartcase": argList = @["on", "off"]
-    of "theme": argList= @["vivid", "dark", "light", "config", "vscode"]
+       "smartcase":
+         argList = @["on", "off"]
+    of "theme":
+      argList = @["vivid", "dark", "light", "config", "vscode"]
     of "e",
        "sp",
        "vs",
-       "sv": argList = getCandidatesFilePath(exStatus.buffer, command)
-    else: discard
+       "sv":
+         argList = buffer.getCandidatesFilePath
+    else:
+      discard
 
-  if argList[0] != "":
-    let arg = if (splitWhitespace(exStatus.buffer)).len > 1:
-                (splitWhitespace(exStatus.buffer))[1]
-              else: ru""
+  if argList.len > 0 and argList[0] != "":
+    let arg =
+      if splitWhitespace(buffer).len > 1:
+        splitWhitespace(buffer)[1]
+      else:
+        ru""
     result = @[arg]
 
   for i in 0 ..< argList.len:
     result.add(argList[i].toRunes)
 
-proc getSuggestList*(exStatus: var ExModeViewStatus,
-                     suggestType: SuggestType): seq[seq[Rune]] =
+proc getsuggestList*(
+  commandLine: CommandLine,
+  suggestType: SuggestType): seq[Runes] =
 
-  if isSuggestTypeExCommand(suggestType):
-    result = getCandidatesExCommand(exStatus.buffer)
-  elif isSuggestTypeExCommandOption(suggestType):
-    let cmd = $(splitWhitespace(exStatus.buffer))[0]
-    result = exStatus.getCandidatesExCommandOption(cmd)
-  else:
-    let
-      cmd = (splitWhitespace(exStatus.buffer))[0]
-      pathList = getCandidatesFilePath(exStatus.buffer, $cmd)
-    for path in pathList: result.add(path.ru)
+    if isSuggestTypeExCommand(suggestType):
+      result = getCandidatesExCommand(commandLine.buffer)
+    elif isSuggestTypeExCommandOption(suggestType):
+      result = commandLine.getCandidatesExCommandOption
+    else:
+      let pathList = commandLine.buffer.getCandidatesFilePath
+      for path in pathList: result.add(path.ru)
 
-proc calcXWhenSuggestPath*(buffer: seq[Rune]): int =
+proc calcXWhenSuggestPath*(buffer, inputPath: Runes): int =
   let
-    cmd = (splitWhitespace(buffer))[0]
-    inputPath = getInputPath(buffer, cmd)
-    positionInInputPath = if inputPath.rfind(ru"/") > 0:
-                            inputPath.rfind(ru"/")
-                          else:
-                            0
-  # +2 is pronpt and space
-  return cmd.len + 2 + positionInInputPath
+    # TODO: Refactor
+    positionInInputPath =
+      if inputPath.len > 0 and
+         (inputPath.count('/'.toRune) > 1 or
+         (not inputPath.startsWith("./".toRunes)) or
+         (inputPath.count('/'.toRune) == 1 and $inputPath[^1] != "/")):
+           inputPath.rfind(ru"/")
+      else:
+        0
+
+  const promptAndSpaceWidth = 2
+  let command = buffer.firstArg
+  return command.len + promptAndSpaceWidth + positionInInputPath
+
+proc calcPopUpWindowSize*(
+  terminalHeight, terminalWidth: int,
+  buffer: seq[Runes]): tuple[h: int, w: int] =
+
+    var maxBufferLen = 0
+    for runes in buffer:
+      if maxBufferLen < runes.len: maxBufferLen = runes.len
+
+    let
+      height =
+        if buffer.len > terminalHeight - 2: terminalHeight - 2
+        else: buffer.len
+      width =
+        # 2 is side spaces
+        if maxBufferLen + 2 > terminalWidth - 1: terminalWidth - 1
+        else: maxBufferLen + 2
+
+    return (h: height, w: width)
+
+# TODO: Fix the return type to `SuggestionWindow`.
+proc tryOpenSuggestWindow*(): Option[Window] =
+  var
+    # Pop up window initial size/position
+    h = 1
+    w = 1
+    x = 0
+    y = terminalHeight() - 1
+
+  # Use EditorStatus.popUpWindow?
+  var popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
+
+  return some(popUpWindow)
+
+proc updateSuggestWindow*(
+  suggestWin: var Window,
+  suggestType: SuggestType,
+  suggestList: seq[Runes],
+  suggestIndex: int,
+  commandLine: var CommandLine) =
+
+    let
+      firstArg = commandLine.buffer.firstArg
+
+      terminalHeight = terminalHeight()
+      terminalWidth = terminalWidth()
+
+    var
+      # Pop up window initial size/position
+      h = 1
+      w = 1
+      x = 0
+      y = terminalHeight - 2
+
+    case suggestType:
+      of exCommand:
+        x = 0
+      of exCommandOption:
+        x = firstArg.len + 1
+      of filePath:
+        # suggestList[0] is the input path.
+        let inputPath =
+          if suggestList.len > 0: suggestList[0]
+          else: "".toRunes
+        x = calcXWhenSuggestPath(commandLine.buffer, inputPath)
+
+    let
+      currentLine = some(suggestIndex)
+      displayBuffer = initSuggestBuffer(suggestList, suggestType)
+      winSize = calcPopUpWindowSize(
+        terminalHeight,
+        terminalWidth,
+        displayBuffer)
+
+    h = winSize.h
+    w = winSize.w
+
+    suggestWin.erase
+    suggestWin.writePopUpWindow(
+      h, w,
+      y, x,
+      terminalHeight, terminalWidth,
+      currentLine,
+      displayBuffer)
+
+    case suggestType:
+      of exCommand:
+        commandLine.buffer = suggestList[suggestIndex]
+      else:
+        commandLine.buffer = firstArg & ' '.toRune & suggestList[suggestIndex]
+
+
+    commandLine.moveEnd
+    commandLine.moveRight
