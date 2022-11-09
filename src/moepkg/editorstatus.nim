@@ -411,10 +411,7 @@ proc initSyntaxHighlight(windowNode: var WindowNode,
       if isDebugMode(buf.mode, buf.prevMode):
         let h = buf.buffer.initDebugmodeHighlight
         updatedHighlights.add((index, h))
-      elif not isFilerMode(buf.mode, buf.prevMode) and
-           not isBackupManagerMode(buf.mode, buf.prevMode) and
-           not isDiffViewerMode(buf.mode, buf.prevMode) and
-           not isConfigMode(buf.mode, buf.prevMode):
+      elif isEditMode(buf.mode, buf.prevMode):
         let
           lang = if isSyntaxHighlight: buf.language
                  else: SourceLanguage.langNone
@@ -513,21 +510,15 @@ proc update*(status: var EditorStatus) =
         var highlight = node.highlight
 
         ## Update highlight
-        ## TODO: Refactor and fix
-        if not isFilerMode(currentMode, prevMode) and
-           not isBackupManagerMode(currentMode, prevMode) and
-           not isDiffViewerMode(currentMode, prevMode) and
-           not isConfigMode(currentMode, prevMode):
-
-          if isLogViewerMode(currentMode, prevMode):
-            status.bufStatus[node.bufferIndex].updateLogViewer(node, status.messageLog)
-          else:
-            highlight.updateHighlight(
-              bufStatus,
-              node,
-              status.isSearchHighlight,
-              status.searchHistory,
-              settings)
+        if isLogViewerMode(currentMode, prevMode):
+          status.bufStatus[node.bufferIndex].updateLogViewer(node, status.messageLog)
+        elif isEditMode(currentMode, prevMode):
+          highlight.updateHighlight(
+            bufStatus,
+            node,
+            status.isSearchHighlight,
+            status.searchHistory,
+            settings)
 
         let
           startSelectedLine = bufStatus.selectArea.startLine
@@ -1328,14 +1319,7 @@ proc eventLoopTask(status: var Editorstatus) =
      lastBackupTime + interval.minutes < now() and
      status.lastOperatingTime + idleTime.seconds < now():
     for bufStatus in status.bufStatus:
-      let
-        mode = bufStatus.mode
-        prevMode = bufStatus.prevMode
-
-      if isNormalMode(mode, prevMode) or
-         isInsertMode(mode) or
-         isVisualMode(mode) or
-         isReplaceMode(mode):
+      if isEditMode(bufStatus.mode, bufStatus.prevMode):
         bufStatus.backupBuffer(
           status.settings.autoBackup,
           status.settings.notification,

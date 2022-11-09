@@ -88,6 +88,13 @@ proc isBufferManagerMode*(mode: Mode): bool {.inline.} = mode == Mode.bufManager
 
 proc isVisualBlockMode*(mode: Mode): bool {.inline.} = mode == Mode.visualBlock
 
+# Modes for editing text
+template isEditMode*(mode, prevMode: Mode): bool =
+  isNormalMode(mode, prevMode) or
+  isInsertMode(mode) or
+  isVisualMode(mode) or
+  isReplaceMode(mode)
+
 proc checkBufferExist*(bufStatus: seq[BufferStatus], path: seq[Rune]): Option[int] =
   for index, buf in bufStatus:
     if buf.path == path:
