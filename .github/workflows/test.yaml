@@ -15,6 +15,9 @@ on:
       - '*.md'
       - 'documents/**'
 
+permissions:
+  contents: read
+
 jobs:
   skip:
     runs-on: ubuntu-latest
@@ -60,7 +63,7 @@ jobs:
       with:
         nim-version: ${{ env.NIM_VERSION }}
 
-    - name: Install integtation tools
+    - name: Install integration tools
       run: |
         # shpec
         sudo sh -c "`curl -L https://raw.githubusercontent.com/rylnd/shpec/master/install.sh`"
@@ -74,5 +77,5 @@ jobs:
     - name: Install moe
       run: nimble install --verbose -Y
 
-    - name: Run integtation test
+    - name: Run integration test
       run: shpec ./shpec.sh

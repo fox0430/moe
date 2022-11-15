@@ -15,6 +15,9 @@ on:
       - '*.md'
       - 'documents/**'
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
