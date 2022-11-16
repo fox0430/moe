@@ -1,6 +1,4 @@
-import std/[unittest, sugar, sequtils, macros, options]
-import moepkg/unicodeext
-
+import std/[unittest, macros]
 include moepkg/autocomplete
 
 const code = ru"""proc fibonacci(n: int): int =

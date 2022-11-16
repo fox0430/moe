@@ -2085,7 +2085,7 @@ proc validateDebugTable(table: TomlValueRef): Option[InvalidItem] =
         return some(InvalidItem(name: $key, val: $val))
 
 proc validateThemeTable(table: TomlValueRef): Option[InvalidItem] =
-  let editorColors = ColorThemeTable[ColorTheme.config].EditorColor
+  let editorColors = ColorThemeTable[ColorTheme.config]
   for key, val in table.getTable:
     case key:
       of "baseTheme":

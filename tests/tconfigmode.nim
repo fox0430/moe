@@ -1,6 +1,4 @@
 import std/[unittest, macros, strformat, os]
-import moepkg/[editorstatus, gapbuffer, bufferstatus, unicodeext]
-
 include moepkg/configmode
 
 suite "Config mode: Start configuration mode":

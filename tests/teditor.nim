@@ -1,5 +1,4 @@
 import std/[unittest, macros]
-import moepkg/register
 include moepkg/[editor, editorstatus, ui, platform, independentutils]
 
 proc isXselAvailable(): bool {.inline.} =

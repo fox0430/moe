@@ -1,8 +1,6 @@
 import std/unittest
 import ncurses
-import moepkg/[editorstatus, gapbuffer, unicodeext, editor, bufferstatus,
-               register, settings]
-
+import moepkg/[register, settings]
 include moepkg/normalmode
 
 suite "Normal mode: Move to the right":

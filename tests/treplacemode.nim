@@ -1,5 +1,5 @@
 import std/unittest
-import moepkg/[editorstatus, bufferstatus, unicodeext]
+import moepkg/[unicodeext]
 include moepkg/replacemode
 
 template recordCurrentPosition() =
