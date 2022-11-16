@@ -8,5 +8,6 @@ updates:
     assignees:
       - fox0430
     commit-message:
+      prefix: "actions"
       include: scope
     target-branch: "develop"
