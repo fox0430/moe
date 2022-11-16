@@ -9,3 +9,4 @@ updates:
       - fox0430
     commit-message:
       include: scope
+    target-branch: "develop"
