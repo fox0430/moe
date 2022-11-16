@@ -409,6 +409,7 @@ proc initSyntaxHighlight(windowNode: var WindowNode,
   for index, buf in bufStatus:
     if buf.isUpdate:
       if isDebugMode(buf.mode, buf.prevMode):
+        # TODO: Fix
         let h = buf.buffer.initDebugmodeHighlight
         updatedHighlights.add((index, h))
       elif isEditMode(buf.mode, buf.prevMode):
@@ -416,9 +417,17 @@ proc initSyntaxHighlight(windowNode: var WindowNode,
           lang = if isSyntaxHighlight: buf.language
                  else: SourceLanguage.langNone
           h = ($buf.buffer).initHighlight(reservedWords, lang)
-
         updatedHighlights.add((index, h))
 
+        bufStatus[index].isUpdate = false
+      # The filer syntax highlight is initialized/updated in filermode module.
+      elif not isFilerMode(buf.mode, buf.prevMode):
+        let h = initHighlight(
+          $buf.buffer,
+          reservedWords,
+          SourceLanguage.langNone)
+
+        updatedHighlights.add((index, h))
         bufStatus[index].isUpdate = false
 
   var queue = initHeapQueue[WindowNode]()
@@ -511,6 +520,7 @@ proc update*(status: var EditorStatus) =
 
         ## Update highlight
         if isLogViewerMode(currentMode, prevMode):
+          # TODO: Move
           status.bufStatus[node.bufferIndex].updateLogViewer(node, status.messageLog)
         elif isEditMode(currentMode, prevMode):
           highlight.updateHighlight(
