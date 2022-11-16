@@ -1,6 +1,4 @@
-import std/[unittest, options, strutils]
-import moepkg/[color, ui, highlight, unicodeext]
-
+import std/[unittest]
 include moepkg/settings
 
 const tomlStr = """

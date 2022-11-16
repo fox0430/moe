@@ -1,5 +1,4 @@
-import std/[unittest, sequtils]
-
+import std/[unittest]
 include moepkg/highlight
 
 const reservedWords = @[

@@ -1,5 +1,4 @@
-import std/[unittest, os, oids, json, strformat]
-import moepkg/[unicodeext, settings, editorstatus, backup]
+import std/[unittest, oids]
 include moepkg/backupmanager
 
 template writeBackupInfoJson(backupDir, sourceFilePath: string) =

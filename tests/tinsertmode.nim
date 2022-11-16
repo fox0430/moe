@@ -1,5 +1,5 @@
-import std/[unittest, options, sequtils, sugar, random]
-import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, settings]
+import std/[unittest, random]
+import moepkg/[highlight]
 include moepkg/[insertmode, suggestionwindow]
 
 suite "Insert mode":

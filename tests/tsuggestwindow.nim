@@ -1,5 +1,4 @@
-import std/[unittest, macros, options, critbits, strutils]
-import moepkg/[unicodeext, editorstatus, gapbuffer]
+import std/[unittest, critbits]
 include moepkg/suggestionwindow
 
 suite "suggestionwindow: buildSuggestionWindow":

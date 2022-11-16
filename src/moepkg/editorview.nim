@@ -223,8 +223,8 @@ proc writeCurrentLine(win: var Window,
     block:
       let
         fg = colors[0]
-        bg = if colors[1] == theme.EditorColor.editorBg:
-               theme.EditorColor.currentLineBg
+        bg = if colors[1] == theme.editorBg:
+               theme.currentLineBg
              else:
                colors[1]
 
@@ -237,8 +237,8 @@ proc writeCurrentLine(win: var Window,
     # Write spaces after text in the current line
     block:
       let
-        fg = theme.EditorColor.defaultChar
-        bg = theme.EditorColor.currentLineBg
+        fg = theme.defaultChar
+        bg = theme.currentLineBg
 
       setColorPair(currentLineColorPair, fg, bg)
     let
