@@ -298,7 +298,7 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langNim
   of ".c", ".h":
     return SourceLanguage.langC
-  of ".cpp", "hpp", "cc":
+  of ".cpp", ".hpp", ".cc":
     return SourceLanguage.langCpp
   of ".cs":
     return SourceLanguage.langCsharp
