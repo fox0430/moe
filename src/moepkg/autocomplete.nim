@@ -2,7 +2,7 @@ import std/[sugar, critbits, options, sequtils, strutils]
 import pkg/unicodedb/properties
 import unicodeext, bufferstatus, algorithm, osext
 import syntax/[highlite, syntaxnim, syntaxc, syntaxcpp, syntaxcsharp,
-               syntaxjava, syntaxpython, syntaxjavascript]
+               syntaxhaskell, syntaxjava, syntaxpython, syntaxjavascript]
 
 type
   # `WordDictionary.val` is number of times used in the autocomplete.
@@ -149,6 +149,9 @@ proc getCppKeywords(): seq[Rune] {.compiletime.} =
 proc getCsharpKeywords(): seq[Rune] {.compiletime.} =
   for s in csharpKeywords: result.add toRunes(s & " ")
 
+proc getHaskellKeywords(): seq[Rune] {.compiletime.} =
+  for s in haskellKeywords: result.add toRunes(s & " ")
+
 proc getJavaKeywords(): seq[Rune] {.compiletime.} =
   for s in javaKeywords: result.add toRunes(s & " ")
 
@@ -168,6 +171,8 @@ proc getTextInLangKeywords*(lang: SourceLanguage): seq[Rune] =
       result = getCppKeywords()
     of SourceLanguage.langCsharp:
       result = getCsharpKeywords()
+    of SourceLanguage.langHaskell:
+      result = getHaskellKeywords()
     of SourceLanguage.langJava:
       result = getJavaKeywords()
     of SourceLanguage.langPython:

@@ -230,7 +230,7 @@ proc initHighlight*(buffer: string,
      language == SourceLanguage.langMarkDown:
     splitByNewline(buffer, EditorColorPair.defaultChar)
     return result
-  
+
   var token = GeneralTokenizer()
   token.initGeneralTokenizer(buffer)
   var pad: string
@@ -298,10 +298,12 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langNim
   of ".c", ".h":
     return SourceLanguage.langC
-  of ".cpp", "hpp", "cc":
+  of ".cpp", ".hpp", ".cc":
     return SourceLanguage.langCpp
   of ".cs":
     return SourceLanguage.langCsharp
+  of ".hs":
+    return SourceLanguage.langHaskell
   of ".java":
     return SourceLanguage.langJava
   of ".yaml", ".yml":

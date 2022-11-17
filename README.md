@@ -23,7 +23,7 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
 - Infinite undo/redo
 
-- Syntax highlighting (Nim, C, C++, C#, Java, Yaml, JavaScript, Python)
+- Syntax highlighting (Nim, C, C++, C#, Haskell, Java, Yaml, JavaScript, Python)
 
 - Auto-complete
 
