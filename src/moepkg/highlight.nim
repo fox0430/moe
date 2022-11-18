@@ -296,30 +296,32 @@ proc indexOf*(highlight: Highlight, row, column: int): int =
 
 proc detectLanguage*(filename: string): SourceLanguage =
   # TODO: use settings file
-  let extention = filename.splitFile.ext
-  case extention:
-  of ".nim", ".nimble", ".nims":
-    return SourceLanguage.langNim
-  of ".c", ".h":
+  case filename.splitFile.ext:
+  of ".c", ".dox", ".h", ".i":
     return SourceLanguage.langC
-  of ".cpp", ".hpp", ".cc":
+  of ".C", ".CPP", ".H", ".HPP", ".c++", ".cc", ".cp", ".cpp", ".cxx", ".h++",
+     ".hh", ".hp", ".hpp", ".hxx", ".ii", ".tcc":
     return SourceLanguage.langCpp
   of ".cs":
     return SourceLanguage.langCsharp
-  of ".hs":
+  of ".cabal", ".hs":
     return SourceLanguage.langHaskell
   of ".java":
     return SourceLanguage.langJava
-  of ".yaml", ".yml":
-    return SourceLanguage.langYaml
-  of ".py":
-    return SourceLanguage.langPython
-  of ".js":
+  of ".js", ".ts":
     return SourceLanguage.langJavaScript
-  of ".sh", ".bash":
-    return SourceLanguage.langShell
-  of ".md":
+  of ".markdown", ".md":
     return SourceLanguage.langMarkDown
+  of ".nim", ".nimble", ".nims":
+    return SourceLanguage.langNim
+  of ".py", ".pyw", ".pyx":
+    return SourceLanguage.langPython
+  of ".rs":
+    return SourceLanguage.langRust
+  of ".bash", ".sh":
+    return SourceLanguage.langShell
+  of ".cff", ".yaml", ".yml":
+    return SourceLanguage.langYaml
   else:
     return SourceLanguage.langNone
 

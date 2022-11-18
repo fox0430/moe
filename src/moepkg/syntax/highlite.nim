@@ -86,14 +86,35 @@ type
     pos*: int
     state*: TokenClass
 
-  SourceLanguage* = enum
-    langNone, langNim, langCpp, langCsharp, langC, langHaskell, langJava,
-    langYaml, langPython, langJavaScript, langShell, langMarkDown
+  SourceLanguage* = enum langNone,
+    langC,
+    langCpp,
+    langCsharp,
+    langHaskell,
+    langJava,
+    langJavaScript,
+    langMarkDown,
+    langNim,
+    langPython,
+    langRust,
+    langShell,
+    langYaml,
 
 const
-  sourceLanguageToStr*: array[SourceLanguage, string] = ["none",
-    "Nim", "C++", "C#", "C", "Haskell", "Java", "Yaml", "Python", "JavaScript",
-    "Shell", "MarkDown"]
+  sourceLanguageToStr*: array[SourceLanguage, string] = [ "none",
+    "C",
+    "C++",
+    "C#",
+    "Haskell",
+    "Java",
+    "JavaScript",
+    "MarkDown",
+    "Nim",
+    "Python",
+    "Rust",
+    "Shell",
+    "Yaml",
+  ]
 
   OpChars* = {'+', '-', '*', '/', '\\', '<', '>', '!', '?', '^', '.',
               '|', '=', '%', '&', '$', '@', '~', ':'}
@@ -174,18 +195,19 @@ type
     hasPreprocessor, hasNestedComments
   TokenizerFlags* = set[TokenizerFlag]
 
-import syntaxnim, syntaxyaml, syntaxjavascript, syntaxc, syntaxcpp,
-       syntaxcsharp, syntaxhaskell, syntaxjava, syntaxpython
+import syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell, syntaxjava,
+       syntaxjavascript, syntaxnim, syntaxpython, syntaxrust, syntaxyaml
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang
-  of langNone: assert false
-  of langNim: nimNextToken(g)
+  of langC: cNextToken(g)
   of langCpp: cppNextToken(g)
   of langCsharp: csharpNextToken(g)
-  of langC: cNextToken(g)
   of langHaskell: haskellNextToken(g)
   of langJava: javaNextToken(g)
-  of langYaml: yamlNextToken(g)
-  of langPython: pythonNextToken(g)
   of langJavaScript: javaScriptNextToken(g)
+  of langNim: nimNextToken(g)
+  of langNone: assert false
+  of langPython: pythonNextToken(g)
+  of langRust: rustNextToken(g)
+  of langYaml: yamlNextToken(g)
   else: discard
