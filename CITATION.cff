@@ -1,0 +1,34 @@
+# Parser settings.
+cff-version: 1.2.0
+message: Please cite this software using these information.
+
+# Version information.
+date-released: 2021-12-21
+version: 0.3.0
+
+# Project information.
+abstract: A command line based editor inspired by Vim. Written in Nim.
+authors:
+  - alias: fox0430
+  - alias: walkre-niboshi
+  - alias: juancarlospaco
+  - alias: tobgle
+  - alias: uninhm
+  - alias: kevinmatthes
+  - alias: jiro4989
+  - alias: jrfondren
+  - alias: loloicci
+  - alias: lbartoletti
+  - alias: 5enxia
+  - alias: 0branch
+  - alias: bung87
+  - alias: xigoi
+  - alias: avahe-kellenberger
+  - alias: tjbell
+  - alias: tobimensch
+  - alias: JohnAD
+  - alias: SolitudeSF
+license: GPL-3.0
+repository-code: https://github.com/fox0430/moe
+title: moe
+url: https://editor.moe

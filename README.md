@@ -1,5 +1,7 @@
-[![Build](https://github.com/fox0430/moe/workflows/Build/badge.svg)](https://github.com/fox0430/moe/actions)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![](https://github.com/fox0430/moe/workflows/Build/badge.svg)](https://github.com/fox0430/moe/workflows/Build)
+[![](https://github.com/fox0430/moe/workflows/CFF/badge.svg)](https://github.com/fox0430/moe/workflows/CFF)
+[![](https://github.com/fox0430/moe/workflows/Tests/badge.svg)](https://github.com/fox0430/moe/workflows/Tests)
+[![](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 ## moe
 
