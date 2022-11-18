@@ -89,3 +89,19 @@ test "Nim pragma":
     SourceLanguage.langNim)
 
   check highlight[2] == ColorSegment(firstRow: 0, firstColumn: 2, lastRow: 0, lastColumn: 7, color: pragma)
+
+test "Fix #1524":
+  # https://github.com/fox0430/moe/issues/1524
+
+  const code = "test: '0'"
+  let highlight = initHighlight(
+    code,
+    reservedWords,
+    SourceLanguage.langYaml)
+
+  check highlight == Highlight(
+    colorSegments: @[
+      ColorSegment(firstRow: 0, firstColumn: 0, lastRow: 0, lastColumn: 3, color: defaultChar),
+      ColorSegment(firstRow: 0, firstColumn: 4, lastRow: 0, lastColumn: 4, color: defaultChar),
+      ColorSegment(firstRow: 0, firstColumn: 5, lastRow: 0, lastColumn: 5, color: defaultChar),
+      ColorSegment(firstRow: 0, firstColumn: 6, lastRow: 0, lastColumn: 8, color: defaultChar)])

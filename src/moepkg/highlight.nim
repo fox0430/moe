@@ -248,10 +248,14 @@ proc initHighlight*(buffer: string,
     let
       first = token.start
       last = first+token.length-1
-    if all(buffer[first .. last], proc (x: char): bool = x == '\n'):
-      currentRow += last - first + 1
-      currentColumn = 0
-      continue
+
+    block:
+      # Increment `currentRow` if newlines only.
+      let str = buffer[first..last]
+      if str != "" and all(str, proc (x: char): bool = x == '\n'):
+        currentRow += last - first + 1
+        currentColumn = 0
+        continue
 
     let color = if language == SourceLanguage.langNim:
                   getEditorColorPairInNim(token.kind)
