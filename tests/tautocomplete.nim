@@ -169,6 +169,14 @@ suite "getTextInLangKeywords":
     for s in csharpKeywords:
       check splited.in s.ru
 
+  test "Haskell":
+    let
+      r = getTextInLangKeywords(SourceLanguage.langHaskell)
+      splited = r.split(' '.ru)
+
+    for s in haskellKeywords:
+      check splited.in s.ru
+
   test "Java":
     let
       r = getTextInLangKeywords(SourceLanguage.langJava)

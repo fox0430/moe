@@ -17,6 +17,8 @@ proc sourceLangToStr(lang: SourceLanguage): string =
       "C++"
     of SourceLanguage.langCsharp:
       "C#"
+    of SourceLanguage.langHaskell:
+      "Haskell"
     of SourceLanguage.langJava:
       "Java"
     of SourceLanguage.langYaml:

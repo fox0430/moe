@@ -87,13 +87,13 @@ type
     state*: TokenClass
 
   SourceLanguage* = enum
-    langNone, langNim, langCpp, langCsharp, langC, langJava,
+    langNone, langNim, langCpp, langCsharp, langC, langHaskell, langJava,
     langYaml, langPython, langJavaScript, langShell, langMarkDown
 
 const
   sourceLanguageToStr*: array[SourceLanguage, string] = ["none",
-    "Nim", "C++", "C#", "C", "Java", "Yaml", "Python", "JavaScript", "Shell",
-    "MarkDown"]
+    "Nim", "C++", "C#", "C", "Haskell", "Java", "Yaml", "Python", "JavaScript",
+    "Shell", "MarkDown"]
 
   OpChars* = {'+', '-', '*', '/', '\\', '<', '>', '!', '?', '^', '.',
               '|', '=', '%', '&', '$', '@', '~', ':'}
@@ -175,7 +175,7 @@ type
   TokenizerFlags* = set[TokenizerFlag]
 
 import syntaxnim, syntaxyaml, syntaxjavascript, syntaxc, syntaxcpp,
-       syntaxcsharp, syntaxjava, syntaxpython
+       syntaxcsharp, syntaxhaskell, syntaxjava, syntaxpython
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang
   of langNone: assert false
@@ -183,6 +183,7 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langCpp: cppNextToken(g)
   of langCsharp: csharpNextToken(g)
   of langC: cNextToken(g)
+  of langHaskell: haskellNextToken(g)
   of langJava: javaNextToken(g)
   of langYaml: yamlNextToken(g)
   of langPython: pythonNextToken(g)
