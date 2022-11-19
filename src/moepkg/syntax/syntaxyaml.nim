@@ -1,43 +1,34 @@
-#=====================================================
-#Nim -- a Compiler for Nim. https://nim-lang.org/
+# Nim -- a Compiler for Nim. https://nim-lang.org/
 #
-#Copyright (C) 2006-2020 Andreas Rumpf. All rights reserved.
+# Copyright (C) 2006-2022 Andreas Rumpf. All rights reserved.
 #
-#Permission is hereby granted, free of charge, to any person obtaining a copy
-#of this software and associated documentation files (the "Software"), to deal
-#in the Software without restriction, including without limitation the rights
-#to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-#copies of the Software, and to permit persons to whom the Software is
-#furnished to do so, subject to the following conditions:
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
 #
-#The above copyright notice and this permission notice shall be included in
-#all copies or substantial portions of the Software.
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 #
-#THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-#IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-#FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-#AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-#LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-#OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-#THE SOFTWARE.
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
 #
-#[ MIT license: http://www.opensource.org/licenses/mit-license.php ]#
-#
-#
-#            Nim's Runtime Library
-#        (c) Copyright 2012 Andreas Rumpf
-#
-#    See the file "copying.txt", included in this
-#    distribution, for details about the copyright.
-#
+# [ MIT license: http://www.opensource.org/licenses/mit-license.php ]
 
 import highlite
 
 proc yamlPlainStrLit(g: var GeneralTokenizer, pos: var int) =
   g.kind = gtStringLit
-  while g.buf[pos] notin {'\0', '\x09'..'\x0D', ',', ']', '}'}:
+  while g.buf[pos] notin {'\0', '\t'..'\r', ',', ']', '}'}:
     if g.buf[pos] == ':' and
-        g.buf[pos + 1] in {'\0', '\x09'..'\x0D', ' '}:
+        g.buf[pos + 1] in {'\0', '\t'..'\r', ' '}:
       break
     inc(pos)
 
@@ -50,14 +41,14 @@ proc yamlPossibleNumber(g: var GeneralTokenizer, pos: var int) =
     while g.buf[pos] in {'0'..'9'}: inc(pos)
   else: yamlPlainStrLit(g, pos)
   if g.kind == gtNone:
-    if g.buf[pos] in {'\0', '\x09'..'\x0D', ' ', ',', ']', '}'}:
+    if g.buf[pos] in {'\0', '\t'..'\r', ' ', ',', ']', '}'}:
       g.kind = gtDecNumber
     elif g.buf[pos] == '.':
       inc(pos)
       if g.buf[pos] notin {'0'..'9'}: yamlPlainStrLit(g, pos)
       else:
         while g.buf[pos] in {'0'..'9'}: inc(pos)
-        if g.buf[pos] in {'\0', '\x09'..'\x0D', ' ', ',', ']', '}'}:
+        if g.buf[pos] in {'\0', '\t'..'\r', ' ', ',', ']', '}'}:
           g.kind = gtFloatNumber
     if g.kind == gtNone:
       if g.buf[pos] in {'e', 'E'}:
@@ -66,13 +57,13 @@ proc yamlPossibleNumber(g: var GeneralTokenizer, pos: var int) =
         if g.buf[pos] notin {'0'..'9'}: yamlPlainStrLit(g, pos)
         else:
           while g.buf[pos] in {'0'..'9'}: inc(pos)
-          if g.buf[pos] in {'\0', '\x09'..'\x0D', ' ', ',', ']', '}'}:
+          if g.buf[pos] in {'\0', '\t'..'\r', ' ', ',', ']', '}'}:
             g.kind = gtFloatNumber
           else: yamlPlainStrLit(g, pos)
       else: yamlPlainStrLit(g, pos)
-  while g.buf[pos] notin {'\0', ',', ']', '}', '\x0A', '\x0D'}:
+  while g.buf[pos] notin {'\0', ',', ']', '}', '\n', '\r'}:
     inc(pos)
-    if g.buf[pos] notin {'\x09'..'\x0D', ' ', ',', ']', '}'}:
+    if g.buf[pos] notin {'\t'..'\r', ' ', ',', ']', '}'}:
       yamlPlainStrLit(g, pos)
       break
   # theoretically, we would need to parse indentation (like with block scalars)
@@ -97,19 +88,16 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
         of 'x':
           inc(pos)
           for i in 1..2:
-            {.unroll.}
             if g.buf[pos] in hexChars: inc(pos)
           break
         of 'u':
           inc(pos)
           for i in 1..4:
-            {.unroll.}
             if g.buf[pos] in hexChars: inc(pos)
           break
         of 'U':
           inc(pos)
           for i in 1..8:
-            {.unroll.}
             if g.buf[pos] in hexChars: inc(pos)
           break
         else: inc(pos)
@@ -144,13 +132,13 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
       while g.buf[pos] in {' ', '\t'}: inc(pos)
     of '#':
       g.kind = gtComment
-      while g.buf[pos] notin {'\0', '\x0A', '\x0D'}: inc(pos)
-    of '\x0A', '\x0D': discard
+      while g.buf[pos] notin {'\0', '\n', '\r'}: inc(pos)
+    of '\n', '\r': discard
     else:
       # illegal here. just don't parse a block scalar
       g.kind = gtNone
       g.state = gtOther
-    if g.buf[pos] in {'\x0A', '\x0D'} and g.state == gtCommand:
+    if g.buf[pos] in {'\n', '\r'} and g.state == gtCommand:
       g.state = gtLongStringLit
   elif g.state == gtLongStringLit:
     # beware, this is the only token where we actually have to parse
@@ -159,10 +147,10 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
     g.kind = gtLongStringLit
     # first, we have to find the parent indentation of the block scalar, so that
     # we know when to stop
-    assert g.buf[pos] in {'\x0A', '\x0D'}
+    assert g.buf[pos] in {'\n', '\r'}
     var lookbehind = pos - 1
     var headerStart = -1
-    while lookbehind >= 0 and g.buf[lookbehind] notin {'\x0A', '\x0D'}:
+    while lookbehind >= 0 and g.buf[lookbehind] notin {'\n', '\r'}:
       if headerStart == -1 and g.buf[lookbehind] in {'|', '>'}:
         headerStart = lookbehind
       dec(lookbehind)
@@ -173,12 +161,12 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
       # when the header is alone in a line, this line does not show the parent's
       # indentation, so we must go further. search the first previous line with
       # non-whitespace content.
-      while lookbehind >= 0 and g.buf[lookbehind] in {'\x0A', '\x0D'}:
+      while lookbehind >= 0 and g.buf[lookbehind] in {'\n', '\r'}:
         dec(lookbehind)
         while lookbehind >= 0 and
             g.buf[lookbehind] in {' ', '\t'}: dec(lookbehind)
       # now, find the beginning of the line...
-      while lookbehind >= 0 and g.buf[lookbehind] notin {'\x0A', '\x0D'}:
+      while lookbehind >= 0 and g.buf[lookbehind] notin {'\n', '\r'}:
         dec(lookbehind)
       # ... and its indentation
       indentation = 1
@@ -186,7 +174,7 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
     if lookbehind == -1: indentation = 0 # top level
     elif g.buf[lookbehind + 1] == '-' and g.buf[lookbehind + 2] == '-' and
         g.buf[lookbehind + 3] == '-' and
-        g.buf[lookbehind + 4] in {'\x09'..'\x0D', ' '}:
+        g.buf[lookbehind + 4] in {'\t'..'\r', ' '}:
       # this is a document start, therefore, we are at top level
       indentation = 0
     # because lookbehind was at newline char when calculating indentation, we're
@@ -194,7 +182,7 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
     let parentIndentation = indentation - 1
 
     # find first content
-    while g.buf[pos] in {' ', '\x0A', '\x0D'}:
+    while g.buf[pos] in {' ', '\n', '\r'}:
       if g.buf[pos] == ' ': inc(indentation)
       else: indentation = 0
       inc(pos)
@@ -211,12 +199,12 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
       if (indentation < minIndentation and g.buf[pos] == '#') or
           (indentation == 0 and g.buf[pos] == '.' and g.buf[pos + 1] == '.' and
           g.buf[pos + 2] == '.' and
-          g.buf[pos + 3] in {'\0', '\x09'..'\x0D', ' '}):
+          g.buf[pos + 3] in {'\0', '\t'..'\r', ' '}):
         # comment after end of block scalar, or end of document
         break
       minIndentation = min(indentation, minIndentation)
-      while g.buf[pos] notin {'\0', '\x0A', '\x0D'}: inc(pos)
-      while g.buf[pos] in {' ', '\x0A', '\x0D'}:
+      while g.buf[pos] notin {'\0', '\n', '\r'}: inc(pos)
+      while g.buf[pos] in {' ', '\n', '\r'}:
         if g.buf[pos] == ' ': inc(indentation)
         else: indentation = 0
         inc(pos)
@@ -225,30 +213,29 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
   elif g.state == gtOther:
     # gtOther means 'inside YAML document'
     case g.buf[pos]
-    of ' ', '\x09'..'\x0D':
+    of ' ', '\t'..'\r':
       g.kind = gtWhitespace
-      while g.buf[pos] in {' ', '\x09'..'\x0D'}: inc(pos)
+      while g.buf[pos] in {' ', '\t'..'\r'}: inc(pos)
     of '#':
       g.kind = gtComment
       inc(pos)
-      while g.buf[pos] notin {'\0', '\x0A', '\x0D'}: inc(pos)
+      while g.buf[pos] notin {'\0', '\n', '\r'}: inc(pos)
     of '-':
       inc(pos)
-      if g.buf[pos] in {'\0', ' ', '\x09'..'\x0D'}:
+      if g.buf[pos] in {'\0', ' ', '\t'..'\r'}:
         g.kind = gtPunctuation
       elif g.buf[pos] == '-' and
-          (pos == 1 or g.buf[pos - 2] in {'\x0A', '\x0D'}): # start of line
+          (pos == 1 or g.buf[pos - 2] in {'\n', '\r'}): # start of line
         inc(pos)
-        if g.buf[pos] == '-' and g.buf[pos + 1] in {'\0', '\x09'..'\x0D', ' '}:
+        if g.buf[pos] == '-' and g.buf[pos + 1] in {'\0', '\t'..'\r', ' '}:
           inc(pos)
           g.kind = gtKeyword
         else: yamlPossibleNumber(g, pos)
       else: yamlPossibleNumber(g, pos)
     of '.':
-      if pos == 0 or g.buf[pos - 1] in {'\x0A', '\x0D'}:
+      if pos == 0 or g.buf[pos - 1] in {'\n', '\r'}:
         inc(pos)
         for i in 1..2:
-          {.unroll.}
           if g.buf[pos] != '.': break
           inc(pos)
         if pos == g.start + 3:
@@ -258,12 +245,12 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
       else: yamlPlainStrLit(g, pos)
     of '?':
       inc(pos)
-      if g.buf[pos] in {'\0', ' ', '\x09'..'\x0D'}:
+      if g.buf[pos] in {'\0', ' ', '\t'..'\r'}:
         g.kind = gtPunctuation
       else: yamlPlainStrLit(g, pos)
     of ':':
       inc(pos)
-      if g.buf[pos] in {'\0', '\x09'..'\x0D', ' ', '\'', '\"'} or
+      if g.buf[pos] in {'\0', '\t'..'\r', ' ', '\'', '\"'} or
           (pos > 0 and g.buf[pos - 2] in {'}', ']', '\"', '\''}):
         g.kind = gtPunctuation
       else: yamlPlainStrLit(g, pos)
@@ -282,7 +269,7 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
       inc(pos)
       if g.buf[pos] == '<':
         # literal tag (e.g. `!<tag:yaml.org,2002:str>`)
-        while g.buf[pos] notin {'\0', '>', '\x09'..'\x0D', ' '}: inc(pos)
+        while g.buf[pos] notin {'\0', '>', '\t'..'\r', ' '}: inc(pos)
         if g.buf[pos] == '>': inc(pos)
       else:
         while g.buf[pos] in {'A'..'Z', 'a'..'z', '0'..'9', '-'}: inc(pos)
@@ -291,17 +278,17 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
           # prefixed tag (e.g. `!!str`)
           inc(pos)
           while g.buf[pos] notin
-              {'\0', '\x09'..'\x0D', ' ', ',', '[', ']', '{', '}'}: inc(pos)
-        of '\0', '\x09'..'\x0D', ' ': discard
+              {'\0', '\t'..'\r', ' ', ',', '[', ']', '{', '}'}: inc(pos)
+        of '\0', '\t'..'\r', ' ': discard
         else:
           # local tag (e.g. `!nim:system:int`)
-          while g.buf[pos] notin {'\0', '\x09'..'\x0D', ' '}: inc(pos)
+          while g.buf[pos] notin {'\0', '\t'..'\r', ' '}: inc(pos)
     of '&':
       g.kind = gtLabel
-      while g.buf[pos] notin {'\0', '\x09'..'\x0D', ' '}: inc(pos)
+      while g.buf[pos] notin {'\0', '\t'..'\r', ' '}: inc(pos)
     of '*':
       g.kind = gtReference
-      while g.buf[pos] notin {'\0', '\x09'..'\x0D', ' '}: inc(pos)
+      while g.buf[pos] notin {'\0', '\t'..'\r', ' '}: inc(pos)
     of '|', '>':
       # this can lead to incorrect tokenization when | or > appear inside flow
       # content. checking whether we're inside flow content is not
@@ -317,23 +304,21 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
     # outside document
     case g.buf[pos]
     of '%':
-      if pos == 0 or g.buf[pos - 1] in {'\x0A', '\x0D'}:
+      if pos == 0 or g.buf[pos - 1] in {'\n', '\r'}:
         g.kind = gtDirective
-        while g.buf[pos] notin {'\0', '\x0A', '\x0D'}: inc(pos)
+        while g.buf[pos] notin {'\0', '\n', '\r'}: inc(pos)
       else:
         g.state = gtOther
         yamlPlainStrLit(g, pos)
-    of ' ', '\x09'..'\x0D':
+    of ' ', '\t'..'\r':
       g.kind = gtWhitespace
-      while g.buf[pos] in {' ', '\x09'..'\x0D'}: inc(pos)
+      while g.buf[pos] in {' ', '\t'..'\r'}: inc(pos)
     of '#':
       g.kind = gtComment
-      while g.buf[pos] notin {'\0', '\x0A', '\x0D'}: inc(pos)
+      while g.buf[pos] notin {'\0', '\n', '\r'}: inc(pos)
     of '\0': g.kind = gtEof
     else:
       g.kind = gtNone
       g.state = gtOther
   g.length = pos - g.pos
   g.pos = pos
-
-
