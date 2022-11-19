@@ -9,8 +9,6 @@ proc isXclipAvailable(): bool {.inline.} =
 
 proc sourceLangToStr(lang: SourceLanguage): string =
   case lang:
-    of SourceLanguage.langNim:
-      "Nim"
     of SourceLanguage.langC:
       "C"
     of SourceLanguage.langCpp:
@@ -21,16 +19,20 @@ proc sourceLangToStr(lang: SourceLanguage): string =
       "Haskell"
     of SourceLanguage.langJava:
       "Java"
-    of SourceLanguage.langYaml:
-      "Yaml"
-    of SourceLanguage.langPython:
-      "Python"
     of SourceLanguage.langJavaScript:
       "JavaScript"
-    of SourceLanguage.langShell:
-      "Shell"
     of SourceLanguage.langMarkDown:
       "Markdown"
+    of SourceLanguage.langNim:
+      "Nim"
+    of SourceLanguage.langPython:
+      "Python"
+    of SourceLanguage.langRust:
+      "Rust"
+    of SourceLanguage.langShell:
+      "Shell"
+    of SourceLanguage.langYaml:
+      "Yaml"
     else:
       "Plain text"
 

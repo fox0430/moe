@@ -316,6 +316,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langNim
   of ".py", ".pyw", ".pyx":
     return SourceLanguage.langPython
+  of ".rs":
+    return SourceLanguage.langRust
   of ".bash", ".sh":
     return SourceLanguage.langShell
   of ".cff", ".yaml", ".yml":
