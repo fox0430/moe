@@ -34,6 +34,7 @@
 import std/strutils
 from std/algorithm import binarySearch
 
+import comments
 import highlite
 
 const
@@ -235,42 +236,8 @@ proc nimNextToken*(g: var GeneralTokenizer) =
       g.kind = gtWhitespace
       while g.buf[pos] in {' ', '\x09'..'\x0D'}: inc(pos)
     of '#':
-      g.kind = gtComment
-      inc(pos)
-      var isDoc = false
-      if g.buf[pos] == '#':
-        inc(pos)
-        isDoc = true
-      if g.buf[pos] == '[':
-        g.kind = gtLongComment
-        var nesting = 0
-        while true:
-          case g.buf[pos]
-          of '\0': break
-          of '#':
-            if isDoc:
-              if g.buf[pos+1] == '#' and g.buf[pos+2] == '[':
-                inc nesting
-            elif g.buf[pos+1] == '[':
-              inc nesting
-            inc pos
-          of ']':
-            if isDoc:
-              if g.buf[pos+1] == '#' and g.buf[pos+2] == '#':
-                if nesting == 0:
-                  inc(pos, 3)
-                  break
-                dec nesting
-            elif g.buf[pos+1] == '#':
-              if nesting == 0:
-                inc(pos, 2)
-                break
-              dec nesting
-            inc pos
-          else:
-            inc pos
-      else:
-        while g.buf[pos] notin {'\0', '\x0A', '\x0D'}: inc(pos)
+      pos = parseHashLineComment(g, pos, {hasDoubleHashBracketComments,
+          hasDoubleHashComments, hasHashBracketComments})
     of 'a'..'z', 'A'..'Z', '_', '\x80'..'\xFF':
       var id = ""
       while g.buf[pos] in SymChars + {'_'}:

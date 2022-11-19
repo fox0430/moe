@@ -1,3 +1,4 @@
+import comments
 import highlite
 
 const
@@ -47,10 +48,7 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
       g.kind = gtWhitespace
       while g.buf[pos] in {' ', '\x09'..'\x0D'}: inc(pos)
     of '#':
-      g.kind = gtComment
-      inc(pos)
-      if g.buf[pos] == '!': g.kind = gtPreprocessor
-      while not (g.buf[pos] in {'\0', '\x0A', '\x0D'}): inc(pos)
+      pos = parseHashLineComment(g, pos, {hasShebang, hasDoubleHashComments})
     of 'a'..'z', 'A'..'Z', '_', '\x80'..'\xFF':
       var id = ""
       while g.buf[pos] in symChars:
@@ -107,5 +105,5 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
         g.kind = gtNone
   g.length = pos - g.pos
   if g.kind != gtEof and g.length <= 0:
-    assert false, "haskellToken: produced an empty token"
+    assert false, "pythonNextToken: produced an empty token"
   g.pos = pos
