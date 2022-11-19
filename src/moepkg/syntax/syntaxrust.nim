@@ -1,3 +1,5 @@
+import std/algorithm
+
 import highlite, syntaxc
 
 const
@@ -52,5 +54,71 @@ const
                   , "yield"
                   ]
 
+  # Types and traits
+  rustBuiltins* = [ "AsMut"
+                  , "AsRef"
+                  , "Box"
+                  , "Clone"
+                  , "Copy"
+                  , "Default"
+                  , "DoubleEndedIterator"
+                  , "Drop"
+                  , "Eq"
+                  , "ErrSliceConcatExt"
+                  , "ExactSizeIterator"
+                  , "Extend"
+                  , "Fn"
+                  , "FnMut"
+                  , "FnOnce"
+                  , "From"
+                  , "Into"
+                  , "IntoIterator"
+                  , "Iterator"
+                  , "None"
+                  , "Ok"
+                  , "Option"
+                  , "Ord"
+                  , "PartialEq"
+                  , "PartialOrd"
+                  , "Result"
+                  , "Self"
+                  , "Send"
+                  , "Sized"
+                  , "Some"
+                  , "String"
+                  , "Sync"
+                  , "ToOwned"
+                  , "ToString"
+                  , "Variant"
+                  , "Variant"
+                  , "Vec"
+                  , "bool"
+                  , "char"
+                  , "f32"
+                  , "f64"
+                  , "i128"
+                  , "i16"
+                  , "i32"
+                  , "i64"
+                  , "i8"
+                  , "isize"
+                  , "str"
+                  , "u128"
+                  , "u16"
+                  , "u32"
+                  , "u64"
+                  , "u8"
+                  , "usize"
+                  ]
+
+# TODO: mergeKeywords() will be deleted in the future.
+# TODO: Allow set different colors for each kind without merging
+# like Nim syntax highlighting.
+proc mergeKeywords(): seq[string] {.compiletime.} =
+  for k in rustKeywords: result.add k
+  for k in rustBuiltins: result.add k
+  result.sort
+
 proc rustNextToken*(g: var GeneralTokenizer) =
-  clikeNextToken(g, rustKeywords, {})
+  const keywords = mergeKeywords()
+  clikeNextToken(g, keywords, {})
