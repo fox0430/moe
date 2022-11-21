@@ -1,5 +1,6 @@
 import std/algorithm
 
+import flags
 import highlite
 
 const

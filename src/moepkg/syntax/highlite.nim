@@ -193,17 +193,6 @@ proc generalStrLit*(g: var GeneralTokenizer, position: int): int =
 proc isKeyword*(x: openArray[string], y: string): int =
   binarySearch(x, y)
 
-type
-  TokenizerFlag* = enum
-    hasDoubleHashBracketComments,
-    hasDoubleHashComments,
-    hasHashBracketComments,
-    hasNestedComments,
-    hasPreprocessor,
-    hasShebang,
-
-  TokenizerFlags* = set[TokenizerFlag]
-
 import syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell, syntaxjava,
        syntaxjavascript, syntaxnim, syntaxpython, syntaxrust, syntaxyaml
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =

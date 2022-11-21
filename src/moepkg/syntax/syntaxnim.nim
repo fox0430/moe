@@ -35,6 +35,7 @@ import std/strutils
 from std/algorithm import binarySearch
 
 import comments
+import flags
 import highlite
 
 const
@@ -235,9 +236,7 @@ proc nimNextToken*(g: var GeneralTokenizer) =
     of ' ', '\x09'..'\x0D':
       g.kind = gtWhitespace
       while g.buf[pos] in {' ', '\x09'..'\x0D'}: inc(pos)
-    of '#':
-      pos = parseHashLineComment(g, pos, {hasDoubleHashBracketComments,
-          hasDoubleHashComments, hasHashBracketComments})
+    of '#': pos = parseHashLineComment(g, pos, flagsNim)
     of 'a'..'z', 'A'..'Z', '_', '\x80'..'\xFF':
       var id = ""
       while g.buf[pos] in SymChars + {'_'}:
