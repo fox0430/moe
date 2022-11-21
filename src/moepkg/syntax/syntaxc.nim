@@ -31,6 +31,7 @@
 #    distribution, for details about the copyright.
 #
 
+import flags
 import highlite
 
 const

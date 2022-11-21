@@ -21,11 +21,13 @@
 # Resources.
 #
 
+from flags import
+  TokenizerFlag,
+  TokenizerFlags
+
 from highlite import
   GeneralTokenizer,
   TokenClass,
-  TokenizerFlag,
-  TokenizerFlags,
   eolChars
 
 
