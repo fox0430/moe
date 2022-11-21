@@ -43,23 +43,23 @@ jobs:
     env:
       NIM_VERSION: stable
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v3.1.0
     - run: |
         sudo apt-get update -yqq
         sudo apt-get install -y gcc libncursesw5-dev build-essential
     - name: Cache choosenim
       id: cache-choosenim
-      uses: actions/cache@v3
+      uses: actions/cache@v3.0.11
       with:
         path: ~/.choosenim
         key: ${{ runner.os }}-choosenim-${{ env.NIM_VERSION }}
     - name: Cache nimble
       id: cache-nimble
-      uses: actions/cache@v1
+      uses: actions/cache@v3.0.11
       with:
         path: ~/.nimble
         key: ${{ runner.os }}-nimble-${{ env.NIM_VERSION }}
-    - uses: jiro4989/setup-nim-action@v1
+    - uses: jiro4989/setup-nim-action@v1.3.64
       with:
         nim-version: ${{ env.NIM_VERSION }}
 
