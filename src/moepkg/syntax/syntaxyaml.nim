@@ -22,9 +22,9 @@
 #
 # [ MIT license: http://www.opensource.org/licenses/mit-license.php ]
 
-import comments
 import flags
 import highlite
+import lexer
 
 proc yamlPlainStrLit(g: var GeneralTokenizer, pos: var int) =
   g.kind = gtStringLit
@@ -132,7 +132,7 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
     of ' ', '\t':
       g.kind = gtWhitespace
       while g.buf[pos] in {' ', '\t'}: inc(pos)
-    of '#': pos = parseHashLineComment(g, pos, flagsYaml)
+    of '#': pos = lexHash(g, pos, flagsYaml)
     of '\n', '\r': discard
     else:
       # illegal here. just don't parse a block scalar
@@ -216,7 +216,7 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
     of ' ', '\t'..'\r':
       g.kind = gtWhitespace
       while g.buf[pos] in {' ', '\t'..'\r'}: inc(pos)
-    of '#': pos = parseHashLineComment(g, pos, flagsYaml)
+    of '#': pos = lexHash(g, pos, flagsYaml)
     of '-':
       inc(pos)
       if g.buf[pos] in {'\0', ' ', '\t'..'\r'}:
@@ -310,7 +310,7 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
     of ' ', '\t'..'\r':
       g.kind = gtWhitespace
       while g.buf[pos] in {' ', '\t'..'\r'}: inc(pos)
-    of '#': pos = parseHashLineComment(g, pos, flagsYaml)
+    of '#': pos = lexHash(g, pos, flagsYaml)
     of '\0': g.kind = gtEof
     else:
       g.kind = gtNone

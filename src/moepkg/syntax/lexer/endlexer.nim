@@ -18,60 +18,35 @@
 #[############################################################################]#
 
 #
-# Type declarations.
+# Resources.
 #
 
-type
-  ## The flags to control the behaviour of the highlighting lexer.
-  ##
-  ## Each language has different lexing requirements regarding certain aspects.
-  ## These details can be summarised by a flag representing the necessity to
-  ## respect a certain convention.
-
-  TokenizerFlag* = enum
-    hasCurlyDashComments,
-    hasCurlyDashPipeComments,
-    hasDoubleDashCaretComments,
-    hasDoubleHashBracketComments,
-    hasDoubleHashComments,
-    hasHashBracketComments,
-    hasHashComments,
-    hasNestedComments,
-    hasPreprocessor,
-    hasShebang,
-
-
-
-  ## The set of rules applying for a given language.
-  ##
-  ## For each language, a set of lexing rules can be formulated in order to
-  ## instruct the lexer appropriately.
-
-  TokenizerFlags* = set[TokenizerFlag]
+from ../highlite import
+  GeneralTokenizer,
+  TokenClass,
+  eolChars,
+  lwsChars
 
 
 
 #
-# Global variables.
+# Procedures.
 #
 
-const
-  ## The lexing rules for Nim.
-  flagsNim*: TokenizerFlags = { hasDoubleHashBracketComments
-                              , hasDoubleHashComments
-                              , hasHashBracketComments
-                              , hasHashComments
-                              , hasNestedComments
-                              }
+## Proceed until the end of the current line.
+proc endLine*(lexer: GeneralTokenizer, position: int): int =
+  result = position
 
-  ## The lexing rules for Python.
-  flagsPython*: TokenizerFlags = { hasDoubleHashComments
-                                 , hasHashComments
-                                 , hasShebang
-                                 }
+  while lexer.buf[result] notin eolChars:
+    inc result
 
-  ## The lexing rules for YAML.
-  flagsYaml*: TokenizerFlags = { hasHashComments
-                               }
+
+
+## Proceed until the end of the line whitespace sequence.
+proc endLWS*(lexer: GeneralTokenizer, position: int): int =
+  result = position
+
+  while lexer.buf[result] in lwsChars:
+    inc result
 
 #[############################################################################]#

@@ -104,6 +104,9 @@ const
   ## Characters ending a line.
   eolChars*: set[char] = {'\0', '\n', '\r'}
 
+  ## Line whitespace characters.
+  lwsChars*: set[char] = {'\t', ' '}
+
   sourceLanguageToStr*: array[SourceLanguage, string] = [ "none",
     "C",
     "C++",

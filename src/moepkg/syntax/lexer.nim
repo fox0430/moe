@@ -18,60 +18,42 @@
 #[############################################################################]#
 
 #
-# Type declarations.
+# Resources.
 #
 
-type
-  ## The flags to control the behaviour of the highlighting lexer.
-  ##
-  ## Each language has different lexing requirements regarding certain aspects.
-  ## These details can be summarised by a flag representing the necessity to
-  ## respect a certain convention.
+from flags import
+  TokenizerFlag,
+  TokenizerFlags
 
-  TokenizerFlag* = enum
-    hasCurlyDashComments,
-    hasCurlyDashPipeComments,
-    hasDoubleDashCaretComments,
-    hasDoubleHashBracketComments,
-    hasDoubleHashComments,
-    hasHashBracketComments,
-    hasHashComments,
-    hasNestedComments,
-    hasPreprocessor,
-    hasShebang,
+from highlite import
+  GeneralTokenizer,
+  TokenClass
 
-
-
-  ## The set of rules applying for a given language.
-  ##
-  ## For each language, a set of lexing rules can be formulated in order to
-  ## instruct the lexer appropriately.
-
-  TokenizerFlags* = set[TokenizerFlag]
+from lexer/hashlexer import
+  lexHashLineComment
 
 
 
 #
-# Global variables.
+# Procedures.
 #
 
-const
-  ## The lexing rules for Nim.
-  flagsNim*: TokenizerFlags = { hasDoubleHashBracketComments
-                              , hasDoubleHashComments
-                              , hasHashBracketComments
-                              , hasHashComments
-                              , hasNestedComments
-                              }
+## Lex a hash character (``#``).
+##
+## Depending on the respective language's lexing rules, determined by its flags,
+## a hash character might either be the introduction of a comment or just a
+## punctuation sign.
 
-  ## The lexing rules for Python.
-  flagsPython*: TokenizerFlags = { hasDoubleHashComments
-                                 , hasHashComments
-                                 , hasShebang
-                                 }
+proc lexHash*(lexer: var GeneralTokenizer, position: int,
+    flags: TokenizerFlags): int =
+  result = position
 
-  ## The lexing rules for YAML.
-  flagsYaml*: TokenizerFlags = { hasHashComments
-                               }
+  if lexer.buf[result] == '#':
+    if hasHashComments in flags:
+      lexer.kind = gtComment
+      result = lexHashLineComment(lexer, result, flags)
+    else:
+      lexer.kind = gtPunctuation
+      inc result
 
 #[############################################################################]#
