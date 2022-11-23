@@ -29,6 +29,9 @@ from highlite import
   GeneralTokenizer,
   TokenClass
 
+from lexer/endlexer import
+  endLine
+
 from lexer/hashlexer import
   lexHashLineComment
 
@@ -38,11 +41,50 @@ from lexer/hashlexer import
 # Procedures.
 #
 
+## Lex a dash character (``-``).
+##
+## Depending on the respective language's lexing rules, determined by its flags,
+## a dash character can be either the introduction of a comment, a function, or
+## just a punctuation mark.
+
+proc lexDash*(lexer: var GeneralTokenizer, position: int,
+    flags: TokenizerFlags): int =
+  result = position
+
+  if lexer.buf[result] == '-':
+    if hasDashFunction in flags:
+      lexer.kind = gtFunctionName
+    elif hasDashPunctuation in flags:
+      lexer.kind = gtPunctuation
+    else:
+      lexer.kind = gtBuiltin
+
+    inc result
+
+    if lexer.buf[result] == '-':
+      inc result
+
+      if hasDoubleDashCaretComments in flags:
+        if hasDoubleDashCaretComments in flags:
+          if lexer.buf[result] == ' ':
+            lexer.kind = gtComment
+            inc result
+
+            if lexer.buf[result] == '^':
+              lexer.kind = gtStringLit
+
+            result = endLine(lexer, result)
+      elif hasDoubleDashComments in flags:
+        lexer.kind = gtComment
+        result = endLine(lexer, result)
+
+
+
 ## Lex a hash character (``#``).
 ##
 ## Depending on the respective language's lexing rules, determined by its flags,
 ## a hash character might either be the introduction of a comment or just a
-## punctuation sign.
+## punctuation mark.
 
 proc lexHash*(lexer: var GeneralTokenizer, position: int,
     flags: TokenizerFlags): int =

@@ -29,9 +29,13 @@ type
   ## respect a certain convention.
 
   TokenizerFlag* = enum
+    hasCurlyComments,
     hasCurlyDashComments,
     hasCurlyDashPipeComments,
+    hasDashFunction,
+    hasDashPunctuation,
     hasDoubleDashCaretComments,
+    hasDoubleDashComments,
     hasDoubleHashBracketComments,
     hasDoubleHashComments,
     hasHashBracketComments,
@@ -56,6 +60,15 @@ type
 #
 
 const
+  ## The lexing rules for Haskell.
+  flagsHaskell*: TokenizerFlags = { hasCurlyDashComments
+                                  , hasCurlyDashPipeComments
+                                  , hasDashFunction
+                                  , hasDoubleDashCaretComments
+                                  , hasDoubleDashComments
+                                  , hasNestedComments
+                                  }
+
   ## The lexing rules for Nim.
   flagsNim*: TokenizerFlags = { hasDoubleHashBracketComments
                               , hasDoubleHashComments
@@ -71,7 +84,8 @@ const
                                  }
 
   ## The lexing rules for YAML.
-  flagsYaml*: TokenizerFlags = { hasHashComments
+  flagsYaml*: TokenizerFlags = { hasDashPunctuation
+                               , hasHashComments
                                }
 
 #[############################################################################]#

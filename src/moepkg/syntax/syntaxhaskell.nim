@@ -1,4 +1,6 @@
+import flags
 import highlite
+import lexer
 
 const
   haskellKeywords* = [ "_"
@@ -63,11 +65,7 @@ proc haskellNextToken*(g: var GeneralTokenizer) =
     of ' ', '\x09'..'\x0D':
       g.kind = gtWhitespace
       while g.buf[pos] in {' ', '\x09'..'\x0D'}: inc(pos)
-    of '-':
-      inc(pos)
-      if g.buf[pos] == '-':
-        g.kind = gtComment
-        while not (g.buf[pos] in {'\0', '\x0A', '\x0D'}): inc(pos)
+    of '-': pos = lexDash(g, pos, flagsHaskell)
     of '{':
       inc(pos)
       if g.buf[pos] == '-':
