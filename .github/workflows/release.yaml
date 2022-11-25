@@ -17,18 +17,29 @@
 ##                                                                            ##
 ################################################################################
 
-name: Scriv
+name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      release:
+        description: Release type
+        required: true
+        default: patch
+        type: choice
+        options:
+        - major
+        - minor
+        - patch 
 
 permissions:
   contents: write
 
 jobs:
-  changelog:
-    name: collect
+  release:
+    name: release
     runs-on: ubuntu-latest
+    if: contains(fromJson('["major", "minor", "patch"]'), inputs.release)
     steps:
       - name: python
         uses: actions/setup-python@v4.3.0
@@ -46,11 +57,14 @@ jobs:
       - name: user
         uses: fregante/setup-git-user@v1.1.0
 
+      - name: bump2version
+        run: bump2version ${{ inputs.release }}
+
       - name: scriv
         run: scriv collect
 
       - name: commit
-        run: git commit -am 'Increment version'
+        run: git commit -am 'Increment ${{ inputs.release }} version'
 
       - name: push
         uses: ad-m/github-push-action@v0.6.0

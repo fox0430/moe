@@ -17,6 +17,9 @@
 ##                                                                            ##
 ################################################################################
 
+# Automatic version increments.
+bump2version
+
 # CHANGELOG assembly.
 scriv
 
