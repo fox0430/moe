@@ -1,0 +1,6 @@
+.. _#1547: https://github.com/fox0430/moe/pull/1547
+
+Changed
+.......
+
+- `#1547`_ syntax highlighting:  Haskell comment lexing logic

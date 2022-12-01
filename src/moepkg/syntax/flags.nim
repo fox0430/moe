@@ -67,6 +67,7 @@ const
                                   , hasDoubleDashCaretComments
                                   , hasDoubleDashComments
                                   , hasNestedComments
+                                  , hasPreprocessor
                                   }
 
   ## The lexing rules for Nim.

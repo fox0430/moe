@@ -66,35 +66,7 @@ proc haskellNextToken*(g: var GeneralTokenizer) =
       g.kind = gtWhitespace
       while g.buf[pos] in {' ', '\x09'..'\x0D'}: inc(pos)
     of '-': pos = lexDash(g, pos, flagsHaskell)
-    of '{':
-      inc(pos)
-      if g.buf[pos] == '-':
-        g.kind = gtLongComment
-        var nested = 0
-        inc(pos)
-        if g.buf[pos] == '#':
-          g.kind = gtPreprocessor
-        while true:
-          case g.buf[pos]
-          of '#':
-            inc(pos)
-            if g.buf[pos] == '-' and g.kind == gtPreprocessor:
-              inc (pos)
-              if g.buf[pos] == '}':
-                inc (pos)
-                if nested == 0: break
-          of '-':
-            inc(pos)
-            if g.buf[pos] == '}':
-              inc(pos)
-              if nested == 0: break
-          of '}':
-            inc(pos)
-            if g.buf[pos] == '*': inc(pos)
-          of '\0':
-            break
-          else: inc(pos)
-      else: g.kind = gtPunctuation
+    of '{': pos = lexCurlyOpen(g, pos, flagsHaskell)
     of 'a'..'z', 'A'..'Z', '_', '\x80'..'\xFF':
       var id = ""
       while g.buf[pos] in symChars:
