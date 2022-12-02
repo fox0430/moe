@@ -29,6 +29,9 @@ from highlite import
   GeneralTokenizer,
   TokenClass
 
+from lexer/curlyopenlexer import
+  lexCurlyDashComment
+
 from lexer/endlexer import
   endLine
 
@@ -40,6 +43,27 @@ from lexer/hashlexer import
 #
 # Procedures.
 #
+
+## Lex an opening curly bracket (``{``).
+##
+## Depending on the respective language's lexing rules, determined by its flags,
+## an opening curly bracket can be either a punctuation mark or the introduction
+## of a nested comment.
+
+proc lexCurlyOpen*(lexer: var GeneralTokenizer, position: int,
+    flags: TokenizerFlags): int =
+  result = position
+
+  if lexer.buf[result] == '{':
+    lexer.kind = gtPunctuation
+    inc result
+
+    if lexer.buf[result] == '-':
+      if hasCurlyDashComments in flags:
+        lexer.kind = gtLongComment
+        result = lexCurlyDashComment(lexer, result, flags)
+
+
 
 ## Lex a dash character (``-``).
 ##

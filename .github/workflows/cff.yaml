@@ -1,6 +1,9 @@
 name: CFF
 
 on:
+  pull_request:
+    paths:
+      - CITATION.cff
   push:
     paths:
       - CITATION.cff

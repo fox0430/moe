@@ -49,7 +49,8 @@ from ../highlite import
 ##
 ## - Nim
 
-proc lexDoubleHashBracketComment(lexer: GeneralTokenizer, position: int, nested: bool): int =
+proc lexDoubleHashBracketComment(lexer: GeneralTokenizer, position: int,
+    nested: bool): int =
   var depth = 0
   result = position
 
@@ -105,7 +106,8 @@ proc lexDoubleHashBracketComment(lexer: GeneralTokenizer, position: int, nested:
 ##
 ## - Nim
 
-proc lexDoubleHashLineComment(lexer: GeneralTokenizer, position: int, flags: TokenizerFlags): int =
+proc lexDoubleHashLineComment(lexer: GeneralTokenizer, position: int,
+    flags: TokenizerFlags): int =
   result = position
 
   if lexer.buf[result] == '#':
@@ -131,7 +133,8 @@ proc lexDoubleHashLineComment(lexer: GeneralTokenizer, position: int, flags: Tok
 ##
 ## - Nim
 
-proc lexHashBracketComment(lexer: GeneralTokenizer, position: int, nested: bool): int =
+proc lexHashBracketComment(lexer: GeneralTokenizer, position: int,
+    nested: bool): int =
   var depth = 0
   result = position
 
