@@ -1,0 +1,6 @@
+.. _#1548: https://github.com/fox0430/moe/pull/1548
+
+Added
+.....
+
+- `#1548`_ syntax highlighting:  Markdown

@@ -107,7 +107,7 @@ proc lexCurlyDashComment*(lexer: var GeneralTokenizer, position: int,
 
     if lexer.buf[result] == '#' and hasPreprocessor in flags:
       lexer.kind = gtPreprocessor
-      result = lexCurlyDashPreprocessor(lexer, result, nested)
+      result = lexer.lexCurlyDashPreprocessor(result, nested)
     else:
       if lexer.buf[result] == '|':
         if hasCurlyDashPipeComments in flags:

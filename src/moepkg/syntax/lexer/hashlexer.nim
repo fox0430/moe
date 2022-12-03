@@ -115,12 +115,12 @@ proc lexDoubleHashLineComment(lexer: GeneralTokenizer, position: int,
 
     if lexer.buf[result] == '[':
       if hasDoubleHashBracketComments in flags:
-        result = lexDoubleHashBracketComment(lexer, result,
+        result = lexer.lexDoubleHashBracketComment(result,
           hasNestedComments in flags)
       else:
-        result = endLine(lexer, result)
+        result = lexer.endLine(result)
     else:
-      result = endLine(lexer, result)
+      result = lexer.endLine(result)
 
 
 
@@ -194,25 +194,24 @@ proc lexHashLineComment*(lexer: var GeneralTokenizer, position: int,
     of '#':
       if hasDoubleHashComments in flags:
         lexer.kind = gtStringLit
-        result = lexDoubleHashLineComment(lexer, result, flags)
+        result = lexer.lexDoubleHashLineComment(result, flags)
       else:
-        result = endLine(lexer, result)
+        result = lexer.endLine(result)
 
     of '[':
       if hasHashBracketComments in flags:
         lexer.kind = gtLongComment
-        result = lexHashBracketComment(lexer, result,
-          hasNestedComments in flags)
+        result = lexer.lexHashBracketComment(result, hasNestedComments in flags)
       else:
-        result = endLine(lexer, result)
+        result = lexer.endLine(result)
 
     of '!':
       if hasShebang in flags:
         lexer.kind = gtPreprocessor
 
-      result = endLine(lexer, result)
+      result = lexer.endLine(result)
 
     else:
-      result = endLine(lexer, result)
+      result = lexer.endLine(result)
 
 #[############################################################################]#

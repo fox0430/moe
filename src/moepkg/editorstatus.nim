@@ -1223,8 +1223,7 @@ proc updateHighlight*(highlight: var Highlight,
   for i in startLine ..< endLine: bufferInView.add(bufStatus.buffer[i])
 
   # highlight trailing spaces
-  if settings.highlight.trailingSpaces and
-     bufStatus.language != SourceLanguage.langMarkDown:
+  if settings.highlight.trailingSpaces:
     highlight.highlightTrailingSpaces(bufStatus, windowNode)
 
   # highlight full width space

@@ -165,9 +165,9 @@ proc clikeNextToken*(g: var GeneralTokenizer, keywords: openArray[string],
     of '\0':
       g.kind = gtEof
     else:
-      if g.buf[pos] in OpChars:
+      if g.buf[pos] in opChars:
         g.kind = gtOperator
-        while g.buf[pos] in OpChars: inc(pos)
+        while g.buf[pos] in opChars: inc(pos)
       else:
         inc(pos)
         g.kind = gtNone

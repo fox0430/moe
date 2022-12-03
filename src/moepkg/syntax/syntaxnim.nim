@@ -238,7 +238,7 @@ proc nimNextToken*(g: var GeneralTokenizer) =
     of ' ', '\x09'..'\x0D':
       g.kind = gtWhitespace
       while g.buf[pos] in {' ', '\x09'..'\x0D'}: inc(pos)
-    of '#': pos = lexHash(g, pos, flagsNim)
+    of '#': pos = g.lexHash(pos, flagsNim)
     of 'a'..'z', 'A'..'Z', '_', '\x80'..'\xFF':
       var id = ""
       while g.buf[pos] in SymChars + {'_'}:
@@ -340,10 +340,10 @@ proc nimNextToken*(g: var GeneralTokenizer) =
     of '\0':
       g.kind = gtEof
     else:
-      if g.buf[pos] in OpChars:
+      if g.buf[pos] in opChars:
         let sp = pos
         g.kind = gtOperator
-        while g.buf[pos] in OpChars: inc(pos)
+        while g.buf[pos] in opChars: inc(pos)
         let ep = pos
         if sp + 1 == ep and g.buf[sp] == '*' and g.buf[ep] == '(':
           g.kind = gtSpecialVar
