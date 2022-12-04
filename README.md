@@ -6,7 +6,7 @@
 ## moe
 
 A command line based editor inspired by Vim written in Nim.
- 
+
 This project's goals are easily customizable, high productivity, user friendly, and high performance editor.
 
 ![moe](https://user-images.githubusercontent.com/15966436/146791140-e020a07f-7ca1-4bfd-a6a4-f20f4c7885db.png)
@@ -33,6 +33,7 @@ This project's goals are easily customizable, high productivity, user friendly, 
   - Haskell
   - Java
   - JavaScript
+  - Markdown
   - Nim
   - Python
   - Rust
@@ -144,7 +145,7 @@ Check [detail](https://github.com/fox0430/moe/blob/develop/documents/overview.md
 [Documents (Latest)](https://github.com/fox0430/moe/blob/develop/documents/index.md)
 
 ## The origin of the name
-moe is a recursive acronym for "moe is an optimal editor".    
+moe is a recursive acronym for "moe is an optimal editor".
 And one more, it comes from the Japanese slang 萌え(moe).
 
 ## Contributing, bug reports, feature request

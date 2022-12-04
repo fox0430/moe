@@ -21,7 +21,7 @@ proc sourceLangToStr(lang: SourceLanguage): string =
       "Java"
     of SourceLanguage.langJavaScript:
       "JavaScript"
-    of SourceLanguage.langMarkDown:
+    of SourceLanguage.langMarkdown:
       "Markdown"
     of SourceLanguage.langNim:
       "Nim"

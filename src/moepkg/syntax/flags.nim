@@ -29,6 +29,7 @@ type
   ## respect a certain convention.
 
   TokenizerFlag* = enum
+    hasBacktickFramedExpressions,
     hasCurlyComments,
     hasCurlyDashComments,
     hasCurlyDashPipeComments,
@@ -40,9 +41,16 @@ type
     hasDoubleHashComments,
     hasHashBracketComments,
     hasHashComments,
+    hasHashHeadings,
     hasNestedComments,
     hasPreprocessor,
+    hasSharpBangDoubleDashComments,
+    hasSharpFunction,
+    hasSharpOperator,
+    hasSharpPunctuation,
     hasShebang,
+    hasTripleBacktickFramedExpressions,
+    hasTripleDashPreprocessor,
 
 
 
@@ -68,7 +76,17 @@ const
                                   , hasDoubleDashComments
                                   , hasNestedComments
                                   , hasPreprocessor
+                                  , hasSharpFunction
                                   }
+
+  ## The lexing rules for Markdown.
+  flagsMarkdown*: TokenizerFlags = { hasBacktickFramedExpressions
+                                   , hasHashHeadings
+                                   , hasPreprocessor
+                                   , hasSharpBangDoubleDashComments
+                                   , hasTripleBacktickFramedExpressions
+                                   , hasTripleDashPreprocessor
+                                   }
 
   ## The lexing rules for Nim.
   flagsNim*: TokenizerFlags = { hasDoubleHashBracketComments
@@ -76,11 +94,13 @@ const
                               , hasHashBracketComments
                               , hasHashComments
                               , hasNestedComments
+                              , hasSharpOperator
                               }
 
   ## The lexing rules for Python.
   flagsPython*: TokenizerFlags = { hasDoubleHashComments
                                  , hasHashComments
+                                 , hasSharpOperator
                                  , hasShebang
                                  }
 
