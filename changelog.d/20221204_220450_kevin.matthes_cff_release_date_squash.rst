@@ -1,0 +1,6 @@
+.. _#1551: https://github.com/fox0430/moe/pull/1551
+
+Fixed
+.....
+
+- `#1551`_ CI:  CFF release date update only on top level
