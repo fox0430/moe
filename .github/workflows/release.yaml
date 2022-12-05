@@ -63,7 +63,7 @@ jobs:
       - name: cff
         run: |
           sed \
-            's/date-released: ....-..-../date-released: '`date +%F`'/g' \
+            's/^date-released: ....-..-../date-released: '`date +%F`'/g' \
             CITATION.cff >> tmp
           mv tmp CITATION.cff
 
