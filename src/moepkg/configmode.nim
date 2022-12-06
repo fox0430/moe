@@ -154,7 +154,11 @@ type themeTableNames {.pure.} = enum
   specialVar
   builtin
   stringLit
+  binNumber
   decNumber
+  floatNumber
+  hexNumber
+  octNumber
   comment
   longComment
   whitespace

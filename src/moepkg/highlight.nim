@@ -156,7 +156,11 @@ proc getEditorColorPairInNim(kind: TokenClass ): EditorColorPair =
     of gtOperator: EditorColorPair.functionName
     of gtBuiltin: EditorColorPair.builtin
     of gtStringLit: EditorColorPair.stringLit
+    of gtBinNumber: EditorColorPair.binNumber
     of gtDecNumber: EditorColorPair.decNumber
+    of gtFloatNumber: EditorColorPair.floatNumber
+    of gtHexNumber: EditorColorPair.hexNumber
+    of gtOctNumber: EditorColorPair.octNumber
     of gtComment: EditorColorPair.comment
     of gtLongComment: EditorColorPair.longComment
     of gtPreprocessor: EditorColorPair.preprocessor
@@ -178,7 +182,11 @@ proc getEditorColorPair(kind: TokenClass,
     of gtStringLit:
       if language == SourceLanguage.langYaml: EditorColorPair.defaultChar
       else: EditorColorPair.stringLit
+    of gtBinNumber: EditorColorPair.binNumber
     of gtDecNumber: EditorColorPair.decNumber
+    of gtFloatNumber: EditorColorPair.floatNumber
+    of gtHexNumber: EditorColorPair.hexNumber
+    of gtOctNumber: EditorColorPair.octNumber
     of gtComment: EditorColorPair.comment
     of gtLongComment: EditorColorPair.longComment
     of gtPreprocessor: EditorColorPair.preprocessor
