@@ -1335,7 +1335,27 @@ gtStringLit
 
 Syntax highlighting color
 ```
+gtBinNumber
+```
+
+Syntax highlighting color
+```
 gtDecNumber
+```
+
+Syntax highlighting color
+```
+gtFloatNumber
+```
+
+Syntax highlighting color
+```
+gtHexNumber
+```
+
+Syntax highlighting color
+```
+gtOctNumber
 ```
 
 Syntax highlighting color
