@@ -16,6 +16,13 @@ proc staticReadVersionFromNimble: string {.compileTime.} =
   assert captures.len == 1
   return captures[0]
 
+proc gitHash: string {.compileTime.} =
+  const r = gorgeEx("git rev-parse HEAD")
+  if r.exitCode == 0 and r.output.len == 40:
+    return r.output
+  else:
+    return ""
+
 proc checkReleaseBuild: string {.compileTime.} =
   if defined(release): return "Release"
   else: return "Debug"
@@ -23,9 +30,13 @@ proc checkReleaseBuild: string {.compileTime.} =
 proc generateVersionInfoMessage(): string =
   const
     versionInfo = "moe v" & staticReadVersionFromNimble()
+    gitHash = "Git hash: " & gitHash()
     buildType = "Build type: " & checkReleaseBuild()
 
-  result = versionInfo & "\n" & buildType
+  result =
+    versionInfo & "\n\n" &
+    gitHash & "\n" &
+    buildType
 
 proc writeVersion() =
   echo generateVersionInfoMessage()
