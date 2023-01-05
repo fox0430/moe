@@ -2,6 +2,9 @@
 ..
 .. Uncomment the header that is right (remove the leading dots).
 ..
+
+.. _#1568: https://github.com/fox0430/moe/pull/1568
+
 .. Added
 .. .....
 ..
@@ -17,9 +20,12 @@
 ..
 .. - A bullet item for the Deprecated category.
 ..
-.. Fixed
-.. .....
-..
+
+Fixed
+.....
+
+- `#1568`_ Fix a bug that crash when only '/' in C. (Fix #1568)
+
 .. - A bullet item for the Fixed category.
 ..
 .. Removed
