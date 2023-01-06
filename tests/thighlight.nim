@@ -105,3 +105,18 @@ test "Fix #1524":
       ColorSegment(firstRow: 0, firstColumn: 4, lastRow: 0, lastColumn: 4, color: defaultChar),
       ColorSegment(firstRow: 0, firstColumn: 5, lastRow: 0, lastColumn: 5, color: defaultChar),
       ColorSegment(firstRow: 0, firstColumn: 6, lastRow: 0, lastColumn: 8, color: defaultChar)])
+
+test "Only '/' in Clang":
+  # https://github.com/fox0430/moe/issues/1568
+
+  const
+    code = "/"
+    emptyReservedWords = @[]
+  let highlight = initHighlight(
+    code,
+    emptyReservedWords,
+    SourceLanguage.langC)
+
+  check highlight == Highlight(
+    colorSegments: @[
+      ColorSegment(firstRow: 0, firstColumn: 0, lastRow: 0, lastColumn: 0, color: defaultChar)])
