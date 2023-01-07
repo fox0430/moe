@@ -1,7 +1,7 @@
 #=====================================================
 #Nim -- a Compiler for Nim. https://nim-lang.org/
 #
-#Copyright (C) 2006-2020 Andreas Rumpf. All rights reserved.
+#Copyright (C) 2006-2022 Andreas Rumpf. All rights reserved.
 #
 #Permission is hereby granted, free of charge, to any person obtaining a copy
 #of this software and associated documentation files (the "Software"), to deal
@@ -31,6 +31,7 @@
 #    distribution, for details about the copyright.
 #
 
+import flags
 import highlite
 
 const
@@ -42,7 +43,7 @@ const
     "volatile", "while"]
 
 proc clikeNextToken*(g: var GeneralTokenizer, keywords: openArray[string],
-                    flags: TokenizerFlags) =
+                     flags: TokenizerFlags) =
   const
     hexChars = {'0'..'9', 'A'..'F', 'a'..'f'}
     octChars = {'0'..'7'}
@@ -68,7 +69,7 @@ proc clikeNextToken*(g: var GeneralTokenizer, keywords: openArray[string],
           g.state = gtNone
         else: inc(pos)
         break
-      of '\0', '\x0D', '\x0A':
+      of '\0', '\r', '\n':
         g.state = gtNone
         break
       of '\"':
@@ -78,14 +79,14 @@ proc clikeNextToken*(g: var GeneralTokenizer, keywords: openArray[string],
       else: inc(pos)
   else:
     case g.buf[pos]
-    of ' ', '\x09'..'\x0D':
+    of ' ', '\t'..'\r':
       g.kind = gtWhitespace
-      while g.buf[pos] in {' ', '\x09'..'\x0D'}: inc(pos)
+      while g.buf[pos] in {' ', '\t'..'\r'}: inc(pos)
     of '/':
       inc(pos)
       if g.buf[pos] == '/':
         g.kind = gtComment
-        while not (g.buf[pos] in {'\0', '\x0A', '\x0D'}): inc(pos)
+        while not (g.buf[pos] in {'\0', '\n', '\r'}): inc(pos)
       elif g.buf[pos] == '*':
         g.kind = gtLongComment
         var nested = 0
@@ -105,6 +106,7 @@ proc clikeNextToken*(g: var GeneralTokenizer, keywords: openArray[string],
           of '\0':
             break
           else: inc(pos)
+      else: g.kind = gtOperator
     of '#':
       inc(pos)
       if hasPreprocessor in flags:
@@ -164,9 +166,9 @@ proc clikeNextToken*(g: var GeneralTokenizer, keywords: openArray[string],
     of '\0':
       g.kind = gtEof
     else:
-      if g.buf[pos] in OpChars:
+      if g.buf[pos] in opChars:
         g.kind = gtOperator
-        while g.buf[pos] in OpChars: inc(pos)
+        while g.buf[pos] in opChars: inc(pos)
       else:
         inc(pos)
         g.kind = gtNone

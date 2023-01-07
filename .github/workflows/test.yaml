@@ -15,6 +15,9 @@ on:
       - '*.md'
       - 'documents/**'
 
+permissions:
+  contents: read
+
 jobs:
   skip:
     runs-on: ubuntu-latest
@@ -40,27 +43,27 @@ jobs:
     env:
       NIM_VERSION: stable
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v3.2.0
     - run: |
         sudo apt-get update -yqq
         sudo apt-get install -y gcc libncursesw5-dev build-essential
     - name: Cache choosenim
       id: cache-choosenim
-      uses: actions/cache@v3
+      uses: actions/cache@v3.2.2
       with:
         path: ~/.choosenim
         key: ${{ runner.os }}-choosenim-${{ env.NIM_VERSION }}
     - name: Cache nimble
       id: cache-nimble
-      uses: actions/cache@v1
+      uses: actions/cache@v3.2.2
       with:
         path: ~/.nimble
         key: ${{ runner.os }}-nimble-${{ env.NIM_VERSION }}
-    - uses: jiro4989/setup-nim-action@v1
+    - uses: jiro4989/setup-nim-action@v1.4.1
       with:
         nim-version: ${{ env.NIM_VERSION }}
 
-    - name: Install integtation tools
+    - name: Install integration tools
       run: |
         # shpec
         sudo sh -c "`curl -L https://raw.githubusercontent.com/rylnd/shpec/master/install.sh`"
@@ -74,5 +77,5 @@ jobs:
     - name: Install moe
       run: nimble install --verbose -Y
 
-    - name: Run integtation test
+    - name: Run integration test
       run: shpec ./shpec.sh

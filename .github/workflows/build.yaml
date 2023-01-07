@@ -15,6 +15,9 @@ on:
       - '*.md'
       - 'documents/**'
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -23,9 +26,9 @@ jobs:
         nim: [ '1.6.2', 'stable', 'devel' ]
     name: Build on ${{ matrix.nim }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v3.2.0
       - name: Setup nim
-        uses: jiro4989/setup-nim-action@v1
+        uses: jiro4989/setup-nim-action@v1.4.1
         with:
           nim-version: ${{ matrix.nim }}
       - run: nimble build -y

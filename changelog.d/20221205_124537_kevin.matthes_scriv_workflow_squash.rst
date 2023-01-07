@@ -1,0 +1,6 @@
+.. _#1552: https://github.com/fox0430/moe/pull/1552
+
+Added
+.....
+
+- `#1552`_ CI:  GitHub Action workflow to create a fresh Scriv fragment

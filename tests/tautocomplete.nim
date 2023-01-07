@@ -1,6 +1,4 @@
-import std/[unittest, sugar, sequtils, macros, options]
-import moepkg/unicodeext
-
+import std/[unittest, macros]
 include moepkg/autocomplete
 
 const code = ru"""proc fibonacci(n: int): int =
@@ -129,24 +127,6 @@ suite "autocomplete: getPathList":
       getPathListTest(i, c.expectVal, c.path)
 
 suite "getTextInLangKeywords":
-  test "Nim":
-    let
-      r = getTextInLangKeywords(SourceLanguage.langNim)
-      splited = r.split(' '.ru)
-
-    for s in nimKeywords:
-      check splited.in s.ru
-    for s in nimBooleans:
-      check splited.in s.ru
-    for s in nimSpecialVars:
-      check splited.in s.ru
-    for s in nimPragmas:
-      check splited.in s.ru
-    for s in nimBuiltins:
-      check splited.in s.ru
-    for s in nimStdLibs:
-      check splited.in s.ru
-
   test "C":
     let
       r = getTextInLangKeywords(SourceLanguage.langC)
@@ -171,12 +151,46 @@ suite "getTextInLangKeywords":
     for s in csharpKeywords:
       check splited.in s.ru
 
+  test "Haskell":
+    let
+      r = getTextInLangKeywords(SourceLanguage.langHaskell)
+      splited = r.split(' '.ru)
+
+    for s in haskellKeywords:
+      check splited.in s.ru
+
   test "Java":
     let
       r = getTextInLangKeywords(SourceLanguage.langJava)
       splited = r.split(' '.ru)
 
     for s in javaKeywords:
+      check splited.in s.ru
+
+  test "JavaScript":
+    let
+      r = getTextInLangKeywords(SourceLanguage.langJavaScript)
+      splited = r.split(' '.ru)
+
+    for s in javaScriptkeywords:
+      check splited.in s.ru
+
+  test "Nim":
+    let
+      r = getTextInLangKeywords(SourceLanguage.langNim)
+      splited = r.split(' '.ru)
+
+    for s in nimKeywords:
+      check splited.in s.ru
+    for s in nimBooleans:
+      check splited.in s.ru
+    for s in nimSpecialVars:
+      check splited.in s.ru
+    for s in nimPragmas:
+      check splited.in s.ru
+    for s in nimBuiltins:
+      check splited.in s.ru
+    for s in nimStdLibs:
       check splited.in s.ru
 
   test "Python":
@@ -187,10 +201,10 @@ suite "getTextInLangKeywords":
     for s in pythonKeywords:
       check splited.in s.ru
 
-  test "JavaScript":
+  test "Rust":
     let
-      r = getTextInLangKeywords(SourceLanguage.langJavaScript)
+      r = getTextInLangKeywords(SourceLanguage.langRust)
       splited = r.split(' '.ru)
 
-    for s in javaScriptkeywords:
+    for s in rustKeywords:
       check splited.in s.ru

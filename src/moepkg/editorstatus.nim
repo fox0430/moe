@@ -417,6 +417,16 @@ proc initSyntaxHighlight(
                  else: SourceLanguage.langNone
           h = ($buf.buffer).initHighlight(reservedWords, lang)
         updatedHighlights.add (index, h)
+
+        bufStatus[index].isUpdate = false
+      # The filer syntax highlight is initialized/updated in filermode module.
+      elif not isFilerMode(buf.mode, buf.prevMode):
+        let h = initHighlight(
+          $buf.buffer,
+          reservedWords,
+          SourceLanguage.langNone)
+
+        updatedHighlights.add((index, h))
         bufStatus[index].isUpdate = false
 
     var queue = initHeapQueue[WindowNode]()
@@ -1203,8 +1213,7 @@ proc updateHighlight*(highlight: var Highlight,
   for i in startLine ..< endLine: bufferInView.add(bufStatus.buffer[i])
 
   # highlight trailing spaces
-  if settings.highlight.trailingSpaces and
-     bufStatus.language != SourceLanguage.langMarkDown:
+  if settings.highlight.trailingSpaces:
     highlight.highlightTrailingSpaces(bufStatus, windowNode)
 
   # highlight full width space

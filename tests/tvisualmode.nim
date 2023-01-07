@@ -1,6 +1,5 @@
-import std/[unittest, osproc]
-import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, movement, bufferstatus,
-               register]
+import std/[unittest]
+import moepkg/[highlight]
 include moepkg/[visualmode, platform, independentutils]
 
 proc isXselAvailable(): bool {.inline.} =

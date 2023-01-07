@@ -539,7 +539,19 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): EditorColor =
   setEditorColor gtStringLit:
     foreground:
       colorFromNode(getScope("string"){"foreground"})
+  setEditorColor gtBinNumber:
+    foreground:
+      colorFromNode(getScope("constant"){"foreground"})
   setEditorColor gtDecNumber:
+    foreground:
+      colorFromNode(getScope("constant"){"foreground"})
+  setEditorColor gtFloatNumber:
+    foreground:
+      colorFromNode(getScope("constant"){"foreground"})
+  setEditorColor gtHexNumber:
+    foreground:
+      colorFromNode(getScope("constant"){"foreground"})
+  setEditorColor gtOctNumber:
     foreground:
       colorFromNode(getScope("constant"){"foreground"})
   setEditorColor gtComment:
@@ -1653,8 +1665,20 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("gtStringLit"):
       ColorThemeTable[ColorTheme.config].gtStringLit = color("gtStringLit")
 
+    if settings["Theme"].contains("gtBinNumber"):
+      ColorThemeTable[ColorTheme.config].gtBinNumber = color("gtBinNumber")
+
     if settings["Theme"].contains("gtDecNumber"):
       ColorThemeTable[ColorTheme.config].gtDecNumber = color("gtDecNumber")
+
+    if settings["Theme"].contains("gtFloatNumber"):
+      ColorThemeTable[ColorTheme.config].gtFloatNumber = color("gtFloatNumber")
+
+    if settings["Theme"].contains("gtHexNumber"):
+      ColorThemeTable[ColorTheme.config].gtHexNumber = color("gtHexNumber")
+
+    if settings["Theme"].contains("gtOctNumber"):
+      ColorThemeTable[ColorTheme.config].gtOctNumber = color("gtOctNumber")
 
     if settings["Theme"].contains("gtComment"):
       ColorThemeTable[ColorTheme.config].gtComment = color("gtComment")
@@ -2085,7 +2109,7 @@ proc validateDebugTable(table: TomlValueRef): Option[InvalidItem] =
         return some(InvalidItem(name: $key, val: $val))
 
 proc validateThemeTable(table: TomlValueRef): Option[InvalidItem] =
-  let editorColors = ColorThemeTable[ColorTheme.config].EditorColor
+  let editorColors = ColorThemeTable[ColorTheme.config]
   for key, val in table.getTable:
     case key:
       of "baseTheme":
@@ -2458,7 +2482,11 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "gtStringLit = \"{$theme.gtStringLit}\""
   result.addLine fmt "gtSpecialVar = \"{$theme.gtSpecialVar}\""
   result.addLine fmt "gtBuiltin = \"{$theme.gtBuiltin}\""
+  result.addLine fmt "gtBinNumber = \"{$theme.gtBinNumber}\""
   result.addLine fmt "gtDecNumber = \"{$theme.gtDecNumber}\""
+  result.addLine fmt "gtFloatNumber = \"{$theme.gtFloatNumber}\""
+  result.addLine fmt "gtHexNumber = \"{$theme.gtHexNumber}\""
+  result.addLine fmt "gtOctNumber = \"{$theme.gtOctNumber}\""
   result.addLine fmt "gtComment = \"{$theme.gtComment}\""
   result.addLine fmt "gtLongComment = \"{$theme.gtLongComment}\""
   result.addLine fmt "gtWhitespace = \"{$theme.gtWhitespace}\""

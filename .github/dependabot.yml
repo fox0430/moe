@@ -1,0 +1,13 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: daily
+      time: '00:00'
+    assignees:
+      - fox0430
+    commit-message:
+      prefix: "actions"
+      include: scope
+    target-branch: "develop"

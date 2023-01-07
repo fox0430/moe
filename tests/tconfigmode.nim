@@ -1,6 +1,4 @@
 import std/[unittest, macros, strformat, os]
-import moepkg/[editorstatus, gapbuffer, bufferstatus, unicodeext]
-
 include moepkg/configmode
 
 suite "Config mode: Start configuration mode":
@@ -361,7 +359,23 @@ suite "Config mode: Init buffer":
                      ru "    foreground                   yellow",
                      ru "    background                   default",
                      ru "",
+                     ru "  binNumber",
+                     ru "    foreground                   aqua",
+                     ru "    background                   default",
+                     ru "",
                      ru "  decNumber",
+                     ru "    foreground                   aqua",
+                     ru "    background                   default",
+                     ru "",
+                     ru "  floatNumber",
+                     ru "    foreground                   aqua",
+                     ru "    background                   default",
+                     ru "",
+                     ru "  hexNumber",
+                     ru "    foreground                   aqua",
+                     ru "    background                   default",
+                     ru "",
+                     ru "  octNumber",
                      ru "    foreground                   aqua",
                      ru "    background                   default",
                      ru "",

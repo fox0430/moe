@@ -1,0 +1,40 @@
+.. A new scriv changelog fragment.
+..
+.. Uncomment the header that is right (remove the leading dots).
+..
+
+.. _#1569: https://github.com/fox0430/moe/pull/1569
+
+.. Added
+.. .....
+..
+.. - A bullet item for the Added category.
+..
+.. Changed
+.. .......
+..
+.. - A bullet item for the Changed category.
+..
+.. Deprecated
+.. ..........
+..
+.. - A bullet item for the Deprecated category.
+..
+
+Fixed
+.....
+
+- `#1569`_ Fix a bug that crash when only '/' in C. (Fix #1568)
+
+.. - A bullet item for the Fixed category.
+..
+.. Removed
+.. .......
+..
+.. - A bullet item for the Removed category.
+..
+.. Security
+.. ........
+..
+.. - A bullet item for the Security category.
+..

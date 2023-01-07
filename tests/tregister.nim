@@ -1,5 +1,5 @@
-import std/[unittest, options]
-import moepkg/[unicodeext, settings]
+import std/[unittest]
+import moepkg/[unicodeext]
 include moepkg/[register]
 
 suite "Register: Add a buffer to the no name register":

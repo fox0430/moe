@@ -1,8 +1,17 @@
 import std/[sugar, critbits, options, sequtils, strutils]
 import pkg/unicodedb/properties
 import unicodeext, bufferstatus, algorithm, osext, gapbuffer
-import syntax/[highlite, syntaxnim, syntaxc, syntaxcpp, syntaxcsharp,
-               syntaxjava, syntaxpython, syntaxjavascript]
+import syntax/[ highlite
+              , syntaxc
+              , syntaxcpp
+              , syntaxcsharp
+              , syntaxhaskell
+              , syntaxjava
+              , syntaxjavascript
+              , syntaxnim
+              , syntaxpython
+              , syntaxrust
+              ]
 
 type
   # `WordDictionary.val` is number of times used in the autocomplete.
@@ -132,14 +141,6 @@ proc getTextInBuffers*(
     else:
       result.add buf.buffer.toRunes
 
-proc getNimKeywords(): seq[Rune] {.compiletime.} =
-  for s in nimKeywords: result.add toRunes(s & " ")
-  for s in nimBooleans: result.add toRunes(s & " ")
-  for s in nimSpecialVars: result.add toRunes(s & " ")
-  for s in nimPragmas: result.add toRunes(s & " ")
-  for s in nimBuiltins: result.add toRunes(s & " ")
-  for s in nimStdLibs: result.add toRunes(s & " ")
-
 proc getCKeywords(): seq[Rune] {.compiletime.} =
   for s in cKeywords: result.add toRunes(s & " ")
 
@@ -149,31 +150,49 @@ proc getCppKeywords(): seq[Rune] {.compiletime.} =
 proc getCsharpKeywords(): seq[Rune] {.compiletime.} =
   for s in csharpKeywords: result.add toRunes(s & " ")
 
+proc getHaskellKeywords(): seq[Rune] {.compiletime.} =
+  for s in haskellKeywords: result.add toRunes(s & " ")
+
 proc getJavaKeywords(): seq[Rune] {.compiletime.} =
   for s in javaKeywords: result.add toRunes(s & " ")
-
-proc getPythonKeywords(): seq[Rune] {.compiletime.} =
-  for s in pythonKeywords: result.add toRunes(s & " ")
 
 proc getJavaScriptKeywords(): seq[Rune] {.compiletime.} =
   for s in javaScriptkeywords: result.add toRunes(s & " ")
 
+proc getNimKeywords(): seq[Rune] {.compiletime.} =
+  for s in nimKeywords: result.add toRunes(s & " ")
+  for s in nimBooleans: result.add toRunes(s & " ")
+  for s in nimSpecialVars: result.add toRunes(s & " ")
+  for s in nimPragmas: result.add toRunes(s & " ")
+  for s in nimBuiltins: result.add toRunes(s & " ")
+  for s in nimStdLibs: result.add toRunes(s & " ")
+
+proc getPythonKeywords(): seq[Rune] {.compiletime.} =
+  for s in pythonKeywords: result.add toRunes(s & " ")
+
+proc getRustKeywords(): seq[Rune] {.compiletime.} =
+  for s in rustKeywords: result.add toRunes(s & " ")
+
 proc getTextInLangKeywords*(lang: SourceLanguage): seq[Rune] =
   case lang:
-    of SourceLanguage.langNim:
-      result = getNimKeywords()
     of SourceLanguage.langC:
       result = getCKeywords()
     of SourceLanguage.langCpp:
       result = getCppKeywords()
     of SourceLanguage.langCsharp:
       result = getCsharpKeywords()
+    of SourceLanguage.langHaskell:
+      result = getHaskellKeywords()
     of SourceLanguage.langJava:
       result = getJavaKeywords()
-    of SourceLanguage.langPython:
-      result = getPythonKeywords()
     of SourceLanguage.langJavaScript:
       result = getJavaScriptKeywords()
+    of SourceLanguage.langPython:
+      result = getPythonKeywords()
+    of SourceLanguage.langNim:
+      result = getNimKeywords()
+    of SourceLanguage.langRust:
+      result = getRustKeywords()
     else:
       discard
 

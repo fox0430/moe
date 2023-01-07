@@ -1,5 +1,4 @@
-import std/[unittest, os, strutils]
-import moepkg/unicodeext
+import std/[unittest]
 include moepkg/[commandview, commandviewutils, editorstatus]
 
 suite "commandview: getCandidatesFilePath":

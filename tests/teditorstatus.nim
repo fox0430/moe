@@ -1,9 +1,5 @@
 import std/unittest
-import moepkg/[ui, highlight, editorview, gapbuffer, unicodeext,
-               editor, window, color, bufferstatus, settings]
-
-from moepkg/movement import keyDown, keyRight
-
+import moepkg/[editor]
 include moepkg/editorstatus
 
 template initHighlight() =

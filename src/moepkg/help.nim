@@ -251,14 +251,14 @@ conf - Open configuration mode
 debug - Open debug mode
 """
 
-proc initHelpModeBuffer(status: var Editorstatus) =
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.bufStatus[currentBufferIndex].path = ru"help"
+proc initHelpModeBuffer(bufStatus: var BufferStatus) =
+  bufStatus.path = ru"help"
+  bufStatus.isUpdate = true
 
   var line = ""
   for ch in helpSentences:
     if ch == '\n':
-      status.bufStatus[currentBufferIndex].buffer.add(line.toRunes)
+      bufStatus.buffer.add(line.toRunes)
       line = ""
     else: line.add(ch)
 
@@ -326,7 +326,8 @@ proc execHelpCommand*(status: var Editorstatus, command: Runes) =
 
 # TODO: Remove
 proc helpMode*(status: var Editorstatus) =
-  status.initHelpModeBuffer
+  currentBufStatus.initHelpModeBuffer
+
   status.resize(terminalHeight(), terminalWidth())
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow

@@ -1,5 +1,4 @@
 import std/[unittest, macros]
-import moepkg/register
 include moepkg/[editor, editorstatus, ui, platform, independentutils]
 
 proc isXselAvailable(): bool {.inline.} =
@@ -10,26 +9,30 @@ proc isXclipAvailable(): bool {.inline.} =
 
 proc sourceLangToStr(lang: SourceLanguage): string =
   case lang:
-    of SourceLanguage.langNim:
-      "Nim"
     of SourceLanguage.langC:
       "C"
     of SourceLanguage.langCpp:
       "C++"
     of SourceLanguage.langCsharp:
       "C#"
+    of SourceLanguage.langHaskell:
+      "Haskell"
     of SourceLanguage.langJava:
       "Java"
-    of SourceLanguage.langYaml:
-      "Yaml"
-    of SourceLanguage.langPython:
-      "Python"
     of SourceLanguage.langJavaScript:
       "JavaScript"
+    of SourceLanguage.langMarkdown:
+      "Markdown"
+    of SourceLanguage.langNim:
+      "Nim"
+    of SourceLanguage.langPython:
+      "Python"
+    of SourceLanguage.langRust:
+      "Rust"
     of SourceLanguage.langShell:
       "Shell"
-    of SourceLanguage.langMarkDown:
-      "Markdown"
+    of SourceLanguage.langYaml:
+      "Yaml"
     else:
       "Plain text"
 

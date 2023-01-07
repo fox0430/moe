@@ -1,3 +1,4 @@
+import flags
 import highlite, syntaxc
 
 const

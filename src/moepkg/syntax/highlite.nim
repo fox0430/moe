@@ -86,17 +86,75 @@ type
     pos*: int
     state*: TokenClass
 
-  SourceLanguage* = enum
-    langNone, langNim, langCpp, langCsharp, langC, langJava,
-    langYaml, langPython, langJavaScript, langShell, langMarkDown
+  SourceLanguage* = enum langNone,
+    langC,
+    langCpp,
+    langCsharp,
+    langHaskell,
+    langJava,
+    langJavaScript,
+    langMarkdown,
+    langNim,
+    langPython,
+    langRust,
+    langShell,
+    langYaml,
 
 const
-  sourceLanguageToStr*: array[SourceLanguage, string] = ["none",
-    "Nim", "C++", "C#", "C", "Java", "Yaml", "Python", "JavaScript", "Shell",
-    "MarkDown"]
+  ## Characters ending a line.
+  eolChars*: set[char] = {'\0', '\n', '\r'}
 
-  OpChars* = {'+', '-', '*', '/', '\\', '<', '>', '!', '?', '^', '.',
-              '|', '=', '%', '&', '$', '@', '~', ':'}
+  ## Line whitespace characters.
+  lwsChars*: set[char] = {'\t', ' '}
+
+  ## Common operators.
+  opChars*: set[char] = { '+'
+                        , '-'
+                        , '*'
+                        , '/'
+                        , '\\'
+                        , '<'
+                        , '>'
+                        , '!'
+                        , '?'
+                        , '^'
+                        , '.'
+                        , '|'
+                        , '='
+                        , '%'
+                        , '&'
+                        , '$'
+                        , '@'
+                        , '~'
+                        , ':'
+                        }
+
+  ## Characters denoting a symbol.
+  symChars*: set[char] = { 'A' .. 'Z'
+                         , 'a' .. 'z'
+                         , '0' .. '9'
+                         , '_'
+                         , '\x80' .. '\xFF'
+                         }
+
+  ## All whitespace characters.
+  wsChars*: set[char] = {'\t' .. '\r', ' '}
+
+  sourceLanguageToStr*: array[SourceLanguage, string] = [ "none",
+    "C",
+    "C++",
+    "C#",
+    "Haskell",
+    "Java",
+    "JavaScript",
+    "Markdown",
+    "Nim",
+    "Python",
+    "Rust",
+    "Shell",
+    "Yaml",
+  ]
+
 
 
 proc getSourceLanguage*(name: string): SourceLanguage =
@@ -169,22 +227,21 @@ proc generalStrLit*(g: var GeneralTokenizer, position: int): int =
 proc isKeyword*(x: openArray[string], y: string): int =
   binarySearch(x, y)
 
-type
-  TokenizerFlag* = enum
-    hasPreprocessor, hasNestedComments
-  TokenizerFlags* = set[TokenizerFlag]
-
-import syntaxnim, syntaxyaml, syntaxjavascript, syntaxc, syntaxcpp,
-       syntaxcsharp, syntaxjava, syntaxpython
+import syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell, syntaxjava,
+       syntaxjavascript, syntaxmarkdown, syntaxnim, syntaxpython, syntaxrust,
+       syntaxyaml
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang
-  of langNone: assert false
-  of langNim: nimNextToken(g)
+  of langC: cNextToken(g)
   of langCpp: cppNextToken(g)
   of langCsharp: csharpNextToken(g)
-  of langC: cNextToken(g)
+  of langHaskell: haskellNextToken(g)
   of langJava: javaNextToken(g)
-  of langYaml: yamlNextToken(g)
-  of langPython: pythonNextToken(g)
   of langJavaScript: javaScriptNextToken(g)
+  of langMarkdown: markdownNextToken(g)
+  of langNim: nimNextToken(g)
+  of langNone: assert false
+  of langPython: pythonNextToken(g)
+  of langRust: rustNextToken(g)
+  of langYaml: yamlNextToken(g)
   else: discard

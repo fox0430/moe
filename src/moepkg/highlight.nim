@@ -156,7 +156,11 @@ proc getEditorColorPairInNim(kind: TokenClass ): EditorColorPair =
     of gtOperator: EditorColorPair.functionName
     of gtBuiltin: EditorColorPair.builtin
     of gtStringLit: EditorColorPair.stringLit
+    of gtBinNumber: EditorColorPair.binNumber
     of gtDecNumber: EditorColorPair.decNumber
+    of gtFloatNumber: EditorColorPair.floatNumber
+    of gtHexNumber: EditorColorPair.hexNumber
+    of gtOctNumber: EditorColorPair.octNumber
     of gtComment: EditorColorPair.comment
     of gtLongComment: EditorColorPair.longComment
     of gtPreprocessor: EditorColorPair.preprocessor
@@ -178,7 +182,11 @@ proc getEditorColorPair(kind: TokenClass,
     of gtStringLit:
       if language == SourceLanguage.langYaml: EditorColorPair.defaultChar
       else: EditorColorPair.stringLit
+    of gtBinNumber: EditorColorPair.binNumber
     of gtDecNumber: EditorColorPair.decNumber
+    of gtFloatNumber: EditorColorPair.floatNumber
+    of gtHexNumber: EditorColorPair.hexNumber
+    of gtOctNumber: EditorColorPair.octNumber
     of gtComment: EditorColorPair.comment
     of gtLongComment: EditorColorPair.longComment
     of gtPreprocessor: EditorColorPair.preprocessor
@@ -226,11 +234,10 @@ proc initHighlight*(buffer: string,
     if not empty: result.colorSegments.add(cs)
 
   if language == SourceLanguage.langNone or
-     language == SourceLanguage.langShell or
-     language == SourceLanguage.langMarkDown:
+     language == SourceLanguage.langShell:
     splitByNewline(buffer, EditorColorPair.defaultChar)
     return result
-  
+
   var token = GeneralTokenizer()
   token.initGeneralTokenizer(buffer)
   var pad: string
@@ -248,10 +255,14 @@ proc initHighlight*(buffer: string,
     let
       first = token.start
       last = first+token.length-1
-    if all(buffer[first .. last], proc (x: char): bool = x == '\n'):
-      currentRow += last - first + 1
-      currentColumn = 0
-      continue
+
+    block:
+      # Increment `currentRow` if newlines only.
+      let str = buffer[first..last]
+      if str != "" and all(str, proc (x: char): bool = x == '\n'):
+        currentRow += last - first + 1
+        currentColumn = 0
+        continue
 
     let color = if language == SourceLanguage.langNim:
                   getEditorColorPairInNim(token.kind)
@@ -292,28 +303,32 @@ proc indexOf*(highlight: Highlight, row, column: int): int =
 
 proc detectLanguage*(filename: string): SourceLanguage =
   # TODO: use settings file
-  let extention = filename.splitFile.ext
-  case extention:
-  of ".nim", ".nimble", ".nims":
-    return SourceLanguage.langNim
-  of ".c", ".h":
+  case filename.splitFile.ext:
+  of ".c", ".dox", ".h", ".i":
     return SourceLanguage.langC
-  of ".cpp", "hpp", "cc":
+  of ".C", ".CPP", ".H", ".HPP", ".c++", ".cc", ".cp", ".cpp", ".cxx", ".h++",
+     ".hh", ".hp", ".hpp", ".hxx", ".ii", ".tcc":
     return SourceLanguage.langCpp
   of ".cs":
     return SourceLanguage.langCsharp
+  of ".cabal", ".hs":
+    return SourceLanguage.langHaskell
   of ".java":
     return SourceLanguage.langJava
-  of ".yaml", ".yml":
-    return SourceLanguage.langYaml
-  of ".py":
-    return SourceLanguage.langPython
-  of ".js":
+  of ".js", ".ts":
     return SourceLanguage.langJavaScript
-  of ".sh", ".bash":
+  of ".markdown", ".md":
+    return SourceLanguage.langMarkdown
+  of ".nim", ".nimble", ".nims":
+    return SourceLanguage.langNim
+  of ".py", ".pyw", ".pyx":
+    return SourceLanguage.langPython
+  of ".rs":
+    return SourceLanguage.langRust
+  of ".bash", ".sh":
     return SourceLanguage.langShell
-  of ".md":
-    return SourceLanguage.langMarkDown
+  of ".cff", ".yaml", ".yml":
+    return SourceLanguage.langYaml
   else:
     return SourceLanguage.langNone
 

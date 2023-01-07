@@ -1,0 +1,58 @@
+######################## GNU General Public License 3.0 ########################
+##                                                                            ##
+## Copyright (C) 2017─2022 fox0430                                            ##
+##                                                                            ##
+## This program is free software: you can redistribute it and/or modify       ##
+## it under the terms of the GNU General Public License as published by       ##
+## the Free Software Foundation, either version 3 of the License, or          ##
+## (at your option) any later version.                                        ##
+##                                                                            ##
+## This program is distributed in the hope that it will be useful,            ##
+## but WITHOUT ANY WARRANTY; without even the implied warranty of             ##
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the              ##
+## GNU General Public License for more details.                               ##
+##                                                                            ##
+## You should have received a copy of the GNU General Public License          ##
+## along with this program.  If not, see <https://www.gnu.org/licenses/>.     ##
+##                                                                            ##
+################################################################################
+
+name: Scriv
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  create:
+    name: create
+    runs-on: ubuntu-latest
+    steps:
+      - name: python
+        uses: actions/setup-python@v4.4.0
+        with:
+          python-version: 3.9
+
+      - name: checkout
+        uses: actions/checkout@v3.2.0
+        with:
+          persist-credentials: false
+
+      - name: dependencies
+        uses: py-actions/py-dependency-install@v4.0.0
+
+      - name: user
+        uses: fregante/setup-git-user@v1.1.0
+
+      - name: scriv
+        run: scriv create --add && git commit -m 'Create fresh Scriv fragment'
+
+      - name: push
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
+
+################################################################################

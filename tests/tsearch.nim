@@ -1,6 +1,4 @@
 import std/unittest
-import moepkg/editorstatus
-
 include moepkg/[search, searchutils]
 
 suite "search.nim: searchLine":

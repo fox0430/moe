@@ -34,7 +34,9 @@
 import std/strutils
 from std/algorithm import binarySearch
 
+import flags
 import highlite
+import lexer
 
 const
   # The following list comes from doc/keywords.txt, make sure it is
@@ -81,7 +83,7 @@ const
     "FloatOverflowError", "FloatUnderflowError", "FloatingPointError",
     "FlushFile", "GC_Strategy", "GC_disable", "GC_disableMarkAnd", "GC_enable",
     "GC_enableMarkAndSweep", "GC_fullCollect", "GC_getStatistics", "GC_ref",
-    "GC_setStrategy","GC_unref", "IOEffect", "IOError", "IndexError",
+    "GC_setStrategy", "GC_unref", "IOEffect", "IOError", "IndexError",
     "KeyError", "LibHandle", "LibraryError", "Msg", "Natural", "NimNode",
     "OSError", "ObjectAssignmentError", "ObjectConversionError", "OpenFile",
     "Ordinal", "OutOfMemError", "OverflowError", "PFloat32", "PFloat64",
@@ -93,15 +95,16 @@ const
     "StackOverflowError", "Sweep", "SystemError", "TFrame", "THINSTANCE",
     "TResult", "TaintedString", "TimeEffect", "Utf16Char", "ValueError",
     "WideCString", "WriteIOEffect", "abs", "add", "addQuitProc", "alloc",
-    "alloc0", "array", "assert", "autoany", "bool", "byte", "card","cchar",
+    "alloc0", "array", "assert", "autoany", "bool", "byte", "card", "cchar",
     "cdouble", "cfloat", "char", "chr", "cint", "clong", "clongdouble",
     "clonglong", "copy", "copyMem", "countdown", "countup", "cpuEndian",
     "cschar", "cshort", "csize", "cstring", "cstringArray", "cuchar", "cuint",
     "culong", "culonglong", "cushort", "dbgLineHook", "dealloc", "dec",
     "defined", "echo", "equalMem", "equalmem", "excl", "expr", "fileHandle",
     "find", "float", "float32", "float64", "getCurrentException", "getFilePos",
-    "getFileSize", "getFreeMem", "getOccupiedMem", "getRefcount","getTotalMem",
-    "guarded","high", "hostCPU", "hostOS", "inc", "incl", "inf", "int", "int16",
+    "getFileSize", "getFreeMem", "getOccupiedMem", "getRefcount", "getTotalMem",
+    "guarded", "high", "hostCPU", "hostOS", "inc", "incl", "inf", "int",
+    "int16",
     "int32", "int64", "int8", "isNil", "items", "len", "lines", "low", "max",
     "min", "moveMem", "movemem", "nan", "neginf", "new", "newSeq", "newString",
     "newseq", "newstring", "nimMajor", "nimMinor", "nimPatch", "nimVersion",
@@ -132,7 +135,8 @@ const
     "memfiles", "mimetypes", "monotimes", "mysql", "nativesockets", "net",
     "odbcsql", "oids", "openssl", "options", "os", "osproc", "packages",
     "packedsets", "parsecfg", "parsecsv", "parsejson", "parseopt", "parsesql",
-    "parseutils", "parsexml", "pcre", "pegs", "posix", "posix_utils", "postgres",
+    "parseutils", "parsexml", "pcre", "pegs", "posix", "posix_utils",
+    "postgres",
     "punycode", "random", "rationals", "rdstdin", "re", "registry", "rlocks",
     "ropes", "rst", "rstast", "rstgen", "segfaults", "selectors", "sequtils",
     "sets", "setutils", "sha1", "sharedlist", "sharedtables", "smtp",
@@ -234,43 +238,7 @@ proc nimNextToken*(g: var GeneralTokenizer) =
     of ' ', '\x09'..'\x0D':
       g.kind = gtWhitespace
       while g.buf[pos] in {' ', '\x09'..'\x0D'}: inc(pos)
-    of '#':
-      g.kind = gtComment
-      inc(pos)
-      var isDoc = false
-      if g.buf[pos] == '#':
-        inc(pos)
-        isDoc = true
-      if g.buf[pos] == '[':
-        g.kind = gtLongComment
-        var nesting = 0
-        while true:
-          case g.buf[pos]
-          of '\0': break
-          of '#':
-            if isDoc:
-              if g.buf[pos+1] == '#' and g.buf[pos+2] == '[':
-                inc nesting
-            elif g.buf[pos+1] == '[':
-              inc nesting
-            inc pos
-          of ']':
-            if isDoc:
-              if g.buf[pos+1] == '#' and g.buf[pos+2] == '#':
-                if nesting == 0:
-                  inc(pos, 3)
-                  break
-                dec nesting
-            elif g.buf[pos+1] == '#':
-              if nesting == 0:
-                inc(pos, 2)
-                break
-              dec nesting
-            inc pos
-          else:
-            inc pos
-      else:
-        while g.buf[pos] notin {'\0', '\x0A', '\x0D'}: inc(pos)
+    of '#': pos = g.lexHash(pos, flagsNim)
     of 'a'..'z', 'A'..'Z', '_', '\x80'..'\xFF':
       var id = ""
       while g.buf[pos] in SymChars + {'_'}:
@@ -372,12 +340,12 @@ proc nimNextToken*(g: var GeneralTokenizer) =
     of '\0':
       g.kind = gtEof
     else:
-      if g.buf[pos] in OpChars:
+      if g.buf[pos] in opChars:
         let sp = pos
         g.kind = gtOperator
-        while g.buf[pos] in OpChars: inc(pos)
+        while g.buf[pos] in opChars: inc(pos)
         let ep = pos
-        if sp + 1 == ep  and g.buf[sp] == '*' and g.buf[ep] == '(' :
+        if sp + 1 == ep and g.buf[sp] == '*' and g.buf[ep] == '(':
           g.kind = gtSpecialVar
       else:
         inc(pos)
