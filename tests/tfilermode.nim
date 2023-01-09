@@ -1,5 +1,6 @@
-import std/[unittest]
-include moepkg/filermode
+import std/[unittest, strutils, algorithm]
+import moepkg/settings
+include moepkg/[filerutils, filermode]
 
 proc getCurrentFiles(path: string): seq[string] =
   var
@@ -22,72 +23,71 @@ proc getCurrentFiles(path: string): seq[string] =
   result = dirs.sortedByIt(it)
   result.add files.sortedByIt(it)
 
-template updateDirListAndView() =
-  if filerStatus.dirlistUpdate:
-    let path = currentBufStatus.path
-
-    filerStatus = filerStatus.updateDirList(path)
-
-    if currentMainWindowNode.currentLine > filerStatus.dirList.high:
-      currentMainWindowNode.currentLine = filerStatus.dirList.high
-
-  if filerStatus.viewUpdate:
-    status.updateFilerView(filerStatus, 100, 100)
-
 suite "Filer mode":
   test "Update directory list":
-    var status = initEditorStatus()
+    const path = "./".toRunes
 
-    const path = "./"
-    status.addNewBuffer(path, Mode.filer)
+    initFilerStatus()
+    updateDirList(path)
 
-    var filerStatus = initFilerStatus()
-    filerStatus = filerStatus.updateDirList(ru path)
-    status.updateFilerView(filerStatus, 100, 100)
+    check filerStatus.get.pathList.len > 0
 
   test "Check highlight in filer mode":
-    var status = initEditorStatus()
+    const path = "./".toRunes
 
-    const path = "./"
-    status.addNewBuffer(path, Mode.filer)
+    initFilerStatus()
+    updateDirList(path)
 
-    var filerStatus = initFilerStatus()
-    filerStatus = filerStatus.updateDirList(ru path)
-    status.updateFilerView(filerStatus, 100, 100)
+    var bufStatus = initBufferStatus($path, Mode.filer)
+    let settings = initEditorSettings()
 
-    let node = currentMainWindowNode
-    check(node.highlight[0].color == EditorColorPair.currentFile)
+    bufStatus.updateFierBuffer(filerStatus.get, settings)
+
+    const currentLine = 0
+    let highlight = bufStatus.buffer.initFilerHighlight(currentLine)
+
+    check highlight[0].color == EditorColorPair.currentFile
 
   test "Open current directory":
-    var status = initEditorStatus()
-    status.settings.filer.showIcons = false
+    const path = "./".toRunes
 
-    const path = "./"
-    status.addNewBuffer(path, Mode.filer)
+    initFilerStatus()
+    updateDirList(path)
 
-    var filerStatus = initFilerStatus()
-    filerStatus = filerStatus.updateDirList(ru path)
-    status.updateFilerView(filerStatus, 100, 100)
+    var
+      bufStatus = initBufferStatus($path, Mode.filer)
+      settings = initEditorSettings()
 
-    let files = getCurrentFiles(path)
-    for i in 0 ..< currentBufStatus.buffer.len:
-      check files[i] == $currentBufStatus.buffer[i]
+    settings.filer.showIcons = false
+
+    bufStatus.updateFierBuffer(filerStatus.get, settings)
+
+    let files = getCurrentFiles($path)
+    for i in 0 ..< bufStatus.buffer.len:
+      check files[i] == $bufStatus.buffer[i]
 
   test "Move directory":
-    var status = initEditorStatus()
-    status.settings.filer.showIcons = false
+    const path = "./".toRunes
 
-    const path = "./"
-    status.addNewBuffer(path, Mode.filer)
+    initFilerStatus()
+    updateDirList(path)
 
-    var filerStatus = initFilerStatus()
-    filerStatus = filerStatus.updateDirList(ru path)
-    status.updateFilerView(filerStatus, 100, 100)
+    var
+      bufStatuses = @[initBufferStatus($path, Mode.filer)]
+      mainWindow = initMainWindow()
+      settings = initEditorSettings()
 
-    status.openFileOrDir(filerStatus)
+    settings.filer.showIcons = false
 
-    updateDirListAndView()
+    bufStatuses[0].updateFierBuffer(filerStatus.get, settings)
+
+    bufStatuses.openFileOrDir(
+      mainWindow.currentMainWindowNode,
+      filerStatus.get)
+
+    updateDirList(bufStatuses[0].path)
+    bufStatuses[0].updateFierBuffer(filerStatus.get, settings)
 
     let files = getCurrentFiles("../")
-    for i in 0 ..< currentBufStatus.buffer.len:
-      check files[i] == $currentBufStatus.buffer[i]
+    for i in 0 ..< bufStatuses[0].buffer.len:
+      check files[i] == $bufStatuses[0].buffer[i]
