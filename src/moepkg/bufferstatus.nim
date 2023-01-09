@@ -197,7 +197,7 @@ proc initBufferStatus*(
         result.buffer = textAndEncoding.text.toGapBuffer
         result.characterEncoding = textAndEncoding.encoding
 
-        result.language = detectLanguage($result.path)
+      result.language = detectLanguage($result.path)
 
 proc initBufferStatus*(
   mode: Mode): BufferStatus {.raises: [OSError].} =

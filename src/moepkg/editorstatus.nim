@@ -411,22 +411,13 @@ proc initSyntaxHighlight(
     # int is buffer index
     var updatedHighlights: seq[(int, Highlight)]
     for index, buf in bufStatus:
-      if buf.isUpdate:
+      # The filer syntax highlight is initialized/updated in filermode module.
+      if buf.isUpdate and not isFilerMode(buf.mode, buf.prevMode):
         let
           lang = if isSyntaxHighlight: buf.language
                  else: SourceLanguage.langNone
           h = ($buf.buffer).initHighlight(reservedWords, lang)
         updatedHighlights.add (index, h)
-
-        bufStatus[index].isUpdate = false
-      # The filer syntax highlight is initialized/updated in filermode module.
-      elif not isFilerMode(buf.mode, buf.prevMode):
-        let h = initHighlight(
-          $buf.buffer,
-          reservedWords,
-          SourceLanguage.langNone)
-
-        updatedHighlights.add((index, h))
         bufStatus[index].isUpdate = false
 
     var queue = initHeapQueue[WindowNode]()
