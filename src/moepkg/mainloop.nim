@@ -4,7 +4,8 @@ import editorstatus, bufferstatus, window, unicodeext, gapbuffer, ui,
        normalmode, visualmode, insertmode, autocomplete, suggestionwindow,
        exmode, replacemode, filermode, buffermanager, logviewer, help,
        recentfilemode, quickrun, backupmanager, diffviewer, configmode,
-       debugmode, commandline, search, commandlineutils, popupwindow, filerutils
+       debugmode, commandline, search, commandlineutils, popupwindow,
+       filermodeutils
 
 proc searchCommand(currentMode: Mode, command: Runes): InputState =
   case currentMode:

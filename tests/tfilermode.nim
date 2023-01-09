@@ -1,6 +1,6 @@
 import std/[unittest, strutils, algorithm]
 import moepkg/settings
-include moepkg/[filerutils, filermode]
+include moepkg/[filermodeutils, filermode]
 
 proc getCurrentFiles(path: string): seq[string] =
   var

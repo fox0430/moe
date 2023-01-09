@@ -1,5 +1,5 @@
 import std/[os, terminal, options]
-import editorstatus, ui, window, bufferstatus, unicodeext, filerutils, messages,
+import editorstatus, ui, window, bufferstatus, unicodeext, filermodeutils, messages,
        commandline
 
 proc openNewWinAndOpenFilerOrDir(
