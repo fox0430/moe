@@ -4,7 +4,7 @@ include moepkg/help
 suite "Help":
   test "Check buffer":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
 
     status.resize(100, 100)
     status.update
@@ -25,7 +25,7 @@ suite "Help":
 
   test "Open help":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
 
     status.resize(100, 100)
     status.update
@@ -34,7 +34,7 @@ suite "Help":
     status.resize(100, 100)
     status.moveNextWindow
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.changeCurrentBuffer(status.bufStatus.high)
     status.changeMode(Mode.help)
 

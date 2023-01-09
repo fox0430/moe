@@ -6,7 +6,7 @@ template writeBackupInfoJson(backupDir, sourceFilePath: string) =
   writeFile(backupDir / "backup.json", $jsonNode)
 
 template addBackupManagerBuffer(status: var EditorStatus) =
-    status.addNewBuffer(Mode.backup)
+    status.addNewBufferInCurrentWin(Mode.backup)
     status.changeCurrentBuffer(status.bufStatus.high)
     currentBufStatus.initBackupManagerBuffer(
       status.baseBackupDir,
@@ -29,9 +29,9 @@ suite "Backup Manager: initbackupManagerBuffer":
 
   test "initBackupManagerBuffer":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
 
-    status.addNewBuffer(Mode.backup)
+    status.addNewBufferInCurrentWin(Mode.backup)
     status.changeCurrentBuffer(status.bufStatus.high)
     currentBufStatus.initBackupManagerBuffer(
       status.baseBackupDir,
@@ -45,7 +45,7 @@ suite "Backup Manager: initbackupManagerBuffer":
     writeBackupInfoJson(backupDir, sourceFilePath)
 
     var status = initEditorStatus()
-    status.addNewBuffer(sourceFilePath)
+    status.addNewBufferInCurrentWin(sourceFilePath)
     status.settings.autoBackup.backupDir = baseBackupDir.toRunes
 
     currentBufStatus.backupBuffer(
@@ -54,7 +54,7 @@ suite "Backup Manager: initbackupManagerBuffer":
       status.commandLine,
       status.messageLog)
 
-    status.addNewBuffer(Mode.backup)
+    status.addNewBufferInCurrentWin(Mode.backup)
     status.changeCurrentBuffer(status.bufStatus.high)
     currentBufStatus.initBackupManagerBuffer(
       status.baseBackupDir,
@@ -86,7 +86,7 @@ suite "Backup Manager: openDiffViewer":
     writeFile(sourceFilePath, "test\n")
 
     var status = initEditorStatus()
-    status.addNewBuffer(sourceFilePath)
+    status.addNewBufferInCurrentWin(sourceFilePath)
     status.settings.autoBackup.backupDir = baseBackupDir.toRunes
 
     currentBufStatus.backupBuffer(
@@ -124,7 +124,7 @@ suite "Backup Manager: restoreBackupFile":
     writeFile(sourceFilePath, "test\n")
 
     var status = initEditorStatus()
-    status.addNewBuffer(sourceFilePath)
+    status.addNewBufferInCurrentWin(sourceFilePath)
     status.settings.autoBackup.backupDir = baseBackupDir.toRunes
 
     currentBufStatus.backupBuffer(
@@ -164,7 +164,7 @@ suite "Backup Manager: removeBackupFile":
     writeFile(sourceFilePath, "test\n")
 
     var status = initEditorStatus()
-    status.addNewBuffer(sourceFilePath)
+    status.addNewBufferInCurrentWin(sourceFilePath)
     status.settings.autoBackup.backupDir = baseBackupDir.toRunes
 
     currentBufStatus.backupBuffer(

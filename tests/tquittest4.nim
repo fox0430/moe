@@ -3,7 +3,7 @@ import moepkg/[editorstatus, unicodeext, exmode]
 
 test "All buffer quit command":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   status.verticalSplitWindow
   status.resize(100, 100)
 

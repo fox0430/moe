@@ -1,6 +1,6 @@
 import std/[unittest, strutils, algorithm]
 import moepkg/settings
-include moepkg/[filermodeutils, filermode]
+include moepkg/[filermodeutils]
 
 proc getCurrentFiles(path: string): seq[string] =
   var
@@ -27,40 +27,37 @@ suite "Filer mode":
   test "Update directory list":
     const path = "./".toRunes
 
-    initFilerStatus()
-    updateDirList(path)
+    var filerStatus = initFilerStatus()
+    filerStatus.updatePathList(path)
 
-    check filerStatus.get.pathList.len > 0
+    check filerStatus.pathList.len > 0
 
   test "Check highlight in filer mode":
     const path = "./".toRunes
 
-    initFilerStatus()
-    updateDirList(path)
+    var filerStatus = initFilerStatus()
+    filerStatus.updatePathList(path)
 
     var bufStatus = initBufferStatus($path, Mode.filer)
-    let settings = initEditorSettings()
 
-    bufStatus.updateFierBuffer(filerStatus.get, settings)
+    const isShowIcons = false
+    bufStatus.buffer = filerStatus.initFilerBuffer(isShowIcons).toGapBuffer
 
     const currentLine = 0
-    let highlight = bufStatus.buffer.initFilerHighlight(currentLine)
+    let highlight = filerStatus.initFilerHighlight(bufStatus.buffer, currentLine)
 
     check highlight[0].color == EditorColorPair.currentFile
 
   test "Open current directory":
     const path = "./".toRunes
 
-    initFilerStatus()
-    updateDirList(path)
+    var filerStatus = initFilerStatus()
+    filerStatus.updatePathList(path)
 
-    var
-      bufStatus = initBufferStatus($path, Mode.filer)
-      settings = initEditorSettings()
+    var bufStatus = initBufferStatus($path, Mode.filer)
+    const isShowIcons = false
 
-    settings.filer.showIcons = false
-
-    bufStatus.updateFierBuffer(filerStatus.get, settings)
+    bufStatus.buffer = filerStatus.initFilerBuffer(isShowIcons).toGapBuffer
 
     let files = getCurrentFiles($path)
     for i in 0 ..< bufStatus.buffer.len:
@@ -69,24 +66,22 @@ suite "Filer mode":
   test "Move directory":
     const path = "./".toRunes
 
-    initFilerStatus()
-    updateDirList(path)
+    var filerStatus = initFilerStatus()
+    filerStatus.updatePathList(path)
 
     var
       bufStatuses = @[initBufferStatus($path, Mode.filer)]
       mainWindow = initMainWindow()
-      settings = initEditorSettings()
+    const isShowIcons = false
 
-    settings.filer.showIcons = false
-
-    bufStatuses[0].updateFierBuffer(filerStatus.get, settings)
+    bufStatuses[0].buffer = filerStatus.initFilerBuffer(isShowIcons).toGapBuffer
 
     bufStatuses.openFileOrDir(
       mainWindow.currentMainWindowNode,
-      filerStatus.get)
+      filerStatus)
 
-    updateDirList(bufStatuses[0].path)
-    bufStatuses[0].updateFierBuffer(filerStatus.get, settings)
+    filerStatus.updatePathList(bufStatuses[0].path)
+    bufStatuses[0].buffer = filerStatus.initFilerBuffer(isShowIcons).toGapBuffer
 
     let files = getCurrentFiles("../")
     for i in 0 ..< bufStatuses[0].buffer.len:

@@ -5,8 +5,8 @@ import moepkg/debugmode {.all.}
 suite "Init debug mode buffer":
   test "Init buffer":
     var status = initEditorStatus()
-    status.addNewBuffer
-    status.addNewBuffer(Mode.debug)
+    status.addNewBufferInCurrentWin
+    status.addNewBufferInCurrentWin(Mode.debug)
 
     status.bufStatus.initDebugModeBuffer(
       mainWindow.mainWindowNode,
