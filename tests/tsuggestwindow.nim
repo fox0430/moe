@@ -1,4 +1,5 @@
 import std/[unittest, critbits]
+import moepkg/editorstatus
 include moepkg/suggestionwindow
 
 suite "suggestionwindow: buildSuggestionWindow":
@@ -28,7 +29,7 @@ suite "suggestionwindow: buildSuggestionWindow":
     check suggestionWin.get.wordDictionary.len == 4
 
     check suggestionWin.get.oldLine == "t".ru
-    check suggestionWin.get.inputWord== "t".ru
+    check suggestionWin.get.inputWord == "t".ru
 
     check suggestionWin.get.firstColumn == 0
     check suggestionWin.get.lastColumn == 0
