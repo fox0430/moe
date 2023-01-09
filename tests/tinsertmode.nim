@@ -482,12 +482,12 @@ suite "Insert mode":
       mainWindowNode,
       currentMainWindowNode)
 
+    const mainWindowNodeY = 1
     let
       mainWindowHeight = status.settings.getMainWindowHeight(100)
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
         currentMainWindowNode,
         mainWindowHeight)
-      mainWindowNodeY = calcMainWindowY(status.settings.tabLine.enable)
     suggestionWindow.get.writeSuggestionWindow(
       currentMainWindowNode,
       y, x,
