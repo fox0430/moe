@@ -14,6 +14,7 @@ type LastPosition* = object
 
 type EditorStatus* = object
   bufStatus*: seq[BufferStatus]
+  filerStatuses: seq[FilerStatus]
   prevBufferIndex*: int
   searchHistory*: seq[Runes]
   exCommandHistory*: seq[Runes]
@@ -70,6 +71,10 @@ template currentMainWindowNode*: var WindowNode =
 template mainWindowNode*: var WindowNode =
   mixin status
   status.mainWindow.mainWindowNode
+
+template currentFilerStatus*: var FilerStatus =
+  mixin status
+  status.filerStatuses[currentBufStatus.filerStatusIndex.get]
 
 proc changeCurrentBuffer*(
   currentNode: var WindowNode,
@@ -244,6 +249,67 @@ proc exitEditor*(status: EditorStatus) =
   executeOnExit(status.settings, CURRENT_PLATFORM)
 
   quit()
+
+## Add a new FilerStatus and link it to the current bufStatus.
+proc addFilerStatus(status: var EditorStatus) {.inline.} =
+  status.filerStatuses.add initFilerStatus()
+  currentBufStatus.filerStatusIndex = some(status.filerStatuses.high)
+
+## Add a new FilerStatus and link it to the bufStatus.
+proc addFilerStatus(status: var EditorStatus, bufStatusIndex: int) {.inline.} =
+  status.filerStatuses.add initFilerStatus()
+  status.bufStatus[bufStatusIndex].filerStatusIndex =
+    some(status.filerStatuses.high)
+
+## Return bufStatus.high after adding a new buffer.
+proc addNewBuffer(
+  status: var EditorStatus,
+  path: string,
+  mode: Mode): Option[int] =
+    try:
+      status.bufStatus.add initBufferStatus(path, mode)
+    except:
+      let errMessage =
+        if mode.isFilerMode:
+          fmt"Failed to open dir: {path} : {getCurrentExceptionMsg()}"
+        else:
+          fmt"Failed to open file: {path} {getCurrentExceptionMsg()}"
+
+      status.commandLine.writeError(errMessage.toRunes)
+      status.messageLog.add errMessage.toRunes
+      return
+
+    return some(status.bufStatus.high)
+
+## Add a new buffer and change the current buffer to it and init an editor view.
+proc addNewBufferInCurrentWin*(
+  status: var EditorStatus,
+  path: string,
+  mode: Mode) =
+    let index = status.addNewBuffer(path, mode)
+    if index.isNone: return
+
+    status.changeCurrentBuffer(index.get)
+
+    currentMainWindowNode.view = currentBufStatus.buffer.initEditorView(1, 1)
+
+    if mode.isFilerMode:
+      status.addFilerStatus
+
+    currentBufStatus.isReadonly = status.isReadonly
+
+proc addNewBufferInCurrentWin*(
+  status: var EditorStatus,
+  mode: Mode) {.inline.} =
+    status.addNewBufferInCurrentWin("", mode)
+
+proc addNewBufferInCurrentWin*(
+  status: var EditorStatus,
+  filename: string) {.inline.} =
+    status.addNewBufferInCurrentWin(filename, Mode.normal)
+
+proc addNewBufferInCurrentWin*(status: var EditorStatus) {.inline.} =
+  status.addNewBufferInCurrentWin("")
 
 proc getMainWindowHeight*(settings: EditorSettings, h: int): int =
   let
@@ -454,18 +520,24 @@ proc updateDebugModeBuffer(status: var EditorStatus)
 proc update*(status: var EditorStatus) =
   setCursor(false)
 
-  if status.settings.tabLine.enable:
+  let settings = status.settings
+
+  if settings.tabLine.enable:
     status.tabWindow.writeTabLineBuffer(
       status.bufStatus,
       status.bufferIndexInCurrentWindow,
       status.mainWindow.mainWindowNode,
-      status.settings.tabline.allBuffer)
+      settings.tabline.allBuffer)
 
   for i, buf in status.bufStatus:
-    if buf.isFilerMode and isUpdateFilerList():
-      # Update the filer mode buffer.
-      updateDirList(buf.path)
-      status.bufStatus[i].updateFilerBuffer(status.settings)
+    if buf.isFilerMode and buf.filerStatusIndex.isSome:
+      let filerIndex = buf.filerStatusIndex.get
+      if status.filerStatuses[filerIndex].isUpdatePathList:
+        # Update the filer mode buffer.
+        status.filerStatuses[filerIndex].updatePathList(buf.path)
+        status.bufStatus[i].buffer =
+          status.filerStatuses[filerIndex].initFilerBuffer(
+            settings.filer.showIcons).toGapBuffer
 
     if buf.isLogViewerMode:
       # Update the logviewer mode buffer.
@@ -479,8 +551,8 @@ proc update*(status: var EditorStatus) =
   # Init (Update) syntax highlightings.
   mainWindowNode.initSyntaxHighlight(
     status.bufStatus,
-    status.settings.highlight.reservedWords,
-    status.settings.syntax)
+    settings.highlight.reservedWords,
+    settings.syntax)
 
   # Set editor Color Pair for current line highlight.
   # New color pairs are set to Number larger than the maximum value of EditorColorPiar.
@@ -526,8 +598,8 @@ proc update*(status: var EditorStatus) =
         # TODO: Fix condition
         if bufStatus.isLogViewerMode:
           highlight = updateLogViewerHighlight($buffer)
-        if bufStatus.isFilerMode and isUpdateFilerView():
-          highlight = initFilerHighlight(
+        if bufStatus.isFilerMode and status.filerStatuses[bufStatus.filerStatusIndex.get].isUpdateView:
+          highlight = status.filerStatuses[bufStatus.filerStatusIndex.get].initFilerHighlight(
             buffer,
             node.currentLine)
         if bufStatus.isEditMode:
@@ -536,7 +608,7 @@ proc update*(status: var EditorStatus) =
             node,
             status.isSearchHighlight,
             status.searchHistory,
-            status.settings)
+            settings)
 
         # TODO: Fix condition. Will use a flag.
         if not bufStatus.isFilerMode:
@@ -548,13 +620,13 @@ proc update*(status: var EditorStatus) =
         # Update the terminal buffer.
         node.view.update(
           node.window.get,
-          status.settings.view,
+          settings.view,
           isCurrentMainWin,
-          bufStatus.mode,
-          bufStatus.prevMode,
+          bufStatus.isVisualMode,
+          bufStatus.isConfigMode,
           buffer,
           highlight,
-          status.settings.editorColorTheme,
+          settings.editorColorTheme,
           node.currentLine,
           bufStatus.selectArea.startLine,
           bufStatus.selectArea.endLine,
@@ -621,13 +693,13 @@ proc verticalSplitWindow*(status: var EditorStatus) =
   currentMainWindowNode = currentMainWindowNode.verticalSplit(buffer)
   inc(status.mainWindow.numOfMainWindow)
 
-  let
-    mode = currentBufStatus.mode
-    prevMode = currentBufStatus.prevMode
-  if isFilerMode(mode, prevMode):
-    status.bufStatus.add(currentBufStatus)
-    currentBufStatus.changeMode(Mode.filer)
-    currentMainWindowNode.bufferIndex = status.bufStatus.high
+  if currentBufStatus.isFilerMode:
+    # Add a new buffer if the filer mode because need to a new filerStatus.
+    let bufSatusIndex = status.addNewBuffer($currentBufStatus.path, Mode.filer)
+    if bufSatusIndex.isNone: return
+
+    status.addFilerStatus(bufSatusIndex.get)
+    currentMainWindowNode.bufferIndex = bufSatusIndex.get
 
   status.statusLine.add(initStatusLine())
 
@@ -643,13 +715,13 @@ proc horizontalSplitWindow*(status: var Editorstatus) =
   currentMainWindowNode = currentMainWindowNode.horizontalSplit(buffer)
   inc(status.mainWindow.numOfMainWindow)
 
-  let
-    mode = currentBufStatus.mode
-    prevMode = currentBufStatus.prevMode
-  if isFilerMode(mode, prevMode):
-    status.bufStatus.add(currentBufStatus)
-    currentBufStatus.changeMode(Mode.filer)
-    currentMainWindowNode.bufferIndex = status.bufStatus.high
+  if currentBufStatus.isFilerMode:
+    # Add a new buffer if the filer mode because need to a new filerStatus.
+    let bufSatusIndex = status.addNewBuffer($currentBufStatus.path, Mode.filer)
+    if bufSatusIndex.isNone: return
+
+    status.addFilerStatus(bufSatusIndex.get)
+    currentMainWindowNode.bufferIndex = bufSatusIndex.get
 
   status.statusLine.add(initStatusLine())
 
@@ -709,46 +781,6 @@ proc movePrevWindow*(status: var EditorStatus) {.inline.} =
   status.updateLastCursorPostion
 
   status.moveCurrentMainWindow(currentMainWindowNode.windowIndex - 1)
-
-proc addNewBuffer*(status: var EditorStatus, path: string, mode: Mode) =
-  try:
-    status.bufStatus.add initBufferStatus(path, mode)
-  except:
-    let errMessage =
-      if mode.isFilerMode:
-        fmt"Failed to open dir: {path} : {getCurrentExceptionMsg()}"
-      else:
-        fmt"Failed to open file: {path} {getCurrentExceptionMsg()}"
-
-    status.commandLine.writeError(errMessage.toRunes)
-    status.messageLog.add errMessage.toRunes
-    return
-
-  currentMainWindowNode.view = status.bufStatus[^1].buffer.initEditorView(1, 1)
-
-  if mode.isFilerMode:
-    # TODO: Refactor
-    initFilerStatus()
-    updateDirList(status.bufStatus[^1].path)
-    status.bufStatus[^1].updateFilerBuffer(status.settings)
-    currentMainWindowNode.highlight = initFilerHighlight(
-      status.bufStatus[^1].buffer,
-      currentMainWindowNode.currentLine)
-
-  status.bufStatus[^1].isReadonly = status.isReadonly
-
-  status.changeCurrentBuffer(status.bufStatus.high)
-
-  status.resize(terminalHeight(), terminalWidth())
-
-proc addNewBuffer*(status: var EditorStatus, mode: Mode) {.inline.} =
-  status.addNewBuffer("", mode)
-
-proc addNewBuffer*(status: var EditorStatus, filename: string) {.inline.} =
-  status.addNewBuffer(filename, Mode.normal)
-
-proc addNewBuffer*(status: var EditorStatus) {.inline.} =
-  status.addNewBuffer("")
 
 proc deleteBuffer*(status: var Editorstatus, deleteIndex,
                    terminalHeight, terminalWidth: int) =

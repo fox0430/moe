@@ -130,7 +130,7 @@ proc runQuickRunCommand(status: var Editorstatus) =
     status.resize(terminalHeight(), terminalWidth())
     status.moveNextWindow
 
-    status.addNewBuffer("")
+    status.addNewBufferInCurrentWin("")
     status.bufStatus[^1].buffer = initGapBuffer(buffer)
 
     status.changeCurrentBuffer(status.bufStatus.high)

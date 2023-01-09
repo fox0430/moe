@@ -280,7 +280,7 @@ proc startDebugMode(status: var Editorstatus) =
   status.moveNextWindow
 
   # Add debug mode buffer
-  status.addNewBuffer(bufferstatus.Mode.debug)
+  status.addNewBufferInCurrentWin(bufferstatus.Mode.debug)
   status.changeCurrentBuffer(status.bufStatus.high)
 
   # Initialize debug mode buffer
@@ -300,7 +300,7 @@ proc startConfigMode(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
 
-  status.addNewBuffer(bufferstatus.Mode.config)
+  status.addNewBufferInCurrentWin(bufferstatus.Mode.config)
   status.changeCurrentBuffer(status.bufStatus.high)
 
 proc startBackupManager(status: var Editorstatus) =
@@ -316,7 +316,7 @@ proc startBackupManager(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
 
-  status.addNewBuffer(bufferstatus.Mode.backup)
+  status.addNewBufferInCurrentWin(bufferstatus.Mode.backup)
   status.changeCurrentBuffer(status.bufStatus.high)
 
 proc startRecentFileMode(status: var Editorstatus) =
@@ -335,7 +335,7 @@ proc startRecentFileMode(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
 
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   status.changeCurrentBuffer(status.bufStatus.high)
   status.changeMode(bufferstatus.Mode.recentFile)
 
@@ -358,7 +358,7 @@ proc runQuickRunCommand(status: var Editorstatus) =
     status.resize(terminalHeight(), terminalWidth())
     status.moveNextWindow
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[^1].buffer = initGapBuffer(buffer)
 
     status.changeCurrentBuffer(status.bufStatus.high)
@@ -410,7 +410,7 @@ proc openHelp(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
 
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   status.changeCurrentBuffer(status.bufStatus.high)
   status.changeMode(bufferstatus.Mode.help)
 
@@ -421,7 +421,7 @@ proc openLogViewer(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
 
-  status.addNewBuffer(Mode.logviewer)
+  status.addNewBufferInCurrentWin(Mode.logviewer)
   status.changeCurrentBuffer(status.bufStatus.high)
 
 proc openBufferManager(status: var Editorstatus) =
@@ -431,7 +431,7 @@ proc openBufferManager(status: var Editorstatus) =
   status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
 
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   status.changeCurrentBuffer(status.bufStatus.high)
   status.changeMode(bufferstatus.Mode.bufManager)
   currentBufStatus.buffer = status.bufStatus.initBufferManagerBuffer.toGapBuffer
@@ -444,16 +444,14 @@ proc changeCursorLineCommand(status: var Editorstatus, command: seq[Rune]) =
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
 proc verticalSplitWindowCommand(status: var EditorStatus) =
+  let prevMode = currentBufStatus.prevMode
   status.verticalSplitWindow
-
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+  status.changeMode(prevMode)
 
 proc horizontalSplitWindowCommand(status: var Editorstatus) =
+  let prevMode = currentBufStatus.prevMode
   status.horizontalSplitWindow
-
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
+  status.changeMode(prevMode)
 
 proc filerIconSettingCommand(status: var Editorstatus, command: seq[Rune]) =
   if command == ru "on": status.settings.filer.showIcons = true
@@ -719,7 +717,7 @@ proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
 
   status.bufStatus.delete(index)
 
-  if status.bufStatus.len == 0: status.addNewBuffer
+  if status.bufStatus.len == 0: status.addNewBufferInCurrentWin
   elif status.bufferIndexInCurrentWindow > status.bufStatus.high:
     currentMainWindowNode.bufferIndex = status.bufStatus.high
 
@@ -786,9 +784,9 @@ proc editCommand(status: var EditorStatus, path: seq[Rune]) =
     var bufferIndex = status.bufStatus.checkBufferExist(path)
     if isNone(bufferIndex):
       if dirExists($path):
-        status.addNewBuffer($path, bufferstatus.Mode.filer)
+        status.addNewBufferInCurrentWin($path, bufferstatus.Mode.filer)
       else:
-        status.addNewBuffer($path)
+        status.addNewBufferInCurrentWin($path)
 
       bufferIndex = some(status.bufStatus.high)
 
@@ -1087,7 +1085,7 @@ proc shellCommand(status: var EditorStatus, shellCommand: string) =
 
 proc listAllBufferCommand(status: var Editorstatus) =
   let swapCurrentBufferIndex = currentMainWindowNode.bufferIndex
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   status.changeCurrentBuffer(status.bufStatus.high)
 
   for i in 0 ..< status.bufStatus.high:
@@ -1186,7 +1184,7 @@ proc createNewEmptyBufferCommand*(status: var Editorstatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   if status.bufStatus[currentBufferIndex].countChange == 0 or
      mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.changeCurrentBuffer(status.bufStatus.high)
   else:
     status.commandLine.writeNoWriteError(status.messageLog)
@@ -1197,7 +1195,7 @@ proc newEmptyBufferInSplitWindowHorizontally*(status: var Editorstatus) =
   status.horizontalSplitWindow
   status.resize(terminalHeight(), terminalWidth())
 
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
 
   status.changeCurrentBuffer(status.bufStatus.high)
 
@@ -1207,7 +1205,7 @@ proc newEmptyBufferInSplitWindowVertically*(status: var Editorstatus) =
   status.verticalSplitWindow
   status.resize(terminalHeight(), terminalWidth())
 
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
 
   status.changeCurrentBuffer(status.bufStatus.high)
 

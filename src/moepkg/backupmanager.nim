@@ -73,7 +73,7 @@ proc openDiffViewer(status: var Editorstatus, sourceFilePath: string) =
   status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
 
-  status.addNewBuffer(Mode.diff)
+  status.addNewBufferInCurrentWin(Mode.diff)
   status.changeCurrentBuffer(status.bufStatus.high)
 
   currentBufStatus.path = backupFilePath.toRunes

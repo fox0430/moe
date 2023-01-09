@@ -19,11 +19,11 @@ proc addBufferStatus(status: var EditorStatus, parsedList: CmdParsedList) =
   if parsedList.path.len > 0:
     for path in parsedList.path:
       if dirExists(path):
-        status.addNewBuffer(path, Mode.filer)
+        status.addNewBufferInCurrentWin(path, Mode.filer)
       else:
-        status.addNewBuffer(path)
+        status.addNewBufferInCurrentWin(path)
   else:
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
 
 proc initEditor(): EditorStatus =
   let parsedList = parseCommandLineOption(commandLineParams())

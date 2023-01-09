@@ -44,6 +44,7 @@ type
     prevMode* : Mode
     lastSaveTime*: DateTime
     isReadonly*: bool
+    filerStatusIndex*: Option[int]
 
 proc isExMode*(mode: Mode): bool = mode == Mode.ex
 

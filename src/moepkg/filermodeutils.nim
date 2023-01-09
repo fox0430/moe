@@ -24,13 +24,25 @@ type
   FilerStatus* = object
     register: FileRegister
     searchMode*: bool
-    viewUpdate*: bool
-    dirlistUpdate*: bool
+    isUpdateView*: bool
+    isUpdatePathList*: bool
     pathList*: seq[PathInfo]
     sortBy: Sort
 
-# TODO: Move?
-var filerStatus*: Option[FilerStatus]
+proc initFileRegister(): FileRegister {.inline.} =
+  result.copy = false
+  result.cut = false
+  result.originPath = ""
+  result.filename = ""
+
+proc initFilerStatus*(): FilerStatus {.inline.} =
+  FilerStatus(
+    register: initFileRegister(),
+    isUpdateView: true,
+    isUpdatePathList: true,
+    pathList: newSeq[PathInfo](),
+    sortBy: name,
+    searchMode: false)
 
 proc searchFiles(
   pathList: seq[PathInfo],
@@ -38,7 +50,6 @@ proc searchFiles(
 
   for dir in pathList:
     if dir.path.contains(keyword): result.add dir
-
 
 ## Return a message.
 ## TODO: Return `Result` type.
@@ -129,49 +140,30 @@ proc refreshDirList(path: seq[Rune], sortBy: Sort): seq[PathInfo] =
             getLastModificationTime($path))] &
             sortDirList(pathList, sortBy) & sortDirList(fileList, sortBy)
 
-proc initFileRegister(): FileRegister {.inline.} =
-  result.copy = false
-  result.cut = false
-  result.originPath = ""
-  result.filename = ""
-
-proc initFilerStatus*() {.inline.} =
-  filerStatus =
-    FilerStatus(
-      register: initFileRegister(),
-      viewUpdate: true,
-      dirlistUpdate: true,
-      pathList: newSeq[PathInfo](),
-      sortBy: name,
-      searchMode: false).some
-
-proc updateDirList(
+proc updatePathList*(
   filerStatus: var FilerStatus,
   path: Runes) =
     filerStatus.pathList = refreshDirList(path, filerStatus.sortBy)
-    filerStatus.viewUpdate = true
-    filerStatus.dirlistUpdate = false
-
-proc updateDirList*(path: Runes) {.inline.} =
-  filerStatus.get.updateDirList(path)
+    filerStatus.isUpdateView = true
+    filerStatus.isUpdatePathList = false
 
 proc keyDown*(filerStatus: var FilerStatus, currentLine: var int) =
   if currentLine < filerStatus.pathList.high:
     inc(currentLine)
-    filerStatus.viewUpdate = true
+    filerStatus.isUpdateView = true
 
 proc keyUp*(filerStatus: var FilerStatus, currentLine: var int) =
   if currentLine > 0:
     dec(currentLine)
-    filerStatus.viewUpdate = true
+    filerStatus.isUpdateView = true
 
 proc moveToTopOfList*(filerStatus: var FilerStatus, currentLine: var int) =
   currentLine = 0
-  filerStatus.viewUpdate = true
+  filerStatus.isUpdateView = true
 
 proc moveToLastOfList*(filerStatus: var FilerStatus, currentLine: var int) =
   currentLine = filerStatus.pathList.high
-  filerStatus.viewUpdate = true
+  filerStatus.isUpdateView = true
 
 proc copyFile*(
   filerStatus: var FilerStatus,
@@ -201,8 +193,8 @@ proc pasteFile*(
     try:
       let filename = filerStatus.register.filename
       copyFile(filerStatus.register.originPath, $currentPath / filename)
-      filerStatus.dirlistUpdate = true
-      filerStatus.viewUpdate = true
+      filerStatus.isUpdatePathList = true
+      filerStatus.isUpdateView = true
     except OSError:
       commandLine.writeCopyFileError(messageLog)
       return
@@ -216,17 +208,20 @@ proc pasteFile*(
 ## Get keys for a dir name and create a dir.
 ## Return error message if it failed.
 ## TODO: Return `Result` type
-proc createDir*(commandLine: var CommandLine): Runes =
-  const prompt = "Dir name: "
-  if commandLine.getKeys(prompt):
-    let dirName = $commandLine.buffer
-    try:
-      createDir(dirName)
-    except OSError:
-      let errMess = fmt"Failed to create directory: {getCurrentExceptionMsg()}"
-      return errMess.toRunes
+proc createDir*(
+  filerStatus: var FilerStatus,
+  commandLine: var CommandLine): Runes =
 
-    filerStatus.get.dirlistUpdate = true
+    const prompt = "Dir name: "
+    if commandLine.getKeys(prompt):
+      let dirName = $commandLine.buffer
+      try:
+        createDir(dirName)
+      except OSError:
+        let errMess = fmt"Failed to create directory: {getCurrentExceptionMsg()}"
+        return errMess.toRunes
+
+      filerStatus.isUpdatePathList = true
 
 proc openFileOrDir*(
   bufStatuses: var seq[BufferStatus],
@@ -240,8 +235,11 @@ proc openFileOrDir*(
 
     case kind
       of pcFile, pcLinkToFile:
-        # TODO: error handling
-        bufStatuses.add initBufferStatus(path, Mode.filer)
+        try:
+          bufStatuses.add initBufferStatus(path, Mode.filer)
+        except:
+          # TODO: Show error message.
+          discard
       of pcDir, pcLinkToDir:
         let currentPath = bufStatuses[bufferIndex].path
         if path == "..":
@@ -252,7 +250,7 @@ proc openFileOrDir*(
           bufStatuses[bufferIndex].path = path.toRunes
 
         windowNode.currentLine = 0
-        filerStatus.dirlistUpdate = true
+        filerStatus.isUpdatePathList = true
 
 proc setDirListColor(
   kind: PathComponent,
@@ -266,11 +264,11 @@ proc setDirListColor(
       of pcLinkToDir, pcLinkToFile: result = EditorColorPair.pcLink
 
 proc initFilerHighlight*[T](
-  pathList: seq[PathInfo],
+  filerStatus: FilerStatus,
   buffer: T,
   currentLine: int): Highlight =
 
-    for index, dir in pathList:
+    for index, dir in filerStatus.pathList:
       let color = setDirListColor(dir.kind, index == currentLine)
       result.colorSegments.add(ColorSegment(
         firstRow: index,
@@ -279,16 +277,7 @@ proc initFilerHighlight*[T](
         lastColumn: buffer[index].len,
         color: color))
 
-proc initFilerHighlight*[T](
-  buffer: T,
-  currentLine: int): Highlight {.inline.} =
-    initFilerHighlight(
-      filerStatus.get.pathList,
-      buffer,
-      currentLine)
-
 proc pathToIcon(path: string): seq[Rune] =
-
   if dirExists(path):
     return ru"📁 "
 
@@ -371,48 +360,40 @@ proc expandSymLinkOrFilename(filename: string): string {.inline.} =
   except OSError:
     filename
 
-proc updateFierBuffer(
-  bufStatus: var BufferStatus,
+proc initFilerBuffer*(
   filerStatus: var FilerStatus,
-  settings: EditorSettings) =
+  isShowIcons: bool): seq[Runes] =
 
-  var buffer: seq[Runes]
+    for index, dir in filerStatus.pathList:
+      let
+        filename = dir.path
+        kind = dir.kind
 
-  for index, dir in filerStatus.pathList:
-    let
-      filename = dir.path
-      kind = dir.kind
+      var newLine =
+        if kind == pcLinkToFile or kind == pcLinkToDir:
+          filename.toRunes
+        else:
+          toRunes(splitPath(filename).tail)
 
-    var newLine =
-      if kind == pcLinkToFile or kind == pcLinkToDir:
-        filename.toRunes
-      else:
-        toRunes(splitPath(filename).tail)
+      case kind
+        of pcFile:
+          try:
+            if isFifo(filename): newLine.add(ru '|')
+          except OSError:
+            discard
+        of pcDir:
+          newLine.add(ru DirSep)
+        of pcLinkToFile:
+          newLine.add(ru"@ -> " & expandSymLinkOrFilename(filename).toRunes)
+        of pcLinkToDir:
+          newLine.add(ru"@ -> " & toRunes(expandSymLinkOrFilename(filename) / $DirSep))
 
-    case kind
-      of pcFile:
-        try:
-          if isFifo(filename): newLine.add(ru '|')
-        except OSError:
-          discard
-      of pcDir:
-        newLine.add(ru DirSep)
-      of pcLinkToFile:
-        newLine.add(ru"@ -> " & expandSymLinkOrFilename(filename).toRunes)
-      of pcLinkToDir:
-        newLine.add(ru"@ -> " & toRunes(expandSymLinkOrFilename(filename) / $DirSep))
+      # Set icons
+      if isShowIcons:
+        # Add an icon
+        newLine.insert(pathToIcon(filename), 0)
 
-    # Set icons
-    if settings.filer.showIcons: newLine.insert(pathToIcon(filename), 0)
-
-    buffer.add(newLine)
-
-  bufStatus.buffer = buffer.toGapBuffer
-
-proc updateFilerBuffer*(
-  bufStatus: var BufferStatus,
-  settings: EditorSettings) {.inline.} =
-    bufStatus.updateFierBuffer(filerStatus.get, settings)
+      result.add(newLine)
 
 proc initFileDeitalHighlight[T](buffer: T): Highlight =
   for i in 0 ..< buffer.len:
@@ -477,7 +458,7 @@ proc changeSortBy*(filerStatus: var FilerStatus) =
     of fileSize: filerStatus.sortBy = time
     of time: filerStatus.sortBy = name
 
-  filerStatus.dirlistUpdate = true
+  filerStatus.isUpdatePathList = true
 
 proc searchFileMode*(
   bufStatus: var BufferStatus,
@@ -487,7 +468,7 @@ proc searchFileMode*(
 
     filerStatus.searchMode = true
     filerStatus.pathList = filerStatus.pathList.searchFiles($keyword)
-    filerStatus.viewUpdate = true
+    filerStatus.isUpdateView = true
 
     windowNode.currentLine = 0
 
@@ -496,7 +477,7 @@ proc searchFileMode*(
       windowNode.eraseWindow
       windowNode.window.get.write(0, 0, "Not found", EditorColorPair.commandBar)
       windowNode.refreshWindow
-      filerStatus.dirlistUpdate = true
+      filerStatus.isUpdatePathList = true
 
 proc isFilerModeCommand*(command: Runes): InputState =
   result = InputState.Invalid
@@ -522,7 +503,3 @@ proc isFilerModeCommand*(command: Runes): InputState =
        isControlK(key) or
        isEnterKey(key):
          return InputState.Valid
-
-proc isUpdateFilerView*(): bool {.inline.} = filerStatus.get.viewUpdate
-
-proc isUpdateFilerList*(): bool {.inline.} = filerStatus.get.dirlistUpdate

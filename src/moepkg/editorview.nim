@@ -1,6 +1,6 @@
 import std/[deques, strutils, math, strformat]
 import gapbuffer, ui, unicodeext, independentutils, color, settings,
-       bufferstatus, highlight
+       highlight
 
 type EditorView* = object
   height*, width*, widthOfLineNum*: int
@@ -194,228 +194,233 @@ proc write(view: EditorView,
   const tab = "    "
   win.write(y, x, ($str).replace("\t", tab), color, false)
 
-proc writeCurrentLine(win: var Window,
-                      view: EditorView,
-                      highlight: Highlight,
-                      theme: ColorTheme,
-                      str: seq[Rune],
-                      currentLineColorPair: var int,
-                      y, x, i, last: int,
-                      mode, prevMode: Mode,
-                      viewSettings: EditorViewSettings) =
+proc writeCurrentLine(
+  win: var Window,
+  view: EditorView,
+  highlight: Highlight,
+  theme: ColorTheme,
+  str: seq[Rune],
+  currentLineColorPair: var int,
+  y, x, i, last: int,
+  isVisualMode, isConfigMode: bool,
+  viewSettings: EditorViewSettings) =
 
-  if viewSettings.cursorLine:
-    # Enable underline
-    win.attron(Attributes.underline)
+    if viewSettings.cursorLine:
+      # Enable underline
+      win.attron(Attributes.underline)
 
-  if viewSettings.highlightCurrentLine and
-     not (isVisualMode(mode) or isConfigMode(mode, prevMode)):
-    # Change background color to white if background color is editorBg
-    let
-      defaultCharColor = EditorColorPair.defaultChar
-      colors = if i > -1 and i < highlight.len:
-                 theme.getColorFromEditorColorPair(highlight[i].color)
-               else:
-                 theme.getColorFromEditorColorPair(defaultCharColor)
-
-      theme = ColorThemeTable[theme]
-
-    block:
+    if viewSettings.highlightCurrentLine and
+       not (isVisualMode or isConfigMode):
+      # Change background color to white if background color is editorBg
       let
-        fg = colors[0]
-        bg = if colors[1] == theme.editorBg:
-               theme.currentLineBg
-             else:
-               colors[1]
+        defaultCharColor = EditorColorPair.defaultChar
+        colors = if i > -1 and i < highlight.len:
+                   theme.getColorFromEditorColorPair(highlight[i].color)
+                 else:
+                   theme.getColorFromEditorColorPair(defaultCharColor)
 
-      setColorPair(currentLineColorPair, fg, bg)
-
-    view.write(win, y, x, str, currentLineColorPair)
-
-    currentLineColorPair.inc
-
-    # Write spaces after text in the current line
-    block:
-      let
-        fg = theme.defaultChar
-        bg = theme.currentLineBg
-
-      setColorPair(currentLineColorPair, fg, bg)
-    let
-      spaces = ru" ".repeat(view.width - view.lines[y].width)
-      x = view.widthOfLineNum + view.lines[y].width
-
-    view.write(win, y, x, spaces, currentLineColorPair)
-
-    currentLineColorPair.inc
-
-  else:
-    view.write(win, y, x, str, highlight[i].color)
-
-  if viewSettings.cursorLine:
-    # Disable underline
-    win.attroff(Attributes.underline)
-
-proc writeAllLines*[T](view: var EditorView,
-                       win: var Window,
-                       viewSettings: EditorViewSettings,
-                       isCurrentWin: bool,
-                       mode, prevMode: Mode,
-                       buffer: T,
-                       highlight: Highlight,
-                       theme: ColorTheme,
-                       currentLine, startSelectedLine, endSelectedLine: int,
-                       currentLineColorPair: var int) =
-
-  win.erase
-  view.widthOfLineNum = if viewSettings.lineNumber: buffer.len.numberOfDigits + 1
-                        else: 0
-
-  var
-    indents          = 0
-    lastOriginalLine = -1
-    lineStart        = 0
-  let
-    start = (view.originalLine[0], view.start[0])
-    useHighlight = highlight.len > 0 and
-                   (highlight[0].firstRow, highlight[0].firstColumn) <= start and
-                   start <= (highlight[^1].lastRow, highlight[^1].lastColumn)
-
-  var i = if useHighlight: highlight.indexOf(view.originalLine[0], view.start[0])
-          else: -1
-  for y in 0 ..< view.height:
-    if view.originalLine[y] == -1: break
-
-    let isCurrentLine = view.originalLine[y] == currentLine
-    if viewSettings.lineNumber and view.start[y] == 0:
-      let lineNumberColor = if isCurrentLine and isCurrentWin and
-                               viewSettings.currentLineNumber:
-                              EditorColorPair.currentLineNum
-                            else:
-                              EditorColorPair.lineNum
-      view.writeLineNum(win, y, view.originalLine[y], lineNumberColor)
-
-    var x = view.widthOfLineNum
-    if view.length[y] == 0:
-      if isVisualMode(mode) and
-         (view.originalLine[y] >= startSelectedLine and
-         endSelectedLine >= view.originalLine[y]):
-        view.write(win, y, x, ru" ", EditorColorPair.visualMode)
-      else:
-        if viewSettings.highlightCurrentLine and isCurrentLine and
-           currentLine < buffer.len:
-          writeCurrentLine(win,
-                           view,
-                           highlight,
-                           theme,
-                           ru"",
-                           currentLineColorPair,
-                           y, x, i, 0,
-                           mode, prevMode,
-                           viewSettings)
-        else:
-          view.write(win, y, x, view.lines[y], EditorColorPair.defaultChar)
-      continue
-
-    if viewSettings.indentationLines and not isConfigMode(mode, prevMode):
-      let currentOriginalLine = view.originalLine[y]
-      if currentOriginalLine != lastOriginalLine:
-        let line = if buffer.len() > currentOriginalLine:
-                     buffer[currentOriginalLine]
-                   else: ru""
-        lineStart = x
-        var numSpaces = 0
-        for i in 0..<line.len:
-          if line[i] != Rune(' '):
-            numSpaces = i+1
-            break
-          inc numSpaces
-        indents = int(numSpaces / viewSettings.tabStop)
-      else:
-        # Line wrapping
-        indents = 0
-      lastOriginalLine = view.originalLine[y]
-
-    while i < highlight.len and highlight[i].firstRow < view.originalLine[y]: inc(i)
-
-    while i < highlight.len and highlight[i].firstRow == view.originalLine[y]:
-      if (highlight[i].firstRow, highlight[i].firstColumn) > (highlight[i].lastRow, highlight[i].lastColumn):
-        # Skip an empty segment
-        break
-      let
-        first = max(highlight[i].firstColumn-view.start[y], 0)
-        last = min(highlight[i].lastColumn-view.start[y], view.lines[y].high)
-
-      if first > last: break
+        theme = ColorThemeTable[theme]
 
       block:
         let
-          lastStr = $last
-          lineStr = $view.lines[y]
-        assert(last <= view.lines[y].high,
-               fmt"last = {lastStr}, view.lines[y] = {lineStr}")
-        assert(first <= last, fmt"first = {first}, last = {last}")
+          fg = colors[0]
+          bg = if colors[1] == theme.editorBg:
+                 theme.currentLineBg
+               else:
+                 colors[1]
 
-      let str = view.lines[y][first .. last]
+        setColorPair(currentLineColorPair, fg, bg)
 
-      if isCurrentLine:
-        writeCurrentLine(win,
-                         view,
-                         highlight,
-                         theme,
-                         str,
-                         currentLineColorPair,
-                         y, x, i, last,
-                         mode, prevMode,
-                         viewSettings)
-      else:
-        view.write(win, y, x, str, highlight[i].color)
-      x += width(str)
-      if last == highlight[i].lastColumn - view.start[y]: inc(i) # consumed a whole segment
-      else: break
+      view.write(win, y, x, str, currentLineColorPair)
 
-    if viewSettings.indentationLines:
-      for i in 0..<indents:
-        view.write(win,
-                   y,
-                   lineStart+(viewSettings.tabStop*i),
-                   ru("┊"),
-                   EditorColorPair.whitespace)
+      currentLineColorPair.inc
 
-  win.refresh
+      # Write spaces after text in the current line
+      block:
+        let
+          fg = theme.defaultChar
+          bg = theme.currentLineBg
 
-proc update*[T](view: var EditorView,
-                win: var Window,
-                viewSettings: EditorViewSettings,
-                isCurrentWin: bool,
-                mode, prevMode: Mode,
-                buffer: T,
-                highlight: Highlight,
-                theme: ColorTheme,
-                currentLine, startSelectedLine, endSelectedLine: int,
-                currentLineColorPair: var int) =
+        setColorPair(currentLineColorPair, fg, bg)
+      let
+        spaces = ru" ".repeat(view.width - view.lines[y].width)
+        x = view.widthOfLineNum + view.lines[y].width
 
-  let widthOfLineNum = buffer.len.intToStr.len + 1
-  if viewSettings.lineNumber and widthOfLineNum != view.widthOfLineNum:
-    view.resize(buffer,
-                view.height,
-                view.width + view.widthOfLineNum - widthOfLineNum,
-                widthOfLineNum)
+      view.write(win, y, x, spaces, currentLineColorPair)
 
-  view.writeAllLines(win,
-                     viewSettings,
-                     isCurrentWin,
-                     mode,
-                     prevMode,
-                     buffer,
-                     highlight,
-                     theme,
-                     currentLine,
-                     startSelectedLine,
-                     endSelectedLine,
-                     currentLineColorPair)
+      currentLineColorPair.inc
 
-  view.updated = false
+    else:
+      view.write(win, y, x, str, highlight[i].color)
+
+    if viewSettings.cursorLine:
+      # Disable underline
+      win.attroff(Attributes.underline)
+
+proc writeAllLines*[T](
+  view: var EditorView,
+  win: var Window,
+  viewSettings: EditorViewSettings,
+  isCurrentWin: bool,
+  isVisualMode, isConfigMode: bool,
+  buffer: T,
+  highlight: Highlight,
+  theme: ColorTheme,
+  currentLine, startSelectedLine, endSelectedLine: int,
+  currentLineColorPair: var int) =
+
+    win.erase
+    view.widthOfLineNum = if viewSettings.lineNumber: buffer.len.numberOfDigits + 1
+                          else: 0
+
+    var
+      indents          = 0
+      lastOriginalLine = -1
+      lineStart        = 0
+    let
+      start = (view.originalLine[0], view.start[0])
+      useHighlight = highlight.len > 0 and
+                     (highlight[0].firstRow, highlight[0].firstColumn) <= start and
+                     start <= (highlight[^1].lastRow, highlight[^1].lastColumn)
+
+    var i = if useHighlight: highlight.indexOf(view.originalLine[0], view.start[0])
+            else: -1
+    for y in 0 ..< view.height:
+      if view.originalLine[y] == -1: break
+
+      let isCurrentLine = view.originalLine[y] == currentLine
+      if viewSettings.lineNumber and view.start[y] == 0:
+        let lineNumberColor = if isCurrentLine and isCurrentWin and
+                                 viewSettings.currentLineNumber:
+                                EditorColorPair.currentLineNum
+                              else:
+                                EditorColorPair.lineNum
+        view.writeLineNum(win, y, view.originalLine[y], lineNumberColor)
+
+      var x = view.widthOfLineNum
+      if view.length[y] == 0:
+        if isVisualMode and
+           (view.originalLine[y] >= startSelectedLine and
+           endSelectedLine >= view.originalLine[y]):
+          view.write(win, y, x, ru" ", EditorColorPair.visualMode)
+        else:
+          if viewSettings.highlightCurrentLine and isCurrentLine and
+             currentLine < buffer.len:
+            writeCurrentLine(
+              win,
+              view,
+              highlight,
+              theme,
+              ru"",
+              currentLineColorPair,
+              y, x, i, 0,
+              isVisualMode, isConfigMode,
+              viewSettings)
+          else:
+            view.write(win, y, x, view.lines[y], EditorColorPair.defaultChar)
+        continue
+
+      if viewSettings.indentationLines and not isConfigMode:
+        let currentOriginalLine = view.originalLine[y]
+        if currentOriginalLine != lastOriginalLine:
+          let line = if buffer.len() > currentOriginalLine:
+                       buffer[currentOriginalLine]
+                     else: ru""
+          lineStart = x
+          var numSpaces = 0
+          for i in 0..<line.len:
+            if line[i] != Rune(' '):
+              numSpaces = i+1
+              break
+            inc numSpaces
+          indents = int(numSpaces / viewSettings.tabStop)
+        else:
+          # Line wrapping
+          indents = 0
+        lastOriginalLine = view.originalLine[y]
+
+      while i < highlight.len and highlight[i].firstRow < view.originalLine[y]: inc(i)
+
+      while i < highlight.len and highlight[i].firstRow == view.originalLine[y]:
+        if (highlight[i].firstRow, highlight[i].firstColumn) > (highlight[i].lastRow, highlight[i].lastColumn):
+          # Skip an empty segment
+          break
+        let
+          first = max(highlight[i].firstColumn-view.start[y], 0)
+          last = min(highlight[i].lastColumn-view.start[y], view.lines[y].high)
+
+        if first > last: break
+
+        block:
+          let
+            lastStr = $last
+            lineStr = $view.lines[y]
+          assert(last <= view.lines[y].high,
+                 fmt"last = {lastStr}, view.lines[y] = {lineStr}")
+          assert(first <= last, fmt"first = {first}, last = {last}")
+
+        let str = view.lines[y][first .. last]
+
+        if isCurrentLine:
+          writeCurrentLine(
+            win,
+            view,
+            highlight,
+            theme,
+            str,
+            currentLineColorPair,
+            y, x, i, last,
+            isVisualMode, isConfigMode,
+            viewSettings)
+        else:
+          view.write(win, y, x, str, highlight[i].color)
+        x += width(str)
+        if last == highlight[i].lastColumn - view.start[y]: inc(i) # consumed a whole segment
+        else: break
+
+      if viewSettings.indentationLines:
+        for i in 0..<indents:
+          view.write(win,
+                     y,
+                     lineStart+(viewSettings.tabStop*i),
+                     ru("┊"),
+                     EditorColorPair.whitespace)
+
+    win.refresh
+
+proc update*[T](
+  view: var EditorView,
+  win: var Window,
+  viewSettings: EditorViewSettings,
+  isCurrentWin: bool,
+  isVisualMode, isConfigMode: bool,
+  buffer: T,
+  highlight: Highlight,
+  theme: ColorTheme,
+  currentLine, startSelectedLine, endSelectedLine: int,
+  currentLineColorPair: var int) =
+
+    let widthOfLineNum = buffer.len.intToStr.len + 1
+    if viewSettings.lineNumber and widthOfLineNum != view.widthOfLineNum:
+      view.resize(
+        buffer,
+        view.height,
+        view.width + view.widthOfLineNum - widthOfLineNum,
+        widthOfLineNum)
+
+    view.writeAllLines(
+      win,
+      viewSettings,
+      isCurrentWin,
+      isVisualMode, isConfigMode,
+      buffer,
+      highlight,
+      theme,
+      currentLine,
+      startSelectedLine, endSelectedLine,
+      currentLineColorPair)
+
+    view.updated = false
 
 proc seekCursor*[T](view: var EditorView,
                     buffer: T,

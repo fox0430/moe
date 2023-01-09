@@ -26,10 +26,8 @@ proc openNewWinAndOpenFilerOrDir(
 
       status.changeCurrentBuffer(status.bufStatus.high)
 
-proc currentPathInfo(
-  status: EditorStatus,
-  filerStatus: FilerStatus): PathInfo {.inline.} =
-    filerStatus.pathList[currentMainWindowNode.currentLine]
+proc currentPathInfo(status: EditorStatus,): PathInfo {.inline.} =
+  currentFilerStatus.pathList[currentMainWindowNode.currentLine]
 
 proc changeModeToExMode*(
   bufStatus: var BufferStatus,
@@ -49,13 +47,16 @@ proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
     const prompt = "/"
     if status.commandLine.getKeys(prompt):
       let keyword = status.commandLine.buffer
-      currentBufStatus.searchFileMode(currentMainWindowNode, filerStatus.get, keyword)
+      currentBufStatus.searchFileMode(
+        currentMainWindowNode,
+        currentFilerStatus,
+        keyword)
   elif isEscKey(key):
-    if filerStatus.get.searchMode == true:
-      filerStatus.get.dirlistUpdate = true
-      filerStatus.get.searchMode = false
+    if currentFilerStatus.searchMode == true:
+      currentFilerStatus.isUpdateView = true
+      currentFilerStatus.searchMode = false
   elif key == ord('D'):
-    let r = deleteFile(status.currentPathInfo(filerStatus.get))
+    let r = status.currentPathInfo.deleteFile
     if r.ok: status.commandLine.write(r.mess)
     else: status.commandLine.write(r.mess)
     status.messageLog.add r.mess
@@ -63,42 +64,42 @@ proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
     currentBufStatus.writeFileDetail(
       currentMainWindowNode,
       status.settings,
-      filerStatus.get.pathList.len,
-      filerStatus.get.pathList[currentMainWindowNode.currentLine][1],
+      currentFilerStatus.pathList.len,
+      currentFilerStatus.pathList[currentMainWindowNode.currentLine][1],
       terminalHeight(),
       terminalWidth())
-    filerStatus.get.viewUpdate = true
+    currentFilerStatus.isUpdateView = true
   elif key == 'j' or isDownKey(key):
-    filerStatus.get.keyDown(currentMainWindowNode.currentLine)
+    currentFilerStatus.keyDown(currentMainWindowNode.currentLine)
   elif key == ord('k') or isUpKey(key):
-    filerStatus.get.keyUp(currentMainWindowNode.currentLine)
+    currentFilerStatus.keyUp(currentMainWindowNode.currentLine)
   elif key == ord('g'):
-    filerStatus.get.moveToTopOfList(currentMainWindowNode.currentLine)
+    currentFilerStatus.moveToTopOfList(currentMainWindowNode.currentLine)
   elif key == ord('G'):
-    filerStatus.get.moveToLastOfList(currentMainWindowNode.currentLine)
+    currentFilerStatus.moveToLastOfList(currentMainWindowNode.currentLine)
   elif key == ord('y'):
-    filerStatus.get.copyFile(
+    currentFilerStatus.copyFile(
       currentMainWindowNode.currentLine,
       currentBufStatus.path)
   elif key == ord('C'):
-    filerStatus.get.cutFile(
+    currentFilerStatus.cutFile(
       currentMainWindowNode.currentLine,
       currentBufStatus.path)
   elif key == ord('p'):
     status.commandLine.pasteFile(
-      filerStatus.get,
+      currentFilerStatus,
       currentBufStatus.path,
       status.messageLog)
   elif key == ord('s'):
-    filerStatus.get.changeSortBy
+    currentFilerStatus.changeSortBy
   elif key == ord('N'):
-    let err = status.commandLine.createDir
+    let err = currentFilerStatus.createDir(status.commandLine)
     if err.len > 0:
       status.commandLine.writeError(err)
       status.messageLog.add err
   elif key == ord('v'):
     status.openNewWinAndOpenFilerOrDir(
-      filerStatus.get,
+      currentFilerStatus,
       terminalHeight(),
       terminalWidth())
   elif isControlJ(key):
@@ -108,4 +109,4 @@ proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
   elif isEnterKey(key):
     status.bufStatus.openFileOrDir(
       currentMainWindowNode,
-      filerStatus.get)
+      currentFilerStatus)
