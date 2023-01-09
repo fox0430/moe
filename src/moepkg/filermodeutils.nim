@@ -409,8 +409,6 @@ proc updateFierBuffer(
 
   bufStatus.buffer = buffer.toGapBuffer
 
-  filerStatus.viewUpdate = false
-
 proc updateFilerBuffer*(
   bufStatus: var BufferStatus,
   settings: EditorSettings) {.inline.} =

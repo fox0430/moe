@@ -31,12 +31,20 @@ proc currentPathInfo(
   filerStatus: FilerStatus): PathInfo {.inline.} =
     filerStatus.pathList[currentMainWindowNode.currentLine]
 
+proc changeModeToExMode*(
+  bufStatus: var BufferStatus,
+  commandLine: var CommandLine) =
+
+    bufStatus.changeMode(Mode.ex)
+    commandLine.clear
+    commandLine.setPrompt(exModePrompt)
+
 # NOTE: WIP
 proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
   let key = command[0]
 
   if key == ord(':'):
-    status.changeMode(Mode.ex)
+    currentBufStatus.changeModeToExMode(status.commandLine)
   elif key == ord('/'):
     const prompt = "/"
     if status.commandLine.getKeys(prompt):
