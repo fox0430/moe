@@ -251,6 +251,7 @@ proc openFileOrDir*(
         else:
           bufStatuses[bufferIndex].path = path.toRunes
 
+        windowNode.currentLine = 0
         filerStatus.dirlistUpdate = true
 
 proc setDirListColor(
