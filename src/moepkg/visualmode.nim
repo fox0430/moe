@@ -492,7 +492,8 @@ proc visualCommand(status: var EditorStatus, area: var SelectArea, key: Rune) =
   elif key == ord('I'):
     status.enterInsertMode
 
-  status.changeMode(currentBufStatus.prevMode)
+  if currentBufStatus.isVisualMode:
+    status.changeMode(currentBufStatus.prevMode)
 
 proc insertCharacterMultipleLines(status: var EditorStatus, area: SelectArea) =
   if currentBufStatus.isReadonly:
@@ -565,6 +566,8 @@ proc visualBlockCommand(
     elif key == ord('I'):
       status.insertCharacterMultipleLines(area)
 
+    if currentBufStatus.isVisualBlockMode:
+      status.changeMode(currentBufStatus.prevMode)
     status.changeMode(currentBufStatus.prevMode)
 
 proc isVisualModeCommand*(command: Runes): InputState =
