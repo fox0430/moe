@@ -56,6 +56,9 @@ Screenshot
 When moe start, Start ncurses. Next, Initialize settings and load the configuration file if existing.
 And load the text file if got an argument. At last, Starting editor main loop.
 
+### ```src/moepkg/mainloop.nim```
+Editor main loops for main window and command line window.
+
 ### ```src/moepkg/editorstatus.nim```
 Editor initializing, add a buffer, update highlighting and create, remove, resize and update view and window, etc...
 
@@ -175,8 +178,11 @@ Parse command line arguments and write help in command line.
 ### ```src/moepkg/build.nim```
 Implementation of Build on save.
 
-### ```src/moepkg/commandview.nim```
-Write command line in moe.
+### ```src/moepkg/commandline.nim```
+Tools for the command line (window). 
+
+### ```src/moepkg/commandlineutils.nim```
+Helper for the command line (window). 
 
 ### ```src/moepkg/backup.nim```
 Implementation of Automatic backups.
@@ -192,3 +198,6 @@ Utils for the clipboard.
 
 ###  ```src/moepkg/platform.nim```
 Check and definition the platform.
+
+###  ```src/moepkg/popupwindow.nim```
+Popup window.
