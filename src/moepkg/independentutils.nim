@@ -2,7 +2,8 @@ import std/[strutils, math, random, osproc]
 
 proc numberOfDigits*(x: int): int {.inline.} = x.intToStr.len
 
-proc calcTabWidth*(numOfBuffer, windowSize: int): int {.inline.} = int(ceil(windowSize / numOfBuffer))
+proc calcTabWidth*(numOfBuffer, windowSize: int): int {.inline.} =
+  int(ceil(windowSize / numOfBuffer))
 
 proc normalizeHex*(s: string): string =
   var count = 0

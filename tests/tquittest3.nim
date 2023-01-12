@@ -3,7 +3,7 @@ import moepkg/[editorstatus, unicodeext, exmode]
 
 test "Force quit command":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
 
   status.bufStatus[0].countChange = 1
   const command = @[ru"q!"]

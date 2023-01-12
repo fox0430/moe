@@ -1,6 +1,6 @@
 import std/[sugar, options, sequtils]
 import ui, window, autocomplete, bufferstatus, gapbuffer, color,
-       editorstatus, unicodeext, osext
+       unicodeext, osext, popupwindow
 import syntax/highlite
 
 type SuggestionWindow* = object
@@ -335,6 +335,10 @@ proc writeSuggestionWindow*(
     suggestionwindow.popUpWindow.y = y
     suggestionwindow.popUpWindow.x = x
 
+  let currentLine =
+    if suggestionWindow.selectedSuggestion == -1: none(int)
+    else: some(suggestionWindow.selectedSuggestion)
+
   var popUpWindow = suggestionWindow.popUpWindow
   popUpWindow.writePopUpWindow(
     popUpWindow.height,
@@ -343,7 +347,7 @@ proc writeSuggestionWindow*(
     popUpWindow.x,
     terminalHeight,
     terminalWidth,
-    suggestionWindow.selectedSuggestion,
+    currentLine,
     suggestionWindow.suggestoins)
 
 proc isLineChanged*(suggestionWindow: SuggestionWindow): bool {.inline.} =

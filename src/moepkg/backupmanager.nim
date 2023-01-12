@@ -3,7 +3,7 @@
 import std/[os, times, terminal, osproc, json, strformat]
 import editorstatus, bufferstatus, unicodeext, ui, movement, gapbuffer,
        highlight, color, settings, messages, backup, fileutils, editorview,
-       window, commandviewutils
+       window, commandlineutils
 
 proc initBackupManagerBuffer(
   bufStatus: var BufferStatus,
@@ -73,7 +73,7 @@ proc openDiffViewer(status: var Editorstatus, sourceFilePath: string) =
   status.resize(terminalHeight(), terminalWidth())
   status.moveNextWindow
 
-  status.addNewBuffer(Mode.diff)
+  status.addNewBufferInCurrentWin(Mode.diff)
   status.changeCurrentBuffer(status.bufStatus.high)
 
   currentBufStatus.path = backupFilePath.toRunes
@@ -122,7 +122,7 @@ proc restoreBackupFile(
       if status.bufStatus[i].absolutePath == sourceFilePath:
         let beforeBufStatus = status.bufStatus[i]
 
-        status.bufStatus[i] = initBufferStatus(sourceFilePath)
+        status.bufStatus[i] = initBufferStatus($sourceFilePath)
 
         try:
           let textAndEncoding = openFile(sourceFilePath)
@@ -193,6 +193,80 @@ template removeBackupFile(status: var EditorStatus, sourceFilePath: seq[Rune]) =
   const IS_FORCE_REMOVE = false
   status.removeBackupFile(sourceFilePath, IS_FORCE_REMOVE)
 
+proc isBackupManagerCommand*(command: Runes): InputState =
+  result = InputState.Invalid
+
+  if command.len == 1:
+    let key = command[0]
+    if isControlK(key) or
+       isControlJ(key) or
+       key == ord(':') or
+       key == ord('k') or isUpKey(key) or
+       key == ord('j') or isDownKey(key) or
+       isEnterKey(key) or
+       key == ord('R') or
+       key == ord('D') or
+       key == ord('r') or
+       key == ord('G'):
+         return InputState.Valid
+    elif key == ord('g'):
+      return InputState.Continue
+  elif command.len == 2:
+    if command[0] == ord('g'):
+      if command[1] == ord('g'):
+        return InputState.Valid
+
+proc execBackupManagerCommand*(status: var EditorStatus, command: Runes) =
+  let sourceFilePath = status.bufStatus[status.prevBufferIndex].absolutePath
+
+  # TODO: Move
+  block:
+    currentBufStatus.initBackupManagerBuffer(
+      status.baseBackupDir,
+      sourceFilePath)
+
+    let
+      currentLine = currentMainWindowNode.currentLine
+      highlight = currentBufStatus.initBackupManagerHighlight(currentLine)
+    currentMainWindowNode.highlight = highlight
+
+    status.update
+    setCursor(false)
+
+  if command.len == 1:
+    let key = command[0]
+    if isControlK(key):
+      status.moveNextWindow
+    elif isControlJ(key):
+      status.movePrevWindow
+    elif key == ord(':'):
+      status.changeMode(Mode.ex)
+    elif key == ord('k') or isUpKey(key):
+      currentBufStatus.keyUp(currentMainWindowNode)
+    elif key == ord('j') or isDownKey(key):
+      currentBufStatus.keyDown(currentMainWindowNode)
+    elif isEnterKey(key):
+      status.openDiffViewer($sourceFilePath)
+    elif key == ord('R'):
+      status.restoreBackupFile(sourceFilePath)
+    elif key == ord('D'):
+      status.removeBackupFile(sourceFilePath)
+      currentBufStatus.initBackupManagerBuffer(
+        status.baseBackupDir,
+        sourceFilePath)
+    elif key == ord('r'):
+      # Reload backup files
+      currentBufStatus.initBackupManagerBuffer(
+        status.baseBackupDir,
+        sourceFilePath)
+    elif key == ord('G'):
+      currentBufStatus.moveToLastLine(currentMainWindowNode)
+  elif command.len == 2:
+    if command[0] == ord('g'):
+      if command[1] == ord('g'):
+        currentBufStatus.moveToFirstLine(currentMainWindowNode)
+
+# TODO: Remove
 proc backupManager*(status: var EditorStatus) =
   status.resize(terminalHeight(), terminalWidth())
 
@@ -212,8 +286,8 @@ proc backupManager*(status: var EditorStatus) =
     status.update
     setCursor(false)
 
-    var key = errorKey
-    while key == errorKey:
+    var key = ERR_KEY
+    while key == ERR_KEY:
       status.eventLoopTask
       key = getKey(currentMainWindowNode)
 

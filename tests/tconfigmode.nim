@@ -4,7 +4,7 @@ include moepkg/configmode
 suite "Config mode: Start configuration mode":
   test "Init configuration mode buffer":
     var status = initEditorStatus()
-    status.addNewBuffer(Mode.config)
+    status.addNewBufferInCurrentWin(Mode.config)
 
     currentBufStatus.buffer = initConfigModeBuffer(status.settings)
 

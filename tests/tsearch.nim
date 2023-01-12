@@ -80,7 +80,7 @@ suite "search.nim: searchLineReversely":
 suite "search.nim: searchBuffer":
   test "searchBuffer":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
 
     let
       line1 = ru"abc def"
@@ -100,7 +100,7 @@ suite "search.nim: searchBuffer":
 
   test "searchBuffer 2":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
 
     let
       line1 = ru"abc def"
@@ -121,7 +121,7 @@ suite "search.nim: searchBuffer":
 suite "search.nim: searchBufferReversely":
   test "searchBufferReversely":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
 
     let
       line1 = ru"abc def"
@@ -144,7 +144,7 @@ suite "search.nim: searchBufferReversely":
 
   test "searchBufferReversely 2":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
 
     let
       line1 = ru"abc def"
@@ -168,7 +168,7 @@ suite "search.nim: searchBufferReversely":
 suite "search.nim: searchAllOccurrence":
   test "searchAllOccurrence":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
 
     let
       line1 = ru"abc def"
@@ -196,7 +196,7 @@ suite "search.nim: searchAllOccurrence":
 
   test "searchAllOccurrence 2":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
 
     let
       line1 = ru"abc def"
@@ -216,7 +216,7 @@ suite "search.nim: searchAllOccurrence":
 suite "search.nim: jumpToSearchForwardResults":
   test "jumpToSearchForwardResults":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
 
     currentMainWindowNode.currentColumn = 1
 
@@ -238,7 +238,7 @@ suite "search.nim: jumpToSearchForwardResults":
 
   test "jumpToSearchForwardResults 2":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
 
     currentMainWindowNode.currentColumn = 1
 
@@ -261,7 +261,7 @@ suite "search.nim: jumpToSearchForwardResults":
 suite "search.nim: jumpToSearchBackwordResults":
   test "jumpToSearchBackwordResults":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
 
     currentMainWindowNode.currentLine = 1
 
@@ -283,7 +283,7 @@ suite "search.nim: jumpToSearchBackwordResults":
 
   test "jumpToSearchBackwordResults 2":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
 
     currentMainWindowNode.currentColumn = 1
 

@@ -1,6 +1,6 @@
-import std/[terminal, times, strutils]
+import std/[terminal, times, strutils, options]
 import gapbuffer, ui, editorstatus, unicodeext, window, movement, settings,
-       bufferstatus, color, highlight, editor, search
+       bufferstatus, color, highlight, editor, commandline, popupwindow
 
 type standardTableNames {.pure.} = enum
   theme
@@ -1281,8 +1281,8 @@ proc editFiguresSetting(status: var EditorStatus,
   while not isBreak and not isCancel:
     status.update
 
-    var key = errorKey
-    while key == errorKey:
+    var key = ERR_KEY
+    while key == ERR_KEY:
       key = currentMainWindowNode.getKey
 
     if isResizekey(key):
@@ -1436,8 +1436,8 @@ proc editStringSetting(status: var EditorStatus,
   while not isBreak and not isCancel:
     status.update
 
-    var key = errorKey
-    while key == errorKey:
+    var key = ERR_KEY
+    while key == ERR_KEY:
       key = currentMainWindowNode.getKey
 
     if isResizekey(key):
@@ -1543,10 +1543,10 @@ proc editEnumAndBoolSettings(status: var EditorStatus,
     popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
     suggestIndex = 0
 
-    key = errorKey
+    key = ERR_KEY
 
   while (isTabKey(key) or isShiftTab(key) or isDownKey(key) or isUpKey(key) or
-         errorKey == key) and settingValues.len > 1:
+         ERR_KEY == key) and settingValues.len > 1:
 
     if (isTabKey(key) or isDownKey(key)) and
        suggestIndex < settingValues.high: inc(suggestIndex)
@@ -1557,10 +1557,11 @@ proc editEnumAndBoolSettings(status: var EditorStatus,
     else:
       suggestIndex = 0
 
-    popUpWindow.writePopUpWindow(h, w, y, x,
-                                 terminalHeight(), terminalWidth(),
-                                 suggestIndex,
-                                 settingValues)
+    popUpWindow.writePopUpWindow(
+      h, w, y, x,
+      terminalHeight(), terminalWidth(),
+      some(suggestIndex),
+      settingValues)
 
     key = currentMainWindowNode.getKey
 
@@ -1572,7 +1573,7 @@ proc editEnumAndBoolSettings(status: var EditorStatus,
     status.changeEditorSettings(
       selectedTable, selectedSetting, position, settingVal)
   else:
-    status.deletePopUpWindow
+    status.popUpWindow.deleteWindow
 
 proc selectAndChangeEditorSettings(status: var EditorStatus, arrayIndex: int) =
   let
@@ -2008,70 +2009,73 @@ proc getNumOfValueOfArraySetting(line: seq[Rune]): int =
   # 1 is the name of the setting
   line.splitWhitespace.len - 1
 
-proc isConfigMode(mode: Mode): bool {.inline.} =
-  mode == Mode.config
+# TODO: Move or Remove
+proc changeModeToSearchForwardMode(
+  bufStatus: var BufferStatus,
+  commandLine: var CommandLine) =
 
-proc configMode*(status: var Editorstatus) =
+    bufStatus.changeMode(Mode.searchForward)
+    commandLine.clear
+    commandLine.setPrompt(searchForwardModePrompt)
 
-  status.resize(terminalHeight(), terminalWidth())
+# TODO: Move or Remove
+proc changeModeToSearchBackwardMode(
+  bufStatus: var BufferStatus,
+  commandLine: var CommandLine) =
 
-  currentBufStatus.buffer = initConfigModeBuffer(status.settings)
-  currentMainWindowNode.currentLine = 1
+    bufStatus.changeMode(Mode.searchBackward)
+    commandLine.clear
+    commandLine.setPrompt(searchBackwardModePrompt)
 
-  let currentBufferIndex = currentMainWindowNode.bufferIndex
+proc isConfigModeCommand*(command: Runes): InputState =
+  result = InputState.Invalid
 
+  if command.len == 1:
+    let key = command[0]
+    if isControlK(key) or
+       isControlJ(key) or
+       key == ord(':') or
+       key == ord('h') or isLeftKey(key) or
+       key == ord('l') or isRightKey(key) or
+       isEnterKey(key) or
+       isControlU(key) or
+       isControlD(key) or
+       isPageUpkey(key) or
+       isPageDownKey(key) or ## Page down and Ctrl - F
+       key == ord('k') or isUpKey(key) or
+       key == ord('j') or isDownKey(key) or
+       key == ord('G') or
+       key == ord('/') or
+       key == ord('?'):
+         return InputState.Valid
+    elif key == ord('g'):
+      return InputState.Continue
+  elif command.len == 2:
+    if command[0] == ord('g'):
+      if command[1] == ord('g'):
+        return InputState.Valid
+
+proc execConfigCommand*(status: var EditorStatus, command: Runes) =
+
+  # TODO: Move or Remove
+  template getSettingType(): SettingType =
+    let buffer = currentBufStatus.buffer
+    buffer.getSettingType(currentMainWindowNode.currentLine)
+
+  # TODO: Move or Remove
+  template getNumOfValueOfArraySetting(): int =
+    let
+      currentLine = currentMainWindowNode.currentLine
+      line = currentBufStatus.buffer[currentLine]
+    getNumOfValueOfArraySetting(line)
+
+  # TODO: Fix or Remove
   # For SettingType.Array
   var arrayIndex = 0
 
-  while isConfigMode(currentBufStatus.mode) and
-        currentBufferIndex == status.bufferIndexInCurrentWindow:
-
-    let
-      currentLine = currentMainWindowNode.currentLine
-      reservedWords = status.settings.highlight.reservedWords
-      highlight = currentBufStatus.buffer.initConfigModeHighlight(
-        currentLine,
-        arrayIndex,
-        reservedWords)
-
-    if currentLine == 0:
-      currentMainWindowNode.currentLine = 1
-    elif currentLine > currentBufStatus.buffer.high - 1:
-      currentMainWindowNode.currentLine = currentBufStatus.buffer.high - 1
-
-    currentMainWindowNode.highlight = highlight
-
-    status.update
-    setCursor(false)
-
-    template getSettingType(): SettingType =
-      let buffer = currentBufStatus.buffer
-      buffer.getSettingType(currentMainWindowNode.currentLine)
-
-    template getNumOfValueOfArraySetting(): int =
-      let
-        currentLine = currentMainWindowNode.currentLine
-        line = currentBufStatus.buffer[currentLine]
-      getNumOfValueOfArraySetting(line)
-
-    var key: Rune = ru'\0'
-    while key == ru'\0':
-      status.eventLoopTask
-      key = getKey(currentMainWindowNode)
-
-    status.lastOperatingTime = now()
-
-    # Adjust arrayIndex
-    block:
-      let line = currentBufStatus.buffer[currentMainWindowNode.currentLine]
-      if line.splitWhitespace.len > 1 and
-         getSettingType() == SettingType.Array and
-         arrayIndex > getNumOfValueOfArraySetting():
-        arrayIndex = getNumOfValueOfArraySetting() - 1
-
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-    elif isControlK(key):
+  if command.len == 1:
+    let key = command[0]
+    if isControlK(key):
       status.moveNextWindow
     elif isControlJ(key):
       status.movePrevWindow
@@ -2101,16 +2105,13 @@ proc configMode*(status: var Editorstatus) =
       currentBufStatus.keyUp(currentMainWindowNode)
     elif key == ord('j') or isDownKey(key):
       currentBufStatus.keyDown(currentMainWindowNode)
-    elif key == ord('g'):
-      let secondKey = getKey(currentMainWindowNode)
-      if secondKey == 'g':
-        currentBufStatus.moveToFirstLine(currentMainWindowNode)
     elif key == ord('G'):
       currentBufStatus.moveToLastLine(currentMainWindowNode)
-
     elif key == ord('/'):
-      status.searchFordwards
+      currentBufStatus.changeModeToSearchForwardMode(status.commandLine)
     elif key == ord('?'):
-      status.searchBackwards
-    else:
-      discard
+      currentBufStatus.changeModeToSearchBackwardMode(status.commandLine)
+  elif command.len == 2:
+    if command[0] == ord('g'):
+      if command[1] == ord('g'):
+        currentBufStatus.moveToFirstLine(currentMainWindowNode)

@@ -4,7 +4,7 @@ import moepkg/[editorstatus, logviewer, bufferstatus, unicodeext]
 suite "Log viewer":
   test "Open the log viewer (Fix #1455)":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
 
     status.resize(100, 100)
     status.update
@@ -15,7 +15,7 @@ suite "Log viewer":
     status.resize(100, 100)
     status.moveNextWindow
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.changeCurrentBuffer(status.bufStatus.high)
     status.changeMode(bufferstatus.Mode.logviewer)
 
@@ -31,7 +31,7 @@ suite "Log viewer":
 
   test "Exit viewer":
     var status = initEditorStatus()
-    status.addNewBuffer("Log viewer", Mode.logViewer)
+    status.addNewBufferInCurrentWin("Log viewer", Mode.logViewer)
 
     status.resize(100, 100)
     status.update

@@ -12,26 +12,26 @@ suite "Add new buffer":
   test "Add 2 uffers":
     var status = initEditorStatus()
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
 
     status.resize(100, 100)
     status.update
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
 
     check status.bufStatus.len == 2
 
   test "Add new buffer (Dir)":
     var status = initEditorStatus()
 
-    status.addNewBuffer("./")
+    status.addNewBufferInCurrentWin("./")
 
     status.resize(100, 100)
     status.update
 
 test "Add new buffer and update editor view when disabling current line highlighting (Fix #1189)":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   status.settings.view.highlightCurrentLine = false
 
   status.resize(100, 100)
@@ -39,19 +39,19 @@ test "Add new buffer and update editor view when disabling current line highligh
 
 test "Vertical split window":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   status.resize(100, 100)
   status.verticalSplitWindow
 
 test "Horizontal split window":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   status.resize(100, 100)
   status.horizontalSplitWindow
 
 test "resize 1":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   status.resize(100, 100)
   currentBufStatus.buffer = initGapBuffer(@[ru"a"])
 
@@ -67,7 +67,7 @@ test "resize 1":
 
 test "resize 2":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   status.resize(100, 100)
   currentBufStatus.buffer = initGapBuffer(@[ru"a"])
 
@@ -90,7 +90,7 @@ test "resize 2":
 
 test "Highlight of a pair of paren 1":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
 
   block:
     currentBufStatus.buffer = initGapBuffer(@[ru"()"])
@@ -174,7 +174,7 @@ test "Highlight of a pair of paren 1":
 
 test "Highlight of a pair of paren 2":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
   initHighlight()
   status.update
@@ -190,7 +190,7 @@ test "Highlight of a pair of paren 2":
 
 test "Highlight of a pair of paren 3":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   currentBufStatus.buffer = initGapBuffer(@[ru"(", ru")"])
   initHighlight()
   status.update
@@ -206,7 +206,7 @@ test "Highlight of a pair of paren 3":
 
 test "Highlight of a pair of paren 5":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"a)"])
   initHighlight()
   status.resize(100, 100)
@@ -219,7 +219,7 @@ test "Auto delete paren 1":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"()"])
     currentBufStatus.deleteCharacter(
       currentMainWindowNode.currentLine,
@@ -232,7 +232,7 @@ test "Auto delete paren 1":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"()"])
     currentBufStatus.keyRight(currentMainWindowNode)
 
@@ -248,7 +248,7 @@ test "Auto delete paren 2":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
 
     currentBufStatus.deleteCharacter(
@@ -262,7 +262,7 @@ test "Auto delete paren 2":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
     currentBufStatus.keyRight(currentMainWindowNode)
 
@@ -277,7 +277,7 @@ test "Auto delete paren 2":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
 
     for i in 0 ..< 2:
@@ -294,7 +294,7 @@ test "Auto delete paren 2":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
     for i in 0 ..< 3:
       currentBufStatus.keyRight(currentMainWindowNode)
@@ -311,7 +311,7 @@ test "Auto delete paren 3":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
 
     currentBufStatus.buffer = initGapBuffer(@[ru"(()"])
 
@@ -326,7 +326,7 @@ test "Auto delete paren 3":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"(()"])
     currentBufStatus.keyRight(currentMainWindowNode)
 
@@ -341,7 +341,7 @@ test "Auto delete paren 3":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"(()"])
     for i in 0 ..< 2:
       currentBufStatus.keyRight(currentMainWindowNode)
@@ -357,7 +357,7 @@ test "Auto delete paren 3":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"())"])
 
     currentBufStatus.deleteCharacter(
@@ -371,7 +371,7 @@ test "Auto delete paren 3":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"())"])
     currentBufStatus.keyRight(currentMainWindowNode)
 
@@ -386,7 +386,7 @@ test "Auto delete paren 3":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"())"])
 
     for i in 0 ..< 3:
@@ -404,7 +404,7 @@ test "Auto delete paren 4":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"(", ru")"])
 
     currentBufStatus.deleteCharacter(
@@ -419,7 +419,7 @@ test "Auto delete paren 4":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"(", ru")"])
     currentBufStatus.keyDown(currentMainWindowNode)
 
@@ -436,7 +436,7 @@ test "Auto delete paren 5":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"()"])
     status.changeMode(Mode.insert)
     currentBufStatus.keyRight(currentMainWindowNode)
@@ -450,7 +450,7 @@ test "Auto delete paren 5":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"()"])
     status.changeMode(Mode.insert)
     for i in 0 ..< 2:
@@ -466,7 +466,7 @@ test "Auto delete paren 6":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"(a(a))"])
 
     status.changeMode(Mode.insert)
@@ -484,7 +484,7 @@ test "Auto delete paren 6":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"(a(a))"])
 
     status.changeMode(Mode.insert)
@@ -500,7 +500,7 @@ test "Auto delete paren 6":
 
 test "Highlight current word 1":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   currentBufStatus.buffer = initGapBuffer(@[ru"test abc test"])
   initHighlight()
   status.update
@@ -516,7 +516,7 @@ test "Highlight current word 1":
 
 test "Highlight current word 2":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   currentBufStatus.buffer = initGapBuffer(@[ru"test", ru"test"])
 
   status.resize(100, 100)
@@ -533,7 +533,7 @@ test "Highlight current word 2":
 
 test "Highlight current word 3":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   currentBufStatus.buffer = initGapBuffer(@[ru"[test]", ru"test"])
 
   status.resize(100, 100)
@@ -552,7 +552,7 @@ test "Highlight current word 3":
 test "Highlight full width space 1":
   var status = initEditorStatus()
 
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   currentBufStatus.buffer = initGapBuffer(@[ru"", ru"　"])
 
   status.settings.highlight.currentWord = false
@@ -576,7 +576,7 @@ test "Highlight full width space 1":
 
 test "Highlight full width space 2":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   currentBufStatus.buffer = initGapBuffer(@[ru"abc　"])
 
   status.settings.highlight.currentWord = false
@@ -600,7 +600,7 @@ test "Highlight full width space 2":
 
 test "Highlight full width space 3":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   currentBufStatus.buffer = initGapBuffer(@[ru"　"])
 
   status.settings.highlight.currentWord = false
@@ -623,7 +623,7 @@ test "Highlight full width space 3":
 
 test "Highlight full width space 4":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   currentBufStatus.buffer = initGapBuffer(@[ru"a　b"])
 
   status.settings.highlight.currentWord = false
@@ -648,7 +648,7 @@ test "Highlight full width space 4":
 
 test "Write tab line":
   var status = initEditorStatus()
-  status.addNewBuffer("test.txt")
+  status.addNewBufferInCurrentWin("test.txt")
 
   status.resize(100, 100)
 
@@ -656,14 +656,14 @@ test "Write tab line":
 
 test "Close window":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   status.resize(100, 100)
   status.verticalSplitWindow
   status.closeWindow(currentMainWindowNode, 100, 100)
 
 test "Close window 2":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
 
   status.resize(100, 100)
   status.update
@@ -685,7 +685,7 @@ test "Close window 2":
 
 test "Close window 3":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
 
   status.resize(100, 100)
   status.update
@@ -712,7 +712,7 @@ test "Close window 3":
 
 test "Close window 4":
   var status = initEditorStatus()
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
 
   status.resize(100, 100)
   status.update
@@ -741,7 +741,7 @@ test "Close window 4":
 
 test "Close window 5":
   var status = initEditorStatus()
-  status.addNewBuffer("test.nim")
+  status.addNewBufferInCurrentWin("test.nim")
 
   status.resize(100, 100)
   status.update
@@ -751,7 +751,7 @@ test "Close window 5":
   status.update
 
   status.moveCurrentMainWindow(1)
-  status.addNewBuffer("test2.nim")
+  status.addNewBufferInCurrentWin("test2.nim")
   status.changeCurrentBuffer(1)
   status.resize(100, 100)
   status.update
@@ -766,7 +766,7 @@ test "Close window 5":
 test "Change current buffer":
   var status = initEditorStatus()
 
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   currentBufStatus.path = ru"test"
   currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc"])
 
@@ -779,7 +779,7 @@ test "Change current buffer":
   currentMainWindowNode.currentLine = currentLine
   currentMainWindowNode.currentColumn = currentColumn
 
-  status.addNewBuffer
+  status.addNewBufferInCurrentWin
   currentBufStatus.path = ru"test2"
   currentBufStatus.buffer =  initGapBuffer(@[ru""])
 
@@ -791,7 +791,7 @@ test "Change current buffer":
 suite "editorstatus: Highlight trailing spaces":
   test "Highlight trailing spaces":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
 
     status.settings.highlight.currentWord = false
 
@@ -819,7 +819,7 @@ suite "editorstatus: Highlight trailing spaces":
 
   test "Highlight trailing spaces 2":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc  "])
 
     status.settings.highlight.currentWord = false
@@ -848,7 +848,7 @@ suite "editorstatus: Highlight trailing spaces":
 
   test "Highlight trailing spaces 3":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru" "])
 
     status.settings.highlight.currentWord = false
@@ -870,7 +870,7 @@ suite "editorstatus: Highlight trailing spaces":
 suite "editorstatus: Highlight paren":
   test "Highlight ')'":
     var status = initEditorStatus()
-    status.addNewBuffer("test.nim")
+    status.addNewBufferInCurrentWin("test.nim")
     currentBufStatus.buffer = initGapBuffer(@[ru"proc test(a: string) ="])
 
     status.resize(100, 100)
@@ -889,7 +889,7 @@ suite "editorstatus: Highlight paren":
 
   test "Highlight '('":
     var status = initEditorStatus()
-    status.addNewBuffer("test.nim")
+    status.addNewBufferInCurrentWin("test.nim")
     currentBufStatus.buffer = initGapBuffer(@[ru"proc test(a: string) ="])
 
     status.resize(100, 100)
@@ -910,7 +910,7 @@ suite "editorstatus: Updates/Restore the last cursor postion":
   test "Update the last cursor position (3 lines)":
     var status = initEditorStatus()
 
-    status.addNewBuffer("test.nim")
+    status.addNewBufferInCurrentWin("test.nim")
     currentBufStatus.buffer = initGapBuffer(@[ru "a", ru "bcd", ru "e"])
     currentMainWindowNode.currentLine = 1
     currentMainWindowNode.currentColumn = 1
@@ -924,7 +924,7 @@ suite "editorstatus: Updates/Restore the last cursor postion":
   test "Update and restore the last cursor position (3 lines and edit the buffer after save)":
     var status = initEditorStatus()
 
-    status.addNewBuffer("test.nim")
+    status.addNewBufferInCurrentWin("test.nim")
     currentBufStatus.buffer = initGapBuffer(@[ru "a", ru "bcd", ru "e"])
     currentMainWindowNode.currentLine = 1
     currentMainWindowNode.currentColumn = 1
@@ -947,9 +947,9 @@ suite "editorstatus: Updates/Restore the last cursor postion":
   test "Update and restore the last cursor position (3 lines and last line is empty)":
     var status = initEditorStatus()
 
-    status.addNewBuffer("test.nim")
+    status.addNewBufferInCurrentWin("test.nim")
 
-    status.addNewBuffer("test.nim")
+    status.addNewBufferInCurrentWin("test.nim")
     currentBufStatus.buffer = initGapBuffer(@[ru "a", ru "bcd", ru ""])
 
     status.resize(100, 100)
@@ -971,7 +971,7 @@ suite "editorstatus: Updates/Restore the last cursor postion":
 suite "Update search highlight":
   test "single window":
     var status = initEditorStatus()
-    status.addNewBuffer("test.nim")
+    status.addNewBufferInCurrentWin("test.nim")
     currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
 
     status.resize(100, 100)
@@ -995,7 +995,7 @@ suite "Update search highlight":
 
   test "two windows":
     var status = initEditorStatus()
-    status.addNewBuffer("test.nim")
+    status.addNewBufferInCurrentWin("test.nim")
     currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
 
     status.resize(100, 100)
@@ -1031,7 +1031,7 @@ suite "Update search highlight":
 suite "Fix #1361":
   test "Insert a character after split window":
     var status = initEditorStatus()
-    status.addNewBuffer("test.nim")
+    status.addNewBufferInCurrentWin("test.nim")
     currentBufStatus.buffer = initGapBuffer(@[ru ""])
 
     status.resize(100, 100)

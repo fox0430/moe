@@ -1,10 +1,11 @@
 import std/[unittest, critbits]
+import moepkg/editorstatus
 include moepkg/suggestionwindow
 
 suite "suggestionwindow: buildSuggestionWindow":
   test "Case 1":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(
       @["test".ru,
         "test2".ru,
@@ -28,7 +29,7 @@ suite "suggestionwindow: buildSuggestionWindow":
     check suggestionWin.get.wordDictionary.len == 4
 
     check suggestionWin.get.oldLine == "t".ru
-    check suggestionWin.get.inputWord== "t".ru
+    check suggestionWin.get.inputWord == "t".ru
 
     check suggestionWin.get.firstColumn == 0
     check suggestionWin.get.lastColumn == 0
@@ -41,7 +42,7 @@ suite "suggestionwindow: buildSuggestionWindow":
 
   test "Case 2":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(
       @["/".ru])
 
@@ -76,7 +77,7 @@ suite "suggestionwindow: buildSuggestionWindow":
 
   test "Case 3":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@["a".ru])
 
     currentMainWindowNode.currentColumn = 1

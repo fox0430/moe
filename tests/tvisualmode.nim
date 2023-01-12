@@ -1,6 +1,6 @@
 import std/[unittest]
-import moepkg/[highlight]
-include moepkg/[visualmode, platform, independentutils]
+import moepkg/[highlight, independentutils]
+include moepkg/[visualmode, platform]
 
 proc isXselAvailable(): bool {.inline.} =
   execCmdExNoOutput("xset q") == 0 and execCmdExNoOutput("xsel --version") == 0
@@ -10,7 +10,7 @@ suite "Visual mode: Delete buffer":
     var status = initEditorStatus()
     status.settings.clipboard.enable = false
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abcd"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -24,7 +24,7 @@ suite "Visual mode: Delete buffer":
     for i in 0 ..< 2:
       currentBufStatus.keyRight(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectArea(
+      currentBufStatus.selectArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
@@ -38,7 +38,7 @@ suite "Visual mode: Delete buffer":
     var status = initEditorStatus()
     status.settings.clipboard.enable = false
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -52,7 +52,7 @@ suite "Visual mode: Delete buffer":
     for i in 0 ..< 2:
       currentBufStatus.keyDown(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectArea(
+      currentBufStatus.selectArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
@@ -67,7 +67,7 @@ suite "Visual mode: Delete buffer":
     var status = initEditorStatus()
     status.settings.clipboard.enable = false
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"ab", ru"cdef"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -80,7 +80,7 @@ suite "Visual mode: Delete buffer":
 
     currentBufStatus.keyDown(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -88,7 +88,7 @@ suite "Visual mode: Delete buffer":
 
     currentBufStatus.keyRight(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -103,7 +103,7 @@ suite "Visual mode: Delete buffer":
     var status = initEditorStatus()
     status.settings.clipboard.enable = false
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"defg"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -123,7 +123,7 @@ suite "Visual mode: Delete buffer":
 
     currentBufStatus.keyDown(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -131,7 +131,7 @@ suite "Visual mode: Delete buffer":
 
     currentBufStatus.keyRight(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -147,7 +147,7 @@ suite "Visual mode: Delete buffer":
     var status = initEditorStatus()
     status.settings.clipboard.enable = false
 
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -168,7 +168,7 @@ suite "Visual mode: Delete buffer":
     for i in 0 ..< 2:
       currentBufStatus.keyDown(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectArea(
+      currentBufStatus.selectArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
@@ -182,7 +182,7 @@ suite "Visual mode: Delete buffer":
 
   test "Fix #890":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"", ru"a"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -211,7 +211,7 @@ suite "Visual mode: Delete buffer":
 
   test "Visual mode: Check cursor position after delete buffer":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"a b c"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -240,7 +240,7 @@ suite "Visual mode: Delete buffer":
 suite "Visual mode: Yank buffer (Disable clipboard)":
   test "Yank lines":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -260,7 +260,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     status.update
 
     currentBufStatus.keyDown(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -278,7 +278,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
   test "Yank string (Fix #1124)":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -292,7 +292,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -310,7 +310,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
   test "Yank lines when the last line is empty (Fix #1183)":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru""])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -323,7 +323,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     status.changeMode(Mode.visual)
 
     currentBufStatus.keyDown(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -341,7 +341,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
   test "Yank the empty line":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -353,7 +353,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     status.changeMode(Mode.visual)
 
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -372,7 +372,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 suite "Visual block mode: Yank buffer (Disable clipboard)":
   test "Yank lines 1":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -389,7 +389,7 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.keyDown(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -407,7 +407,7 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
 
   test "Yank lines 2":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"d"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -425,14 +425,14 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
 
     for i in 0 ..< 2:
       currentBufStatus.keyRight(currentMainWindowNode)
-      currentBufStatus.selectArea.updateSelectArea(
+      currentBufStatus.selectArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
       status.update
 
     currentBufStatus.keyDown(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -451,7 +451,7 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
 suite "Visual block mode: Delete buffer (Disable clipboard)":
   test "Delete buffer":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -468,7 +468,7 @@ suite "Visual block mode: Delete buffer (Disable clipboard)":
 
     currentBufStatus.keyDown(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -490,7 +490,7 @@ if isXselAvailable():
     test "Yank string":
       var status = initEditorStatus()
 
-      status.addNewBuffer
+      status.addNewBufferInCurrentWin
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
       currentMainWindowNode.highlight = initHighlight(
@@ -507,7 +507,7 @@ if isXselAvailable():
         currentMainWindowNode.currentColumn)
 
       currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-      currentBufStatus.selectArea.updateSelectArea(
+      currentBufStatus.selectArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
@@ -539,7 +539,7 @@ if isXselAvailable():
 
     test "Yank lines":
       var status = initEditorStatus()
-      status.addNewBuffer
+      status.addNewBufferInCurrentWin
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
       currentMainWindowNode.highlight = initHighlight(
@@ -556,13 +556,13 @@ if isXselAvailable():
         currentMainWindowNode.currentColumn)
 
       currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-      currentBufStatus.selectArea.updateSelectArea(
+      currentBufStatus.selectArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
       status.update
 
       currentBufStatus.keyDown(currentMainWindowNode)
-      currentBufStatus.selectArea.updateSelectArea(
+      currentBufStatus.selectArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
       status.update
@@ -595,7 +595,7 @@ if isXselAvailable():
   suite "Visual block mode: Yank buffer (Enable clipboard) 1":
     test "Yank lines 1":
       var status = initEditorStatus()
-      status.addNewBuffer
+      status.addNewBufferInCurrentWin
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
       currentMainWindowNode.highlight = initHighlight(
@@ -613,7 +613,7 @@ if isXselAvailable():
 
       currentBufStatus.keyDown(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectArea(
+      currentBufStatus.selectArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
@@ -636,7 +636,7 @@ if isXselAvailable():
 
     test "Yank lines 2":
       var status = initEditorStatus()
-      status.addNewBuffer
+      status.addNewBufferInCurrentWin
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"d"])
 
       currentMainWindowNode.highlight = initHighlight(
@@ -653,13 +653,13 @@ if isXselAvailable():
         currentMainWindowNode.currentColumn)
 
       currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-      currentBufStatus.selectArea.updateSelectArea(
+      currentBufStatus.selectArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
       status.update
 
       currentBufStatus.keyDown(currentMainWindowNode)
-      currentBufStatus.selectArea.updateSelectArea(
+      currentBufStatus.selectArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
       status.update
@@ -683,7 +683,7 @@ if isXselAvailable():
   suite "Visual block mode: Delete buffer":
     test "Delete buffer (Enable clipboard) 1":
       var status = initEditorStatus()
-      status.addNewBuffer
+      status.addNewBufferInCurrentWin
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
       currentMainWindowNode.highlight = initHighlight(
@@ -701,7 +701,7 @@ if isXselAvailable():
 
       currentBufStatus.keyDown(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectArea(
+      currentBufStatus.selectArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
@@ -721,7 +721,7 @@ if isXselAvailable():
 
     test "Delete buffer (Enable clipboard) 2":
       var status = initEditorStatus()
-      status.addNewBuffer
+      status.addNewBufferInCurrentWin
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"edf"])
 
       currentMainWindowNode.highlight = initHighlight(
@@ -740,7 +740,7 @@ if isXselAvailable():
       for i in 0 ..< 2:
         currentBufStatus.keyDown(currentMainWindowNode)
 
-        currentBufStatus.selectArea.updateSelectArea(
+        currentBufStatus.selectArea.updateSelectedArea(
           currentMainWindowNode.currentLine,
           currentMainWindowNode.currentColumn)
 
@@ -756,7 +756,7 @@ if isXselAvailable():
 
     test "Fix #885":
       var status = initEditorStatus()
-      status.addNewBuffer
+      status.addNewBufferInCurrentWin
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"de", ru"fgh"])
 
       currentMainWindowNode.highlight = initHighlight(
@@ -776,7 +776,7 @@ if isXselAvailable():
       for i in 0 ..< 2:
         currentBufStatus.keyDown(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectArea(
+      currentBufStatus.selectArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
@@ -798,7 +798,7 @@ if isXselAvailable():
 suite "Visual mode: Join lines":
   test "Join 3 lines":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -817,7 +817,7 @@ suite "Visual mode: Join lines":
     for i in 0 ..< 2:
       currentBufStatus.keyDown(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectArea(
+      currentBufStatus.selectArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
@@ -834,7 +834,7 @@ suite "Visual mode: Join lines":
 suite "Visual block mode: Join lines":
   test "Join 3 lines":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -853,7 +853,7 @@ suite "Visual block mode: Join lines":
     for i in 0 ..< 2:
       currentBufStatus.keyDown(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectArea(
+      currentBufStatus.selectArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
@@ -870,7 +870,7 @@ suite "Visual block mode: Join lines":
 test "Visual mode: Add indent":
   test "Add 1 indent":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -889,7 +889,7 @@ test "Visual mode: Add indent":
     for i in 0 ..< 2:
       currentBufStatus.keyDown(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectArea(
+      currentBufStatus.selectArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
@@ -905,7 +905,7 @@ test "Visual mode: Add indent":
 suite "Visual block mode: Add indent":
   test "Add 1 indent":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -923,7 +923,7 @@ suite "Visual block mode: Add indent":
 
     for i in 0 ..< 2:
       currentBufStatus.keyDown(currentMainWindowNode)
-      currentBufStatus.selectArea.updateSelectArea(
+      currentBufStatus.selectArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
       status.update
@@ -938,7 +938,7 @@ suite "Visual block mode: Add indent":
 suite "Visual mode: Delete indent":
   test "Delete 1 indent":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"  abc", ru"  def", ru"  ghi"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -957,7 +957,7 @@ suite "Visual mode: Delete indent":
     for i in 0 ..< 2:
       currentBufStatus.keyDown(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectArea(
+      currentBufStatus.selectArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
@@ -973,7 +973,7 @@ suite "Visual mode: Delete indent":
 suite "Visual block mode: Delete indent":
   test "Delete 1 indent":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"  abc", ru"  def", ru"  ghi"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -992,7 +992,7 @@ suite "Visual block mode: Delete indent":
     for i in 0 ..< 2:
       currentBufStatus.keyDown(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectArea(
+      currentBufStatus.selectArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
@@ -1008,7 +1008,7 @@ suite "Visual block mode: Delete indent":
 suite "Visual mode: Converts string into lower-case string":
   test "Converts string into lower-case string 1":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1025,7 +1025,7 @@ suite "Visual mode: Converts string into lower-case string":
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
     status.update
@@ -1037,7 +1037,7 @@ suite "Visual mode: Converts string into lower-case string":
 
   test "Converts string into lower-case string 2":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"AあbC"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1054,7 +1054,7 @@ suite "Visual mode: Converts string into lower-case string":
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
     status.update
@@ -1066,7 +1066,7 @@ suite "Visual mode: Converts string into lower-case string":
 
   test "Converts string into lower-case string 3":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC", ru"DEF"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1084,7 +1084,7 @@ suite "Visual mode: Converts string into lower-case string":
 
     currentBufStatus.keyDown(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -1097,7 +1097,7 @@ suite "Visual mode: Converts string into lower-case string":
 
   test "Converts string into lower-case string 4 (Fix #687)":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC", ru"", ru"DEF", ru""])
     currentMainWindowNode.highlight = initHighlight($currentBufStatus.buffer,
       status.settings.highlight.reservedWords,
@@ -1113,7 +1113,7 @@ suite "Visual mode: Converts string into lower-case string":
     for i in 0 ..< 3:
       currentBufStatus.keyDown(currentMainWindowNode)
       status.update
-      currentBufStatus.selectArea.updateSelectArea(
+      currentBufStatus.selectArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
@@ -1126,7 +1126,7 @@ suite "Visual mode: Converts string into lower-case string":
 test "Visual block mode: Converts string into lower-case string":
   test "Converts string into lower-case string":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1142,7 +1142,7 @@ test "Visual block mode: Converts string into lower-case string":
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
     status.update
@@ -1154,7 +1154,7 @@ test "Visual block mode: Converts string into lower-case string":
 
   test "Converts string into lower-case string 2":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC", ru"DEF"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1172,7 +1172,7 @@ test "Visual block mode: Converts string into lower-case string":
 
     currentBufStatus.keyRight(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -1180,7 +1180,7 @@ test "Visual block mode: Converts string into lower-case string":
 
     currentBufStatus.keyDown(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -1194,7 +1194,7 @@ test "Visual block mode: Converts string into lower-case string":
 suite "Visual mode: Converts string into upper-case string":
   test "Converts string into upper-case string 1":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1211,7 +1211,7 @@ suite "Visual mode: Converts string into upper-case string":
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -1224,7 +1224,7 @@ suite "Visual mode: Converts string into upper-case string":
 
   test "Converts string into upper-case string 2":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"aあBc"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1241,7 +1241,7 @@ suite "Visual mode: Converts string into upper-case string":
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -1254,7 +1254,7 @@ suite "Visual mode: Converts string into upper-case string":
 
   test "Converts string into upper-case string 3":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1271,7 +1271,7 @@ suite "Visual mode: Converts string into upper-case string":
 
     currentBufStatus.keyDown(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -1284,7 +1284,7 @@ suite "Visual mode: Converts string into upper-case string":
 
   test "Visual mode: Converts string into upper-case string 4 (Fix #687)":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"def", ru""])
     currentMainWindowNode.highlight = initHighlight(
       $currentBufStatus.buffer,
@@ -1301,7 +1301,7 @@ suite "Visual mode: Converts string into upper-case string":
     for i in 0 ..< 3:
       currentBufStatus.keyDown(currentMainWindowNode)
       status.update
-      currentBufStatus.selectArea.updateSelectArea(
+      currentBufStatus.selectArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
@@ -1315,7 +1315,7 @@ suite "Visual mode: Converts string into upper-case string":
 suite "Visual block mode: Converts string into upper-case string":
   test "Converts string into upper-case string 1":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1332,7 +1332,7 @@ suite "Visual block mode: Converts string into upper-case string":
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
     status.update
@@ -1344,7 +1344,7 @@ suite "Visual block mode: Converts string into upper-case string":
 
   test "Converts string into upper-case string 2":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1360,13 +1360,13 @@ suite "Visual block mode: Converts string into upper-case string":
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.keyRight(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
     status.update
 
     currentBufStatus.keyDown(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
     status.update
@@ -1379,7 +1379,7 @@ suite "Visual block mode: Converts string into upper-case string":
 suite "Visual block mode: Insert buffer":
   test "insert tab (Fix #1186)":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1395,7 +1395,7 @@ suite "Visual block mode: Insert buffer":
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.keyDown(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectArea(
+    currentBufStatus.selectArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
     status.update
@@ -1432,7 +1432,7 @@ suite "Visual mode: Run command when Readonly mode":
   test "Delete buffer (\"x\" command)":
     var status = initEditorStatus()
     status.isReadonly = true
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1458,7 +1458,7 @@ suite "Visual mode: Run command when Readonly mode":
   test "Add the indent (\">\" command)":
     var status = initEditorStatus()
     status.isReadonly = true
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1484,7 +1484,7 @@ suite "Visual mode: Run command when Readonly mode":
   test "Add the indent (\"<\" command)":
     var status = initEditorStatus()
     status.isReadonly = true
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1510,7 +1510,7 @@ suite "Visual mode: Run command when Readonly mode":
   test "Join lines (\"J\" command)":
     var status = initEditorStatus()
     status.isReadonly = true
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru "def"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1541,7 +1541,7 @@ suite "Visual mode: Run command when Readonly mode":
   test "To lower case (\"u\" command)":
     var status = initEditorStatus()
     status.isReadonly = true
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1567,7 +1567,7 @@ suite "Visual mode: Run command when Readonly mode":
   test "To upper case (\"U\" command)":
     var status = initEditorStatus()
     status.isReadonly = true
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1593,7 +1593,7 @@ suite "Visual mode: Run command when Readonly mode":
   test "Replace characters (\"r\" command)":
     var status = initEditorStatus()
     status.isReadonly = true
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1616,10 +1616,10 @@ suite "Visual mode: Run command when Readonly mode":
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
 
-  test "Enter insert mode (\"I\" command)":
+  test "Enter insert mode when readonly mode (\"I\" command)":
     var status = initEditorStatus()
     status.isReadonly = true
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1639,13 +1639,13 @@ suite "Visual mode: Run command when Readonly mode":
 
     status.visualCommand(currentBufStatus.selectArea, ru'I')
 
-    check currentBufStatus.mode == Mode.visual
+    check currentBufStatus.mode == Mode.normal
 
 suite "Visual block mode: Run command when Readonly mode":
   test "Delete buffer (\"x\" command)":
     var status = initEditorStatus()
     status.isReadonly = true
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1668,10 +1668,10 @@ suite "Visual block mode: Run command when Readonly mode":
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
 
-  test "Enter insert mode (\"I\" command)":
+  test "Enter insert mode when readonly mode (\"I\" command)":
     var status = initEditorStatus()
     status.isReadonly = true
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1691,12 +1691,12 @@ suite "Visual block mode: Run command when Readonly mode":
 
     status.visualCommand(currentBufStatus.selectArea, ru'I')
 
-    check currentBufStatus.mode == Mode.visualblock
+    check currentBufStatus.mode == Mode.normal
 
   test "Add the indent (\">\" command)":
     var status = initEditorStatus()
     status.isReadonly = true
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1722,7 +1722,7 @@ suite "Visual block mode: Run command when Readonly mode":
   test "Add the indent (\"<\" command)":
     var status = initEditorStatus()
     status.isReadonly = true
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1748,7 +1748,7 @@ suite "Visual block mode: Run command when Readonly mode":
   test "Join lines (\"J\" command)":
     var status = initEditorStatus()
     status.isReadonly = true
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru "def"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1779,7 +1779,7 @@ suite "Visual block mode: Run command when Readonly mode":
   test "To lower case (\"u\" command)":
     var status = initEditorStatus()
     status.isReadonly = true
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1805,7 +1805,7 @@ suite "Visual block mode: Run command when Readonly mode":
   test "To upper case (\"U\" command)":
     var status = initEditorStatus()
     status.isReadonly = true
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -1831,7 +1831,7 @@ suite "Visual block mode: Run command when Readonly mode":
   test "Replace characters (\"r\" command)":
     var status = initEditorStatus()
     status.isReadonly = true
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(

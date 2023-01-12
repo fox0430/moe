@@ -1,5 +1,5 @@
-import std/[macros, strformat]
-import undoredostack
+import std/[macros, strformat, strutils]
+import undoredostack, unicodeext
 export undoredostack
 
 type GapBuffer*[T] = object
@@ -210,3 +210,17 @@ proc calcIndexInEntireBuffer*[T: array | seq | string](
     result += gapBuffer[i].len
     if containNewline: inc(result)
   result += column
+
+proc toGapBuffer*(r: seq[Rune]): GapBuffer[Runes] {.inline.} =
+  r.split(ru'\n').initGapBuffer
+
+proc toGapBuffer*(r: seq[Runes]): GapBuffer[Runes] {.inline.} =
+  r.initGapBuffer
+
+proc toGapBuffer*(s: string): GapBuffer[Runes] {.inline.} =
+  s.splitLines.toRunes.toGapBuffer
+
+proc toRunes*(buffer: GapBuffer[Runes]): Runes =
+  for i in 0 ..< buffer.len:
+    result.add(buffer[i])
+    if i+1 < buffer.len: result.add(ru'\n')
