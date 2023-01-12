@@ -1,0 +1,6 @@
+.. _#1574: https://github.com/fox0430/moe/pull/1574
+
+Changed
+.....
+
+- `#1574`_ doc: Update developer doc
