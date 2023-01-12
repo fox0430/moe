@@ -3,7 +3,7 @@ import syntax/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
        unicodeext, independentutils, searchutils, highlight, window, movement,
        color, build, bufferstatus, editor, settings, quickrun, messages,
-       commandline, debugmode, platform, commandlineutils, recentfilemode,
+       commandline, debugmodeutils, platform, commandlineutils, recentfilemode,
        buffermanager
 
 type
@@ -271,26 +271,28 @@ proc isBuildCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 1 and cmpIgnoreCase($command[0], "build") == 0
 
 proc startDebugMode(status: var Editorstatus) =
-  let bufferIndex = status.bufferIndexInCurrentWindow
-  status.changeMode(status.bufStatus[bufferIndex].prevMode)
+  status.changeMode(currentBufStatus.prevMode)
 
   # Split window and move to new window
   status.verticalSplitWindow
   status.resize(terminalHeight(), terminalWidth())
-  status.moveNextWindow
 
-  # Add debug mode buffer
-  status.addNewBufferInCurrentWin(bufferstatus.Mode.debug)
-  status.changeCurrentBuffer(status.bufStatus.high)
+  # Add the buffer for the debug mode
+  let bufferIndex = status.addNewBuffer(bufferstatus.Mode.debug)
+  if bufferIndex.isSome:
+    # Initialize the debug mode buffer
+    status.bufStatus[bufferIndex.get].buffer =
+      status.bufStatus.initDebugModeBuffer(
+        mainWindowNode,
+        currentMainWindowNode.windowIndex,
+        status.settings.debugMode).toGapBuffer
 
-  # Initialize debug mode buffer
-  status.bufStatus.initDebugModeBuffer(
-    mainWindowNode,
-    currentMainWindowNode.windowIndex,
-    status.settings.debugMode)
+    # Link the window and the debug mode buffer.
+    var node = status.mainWindow.mainWindowNode.searchByWindowIndex(
+    currentMainWindowNode.windowIndex + 1)
+    node.bufferIndex = bufferIndex.get
 
-  status.movePrevWindow
-  status.changeCurrentBuffer(bufferIndex)
+    status.resize(terminalHeight(), terminalWidth())
 
 proc startConfigMode(status: var Editorstatus) =
   let bufferIndex = status.bufferIndexInCurrentWindow

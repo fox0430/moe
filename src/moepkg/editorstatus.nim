@@ -4,7 +4,7 @@ import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        window, color, settings, statusline, bufferstatus, cursor, tabline,
        backup, messages, commandline, register, platform, searchutils,
-       movement, autocomplete, suggestionwindow, filermodeutils
+       movement, autocomplete, suggestionwindow, filermodeutils, debugmodeutils
 
 # Save cursor position when a buffer for a window(file) gets closed.
 type LastPosition* = object
@@ -262,7 +262,7 @@ proc addFilerStatus(status: var EditorStatus, bufStatusIndex: int) {.inline.} =
     some(status.filerStatuses.high)
 
 ## Return bufStatus.high after adding a new buffer.
-proc addNewBuffer(
+proc addNewBuffer*(
   status: var EditorStatus,
   path: string,
   mode: Mode): Option[int] =
@@ -280,6 +280,12 @@ proc addNewBuffer(
       return
 
     return some(status.bufStatus.high)
+
+proc addNewBuffer*(
+  status: var EditorStatus,
+  mode: Mode): Option[int] {.inline.} =
+    const path = ""
+    return status.addNewBuffer(path, mode)
 
 ## Add a new buffer and change the current buffer to it and init an editor view.
 proc addNewBufferInCurrentWin*(
@@ -513,9 +519,6 @@ proc updateLogViewerHighlight(buffer: string): Highlight =
       emptyReservedWord,
       SourceLanguage.langNone)
 
-# TODO: Remove
-proc updateDebugModeBuffer(status: var EditorStatus)
-
 # Update all views, highlighting, cursor, etc.
 proc update*(status: var EditorStatus) =
   setCursor(false)
@@ -546,7 +549,10 @@ proc update*(status: var EditorStatus) =
 
     if buf.isDebugMode:
       # Update the debug mode buffer.
-      status.updateDebugModeBuffer
+      status.bufStatus[i].buffer = status.bufStatus.initDebugModeBuffer(
+        status.mainWindow.mainWindowNode,
+        currentMainWindowNode.windowIndex,
+        status.settings.debugMode).toGapBuffer
 
   # Init (Update) syntax highlightings.
   mainWindowNode.initSyntaxHighlight(
@@ -1373,14 +1379,3 @@ proc getKeyFromCommandLine*(status: var EditorStatus): Rune =
     if pressCtrlC:
       pressCtrlC = false
       result = Rune(3)
-
-
-# TODO: Resolve the recursive module dependency and move to top.
-import debugmode
-
-# TODO: Remove
-proc updateDebugModeBuffer(status: var EditorStatus) =
-  status.bufStatus.updateDebugModeBuffer(
-    status.mainWindow.mainWindowNode,
-    currentMainWindowNode.windowIndex,
-    status.settings.debugMode)
