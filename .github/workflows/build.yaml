@@ -2,18 +2,18 @@ name: Build
 
 on:
   push:
-    paths-ignore:
-      - 'LICENSE'
-      - '*.md'
-      - 'documents/**'
+    paths:
+      - '.github/workflows/build.yaml'
+      - 'moe.nimble'
+      - 'src/**'
     branches:
       - develop
       - master
   pull_request:
-    paths-ignore:
-      - 'LICENSE'
-      - '*.md'
-      - 'documents/**'
+    paths:
+      - '.github/workflows/build.yaml'
+      - 'moe.nimble'
+      - 'src/**'
 
 permissions:
   contents: read

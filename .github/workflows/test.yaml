@@ -2,18 +2,24 @@ name: Tests
 
 on:
   push:
-    paths-ignore:
-      - 'LICENSE'
-      - '*.md'
-      - 'documents/**'
+    paths:
+      - '.github/workflows/test.yaml'
+      - 'example/**'
+      - 'moe.nimble'
+      - 'src/**'
+      - 'tests/**'
+      - 'shpec.sh'
     branches:
       - develop
       - master
   pull_request:
-    paths-ignore:
-      - 'LICENSE'
-      - '*.md'
-      - 'documents/**'
+    paths:
+      - '.github/workflows/test.yaml'
+      - 'example/**'
+      - 'moe.nimble'
+      - 'src/**'
+      - 'tests/**'
+      - 'shpec.sh'
 
 permissions:
   contents: read

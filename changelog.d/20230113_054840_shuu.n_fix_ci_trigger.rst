@@ -1,0 +1,6 @@
+.. _#1575: https://github.com/fox0430/moe/pull/#1575
+
+Changed
+.....
+
+- `#1575`_ ci: Fix CI triggers
