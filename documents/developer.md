@@ -164,7 +164,10 @@ Update syntax highlighting.
 Filer mode loop and commands.
 
 ### ```src/moepkg/debugmode.nim```
-Debug mode loop and commands. (```:debug```)
+Main module for the debug mode.
+
+### ```src/moepkg/debugmodeutils.nim```
+Tools for the debug mode.
 
 ### ```src/moepkg/cursor.nim```
 Update cursor position.
