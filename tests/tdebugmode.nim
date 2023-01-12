@@ -1,28 +1,29 @@
-import std/[unittest, os, strformat, times]
+import std/[unittest, os, strformat, times, options]
 import moepkg/[editorstatus, bufferstatus, gapbuffer, unicodeext]
-import moepkg/debugmode {.all.}
+import moepkg/debugmodeutils {.all.}
 
 suite "Init debug mode buffer":
   test "Init buffer":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
-    status.addNewBufferInCurrentWin(Mode.debug)
+    let bufferIndex = status.addNewBuffer(Mode.debug)
 
-    status.bufStatus.initDebugModeBuffer(
-      mainWindow.mainWindowNode,
-      currentMainWindowNode.windowIndex,
-      status.settings.debugMode)
+    status.bufStatus[bufferIndex.get].buffer =
+      status.bufStatus.initDebugModeBuffer(
+        mainWindow.mainWindowNode,
+        currentMainWindowNode.windowIndex,
+        status.settings.debugMode).toGapBuffer
 
     status.resize(100, 100)
     status.update
 
     let correctBuf = initGapBuffer[seq[Rune]](@[
-      ru "",
+      ru"",
       ru"-- WindowNode --",
       ru"  currentWindow           : true",
       ru"  index                   : 0",
       ru"  windowIndex             : 0",
-      ru"  bufferIndex             : 1",
+      ru"  bufferIndex             : 0",
       ru"  parentIndex             : 0",
       ru"  child length            : 0",
       ru"  splitType               : vertical",
@@ -55,7 +56,7 @@ suite "Init debug mode buffer":
       ru"  buffer length           : 1",
       ru"",
       ru"buffer Index: 1",
-      ru"  path                    : Debug mode",
+      ru"  path                    : ",
       ru fmt"  openDir                 : {getCurrentDir()}",
       ru"  currentMode             : debug",
       ru"  prevMode                : normal",
@@ -64,7 +65,7 @@ suite "Init debug mode buffer":
       ru"  countChange             : 0",
       ru"  cmdLoop                 : 0",
       ru fmt"  lastSaveTime            : {status.bufStatus[1].lastSaveTime}",
-      ru"  buffer length           : 47",
+      ru"  buffer length           : 49",
       ru""])
 
     for i in 0 ..< status.bufStatus[1].buffer.len:
