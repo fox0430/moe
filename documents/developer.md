@@ -28,8 +28,48 @@ proc initEditor(): EditorStatus =
 
 Please use :! or quit moe to check the output.
 
+### Using logger
+You can use the logger.
+Log files are written to the cache dir (`~/.cache/moe/logs`).
+You have to import `srd/logger`.
+
+Example
+
+```Nim
+import std/[os, times, logging]
+import moepkg/[ui, bufferstatus, editorstatus, cmdlineoption, mainloop]
+
+##### Important #####
+import std/logging
+
+.
+.
+.
+
+proc initEditor(): EditorStatus =
+  let parsedList = parseCommandLineOption(commandLineParams())
+
+  defer: exitUi()
+
+  startUi()
+
+  ##### Important! #####
+  debug "debug"
+
+  result = initEditorStatus()
+  result.loadConfigurationFile
+  result.timeConfFileLastReloaded = now()
+  result.changeTheme
+```
+
+```
+cat ~/.cache/moe/logs/2023-01-13T05:29:04+09:00.log
+DEBUG debug
+```
+
 ### Using log viewer
 You can use the log in moe. 
+This is not written to a file.
 
 Example
 
@@ -106,19 +146,19 @@ Management of the main window node.
 Write Tab line.
 
 ### ```src/moepkg/normalmode.nim```
-Normal mode loop and Normal mode commands.
+Main module for the Normal mode.
 
 ### ```src/moepkg/insert.nim```
-Insert mode loop and Insert mode commands.
+Main module for the insert mode.
 
 ### ```src/moepkg/exmode.nim```
-Ex (command line) mode loop and Ex mode commands.
+Main module for the Ex (command line) mode. 
 
 ### ```src/moepkg/help.nim```
 Help in moe (```:help``` command).
 
 ### ```src/moepkg/visualmode.nim```
-Visual/Visual block mode loop and Visual/Visual block mode commands.
+Main module for Visual and Visual block modes.
 
 ### ```src/moepkg/undoredostack.nim```
 undo/redo utils
@@ -136,32 +176,39 @@ Write Status line
 Search utils for normal mode.
 
 ### ```src/moepkg/quickrun.nim```
-Implementation of QuickRun.
+Main module for the QuickRun mode.
 
 ### ```src/moepkg/replacemode.nim```
-Replace mode loop and Replace mode commands.
+Main module for the replace mode.
 
 ### ```src/moepkg/logviwer.nim```
-moe's log viewer. (```:log```)
+Main module for the log mode (Log viewer).
+The log mode can be started with `:log` command.
 
 ### ```src/moepkg/backupmanager.nim```
-Backupmanager mode loop and History mode commands. (```:backup```)
-Backupmanger is the manager of the auto-backup files.
+Main module for the backup mode (Backup manger).
+Backup manger is the manager of the auto-backup files.
+The backup mode can be started with `:backup` command.
 
 ### ```src/moepkg/diffviewer.nim```
-Diff mode loop and Diff mode commands.
-Diff mode can start in History mode. And, it shows the difference between the backup file and the current buffer.
+Main module for the diff mode.
+Diff mode can start in History mode.
+And, it shows the difference between the backup file and the current buffer.
 
 ### ```src/moepkg/recentfilemode.nim```
-Recent mode loop and commands.
+Main module for the recent mode.
 Recent mode is can select recently opened files.
 This mode is GNU/Linux only supported.
+The configuration mode can be started with `:recent` command.
 
 ### ```src/moepkg/highlight.nim```
 Update syntax highlighting.
 
 ### ```src/moepkg/filermode.nim```
-Filer mode loop and commands.
+Main module for the filer mode.
+
+### ```src/moepkg/filermodeutils.nim```
+Tools for the filer mode.
 
 ### ```src/moepkg/debugmode.nim```
 Main module for the debug mode.
@@ -173,7 +220,8 @@ Tools for the debug mode.
 Update cursor position.
 
 ### ```src/moepkg/configmode.nim```
-Configration mode loop and commands. (```conf```:)
+Main module for the configuration mode.
+The configuration mode can be started with `:conf` command.
 
 ### ```src/moepkg/cmdlineoption.nim```
 Parse command line arguments and write help in command line.
@@ -191,7 +239,8 @@ Helper for the command line (window).
 Implementation of Automatic backups.
 
 ### ```src/moepkg/buffermanager.nim```
-Buffer manager mode and commands. (```:buf```)
+Main module for the buffer mode (Buffer manager).
+The buffer mode can be started with `:buf` command.
 
 ### ```src/moepkg/register.nim```
 Definition of the registers and utils for the register.
