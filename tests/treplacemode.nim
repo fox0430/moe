@@ -1,5 +1,7 @@
 import std/unittest
-include moepkg/replacemode
+import moepkg/[editorstatus, gapbuffer, bufferstatus, unicodeext, editor]
+
+import moepkg/replacemode {.all.}
 
 template recordCurrentPosition() =
   currentBufStatus.buffer.beginNewSuitIfNeeded

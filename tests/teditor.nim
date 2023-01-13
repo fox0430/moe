@@ -1,11 +1,14 @@
-import std/[unittest, macros]
-include moepkg/[editor, editorstatus, ui, platform, independentutils]
+import std/[unittest, macros, osproc]
+import moepkg/[independentutils, gapbuffer, unicodeext, bufferstatus,
+               editorstatus, settings, register]
+import moepkg/syntax/highlite
+
+import moepkg/editor {.all.}
+import moepkg/ui {.all.}
+import moepkg/platform {.all.}
 
 proc isXselAvailable(): bool {.inline.} =
   execCmdExNoOutput("xset q") == 0 and execCmdExNoOutput("xsel --version") == 0
-
-proc isXclipAvailable(): bool {.inline.} =
-  execCmdExNoOutput("xset q") == 0 and execCmdExNoOutput("xclip -version") == 0
 
 proc sourceLangToStr(lang: SourceLanguage): string =
   case lang:

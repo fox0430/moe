@@ -1,5 +1,8 @@
 import std/[unittest, macros, strformat, os]
-include moepkg/configmode
+import moepkg/[unicodeext, editorstatus, bufferstatus, gapbuffer, settings,
+               color, ui]
+
+import moepkg/configmode {.all.}
 
 suite "Config mode: Start configuration mode":
   test "Init configuration mode buffer":

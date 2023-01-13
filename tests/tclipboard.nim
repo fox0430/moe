@@ -1,18 +1,8 @@
-import std/unittest
-import moepkg/[settings, unicodeext, register, clipboard]
-include moepkg/[platform, independentutils]
+import std/[unittest, osproc]
+import moepkg/[settings, unicodeext, clipboard]
 
-proc initRegister(
-  buffer: seq[Rune],
-  settings: EditorSettings): Registers {.compiletime.} =
-
-  result.addRegister(buffer, settings)
-
-proc initRegister(
-  buffer: seq[seq[Rune]],
-  settings: EditorSettings): Registers {.compiletime.} =
-
-  result.addRegister(buffer, settings)
+import moepkg/platform {.all.}
+import moepkg/independentutils {.all.}
 
 proc isXselAvailable(): bool {.inline.} =
   execCmdExNoOutput("xset q") == 0 and execCmdExNoOutput("xsel --version") == 0

@@ -1,5 +1,7 @@
-import std/[unittest]
-include moepkg/backup
+import std/[unittest, times, os, json, oids]
+import moepkg/unicodeext
+
+import moepkg/backup {.all.}
 
 suite "Backup: createDir":
   test "createDir":

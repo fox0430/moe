@@ -1,5 +1,10 @@
-import std/[unittest, macros]
-include moepkg/autocomplete
+import std/[unittest, macros, sequtils, sugar, critbits, options]
+import moepkg/unicodeext
+import moepkg/syntax/[highlite, syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell,
+                      syntaxjava, syntaxjavascript, syntaxnim, syntaxpython,
+                      syntaxrust]
+
+import moepkg/autocomplete {.all.}
 
 const code = ru"""proc fibonacci(n: int): int =
   if n == 0: return 0
@@ -53,7 +58,6 @@ suite "autocomplete: extractNeighborWord":
 suite "autocomplete: collectSuggestions":
   test "Case 1":
     var dictionary: WordDictionary
-    const allWords = @["proc", "pass", "parse", "paste", "pop", "path"]
     dictionary.addWordToDictionary(code)
 
     dictionary.incNumOfUsed("proc".toRunes)

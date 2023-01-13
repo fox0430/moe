@@ -1,6 +1,8 @@
-import std/[unittest, random]
-import moepkg/[highlight]
-include moepkg/[insertmode, suggestionwindow]
+import std/[unittest, random, options, sequtils, sugar, importutils]
+import moepkg/[highlight, editorstatus, gapbuffer, unicodeext, editor,
+               bufferstatus, movement, autocomplete, window]
+
+import moepkg/suggestionwindow {.all.}
 
 suite "Insert mode":
   test "Issue #474":
@@ -494,6 +496,8 @@ suite "Insert mode":
       100, 100,
       mainWindowNodeY,
       status.settings.statusLine.enable)
+
+    privateAccess(suggestionWindow.get.type)
 
     check suggestionWindow.get.popUpWindow.y == 2
     check suggestionWindow.get.popUpWindow.height == terminalHeight - 4

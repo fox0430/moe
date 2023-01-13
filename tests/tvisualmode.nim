@@ -1,6 +1,9 @@
-import std/[unittest]
-import moepkg/[highlight, independentutils]
-include moepkg/[visualmode, platform]
+import std/[unittest, osproc]
+import moepkg/[highlight, independentutils, editorstatus, gapbuffer, unicodeext,
+               bufferstatus, movement, editor]
+
+import moepkg/visualmode {.all.}
+import moepkg/platform {.all.}
 
 proc isXselAvailable(): bool {.inline.} =
   execCmdExNoOutput("xset q") == 0 and execCmdExNoOutput("xsel --version") == 0

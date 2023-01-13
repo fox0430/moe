@@ -1,7 +1,9 @@
 import std/unittest
-import ncurses
-import moepkg/[register, settings]
-include moepkg/normalmode
+import pkg/ncurses
+import moepkg/[register, settings, editorstatus, gapbuffer, unicodeext,
+               bufferstatus, ui]
+
+import moepkg/normalmode {.all.}
 
 suite "Normal mode: Move to the right":
   test "Move tow to the right":
