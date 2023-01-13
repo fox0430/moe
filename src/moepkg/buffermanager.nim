@@ -31,7 +31,7 @@ proc deleteSelectedBuffer(status: var Editorstatus, height, width: int) =
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
 
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize
 
   if status.mainWindow.numOfMainWindow > 0:
     status.bufStatus.delete(deleteIndex)
@@ -57,7 +57,7 @@ proc deleteSelectedBuffer(status: var Editorstatus, height, width: int) =
     currentBufStatus.buffer =
       status.bufStatus.initBufferManagerBuffer.toGapBuffer
 
-    status.resize(terminalHeight(), terminalWidth())
+    status.resize
 
 proc openSelectedBuffer(status: var Editorstatus, isNewWindow: bool) =
   if isNewWindow:

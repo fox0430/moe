@@ -1,4 +1,4 @@
-import std/[terminal, strutils, sequtils]
+import std/[strutils, sequtils]
 import editorstatus, ui, gapbuffer, unicodeext, window, movement, editor,
        bufferstatus, settings, register, messages, commandline
 
@@ -366,7 +366,7 @@ proc getInsertBuffer(status: var Editorstatus): seq[Rune] =
     if isEscKey(key):
       break
     if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
+      status.resize
     elif isEnterKey(key):
       currentBufStatus.keyEnter(
         currentMainWindowNode,

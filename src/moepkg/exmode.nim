@@ -275,7 +275,7 @@ proc startDebugMode(status: var Editorstatus) =
 
   # Split window and move to new window
   status.verticalSplitWindow
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize
 
   # Add the buffer for the debug mode
   let bufferIndex = status.addNewBuffer(bufferstatus.Mode.debug)
@@ -292,14 +292,14 @@ proc startDebugMode(status: var Editorstatus) =
     currentMainWindowNode.windowIndex + 1)
     node.bufferIndex = bufferIndex.get
 
-    status.resize(terminalHeight(), terminalWidth())
+    status.resize
 
 proc startConfigMode(status: var Editorstatus) =
   let bufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[bufferIndex].prevMode)
 
   status.verticalSplitWindow
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize
   status.moveNextWindow
 
   status.addNewBufferInCurrentWin(bufferstatus.Mode.config)
@@ -315,7 +315,7 @@ proc startBackupManager(status: var Editorstatus) =
     if bufStatus.mode == bufferstatus.Mode.backup: return
 
   status.verticalSplitWindow
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize
   status.moveNextWindow
 
   status.addNewBufferInCurrentWin(bufferstatus.Mode.backup)
@@ -334,7 +334,7 @@ proc startRecentFileMode(status: var Editorstatus) =
     return
 
   status.verticalSplitWindow
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize
   status.moveNextWindow
 
   status.addNewBufferInCurrentWin
@@ -357,7 +357,7 @@ proc runQuickRunCommand(status: var Editorstatus) =
 
   if quickRunBufferIndex == -1:
     status.verticalSplitWindow
-    status.resize(terminalHeight(), terminalWidth())
+    status.resize
     status.moveNextWindow
 
     status.addNewBufferInCurrentWin
@@ -409,7 +409,7 @@ proc openHelp(status: var Editorstatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   status.verticalSplitWindow
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize
   status.moveNextWindow
 
   status.addNewBufferInCurrentWin
@@ -420,7 +420,7 @@ proc openLogViewer(status: var Editorstatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   status.verticalSplitWindow
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize
   status.moveNextWindow
 
   status.addNewBufferInCurrentWin(Mode.logviewer)
@@ -430,7 +430,7 @@ proc openBufferManager(status: var Editorstatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   status.verticalSplitWindow
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize
   status.moveNextWindow
 
   status.addNewBufferInCurrentWin
@@ -486,7 +486,7 @@ proc changeThemeSettingCommand(status: var EditorStatus, command: seq[Rune]) =
     status.settings.editorColorTheme = ColorTheme.vscode
 
   status.changeTheme
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize
   status.commandLine.clear
 
   status.changeMode(currentBufStatus.prevMode)
@@ -495,7 +495,7 @@ proc tabLineSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.tabLine.enable = true
   elif command == ru"off": status.settings.tabLine.enable = false
 
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize
   status.commandLine.clear
 
 proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
@@ -801,13 +801,13 @@ proc editCommand(status: var EditorStatus, path: seq[Rune]) =
 
 proc openInHorizontalSplitWindow(status: var Editorstatus, filename: seq[Rune]) =
   status.horizontalSplitWindow
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize
 
   status.editCommand(filename)
 
 proc openInVerticalSplitWindowCommand(status: var Editorstatus, filename: seq[Rune]) =
   status.verticalSplitWindow
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize
 
   status.editCommand(filename)
 
@@ -1129,7 +1129,7 @@ proc listAllBufferCommand(status: var Editorstatus) =
     status.update
     setCursor(false)
     let key = getKey(currentMainWindowNode)
-    if isResizekey(key): status.resize(terminalHeight(), terminalWidth())
+    if isResizekey(key): status.resize
     elif key.int == 0: discard
     else: break
 
@@ -1195,7 +1195,7 @@ proc newEmptyBufferInSplitWindowHorizontally*(status: var Editorstatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   status.horizontalSplitWindow
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize
 
   status.addNewBufferInCurrentWin
 
@@ -1205,7 +1205,7 @@ proc newEmptyBufferInSplitWindowVertically*(status: var Editorstatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   status.verticalSplitWindow
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize
 
   status.addNewBufferInCurrentWin
 

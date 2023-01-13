@@ -1,5 +1,18 @@
 import std/[strutils, math, random, osproc]
 
+type
+  Position* = object
+    y*: int
+    x*: int
+
+  Size* = object
+    h*: int
+    w*: int
+
+  Range* = object
+    start*: int
+    `end`*: int
+
 proc numberOfDigits*(x: int): int {.inline.} = x.intToStr.len
 
 proc calcTabWidth*(numOfBuffer, windowSize: int): int {.inline.} =

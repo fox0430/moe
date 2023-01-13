@@ -127,7 +127,7 @@ proc runQuickRunCommand(status: var Editorstatus) =
 
   if quickRunWindowIndex == -1:
     status.verticalSplitWindow
-    status.resize(terminalHeight(), terminalWidth())
+    status.resize
     status.moveNextWindow
 
     status.addNewBufferInCurrentWin("")

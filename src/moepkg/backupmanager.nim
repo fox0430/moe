@@ -1,6 +1,6 @@
 # Manager for automatic backup.
 
-import std/[os, times, terminal, osproc, json, strformat]
+import std/[os, osproc, json, strformat]
 import editorstatus, bufferstatus, unicodeext, ui, movement, gapbuffer,
        highlight, color, settings, messages, backup, fileutils, editorview,
        window, commandlineutils
@@ -70,7 +70,7 @@ proc openDiffViewer(status: var Editorstatus, sourceFilePath: string) =
 
   # Create new window
   status.verticalSplitWindow
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize
   status.moveNextWindow
 
   status.addNewBufferInCurrentWin(Mode.diff)
@@ -137,7 +137,7 @@ proc restoreBackupFile(
         currentMainWindowNode.view =
           status.bufStatus[i].buffer.initEditorView(1, 1)
 
-        status.resize(terminalHeight(), terminalWidth())
+        status.resize
 
         let settings = status.settings.notification
         status.commandLine.writeRestoreFileSuccessMessage(
@@ -265,66 +265,3 @@ proc execBackupManagerCommand*(status: var EditorStatus, command: Runes) =
     if command[0] == ord('g'):
       if command[1] == ord('g'):
         currentBufStatus.moveToFirstLine(currentMainWindowNode)
-
-# TODO: Remove
-proc backupManager*(status: var EditorStatus) =
-  status.resize(terminalHeight(), terminalWidth())
-
-  let sourceFilePath = status.bufStatus[status.prevBufferIndex].absolutePath
-
-  currentBufStatus.initBackupManagerBuffer(
-    status.baseBackupDir,
-    sourceFilePath)
-
-  while status.isBackupManagerMode:
-    block:
-      let
-        currentLine = currentMainWindowNode.currentLine
-        highlight = currentBufStatus.initBackupManagerHighlight(currentLine)
-      currentMainWindowNode.highlight = highlight
-
-    status.update
-    setCursor(false)
-
-    var key = ERR_KEY
-    while key == ERR_KEY:
-      status.eventLoopTask
-      key = getKey(currentMainWindowNode)
-
-    status.lastOperatingTime = now()
-
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-    elif isControlK(key):
-      status.moveNextWindow
-    elif isControlJ(key):
-      status.movePrevWindow
-    elif key == ord(':'):
-      status.changeMode(Mode.ex)
-    elif key == ord('k') or isUpKey(key):
-      currentBufStatus.keyUp(currentMainWindowNode)
-    elif key == ord('j') or isDownKey(key):
-      currentBufStatus.keyDown(currentMainWindowNode)
-    elif isEnterKey(key):
-      status.openDiffViewer($sourceFilePath)
-    elif key == ord('R'):
-      status.restoreBackupFile(sourceFilePath)
-    elif key == ord('D'):
-      status.removeBackupFile(sourceFilePath)
-      currentBufStatus.initBackupManagerBuffer(
-        status.baseBackupDir,
-        sourceFilePath)
-    elif key == ord('r'):
-      # Reload backup files
-      currentBufStatus.initBackupManagerBuffer(
-        status.baseBackupDir,
-        sourceFilePath)
-    elif key == ord('g'):
-      let secondKey = getKey(currentMainWindowNode)
-      if  secondKey == ord('g'):
-        currentBufStatus.moveToFirstLine(currentMainWindowNode)
-      else: discard
-    elif key == ord('G'):
-      currentBufStatus.moveToLastLine(currentMainWindowNode)
-    else:
-      discard

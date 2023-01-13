@@ -1,4 +1,3 @@
-import std/[times, terminal]
 import editorstatus, unicodeext, bufferstatus, highlight, color, gapbuffer, ui,
        movement, window
 
@@ -63,48 +62,3 @@ proc execDiffViewerCommand*(status: var Editorstatus, command: Runes) =
     if command[0] == ord('g'):
       if command[1] == ord('g'):
         currentBufStatus.moveToFirstLine(currentMainWindowNode)
-
-# TODO: Remove
-proc diffViewer*(status: var Editorstatus) =
-  status.resize(terminalHeight(), terminalWidth())
-
-  while status.isDiffViewerMode:
-    let bufferIndex = status.bufferIndexInCurrentWindow
-
-    block:
-      let
-        bufferIndex = status.bufferIndexInCurrentWindow
-        bufStatus = status.bufStatus[bufferIndex]
-      currentMainWindowNode.highlight = initDiffHighlight(bufStatus)
-
-    status.update
-
-    var key = ERR_KEY
-    while key == ERR_KEY:
-      status.eventLoopTask
-      key = getKey(currentMainWindowNode)
-
-    status.lastOperatingTime = now()
-
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-    elif isControlK(key):
-      status.moveNextWindow
-    elif isControlJ(key):
-      status.movePrevWindow
-    elif key == ord(':'):
-      status.changeMode(Mode.ex)
-    elif key == ord('k') or isUpKey(key):
-      status.bufStatus[bufferIndex].keyUp(currentMainWindowNode)
-    elif key == ord('j') or isDownKey(key):
-      status.bufStatus[bufferIndex].keyDown(currentMainWindowNode)
-    elif key == ord('g'):
-      let secondKey = getKey(currentMainWindowNode)
-      if  secondKey == ord('g'):
-        currentBufStatus.moveToFirstLine(currentMainWindowNode)
-      else:
-        discard
-    elif key == ord('G'):
-      currentBufStatus.moveToLastLine(currentMainWindowNode)
-    else:
-      discard
