@@ -1,5 +1,7 @@
 import std/unittest
-include moepkg/[search, searchutils]
+import moepkg/[unicodeext, editorstatus, gapbuffer]
+
+import moepkg/searchutils {.all.}
 
 suite "search.nim: searchLine":
   test "searchLine":

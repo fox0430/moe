@@ -1,5 +1,7 @@
 import std/[unittest, strutils]
-include moepkg/help
+import moepkg/[editorstatus, bufferstatus, unicodeext, gapbuffer]
+
+import moepkg/help {.all.}
 
 suite "Help":
   test "Check buffer":

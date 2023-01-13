@@ -1,6 +1,7 @@
-import std/[unittest, critbits]
-import moepkg/editorstatus
-include moepkg/suggestionwindow
+import std/[unittest, critbits, importutils, options]
+import moepkg/[editorstatus, gapbuffer, unicodeext]
+
+import moepkg/suggestionwindow {.all.}
 
 suite "suggestionwindow: buildSuggestionWindow":
   test "Case 1":
@@ -25,6 +26,8 @@ suite "suggestionwindow: buildSuggestionWindow":
       currentMainWindowNode)
 
     check suggestionWin.isSome
+
+    privateAccess(suggestionWin.get.type)
 
     check suggestionWin.get.wordDictionary.len == 4
 
@@ -58,6 +61,8 @@ suite "suggestionwindow: buildSuggestionWindow":
       currentMainWindowNode)
 
     check suggestionWin.isSome
+
+    privateAccess(suggestionWin.get.type)
 
     check suggestionWin.get.wordDictionary.len == 0
 

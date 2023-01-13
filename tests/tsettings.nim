@@ -1,5 +1,8 @@
-import std/[unittest]
-include moepkg/settings
+import std/[unittest, options]
+import pkg/parsetoml
+import moepkg/[color, unicodeext, ui]
+
+import moepkg/settings {.all.}
 
 const tomlStr = """
   [Standard]

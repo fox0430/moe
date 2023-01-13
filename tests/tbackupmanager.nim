@@ -1,5 +1,7 @@
-import std/[unittest, oids]
-include moepkg/backupmanager
+import std/[unittest, oids, os, json, strformat]
+import moepkg/[unicodeext, editorstatus, bufferstatus, backup, gapbuffer]
+
+import moepkg/backupmanager {.all.}
 
 template writeBackupInfoJson(backupDir, sourceFilePath: string) =
   let jsonNode = %* { "path": sourceFilePath }

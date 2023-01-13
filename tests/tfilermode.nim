@@ -1,6 +1,7 @@
-import std/[unittest, strutils, algorithm]
-import moepkg/settings
-include moepkg/[filermodeutils]
+import std/[unittest, strutils, algorithm, os]
+import moepkg/[unicodeext, bufferstatus, gapbuffer, color, window, highlight]
+
+import moepkg/filermodeutils {.all.}
 
 proc getCurrentFiles(path: string): seq[string] =
   var

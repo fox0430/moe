@@ -1,6 +1,7 @@
-import std/[unittest]
-import moepkg/[unicodeext]
-include moepkg/[register]
+import std/[unittest, options]
+import moepkg/[unicodeext, settings]
+
+import moepkg/register {.all.}
 
 suite "Register: Add a buffer to the no name register":
   test "Add a string to the no name register":
@@ -146,7 +147,6 @@ suite "Register: Add a buffer to the number register":
     var registers: Registers
     let settings = initEditorSettings()
 
-    const number = 0
     registers.addRegister(@[ru "abc"], settings)
 
     const
@@ -166,7 +166,6 @@ suite "Register: Add a buffer to the number register":
 suite "Register: Search a register by name":
   test "Search a register by name":
     var registers: Registers
-    let settings = initEditorSettings()
     const
       r1 = Register(buffer: @[ru "abc"], name: "a")
       r2 = Register(buffer: @[ru "def"], name: "b")
@@ -179,7 +178,6 @@ suite "Register: Search a register by name":
 
   test "Search a register by number string":
     var registers: Registers
-    let settings = initEditorSettings()
     const
       r1 = Register(buffer: @[ru "abc"], name: "a")
       r2 = Register(buffer: @[ru "def"], name: "b")
@@ -194,7 +192,6 @@ suite "Register: Search a register by name":
 
   test "Return empty":
     var registers: Registers
-    let settings = initEditorSettings()
     const
       r1 = Register(buffer: @[ru "abc"], name: "a")
       r2 = Register(buffer: @[ru "def"], name: "b")

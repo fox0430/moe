@@ -1,6 +1,8 @@
-import std/unittest
-import moepkg/[editor]
-include moepkg/editorstatus
+import std/[unittest, options, heapqueue, os, importutils]
+import moepkg/[editor, gapbuffer, bufferstatus, editorview, unicodeext, color,
+               highlight, window, movement]
+
+import moepkg/editorstatus {.all.}
 
 template initHighlight() =
   currentMainWindowNode.highlight = initHighlight(
@@ -916,6 +918,8 @@ suite "editorstatus: Updates/Restore the last cursor postion":
     currentMainWindowNode.currentColumn = 1
 
     status.updateLastCursorPostion
+
+    privateAccess(status.lastPosition[0].type)
 
     check status.lastPosition[0].path == absolutePath("test.nim").ru
     check status.lastPosition[0].line == 1
