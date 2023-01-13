@@ -1286,7 +1286,7 @@ proc editFiguresSetting(status: var EditorStatus,
       key = currentMainWindowNode.getKey
 
     if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
+      status.resize
     elif isEscKey(key):
       isCancel = true
     elif isEnterKey(key):
@@ -1312,9 +1312,10 @@ proc editFiguresSetting(status: var EditorStatus,
       currentBufStatus.insertCharacter(currentMainWindowNode, key)
       let reservedWords = status.settings.highlight.reservedWords
       currentMainWindowNode.highlight =
-        currentBufStatus.buffer.initConfigModeHighlight(currentLine,
-                                                        arrayIndex,
-                                                        reservedWords)
+        currentBufStatus.buffer.initConfigModeHighlight(
+          currentLine,
+          arrayIndex,
+          reservedWords)
 
   if not isCancel:
     let number = try: parseInt(numStr)
@@ -1441,7 +1442,7 @@ proc editStringSetting(status: var EditorStatus,
       key = currentMainWindowNode.getKey
 
     if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
+      status.resize
     elif isEscKey(key):
       isCancel = true
     elif isEnterKey(key):
@@ -1467,7 +1468,10 @@ proc editStringSetting(status: var EditorStatus,
       currentBufStatus.insertCharacter(currentMainWindowNode, key)
       let reservedWords = status.settings.highlight.reservedWords
       currentMainWindowNode.highlight =
-        currentBufStatus.buffer.initConfigModeHighlight(currentLine, arrayIndex, reservedWords)
+        currentBufStatus.buffer.initConfigModeHighlight(
+          currentLine,
+          arrayIndex,
+          reservedWords)
 
   if not isCancel:
     template buildOnSaveTable() =

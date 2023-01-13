@@ -10,7 +10,7 @@ proc openNewWinAndOpenFilerOrDir(
     let path = filerStatus.pathList[currentMainWindowNode.currentLine].path
 
     status.verticalSplitWindow
-    status.resize(terminalHeight, terminalWidth)
+    status.resize
     status.moveNextWindow
 
     if dirExists($path):

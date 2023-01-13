@@ -266,12 +266,15 @@ proc writeAllLines*[T](
   buffer: T,
   highlight: Highlight,
   theme: ColorTheme,
-  currentLine, startSelectedLine, endSelectedLine: int,
+  currentLine: int,
+  selectedRange: Range,
   currentLineColorPair: var int) =
 
     win.erase
-    view.widthOfLineNum = if viewSettings.lineNumber: buffer.len.numberOfDigits + 1
-                          else: 0
+
+    view.widthOfLineNum =
+      if viewSettings.lineNumber: buffer.len.numberOfDigits + 1
+      else: 0
 
     var
       indents          = 0
@@ -300,8 +303,8 @@ proc writeAllLines*[T](
       var x = view.widthOfLineNum
       if view.length[y] == 0:
         if isVisualMode and
-           (view.originalLine[y] >= startSelectedLine and
-           endSelectedLine >= view.originalLine[y]):
+           (view.originalLine[y] >= selectedRange.start and
+           selectedRange.end >= view.originalLine[y]):
           view.write(win, y, x, ru" ", EditorColorPair.visualMode)
         else:
           if viewSettings.highlightCurrentLine and isCurrentLine and
@@ -397,7 +400,8 @@ proc update*[T](
   buffer: T,
   highlight: Highlight,
   theme: ColorTheme,
-  currentLine, startSelectedLine, endSelectedLine: int,
+  currentLine: int,
+  selectedRange : Range,
   currentLineColorPair: var int) =
 
     let widthOfLineNum = buffer.len.intToStr.len + 1
@@ -417,7 +421,7 @@ proc update*[T](
       highlight,
       theme,
       currentLine,
-      startSelectedLine, endSelectedLine,
+      selectedRange,
       currentLineColorPair)
 
     view.updated = false

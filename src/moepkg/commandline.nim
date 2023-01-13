@@ -1,12 +1,7 @@
 import std/[terminal, sequtils]
-import ui, unicodeext, color
+import ui, unicodeext, color, independentutils
 
 type
-  # TODO: Move?
-  Position* = object
-    x*: int
-    y*: int
-
   # TODO: Add EditorView to CommandLine?
   CommandLine* = object
     ## The prompt doesn't include in the buffer.

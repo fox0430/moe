@@ -11,7 +11,7 @@ proc loadPersistData(status: var EditorStatus) =
     status.searchHistory = loadSearchHistory()
 
   if status.settings.persist.cursorPosition:
-    status.lastPosition = loadLastPosition()
+    status.lastPosition = loadLastCursorPosition()
     currentMainWindowNode.restoreCursorPostion(currentBufStatus,
                                                status.lastPosition)
 

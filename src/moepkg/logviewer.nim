@@ -56,7 +56,7 @@ proc execLogViewerCommand*(status: var EditorStatus, command: Runes) =
 proc messageLogViewer*(status: var Editorstatus) =
   currentBufStatus.path = ru"Log viewer"
 
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize
   status.update
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -74,7 +74,7 @@ proc messageLogViewer*(status: var Editorstatus) =
     status.lastOperatingTime = now()
 
     if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
+      status.resize
 
     elif isControlK(key):
       status.moveNextWindow

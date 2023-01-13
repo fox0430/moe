@@ -4,10 +4,11 @@ import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        window, color, settings, statusline, bufferstatus, cursor, tabline,
        backup, messages, commandline, register, platform, searchutils,
-       movement, autocomplete, suggestionwindow, filermodeutils, debugmodeutils
+       movement, autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
+       independentutils
 
 # Save cursor position when a buffer for a window(file) gets closed.
-type LastPosition* = object
+type LastCursorPosition* = object
   path: seq[Rune]
   line: int
   column: int
@@ -32,7 +33,7 @@ type EditorStatus* = object
   lastOperatingTime*: DateTime
   autoBackupStatus*: AutoBackupStatus
   isSearchHighlight*: bool
-  lastPosition*: seq[LastPosition]
+  lastPosition*: seq[LastCursorPosition]
   isReadonly*: bool
   wordDictionary*: WordDictionary
   suggestionWindow*: Option[SuggestionWindow]
@@ -125,10 +126,10 @@ proc updateLastCursorPostion*(status: var EditorStatus) =
       path = currentBufStatus.path.absolutePath
       line = currentMainWindowNode.currentLine
       column = currentMainWindowNode.currentColumn
-    status.lastPosition.add LastPosition(path: path, line: line, column: column)
+    status.lastPosition.add LastCursorPosition(path: path, line: line, column: column)
 
-proc getLastCursorPostion*(lastPosition: seq[LastPosition],
-                           path: seq[Rune]): Option[LastPosition] =
+proc getLastCursorPostion*(lastPosition: seq[LastCursorPosition],
+                           path: seq[Rune]): Option[LastCursorPosition] =
 
   for p in lastPosition:
     if p.path.absolutePath == path.absolutePath:
@@ -161,7 +162,7 @@ proc loadSearchHistory*(): seq[seq[Rune]] =
       if line.len > 0:
         result.add ru line
 
-proc loadLastPosition*(): seq[LastPosition] =
+proc loadLastCursorPosition*(): seq[LastCursorPosition] =
   let chaheFile = getHomeDir() / ".cache/moe/lastPosition"
 
   if fileExists(chaheFile):
@@ -172,7 +173,7 @@ proc loadLastPosition*(): seq[LastPosition] =
       if line.len > 0:
         let lineSplit = (line.ru).split(ru ':')
         if lineSplit.len == 3:
-          var position = LastPosition(path: lineSplit[0])
+          var position = LastCursorPosition(path: lineSplit[0])
           try:
             position.line = parseInt($lineSplit[1])
             position.column = parseInt($lineSplit[2])
@@ -220,7 +221,7 @@ proc saveSearchHistory(history: seq[seq[Rune]]) =
     f.writeLine($line)
 
 # Save the cursor position to the file
-proc saveLastCursorPosition(lastPosition: seq[LastPosition]) =
+proc saveLastCursorPosition(lastPosition: seq[LastCursorPosition]) =
   let
     chaheDir = getHomeDir() / ".cache/moe"
     chaheFile = chaheDir / "lastPosition"
@@ -325,24 +326,29 @@ proc getMainWindowHeight*(settings: EditorSettings, h: int): int =
 
   result = h - tabHeight - statusHeight - commandHeight
 
-proc resizeMainWindowNode(status: var EditorStatus, height, width: int) =
+proc resizeMainWindowNode(status: var EditorStatus, terminalSize: Size) =
   let
+    height = terminalSize.h
+    width = terminalSize.w
     tabLineHeight = if status.settings.tabLine.enable: 1 else: 0
     statusLineHeight = if status.settings.statusLine.enable: 1 else: 0
     commandLineHeight = if status.settings.statusLine.merge: 1 else: 0
 
-  const x = 0
   let
     y = tabLineHeight
     h = height - tabLineHeight - statusLineHeight - commandLineHeight
     w = width
 
-  mainWindowNode.resize(y, x, h, w)
+  mainWindowNode.resize(Position(y: y, x: 0), Size(h: h, w: w))
 
-proc resize*(status: var EditorStatus, height, width: int) =
+proc resize*(status: var EditorStatus, terminalSize: Size) =
   setCursor(false)
 
-  status.resizeMainWindowNode(height, width)
+  status.resizeMainWindowNode(terminalSize)
+
+  let
+    height = terminalSize.h
+    width = terminalSize.w
 
   const statusLineHeight = 1
   var
@@ -440,15 +446,12 @@ proc resize*(status: var EditorStatus, height, width: int) =
   setCursor(true)
 
 proc resize*(status: var EditorStatus) {.inline.} =
-  status.resize(terminalHeight(), terminalWidth())
+  let terminalSize = Size(h: terminalHeight(), w: terminalWidth())
+  status.resize(terminalSize)
 
-# TODO: Remove
-proc updateHighlight*(highlight: var Highlight,
-                      bufStatus: BufferStatus,
-                      windowNode: var WindowNode,
-                      isSearchHighlight: bool,
-                      searchHistory: seq[seq[Rune]],
-                      settings: EditorSettings)
+proc resize*(status: var EditorStatus, height, width: int) {.inline.} =
+  let terminalSize = Size(h: height, w: width)
+  status.resize(terminalSize)
 
 proc updateStatusLine(status: var Editorstatus) =
   if not status.settings.statusLine.multipleStatusLine:
@@ -518,6 +521,15 @@ proc updateLogViewerHighlight(buffer: string): Highlight =
       buffer,
       emptyReservedWord,
       SourceLanguage.langNone)
+
+# TODO: Remove
+proc updateHighlight*(
+  highlight: var Highlight,
+  bufStatus: BufferStatus,
+  windowNode: var WindowNode,
+  isSearchHighlight: bool,
+  searchHistory: seq[seq[Rune]],
+  settings: EditorSettings)
 
 # Update all views, highlighting, cursor, etc.
 proc update*(status: var EditorStatus) =
@@ -623,20 +635,23 @@ proc update*(status: var EditorStatus) =
             node.currentLine,
             node.currentColumn)
 
-        # Update the terminal buffer.
-        node.view.update(
-          node.window.get,
-          settings.view,
-          isCurrentMainWin,
-          bufStatus.isVisualMode,
-          bufStatus.isConfigMode,
-          buffer,
-          highlight,
-          settings.editorColorTheme,
-          node.currentLine,
-          bufStatus.selectArea.startLine,
-          bufStatus.selectArea.endLine,
-          currentLineColorPair)
+        block UpdateTerminalBuffer:
+          let selectedRange = Range(
+            start: bufStatus.selectArea.startLine,
+            `end`: bufStatus.selectArea.endLine)
+
+          node.view.update(
+            node.window.get,
+            settings.view,
+            isCurrentMainWin,
+            bufStatus.isVisualMode,
+            bufStatus.isConfigMode,
+            buffer,
+            highlight,
+            settings.editorColorTheme,
+            node.currentLine,
+            selectedRange,
+            currentLineColorPair)
 
         # TODO: Fix condition. Will use a flag.
         if isCurrentMainWin and not bufStatus.isFilerMode:
@@ -649,12 +664,7 @@ proc update*(status: var EditorStatus) =
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
-  let
-    currentMode = currentBufStatus.mode
-    prevMode = currentBufStatus.prevMode
-  if (currentMode != Mode.filer) and
-     not (currentMode == Mode.ex and
-     prevMode == Mode.filer):
+  if not currentBufStatus.isFilerMode:
     let
       y = currentMainWindowNode.cursor.y
       x = currentMainWindowNode.view.widthOfLineNum + currentMainWindowNode.cursor.x
@@ -669,27 +679,28 @@ proc update*(status: var EditorStatus) =
     setCursor(true)
 
 # Update currentLine and currentColumn from status.lastPosition
-proc restoreCursorPostion*(node: var WindowNode,
-                           bufStatus: BufferStatus,
-                           lastPosition: seq[LastPosition]) =
+proc restoreCursorPostion*(
+  node: var WindowNode,
+  bufStatus: BufferStatus,
+  lastPosition: seq[LastCursorPosition]) =
 
-  let position = lastPosition.getLastCursorPostion(bufStatus.path)
+    let position = lastPosition.getLastCursorPostion(bufStatus.path)
 
-  if isSome(position):
-    let posi = position.get
-    if posi.line > bufStatus.buffer.high:
-      node.currentLine = bufStatus.buffer.high
-    else:
-      node.currentLine = posi.line
-
-    let currentColumn = bufStatus.buffer[node.currentLine].high
-    if posi.column > currentColumn:
-      if currentColumn > -1:
-        node.currentColumn = bufStatus.buffer[node.currentLine].high
+    if isSome(position):
+      let posi = position.get
+      if posi.line > bufStatus.buffer.high:
+        node.currentLine = bufStatus.buffer.high
       else:
-        node.currentColumn = 0
-    else:
-      node.currentColumn = posi.column
+        node.currentLine = posi.line
+
+      let currentColumn = bufStatus.buffer[node.currentLine].high
+      if posi.column > currentColumn:
+        if currentColumn > -1:
+          node.currentColumn = bufStatus.buffer[node.currentLine].high
+        else:
+          node.currentColumn = 0
+      else:
+        node.currentColumn = posi.column
 
 proc verticalSplitWindow*(status: var EditorStatus) =
   status.updateLastCursorPostion
@@ -709,7 +720,7 @@ proc verticalSplitWindow*(status: var EditorStatus) =
 
   status.statusLine.add(initStatusLine())
 
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize
 
   var newNode = mainWindowNode.searchByWindowIndex(currentMainWindowNode.windowIndex + 1)
   newNode.restoreCursorPostion(currentBufStatus, status.lastPosition)
@@ -731,7 +742,7 @@ proc horizontalSplitWindow*(status: var Editorstatus) =
 
   status.statusLine.add(initStatusLine())
 
-  status.resize(terminalHeight(), terminalWidth())
+  status.resize
 
   var newNode = mainWindowNode.searchByWindowIndex(currentMainWindowNode.windowIndex + 1)
   newNode.restoreCursorPostion(currentBufStatus, status.lastPosition)
@@ -756,7 +767,7 @@ proc closeWindow*(status: var EditorStatus,
     let statusLineHigh = status.statusLine.high
     status.statusLine.delete(statusLineHigh)
 
-  status.resize(height, width)
+  status.resize(Size(h: height, w: width))
 
   let
     numOfMainWindow = status.mainWindow.numOfMainWindow
@@ -804,7 +815,7 @@ proc deleteBuffer*(status: var Editorstatus, deleteIndex,
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
-  status.resize(terminalHeight, terminalWidth)
+  status.resize
 
   status.bufStatus.delete(deleteIndex)
 
@@ -1312,7 +1323,7 @@ proc eventLoopTask(status: var Editorstatus) =
     status.timeConfFileLastReloaded = now()
     if beforeTheme != status.settings.editorColorTheme:
       changeTheme(status)
-      status.resize(terminalHeight(), terminalWidth())
+      status.resize
 
   # Live reload of an open file. a current window's buffer only.
   if status.settings.liveReloadOfFile:
