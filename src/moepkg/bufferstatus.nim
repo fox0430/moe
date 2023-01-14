@@ -1,6 +1,6 @@
 import std/[tables, times, options, os]
 import syntax/highlite
-import gapbuffer, unicodeext, fileutils, highlight
+import gapbuffer, unicodeext, fileutils, highlight, independentutils
 
 type
   Mode* = enum
@@ -23,18 +23,12 @@ type
     searchForward
     searchBackward
 
-  SelectArea* = object
-    startLine*: int
-    startColumn*: int
-    endLine*: int
-    endColumn*: int
-
   BufferStatus* = object
     buffer*: GapBuffer[seq[Rune]]
     isUpdate*: bool
     characterEncoding*: CharacterEncoding
     language*: SourceLanguage
-    selectArea*: SelectArea
+    selectedArea*: SelectedArea
     path*: seq[Rune]
     openDir*: seq[Rune]
     positionRecord*: Table[int, tuple[line, column, expandedColumn: int]]

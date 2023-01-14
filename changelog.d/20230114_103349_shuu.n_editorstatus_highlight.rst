@@ -1,0 +1,6 @@
+.. _#1580: https://github.com/fox0430/moe/pull/1580
+
+Changed
+.......
+
+- `#1580`_ refactor: Move procs for highlighting that was in editorstatus to bufferhighlight

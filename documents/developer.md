@@ -253,3 +253,6 @@ Check and definition the platform.
 
 ###  ```src/moepkg/popupwindow.nim```
 Popup window.
+
+### ```src/moepkg/bufferhighlight.nim```
+Highlighting tools for buffers. (Current words, search results, etc...)

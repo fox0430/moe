@@ -442,7 +442,7 @@ proc seekCursor*[T](view: var EditorView,
          currentColumn >= view.start[view.height - 1]+view.length[view.height - 1]):
      view.scrollDown(buffer)
 
-proc rangeOfOriginalLineInView*(view: EditorView): (int, int) =
+proc rangeOfOriginalLineInView*(view: EditorView): Range =
   var
     startLine = 0
     endLine = 0
@@ -451,4 +451,4 @@ proc rangeOfOriginalLineInView*(view: EditorView): (int, int) =
     elif lineNum == -1: break
     else: endLine = lineNum
 
-  return (startLine, endLine)
+  return Range(start: startLine, `end`: endLine)

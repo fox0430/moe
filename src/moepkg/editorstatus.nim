@@ -3,9 +3,9 @@ import std/[strutils, terminal, os, strformat, tables, times, heapqueue, deques,
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        window, color, settings, statusline, bufferstatus, cursor, tabline,
-       backup, messages, commandline, register, platform, searchutils,
-       movement, autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
-       independentutils
+       backup, messages, commandline, register, platform, movement,
+       autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
+       independentutils, bufferhighlight
 
 # Save cursor position when a buffer for a window(file) gets closed.
 type LastCursorPosition* = object
@@ -522,15 +522,6 @@ proc updateLogViewerHighlight(buffer: string): Highlight =
       emptyReservedWord,
       SourceLanguage.langNone)
 
-# TODO: Remove
-proc updateHighlight*(
-  highlight: var Highlight,
-  bufStatus: BufferStatus,
-  windowNode: var WindowNode,
-  isSearchHighlight: bool,
-  searchHistory: seq[seq[Rune]],
-  settings: EditorSettings)
-
 # Update all views, highlighting, cursor, etc.
 proc update*(status: var EditorStatus) =
   setCursor(false)
@@ -637,8 +628,8 @@ proc update*(status: var EditorStatus) =
 
         block UpdateTerminalBuffer:
           let selectedRange = Range(
-            start: bufStatus.selectArea.startLine,
-            `end`: bufStatus.selectArea.endLine)
+            start: bufStatus.selectedArea.startLine,
+            `end`: bufStatus.selectedArea.endLine)
 
           node.view.update(
             node.window.get,
@@ -856,253 +847,6 @@ proc revertPosition*(bufStatus: var BufferStatus,
 # TODO: Remove
 proc eventLoopTask*(status: var Editorstatus)
 
-proc initSelectedAreaColorSegment(startLine, startColumn: int): ColorSegment =
-  result.firstRow = startLine
-  result.firstColumn = startColumn
-  result.lastRow = startLine
-  result.lastColumn = startColumn
-  result.color = EditorColorPair.visualMode
-
-proc overwriteColorSegmentBlock[T](highlight: var Highlight,
-                                   area: SelectArea,
-                                   buffer: T) =
-
-  var
-    startLine = area.startLine
-    endLine = area.endLine
-    startColumn = area.startColumn
-    endColumn = area.endColumn
-  if startLine > endLine: swap(startLine, endLine)
-  if startColumn > endColumn: swap(startColumn, endColumn)
-
-  for i in startLine .. endLine:
-    let colorSegment = ColorSegment(firstRow: i,
-                                    firstColumn: startColumn,
-                                    lastRow: i,
-                                    lastColumn: min(endColumn, buffer[i].high),
-                                    color: EditorColorPair.visualMode)
-    highlight.overwrite(colorSegment)
-
-proc highlightSelectedArea(highlight: var Highlight,
-                           bufStatus: BufferStatus,
-                           windowNode: WindowNode) =
-
-  let area = bufStatus.selectArea
-
-  var colorSegment = initSelectedAreaColorSegment(
-    windowNode.currentLine,
-    windowNode.currentColumn)
-
-  if area.startLine == area.endLine:
-    colorSegment.firstRow = area.startLine
-    colorSegment.lastRow = area.endLine
-    if area.startColumn < area.endColumn:
-      colorSegment.firstColumn = area.startColumn
-      colorSegment.lastColumn = area.endColumn
-    else:
-      colorSegment.firstColumn = area.endColumn
-      colorSegment.lastColumn = area.startColumn
-  elif area.startLine < area.endLine:
-    colorSegment.firstRow = area.startLine
-    colorSegment.lastRow = area.endLine
-    colorSegment.firstColumn = area.startColumn
-    colorSegment.lastColumn = area.endColumn
-  else:
-    colorSegment.firstRow = area.endLine
-    colorSegment.lastRow = area.startLine
-    colorSegment.firstColumn = area.endColumn
-    colorSegment.lastColumn = area.startColumn
-
-  let
-    currentMode = bufStatus.mode
-    prevMode = bufStatus.prevMode
-
-  if (currentMode == Mode.visual) or
-     (currentMode == Mode.ex and
-     prevMode == Mode.visual):
-    highlight.overwrite(colorSegment)
-  elif (currentMode == Mode.visualBlock) or
-       (currentMode == Mode.ex and
-       prevMode == Mode.visualBlock):
-    highlight.overwriteColorSegmentBlock(
-      bufStatus.selectArea,
-      bufStatus.buffer)
-
-proc highlightPairOfParen(highlight: var Highlight,
-                          bufStatus: BufferStatus,
-                          windowNode: WindowNode) =
-
-  let
-    buffer = bufStatus.buffer
-    currentLine = windowNode.currentLine
-    currentColumn = if windowNode.currentColumn > buffer[currentLine].high:
-                      buffer[currentLine].high
-                    else: windowNode.currentColumn
-
-  if buffer[currentLine].len < 1 or
-     (buffer[currentLine][currentColumn] == ru'"') or
-     (buffer[currentLine][currentColumn] == ru'\''): return
-
-  if isOpenParen(buffer[currentLine][currentColumn]):
-    var depth = 0
-    let
-      openParen = buffer[currentLine][currentColumn]
-      closeParen = correspondingCloseParen(openParen)
-    for i in currentLine ..< buffer.len:
-      let startColumn = if i == currentLine: currentColumn else: 0
-      for j in startColumn ..< buffer[i].len:
-        if buffer[i][j] == openParen: inc(depth)
-        elif buffer[i][j] == closeParen: dec(depth)
-        if depth == 0:
-          let
-            color = EditorColorPair.parenText
-            colorSegment = ColorSegment(firstRow: i,
-                                        firstColumn: j,
-                                        lastRow: i,
-                                        lastColumn: j,
-                                        color: color)
-          highlight.overwrite(colorSegment)
-          return
-
-  elif isCloseParen(buffer[currentLine][currentColumn]):
-    var depth = 0
-    let
-      closeParen = buffer[currentLine][currentColumn]
-      openParen = correspondingOpenParen(closeParen)
-    for i in countdown(currentLine, 0):
-      let startColumn = if i == currentLine: currentColumn else: buffer[i].high
-      for j in countdown(startColumn, 0):
-        if buffer[i].len < 1: break
-        if buffer[i][j] == closeParen: inc(depth)
-        elif buffer[i][j] == openParen: dec(depth)
-        if depth == 0:
-          let
-            color = EditorColorPair.parenText
-            colorSegment = ColorSegment(firstRow: i,
-                                        firstColumn: j,
-                                        lastRow: i,
-                                        lastColumn: j,
-                                        color: color)
-          highlight.overwrite(colorSegment)
-          return
-
-# Highlighting other uses of the current word under the cursor
-proc highlightOtherUsesCurrentWord(highlight: var Highlight,
-                                   bufStatus: BufferStatus,
-                                   windowNode: WindowNode,
-                                   theme: ColorTheme) =
-
-  let line = bufStatus.buffer[windowNode.currentLine]
-
-  if line.len < 1 or
-     windowNode.currentColumn > line.high or
-     (line[windowNode.currentColumn] != '_' and
-     unicodeext.isPunct(line[windowNode.currentColumn])) or
-     line[windowNode.currentColumn].isSpace: return
-  var
-    startCol = windowNode.currentColumn
-    endCol = windowNode.currentColumn
-
-  # Set start col
-  for i in countdown(windowNode.currentColumn - 1, 0):
-    if (line[i] != '_' and unicodeext.isPunct(line[i])) or line[i].isSpace:
-      break
-    else: startCol.dec
-
-  # Set end col
-  for i in windowNode.currentColumn ..< line.len:
-    if (line[i] != '_' and unicodeext.isPunct(line[i])) or line[i].isSpace:
-      break
-    else: endCol.inc
-
-  let highlightWord = line[startCol ..< endCol]
-
-  let
-    range = windowNode.view.rangeOfOriginalLineInView
-    startLine = range[0]
-    endLine = if bufStatus.buffer.len > range[1] + 1: range[1] + 2
-              elif bufStatus.buffer.len > range[1]: range[1] + 1
-              else: range[1]
-
-  proc isWordAtCursor(highlightWordLen, i, j: int): bool =
-    result = i == windowNode.currentLine and
-             (j >= startCol and j <= endCol)
-
-  for i in startLine ..< endLine:
-    let line = bufStatus.buffer[i]
-    for j in 0 .. (line.len - highlightWord.len):
-      let endCol = j + highlightWord.len
-      if line[j ..< endCol] == highlightWord:
-        ## TODO: Refactor
-        if j == 0 or
-           (j > 0 and
-           ((line[j - 1] != '_' and
-           unicodeext.isPunct(line[j - 1])) or
-           line[j - 1].isSpace)):
-          if (j == (line.len - highlightWord.len)) or
-             ((line[j + highlightWord.len] != '_' and
-             unicodeext.isPunct(line[j + highlightWord.len])) or
-             line[j + highlightWord.len].isSpace):
-
-            # Do not highlight current word on the cursor
-            if not isWordAtCursor(highlightWord.len, i, j):
-              # Set color
-              let
-                originalColorPair =
-                  highlight.getColorPair(i, j)
-                colors = theme.getColorFromEditorColorPair(originalColorPair)
-              setColorPair(EditorColorPair.currentWord,
-                           colors[0],
-                           ColorThemeTable[theme].currentWordBg)
-
-              let
-                color = EditorColorPair.currentWord
-                colorSegment = ColorSegment(firstRow: i,
-                                            firstColumn: j,
-                                            lastRow: i,
-                                            lastColumn: j + highlightWord.high,
-                                            color: color)
-              highlight.overwrite(colorSegment)
-
-proc highlightTrailingSpaces(highlight: var Highlight,
-                             bufStatus: BufferStatus,
-                             windowNode: WindowNode) =
-
-  if isConfigMode(bufStatus.mode, bufStatus.prevMode) or
-     isDebugMode(bufStatus.mode, bufStatus.prevMode): return
-
-  let
-    currentLine = windowNode.currentLine
-
-    color = EditorColorPair.highlightTrailingSpaces
-
-    range = windowNode.view.rangeOfOriginalLineInView
-    buffer = bufStatus.buffer
-    startLine = range[0]
-    endLine = if buffer.len > range[1] + 1: range[1] + 2
-              elif buffer.len > range[1]: range[1] + 1
-              else: range[1]
-
-  var colorSegments: seq[ColorSegment] = @[]
-  for i in startLine ..< endLine:
-    let line = buffer[i]
-    if line.len > 0 and i != currentLine:
-      var countSpaces = 0
-      for j in countdown(line.high, 0):
-        if line[j] == ru' ': inc countSpaces
-        else: break
-
-      if countSpaces > 0:
-        let firstColumn = line.len - countSpaces
-        colorSegments.add(ColorSegment(firstRow: i,
-                                       firstColumn: firstColumn,
-                                       lastRow: i,
-                                       lastColumn: line.high,
-                                       color: color))
-
-  for colorSegment in colorSegments:
-    highlight.overwrite(colorSegment)
-
 # TODO: Move
 proc scrollUpNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
   let destination = max(currentMainWindowNode.currentLine - numberOfLines, 0)
@@ -1173,102 +917,6 @@ proc pageDown*(status: var EditorStatus) =
 # TODO: Move
 proc halfPageDown*(status: var EditorStatus) =
   status.scrollDownNumberOfLines(Natural(currentMainWindowNode.view.height / 2))
-
-proc highlightFullWidthSpace(highlight: var Highlight,
-                             windowNode: WindowNode,
-                             bufferInView: GapBuffer[seq[Rune]],
-                             range: (int, int)) =
-
-
-  const fullWidthSpace = ru"　"
-  let
-    ignorecase = false
-    smartcase = false
-    allOccurrence = bufferInView.searchAllOccurrence(
-      fullWidthSpace,
-      ignorecase,
-      smartcase)
-    color = EditorColorPair.highlightFullWidthSpace
-  for pos in allOccurrence:
-    let colorSegment = ColorSegment(firstRow: range[0] + pos.line,
-                                    firstColumn: pos.column,
-                                    lastRow: range[0] + pos.line,
-                                    lastColumn: pos.column,
-                                    color: color)
-    highlight.overwrite(colorSegment)
-
-proc highlightSearchResults(highlight: var Highlight,
-                            bufStatus: BufferStatus,
-                            bufferInView: GapBuffer[seq[Rune]],
-                            range: (int, int),
-                            keyword: seq[Rune],
-                            settings: EditorSettings,
-                            isSearchHighlight: bool) =
-
-  let
-    ignorecase = settings.ignorecase
-    smartcase = settings.smartcase
-    allOccurrence = searchAllOccurrence(
-      bufferInView,
-      keyword,
-      ignorecase,
-      smartcase)
-    color = if isSearchHighlight: EditorColorPair.searchResult
-            else: EditorColorPair.replaceText
-  for pos in allOccurrence:
-    let colorSegment = ColorSegment(firstRow: range[0] + pos.line,
-                                    firstColumn: pos.column,
-                                    lastRow: range[0] + pos.line,
-                                    lastColumn: pos.column + keyword.high,
-                                    color: color)
-    highlight.overwrite(colorSegment)
-
-proc updateHighlight*(highlight: var Highlight,
-                      bufStatus: BufferStatus,
-                      windowNode: var WindowNode,
-                      isSearchHighlight: bool,
-                      searchHistory: seq[seq[Rune]],
-                      settings: EditorSettings) =
-
-  if settings.highlight.currentWord:
-    highlight.highlightOtherUsesCurrentWord(
-      bufStatus,
-      windowNode,
-      settings.editorColorTheme)
-
-  if isVisualMode(bufStatus.mode):
-    highlight.highlightSelectedArea(bufStatus, windowNode)
-
-  if settings.highlight.pairOfParen:
-    highlight.highlightPairOfParen(bufStatus, windowNode)
-
-  let
-    range = windowNode.view.rangeOfOriginalLineInView
-    startLine = range[0]
-    endLine = if bufStatus.buffer.len > range[1] + 1: range[1] + 2
-              elif bufStatus.buffer.len > range[1]: range[1] + 1
-              else: range[1]
-
-  var bufferInView = initGapBuffer[seq[Rune]]()
-  for i in startLine ..< endLine: bufferInView.add(bufStatus.buffer[i])
-
-  # highlight trailing spaces
-  if settings.highlight.trailingSpaces:
-    highlight.highlightTrailingSpaces(bufStatus, windowNode)
-
-  # highlight full width space
-  if settings.highlight.fullWidthSpace:
-    highlight.highlightFullWidthSpace(windowNode, bufferInView, range)
-
-  # highlight search results
-  if isSearchHighlight and searchHistory.len > 0:
-    highlight.highlightSearchResults(
-      bufStatus,
-      bufferInView,
-      range,
-      searchHistory[^1],
-      settings,
-      isSearchHighlight)
 
 proc changeTheme*(status: var EditorStatus) =
   if status.settings.editorColorTheme == ColorTheme.vscode:

@@ -108,7 +108,7 @@ proc updateSuggestWindow(
       status.settings.statusLine.enable)
 
 proc updateSelectedArea(status: var EditorStatus) {.inline.} =
-  currentBufStatus.selectArea.updateSelectedArea(
+  currentBufStatus.selectedArea.updateSelectedArea(
     currentMainWindowNode.currentLine,
     currentMainWindowNode.currentColumn)
 
