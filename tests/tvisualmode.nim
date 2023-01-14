@@ -27,13 +27,13 @@ suite "Visual mode: Delete buffer":
     for i in 0 ..< 2:
       currentBufStatus.keyRight(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectedArea(
+      currentBufStatus.selectedArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
       status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea, ru'x')
 
     check(currentBufStatus.buffer[0] == ru"d")
 
@@ -55,13 +55,13 @@ suite "Visual mode: Delete buffer":
     for i in 0 ..< 2:
       currentBufStatus.keyDown(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectedArea(
+      currentBufStatus.selectedArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
       status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea, ru'x')
 
     check(currentBufStatus.buffer.len == 1)
     check(currentBufStatus.buffer[0] == ru"")
@@ -83,7 +83,7 @@ suite "Visual mode: Delete buffer":
 
     currentBufStatus.keyDown(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -91,13 +91,13 @@ suite "Visual mode: Delete buffer":
 
     currentBufStatus.keyRight(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea, ru'x')
 
     check(currentBufStatus.buffer.len == 1)
     check(currentBufStatus.buffer[0] == ru"ef")
@@ -120,13 +120,13 @@ suite "Visual mode: Delete buffer":
     status.update
 
     status.changeMode(Mode.visual)
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.keyDown(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -134,13 +134,13 @@ suite "Visual mode: Delete buffer":
 
     currentBufStatus.keyRight(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea, ru'x')
 
     check(currentBufStatus.buffer.len == 2)
     check(currentBufStatus.buffer[0] == ru"a")
@@ -164,20 +164,20 @@ suite "Visual mode: Delete buffer":
     status.update
 
     status.changeMode(Mode.visual)
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     for i in 0 ..< 2:
       currentBufStatus.keyDown(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectedArea(
+      currentBufStatus.selectedArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
       status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea, ru'x')
 
     check(currentBufStatus.buffer.len == 2)
     check(currentBufStatus.buffer[0] == ru"a")
@@ -200,13 +200,13 @@ suite "Visual mode: Delete buffer":
     status.update
 
     status.changeMode(Mode.visual)
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea, ru'x')
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru"a"
@@ -229,13 +229,13 @@ suite "Visual mode: Delete buffer":
     status.update
 
     status.changeMode(Mode.visual)
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea, ru'x')
 
     check currentBufStatus.buffer[0] == ru"a  c"
     check currentMainWindowNode.currentColumn == 2
@@ -255,7 +255,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     status.changeMode(Mode.visual)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -263,13 +263,13 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     status.update
 
     currentBufStatus.keyDown(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    let area = currentBufStatus.selectArea
+    let area = currentBufStatus.selectedArea
     status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(status.registers,
                                 currentMainWindowNode,
@@ -295,13 +295,13 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    let area = currentBufStatus.selectArea
+    let area = currentBufStatus.selectedArea
     status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(status.registers,
                                 currentMainWindowNode,
@@ -326,13 +326,13 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     status.changeMode(Mode.visual)
 
     currentBufStatus.keyDown(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    let area = currentBufStatus.selectArea
+    let area = currentBufStatus.selectedArea
     status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(status.registers,
                                 currentMainWindowNode,
@@ -356,13 +356,13 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     status.changeMode(Mode.visual)
 
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    let area = currentBufStatus.selectArea
+    let area = currentBufStatus.selectedArea
     status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(status.registers,
                                 currentMainWindowNode,
@@ -387,18 +387,18 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
 
     status.changeMode(Mode.visualBlock)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.keyDown(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    let area = currentBufStatus.selectArea
+    let area = currentBufStatus.selectedArea
     status.settings.clipboard.enable = false
     currentBufStatus.yankBufferBlock(status.registers,
                                      currentMainWindowNode,
@@ -422,26 +422,26 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
 
     status.changeMode(Mode.visualBlock)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     for i in 0 ..< 2:
       currentBufStatus.keyRight(currentMainWindowNode)
-      currentBufStatus.selectArea.updateSelectedArea(
+      currentBufStatus.selectedArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
       status.update
 
     currentBufStatus.keyDown(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    let area = currentBufStatus.selectArea
+    let area = currentBufStatus.selectedArea
     status.settings.clipboard.enable = false
     currentBufStatus.yankBufferBlock(status.registers,
                                      currentMainWindowNode,
@@ -465,19 +465,19 @@ suite "Visual block mode: Delete buffer (Disable clipboard)":
     status.resize(100, 100)
 
     status.changeMode(Mode.visualBlock)
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.keyDown(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    let area = currentBufStatus.selectArea
+    let area = currentBufStatus.selectedArea
     status.settings.clipboard.enable = false
     currentBufStatus.deleteBufferBlock(status.registers,
                                        currentMainWindowNode,
@@ -505,18 +505,18 @@ if isXselAvailable():
 
       status.changeMode(Mode.visual)
 
-      currentBufStatus.selectArea = initSelectArea(
+      currentBufStatus.selectedArea = initSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
       currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-      currentBufStatus.selectArea.updateSelectedArea(
+      currentBufStatus.selectedArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
       status.update
 
-      let area = currentBufStatus.selectArea
+      let area = currentBufStatus.selectedArea
       status.settings.clipboard.enable = true
       currentBufStatus.yankBuffer(status.registers,
                                   currentMainWindowNode,
@@ -554,23 +554,23 @@ if isXselAvailable():
 
       status.changeMode(Mode.visual)
 
-      currentBufStatus.selectArea = initSelectArea(
+      currentBufStatus.selectedArea = initSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
       currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-      currentBufStatus.selectArea.updateSelectedArea(
+      currentBufStatus.selectedArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
       status.update
 
       currentBufStatus.keyDown(currentMainWindowNode)
-      currentBufStatus.selectArea.updateSelectedArea(
+      currentBufStatus.selectedArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
       status.update
 
-      let area = currentBufStatus.selectArea
+      let area = currentBufStatus.selectedArea
       status.settings.clipboard.enable = true
       currentBufStatus.yankBuffer(status.registers,
                                   currentMainWindowNode,
@@ -610,19 +610,19 @@ if isXselAvailable():
 
       status.changeMode(Mode.visualBlock)
 
-      currentBufStatus.selectArea = initSelectArea(
+      currentBufStatus.selectedArea = initSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
       currentBufStatus.keyDown(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectedArea(
+      currentBufStatus.selectedArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
       status.update
 
-      let area = currentBufStatus.selectArea
+      let area = currentBufStatus.selectedArea
       status.settings.clipboard.enable = true
       currentBufStatus.yankBufferBlock(status.registers,
                                        currentMainWindowNode,
@@ -651,23 +651,23 @@ if isXselAvailable():
 
       status.changeMode(Mode.visualBlock)
 
-      currentBufStatus.selectArea = initSelectArea(
+      currentBufStatus.selectedArea = initSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
       currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-      currentBufStatus.selectArea.updateSelectedArea(
+      currentBufStatus.selectedArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
       status.update
 
       currentBufStatus.keyDown(currentMainWindowNode)
-      currentBufStatus.selectArea.updateSelectedArea(
+      currentBufStatus.selectedArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
       status.update
 
-      let area = currentBufStatus.selectArea
+      let area = currentBufStatus.selectedArea
       status.settings.clipboard.enable = true
       currentBufStatus.yankBufferBlock(status.registers,
                                        currentMainWindowNode,
@@ -698,19 +698,19 @@ if isXselAvailable():
 
       status.changeMode(Mode.visualBlock)
 
-      currentBufStatus.selectArea = initSelectArea(
+      currentBufStatus.selectedArea = initSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
       currentBufStatus.keyDown(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectedArea(
+      currentBufStatus.selectedArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
       status.update
 
-      let area = currentBufStatus.selectArea
+      let area = currentBufStatus.selectedArea
       status.settings.clipboard.enable = true
       currentBufStatus.deleteBufferBlock(status.registers,
                                          currentMainWindowNode,
@@ -736,20 +736,20 @@ if isXselAvailable():
 
       status.changeMode(Mode.visualBlock)
 
-      currentBufStatus.selectArea = initSelectArea(
+      currentBufStatus.selectedArea = initSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
       for i in 0 ..< 2:
         currentBufStatus.keyDown(currentMainWindowNode)
 
-        currentBufStatus.selectArea.updateSelectedArea(
+        currentBufStatus.selectedArea.updateSelectedArea(
           currentMainWindowNode.currentLine,
           currentMainWindowNode.currentColumn)
 
         status.update
 
-      let area = currentBufStatus.selectArea
+      let area = currentBufStatus.selectedArea
       status.settings.clipboard.enable = true
       currentBufStatus.deleteBufferBlock(status.registers,
                                          currentMainWindowNode,
@@ -771,7 +771,7 @@ if isXselAvailable():
 
       status.changeMode(Mode.visualBlock)
 
-      currentBufStatus.selectArea = initSelectArea(
+      currentBufStatus.selectedArea = initSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
@@ -779,13 +779,13 @@ if isXselAvailable():
       for i in 0 ..< 2:
         currentBufStatus.keyDown(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectedArea(
+      currentBufStatus.selectedArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
       status.update
 
-      let area = currentBufStatus.selectArea
+      let area = currentBufStatus.selectedArea
       status.settings.clipboard.enable = true
       currentBufStatus.deleteBufferBlock(
         status.registers,
@@ -813,20 +813,20 @@ suite "Visual mode: Join lines":
 
     status.changeMode(Mode.visual)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     for i in 0 ..< 2:
       currentBufStatus.keyDown(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectedArea(
+      currentBufStatus.selectedArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
       status.update
 
-    let area = currentBufStatus.selectArea
+    let area = currentBufStatus.selectedArea
 
     status.update
     currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)
@@ -849,20 +849,20 @@ suite "Visual block mode: Join lines":
 
     status.changeMode(Mode.visualBlock)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     for i in 0 ..< 2:
       currentBufStatus.keyDown(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectedArea(
+      currentBufStatus.selectedArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
       status.update
 
-    let area = currentBufStatus.selectArea
+    let area = currentBufStatus.selectedArea
 
     status.update
     currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)
@@ -885,21 +885,21 @@ test "Visual mode: Add indent":
 
     status.changeMode(Mode.visual)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     for i in 0 ..< 2:
       currentBufStatus.keyDown(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectedArea(
+      currentBufStatus.selectedArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
       status.update
 
     status.update
-    status.visualCommand(currentBufStatus.selectArea, ru'>')
+    status.visualCommand(currentBufStatus.selectedArea, ru'>')
 
     check(currentBufStatus.buffer[0] == ru"  abc")
     check(currentBufStatus.buffer[1] == ru"  def")
@@ -920,19 +920,19 @@ suite "Visual block mode: Add indent":
 
     status.changeMode(Mode.visualblock)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     for i in 0 ..< 2:
       currentBufStatus.keyDown(currentMainWindowNode)
-      currentBufStatus.selectArea.updateSelectedArea(
+      currentBufStatus.selectedArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
       status.update
 
     status.update
-    status.visualBlockCommand(currentBufStatus.selectArea, ru'>')
+    status.visualBlockCommand(currentBufStatus.selectedArea, ru'>')
 
     check(currentBufStatus.buffer[0] == ru"  abc")
     check(currentBufStatus.buffer[1] == ru"  def")
@@ -953,21 +953,21 @@ suite "Visual mode: Delete indent":
 
     status.changeMode(Mode.visual)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     for i in 0 ..< 2:
       currentBufStatus.keyDown(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectedArea(
+      currentBufStatus.selectedArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
       status.update
 
     status.update
-    status.visualCommand(currentBufStatus.selectArea, ru'<')
+    status.visualCommand(currentBufStatus.selectedArea, ru'<')
 
     check(currentBufStatus.buffer[0] == ru"abc")
     check(currentBufStatus.buffer[1] == ru"def")
@@ -988,21 +988,21 @@ suite "Visual block mode: Delete indent":
 
     status.changeMode(Mode.visualblock)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     for i in 0 ..< 2:
       currentBufStatus.keyDown(currentMainWindowNode)
 
-      currentBufStatus.selectArea.updateSelectedArea(
+      currentBufStatus.selectedArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
       status.update
 
     status.update
-    status.visualBlockCommand(currentBufStatus.selectArea, ru'<')
+    status.visualBlockCommand(currentBufStatus.selectedArea, ru'<')
 
     check(currentBufStatus.buffer[0] == ru"abc")
     check(currentBufStatus.buffer[1] == ru"def")
@@ -1023,18 +1023,18 @@ suite "Visual mode: Converts string into lower-case string":
 
     status.changeMode(Mode.visual)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
     status.update
 
     status.update
-    status.visualCommand(currentBufStatus.selectArea, ru'u')
+    status.visualCommand(currentBufStatus.selectedArea, ru'u')
 
     check(currentBufStatus.buffer[0] == ru"abc")
 
@@ -1052,18 +1052,18 @@ suite "Visual mode: Converts string into lower-case string":
 
     status.changeMode(Mode.visual)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
     status.update
 
     status.update
-    status.visualCommand(currentBufStatus.selectArea, ru'u')
+    status.visualCommand(currentBufStatus.selectedArea, ru'u')
 
     check(currentBufStatus.buffer[0] == ru"aあbc")
 
@@ -1081,19 +1081,19 @@ suite "Visual mode: Converts string into lower-case string":
 
     status.changeMode(Mode.visual)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.keyDown(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'u')
+    status.visualCommand(currentBufStatus.selectedArea, ru'u')
 
     check(currentBufStatus.buffer[0] == ru"abc")
     check(currentBufStatus.buffer[1] == ru"dEF")
@@ -1109,18 +1109,18 @@ suite "Visual mode: Converts string into lower-case string":
     status.resize(100, 100)
 
     status.changeMode(Mode.visual)
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     for i in 0 ..< 3:
       currentBufStatus.keyDown(currentMainWindowNode)
       status.update
-      currentBufStatus.selectArea.updateSelectedArea(
+      currentBufStatus.selectedArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
-    status.visualCommand(currentBufStatus.selectArea, ru'u')
+    status.visualCommand(currentBufStatus.selectedArea, ru'u')
 
     check(currentBufStatus.buffer[0] == ru"abc")
     check(currentBufStatus.buffer[1] == ru"")
@@ -1140,18 +1140,18 @@ test "Visual block mode: Converts string into lower-case string":
     status.resize(100, 100)
 
     status.changeMode(Mode.visualBlock)
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
     status.update
 
     status.update
-    status.visualBlockCommand(currentBufStatus.selectArea, ru'u')
+    status.visualBlockCommand(currentBufStatus.selectedArea, ru'u')
 
     check(currentBufStatus.buffer[0] == ru"abc")
 
@@ -1169,13 +1169,13 @@ test "Visual block mode: Converts string into lower-case string":
 
     status.changeMode(Mode.visualBlock)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.keyRight(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
@@ -1183,13 +1183,13 @@ test "Visual block mode: Converts string into lower-case string":
 
     currentBufStatus.keyDown(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    status.visualBlockCommand(currentBufStatus.selectArea, ru'u')
+    status.visualBlockCommand(currentBufStatus.selectedArea, ru'u')
 
     check(currentBufStatus.buffer[0] == ru"abC")
     check(currentBufStatus.buffer[1] == ru"deF")
@@ -1209,19 +1209,19 @@ suite "Visual mode: Converts string into upper-case string":
 
     status.changeMode(Mode.visual)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
     status.update
-    status.visualCommand(currentBufStatus.selectArea, ru'U')
+    status.visualCommand(currentBufStatus.selectedArea, ru'U')
 
     check(currentBufStatus.buffer[0] == ru"ABC")
 
@@ -1239,19 +1239,19 @@ suite "Visual mode: Converts string into upper-case string":
 
     status.changeMode(Mode.visual)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
     status.update
-    status.visualCommand(currentBufStatus.selectArea, ru'U')
+    status.visualCommand(currentBufStatus.selectedArea, ru'U')
 
     check(currentBufStatus.buffer[0] == ru"AあBC")
 
@@ -1268,19 +1268,19 @@ suite "Visual mode: Converts string into upper-case string":
     status.resize(100, 100)
 
     status.changeMode(Mode.visual)
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.keyDown(currentMainWindowNode)
 
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'U')
+    status.visualCommand(currentBufStatus.selectedArea, ru'U')
 
     check(currentBufStatus.buffer[0] == ru"ABC")
     check(currentBufStatus.buffer[1] == ru"Def")
@@ -1297,18 +1297,18 @@ suite "Visual mode: Converts string into upper-case string":
     status.resize(100, 100)
 
     status.changeMode(Mode.visual)
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     for i in 0 ..< 3:
       currentBufStatus.keyDown(currentMainWindowNode)
       status.update
-      currentBufStatus.selectArea.updateSelectedArea(
+      currentBufStatus.selectedArea.updateSelectedArea(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn)
 
-    status.visualCommand(currentBufStatus.selectArea, ru'U')
+    status.visualCommand(currentBufStatus.selectedArea, ru'U')
 
     check(currentBufStatus.buffer[0] == ru"ABC")
     check(currentBufStatus.buffer[1] == ru"")
@@ -1330,18 +1330,18 @@ suite "Visual block mode: Converts string into upper-case string":
 
     status.changeMode(Mode.visualBlock)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
     status.update
 
     status.update
-    status.visualBlockCommand(currentBufStatus.selectArea, ru'U')
+    status.visualBlockCommand(currentBufStatus.selectedArea, ru'U')
 
     check(currentBufStatus.buffer[0] == ru"ABC")
 
@@ -1358,23 +1358,23 @@ suite "Visual block mode: Converts string into upper-case string":
     status.resize(100, 100)
 
     status.changeMode(Mode.visualBlock)
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.keyRight(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
     status.update
 
     currentBufStatus.keyDown(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
     status.update
 
-    status.visualBlockCommand(currentBufStatus.selectArea, ru'U')
+    status.visualBlockCommand(currentBufStatus.selectedArea, ru'U')
 
     check(currentBufStatus.buffer[0] == ru"ABc")
     check(currentBufStatus.buffer[1] == ru"DEf")
@@ -1393,12 +1393,12 @@ suite "Visual block mode: Insert buffer":
     status.resize(100, 100)
 
     status.changeMode(Mode.visualBlock)
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     currentBufStatus.keyDown(currentMainWindowNode)
-    currentBufStatus.selectArea.updateSelectedArea(
+    currentBufStatus.selectedArea.updateSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
     status.update
@@ -1407,7 +1407,7 @@ suite "Visual block mode: Insert buffer":
     block:
       status.changeMode(Mode.insert)
 
-      let area = currentBufStatus.selectArea
+      let area = currentBufStatus.selectedArea
       currentMainWindowNode.currentLine = area.startLine
       currentMainWindowNode.currentColumn = area.startColumn
 
@@ -1447,13 +1447,13 @@ suite "Visual mode: Run command when Readonly mode":
 
     status.changeMode(Mode.visual)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea, ru'x')
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1473,13 +1473,13 @@ suite "Visual mode: Run command when Readonly mode":
 
     status.changeMode(Mode.visual)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'>')
+    status.visualCommand(currentBufStatus.selectedArea, ru'>')
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1499,13 +1499,13 @@ suite "Visual mode: Run command when Readonly mode":
 
     status.changeMode(Mode.visual)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'<')
+    status.visualCommand(currentBufStatus.selectedArea, ru'<')
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1527,15 +1527,15 @@ suite "Visual mode: Run command when Readonly mode":
 
     currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].high
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
-    currentBufStatus.selectArea.endLine = 1
+    currentBufStatus.selectedArea.endLine = 1
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'J')
+    status.visualCommand(currentBufStatus.selectedArea, ru'J')
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1556,13 +1556,13 @@ suite "Visual mode: Run command when Readonly mode":
 
     status.changeMode(Mode.visual)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'u')
+    status.visualCommand(currentBufStatus.selectedArea, ru'u')
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1582,13 +1582,13 @@ suite "Visual mode: Run command when Readonly mode":
 
     status.changeMode(Mode.visual)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'U')
+    status.visualCommand(currentBufStatus.selectedArea, ru'U')
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1608,13 +1608,13 @@ suite "Visual mode: Run command when Readonly mode":
 
     status.changeMode(Mode.visual)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    currentBufStatus.replaceCharacter(currentBufStatus.selectArea, ru 'z', status.commandLine)
+    currentBufStatus.replaceCharacter(currentBufStatus.selectedArea, ru 'z', status.commandLine)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1634,13 +1634,13 @@ suite "Visual mode: Run command when Readonly mode":
 
     status.changeMode(Mode.visual)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'I')
+    status.visualCommand(currentBufStatus.selectedArea, ru'I')
 
     check currentBufStatus.mode == Mode.normal
 
@@ -1660,13 +1660,13 @@ suite "Visual block mode: Run command when Readonly mode":
 
     status.changeMode(Mode.visualblock)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea, ru'x')
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1686,13 +1686,13 @@ suite "Visual block mode: Run command when Readonly mode":
 
     status.changeMode(Mode.visualblock)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'I')
+    status.visualCommand(currentBufStatus.selectedArea, ru'I')
 
     check currentBufStatus.mode == Mode.normal
 
@@ -1711,13 +1711,13 @@ suite "Visual block mode: Run command when Readonly mode":
 
     status.changeMode(Mode.visualBlock)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'>')
+    status.visualCommand(currentBufStatus.selectedArea, ru'>')
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1737,13 +1737,13 @@ suite "Visual block mode: Run command when Readonly mode":
 
     status.changeMode(Mode.visualBlock)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'<')
+    status.visualCommand(currentBufStatus.selectedArea, ru'<')
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1765,15 +1765,15 @@ suite "Visual block mode: Run command when Readonly mode":
 
     currentMainWindowNode.currentColumn = currentBufStatus.buffer[0].high
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
-    currentBufStatus.selectArea.endLine = 1
+    currentBufStatus.selectedArea.endLine = 1
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'J')
+    status.visualCommand(currentBufStatus.selectedArea, ru'J')
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1794,13 +1794,13 @@ suite "Visual block mode: Run command when Readonly mode":
 
     status.changeMode(Mode.visualBlock)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'u')
+    status.visualCommand(currentBufStatus.selectedArea, ru'u')
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1820,13 +1820,13 @@ suite "Visual block mode: Run command when Readonly mode":
 
     status.changeMode(Mode.visualBlock)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectArea, ru'U')
+    status.visualCommand(currentBufStatus.selectedArea, ru'U')
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1846,13 +1846,13 @@ suite "Visual block mode: Run command when Readonly mode":
 
     status.changeMode(Mode.visualBlock)
 
-    currentBufStatus.selectArea = initSelectArea(
+    currentBufStatus.selectedArea = initSelectedArea(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
     status.update
 
-    currentBufStatus.replaceCharacter(currentBufStatus.selectArea, ru 'z', status.commandLine)
+    currentBufStatus.replaceCharacter(currentBufStatus.selectedArea, ru 'z', status.commandLine)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
