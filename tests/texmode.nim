@@ -1,6 +1,6 @@
-import std/[unittest, os]
+import std/[unittest, os, oids, deques]
 import moepkg/[ui, editorstatus, gapbuffer, exmode, unicodeext, bufferstatus,
-               settings]
+               settings, window]
 
 suite "Ex mode: Edit command":
   test "Edit command":
@@ -24,6 +24,41 @@ suite "Ex mode: Edit command":
 
     check(status.bufStatus[0].mode == Mode.normal)
     check(status.bufStatus[1].mode == Mode.normal)
+
+suite "Fix #1581":
+  let
+    dirPath = getAppDir() / "exmodetestfiles"
+    filePaths: seq[string] = @[dirPath / $genOid(), dirPath / $genOid()]
+
+  setup:
+    # Create dir and test file
+    createDir(dirPath)
+    for p in filePaths: writeFile(p, "1\n2\n3\n")
+
+  teardown:
+    # Clean up the test dir
+    removeDir(dirPath)
+
+  test "Open a new buffer using the edit command":
+    # Fix for https://github.com/fox0430/moe/issues/1581
+
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin(filePaths[0])
+    status.resize(100, 100)
+
+    status.changeMode(Mode.ex)
+
+    let command = @[ru"e", filePaths[1].toRunes]
+    status.exModeCommand(command, 100, 100)
+
+    check currentMainWindowNode.w > 1
+    check currentMainWindowNode.h > 1
+    check currentMainWindowNode.view.height > 1
+    check currentMainWindowNode.view.width > 1
+    check currentMainWindowNode.view.lines.len > 1
+    check currentMainWindowNode.view.start.len > 1
+    check currentMainWindowNode.view.originalLine.len > 1
+    check currentMainWindowNode.view.length.len > 1
 
 suite "Ex mode: Write command":
   test "Write command":

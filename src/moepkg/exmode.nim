@@ -794,6 +794,8 @@ proc editCommand(status: var EditorStatus, path: seq[Rune]) =
 
     status.changeCurrentBuffer(bufferIndex.get)
 
+    status.resize
+
     if not isFilerMode(currentBufStatus.mode):
       currentMainWindowNode.restoreCursorPostion(
         currentBufStatus,
