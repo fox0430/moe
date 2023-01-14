@@ -1,7 +1,7 @@
 import std/[terminal, times, strutils, sequtils]
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, window,
        movement, editor, searchutils, bufferstatus, quickrun, messages,
-       visualmode, commandline
+       visualmode, commandline, bufferhighlight
 
 proc searchOneCharacterToEndOfLine(bufStatus: var BufferStatus,
                                    windowNode: WindowNode,
@@ -1042,13 +1042,13 @@ proc changeModeToReplaceMode(status: var EditorStatus) {.inline.} =
 
 proc changeModeToVisualMode(status: var EditorStatus) =
   status.changeMode(Mode.visual)
-  currentBufStatus.selectArea = initSelectArea(
+  currentBufStatus.selectedArea = initSelectedArea(
     currentMainWindowNode.currentLine,
     currentMainWindowNode.currentColumn)
 
 proc changeModeToVisualBlockMode(status: var EditorStatus) =
   status.changeMode(Mode.visualBlock)
-  currentBufStatus.selectArea = initSelectArea(
+  currentBufStatus.selectedArea = initSelectedArea(
     currentMainWindowNode.currentLine,
     currentMainWindowNode.currentColumn)
 

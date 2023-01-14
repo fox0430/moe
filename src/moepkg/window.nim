@@ -358,4 +358,3 @@ proc setTimeout*(node: var WindowNode, time: int) {.inline.} =
 proc getHeight*(node: var WindowNode): int {.inline.} = node.window.get.height
 
 proc getWidth*(node: var WindowNode): int {.inline.} = node.window.get.width
-

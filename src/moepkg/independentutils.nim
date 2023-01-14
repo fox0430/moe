@@ -13,6 +13,16 @@ type
     start*: int
     `end`*: int
 
+  SelectedArea* = object
+    startLine*: int
+    startColumn*: int
+    endLine*: int
+    endColumn*: int
+
+  BufferPosition* = object
+    line*: int
+    column*: int
+
 proc numberOfDigits*(x: int): int {.inline.} = x.intToStr.len
 
 proc calcTabWidth*(numOfBuffer, windowSize: int): int {.inline.} =

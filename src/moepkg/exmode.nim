@@ -4,7 +4,7 @@ import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
        unicodeext, independentutils, searchutils, highlight, window, movement,
        color, build, bufferstatus, editor, settings, quickrun, messages,
        commandline, debugmodeutils, platform, commandlineutils, recentfilemode,
-       buffermanager
+       buffermanager, bufferhighlight
 
 type
   replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
