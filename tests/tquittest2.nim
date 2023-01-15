@@ -7,4 +7,4 @@ test "Open buffer manager":
   startUi()
 
   const command = @[ru"buf"]
-  status.exModeCommand(command, 100, 100)
+  status.exModeCommand(command)

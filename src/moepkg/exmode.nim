@@ -1,4 +1,4 @@
-import std/[sequtils, strutils, os, terminal, times, options]
+import std/[sequtils, strutils, os, times, options]
 import syntax/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
        unicodeext, independentutils, searchutils, highlight, window, movement,
@@ -555,8 +555,8 @@ proc lineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
 
   currentMainWindowNode.view = initEditorView(
     status.bufStatus[0].buffer,
-    terminalHeight() - useStatusLine - 1,
-    terminalWidth() - numberOfDigitsLen)
+    getTerminalHeight() - useStatusLine - 1,
+    getTerminalWidth() - numberOfDigitsLen)
 
   status.commandLine.clear
 
@@ -574,8 +574,8 @@ proc statusLineSettingCommand(status: var EditorStatus, command: seq[Rune]) =
 
   currentMainWindowNode.view = initEditorView(
     status.bufStatus[0].buffer,
-    terminalHeight() - useStatusLine - 1,
-    terminalWidth() - numberOfDigitsLen)
+    getTerminalHeight() - useStatusLine - 1,
+    getTerminalWidth() - numberOfDigitsLen)
 
   status.commandLine.clear
 
@@ -772,7 +772,7 @@ proc jumpCommand(status: var EditorStatus, line: int) =
   status.commandLine.clear
   status.changeMode(bufferstatus.Mode.normal)
 
-proc editCommand(status: var EditorStatus, path: seq[Rune], h, w: int) =
+proc editCommand(status: var EditorStatus, path: seq[Rune]) =
   status.changeMode(currentBufStatus.prevMode)
 
   status.updateLastCursorPostion
@@ -794,7 +794,7 @@ proc editCommand(status: var EditorStatus, path: seq[Rune], h, w: int) =
 
     status.changeCurrentBuffer(bufferIndex.get)
 
-    status.resize(h, w)
+    status.resize
 
     if not isFilerMode(currentBufStatus.mode):
       currentMainWindowNode.restoreCursorPostion(
@@ -803,21 +803,19 @@ proc editCommand(status: var EditorStatus, path: seq[Rune], h, w: int) =
 
 proc openInHorizontalSplitWindow(
   status: var Editorstatus,
-  filename: seq[Rune],
-  h, w: int) =
+  filename: seq[Rune]) =
     status.horizontalSplitWindow
     status.resize
 
-    status.editCommand(filename, h, w)
+    status.editCommand(filename)
 
 proc openInVerticalSplitWindowCommand(
   status: var Editorstatus,
-  filename: seq[Rune],
-  h, w: int) =
+  filename: seq[Rune]) =
     status.verticalSplitWindow
     status.resize
 
-    status.editCommand(filename, h, w)
+    status.editCommand(filename)
 
 proc execCmdResultToMessageLog*(output: string,
                                 messageLog: var seq[seq[Rune]])=
@@ -952,11 +950,11 @@ proc forceWriteCommand(status: var EditorStatus, path: seq[Rune]) =
 
   status.writeCommand(path)
 
-proc quitCommand(status: var EditorStatus, height, width: int) =
+proc quitCommand(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
   if currentBufStatus.prevMode != bufferstatus.Mode.normal:
-    status.deleteBuffer(currentBufferIndex, height, width)
+    status.deleteBuffer(currentBufferIndex)
   else:
     let
       numberReferenced = mainWindowNode.countReferencedWindow(currentBufferIndex)
@@ -966,12 +964,12 @@ proc quitCommand(status: var EditorStatus, height, width: int) =
        (countChange == 0 or numberReferenced > 1 or not canundo):
 
       status.changeMode(currentBufStatus.prevMode)
-      status.closeWindow(currentMainWindowNode, height, width)
+      status.closeWindow(currentMainWindowNode)
     else:
       status.commandLine.writeNoWriteError(status.messageLog)
       status.changeMode(currentBufStatus.prevMode)
 
-proc writeAndQuitCommand(status: var EditorStatus, height, width: int) =
+proc writeAndQuitCommand(status: var EditorStatus) =
   let path = currentBufStatus.path
 
   # Check if the file has been overwritten by another application
@@ -1002,9 +1000,9 @@ proc writeAndQuitCommand(status: var EditorStatus, height, width: int) =
     return
 
   status.changeMode(currentBufStatus.prevMode)
-  status.closeWindow(currentMainWindowNode, height, width)
+  status.closeWindow(currentMainWindowNode)
 
-proc forceWriteAndQuitCommand(status: var EditorStatus, height, width: int) =
+proc forceWriteAndQuitCommand(status: var EditorStatus) =
   try:
     setFilePermissions($currentBufStatus.path, {fpUserRead,fpUserWrite})
   except OSError:
@@ -1013,11 +1011,11 @@ proc forceWriteAndQuitCommand(status: var EditorStatus, height, width: int) =
 
   discard status.commandLine.getKey
 
-  status.writeAndQuitCommand(height, width)
+  status.writeAndQuitCommand
 
-proc forceQuitCommand(status: var EditorStatus, height, width: int) =
+proc forceQuitCommand(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
-  status.closeWindow(currentMainWindowNode, height, width)
+  status.closeWindow(currentMainWindowNode)
 
 proc allBufferQuitCommand(status: var EditorStatus) =
   for i in 0 ..< status.mainWindow.numOfMainWindow:
@@ -1120,8 +1118,8 @@ proc listAllBufferCommand(status: var Editorstatus) =
 
   status.settings.view.currentLineNumber = false
   currentMainWindowNode.view = currentBufStatus.buffer.initEditorView(
-    terminalHeight() - useStatusLine - enable - 1,
-    terminalWidth())
+    getTerminalHeight() - useStatusLine - enable - 1,
+    getTerminalWidth())
 
   currentMainWindowNode.currentLine = 0
 
@@ -1310,10 +1308,7 @@ proc isExCommand*(command: Runes): InputState =
          return InputState.Valid
 
 # TODO: command arg type.
-proc exModeCommand*(status: var EditorStatus,
-                    command: seq[seq[Rune]],
-                    height, width: int) =
-
+proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
   # Save command history
@@ -1328,23 +1323,23 @@ proc exModeCommand*(status: var EditorStatus,
       line = currentBufStatus.buffer.high
     jumpCommand(status, line)
   elif isEditCommand(command):
-    status.editCommand(command[1].normalizePath, height, width)
+    status.editCommand(command[1].normalizePath)
   elif isOpenInHorizontalSplitWindowCommand(command):
     let path = if command.len == 2:
       command[1].normalizePath
     else: status.bufStatus[currentBufferIndex].path
-    status.openInHorizontalSplitWindow(path, height, width)
+    status.openInHorizontalSplitWindow(path)
   elif isOpenInVerticalSplitWindowCommand(command):
-    status.openInVerticalSplitWindowCommand(command[1], height, width)
+    status.openInVerticalSplitWindowCommand(command[1])
   elif isWriteCommand(status, command):
     let path = if command.len < 2: currentBufStatus.path else: command[1]
     status.writeCommand(path)
   elif isQuitCommand(command):
-    status.quitCommand(height, width)
+    status.quitCommand
   elif status.isWriteAndQuitCommand(command):
-    status.writeAndQuitCommand(height, width)
+    status.writeAndQuitCommand
   elif isForceQuitCommand(command):
-    status.forceQuitCommand(height, width)
+    status.forceQuitCommand
   elif isShellCommand(command):
     status.shellCommand(command.join(" ").substr(1))
   elif isReplaceCommand(command):
@@ -1454,7 +1449,7 @@ proc exModeCommand*(status: var EditorStatus,
   elif isForceWriteCommand(command):
     status.forceWriteCommand(status.bufStatus[currentBufferIndex].path)
   elif isForceWriteAndQuitCommand(command):
-    status.forceWriteAndQuitCommand(height, width)
+    status.forceWriteAndQuitCommand
   elif isStartDebugMode(command):
     status.startDebugMode
   elif isHighlightCurrentLineSettingCommand(command):
@@ -1466,7 +1461,4 @@ proc exModeCommand*(status: var EditorStatus,
     status.changeMode(currentBufStatus.prevMode)
 
 proc execExCommand*(status: var EditorStatus, command: Runes) =
-  status.exModeCommand(
-    splitCommand($command),
-    terminalHeight(),
-    terminalWidth())
+  status.exModeCommand(splitCommand($command))

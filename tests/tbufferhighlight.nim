@@ -1,6 +1,6 @@
 import std/[unittest, heapqueue, options]
 import moepkg/[editorstatus, highlight, color, editorview, gapbuffer,
-               unicodeext, movement, window]
+               unicodeext, movement, window, ui]
 
 import moepkg/bufferhighlight {.all.}
 
@@ -131,7 +131,9 @@ test "Highlight of a pair of paren 4":
   status.addNewBufferInCurrentWin
   currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"a)"])
   initHighlight()
-  status.resize(100, 100)
+
+  updateTerminalSize(100, 100)
+  status.resize
 
   currentBufStatus.keyDown(currentMainWindowNode)
   status.update
@@ -157,7 +159,8 @@ test "Highlight current word 2":
   status.addNewBufferInCurrentWin
   currentBufStatus.buffer = initGapBuffer(@[ru"test", ru"test"])
 
-  status.resize(100, 100)
+  updateTerminalSize(100, 100)
+  status.resize
   status.update
 
   var highlight = currentMainWindowNode.highlight
@@ -174,7 +177,8 @@ test "Highlight current word 3":
   status.addNewBufferInCurrentWin
   currentBufStatus.buffer = initGapBuffer(@[ru"[test]", ru"test"])
 
-  status.resize(100, 100)
+  updateTerminalSize(100, 100)
+  status.resize
   currentBufStatus.keyRight(currentMainWindowNode)
   status.update
 
@@ -369,7 +373,8 @@ suite "Highlight paren":
     status.addNewBufferInCurrentWin("test.nim")
     currentBufStatus.buffer = initGapBuffer(@[ru"proc test(a: string) ="])
 
-    status.resize(100, 100)
+    updateTerminalSize(100, 100)
+    status.resize
     status.update()
 
     currentMainWindowNode.currentColumn = 9
@@ -388,7 +393,8 @@ suite "Highlight paren":
     status.addNewBufferInCurrentWin("test.nim")
     currentBufStatus.buffer = initGapBuffer(@[ru"proc test(a: string) ="])
 
-    status.resize(100, 100)
+    updateTerminalSize(100, 100)
+    status.resize
     status.update()
 
     currentMainWindowNode.currentColumn = 19
@@ -408,7 +414,8 @@ suite "Update search highlight":
     status.addNewBufferInCurrentWin("test.nim")
     currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
 
-    status.resize(100, 100)
+    updateTerminalSize(100, 100)
+    status.resize
     status.update
 
     status.searchHistory = @[ru "abc"]
@@ -432,7 +439,8 @@ suite "Update search highlight":
     status.addNewBufferInCurrentWin("test.nim")
     currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
 
-    status.resize(100, 100)
+    updateTerminalSize(100, 100)
+    status.resize
     status.update
 
     status.verticalSplitWindow

@@ -1,4 +1,4 @@
-import std/[terminal, times, strutils, sequtils]
+import std/[times, strutils, sequtils]
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, window,
        movement, editor, searchutils, bufferstatus, quickrun, messages,
        visualmode, commandline, bufferhighlight
@@ -101,7 +101,7 @@ proc turnOffHighlighting*(status: var EditorStatus) =
   status.isSearchHighlight = false
   status.update
 
-proc writeFileAndExit(status: var EditorStatus, height, width: int) =
+proc writeFileAndExit(status: var EditorStatus) =
   if currentBufStatus.path.len == 0:
     status.commandLine.writeNoFileNameError(status.messageLog)
     status.changeMode(Mode.normal)
@@ -110,12 +110,12 @@ proc writeFileAndExit(status: var EditorStatus, height, width: int) =
       saveFile(currentBufStatus.path,
                currentBufStatus.buffer.toRunes,
                currentBufStatus.characterEncoding)
-      status.closeWindow(currentMainWindowNode, height, width)
+      status.closeWindow(currentMainWindowNode)
     except IOError:
       status.commandLine.writeSaveError(status.messageLog)
 
-proc forceExit(status: var Editorstatus, height, width: int) {.inline.} =
-  status.closeWindow(currentMainWindowNode, height, width)
+proc forceExit(status: var Editorstatus) {.inline.} =
+  status.closeWindow(currentMainWindowNode)
 
 proc runQuickRunCommand(status: var Editorstatus) =
   let
@@ -289,15 +289,13 @@ proc showCurrentCharInfoCommand(status: var EditorStatus,
 
   status.commandLine.writeCurrentCharInfo(currentChar)
 
-proc normalCommand(status: var EditorStatus,
-                   commands: seq[Rune],
-                   height, width: int)
+proc normalCommand(status: var EditorStatus, commands: seq[Rune])
 
-proc repeatNormalModeCommand(status: var Editorstatus, height, width: int) =
+proc repeatNormalModeCommand(status: var Editorstatus) =
   if status.normalCommandHistory.len == 0: return
 
   let commands  = status.normalCommandHistory[^1]
-  status.normalCommand(commands, height, width)
+  status.normalCommand(commands)
 
 proc yankLines(status: var Editorstatus, start, last: int) =
   let lastLine = min(last,
@@ -869,14 +867,14 @@ proc moveToEndOfLineAndEnterInsertMode(status: var EditorStatus) =
   currentMainWindowNode.currentColumn = lineLen
   status.changeMode(Mode.insert)
 
-proc closeCurrentWindow(status: var EditorStatus, height, width: int) =
+proc closeCurrentWindow(status: var EditorStatus) =
   if status.mainWindow.numOfMainWindow == 1: return
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
   if currentBufStatus.countChange == 0 or
      mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
-    status.closeWindow(currentMainWindowNode, height, width)
+    status.closeWindow(currentMainWindowNode)
 
 proc addRegister(status: var EditorStatus, command, registerName: string) =
   if command == "yy":
@@ -1076,10 +1074,7 @@ proc changeModeToSearchBackwardMode(
     commandLine.clear
     commandLine.setPrompt(searchBackwardModePrompt)
 
-proc normalCommand(status: var EditorStatus,
-                   commands: seq[Rune],
-                   height, width: int) =
-
+proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
   if commands.len == 0:
     return
   elif isControlC(commands[^1]):
@@ -1087,7 +1082,7 @@ proc normalCommand(status: var EditorStatus,
     status.commandLine.writeExitHelp
   elif commands.len > 1 and isEscKey(commands[0]):
     # Remove ECS key and call recursively.
-    status.normalCommand(commands[1..commands.high], height, width)
+    status.normalCommand(commands[1..commands.high])
 
   if currentBufStatus.cmdLoop == 0: currentBufStatus.cmdLoop = 1
 
@@ -1318,15 +1313,15 @@ proc normalCommand(status: var EditorStatus,
   elif key == ord('Z'):
     let secondKey = commands[1]
     if  secondKey == ord('Z'):
-      status.writeFileAndExit(height, width)
+      status.writeFileAndExit
     elif secondKey == ord('Q'):
-      status.forceExit(height, width)
+      status.forceExit
   elif isControlW(key):
     let secondKey = commands[1]
     if secondKey == ord('c'):
-      status.closeCurrentWindow(height, width)
+      status.closeCurrentWindow
   elif key == ord('.'):
-    status.repeatNormalModeCommand(height, width)
+    status.repeatNormalModeCommand
   elif key == ord('\\'):
     let secondKey = commands[1]
     if secondKey == ord('r'): status.runQuickRunCommand
@@ -1618,6 +1613,6 @@ proc execNormalModeCommand*(status: var Editorstatus, command: Runes) =
     let cmd =
       if isDigit(command[0]): command.filterIt(not isDigit(it))
       else: command
-    status.normalCommand(cmd, terminalHeight(), terminalWidth())
+    status.normalCommand(cmd)
 
   currentBufStatus.cmdLoop = 0

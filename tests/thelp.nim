@@ -1,7 +1,11 @@
 import std/[unittest, strutils]
-import moepkg/[editorstatus, bufferstatus, unicodeext, gapbuffer]
+import moepkg/[editorstatus, bufferstatus, unicodeext, gapbuffer, ui]
 
 import moepkg/help {.all.}
+
+proc resize(status: var EditorStatus, h, w: int) =
+  updateTerminalSize(h, w)
+  status.resize
 
 suite "Help":
   test "Check buffer":

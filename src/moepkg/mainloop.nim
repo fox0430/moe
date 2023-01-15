@@ -1,4 +1,4 @@
-import std/[terminal, options, times]
+import std/[options, times]
 
 import editorstatus, bufferstatus, window, unicodeext, gapbuffer, ui,
        normalmode, visualmode, insertmode, autocomplete, suggestionwindow,
@@ -95,7 +95,7 @@ proc updateSuggestWindow(
       mainWindowY =
         if status.settings.tabLine.enable: 1
         else: 0
-      mainWindowHeight = status.settings.getMainWindowHeight(terminalHeight())
+      mainWindowHeight = status.settings.getMainWindowHeight
       (y, x) = suggestWin.calcSuggestionWindowPosition(
         currentMainWindowNode,
         mainWindowHeight)
@@ -103,7 +103,6 @@ proc updateSuggestWindow(
     suggestWin.writeSuggestionWindow(
       currentMainWindowNode,
       y, x,
-      terminalHeight(), terminalWidth(),
       mainWindowY,
       status.settings.statusLine.enable)
 
@@ -178,6 +177,7 @@ proc commandLineLoop*(status: var EditorStatus) =
     let key = status.getKeyFromCommandLine
 
     if isResizekey(key):
+      updateTerminalSize()
       status.resize
     elif isEscKey(key) or isControlC(key):
       isCancel = true
@@ -312,6 +312,7 @@ proc editorMainLoop*(status: var EditorStatus) =
         status.suggestionWindow.close
 
     if isResizekey(key):
+      updateTerminalSize()
       status.resize
       continue
 

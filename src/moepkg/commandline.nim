@@ -1,4 +1,4 @@
-import std/[terminal, sequtils]
+import std/[sequtils]
 import ui, unicodeext, color, independentutils
 
 type
@@ -35,8 +35,8 @@ proc initCommandLine*(): CommandLine =
     l = 0
     color = EditorColorPair.defaultChar
   let
-    w = terminalWidth()
-    h = terminalHeight() - 1
+    w = getTerminalWidth()
+    h = getTerminalHeight() - 1
   result.window = initWindow(h, w, t, l, color)
   result.window.setTimeout()
 

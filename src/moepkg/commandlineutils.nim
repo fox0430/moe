@@ -1,4 +1,4 @@
-import std/[terminal, strutils, sequtils, strformat, os, algorithm, options]
+import std/[strutils, sequtils, strformat, os, algorithm, options]
 import ui, unicodeext, fileutils, color, commandline, popupwindow
 
 type
@@ -389,7 +389,6 @@ proc calcXWhenSuggestPath*(buffer, inputPath: Runes): int =
   return command.len + promptAndSpaceWidth + positionInInputPath
 
 proc calcPopUpWindowSize*(
-  terminalHeight, terminalWidth: int,
   buffer: seq[Runes]): tuple[h: int, w: int] =
 
     var maxBufferLen = 0
@@ -398,11 +397,11 @@ proc calcPopUpWindowSize*(
 
     let
       height =
-        if buffer.len > terminalHeight - 2: terminalHeight - 2
+        if buffer.len > getTerminalHeight() - 2: getTerminalHeight() - 2
         else: buffer.len
       width =
         # 2 is side spaces
-        if maxBufferLen + 2 > terminalWidth - 1: terminalWidth - 1
+        if maxBufferLen + 2 > getTerminalWidth() - 1: getTerminalWidth() - 1
         else: maxBufferLen + 2
 
     return (h: height, w: width)
@@ -414,7 +413,7 @@ proc tryOpenSuggestWindow*(): Option[Window] =
     h = 1
     w = 1
     x = 0
-    y = terminalHeight() - 1
+    y = getTerminalHeight() - 1
 
   # Use EditorStatus.popUpWindow?
   var popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
@@ -428,18 +427,14 @@ proc updateSuggestWindow*(
   suggestIndex: int,
   commandLine: var CommandLine) =
 
-    let
-      firstArg = commandLine.buffer.firstArg
-
-      terminalHeight = terminalHeight()
-      terminalWidth = terminalWidth()
+    let firstArg = commandLine.buffer.firstArg
 
     var
       # Pop up window initial size/position
       h = 1
       w = 1
       x = 0
-      y = terminalHeight - 2
+      y = getTerminalHeight() - 2
 
     case suggestType:
       of exCommand:
@@ -457,8 +452,6 @@ proc updateSuggestWindow*(
       currentLine = some(suggestIndex)
       displayBuffer = initSuggestBuffer(suggestList, suggestType)
       winSize = calcPopUpWindowSize(
-        terminalHeight,
-        terminalWidth,
         displayBuffer)
 
     h = winSize.h
@@ -468,7 +461,6 @@ proc updateSuggestWindow*(
     suggestWin.writePopUpWindow(
       h, w,
       y, x,
-      terminalHeight, terminalWidth,
       currentLine,
       displayBuffer)
 

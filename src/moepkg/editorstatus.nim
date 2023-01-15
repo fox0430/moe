@@ -1,5 +1,5 @@
-import std/[strutils, terminal, os, strformat, tables, times, heapqueue, deques,
-            options, encodings]
+import std/[strutils, os, strformat, tables, times, heapqueue, deques, options,
+            encodings]
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        window, color, settings, statusline, bufferstatus, cursor, tabline,
@@ -318,8 +318,10 @@ proc addNewBufferInCurrentWin*(
 proc addNewBufferInCurrentWin*(status: var EditorStatus) {.inline.} =
   status.addNewBufferInCurrentWin("")
 
-proc getMainWindowHeight*(settings: EditorSettings, h: int): int =
+# TODO: Move to window.nim?
+proc getMainWindowHeight*(settings: EditorSettings): int =
   let
+    h = getTerminalHeight()
     tabHeight = if settings.tabLine.enable: 1 else: 0
     statusHeight = if settings.statusLine.enable: 1 else: 0
     commandHeight = if settings.statusLine.merge: 1 else: 0
@@ -341,8 +343,12 @@ proc resizeMainWindowNode(status: var EditorStatus, terminalSize: Size) =
 
   mainWindowNode.resize(Position(y: y, x: 0), Size(h: h, w: w))
 
-proc resize*(status: var EditorStatus, terminalSize: Size) =
+## Reszie all windows to ui.terminalSize.
+proc resize*(status: var EditorStatus) =
   setCursor(false)
+
+  # Get the current terminal from ui.terminalSize.
+  let terminalSize = getTerminalSize()
 
   status.resizeMainWindowNode(terminalSize)
 
@@ -444,14 +450,6 @@ proc resize*(status: var EditorStatus, terminalSize: Size) =
   status.commandLine.resize(y, x, commandWindowHeight, width)
 
   setCursor(true)
-
-proc resize*(status: var EditorStatus) {.inline.} =
-  let terminalSize = Size(h: terminalHeight(), w: terminalWidth())
-  status.resize(terminalSize)
-
-proc resize*(status: var EditorStatus, height, width: int) {.inline.} =
-  let terminalSize = Size(h: height, w: width)
-  status.resize(terminalSize)
 
 proc updateStatusLine(status: var Editorstatus) =
   if not status.settings.statusLine.multipleStatusLine:
@@ -738,10 +736,7 @@ proc horizontalSplitWindow*(status: var Editorstatus) =
   var newNode = mainWindowNode.searchByWindowIndex(currentMainWindowNode.windowIndex + 1)
   newNode.restoreCursorPostion(currentBufStatus, status.lastPosition)
 
-proc closeWindow*(status: var EditorStatus,
-                  node: WindowNode,
-                  height, width: int) =
-
+proc closeWindow*(status: var EditorStatus, node: WindowNode) =
   if isNormalMode(currentBufStatus.mode, currentBufStatus.prevMode) or
      isFilerMode(currentBufStatus.mode, currentBufStatus.prevMode):
     status.updateLastCursorPostion
@@ -758,7 +753,7 @@ proc closeWindow*(status: var EditorStatus,
     let statusLineHigh = status.statusLine.high
     status.statusLine.delete(statusLineHigh)
 
-  status.resize(Size(h: height, w: width))
+  status.resize
 
   let
     numOfMainWindow = status.mainWindow.numOfMainWindow
@@ -790,8 +785,7 @@ proc movePrevWindow*(status: var EditorStatus) {.inline.} =
 
   status.moveCurrentMainWindow(currentMainWindowNode.windowIndex - 1)
 
-proc deleteBuffer*(status: var Editorstatus, deleteIndex,
-                   terminalHeight, terminalWidth: int) =
+proc deleteBuffer*(status: var Editorstatus, deleteIndex: int) =
   let beforeWindowIndex = currentMainWindowNode.windowIndex
 
   var queue = initHeapQueue[WindowNode]()
@@ -801,7 +795,7 @@ proc deleteBuffer*(status: var Editorstatus, deleteIndex,
     for i in 0 ..< queue.len:
       let node = queue.pop
       if node.bufferIndex == deleteIndex:
-        status.closeWindow(node, terminalHeight, terminalWidth)
+        status.closeWindow(node)
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)

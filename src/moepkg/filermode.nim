@@ -1,12 +1,10 @@
-import std/[os, terminal, options]
+import std/[os, options]
 import editorstatus, ui, window, bufferstatus, unicodeext, filermodeutils, messages,
        commandline
 
 proc openNewWinAndOpenFilerOrDir(
   status: var EditorStatus,
-  filerStatus: var FilerStatus,
-  terminalHeight, terminalWidth: int) =
-
+  filerStatus: var FilerStatus) =
     let path = filerStatus.pathList[currentMainWindowNode.currentLine].path
 
     status.verticalSplitWindow
@@ -65,9 +63,7 @@ proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
       currentMainWindowNode,
       status.settings,
       currentFilerStatus.pathList.len,
-      currentFilerStatus.pathList[currentMainWindowNode.currentLine][1],
-      terminalHeight(),
-      terminalWidth())
+      currentFilerStatus.pathList[currentMainWindowNode.currentLine][1])
     currentFilerStatus.isUpdateView = true
   elif key == 'j' or isDownKey(key):
     currentFilerStatus.keyDown(currentMainWindowNode.currentLine)
@@ -98,10 +94,7 @@ proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
       status.commandLine.writeError(err)
       status.messageLog.add err
   elif key == ord('v'):
-    status.openNewWinAndOpenFilerOrDir(
-      currentFilerStatus,
-      terminalHeight(),
-      terminalWidth())
+    status.openNewWinAndOpenFilerOrDir(currentFilerStatus)
   elif isControlJ(key):
     status.movePrevWindow
   elif isControlK(key):

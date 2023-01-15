@@ -1,8 +1,12 @@
 import std/[unittest, random, options, sequtils, sugar, importutils]
 import moepkg/[highlight, editorstatus, gapbuffer, unicodeext, editor,
-               bufferstatus, movement, autocomplete, window]
+               bufferstatus, movement, autocomplete, window, ui]
 
 import moepkg/suggestionwindow {.all.}
+
+proc resize(status: var EditorStatus, h, w: int) =
+  updateTerminalSize(h, w)
+  status.resize
 
 suite "Insert mode":
   test "Issue #474":
@@ -296,7 +300,7 @@ suite "Insert mode":
       currentMainWindowNode)
 
     let
-      mainWindowHeight = status.settings.getMainWindowHeight(100)
+      mainWindowHeight = status.settings.getMainWindowHeight
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
         currentMainWindowNode,
         mainWindowHeight)
@@ -307,7 +311,6 @@ suite "Insert mode":
     suggestionWindow.get.writeSuggestionWindow(
       currentMainWindowNode,
       y, x,
-      100, 100,
       mainWindowNodeY,
       isEnableStatusLine)
 
@@ -334,7 +337,7 @@ suite "Insert mode":
       currentMainWindowNode)
 
     let
-      mainWindowHeight = status.settings.getMainWindowHeight(terminalHeight)
+      mainWindowHeight = status.settings.getMainWindowHeight
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
         currentMainWindowNode,
         mainWindowHeight)
@@ -345,7 +348,6 @@ suite "Insert mode":
     suggestionWindow.get.writeSuggestionWindow(
       currentMainWindowNode,
       y, x,
-      100, 100,
       mainWindowNodeY,
       isEnableStatusLine)
 
@@ -373,7 +375,7 @@ suite "Insert mode":
       currentMainWindowNode)
 
     let
-      mainWindowHeight = status.settings.getMainWindowHeight(100)
+      mainWindowHeight = status.settings.getMainWindowHeight
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
         currentMainWindowNode,
         mainWindowHeight)
@@ -384,7 +386,6 @@ suite "Insert mode":
     suggestionWindow.get.writeSuggestionWindow(
       currentMainWindowNode,
       y, x,
-      100, 100,
       mainWindowNodeY,
       isEnableStatusLine)
 
@@ -486,14 +487,13 @@ suite "Insert mode":
 
     const mainWindowNodeY = 1
     let
-      mainWindowHeight = status.settings.getMainWindowHeight(100)
+      mainWindowHeight = status.settings.getMainWindowHeight
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
         currentMainWindowNode,
         mainWindowHeight)
     suggestionWindow.get.writeSuggestionWindow(
       currentMainWindowNode,
       y, x,
-      100, 100,
       mainWindowNodeY,
       status.settings.statusLine.enable)
 

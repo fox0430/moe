@@ -410,8 +410,7 @@ proc writefileDetail*(
   windowNode: var WindowNode,
   settings: EditorSettings,
   numOfFile: int,
-  fileName: string,
-  terminalHeight, terminalWidth: int) =
+  fileName: string) =
 
     bufStatus.buffer = initGapBuffer[seq[Rune]]()
 
@@ -447,8 +446,8 @@ proc writefileDetail*(
     # TODO: Move
     windowNode.view = initEditorView(
       bufStatus.buffer,
-      terminalHeight - useStatusBar - 1,
-      terminalWidth - numOfFile)
+      getTerminalHeight() - useStatusBar - 1,
+      getTerminalWidth() - numOfFile)
 
     windowNode.currentLine = tmpCurrentLine
 

@@ -7,4 +7,4 @@ test "Force quit command":
 
   status.bufStatus[0].countChange = 1
   const command = @[ru"q!"]
-  status.exModeCommand(command, 100, 100)
+  status.exModeCommand(command)

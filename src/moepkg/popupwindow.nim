@@ -6,7 +6,6 @@ import ui, color, unicodeext
 proc writePopUpWindow*(
   popUpWindow: var Window,
   h, w, y, x: int,
-  terminalHeight, terminalWidth: int,
   currentLine: Option[int],
   buffer: seq[Runes]) =
 
@@ -17,8 +16,8 @@ proc writePopUpWindow*(
 
     # Pop up window position
     let
-      absY = y.clamp(0, terminalHeight - 1 - h)
-      absX = x.clamp(0, terminalWidth - w)
+      absY = y.clamp(0, getTerminalHeight() - 1 - h)
+      absX = x.clamp(0, getTerminalWidth() - w)
 
     popUpWindow.resize(h, w, absY, absX)
 

@@ -1,8 +1,12 @@
 import std/[unittest, options, heapqueue, os, importutils]
-import moepkg/[editor, gapbuffer, bufferstatus, editorview, unicodeext, color,
-               highlight, window, movement]
+import moepkg/[editor, gapbuffer, bufferstatus, editorview, unicodeext, ui,
+               highlight, window, movement, ui]
 
 import moepkg/editorstatus {.all.}
+
+proc resize(status: var EditorStatus, h, w: int) =
+  updateTerminalSize(h, w)
+  status.resize
 
 suite "Add new buffer":
   test "Add 2 uffers":
@@ -384,7 +388,7 @@ test "Close window":
   status.addNewBufferInCurrentWin
   status.resize(100, 100)
   status.verticalSplitWindow
-  status.closeWindow(currentMainWindowNode, 100, 100)
+  status.closeWindow(currentMainWindowNode)
 
 test "Close window 2":
   var status = initEditorStatus()
@@ -397,7 +401,7 @@ test "Close window 2":
   status.resize(100, 100)
   status.update
 
-  status.closeWindow(currentMainWindowNode, 100, 100)
+  status.closeWindow(currentMainWindowNode)
   status.resize(100, 100)
   status.update
 
@@ -423,7 +427,7 @@ test "Close window 3":
   status.resize(100, 100)
   status.update
 
-  status.closeWindow(currentMainWindowNode, 100, 100)
+  status.closeWindow(currentMainWindowNode)
   status.resize(100, 100)
   status.update
 
@@ -450,7 +454,7 @@ test "Close window 4":
   status.resize(100, 100)
   status.update
 
-  status.closeWindow(currentMainWindowNode, 100, 100)
+  status.closeWindow(currentMainWindowNode)
   status.resize(100, 100)
   status.update
 
@@ -481,7 +485,7 @@ test "Close window 5":
   status.resize(100, 100)
   status.update
 
-  status.closeWindow(currentMainWindowNode, 100, 100)
+  status.closeWindow(currentMainWindowNode)
   status.resize(100, 100)
   status.update
 

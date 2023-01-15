@@ -1,4 +1,4 @@
-import std/[terminal, os, heapqueue]
+import std/[os, heapqueue]
 import gapbuffer, ui, editorstatus, unicodeext, window, movement, bufferstatus
 
 proc initBufferManagerBuffer*(
@@ -16,7 +16,7 @@ proc initBufferManagerBuffer*(
 
         result.add line
 
-proc deleteSelectedBuffer(status: var Editorstatus, height, width: int) =
+proc deleteSelectedBuffer(status: var Editorstatus) =
   let deleteIndex = currentMainWindowNode.currentLine
 
   var qeue = initHeapQueue[WindowNode]()
@@ -26,7 +26,7 @@ proc deleteSelectedBuffer(status: var Editorstatus, height, width: int) =
     for i in 0 ..< qeue.len:
       let node = qeue.pop
       if node.bufferIndex == deleteIndex:
-        status.closeWindow(node, height, width)
+        status.closeWindow(node)
 
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
@@ -101,6 +101,6 @@ proc execBufferManagerCommand*(status: var Editorstatus, command: Runes) =
   elif key == ord('o'):
     status.openSelectedBuffer(true)
   elif key == ord('D'):
-    status.deleteSelectedBuffer(terminalHeight(), terminalWidth())
+    status.deleteSelectedBuffer
 
   if status.bufStatus.len < 2: status.exitEditor
