@@ -1,0 +1,9 @@
+.. _#1583: https://github.com/fox0430/moe/pull/1583
+.. _#1584: https://github.com/fox0430/moe/pull/1584
+
+Fixed
+.....
+
+- `#1583`_  Fix #1581: Fix a bug that crash when opening a file by the edit command
+
+- `#1584`_  Fix #1582: Fix a bug that deleteTrailingSpaces doesn't work at EOF

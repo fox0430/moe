@@ -104,6 +104,18 @@ suite "Editor: Delete trailing spaces":
     check status.bufStatus[0].buffer[1] == ru"d"
     check status.bufStatus[0].buffer[2] == ru"efg"
 
+  test "Fix #1582":
+    # Fix for https://github.com/fox0430/moe/issues/1582.
+
+    var bufStatus = initBufferStatus(Mode.normal)
+    bufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi "])
+
+    bufStatus.deleteTrailingSpaces
+
+    check bufStatus.buffer[0] == ru"abc"
+    check bufStatus.buffer[1] == ru"def"
+    check bufStatus.buffer[2] == ru"ghi"
+
 suite "Editor: Delete word":
   test "Fix #842":
     var status = initEditorStatus()
