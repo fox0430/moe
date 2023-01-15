@@ -412,9 +412,10 @@ proc openHelp(status: var Editorstatus) =
   status.resize
   status.moveNextWindow
 
-  status.addNewBufferInCurrentWin
-  status.changeCurrentBuffer(status.bufStatus.high)
-  status.changeMode(bufferstatus.Mode.help)
+  const path = ""
+  status.addNewBufferInCurrentWin(path, Mode.help)
+
+  status.resize
 
 proc openLogViewer(status: var Editorstatus) =
   status.changeMode(currentBufStatus.prevMode)

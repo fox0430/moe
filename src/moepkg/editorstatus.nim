@@ -5,7 +5,7 @@ import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        window, color, settings, statusline, bufferstatus, cursor, tabline,
        backup, messages, commandline, register, platform, movement,
        autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
-       independentutils, bufferhighlight
+       independentutils, bufferhighlight, helputils
 
 # Save cursor position when a buffer for a window(file) gets closed.
 type LastCursorPosition* = object
@@ -267,20 +267,27 @@ proc addNewBuffer*(
   status: var EditorStatus,
   path: string,
   mode: Mode): Option[int] =
-    try:
-      status.bufStatus.add initBufferStatus(path, mode)
-    except:
-      let errMessage =
-        if mode.isFilerMode:
-          fmt"Failed to open dir: {path} : {getCurrentExceptionMsg()}"
-        else:
-          fmt"Failed to open file: {path} {getCurrentExceptionMsg()}"
 
-      status.commandLine.writeError(errMessage.toRunes)
-      status.messageLog.add errMessage.toRunes
-      return
+    case mode:
+      of Mode.help:
+        status.bufStatus.add initBufferStatus(mode)
+        status.bufStatus[^1].buffer = initHelpModeBuffer().toGapBuffer
+        return some(status.bufStatus.high)
+      else:
+        try:
+          status.bufStatus.add initBufferStatus(path, mode)
+        except:
+          let errMessage =
+            if mode.isFilerMode:
+              fmt"Failed to open dir: {path} : {getCurrentExceptionMsg()}"
+            else:
+              fmt"Failed to open file: {path} {getCurrentExceptionMsg()}"
 
-    return some(status.bufStatus.high)
+          status.commandLine.writeError(errMessage.toRunes)
+          status.messageLog.add errMessage.toRunes
+          return
+
+        return some(status.bufStatus.high)
 
 proc addNewBuffer*(
   status: var EditorStatus,
