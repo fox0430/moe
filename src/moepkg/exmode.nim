@@ -772,7 +772,7 @@ proc jumpCommand(status: var EditorStatus, line: int) =
   status.commandLine.clear
   status.changeMode(bufferstatus.Mode.normal)
 
-proc editCommand(status: var EditorStatus, path: seq[Rune]) =
+proc editCommand(status: var EditorStatus, path: seq[Rune], h, w: int) =
   status.changeMode(currentBufStatus.prevMode)
 
   status.updateLastCursorPostion
@@ -794,24 +794,30 @@ proc editCommand(status: var EditorStatus, path: seq[Rune]) =
 
     status.changeCurrentBuffer(bufferIndex.get)
 
-    status.resize
+    status.resize(h, w)
 
     if not isFilerMode(currentBufStatus.mode):
       currentMainWindowNode.restoreCursorPostion(
         currentBufStatus,
         status.lastPosition)
 
-proc openInHorizontalSplitWindow(status: var Editorstatus, filename: seq[Rune]) =
-  status.horizontalSplitWindow
-  status.resize
+proc openInHorizontalSplitWindow(
+  status: var Editorstatus,
+  filename: seq[Rune],
+  h, w: int) =
+    status.horizontalSplitWindow
+    status.resize
 
-  status.editCommand(filename)
+    status.editCommand(filename, h, w)
 
-proc openInVerticalSplitWindowCommand(status: var Editorstatus, filename: seq[Rune]) =
-  status.verticalSplitWindow
-  status.resize
+proc openInVerticalSplitWindowCommand(
+  status: var Editorstatus,
+  filename: seq[Rune],
+  h, w: int) =
+    status.verticalSplitWindow
+    status.resize
 
-  status.editCommand(filename)
+    status.editCommand(filename, h, w)
 
 proc execCmdResultToMessageLog*(output: string,
                                 messageLog: var seq[seq[Rune]])=
@@ -1322,14 +1328,14 @@ proc exModeCommand*(status: var EditorStatus,
       line = currentBufStatus.buffer.high
     jumpCommand(status, line)
   elif isEditCommand(command):
-    status.editCommand(command[1].normalizePath)
+    status.editCommand(command[1].normalizePath, height, width)
   elif isOpenInHorizontalSplitWindowCommand(command):
     let path = if command.len == 2:
       command[1].normalizePath
     else: status.bufStatus[currentBufferIndex].path
-    status.openInHorizontalSplitWindow(path)
+    status.openInHorizontalSplitWindow(path, height, width)
   elif isOpenInVerticalSplitWindowCommand(command):
-    status.openInVerticalSplitWindowCommand(command[1])
+    status.openInVerticalSplitWindowCommand(command[1], height, width)
   elif isWriteCommand(status, command):
     let path = if command.len < 2: currentBufStatus.path else: command[1]
     status.writeCommand(path)
