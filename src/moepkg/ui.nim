@@ -1,6 +1,6 @@
-import std/[strformat, osproc, strutils, os]
+import std/[strformat, osproc, strutils, os, terminal]
 import pkg/ncurses
-import unicodeext, color
+import unicodeext, color, independentutils
 
 when not defined unitTest:
   import std/posix
@@ -36,9 +36,31 @@ type
     Invalid
     Cancel
 
-# if press ctrl-c key, set true in setControlCHook()
-# TODO: Rename
-var pressCtrlC* = false
+var
+  # if press ctrl-c key, set true in setControlCHook()
+  # TODO: Rename
+  pressCtrlC* = false
+
+  terminalSize: Size
+
+## Get the current terminal size and update.
+proc updateTerminalSize*() =
+  terminalSize.h = terminalHeight()
+  terminalSize.w = terminalWidth()
+
+proc updateTerminalSize*(s: Size) =
+  terminalSize.h = s.h
+  terminalSize.w = s.w
+
+proc updateTerminalSize*(h, w: int) =
+  terminalSize.h = h
+  terminalSize.w = w
+
+proc getTerminalSize*(): Size = terminalSize
+
+proc getTerminalHeight*(): int = terminalSize.h
+
+proc getTerminalWidth*(): int = terminalSize.w
 
 proc setBkinkingIbeamCursor*() {.inline.} = discard execShellCmd("printf '\e[5 q'")
 
@@ -88,6 +110,9 @@ proc checkColorSupportedTerminal*(): int =
 proc startUi*() =
   # Not start when running unit tests
   when not defined unitTest:
+    # Set the current terminal size.
+    updateTerminalSize()
+
     discard setLocale(LC_ALL, "")   # enable UTF-8
 
     initscr()   ## start terminal control

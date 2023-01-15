@@ -1,12 +1,16 @@
 import std/[unittest, osproc]
 import moepkg/[highlight, independentutils, editorstatus, gapbuffer, unicodeext,
-               bufferstatus, movement, editor]
+               bufferstatus, movement, editor, ui]
 
 import moepkg/visualmode {.all.}
 import moepkg/platform {.all.}
 
 proc isXselAvailable(): bool {.inline.} =
   execCmdExNoOutput("xset q") == 0 and execCmdExNoOutput("xsel --version") == 0
+
+proc resize(status: var EditorStatus, h, w: int) =
+  updateTerminalSize(h, w)
+  status.resize
 
 suite "Visual mode: Delete buffer":
   test "Delete buffer 1":

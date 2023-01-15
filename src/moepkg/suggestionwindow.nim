@@ -287,9 +287,8 @@ proc calcSuggestionWindowPosition*(
 
 # cursorPosition is absolute y
 proc calcMaxSugestionWindowHeight(
-  y,
-  terminalHeight,
-  cursorYPosition,
+  y: int,
+  cursorYPosition: int,
   mainWindowNodeY: int,
   isEnableStatusLine: bool): int =
 
@@ -297,15 +296,14 @@ proc calcMaxSugestionWindowHeight(
   let statusLineHeight = if isEnableStatusLine: 1 else: 0
 
   if y > cursorYPosition:
-    result = (terminalHeight - 1) - cursorYPosition - commanLineHeight - statusLineHeight
+    result = (getTerminalHeight() - 1) - cursorYPosition - commanLineHeight - statusLineHeight
   else:
     result = cursorYPosition - mainWindowNodeY
 
 proc writeSuggestionWindow*(
   suggestionWindow: var SuggestionWindow,
   windowNode: WindowNode,
-  y, x,
-  terminalHeight, terminalWidth,
+  y, x: int,
   mainWindowNodeY: int,
   isEnableStatusLine: bool) =
 
@@ -315,7 +313,6 @@ proc writeSuggestionWindow*(
     (absoluteY, _) = windowNode.absolutePosition(line, column)
     maxHeight = calcMaxSugestionWindowHeight(
       y,
-      terminalHeight,
       absoluteY,
       mainWindowNodeY,
       isEnableStatusLine)
@@ -345,8 +342,6 @@ proc writeSuggestionWindow*(
     popUpWindow.width,
     popUpWindow.y,
     popUpWindow.x,
-    terminalHeight,
-    terminalWidth,
     currentLine,
     suggestionWindow.suggestoins)
 

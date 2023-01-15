@@ -1,8 +1,8 @@
-import std/[terminal, times]
+import std/times
 import ui, editorstatus, unicodeext, movement, bufferstatus, window
 
-proc exitLogViewer*(status: var Editorstatus, height, width: int) {.inline.} =
-  status.deleteBuffer(status.bufferIndexInCurrentWindow, height, width)
+proc exitLogViewer*(status: var Editorstatus) {.inline.} =
+  status.deleteBuffer(status.bufferIndexInCurrentWindow)
 
 proc isLogViewerCommand*(command: Runes): InputState =
   result = InputState.Invalid
@@ -44,7 +44,7 @@ proc execLogViewerCommand*(status: var EditorStatus, command: Runes) =
     elif command[0] == ord('j') or isDownKey(key):
       currentBufStatus.keyDown(currentMainWindowNode)
     elif command[0] == ord('q') or isEscKey(key):
-      status.exitLogViewer(terminalHeight(), terminalWidth())
+      status.exitLogViewer
     elif command[0] == ord('G'):
       currentBufStatus.moveToLastLine(currentMainWindowNode)
   elif command.len == 2:
@@ -97,7 +97,7 @@ proc messageLogViewer*(status: var Editorstatus) =
     elif key == ord('$') or isEndKey(key):
       currentBufStatus.moveToLastOfLine(currentMainWindowNode)
     elif key == ord('q') or isEscKey(key):
-      status.exitLogViewer(terminalHeight(), terminalWidth())
+      status.exitLogViewer
     elif key == ord('g'):
       let secondKey = getKey(currentMainWindowNode)
       if secondKey == 'g': currentBufStatus.moveToFirstLine(currentMainWindowNode)

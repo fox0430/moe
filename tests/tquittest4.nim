@@ -1,11 +1,13 @@
 import std/unittest
-import moepkg/[editorstatus, unicodeext, exmode]
+import moepkg/[editorstatus, unicodeext, exmode, ui]
 
 test "All buffer quit command":
   var status = initEditorStatus()
   status.addNewBufferInCurrentWin
   status.verticalSplitWindow
-  status.resize(100, 100)
+
+  updateTerminalSize(100, 100)
+  status.resize
 
   const command = @[ru"qa"]
-  status.exModeCommand(command, 100, 100)
+  status.exModeCommand(command)

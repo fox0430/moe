@@ -9,4 +9,4 @@ test "All buffer force quit command":
   status.verticalSplitWindow
 
   const command = @[ru"qa!"]
-  status.exModeCommand(command, 100, 100)
+  status.exModeCommand(command)

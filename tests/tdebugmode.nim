@@ -1,5 +1,5 @@
 import std/[unittest, os, strformat, times, options]
-import moepkg/[editorstatus, bufferstatus, gapbuffer, unicodeext]
+import moepkg/[editorstatus, bufferstatus, gapbuffer, unicodeext, ui]
 import moepkg/debugmodeutils {.all.}
 
 suite "Init debug mode buffer":
@@ -14,7 +14,8 @@ suite "Init debug mode buffer":
         currentMainWindowNode.windowIndex,
         status.settings.debugMode).toGapBuffer
 
-    status.resize(100, 100)
+    updateTerminalSize(100, 100)
+    status.resize
     status.update
 
     let correctBuf = initGapBuffer[seq[Rune]](@[

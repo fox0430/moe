@@ -6,4 +6,4 @@ test "Quit command":
   status.addNewBufferInCurrentWin
 
   const command = @[ru"q"]
-  status.exModeCommand(command, 100, 100)
+  status.exModeCommand(command)

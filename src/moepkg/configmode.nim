@@ -1,4 +1,4 @@
-import std/[terminal, times, strutils, options]
+import std/[times, strutils, options]
 import gapbuffer, ui, editorstatus, unicodeext, window, movement, settings,
        bufferstatus, color, highlight, editor, commandline, popupwindow
 
@@ -1563,7 +1563,6 @@ proc editEnumAndBoolSettings(status: var EditorStatus,
 
     popUpWindow.writePopUpWindow(
       h, w, y, x,
-      terminalHeight(), terminalWidth(),
       some(suggestIndex),
       settingValues)
 
