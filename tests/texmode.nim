@@ -1,10 +1,20 @@
 import std/[unittest, os, oids, deques]
 import moepkg/[ui, editorstatus, gapbuffer, exmode, unicodeext, bufferstatus,
-               settings, window]
+               settings, window, helputils]
 
 proc resize(status: var EditorStatus, h, w: int) =
   updateTerminalSize(h, w)
   status.resize
+
+proc isValidWindowSize(n: WindowNode) =
+  check n.w > 0
+  check n.h > 1
+  check n.view.height > 1
+  check n.view.width > 1
+  check n.view.lines.len > 1
+  check n.view.start.len > 1
+  check n.view.originalLine.len > 1
+  check n.view.length.len > 1
 
 suite "Ex mode: Edit command":
   test "Edit command":
@@ -55,14 +65,7 @@ suite "Fix #1581":
     let command = @[ru"e", filePaths[1].toRunes]
     status.exModeCommand(command)
 
-    check currentMainWindowNode.w > 1
-    check currentMainWindowNode.h > 1
-    check currentMainWindowNode.view.height > 1
-    check currentMainWindowNode.view.width > 1
-    check currentMainWindowNode.view.lines.len > 1
-    check currentMainWindowNode.view.start.len > 1
-    check currentMainWindowNode.view.originalLine.len > 1
-    check currentMainWindowNode.view.length.len > 1
+    currentMainWindowNode.isValidWindowSize
 
 suite "Ex mode: Write command":
   test "Write command":
@@ -510,8 +513,8 @@ suite "Ex mode: Open buffer by number command":
 
     check(status.bufferIndexInCurrentWindow == 1)
 
-suite "Ex mode: Open help command":
-  test "Open help command":
+suite "Ex mode: help command":
+  test "Open help":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
 
@@ -521,13 +524,18 @@ suite "Ex mode: Open help command":
     const command = @[ru"help"]
     status.exModeCommand(command)
 
-    status.resize(100, 100)
     status.update
 
-    check(status.mainWindow.numOfMainWindow == 2)
-    check(status.bufferIndexInCurrentWindow == 1)
+    check status.mainWindow.numOfMainWindow == 2
+    check status.bufferIndexInCurrentWindow == 1
 
-    check(status.bufStatus[1].mode == Mode.help)
+    currentMainWindowNode.isValidWindowSize
+
+    check status.bufStatus[1].mode == Mode.help
+
+    let help = initHelpModeBuffer()
+    for i, line in help:
+      check status.bufStatus[1].buffer[i] == line
 
 suite "Ex mode: Open in horizontal split window":
   test "Open in horizontal split window":

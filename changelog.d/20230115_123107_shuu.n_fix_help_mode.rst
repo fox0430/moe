@@ -1,0 +1,6 @@
+.. _#1588: https://github.com/fox0430/moe/pull/1588
+
+Fixed
+.......
+
+- `#1588`_ Fix #1586: Fix a bug the help mode buffer is empty. Fix a bug that cannot move to the prev window in the help mode.

@@ -157,6 +157,9 @@ Main module for the Ex (command line) mode.
 ### ```src/moepkg/help.nim```
 Help in moe (```:help``` command).
 
+### ```src/moepkg/helputils.nim```
+A sentence for the help.
+
 ### ```src/moepkg/visualmode.nim```
 Main module for Visual and Visual block modes.
 
