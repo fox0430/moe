@@ -2,40 +2,8 @@
 
 import std/[os, osproc, json, strformat]
 import editorstatus, bufferstatus, unicodeext, ui, movement, gapbuffer,
-       highlight, color, settings, messages, backup, fileutils, editorview,
-       window, commandlineutils
-
-proc initBackupManagerBuffer(
-  bufStatus: var BufferStatus,
-  baseBackupDir, sourceFilePath: seq[Rune]) =
-
-    let list = getBackupFiles(baseBackupDir, sourceFilePath)
-    if list.len > 0:
-      bufStatus.buffer = initGapBuffer[seq[Rune]]()
-
-      for name in list:
-        bufStatus.buffer.add(name)
-
-proc initBackupManagerHighlight(
-  bufStatus: BufferStatus,
-  currentLine: int): Highlight =
-
-    for i in 0 ..< bufStatus.buffer.len:
-      let
-        line = bufStatus.buffer[i]
-        color = if i == currentLine: EditorColorPair.currentBackup
-                else: EditorColorPair.defaultChar
-
-      result.colorSegments.add(ColorSegment(
-        firstRow: i,
-        firstColumn: 0,
-        lastRow: i,
-        lastColumn: line.high,
-        color: color))
-
-proc isBackupManagerMode(status: var Editorstatus): bool =
-  let index = status.bufferIndexInCurrentWindow
-  status.bufStatus[index].mode == Mode.backup
+       highlight, settings, messages, backup, fileutils, editorview,
+       window, commandlineutils, backupmanagerutils
 
 template baseBackupDir(status: EditorStatus): seq[Rune] =
   status.settings.autoBackup.backupDir
@@ -219,20 +187,6 @@ proc isBackupManagerCommand*(command: Runes): InputState =
 proc execBackupManagerCommand*(status: var EditorStatus, command: Runes) =
   let sourceFilePath = status.bufStatus[status.prevBufferIndex].absolutePath
 
-  # TODO: Move
-  block:
-    currentBufStatus.initBackupManagerBuffer(
-      status.baseBackupDir,
-      sourceFilePath)
-
-    let
-      currentLine = currentMainWindowNode.currentLine
-      highlight = currentBufStatus.initBackupManagerHighlight(currentLine)
-    currentMainWindowNode.highlight = highlight
-
-    status.update
-    setCursor(false)
-
   if command.len == 1:
     let key = command[0]
     if isControlK(key):
@@ -251,14 +205,14 @@ proc execBackupManagerCommand*(status: var EditorStatus, command: Runes) =
       status.restoreBackupFile(sourceFilePath)
     elif key == ord('D'):
       status.removeBackupFile(sourceFilePath)
-      currentBufStatus.initBackupManagerBuffer(
+      currentBufStatus.buffer = initBackupManagerBuffer(
         status.baseBackupDir,
-        sourceFilePath)
+        sourceFilePath).toGapBuffer
     elif key == ord('r'):
       # Reload backup files
-      currentBufStatus.initBackupManagerBuffer(
+      currentBufStatus.buffer = initBackupManagerBuffer(
         status.baseBackupDir,
-        sourceFilePath)
+        sourceFilePath).toGapBuffer
     elif key == ord('G'):
       currentBufStatus.moveToLastLine(currentMainWindowNode)
   elif command.len == 2:

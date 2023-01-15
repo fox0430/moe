@@ -5,7 +5,7 @@ import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        window, color, settings, statusline, bufferstatus, cursor, tabline,
        backup, messages, commandline, register, platform, movement,
        autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
-       independentutils, bufferhighlight, helputils
+       independentutils, bufferhighlight, helputils, backupmanagerutils
 
 # Save cursor position when a buffer for a window(file) gets closed.
 type LastCursorPosition* = object
@@ -272,7 +272,13 @@ proc addNewBuffer*(
       of Mode.help:
         status.bufStatus.add initBufferStatus(mode)
         status.bufStatus[^1].buffer = initHelpModeBuffer().toGapBuffer
-        return some(status.bufStatus.high)
+      of Mode.backup:
+        # Get a backup history of the current buffer.
+        let sourceFilePath = currentBufStatus.absolutePath
+        status.bufStatus.add initBufferStatus(mode)
+        status.bufStatus[^1].buffer = initBackupManagerBuffer(
+          status.settings.autoBackup.backupDir,
+          sourceFilePath).toGapBuffer
       else:
         try:
           status.bufStatus.add initBufferStatus(path, mode)
@@ -287,7 +293,7 @@ proc addNewBuffer*(
           status.messageLog.add errMessage.toRunes
           return
 
-        return some(status.bufStatus.high)
+    return some(status.bufStatus.high)
 
 proc addNewBuffer*(
   status: var EditorStatus,

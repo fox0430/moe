@@ -54,7 +54,7 @@ suite "Fix #1581":
     removeDir(dirPath)
 
   test "Open a new buffer using the edit command":
-    # Fix for https://github.com/fox0430/moe/issues/1581
+    # For https://github.com/fox0430/moe/issues/1581
 
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin(filePaths[0])
@@ -946,3 +946,20 @@ suite "Ex mode: Save Ex command history":
     status.exModeCommand(command)
 
     check status.exCommandHistory == @[ru "buildOnSave off"]
+
+suite "Ex mode: Open backup manager":
+  test "backup command":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    status.resize(100, 100)
+
+    status.changeMode(Mode.ex)
+
+    const command = @[ru"backup"]
+    status.exModeCommand(command)
+
+    currentMainWindowNode.isValidWindowSize
+
+    check status.bufStatus.len == 2
+    check status.bufStatus[0].isNormalMode
+    check status.bufStatus[1].isBackupManagerMode

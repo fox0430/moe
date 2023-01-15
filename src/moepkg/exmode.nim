@@ -306,20 +306,19 @@ proc startConfigMode(status: var Editorstatus) =
   status.changeCurrentBuffer(status.bufStatus.high)
 
 proc startBackupManager(status: var Editorstatus) =
-  let bufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(currentBufStatus.prevMode)
-  status.prevBufferIndex = bufferIndex
 
-  if currentBufStatus.mode != bufferstatus.Mode.normal: return
-  for bufStatus in status.bufStatus:
-    if bufStatus.mode == bufferstatus.Mode.backup: return
+  if not currentBufStatus.isNormalMode: return
 
-  status.verticalSplitWindow
-  status.resize
-  status.moveNextWindow
+  let bufferIndex = status.addNewBuffer(Mode.backup)
+  if bufferIndex.isSome:
+    status.verticalSplitWindow
+    status.resize
+    status.moveNextWindow
 
-  status.addNewBufferInCurrentWin(bufferstatus.Mode.backup)
-  status.changeCurrentBuffer(status.bufStatus.high)
+    status.changeCurrentBuffer(bufferIndex.get)
+
+    status.resize
 
 proc startRecentFileMode(status: var Editorstatus) =
   status.changeMode(currentBufStatus.prevMode)
