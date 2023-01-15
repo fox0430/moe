@@ -1,0 +1,6 @@
+.. _#1589: https://github.com/fox0430/moe/pull/1589
+
+Changed
+.......
+
+- `#1589`_ refactor: Add bufStatus.isCursor and refactor
