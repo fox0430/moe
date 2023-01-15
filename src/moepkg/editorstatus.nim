@@ -345,6 +345,7 @@ proc resizeMainWindowNode(status: var EditorStatus, terminalSize: Size) =
 
 ## Reszie all windows to ui.terminalSize.
 proc resize*(status: var EditorStatus) =
+  # Disable the cursor while updating views.
   setCursor(false)
 
   # Get the current terminal from ui.terminalSize.
@@ -449,7 +450,8 @@ proc resize*(status: var EditorStatus) =
   let y = max(height, 4) - 1
   status.commandLine.resize(y, x, commandWindowHeight, width)
 
-  setCursor(true)
+  if currentBufStatus.isCursor:
+    setCursor(true)
 
 proc updateStatusLine(status: var Editorstatus) =
   if not status.settings.statusLine.multipleStatusLine:
@@ -520,8 +522,9 @@ proc updateLogViewerHighlight(buffer: string): Highlight =
       emptyReservedWord,
       SourceLanguage.langNone)
 
-# Update all views, highlighting, cursor, etc.
+## Update all views, highlighting, cursor, etc.
 proc update*(status: var EditorStatus) =
+  # Disable the cursor while resizing windows.
   setCursor(false)
 
   let settings = status.settings
@@ -663,8 +666,7 @@ proc update*(status: var EditorStatus) =
 
   status.commandLine.update
 
-  # TODO: Fix condition.
-  if not currentBufStatus.mode.isFilerMode:
+  if currentBufStatus.isCursor:
     setCursor(true)
 
 # Update currentLine and currentColumn from status.lastPosition
