@@ -1,6 +1,7 @@
 import std/[unittest, oids, os, json, strformat]
 import moepkg/[unicodeext, editorstatus, bufferstatus, backup, gapbuffer]
 
+import moepkg/backupmanagerutils {.all.}
 import moepkg/backupmanager {.all.}
 
 template writeBackupInfoJson(backupDir, sourceFilePath: string) =
@@ -10,9 +11,9 @@ template writeBackupInfoJson(backupDir, sourceFilePath: string) =
 template addBackupManagerBuffer(status: var EditorStatus) =
     status.addNewBufferInCurrentWin(Mode.backup)
     status.changeCurrentBuffer(status.bufStatus.high)
-    currentBufStatus.initBackupManagerBuffer(
+    currentBufStatus.buffer = initBackupManagerBuffer(
       status.baseBackupDir,
-      sourceFilePath.toRunes)
+      sourceFilePath.toRunes).toGapbuffer
 
 suite "Backup Manager: initbackupManagerBuffer":
   let
@@ -35,11 +36,11 @@ suite "Backup Manager: initbackupManagerBuffer":
 
     status.addNewBufferInCurrentWin(Mode.backup)
     status.changeCurrentBuffer(status.bufStatus.high)
-    currentBufStatus.initBackupManagerBuffer(
+    currentBufStatus.buffer = initBackupManagerBuffer(
       status.baseBackupDir,
-      sourceFilePath.toRunes)
+      sourceFilePath.toRunes).toGapbuffer
 
-    check currentBufStatus.buffer.toRunes == ru""
+    check "" == $currentBufStatus.buffer[0]
 
   test "initBackupManagerBuffer 2":
     writeFile(sourceFilePath, "test")
@@ -58,9 +59,9 @@ suite "Backup Manager: initbackupManagerBuffer":
 
     status.addNewBufferInCurrentWin(Mode.backup)
     status.changeCurrentBuffer(status.bufStatus.high)
-    currentBufStatus.initBackupManagerBuffer(
+    currentBufStatus.buffer = initBackupManagerBuffer(
       status.baseBackupDir,
-      sourceFilePath.toRunes)
+      sourceFilePath.toRunes).toGapbuffer
 
     removeFile(sourceFilePath)
 
@@ -144,8 +145,6 @@ suite "Backup Manager: restoreBackupFile":
     status.restoreBackupFile(sourceFilePath.toRunes, IS_FORCE_RESTORE)
 
     check readFile(sourceFilePath) == "test\n"
-
-    removeFile(sourceFilePath)
 
 suite "Backup Manager: removeBackupFile":
   let

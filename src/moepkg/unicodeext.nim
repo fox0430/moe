@@ -245,6 +245,9 @@ proc split*(runes: seq[Rune], sep: Rune): seq[seq[Rune]] =
     if c == sep: result.add(@[])
     else: result[result.high].add(c)
 
+proc splitLines*(runes: seq[Rune]): seq[seq[Rune]] =
+  runes.split(ru'\n')
+
 proc toRunes*(num: int): seq[Rune] {.inline.} = toRunes($num)
 
 proc toRunes*(dateTime: DateTime): seq[Rune] {.inline.} = toRunes($dateTime)
