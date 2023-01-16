@@ -1,0 +1,6 @@
+.. _#1591: https://github.com/fox0430/moe/pull/1591
+
+Changed
+.......
+
+- `#1591`_ Add --styleCheck:error and fix style
