@@ -1,0 +1,6 @@
+.. _#1590: https://github.com/fox0430/moe/pull/1590
+
+Fixed
+.......
+
+- `#1590`_ Fix #1587 and fix diff mode bugs
