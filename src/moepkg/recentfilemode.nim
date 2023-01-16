@@ -2,7 +2,7 @@ import std/[os, re]
 import editorstatus, ui, unicodeext, bufferstatus, movement, gapbuffer,
        messages, window
 
-proc openSelectedBuffer(status: var Editorstatus) =
+proc openSelectedBuffer(status: var EditorStatus) =
   let
     line = currentMainWindowNode.currentLine
     filename = status.bufStatus[currentMainWindowNode.bufferIndex].buffer[line]
@@ -44,7 +44,7 @@ proc isRecentFileCommand*(command: Runes): InputState =
       if command[1] == ord('g'):
         return InputState.Valid
 
-proc execRecentFileCommand*(status: var Editorstatus, command: Runes) =
+proc execRecentFileCommand*(status: var EditorStatus, command: Runes) =
   if command.len == 1:
     let key = command[0]
     if isControlK(key):

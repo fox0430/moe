@@ -356,7 +356,7 @@ proc pathToIcon(path: string): seq[Rune] =
 
 proc expandSymLinkOrFilename(filename: string): string {.inline.} =
   try:
-    expandSymLink(filename)
+    expandSymlink(filename)
   except OSError:
     filename
 
@@ -405,7 +405,7 @@ proc initFileDeitalHighlight[T](buffer: T): Highlight =
       color: EditorColorPair.defaultChar))
 
 # TODO: Separate updating buffer and updating view.
-proc writefileDetail*(
+proc writeFileDetail*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
   settings: EditorSettings,

@@ -1,6 +1,6 @@
 import editorstatus, searchutils, unicodeext, bufferstatus
 
-proc execSearchCommand*(status: var Editorstatus, keyword: Runes) =
+proc execSearchCommand*(status: var EditorStatus, keyword: Runes) =
   status.searchHistory[^1] = keyword
 
   if isSearchForwardMode(currentBufStatus.mode):

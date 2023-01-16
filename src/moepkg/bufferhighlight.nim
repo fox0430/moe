@@ -107,7 +107,7 @@ proc highlightOtherUsesCurrentWord(
   highlight: var Highlight,
   bufStatus: BufferStatus,
   windowNode: WindowNode,
-  theme: ColorTheme) =
+  theme: colorTheme) =
 
     let line = bufStatus.buffer[windowNode.currentLine]
 
@@ -170,7 +170,7 @@ proc highlightOtherUsesCurrentWord(
                   colors = theme.getColorFromEditorColorPair(originalColorPair)
                 setColorPair(EditorColorPair.currentWord,
                              colors[0],
-                             ColorThemeTable[theme].currentWordBg)
+                             colorThemeTable[theme].currentWordBg)
 
                 let
                   color = EditorColorPair.currentWord

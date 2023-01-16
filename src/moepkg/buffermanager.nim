@@ -3,7 +3,7 @@ import gapbuffer, ui, editorstatus, unicodeext, window, movement, bufferstatus
 
 proc initBufferManagerBuffer*(
   bufStatuses: seq[BufferStatus]): seq[Runes] =
-    for bufstatus in bufStatuses:
+    for bufStatus in bufStatuses:
       let currentMode = bufStatus.mode
       if currentMode != Mode.bufManager:
         let
@@ -16,7 +16,7 @@ proc initBufferManagerBuffer*(
 
         result.add line
 
-proc deleteSelectedBuffer(status: var Editorstatus) =
+proc deleteSelectedBuffer(status: var EditorStatus) =
   let deleteIndex = currentMainWindowNode.currentLine
 
   var qeue = initHeapQueue[WindowNode]()
@@ -59,7 +59,7 @@ proc deleteSelectedBuffer(status: var Editorstatus) =
 
     status.resize
 
-proc openSelectedBuffer(status: var Editorstatus, isNewWindow: bool) =
+proc openSelectedBuffer(status: var EditorStatus, isNewWindow: bool) =
   if isNewWindow:
     status.verticalSplitWindow
     status.moveNextWindow
@@ -83,7 +83,7 @@ proc isBufferManagerCommand*(command: Runes): InputState =
        key == ord('D'):
          return InputState.Valid
 
-proc execBufferManagerCommand*(status: var Editorstatus, command: Runes) =
+proc execBufferManagerCommand*(status: var EditorStatus, command: Runes) =
   let key = command[0]
 
   if isControlK(key):

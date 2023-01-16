@@ -129,10 +129,10 @@ proc isSmoothScrollSpeedSettingCommand(command: seq[seq[Rune]]): bool {.inline.}
 proc isHighlightCurrentWordSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 2 and cmpIgnoreCase($command[0], "highlightcurrentword") == 0
 
-proc isSystemClipboardSettingCommand(command: seq[seq[RUne]]): bool {.inline.} =
+proc isSystemClipboardSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 2 and cmpIgnoreCase($command[0], "clipboard") == 0
 
-proc isHighlightFullWidthSpaceSettingCommand(command: seq[seq[RUne]]): bool {.inline.} =
+proc isHighlightFullWidthSpaceSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 2 and cmpIgnoreCase($command[0], "highlightfullspace") == 0
 
 proc isMultipleStatusLineSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
@@ -270,7 +270,7 @@ proc isStartDebugMode(command: seq[seq[Rune]]): bool {.inline.} =
 proc isBuildCommand(command: seq[seq[Rune]]): bool {.inline.} =
   return command.len == 1 and cmpIgnoreCase($command[0], "build") == 0
 
-proc startDebugMode(status: var Editorstatus) =
+proc startDebugMode(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   # Split window and move to new window
@@ -294,7 +294,7 @@ proc startDebugMode(status: var Editorstatus) =
 
     status.resize
 
-proc startConfigMode(status: var Editorstatus) =
+proc startConfigMode(status: var EditorStatus) =
   let bufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[bufferIndex].prevMode)
 
@@ -305,7 +305,7 @@ proc startConfigMode(status: var Editorstatus) =
   status.addNewBufferInCurrentWin(bufferstatus.Mode.config)
   status.changeCurrentBuffer(status.bufStatus.high)
 
-proc startBackupManager(status: var Editorstatus) =
+proc startBackupManager(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   if not currentBufStatus.isNormalMode: return
@@ -320,13 +320,13 @@ proc startBackupManager(status: var Editorstatus) =
 
     status.resize
 
-proc startRecentFileMode(status: var Editorstatus) =
+proc startRecentFileMode(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   # :recent is only supported on Unix or Unix-like (BSD and Linux)
-  if not (CURRENT_PLATFORM == Platforms.linux or
-          CURRENT_PLATFORM == Platforms.freebsd or
-          CURRENT_PLATFORM == Platforms.openbsd): return
+  if not (currentPlatform == Platforms.linux or
+          currentPlatform == Platforms.freebsd or
+          currentPlatform == Platforms.openbsd): return
 
   if not fileExists(getHomeDir() / ".local/share/recently-used.xbel"):
     status.commandLine.writeOpenRecentlyUsedXbelError(status.messageLog)
@@ -342,7 +342,7 @@ proc startRecentFileMode(status: var Editorstatus) =
 
   currentBufStatus.initRecentFileModeBuffer
 
-proc runQuickRunCommand(status: var Editorstatus) =
+proc runQuickRunCommand(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   let
@@ -371,7 +371,7 @@ proc runQuickRunCommand(status: var Editorstatus) =
 proc staticReadVersionFromConfigFileExample(): string {.compileTime.} =
   staticRead(currentSourcePath.parentDir() / "../../example/moerc.toml")
 
-proc putConfigFileCommand(status: var Editorstatus) =
+proc putConfigFileCommand(status: var EditorStatus) =
   if not dirExists(getHomeDir() / ".config"):
     try:
       createDir(getHomeDir() / ".config")
@@ -399,12 +399,12 @@ proc putConfigFileCommand(status: var Editorstatus) =
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc deleteTrailingSpacesCommand(status: var Editorstatus) =
+proc deleteTrailingSpacesCommand(status: var EditorStatus) =
   currentBufStatus.deleteTrailingSpaces
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc openHelp(status: var Editorstatus) =
+proc openHelp(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   status.verticalSplitWindow
@@ -416,7 +416,7 @@ proc openHelp(status: var Editorstatus) =
 
   status.resize
 
-proc openLogViewer(status: var Editorstatus) =
+proc openLogViewer(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   status.verticalSplitWindow
@@ -426,7 +426,7 @@ proc openLogViewer(status: var Editorstatus) =
   status.addNewBufferInCurrentWin(Mode.logviewer)
   status.changeCurrentBuffer(status.bufStatus.high)
 
-proc openBufferManager(status: var Editorstatus) =
+proc openBufferManager(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   status.verticalSplitWindow
@@ -438,7 +438,7 @@ proc openBufferManager(status: var Editorstatus) =
   status.changeMode(bufferstatus.Mode.bufManager)
   currentBufStatus.buffer = status.bufStatus.initBufferManagerBuffer.toGapBuffer
 
-proc changeCursorLineCommand(status: var Editorstatus, command: seq[Rune]) =
+proc changeCursorLineCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on" : status.settings.view.cursorLine = true
   elif command == ru"off": status.settings.view.cursorLine = false
 
@@ -450,12 +450,12 @@ proc verticalSplitWindowCommand(status: var EditorStatus) =
   status.verticalSplitWindow
   status.changeMode(prevMode)
 
-proc horizontalSplitWindowCommand(status: var Editorstatus) =
+proc horizontalSplitWindowCommand(status: var EditorStatus) =
   let prevMode = currentBufStatus.prevMode
   status.horizontalSplitWindow
   status.changeMode(prevMode)
 
-proc filerIconSettingCommand(status: var Editorstatus, command: seq[Rune]) =
+proc filerIconSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru "on": status.settings.filer.showIcons = true
   elif command == ru"off": status.settings.filer.showIcons = false
 
@@ -475,15 +475,15 @@ proc liveReloadOfConfSettingCommand(status: var EditorStatus, command: seq[Rune]
 
 proc changeThemeSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"dark":
-    status.settings.editorColorTheme = ColorTheme.dark
+    status.settings.editorColorTheme = colorTheme.dark
   elif command == ru"light":
-    status.settings.editorColorTheme = ColorTheme.light
+    status.settings.editorColorTheme = colorTheme.light
   elif command == ru"vivid":
-    status.settings.editorColorTheme = ColorTheme.vivid
+    status.settings.editorColorTheme = colorTheme.vivid
   elif command == ru"config":
-    status.settings.editorColorTheme = ColorTheme.config
+    status.settings.editorColorTheme = colorTheme.config
   elif command == ru"vscode":
-    status.settings.editorColorTheme = ColorTheme.vscode
+    status.settings.editorColorTheme = colorTheme.vscode
 
   status.changeTheme
   status.resize
@@ -581,7 +581,7 @@ proc statusLineSettingCommand(status: var EditorStatus, command: seq[Rune]) =
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc incrementalSearchSettingCommand(status: var Editorstatus, command: seq[Rune]) =
+proc incrementalSearchSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.incrementalSearch = true
   elif command == ru"off": status.settings.incrementalSearch = false
 
@@ -589,7 +589,7 @@ proc incrementalSearchSettingCommand(status: var Editorstatus, command: seq[Rune
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc highlightPairOfParenSettigCommand(status: var Editorstatus,
+proc highlightPairOfParenSettigCommand(status: var EditorStatus,
                                        command: seq[Rune]) =
 
   if command == ru"on": status.settings.highlight.pairOfParen = true
@@ -609,7 +609,7 @@ proc autoDeleteParenSettingCommand(status: var EditorStatus,
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc smoothScrollSettingCommand(status: var Editorstatus, command: seq[Rune]) =
+proc smoothScrollSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.smoothScroll = true
   elif command == ru"off": status.settings.smoothScroll = false
 
@@ -617,14 +617,14 @@ proc smoothScrollSettingCommand(status: var Editorstatus, command: seq[Rune]) =
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc smoothScrollSpeedSettingCommand(status: var Editorstatus, speed: int) =
+proc smoothScrollSpeedSettingCommand(status: var EditorStatus, speed: int) =
   if speed > 0: status.settings.smoothScrollSpeed = speed
 
   status.commandLine.clear
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc highlightCurrentWordSettingCommand(status: var Editorstatus,
+proc highlightCurrentWordSettingCommand(status: var EditorStatus,
                                         command: seq[Rune]) =
 
   if command == ru"on": status.settings.highlight.currentWord = true
@@ -634,7 +634,7 @@ proc highlightCurrentWordSettingCommand(status: var Editorstatus,
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc systemClipboardSettingCommand(status: var Editorstatus,
+proc systemClipboardSettingCommand(status: var EditorStatus,
                                    command: seq[Rune]) =
 
   if command == ru"on": status.settings.clipboard.enable = true
@@ -644,7 +644,7 @@ proc systemClipboardSettingCommand(status: var Editorstatus,
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc highlightFullWidthSpaceSettingCommand(status: var Editorstatus,
+proc highlightFullWidthSpaceSettingCommand(status: var EditorStatus,
                                            command: seq[Rune]) =
 
   if command == ru"on":
@@ -656,7 +656,7 @@ proc highlightFullWidthSpaceSettingCommand(status: var Editorstatus,
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc buildOnSaveSettingCommand(status: var Editorstatus, command: seq[Rune]) =
+proc buildOnSaveSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.buildOnSave.enable = true
   elif command == ru"off":
     status.settings.buildOnSave.enable = false
@@ -671,7 +671,7 @@ proc turnOffHighlightingCommand(status: var EditorStatus) =
   status.commandLine.clear
   status.changeMode(bufferstatus.Mode.normal)
 
-proc multipleStatusLineSettingCommand(status: var Editorstatus,
+proc multipleStatusLineSettingCommand(status: var EditorStatus,
                                      command: seq[Rune]) =
 
   if command == ru"on": status.settings.statusLine.multipleStatusLine = true
@@ -746,7 +746,7 @@ proc opneBufferByNumberCommand(status: var EditorStatus, number: int) =
   if number < 0 or number > status.bufStatus.high: return
 
   status.changeCurrentBuffer(number)
-  status.commandline.clear
+  status.commandLine.clear
   status.changeMode(bufferstatus.Mode.normal)
 
 proc changeNextBufferCommand(status: var EditorStatus) =
@@ -754,7 +754,7 @@ proc changeNextBufferCommand(status: var EditorStatus) =
   if currentBufferIndex == status.bufStatus.high: return
 
   status.changeCurrentBuffer(currentBufferIndex + 1)
-  status.commandline.clear
+  status.commandLine.clear
   status.changeMode(bufferstatus.Mode.normal)
 
 proc changePreveBufferCommand(status: var EditorStatus) =
@@ -802,7 +802,7 @@ proc editCommand(status: var EditorStatus, path: seq[Rune]) =
         status.lastPosition)
 
 proc openInHorizontalSplitWindow(
-  status: var Editorstatus,
+  status: var EditorStatus,
   filename: seq[Rune]) =
     status.horizontalSplitWindow
     status.resize
@@ -810,7 +810,7 @@ proc openInHorizontalSplitWindow(
     status.editCommand(filename)
 
 proc openInVerticalSplitWindowCommand(
-  status: var Editorstatus,
+  status: var EditorStatus,
   filename: seq[Rune]) =
     status.verticalSplitWindow
     status.resize
@@ -827,7 +827,7 @@ proc execCmdResultToMessageLog*(output: string,
       line = ""
     else: line.add(ch)
 
-proc buildOnSave(status: var Editorstatus) =
+proc buildOnSave(status: var EditorStatus) =
   status.commandLine.writeMessageBuildOnSave(
     status.settings.notification,
     status.messageLog)
@@ -959,9 +959,9 @@ proc quitCommand(status: var EditorStatus) =
     let
       numberReferenced = mainWindowNode.countReferencedWindow(currentBufferIndex)
       countChange = currentBufStatus.countChange
-      canundo = currentBufStatus.buffer.canundo
+      canUndo = currentBufStatus.buffer.canUndo
     if (not isNormalMode(currentBufStatus.mode, currentBufStatus.prevMode)) or
-       (countChange == 0 or numberReferenced > 1 or not canundo):
+       (countChange == 0 or numberReferenced > 1 or not canUndo):
 
       status.changeMode(currentBufStatus.prevMode)
       status.closeWindow(currentMainWindowNode)
@@ -1033,7 +1033,7 @@ proc allBufferQuitCommand(status: var EditorStatus) =
 
 proc forceAllBufferQuitCommand(status: var EditorStatus) {.inline.} = status.exitEditor
 
-proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
+proc writeAndQuitAllBufferCommand(status: var EditorStatus) =
   for bufStatus in status.bufStatus:
     let path = bufStatus.path
 
@@ -1067,7 +1067,7 @@ proc writeAndQuitAllBufferCommand(status: var Editorstatus) =
   status.exitEditor
 
 # Save buffer, buid and open log viewer
-proc buildCommand(status: var Editorstatus) =
+proc buildCommand(status: var EditorStatus) =
   # Force enable a build on save temporarily.
   let currentSetting = status.settings.buildOnSave.enable
 
@@ -1091,7 +1091,7 @@ proc shellCommand(status: var EditorStatus, shellCommand: string) =
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc listAllBufferCommand(status: var Editorstatus) =
+proc listAllBufferCommand(status: var EditorStatus) =
   let swapCurrentBufferIndex = currentMainWindowNode.bufferIndex
   status.addNewBufferInCurrentWin
   status.changeCurrentBuffer(status.bufStatus.high)
@@ -1135,7 +1135,7 @@ proc listAllBufferCommand(status: var Editorstatus) =
     status.update
     setCursor(false)
     let key = getKey(currentMainWindowNode)
-    if isResizekey(key): status.resize
+    if isResizeKey(key): status.resize
     elif key.int == 0: discard
     else: break
 
@@ -1185,7 +1185,7 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
   status.commandLine.clear
   status.changeMode(currentBufStatus.prevMode)
 
-proc createNewEmptyBufferCommand*(status: var Editorstatus) =
+proc createNewEmptyBufferCommand*(status: var EditorStatus) =
 
   status.changeMode(currentBufStatus.prevMode)
 
@@ -1197,7 +1197,7 @@ proc createNewEmptyBufferCommand*(status: var Editorstatus) =
   else:
     status.commandLine.writeNoWriteError(status.messageLog)
 
-proc newEmptyBufferInSplitWindowHorizontally*(status: var Editorstatus) =
+proc newEmptyBufferInSplitWindowHorizontally*(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   status.horizontalSplitWindow
@@ -1207,7 +1207,7 @@ proc newEmptyBufferInSplitWindowHorizontally*(status: var Editorstatus) =
 
   status.changeCurrentBuffer(status.bufStatus.high)
 
-proc newEmptyBufferInSplitWindowVertically*(status: var Editorstatus) =
+proc newEmptyBufferInSplitWindowVertically*(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   status.verticalSplitWindow

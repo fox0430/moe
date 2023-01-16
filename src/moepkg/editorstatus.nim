@@ -29,7 +29,7 @@ type EditorStatus* = object
   messageLog*: seq[seq[Rune]]
   commandLine*: CommandLine
   tabWindow*: Window
-  popUpWindow*: Window
+  popupWindow*: Window
   lastOperatingTime*: DateTime
   autoBackupStatus*: AutoBackupStatus
   isSearchHighlight*: bool
@@ -105,7 +105,7 @@ proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
     status.bufStatus,
     bufferIndex)
 
-proc bufferIndexInCurrentWindow*(status: Editorstatus): int {.inline.} =
+proc bufferIndexInCurrentWindow*(status: EditorStatus): int {.inline.} =
   currentMainWindowNode.bufferIndex
 
 # TODO: Remove
@@ -251,7 +251,7 @@ proc exitEditor*(status: EditorStatus) =
 
   exitUi()
 
-  executeOnExit(status.settings, CURRENT_PLATFORM)
+  executeOnExit(status.settings, currentPlatform)
 
   quit()
 
@@ -483,7 +483,7 @@ proc resize*(status: var EditorStatus) =
   if currentBufStatus.isCursor:
     setCursor(true)
 
-proc updateStatusLine(status: var Editorstatus) =
+proc updateStatusLine(status: var EditorStatus) =
   if not status.settings.statusLine.multipleStatusLine:
     const isActiveWindow = true
     let index = status.statusLine[0].bufferIndex
@@ -564,7 +564,7 @@ proc update*(status: var EditorStatus) =
       status.bufStatus,
       status.bufferIndexInCurrentWindow,
       status.mainWindow.mainWindowNode,
-      settings.tabline.allBuffer)
+      settings.tabLine.allBuffer)
 
   for i, buf in status.bufStatus:
     if buf.isFilerMode and buf.filerStatusIndex.isSome:
@@ -659,7 +659,7 @@ proc update*(status: var EditorStatus) =
             node.currentLine,
             node.currentColumn)
 
-        block UpdateTerminalBuffer:
+        block updateTerminalBuffer:
           let selectedRange = Range(
             start: bufStatus.selectedArea.startLine,
             `end`: bufStatus.selectedArea.endLine)
@@ -748,7 +748,7 @@ proc verticalSplitWindow*(status: var EditorStatus) =
   var newNode = mainWindowNode.searchByWindowIndex(currentMainWindowNode.windowIndex + 1)
   newNode.restoreCursorPostion(currentBufStatus, status.lastPosition)
 
-proc horizontalSplitWindow*(status: var Editorstatus) =
+proc horizontalSplitWindow*(status: var EditorStatus) =
   status.updateLastCursorPostion
 
   let buffer = currentBufStatus.buffer
@@ -819,7 +819,7 @@ proc movePrevWindow*(status: var EditorStatus) {.inline.} =
 
   status.moveCurrentMainWindow(currentMainWindowNode.windowIndex - 1)
 
-proc deleteBuffer*(status: var Editorstatus, deleteIndex: int) =
+proc deleteBuffer*(status: var EditorStatus, deleteIndex: int) =
   let beforeWindowIndex = currentMainWindowNode.windowIndex
 
   var queue = initHeapQueue[WindowNode]()
@@ -873,7 +873,7 @@ proc revertPosition*(bufStatus: var BufferStatus,
   windowNode.expandedColumn = bufStatus.positionRecord[id].expandedColumn
 
 # TODO: Remove
-proc eventLoopTask*(status: var Editorstatus)
+proc eventLoopTask*(status: var EditorStatus)
 
 # TODO: Move
 proc scrollUpNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
@@ -947,15 +947,15 @@ proc halfPageDown*(status: var EditorStatus) =
   status.scrollDownNumberOfLines(Natural(currentMainWindowNode.view.height / 2))
 
 proc changeTheme*(status: var EditorStatus) =
-  if status.settings.editorColorTheme == ColorTheme.vscode:
+  if status.settings.editorColorTheme == colorTheme.vscode:
     status.settings.editorColorTheme = loadVSCodeTheme()
 
-  setCursesColor(ColorThemeTable[status.settings.editorColorTheme])
+  setCursesColor(colorThemeTable[status.settings.editorColorTheme])
 
   if checkColorSupportedTerminal() == 8:
     convertToConsoleEnvironmentColor(status.settings.editorColorTheme)
 
-proc autoSave(status: var Editorstatus) =
+proc autoSave(status: var EditorStatus) =
   let interval = status.settings.autoSaveInterval.minutes
   for index, bufStatus in status.bufStatus:
     if bufStatus.path != ru"" and now() > bufStatus.lastSaveTime + interval:
@@ -985,7 +985,7 @@ proc loadConfigurationFile*(status: var EditorStatus) =
         status.messageLog)
       initEditorSettings()
 
-proc eventLoopTask(status: var Editorstatus) =
+proc eventLoopTask(status: var EditorStatus) =
   # Auto save
   if status.settings.autoSave: status.autoSave
 

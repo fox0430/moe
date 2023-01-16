@@ -20,7 +20,7 @@ proc sendToClipboard*(buffer: seq[seq[Rune]],
     str = runesToStrings(buffer)
     delimiterStr = genDelimiterStr(str)
 
-  case CURRENT_PLATFORM:
+  case currentPlatform:
     of linux:
       let cmd = if tool == ClipboardToolOnLinux.xclip:
                   "xclip -r <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"

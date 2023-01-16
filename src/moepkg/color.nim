@@ -22,7 +22,7 @@ macro mapAnnotationToTable(args: varargs[untyped]): untyped =
       continue
     let line = lines[child.lineInfoObj.line-1].strip()
     # check for annotations
-    if "##" notIn line:
+    if "##" notin line:
       continue
 
     let hexCode = line[line.len()-6..line.len()-1]
@@ -53,7 +53,7 @@ mapAnnotationToTable:
     green               = 2    ## hex: #008000
     olive               = 3    ## hex: #808000
     navy                = 4    ## hex: #000080
-    purple_1            = 5    ## hex: #800080
+    purple1            = 5    ## hex: #800080
     teal                = 6    ## hex: #008080
     silver              = 7    ## hex: #c0c0c0
     gray                = 8    ## hex: #808080
@@ -67,195 +67,195 @@ mapAnnotationToTable:
     gray0               = 16   ## hex: #000000
     navyBlue            = 17   ## hex: #00005f
     darkBlue            = 18   ## hex: #000087
-    blue3_1             = 19   ## hex: #0000af
-    blue3_2             = 20   ## hex: #0000d7
+    blue31             = 19   ## hex: #0000af
+    blue32             = 20   ## hex: #0000d7
     blue1               = 21   ## hex: #0000ff
     darkGreen           = 22   ## hex: #005f00
-    deepSkyBlue4_1      = 23   ## hex: #005f5f
-    deepSkyBlue4_2      = 24   ## hex: #005f87
-    deepSkyBlue4_3      = 25   ## hex: #005faf
-    dodgerBlue3_1       = 26   ## hex: #005fd7
-    dodgerBlue3_2       = 27   ## hex: #005fff
+    deepSkyBlue41      = 23   ## hex: #005f5f
+    deepSkyBlue42      = 24   ## hex: #005f87
+    deepSkyBlue43      = 25   ## hex: #005faf
+    dodgerBlue31       = 26   ## hex: #005fd7
+    dodgerBlue32       = 27   ## hex: #005fff
     green4              = 28   ## hex: #008700
     springGreen4        = 29   ## hex: #00875f
     turquoise4          = 30   ## hex: #008787
-    deepSkyBlue3_1      = 31   ## hex: #0087af
-    deepSkyBlue3_2      = 32   ## hex: #0087d7
+    deepSkyBlue31      = 31   ## hex: #0087af
+    deepSkyBlue32      = 32   ## hex: #0087d7
     dodgerBlue1         = 33   ## hex: #0087ff
-    green3_1            = 34   ## hex: #00af00
-    springGreen3_1      = 35   ## hex: #00af5f
+    green31            = 34   ## hex: #00af00
+    springGreen31      = 35   ## hex: #00af5f
     darkCyan            = 36   ## hex: #00af87
     lightSeaGreen       = 37   ## hex: #00afaf
     deepSkyBlue2        = 38   ## hex: #00afd7
     deepSkyBlue1        = 39   ## hex: #00afff
-    green3_2            = 40   ## hex: #00d700
-    springGreen3_3      = 41   ## hex: #00d75f
-    springGreen2_1      = 42   ## hex: #00d787
+    green32            = 40   ## hex: #00d700
+    springGreen33      = 41   ## hex: #00d75f
+    springGreen21      = 42   ## hex: #00d787
     cyan3               = 43   ## hex: #00d7af
     darkTurquoise       = 44   ## hex: #00d7df
     turquoise2          = 45   ## hex: #00d7ff
     green1              = 46   ## hex: #00ff00
-    springGreen2_2      = 47   ## hex: #00ff5f
+    springGreen22      = 47   ## hex: #00ff5f
     springGreen1        = 48   ## hex: #00ff87
     mediumSpringGreen   = 49   ## hex: #00ffaf
     cyan2               = 50   ## hex: #00ffd7
     cyan1               = 51   ## hex: #00ffff
-    darkRed_1           = 52   ## hex: #5f0000
-    deepPink4_1         = 53   ## hex: #5f005f
-    purple4_1           = 54   ## hex: #5f0087
-    purple4_2           = 55   ## hex: #5f00af
+    darkRed1           = 52   ## hex: #5f0000
+    deepPink41         = 53   ## hex: #5f005f
+    purple41           = 54   ## hex: #5f0087
+    purple42           = 55   ## hex: #5f00af
     purple3             = 56   ## hex: #5f00df
     blueViolet          = 57   ## hex: #5f00ff
-    orange4_1           = 58   ## hex: #5f5f00
+    orange41           = 58   ## hex: #5f5f00
     gray37              = 59   ## hex: #5f5f5f
     mediumPurple4       = 60   ## hex: #5f5f87
-    slateBlue3_1        = 61   ## hex: #5f5faf
-    slateBlue3_2        = 62   ## hex: #5f5fd7
+    slateBlue31        = 61   ## hex: #5f5faf
+    slateBlue32        = 62   ## hex: #5f5fd7
     royalBlue1          = 63   ## hex: #5f5fff
     chartreuse4         = 64   ## hex: #5f8700
-    darkSeaGreen4_1     = 65   ## hex: #5f875f
+    darkSeaGreen41     = 65   ## hex: #5f875f
     paleTurquoise4      = 66   ## hex: #5f8787
     steelBlue           = 67   ## hex: #5f87af
     steelBlue3          = 68   ## hex: #5f87d7
     cornflowerBlue      = 69   ## hex: #5f87ff
-    chartreuse3_1       = 70   ## hex: #5faf00
-    darkSeaGreen4_2     = 71   ## hex: #5faf5f
-    cadetBlue_1         = 72   ## hex: #5faf87
-    cadetBlue_2         = 73   ## hex: #5fafaf
+    chartreuse31       = 70   ## hex: #5faf00
+    darkSeaGreen42     = 71   ## hex: #5faf5f
+    cadetBlue1         = 72   ## hex: #5faf87
+    cadetBlue2         = 73   ## hex: #5fafaf
     skyBlue3            = 74   ## hex: #5fafd7
-    steelBlue1_1        = 75   ## hex: #5fafff
-    chartreuse3_2       = 76   ## hex: #5fd000
-    paleGreen3_1        = 77   ## hex: #5fd75f
+    steelBlue11        = 75   ## hex: #5fafff
+    chartreuse32       = 76   ## hex: #5fd000
+    paleGreen31        = 77   ## hex: #5fd75f
     seaGreen3           = 78   ## hex: #5fd787
     aquamarine3         = 79   ## hex: #5fd7af
     mediumTurquoise     = 80   ## hex: #5fd7d7
-    steelBlue1_2        = 81   ## hex: #5fd7ff
-    chartreuse2_1       = 82   ## hex: #5fff00
+    steelBlue12        = 81   ## hex: #5fd7ff
+    chartreuse21       = 82   ## hex: #5fff00
     seaGreen2           = 83   ## hex: #5fff5f
-    seaGreen1_1         = 84   ## hex: #5fff87
-    seaGreen1_2         = 85   ## hex: #5fffaf
-    aquamarine1_1       = 86   ## hex: #5fffd7
+    seaGreen11         = 84   ## hex: #5fff87
+    seaGreen12         = 85   ## hex: #5fffaf
+    aquamarine11       = 86   ## hex: #5fffd7
     darkSlateGray2      = 87   ## hex: #5fffff
-    darkRed_2           = 88   ## hex: #870000
-    deepPink4_2         = 89   ## hex: #87005f
-    darkMagenta_1       = 90   ## hex: #870087
-    darkMagenta_2       = 91   ## hex: #8700af
-    darkViolet_1        = 92   ## hex: #8700d7
-    purple_2            = 93   ## hex: #8700ff
-    orange4_2           = 94   ## hex: #875f00
+    darkRed2           = 88   ## hex: #870000
+    deepPink42         = 89   ## hex: #87005f
+    darkMagenta1       = 90   ## hex: #870087
+    darkMagenta2       = 91   ## hex: #8700af
+    darkViolet1        = 92   ## hex: #8700d7
+    purple2            = 93   ## hex: #8700ff
+    orange42           = 94   ## hex: #875f00
     lightPink4          = 95   ## hex: #875f5f
     plum4               = 96   ## hex: #875f87
-    mediumPurple3_1     = 97   ## hex: #875faf
-    mediumPurple3_2     = 98   ## hex: #875fd7
+    mediumPurple31     = 97   ## hex: #875faf
+    mediumPurple32     = 98   ## hex: #875fd7
     slateBlue1          = 99   ## hex: #875fff
-    yellow4_1           = 100  ## hex: #878700
+    yellow41           = 100  ## hex: #878700
     wheat4              = 101  ## hex: #87875f
     gray53              = 102  ## hex: #878787
     lightSlategray      = 103  ## hex: #8787af
     mediumPurple        = 104  ## hex: #8787d7
     lightSlateBlue      = 105  ## hex: #8787ff
-    yellow4_2           = 106  ## hex: #87af00
+    yellow42           = 106  ## hex: #87af00
     Wheat4              = 107  ## hex: #87af5f
     darkSeaGreen        = 108  ## hex: #87af87
-    lightSkyBlue3_1     = 109  ## hex: #87afaf
-    lightSkyBlue3_2     = 110  ## hex: #87afd7
+    lightSkyBlue31     = 109  ## hex: #87afaf
+    lightSkyBlue32     = 110  ## hex: #87afd7
     skyBlue2            = 111  ## hex: #87afff
-    chartreuse2_2       = 112  ## hex: #87d700
-    darkOliveGreen3_1   = 113  ## hex: #87d75f
-    paleGreen3_2        = 114  ## hex: #87d787
-    darkSeaGreen3_1     = 115  ## hex: #87d7af
+    chartreuse22       = 112  ## hex: #87d700
+    darkOliveGreen31   = 113  ## hex: #87d75f
+    paleGreen32        = 114  ## hex: #87d787
+    darkSeaGreen31     = 115  ## hex: #87d7af
     darkSlateGray3      = 116  ## hex: #87d7d7
     skyBlue1            = 117  ## hex: #87d7ff
     chartreuse1         = 118  ## hex: #87ff00
-    lightGreen_1        = 119  ## hex: #87ff5f
-    lightGreen_2        = 120  ## hex: #87ff87
-    paleGreen1_1        = 121  ## hex: #87ffaf
-    aquamarine1_2       = 122  ## hex: #87ffd7
+    lightGreen1        = 119  ## hex: #87ff5f
+    lightGreen2        = 120  ## hex: #87ff87
+    paleGreen11        = 121  ## hex: #87ffaf
+    aquamarine12       = 122  ## hex: #87ffd7
     darkSlateGray1      = 123  ## hex: #87ffff
-    red3_1              = 124  ## hex: #af0000
+    red31              = 124  ## hex: #af0000
     deepPink4           = 125  ## hex: #af005f
     mediumVioletRed     = 126  ## hex: #af0087
     magenta3            = 127  ## hex: #af00af
-    darkViolet_2        = 128  ## hex: #af00d7
+    darkViolet2        = 128  ## hex: #af00d7
     purple              = 129  ## hex: #af00ff
-    darkOrange3_1       = 130  ## hex: #af5f00
-    indianRed_1         = 131  ## hex: #af5f5f
-    hotPink3_1          = 132  ## hex: #af5f87
+    darkOrange31       = 130  ## hex: #af5f00
+    indianRed1         = 131  ## hex: #af5f5f
+    hotPink31          = 132  ## hex: #af5f87
     mediumOrchid3       = 133  ## hex: #af5faf
     mediumOrchid        = 134  ## hex: #af5fd7
-    mediumPurple2_1     = 135  ## hex: #af5fff
+    mediumPurple21     = 135  ## hex: #af5fff
     darkGoldenrod       = 136  ## hex: #af8700
-    lightSalmon3_1      = 137  ## hex: #af875f
+    lightSalmon31      = 137  ## hex: #af875f
     rosyBrown           = 138  ## hex: #af8787
     gray63              = 139  ## hex: #af87af
-    mediumPurple2_2     = 140  ## hex: #af87d7
+    mediumPurple22     = 140  ## hex: #af87d7
     mediumPurple1       = 141  ## hex: #af87ff
-    gold3_1             = 142  ## hex: #afaf00
+    gold31             = 142  ## hex: #afaf00
     darkKhaki           = 143  ## hex: #afaf5f
     navajoWhite3        = 144  ## hex: #afaf87
     gray69              = 145  ## hex: #afafaf
     lightSteelBlue3     = 146  ## hex: #afafd7
     lightSteelBlue      = 147  ## hex: #afafff
-    yellow3_1           = 148  ## hex: #afd700
-    darkOliveGreen3_2   = 149  ## hex: #afd75f
-    darkSeaGreen3_2     = 150  ## hex: #afd787
-    darkSeaGreen2_1     = 151  ## hex: #afd7af
+    yellow31           = 148  ## hex: #afd700
+    darkOliveGreen32   = 149  ## hex: #afd75f
+    darkSeaGreen32     = 150  ## hex: #afd787
+    darkSeaGreen21     = 151  ## hex: #afd7af
     lightCyan3          = 152  ## hex: #afafd7
     lightSkyBlue1       = 153  ## hex: #afd7ff
     greenYellow         = 154  ## hex: #afff00
     darkOliveGreen2     = 155  ## hex: #afff5f
-    paleGreen1_2        = 156  ## hex: #afff87
-    darkSeaGreen2_2     = 157  ## hex: #afffaf
-    darkSeaGreen1_1     = 158  ## hex: #afffd7
+    paleGreen12        = 156  ## hex: #afff87
+    darkSeaGreen22     = 157  ## hex: #afffaf
+    darkSeaGreen11     = 158  ## hex: #afffd7
     paleTurquoise1      = 159  ## hex: #afffff
-    red3_2              = 160  ## hex: #d70000
-    deepPink3_1         = 161  ## hex: #d7005f
-    deepPink3_2         = 162  ## hex: #d70087
-    magenta3_1          = 163  ## hex: #d700af
-    magenta3_2          = 164  ## hex: #d700d7
-    magenta2_1          = 165  ## hex: #d700ff
-    darkOrange3_2       = 166  ## hex: #d75f00
-    indianRed_2         = 167  ## hex: #d75f5f
-    hotPink3_2          = 168  ## hex: #d75f87
+    red32              = 160  ## hex: #d70000
+    deepPink31         = 161  ## hex: #d7005f
+    deepPink32         = 162  ## hex: #d70087
+    magenta31          = 163  ## hex: #d700af
+    magenta32          = 164  ## hex: #d700d7
+    magenta21          = 165  ## hex: #d700ff
+    darkOrange32       = 166  ## hex: #d75f00
+    indianRed2         = 167  ## hex: #d75f5f
+    hotPink32          = 168  ## hex: #d75f87
     hotPink2            = 169  ## hex: #d75faf
     orchid              = 170  ## hex: #d75fd7
-    mediumOrchid1_1     = 171  ## hex: #d75fff
+    mediumOrchid11     = 171  ## hex: #d75fff
     orange3             = 172  ## hex: #d78700
-    lightSalmon3_2      = 173  ## hex: #d7875f
+    lightSalmon32      = 173  ## hex: #d7875f
     lightPink3          = 174  ## hex: #d78787
     pink3               = 175  ## hex: #d787af
     plum3               = 176  ## hex: #d787d7
     violet              = 177  ## hex: #d787ff
-    gold3_2             = 178  ## hex: #d7af00
+    gold32             = 178  ## hex: #d7af00
     lightGoldenrod3     = 179  ## hex: #d7af5f
     tan                 = 180  ## hex: #d7af87
     mistyRose3          = 181  ## hex: #d7afaf
     thistle3            = 182  ## hex: #d7afd7
     plum2               = 183  ## hex: #d7afff
-    yellow3_2           = 184  ## hex: #d7d700
+    yellow32           = 184  ## hex: #d7d700
     khaki3              = 185  ## hex: #d7d75f
     lightGoldenrod2     = 186  ## hex: #d7d787
     lightYellow3        = 187  ## hex: #d7d7af
     gray84              = 188  ## hex: #d7d7d7
     lightSteelBlue1     = 189  ## hex: #d7d7ff
     yellow2             = 190  ## hex: #d7ff00
-    darkOliveGreen1_1   = 191  ## hex: #d7ff5f
-    darkOliveGreen1_2   = 192  ## hex: #d7ff87
-    darkSeaGreen1_2     = 193  ## hex: #d7ffaf
+    darkOliveGreen11   = 191  ## hex: #d7ff5f
+    darkOliveGreen12   = 192  ## hex: #d7ff87
+    darkSeaGreen12     = 193  ## hex: #d7ffaf
     honeydew2           = 194  ## hex: #d7ffd7
     lightCyan1          = 195  ## hex: #d7ffff
     red1                = 196  ## hex: #ff0000
     deepPink2           = 197  ## hex: #ff005f
-    deepPink1_1         = 198  ## hex: #ff0087
-    deepPink1_2         = 199  ## hex: #ff00af
-    magenta2_2          = 200  ## hex: #ff00d7
+    deepPink11         = 198  ## hex: #ff0087
+    deepPink12         = 199  ## hex: #ff00af
+    magenta22          = 200  ## hex: #ff00d7
     magenta1            = 201  ## hex: #ff00ff
     orangeRed1          = 202  ## hex: #ff5f00
-    indianRed1_1        = 203  ## hex: #ff5f5f
-    indianRed1_2        = 204  ## hex: #ff5f87
-    hotPink1_1          = 205  ## hex: #ff5faf
-    hotPink1_2          = 206  ## hex: #ff5fd7
-    mediumOrchid1_2     = 207  ## hex: #ff5fff
+    indianRed11        = 203  ## hex: #ff5f5f
+    indianRed12        = 204  ## hex: #ff5f87
+    hotPink11          = 205  ## hex: #ff5faf
+    hotPink12          = 206  ## hex: #ff5fd7
+    mediumOrchid12     = 207  ## hex: #ff5fff
     darkOrange          = 208  ## hex: #ff8700
     salmon1             = 209  ## hex: #ff875f
     lightCoral          = 210  ## hex: #ff8787
@@ -269,8 +269,8 @@ mapAnnotationToTable:
     pink1               = 218  ## hex: #ffafd7
     plum1               = 219  ## hex: #ffafff
     gold1               = 220  ## hex: #ffd700
-    lightGoldenrod2_1   = 221  ## hex: #ffd75f
-    lightGoldenrod2_2   = 222  ## hex: #ffd787
+    lightGoldenrod21   = 221  ## hex: #ffd75f
+    lightGoldenrod22   = 222  ## hex: #ffd787
     navajoWhite1        = 223  ## hex: #ffd7af
     mistyRose1          = 224  ## hex: #ffd7d7
     thistle1            = 225  ## hex: #ffd7ff
@@ -311,7 +311,7 @@ template calcRGBDifference(col1: (int, int, int), col2: (int, int, int)): int =
 
 # Converts an rgb value to a color,
 # the closest color is approximated
-proc RGBToColor*(red, green, blue: int): Color =
+proc rgbToColor*(red, green, blue: int): Color =
   var closestColor     : Color
   var lowestDifference : int    = 100000
   for key, value in colorToRGBTable:
@@ -333,7 +333,7 @@ proc hexToColor*(hex: string): Color =
   let red   = parseHexInt(hex[0..1])
   let green = parseHexInt(hex[2..3])
   let blue  = parseHexInt(hex[4..5])
-  return RGBToColor(red, green, blue)
+  return rgbToColor(red, green, blue)
 
 # Returns the closest inverse Color
 # for col.
@@ -345,7 +345,7 @@ proc inverseColor*(col: Color): Color =
   rgb[0] = abs(rgb[0] - 255)
   rgb[1] = abs(rgb[1] - 255)
   rgb[2] = abs(rgb[2] - 255)
-  return RGBToColor(rgb[0], rgb[1], rgb[2])
+  return rgbToColor(rgb[0], rgb[1], rgb[2])
 
 # Make Color col readable on the background.
 # This tries to preserve the color of col as much as
@@ -394,9 +394,9 @@ proc readableOnBackground*(col: Color, background: Color): Color =
                            (rgb2[0], rgb2[1], rgb2[2]))
   if diff < minDiff:
     return inverseColor(col)
-  return RGBToColor(rgb1[0], rgb1[1], rgb1[2])
+  return rgbToColor(rgb1[0], rgb1[1], rgb1[2])
 
-type ColorTheme* = enum
+type colorTheme* = enum
   config  = 0
   vscode  = 1
   dark    = 2
@@ -502,10 +502,10 @@ type EditorColor* = object
   pcLink*: Color
   pcLinkBg*: Color
   # pop up window
-  popUpWindow*: Color
-  popUpWindowBg*: Color
-  popUpWinCurrentLine*: Color
-  popUpWinCurrentLineBg*: Color
+  popupWindow*: Color
+  popupWindowBg*: Color
+  popupWinCurrentLine*: Color
+  popupWinCurrentLineBg*: Color
   # replace text highlighting
   replaceText*: Color
   replaceTextBg*: Color
@@ -609,8 +609,8 @@ type EditorColorPair* = enum
   dir = 48
   pcLink = 49
   # pop up window
-  popUpWindow = 50
-  popUpWinCurrentLine = 51
+  popupWindow = 50
+  popupWinCurrentLine = 51
   # replace text highlighting
   replaceText = 52
   # pair of paren highlighting
@@ -631,7 +631,7 @@ type EditorColorPair* = enum
   # configuration mode
   currentSetting = 61
 
-var ColorThemeTable*: array[ColorTheme, EditorColor] = [
+var colorThemeTable*: array[colorTheme, EditorColor] = [
   config: EditorColor(
     editorBg: default,
     lineNum: gray54,
@@ -699,7 +699,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     searchResultBg: red,
     # selected area in visual mode
     visualMode: gray100,
-    visualModeBg: purple_1,
+    visualModeBg: purple1,
 
     # color scheme
     defaultChar: white,
@@ -731,10 +731,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     pcLink: teal,
     pcLinkBg: default,
     # pop up window
-    popUpWindow: gray100,
-    popUpWindowBg: black,
-    popUpWinCurrentLine: blue,
-    popUpWinCurrentLineBg: black,
+    popupWindow: gray100,
+    popupWindowBg: black,
+    popupWinCurrentLine: blue,
+    popupWinCurrentLineBg: black,
     # replace text highlighting
     replaceText: default,
     replaceTextBg: red,
@@ -834,7 +834,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     searchResultBg: red,
     # selected area in visual mode
     visualMode: gray100,
-    visualModeBg: purple_1,
+    visualModeBg: purple1,
 
     # color scheme
     defaultChar: white,
@@ -866,10 +866,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     pcLink: teal,
     pcLinkBg: default,
     # pop up window
-    popUpWindow: gray100,
-    popUpWindowBg: black,
-    popUpWinCurrentLine: blue,
-    popUpWinCurrentLineBg: black,
+    popupWindow: gray100,
+    popupWindowBg: black,
+    popupWinCurrentLine: blue,
+    popupWinCurrentLineBg: black,
     # replace text highlighting
     replaceText: default,
     replaceTextBg: red,
@@ -969,7 +969,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     searchResultBg: red,
     # selected area in visual mode
     visualMode: gray100,
-    visualModeBg: purple_1,
+    visualModeBg: purple1,
 
     # color scheme
     defaultChar: white,
@@ -1001,10 +1001,10 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     pcLink: teal,
     pcLinkBg: default,
     # pop up window
-    popUpWindow: gray100,
-    popUpWindowBg: black,
-    popUpWinCurrentLine: blue,
-    popUpWinCurrentLineBg: black,
+    popupWindow: gray100,
+    popupWindowBg: black,
+    popupWinCurrentLine: blue,
+    popupWinCurrentLineBg: black,
     # replace text highlighting
     replaceText: default,
     replaceTextBg: red,
@@ -1104,15 +1104,15 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     searchResultBg: red,
     # selected area in visual mode
     visualMode: black,
-    visualModeBg: purple_1,
+    visualModeBg: purple1,
 
     # color scheme
     defaultChar: gray100,
-    gtKeyword: seaGreen1_2,
+    gtKeyword: seaGreen12,
     gtFunctionName: gold1,
     gtTypeName: green,
     gtBoolean: yellow,
-    gtStringLit: purple_1,
+    gtStringLit: purple1,
     gtSpecialVar: green,
     gtBuiltin: yellow,
     gtBinNumber: aqua,
@@ -1128,18 +1128,18 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
 
     # filer mode
     currentFile: black,
-    currentFileBg: deepPink1_1,
+    currentFileBg: deepPink11,
     file: black,
     fileBg: default,
-    dir: deepPink1_1,
+    dir: deepPink11,
     dirBg: default,
     pcLink: teal,
     pcLinkBg: default,
     # pop up window
-    popUpWindow: black,
-    popUpWindowBg: gray,
-    popUpWinCurrentLine: blue,
-    popUpWinCurrentLineBg: gray,
+    popupWindow: black,
+    popupWindowBg: gray,
+    popupWinCurrentLine: blue,
+    popupWinCurrentLineBg: gray,
     # replace text highlighting
     replaceText: default,
     replaceTextBg: red,
@@ -1160,7 +1160,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     reservedWordBg: gray,
     # Backup manager
     currentBackup: black,
-    currentBackupBg: deepPink1_1,
+    currentBackupBg: deepPink11,
     # diff viewer
     addedLine: green,
     addedLineBg: default,
@@ -1168,7 +1168,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     deletedLineBg: default,
     # configuration mode
     currentSetting: black,
-    currentSettingBg: deepPink1_1,
+    currentSettingBg: deepPink11,
     # Highlight current line background
     currentLineBg: gray27
   ),
@@ -1176,58 +1176,58 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     editorBg: default,
     lineNum: gray54,
     lineNumBg: default,
-    currentLineNum: deepPink1_1,
+    currentLineNum: deepPink11,
     currentLineNumBg: default,
     # status line
     statusLineNormalMode: black,
-    statusLineNormalModeBg: deepPink1_1,
+    statusLineNormalModeBg: deepPink11,
     statusLineModeNormalMode: black,
     statusLineModeNormalModeBg: gray100,
-    statusLineNormalModeInactive: deepPink1_1,
+    statusLineNormalModeInactive: deepPink11,
     statusLineNormalModeInactiveBg: white,
 
     statusLineInsertMode: black,
-    statusLineInsertModeBg: deepPink1_1,
+    statusLineInsertModeBg: deepPink11,
     statusLineModeInsertMode: black,
     statusLineModeInsertModeBg: gray100,
-    statusLineInsertModeInactive: deepPink1_1,
+    statusLineInsertModeInactive: deepPink11,
     statusLineInsertModeInactiveBg: white,
 
     statusLineVisualMode: black,
-    statusLineVisualModeBg: deepPink1_1,
+    statusLineVisualModeBg: deepPink11,
     statusLineModeVisualMode: black,
     statusLineModeVisualModeBg: gray100,
-    statusLineVisualModeInactive: deepPink1_1,
+    statusLineVisualModeInactive: deepPink11,
     statusLineVisualModeInactiveBg: white,
 
     statusLineReplaceMode: black,
-    statusLineReplaceModeBg: deepPink1_1,
+    statusLineReplaceModeBg: deepPink11,
     statusLineModeReplaceMode: black,
     statusLineModeReplaceModeBg: gray100,
-    statusLineReplaceModeInactive: deepPink1_1,
+    statusLineReplaceModeInactive: deepPink11,
     statusLineReplaceModeInactiveBg: white,
 
     statusLineFilerMode: black,
-    statusLineFilerModeBg: deepPink1_1,
+    statusLineFilerModeBg: deepPink11,
     statusLineModeFilerMode: black,
     statusLineModeFilerModeBg: gray100,
-    statusLineFilerModeInactive: deepPink1_1,
+    statusLineFilerModeInactive: deepPink11,
     statusLineFilerModeInactiveBg: white,
 
     statusLineExMode: black,
-    statusLineExModeBg: deepPink1_1,
+    statusLineExModeBg: deepPink11,
     statusLineModeExMode: black,
     statusLineModeExModeBg: gray100,
-    statusLineExModeInactive: deepPink1_1,
+    statusLineExModeInactive: deepPink11,
     statusLineExModeInactiveBg: white,
 
-    statusLineGitBranch: deepPink1_1,
+    statusLineGitBranch: deepPink11,
     statusLineGitBranchBg: black,
     # tab line
     tab: white,
     tabBg: default,
     currentTab: black,
-    currentTabBg: deepPink1_1,
+    currentTabBg: deepPink11,
     # command bar
     commandBar: gray100,
     commandBarBg: default,
@@ -1239,15 +1239,15 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     searchResultBg: red,
     # selected area in visual mode
     visualMode: gray100,
-    visualModeBg: purple_1,
+    visualModeBg: purple1,
 
     # color scheme
     defaultChar: gray100,
-    gtKeyword: deepPink1_1,
+    gtKeyword: deepPink11,
     gtFunctionName: gold1,
     gtTypeName: green,
     gtBoolean: yellow,
-    gtStringLit: purple_1,
+    gtStringLit: purple1,
     gtSpecialVar: green,
     gtBuiltin: aqua,
     gtBinNumber: aqua,
@@ -1263,24 +1263,24 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
 
     # filer mode
     currentFile: gray100,
-    currentFileBg: deepPink1_1,
+    currentFileBg: deepPink11,
     file: gray100,
     fileBg: default,
-    dir: deepPink1_1,
+    dir: deepPink11,
     dirBg: default,
     pcLink: cyan1,
     pcLinkBg: default,
     # pop up window
-    popUpWindow: gray100,
-    popUpWindowBg: black,
-    popUpWinCurrentLine: deepPink1_1,
-    popUpWinCurrentLineBg: black,
+    popupWindow: gray100,
+    popupWindowBg: black,
+    popupWinCurrentLine: deepPink11,
+    popupWinCurrentLineBg: black,
     # replace text highlighting
     replaceText: default,
     replaceTextBg: red,
     # pair of paren highlighting
     parenText: default,
-    parenTextBg: deepPink1_1,
+    parenTextBg: deepPink11,
     # highlight other uses current word
     currentWord: default,
     currentWordBg: gray,
@@ -1291,11 +1291,11 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     highlightTrailingSpaces: red,
     highlightTrailingSpacesBg: red,
     # highlight reserved words
-    reservedWord: deepPink1_1,
+    reservedWord: deepPink11,
     reservedWordBg: black,
     # Backup manager
     currentBackup: gray100,
-    currentBackupBg: deepPink1_1,
+    currentBackupBg: deepPink11,
     # diff viewer
     addedLine: green,
     addedLineBg: default,
@@ -1303,7 +1303,7 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
     deletedLineBg: default,
     # configuration mode
     currentSetting: gray100,
-    currentSettingBg: deepPink1_1,
+    currentSettingBg: deepPink11,
     # Highlight current line background
     currentLineBg: gray27
   ),
@@ -1312,15 +1312,15 @@ var ColorThemeTable*: array[ColorTheme, EditorColor] = [
 proc setColorPair*(colorPair: EditorColorPair | int,
                    character, background: Color) {.inline.} =
 
-  init_pair(cshort(ord(colorPair)),
+  initpair(cshort(ord(colorPair)),
             cshort(ord(character)),
             cshort(ord(background)))
 
 proc setCursesColor*(editorColor: EditorColor) =
   # Not set when running unit tests
   when not defined unitTest:
-    start_color()   # enable color
-    use_default_colors()    # set terminal default color
+    startcolor()   # enable color
+    usedefaultcolors()    # set terminal default color
 
     setColorPair(EditorColorPair.lineNum,
                  editorColor.lineNum,
@@ -1479,12 +1479,12 @@ proc setCursesColor*(editorColor: EditorColor) =
     setColorPair(EditorColorPair.dir, editorColor.dir, editorColor.dirBg)
     setColorPair(EditorColorPair.pcLink, editorColor.pcLink, editorColor.pcLinkBg)
     # pop up window
-    setColorPair(EditorColorPair.popUpWindow,
-                 editorColor.popUpWindow,
-                 editorColor.popUpWindowBg)
-    setColorPair(EditorColorPair.popUpWinCurrentLine,
-                 editorColor.popUpWinCurrentLine,
-                 editorColor.popUpWinCurrentLineBg)
+    setColorPair(EditorColorPair.popupWindow,
+                 editorColor.popupWindow,
+                 editorColor.popupWindowBg)
+    setColorPair(EditorColorPair.popupWinCurrentLine,
+                 editorColor.popupWinCurrentLine,
+                 editorColor.popupWinCurrentLineBg)
 
     # replace text highlighting
     setColorPair(EditorColorPair.replaceText,
@@ -1534,10 +1534,10 @@ proc setCursesColor*(editorColor: EditorColor) =
                  editorColor.currentSetting,
                  editorColor.currentSettingBg)
 
-proc getColorFromEditorColorPair*(theme: ColorTheme,
+proc getColorFromEditorColorPair*(theme: colorTheme,
                                   pair: EditorColorPair): (Color, Color) =
 
-  let editorColor = ColorThemeTable[theme]
+  let editorColor = colorThemeTable[theme]
 
   case pair
   of EditorColorPair.lineNum:
@@ -1656,10 +1656,10 @@ proc getColorFromEditorColorPair*(theme: ColorTheme,
     return (editorColor.dir, editorColor.dirBg)
   of EditorColorPair.pcLink:
     return (editorColor.pcLink, editorColor.pcLinkBg)
-  of EditorColorPair.popUpWindow:
-    return (editorColor.popUpWindow, editorColor.popUpWindowBg)
-  of EditorColorPair.popUpWinCurrentLine:
-    return (editorColor.popUpWinCurrentLine, editorColor.popUpWinCurrentLineBg)
+  of EditorColorPair.popupWindow:
+    return (editorColor.popupWindow, editorColor.popupWindowBg)
+  of EditorColorPair.popupWinCurrentLine:
+    return (editorColor.popupWinCurrentLine, editorColor.popupWinCurrentLineBg)
   of EditorColorPair.replaceText:
     return (editorColor.replaceText, editorColor.replaceTextBg)
   of EditorColorPair.highlightTrailingSpaces:
@@ -1682,16 +1682,16 @@ proc getColorFromEditorColorPair*(theme: ColorTheme,
   of EditorColorPair.highlightFullWidthSpace:
     return (editorColor.highlightFullWidthSpace, editorColor.highlightFullWidthSpaceBg)
 
-macro setColor*(theme: ColorTheme,
+macro setColor*(theme: colorTheme,
                 editorColor: string,
                 color: Color): untyped =
 
     parseStmt(fmt"""
-      ColorThemeTable[{repr(theme)}].{editorColor} = {repr(color)}
+      colorThemeTable[{repr(theme)}].{editorColor} = {repr(color)}
     """)
 
 # Environment where only 8 colors can be used
-proc convertToConsoleEnvironmentColor*(theme: ColorTheme) =
+proc convertToConsoleEnvironmentColor*(theme: colorTheme) =
   proc isDefault(color: Color): bool {.inline.} = color == Color.default
 
   proc isBlack(color: Color): bool =
@@ -1704,26 +1704,26 @@ proc convertToConsoleEnvironmentColor*(theme: ColorTheme) =
   # is maroon (red)
   proc isMaroon(color: Color): bool =
     case color:
-      of maroon, red, darkRed_1, darkRed_2, red3_1, mediumVioletRed,
-         indianRed_1, red3_2, indianRed_2, red1, orangeRed1, indianRed1_1,
-         indianRed1_2, paleVioletRed1, deepPink4_1, deepPink4_2, deepPink4,
+      of maroon, red, darkRed1, darkRed2, red31, mediumVioletRed,
+         indianRed1, red32, indianRed2, red1, orangeRed1, indianRed11,
+         indianRed12, paleVioletRed1, deepPink41, deepPink42, deepPink4,
          magenta3: true
       else: false
 
   proc isGreen(color: Color): bool =
     case color:
-      of green, darkGreen, green4, springGreen4, green3_1, springGreen3_1,
-         lightSeaGreen, green3_2, springGreen3_3, springGreen2_1, green1,
-         springGreen2_2, springGreen1, mediumSpringGreen, darkSeaGreen4_1,
-         darkSeaGreen4_2, paleGreen3_1, seaGreen3, seaGreen2, seaGreen1_1,
-         seaGreen1_2, darkSeaGreen, darkOliveGreen3_1, paleGreen3_2,
-         darkSeaGreen3_1, lightGreen_1, lightGreen_2, paleGreen1_1,
-         darkOliveGreen3_2, darkSeaGreen3_2, darkSeaGreen2_1, greenYellow,
-         darkOliveGreen2, paleGreen1_2, darkSeaGreen2_2, darkSeaGreen1_1,
-         darkOliveGreen1_1, darkOliveGreen1_2, darkSeaGreen1_2,
-         lime, orange4_1, chartreuse4, paleTurquoise4, chartreuse3_1,
-         chartreuse3_2, chartreuse2_1, Wheat4, chartreuse2_2, chartreuse1,
-         darkGoldenrod, lightSalmon3_1, rosyBrown, gold3_1, darkKhaki,
+      of green, darkGreen, green4, springGreen4, green31, springGreen31,
+         lightSeaGreen, green32, springGreen33, springGreen21, green1,
+         springGreen22, springGreen1, mediumSpringGreen, darkSeaGreen41,
+         darkSeaGreen42, paleGreen31, seaGreen3, seaGreen2, seaGreen11,
+         seaGreen12, darkSeaGreen, darkOliveGreen31, paleGreen32,
+         darkSeaGreen31, lightGreen1, lightGreen2, paleGreen11,
+         darkOliveGreen32, darkSeaGreen32, darkSeaGreen21, greenYellow,
+         darkOliveGreen2, paleGreen12, darkSeaGreen22, darkSeaGreen11,
+         darkOliveGreen11, darkOliveGreen12, darkSeaGreen12,
+         lime, orange41, chartreuse4, paleTurquoise4, chartreuse31,
+         chartreuse32, chartreuse21, Wheat4, chartreuse22, chartreuse1,
+         darkGoldenrod, lightSalmon31, rosyBrown, gold31, darkKhaki,
          navajoWhite3: true
       else: false
 
@@ -1731,11 +1731,11 @@ proc convertToConsoleEnvironmentColor*(theme: ColorTheme) =
   proc isOlive(color: Color): bool =
     case color:
       of olive,
-         yellow, yellow4_1, yellow4_2, yellow3_1, yellow3_2, lightYellow3,
-         yellow2, yellow1, orange4_2, lightPink4, plum4, wheat4, darkOrange3_1,
-         darkOrange3_2, orange3, lightSalmon3_2, gold3_2, lightGoldenrod3, tan,
+         yellow, yellow41, yellow42, yellow31, yellow32, lightYellow3,
+         yellow2, yellow1, orange42, lightPink4, plum4, wheat4, darkOrange31,
+         darkOrange32, orange3, lightSalmon32, gold32, lightGoldenrod3, tan,
          mistyRose3, khaki3, lightGoldenrod2, darkOrange, salmon1, orange1,
-         sandyBrown, lightSalmon1, gold1, lightGoldenrod2_1, lightGoldenrod2_2,
+         sandyBrown, lightSalmon1, gold1, lightGoldenrod21, lightGoldenrod22,
          navajoWhite1, lightGoldenrod1, khaki1, wheat1, cornsilk1: true
       else: false
 
@@ -1743,29 +1743,29 @@ proc convertToConsoleEnvironmentColor*(theme: ColorTheme) =
   proc isNavy(color: Color): bool =
     case color:
       of navy,
-         blue, navyBlue, darkBlue, blue3_1, blue3_2, blue1, deepSkyBlue4_1,
-         deepSkyBlue4_2, deepSkyBlue4_3, dodgerBlue3_1, dodgerBlue3_2,
-         deepSkyBlue3_1, deepSkyBlue3_2, dodgerBlue1, deepSkyBlue2,
-         deepSkyBlue1, blueViolet, slateBlue3_1, slateBlue3_2, royalBlue1,
-         steelBlue, steelBlue3, cornflowerBlue, cadetBlue_1, cadetBlue_2,
-         skyBlue3, steelBlue1_1, steelBlue1_2, slateBlue1, lightSlateBlue,
-         lightSkyBlue3_1, lightSkyBlue3_2, skyBlue2, skyBlue1,
+         blue, navyBlue, darkBlue, blue31, blue32, blue1, deepSkyBlue41,
+         deepSkyBlue42, deepSkyBlue43, dodgerBlue31, dodgerBlue32,
+         deepSkyBlue31, deepSkyBlue32, dodgerBlue1, deepSkyBlue2,
+         deepSkyBlue1, blueViolet, slateBlue31, slateBlue32, royalBlue1,
+         steelBlue, steelBlue3, cornflowerBlue, cadetBlue1, cadetBlue2,
+         skyBlue3, steelBlue11, steelBlue12, slateBlue1, lightSlateBlue,
+         lightSkyBlue31, lightSkyBlue32, skyBlue2, skyBlue1,
          lightSteelBlue3, lightSteelBlue, lightSkyBlue1, lightSteelBlue1,
-         aqua, darkTurquoise, turquoise2, aquamarine1_1: true
+         aqua, darkTurquoise, turquoise2, aquamarine11: true
       else: false
 
   proc isPurple(color: Color): bool =
     case color:
-      of purple_1,
-         purple4_1, purple4_2, purple3, mediumPurple4, purple_2,
-         mediumPurple3_1, mediumPurple3_2, mediumPurple, purple,
-         mediumPurple2_1, mediumPurple2_2, mediumPurple1, fuchsia,
-         darkMagenta_1, darkMagenta_2, darkViolet_1, darkViolet_2, hotPink3_1,
-         mediumOrchid3, mediumOrchid, deepPink3_1, deepPink3_2, magenta3_1,
-         magenta3_2, magenta2_1, hotPink3_2, hotPink2, orchid, mediumOrchid1_1,
+      of purple1,
+         purple41, purple42, purple3, mediumPurple4, purple2,
+         mediumPurple31, mediumPurple32, mediumPurple, purple,
+         mediumPurple21, mediumPurple22, mediumPurple1, fuchsia,
+         darkMagenta1, darkMagenta2, darkViolet1, darkViolet2, hotPink31,
+         mediumOrchid3, mediumOrchid, deepPink31, deepPink32, magenta31,
+         magenta32, magenta21, hotPink32, hotPink2, orchid, mediumOrchid11,
          lightPink3, pink3, plum3, violet, thistle3, plum2, deepPink2,
-         deepPink1_1, deepPink1_2, magenta2_2, magenta1, hotPink1_1,
-         hotPink1_2, mediumOrchid1_2, lightCoral, orchid2, orchid1, lightPink1,
+         deepPink11, deepPink12, magenta22, magenta1, hotPink11,
+         hotPink12, mediumOrchid12, lightCoral, orchid2, orchid1, lightPink1,
          pink1, plum1, mistyRose1, thistle1: true
       else: false
 
@@ -1773,11 +1773,11 @@ proc convertToConsoleEnvironmentColor*(theme: ColorTheme) =
   proc isTeal(color: Color): bool =
     case color:
       of teal, darkCyan, cyan3, cyan2, cyan1, lightCyan3, lightCyan1,
-         turquoise4, turquoise2, aquamarine3, mediumTurquoise, aquamarine1_2,
+         turquoise4, turquoise2, aquamarine3, mediumTurquoise, aquamarine12,
          paleTurquoise1, honeydew2: true
       else: false
 
-  for name, color in ColorThemeTable[theme].fieldPairs:
+  for name, color in colorThemeTable[theme].fieldPairs:
     if isDefault(color):
       setColor(theme, name, Color.default)
     elif isBlack(color):
@@ -1791,11 +1791,11 @@ proc convertToConsoleEnvironmentColor*(theme: ColorTheme) =
     elif isNavy(color):
       setColor(theme, name, Color.navy)
     elif isPurple(color):
-      setColor(theme, name, Color.purple_1)
+      setColor(theme, name, Color.purple1)
     elif isTeal(color):
       setColor(theme, name, Color.teal)
     else:
       # is silver (white)
       setColor(theme, name, Color.silver)
 
-    setCursesColor(ColorThemeTable[theme])
+    setCursesColor(colorThemeTable[theme])

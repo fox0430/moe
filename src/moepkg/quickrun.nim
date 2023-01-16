@@ -12,12 +12,12 @@ proc generateCommand(bufStatus: BufferStatus,
   if bufStatus.language == SourceLanguage.langNim:
     let
       advancedCommand = settings.nimAdvancedCommand
-      options = settings.NimOptions
+      options = settings.nimOptions
     result &= "nim " & advancedCommand & " -r " & options & " " & filename
   elif bufStatus.language == SourceLanguage.langC:
-    result &= "gcc " & settings.ClangOptions & " " & filename & " && ./a.out"
+    result &= "gcc " & settings.clangOptions & " " & filename & " && ./a.out"
   elif bufStatus.language == SourceLanguage.langCpp:
-    result &= "g++ " & settings.CppOptions & " " & filename & " && ./a.out"
+    result &= "g++ " & settings.cppOptions & " " & filename & " && ./a.out"
   elif bufStatus.language == SourceLanguage.langShell:
     if bufStatus.buffer[0] == ru"#!/bin/bash":
       result &= "bash " & settings.bashOptions & " " & filename
@@ -92,7 +92,7 @@ proc isQuickRunCommand*(command: Runes): InputState =
       if command[1] == ord('g'):
         return InputState.Valid
 
-proc execQuickRunCommand*(status: var Editorstatus, command: Runes) =
+proc execQuickRunCommand*(status: var EditorStatus, command: Runes) =
   if command.len == 1:
     let key = command[0]
     if isControlK(key):

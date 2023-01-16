@@ -81,7 +81,7 @@ proc getBackupFiles*(baseBackupDir, sourceFilePath: seq[Rune]): seq[seq[Rune]] =
 # Create dirs for base dir and for the backup source.
 proc initBackupDir(baseBackupDir, sourceFilePath: seq[Rune]): seq[Rune]=
   if createDir(baseBackupDir):
-    let backupDir = getbackupDir(baseBackupDir, sourceFilePath)
+    let backupDir = getBackupDir(baseBackupDir, sourceFilePath)
     if backupDir.len > 0:
       return backupDir
     else:
