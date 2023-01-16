@@ -355,7 +355,7 @@ proc toUpperStringBlock(bufStatus: var BufferStatus,
     if oldLine != newLine: bufStatus.buffer[i] = newLine
 
 # TODO: Remove
-proc getInsertBuffer(status: var Editorstatus): seq[Rune] =
+proc getInsertBuffer(status: var EditorStatus): seq[Rune] =
   while true:
     status.update
 
@@ -366,7 +366,7 @@ proc getInsertBuffer(status: var Editorstatus): seq[Rune] =
 
     if isEscKey(key):
       break
-    if isResizekey(key):
+    if isResizeKey(key):
       status.resize
     elif isEnterKey(key):
       currentBufStatus.keyEnter(

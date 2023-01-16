@@ -42,7 +42,7 @@ liveReloadOfConf = false
 
 incrementalSearch = true
 
-popUpWindowInExmode = true
+popupWindowInExmode = true
 
 autoDeleteParen = false
 
@@ -324,7 +324,7 @@ searchResultBg = "red"
 
 # selected area in visual mode
 visualMode = "gray100"
-visualModeBg = "purple_1"
+visualModeBg = "purple1"
 
 # color scheme
 defaultChar = "white"
@@ -357,10 +357,10 @@ pcLink = "teal"
 pcLinkBg = "default"
 
 # pop up window
-popUpWindow = "gray100"
-popUpWindowBg = "black"
-popUpWinCurrentLine = "blue"
-popUpWinCurrentLineBg = "black"
+popupWindow = "gray100"
+popupWindowBg = "black"
+popupWinCurrentLine = "blue"
+popupWinCurrentLineBg = "black"
 
 # replace text highlighting
 replaceText = "default"

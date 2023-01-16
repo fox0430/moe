@@ -360,7 +360,7 @@ proc getCandidatesExCommandOption*(commandLine: CommandLine): seq[Runes] =
   for i in 0 ..< argList.len:
     result.add(argList[i].toRunes)
 
-proc getsuggestList*(
+proc getSuggestList*(
   commandLine: CommandLine,
   suggestType: SuggestType): seq[Runes] =
 

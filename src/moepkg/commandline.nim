@@ -87,7 +87,7 @@ proc moveLeft*(commandLine: var CommandLine) {.inline.} =
     commandLine.bufferPosition.x.dec
 
 proc moveRight*(commandLine: var CommandLine) {.inline.} =
-  if commandline.bufferPosition.x < commandLine.buffer.len:
+  if commandLine.bufferPosition.x < commandLine.buffer.len:
     commandLine.bufferPosition.x.inc
 
 proc moveTop*(commandLine: var CommandLine) {.inline.} =
@@ -186,7 +186,7 @@ proc setBufferPositionY*(commandLine: var CommandLine, y: int) {.inline.} =
 
 ## Return a single Key.
 proc getKey*(commandLine: var CommandLine): Rune {.inline.} =
-  commandLine.window.getkey
+  commandLine.window.getKey
 
 ## Get keys and update command line until confirmed or canceled.
 ## Received keys are added to the command line buffer.
@@ -215,7 +215,7 @@ proc getKeys*(commandLine: var CommandLine, prompt: string): bool =
 
     elif isLeftKey(key):
       commandLine.moveLeft
-    elif isRightkey(key):
+    elif isRightKey(key):
       commandLine.moveRight
     elif isHomeKey(key):
       commandLine.moveTop

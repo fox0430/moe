@@ -113,7 +113,7 @@ proc startUi*() =
     # Set the current terminal size.
     updateTerminalSize()
 
-    discard setLocale(LC_ALL, "")   # enable UTF-8
+    discard setlocale(LC_ALL, "")   # enable UTF-8
 
     initscr()   ## start terminal control
     cbreak()    ## enable cbreak mode
@@ -122,7 +122,7 @@ proc startUi*() =
 
     if can_change_color():
       ## default is dark
-      setCursesColor(ColorThemeTable[ColorTheme.dark])
+      setCursesColor(colorThemeTable[colorTheme.dark])
 
     erase()
     keyEcho(false)
@@ -307,12 +307,12 @@ proc isPageUpKey*(key: Rune): bool {.inline.} = key == KEY_PPAGE or key == 2
 proc isPageUpKey*(r: Runes): bool {.inline.} =
   r.len == 1 and (r[0] == KEY_PPAGE or r[0] == 2)
 
-proc isPageDownkey*(key: Rune): bool {.inline.} = key == KEY_NPAGE or key == 6
-proc isPageDownkey*(r: Runes): bool {.inline.} =
+proc isPageDownKey*(key: Rune): bool {.inline.} = key == KEY_NPAGE or key == 6
+proc isPageDownKey*(r: Runes): bool {.inline.} =
   r.len == 1 and (r[0] == KEY_NPAGE or r[0] == 6)
 
-proc isTabkey*(key: Rune): bool {.inline.} = key == ord('\t') or key == 9
-proc isTabkey*(r: Runes): bool {.inline.} =
+proc isTabKey*(key: Rune): bool {.inline.} = key == ord('\t') or key == 9
+proc isTabKey*(r: Runes): bool {.inline.} =
   r.len == 1 and (r[0] == ord('\t') or r[0] == 9)
 
 proc isControlA*(key: Rune): bool {.inline.} = key == 1

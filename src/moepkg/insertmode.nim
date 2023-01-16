@@ -18,7 +18,7 @@ proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
       currentMainWindowNode)
   elif isLeftKey(key):
     currentMainWindowNode.keyLeft
-  elif isRightkey(key):
+  elif isRightKey(key):
     currentBufStatus.keyRight(currentMainWindowNode)
   elif isUpKey(key):
     currentBufStatus.keyUp(currentMainWindowNode)

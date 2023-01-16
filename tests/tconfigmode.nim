@@ -38,7 +38,7 @@ suite "Config mode: Init buffer":
                      ru "  autoSaveInterval               5",
                      ru "  liveReloadOfConf               false",
                      ru "  incrementalSearch              true",
-                     ru "  popUpWindowInExmode            true",
+                     ru "  popupWindowInExmode            true",
                      ru "  autoDeleteParen                false",
                      ru "  smoothScroll                   true",
                      ru "  smoothScrollSpeed              15",
@@ -142,9 +142,9 @@ suite "Config mode: Init buffer":
                      ru "  command                        ",
                      ru "  timeout                        30",
                      ru "  nimAdvancedCommand             c",
-                     ru "  ClangOptions                   ",
-                     ru "  CppOptions                     ",
-                     ru "  NimOptions                     ",
+                     ru "  clangOptions                   ",
+                     ru "  cppOptions                     ",
+                     ru "  nimOptions                     ",
                      ru "  shOptions                      ",
                      ru "  bashOptions                    "]
 
@@ -328,7 +328,7 @@ suite "Config mode: Init buffer":
                      ru "",
                      ru "  visualMode",
                      ru "    foreground                   gray100",
-                     ru "    background                   purple_1",
+                     ru "    background                   purple1",
                      ru "",
                      ru "  defaultChar",
                      ru "    foreground                   white",
@@ -418,11 +418,11 @@ suite "Config mode: Init buffer":
                      ru "    foreground                   teal",
                      ru "    background                   default",
                      ru "",
-                     ru "  popUpWindow",
+                     ru "  popupWindow",
                      ru "    foreground                   gray100",
                      ru "    background                   black",
                      ru "",
-                     ru "  popUpWinCurrentLine",
+                     ru "  popupWinCurrentLine",
                      ru "    foreground                   blue",
                      ru "    background                   black",
                      ru "",
@@ -670,13 +670,13 @@ suite "Config mode: Get standard table setting values":
 
     checkBoolSettingValue(default, values)
 
-  test "Get popUpWindowInExmode values":
+  test "Get popupWindowInExmode values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "popUpWindowInExmode"
+    const name = "popupWindowInExmode"
     let
-      default = settings.popUpWindowInExmode
+      default = settings.popupWindowInExmode
       values = settings.getStandardTableSettingValues(name)
 
     checkBoolSettingValue(default, values)
@@ -1100,41 +1100,41 @@ suite "Config mode: Get QuickRun table setting values":
 
     check default == values[0]
 
-  test "Get ClangOptions values":
+  test "Get clangOptions values":
     var status = initEditorStatus()
     let quickRunSettings = status.settings.quickRun
 
     const
-      name = "ClangOptions"
+      name = "clangOptions"
       settingType = SettingType.String
     let
-      default = ru quickRunSettings.ClangOptions
+      default = ru quickRunSettings.clangOptions
       values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
 
     check default == values[0]
 
-  test "Get CppOptions values":
+  test "Get cppOptions values":
     var status = initEditorStatus()
     let quickRunSettings = status.settings.quickRun
 
     const
-      name = "CppOptions"
+      name = "cppOptions"
       settingType = SettingType.String
     let
-      default = ru quickRunSettings.CppOptions
+      default = ru quickRunSettings.cppOptions
       values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
 
     check default == values[0]
 
-  test "Get NimOptions values":
+  test "Get nimOptions values":
     var status = initEditorStatus()
     let quickRunSettings = status.settings.quickRun
 
     const
-      name = "NimOptions"
+      name = "nimOptions"
       settingType = SettingType.String
     let
-      default = ru quickRunSettings.NimOptions
+      default = ru quickRunSettings.nimOptions
       values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
 
     check default == values[0]
@@ -1500,7 +1500,7 @@ suite "Config mode: Get Theme table setting values":
       let testTitle = "Get " & $`colorPair` & "." & $`position`  & " values"
       test testTitle:
         let
-          theme = settings.editorColorTheme
+          theme = settings.editorcolorTheme
           (fg, bg) = theme.getColorFromEditorColorPair(`colorPair`)
           values = settings.getThemeTableSettingValues($`colorPair`, $`position`)
           # values[0] should be current setting
@@ -1525,8 +1525,8 @@ suite "Config mode: Get Theme table setting values":
   # Check Theme.editorBg
   test "Get editorBg.background values":
     let
-      theme = settings.editorColorTheme
-      bg = ColorThemeTable[theme].editorBg
+      theme = settings.editorcolorTheme
+      bg = colorThemeTable[theme].editorBg
       values = settings.getThemeTableSettingValues("editorBg", "background")
       # values[0] should be current setting
       default = $values[0]
@@ -1550,7 +1550,7 @@ suite "Config mode: Chaging Standard table settings":
     var settings = initEditorSettings()
     settings.changeStandardTableSetting("theme", "vivid")
 
-    check settings.editorColorTheme == ColorTheme.vivid
+    check settings.editorcolorTheme == colorTheme.vivid
 
   test "Chaging number":
     var settings = initEditorSettings()
@@ -1696,13 +1696,13 @@ suite "Config mode: Chaging Standard table settings":
 
     check val == settings.incrementalSearch
 
-  test "Chaging popUpWindowInExmode":
+  test "Chaging popupWindowInExmode":
     var settings = initEditorSettings()
 
-    let val = not settings.popUpWindowInExmode
-    settings.changeStandardTableSetting("popUpWindowInExmode", $val)
+    let val = not settings.popupWindowInExmode
+    settings.changeStandardTableSetting("popupWindowInExmode", $val)
 
-    check val == settings.popUpWindowInExmode
+    check val == settings.popupWindowInExmode
 
   test "Chaging autoDeleteParen":
     var settings = initEditorSettings()
@@ -2328,7 +2328,7 @@ suite "Config mode: Chaging Persist table settings":
 
 suite "Config mode: Chaging Theme table settings":
   # Generate test code
-  macro checkChaingThemeSetting(theme: ColorTheme, editorColorName: string): untyped =
+  macro checkChaingThemeSetting(theme: colorTheme, editorColorName: string): untyped =
     let editorColor = ident(editorColorName.strVal)
     quote do:
       let
@@ -2341,17 +2341,17 @@ suite "Config mode: Chaging Theme table settings":
         let
           position = if name[name.len - 2 .. ^1] == "Bg": "background"
                      else: "foreground"
-          currentVal = ColorThemeTable[theme].`editorColor`
+          currentVal = colorThemeTable[theme].`editorColor`
           n = if position == "background": name[0 .. name.high - 2]
               else: name
         var val = Color.default
         if currentVal == val: inc(val)
         settings.changeThemeTableSetting(n, position, $val)
 
-        check ColorThemeTable[theme].`editorColor` == val
+        check colorThemeTable[theme].`editorColor` == val
 
-  let theme = ColorTheme.dark
-  for name, _ in ColorThemeTable[theme].fieldPairs:
+  let theme = colorTheme.dark
+  for name, _ in colorThemeTable[theme].fieldPairs:
     checkChaingThemeSetting(theme, $name)
 
 suite "Config mode: Get BuildOnSave table setting type":
