@@ -1,74 +1,28 @@
 # Manager for automatic backup.
 
-import std/[os, osproc, json, strformat]
+import std/os
 import editorstatus, bufferstatus, unicodeext, ui, movement, gapbuffer,
-       highlight, color, settings, messages, backup, fileutils, editorview,
-       window, commandlineutils
+       highlight, settings, messages, backup, fileutils, editorview,
+       window, commandlineutils, backupmanagerutils
 
-proc initBackupManagerBuffer(
-  bufStatus: var BufferStatus,
-  baseBackupDir, sourceFilePath: seq[Rune]) =
-
-    let list = getBackupFiles(baseBackupDir, sourceFilePath)
-    if list.len > 0:
-      bufStatus.buffer = initGapBuffer[seq[Rune]]()
-
-      for name in list:
-        bufStatus.buffer.add(name)
-
-proc initBackupManagerHighlight(
-  bufStatus: BufferStatus,
-  currentLine: int): Highlight =
-
-    for i in 0 ..< bufStatus.buffer.len:
-      let
-        line = bufStatus.buffer[i]
-        color = if i == currentLine: EditorColorPair.currentBackup
-                else: EditorColorPair.defaultChar
-
-      result.colorSegments.add(ColorSegment(
-        firstRow: i,
-        firstColumn: 0,
-        lastRow: i,
-        lastColumn: line.high,
-        color: color))
-
-proc isBackupManagerMode(status: var Editorstatus): bool =
-  let index = status.bufferIndexInCurrentWindow
-  status.bufStatus[index].mode == Mode.backup
-
-template baseBackupDir(status: EditorStatus): seq[Rune] =
+template baseBackupDir*(status: EditorStatus): seq[Rune] =
   status.settings.autoBackup.backupDir
-
-template currentLineBuffer(status: EditorStatus): seq[Rune] =
-  currentBufStatus.buffer[currentMainWindowNode.currentLine]
 
 # Create an new window and open the diff viewer.
 # `sourceFilePath` and `backupFilePath` is need to absolute path.
 # Use diff command.
 proc openDiffViewer(status: var Editorstatus, sourceFilePath: string) =
-  if currentBufStatus.buffer.len == 0 or status.currentLineBuffer.len == 0:
+  if currentLineBuffer.len == 0:
     return
 
   let
     backupDir = backupDir($status.baseBackupDir, sourceFilePath)
-    backupFilePath = backupDir / $status.currentLineBuffer
+    backupFilePath = backupDir / $currentLineBuffer
 
   if not validateBackupFileName(backupFilePath.splitPath.tail):
     return
 
-  let cmdResult = execCmdEx(fmt"diff -u {sourceFilePath} {backupFilePath}")
-  # The diff command return 2 on failure.
-  if cmdResult.exitCode == 2:
-    # TODO: Write the error message to the command window.
-    return
-
-  var buffer: seq[seq[Rune]] = @[ru""]
-  for r in ru(cmdResult.output):
-    if r == '\n': buffer.add(ru"")
-    else: buffer[^1].add(r)
-
-  # Create new window
+  # Create a new window and move to it.
   status.verticalSplitWindow
   status.resize
   status.moveNextWindow
@@ -77,7 +31,8 @@ proc openDiffViewer(status: var Editorstatus, sourceFilePath: string) =
   status.changeCurrentBuffer(status.bufStatus.high)
 
   currentBufStatus.path = backupFilePath.toRunes
-  currentBufStatus.buffer = initGapBuffer(buffer)
+
+  status.resize
 
 # Restore the current buffer from backupFile.
 # the filename is the curent line.
@@ -104,12 +59,13 @@ proc restoreBackupFile(
 
     # Backup the current buffer before restore
     for bufStatus in status.bufStatus:
-      if bufStatus.absolutePath == sourceFilePath:
-        bufStatus.backupBuffer(
-          status.settings.autoBackup,
-          status.settings.notification,
-          status.commandLine,
-          status.messageLog)
+      if bufStatus.absolutePath == sourceFilePath and
+         bufStatus.mode == Mode.normal:
+           bufStatus.backupBuffer(
+             status.settings.autoBackup,
+             status.settings.notification,
+             status.commandLine,
+             status.messageLog)
 
     try:
       copyFile(restoreFilePath, $sourceFilePath)
@@ -219,20 +175,6 @@ proc isBackupManagerCommand*(command: Runes): InputState =
 proc execBackupManagerCommand*(status: var EditorStatus, command: Runes) =
   let sourceFilePath = status.bufStatus[status.prevBufferIndex].absolutePath
 
-  # TODO: Move
-  block:
-    currentBufStatus.initBackupManagerBuffer(
-      status.baseBackupDir,
-      sourceFilePath)
-
-    let
-      currentLine = currentMainWindowNode.currentLine
-      highlight = currentBufStatus.initBackupManagerHighlight(currentLine)
-    currentMainWindowNode.highlight = highlight
-
-    status.update
-    setCursor(false)
-
   if command.len == 1:
     let key = command[0]
     if isControlK(key):
@@ -251,14 +193,14 @@ proc execBackupManagerCommand*(status: var EditorStatus, command: Runes) =
       status.restoreBackupFile(sourceFilePath)
     elif key == ord('D'):
       status.removeBackupFile(sourceFilePath)
-      currentBufStatus.initBackupManagerBuffer(
+      currentBufStatus.buffer = initBackupManagerBuffer(
         status.baseBackupDir,
-        sourceFilePath)
+        sourceFilePath).toGapBuffer
     elif key == ord('r'):
       # Reload backup files
-      currentBufStatus.initBackupManagerBuffer(
+      currentBufStatus.buffer = initBackupManagerBuffer(
         status.baseBackupDir,
-        sourceFilePath)
+        sourceFilePath).toGapBuffer
     elif key == ord('G'):
       currentBufStatus.moveToLastLine(currentMainWindowNode)
   elif command.len == 2:

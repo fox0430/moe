@@ -118,7 +118,7 @@ currentWord = true
 
 enable = false
 
-backupDir = "/home/user/.cache/moe/backups"
+# backupDir = "/home/user/.cache/moe/backups"
 
 # 10 second
 idleTime = 10

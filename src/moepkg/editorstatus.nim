@@ -5,7 +5,7 @@ import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        window, color, settings, statusline, bufferstatus, cursor, tabline,
        backup, messages, commandline, register, platform, movement,
        autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
-       independentutils, bufferhighlight, helputils
+       independentutils, bufferhighlight, helputils, backupmanagerutils, diffviewerutils
 
 # Save cursor position when a buffer for a window(file) gets closed.
 type LastCursorPosition* = object
@@ -76,6 +76,10 @@ template mainWindowNode*: var WindowNode =
 template currentFilerStatus*: var FilerStatus =
   mixin status
   status.filerStatuses[currentBufStatus.filerStatusIndex.get]
+
+template currentLineBuffer*: var Runes =
+  mixin status
+  currentBufStatus.buffer[currentMainWindowNode.currentLine]
 
 proc changeCurrentBuffer*(
   currentNode: var WindowNode,
@@ -272,7 +276,26 @@ proc addNewBuffer*(
       of Mode.help:
         status.bufStatus.add initBufferStatus(mode)
         status.bufStatus[^1].buffer = initHelpModeBuffer().toGapBuffer
-        return some(status.bufStatus.high)
+      of Mode.backup:
+        # Get a backup history of the current buffer.
+        let sourceFilePath = currentBufStatus.absolutePath
+        status.bufStatus.add initBufferStatus(mode)
+        status.bufStatus[^1].buffer = initBackupManagerBuffer(
+          status.settings.autoBackup.backupDir,
+          sourceFilePath).toGapBuffer
+        # Set the source file path to bufStatus.path.
+        status.bufStatus[^1].path = sourceFilePath
+      of Mode.diff:
+        let
+          sourceFilePath = $currentBufStatus.path
+          baseBackupDir = $status.settings.autoBackup.backupDir
+          backupDir = backupDir(baseBackupDir, sourceFilePath)
+          backupFilePath = backupDir / $currentLineBuffer
+        status.bufStatus.add initBufferStatus(mode)
+        status.bufStatus[^1].buffer = initDiffViewerBuffer(
+          sourceFilePath,
+          backupFilePath).toGapBuffer
+        status.bufStatus[^1].path = backupFilePath.toRunes
       else:
         try:
           status.bufStatus.add initBufferStatus(path, mode)
@@ -287,7 +310,7 @@ proc addNewBuffer*(
           status.messageLog.add errMessage.toRunes
           return
 
-        return some(status.bufStatus.high)
+    return some(status.bufStatus.high)
 
 proc addNewBuffer*(
   status: var EditorStatus,
@@ -615,11 +638,13 @@ proc update*(status: var EditorStatus) =
         # TODO: Fix condition
         if bufStatus.isLogViewerMode:
           highlight = updateLogViewerHighlight($buffer)
-        if bufStatus.isFilerMode and status.filerStatuses[bufStatus.filerStatusIndex.get].isUpdateView:
+        elif bufStatus.isFilerMode and status.filerStatuses[bufStatus.filerStatusIndex.get].isUpdateView:
           highlight = status.filerStatuses[bufStatus.filerStatusIndex.get].initFilerHighlight(
             buffer,
             node.currentLine)
-        if bufStatus.isEditMode:
+        elif bufStatus.isDiffViewerMode:
+          highlight = bufStatus.buffer.toRunes.initDiffViewerHighlight
+        elif bufStatus.isEditMode:
           highlight.updateHighlight(
             bufStatus,
             node,
