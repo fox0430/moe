@@ -1,7 +1,7 @@
 import std/strutils
 import unicodeext
 
-const helpsentences = """
+const helpSentences = """
 # Exiting
 
 :w    - Write file

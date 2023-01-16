@@ -527,10 +527,10 @@ if isXselAvailable():
                                   area,
                                   status.settings)
 
-      if (CURRENT_PLATFORM == Platforms.linux or
-          CURRENT_PLATFORM == Platforms.wsl):
+      if (currentPlatform == Platforms.linux or
+          currentPlatform == Platforms.wsl):
         let
-          cmd = if CURRENT_PLATFORM == Platforms.linux:
+          cmd = if currentPlatform == Platforms.linux:
                   execCmdEx("xsel -o")
                 else:
                   # On the WSL
@@ -538,7 +538,7 @@ if isXselAvailable():
           (output, exitCode) = cmd
 
         check exitCode == 0
-        if CURRENT_PLATFORM == Platforms.linux:
+        if currentPlatform == Platforms.linux:
           check output[0 .. output.high - 1] == "abc"
         else:
           # On the WSL
@@ -581,10 +581,10 @@ if isXselAvailable():
                                   area,
                                   status.settings)
 
-      if (CURRENT_PLATFORM == Platforms.linux or
-          CURRENT_PLATFORM == Platforms.wsl):
+      if (currentPlatform == Platforms.linux or
+          currentPlatform == Platforms.wsl):
         let
-          cmd = if CURRENT_PLATFORM == Platforms.linux:
+          cmd = if currentPlatform == Platforms.linux:
                   execCmdEx("xsel -o")
                 else:
                   # On the WSL
@@ -592,7 +592,7 @@ if isXselAvailable():
           (output, exitCode) = cmd
 
         check exitCode == 0
-        if CURRENT_PLATFORM == Platforms.linux:
+        if currentPlatform == Platforms.linux:
           check output[0 .. output.high - 1] == "abc\ndef"
         else:
           # On the WSL
@@ -633,7 +633,7 @@ if isXselAvailable():
                                        area,
                                        status.settings)
 
-      if CURRENT_PLATFORM == Platforms.linux:
+      if currentPlatform == Platforms.linux:
         let
           cmd = execCmdEx("xsel -o")
           (output, exitCode) = cmd
@@ -678,7 +678,7 @@ if isXselAvailable():
                                        area,
                                        status.settings)
 
-      if CURRENT_PLATFORM == Platforms.linux:
+      if currentPlatform == Platforms.linux:
         let
           cmd = execCmdEx("xsel -o")
           (output, exitCode) = cmd
@@ -722,7 +722,7 @@ if isXselAvailable():
                                          status.settings,
                                          status.commandLine)
 
-      if CURRENT_PLATFORM == Platforms.linux:
+      if currentPlatform == Platforms.linux:
         let (output, exitCode) = execCmdEx("xsel -o")
         check(exitCode == 0 and output[0 .. output.high - 1] == "a\nd")
 

@@ -11,7 +11,7 @@ template baseBackupDir*(status: EditorStatus): seq[Rune] =
 # Create an new window and open the diff viewer.
 # `sourceFilePath` and `backupFilePath` is need to absolute path.
 # Use diff command.
-proc openDiffViewer(status: var Editorstatus, sourceFilePath: string) =
+proc openDiffViewer(status: var EditorStatus, sourceFilePath: string) =
   if currentLineBuffer.len == 0:
     return
 

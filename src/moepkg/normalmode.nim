@@ -114,10 +114,10 @@ proc writeFileAndExit(status: var EditorStatus) =
     except IOError:
       status.commandLine.writeSaveError(status.messageLog)
 
-proc forceExit(status: var Editorstatus) {.inline.} =
+proc forceExit(status: var EditorStatus) {.inline.} =
   status.closeWindow(currentMainWindowNode)
 
-proc runQuickRunCommand(status: var Editorstatus) =
+proc runQuickRunCommand(status: var EditorStatus) =
   let
     buffer = runQuickRun(status.bufStatus[currentMainWindowNode.bufferIndex],
                          status.commandLine,
@@ -291,13 +291,13 @@ proc showCurrentCharInfoCommand(status: var EditorStatus,
 
 proc normalCommand(status: var EditorStatus, commands: seq[Rune])
 
-proc repeatNormalModeCommand(status: var Editorstatus) =
+proc repeatNormalModeCommand(status: var EditorStatus) =
   if status.normalCommandHistory.len == 0: return
 
   let commands  = status.normalCommandHistory[^1]
   status.normalCommand(commands)
 
-proc yankLines(status: var Editorstatus, start, last: int) =
+proc yankLines(status: var EditorStatus, start, last: int) =
   let lastLine = min(last,
                      currentBufStatus.buffer.high)
 
@@ -308,7 +308,7 @@ proc yankLines(status: var Editorstatus, start, last: int) =
                              start, lastLine,
                              status.settings)
 
-proc yankLines(status: var Editorstatus, start, last: int, registerName: string) =
+proc yankLines(status: var EditorStatus, start, last: int, registerName: string) =
   let lastLine = min(last,
                      currentBufStatus.buffer.high)
 
@@ -322,7 +322,7 @@ proc yankLines(status: var Editorstatus, start, last: int, registerName: string)
 
 # yy command
 # Ynak lines from the current line
-proc yankLines(status: var Editorstatus) =
+proc yankLines(status: var EditorStatus) =
   const registerName = ""
   let
     cmdLoop = currentBufStatus.cmdLoop
@@ -337,7 +337,7 @@ proc yankLines(status: var Editorstatus) =
                              status.settings)
 
 # Ynak lines from the current line
-proc yankLines(status: var Editorstatus, registerName: string) =
+proc yankLines(status: var EditorStatus, registerName: string) =
   let
     cmdLoop = currentBufStatus.cmdLoop
     currentLine = currentMainWindowNode.currentLine
@@ -424,7 +424,7 @@ proc deleteLines(status: var EditorStatus, registerName: string) =
                                count,
                                status.settings)
 
-proc yankCharacters(status: var Editorstatus) =
+proc yankCharacters(status: var EditorStatus) =
   const
     registerName = ""
     isDelete = false
@@ -446,7 +446,7 @@ proc yankCharacters(status: var Editorstatus) =
     isDelete)
 
 # name is the register name
-proc yankCharacters(status: var Editorstatus, registerName: string) =
+proc yankCharacters(status: var EditorStatus, registerName: string) =
   const isDelete = false
   let
     buffer = currentBufStatus.buffer
@@ -1009,7 +1009,7 @@ proc isMovementKey(key: Rune): bool =
          key == ord('G') or
          isControlU(key) or
          isControlD(key) or
-         isPageUpkey(key) or
+         isPageUpKey(key) or
          isPageDownKey(key) or
          key == ord('w') or
          key == ord('b') or
@@ -1138,7 +1138,7 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
     for i in 0 ..< cmdLoop: status.halfPageUp
   elif isControlD(key):
     for i in 0 ..< cmdLoop: status.halfPageDown
-  elif isPageUpkey(key):
+  elif isPageUpKey(key):
     for i in 0 ..< cmdLoop: status.pageUp
   elif isPageDownKey(key): ## Page down and Ctrl - F
     for i in 0 ..< cmdLoop: status.pageDown
@@ -1591,7 +1591,7 @@ proc isNormalModeCommand*(command: seq[Rune]): InputState =
              (cmd.len == 3 and cmd[0 .. 1] == "ci"):
                result = InputState.Valid
 
-proc execNormalModeCommand*(status: var Editorstatus, command: Runes) =
+proc execNormalModeCommand*(status: var EditorStatus, command: Runes) =
   status.lastOperatingTime = now()
 
   if $command == "/":

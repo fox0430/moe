@@ -141,25 +141,25 @@ proc getTextInBuffers*(
     else:
       result.add buf.buffer.toRunes
 
-proc getCKeywords(): seq[Rune] {.compiletime.} =
+proc getCKeywords(): seq[Rune] {.compileTime.} =
   for s in cKeywords: result.add toRunes(s & " ")
 
-proc getCppKeywords(): seq[Rune] {.compiletime.} =
+proc getCppKeywords(): seq[Rune] {.compileTime.} =
   for s in cppKeywords: result.add toRunes(s & " ")
 
-proc getCsharpKeywords(): seq[Rune] {.compiletime.} =
+proc getCsharpKeywords(): seq[Rune] {.compileTime.} =
   for s in csharpKeywords: result.add toRunes(s & " ")
 
-proc getHaskellKeywords(): seq[Rune] {.compiletime.} =
+proc getHaskellKeywords(): seq[Rune] {.compileTime.} =
   for s in haskellKeywords: result.add toRunes(s & " ")
 
-proc getJavaKeywords(): seq[Rune] {.compiletime.} =
+proc getJavaKeywords(): seq[Rune] {.compileTime.} =
   for s in javaKeywords: result.add toRunes(s & " ")
 
-proc getJavaScriptKeywords(): seq[Rune] {.compiletime.} =
+proc getJavaScriptKeywords(): seq[Rune] {.compileTime.} =
   for s in javaScriptkeywords: result.add toRunes(s & " ")
 
-proc getNimKeywords(): seq[Rune] {.compiletime.} =
+proc getNimKeywords(): seq[Rune] {.compileTime.} =
   for s in nimKeywords: result.add toRunes(s & " ")
   for s in nimBooleans: result.add toRunes(s & " ")
   for s in nimSpecialVars: result.add toRunes(s & " ")
@@ -167,10 +167,10 @@ proc getNimKeywords(): seq[Rune] {.compiletime.} =
   for s in nimBuiltins: result.add toRunes(s & " ")
   for s in nimStdLibs: result.add toRunes(s & " ")
 
-proc getPythonKeywords(): seq[Rune] {.compiletime.} =
+proc getPythonKeywords(): seq[Rune] {.compileTime.} =
   for s in pythonKeywords: result.add toRunes(s & " ")
 
-proc getRustKeywords(): seq[Rune] {.compiletime.} =
+proc getRustKeywords(): seq[Rune] {.compileTime.} =
   for s in rustKeywords: result.add toRunes(s & " ")
 
 proc getTextInLangKeywords*(lang: SourceLanguage): seq[Rune] =

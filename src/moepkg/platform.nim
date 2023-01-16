@@ -17,4 +17,4 @@ proc initPlatform(): Platforms =
   else:
     result = Platforms.other
 
-let CURRENT_PLATFORM* = initPlatform()
+let currentPlatform* = initPlatform()

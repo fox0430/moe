@@ -100,21 +100,21 @@ proc resize*[T](view: var EditorView,
   # Update EditorView with width/height.
   # The displayed content is as similar as possible to that before the resizing.
 
-  let topline = view.originalLine[0]
+  let topLine = view.originalLine[0]
 
   view.lines = initDeque[seq[Rune]]()
-  for i in 0..height-1: view.lines.addlast(ru"")
+  for i in 0..height-1: view.lines.addLast(ru"")
 
   view.height = height
   view.width = width
   view.widthOfLineNum = widthOfLineNum
 
   view.originalLine = initDeque[int]()
-  for i in 0..height-1: view.originalLine.addlast(-1)
+  for i in 0..height-1: view.originalLine.addLast(-1)
   view.start = initDeque[int]()
-  for i in 0..height-1: view.start.addlast(-1)
+  for i in 0..height-1: view.start.addLast(-1)
   view.length = initDeque[int]()
-  for i in 0..height-1: view.length.addlast(-1)
+  for i in 0..height-1: view.length.addLast(-1)
 
   view.updated = true
   view.reload(buffer, topLine)
@@ -198,7 +198,7 @@ proc writeCurrentLine(
   win: var Window,
   view: EditorView,
   highlight: Highlight,
-  theme: ColorTheme,
+  theme: colorTheme,
   str: seq[Rune],
   currentLineColorPair: var int,
   y, x, i, last: int,
@@ -219,7 +219,7 @@ proc writeCurrentLine(
                  else:
                    theme.getColorFromEditorColorPair(defaultCharColor)
 
-        theme = ColorThemeTable[theme]
+        theme = colorThemeTable[theme]
 
       block:
         let
@@ -265,7 +265,7 @@ proc writeAllLines*[T](
   isVisualMode, isConfigMode: bool,
   buffer: T,
   highlight: Highlight,
-  theme: ColorTheme,
+  theme: colorTheme,
   currentLine: int,
   selectedRange: Range,
   currentLineColorPair: var int) =
@@ -399,7 +399,7 @@ proc update*[T](
   isVisualMode, isConfigMode: bool,
   buffer: T,
   highlight: Highlight,
-  theme: ColorTheme,
+  theme: colorTheme,
   currentLine: int,
   selectedRange : Range,
   currentLineColorPair: var int) =

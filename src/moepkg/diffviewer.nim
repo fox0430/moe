@@ -19,7 +19,7 @@ proc isDiffViewerCommand*(command: Runes): InputState =
       if command[1] == ord('g'):
         return InputState.Valid
 
-proc execDiffViewerCommand*(status: var Editorstatus, command: Runes) =
+proc execDiffViewerCommand*(status: var EditorStatus, command: Runes) =
   if command.len == 1:
     let key = command[0]
 

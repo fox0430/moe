@@ -176,7 +176,7 @@ proc commandLineLoop*(status: var EditorStatus) =
 
     let key = status.getKeyFromCommandLine
 
-    if isResizekey(key):
+    if isResizeKey(key):
       updateTerminalSize()
       status.resize
     elif isEscKey(key) or isControlC(key):
@@ -202,11 +202,11 @@ proc commandLineLoop*(status: var EditorStatus) =
       continue
     elif isLeftKey(key):
       status.commandLine.moveLeft
-    elif isRightkey(key):
+    elif isRightKey(key):
       status.commandLine.moveRight
-      if status.settings.popUpWindowInExmode:
-        if status.popupWIndow != nil:
-          status.popupWIndow.deleteWindow
+      if status.settings.popupWindowInExmode:
+        if status.popupWindow != nil:
+          status.popupWindow.deleteWindow
           continue
     elif isUpKey(key):
       if currentBufStatus.isExMode:
@@ -311,7 +311,7 @@ proc editorMainLoop*(status: var EditorStatus) =
         status.updateAfterInsertFromSuggestion
         status.suggestionWindow.close
 
-    if isResizekey(key):
+    if isResizeKey(key):
       updateTerminalSize()
       status.resize
       continue
@@ -337,6 +337,6 @@ proc editorMainLoop*(status: var EditorStatus) =
     # TODO: Fix condition.
     # I think this should use something like a flag or enum
     # for switching to the command line instead of modes.
-    if currentBufStatus.isExmode or
+    if currentBufStatus.isExMode or
        currentBufStatus.isSearchMode:
          status.commandLineLoop
