@@ -1,4 +1,4 @@
-import std/[sequtils, os, strformat, parseutils, strutils]
+import std/[sequtils, strformat, os, parseutils, strutils]
 import syntax/highlite
 import unicodeext, color, independentutils
 
@@ -282,11 +282,11 @@ proc indexOf*(highlight: Highlight, row, column: int): int =
   # Because the following assertion is sluggish, it is disabled in release builds.
   when not defined(release):
     block:
-      let mess = strformat.fmt"row = {row}, column = {column}, highlight[0].firstRow = {highlight[0].firstRow}, hightlihgt[0].firstColumn = {highlight[0].firstColumn}"
+      let mess = fmt"row = {row}, column = {column}, highlight[0].firstRow = {highlight[0].firstRow}, hightlihgt[0].firstColumn = {highlight[0].firstColumn}"
       doAssert((row, column) >= (highlight[0].firstRow, highlight[0].firstColumn),
                mess)
     block:
-      let mess = strformat.fmt"row = {row}, column = {column}, highlight[^1].lastRow = {highlight[^1].lastRow}, hightlihgt[^1].lastColumn = {highlight[^1].lastColumn}, highlight = {highlight}"
+      let mess = fmt"row = {row}, column = {column}, highlight[^1].lastRow = {highlight[^1].lastRow}, hightlihgt[^1].lastColumn = {highlight[^1].lastColumn}, highlight = {highlight}"
       doAssert((row, column) <= (highlight[^1].lastRow, highlight[^1].lastColumn),
                mess)
   var
