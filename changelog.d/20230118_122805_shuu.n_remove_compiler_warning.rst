@@ -1,0 +1,6 @@
+.. _#1594: https://github.com/fox0430/moe/pull/1594
+
+Fixed
+.......
+
+- `#1594`_ Remove compiler warning
