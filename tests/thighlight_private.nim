@@ -1,5 +1,7 @@
-import std/[unittest]
-include moepkg/highlight
+import std/[unittest, sequtils]
+import moepkg/color
+
+import moepkg/highlight {.all.}
 
 const reservedWords = @[
   ReservedWord(word: "TODO", color: EditorColorPair.reservedWord),

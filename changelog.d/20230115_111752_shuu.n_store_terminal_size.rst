@@ -1,0 +1,6 @@
+.. _#1585: https://github.com/fox0430/moe/pull/1585
+
+Changed
+.....
+
+- `#1585`_ Store the terminal size

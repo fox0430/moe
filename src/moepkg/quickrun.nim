@@ -1,4 +1,4 @@
-import std/[osproc, terminal, times, os]
+import std/[osproc, times, os]
 import syntax/highlite
 import unicodeext, settings, bufferstatus, gapbuffer, messages, ui,
        editorstatus, movement, window, fileutils, commandline
@@ -12,12 +12,12 @@ proc generateCommand(bufStatus: BufferStatus,
   if bufStatus.language == SourceLanguage.langNim:
     let
       advancedCommand = settings.nimAdvancedCommand
-      options = settings.NimOptions
+      options = settings.nimOptions
     result &= "nim " & advancedCommand & " -r " & options & " " & filename
   elif bufStatus.language == SourceLanguage.langC:
-    result &= "gcc " & settings.ClangOptions & " " & filename & " && ./a.out"
+    result &= "gcc " & settings.clangOptions & " " & filename & " && ./a.out"
   elif bufStatus.language == SourceLanguage.langCpp:
-    result &= "g++ " & settings.CppOptions & " " & filename & " && ./a.out"
+    result &= "g++ " & settings.cppOptions & " " & filename & " && ./a.out"
   elif bufStatus.language == SourceLanguage.langShell:
     if bufStatus.buffer[0] == ru"#!/bin/bash":
       result &= "bash " & settings.bashOptions & " " & filename
@@ -61,7 +61,7 @@ proc runQuickRun*(bufStatus: var BufferStatus,
 
   commandLine.writeRunQuickRunMessage(settings.notification, messageLog)
   let cmdResult = execCmdEx(command)
-  commandLine.erase
+  commandLine.clear
 
   result = @[ru""]
 
@@ -73,26 +73,29 @@ proc runQuickRun*(bufStatus: var BufferStatus,
         if cmdResult.output[i] == '\n': result.add(@[ru""])
         else: result[^1].add(toRunes($cmdResult.output[i])[0])
 
-proc quickRunMode*(status: var Editorstatus) =
-  status.resize(terminalHeight(), terminalWidth())
+proc isQuickRunCommand*(command: Runes): InputState =
+  result = InputState.Invalid
 
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  if command.len == 1:
+    let key = command[0]
+    if isControlK(key) or
+       isControlJ(key) or
+       key == ord(':') or
+       key == ord('k') or isUpKey(key) or
+       key == ord('j') or isDownKey(key) or
+       key == ord('G'):
+         return InputState.Valid
+    elif key == ord('g'):
+      return InputState.Continue
+  elif command.len == 2:
+    if command[0] == ord('g'):
+      if command[1] == ord('g'):
+        return InputState.Valid
 
-  while isQuickRunMode(currentBufStatus.mode) and
-        currentBufferIndex == status.bufferIndexInCurrentWindow:
-
-    status.update
-
-    var key = errorKey
-    while key == errorKey:
-      status.eventLoopTask
-      key = getKey(currentMainWindowNode)
-
-    status.lastOperatingTime = now()
-
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-    elif isControlK(key):
+proc execQuickRunCommand*(status: var EditorStatus, command: Runes) =
+  if command.len == 1:
+    let key = command[0]
+    if isControlK(key):
       status.moveNextWindow
     elif isControlJ(key):
       status.movePrevWindow
@@ -102,9 +105,9 @@ proc quickRunMode*(status: var Editorstatus) =
       currentBufStatus.keyUp(currentMainWindowNode)
     elif key == ord('j') or isDownKey(key):
       currentBufStatus.keyDown(currentMainWindowNode)
-    elif key == ord('g'):
-      let secondKey = getKey(currentMainWindowNode)
-      if secondKey == 'g':
-        currentBufStatus.moveToFirstLine(currentMainWindowNode)
     elif key == ord('G'):
       currentBufStatus.moveToLastLine(currentMainWindowNode)
+  elif command.len == 2:
+    if command[0] == ord('g'):
+      if command[1] == ord('g'):
+        currentBufStatus.moveToFirstLine(currentMainWindowNode)

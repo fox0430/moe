@@ -1,6 +1,6 @@
-import std/[terminal, times, strutils]
+import std/[times, strutils, options]
 import gapbuffer, ui, editorstatus, unicodeext, window, movement, settings,
-       bufferstatus, color, highlight, editor, search
+       bufferstatus, color, highlight, editor, commandline, popupwindow
 
 type standardTableNames {.pure.} = enum
   theme
@@ -24,7 +24,7 @@ type standardTableNames {.pure.} = enum
   autoSaveInterval
   liveReloadOfConf
   incrementalSearch
-  popUpWindowInExmode
+  popupWindowInExmode
   autoDeleteParen
   smoothScroll
   smoothScrollSpeed
@@ -78,9 +78,9 @@ type quickRunTableNames {.pure.} = enum
   command
   timeout
   nimAdvancedCommand
-  ClangOptions
-  CppOptions
-  NimOptions
+  clangOptions
+  cppOptions
+  nimOptions
   shOptions
   bashOptions
 
@@ -168,8 +168,8 @@ type themeTableNames {.pure.} = enum
   file
   dir
   pcLink
-  popUpWindow
-  popUpWinCurrentLine
+  popupWindow
+  popupWinCurrentLine
   replaceText
   parenText
   currentWord
@@ -211,9 +211,9 @@ const
   positionOfSetVal = calcPositionOfSettingValue()
   indent = "  "
 
-proc getColorThemeSettingValues(currentVal: ColorTheme): seq[seq[Rune]] =
+proc getcolorThemeSettingValues(currentVal: colorTheme): seq[seq[Rune]] =
   result.add ru $currentVal
-  for theme in ColorTheme:
+  for theme in colorTheme:
     if theme != currentVal:
       result.add ru $theme
 
@@ -227,7 +227,7 @@ proc getStandardTableSettingValues(settings: EditorSettings,
                                    name: string): seq[seq[Rune]] =
   if name == "theme":
     let theme = settings.editorColorTheme
-    result = getColorThemeSettingValues(theme)
+    result = getcolorThemeSettingValues(theme)
   elif name == "defaultCursor":
       let currentCursorType = settings.defaultCursor
       result = getCursorTypeSettingValues(currentCursorType)
@@ -271,8 +271,8 @@ proc getStandardTableSettingValues(settings: EditorSettings,
         currentVal = settings.liveReloadOfConf
       of "incrementalSearch":
         currentVal = settings.incrementalSearch
-      of "popUpWindowInExmode":
-        currentVal = settings.popUpWindowInExmode
+      of "popupWindowInExmode":
+        currentVal = settings.popupWindowInExmode
       of "autoDeleteParen":
         currentVal = settings.autoDeleteParen
       of "smoothScroll":
@@ -287,7 +287,7 @@ proc getStandardTableSettingValues(settings: EditorSettings,
     else:
       result = @[ru "false", ru "true"]
 
-proc getClipboardTableSettingsValues(settings: ClipBoardSettings,
+proc getClipboardTableSettingsValues(settings: ClipboardSettings,
                                      name: string): seq[seq[Rune]] =
 
   case name:
@@ -431,12 +431,12 @@ proc getQuickRunTableSettingValues(settings: QuickRunSettings,
         result = @[ru "false", ru "true"]
     of "nimAdvancedCommand":
       result = @[ru settings.nimAdvancedCommand]
-    of "ClangOptions":
-      result = @[ru settings.ClangOptions]
-    of "CppOptions":
-      result = @[ru settings.CppOptions]
-    of "NimOptions":
-      result = @[ru settings.NimOptions]
+    of "clangOptions":
+      result = @[ru settings.clangOptions]
+    of "cppOptions":
+      result = @[ru settings.cppOptions]
+    of "nimOptions":
+      result = @[ru settings.nimOptions]
     of "shOptions":
       result = @[ru settings.shOptions]
     of "bashOptions":
@@ -549,9 +549,9 @@ proc getPersistTableSettingsValues(settings: PersistSettings,
 proc getThemeTableSettingValues(settings: EditorSettings,
                                 name, position: string): seq[seq[Rune]] =
 
-  proc getCurrentVal(theme: ColorTheme, name, position: string): Color =
+  proc getCurrentVal(theme: colorTheme, name, position: string): Color =
     if name == "editorBg":
-      result = ColorThemeTable[theme].editorBg
+      result = colorThemeTable[theme].editorBg
     else:
       let
         colorPair = parseEnum[EditorColorPair]($name)
@@ -580,7 +580,7 @@ proc getSettingValues(settings: EditorSettings,
     of "BuildOnSave":
       result = settings.buildOnSave.getBuildOnSaveTableSettingValues(name)
     of "TabLine":
-      result = settings.tabline.getTabLineTableSettingValues(name)
+      result = settings.tabLine.getTabLineTableSettingValues(name)
     of "StatusLine":
       result = settings.statusLine.getStatusLineTableSettingValues(name)
     of "Highlight":
@@ -612,7 +612,7 @@ proc maxLen(list: seq[seq[Rune]]): int =
 
 proc getTableName(buffer: GapBuffer[seq[Rune]], line: int): string =
   # Search table name from configuration mode buffer
-  for i in countDown(line, 0):
+  for i in countdown(line, 0):
     if buffer[i].len > 0 and buffer[i][0] != ru ' ':
       return $buffer[i]
 
@@ -681,7 +681,7 @@ proc changeStandardTableSetting(settings: var EditorSettings,
 
   case settingName:
     of "theme":
-      settings.editorColorTheme = parseEnum[ColorTheme](settingVal)
+      settings.editorColorTheme = parseEnum[colorTheme](settingVal)
     of "number":
       settings.view.lineNumber = parseBool(settingVal)
     of "currentNumber":
@@ -691,7 +691,7 @@ proc changeStandardTableSetting(settings: var EditorSettings,
     of "statusLine":
       settings.statusLine.enable = parseBool(settingVal)
     of "tabLine":
-      settings.tabline.enable = parseBool(settingVal)
+      settings.tabLine.enable = parseBool(settingVal)
     of "syntax":
       settings.syntax = parseBool(settingVal)
     of "indentationLines":
@@ -718,8 +718,8 @@ proc changeStandardTableSetting(settings: var EditorSettings,
       settings.liveReloadOfConf = parseBool(settingVal)
     of "incrementalSearch":
       settings.incrementalSearch = parseBool(settingVal)
-    of "popUpWindowInExmode":
-      settings.popUpWindowInExmode = parseBool(settingVal)
+    of "popupWindowInExmode":
+      settings.popupWindowInExmode = parseBool(settingVal)
     of "autoDeleteParen":
       settings.autoDeleteParen = parseBool(settingVal)
     of "smoothScroll":
@@ -729,7 +729,7 @@ proc changeStandardTableSetting(settings: var EditorSettings,
     else:
       discard
 
-proc changeClipBoardTableSettings(settings: var ClipBoardSettings,
+proc changeClipBoardTableSettings(settings: var ClipboardSettings,
                                   settingName, settingVal: string) =
 
   case settingName:
@@ -913,7 +913,7 @@ proc changeThemeTableSetting(settings: var EditorSettings,
   let theme = settings.editorColorTheme
   case settingName:
     of "editorBg":
-      ColorThemeTable[theme].editorBg = parseEnum[Color](settingVal)
+      colorThemeTable[theme].editorBg = parseEnum[Color](settingVal)
     else:
       let
         color = parseEnum[Color](settingVal)
@@ -922,7 +922,7 @@ proc changeThemeTableSetting(settings: var EditorSettings,
                      else:
                        settingName
 
-      for name, _ in ColorThemeTable[theme].fieldPairs:
+      for name, _ in colorThemeTable[theme].fieldPairs:
         if editoColor == name:
           setColor(theme, name, color)
 
@@ -939,14 +939,14 @@ proc changeEditorSettings(status: var EditorStatus,
     if status.settings.editorColorTheme != currentTheme:
       status.changeTheme
 
-  template clipboardSettings: var ClipBoardSettings =
+  template clipboardSettings: var ClipboardSettings =
     status.settings.clipboard
 
   template buildOnSaveSettings: var BuildOnSaveSettings =
     status.settings.buildOnSave
 
   template tablineSettings: var TabLineSettings =
-    status.settings.tabline
+    status.settings.tabLine
 
   template statusLineSettings: var StatusLineSettings =
     status.settings.statusLine
@@ -1023,7 +1023,7 @@ proc getSettingType(table, name: string): SettingType =
          "autoSave",
          "liveReloadOfConf",
          "incrementalSearch",
-         "popUpWindowInExmode",
+         "popupWindowInExmode",
          "autoDeleteParen",
          "systemClipboard",
          "smoothScroll",
@@ -1281,12 +1281,12 @@ proc editFiguresSetting(status: var EditorStatus,
   while not isBreak and not isCancel:
     status.update
 
-    var key = errorKey
-    while key == errorKey:
+    var key = ERR_KEY
+    while key == ERR_KEY:
       key = currentMainWindowNode.getKey
 
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
+    if isResizeKey(key):
+      status.resize
     elif isEscKey(key):
       isCancel = true
     elif isEnterKey(key):
@@ -1294,7 +1294,7 @@ proc editFiguresSetting(status: var EditorStatus,
 
     elif isLeftKey(key):
       moveToLeft()
-    elif isRightkey(key):
+    elif isRightKey(key):
       currentBufStatus.keyRight(currentMainWindowNode)
 
     elif isBackspaceKey(key):
@@ -1312,9 +1312,10 @@ proc editFiguresSetting(status: var EditorStatus,
       currentBufStatus.insertCharacter(currentMainWindowNode, key)
       let reservedWords = status.settings.highlight.reservedWords
       currentMainWindowNode.highlight =
-        currentBufStatus.buffer.initConfigModeHighlight(currentLine,
-                                                        arrayIndex,
-                                                        reservedWords)
+        currentBufStatus.buffer.initConfigModeHighlight(
+          currentLine,
+          arrayIndex,
+          reservedWords)
 
   if not isCancel:
     let number = try: parseInt(numStr)
@@ -1412,11 +1413,11 @@ proc editStringSetting(status: var EditorStatus,
             of "nimAdvancedCommand":
               ru settings.quickRun.nimAdvancedCommand
             of "ClangOptions":
-              ru settings.quickRun.ClangOptions
+              ru settings.quickRun.clangOptions
             of "CppOptions":
-              ru settings.quickRun.CppOptions
+              ru settings.quickRun.cppOptions
             of "NimOptions":
-              ru settings.quickRun.NimOptions
+              ru settings.quickRun.nimOptions
             of "shOptions":
               ru settings.quickRun.shOptions
             of "bashOptions":
@@ -1436,12 +1437,12 @@ proc editStringSetting(status: var EditorStatus,
   while not isBreak and not isCancel:
     status.update
 
-    var key = errorKey
-    while key == errorKey:
+    var key = ERR_KEY
+    while key == ERR_KEY:
       key = currentMainWindowNode.getKey
 
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
+    if isResizeKey(key):
+      status.resize
     elif isEscKey(key):
       isCancel = true
     elif isEnterKey(key):
@@ -1449,7 +1450,7 @@ proc editStringSetting(status: var EditorStatus,
 
     elif isLeftKey(key):
       moveToLeft()
-    elif isRightkey(key):
+    elif isRightKey(key):
       currentBufStatus.keyRight(currentMainWindowNode)
 
     elif isBackspaceKey(key):
@@ -1467,7 +1468,10 @@ proc editStringSetting(status: var EditorStatus,
       currentBufStatus.insertCharacter(currentMainWindowNode, key)
       let reservedWords = status.settings.highlight.reservedWords
       currentMainWindowNode.highlight =
-        currentBufStatus.buffer.initConfigModeHighlight(currentLine, arrayIndex, reservedWords)
+        currentBufStatus.buffer.initConfigModeHighlight(
+          currentLine,
+          arrayIndex,
+          reservedWords)
 
   if not isCancel:
     template buildOnSaveTable() =
@@ -1498,11 +1502,11 @@ proc editStringSetting(status: var EditorStatus,
         of "nimAdvancedCommand":
           status.settings.quickRun.nimAdvancedCommand = buffer
         of "ClangOptions":
-          status.settings.quickRun.ClangOptions = buffer
+          status.settings.quickRun.clangOptions = buffer
         of "CppOptions":
-          status.settings.quickRun.CppOptions = buffer
+          status.settings.quickRun.cppOptions = buffer
         of "NimOptions":
-          status.settings.quickRun.NimOptions = buffer
+          status.settings.quickRun.nimOptions = buffer
         of "shOptions":
           status.settings.quickRun.shOptions = buffer
         of "bashOptions":
@@ -1540,13 +1544,13 @@ proc editEnumAndBoolSettings(status: var EditorStatus,
     x = absoluteX + positionOfSetVal + numOfIndent - margin
 
   var
-    popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
+    popupWindow = initWindow(h, w, y, x, EditorColorPair.popupWindow)
     suggestIndex = 0
 
-    key = errorKey
+    key = ERR_KEY
 
   while (isTabKey(key) or isShiftTab(key) or isDownKey(key) or isUpKey(key) or
-         errorKey == key) and settingValues.len > 1:
+         ERR_KEY == key) and settingValues.len > 1:
 
     if (isTabKey(key) or isDownKey(key)) and
        suggestIndex < settingValues.high: inc(suggestIndex)
@@ -1557,10 +1561,10 @@ proc editEnumAndBoolSettings(status: var EditorStatus,
     else:
       suggestIndex = 0
 
-    popUpWindow.writePopUpWindow(h, w, y, x,
-                                 terminalHeight(), terminalWidth(),
-                                 suggestIndex,
-                                 settingValues)
+    popupWindow.writePopUpWindow(
+      h, w, y, x,
+      some(suggestIndex),
+      settingValues)
 
     key = currentMainWindowNode.getKey
 
@@ -1572,7 +1576,7 @@ proc editEnumAndBoolSettings(status: var EditorStatus,
     status.changeEditorSettings(
       selectedTable, selectedSetting, position, settingVal)
   else:
-    status.deletePopUpWindow
+    status.popupWindow.deleteWindow
 
 proc selectAndChangeEditorSettings(status: var EditorStatus, arrayIndex: int) =
   let
@@ -1661,8 +1665,8 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
         result.add(ru nameStr & space & $settings.liveReloadOfConf)
       of "incrementalSearch":
         result.add(ru nameStr & space & $settings.incrementalSearch)
-      of "popUpWindowInExmode":
-        result.add(ru nameStr & space & $settings.popUpWindowInExmode)
+      of "popupWindowInExmode":
+        result.add(ru nameStr & space & $settings.popupWindowInExmode)
       of "autoDeleteParen":
         result.add(ru nameStr & space & $settings.autoDeleteParen)
       of "smoothScroll":
@@ -1672,7 +1676,7 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       of "liveReloadOfFile":
         result.add(ru nameStr & space & $settings.liveReloadOfFile)
 
-proc initClipBoardTableBuffer(settings: ClipBoardSettings): seq[seq[Rune]] =
+proc initClipBoardTableBuffer(settings: ClipboardSettings): seq[seq[Rune]] =
   result.add(ru"ClipBoard")
 
   for name in clipboardTableNames:
@@ -1808,12 +1812,12 @@ proc initQuickRunTableBuffer(settings: QuickRunSettings): seq[seq[Rune]] =
         result.add(ru nameStr & space & $settings.timeout)
       of "nimAdvancedCommand":
         result.add(ru nameStr & space & $settings.nimAdvancedCommand)
-      of "ClangOptions":
-        result.add(ru nameStr & space & $settings.ClangOptions)
-      of "CppOptions":
-        result.add(ru nameStr & space & $settings.CppOptions)
-      of "NimOptions":
-        result.add(ru nameStr & space & $settings.NimOptions)
+      of "clangOptions":
+        result.add(ru nameStr & space & $settings.clangOptions)
+      of "cppOptions":
+        result.add(ru nameStr & space & $settings.cppOptions)
+      of "nimOptions":
+        result.add(ru nameStr & space & $settings.nimOptions)
       of "shOptions":
         result.add(ru nameStr & space & $settings.shOptions)
       of "bashOptions":
@@ -1931,7 +1935,7 @@ proc initThemeTableBuffer*(settings: EditorSettings): seq[seq[Rune]] =
         let
           # 11 is "background " length
           space = " ".repeat(positionOfSetVal - indent.len - 11)
-          editorBg = $ColorThemeTable[theme].editorBg
+          editorBg = $colorThemeTable[theme].editorBg
 
         result.add(ru indent & nameStr)
         result.add(ru indent.repeat(2) & "background " & space & editorBg)
@@ -2008,70 +2012,73 @@ proc getNumOfValueOfArraySetting(line: seq[Rune]): int =
   # 1 is the name of the setting
   line.splitWhitespace.len - 1
 
-proc isConfigMode(mode: Mode): bool {.inline.} =
-  mode == Mode.config
+# TODO: Move or Remove
+proc changeModeToSearchForwardMode(
+  bufStatus: var BufferStatus,
+  commandLine: var CommandLine) =
 
-proc configMode*(status: var Editorstatus) =
+    bufStatus.changeMode(Mode.searchForward)
+    commandLine.clear
+    commandLine.setPrompt(searchForwardModePrompt)
 
-  status.resize(terminalHeight(), terminalWidth())
+# TODO: Move or Remove
+proc changeModeToSearchBackwardMode(
+  bufStatus: var BufferStatus,
+  commandLine: var CommandLine) =
 
-  currentBufStatus.buffer = initConfigModeBuffer(status.settings)
-  currentMainWindowNode.currentLine = 1
+    bufStatus.changeMode(Mode.searchBackward)
+    commandLine.clear
+    commandLine.setPrompt(searchBackwardModePrompt)
 
-  let currentBufferIndex = currentMainWindowNode.bufferIndex
+proc isConfigModeCommand*(command: Runes): InputState =
+  result = InputState.Invalid
 
+  if command.len == 1:
+    let key = command[0]
+    if isControlK(key) or
+       isControlJ(key) or
+       key == ord(':') or
+       key == ord('h') or isLeftKey(key) or
+       key == ord('l') or isRightKey(key) or
+       isEnterKey(key) or
+       isControlU(key) or
+       isControlD(key) or
+       isPageUpKey(key) or
+       isPageDownKey(key) or ## Page down and Ctrl - F
+       key == ord('k') or isUpKey(key) or
+       key == ord('j') or isDownKey(key) or
+       key == ord('G') or
+       key == ord('/') or
+       key == ord('?'):
+         return InputState.Valid
+    elif key == ord('g'):
+      return InputState.Continue
+  elif command.len == 2:
+    if command[0] == ord('g'):
+      if command[1] == ord('g'):
+        return InputState.Valid
+
+proc execConfigCommand*(status: var EditorStatus, command: Runes) =
+
+  # TODO: Move or Remove
+  template getSettingType(): SettingType =
+    let buffer = currentBufStatus.buffer
+    buffer.getSettingType(currentMainWindowNode.currentLine)
+
+  # TODO: Move or Remove
+  template getNumOfValueOfArraySetting(): int =
+    let
+      currentLine = currentMainWindowNode.currentLine
+      line = currentBufStatus.buffer[currentLine]
+    getNumOfValueOfArraySetting(line)
+
+  # TODO: Fix or Remove
   # For SettingType.Array
   var arrayIndex = 0
 
-  while isConfigMode(currentBufStatus.mode) and
-        currentBufferIndex == status.bufferIndexInCurrentWindow:
-
-    let
-      currentLine = currentMainWindowNode.currentLine
-      reservedWords = status.settings.highlight.reservedWords
-      highlight = currentBufStatus.buffer.initConfigModeHighlight(
-        currentLine,
-        arrayIndex,
-        reservedWords)
-
-    if currentLine == 0:
-      currentMainWindowNode.currentLine = 1
-    elif currentLine > currentBufStatus.buffer.high - 1:
-      currentMainWindowNode.currentLine = currentBufStatus.buffer.high - 1
-
-    currentMainWindowNode.highlight = highlight
-
-    status.update
-    setCursor(false)
-
-    template getSettingType(): SettingType =
-      let buffer = currentBufStatus.buffer
-      buffer.getSettingType(currentMainWindowNode.currentLine)
-
-    template getNumOfValueOfArraySetting(): int =
-      let
-        currentLine = currentMainWindowNode.currentLine
-        line = currentBufStatus.buffer[currentLine]
-      getNumOfValueOfArraySetting(line)
-
-    var key: Rune = ru'\0'
-    while key == ru'\0':
-      status.eventLoopTask
-      key = getKey(currentMainWindowNode)
-
-    status.lastOperatingTime = now()
-
-    # Adjust arrayIndex
-    block:
-      let line = currentBufStatus.buffer[currentMainWindowNode.currentLine]
-      if line.splitWhitespace.len > 1 and
-         getSettingType() == SettingType.Array and
-         arrayIndex > getNumOfValueOfArraySetting():
-        arrayIndex = getNumOfValueOfArraySetting() - 1
-
-    if isResizekey(key):
-      status.resize(terminalHeight(), terminalWidth())
-    elif isControlK(key):
+  if command.len == 1:
+    let key = command[0]
+    if isControlK(key):
       status.moveNextWindow
     elif isControlJ(key):
       status.movePrevWindow
@@ -2093,7 +2100,7 @@ proc configMode*(status: var Editorstatus) =
       status.halfPageUp
     elif isControlD(key):
       status.halfPageDown
-    elif isPageUpkey(key):
+    elif isPageUpKey(key):
       status.pageUp
     elif isPageDownKey(key): ## Page down and Ctrl - F
       status.pageDown
@@ -2101,16 +2108,13 @@ proc configMode*(status: var Editorstatus) =
       currentBufStatus.keyUp(currentMainWindowNode)
     elif key == ord('j') or isDownKey(key):
       currentBufStatus.keyDown(currentMainWindowNode)
-    elif key == ord('g'):
-      let secondKey = getKey(currentMainWindowNode)
-      if secondKey == 'g':
-        currentBufStatus.moveToFirstLine(currentMainWindowNode)
     elif key == ord('G'):
       currentBufStatus.moveToLastLine(currentMainWindowNode)
-
     elif key == ord('/'):
-      status.searchFordwards
+      currentBufStatus.changeModeToSearchForwardMode(status.commandLine)
     elif key == ord('?'):
-      status.searchBackwards
-    else:
-      discard
+      currentBufStatus.changeModeToSearchBackwardMode(status.commandLine)
+  elif command.len == 2:
+    if command[0] == ord('g'):
+      if command[1] == ord('g'):
+        currentBufStatus.moveToFirstLine(currentMainWindowNode)

@@ -1,8 +1,32 @@
 import std/[strutils, math, random, osproc]
 
+type
+  Position* = object
+    y*: int
+    x*: int
+
+  Size* = object
+    h*: int
+    w*: int
+
+  Range* = object
+    start*: int
+    `end`*: int
+
+  SelectedArea* = object
+    startLine*: int
+    startColumn*: int
+    endLine*: int
+    endColumn*: int
+
+  BufferPosition* = object
+    line*: int
+    column*: int
+
 proc numberOfDigits*(x: int): int {.inline.} = x.intToStr.len
 
-proc calcTabWidth*(numOfBuffer, windowSize: int): int {.inline.} = int(ceil(windowSize / numOfBuffer))
+proc calcTabWidth*(numOfBuffer, windowSize: int): int {.inline.} =
+  int(ceil(windowSize / numOfBuffer))
 
 proc normalizeHex*(s: string): string =
   var count = 0

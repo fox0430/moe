@@ -115,7 +115,7 @@ const
 # TODO: mergeKeywords() will be deleted in the future.
 # TODO: Allow set different colors for each kind without merging
 # like Nim syntax highlighting.
-proc mergeKeywords(): seq[string] {.compiletime.} =
+proc mergeKeywords(): seq[string] {.compileTime.} =
   for k in rustKeywords: result.add k
   for k in rustBuiltins: result.add k
   result.sort

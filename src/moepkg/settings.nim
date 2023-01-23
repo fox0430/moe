@@ -92,9 +92,9 @@ type
     command*: string
     timeout*: int # seconds
     nimAdvancedCommand*: string
-    ClangOptions*: string
-    CppOptions*: string
-    NimOptions*: string
+    clangOptions*: string
+    cppOptions*: string
+    nimOptions*: string
     shOptions*: string
     bashOptions*: string
 
@@ -126,7 +126,7 @@ type
 
   TabLineSettings* = object
     enable*: bool
-    allbuffer*: bool
+    allBuffer*: bool
 
   EditorViewSettings* = object
     highlightCurrentLine*: bool
@@ -163,7 +163,7 @@ type
     toolOnLinux*: ClipboardToolOnLinux
 
   EditorSettings* = object
-    editorColorTheme*: ColorTheme
+    editorColorTheme*: colorTheme
     statusLine*: StatusLineSettings
     tabLine*: TabLineSettings
     view*: EditorViewSettings
@@ -181,7 +181,7 @@ type
     autoSaveInterval*: int # minutes
     liveReloadOfConf*: bool
     incrementalSearch*: bool
-    popUpWindowInExmode*: bool
+    popupWindowInExmode*: bool
     autoDeleteParen*: bool
     smoothScroll*: bool
     smoothScrollSpeed*: int
@@ -331,7 +331,7 @@ proc initPersistSettings(): PersistSettings =
 proc autoSetClipboardTool(): ClipboardToolOnLinux =
   result = ClipboardToolOnLinux.none
 
-  case CURRENT_PLATFORM:
+  case currentPlatform:
     of linux:
       ## Check if X server is running
       if execCmdExNoOutput("xset q") == 0:
@@ -358,7 +358,7 @@ proc initClipboardSettings(): ClipboardSettings =
     result.enable = true
 
 proc initEditorSettings*(): EditorSettings =
-  result.editorColorTheme = ColorTheme.dark
+  result.editorColorTheme = colorTheme.dark
   result.statusLine = initStatusLineSettings()
   result.tabLine = initTabBarSettings()
   result.view = initEditorViewSettings()
@@ -374,7 +374,7 @@ proc initEditorSettings*(): EditorSettings =
   result.insertModeCursor = CursorType.blinkIbeam
   result.autoSaveInterval = 5
   result.incrementalSearch = true
-  result.popUpWindowInExmode = true
+  result.popupWindowInExmode = true
   result.smoothScroll = true
   result.smoothScrollSpeed = 15
   result.clipboard = initClipboardSettings()
@@ -388,12 +388,12 @@ proc initEditorSettings*(): EditorSettings =
   result.highlight= initHighlightSettings()
   result.persist = initPersistSettings()
 
-proc getTheme(theme: string): ColorTheme =
-  if theme == "vivid": return ColorTheme.vivid
-  elif theme == "light": return ColorTheme.light
-  elif theme == "config": return ColorTheme.config
-  elif theme == "vscode": return ColorTheme.vscode
-  else: return ColorTheme.dark
+proc getTheme(theme: string): colorTheme =
+  if theme == "vivid": return colorTheme.vivid
+  elif theme == "light": return colorTheme.light
+  elif theme == "config": return colorTheme.config
+  elif theme == "vscode": return colorTheme.vscode
+  else: return colorTheme.dark
 
 # This macro takes statement lists for the foreground and
 # background colors of a foreground/background color setting.
@@ -475,7 +475,7 @@ macro setEditorColor(args: varargs[untyped]): untyped =
     `bgDynamicAdjust`
     `assignColors`
 
-proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): EditorColor =
+proc makecolorThemeFromVSCodeThemeFile(jsonNode: JsonNode): EditorColor =
   # This converts a JsonNode JString to a 256-Color-Terminal-Color
   proc colorFromNode(node: JsonNode): Color =
     if node == nil:
@@ -713,19 +713,19 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): EditorColor =
     background:
       colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
 
-  setEditorColor popUpWinCurrentLine:
+  setEditorColor popupWinCurrentLine:
     foreground:
       colorFromNode(jsonNode{"colors", "sideBarTitle.forground"})
     background:
       colorFromNode(jsonNode{"colors", "sideBarSectionHeader.background"})
 
   # pop up window
-  setEditorColor popUpWindow:
+  setEditorColor popupWindow:
     foreground:
       adjust: ReadableVsBackground
     background:
       colorFromNode(jsonNode{"colors", "sideBar.background"})
-  setEditorColor popUpWinCurrentLine:
+  setEditorColor popupWinCurrentLine:
     foreground:
       colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
       adjust: ReadableVsBackground
@@ -923,26 +923,26 @@ proc isCurrentVsCodeThemePackage(json: JsonNode, themeName: string): bool =
     else:
       if json{"displayName"}.getStr == themeName: return true
 
-proc loadVSCodeTheme*(): ColorTheme =
+proc loadVSCodeTheme*(): colorTheme =
   # If no vscode theme can be found, this defaults to the dark theme.
   # Hopefully other contributors will come and add support for Windows,
   # and other systems.
 
-  result = ColorTheme.dark
+  result = colorTheme.dark
 
   let vsCodeFlavor = detectVsCodeFlavor()
-  if vsCodeFlavor.isNone: return ColorTheme.dark
+  if vsCodeFlavor.isNone: return colorTheme.dark
 
   let
     # load the VSCode user settings json
     settingsFilePath = vsCodeSettingsFilePath(vsCodeFlavor.get)
     settingsJson =
       try: json.parseFile(settingsFilePath)
-      except: return ColorTheme.dark
+      except: return colorTheme.dark
 
   # The current theme name
   if settingsJson{"workbench.colorTheme"} == nil or
-     settingsJson{"workbench.colorTheme"}.getStr == "": return ColorTheme.dark
+     settingsJson{"workbench.colorTheme"}.getStr == "": return colorTheme.dark
 
   let themeSetting = settingsJson{"workbench.colorTheme"}.getStr
 
@@ -960,9 +960,9 @@ proc loadVSCodeTheme*(): ColorTheme =
           themeSetting,
           file)
         if themeJson.isSome:
-          ColorThemeTable[ColorTheme.vscode] =
-            makeColorThemeFromVSCodeThemeFile(themeJson.get)
-          return ColorTheme.vscode
+          colorThemeTable[colorTheme.vscode] =
+            makecolorThemeFromVSCodeThemeFile(themeJson.get)
+          return colorTheme.vscode
 
   # Check user themes.
   let userExtensionsDir = vsCodeUserExtensionsDir(vsCodeFlavor.get)
@@ -978,9 +978,9 @@ proc loadVSCodeTheme*(): ColorTheme =
           themeSetting,
           file)
         if themeJson.isSome:
-          ColorThemeTable[ColorTheme.vscode] =
-            makeColorThemeFromVSCodeThemeFile(themeJson.get)
-          return ColorTheme.vscode
+          colorThemeTable[colorTheme.vscode] =
+            makecolorThemeFromVSCodeThemeFile(themeJson.get)
+          return colorTheme.vscode
 
 proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
   result = initEditorSettings()
@@ -994,41 +994,41 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       result.editorColorTheme = getTheme(themeString)
 
     if settings["Standard"].contains("number"):
-      result.view.lineNumber = settings["Standard"]["number"].getbool()
+      result.view.lineNumber = settings["Standard"]["number"].getBool()
 
     if settings["Standard"].contains("currentNumber"):
-      result.view.currentLineNumber = settings["Standard"]["currentNumber"].getbool()
+      result.view.currentLineNumber = settings["Standard"]["currentNumber"].getBool()
 
     if settings["Standard"].contains("cursorLine"):
-      result.view.cursorLine = settings["Standard"]["cursorLine"].getbool()
+      result.view.cursorLine = settings["Standard"]["cursorLine"].getBool()
 
     if settings["Standard"].contains("statusLine"):
-      result.statusLine.enable = settings["Standard"]["statusLine"].getbool()
+      result.statusLine.enable = settings["Standard"]["statusLine"].getBool()
 
     if settings["Standard"].contains("tabLine"):
-      result.tabLine.enable = settings["Standard"]["tabLine"].getbool()
+      result.tabLine.enable = settings["Standard"]["tabLine"].getBool()
 
     if settings["Standard"].contains("syntax"):
-      result.syntax = settings["Standard"]["syntax"].getbool()
+      result.syntax = settings["Standard"]["syntax"].getBool()
 
     if settings["Standard"].contains("tabStop"):
       result.tabStop      = settings["Standard"]["tabStop"].getInt()
       result.view.tabStop = settings["Standard"]["tabStop"].getInt()
 
     if settings["Standard"].contains("autoCloseParen"):
-      result.autoCloseParen = settings["Standard"]["autoCloseParen"].getbool()
+      result.autoCloseParen = settings["Standard"]["autoCloseParen"].getBool()
 
     if settings["Standard"].contains("autoIndent"):
-      result.autoIndent = settings["Standard"]["autoIndent"].getbool()
+      result.autoIndent = settings["Standard"]["autoIndent"].getBool()
 
     if settings["Standard"].contains("ignorecase"):
-      result.ignorecase = settings["Standard"]["ignorecase"].getbool()
+      result.ignorecase = settings["Standard"]["ignorecase"].getBool()
 
     if settings["Standard"].contains("smartcase"):
-      result.smartcase = settings["Standard"]["smartcase"].getbool()
+      result.smartcase = settings["Standard"]["smartcase"].getBool()
 
     if settings["Standard"].contains("disableChangeCursor"):
-      result.disableChangeCursor = settings["Standard"]["disableChangeCursor"].getbool()
+      result.disableChangeCursor = settings["Standard"]["disableChangeCursor"].getBool()
 
     if settings["Standard"].contains("defaultCursor"):
       let str = settings["Standard"]["defaultCursor"].getStr()
@@ -1043,38 +1043,38 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       result.insertModeCursor = cursorType(str)
 
     if settings["Standard"].contains("autoSave"):
-      result.autoSave = settings["Standard"]["autoSave"].getbool()
+      result.autoSave = settings["Standard"]["autoSave"].getBool()
 
     if settings["Standard"].contains("autoSaveInterval"):
       result.autoSaveInterval = settings["Standard"]["autoSaveInterval"].getInt()
 
     if settings["Standard"].contains("liveReloadOfConf"):
-      result.liveReloadOfConf = settings["Standard"]["liveReloadOfConf"].getbool()
+      result.liveReloadOfConf = settings["Standard"]["liveReloadOfConf"].getBool()
 
     if settings["Standard"].contains("incrementalSearch"):
-      result.incrementalSearch = settings["Standard"]["incrementalSearch"].getbool()
+      result.incrementalSearch = settings["Standard"]["incrementalSearch"].getBool()
 
-    if settings["Standard"].contains("popUpWindowInExmode"):
-      result.popUpWindowInExmode = settings["Standard"]["popUpWindowInExmode"].getbool()
+    if settings["Standard"].contains("popupWindowInExmode"):
+      result.popupWindowInExmode = settings["Standard"]["popupWindowInExmode"].getBool()
 
     if settings["Standard"].contains("autoDeleteParen"):
-      result.autoDeleteParen =  settings["Standard"]["autoDeleteParen"].getbool()
+      result.autoDeleteParen =  settings["Standard"]["autoDeleteParen"].getBool()
 
     if settings["Standard"].contains("smoothScroll"):
-      result.smoothScroll =  settings["Standard"]["smoothScroll"].getbool()
+      result.smoothScroll =  settings["Standard"]["smoothScroll"].getBool()
 
     if settings["Standard"].contains("smoothScrollSpeed"):
-      result.smoothScrollSpeed = settings["Standard"]["smoothScrollSpeed"].getint()
+      result.smoothScrollSpeed = settings["Standard"]["smoothScrollSpeed"].getInt()
 
     if settings["Standard"].contains("liveReloadOfFile"):
-      result.liveReloadOfFile = settings["Standard"]["liveReloadOfFile"].getbool()
+      result.liveReloadOfFile = settings["Standard"]["liveReloadOfFile"].getBool()
 
     if settings["Standard"].contains("indentationLines"):
-      result.view.indentationLines = settings["Standard"]["indentationLines"].getbool()
+      result.view.indentationLines = settings["Standard"]["indentationLines"].getBool()
 
   if settings.contains("Clipboard"):
     if settings["Clipboard"].contains("enable"):
-      result.clipboard.enable = settings["Clipboard"]["enable"].getbool()
+      result.clipboard.enable = settings["Clipboard"]["enable"].getBool()
 
     if settings["Clipboard"].contains("toolOnLinux"):
       let str = settings["Clipboard"]["toolOnLinux"].getStr
@@ -1090,51 +1090,51 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
   if settings.contains("TabLine"):
     if settings["TabLine"].contains("allBuffer"):
-        result.tabLine.allBuffer= settings["TabLine"]["allBuffer"].getbool()
+        result.tabLine.allBuffer = settings["TabLine"]["allBuffer"].getBool()
 
   if settings.contains("StatusLine"):
     if settings["StatusLine"].contains("multipleStatusLine"):
-        result.statusLine.multipleStatusLine = settings["StatusLine"]["multipleStatusLine"].getbool()
+        result.statusLine.multipleStatusLine = settings["StatusLine"]["multipleStatusLine"].getBool()
 
     if settings["StatusLine"].contains("merge"):
-        result.statusLine.merge = settings["StatusLine"]["merge"].getbool()
+        result.statusLine.merge = settings["StatusLine"]["merge"].getBool()
 
     if settings["StatusLine"].contains("mode"):
-        result.statusLine.mode= settings["StatusLine"]["mode"].getbool()
+        result.statusLine.mode= settings["StatusLine"]["mode"].getBool()
 
     if settings["StatusLine"].contains("filename"):
-        result.statusLine.filename = settings["StatusLine"]["filename"].getbool()
+        result.statusLine.filename = settings["StatusLine"]["filename"].getBool()
 
     if settings["StatusLine"].contains("chanedMark"):
-        result.statusLine.chanedMark = settings["StatusLine"]["chanedMark"].getbool()
+        result.statusLine.chanedMark = settings["StatusLine"]["chanedMark"].getBool()
 
     if settings["StatusLine"].contains("line"):
-        result.statusLine.line = settings["StatusLine"]["line"].getbool()
+        result.statusLine.line = settings["StatusLine"]["line"].getBool()
 
     if settings["StatusLine"].contains("column"):
-        result.statusLine.column = settings["StatusLine"]["column"].getbool()
+        result.statusLine.column = settings["StatusLine"]["column"].getBool()
 
     if settings["StatusLine"].contains("encoding"):
-        result.statusLine.characterEncoding = settings["StatusLine"]["encoding"].getbool()
+        result.statusLine.characterEncoding = settings["StatusLine"]["encoding"].getBool()
 
     if settings["StatusLine"].contains("language"):
-        result.statusLine.language = settings["StatusLine"]["language"].getbool()
+        result.statusLine.language = settings["StatusLine"]["language"].getBool()
 
     if settings["StatusLine"].contains("directory"):
-        result.statusLine.directory = settings["StatusLine"]["directory"].getbool()
+        result.statusLine.directory = settings["StatusLine"]["directory"].getBool()
 
     if settings["StatusLine"].contains("gitbranchName"):
-        result.statusLine.gitbranchName = settings["StatusLine"]["gitbranchName"].getbool()
+        result.statusLine.gitbranchName = settings["StatusLine"]["gitbranchName"].getBool()
 
     if settings["StatusLine"].contains("showGitInactive"):
-        result.statusLine.showGitInactive = settings["StatusLine"]["showGitInactive"].getbool()
+        result.statusLine.showGitInactive = settings["StatusLine"]["showGitInactive"].getBool()
 
     if settings["StatusLine"].contains("showModeInactive"):
-        result.statusLine.showModeInactive = settings["StatusLine"]["showModeInactive"].getbool()
+        result.statusLine.showModeInactive = settings["StatusLine"]["showModeInactive"].getBool()
 
   if settings.contains("BuildOnSave"):
     if settings["BuildOnSave"].contains("enable"):
-      result.buildOnSave.enable = settings["BuildOnSave"]["enable"].getbool()
+      result.buildOnSave.enable = settings["BuildOnSave"]["enable"].getBool()
 
     if settings["BuildOnSave"].contains("workspaceRoot"):
       result.buildOnSave.workspaceRoot = settings["BuildOnSave"]["workspaceRoot"].getStr().toRunes
@@ -1152,26 +1152,26 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
         result.highlight.reservedWords.add(reservedWord)
 
     if settings["Highlight"].contains("currentLine"):
-      result.view.highlightCurrentLine = settings["Highlight"]["currentLine"].getbool()
+      result.view.highlightCurrentLine = settings["Highlight"]["currentLine"].getBool()
 
     if settings["Highlight"].contains("currentWord"):
-      result.highlight.currentWord = settings["Highlight"]["currentWord"].getbool()
+      result.highlight.currentWord = settings["Highlight"]["currentWord"].getBool()
 
     if settings["Highlight"].contains("replaceText"):
-      result.highlight.replaceText = settings["Highlight"]["replaceText"].getbool()
+      result.highlight.replaceText = settings["Highlight"]["replaceText"].getBool()
 
     if settings["Highlight"].contains("pairOfParen"):
-      result.highlight.pairOfParen =  settings["Highlight"]["pairOfParen"].getbool()
+      result.highlight.pairOfParen =  settings["Highlight"]["pairOfParen"].getBool()
 
     if settings["Highlight"].contains("fullWidthSpace"):
-      result.highlight.fullWidthSpace = settings["Highlight"]["fullWidthSpace"].getbool()
+      result.highlight.fullWidthSpace = settings["Highlight"]["fullWidthSpace"].getBool()
 
     if settings["Highlight"].contains("trailingSpaces"):
-      result.highlight.trailingSpaces = settings["Highlight"]["trailingSpaces"].getbool()
+      result.highlight.trailingSpaces = settings["Highlight"]["trailingSpaces"].getBool()
 
   if settings.contains("AutoBackup"):
     if settings["AutoBackup"].contains("enable"):
-      result.autoBackup.enable = settings["AutoBackup"]["enable"].getbool()
+      result.autoBackup.enable = settings["AutoBackup"]["enable"].getBool()
 
     if settings["AutoBackup"].contains("idleTime"):
       result.autoBackup.idleTime = settings["AutoBackup"]["idleTime"].getInt()
@@ -1203,14 +1203,14 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["QuickRun"].contains("nimAdvancedCommand"):
       result.quickRun.nimAdvancedCommand = settings["QuickRun"]["nimAdvancedCommand"].getStr()
 
-    if settings["QuickRun"].contains("ClangOptions"):
-      result.quickRun.ClangOptions = settings["QuickRun"]["ClangOptions"].getStr()
+    if settings["QuickRun"].contains("clangOptions"):
+      result.quickRun.clangOptions = settings["QuickRun"]["clangOptions"].getStr()
 
-    if settings["QuickRun"].contains("CppOptions"):
-      result.quickRun.CppOptions = settings["QuickRun"]["CppOptions"].getStr()
+    if settings["QuickRun"].contains("cppOptions"):
+      result.quickRun.cppOptions = settings["QuickRun"]["cppOptions"].getStr()
 
-    if settings["QuickRun"].contains("NimOptions"):
-      result.quickRun.NimOptions = settings["QuickRun"]["NimOptions"].getStr()
+    if settings["QuickRun"].contains("nimOptions"):
+      result.quickRun.nimOptions = settings["QuickRun"]["nimOptions"].getStr()
 
     if settings["QuickRun"].contains("shOptions"):
       result.quickRun.shOptions = settings["QuickRun"]["shOptions"].getStr()
@@ -1281,11 +1281,11 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
   if settings.contains("Filer"):
     if settings["Filer"].contains("showIcons"):
-      result.filer.showIcons = settings["Filer"]["showIcons"].getbool()
+      result.filer.showIcons = settings["Filer"]["showIcons"].getBool()
 
   if (const table = "Autocomplete"; settings.contains(table)):
     if (const key = "enable"; settings[table].contains(key)):
-      result.autocomplete.enable = settings[table][key].getbool
+      result.autocomplete.enable = settings[table][key].getBool
 
   if settings.contains("Persist"):
     if settings["Persist"].contains("exCommand"):
@@ -1302,160 +1302,160 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       let windowNodeSettings = settings["Debug"]["WindowNode"]
 
       if windowNodeSettings.contains("enable"):
-        let setting = windowNodeSettings["enable"].getbool
+        let setting = windowNodeSettings["enable"].getBool
         result.debugMode.windowNode.enable = setting
 
       if windowNodeSettings.contains("currentWindow"):
-        let setting = windowNodeSettings["currentWindow"].getbool
+        let setting = windowNodeSettings["currentWindow"].getBool
         result.debugMode.windowNode.currentWindow = setting
 
       if windowNodeSettings.contains("index"):
-        let setting = windowNodeSettings["index"].getbool
+        let setting = windowNodeSettings["index"].getBool
         result.debugMode.windowNode.index = setting
 
       if windowNodeSettings.contains("windowIndex"):
-        let setting = windowNodeSettings["windowIndex"].getbool
+        let setting = windowNodeSettings["windowIndex"].getBool
         result.debugMode.windowNode.windowIndex = setting
 
       if windowNodeSettings.contains("bufferIndex"):
-        let setting = windowNodeSettings["bufferIndex"].getbool
+        let setting = windowNodeSettings["bufferIndex"].getBool
         result.debugMode.windowNode.bufferIndex = setting
 
       if windowNodeSettings.contains("parentIndex"):
-        let setting = windowNodeSettings["parentIndex"].getbool
+        let setting = windowNodeSettings["parentIndex"].getBool
         result.debugMode.windowNode.parentIndex = setting
 
       if windowNodeSettings.contains("childLen"):
-        let setting = windowNodeSettings["childLen"].getbool
+        let setting = windowNodeSettings["childLen"].getBool
         result.debugMode.windowNode.childLen = setting
 
       if windowNodeSettings.contains("splitType"):
-        let setting = windowNodeSettings["splitType"].getbool
+        let setting = windowNodeSettings["splitType"].getBool
         result.debugMode.windowNode.splitType = setting
 
       if windowNodeSettings.contains("haveCursesWin"):
-        let setting = windowNodeSettings["haveCursesWin"].getbool
+        let setting = windowNodeSettings["haveCursesWin"].getBool
         result.debugMode.windowNode.haveCursesWin = setting
 
       if windowNodeSettings.contains("haveCursesWin"):
-        let setting = windowNodeSettings["haveCursesWin"].getbool
+        let setting = windowNodeSettings["haveCursesWin"].getBool
         result.debugMode.windowNode.haveCursesWin = setting
 
       if windowNodeSettings.contains("y"):
-        let setting = windowNodeSettings["y"].getbool
+        let setting = windowNodeSettings["y"].getBool
         result.debugMode.windowNode.y = setting
 
       if windowNodeSettings.contains("x"):
-        let setting = windowNodeSettings["x"].getbool
+        let setting = windowNodeSettings["x"].getBool
         result.debugMode.windowNode.x = setting
 
       if windowNodeSettings.contains("h"):
-        let setting = windowNodeSettings["h"].getbool
+        let setting = windowNodeSettings["h"].getBool
         result.debugMode.windowNode.h = setting
 
       if windowNodeSettings.contains("w"):
-        let setting = windowNodeSettings["w"].getbool
+        let setting = windowNodeSettings["w"].getBool
         result.debugMode.windowNode.w = setting
 
       if windowNodeSettings.contains("currentLine"):
-        let setting = windowNodeSettings["currentLine"].getbool
+        let setting = windowNodeSettings["currentLine"].getBool
         result.debugMode.windowNode.currentLine = setting
 
       if windowNodeSettings.contains("currentColumn"):
-        let setting = windowNodeSettings["currentColumn"].getbool
+        let setting = windowNodeSettings["currentColumn"].getBool
         result.debugMode.windowNode.currentColumn = setting
 
       if windowNodeSettings.contains("expandedColumn"):
-        let setting = windowNodeSettings["expandedColumn"].getbool
+        let setting = windowNodeSettings["expandedColumn"].getBool
         result.debugMode.windowNode.expandedColumn = setting
 
       if windowNodeSettings.contains("cursor"):
-        let setting = windowNodeSettings["cursor"].getbool
+        let setting = windowNodeSettings["cursor"].getBool
         result.debugMode.windowNode.cursor = setting
 
     if settings["Debug"].contains("EditorView"):
       let editorViewSettings = settings["Debug"]["EditorView"]
 
       if editorViewSettings.contains("enable"):
-        let setting = editorViewSettings["enable"].getbool
+        let setting = editorViewSettings["enable"].getBool
         result.debugMode.editorview.enable = setting
 
       if editorViewSettings.contains("widthOfLineNum"):
-        let setting = editorViewSettings["widthOfLineNum"].getbool
+        let setting = editorViewSettings["widthOfLineNum"].getBool
         result.debugMode.editorview.widthOfLineNum = setting
 
       if editorViewSettings.contains("height"):
-        let setting = editorViewSettings["height"].getbool
+        let setting = editorViewSettings["height"].getBool
         result.debugMode.editorview.height = setting
 
       if editorViewSettings.contains("width"):
-        let setting = editorViewSettings["width"].getbool
+        let setting = editorViewSettings["width"].getBool
         result.debugMode.editorview.width = setting
 
       if editorViewSettings.contains("originalLine"):
-        let setting = editorViewSettings["originalLine"].getbool
+        let setting = editorViewSettings["originalLine"].getBool
         result.debugMode.editorview.originalLine = setting
 
       if editorViewSettings.contains("start"):
-        let setting = editorViewSettings["start"].getbool
+        let setting = editorViewSettings["start"].getBool
         result.debugMode.editorview.start = setting
 
       if editorViewSettings.contains("length"):
-        let setting = editorViewSettings["length"].getbool
+        let setting = editorViewSettings["length"].getBool
         result.debugMode.editorview.length = setting
 
     if settings["Debug"].contains("BufferStatus"):
       let bufStatusSettings = settings["Debug"]["BufferStatus"]
 
       if bufStatusSettings.contains("enable"):
-        let setting = bufStatusSettings["enable"].getbool
+        let setting = bufStatusSettings["enable"].getBool
         result.debugMode.bufStatus.enable = setting
 
       if bufStatusSettings.contains("bufferIndex"):
-        let setting = bufStatusSettings["bufferIndex"].getbool
+        let setting = bufStatusSettings["bufferIndex"].getBool
         result.debugMode.bufStatus.bufferIndex = setting
 
       if bufStatusSettings.contains("path"):
-        let setting = bufStatusSettings["path"].getbool
+        let setting = bufStatusSettings["path"].getBool
         result.debugMode.bufStatus.path = setting
 
       if bufStatusSettings.contains("openDir"):
-        let setting = bufStatusSettings["openDir"].getbool
+        let setting = bufStatusSettings["openDir"].getBool
         result.debugMode.bufStatus.openDir = setting
 
       if bufStatusSettings.contains("currentMode"):
-        let setting = bufStatusSettings["currentMode"].getbool
+        let setting = bufStatusSettings["currentMode"].getBool
         result.debugMode.bufStatus.currentMode = setting
 
       if bufStatusSettings.contains("prevMode"):
-        let setting = bufStatusSettings["prevMode"].getbool
+        let setting = bufStatusSettings["prevMode"].getBool
         result.debugMode.bufStatus.prevMode = setting
 
       if bufStatusSettings.contains("language"):
-        let setting = bufStatusSettings["language"].getbool
+        let setting = bufStatusSettings["language"].getBool
         result.debugMode.bufStatus.language = setting
 
       if bufStatusSettings.contains("encoding"):
-        let setting = bufStatusSettings["encoding"].getbool
+        let setting = bufStatusSettings["encoding"].getBool
         result.debugMode.bufStatus.encoding = setting
 
       if bufStatusSettings.contains("countChange"):
-        let setting = bufStatusSettings["countChange"].getbool
+        let setting = bufStatusSettings["countChange"].getBool
         result.debugMode.bufStatus.countChange = setting
 
       if bufStatusSettings.contains("cmdLoop"):
-        let setting = bufStatusSettings["cmdLoop"].getbool
+        let setting = bufStatusSettings["cmdLoop"].getBool
         result.debugMode.bufStatus.cmdLoop = setting
 
       if bufStatusSettings.contains("lastSaveTime"):
-        let setting = bufStatusSettings["lastSaveTime"].getbool
+        let setting = bufStatusSettings["lastSaveTime"].getBool
         result.debugMode.bufStatus.lastSaveTime = setting
 
       if bufStatusSettings.contains("bufferLen"):
-        let setting = bufStatusSettings["bufferLen"].getbool
+        let setting = bufStatusSettings["bufferLen"].getBool
         result.debugMode.bufStatus.bufferLen = setting
 
-  if result.editorColorTheme == ColorTheme.config and
+  if result.editorColorTheme == colorTheme.config and
      settings.contains("Theme"):
     if settings["Theme"].contains("baseTheme"):
       let themeString = settings["Theme"]["baseTheme"].getStr()
@@ -1465,332 +1465,332 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
           try: some(json.parseFile(themeString))
           except: none(JsonNode)
         if jsonNode.isSome:
-          ColorThemeTable[ColorTheme.config] = makeColorThemeFromVSCodeThemeFile(jsonNode.get)
+          colorThemeTable[colorTheme.config] = makecolorThemeFromVSCodeThemeFile(jsonNode.get)
         else:
-          let theme = parseEnum[ColorTheme](themeString)
-          ColorThemeTable[ColorTheme.config] = ColorThemeTable[theme]
+          let theme = parseEnum[colorTheme](themeString)
+          colorThemeTable[colorTheme.config] = colorThemeTable[theme]
       else:
-        let theme = parseEnum[ColorTheme](themeString)
-        ColorThemeTable[ColorTheme.config] = ColorThemeTable[theme]
+        let theme = parseEnum[colorTheme](themeString)
+        colorThemeTable[colorTheme.config] = colorThemeTable[theme]
 
     template color(str: string): untyped =
       parseEnum[Color](settings["Theme"][str].getStr())
 
     if settings["Theme"].contains("editorBg"):
-      ColorThemeTable[ColorTheme.config].editorBg = color("editorBg")
+      colorThemeTable[colorTheme.config].editorBg = color("editorBg")
 
     if settings["Theme"].contains("lineNum"):
-      ColorThemeTable[ColorTheme.config].lineNum = color("lineNum")
+      colorThemeTable[colorTheme.config].lineNum = color("lineNum")
 
     if settings["Theme"].contains("lineNumBg"):
-      ColorThemeTable[ColorTheme.config].lineNumBg = color("lineNumBg")
+      colorThemeTable[colorTheme.config].lineNumBg = color("lineNumBg")
 
     if settings["Theme"].contains("currentLineNum"):
-      ColorThemeTable[ColorTheme.config].currentLineNum = color("currentLineNum")
+      colorThemeTable[colorTheme.config].currentLineNum = color("currentLineNum")
 
     if settings["Theme"].contains("currentLineNumBg"):
-      ColorThemeTable[ColorTheme.config].currentLineNumBg = color("currentLineNumBg")
+      colorThemeTable[colorTheme.config].currentLineNumBg = color("currentLineNumBg")
 
     if settings["Theme"].contains("statusLineNormalMode"):
-      ColorThemeTable[ColorTheme.config].statusLineNormalMode = color("statusLineNormalMode")
+      colorThemeTable[colorTheme.config].statusLineNormalMode = color("statusLineNormalMode")
 
     if settings["Theme"].contains("statusLineNormalModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineNormalModeBg = color("statusLineNormalModeBg")
+      colorThemeTable[colorTheme.config].statusLineNormalModeBg = color("statusLineNormalModeBg")
 
     if settings["Theme"].contains("statusLineModeNormalMode"):
-      ColorThemeTable[ColorTheme.config].statusLineModeNormalMode = color("statusLineModeNormalMode")
+      colorThemeTable[colorTheme.config].statusLineModeNormalMode = color("statusLineModeNormalMode")
 
     if settings["Theme"].contains("statusLineModeNormalModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineModeNormalModeBg = color("statusLineModeNormalModeBg")
+      colorThemeTable[colorTheme.config].statusLineModeNormalModeBg = color("statusLineModeNormalModeBg")
 
     if settings["Theme"].contains("statusLineNormalModeInactive"):
-      ColorThemeTable[ColorTheme.config].statusLineNormalModeInactive = color("statusLineNormalModeInactive")
+      colorThemeTable[colorTheme.config].statusLineNormalModeInactive = color("statusLineNormalModeInactive")
 
     if settings["Theme"].contains("statusLineNormalModeInactiveBg"):
-      ColorThemeTable[ColorTheme.config].statusLineNormalModeInactiveBg = color("statusLineNormalModeInactiveBg")
+      colorThemeTable[colorTheme.config].statusLineNormalModeInactiveBg = color("statusLineNormalModeInactiveBg")
 
     if settings["Theme"].contains("statusLineInsertMode"):
-      ColorThemeTable[ColorTheme.config].statusLineInsertMode = color("statusLineInsertMode")
+      colorThemeTable[colorTheme.config].statusLineInsertMode = color("statusLineInsertMode")
 
     if settings["Theme"].contains("statusLineInsertModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineInsertModeBg = color("statusLineInsertModeBg")
+      colorThemeTable[colorTheme.config].statusLineInsertModeBg = color("statusLineInsertModeBg")
 
     if settings["Theme"].contains("statusLineModeInsertMode"):
-      ColorThemeTable[ColorTheme.config].statusLineModeInsertMode = color("statusLineModeInsertMode")
+      colorThemeTable[colorTheme.config].statusLineModeInsertMode = color("statusLineModeInsertMode")
 
     if settings["Theme"].contains("statusLineModeInsertModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineModeInsertModeBg = color("statusLineModeInsertModeBg")
+      colorThemeTable[colorTheme.config].statusLineModeInsertModeBg = color("statusLineModeInsertModeBg")
 
     if settings["Theme"].contains("statusLineInsertModeInactive"):
-      ColorThemeTable[ColorTheme.config].statusLineInsertModeInactive = color("statusLineInsertModeInactive")
+      colorThemeTable[colorTheme.config].statusLineInsertModeInactive = color("statusLineInsertModeInactive")
 
     if settings["Theme"].contains("statusLineInsertModeInactiveBg"):
-      ColorThemeTable[ColorTheme.config].statusLineInsertModeInactiveBg = color("statusLineInsertModeInactiveBg")
+      colorThemeTable[colorTheme.config].statusLineInsertModeInactiveBg = color("statusLineInsertModeInactiveBg")
 
     if settings["Theme"].contains("statusLineVisualMode"):
-      ColorThemeTable[ColorTheme.config].statusLineVisualMode = color("statusLineVisualMode")
+      colorThemeTable[colorTheme.config].statusLineVisualMode = color("statusLineVisualMode")
 
     if settings["Theme"].contains("statusLineVisualModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineVisualModeBg = color("statusLineVisualModeBg")
+      colorThemeTable[colorTheme.config].statusLineVisualModeBg = color("statusLineVisualModeBg")
 
     if settings["Theme"].contains("statusLineModeVisualMode"):
-      ColorThemeTable[ColorTheme.config].statusLineModeVisualMode = color("statusLineModeVisualMode")
+      colorThemeTable[colorTheme.config].statusLineModeVisualMode = color("statusLineModeVisualMode")
 
     if settings["Theme"].contains("statusLineModeVisualModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineModeVisualModeBg = color("statusLineModeVisualModeBg")
+      colorThemeTable[colorTheme.config].statusLineModeVisualModeBg = color("statusLineModeVisualModeBg")
 
     if settings["Theme"].contains("statusLineVisualModeInactive"):
-      ColorThemeTable[ColorTheme.config].statusLineVisualModeInactive = color("statusLineVisualModeInactive")
+      colorThemeTable[colorTheme.config].statusLineVisualModeInactive = color("statusLineVisualModeInactive")
 
     if settings["Theme"].contains("statusLineVisualModeInactiveBg"):
-      ColorThemeTable[ColorTheme.config].statusLineVisualModeInactiveBg = color("statusLineVisualModeInactiveBg")
+      colorThemeTable[colorTheme.config].statusLineVisualModeInactiveBg = color("statusLineVisualModeInactiveBg")
 
     if settings["Theme"].contains("statusLineReplaceMode"):
-      ColorThemeTable[ColorTheme.config].statusLineReplaceMode = color("statusLineReplaceMode")
+      colorThemeTable[colorTheme.config].statusLineReplaceMode = color("statusLineReplaceMode")
 
     if settings["Theme"].contains("statusLineReplaceModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineReplaceModeBg = color("statusLineReplaceModeBg")
+      colorThemeTable[colorTheme.config].statusLineReplaceModeBg = color("statusLineReplaceModeBg")
 
     if settings["Theme"].contains("statusLineModeReplaceMode"):
-      ColorThemeTable[ColorTheme.config].statusLineModeReplaceMode = color("statusLineModeReplaceMode")
+      colorThemeTable[colorTheme.config].statusLineModeReplaceMode = color("statusLineModeReplaceMode")
 
     if settings["Theme"].contains("statusLineModeReplaceModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineModeReplaceModeBg = color("statusLineModeReplaceModeBg")
+      colorThemeTable[colorTheme.config].statusLineModeReplaceModeBg = color("statusLineModeReplaceModeBg")
 
     if settings["Theme"].contains("statusLineReplaceModeInactive"):
-      ColorThemeTable[ColorTheme.config].statusLineReplaceModeInactive = color("statusLineReplaceModeInactive")
+      colorThemeTable[colorTheme.config].statusLineReplaceModeInactive = color("statusLineReplaceModeInactive")
 
     if settings["Theme"].contains("statusLineReplaceModeInactiveBg"):
-      ColorThemeTable[ColorTheme.config].statusLineReplaceModeInactiveBg = color("statusLineReplaceModeInactiveBg")
+      colorThemeTable[colorTheme.config].statusLineReplaceModeInactiveBg = color("statusLineReplaceModeInactiveBg")
 
     if settings["Theme"].contains("statusLineFilerMode"):
-      ColorThemeTable[ColorTheme.config].statusLineFilerMode = color("statusLineFilerMode")
+      colorThemeTable[colorTheme.config].statusLineFilerMode = color("statusLineFilerMode")
 
     if settings["Theme"].contains("statusLineFilerModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineFilerModeBg = color("statusLineFilerModeBg")
+      colorThemeTable[colorTheme.config].statusLineFilerModeBg = color("statusLineFilerModeBg")
 
     if settings["Theme"].contains("statusLineModeFilerMode"):
-      ColorThemeTable[ColorTheme.config].statusLineModeFilerMode = color("statusLineModeFilerMode")
+      colorThemeTable[colorTheme.config].statusLineModeFilerMode = color("statusLineModeFilerMode")
 
     if settings["Theme"].contains("statusLineModeFilerModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineModeFilerModeBg = color("statusLineModeFilerModeBg")
+      colorThemeTable[colorTheme.config].statusLineModeFilerModeBg = color("statusLineModeFilerModeBg")
 
     if settings["Theme"].contains("statusLineFilerModeInactive"):
-      ColorThemeTable[ColorTheme.config].statusLineFilerModeInactive = color("statusLineFilerModeInactive")
+      colorThemeTable[colorTheme.config].statusLineFilerModeInactive = color("statusLineFilerModeInactive")
 
     if settings["Theme"].contains("statusLineFilerModeInactiveBg"):
-      ColorThemeTable[ColorTheme.config].statusLineFilerModeInactiveBg = color("statusLineFilerModeInactiveBg")
+      colorThemeTable[colorTheme.config].statusLineFilerModeInactiveBg = color("statusLineFilerModeInactiveBg")
 
     if settings["Theme"].contains("statusLineExMode"):
-      ColorThemeTable[ColorTheme.config].statusLineExMode = color("statusLineExMode")
+      colorThemeTable[colorTheme.config].statusLineExMode = color("statusLineExMode")
 
     if settings["Theme"].contains("statusLineExModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineExModeBg = color("statusLineExModeBg")
+      colorThemeTable[colorTheme.config].statusLineExModeBg = color("statusLineExModeBg")
 
     if settings["Theme"].contains("statusLineModeExMode"):
-      ColorThemeTable[ColorTheme.config].statusLineModeExMode = color("statusLineModeExMode")
+      colorThemeTable[colorTheme.config].statusLineModeExMode = color("statusLineModeExMode")
 
     if settings["Theme"].contains("statusLineModeExModeBg"):
-      ColorThemeTable[ColorTheme.config].statusLineModeExModeBg = color("statusLineModeExModeBg")
+      colorThemeTable[colorTheme.config].statusLineModeExModeBg = color("statusLineModeExModeBg")
 
     if settings["Theme"].contains("statusLineExModeInactive"):
-      ColorThemeTable[ColorTheme.config].statusLineExModeInactive = color("statusLineExModeInactive")
+      colorThemeTable[colorTheme.config].statusLineExModeInactive = color("statusLineExModeInactive")
 
     if settings["Theme"].contains("statusLineExModeInactiveBg"):
-      ColorThemeTable[ColorTheme.config].statusLineExModeInactiveBg = color("statusLineExModeInactiveBg")
+      colorThemeTable[colorTheme.config].statusLineExModeInactiveBg = color("statusLineExModeInactiveBg")
 
     if settings["Theme"].contains("statusLineGitBranch"):
-      ColorThemeTable[ColorTheme.config].statusLineGitBranch = color("statusLineGitBranch")
+      colorThemeTable[colorTheme.config].statusLineGitBranch = color("statusLineGitBranch")
 
     if settings["Theme"].contains("statusLineGitBranchBg"):
-      ColorThemeTable[ColorTheme.config].statusLineGitBranchBg = color("statusLineGitBranchBg")
+      colorThemeTable[colorTheme.config].statusLineGitBranchBg = color("statusLineGitBranchBg")
 
     if settings["Theme"].contains("tab"):
-      ColorThemeTable[ColorTheme.config].tab = color("tab")
+      colorThemeTable[colorTheme.config].tab = color("tab")
 
     if settings["Theme"].contains("tabBg"):
-      ColorThemeTable[ColorTheme.config].tabBg = color("tabBg")
+      colorThemeTable[colorTheme.config].tabBg = color("tabBg")
 
     if settings["Theme"].contains("currentTab"):
-      ColorThemeTable[ColorTheme.config].currentTab = color("currentTab")
+      colorThemeTable[colorTheme.config].currentTab = color("currentTab")
 
     if settings["Theme"].contains("currentTabBg"):
-      ColorThemeTable[ColorTheme.config].currentTabBg = color("currentTabBg")
+      colorThemeTable[colorTheme.config].currentTabBg = color("currentTabBg")
 
     if settings["Theme"].contains("commandBar"):
-      ColorThemeTable[ColorTheme.config].commandBar = color("commandBar")
+      colorThemeTable[colorTheme.config].commandBar = color("commandBar")
 
     if settings["Theme"].contains("commandBarBg"):
-      ColorThemeTable[ColorTheme.config].commandBarBg = color("commandBarBg")
+      colorThemeTable[colorTheme.config].commandBarBg = color("commandBarBg")
 
     if settings["Theme"].contains("errorMessage"):
-      ColorThemeTable[ColorTheme.config].errorMessage = color("errorMessage")
+      colorThemeTable[colorTheme.config].errorMessage = color("errorMessage")
 
     if settings["Theme"].contains("errorMessageBg"):
-      ColorThemeTable[ColorTheme.config].errorMessageBg = color("errorMessageBg")
+      colorThemeTable[colorTheme.config].errorMessageBg = color("errorMessageBg")
 
     if settings["Theme"].contains("searchResult"):
-      ColorThemeTable[ColorTheme.config].searchResult = color("searchResult")
+      colorThemeTable[colorTheme.config].searchResult = color("searchResult")
 
     if settings["Theme"].contains("searchResultBg"):
-      ColorThemeTable[ColorTheme.config].searchResultBg = color("searchResultBg")
+      colorThemeTable[colorTheme.config].searchResultBg = color("searchResultBg")
 
     if settings["Theme"].contains("visualMode"):
-      ColorThemeTable[ColorTheme.config].visualMode = color("visualMode")
+      colorThemeTable[colorTheme.config].visualMode = color("visualMode")
 
     if settings["Theme"].contains("visualModeBg"):
-      ColorThemeTable[ColorTheme.config].visualModeBg = color("visualModeBg")
+      colorThemeTable[colorTheme.config].visualModeBg = color("visualModeBg")
 
     if settings["Theme"].contains("defaultChar"):
-      ColorThemeTable[ColorTheme.config].defaultChar = color("defaultChar")
+      colorThemeTable[colorTheme.config].defaultChar = color("defaultChar")
 
     if settings["Theme"].contains("gtKeyword"):
-      ColorThemeTable[ColorTheme.config].gtKeyword = color("gtKeyword")
+      colorThemeTable[colorTheme.config].gtKeyword = color("gtKeyword")
 
     if settings["Theme"].contains("gtFunctionName"):
-      ColorThemeTable[ColorTheme.config].gtFunctionName = color("gtFunctionName")
+      colorThemeTable[colorTheme.config].gtFunctionName = color("gtFunctionName")
 
     if settings["Theme"].contains("gtTypeName"):
-      ColorThemeTable[ColorTheme.config].gtTypeName = color("gtTypeName")
+      colorThemeTable[colorTheme.config].gtTypeName = color("gtTypeName")
 
     if settings["Theme"].contains("gtBoolean"):
-      ColorThemeTable[ColorTheme.config].gtBoolean = color("gtBoolean")
+      colorThemeTable[colorTheme.config].gtBoolean = color("gtBoolean")
 
     if settings["Theme"].contains("gtSpecialVar"):
-      ColorThemeTable[ColorTheme.config].gtSpecialVar = color("gtSpecialVar")
+      colorThemeTable[colorTheme.config].gtSpecialVar = color("gtSpecialVar")
 
     if settings["Theme"].contains("gtBuiltin"):
-      ColorThemeTable[ColorTheme.config].gtBuiltin = color("gtBuiltin")
+      colorThemeTable[colorTheme.config].gtBuiltin = color("gtBuiltin")
 
     if settings["Theme"].contains("gtStringLit"):
-      ColorThemeTable[ColorTheme.config].gtStringLit = color("gtStringLit")
+      colorThemeTable[colorTheme.config].gtStringLit = color("gtStringLit")
 
     if settings["Theme"].contains("gtBinNumber"):
-      ColorThemeTable[ColorTheme.config].gtBinNumber = color("gtBinNumber")
+      colorThemeTable[colorTheme.config].gtBinNumber = color("gtBinNumber")
 
     if settings["Theme"].contains("gtDecNumber"):
-      ColorThemeTable[ColorTheme.config].gtDecNumber = color("gtDecNumber")
+      colorThemeTable[colorTheme.config].gtDecNumber = color("gtDecNumber")
 
     if settings["Theme"].contains("gtFloatNumber"):
-      ColorThemeTable[ColorTheme.config].gtFloatNumber = color("gtFloatNumber")
+      colorThemeTable[colorTheme.config].gtFloatNumber = color("gtFloatNumber")
 
     if settings["Theme"].contains("gtHexNumber"):
-      ColorThemeTable[ColorTheme.config].gtHexNumber = color("gtHexNumber")
+      colorThemeTable[colorTheme.config].gtHexNumber = color("gtHexNumber")
 
     if settings["Theme"].contains("gtOctNumber"):
-      ColorThemeTable[ColorTheme.config].gtOctNumber = color("gtOctNumber")
+      colorThemeTable[colorTheme.config].gtOctNumber = color("gtOctNumber")
 
     if settings["Theme"].contains("gtComment"):
-      ColorThemeTable[ColorTheme.config].gtComment = color("gtComment")
+      colorThemeTable[colorTheme.config].gtComment = color("gtComment")
 
     if settings["Theme"].contains("gtLongComment"):
-      ColorThemeTable[ColorTheme.config].gtLongComment = color("gtLongComment")
+      colorThemeTable[colorTheme.config].gtLongComment = color("gtLongComment")
 
     if settings["Theme"].contains("gtWhitespace"):
-      ColorThemeTable[ColorTheme.config].gtWhitespace = color("gtWhitespace")
+      colorThemeTable[colorTheme.config].gtWhitespace = color("gtWhitespace")
 
     if settings["Theme"].contains("gtPreprocessor"):
-      ColorThemeTable[ColorTheme.config].gtPreprocessor = color("gtPreprocessor")
+      colorThemeTable[colorTheme.config].gtPreprocessor = color("gtPreprocessor")
 
     if settings["Theme"].contains("currentFile"):
-      ColorThemeTable[ColorTheme.config].currentFile = color("currentFile")
+      colorThemeTable[colorTheme.config].currentFile = color("currentFile")
 
     if settings["Theme"].contains("currentFileBg"):
-      ColorThemeTable[ColorTheme.config].currentFileBg = color("currentFileBg")
+      colorThemeTable[colorTheme.config].currentFileBg = color("currentFileBg")
 
     if settings["Theme"].contains("file"):
-      ColorThemeTable[ColorTheme.config].file = color("file")
+      colorThemeTable[colorTheme.config].file = color("file")
 
     if settings["Theme"].contains("fileBg"):
-      ColorThemeTable[ColorTheme.config].fileBg = color("fileBg")
+      colorThemeTable[colorTheme.config].fileBg = color("fileBg")
 
     if settings["Theme"].contains("dir"):
-      ColorThemeTable[ColorTheme.config].dir = color("dir")
+      colorThemeTable[colorTheme.config].dir = color("dir")
 
     if settings["Theme"].contains("dirBg"):
-      ColorThemeTable[ColorTheme.config].dirBg = color("dirBg")
+      colorThemeTable[colorTheme.config].dirBg = color("dirBg")
 
     if settings["Theme"].contains("pcLink"):
-      ColorThemeTable[ColorTheme.config].pcLink = color("pcLink")
+      colorThemeTable[colorTheme.config].pcLink = color("pcLink")
 
     if settings["Theme"].contains("pcLinkBg"):
-      ColorThemeTable[ColorTheme.config].pcLinkBg = color("pcLinkBg")
+      colorThemeTable[colorTheme.config].pcLinkBg = color("pcLinkBg")
 
-    if settings["Theme"].contains("popUpWindow"):
-      ColorThemeTable[ColorTheme.config].popUpWindow = color("popUpWindow")
+    if settings["Theme"].contains("popupWindow"):
+      colorThemeTable[colorTheme.config].popupWindow = color("popupWindow")
 
-    if settings["Theme"].contains("popUpWindowBg"):
-      ColorThemeTable[ColorTheme.config].popUpWindowBg = color("popUpWindowBg")
+    if settings["Theme"].contains("popupWindowBg"):
+      colorThemeTable[colorTheme.config].popupWindowBg = color("popupWindowBg")
 
-    if settings["Theme"].contains("popUpWinCurrentLine"):
-      ColorThemeTable[ColorTheme.config].popUpWinCurrentLine = color("popUpWinCurrentLine")
+    if settings["Theme"].contains("popupWinCurrentLine"):
+      colorThemeTable[colorTheme.config].popupWinCurrentLine = color("popupWinCurrentLine")
 
-    if settings["Theme"].contains("popUpWinCurrentLineBg"):
-      ColorThemeTable[ColorTheme.config].popUpWinCurrentLineBg = color("popUpWinCurrentLineBg")
+    if settings["Theme"].contains("popupWinCurrentLineBg"):
+      colorThemeTable[colorTheme.config].popupWinCurrentLineBg = color("popupWinCurrentLineBg")
 
     if settings["Theme"].contains("replaceText"):
-      ColorThemeTable[ColorTheme.config].replaceText = color("replaceText")
+      colorThemeTable[colorTheme.config].replaceText = color("replaceText")
 
     if settings["Theme"].contains("replaceTextBg"):
-      ColorThemeTable[ColorTheme.config].replaceTextBg = color("replaceTextBg")
+      colorThemeTable[colorTheme.config].replaceTextBg = color("replaceTextBg")
 
     if settings["Theme"].contains("parenText"):
-      ColorThemeTable[ColorTheme.config].parenText = color("parenText")
+      colorThemeTable[colorTheme.config].parenText = color("parenText")
 
     if settings["Theme"].contains("parenTextBg"):
-      ColorThemeTable[ColorTheme.config].parenTextBg = color("parenTextBg")
+      colorThemeTable[colorTheme.config].parenTextBg = color("parenTextBg")
 
     if settings["Theme"].contains("currentWordBg"):
-      ColorThemeTable[ColorTheme.config].currentWordBg = color("currentWordBg")
+      colorThemeTable[colorTheme.config].currentWordBg = color("currentWordBg")
 
     if settings["Theme"].contains("highlightFullWidthSpace"):
-      ColorThemeTable[ColorTheme.config].highlightFullWidthSpace = color("highlightFullWidthSpace")
+      colorThemeTable[colorTheme.config].highlightFullWidthSpace = color("highlightFullWidthSpace")
 
     if settings["Theme"].contains("highlightFullWidthSpaceBg"):
-      ColorThemeTable[ColorTheme.config].highlightFullWidthSpaceBg = color("highlightFullWidthSpaceBg")
+      colorThemeTable[colorTheme.config].highlightFullWidthSpaceBg = color("highlightFullWidthSpaceBg")
 
     if settings["Theme"].contains("highlightTrailingSpaces"):
-      ColorThemeTable[ColorTheme.config].highlightTrailingSpaces = color("highlightTrailingSpaces")
+      colorThemeTable[colorTheme.config].highlightTrailingSpaces = color("highlightTrailingSpaces")
 
     if settings["Theme"].contains("highlightTrailingSpacesBg"):
-      ColorThemeTable[ColorTheme.config].highlightTrailingSpacesBg = color("highlightTrailingSpacesBg")
+      colorThemeTable[colorTheme.config].highlightTrailingSpacesBg = color("highlightTrailingSpacesBg")
 
     if settings["Theme"].contains("reservedWord"):
-      ColorThemeTable[ColorTheme.config].reservedWord = color("reservedWord")
+      colorThemeTable[colorTheme.config].reservedWord = color("reservedWord")
 
     if settings["Theme"].contains("reservedWordBg"):
-      ColorThemeTable[ColorTheme.config].reservedWordBg = color("reservedWordBg")
+      colorThemeTable[colorTheme.config].reservedWordBg = color("reservedWordBg")
 
     if settings["Theme"].contains("currentBackup"):
-      ColorThemeTable[ColorTheme.config].currentBackup = color("currentBackup")
+      colorThemeTable[colorTheme.config].currentBackup = color("currentBackup")
 
     if settings["Theme"].contains("currentBackupBg"):
-      ColorThemeTable[ColorTheme.config].currentBackupBg = color("currentBackupBg")
+      colorThemeTable[colorTheme.config].currentBackupBg = color("currentBackupBg")
 
     if settings["Theme"].contains("addedLine"):
-      ColorThemeTable[ColorTheme.config].addedLine = color("addedLine")
+      colorThemeTable[colorTheme.config].addedLine = color("addedLine")
 
     if settings["Theme"].contains("addedLineBg"):
-      ColorThemeTable[ColorTheme.config].addedLineBg = color("addedLineBg")
+      colorThemeTable[colorTheme.config].addedLineBg = color("addedLineBg")
 
     if settings["Theme"].contains("deletedLine"):
-      ColorThemeTable[ColorTheme.config].deletedLine = color("deletedLine")
+      colorThemeTable[colorTheme.config].deletedLine = color("deletedLine")
 
     if settings["Theme"].contains("deletedLineBg"):
-      ColorThemeTable[ColorTheme.config].deletedLineBg = color("deletedLineBg")
+      colorThemeTable[colorTheme.config].deletedLineBg = color("deletedLineBg")
 
     if settings["Theme"].contains("currentSetting"):
-      ColorThemeTable[ColorTheme.config].currentSetting = color("currentSetting")
+      colorThemeTable[colorTheme.config].currentSetting = color("currentSetting")
 
     if settings["Theme"].contains("currentSettingBg"):
-      ColorThemeTable[ColorTheme.config].currentSettingBg = color("currentSettingBg")
+      colorThemeTable[colorTheme.config].currentSettingBg = color("currentSettingBg")
 
     if settings["Theme"].contains("currentLineBg"):
-      ColorThemeTable[ColorTheme.config].currentLineBg = color("currentLineBg")
+      colorThemeTable[colorTheme.config].currentLineBg = color("currentLineBg")
 
-    result.editorColorTheme = ColorTheme.config
+    result.editorColorTheme = colorTheme.config
 
-  if result.editorColorTheme == ColorTheme.vscode:
+  if result.editorColorTheme == colorTheme.vscode:
     result.editorColorTheme = loadVSCodeTheme()
 
 proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
@@ -1801,7 +1801,7 @@ proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
         if val.getStr == "vscode":
           correctValue = true
         else:
-          for theme in ColorTheme:
+          for theme in colorTheme:
             if $theme == val.getStr:
               correctValue = true
         if not correctValue:
@@ -1821,7 +1821,7 @@ proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
          "autoSave",
          "liveReloadOfConf",
          "incrementalSearch",
-         "popUpWindowInExmode",
+         "popupWindowInExmode",
          "autoDeleteParen",
          "systemClipboard",
          "smoothScroll",
@@ -1961,9 +1961,9 @@ proc validateQuickRunTable(table: TomlValueRef): Option[InvalidItem] =
           return some(InvalidItem(name: $key, val: $val))
       of "command",
          "nimAdvancedCommand",
-         "ClangOptions",
-         "CppOptions",
-         "NimOptions",
+         "clangOptions",
+         "cppOptions",
+         "nimOptions",
          "shOptions",
          "bashOptions":
         if val.kind != TomlValueKind.String:
@@ -2109,12 +2109,12 @@ proc validateDebugTable(table: TomlValueRef): Option[InvalidItem] =
         return some(InvalidItem(name: $key, val: $val))
 
 proc validateThemeTable(table: TomlValueRef): Option[InvalidItem] =
-  let editorColors = ColorThemeTable[ColorTheme.config]
+  let editorColors = colorThemeTable[colorTheme.config]
   for key, val in table.getTable:
     case key:
       of "baseTheme":
         var correctKey = false
-        for theme in ColorTheme:
+        for theme in colorTheme:
           if $theme == val.getStr:
             correctKey = true
         if not correctKey: return some(InvalidItem(name: $key, val: $val))
@@ -2215,7 +2215,7 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   proc addLine(buf: var string, str: string) {.inline.} = buf &= "\n" & str
 
   result = "[Standard]"
-  result.addLine fmt "theme = \"{$settings.editorColorTheme}\""
+  result.addLine fmt "theme = \"{$settings.editorcolorTheme}\""
   result.addLine fmt "number = {$settings.view.lineNumber}"
   result.addLine fmt "currentNumber = {$settings.view.currentLineNumber}"
   result.addLine fmt "statusLine = {$settings.statusLine.enable}"
@@ -2235,7 +2235,7 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "autoSaveInterval = {$settings.autoSaveInterval}"
   result.addLine fmt "liveReloadOfConf = {$settings.liveReloadOfConf}"
   result.addLine fmt "incrementalSearch = {$settings.incrementalSearch}"
-  result.addLine fmt "popUpWindowInExmode = {$settings.popUpWindowInExmode}"
+  result.addLine fmt "popupWindowInExmode = {$settings.popupWindowInExmode}"
   result.addLine fmt "autoDeleteParen = {$settings.autoDeleteParen }"
   result.addLine fmt "smoothScroll = {$settings.smoothScroll }"
   result.addLine fmt "smoothScrollSpeed = {$settings.smoothScrollSpeed}"
@@ -2316,12 +2316,12 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "timeout = {$settings.quickRun.timeout }"
   if settings.quickRun.nimAdvancedCommand .len > 0:
     result.addLine fmt "nimAdvancedCommand = \"{$settings.quickRun.nimAdvancedCommand}\""
-  if settings.quickRun.ClangOptions.len > 0:
-    result.addLine fmt "ClangOptions = \"{$settings.quickRun.ClangOptions}\""
-  if settings.quickRun.CppOptions.len > 0:
-    result.addLine fmt "CppOptions = \"{$settings.quickRun.CppOptions}\""
-  if settings.quickRun.NimOptions.len > 0:
-    result.addLine fmt "NimOptions = \"{$settings.quickRun.NimOptions}\""
+  if settings.quickRun.clangOptions.len > 0:
+    result.addLine fmt "clangOptions = \"{$settings.quickRun.clangOptions}\""
+  if settings.quickRun.cppOptions.len > 0:
+    result.addLine fmt "cppOptions = \"{$settings.quickRun.cppOptions}\""
+  if settings.quickRun.nimOptions.len > 0:
+    result.addLine fmt "nimOptions = \"{$settings.quickRun.nimOptions}\""
   if settings.quickRun.shOptions.len > 0:
     result.addLine fmt "shOptions = \"{$settings.quickRun.shOptions}\""
   if settings.quickRun.bashOptions.len > 0:
@@ -2416,9 +2416,9 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine ""
 
-  let theme = ColorThemeTable[ColorTheme.config]
+  let theme = colorThemeTable[colorTheme.config]
   result.addLine fmt "[Theme]"
-  result.addLine fmt "baseTheme = \"{$settings.editorColorTheme}\""
+  result.addLine fmt "baseTheme = \"{$settings.editorcolorTheme}\""
   result.addLine fmt "editorBg = \"{$theme.editorBg}\""
   result.addLine fmt "lineNum = \"{$theme.lineNum}\""
   result.addLine fmt "lineNumBg = \"{$theme.lineNumBg}\""
@@ -2499,10 +2499,10 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "dirBg = \"{$theme.dirBg}\""
   result.addLine fmt "pcLink = \"{$theme.pcLink}\""
   result.addLine fmt "pcLinkBg = \"{$theme.pcLinkBg}\""
-  result.addLine fmt "popUpWindow = \"{$theme.popUpWindow}\""
-  result.addLine fmt "popUpWindowBg = \"{$theme.popUpWindowBg}\""
-  result.addLine fmt "popUpWinCurrentLine = \"{$theme.popUpWinCurrentLine}\""
-  result.addLine fmt "popUpWinCurrentLineBg = \"{$theme.popUpWinCurrentLineBg}\""
+  result.addLine fmt "popupWindow = \"{$theme.popupWindow}\""
+  result.addLine fmt "popupWindowBg = \"{$theme.popupWindowBg}\""
+  result.addLine fmt "popupWinCurrentLine = \"{$theme.popupWinCurrentLine}\""
+  result.addLine fmt "popupWinCurrentLineBg = \"{$theme.popupWinCurrentLineBg}\""
   result.addLine fmt "replaceText = \"{$theme.replaceText}\""
   result.addLine fmt "replaceTextBg = \"{$theme.replaceTextBg}\""
   result.addLine fmt "parenText = \"{$theme.parenText}\""

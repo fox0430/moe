@@ -1,0 +1,6 @@
+.. _#1597: https://github.com/fox0430/moe/pull/1597
+
+Added
+.....
+
+- `#1597`_ syntax highlighting:  Shell

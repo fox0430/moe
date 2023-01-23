@@ -1,16 +1,19 @@
-import std/[unittest, oids]
-include moepkg/backupmanager
+import std/[unittest, oids, os, json, strformat]
+import moepkg/[unicodeext, editorstatus, bufferstatus, backup, gapbuffer]
+
+import moepkg/backupmanagerutils {.all.}
+import moepkg/backupmanager {.all.}
 
 template writeBackupInfoJson(backupDir, sourceFilePath: string) =
   let jsonNode = %* { "path": sourceFilePath }
   writeFile(backupDir / "backup.json", $jsonNode)
 
 template addBackupManagerBuffer(status: var EditorStatus) =
-    status.addNewBuffer(Mode.backup)
+    status.addNewBufferInCurrentWin(Mode.backup)
     status.changeCurrentBuffer(status.bufStatus.high)
-    currentBufStatus.initBackupManagerBuffer(
+    currentBufStatus.buffer = initBackupManagerBuffer(
       status.baseBackupDir,
-      sourceFilePath.toRunes)
+      sourceFilePath.toRunes).toGapbuffer
 
 suite "Backup Manager: initbackupManagerBuffer":
   let
@@ -29,15 +32,15 @@ suite "Backup Manager: initbackupManagerBuffer":
 
   test "initBackupManagerBuffer":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
 
-    status.addNewBuffer(Mode.backup)
+    status.addNewBufferInCurrentWin(Mode.backup)
     status.changeCurrentBuffer(status.bufStatus.high)
-    currentBufStatus.initBackupManagerBuffer(
+    currentBufStatus.buffer = initBackupManagerBuffer(
       status.baseBackupDir,
-      sourceFilePath.toRunes)
+      sourceFilePath.toRunes).toGapbuffer
 
-    check currentBufStatus.buffer.toRunes == ru""
+    check "" == $currentBufStatus.buffer[0]
 
   test "initBackupManagerBuffer 2":
     writeFile(sourceFilePath, "test")
@@ -45,7 +48,7 @@ suite "Backup Manager: initbackupManagerBuffer":
     writeBackupInfoJson(backupDir, sourceFilePath)
 
     var status = initEditorStatus()
-    status.addNewBuffer(sourceFilePath)
+    status.addNewBufferInCurrentWin(sourceFilePath)
     status.settings.autoBackup.backupDir = baseBackupDir.toRunes
 
     currentBufStatus.backupBuffer(
@@ -54,11 +57,11 @@ suite "Backup Manager: initbackupManagerBuffer":
       status.commandLine,
       status.messageLog)
 
-    status.addNewBuffer(Mode.backup)
+    status.addNewBufferInCurrentWin(Mode.backup)
     status.changeCurrentBuffer(status.bufStatus.high)
-    currentBufStatus.initBackupManagerBuffer(
+    currentBufStatus.buffer = initBackupManagerBuffer(
       status.baseBackupDir,
-      sourceFilePath.toRunes)
+      sourceFilePath.toRunes).toGapbuffer
 
     removeFile(sourceFilePath)
 
@@ -86,7 +89,7 @@ suite "Backup Manager: openDiffViewer":
     writeFile(sourceFilePath, "test\n")
 
     var status = initEditorStatus()
-    status.addNewBuffer(sourceFilePath)
+    status.addNewBufferInCurrentWin(sourceFilePath)
     status.settings.autoBackup.backupDir = baseBackupDir.toRunes
 
     currentBufStatus.backupBuffer(
@@ -124,7 +127,7 @@ suite "Backup Manager: restoreBackupFile":
     writeFile(sourceFilePath, "test\n")
 
     var status = initEditorStatus()
-    status.addNewBuffer(sourceFilePath)
+    status.addNewBufferInCurrentWin(sourceFilePath)
     status.settings.autoBackup.backupDir = baseBackupDir.toRunes
 
     currentBufStatus.backupBuffer(
@@ -142,8 +145,6 @@ suite "Backup Manager: restoreBackupFile":
     status.restoreBackupFile(sourceFilePath.toRunes, IS_FORCE_RESTORE)
 
     check readFile(sourceFilePath) == "test\n"
-
-    removeFile(sourceFilePath)
 
 suite "Backup Manager: removeBackupFile":
   let
@@ -164,7 +165,7 @@ suite "Backup Manager: removeBackupFile":
     writeFile(sourceFilePath, "test\n")
 
     var status = initEditorStatus()
-    status.addNewBuffer(sourceFilePath)
+    status.addNewBufferInCurrentWin(sourceFilePath)
     status.settings.autoBackup.backupDir = baseBackupDir.toRunes
 
     currentBufStatus.backupBuffer(

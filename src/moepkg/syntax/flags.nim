@@ -104,6 +104,11 @@ const
                                  , hasShebang
                                  }
 
+  ## The lexing rules for Shell languages.
+  flagsShell*: TokenizerFlags = { hasHashComments
+                                , hasShebang
+                                }
+
   ## The lexing rules for YAML.
   flagsYaml*: TokenizerFlags = { hasDashPunctuation
                                , hasHashComments

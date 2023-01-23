@@ -1,5 +1,6 @@
 import std/[heapqueue, options]
-import ui, editorview, gapbuffer, color, cursor, highlight, unicodeext
+import ui, editorview, gapbuffer, color, cursor, highlight, unicodeext,
+       independentutils
 
 # vertical is default
 type SplitType* = enum
@@ -167,10 +168,17 @@ proc deleteWindowNode*(root: var WindowNode, windowIndex: int) =
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
 
-proc resize*(root: WindowNode, y, x, height, width: int) =
+proc resize*(root: WindowNode, position: Position, size: Size) =
+  let
+    y = position.y
+    x = position.x
+    width = size.w
+    height = size.h
+
   var
     qeue = initHeapQueue[WindowNode]()
     windowIndex = 0
+
   const statusBarLineHeight = 1
 
   for index, node in root.child:
@@ -350,4 +358,3 @@ proc setTimeout*(node: var WindowNode, time: int) {.inline.} =
 proc getHeight*(node: var WindowNode): int {.inline.} = node.window.get.height
 
 proc getWidth*(node: var WindowNode): int {.inline.} = node.window.get.width
-

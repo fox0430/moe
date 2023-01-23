@@ -1,11 +1,17 @@
-import std/[unittest, random]
-import moepkg/[highlight]
-include moepkg/[insertmode, suggestionwindow]
+import std/[unittest, random, options, sequtils, sugar, importutils]
+import moepkg/[highlight, editorstatus, gapbuffer, unicodeext, editor,
+               bufferstatus, movement, autocomplete, window, ui]
+
+import moepkg/suggestionwindow {.all.}
+
+proc resize(status: var EditorStatus, h, w: int) =
+  updateTerminalSize(h, w)
+  status.resize
 
 suite "Insert mode":
   test "Issue #474":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru""])
 
     currentMainWindowNode.highlight = initHighlight(
@@ -25,7 +31,7 @@ suite "Insert mode":
 
   test "Insert the character which is below the cursor":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b"])
 
     status.bufStatus[0].insertCharacterBelowCursor(
@@ -38,7 +44,7 @@ suite "Insert mode":
 
   test "Insert the character which is below the cursor 2":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
     status.bufStatus[0].insertCharacterBelowCursor(
@@ -50,7 +56,7 @@ suite "Insert mode":
 
   test "Insert the character which is below the cursor 3":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"e"])
 
     currentMainWindowNode.currentColumn = 2
@@ -65,7 +71,7 @@ suite "Insert mode":
 
   test "Insert the character which is above the cursor":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b"])
 
     currentMainWindowNode.currentLine = 1
@@ -80,7 +86,7 @@ suite "Insert mode":
 
   test "Insert the character which is above the cursor":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"bcd"])
 
     currentMainWindowNode.currentLine = 1
@@ -96,7 +102,7 @@ suite "Insert mode":
 
   test "Insert the character which is above the cursor 3":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
 
     status.bufStatus[0].insertCharacterAboveCursor(
@@ -108,7 +114,7 @@ suite "Insert mode":
 
   test "Delete the word before the cursor":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc def"])
 
     currentMainWindowNode.currentColumn = 4
@@ -126,7 +132,7 @@ suite "Insert mode":
 
   test "Delete the word before the cursor 2":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     const loop = 1
@@ -142,7 +148,7 @@ suite "Insert mode":
 
   test "Delete the word before the cursor 3":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentMainWindowNode.currentLine = 1
@@ -160,7 +166,7 @@ suite "Insert mode":
 
   test "Delete characters before the cursor in current line":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abcdef"])
 
     currentMainWindowNode.currentColumn = 4
@@ -174,7 +180,7 @@ suite "Insert mode":
 
   test "Delete characters before the cursor in current line 2":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
 
     status.bufStatus[0].deleteCharactersBeforeCursorInCurrentLine(
@@ -186,7 +192,7 @@ suite "Insert mode":
 
   test "Add indent in current line 1":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
     status.bufStatus[0].addIndentInCurrentLine(
@@ -200,7 +206,7 @@ suite "Insert mode":
 
   test "Add indent in current line 2":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru" abc"])
 
     status.bufStatus[0].addIndentInCurrentLine(
@@ -214,7 +220,7 @@ suite "Insert mode":
 
   test "Delete indent in current line 1":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc"])
 
     status.bufStatus[0].deleteIndentInCurrentLine(
@@ -228,7 +234,7 @@ suite "Insert mode":
 
   test "Delete indent in current line 2":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
     status.bufStatus[0].deleteIndentInCurrentLine(
@@ -242,7 +248,7 @@ suite "Insert mode":
 
   test "Delete indent in current line 3":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru"   abc"])
 
     status.bufStatus[0].deleteIndentInCurrentLine(
@@ -256,7 +262,7 @@ suite "Insert mode":
 
   test "Move to last of line":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
     status.bufStatus[0].mode = Mode.insert
 
@@ -268,7 +274,7 @@ suite "Insert mode":
                          line, column, height, width: int): EditorStatus =
 
     result = initEditorStatus()
-    result.addNewBuffer(Mode.insert)
+    result.addNewBufferInCurrentWin(Mode.insert)
     result.bufStatus[0].buffer = initGapBuffer(buffer.map(s => s.ru))
     result.mainWindow.currentMainWindowNode.currentLine = line
     result.mainWindow.currentMainWindowNode.currentColumn = column
@@ -294,7 +300,7 @@ suite "Insert mode":
       currentMainWindowNode)
 
     let
-      mainWindowHeight = status.settings.getMainWindowHeight(100)
+      mainWindowHeight = status.settings.getMainWindowHeight
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
         currentMainWindowNode,
         mainWindowHeight)
@@ -305,7 +311,6 @@ suite "Insert mode":
     suggestionWindow.get.writeSuggestionWindow(
       currentMainWindowNode,
       y, x,
-      100, 100,
       mainWindowNodeY,
       isEnableStatusLine)
 
@@ -332,7 +337,7 @@ suite "Insert mode":
       currentMainWindowNode)
 
     let
-      mainWindowHeight = status.settings.getMainWindowHeight(terminalHeight)
+      mainWindowHeight = status.settings.getMainWindowHeight
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
         currentMainWindowNode,
         mainWindowHeight)
@@ -343,7 +348,6 @@ suite "Insert mode":
     suggestionWindow.get.writeSuggestionWindow(
       currentMainWindowNode,
       y, x,
-      100, 100,
       mainWindowNodeY,
       isEnableStatusLine)
 
@@ -371,7 +375,7 @@ suite "Insert mode":
       currentMainWindowNode)
 
     let
-      mainWindowHeight = status.settings.getMainWindowHeight(100)
+      mainWindowHeight = status.settings.getMainWindowHeight
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
         currentMainWindowNode,
         mainWindowHeight)
@@ -382,7 +386,6 @@ suite "Insert mode":
     suggestionWindow.get.writeSuggestionWindow(
       currentMainWindowNode,
       y, x,
-      100, 100,
       mainWindowNodeY,
       isEnableStatusLine)
 
@@ -482,18 +485,19 @@ suite "Insert mode":
       mainWindowNode,
       currentMainWindowNode)
 
+    const mainWindowNodeY = 1
     let
-      mainWindowHeight = status.settings.getMainWindowHeight(100)
+      mainWindowHeight = status.settings.getMainWindowHeight
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
         currentMainWindowNode,
         mainWindowHeight)
-      mainWindowNodeY = calcMainWindowY(status.settings.tabLine.enable)
     suggestionWindow.get.writeSuggestionWindow(
       currentMainWindowNode,
       y, x,
-      100, 100,
       mainWindowNodeY,
       status.settings.statusLine.enable)
+
+    privateAccess(suggestionWindow.get.type)
 
     check suggestionWindow.get.popUpWindow.y == 2
     check suggestionWindow.get.popUpWindow.height == terminalHeight - 4

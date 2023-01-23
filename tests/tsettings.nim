@@ -1,5 +1,8 @@
-import std/[unittest]
-include moepkg/settings
+import std/[unittest, options]
+import pkg/parsetoml
+import moepkg/[color, unicodeext, ui]
+
+import moepkg/settings {.all.}
 
 const tomlStr = """
   [Standard]
@@ -24,7 +27,7 @@ const tomlStr = """
   autoSaveInterval = 1
   liveReloadOfConf = true
   incrementalSearch = false
-  popUpWindowInExmode = false
+  popupWindowInExmode = false
   autoDeleteParen = false
   smoothScroll = false
   smoothScrollSpeed = 1
@@ -77,9 +80,9 @@ const tomlStr = """
   command = "nimble build"
   timeout = 1
   nimAdvancedCommand = "js"
-  ClangOptions = "-Wall"
-  CppOptions = "-Wall"
-  NimOptions = "--debugger:native"
+  clangOptions = "-Wall"
+  cppOptions = "-Wall"
+  nimOptions = "--debugger:native"
   shOptions = "-c"
   bashOptions = "-c"
 
@@ -238,10 +241,10 @@ const tomlStr = """
   dirBg = "pink1"
   pcLink = "pink1"
   pcLinkBg = "pink1"
-  popUpWindow = "pink1"
-  popUpWindowBg = "pink1"
-  popUpWinCurrentLine = "pink1"
-  popUpWinCurrentLineBg = "pink1"
+  popupWindow = "pink1"
+  popupWindowBg = "pink1"
+  popupWinCurrentLine = "pink1"
+  popupWinCurrentLineBg = "pink1"
   replaceText = "pink1"
   replaceTextBg = "pink1"
   parenText = "pink1"
@@ -270,7 +273,7 @@ suite "Parse configuration file":
     let toml = parsetoml.parseString(tomlStr)
     var settings = parseSettingsFile(toml)
 
-    check settings.editorColorTheme == ColorTheme.config
+    check settings.editorColorTheme == colorTheme.config
     check not settings.view.lineNumber
     check not settings.view.currentLineNumber
     check settings.view.cursorLine
@@ -291,7 +294,7 @@ suite "Parse configuration file":
     check settings.autoSaveInterval == 1
     check settings.liveReloadOfConf
     check not settings.incrementalSearch
-    check not settings.popUpWindowInExmode
+    check not settings.popupWindowInExmode
     check not settings.autoDeleteParen
     check not settings.smoothScroll
     check settings.smoothScrollSpeed == 1
@@ -338,9 +341,9 @@ suite "Parse configuration file":
     check settings.quickRun.command == "nimble build"
     check settings.quickRun.timeout == 1
     check settings.quickRun.nimAdvancedCommand == "js"
-    check settings.quickRun.ClangOptions == "-Wall"
-    check settings.quickRun.CppOptions == "-Wall"
-    check settings.quickRun.NimOptions == "--debugger:native"
+    check settings.quickRun.clangOptions == "-Wall"
+    check settings.quickRun.cppOptions == "-Wall"
+    check settings.quickRun.nimOptions == "--debugger:native"
     check settings.quickRun.shOptions == "-c"
     check settings.quickRun.bashOptions == "-c"
 
@@ -404,110 +407,110 @@ suite "Parse configuration file":
     check not settings.debugMode.bufStatus.lastSaveTime
     check not settings.debugMode.bufStatus.bufferLen
 
-    let theme = ColorTheme.config
-    check ColorThemeTable[theme].editorBg == Color.pink1
-    check ColorThemeTable[theme].lineNum == Color.pink1
-    check ColorThemeTable[theme].lineNumBg == Color.pink1
-    check ColorThemeTable[theme].currentLineNum == Color.pink1
-    check ColorThemeTable[theme].currentLineNumBg == Color.pink1
-    check ColorThemeTable[theme].statusLineNormalMode == Color.pink1
-    check ColorThemeTable[theme].statusLineNormalModeBg == Color.pink1
-    check ColorThemeTable[theme].statusLineModeNormalMode == Color.pink1
-    check ColorThemeTable[theme].statusLineModeNormalModeBg == Color.pink1
-    check ColorThemeTable[theme].statusLineNormalModeInactive == Color.pink1
-    check ColorThemeTable[theme].statusLineNormalModeInactiveBg == Color.pink1
-    check ColorThemeTable[theme].statusLineInsertMode == Color.pink1
-    check ColorThemeTable[theme].statusLineInsertModeBg == Color.pink1
-    check ColorThemeTable[theme].statusLineModeInsertMode == Color.pink1
-    check ColorThemeTable[theme].statusLineModeInsertModeBg == Color.pink1
-    check ColorThemeTable[theme].statusLineInsertModeInactive == Color.pink1
-    check ColorThemeTable[theme].statusLineInsertModeInactiveBg == Color.pink1
-    check ColorThemeTable[theme].statusLineVisualMode == Color.pink1
-    check ColorThemeTable[theme].statusLineVisualModeBg == Color.pink1
-    check ColorThemeTable[theme].statusLineModeVisualMode == Color.pink1
-    check ColorThemeTable[theme].statusLineModeVisualModeBg == Color.pink1
-    check ColorThemeTable[theme].statusLineVisualModeInactive == Color.pink1
-    check ColorThemeTable[theme].statusLineVisualModeInactiveBg == Color.pink1
-    check ColorThemeTable[theme].statusLineReplaceMode == Color.pink1
-    check ColorThemeTable[theme].statusLineReplaceModeBg == Color.pink1
-    check ColorThemeTable[theme].statusLineModeReplaceMode == Color.pink1
-    check ColorThemeTable[theme].statusLineModeReplaceModeBg == Color.pink1
-    check ColorThemeTable[theme].statusLineReplaceModeInactive == Color.pink1
-    check ColorThemeTable[theme].statusLineReplaceModeInactiveBg == Color.pink1
-    check ColorThemeTable[theme].statusLineFilerMode == Color.pink1
-    check ColorThemeTable[theme].statusLineFilerModeBg == Color.pink1
-    check ColorThemeTable[theme].statusLineModeFilerMode == Color.pink1
-    check ColorThemeTable[theme].statusLineModeFilerModeBg == Color.pink1
-    check ColorThemeTable[theme].statusLineFilerModeInactive == Color.pink1
-    check ColorThemeTable[theme].statusLineFilerModeInactiveBg == Color.pink1
-    check ColorThemeTable[theme].statusLineExMode == Color.pink1
-    check ColorThemeTable[theme].statusLineExModeBg == Color.pink1
-    check ColorThemeTable[theme].statusLineModeExMode == Color.pink1
-    check ColorThemeTable[theme].statusLineModeExModeBg == Color.pink1
-    check ColorThemeTable[theme].statusLineExModeInactive == Color.pink1
-    check ColorThemeTable[theme].statusLineExModeInactiveBg == Color.pink1
-    check ColorThemeTable[theme].statusLineGitBranch == Color.pink1
-    check ColorThemeTable[theme].statusLineGitBranchBg == Color.pink1
-    check ColorThemeTable[theme].tab == Color.pink1
-    check ColorThemeTable[theme].tabBg == Color.pink1
-    check ColorThemeTable[theme].currentTab == Color.pink1
-    check ColorThemeTable[theme].currentTabBg == Color.pink1
-    check ColorThemeTable[theme].commandBar == Color.pink1
-    check ColorThemeTable[theme].commandBarBg == Color.pink1
-    check ColorThemeTable[theme].errorMessage == Color.pink1
-    check ColorThemeTable[theme].errorMessageBg == Color.pink1
-    check ColorThemeTable[theme].searchResult == Color.pink1
-    check ColorThemeTable[theme].searchResultBg == Color.pink1
-    check ColorThemeTable[theme].visualMode == Color.pink1
-    check ColorThemeTable[theme].visualModeBg == Color.pink1
-    check ColorThemeTable[theme].defaultChar == Color.pink1
-    check ColorThemeTable[theme].gtKeyword == Color.pink1
-    check ColorThemeTable[theme].gtFunctionName == Color.pink1
-    check ColorThemeTable[theme].gtBoolean == Color.pink1
-    check ColorThemeTable[theme].gtSpecialVar == Color.pink1
-    check ColorThemeTable[theme].gtBuiltin == Color.pink1
-    check ColorThemeTable[theme].gtStringLit == Color.pink1
-    check ColorThemeTable[theme].gtBinNumber == Color.pink1
-    check ColorThemeTable[theme].gtDecNumber == Color.pink1
-    check ColorThemeTable[theme].gtFloatNumber == Color.pink1
-    check ColorThemeTable[theme].gtHexNumber == Color.pink1
-    check ColorThemeTable[theme].gtOctNumber == Color.pink1
-    check ColorThemeTable[theme].gtComment == Color.pink1
-    check ColorThemeTable[theme].gtLongComment == Color.pink1
-    check ColorThemeTable[theme].gtWhitespace == Color.pink1
-    check ColorThemeTable[theme].gtPreprocessor == Color.pink1
-    check ColorThemeTable[theme].currentFile == Color.pink1
-    check ColorThemeTable[theme].currentFileBg == Color.pink1
-    check ColorThemeTable[theme].file == Color.pink1
-    check ColorThemeTable[theme].fileBg == Color.pink1
-    check ColorThemeTable[theme].dir == Color.pink1
-    check ColorThemeTable[theme].dirBg == Color.pink1
-    check ColorThemeTable[theme].pcLink == Color.pink1
-    check ColorThemeTable[theme].pcLinkBg == Color.pink1
-    check ColorThemeTable[theme].popUpWindow == Color.pink1
-    check ColorThemeTable[theme].popUpWindowBg == Color.pink1
-    check ColorThemeTable[theme].popUpWinCurrentLine == Color.pink1
-    check ColorThemeTable[theme].popUpWinCurrentLineBg == Color.pink1
-    check ColorThemeTable[theme].replaceText == Color.pink1
-    check ColorThemeTable[theme].replaceTextBg == Color.pink1
-    check ColorThemeTable[theme].parenText == Color.pink1
-    check ColorThemeTable[theme].parenTextBg == Color.pink1
-    check ColorThemeTable[theme].currentWordBg == Color.pink1
-    check ColorThemeTable[theme].highlightFullWidthSpace == Color.pink1
-    check ColorThemeTable[theme].highlightFullWidthSpaceBg == Color.pink1
-    check ColorThemeTable[theme].highlightTrailingSpaces == Color.pink1
-    check ColorThemeTable[theme].highlightTrailingSpacesBg == Color.pink1
-    check ColorThemeTable[theme].reservedWord == Color.pink1
-    check ColorThemeTable[theme].reservedWordBg == Color.pink1
-    check ColorThemeTable[theme].currentBackup == Color.pink1
-    check ColorThemeTable[theme].currentBackupBg == Color.pink1
-    check ColorThemeTable[theme].addedLine == Color.pink1
-    check ColorThemeTable[theme].addedLineBg == Color.pink1
-    check ColorThemeTable[theme].deletedLine == Color.pink1
-    check ColorThemeTable[theme].deletedLineBg == Color.pink1
-    check ColorThemeTable[theme].currentSetting == Color.pink1
-    check ColorThemeTable[theme].currentSettingBg == Color.pink1
-    check ColorThemeTable[theme].currentLineBg == Color.pink1
+    let theme = colorTheme.config
+    check colorThemeTable[theme].editorBg == Color.pink1
+    check colorThemeTable[theme].lineNum == Color.pink1
+    check colorThemeTable[theme].lineNumBg == Color.pink1
+    check colorThemeTable[theme].currentLineNum == Color.pink1
+    check colorThemeTable[theme].currentLineNumBg == Color.pink1
+    check colorThemeTable[theme].statusLineNormalMode == Color.pink1
+    check colorThemeTable[theme].statusLineNormalModeBg == Color.pink1
+    check colorThemeTable[theme].statusLineModeNormalMode == Color.pink1
+    check colorThemeTable[theme].statusLineModeNormalModeBg == Color.pink1
+    check colorThemeTable[theme].statusLineNormalModeInactive == Color.pink1
+    check colorThemeTable[theme].statusLineNormalModeInactiveBg == Color.pink1
+    check colorThemeTable[theme].statusLineInsertMode == Color.pink1
+    check colorThemeTable[theme].statusLineInsertModeBg == Color.pink1
+    check colorThemeTable[theme].statusLineModeInsertMode == Color.pink1
+    check colorThemeTable[theme].statusLineModeInsertModeBg == Color.pink1
+    check colorThemeTable[theme].statusLineInsertModeInactive == Color.pink1
+    check colorThemeTable[theme].statusLineInsertModeInactiveBg == Color.pink1
+    check colorThemeTable[theme].statusLineVisualMode == Color.pink1
+    check colorThemeTable[theme].statusLineVisualModeBg == Color.pink1
+    check colorThemeTable[theme].statusLineModeVisualMode == Color.pink1
+    check colorThemeTable[theme].statusLineModeVisualModeBg == Color.pink1
+    check colorThemeTable[theme].statusLineVisualModeInactive == Color.pink1
+    check colorThemeTable[theme].statusLineVisualModeInactiveBg == Color.pink1
+    check colorThemeTable[theme].statusLineReplaceMode == Color.pink1
+    check colorThemeTable[theme].statusLineReplaceModeBg == Color.pink1
+    check colorThemeTable[theme].statusLineModeReplaceMode == Color.pink1
+    check colorThemeTable[theme].statusLineModeReplaceModeBg == Color.pink1
+    check colorThemeTable[theme].statusLineReplaceModeInactive == Color.pink1
+    check colorThemeTable[theme].statusLineReplaceModeInactiveBg == Color.pink1
+    check colorThemeTable[theme].statusLineFilerMode == Color.pink1
+    check colorThemeTable[theme].statusLineFilerModeBg == Color.pink1
+    check colorThemeTable[theme].statusLineModeFilerMode == Color.pink1
+    check colorThemeTable[theme].statusLineModeFilerModeBg == Color.pink1
+    check colorThemeTable[theme].statusLineFilerModeInactive == Color.pink1
+    check colorThemeTable[theme].statusLineFilerModeInactiveBg == Color.pink1
+    check colorThemeTable[theme].statusLineExMode == Color.pink1
+    check colorThemeTable[theme].statusLineExModeBg == Color.pink1
+    check colorThemeTable[theme].statusLineModeExMode == Color.pink1
+    check colorThemeTable[theme].statusLineModeExModeBg == Color.pink1
+    check colorThemeTable[theme].statusLineExModeInactive == Color.pink1
+    check colorThemeTable[theme].statusLineExModeInactiveBg == Color.pink1
+    check colorThemeTable[theme].statusLineGitBranch == Color.pink1
+    check colorThemeTable[theme].statusLineGitBranchBg == Color.pink1
+    check colorThemeTable[theme].tab == Color.pink1
+    check colorThemeTable[theme].tabBg == Color.pink1
+    check colorThemeTable[theme].currentTab == Color.pink1
+    check colorThemeTable[theme].currentTabBg == Color.pink1
+    check colorThemeTable[theme].commandBar == Color.pink1
+    check colorThemeTable[theme].commandBarBg == Color.pink1
+    check colorThemeTable[theme].errorMessage == Color.pink1
+    check colorThemeTable[theme].errorMessageBg == Color.pink1
+    check colorThemeTable[theme].searchResult == Color.pink1
+    check colorThemeTable[theme].searchResultBg == Color.pink1
+    check colorThemeTable[theme].visualMode == Color.pink1
+    check colorThemeTable[theme].visualModeBg == Color.pink1
+    check colorThemeTable[theme].defaultChar == Color.pink1
+    check colorThemeTable[theme].gtKeyword == Color.pink1
+    check colorThemeTable[theme].gtFunctionName == Color.pink1
+    check colorThemeTable[theme].gtBoolean == Color.pink1
+    check colorThemeTable[theme].gtSpecialVar == Color.pink1
+    check colorThemeTable[theme].gtBuiltin == Color.pink1
+    check colorThemeTable[theme].gtStringLit == Color.pink1
+    check colorThemeTable[theme].gtBinNumber == Color.pink1
+    check colorThemeTable[theme].gtDecNumber == Color.pink1
+    check colorThemeTable[theme].gtFloatNumber == Color.pink1
+    check colorThemeTable[theme].gtHexNumber == Color.pink1
+    check colorThemeTable[theme].gtOctNumber == Color.pink1
+    check colorThemeTable[theme].gtComment == Color.pink1
+    check colorThemeTable[theme].gtLongComment == Color.pink1
+    check colorThemeTable[theme].gtWhitespace == Color.pink1
+    check colorThemeTable[theme].gtPreprocessor == Color.pink1
+    check colorThemeTable[theme].currentFile == Color.pink1
+    check colorThemeTable[theme].currentFileBg == Color.pink1
+    check colorThemeTable[theme].file == Color.pink1
+    check colorThemeTable[theme].fileBg == Color.pink1
+    check colorThemeTable[theme].dir == Color.pink1
+    check colorThemeTable[theme].dirBg == Color.pink1
+    check colorThemeTable[theme].pcLink == Color.pink1
+    check colorThemeTable[theme].pcLinkBg == Color.pink1
+    check colorThemeTable[theme].popupWindow == Color.pink1
+    check colorThemeTable[theme].popupWindowBg == Color.pink1
+    check colorThemeTable[theme].popupWinCurrentLine == Color.pink1
+    check colorThemeTable[theme].popupWinCurrentLineBg == Color.pink1
+    check colorThemeTable[theme].replaceText == Color.pink1
+    check colorThemeTable[theme].replaceTextBg == Color.pink1
+    check colorThemeTable[theme].parenText == Color.pink1
+    check colorThemeTable[theme].parenTextBg == Color.pink1
+    check colorThemeTable[theme].currentWordBg == Color.pink1
+    check colorThemeTable[theme].highlightFullWidthSpace == Color.pink1
+    check colorThemeTable[theme].highlightFullWidthSpaceBg == Color.pink1
+    check colorThemeTable[theme].highlightTrailingSpaces == Color.pink1
+    check colorThemeTable[theme].highlightTrailingSpacesBg == Color.pink1
+    check colorThemeTable[theme].reservedWord == Color.pink1
+    check colorThemeTable[theme].reservedWordBg == Color.pink1
+    check colorThemeTable[theme].currentBackup == Color.pink1
+    check colorThemeTable[theme].currentBackupBg == Color.pink1
+    check colorThemeTable[theme].addedLine == Color.pink1
+    check colorThemeTable[theme].addedLineBg == Color.pink1
+    check colorThemeTable[theme].deletedLine == Color.pink1
+    check colorThemeTable[theme].deletedLineBg == Color.pink1
+    check colorThemeTable[theme].currentSetting == Color.pink1
+    check colorThemeTable[theme].currentSettingBg == Color.pink1
+    check colorThemeTable[theme].currentLineBg == Color.pink1
 
   test "Parse Clipboard setting 1":
     const str = """

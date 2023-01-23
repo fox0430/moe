@@ -1,0 +1,6 @@
+.. _#1578: https://github.com/fox0430/moe/pull/1578
+
+Fixed
+.......
+
+- `#1578`_ refactor: Replace include with all pragama

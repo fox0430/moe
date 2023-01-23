@@ -1,6 +1,6 @@
 import std/[sugar, options, sequtils]
 import ui, window, autocomplete, bufferstatus, gapbuffer, color,
-       editorstatus, unicodeext, osext
+       unicodeext, osext, popupwindow
 import syntax/highlite
 
 type SuggestionWindow* = object
@@ -63,7 +63,7 @@ proc handleKeyInSuggestionWindow*(
       suggestionWindow.selectedSuggestion = suggestionWindow.suggestoins.high
     else:
       dec(suggestionWindow.selectedSuggestion)
-  elif isPageDownkey(key):
+  elif isPageDownKey(key):
     suggestionWindow.selectedSuggestion += suggestionWindow.popUpWindow.height - 1
   elif isPageUpKey(key):
     suggestionWindow.selectedSuggestion -= suggestionWindow.popUpWindow.height - 1
@@ -79,7 +79,7 @@ proc handleKeyInSuggestionWindow*(
 
     let
       firstColumn =
-        if (suggestionwindow.isPath) and (newLine in '/'.ru):
+        if (suggestionWindow.isPath) and (newLine in '/'.ru):
           suggestionWindow.firstColumn + 1
         else:
           suggestionWindow.firstColumn
@@ -101,23 +101,23 @@ proc initSuggestionWindow*(
     wordDictionary.addWordToDictionary(text)
 
   var suggestionWindow: SuggestionWindow
-  suggestionwindow.wordDictionary = wordDictionary
-  suggestionwindow.inputWord = word
-  suggestionwindow.firstColumn = firstColumn
-  suggestionwindow.lastColumn = lastColumn
-  suggestionwindow.isPath = isPath
+  suggestionWindow.wordDictionary = wordDictionary
+  suggestionWindow.inputWord = word
+  suggestionWindow.firstColumn = firstColumn
+  suggestionWindow.lastColumn = lastColumn
+  suggestionWindow.isPath = isPath
 
   if isPath:
-    suggestionwindow.suggestoins = text.splitWhitespace
+    suggestionWindow.suggestoins = text.splitWhitespace
   else:
-    suggestionwindow.suggestoins = collectSuggestions(
-      suggestionwindow.wordDictionary,
+    suggestionWindow.suggestoins = collectSuggestions(
+      suggestionWindow.wordDictionary,
       word)
 
-  if suggestionwindow.suggestoins.len == 0: return none(SuggestionWindow)
+  if suggestionWindow.suggestoins.len == 0: return none(SuggestionWindow)
 
-  suggestionwindow.selectedSuggestion = -1
-  suggestionwindow.oldLine = currentLineText
+  suggestionWindow.selectedSuggestion = -1
+  suggestionWindow.oldLine = currentLineText
 
   return some(suggestionWindow)
 
@@ -287,9 +287,8 @@ proc calcSuggestionWindowPosition*(
 
 # cursorPosition is absolute y
 proc calcMaxSugestionWindowHeight(
-  y,
-  terminalHeight,
-  cursorYPosition,
+  y: int,
+  cursorYPosition: int,
   mainWindowNodeY: int,
   isEnableStatusLine: bool): int =
 
@@ -297,15 +296,14 @@ proc calcMaxSugestionWindowHeight(
   let statusLineHeight = if isEnableStatusLine: 1 else: 0
 
   if y > cursorYPosition:
-    result = (terminalHeight - 1) - cursorYPosition - commanLineHeight - statusLineHeight
+    result = (getTerminalHeight() - 1) - cursorYPosition - commanLineHeight - statusLineHeight
   else:
     result = cursorYPosition - mainWindowNodeY
 
 proc writeSuggestionWindow*(
   suggestionWindow: var SuggestionWindow,
   windowNode: WindowNode,
-  y, x,
-  terminalHeight, terminalWidth,
+  y, x: int,
   mainWindowNodeY: int,
   isEnableStatusLine: bool) =
 
@@ -315,25 +313,28 @@ proc writeSuggestionWindow*(
     (absoluteY, _) = windowNode.absolutePosition(line, column)
     maxHeight = calcMaxSugestionWindowHeight(
       y,
-      terminalHeight,
       absoluteY,
       mainWindowNodeY,
       isEnableStatusLine)
-    height = min(suggestionwindow.suggestoins.len, maxHeight)
-    width = suggestionwindow.suggestoins.map(item => item.len).max + 2
+    height = min(suggestionWindow.suggestoins.len, maxHeight)
+    width = suggestionWindow.suggestoins.map(item => item.len).max + 2
 
-  if suggestionwindow.popUpWindow == nil:
-    suggestionwindow.popUpWindow = initWindow(
+  if suggestionWindow.popUpWindow == nil:
+    suggestionWindow.popUpWindow = initWindow(
       height,
       width,
       if y < mainWindowNodeY: mainWindowNodeY else: y,
       x,
       EditorColorPair.popUpWindow)
   else:
-    suggestionwindow.popUpWindow.height = height
-    suggestionwindow.popUpWindow.width = width
-    suggestionwindow.popUpWindow.y = y
-    suggestionwindow.popUpWindow.x = x
+    suggestionWindow.popUpWindow.height = height
+    suggestionWindow.popUpWindow.width = width
+    suggestionWindow.popUpWindow.y = y
+    suggestionWindow.popUpWindow.x = x
+
+  let currentLine =
+    if suggestionWindow.selectedSuggestion == -1: none(int)
+    else: some(suggestionWindow.selectedSuggestion)
 
   var popUpWindow = suggestionWindow.popUpWindow
   popUpWindow.writePopUpWindow(
@@ -341,9 +342,7 @@ proc writeSuggestionWindow*(
     popUpWindow.width,
     popUpWindow.y,
     popUpWindow.x,
-    terminalHeight,
-    terminalWidth,
-    suggestionWindow.selectedSuggestion,
+    currentLine,
     suggestionWindow.suggestoins)
 
 proc isLineChanged*(suggestionWindow: SuggestionWindow): bool {.inline.} =

@@ -1,7 +1,6 @@
-import std/[sequtils, os, strformat, parseutils]
+import std/[sequtils, strformat, os, parseutils, strutils]
 import syntax/highlite
-import unicodeext, color
-from std/strutils import find
+import unicodeext, color, independentutils
 
 type ColorSegment* = object
   firstRow*, firstColumn*, lastRow*, lastColumn*: int
@@ -233,8 +232,7 @@ proc initHighlight*(buffer: string,
         empty = false
     if not empty: result.colorSegments.add(cs)
 
-  if language == SourceLanguage.langNone or
-     language == SourceLanguage.langShell:
+  if language == SourceLanguage.langNone:
     splitByNewline(buffer, EditorColorPair.defaultChar)
     return result
 
@@ -283,11 +281,11 @@ proc indexOf*(highlight: Highlight, row, column: int): int =
   # Because the following assertion is sluggish, it is disabled in release builds.
   when not defined(release):
     block:
-      let mess = strformat.fmt"row = {row}, column = {column}, highlight[0].firstRow = {highlight[0].firstRow}, hightlihgt[0].firstColumn = {highlight[0].firstColumn}"
+      let mess = fmt"row = {row}, column = {column}, highlight[0].firstRow = {highlight[0].firstRow}, hightlihgt[0].firstColumn = {highlight[0].firstColumn}"
       doAssert((row, column) >= (highlight[0].firstRow, highlight[0].firstColumn),
                mess)
     block:
-      let mess = strformat.fmt"row = {row}, column = {column}, highlight[^1].lastRow = {highlight[^1].lastRow}, hightlihgt[^1].lastColumn = {highlight[^1].lastColumn}, highlight = {highlight}"
+      let mess = fmt"row = {row}, column = {column}, highlight[^1].lastRow = {highlight[^1].lastRow}, hightlihgt[^1].lastColumn = {highlight[^1].lastColumn}, highlight = {highlight}"
       doAssert((row, column) <= (highlight[^1].lastRow, highlight[^1].lastColumn),
                mess)
   var
@@ -332,5 +330,33 @@ proc detectLanguage*(filename: string): SourceLanguage =
   else:
     return SourceLanguage.langNone
 
-when isMainModule:
-  echo initHighlight(readFile(currentSourcePath),@[],langNim).colorSegments
+proc initSelectedAreaColorSegment*(
+  position: BufferPosition,
+  color: EditorColorPair): ColorSegment {.inline.} =
+    result.firstRow = position.line
+    result.firstColumn = position.column
+    result.lastRow = position.line
+    result.lastColumn = position.column
+    result.color = color
+
+proc overwriteColorSegmentBlock*[T](
+  highlight: var Highlight,
+  area: SelectedArea,
+  buffer: T) =
+
+    var
+      startLine = area.startLine
+      endLine = area.endLine
+      startColumn = area.startColumn
+      endColumn = area.endColumn
+    if startLine > endLine: swap(startLine, endLine)
+    if startColumn > endColumn: swap(startColumn, endColumn)
+
+    for i in startLine .. endLine:
+      let colorSegment = ColorSegment(
+        firstRow: i,
+        firstColumn: startColumn,
+        lastRow: i,
+        lastColumn: min(endColumn, buffer[i].high),
+        color: EditorColorPair.visualMode)
+      highlight.overwrite(colorSegment)

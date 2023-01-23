@@ -1,4 +1,5 @@
 import std/[strutils, unittest, encodings, sequtils, sugar]
+import moepkg/gapbuffer
 import moepkg/unicodeext
 
 test "width 1":

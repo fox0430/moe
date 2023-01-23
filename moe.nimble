@@ -11,7 +11,7 @@ bin           = @["moe"]
 
 requires "nim >= 1.6.2"
 requires "ncurses >= 1.0.2"
-requires "unicodedb >= 0.11.1"
+requires "unicodedb >= 0.11.2"
 requires "parsetoml#bb903611e91584efd03b7327493ade0859eeddea"
 
 task release, "Build for release":

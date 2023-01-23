@@ -1628,15 +1628,15 @@ proc joinLine*(bufStatus: var BufferStatus, windowNode: WindowNode) =
 
 proc deleteTrailingSpaces*(bufStatus: var BufferStatus) =
   var isChanged = false
-  for i in 0 ..< bufStatus.buffer.high:
+  for i in 0 ..< bufStatus.buffer.len:
     let oldLine = bufStatus.buffer[i]
     var newLine = bufStatus.buffer[i]
     for j in countdown(newLine.high, 0):
-      if newline[j] == ru' ': newline.delete(newline.high)
+      if newLine[j] == ru' ': newLine.delete(newLine.high)
       else: break
 
     if oldLine != newLine:
-      bufStatus.buffer[i] = newline
+      bufStatus.buffer[i] = newLine
       isChanged = true
 
   if isChanged:

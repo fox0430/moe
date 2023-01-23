@@ -31,12 +31,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: python
-        uses: actions/setup-python@v4.3.0
+        uses: actions/setup-python@v4.5.0
         with:
           python-version: 3.9
 
       - name: checkout
-        uses: actions/checkout@v3.1.0
+        uses: actions/checkout@v3.3.0
         with:
           persist-credentials: false
 

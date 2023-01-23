@@ -2,18 +2,24 @@ name: Tests
 
 on:
   push:
-    paths-ignore:
-      - 'LICENSE'
-      - '*.md'
-      - 'documents/**'
+    paths:
+      - '.github/workflows/test.yaml'
+      - 'example/**'
+      - 'moe.nimble'
+      - 'src/**'
+      - 'tests/**'
+      - 'shpec.sh'
     branches:
       - develop
       - master
   pull_request:
-    paths-ignore:
-      - 'LICENSE'
-      - '*.md'
-      - 'documents/**'
+    paths:
+      - '.github/workflows/test.yaml'
+      - 'example/**'
+      - 'moe.nimble'
+      - 'src/**'
+      - 'tests/**'
+      - 'shpec.sh'
 
 permissions:
   contents: read
@@ -43,23 +49,23 @@ jobs:
     env:
       NIM_VERSION: stable
     steps:
-    - uses: actions/checkout@v3.1.0
+    - uses: actions/checkout@v3.3.0
     - run: |
         sudo apt-get update -yqq
         sudo apt-get install -y gcc libncursesw5-dev build-essential
     - name: Cache choosenim
       id: cache-choosenim
-      uses: actions/cache@v3.0.11
+      uses: actions/cache@v3.2.3
       with:
         path: ~/.choosenim
         key: ${{ runner.os }}-choosenim-${{ env.NIM_VERSION }}
     - name: Cache nimble
       id: cache-nimble
-      uses: actions/cache@v3.0.11
+      uses: actions/cache@v3.2.3
       with:
         path: ~/.nimble
         key: ${{ runner.os }}-nimble-${{ env.NIM_VERSION }}
-    - uses: jiro4989/setup-nim-action@v1.3.65
+    - uses: jiro4989/setup-nim-action@v1.4.2
       with:
         nim-version: ${{ env.NIM_VERSION }}
 

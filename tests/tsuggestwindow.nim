@@ -1,10 +1,12 @@
-import std/[unittest, critbits]
-include moepkg/suggestionwindow
+import std/[unittest, critbits, importutils, options]
+import moepkg/[editorstatus, gapbuffer, unicodeext]
+
+import moepkg/suggestionwindow {.all.}
 
 suite "suggestionwindow: buildSuggestionWindow":
   test "Case 1":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(
       @["test".ru,
         "test2".ru,
@@ -25,10 +27,12 @@ suite "suggestionwindow: buildSuggestionWindow":
 
     check suggestionWin.isSome
 
+    privateAccess(suggestionWin.get.type)
+
     check suggestionWin.get.wordDictionary.len == 4
 
     check suggestionWin.get.oldLine == "t".ru
-    check suggestionWin.get.inputWord== "t".ru
+    check suggestionWin.get.inputWord == "t".ru
 
     check suggestionWin.get.firstColumn == 0
     check suggestionWin.get.lastColumn == 0
@@ -41,7 +45,7 @@ suite "suggestionwindow: buildSuggestionWindow":
 
   test "Case 2":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(
       @["/".ru])
 
@@ -57,6 +61,8 @@ suite "suggestionwindow: buildSuggestionWindow":
       currentMainWindowNode)
 
     check suggestionWin.isSome
+
+    privateAccess(suggestionWin.get.type)
 
     check suggestionWin.get.wordDictionary.len == 0
 
@@ -76,7 +82,7 @@ suite "suggestionwindow: buildSuggestionWindow":
 
   test "Case 3":
     var status = initEditorStatus()
-    status.addNewBuffer
+    status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@["a".ru])
 
     currentMainWindowNode.currentColumn = 1
