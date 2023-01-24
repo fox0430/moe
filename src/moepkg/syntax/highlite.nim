@@ -240,7 +240,6 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langJavaScript: g.javaScriptNextToken
   of langMarkdown: g.markdownNextToken
   of langNim: g.nimNextToken
-  of langNone: assert false
   of langPython: g.pythonNextToken
   of langRust: g.rustNextToken
   of langShell: g.shellNextToken
