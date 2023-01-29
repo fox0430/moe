@@ -232,8 +232,7 @@ proc initHighlight*(buffer: string,
         empty = false
     if not empty: result.colorSegments.add(cs)
 
-  if language == SourceLanguage.langNone or
-     language == SourceLanguage.langShell:
+  if language == SourceLanguage.langNone:
     splitByNewline(buffer, EditorColorPair.defaultChar)
     return result
 
