@@ -252,7 +252,13 @@ proc initHighlight*(buffer: string,
 
     let
       first = token.start
-      last = first+token.length-1
+
+      # Make it complete even if it's incomplete.
+      last =
+        if first + token.length - 1 > buffer.high:
+          buffer.high
+        else:
+          first + token.length - 1
 
     block:
       # Increment `currentRow` if newlines only.
