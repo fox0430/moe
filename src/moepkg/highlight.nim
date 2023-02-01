@@ -1,6 +1,9 @@
-import std/[sequtils, strformat, os, parseutils, strutils]
+import std/[sequtils, os, parseutils, strutils]
 import syntax/highlite
 import unicodeext, color, independentutils
+
+when not defined(release):
+ import std/strformat
 
 type ColorSegment* = object
   firstRow*, firstColumn*, lastRow*, lastColumn*: int
