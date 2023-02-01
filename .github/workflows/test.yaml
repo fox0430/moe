@@ -65,7 +65,7 @@ jobs:
       with:
         path: ~/.nimble
         key: ${{ runner.os }}-nimble-${{ env.NIM_VERSION }}
-    - uses: jiro4989/setup-nim-action@v1.4.2
+    - uses: jiro4989/setup-nim-action@v1.4.3
       with:
         nim-version: ${{ env.NIM_VERSION }}
 
