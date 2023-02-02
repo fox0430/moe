@@ -1,4 +1,4 @@
-import editorstatus, bufferstatus, ui, movement, unicodeext, window
+import editorstatus, bufferstatus, ui, movement, unicodeext, window, commandline
 
 proc isHelpCommand*(command: Runes): InputState =
   result = InputState.Invalid
@@ -23,6 +23,14 @@ proc isHelpCommand*(command: Runes): InputState =
       if command[1] == ord('g'):
         return InputState.Valid
 
+proc changeModeToExMode*(
+  bufStatus: var BufferStatus,
+  commandLine: var CommandLine) =
+
+    bufStatus.changeMode(Mode.ex)
+    commandLine.clear
+    commandLine.setPrompt(exModePrompt)
+
 proc execHelpCommand*(status: var EditorStatus, command: Runes) =
   if command.len == 1:
     let key = command[0]
@@ -32,7 +40,7 @@ proc execHelpCommand*(status: var EditorStatus, command: Runes) =
       status.movePrevWindow
 
     elif key == ord(':'):
-      status.changeMode(Mode.ex)
+      currentBufStatus.changeModeToExMode(status.commandLine)
 
     elif key == ord('k') or isUpKey(key):
       currentBufStatus.keyUp(currentMainWindowNode)
