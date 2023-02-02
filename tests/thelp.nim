@@ -29,4 +29,4 @@ suite "execHelpCommand":
     check status.commandLine.buffer.len == 0
 
     privateAccess(status.commandLine.type)
-    check status.commandLine.prompt == ":".toRunes
+    check status.commandLine.prompt == exModePrompt.toRunes
