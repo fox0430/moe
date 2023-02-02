@@ -86,6 +86,7 @@ suite "commandview: getCandidatesExCommand":
     const candidates = [
       "b",
       "bd",
+      "bg",
       "bfirst",
       "blast",
       "bnext",

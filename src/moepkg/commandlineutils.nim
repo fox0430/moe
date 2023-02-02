@@ -8,11 +8,12 @@ type
     filePath
 
 # TODO: Auto inserts spaces in compile time.
-const exCommandList: array[65, tuple[command, description: string]] = [
+const exCommandList: array[67, tuple[command, description: string]] = [
   (command: "!", description: "                    | Shell command execution"),
   (command: "deleteParen", description: "          | Enable/Disable auto delete paren"),
   (command: "b", description: "                    | Change the buffer with the given number"),
   (command: "bd", description: "                   | Delete the current buffer"),
+  (command: "bg", description: "                   | Pause the editor and show the recent terminal output"),
   (command: "bfirst", description: "               | Change the first buffer"),
   (command: "blast", description: "                | Change the last buffer"),
   (command: "bnext", description: "                | Change the next buffer"),
@@ -45,6 +46,7 @@ const exCommandList: array[65, tuple[command, description: string]] = [
   (command: "log", description: "                  | Open the log viewer"),
   (command: "ls", description: "                   | Show the all buffer"),
   (command: "lsw", description: "                  | Show the all workspace"),
+  (command: "man", description: "                  | Show the given UNIX manual page, if available"),
   (command: "multipleStatusLine", description: "   | Enable/Disable multiple status line"),
   (command: "new", description: "                  | Create the new buffer in split window horizontally"),
   (command: "noh", description: "                  | Turn off highlights"),

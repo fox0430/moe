@@ -10,7 +10,7 @@ type SuggestionWindow* = object
   firstColumn, lastColumn: int
   suggestoins: seq[seq[Rune]]
   selectedSuggestion: int
-  popUpWindow: Window
+  popUpWindow: Option[Window]
   isPath: bool
 
 proc selectedWordOrInputWord(suggestionWindow: SuggestionWindow): seq[Rune] =
@@ -32,7 +32,8 @@ proc newLine*(suggestionWindow: SuggestionWindow): seq[Rune] =
           suggestionWindow.selectedWordOrInputWord)
 
 proc close*(suggestionWindow: var SuggestionWindow) =
-  suggestionWindow.popUpWindow.deleteWindow
+  suggestionWindow.popUpWindow.get.deleteWindow
+  suggestionWindow.popupwindow = none(Window)
 
 proc canHandleInSuggestionWindow*(key: Rune): bool {.inline.} =
   isTabKey(key) or
@@ -64,9 +65,11 @@ proc handleKeyInSuggestionWindow*(
     else:
       dec(suggestionWindow.selectedSuggestion)
   elif isPageDownKey(key):
-    suggestionWindow.selectedSuggestion += suggestionWindow.popUpWindow.height - 1
+    suggestionWindow.selectedSuggestion +=
+      suggestionWindow.popUpWindow.get.height - 1
   elif isPageUpKey(key):
-    suggestionWindow.selectedSuggestion -= suggestionWindow.popUpWindow.height - 1
+    suggestionWindow.selectedSuggestion -=
+      suggestionWindow.popUpWindow.get.height - 1
 
   suggestionWindow.selectedSuggestion =
     suggestionWindow.selectedSuggestion.clamp(0, suggestionWindow.suggestoins.high)
@@ -319,29 +322,29 @@ proc writeSuggestionWindow*(
     height = min(suggestionWindow.suggestoins.len, maxHeight)
     width = suggestionWindow.suggestoins.map(item => item.len).max + 2
 
-  if suggestionWindow.popUpWindow == nil:
+  if suggestionWindow.popUpWindow.isNone:
     suggestionWindow.popUpWindow = initWindow(
       height,
       width,
       if y < mainWindowNodeY: mainWindowNodeY else: y,
       x,
       EditorColorPair.popUpWindow)
+      .some
   else:
-    suggestionWindow.popUpWindow.height = height
-    suggestionWindow.popUpWindow.width = width
-    suggestionWindow.popUpWindow.y = y
-    suggestionWindow.popUpWindow.x = x
+    suggestionWindow.popUpWindow.get.height = height
+    suggestionWindow.popUpWindow.get.width = width
+    suggestionWindow.popUpWindow.get.y = y
+    suggestionWindow.popUpWindow.get.x = x
 
   let currentLine =
     if suggestionWindow.selectedSuggestion == -1: none(int)
-    else: some(suggestionWindow.selectedSuggestion)
+    else: suggestionWindow.selectedSuggestion.some
 
-  var popUpWindow = suggestionWindow.popUpWindow
-  popUpWindow.writePopUpWindow(
-    popUpWindow.height,
-    popUpWindow.width,
-    popUpWindow.y,
-    popUpWindow.x,
+  suggestionWindow.popUpWindow.get.writePopUpWindow(
+    suggestionWindow.popUpWindow.get.height,
+    suggestionWindow.popUpWindow.get.width,
+    suggestionWindow.popUpWindow.get.y,
+    suggestionWindow.popUpWindow.get.x,
     currentLine,
     suggestionWindow.suggestoins)
 
