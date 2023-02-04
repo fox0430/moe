@@ -5,8 +5,8 @@ import moepkg/helputils {.all.}
 import moepkg/help {.all.}
 import moepkg/commandline {.all.}
 
-suite "initHlepModeBuffer":
-  test "initHlepModeBuffer":
+suite "initHelpModeBuffer":
+  test "initHelpModeBuffer":
     let
       buffer = initHelpModeBuffer().toGapBuffer
       help = helpsentences.splitLines
