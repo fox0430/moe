@@ -184,8 +184,10 @@ v  - Split window and open file or directory
 
 # Ex mode
 
-number          - Jump to line number; for example :10
+number          - Jump to line number; e.g. :10
 ! shell command - Shell command execution
+bg              - Pause the editor and show the recent terminal output
+man arguments   - Show the given UNIX manual page, if available; e.g. :man man
 
 e filename - Open file
 ene        - Create a new empty buffer

@@ -5,7 +5,7 @@
 |                               |                             |                               |                             |                                   |
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|:---------------------------------:|
 | [Normal Mode](#normal-mode)   | [Register](#register) | [Visual Mode](#visual-block-mode) | [Replace Mode](#replace-mode) | [Insert Mode](#insert-mode) | 
-| [Backup Mode](#backpmanager-mode)     | [Ex Mode](#ex-mode)       | [Diff Mode](#diff-mode)     | [Filer Mode](#filer-mode)     | [Exiting](#exiting)         |
+| [Backup Mode](#backupmanager-mode)     | [Ex Mode](#ex-mode)       | [Diff Mode](#diff-mode)     | [Filer Mode](#filer-mode)     | [Exiting](#exiting)         |
 | [Changing Modes](#changing-modes) |
 
 
@@ -171,10 +171,12 @@
 <details open>
   <summary>Ex mode</summary>
 
-```number``` - Jump to line number : Example ```:10```  
-```!``` shell command - Shell command execution  
+`number`          - Jump to line number; e.g. `:10`  
+`! shell command` - Shell command execution  
+`bg`              - Pause the editor and show the recent terminal output  
+`man arguments`   - Show the given UNIX manual page, if available; e.g. `:man man`  
 
-```e``` filename - Open file  
+```e filename``` - Open file  
 ```ene``` - Create new empty buffer  
 ```new``` - Create new empty buffer in split window horizontally  
 ```vnew``` - Create new empty buffer in split window vertically  
