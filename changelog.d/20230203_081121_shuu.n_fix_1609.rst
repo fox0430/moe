@@ -1,3 +1,4 @@
+.. _#1609: https://github.com/fox0430/moe/pull/1609
 .. _#1610: https://github.com/fox0430/moe/pull/1610
 .. A new scriv changelog fragment.
 ..
@@ -21,7 +22,7 @@
 Fixed
 .....
 
-- `#1610`_ Fix #1609
+- `#1610`_ Fix `#1609`_
 
 .. Removed
 .. .......
