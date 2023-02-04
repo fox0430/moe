@@ -1112,7 +1112,15 @@ proc manualCommand(status: var EditorStatus, manualInvocationCommand: string) =
   exitUi()
 
   # TODO:  Configure a default manual page to show on `:man`.
-  discard execShellCmd(manualInvocationCommand)
+  let exitCode = execShellCmd(manualInvocationCommand)
+  restoreTerminalModes()
+
+  if exitCode != 0:
+    let mess = "Error: No manual entry for " & manualInvocationCommand
+    status.commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+    status.messageLog.add(mess.toRunes)
+  else:
+    status.commandLine.clear
 
   restoreTerminalModes()
   status.commandLine.clear
