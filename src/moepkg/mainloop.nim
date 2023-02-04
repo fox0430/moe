@@ -130,6 +130,9 @@ proc commandLineLoop*(status: var EditorStatus) =
     suggestType = status.commandLine.buffer.getSuggestType
     suggestList = status.commandLine.getSuggestList(suggestType)
     if suggestList.len > 0:
+      if suggestIndex > suggestList.high:
+        suggestIndex = suggestList.high
+
       suggestWin = tryOpenSuggestWindow()
 
   if currentBufStatus.isSearchMode:
