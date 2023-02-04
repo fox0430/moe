@@ -1,4 +1,4 @@
-.. _#1611: https://github.com/fox0430/moe/pull/1611
+.. _#1611: https://github.com/fox0430/moe/issues/1611
 .. _#1612: https://github.com/fox0430/moe/pull/1612
 
 .. A new scriv changelog fragment.
