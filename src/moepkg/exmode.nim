@@ -1122,8 +1122,6 @@ proc manualCommand(status: var EditorStatus, manualInvocationCommand: string) =
   else:
     status.commandLine.clear
 
-  restoreTerminalModes()
-  status.commandLine.clear
   status.changeMode(currentBufStatus.prevMode)
 
 proc listAllBufferCommand(status: var EditorStatus) =
