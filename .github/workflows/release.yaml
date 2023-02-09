@@ -47,7 +47,7 @@ jobs:
           persist-credentials: false
 
       - name: release-bump2version-scriv
-        uses: kevinmatthes/release-bump2version-scriv@v0.2.1
+        uses: kevinmatthes/release-bump2version-scriv@v0.2.2
         with:
           release: ${{ inputs.release }}
 
