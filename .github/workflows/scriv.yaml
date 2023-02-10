@@ -36,7 +36,7 @@ jobs:
           persist-credentials: false
 
       - name: scriv
-        uses: kevinmatthes/create-scriv-fragment@v0.2.0
+        uses: kevinmatthes/create-scriv-fragment@v0.2.1
 
       - name: push
         uses: ad-m/github-push-action@v0.6.0
