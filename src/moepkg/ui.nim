@@ -240,7 +240,7 @@ proc moveCursor*(win: Window, y, x: int) {.inline.} =
 proc deleteWindow*(win: var Window) {.inline.} = delwin(win.cursesWindow)
 
 const ERR_KEY* = Rune(ERR)
-const KEY_ESC = 27
+const KEY_ESC* = 27
 var KEY_RESIZE {.header: "<ncurses.h>", importc: "KEY_RESIZE".}: int
 var KEY_DOWN {.header: "<ncurses.h>", importc: "KEY_DOWN".}: int
 var KEY_UP {.header: "<ncurses.h>", importc: "KEY_UP".}: int

@@ -1,4 +1,4 @@
-import std/unittest
+import std/[unittest, importutils]
 import pkg/ncurses
 import moepkg/[register, settings, editorstatus, gapbuffer, unicodeext,
                bufferstatus, ui]
@@ -1472,6 +1472,18 @@ suite "Normal mode: Validate normal mode command":
     const command = ru "\"ayy"
     check isNormalModeCommand(command) == InputState.Valid
 
+  test "\"y ESC (Expect to invalid)":
+    const command = @['y'.toRune, KEY_ESC.toRune]
+    check isNormalModeCommand(command) == InputState.Invalid
+
+  test "\"1 y ESC (Expect to invalid)":
+    const command = @['1'.toRune, 'y'.toRune, KEY_ESC.toRune]
+    check isNormalModeCommand(command) == InputState.Invalid
+
+  test "\"10 y ESC (Expect to invalid)":
+    const command = @['1'.toRune, '0'.toRune, 'y'.toRune, KEY_ESC.toRune]
+    check isNormalModeCommand(command) == InputState.Invalid
+
 suite "Normal mode: Yank and delete words":
   test "Ynak and delete a word (dw command)":
     var status = initEditorStatus()
@@ -1956,3 +1968,116 @@ suite "Normal mode: Delete characters to any characters and Enter insert mode":
     check status.registers.noNameRegister.buffer.len == 0
 
     check currentBufStatus.mode == Mode.normal
+
+suite "Normal mode: execNormalModeCommand":
+  test "'/' key":
+    # Change mode to searchForward
+
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    status.execNormalModeCommand("/".toRunes)
+
+    check currentBufStatus.isSearchForwardMode
+    check status.commandLine.buffer == "".toRunes
+
+    privateAccess(status.commandLine.type)
+
+    check status.commandLine.prompt == "/".toRunes
+
+  test "'?' key":
+    # Change mode to searchBackward
+
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    status.execNormalModeCommand("?".toRunes)
+
+    check currentBufStatus.isSearchBackwardMode
+    check status.commandLine.buffer == "".toRunes
+
+    privateAccess(status.commandLine.type)
+
+    check status.commandLine.prompt == "?".toRunes
+
+  test "':' key":
+    # Change mode to ex
+
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    status.execNormalModeCommand(":".toRunes)
+
+    check currentBufStatus.isExmode
+    check status.commandLine.buffer == "".toRunes
+
+    privateAccess(status.commandLine.type)
+
+    check status.commandLine.prompt == ":".toRunes
+
+  test "\"ESC ESC\" keys":
+    # Trun off highlightings
+
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    status.update
+
+    let beforeBufStatus = currentBufStatus
+
+    status.isSearchHighlight = true
+
+    status.execNormalModeCommand(@[KEY_ESC.toRune, KEY_ESC.toRune])
+
+    check currentBufStatus == beforeBufStatus
+
+    check not status.isSearchHighlight
+
+  test "\"ESC /\" keys":
+    # Remove ESC from top of the command and exec commands.
+
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    status.execNormalModeCommand(@[KEY_ESC.toRune, '/'.toRune])
+
+    check currentBufStatus.isSearchForwardMode
+    check status.commandLine.buffer == "".toRunes
+
+    privateAccess(status.commandLine.type)
+
+    check status.commandLine.prompt == "/".toRunes
+
+  test "\"yy\" keys":
+    # Yank the line
+
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    let buffer = @["a".toRunes]
+    currentBufStatus.buffer = buffer.toGapBuffer
+
+    status.update
+
+    status.execNormalModeCommand("yy".toRunes)
+
+    check status.registers.noNameRegister == Register(
+      buffer: buffer,
+      isLine: true)
+
+  test "\"2yy\" keys":
+    # Yank lines
+
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    let buffer = @["a".toRunes, "b".toRunes]
+    currentBufStatus.buffer = buffer.initGapBuffer
+
+    status.update
+
+    status.execNormalModeCommand("2yy".toRunes)
+
+    check status.registers.noNameRegister == Register(
+      buffer: buffer,
+      isLine: true)
