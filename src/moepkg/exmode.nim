@@ -1130,9 +1130,7 @@ proc manualCommand(status: var EditorStatus, manualInvocationCommand: string) =
   restoreTerminalModes()
 
   if exitCode != 0:
-    let mess = "Error: No manual entry for " & manualInvocationCommand
-    status.commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
-    addMessageLog mess
+    status.commandLine.writeManualCommandError(manualInvocationCommand)
   else:
     status.commandLine.clear
 

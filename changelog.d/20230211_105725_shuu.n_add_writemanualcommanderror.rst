@@ -1,4 +1,4 @@
-.. _#1620: https://github.com/fox0430/moe/pull/1620
+.. _#1621: https://github.com/fox0430/moe/pull/1621
 .. A new scriv changelog fragment.
 ..
 .. Uncomment the header that is right (remove the leading dots).
@@ -11,7 +11,7 @@
 Changed
 .......
 
-- `#1620`_ refactor: Remove EditorStatus.messageLog and add messagelog.nim
+- `#1621`_ refactor: Add message.writeManualCommandError
 
 .. Deprecated
 .. ..........

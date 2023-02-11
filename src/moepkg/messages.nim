@@ -294,3 +294,10 @@ proc writeCurrentCharInfo*(commandLine: var CommandLine, r: Rune) {.inline.} =
 proc writeReadonlyModeWarning*(commandLine: var CommandLine) {.inline.} =
   const mess = "Warning: Readonly mode"
   commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+
+proc writeManualCommandError*(
+  commandLine: var CommandLine,
+  message: string) {.inline.} =
+    let mess = fmt"Error: No manual entry for {message}"
+    commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+    addMessageLog mess
