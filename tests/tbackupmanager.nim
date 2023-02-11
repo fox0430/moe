@@ -73,8 +73,7 @@ suite "Backup Manager: initbackupManagerBuffer":
     currentBufStatus.backupBuffer(
       status.settings.autoBackup,
       status.settings.notification,
-      status.commandLine,
-      status.messageLog)
+      status.commandLine)
 
     status.addNewBufferInCurrentWin(Mode.backup)
     status.changeCurrentBuffer(status.bufStatus.high)
@@ -114,8 +113,7 @@ suite "Backup Manager: openDiffViewer":
     currentBufStatus.backupBuffer(
       status.settings.autoBackup,
       status.settings.notification,
-      status.commandLine,
-      status.messageLog)
+      status.commandLine)
 
     # Update the source file.
     writeFile(sourceFilePath, "test2\n")
@@ -152,8 +150,7 @@ suite "Backup Manager: restoreBackupFile":
     currentBufStatus.backupBuffer(
       status.settings.autoBackup,
       status.settings.notification,
-      status.commandLine,
-      status.messageLog)
+      status.commandLine)
 
     # Update the source file.
     writeFile(sourceFilePath, "test2\n")
@@ -190,8 +187,7 @@ suite "Backup Manager: removeBackupFile":
     currentBufStatus.backupBuffer(
       status.settings.autoBackup,
       status.settings.notification,
-      status.commandLine,
-      status.messageLog)
+      status.commandLine)
 
     status.addBackupManagerBuffer
 

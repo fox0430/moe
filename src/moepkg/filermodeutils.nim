@@ -207,22 +207,21 @@ proc cutFile*(
 proc pasteFile*(
   commandLine: var CommandLine,
   filerStatus: var FilerStatus,
-  currentPath: seq[Rune],
-  messageLog: var seq[seq[Rune]]) =
+  currentPath: seq[Rune]) =
     try:
       let filename = filerStatus.register.filename
       copyFile(filerStatus.register.originPath, $currentPath / filename)
       filerStatus.isUpdatePathList = true
       filerStatus.isUpdateView = true
     except OSError:
-      commandLine.writeCopyFileError(messageLog)
+      commandLine.writeCopyFileError
       return
 
     if filerStatus.register.cut:
       let filename = filerStatus.register.filename
       if tryRemoveFile(filerStatus.register.originPath / filename):
         filerStatus.register.cut = false
-      else: commandLine.writeRemoveFileError(messageLog)
+      else: commandLine.writeRemoveFileError
 
 ## Get keys for a dir name and create a dir.
 ## Return error message if it failed.

@@ -1226,7 +1226,6 @@ if isXselAvailable():
         status.registers,
         currentMainWindowNode,
         status.commandline,
-        status.messageLog,
         status.settings,
         length,
         name,
