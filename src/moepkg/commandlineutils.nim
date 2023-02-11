@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[strutils, sequtils, strformat, os, algorithm, options]
-import ui, unicodeext, fileutils, color, commandline, popupwindow
+import ui, unicodeext, fileutils, color, commandline, popupwindow, messagelog
 
 type
   SuggestType* = enum
@@ -99,12 +99,11 @@ const exCommandList: array[67, tuple[command, description: string]] = [
 
 proc askCreateDirPrompt*(
   commndLine: var CommandLine,
-  messageLog: var seq[Runes],
   path: string): bool =
 
     let mess = fmt"{path} does not exists. Create it now?: y/n"
     commndLine.write(mess.toRunes)
-    messageLog.add(mess.toRunes)
+    addMessageLog mess.toRunes
 
     let key = commndLine.getKey
 
@@ -113,12 +112,11 @@ proc askCreateDirPrompt*(
 
 proc askBackupRestorePrompt*(
   commndLine: var CommandLine,
-  messageLog: var seq[Runes],
   filename: seq[Rune]): bool =
 
     let mess = fmt"Restore {filename}?: y/n"
     commndLine.write(mess.toRunes)
-    messageLog.add(mess.toRunes)
+    addMessageLog mess
 
     let key = commndLine.getKey
 
@@ -127,36 +125,32 @@ proc askBackupRestorePrompt*(
 
 proc askDeleteBackupPrompt*(
   commndLine: var CommandLine,
-  messageLog: var seq[Runes],
   filename: seq[Rune]): bool =
 
     let mess = fmt"Delete {filename}?: y/n"
     commndLine.write(mess.toRunes)
-    messageLog.add(mess.toRunes)
+    addMessageLog mess
 
     let key = commndLine.getKey
 
     if key == ord('y'): result = true
     else: result = false
 
-proc askFileChangedSinceReading*(
-  commndLine: var CommandLine,
-  messageLog: var seq[Runes]): bool =
+proc askFileChangedSinceReading*(commndLine: var CommandLine): bool =
+  block:
+    const mess = "WARNING: The file has been changed since reading it!: Press any key"
+    commndLine.write(mess.toRunes)
+    addMessageLog mess.toRunes
+    discard commndLine.getKey
 
-    block:
-      const mess = "WARNING: The file has been changed since reading it!: Press any key"
-      commndLine.write(mess.toRunes)
-      messageLog.add(mess.toRunes)
-      discard commndLine.getKey
+  block:
+    const mess = "Do you really want to write to it: y/n ?"
+    commndLine.write(mess.toRunes)
+    addMessageLog mess.toRunes
+    let key = commndLine.getKey
 
-    block:
-      const mess = "Do you really want to write to it: y/n ?"
-      commndLine.write(mess.toRunes)
-      messageLog.add(mess.toRunes)
-      let key = commndLine.getKey
-
-      if key == ord('y'): result = true
-      else: result = false
+    if key == ord('y'): result = true
+    else: result = false
 
 proc removeSuffix(r: seq[Runes], suffix: string): seq[Runes] =
   for i in 0 .. r.high:

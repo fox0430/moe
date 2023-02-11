@@ -19,7 +19,7 @@
 
 import std/[os, options]
 import editorstatus, ui, window, bufferstatus, unicodeext, filermodeutils, messages,
-       commandline
+       commandline, messagelog
 
 proc openNewWinAndOpenFilerOrDir(
   status: var EditorStatus,
@@ -34,7 +34,7 @@ proc openNewWinAndOpenFilerOrDir(
       try:
         setCurrentDir($path)
       except OSError:
-        status.commandLine.writeFileOpenError($path, status.messageLog)
+        status.commandLine.writeFileOpenError($path)
         status.bufStatus.add initBufferStatus("")
 
       status.bufStatus.add initBufferStatus(Mode.filer)
@@ -76,7 +76,7 @@ proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
     let r = status.currentPathInfo.deleteFile
     if r.ok: status.commandLine.write(r.mess)
     else: status.commandLine.write(r.mess)
-    status.messageLog.add r.mess
+    addMessageLog r.mess
   elif key == ord('i'):
     currentBufStatus.writeFileDetail(
       currentMainWindowNode,
@@ -103,15 +103,14 @@ proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
   elif key == ord('p'):
     status.commandLine.pasteFile(
       currentFilerStatus,
-      currentBufStatus.path,
-      status.messageLog)
+      currentBufStatus.path)
   elif key == ord('s'):
     currentFilerStatus.changeSortBy
   elif key == ord('N'):
     let err = currentFilerStatus.createDir(status.commandLine)
     if err.len > 0:
       status.commandLine.writeError(err)
-      status.messageLog.add err
+      addMessageLog err
   elif key == ord('v'):
     status.openNewWinAndOpenFilerOrDir(currentFilerStatus)
   elif isControlJ(key):

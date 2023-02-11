@@ -72,7 +72,6 @@ proc restoreBackupFile(
 
     if not isForceRestore:
       let isRestore = status.commandLine.askBackupRestorePrompt(
-        status.messageLog,
         backupFilename)
       if not isRestore: return
 
@@ -83,8 +82,7 @@ proc restoreBackupFile(
            bufStatus.backupBuffer(
              status.settings.autoBackup,
              status.settings.notification,
-             status.commandLine,
-             status.messageLog)
+             status.commandLine)
 
     try:
       copyFile(restoreFilePath, $sourceFilePath)
@@ -117,8 +115,7 @@ proc restoreBackupFile(
         let settings = status.settings.notification
         status.commandLine.writeRestoreFileSuccessMessage(
           backupFilename,
-          settings,
-          status.messageLog)
+          settings)
 
         return
 
@@ -148,7 +145,6 @@ proc removeBackupFile(
 
     if not isForceRemove:
       let isRemove = status.commandLine.askDeleteBackupPrompt(
-        status.messageLog,
         backupFilename)
       if not isRemove: return
 
@@ -161,8 +157,7 @@ proc removeBackupFile(
     let settings = status.settings.notification
     status.commandLine.writeMessageDeletedFile(
       $backupFilename,
-      settings,
-      status.messageLog)
+      settings)
 
 template removeBackupFile(status: var EditorStatus, sourceFilePath: seq[Rune]) =
   const IS_FORCE_REMOVE = false

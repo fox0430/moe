@@ -1249,88 +1249,87 @@ proc deleteTillNextBlankLine*(bufStatus: var BufferStatus,
   bufStatus.isUpdate = true
 
 # name is the register name
-proc yankLines*(bufStatus: BufferStatus,
-                registers: var Registers,
-                commandLine: var CommandLine,
-                messageLog: var seq[seq[Rune]],
-                notificationSettings: NotificationSettings,
-                first, last: int,
-                name: string,
-                isDelete: bool,
-                settings: EditorSettings) =
+proc yankLines*(
+  bufStatus: BufferStatus,
+  registers: var Registers,
+  commandLine: var CommandLine,
+  notificationSettings: NotificationSettings,
+  first, last: int,
+  name: string,
+  isDelete: bool,
+  settings: EditorSettings) =
 
-  var yankedBuffer: seq[seq[Rune]]
-  for i in first .. last:
-    yankedBuffer.add bufStatus.buffer[i]
+    var yankedBuffer: seq[seq[Rune]]
+    for i in first .. last:
+      yankedBuffer.add bufStatus.buffer[i]
 
-  if name.len > 0:
-    registers.addRegister(yankedBuffer, name, settings)
-  else:
-    const isLine = true
-    registers.addRegister(yankedBuffer, isLine, isDelete, settings)
+    if name.len > 0:
+      registers.addRegister(yankedBuffer, name, settings)
+    else:
+      const isLine = true
+      registers.addRegister(yankedBuffer, isLine, isDelete, settings)
 
-  commandLine.writeMessageYankedLine(
-    yankedBuffer.len,
-    notificationSettings,
-    messageLog)
+    commandLine.writeMessageYankedLine(
+      yankedBuffer.len,
+      notificationSettings)
 
-proc yankLines*(bufStatus: BufferStatus,
-                registers: var Registers,
-                commandLine: var CommandLine,
-                messageLog: var seq[seq[Rune]],
-                notificationSettings: NotificationSettings,
-                first, last: int,
-                isDelete: bool,
-                settings: EditorSettings) =
+proc yankLines*(
+  bufStatus: BufferStatus,
+  registers: var Registers,
+  commandLine: var CommandLine,
+  notificationSettings: NotificationSettings,
+  first, last: int,
+  isDelete: bool,
+  settings: EditorSettings) =
 
-  const name = ""
-  bufStatus.yankLines(registers,
-                      commandLine,
-                      messageLog,
-                      notificationSettings,
-                      first, last,
-                      name,
-                      isDelete,
-                      settings)
+    const name = ""
+    bufStatus.yankLines(
+      registers,
+      commandLine,
+      notificationSettings,
+      first, last,
+      name,
+      isDelete,
+      settings)
 
-proc yankLines*(bufStatus: BufferStatus,
-                registers: var Registers,
-                commandLine: var CommandLine,
-                messageLog: var seq[seq[Rune]],
-                notificationSettings: NotificationSettings,
-                first, last: int,
-                name: string,
-                settings: EditorSettings) =
+proc yankLines*(
+  bufStatus: BufferStatus,
+  registers: var Registers,
+  commandLine: var CommandLine,
+  notificationSettings: NotificationSettings,
+  first, last: int,
+  name: string,
+  settings: EditorSettings) =
 
   const isDelete = false
-  bufStatus.yankLines(registers,
-                      commandLine,
-                      messageLog,
-                      notificationSettings,
-                      first, last,
-                      name,
-                      isDelete,
-                      settings)
+  bufStatus.yankLines(
+    registers,
+    commandLine,
+    notificationSettings,
+    first, last,
+    name,
+    isDelete,
+    settings)
 
-proc yankLines*(bufStatus: BufferStatus,
-                registers: var Registers,
-                commandLine: var CommandLine,
-                messageLog: var seq[seq[Rune]],
-                notificationSettings: NotificationSettings,
-                first, last: int,
-                settings: EditorSettings) =
+proc yankLines*(
+  bufStatus: BufferStatus,
+  registers: var Registers,
+  commandLine: var CommandLine,
+  notificationSettings: NotificationSettings,
+  first, last: int,
+  settings: EditorSettings) =
 
-  const
-    name = ""
-    isDelete = false
-  bufStatus.yankLines(registers,
-                      commandLine,
-                      messageLog,
-                      notificationSettings,
-                      first, last,
-                      name,
-                      isDelete,
-                      settings)
+    const
+      name = ""
+      isDelete = false
+    bufStatus.yankLines(
+      registers,
+      commandLine,
+      notificationSettings,
+      first, last,
+      name,
+      isDelete,
+      settings)
 
 proc pasteLines(bufStatus: var BufferStatus,
                 windowNode: var WindowNode,
@@ -1344,34 +1343,33 @@ proc pasteLines(bufStatus: var BufferStatus,
   bufStatus.isUpdate = true
 
 # name is the register name
-proc yankCharacters*(bufStatus: BufferStatus,
-                     registers: var Registers,
-                     windowNode: WindowNode,
-                     commandLine: var CommandLine,
-                     messageLog: var seq[seq[Rune]],
-                     settings: EditorSettings,
-                     length: int,
-                     name: string,
-                     isDelete: bool) =
+proc yankCharacters*(
+  bufStatus: BufferStatus,
+  registers: var Registers,
+  windowNode: WindowNode,
+  commandLine: var CommandLine,
+  settings: EditorSettings,
+  length: int,
+  name: string,
+  isDelete: bool) =
 
-  var yankedBuffer: seq[Rune]
+    var yankedBuffer: seq[Rune]
 
-  if bufStatus.buffer[windowNode.currentLine].len > 0:
-    for i in 0 ..< length:
-      let
-        col = windowNode.currentColumn + i
-        line = windowNode.currentLine
-      yankedBuffer.add bufStatus.buffer[line][col]
+    if bufStatus.buffer[windowNode.currentLine].len > 0:
+      for i in 0 ..< length:
+        let
+          col = windowNode.currentColumn + i
+          line = windowNode.currentLine
+        yankedBuffer.add bufStatus.buffer[line][col]
 
-    if name.len > 0:
-      registers.addRegister(yankedBuffer, name, settings)
-    else:
-      registers.addRegister(yankedBuffer, settings)
+      if name.len > 0:
+        registers.addRegister(yankedBuffer, name, settings)
+      else:
+        registers.addRegister(yankedBuffer, settings)
 
-  commandLine.writeMessageYankedCharactor(
-    yankedBuffer.len,
-    settings.notification,
-    messageLog)
+    commandLine.writeMessageYankedCharactor(
+      yankedBuffer.len,
+      settings.notification)
 
 proc yankWord*(bufStatus: var BufferStatus,
                registers: var Registers,

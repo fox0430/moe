@@ -259,3 +259,6 @@ Popup window.
 
 ### ```src/moepkg/bufferhighlight.nim```
 Highlighting tools for buffers. (Current words, search results, etc...)
+
+### ```src/moepkg/messagelog.nim```
+Utils for log messages displayed on the command line.

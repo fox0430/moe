@@ -53,10 +53,10 @@ proc getQuickRunBufferIndex*(bufStatus: seq[BufferStatus],
   for index in allBufferIndex:
     if bufStatus[index].mode == Mode.quickRun: return index
 
-proc runQuickRun*(bufStatus: var BufferStatus,
-                  commandLine: var CommandLine,
-                  messageLog: var seq[seq[Rune]],
-                  settings: EditorSettings): seq[seq[Rune]] =
+proc runQuickRun*(
+  bufStatus: var BufferStatus,
+  commandLine: var CommandLine,
+  settings: EditorSettings): seq[seq[Rune]] =
 
   if bufStatus.path.len == 0: return @[ru""]
 
@@ -78,7 +78,7 @@ proc runQuickRun*(bufStatus: var BufferStatus,
   let command = bufStatus.generateCommand(settings.quickRun)
   if command == "": return @[ru""]
 
-  commandLine.writeRunQuickRunMessage(settings.notification, messageLog)
+  commandLine.writeRunQuickRunMessage(settings.notification)
   let cmdResult = execCmdEx(command)
   commandLine.clear
 
@@ -86,7 +86,7 @@ proc runQuickRun*(bufStatus: var BufferStatus,
 
   case cmdResult.exitCode:
     of 124:
-      commandLine.writeRunQuickRunTimeoutMessage(messageLog)
+      commandLine.writeRunQuickRunTimeoutMessage
     else:
       for i in 0 ..< cmdResult.output.len:
         if cmdResult.output[i] == '\n': result.add(@[ru""])

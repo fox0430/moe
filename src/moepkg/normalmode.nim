@@ -122,7 +122,7 @@ proc turnOffHighlighting*(status: var EditorStatus) =
 
 proc writeFileAndExit(status: var EditorStatus) =
   if currentBufStatus.path.len == 0:
-    status.commandLine.writeNoFileNameError(status.messageLog)
+    status.commandLine.writeNoFileNameError
     status.changeMode(Mode.normal)
   else:
     try:
@@ -131,7 +131,7 @@ proc writeFileAndExit(status: var EditorStatus) =
                currentBufStatus.characterEncoding)
       status.closeWindow(currentMainWindowNode)
     except IOError:
-      status.commandLine.writeSaveError(status.messageLog)
+      status.commandLine.writeSaveError
 
 proc forceExit(status: var EditorStatus) {.inline.} =
   status.closeWindow(currentMainWindowNode)
@@ -140,7 +140,6 @@ proc runQuickRunCommand(status: var EditorStatus) =
   let
     buffer = runQuickRun(status.bufStatus[currentMainWindowNode.bufferIndex],
                          status.commandLine,
-                         status.messageLog,
                          status.settings)
     quickRunWindowIndex = status.bufStatus.getQuickRunBufferIndex(mainWindowNode)
 
@@ -320,24 +319,24 @@ proc yankLines(status: var EditorStatus, start, last: int) =
   let lastLine = min(last,
                      currentBufStatus.buffer.high)
 
-  currentBufStatus.yankLines(status.registers,
-                             status.commandLine,
-                             status.messageLog,
-                             status.settings.notification,
-                             start, lastLine,
-                             status.settings)
+  currentBufStatus.yankLines(
+    status.registers,
+    status.commandLine,
+    status.settings.notification,
+    start, lastLine,
+    status.settings)
 
 proc yankLines(status: var EditorStatus, start, last: int, registerName: string) =
   let lastLine = min(last,
                      currentBufStatus.buffer.high)
 
-  currentBufStatus.yankLines(status.registers,
-                             status.commandLine,
-                             status.messageLog,
-                             status.settings.notification,
-                             start, lastLine,
-                             registerName,
-                             status.settings)
+  currentBufStatus.yankLines(
+    status.registers,
+    status.commandLine,
+    status.settings.notification,
+    start, lastLine,
+    registerName,
+    status.settings)
 
 # yy command
 # Ynak lines from the current line
@@ -347,13 +346,13 @@ proc yankLines(status: var EditorStatus) =
     cmdLoop = currentBufStatus.cmdLoop
     currentLine = currentMainWindowNode.currentLine
     lastLine = min(currentLine + cmdLoop - 1, currentBufStatus.buffer.high)
-  currentBufStatus.yankLines(status.registers,
-                             status.commandLine,
-                             status.messageLog,
-                             status.settings.notification,
-                             currentLine, lastLine,
-                             registerName,
-                             status.settings)
+  currentBufStatus.yankLines(
+    status.registers,
+    status.commandLine,
+    status.settings.notification,
+    currentLine, lastLine,
+    registerName,
+    status.settings)
 
 # Ynak lines from the current line
 proc yankLines(status: var EditorStatus, registerName: string) =
@@ -361,13 +360,13 @@ proc yankLines(status: var EditorStatus, registerName: string) =
     cmdLoop = currentBufStatus.cmdLoop
     currentLine = currentMainWindowNode.currentLine
     lastLine = min(currentLine + cmdLoop - 1, currentBufStatus.buffer.high)
-  currentBufStatus.yankLines(status.registers,
-                             status.commandLine,
-                             status.messageLog,
-                             status.settings.notification,
-                             currentLine, lastLine,
-                             registerName,
-                             status.settings)
+  currentBufStatus.yankLines(
+    status.registers,
+    status.commandLine,
+    status.settings.notification,
+    currentLine, lastLine,
+    registerName,
+    status.settings)
 
 # y{ command
 proc yankToPreviousBlankLine(status: var EditorStatus, registerName: string) =
@@ -458,7 +457,6 @@ proc yankCharacters(status: var EditorStatus) =
     status.registers,
     currentMainWindowNode,
     status.commandLine,
-    status.messageLog,
     status.settings,
     length,
     registerName,
@@ -478,7 +476,6 @@ proc yankCharacters(status: var EditorStatus, registerName: string) =
     status.registers,
     currentMainWindowNode,
     status.commandLine,
-    status.messageLog,
     status.settings,
     length,
     registerName,
@@ -503,7 +500,6 @@ proc yankCharactersToCharacter(status: var EditorStatus,
       status.registers,
       currentMainWindowNode,
       status.commandLine,
-      status.messageLog,
       status.settings,
       position,
       registerName,
@@ -527,7 +523,6 @@ proc yankCharactersToCharacter(status: var EditorStatus,
       status.registers,
       currentMainWindowNode,
       status.commandLine,
-      status.messageLog,
       status.settings,
       position,
       registerName,

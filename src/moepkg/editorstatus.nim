@@ -24,7 +24,8 @@ import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        window, color, settings, statusline, bufferstatus, cursor, tabline,
        backup, messages, commandline, register, platform, movement,
        autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
-       independentutils, bufferhighlight, helputils, backupmanagerutils, diffviewerutils
+       independentutils, bufferhighlight, helputils, backupmanagerutils,
+       diffviewerutils, messagelog
 
 # Save cursor position when a buffer for a window(file) gets closed.
 type LastCursorPosition* = object
@@ -45,7 +46,6 @@ type EditorStatus* = object
   statusLine*: seq[StatusLine]
   timeConfFileLastReloaded*: DateTime
   currentDir: seq[Rune]
-  messageLog*: seq[seq[Rune]]
   commandLine*: CommandLine
   tabWindow*: Window
   popupWindow*: Window
@@ -326,7 +326,7 @@ proc addNewBuffer*(
               fmt"Failed to open file: {path} {getCurrentExceptionMsg()}"
 
           status.commandLine.writeError(errMessage.toRunes)
-          status.messageLog.add errMessage.toRunes
+          addMessageLog errMessage
           return
 
     return some(status.bufStatus.high)
@@ -597,8 +597,7 @@ proc update*(status: var EditorStatus) =
 
     if buf.isLogViewerMode:
       # Update the logviewer mode buffer.
-      status.bufStatus[i].updateLogViewerBuffer(
-        status.messageLog)
+      status.bufStatus[i].updateLogViewerBuffer(getMessageLog())
 
     if buf.isDebugMode:
       # Update the debug mode buffer.
@@ -983,8 +982,7 @@ proc autoSave(status: var EditorStatus) =
                bufStatus.characterEncoding)
       status.commandLine.writeMessageAutoSave(
         bufStatus.path,
-        status.settings.notification,
-        status.messageLog)
+        status.settings.notification)
       status.bufStatus[index].lastSaveTime = now()
 
 proc loadConfigurationFile*(status: var EditorStatus) =
@@ -994,14 +992,12 @@ proc loadConfigurationFile*(status: var EditorStatus) =
     except InvalidItemError:
       let invalidItem = getCurrentExceptionMsg()
       status.commandLine.writeInvalidItemInConfigurationFileError(
-        invalidItem,
-        status.messageLog)
+        invalidItem)
       initEditorSettings()
     except IOError, TomlError:
       let failureCause = getCurrentExceptionMsg()
       status.commandLine.writeFailedToLoadConfigurationFileError(
-        failureCause,
-        status.messageLog)
+        failureCause)
       initEditorSettings()
 
 proc eventLoopTask(status: var EditorStatus) =
@@ -1057,8 +1053,7 @@ proc eventLoopTask(status: var EditorStatus) =
         bufStatus.backupBuffer(
           status.settings.autoBackup,
           status.settings.notification,
-          status.commandLine,
-          status.messageLog)
+          status.commandLine)
 
         status.autoBackupStatus.lastBackupTime = now()
 
