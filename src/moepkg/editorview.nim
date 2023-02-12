@@ -408,8 +408,6 @@ proc writeAllLines*[T](
                      ru("┊"),
                      EditorColorPair.whitespace)
 
-    win.refresh
-
 proc update*[T](
   view: var EditorView,
   win: var Window,
