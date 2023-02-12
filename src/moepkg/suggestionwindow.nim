@@ -68,7 +68,8 @@ proc handleKeyInSuggestionWindow*(
   windowNode: var WindowNode,
   key: Rune) =
 
-    doAssert(canHandleInSuggestionWindow(key))
+    when not defined(release):
+      doAssert(canHandleInSuggestionWindow(key))
 
     # Check whether the selected suggestion is changed.
     let prevSuggestion = suggestionWindow.selectedSuggestion

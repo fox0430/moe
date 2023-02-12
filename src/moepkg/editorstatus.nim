@@ -571,6 +571,22 @@ proc updateLogViewerHighlight(buffer: string): Highlight =
       emptyReservedWord,
       SourceLanguage.langNone)
 
+proc updateSuggestWindow(status: var EditorStatus) =
+  let
+    mainWindowY =
+      if status.settings.tabLine.enable: 1
+      else: 0
+    mainWindowHeight = status.settings.getMainWindowHeight
+    (y, x) = status.suggestionWindow.get.calcSuggestionWindowPosition(
+      currentMainWindowNode,
+      mainWindowHeight)
+
+  status.suggestionWindow.get.writeSuggestionWindow(
+    currentMainWindowNode,
+    y, x,
+    mainWindowY,
+    status.settings.statusLine.enable)
+
 ## Update all views, highlighting, cursor, etc.
 proc update*(status: var EditorStatus) =
   # Disable the cursor while resizing windows.
@@ -705,6 +721,11 @@ proc update*(status: var EditorStatus) =
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)
+
+
+  # Update the suggestion window
+  if status.suggestionWindow.isSome:
+    status.updateSuggestWindow
 
   if not currentBufStatus.isFilerMode:
     let
