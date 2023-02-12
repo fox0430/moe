@@ -106,25 +106,6 @@ proc tryOpenSuggestWindow(status: var EditorStatus) {.inline.} =
     mainWindowNode,
     currentMainWindowNode)
 
-proc updateSuggestWindow(
-  status: var EditorStatus,
-  suggestWin: var SuggestionWindow) =
-
-    let
-      mainWindowY =
-        if status.settings.tabLine.enable: 1
-        else: 0
-      mainWindowHeight = status.settings.getMainWindowHeight
-      (y, x) = suggestWin.calcSuggestionWindowPosition(
-        currentMainWindowNode,
-        mainWindowHeight)
-
-    suggestWin.writeSuggestionWindow(
-      currentMainWindowNode,
-      y, x,
-      mainWindowY,
-      status.settings.statusLine.enable)
-
 proc updateSelectedArea(status: var EditorStatus) {.inline.} =
   currentBufStatus.selectedArea.updateSelectedArea(
     currentMainWindowNode.currentLine,
@@ -315,10 +296,6 @@ proc editorMainLoop*(status: var EditorStatus) =
       status.updateSelectedArea
 
     status.update
-
-    # TODO: Move to editorStatus.update?
-    if status.suggestionWindow.isSome:
-      status.updateSuggestWindow(status.suggestionWindow.get)
 
     let key = status.getKeyFromMainWindow
 
