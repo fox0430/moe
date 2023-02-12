@@ -722,7 +722,6 @@ proc update*(status: var EditorStatus) =
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
-
   # Update the suggestion window
   if status.suggestionWindow.isSome:
     status.updateSuggestWindow
