@@ -18,13 +18,8 @@
 #[############################################################################]#
 
 import std/[strutils, sequtils, strformat, os, algorithm, options]
-import ui, unicodeext, fileutils, color, commandline, popupwindow, messagelog
-
-type
-  SuggestType* = enum
-    exCommand
-    exCommandOption
-    filePath
+import ui, unicodeext, fileutils, color, commandline, popupwindow, messagelog,
+       suggestionwindow
 
 # TODO: Auto inserts spaces in compile time.
 const exCommandList: array[67, tuple[command, description: string]] = [
@@ -317,6 +312,8 @@ proc initSuggestBuffer*(
               result.add l & list.description.ru
       of exCommandOption:
         return suggestList
+      else:
+        discard
 
 proc firstArg(buffer: Runes): Runes =
   let commandSplit = splitWhitespace(buffer)
@@ -462,6 +459,8 @@ proc updateSuggestWindow*(
           if suggestList.len > 0: suggestList[0]
           else: "".toRunes
         x = calcXWhenSuggestPath(commandLine.buffer, inputPath)
+      else:
+        discard
 
     let
       currentLine = some(suggestIndex)

@@ -22,21 +22,31 @@ import ui, window, autocomplete, bufferstatus, gapbuffer, color,
        unicodeext, osext, popupwindow
 import syntax/highlite
 
-type SuggestionWindow* = object
-  wordDictionary: WordDictionary
-  oldLine: seq[Rune]
-  inputWord: seq[Rune]
-  firstColumn, lastColumn: int
-  suggestoins: seq[seq[Rune]]
-  selectedSuggestion: int
-  popUpWindow: Option[Window]
-  isPath: bool
+type
+  SuggestType* = enum
+    text
+    filePath
+    exCommand
+    exCommandOption
+
+  SuggestionWindow* = object
+    wordDictionary: WordDictionary
+    oldLine: seq[Rune]
+    inputWord: seq[Rune]
+    firstColumn, lastColumn: int
+    suggestoins: seq[seq[Rune]]
+    selectedSuggestion: int
+    popUpWindow: Option[Window]
+    suggestType: SuggestType
 
 proc selectedWordOrInputWord(suggestionWindow: SuggestionWindow): seq[Rune] =
   if suggestionWindow.selectedSuggestion == -1:
     suggestionWindow.inputWord
   else:
     suggestionWindow.suggestoins[suggestionWindow.selectedSuggestion]
+
+proc isPath(suggestWin: SuggestionWindow): bool {.inline.} =
+  suggestWin.suggestType == SuggestType.filePath
 
 proc newLine*(suggestionWindow: SuggestionWindow): seq[Rune] =
   suggestionWindow.oldLine.dup(
@@ -111,9 +121,9 @@ proc handleKeyInSuggestionWindow*(
 
       bufStatus.isUpdate = true
 
-# Suggestions are extracted from `text`.
-# `word` is the inputted text.
-# `isPath` is true when the file path suggestions.
+## Suggestions are extracted from `text`.
+## `word` is the inputted text.
+## `isPath` is true when the file path suggestions.
 proc initSuggestionWindow*(
   wordDictionary: var WordDictionary,
   text, word, currentLineText: seq[Rune],
@@ -123,26 +133,28 @@ proc initSuggestionWindow*(
     if not isPath:
       wordDictionary.addWordToDictionary(text)
 
-    var suggestionWindow: SuggestionWindow
-    suggestionWindow.wordDictionary = wordDictionary
-    suggestionWindow.inputWord = word
-    suggestionWindow.firstColumn = firstColumn
-    suggestionWindow.lastColumn = lastColumn
-    suggestionWindow.isPath = isPath
+    let
+      # TODO: Add ex mode supports
+      suggestType =
+        if isPath: SuggestType.filePath
+        else: SuggestType.text
 
-    if isPath:
-      suggestionWindow.suggestoins = text.splitWhitespace
+      suggestoins =
+        if isPath: text.splitWhitespace
+        else: collectSuggestions(wordDictionary, word)
+
+    if suggestoins.len == 0:
+      return SuggestionWindow.none
     else:
-      suggestionWindow.suggestoins = collectSuggestions(
-        suggestionWindow.wordDictionary,
-        word)
-
-    if suggestionWindow.suggestoins.len == 0: return none(SuggestionWindow)
-
-    suggestionWindow.selectedSuggestion = -1
-    suggestionWindow.oldLine = currentLineText
-
-    return some(suggestionWindow)
+      return SuggestionWindow(
+        wordDictionary: wordDictionary,
+        oldLine: currentLineText,
+        inputWord: word,
+        firstColumn: firstColumn,
+        lastColumn: lastColumn,
+        suggestoins: suggestoins,
+        selectedSuggestion: -1,
+        suggestType: suggestType).some
 
 proc extractWordBeforeCursor(
   bufStatus: BufferStatus,
@@ -185,6 +197,7 @@ proc getBufferAndLangKeyword(
 
     return bufferText & keywordsText
 
+## Build a suggestion window for editor (insert) mode.
 proc buildSuggestionWindow*(
   wordDictionary: var WordDictionary,
   bufStatus: seq[BufferStatus],
