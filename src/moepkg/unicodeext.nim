@@ -499,3 +499,9 @@ template clear*(r: var Rune) = r = "".ru
 
 # Assign empty runes.
 template clear*(r: var Runes) = r = "".ru
+
+proc join*(lines: seq[Runes], sep: Rune = ru' '): Runes =
+  for i, runes in lines:
+    result.add runes
+    if i < lines.high:
+      result.add sep
