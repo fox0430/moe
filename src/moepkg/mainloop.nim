@@ -98,14 +98,6 @@ proc execCommand(status: var EditorStatus, command: Runes) =
 proc isOpenSuggestWindow(status: EditorStatus): bool {.inline.} =
   status.settings.autocomplete.enable and isInsertMode(currentBufStatus.mode)
 
-proc tryOpenSuggestWindow(status: var EditorStatus) {.inline.} =
-  status.suggestionWindow = tryOpenSuggestionWindow(
-    status.wordDictionary,
-    status.bufStatus,
-    currentMainWindowNode.bufferIndex,
-    mainWindowNode,
-    currentMainWindowNode)
-
 proc updateSelectedArea(status: var EditorStatus) {.inline.} =
   currentBufStatus.selectedArea.updateSelectedArea(
     currentMainWindowNode.currentLine,
@@ -123,106 +115,95 @@ proc incListIndex(index: var int, list: seq[Runes]) =
   if index == list.high: index = 0
   else: index .inc
 
+proc updateAfterInsertFromSuggestion(status: var EditorStatus) =
+  if currentBufStatus.isExmode or currentBufStatus.isSearchMode:
+    if status.suggestionWindow.get.isLineChanged:
+      status.commandLine.buffer = status.suggestionWindow.get.newLine
+  else:
+    if status.suggestionWindow.get.isLineChanged:
+      currentBufStatus.buffer[currentMainWindowNode.currentLine] =
+        status.suggestionWindow.get.newLine
+      currentMainWindowNode.expandedColumn = currentMainWindowNode.currentColumn
+
+  # Update WordDictionary
+  block:
+    let selectedWord = status.suggestionWindow.get.getSelectedWord
+    if selectedWord.len > 0:
+      status.wordDictionary.incNumOfUsed(selectedWord)
+
+proc close(suggestWin: var Option[SuggestionWindow]) {.inline.} =
+  suggestWin.get.close
+  suggestWin = none(SuggestionWindow)
+
 ## Get keys and update view.
 proc commandLineLoop*(status: var EditorStatus) =
-  # TODO: Remove
-  template openSuggestWindow() =
-    suggestType = status.commandLine.buffer.getSuggestType
-    suggestList = status.commandLine.getSuggestList(suggestType)
-    if suggestList.len > 0:
-      if suggestIndex > suggestList.high:
-        suggestIndex = suggestList.high
-
-      suggestWin = tryOpenSuggestWindow()
-
   if currentBufStatus.isSearchMode:
     status.searchHistory.add "".toRunes
 
     if status.isIncrementalSearch:
       status.isSearchHighlight = true
 
-  var
-    isCancel = false
-
-    # TODO: Change type to `SuggestionWindow`.
-    suggestWin = none(Window)
-
-    # Use only when Ex mode.
-    # TODO: Move
-    suggestType = SuggestType.exCommand
-
-    # Use when Ex mode and search mode.
-    # TODO: Move
-    suggestList: seq[Runes]
-
-    # Use when Ex mode and search mode.
-    # TODO: Move
-    suggestIndex =
-      if currentBufStatus.isSearchMode: status.searchHistory.high
-      else: 0
+  var isCancel = false
 
   while not isCancel:
     status.update
 
-    if suggestWin.isSome:
-      suggestWin.get.updateSuggestWindow(
-        suggestType,
-        suggestList,
-        suggestIndex,
-        status.commandLine)
-      status.commandLine.update
-
     # TODO: Move to editorstatus.update?
-    if currentBufStatus.isSearchMode:
-      status.commandLine.buffer = status.searchHistory[suggestIndex]
-      status.commandLine.update
+    # TODO: Enable
+    #if currentBufStatus.isSearchMode:
+    #  status.commandLine.buffer = status.searchHistory[suggestIndex]
+    #  status.commandLine.update
 
     let key = status.getKeyFromCommandLine
+
+    if status.suggestionWindow.isNone and (isTabKey(key) or isShiftTab(key)):
+      status.suggestionWindow = tryOpenSuggestionWindow(
+        status.wordDictionary,
+        status.commandLine)
+      continue
+
+    if status.suggestionWindow.isSome:
+      if canHandleInSuggestionWindow(key):
+        status.suggestionWindow.get.handleKeyInSuggestionWindow(
+          status.commandLine,
+          key)
+        continue
+      else:
+        status.updateAfterInsertFromSuggestion
+        status.suggestionWindow.close
 
     if isResizeKey(key):
       updateTerminalSize()
       status.resize
     elif isEscKey(key) or isControlC(key):
       isCancel = true
-      if suggestWin.isSome:
-        suggestWin.get.delete
-        suggestWin = none(Window)
+      if status.suggestionWindow.isSome:
+        status.suggestionWindow.get.close
     elif isEnterKey(key):
-      if suggestWin.isSome:
-        suggestWin.get.delete
-        suggestWin = none(Window)
+      if status.suggestionWindow.isSome:
+        status.suggestionWindow.get.close
       break
 
-    elif isTabKey(key):
-      if suggestWin.isNone: openSuggestWindow()
-      else: suggestIndex.incListIndex(suggestList)
-
-      continue
-    elif isShiftTab(key):
-      if suggestWin.isNone: openSuggestWindow()
-      else: suggestIndex.decListIndex(suggestList)
-
-      continue
     elif isLeftKey(key):
       status.commandLine.moveLeft
     elif isRightKey(key):
       status.commandLine.moveRight
       if status.settings.popupWindowInExmode:
-        if status.popupWindow != nil:
-          status.popupWindow.deleteWindow
+        if status.suggestionWindow.isSome:
+          status.suggestionWindow.close
           continue
-    elif isUpKey(key):
-      if currentBufStatus.isExMode:
-        suggestIndex.decListIndex(suggestList)
-      elif currentBufStatus.isSearchMode:
-        suggestIndex.decListIndex(status.searchHistory)
-      continue
-    elif isDownKey(key):
-      if currentBufStatus.isExMode:
-        suggestIndex.incListIndex(suggestList)
-      elif currentBufStatus.isSearchMode:
-        suggestIndex.incListIndex(status.searchHistory)
-      continue
+    #elif isUpKey(key):
+    #  if currentBufStatus.isExMode:
+    #    suggestIndex.decListIndex(suggestList)
+    #  elif currentBufStatus.isSearchMode:
+    #    suggestIndex.decListIndex(status.searchHistory)
+    #  continue
+    #elif isDownKey(key):
+    #  if currentBufStatus.isExMode:
+    #    suggestIndex.incListIndex(suggestList)
+    #  elif currentBufStatus.isSearchMode:
+    #    suggestIndex.incListIndex(status.searchHistory)
+    #  continue
     elif isHomeKey(key):
       status.commandLine.moveTop
     elif isEndKey(key):
@@ -236,10 +217,6 @@ proc commandLineLoop*(status: var EditorStatus) =
 
       if status.isIncrementalSearch:
         status.execSearchCommand(status.commandLine.buffer)
-
-    if suggestWin.isSome:
-      suggestWin.get.delete
-      suggestWin = none(Window)
 
   if isCancel:
     status.changeMode(currentBufStatus.prevMode)
@@ -261,23 +238,6 @@ proc commandLineLoop*(status: var EditorStatus) =
         status.changeMode(currentBufStatus.prevMode)
     elif isSearchMode(currentBufStatus.mode):
       status.changeMode(currentBufStatus.prevMode)
-
-proc updateAfterInsertFromSuggestion(status: var EditorStatus) =
-  if status.suggestionWindow.get.isLineChanged:
-    currentBufStatus.buffer[currentMainWindowNode.currentLine] =
-      status.suggestionWindow.get.newLine
-    currentMainWindowNode.expandedColumn = currentMainWindowNode.currentColumn
-
-  # Update WordDictionary
-  block:
-    let selectedWord = status.suggestionWindow.get.getSelectedWord
-    if selectedWord.len > 0:
-      status.wordDictionary.incNumOfUsed(selectedWord)
-
-# TODO: Move
-proc close(suggestWin: var Option[SuggestionWindow]) {.inline.} =
-  suggestWin.get.close
-  suggestWin = none(SuggestionWindow)
 
 ## Get keys and update view.
 proc editorMainLoop*(status: var EditorStatus) =
@@ -331,7 +291,12 @@ proc editorMainLoop*(status: var EditorStatus) =
         continue
 
     if status.isOpenSuggestWindow:
-      status.tryOpenSuggestWindow
+      status.suggestionWindow = tryOpenSuggestionWindow(
+        status.wordDictionary,
+        status.bufStatus,
+        currentMainWindowNode.bufferIndex,
+        mainWindowNode,
+        currentMainWindowNode)
 
     # TODO: Fix condition.
     # I think this should use something like a flag or enum

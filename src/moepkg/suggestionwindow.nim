@@ -193,6 +193,52 @@ proc handleKeyInSuggestionWindow*(
 
       bufStatus.isUpdate = true
 
+proc handleKeyInSuggestionWindow*(
+  suggestionWindow: var SuggestionWindow,
+  commandLine: var CommandLine,
+  key: Rune) =
+
+    when not defined(release):
+      doAssert(canHandleInSuggestionWindow(key))
+
+    # Check whether the selected suggestion is changed.
+    let prevSuggestion = suggestionWindow.selectedSuggestion
+
+    if isTabKey(key) or isDownKey(key):
+      if suggestionWindow.selectedSuggestion == suggestionWindow.suggestoins.high:
+        suggestionWindow.selectedSuggestion = 0
+      else:
+        inc(suggestionWindow.selectedSuggestion)
+    elif isShiftTab(key) or isUpKey(key):
+      if suggestionWindow.selectedSuggestion == 0:
+        suggestionWindow.selectedSuggestion = suggestionWindow.suggestoins.high
+      else:
+        dec(suggestionWindow.selectedSuggestion)
+    elif isPageDownKey(key):
+      suggestionWindow.selectedSuggestion +=
+        suggestionWindow.popUpWindow.get.height - 1
+    elif isPageUpKey(key):
+      suggestionWindow.selectedSuggestion -=
+        suggestionWindow.popUpWindow.get.height - 1
+
+    suggestionWindow.selectedSuggestion =
+      suggestionWindow.selectedSuggestion.clamp(0, suggestionWindow.suggestoins.high)
+
+    if suggestionWindow.selectedSuggestion != prevSuggestion:
+      # The selected suggestoin is changed.
+      # Update the buffer.
+      let newLine = suggestionWindow.newLine
+      commandLine.buffer = newLine
+
+      let
+        firstColumn =
+          if (suggestionWindow.isPath) and (newLine in '/'.ru):
+            suggestionWindow.firstColumn + 1
+          else:
+            suggestionWindow.firstColumn
+        wordLen = suggestionWindow.selectedWordOrInputWord.len
+      commandLine.setBufferPositionX(firstColumn + wordLen)
+
 ## Suggestions are extracted from `text`.
 ## `word` is the inputted text.
 ## `isPath` is true when the file path suggestions.
@@ -233,6 +279,7 @@ proc extractWordBeforeCursor(
   windowNode: WindowNode): Option[tuple[word: seq[Rune], first, last: int]] =
 
     if windowNode.currentColumn - 1 < 0: return
+
     extractNeighborWord(
       bufStatus.buffer[windowNode.currentLine],
       windowNode.currentColumn - 1)
@@ -242,6 +289,7 @@ proc extractPathBeforeCursor(
   windowNode: WindowNode): Option[tuple[path: seq[Rune], first, last: int]] =
 
     if windowNode.currentColumn - 1 < 0: return
+
     extractNeighborPath(
       bufStatus.buffer[windowNode.currentLine],
       windowNode.currentColumn - 1)
@@ -251,7 +299,8 @@ proc wordExistsBeforeCursor(
   windowNode: WindowNode): bool =
 
     if windowNode.currentColumn == 0: return false
-    let wordFirstLast = extractWordBeforeCursor(bufStatus, windowNode)
+
+    let wordFirstLast = bufStatus.extractWordBeforeCursor(windowNode)
     wordFirstLast.isSome and wordFirstLast.get.word.len > 0
 
 # Get a text in the buffer and language keywords
@@ -581,21 +630,24 @@ proc calcXWhenSuggestPath*(buffer, inputPath: Runes): int =
 ## Build a suggestion window for the command line.
 proc buildSuggestionWindow*(
   wordDictionary: var WordDictionary,
-  commandLine: CommandLine,
-  currentBufferIndex: int): Option[SuggestionWindow] =
+  commandLine: CommandLine): Option[SuggestionWindow] =
 
     let
       suggestType = commandLine.buffer.getSuggestType
       suggestList = commandLine.getSuggestList(suggestType)
 
+      word =
+        if commandLine.buffer.len > 0: commandline.buffer.splitWhitespace[^1]
+        else: "".toRunes
+
     initSuggestionWindow(
       wordDictionary,
-      text,
+      suggestList.join,
       word,
-      currentBufStatus.buffer[currenWindowNode.currentLine],
-      firstColumn,
-      lastColumn,
-      isPath)
+      commandLine.buffer,
+      commandLine.bufferPosition.x,
+      commandLine.bufferPosition.y,
+      commandLine.buffer.isPath)
 
 proc tryOpenSuggestionWindow*(
   wordDictionary: var WordDictionary,
@@ -610,6 +662,12 @@ proc tryOpenSuggestionWindow*(
         currentBufferIndex,
         root,
         currenWindowNode)
+
+proc tryOpenSuggestionWindow*(
+  wordDictionary: var WordDictionary,
+  commandLine: CommandLine): Option[SuggestionWindow] =
+
+    return buildSuggestionWindow(wordDictionary, commandLine)
 
 proc calcSuggestionWindowPosition*(
   suggestionWindow: SuggestionWindow,
