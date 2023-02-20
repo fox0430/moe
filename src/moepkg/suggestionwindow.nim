@@ -121,16 +121,19 @@ proc isPath(suggestWin: SuggestionWindow): bool {.inline.} =
   suggestWin.suggestType == SuggestType.filePath
 
 proc newLine*(suggestionWindow: SuggestionWindow): seq[Rune] =
-  suggestionWindow.oldLine.dup(
-    proc (r: var seq[Rune]) =
-      let
-        firstColumn = suggestionWindow.firstColumn
-        lastColumn = suggestionWindow.lastColumn
-      r[firstColumn .. lastColumn] =
-        if suggestionWindow.isPath and r.len > 0 and r[firstColumn] == '/'.ru:
-          "/".ru & suggestionWindow.selectedWordOrInputWord
-        else:
-          suggestionWindow.selectedWordOrInputWord)
+  if suggestionWindow.oldLine.len > 0:
+    suggestionWindow.oldLine.dup(
+      proc (r: var seq[Rune]) =
+        let
+          firstColumn = suggestionWindow.firstColumn
+          lastColumn = suggestionWindow.lastColumn
+        r[firstColumn .. lastColumn] =
+          if suggestionWindow.isPath and r.len > 0 and r[firstColumn] == '/'.ru:
+            "/".ru & suggestionWindow.selectedWordOrInputWord
+          else:
+            suggestionWindow.selectedWordOrInputWord)
+  else:
+    suggestionWindow.selectedWordOrInputWord
 
 proc close*(suggestionWindow: var SuggestionWindow) =
   suggestionWindow.popUpWindow.get.deleteWindow
