@@ -23,8 +23,7 @@ import editorstatus, bufferstatus, window, unicodeext, gapbuffer, ui,
        normalmode, visualmode, insertmode, autocomplete, suggestionwindow,
        exmode, replacemode, filermode, buffermanager, logviewer, help,
        recentfilemode, quickrun, backupmanager, diffviewer, configmode,
-       debugmode, commandline, search, commandlineutils, popupwindow,
-       filermodeutils
+       debugmode, commandline, search, filermodeutils
 
 proc searchCommand(currentMode: Mode, command: Runes): InputState =
   case currentMode:
@@ -107,14 +106,6 @@ proc isIncrementalSearch(status: EditorStatus): bool {.inline.} =
   isSearchMode(currentBufStatus.mode) and
   status.settings.incrementalSearch
 
-proc decListIndex(index: var int, list: seq[Runes]) =
-  if index == 0: index = list.high
-  else: index .dec
-
-proc incListIndex(index: var int, list: seq[Runes]) =
-  if index == list.high: index = 0
-  else: index .inc
-
 proc updateAfterInsertFromSuggestion(status: var EditorStatus) =
   if currentBufStatus.isExmode or currentBufStatus.isSearchMode:
     if status.suggestionWindow.get.isLineChanged:
@@ -157,9 +148,8 @@ proc commandLineLoop*(status: var EditorStatus) =
     let key = status.getKeyFromCommandLine
 
     if status.suggestionWindow.isNone and (isTabKey(key) or isShiftTab(key)):
-      status.suggestionWindow = tryOpenSuggestionWindow(
-        status.wordDictionary,
-        status.commandLine)
+      status.suggestionWindow = status.commandLine.tryOpenSuggestionWindow(
+        status.wordDictionary)
       continue
 
     if status.suggestionWindow.isSome:
@@ -192,18 +182,6 @@ proc commandLineLoop*(status: var EditorStatus) =
         if status.suggestionWindow.isSome:
           status.suggestionWindow.close
           continue
-    #elif isUpKey(key):
-    #  if currentBufStatus.isExMode:
-    #    suggestIndex.decListIndex(suggestList)
-    #  elif currentBufStatus.isSearchMode:
-    #    suggestIndex.decListIndex(status.searchHistory)
-    #  continue
-    #elif isDownKey(key):
-    #  if currentBufStatus.isExMode:
-    #    suggestIndex.incListIndex(suggestList)
-    #  elif currentBufStatus.isSearchMode:
-    #    suggestIndex.incListIndex(status.searchHistory)
-    #  continue
     elif isHomeKey(key):
       status.commandLine.moveTop
     elif isEndKey(key):
@@ -291,9 +269,8 @@ proc editorMainLoop*(status: var EditorStatus) =
         continue
 
     if status.isOpenSuggestWindow:
-      status.suggestionWindow = tryOpenSuggestionWindow(
+      status.suggestionWindow = status.bufStatus.tryOpenSuggestionWindow(
         status.wordDictionary,
-        status.bufStatus,
         currentMainWindowNode.bufferIndex,
         mainWindowNode,
         currentMainWindowNode)

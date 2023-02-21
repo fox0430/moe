@@ -19,7 +19,7 @@
 
 import std/[sugar, options, sequtils, strutils, algorithm]
 import ui, window, autocomplete, bufferstatus, gapbuffer, color,
-       unicodeext, osext, popupwindow, commandline, fileutils
+       unicodeext, osext, popupwindow, commandline, fileutils, independentutils
 import syntax/highlite
 
 # TODO: Remove
@@ -323,8 +323,8 @@ proc getBufferAndLangKeyword(
 
 ## Build a suggestion window for editor (insert) mode.
 proc buildSuggestionWindow*(
-  wordDictionary: var WordDictionary,
   bufStatus: seq[BufferStatus],
+  wordDictionary: var WordDictionary,
   currentBufferIndex: int,
   root, currenWindowNode: WindowNode): Option[SuggestionWindow] =
 
@@ -632,8 +632,8 @@ proc calcXWhenSuggestPath*(buffer, inputPath: Runes): int =
 
 ## Build a suggestion window for the command line.
 proc buildSuggestionWindow*(
-  wordDictionary: var WordDictionary,
-  commandLine: CommandLine): Option[SuggestionWindow] =
+  commandLine: CommandLine,
+  wordDictionary: var WordDictionary): Option[SuggestionWindow] =
 
     let
       suggestType = commandLine.buffer.getSuggestType
@@ -653,29 +653,28 @@ proc buildSuggestionWindow*(
       commandLine.buffer.isPath)
 
 proc tryOpenSuggestionWindow*(
-  wordDictionary: var WordDictionary,
   bufStatus: seq[BufferStatus],
+  wordDictionary: var WordDictionary,
   currentBufferIndex: int,
   root, currenWindowNode: WindowNode): Option[SuggestionWindow] =
 
     if wordExistsBeforeCursor(bufStatus[currentBufferIndex], currenWindowNode):
-      return buildSuggestionWindow(
+      return bufStatus.buildSuggestionWindow(
         wordDictionary,
-        bufStatus,
         currentBufferIndex,
         root,
         currenWindowNode)
 
 proc tryOpenSuggestionWindow*(
-  wordDictionary: var WordDictionary,
-  commandLine: CommandLine): Option[SuggestionWindow] =
+  commandLine: CommandLine,
+  wordDictionary: var WordDictionary): Option[SuggestionWindow] =
 
-    return buildSuggestionWindow(wordDictionary, commandLine)
+    return commandLine.buildSuggestionWindow(wordDictionary)
 
 proc calcSuggestionWindowPosition*(
   suggestionWindow: SuggestionWindow,
   windowNode: WindowNode,
-  mainWindowHeight: int): tuple[y, x: int] =
+  mainWindowHeight: int): Position =
 
     let
       line = windowNode.currentLine
@@ -700,7 +699,10 @@ proc calcSuggestionWindowPosition*(
         else:
           absoluteX - leftMargin
 
-    return (y, x)
+    return Position(x: x, y: y)
+
+proc calcSuggestionWindowPosition*(commandLine: CommandLine): Position =
+  Position(x: commandLine.cursorPosition.x, y: commandLine.windowPosition.y)
 
 # cursorPosition is absolute y
 proc calcMaxSugestionWindowHeight(

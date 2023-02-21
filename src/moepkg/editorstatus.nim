@@ -577,13 +577,19 @@ proc updateSuggestWindow(status: var EditorStatus) =
       if status.settings.tabLine.enable: 1
       else: 0
     mainWindowHeight = status.settings.getMainWindowHeight
-    (y, x) = status.suggestionWindow.get.calcSuggestionWindowPosition(
-      currentMainWindowNode,
-      mainWindowHeight)
+    windowPosition =
+      # TODO: Fix confition
+      if currentBufStatus.isExMode or currentBufStatus.isSearchMode:
+        status.commandLine.calcSuggestionWindowPosition
+      else:
+        status.suggestionWindow.get.calcSuggestionWindowPosition(
+          currentMainWindowNode,
+          mainWindowHeight)
 
   status.suggestionWindow.get.writeSuggestionWindow(
     currentMainWindowNode,
-    y, x,
+    windowPosition.y,
+    windowPosition.x,
     mainWindowY,
     status.settings.statusLine.enable)
 
