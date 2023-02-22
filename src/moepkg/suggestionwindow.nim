@@ -110,6 +110,18 @@ type
     popUpWindow: Option[Window]
     suggestType: SuggestType
 
+proc isText(t: SuggestType): bool {.inline.} =
+  t == SuggestType.text
+
+proc isPath(t: SuggestType): bool {.inline.} =
+  t == SuggestType.filePath
+
+proc isExCommand(t: SuggestType): bool {.inline.} =
+  t == SuggestType.exCommand
+
+proc isExCommandOption(t: SuggestType): bool {.inline.} =
+  t == SuggestType.exCommandOption
+
 proc selectedWordOrInputWord(suggestionWindow: SuggestionWindow): seq[Rune] =
   if suggestionWindow.selectedSuggestion == -1:
     suggestionWindow.inputWord
@@ -248,24 +260,18 @@ proc initSuggestionWindow*(
   wordDictionary: var WordDictionary,
   text, word, currentLineText: seq[Rune],
   firstColumn, lastColumn: int,
-  isPath: bool): Option[SuggestionWindow] =
+  suggestType: SuggestType): Option[SuggestionWindow] =
 
-    if not isPath:
+    if not suggestType.isPath:
       wordDictionary.addWordToDictionary(text)
 
-    let
-      # TODO: Add ex mode supports
-      suggestType =
-        if isPath: SuggestType.filePath
-        else: SuggestType.text
+    let suggestoins =
+      if suggestType == SuggestType.text:
+        collectSuggestions(wordDictionary, word)
+      else:
+        text.splitWhitespace
 
-      suggestoins =
-        if isPath: text.splitWhitespace
-        else: collectSuggestions(wordDictionary, word)
-
-    if suggestoins.len == 0:
-      return SuggestionWindow.none
-    else:
+    if suggestoins.len > 0:
       return SuggestionWindow(
         wordDictionary: wordDictionary,
         oldLine: currentLineText,
@@ -274,7 +280,8 @@ proc initSuggestionWindow*(
         lastColumn: lastColumn,
         suggestoins: suggestoins,
         selectedSuggestion: -1,
-        suggestType: suggestType).some
+        suggestType: suggestType
+      ).some
 
 proc extractWordBeforeCursor(
   bufStatus: BufferStatus,
@@ -334,9 +341,11 @@ proc buildSuggestionWindow*(
       # Whether the word on the current position is a path.
       head = currentLineBuffer[0 .. currenWindowNode.currentColumn - 1]
       word = (head.splitWhitespace)[^1].removePrefix("\"".ru)
-      isPath = word.isPath
+      suggestType =
+        if word.isPath: SuggestType.filePath
+        else: SuggestType.text
 
-    if isPath:
+    if suggestType.isPath:
       let
         (path, firstColumn, lastColumn) = extractPathBeforeCursor(
           currentBufStatus,
@@ -361,7 +370,7 @@ proc buildSuggestionWindow*(
         currentBufStatus.buffer[currenWindowNode.currentLine],
         first,
         last,
-        isPath)
+        suggestType)
 
     else:
       let
@@ -398,7 +407,7 @@ proc buildSuggestionWindow*(
         currentBufStatus.buffer[currenWindowNode.currentLine],
         firstColumn,
         lastColumn,
-        isPath)
+        suggestType)
 
 # TODO: Move to exmode?
 proc isExCommand(buffer: string): bool =
@@ -649,7 +658,7 @@ proc buildSuggestionWindow*(
       commandLine.buffer,
       commandLine.bufferPosition.x,
       commandLine.bufferPosition.y,
-      commandLine.buffer.isPath)
+      suggestType)
 
 ## Return a `SuggestionWindow` for a text being edited if it's possible to create.
 ## Return `None` if no candidates exist.
