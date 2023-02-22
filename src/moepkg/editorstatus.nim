@@ -576,22 +576,26 @@ proc updateSuggestWindow(status: var EditorStatus) =
     mainWindowY =
       if status.settings.tabLine.enable: 1
       else: 0
-    mainWindowHeight = status.settings.getMainWindowHeight
-    windowPosition =
-      # TODO: Fix confition
-      if currentBufStatus.isExMode or currentBufStatus.isSearchMode:
-        status.commandLine.calcSuggestionWindowPosition
-      else:
-        status.suggestionWindow.get.calcSuggestionWindowPosition(
-          currentMainWindowNode,
-          mainWindowHeight)
 
-  status.suggestionWindow.get.writeSuggestionWindow(
-    currentMainWindowNode,
-    windowPosition.y,
-    windowPosition.x,
-    mainWindowY,
-    status.settings.statusLine.enable)
+  # TODO: Fix confition
+  if currentBufStatus.isExMode or currentBufStatus.isSearchMode:
+    let windowPosition = status.commandLine.calcSuggestionWindowPosition(
+      status.suggestionWindow.get)
+    status.commandLine.writeSuggestionWindow(
+      status.suggestionWindow.get,
+      windowPosition)
+  else:
+    let
+      mainWindowHeight = status.settings.getMainWindowHeight
+      windowPosition = currentMainWindowNode.calcSuggestionWindowPosition(
+        mainWindowHeight,
+        status.suggestionWindow.get)
+
+    currentMainWindowNode.writeSuggestionWindow(
+      mainWindowY,
+      status.suggestionWindow.get,
+      windowPosition,
+      status.settings.statusLine.enable)
 
 ## Update all views, highlighting, cursor, etc.
 proc update*(status: var EditorStatus) =

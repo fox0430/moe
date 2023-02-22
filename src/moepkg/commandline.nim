@@ -191,6 +191,9 @@ proc writeWarn*(commandLine: var CommandLine, runes: Runes) =
 ## Return commandLine.buffer
 proc buffer*(commandLine: CommandLine) : Runes {.inline.} = commandLine.buffer
 
+## Return a prompt text
+proc prompt*(commandLine: CommandLine): Runes {.inline.} = commandLine.prompt
+
 ## Set test to commandLine.prompt
 proc setPrompt*(commandLine: var CommandLine, s: string) {.inline.} =
   commandLine.prompt = s.toRunes

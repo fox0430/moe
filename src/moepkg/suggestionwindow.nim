@@ -22,7 +22,7 @@ import ui, window, autocomplete, bufferstatus, gapbuffer, color,
        unicodeext, osext, popupwindow, commandline, fileutils, independentutils
 import syntax/highlite
 
-# TODO: Remove
+# TODO: Move to exmode.nim or exmodeutils.nim
 const exCommandList: array[67, tuple[command, description: string]] = [
   (command: "!", description: "                    | Shell command execution"),
   (command: "deleteParen", description: "          | Enable/Disable auto delete paren"),
@@ -92,7 +92,6 @@ const exCommandList: array[67, tuple[command, description: string]] = [
   (command: "wq!", description: "                  | Force write file and close window"),
   (command: "wqa", description: "                  | Write all file in current workspace")
 ]
-
 
 type
   SuggestType* = enum
@@ -652,6 +651,8 @@ proc buildSuggestionWindow*(
       commandLine.bufferPosition.y,
       commandLine.buffer.isPath)
 
+## Return a `SuggestionWindow` for a text being edited if it's possible to create.
+## Return `None` if no candidates exist.
 proc tryOpenSuggestionWindow*(
   bufStatus: seq[BufferStatus],
   wordDictionary: var WordDictionary,
@@ -665,16 +666,19 @@ proc tryOpenSuggestionWindow*(
         root,
         currenWindowNode)
 
+## Return a `SuggestionWindow` for the command line if it's possible to create.
+## Return `None` if no candidates exist.
 proc tryOpenSuggestionWindow*(
   commandLine: CommandLine,
   wordDictionary: var WordDictionary): Option[SuggestionWindow] =
 
     return commandLine.buildSuggestionWindow(wordDictionary)
 
+## Return the absolute suggestion window position.
 proc calcSuggestionWindowPosition*(
-  suggestionWindow: SuggestionWindow,
   windowNode: WindowNode,
-  mainWindowHeight: int): Position =
+  mainWindowHeight: int,
+  suggestionWindow: SuggestionWindow): Position =
 
     let
       line = windowNode.currentLine
@@ -701,10 +705,23 @@ proc calcSuggestionWindowPosition*(
 
     return Position(x: x, y: y)
 
-proc calcSuggestionWindowPosition*(commandLine: CommandLine): Position =
-  Position(x: commandLine.cursorPosition.x, y: commandLine.windowPosition.y)
+## Return the absolute suggestion window position.
+proc calcSuggestionWindowPosition*(
+  commandLine: CommandLine,
+  suggestionWindow: SuggestionWindow): Position =
 
-# cursorPosition is absolute y
+    let
+      suggestHigh = suggestionWindow.suggestoins.high
+      x = commandLine.prompt.len + suggestionWindow.inputWord.len
+      y =
+        if suggestHigh > (getTerminalHeight() - 1 - commandLine.windowSize.h):
+          getTerminalHeight() - 1 - commandLine.windowSize.h
+        else:
+          getTerminalHeight() - 1 - commandLine.windowSize.h - suggestHigh
+
+    Position(x: x, y: y)
+
+## cursorPosition is absolute y
 proc calcMaxSugestionWindowHeight(
   y: int,
   cursorYPosition: int,
@@ -719,19 +736,21 @@ proc calcMaxSugestionWindowHeight(
     else:
       result = cursorYPosition - mainWindowNodeY
 
+## Write (Update) a suggestion window for main windows.
 proc writeSuggestionWindow*(
-  suggestionWindow: var SuggestionWindow,
   windowNode: WindowNode,
-  y, x: int,
   mainWindowNodeY: int,
+  suggestionWindow: var SuggestionWindow,
+  position: Position,
   isEnableStatusLine: bool) =
 
     let
       line = windowNode.currentLine
       column = windowNode.currentColumn
       (absoluteY, _) = windowNode.absolutePosition(line, column)
+      # TODO: Calc maxHeight when calculating the window position. Remove from here.
       maxHeight = calcMaxSugestionWindowHeight(
-        y,
+        position.y,
         absoluteY,
         mainWindowNodeY,
         isEnableStatusLine)
@@ -739,18 +758,61 @@ proc writeSuggestionWindow*(
       width = suggestionWindow.suggestoins.map(item => item.len).max + 2
 
     if suggestionWindow.popUpWindow.isNone:
+      let y =
+        if position.y < mainWindowNodeY: mainWindowNodeY
+        else: position.y
       suggestionWindow.popUpWindow = initWindow(
         height,
         width,
-        if y < mainWindowNodeY: mainWindowNodeY else: y,
-        x,
-        EditorColorPair.popUpWindow)
-        .some
+        y,
+        position.x,
+        EditorColorPair.popUpWindow
+      )
+      .some
     else:
       suggestionWindow.popUpWindow.get.height = height
       suggestionWindow.popUpWindow.get.width = width
-      suggestionWindow.popUpWindow.get.y = y
-      suggestionWindow.popUpWindow.get.x = x
+      suggestionWindow.popUpWindow.get.y = position.y
+      suggestionWindow.popUpWindow.get.x = position.x
+
+    let currentLine =
+      if suggestionWindow.selectedSuggestion == -1: none(int)
+      else: suggestionWindow.selectedSuggestion.some
+
+    suggestionWindow.popUpWindow.get.writePopUpWindow(
+      suggestionWindow.popUpWindow.get.height,
+      suggestionWindow.popUpWindow.get.width,
+      suggestionWindow.popUpWindow.get.y,
+      suggestionWindow.popUpWindow.get.x,
+      currentLine,
+      suggestionWindow.suggestoins)
+
+## Write (Update) a suggestion window for the command line.
+proc writeSuggestionWindow*(
+  commandLine: CommandLine,
+  suggestionWindow: var SuggestionWindow,
+  position: Position) =
+
+    let
+      # TODO: Calc maxHeight when calculating the window position. Remove from here.
+      maxHeight = getTerminalHeight() - 1
+      height = min(suggestionWindow.suggestoins.len, maxHeight)
+      width = suggestionWindow.suggestoins.map(item => item.len).max + 2
+
+    if suggestionWindow.popUpWindow.isNone:
+      suggestionWindow.popUpWindow = initWindow(
+        height,
+        width,
+        position.y,
+        position.x,
+        EditorColorPair.popUpWindow
+      )
+      .some
+    else:
+      suggestionWindow.popUpWindow.get.height = height
+      suggestionWindow.popUpWindow.get.width = width
+      suggestionWindow.popUpWindow.get.y = position.y
+      suggestionWindow.popUpWindow.get.x = position.x
 
     let currentLine =
       if suggestionWindow.selectedSuggestion == -1: none(int)
