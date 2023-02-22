@@ -314,58 +314,66 @@ proc pathToIcon(path: string): seq[Rune] =
   # they don't always have to make perfect sense,
   # there's simply not a symbol for every possible
   # file extension in unicode.
-  let ext = path.split(".")[^1]
-  case ext.toLower():
-  of "nim":
-    return ru"👑 "
-  of "nimble", "rpm", "deb":
-    return ru"📦 "
-  of "py":
-    return ru"🐍 "
-  of "ui", "glade":
-    return ru"🏠 "
-  of "txt", "md", "rst":
-    return ru"📝 "
-  of "cpp", "cxx", "hpp":
-    return ru"⧺ "
-  of "c", "h":
-    return ru"🅒 "
-  of "java":
-    return ru"🍵 "
-  of "php":
-    return ru"🙈 "
-  of "js", "json":
-    return ru"🙉 "
-  of "html", "xhtml":
-    return ru"🏄 "
-  of "css":
-    return ru"👚 "
-  of "xml":
-    return ru"༕ "
-  of "cfg", "ini":
-    return ru"🍳 "
-  of "sh":
-    return ru"🐚 "
-  of "pdf", "doc", "odf", "ods", "odt":
-    return ru"🍞 "
-  of "wav", "mp3", "ogg":
-    return ru"🎼 "
-  of "zip", "bz2", "xz", "gz", "tgz", "zstd":
-    return ru"🚢 "
-  of "exe", "bin":
-    return ru"🏃 "
-  of "mp4", "webm", "avi", "mpeg":
-    return ru"🎞 "
-  of "patch":
-    return ru"💊 "
-  of "lock":
-    return ru"🔒 "
-  of "pem", "crt":
-    return ru"🔏 "
-  of "png", "jpeg", "jpg", "bmp", "gif":
-    return ru"🎨 "
-  else:
-    return ru"🍕 "
+
+  let filename = path.split("/")[^1]
+  case filename:
+    of "Dockerfile", "docker-compose.yml", "docker-compose.yaml":
+      return ru"🐳 "
+    else:
+      let ext = filename.split(".")[^1]
+      case ext.toLower():
+        of "nim":
+          return ru"👑 "
+        of "nimble", "rpm", "deb":
+          return ru"📦 "
+        of "py":
+          return ru"🐍 "
+        of "ui", "glade":
+          return ru"🏠 "
+        of "txt", "md", "rst":
+          return ru"📝 "
+        of "cpp", "cxx", "hpp":
+          return ru"⧺ "
+        of "c", "h":
+          return ru"🅒 "
+        of "java":
+          return ru"🍵 "
+        of "php":
+          return ru"🙈 "
+        of "js", "json":
+          return ru"🙉 "
+        of "rs":
+          return ru"🦀 "
+        of "html", "xhtml":
+          return ru"🏄 "
+        of "css":
+          return ru"👚 "
+        of "xml":
+          return ru"༕ "
+        of "cfg", "ini":
+          return ru"🍳 "
+        of "sh":
+          return ru"🐚 "
+        of "pdf", "doc", "odf", "ods", "odt":
+          return ru"🍞 "
+        of "wav", "mp3", "ogg":
+          return ru"🎼 "
+        of "zip", "bz2", "xz", "gz", "tgz", "zstd":
+          return ru"🚢 "
+        of "exe", "bin":
+          return ru"🏃 "
+        of "mp4", "webm", "avi", "mpeg":
+          return ru"🎞 "
+        of "patch":
+          return ru"💊 "
+        of "lock":
+          return ru"🔒 "
+        of "pem", "crt":
+          return ru"🔏 "
+        of "png", "jpeg", "jpg", "bmp", "gif":
+          return ru"🎨 "
+        else:
+          return ru"🍕 "
 
   # useful unicode symbols: that aren't used here yet:
   # open book        : 📖
