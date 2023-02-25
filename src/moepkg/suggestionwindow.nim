@@ -241,15 +241,12 @@ proc handleKeyInSuggestionWindow*(
     if suggestionWindow.selectedSuggestion != prevSuggestion:
       # The selected suggestoin is changed.
       # Update the buffer.
+      suggestionWindow.oldLine.add ru" "
       let newLine = suggestionWindow.newLine
       commandLine.buffer = newLine
 
       let
-        firstColumn =
-          if (suggestionWindow.isPath) and (newLine in '/'.ru):
-            suggestionWindow.firstColumn + 1
-          else:
-            suggestionWindow.firstColumn
+        firstColumn = suggestionWindow.firstColumn
         wordLen = suggestionWindow.selectedWordOrInputWord.len
       commandLine.setBufferPositionX(firstColumn + wordLen)
 
@@ -302,6 +299,14 @@ proc extractPathBeforeCursor(
     extractNeighborPath(
       bufStatus.buffer[windowNode.currentLine],
       windowNode.currentColumn - 1)
+
+proc extractWordBeforeCursor(
+  commandLine: CommandLine): Option[tuple[word: seq[Rune], first, last: int]] =
+
+    let position = commandLine.bufferPosition
+    extractNeighborWord(
+      commandLine.buffer,
+      position.x - 1)
 
 proc wordExistsBeforeCursor(
   bufStatus: BufferStatus,
@@ -647,17 +652,27 @@ proc buildSuggestionWindow*(
       suggestType = commandLine.buffer.getSuggestType
       suggestList = commandLine.getSuggestList(suggestType)
 
+      wordFirstLast = commandLine.extractWordBeforeCursor
+
       word =
-        if commandLine.buffer.len > 0: commandline.buffer.splitWhitespace[^1]
-        else: "".toRunes
+        if wordFirstLast.isSome: wordFirstLast.get.word
+        else: ru""
+
+      firstColumn =
+        if wordFirstLast.isSome: wordFirstLast.get.first
+        else: commandLine.bufferPositionX
+
+      lastColumn =
+        if wordFirstLast.isSome: wordFirstLast.get.last
+        else: firstColumn
 
     initSuggestionWindow(
       wordDictionary,
       suggestList.join,
       word,
       commandLine.buffer,
-      commandLine.bufferPosition.x,
-      commandLine.bufferPosition.y,
+      firstColumn,
+      lastColumn,
       suggestType)
 
 ## Return a `SuggestionWindow` for a text being edited if it's possible to create.
