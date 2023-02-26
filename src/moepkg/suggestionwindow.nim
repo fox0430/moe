@@ -303,10 +303,11 @@ proc extractPathBeforeCursor(
 proc extractWordBeforeCursor(
   commandLine: CommandLine): Option[tuple[word: seq[Rune], first, last: int]] =
 
-    let position = commandLine.bufferPosition
-    extractNeighborWord(
-      commandLine.buffer,
-      position.x - 1)
+    if commandLine.buffer.len > 0:
+      let position = commandLine.bufferPosition
+      return extractNeighborWord(
+        commandLine.buffer,
+        position.x - 1)
 
 proc wordExistsBeforeCursor(
   bufStatus: BufferStatus,
