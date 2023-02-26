@@ -1621,12 +1621,14 @@ proc execNormalModeCommand*(status: var EditorStatus, command: Runes) =
       # Remove ECS key and call recursively.
       status.execNormalModeCommand(command[1..command.high])
   else:
-    if isDigit(command[0]):
+    if command[0] != '0' and isDigit(command[0]):
       currentBufStatus.cmdLoop = parseInt($command.filterIt(isDigit(it)))
 
     let cmd =
-      if isDigit(command[0]): command.filterIt(not isDigit(it))
-      else: command
+      if command[0] != '0' and isDigit(command[0]):
+        command.filterIt(not isDigit(it))
+      else:
+        command
     status.normalCommand(cmd)
 
   currentBufStatus.cmdLoop = 0
