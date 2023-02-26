@@ -2100,3 +2100,21 @@ suite "Normal mode: execNormalModeCommand":
     check status.registers.noNameRegister == Register(
       buffer: buffer,
       isLine: true)
+
+  test "'0' command":
+    # Move to top of the line.
+
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    let buffer = @["abc".toRunes]
+    currentBufStatus.buffer = buffer.initGapBuffer
+    currentMainWindowNode.currentColumn =
+      currentBufStatus.buffer[currentMainWindowNode.currentLine].high
+
+    status.resize(100, 100)
+    status.update
+
+    status.execNormalModeCommand("0".toRunes)
+
+    check currentMainWindowNode.currentColumn == 0
