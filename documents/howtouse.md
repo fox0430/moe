@@ -32,6 +32,7 @@
 |:-----------------------------:|:---------------------------:|:-----------------------------:|:---------------------------:|
 | <kbd>**v**</kbd><br>Visual mode  | <kbd>**Ctrl**</kbd> <kbd>**v**</kbd><br>Visual Block mode | <kbd>**r**</kbd><br>Replace mode | <kbd>**i**</kbd><br>Insert mode |
 | <kbd>**o**</kbd><br>Insert a new line and start insert mode | <kbd>**a**</kbd><br>Append after the cursor and start insert mode | <kbd>**I**</kbd><br>Same as <kbd>**0**</kbd> <kbd>**a**</kbd> | <kbd>**A**</kbd><br>Same as <kbd>**$**</kbd> <kbd>**a**</kbd> |
+| <kbd>**V**</kbd><br>Visual line mode | | | |
 
 </details>
 

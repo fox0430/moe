@@ -37,6 +37,7 @@ const helpSentences = """
 
 v      - Visual mode
 Ctrl-v - Visual block mode
+V      - Visual line mode
 r      - Replace mode
 i      - Insert mode
 o      - Insert a new line and start insert mode

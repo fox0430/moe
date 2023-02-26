@@ -27,6 +27,7 @@ type
     insert
     visual
     visualBlock
+    visualLine
     replace
     ex
     filer
@@ -62,12 +63,6 @@ type
 proc isExMode*(mode: Mode): bool {.inline.} = mode == Mode.ex
 
 proc isExMode*(b: BufferStatus): bool {.inline.} = b.mode == Mode.ex
-
-proc isVisualMode*(mode: Mode): bool {.inline.} =
-  mode == Mode.visual or mode == Mode.visualBlock
-
-proc isVisualMode*(b: BufferStatus): bool {.inline.} =
-  b.mode == Mode.visual or b.mode == Mode.visualBlock
 
 proc isFilerMode*(mode: Mode): bool = mode == Mode.filer
 
@@ -159,11 +154,22 @@ proc isBufferManagerMode*(mode: Mode): bool {.inline.} = mode == Mode.bufManager
 proc isBufferManagerMode*(b: BufferStatus): bool {.inline.} =
   b.mode == Mode.bufManager
 
+proc isVisualMode*(mode: Mode): bool {.inline.} =
+  mode == Mode.visual or mode == Mode.visualBlock or mode == Mode.visualLine
+
+proc isVisualMode*(b: BufferStatus): bool {.inline.} =
+  b.mode == Mode.visual or b.mode == Mode.visualBlock  or b.mode == Mode.visualLine
+
 proc isVisualBlockMode*(mode: Mode): bool {.inline.} =
   mode == Mode.visualBlock
 
 proc isVisualBlockMode*(b: BufferStatus): bool {.inline.} =
   b.mode == Mode.visualBlock
+
+proc isVisualLineMode*(mode: Mode): bool {.inline.} = mode == Mode.visualLine
+
+proc isVisualLineMode*(b: BufferStatus): bool {.inline.} =
+  b.mode == Mode.visualLine
 
 # Modes for editing text
 proc isEditMode*(mode, prevMode: Mode): bool {.inline.} =

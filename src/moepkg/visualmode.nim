@@ -37,10 +37,25 @@ proc updateSelectedArea*(
 
 proc swapSelectedArea*(area: var SelectedArea) =
   if area.startLine == area.endLine:
-    if area.endColumn < area.startColumn: swap(area.startColumn, area.endColumn)
+    if area.endColumn < area.startColumn:
+      swap(area.startColumn, area.endColumn)
   elif area.endLine < area.startLine:
     swap(area.startLine, area.endLine)
     swap(area.startColumn, area.endColumn)
+
+proc swapSelectedAreaVisualLine(
+  area: var SelectedArea,
+  bufStatus: BufferStatus) =
+
+    if area.endLine < area.startLine:
+      swap(area.startLine, area.endLine)
+
+    area.startColumn = 0
+    area.endColumn =
+      if bufStatus.buffer[area.endLine].high > 0:
+        bufStatus.buffer[area.endLine].high
+      else:
+        0
 
 proc yankBuffer(bufStatus: var BufferStatus,
                 registers: var Registers,
@@ -472,7 +487,10 @@ proc exitVisualMode(status: var EditorStatus) =
     status.changeMode(Mode.normal)
 
 proc visualCommand(status: var EditorStatus, area: var SelectedArea, key: Rune) =
-  area.swapSelectedArea
+  if currentBufStatus.isVisualLineMode:
+    area.swapSelectedAreaVisualLine(currentBufStatus)
+  else:
+    area.swapSelectedArea
 
   if key == ord('y') or isDcKey(key):
     currentBufStatus.yankBuffer(

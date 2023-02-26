@@ -34,7 +34,7 @@ proc searchCommand(currentMode: Mode, command: Runes): InputState =
       isExCommand(command)
     of Mode.normal:
       isNormalModeCommand(command)
-    of Mode.visual, Mode.visualBlock:
+    of Mode.visual, Mode.visualBlock, Mode.visualLine:
       isVisualModeCommand(command)
     of Mode.replace:
       isReplaceModeCommand(command)
@@ -68,7 +68,7 @@ proc execCommand(status: var EditorStatus, command: Runes) =
       status.execExCommand(command)
     of Mode.normal:
       status.execNormalModeCommand(command)
-    of Mode.visual, Mode.visualBlock:
+    of Mode.visual, Mode.visualBlock, Mode.visualLine:
       status.execVisualModeCommand(command)
     of Mode.replace:
       status.execReplaceModeCommand(command)
@@ -107,9 +107,19 @@ proc tryOpenSuggestWindow(status: var EditorStatus) {.inline.} =
     currentMainWindowNode)
 
 proc updateSelectedArea(status: var EditorStatus) {.inline.} =
-  currentBufStatus.selectedArea.updateSelectedArea(
-    currentMainWindowNode.currentLine,
-    currentMainWindowNode.currentColumn)
+  if currentBufStatus.isVisualLineMode:
+    let
+      currentLine = currentMainWindowNode.currentLine
+      column =
+        if currentBufStatus.buffer[currentLine].high > 0:
+          currentBufStatus.buffer[currentLine].high
+        else:
+          0
+    currentBufStatus.selectedArea.updateSelectedArea(currentLine, column)
+  else:
+    currentBufStatus.selectedArea.updateSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
 
 proc isIncrementalSearch(status: EditorStatus): bool {.inline.} =
   isSearchMode(currentBufStatus.mode) and
