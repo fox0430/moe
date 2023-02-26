@@ -295,6 +295,14 @@ proc initFilerHighlight*[T](
         lastColumn: buffer[index].len,
         color: color))
 
+## Return true if Dockerfile or docker compose file.
+proc isDockerFile(filename: string): bool {.inline.} =
+ filename == "Dockerfile" or
+ filename == "docker-compose.yml" or
+ filename == "docker-compose.yaml" or
+ filename == "compose.yaml" or
+ filename == "compose.yml"
+
 proc pathToIcon(path: string): seq[Rune] =
   if dirExists(path):
     return ru"📁 "
@@ -316,64 +324,63 @@ proc pathToIcon(path: string): seq[Rune] =
   # file extension in unicode.
 
   let filename = path.split("/")[^1]
-  case filename:
-    of "Dockerfile", "docker-compose.yml", "docker-compose.yaml":
-      return ru"🐳 "
-    else:
-      let ext = filename.split(".")[^1]
-      case ext.toLower():
-        of "nim":
-          return ru"👑 "
-        of "nimble", "rpm", "deb":
-          return ru"📦 "
-        of "py":
-          return ru"🐍 "
-        of "ui", "glade":
-          return ru"🏠 "
-        of "txt", "md", "rst":
-          return ru"📝 "
-        of "cpp", "cxx", "hpp":
-          return ru"⧺ "
-        of "c", "h":
-          return ru"🅒 "
-        of "java":
-          return ru"🍵 "
-        of "php":
-          return ru"🙈 "
-        of "js", "json":
-          return ru"🙉 "
-        of "rs":
-          return ru"🦀 "
-        of "html", "xhtml":
-          return ru"🏄 "
-        of "css":
-          return ru"👚 "
-        of "xml":
-          return ru"༕ "
-        of "cfg", "ini":
-          return ru"🍳 "
-        of "sh":
-          return ru"🐚 "
-        of "pdf", "doc", "odf", "ods", "odt":
-          return ru"🍞 "
-        of "wav", "mp3", "ogg":
-          return ru"🎼 "
-        of "zip", "bz2", "xz", "gz", "tgz", "zstd":
-          return ru"🚢 "
-        of "exe", "bin":
-          return ru"🏃 "
-        of "mp4", "webm", "avi", "mpeg":
-          return ru"🎞 "
-        of "patch":
-          return ru"💊 "
-        of "lock":
-          return ru"🔒 "
-        of "pem", "crt":
-          return ru"🔏 "
-        of "png", "jpeg", "jpg", "bmp", "gif":
-          return ru"🎨 "
-        else:
-          return ru"🍕 "
+  if filename.isDockerFile:
+    return ru"🐳 "
+  else:
+    let ext = filename.split(".")[^1]
+    case ext.toLower():
+      of "nim":
+        return ru"👑 "
+      of "nimble", "rpm", "deb":
+        return ru"📦 "
+      of "py":
+        return ru"🐍 "
+      of "ui", "glade":
+        return ru"🏠 "
+      of "txt", "md", "rst":
+        return ru"📝 "
+      of "cpp", "cxx", "hpp":
+        return ru"⧺ "
+      of "c", "h":
+        return ru"🅒 "
+      of "java":
+        return ru"🍵 "
+      of "php":
+        return ru"🙈 "
+      of "js", "json":
+        return ru"🙉 "
+      of "rs":
+        return ru"🦀 "
+      of "html", "xhtml":
+        return ru"🏄 "
+      of "css":
+        return ru"👚 "
+      of "xml":
+        return ru"༕ "
+      of "cfg", "ini":
+        return ru"🍳 "
+      of "sh":
+        return ru"🐚 "
+      of "pdf", "doc", "odf", "ods", "odt":
+        return ru"🍞 "
+      of "wav", "mp3", "ogg":
+        return ru"🎼 "
+      of "zip", "bz2", "xz", "gz", "tgz", "zstd":
+        return ru"🚢 "
+      of "exe", "bin":
+        return ru"🏃 "
+      of "mp4", "webm", "avi", "mpeg":
+        return ru"🎞 "
+      of "patch":
+        return ru"💊 "
+      of "lock":
+        return ru"🔒 "
+      of "pem", "crt":
+        return ru"🔏 "
+      of "png", "jpeg", "jpg", "bmp", "gif":
+        return ru"🎨 "
+      else:
+        return ru"🍕 "
 
   # useful unicode symbols: that aren't used here yet:
   # open book        : 📖
