@@ -276,7 +276,8 @@ proc lexSharp*(lexer: var GeneralTokenizer, position: int,
                 inc result
 
                 if lexer.buf[result] == '-':
-                  inc result
+                  while lexer.buf[result] == '-':
+                    inc result
 
                   if lexer.buf[result] == '>':
                     inc result
