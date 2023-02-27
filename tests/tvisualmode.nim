@@ -472,7 +472,7 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
                                      status.settings)
 
     check status.registers.noNameRegister.isLine
-    check status.registers.noNameRegister.buffer == @[ru"a", ru"d"]
+    check status.registers.noNameRegister.buffer == @[ru"ab", ru"d"]
 
 suite "Visual block mode: Delete buffer (Disable clipboard)":
   test "Delete buffer":
@@ -703,7 +703,7 @@ if isXselAvailable():
           (output, exitCode) = cmd
 
         check exitCode == 0
-        check output[0 .. output.high - 1] == "a\nd"
+        check output[0 .. output.high - 1] == "ab\nd"
 
 if isXselAvailable():
   suite "Visual block mode: Delete buffer":
@@ -1904,10 +1904,9 @@ suite "Visual line mode: Delete buffer":
 
     status.visualCommand(currentBufStatus.selectedArea, ru'x')
 
-    check currentBufStatus.buffer[0] == ru""
-    check currentBufStatus.buffer[1] == ru"b"
-    check currentBufStatus.buffer[2] == ru"c"
-    check currentBufStatus.buffer[3] == ru"d"
+    check currentBufStatus.buffer[0] == ru"b"
+    check currentBufStatus.buffer[1] == ru"c"
+    check currentBufStatus.buffer[2] == ru"d"
 
   test "Delete buffer with 'x' command 2":
     var status = initEditorStatus()
@@ -1960,10 +1959,9 @@ suite "Visual line mode: Delete buffer":
 
     status.visualCommand(currentBufStatus.selectedArea, ru'd')
 
-    check currentBufStatus.buffer[0] == ru""
-    check currentBufStatus.buffer[1] == ru"b"
-    check currentBufStatus.buffer[2] == ru"c"
-    check currentBufStatus.buffer[3] == ru"d"
+    check currentBufStatus.buffer[0] == ru"b"
+    check currentBufStatus.buffer[1] == ru"c"
+    check currentBufStatus.buffer[2] == ru"d"
 
   test "Delete buffer with 'd' command 2":
     var status = initEditorStatus()

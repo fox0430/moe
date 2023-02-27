@@ -22,6 +22,12 @@ import editorview, gapbuffer, unicodeext, window, bufferstatus
 
 template currentLineLen: int = bufStatus.buffer[windowNode.currentLine].len
 
+proc isExpand(bufStatus: BufferStatus): bool =
+  # Can move up to the line.len in these modes.
+  bufStatus.isInsertMode or
+  bufStatus.isReplaceMode or
+  bufStatus.isVisualMode
+
 proc keyLeft*(windowNode: var WindowNode) =
   if windowNode.currentColumn == 0: return
 
@@ -29,10 +35,7 @@ proc keyLeft*(windowNode: var WindowNode) =
   windowNode.expandedColumn = windowNode.currentColumn
 
 proc keyRight*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
-  let
-    mode = bufStatus.mode
-    maxColumn = currentLineLen + (if isInsertMode(mode) or isReplaceMode(mode): 1 else: 0)
-
+  let maxColumn = currentLineLen + (if bufStatus.isExpand: 1 else: 0)
   if windowNode.currentColumn + 1 >= maxColumn: return
 
   inc(windowNode.currentColumn)
@@ -42,7 +45,8 @@ proc keyUp*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   if windowNode.currentLine == 0: return
 
   dec(windowNode.currentLine)
-  let maxColumn = currentLineLen - 1 + (if isInsertMode(bufStatus.mode): 1 else: 0)
+
+  let maxColumn = currentLineLen + (if bufStatus.isExpand:0 else: -1)
   windowNode.currentColumn = min(windowNode.expandedColumn, maxColumn)
 
   if windowNode.currentColumn < 0: windowNode.currentColumn = 0
@@ -51,9 +55,10 @@ proc keyDown*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   if windowNode.currentLine + 1 == bufStatus.buffer.len: return
 
   inc(windowNode.currentLine)
-  let maxColumn = currentLineLen + (if isInsertMode(bufStatus.mode): 0 else: -1)
 
+  let maxColumn = currentLineLen + (if bufStatus.isExpand: 0 else: -1)
   windowNode.currentColumn = min(windowNode.expandedColumn, maxColumn)
+
   if windowNode.currentColumn < 0: windowNode.currentColumn = 0
 
 proc getFirstNonBlankOfLine*(bufStatus: BufferStatus,
@@ -108,10 +113,11 @@ proc moveToFirstOfLine*(windowNode: var WindowNode) =
 proc moveToLastOfLine*(bufStatus: var BufferStatus,
                        windowNode: var WindowNode) =
 
-  let destination = if isInsertMode(bufStatus.mode):
-                      bufStatus.buffer[windowNode.currentLine].len
-                    else:
-                      bufStatus.buffer[windowNode.currentLine].high
+  let destination =
+    if bufStatus.isInsertMode or bufStatus.isVisualMode:
+      bufStatus.buffer[windowNode.currentLine].len
+    else:
+      bufStatus.buffer[windowNode.currentLine].high
 
   windowNode.currentColumn = max(destination, 0)
   windowNode.expandedColumn = windowNode.currentColumn

@@ -69,11 +69,19 @@ proc yankBuffer(bufStatus: var BufferStatus,
 
   if area.startLine == area.endLine:
     if bufStatus.buffer[windowNode.currentLine].len < 1:
+        # Yank the empty string if the empty line
         yankedBuffer.add(@[ru ""])
     else:
+      # Yank the text in the line.
       isLine = false
       var runes = ru ""
-      for j in area.startColumn .. area.endColumn:
+      let
+        endColumn =
+          if area.endColumn > bufStatus.buffer[area.startLine].high:
+            bufStatus.buffer[area.startLine].high
+          else:
+            area.endColumn
+      for j in area.startColumn .. endColumn:
         runes.add(bufStatus.buffer[area.startLine][j])
       yankedBuffer = @[runes]
   else:
@@ -123,6 +131,7 @@ proc deleteBuffer(bufStatus: var BufferStatus,
 
   if bufStatus.buffer.len == 1 and
      bufStatus.buffer[windowNode.currentLine].len < 1: return
+
   bufStatus.yankBuffer(registers, windowNode, area, settings)
 
   var currentLine = area.startLine
@@ -131,11 +140,17 @@ proc deleteBuffer(bufStatus: var BufferStatus,
     var newLine = bufStatus.buffer[currentLine]
 
     if area.startLine == area.endLine:
-      if oldLine.len > 0:
+      if area.endColumn == bufStatus.buffer[area.startLine].len or
+         bufStatus.isVisualLineMode:
+           # Delete the single line
+           bufStatus.buffer.delete(currentLine, currentLine)
+      elif oldLine.len > 0:
+        # Delete the text in the line.
         for j in area.startColumn .. area.endColumn:
           newLine.delete(area.startColumn)
         if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
       else:
+        # Delete the single char
         bufStatus.buffer.delete(currentLine, currentLine)
     elif i == area.startLine and 0 < area.startColumn:
       for j in area.startColumn .. bufStatus.buffer[currentLine].high:
