@@ -1064,6 +1064,12 @@ proc changeModeToVisualBlockMode(status: var EditorStatus) =
     currentMainWindowNode.currentLine,
     currentMainWindowNode.currentColumn)
 
+proc changeModeToVisualLineMode(status: var EditorStatus) =
+  status.changeMode(Mode.visualLine)
+  currentBufStatus.selectedArea = initSelectedArea(
+    currentMainWindowNode.currentLine,
+    currentMainWindowNode.currentColumn)
+
 proc changeModeToExMode*(
   bufStatus: var BufferStatus,
   commandLine: var CommandLine) =
@@ -1316,6 +1322,8 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
     status.moveToFirstNonBlankOfLineAndEnterInsertMode
   elif key == ord('v'):
     status.changeModeToVisualMode
+  elif key == ord('V'):
+    status.changeModeToVisualLineMode
   elif key == ord('a'):
     status.enterInsertModeAfterCursor
   elif key == ord('A'):
@@ -1426,7 +1434,8 @@ proc isNormalModeCommand*(command: seq[Rune]): InputState =
        $command == "u" or
        isControlR(command) or
        $command == "." or
-       $command == "Y":
+       $command == "Y" or
+       $command == "V":
       result = InputState.Valid
 
     elif isDigit(command[0]):

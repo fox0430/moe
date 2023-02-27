@@ -16,7 +16,6 @@
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
 #                                                                              #
 #[############################################################################]#
-
 import independentutils, bufferstatus, highlight, color, window, gapbuffer,
        unicodeext, editorview, searchutils, settings
 
@@ -54,6 +53,13 @@ proc highlightSelectedArea(
       colorSegment.lastRow = area.startLine
       colorSegment.firstColumn = area.endColumn
       colorSegment.lastColumn = area.startColumn
+
+    if bufStatus.isVisualLineMode:
+      colorSegment.firstColumn = 0
+      if bufStatus.buffer[colorSegment.lastRow].high >= 0:
+        colorSegment.lastColumn = bufStatus.buffer[colorSegment.lastRow].high
+      else:
+        colorSegment.lastColumn = 0
 
     if bufStatus.isVisualBlockMode:
       highlight.overwriteColorSegmentBlock(

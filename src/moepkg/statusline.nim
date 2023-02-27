@@ -191,20 +191,34 @@ proc setModeStr(mode: Mode, isActiveWindow, showModeInactive: bool): string =
   if not isActiveWindow and not showModeInactive: result = ""
   else:
     case mode:
-    of Mode.insert: result = " INSERT "
-    of Mode.visual, Mode.visualBlock: result = " VISUAL "
-    of Mode.replace: result = " REPLACE "
-    of Mode.filer: result = " FILER "
-    of Mode.bufManager: result = " BUFFER "
-    of Mode.ex: result = " EX "
-    of Mode.logViewer: result = " LOG "
-    of Mode.recentFile: result = " RECENT "
-    of Mode.quickRun: result = " QUICKRUN "
-    of Mode.backup: result = " BACKUP "
-    of Mode.diff: result = "DIFF "
-    of Mode.config: result = " CONFIG "
-    of Mode.debug: result = " DEBUG "
-    else: result = " NORMAL "
+      of Mode.insert:
+        result = " INSERT "
+      of Mode.visual, Mode.visualBlock, Mode.visualLine:
+        result = " VISUAL "
+      of Mode.replace:
+        result = " REPLACE "
+      of Mode.filer:
+        result = " FILER "
+      of Mode.bufManager:
+        result = " BUFFER "
+      of Mode.ex:
+        result = " EX "
+      of Mode.logViewer:
+        result = " LOG "
+      of Mode.recentFile:
+        result = " RECENT "
+      of Mode.quickRun:
+        result = " QUICKRUN "
+      of Mode.backup:
+        result = " BACKUP "
+      of Mode.diff:
+        result = "DIFF "
+      of Mode.config:
+        result = " CONFIG "
+      of Mode.debug:
+        result = " DEBUG "
+      else:
+        result = " NORMAL "
 
 proc setModeStrColor(mode: Mode): EditorColorPair =
   case mode
