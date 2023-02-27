@@ -1993,8 +1993,8 @@ suite "Visual line mode: Delete buffer":
 
     check(currentBufStatus.buffer[0] == ru"d")
 
-suite "Visual line mode: Yank buffer":
-  test "Yank lines (Disable clipboard)":
+suite "Visual line mode: Yank buffer (Disable clipboard)":
+  test "Yank lines":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
     let buffer = @[ru"a", ru"b", ru"c", ru"d"]
@@ -2031,7 +2031,9 @@ suite "Visual line mode: Yank buffer":
 
     check status.registers.noNameRegister.buffer == @[buffer[0]]
 
-    test "Yank lines (Enable clipboard)":
+if isXselAvailable():
+  suite "Visual line mode: Yank buffer (Enable clipboard)":
+    test "Yank lines":
       var status = initEditorStatus()
       status.addNewBufferInCurrentWin
       let buffer = @[ru"a", ru"b", ru"c", ru"d"]
