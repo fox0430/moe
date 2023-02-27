@@ -1879,3 +1879,248 @@ suite "Visual block mode: Run command when Readonly mode":
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
+
+suite "Visual line mode: Delete buffer":
+  test "Delete buffer with 'x' command":
+    var status = initEditorStatus()
+    status.settings.clipboard.enable = false
+
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.changeMode(Mode.visualLine)
+    status.resize(100, 100)
+
+    currentBufStatus.selectedArea.updateSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectedArea, ru'x')
+
+    check currentBufStatus.buffer[0] == ru""
+    check currentBufStatus.buffer[1] == ru"b"
+    check currentBufStatus.buffer[2] == ru"c"
+    check currentBufStatus.buffer[3] == ru"d"
+
+  test "Delete buffer with 'x' command 2":
+    var status = initEditorStatus()
+    status.settings.clipboard.enable = false
+
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.changeMode(Mode.visualLine)
+    status.resize(100, 100)
+
+    for i in 0 ..< 2:
+      currentBufStatus.keyDown(currentMainWindowNode)
+
+      currentBufStatus.selectedArea.updateSelectedArea(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn)
+
+      status.update
+
+    status.visualCommand(currentBufStatus.selectedArea, ru'x')
+
+    check(currentBufStatus.buffer[0] == ru"d")
+
+  test "Delete buffer with 'd' command":
+    var status = initEditorStatus()
+    status.settings.clipboard.enable = false
+
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.changeMode(Mode.visualLine)
+    status.resize(100, 100)
+
+    currentBufStatus.selectedArea.updateSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectedArea, ru'd')
+
+    check currentBufStatus.buffer[0] == ru""
+    check currentBufStatus.buffer[1] == ru"b"
+    check currentBufStatus.buffer[2] == ru"c"
+    check currentBufStatus.buffer[3] == ru"d"
+
+  test "Delete buffer with 'd' command 2":
+    var status = initEditorStatus()
+    status.settings.clipboard.enable = false
+
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.changeMode(Mode.visualLine)
+    status.resize(100, 100)
+
+    for i in 0 ..< 2:
+      currentBufStatus.keyDown(currentMainWindowNode)
+
+      currentBufStatus.selectedArea.updateSelectedArea(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn)
+
+      status.update
+
+    status.visualCommand(currentBufStatus.selectedArea, ru'd')
+
+    check(currentBufStatus.buffer[0] == ru"d")
+
+suite "Visual line mode: Yank buffer":
+  test "Yank lines (Disable clipboard)":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    let buffer = @[ru"a", ru"b", ru"c", ru"d"]
+    currentBufStatus.buffer = buffer.toGapBuffer
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visualLine)
+
+    currentBufStatus.selectedArea = initSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    currentBufStatus.selectedArea.updateSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    let area = currentBufStatus.selectedArea
+    status.settings.clipboard.enable = false
+    currentBufStatus.yankBuffer(
+      status.registers,
+      currentMainWindowNode,
+      area,
+      status.settings)
+
+    check status.registers.noNameRegister.buffer == @[buffer[0]]
+
+    test "Yank lines (Enable clipboard)":
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
+      let buffer = @[ru"a", ru"b", ru"c", ru"d"]
+      currentBufStatus.buffer = buffer.toGapBuffer
+
+      currentMainWindowNode.highlight = initHighlight(
+        $currentBufStatus.buffer,
+        status.settings.highlight.reservedWords,
+        currentBufStatus.language)
+
+      status.resize(100, 100)
+
+      status.changeMode(Mode.visualBlock)
+
+      currentBufStatus.selectedArea = initSelectedArea(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn)
+
+      currentBufStatus.selectedArea.updateSelectedArea(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn)
+
+      status.update
+
+      let area = currentBufStatus.selectedArea
+      status.settings.clipboard.enable = true
+      currentBufStatus.yankBuffer(
+        status.registers,
+        currentMainWindowNode,
+        area,
+        status.settings)
+
+      if currentPlatform == Platforms.linux:
+        let
+          cmd = execCmdEx("xsel -o")
+          (output, exitCode) = cmd
+
+        check exitCode == 0
+        check output[0 .. output.high - 1] == "a"
+
+suite "Visual line mode: idenet":
+  test "Add the indent (\">\" command)":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visualLine)
+
+    currentBufStatus.selectedArea = initSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectedArea, ru'>')
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
+
+  test "Add the indent (\"<\" command)":
+    var status = initEditorStatus()
+    status.isReadonly = true
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visualline)
+
+    currentBufStatus.selectedArea = initSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.visualCommand(currentBufStatus.selectedArea, ru'<')
+
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru "abc"
