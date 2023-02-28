@@ -474,6 +474,33 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
     check status.registers.noNameRegister.isLine
     check status.registers.noNameRegister.buffer == @[ru"a", ru"d"]
 
+  test "Fix #1636":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"d"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visualBlock)
+
+    currentBufStatus.selectedArea = initSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+    status.update
+
+    status.settings.clipboard.enable = false
+
+    var area = currentBufStatus.selectedArea
+    const key = ru'y'
+    status.visualBlockCommand(area, key)
+
+    check currentBufStatus.isNormalMode
+
 suite "Visual block mode: Delete buffer (Disable clipboard)":
   test "Delete buffer":
     var status = initEditorStatus()
