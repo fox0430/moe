@@ -606,7 +606,6 @@ proc visualBlockCommand(
 
     if currentBufStatus.isVisualBlockMode:
       status.changeMode(currentBufStatus.prevMode)
-    status.changeMode(currentBufStatus.prevMode)
 
 proc isVisualModeCommand*(command: Runes): InputState =
   result = InputState.Invalid
