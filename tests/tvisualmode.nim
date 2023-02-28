@@ -206,6 +206,37 @@ suite "Visual mode: Delete buffer":
     check(currentBufStatus.buffer[0] == ru"a")
     check(currentBufStatus.buffer[1] == ru"i")
 
+  test "Delete buffer 6":
+    var status = initEditorStatus()
+    status.settings.clipboard.enable = false
+
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+    status.update
+
+    status.changeMode(Mode.visual)
+    currentBufStatus.selectedArea = initSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    currentBufStatus.moveToLastOfLine(currentMainWindowNode)
+    currentBufStatus.selectedArea.updateSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+    status.update
+
+    status.visualCommand(currentBufStatus.selectedArea, ru'x')
+
+    check currentBufStatus.buffer[0] == ru"def"
+    check currentBufStatus.buffer[1] == ru"ghi"
+
   test "Fix #890":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
@@ -301,6 +332,44 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     check status.registers.noNameRegister.isLine
     check status.registers.noNameRegister.buffer == @[ru"abc", ru"def"]
+
+  test "Yank lines 2":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
+
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    currentBufStatus.selectedArea = initSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    currentBufStatus.moveToLastOfLine(currentMainWindowNode)
+    currentBufStatus.selectedArea.updateSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    let area = currentBufStatus.selectedArea
+    status.settings.clipboard.enable = false
+    currentBufStatus.yankBuffer(
+      status.registers,
+      currentMainWindowNode,
+      area,
+      status.settings)
+
+    check not status.registers.noNameRegister.isLine
+    check status.registers.noNameRegister.buffer == @[ru"abc"]
 
   test "Yank string (Fix #1124)":
     var status = initEditorStatus()
@@ -472,7 +541,7 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
                                      status.settings)
 
     check status.registers.noNameRegister.isLine
-    check status.registers.noNameRegister.buffer == @[ru"a", ru"d"]
+    check status.registers.noNameRegister.buffer == @[ru"ab", ru"d"]
 
 suite "Visual block mode: Delete buffer (Disable clipboard)":
   test "Delete buffer":
@@ -703,7 +772,7 @@ if isXselAvailable():
           (output, exitCode) = cmd
 
         check exitCode == 0
-        check output[0 .. output.high - 1] == "a\nd"
+        check output[0 .. output.high - 1] == "ab\nd"
 
 if isXselAvailable():
   suite "Visual block mode: Delete buffer":
@@ -1337,6 +1406,27 @@ suite "Visual mode: Converts string into upper-case string":
     check(currentBufStatus.buffer[1] == ru"")
     check(currentBufStatus.buffer[2] == ru"DEF")
 
+suite "Visual mode: Movement":
+  test "Move to end of the line + 1":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+    currentBufStatus.selectedArea = initSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    currentBufStatus.moveToLastOfLine(currentMainWindowNode)
+    status.update
+
+    assert currentMainWindowNode.currentColumn == currentBufStatus.buffer[0].len
 
 suite "Visual block mode: Converts string into upper-case string":
   test "Converts string into upper-case string 1":
@@ -1880,6 +1970,28 @@ suite "Visual block mode: Run command when Readonly mode":
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
 
+suite "Visual block mode: Movement":
+  test "Move to end of the line + 1":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+    currentMainWindowNode.highlight = initHighlight(
+      $currentBufStatus.buffer,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visualBlock)
+    currentBufStatus.selectedArea = initSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    currentBufStatus.moveToLastOfLine(currentMainWindowNode)
+    status.update
+
+    assert currentMainWindowNode.currentColumn == currentBufStatus.buffer[0].len
+
 suite "Visual line mode: Delete buffer":
   test "Delete buffer with 'x' command":
     var status = initEditorStatus()
@@ -1904,10 +2016,9 @@ suite "Visual line mode: Delete buffer":
 
     status.visualCommand(currentBufStatus.selectedArea, ru'x')
 
-    check currentBufStatus.buffer[0] == ru""
-    check currentBufStatus.buffer[1] == ru"b"
-    check currentBufStatus.buffer[2] == ru"c"
-    check currentBufStatus.buffer[3] == ru"d"
+    check currentBufStatus.buffer[0] == ru"b"
+    check currentBufStatus.buffer[1] == ru"c"
+    check currentBufStatus.buffer[2] == ru"d"
 
   test "Delete buffer with 'x' command 2":
     var status = initEditorStatus()
@@ -1960,10 +2071,9 @@ suite "Visual line mode: Delete buffer":
 
     status.visualCommand(currentBufStatus.selectedArea, ru'd')
 
-    check currentBufStatus.buffer[0] == ru""
-    check currentBufStatus.buffer[1] == ru"b"
-    check currentBufStatus.buffer[2] == ru"c"
-    check currentBufStatus.buffer[3] == ru"d"
+    check currentBufStatus.buffer[0] == ru"b"
+    check currentBufStatus.buffer[1] == ru"c"
+    check currentBufStatus.buffer[2] == ru"d"
 
   test "Delete buffer with 'd' command 2":
     var status = initEditorStatus()

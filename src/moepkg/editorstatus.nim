@@ -589,7 +589,7 @@ proc updateSuggestWindow(status: var EditorStatus) =
 
 ## Update all views, highlighting, cursor, etc.
 proc update*(status: var EditorStatus) =
-  # Disable the cursor while resizing windows.
+  # Disable the cursor while updating.
   setCursor(false)
 
   let settings = status.settings
@@ -644,10 +644,11 @@ proc update*(status: var EditorStatus) =
         if bufStatus.buffer.high < node.currentLine:
           node.currentLine = bufStatus.buffer.high
 
-        # TODO: Refactor
+        # TODO: Remove
         if not bufStatus.isInsertMode and
            not bufStatus.isReplaceMode and
            not bufStatus.isConfigMode and
+           not bufStatus.isVisualMode and
            bufStatus.buffer[node.currentLine].len > 0 and
            bufStatus.buffer[node.currentLine].high < node.currentColumn:
              node.currentColumn = bufStatus.buffer[node.currentLine].high
