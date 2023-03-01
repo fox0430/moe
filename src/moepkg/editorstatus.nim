@@ -506,8 +506,8 @@ proc updateStatusLine(status: var EditorStatus) =
   if not status.settings.statusLine.multipleStatusLine:
     const isActiveWindow = true
     let index = status.statusLine[0].bufferIndex
-    status.bufStatus[index].writeStatusLine(
-      status.statusLine[0],
+    status.statusLine[0].writeStatusLine(
+      status.bufStatus[index],
       currentMainWindowNode,
       isActiveWindow,
       status.settings)
@@ -519,8 +519,8 @@ proc updateStatusLine(status: var EditorStatus) =
         node = mainWindowNode.searchByWindowIndex(index)
         currentNode = status.mainWindow.currentMainWindowNode
         isActiveWindow = index == currentNode.windowIndex
-      status.bufStatus[bufferIndex].writeStatusLine(
-        status.statusLine[i],
+      status.statusLine[i].writeStatusLine(
+        status.bufStatus[bufferIndex],
         node,
         isActiveWindow,
         status.settings)
