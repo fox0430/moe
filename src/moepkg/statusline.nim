@@ -195,7 +195,9 @@ proc writeStatusLineCurrentGitBranchName(
     statusLine.window.append(buffer, color)
 
 proc modeLablel(mode: Mode, isActiveWindow, showModeInactive: bool): string =
-  if isActiveWindow and showModeInactive:
+  if not isActiveWindow and not showModeInactive:
+    result = ""
+  else:
     case mode:
       of Mode.insert:
         result = "INSERT"
