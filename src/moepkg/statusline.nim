@@ -62,6 +62,24 @@ proc appendFileName(statusLineBuffer: var seq[Rune],
   statusLineBuffer.add(filename)
   statusLineWindow.append(filename, color)
 
+proc statusLineColor(mode: Mode, isActiveWindow: bool): EditorColorPair =
+  case mode:
+    of Mode.insert:
+      if isActiveWindow: return EditorColorPair.statusLineInsertMode
+      else: return EditorColorPair.statusLineInsertModeInactive
+    of Mode.visual, Mode.visualBlock, Mode.visualLine:
+      if isActiveWindow: return EditorColorPair.statusLineVisualMode
+      else: return EditorColorPair.statusLineVisualModeInactive
+    of Mode.replace:
+      if isActiveWindow: return EditorColorPair.statusLineReplaceMode
+      else: return EditorColorPair.statusLineReplaceModeInactive
+    of Mode.ex:
+      if isActiveWindow: return EditorColorPair.statusLineExMode
+      else: return EditorColorPair.statusLineExModeInactive
+    else:
+      if isActiveWindow: return EditorColorPair.statusLineNormalMode
+      else: return EditorColorPair.statusLineNormalModeInactive
+
 proc writeStatusLineNormalModeInfo(bufStatus: var BufferStatus,
                                    statusLine: var StatusLine,
                                    statusLineBuffer: var seq[Rune],
@@ -69,26 +87,8 @@ proc writeStatusLineNormalModeInfo(bufStatus: var BufferStatus,
                                    isActiveWindow: bool,
                                    settings: EditorSettings) =
 
-  proc setStatusLineColor(mode: Mode): EditorColorPair =
-    case mode:
-      of Mode.insert:
-        if isActiveWindow: return EditorColorPair.statusLineInsertMode
-        else: return EditorColorPair.statusLineInsertModeInactive
-      of Mode.visual:
-        if isActiveWindow: return EditorColorPair.statusLineVisualMode
-        else: return EditorColorPair.statusLineVisualModeInactive
-      of Mode.replace:
-        if isActiveWindow: return EditorColorPair.statusLineReplaceMode
-        else: return EditorColorPair.statusLineReplaceModeInactive
-      of Mode.ex:
-        if isActiveWindow: return EditorColorPair.statusLineExMode
-        else: return EditorColorPair.statusLineExModeInactive
-      else:
-        if isActiveWindow: return EditorColorPair.statusLineNormalMode
-        else: return EditorColorPair.statusLineNormalModeInactive
-
   let
-    color = setStatusLineColor(bufStatus.mode)
+    color = bufStatus.mode.statusLineColor(isActiveWindow)
     statusLineWidth = statusLine.window.width
 
   statusLineBuffer.add(ru" ")
@@ -193,8 +193,12 @@ proc setModeStr(mode: Mode, isActiveWindow, showModeInactive: bool): string =
     case mode:
       of Mode.insert:
         result = " INSERT "
-      of Mode.visual, Mode.visualBlock, Mode.visualLine:
+      of Mode.visual:
         result = " VISUAL "
+      of Mode.visualBlock:
+        result = " VISUAL BLOCK "
+      of Mode.visualLine:
+        result = " VISUAL LINE "
       of Mode.replace:
         result = " REPLACE "
       of Mode.filer:
