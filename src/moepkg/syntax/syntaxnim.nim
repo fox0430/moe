@@ -1,5 +1,4 @@
-#=====================================================
-#Nim -- a Compiler for Nim. https://nim-lang.org/
+#===================================================== Nim -- a Compiler for Nim. https://nim-lang.org/
 #
 #Copyright (C) 2006-2020 Andreas Rumpf. All rights reserved.
 #

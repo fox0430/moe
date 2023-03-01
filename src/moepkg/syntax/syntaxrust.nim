@@ -6,6 +6,8 @@ import highlite
 const
   rustKeywords* = [ "abstract"
                   , "as"
+                  , "async"
+                  , "await"
                   , "become"
                   , "box"
                   , "break"
@@ -17,7 +19,6 @@ const
                   , "else"
                   , "enum"
                   , "extern"
-                  , "false"
                   , "final"
                   , "fn"
                   , "for"
@@ -42,7 +43,6 @@ const
                   , "struct"
                   , "super"
                   , "trait"
-                  , "true"
                   , "try"
                   , "type"
                   , "typeof"
@@ -55,7 +55,9 @@ const
                   , "yield"
                   ]
 
-  # Types and traits
+  rustBooleans = ["true", "false"]
+
+  # Types, traits etc,
   rustBuiltins* = [ "AsMut"
                   , "AsRef"
                   , "Box"
@@ -65,6 +67,7 @@ const
                   , "DoubleEndedIterator"
                   , "Drop"
                   , "Eq"
+                  , "Error"
                   , "ErrSliceConcatExt"
                   , "ExactSizeIterator"
                   , "Extend"
@@ -112,19 +115,16 @@ const
                   , "usize"
                   ]
 
-# TODO: mergeKeywords() will be deleted in the future.
-# TODO: Allow set different colors for each kind without merging
-# like Nim syntax highlighting.
-proc mergeKeywords(): seq[string] {.compileTime.} =
-  for k in rustKeywords: result.add k
-  for k in rustBuiltins: result.add k
-  result.sort
+proc rustGetKeyword(id: string): TokenClass =
+  if binarySearch(rustKeywords, id) > -1: return gtKeyword
+  if binarySearch(rustBooleans, id) > -1: return gtBoolean
+  if binarySearch(rustBuiltins, id) > -1: return gtBuiltin
+  else: gtIdentifier
 
 template isCharLit*(g: var GeneralTokenizer, position: int): bool =
   (g.buf.high > pos + 1) and (g.buf[position + 2] == '\'')
 
-proc rustNextToken(g: var GeneralTokenizer, keywords: openArray[string],
-                   flags: TokenizerFlags) =
+proc rustNextToken(g: var GeneralTokenizer, flags: TokenizerFlags) =
   const
     hexChars = {'0'..'9', 'A'..'F', 'a'..'f'}
     octChars = {'0'..'7'}
@@ -200,8 +200,7 @@ proc rustNextToken(g: var GeneralTokenizer, keywords: openArray[string],
       while g.buf[pos] in symChars:
         add(id, g.buf[pos])
         inc(pos)
-      if isKeyword(keywords, id) >= 0: g.kind = gtKeyword
-      else: g.kind = gtIdentifier
+      g.kind = rustGetKeyword(id)
     of '0':
       inc(pos)
       case g.buf[pos]
@@ -265,5 +264,4 @@ proc rustNextToken(g: var GeneralTokenizer, keywords: openArray[string],
   g.pos = pos
 
 proc rustNextToken*(g: var GeneralTokenizer) =
-  const keywords = mergeKeywords()
-  rustNextToken(g, keywords, {})
+  rustNextToken(g, {})
