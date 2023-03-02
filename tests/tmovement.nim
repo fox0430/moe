@@ -17,9 +17,13 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/unittest
+import std/[unittest, sequtils]
 import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, movement,
-               bufferstatus]
+               bufferstatus, ui]
+
+proc resize(status: var EditorStatus, h, w: int) =
+  updateTerminalSize(h, w)
+  status.resize
 
 test "Move right":
   var status = initEditorStatus()
@@ -199,3 +203,44 @@ test "Move to next blank line":
 
   check currentMainWindowNode.currentLine == 2
   check currentMainWindowNode.currentColumn == 0
+
+test "Move to the top line of the screen":
+  var status = initEditorStatus()
+  status.addNewBufferInCurrentWin
+  currentBufStatus.buffer = 7.newSeqWith(ru"").toGapBuffer
+
+  status.resize(10, 10)
+  status.update
+
+  currentMainWindowNode.currentLine = currentBufStatus.buffer.high
+  status.update
+
+  currentBufStatus.moveToTopOfScreen(currentMainWindowNode)
+
+  check currentMainWindowNode.currentLine == 0
+
+test "Move to the center line of the screen":
+  var status = initEditorStatus()
+  status.addNewBufferInCurrentWin
+  currentBufStatus.buffer = 7.newSeqWith(ru"").toGapBuffer
+
+  status.resize(10, 10)
+
+  status.update
+
+  currentBufStatus.moveToCenterOfScreen(currentMainWindowNode)
+
+  check currentMainWindowNode.currentLine == 3
+
+test "Move to the bottom line of the screen":
+  var status = initEditorStatus()
+  status.addNewBufferInCurrentWin
+  currentBufStatus.buffer = 7.newSeqWith(ru"").toGapBuffer
+
+  status.resize(10, 10)
+
+  status.update
+
+  currentBufStatus.moveToBottomOfScreen(currentMainWindowNode)
+
+  check currentMainWindowNode.currentLine == 6
