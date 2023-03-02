@@ -333,21 +333,56 @@ proc moveToForwardEndOfWord*(bufStatus: var BufferStatus,
 
   windowNode.expandedColumn = windowNode.currentColumn
 
-proc moveCenterScreen*(bufStatus: var BufferStatus, windowNode: WindowNode) =
-  if windowNode.currentLine > int(windowNode.view.height / 2):
-    if windowNode.cursor.y > int(windowNode.view.height / 2):
-      let startOfPrintedLines = windowNode.cursor.y - int(windowNode.view.height / 2)
-      windowNode.view.reload(bufStatus.buffer,
-                             windowNode.view.originalLine[startOfPrintedLines])
-    else:
-      let numOfTime = int(windowNode.view.height / 2) - windowNode.cursor.y
-      for i in 0 ..< numOfTime: scrollUp(windowNode.view, bufStatus.buffer)
+## Move to the top line of the screen.
+proc moveToTopOfScreen*(bufStatus: BufferStatus, windowNode: var WindowNode) =
+  windowNode.currentLine = windowNode.view.originalLine[0]
+  if windowNode.currentColumn > bufStatus.buffer[windowNode.currentLine].high:
+    windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].high
+
+## Move to the center line of the screen.
+proc moveToCenterOfScreen*(bufStatus: BufferStatus, windowNode: var WindowNode) =
+  if (bufStatus.buffer.high - windowNode.currentLine) < windowNode.view.height - 1:
+    # Move to the middle of visible lines if less than a view bottom.
+    let
+      medInVisible = int((bufStatus.buffer.high - windowNode.view.originalLine[0]) / 2)
+    windowNode.currentLine = windowNode.view.originalLine[0] + medInVisible
+  else:
+    let
+      medOnScreen = int(windowNode.view.originalLine.len / 2)
+      dest = windowNode.view.originalLine[medOnScreen]
+    if dest > -1 and bufStatus.buffer.high >= dest:
+      windowNode.currentLine = dest
+
+## Move to the bottom line of the screen.
+proc moveToBottomOfScreen*(bufStatus: BufferStatus, windowNode: var WindowNode) =
+  if (bufStatus.buffer.high - windowNode.currentLine) < windowNode.view.height - 1:
+    # Move to the bottom of visible lines if less than a view bottom.
+    let bottomInVisalbe = bufStatus.buffer.high - windowNode.view.originalLine[0]
+    windowNode.currentLine = windowNode.view.originalLine[0] + bottomInVisalbe
+  else:
+    windowNode.currentLine = windowNode.view.originalLine[^1]
+    if windowNode.currentColumn > bufStatus.buffer[windowNode.currentLine].high:
+      windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].high
 
 proc scrollScreenTop*(bufStatus: var BufferStatus,
                       windowNode: var WindowNode) {.inline.} =
 
   windowNode.view.reload(bufStatus.buffer,
                          windowNode.view.originalLine[windowNode.cursor.y])
+
+proc scrollScreenCenter*(
+  bufStatus: var BufferStatus,
+  windowNode: var WindowNode) =
+
+    if windowNode.currentLine > int(windowNode.view.height / 2):
+      if windowNode.cursor.y > int(windowNode.view.height / 2):
+        let startOfPrintedLines = windowNode.cursor.y - int(windowNode.view.height / 2)
+        windowNode.view.reload(
+          bufStatus.buffer,
+          windowNode.view.originalLine[startOfPrintedLines])
+      else:
+        let numOfTime = int(windowNode.view.height / 2) - windowNode.cursor.y
+        for i in 0 ..< numOfTime: scrollUp(windowNode.view, bufStatus.buffer)
 
 proc scrollScreenBottom*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   if windowNode.currentLine > windowNode.view.height:
