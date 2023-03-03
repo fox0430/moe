@@ -1174,11 +1174,17 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
   elif key == ord('z'):
     let secondKey = commands[1]
     if secondKey == ord('.'):
-      currentBufStatus.moveCenterScreen(currentMainWindowNode)
+      currentBufStatus.scrollScreenCenter(currentMainWindowNode)
     elif secondKey == ord('t'):
       currentBufStatus.scrollScreenTop(currentMainWindowNode)
     elif secondKey == ord('b'):
       currentBufStatus.scrollScreenBottom(currentMainWindowNode)
+  elif key == ord('H'):
+    currentBufStatus.moveToTopOfScreen(currentMainWindowNode)
+  elif key == ord('M'):
+    currentBufStatus.moveToCenterOfScreen(currentMainWindowNode)
+  elif key == ord('L'):
+    currentBufStatus.moveToBottomOfScreen(currentMainWindowNode)
   elif key == ord('o'):
     status.openBlankLineBelowAndEnterInsertMode
   elif key == ord('O'):
@@ -1435,8 +1441,11 @@ proc isNormalModeCommand*(command: seq[Rune]): InputState =
        isControlR(command) or
        $command == "." or
        $command == "Y" or
-       $command == "V":
-      result = InputState.Valid
+       $command == "V" or
+       $command == "H" or
+       $command == "M" or
+       $command == "L":
+         result = InputState.Valid
 
     elif isDigit(command[0]):
       # Remove numbers and call recursively.
