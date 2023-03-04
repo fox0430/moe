@@ -62,6 +62,7 @@
 | <kbd>**/**</kbd><br>`keyword` Search forwards | <kbd>**\\**</kbd> <kbd>**r**</kbd><br>Quick Run | <kbd>**s**</kbd> OR <kbd>**c**</kbd><kbd>**u**</kbd><br> Delete current charater and enter insert mode | <kbd>**y**</kbd><kbd>**{**</kbd><br> Yank to the previous blank line |
 | <kbd>**y**</kbd><kbd>**}**</kbd><br> Yank to the next blank line | <kbd>**y**</kbd><kbd>**l**</kbd><br> Yank a character| <kbd>**X**</kbd> OR <kbd>**d**</kbd><kbd>**h**</kbd><br> Cut a character before cursor | <kbd>**g**</kbd><kbd>**a**</kbd><br> Show current character info |
 | <kbd>**t**</kbd><kbd>**x**</kbd><br> Move to the left of the next ```x``` (any character) on the current line | <kbd>**T**</kbd><kbd>**x**</kbd><br> Move to the right of the back ```x ``` (any character) on the current line | <kbd>**y**</kbd><kbd>**t**</kbd><br><kbd>**Any key**</kbd><br> Yank characters to an any character | <kbd>**c**</kbd><kbd>**f**</kbd><br><kbd>**Any key**</kbd><br> Delete characters to an any character and enter insert mode |
+| <kbd>**M**</kbd></br> Move to the top line of the screen | <kbd>**H**</kbd></br> Move to the center line of the screen | <kbd>**L**</kbd></br> Move to the bottom line of the screen | |
 
 </details>
 
