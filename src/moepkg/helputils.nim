@@ -65,6 +65,9 @@ $          - Go to the end of the line
 ^          - Go to the first non-blank character of the line
 {          - Go to the previous blank line
 }          - Go to the next blank line
+H          - Move to the top line of the screen
+M          - Move to the center line of the screen
+L          - Move to the bottom line of the screen
 Ctrl-w     - Half Page Down
 Ctrl-d     - Half Page Up
 d$ or D    - Delete until the end of the line
