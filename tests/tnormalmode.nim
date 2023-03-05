@@ -2118,3 +2118,22 @@ suite "Normal mode: execNormalModeCommand":
     status.execNormalModeCommand("0".toRunes)
 
     check currentMainWindowNode.currentColumn == 0
+
+  test "'%' command":
+    # Move to matching pair of paren.
+
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    currentBufStatus.buffer = @["( )".toRunes].initGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const command = ru"%"
+
+    check isNormalModeCommand(command) == InputState.Valid
+    status.execNormalModeCommand(command)
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 2

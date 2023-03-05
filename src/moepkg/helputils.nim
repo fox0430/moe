@@ -70,6 +70,7 @@ M          - Move to the center line of the screen
 L          - Move to the bottom line of the screen
 Ctrl-w     - Half Page Down
 Ctrl-d     - Half Page Up
+%          - Move to matching pair of paren
 d$ or D    - Delete until the end of the line
 yy or Y    - Copy a line
 y{         - Yank to the previous blank line

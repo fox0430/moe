@@ -297,3 +297,55 @@ test "Move to the bottom line of the screen 3":
   currentBufStatus.moveToBottomOfScreen(currentMainWindowNode)
 
   check currentMainWindowNode.currentLine == 19
+
+test "Move to matching pair of paren 1":
+  var status = initEditorStatus()
+  status.addNewBufferInCurrentWin
+  currentBufStatus.buffer = @[ru"( )"].toGapBuffer
+
+  status.resize(100, 100)
+  status.update
+
+  currentBufStatus.moveToPairOfParen(currentMainWindowNode)
+
+  check currentMainWindowNode.currentLine == 0
+  check currentMainWindowNode.currentColumn == 2
+
+test "Move to matching pair of paren 2":
+  var status = initEditorStatus()
+  status.addNewBufferInCurrentWin
+  currentBufStatus.buffer = @[ru"(", ru")"].toGapBuffer
+
+  status.resize(100, 100)
+  status.update
+
+  currentBufStatus.moveToPairOfParen(currentMainWindowNode)
+
+  check currentMainWindowNode.currentLine == 1
+  check currentMainWindowNode.currentColumn == 0
+
+test "Move to matching pair of paren 3":
+  var status = initEditorStatus()
+  status.addNewBufferInCurrentWin
+  currentBufStatus.buffer = @[ru" )"].toGapBuffer
+
+  status.resize(100, 100)
+  status.update
+
+  currentBufStatus.moveToPairOfParen(currentMainWindowNode)
+
+  check currentMainWindowNode.currentLine == 0
+  check currentMainWindowNode.currentColumn == 0
+
+test "Move to matching pair of paren 4":
+  var status = initEditorStatus()
+  status.addNewBufferInCurrentWin
+  currentBufStatus.buffer = @[ru"(", ru"", ru"]"].toGapBuffer
+
+  status.resize(100, 100)
+  status.update
+
+  currentBufStatus.moveToPairOfParen(currentMainWindowNode)
+
+  check currentMainWindowNode.currentLine == 0
+  check currentMainWindowNode.currentColumn == 0
