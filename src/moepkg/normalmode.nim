@@ -1185,6 +1185,8 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
     currentBufStatus.moveToCenterOfScreen(currentMainWindowNode)
   elif key == ord('L'):
     currentBufStatus.moveToBottomOfScreen(currentMainWindowNode)
+  elif key == ord('%'):
+    currentBufStatus.moveToPairOfParen(currentMainWindowNode)
   elif key == ord('o'):
     status.openBlankLineBelowAndEnterInsertMode
   elif key == ord('O'):
@@ -1444,7 +1446,8 @@ proc isNormalModeCommand*(command: seq[Rune]): InputState =
        $command == "V" or
        $command == "H" or
        $command == "M" or
-       $command == "L":
+       $command == "L" or
+       $command == "%":
          result = InputState.Valid
 
     elif isDigit(command[0]):
