@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options]
+import std/[unittest, options, macros, strformat]
 import moepkg/[unicodeext, editorstatus, gapbuffer, independentutils]
 
 import moepkg/searchutils {.all.}
@@ -251,3 +251,139 @@ suite "search: matchingParenPair":
       searchResult = currentBufStatus.matchingParenPair(position)
 
     check searchResult.isNone
+
+  const
+    openParens = @[ru'(', ru'{', ru'[']
+    closeParens = @[ru')', ru'}', ru']']
+
+  ## Generate test code
+  macro matchingParenPairTest(
+    testIndex: int,
+    paren: Rune,
+    buffer: seq[Runes],
+    currentPosition: BufferPosition,
+    expectPosition: Option[BufferPosition]): untyped =
+
+      quote do:
+        let testTitle =
+          "Case " & $`testIndex` & ": matchingParenPair: '" & $`paren` & "'"
+
+        test testTitle:
+          var status = initEditorStatus()
+          status.addNewBufferInCurrentWin
+
+          status.bufStatus[0].buffer = `buffer`.toGapBuffer
+
+          let
+            searchResult = status.bufStatus[0].matchingParenPair(`currentPosition`)
+
+          check searchResult == `expectPosition`
+
+  block case1:
+    ## Case 1 is starting the search on an empty line.
+    const
+      testIndex = 1
+      buffer = @[ru""]
+      currentPosition = BufferPosition(line: 0, column: 0)
+      expectPosition = SearchResult.none
+
+    for i in 0 ..< openParens.len:
+      block open:
+        matchingParenPairTest(testIndex, openParens[i], buffer, currentPosition, expectPosition)
+      block close:
+        matchingParenPairTest(testIndex, closeParens[i], buffer, currentPosition, expectPosition)
+
+  block case2:
+    const testIndex = 2
+
+    for i in 0 ..< openParens.len:
+      let buffer = @[toRunes(fmt"{openParens[i]}{closeParens[i]}")]
+
+      block open:
+        const
+          currentPosition = BufferPosition(line: 0, column: 0)
+          expectPosition = SearchResult(line: 0, column: 1).some
+        matchingParenPairTest(testIndex, openParens[i], buffer, currentPosition, expectPosition)
+
+      block close:
+        const
+          currentPosition = BufferPosition(line: 0, column: 1)
+          expectPosition = SearchResult(line: 0, column: 0).some
+        matchingParenPairTest(testIndex, closeParens[i], buffer, currentPosition, expectPosition)
+
+  block case3:
+    const testIndex = 3
+
+    for i in 0 ..< openParens.len:
+      let buffer = @[toRunes(fmt"{openParens[i]} {closeParens[i]}")]
+
+      block open:
+        const
+          currentPosition = BufferPosition(line: 0, column: 0)
+          expectPosition = SearchResult(line: 0, column: 2).some
+        matchingParenPairTest(testIndex, openParens[i], buffer, currentPosition, expectPosition)
+
+      block close:
+        const
+          currentPosition = BufferPosition(line: 0, column: 2)
+          expectPosition = SearchResult(line: 0, column: 0).some
+        matchingParenPairTest(testIndex, closeParens[i], buffer, currentPosition, expectPosition)
+
+  block case4:
+    const testIndex = 4
+
+    for i in 0 ..< openParens.len:
+      let buffer = @[openParens[i].toRunes, closeParens[i].toRunes]
+
+      block open:
+        const
+          currentPosition = BufferPosition(line: 0, column: 0)
+          expectPosition = SearchResult(line: 1, column: 0).some
+        matchingParenPairTest(testIndex, openParens[i], buffer, currentPosition, expectPosition)
+
+      block close:
+        const
+          currentPosition = BufferPosition(line: 1, column: 0)
+          expectPosition = SearchResult(line: 0, column: 0).some
+        matchingParenPairTest(testIndex, closeParens[i], buffer, currentPosition, expectPosition)
+
+  block case5:
+    const testIndex = 5
+
+    for i in 0 ..< openParens.len:
+
+      block open:
+        let buffer = @[openParens[i].toRunes, ru""]
+        const
+          currentPosition = BufferPosition(line: 0, column: 0)
+          expectPosition = none(SearchResult)
+        matchingParenPairTest(testIndex, openParens[i], buffer, currentPosition, expectPosition)
+
+      block close:
+        let buffer = @[ru"", closeParens[i].toRunes]
+        const
+          currentPosition = BufferPosition(line: 1, column: 0)
+          expectPosition = none(SearchResult)
+        matchingParenPairTest(testIndex, closeParens[i], buffer, currentPosition, expectPosition)
+
+  block case6:
+    ## matchingParenPair should ignore '"'.
+    const
+      testIndex = 6
+      buffer = @["\"\"".toRunes]
+      paren = ru'"'
+      currentPosition = BufferPosition(line: 0, column: 0)
+      expectPosition = none(SearchResult)
+
+    matchingParenPairTest(testIndex, paren, buffer, currentPosition, expectPosition)
+
+  block case7:
+    ## matchingParenPair should ignore '''.
+    const
+      testIndex = 7
+      buffer = @["''".toRunes]
+      paren = ru'\''
+      currentPosition = BufferPosition(line: 0, column: 0)
+      expectPosition = none(SearchResult)
+
+    matchingParenPairTest(testIndex, paren, buffer, currentPosition, expectPosition)
