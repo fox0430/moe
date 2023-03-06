@@ -18,11 +18,11 @@
 #[############################################################################]#
 
 import std/[unittest, options]
-import moepkg/[unicodeext, editorstatus, gapbuffer]
+import moepkg/[unicodeext, editorstatus, gapbuffer, independentutils]
 
 import moepkg/searchutils {.all.}
 
-suite "search.nim: searchLine":
+suite "search: searchLine":
   test "searchLine":
     let
       line = ru"abc efg hijkl"
@@ -78,7 +78,7 @@ suite "search.nim: searchLine":
 
     check position.isNone
 
-suite "search.nim: searchLineReversely":
+suite "search: searchLineReversely":
   test "searchLineReversely":
     let
       line = ru"abc efg hijkl"
@@ -98,7 +98,7 @@ suite "search.nim: searchLineReversely":
 
       check position.isNone
 
-suite "search.nim: searchBuffer":
+suite "search: searchBuffer":
   test "searchBuffer":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
@@ -138,7 +138,7 @@ suite "search.nim: searchBuffer":
 
     check searchResult.isNone
 
-suite "search.nim: searchBufferReversely":
+suite "search: searchBufferReversely":
   test "searchBufferReversely":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
@@ -184,7 +184,7 @@ suite "search.nim: searchBufferReversely":
 
     check searchResult.isNone
 
-suite "search.nim: searchAllOccurrence":
+suite "search: searchAllOccurrence":
   test "searchAllOccurrence":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
@@ -237,3 +237,17 @@ suite "search.nim: searchAllOccurrence":
         isSmartcase)
 
     check searchResult.len == 0
+
+suite "search: matchingParenPair":
+  test "matchingParenPair":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    # The empty line
+    currentBufStatus.buffer = initGapBuffer(@[ru""])
+
+    let
+      position = BufferPosition(line: 0, column: 0)
+      searchResult = currentBufStatus.matchingParenPair(position)
+
+    check searchResult.isNone
