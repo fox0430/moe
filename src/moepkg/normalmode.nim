@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[times, strutils, sequtils]
+import std/[times, strutils, sequtils, options]
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, window,
        movement, editor, searchutils, bufferstatus, quickrun, messages,
        visualmode, commandline, bufferhighlight
@@ -70,11 +70,12 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
     smartcase = status.settings.smartcase
     searchResult = currentBufStatus.searchBuffer(
       currentMainWindowNode, keyword, ignorecase, smartcase)
-  if searchResult.line > -1:
-    currentBufStatus.jumpLine(currentMainWindowNode, searchResult.line)
-    for column in 0 ..< searchResult.column:
+  if searchResult.isSome:
+    currentBufStatus.jumpLine(currentMainWindowNode, searchResult.get.line)
+    for column in 0 ..< searchResult.get.column:
       status.bufStatus[currentBufferIndex].keyRight(currentMainWindowNode)
-  elif searchResult.line == -1: currentMainWindowNode.keyLeft
+  else:
+    currentMainWindowNode.keyLeft
 
 proc searchNextOccurrence(status: var EditorStatus) =
   if status.searchHistory.len < 1: return
@@ -102,11 +103,11 @@ proc searchNextOccurrenceReversely(status: var EditorStatus, keyword: seq[Rune])
     smartcase = status.settings.smartcase
     searchResult = currentBufStatus.searchBufferReversely(
       currentMainWindowNode, keyword, ignorecase, smartcase)
-  if searchResult.line > -1:
-    currentBufStatus.jumpLine(currentMainWindowNode, searchResult.line)
-    for column in 0 ..< searchResult.column:
+  if searchResult.isSome:
+    currentBufStatus.jumpLine(currentMainWindowNode, searchResult.get.line)
+    for column in 0 ..< searchResult.get.column:
       currentBufStatus.keyRight(windowNode)
-  elif searchResult.line == -1:
+  else:
     currentBufStatus.keyRight(windowNode)
 
 proc searchNextOccurrenceReversely(status: var EditorStatus) =

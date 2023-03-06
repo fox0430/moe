@@ -499,3 +499,8 @@ template clear*(r: var Rune) = r = "".ru
 
 # Assign empty runes.
 template clear*(r: var Runes) = r = "".ru
+
+proc isContainUpper*(runes: Runes): bool =
+  for r in runes:
+    let ch = ($r)[0]
+    if isUpperAscii(ch): return true

@@ -17,25 +17,21 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/strutils
-import gapbuffer, movement, unicodeext, bufferstatus, window
+import std/[strutils, options]
+import gapbuffer, unicodeext, bufferstatus, window, independentutils
 
 type
-  SearchResult* = tuple[line: int, column: int]
+  SearchResult* = BufferPosition
 
-type Direction* = enum
-  forward = 0
-  backward = 1
+  Direction* = enum
+    forward = 0
+    backward = 1
 
-proc compare(rune, sub: seq[Rune], ignorecase, smartcase: bool): bool =
-  proc isContainUpper(sub: seq[Rune]): bool =
-    for r in sub:
-      let ch = ($r)[0]
-      if isUpperAscii(ch): return true
-
-  if ignorecase and not smartcase:
+## Return true If the text matches.
+proc compare(rune, sub: Runes, isIgnorecase, isSmartcase: bool): bool =
+  if isIgnorecase and not isSmartcase:
     if cmpIgnoreCase($rune, $sub) == 0: return true
-  elif smartcase and ignorecase:
+  elif isSmartcase and isIgnorecase:
     if isContainUpper(sub):
       return rune == sub
     else:
@@ -43,126 +39,191 @@ proc compare(rune, sub: seq[Rune], ignorecase, smartcase: bool): bool =
   else:
     return rune == sub
 
-proc searchLine(line: seq[Rune],
-                keyword: seq[Rune],
-                ignorecase, smartcase: bool): int =
+## Return a position in a line if a keyword matches.
+proc searchLine(
+  line: Runes,
+  keyword: Runes,
+  isIgnorecase, isSmartcase: bool): Option[int] =
 
-  result = -1
-  for startPostion in 0 .. (line.len - keyword.len):
-    let
-      endPosition = startPostion + keyword.len
-      rune = line[startPostion ..< endPosition]
-
-    if compare(rune, keyword, ignorecase, smartcase): return startPostion
-
-proc searchLineReversely(line: seq[Rune],
-                         keyword: seq[Rune],
-                         ignorecase, smartcase: bool): int =
-
-  result = -1
-  for startPostion in countdown((line.len - keyword.len), 0):
-    let
-      endPosition = startPostion + keyword.len
-      rune = line[startPostion ..< endPosition]
-
-    if compare(rune, keyword, ignorecase, smartcase): return startPostion
-
-proc searchBuffer*(bufStatus: BufferStatus,
-                   win: var WindowNode,
-                   keyword: seq[Rune],
-                   ignorecase, smartcase: bool): SearchResult =
-
-  result = (-1, -1)
-  let
-    startLine = win.currentLine
-    buffer = bufStatus.buffer
-  for i in 0 ..< buffer.len:
-    let
-      lineNumber = (startLine + i) mod buffer.len
-      begin = if lineNumber == startLine and
-                 i == 0: win.currentColumn
-              else: 0
-      `end` = buffer[lineNumber].len
-      line = buffer[lineNumber]
-      position = searchLine(line[begin ..< `end`],
-                            keyword,
-                            ignorecase,
-                            smartcase)
-
-    if position > -1: return (lineNumber, begin + position)
-
-proc searchBufferReversely*(bufStatus: BufferStatus,
-                            win: WindowNode,
-                            keyword: seq[Rune],
-                            ignorecase, smartcase: bool): SearchResult =
-
-  result = (-1, -1)
-  let
-    startLine = win.currentLine
-    buffer = bufStatus.buffer
-  for i in 0 ..< bufStatus.buffer.len + 1:
-    var lineNumber = (startLine - i) mod buffer.len
-    if lineNumber < 0: lineNumber = buffer.len - i
-    let
-      endPosition = if lineNumber == startLine and i == 0:
-                      win.currentColumn
-                    else:
-                      buffer[lineNumber].len
-      position = searchLineReversely(buffer[lineNumber][0 ..< endPosition],
-                                     keyword,
-                                     ignorecase,
-                                     smartcase)
-
-    if position > -1: return (lineNumber, position)
-
-proc searchAllOccurrence*(buffer: GapBuffer[seq[Rune]],
-                          keyword: seq[Rune],
-                          ignorecase, smartcase: bool): seq[SearchResult] =
-
-  if keyword.len < 1: return
-
-  for lineNumber in 0 ..< buffer.len:
-    var begin = 0
-    while begin < buffer[lineNumber].len:
+    for startPostion in 0 .. (line.len - keyword.len):
       let
-        `end` = buffer[lineNumber].len
-        line = buffer[lineNumber]
-        position = searchLine(line[begin ..< `end`],
-                              keyword,
-                              ignorecase,
-                              smartcase)
-      if position == -1: break
-      result.add((lineNumber, begin + position))
-      begin += position + keyword.len
+        endPosition = startPostion + keyword.len
+        runes = line[startPostion ..< endPosition]
 
-proc jumpToSearchForwardResults*(bufStatus: var BufferStatus,
-                                 windowNode: var WindowNode,
-                                 keyword: seq[Rune],
-                                 ignorecase, smartcase: bool) =
-  let
-    searchResult = bufStatus.searchBuffer(windowNode, keyword, ignorecase, smartcase)
-  if searchResult.line > -1:
-    bufStatus.jumpLine(windowNode, searchResult.line)
-    for column in 0 ..< searchResult.column:
-      bufStatus.keyRight(windowNode)
+      if compare(runes, keyword, isIgnorecase, isSmartcase):
+        return startPostion.some
 
-proc jumpToSearchBackwordResults*(bufStatus: var BufferStatus,
-                                  windowNode: var WindowNode,
-                                  keyword: seq[Rune],
-                                  ignorecase, smartcase: bool) =
+## Return a position in a line if a keyword matches.
+proc searchLineReversely(
+  line: Runes,
+  keyword: Runes,
+  isIgnorecase, isSmartcase: bool): Option[int] =
 
-  let
-    searchResult = bufStatus.searchBufferReversely(
-      windowNode, keyword, ignorecase, smartcase)
-  if searchResult.line > -1:
-    bufStatus.jumpLine(windowNode, searchResult.line)
-    for column in 0 ..< searchResult.column:
-      bufStatus.keyRight(windowNode)
+    for startPostion in countdown((line.len - keyword.len), 0):
+      let
+        endPosition = startPostion + keyword.len
+        runes = line[startPostion ..< endPosition]
 
-proc addSearchHistory*(searchHistory: var seq[seq[Rune]],
-                       keyword: seq[Rune]) =
+      if compare(runes, keyword, isIgnorecase, isSmartcase):
+        return startPostion.some
 
+## Return a buffer position if a keyword matches.
+proc searchBuffer*(
+  bufStatus: BufferStatus,
+  windowNode: WindowNode,
+  keyword: Runes,
+  isIgnorecase, isSmartcase: bool): Option[SearchResult] =
+
+    let startLine = windowNode.currentLine
+    for i in 0 ..< bufStatus.buffer.len:
+      let
+        lineNumber = (startLine + i) mod bufStatus.buffer.len
+
+        first =
+          if lineNumber == startLine and i == 0: windowNode.currentColumn
+          else: 0
+        last = bufStatus.buffer[lineNumber].len
+
+        line = bufStatus.buffer[lineNumber]
+
+        position = searchLine(
+          line[first ..< last],
+          keyword,
+          isIgnorecase,
+          isSmartcase)
+
+      if position.isSome:
+        return SearchResult(line: lineNumber, column: first + position.get).some
+
+## Return a buffer position if a keyword matches.
+proc searchBufferReversely*(
+  bufStatus: BufferStatus,
+  windowNode: WindowNode,
+  keyword: Runes,
+  isIgnorecase, isSmartcase: bool): Option[SearchResult] =
+
+    let
+      startLine = windowNode.currentLine
+      buffer = bufStatus.buffer
+    for i in 0 ..< bufStatus.buffer.len + 1:
+      var lineNumber = (startLine - i) mod buffer.len
+      if lineNumber < 0: lineNumber = buffer.len - i
+      let
+        endPosition =
+          if lineNumber == startLine and i == 0:
+            windowNode.currentColumn
+          else:
+            buffer[lineNumber].len
+
+        position = searchLineReversely(
+          buffer[lineNumber][0 ..< endPosition],
+          keyword,
+          isIgnorecase,
+          isSmartcase)
+
+      if position.isSome:
+        return SearchResult(line: lineNumber, column: position.get).some
+
+## Return a buffer position if a keyword matches.
+proc searchAllOccurrence*(
+  buffer: GapBuffer[Runes],
+  keyword: Runes,
+  isIgnorecase, isSmartcase: bool): seq[SearchResult] =
+
+    if keyword.len < 1: return
+
+    for lineNumber in 0 ..< buffer.len:
+      var first = 0
+      while first < buffer[lineNumber].len:
+        let
+          last = buffer[lineNumber].len
+          line = buffer[lineNumber]
+          position = searchLine(
+            line[first ..< last],
+            keyword,
+            isIgnorecase,
+            isSmartcase)
+
+        if position.isNone: break
+
+        result.add SearchResult(line: lineNumber, column: first + position.get)
+        first += position.get + keyword.len
+
+## Add a keyword to the searchHistory.
+proc addSearchHistory*(searchHistory: var seq[Runes], keyword: Runes) =
   if searchHistory.len == 0 or keyword != searchHistory[^1]:
     searchHistory.add(keyword)
 
+## If `parenPosition` is an opening paren,
+## search for the corresponding closing paren and return its position.
+proc searchClosingParen(
+  bufStatus: BufferStatus,
+  parenPosition: BufferPosition): Option[SearchResult] =
 
+    let
+      buffer = bufStatus.buffer
+      currentLine = parenPosition.line
+      currentColumn = parenPosition.column
+
+    if (buffer[currentLine].len < 1) or
+       (not isOpenParen(buffer[currentLine][currentColumn])) or
+       (buffer[currentLine][currentColumn] == ru'"') or
+       (buffer[currentLine][currentColumn] == ru'\''): return
+
+    var depth = 0
+    let
+      openParen = buffer[currentLine][currentColumn]
+      closeParen = correspondingCloseParen(openParen)
+    for i in currentLine ..< buffer.len:
+      let startColumn =
+        if i == currentLine: currentColumn
+        else: 0
+
+      for j in startColumn ..< buffer[i].len:
+        if buffer[i][j] == openParen: inc(depth)
+        elif buffer[i][j] == closeParen: dec(depth)
+        if depth == 0:
+          return SearchResult(line: i, column: j).some
+
+## If `parenPosition` is an closing paren,
+## search for the corresponding opening paren and return its position.
+proc searchOpeningParen(
+  bufStatus: BufferStatus,
+  parenPosition: BufferPosition): Option[SearchResult] =
+
+    let
+      buffer = bufStatus.buffer
+      currentLine = parenPosition.line
+      currentColumn = parenPosition.column
+
+    if (buffer[currentLine].len < 1) or
+       (not isCloseParen(buffer[currentLine][currentColumn])) or
+       (buffer[currentLine][currentColumn] == ru'"') or
+       (buffer[currentLine][currentColumn] == ru'\''): return
+
+    var depth = 0
+    let
+      closeParen = buffer[currentLine][currentColumn]
+      openParen = correspondingOpenParen(closeParen)
+    for i in countdown(currentLine, 0):
+      let startColumn =
+        if i == currentLine: currentColumn
+        else: buffer[i].high
+
+      for j in countdown(startColumn, 0):
+        if buffer[i].len < 1: break
+        if buffer[i][j] == closeParen: inc(depth)
+        elif buffer[i][j] == openParen: dec(depth)
+        if depth == 0:
+          return SearchResult(line: i, column: j).some
+
+## Return a position of the corresponding pair of paren.
+proc matchingParenPair*(
+  bufStatus: BufferStatus,
+  parenPosition: BufferPosition): Option[SearchResult] =
+
+    let currentRune = bufStatus.buffer[parenPosition.line][parenPosition.column]
+    if isOpenParen(currentRune):
+      return bufStatus.searchClosingParen(parenPosition)
+    elif isCloseParen(currentRune):
+      return bufStatus.searchOpeningParen(parenPosition)

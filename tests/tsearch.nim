@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/unittest
+import std/[unittest, options]
 import moepkg/[unicodeext, editorstatus, gapbuffer]
 
 import moepkg/searchutils {.all.}
@@ -26,77 +26,77 @@ suite "search.nim: searchLine":
   test "searchLine":
     let
       line = ru"abc efg hijkl"
-      ignorecase = true
-      smartcase = true
-      position = line.searchLine(ru"ijk", ignorecase, smartcase)
+      isIgnorecase = true
+      isSmartcase = true
+      position = line.searchLine(ru"ijk", isIgnorecase, isSmartcase)
 
-    check(position == 9)
+    check position.get == 9
 
   test "searchLine 2":
     let
       line = ru"abc efg hijkl"
-      ignorecase = true
-      smartcase = true
-      position = line.searchLine(ru"xyz", ignorecase, smartcase)
+      isIgnorecase = true
+      isSmartcase = true
+      position = line.searchLine(ru"xyz", isIgnorecase, isSmartcase)
 
-    check(position == -1)
+    check position.isNone
 
   test "Enable ignorecase, disable smartcase":
     let
       line = ru"Editor editor"
-      ignorecase = true
-      smartcase = true
-      position = line.searchLine(ru"editor", ignorecase, smartcase)
+      isIgnorecase = true
+      isSmartcase = true
+      position = line.searchLine(ru"editor", isIgnorecase, isSmartcase)
 
-    check(position == 0)
+    check position.get == 0
 
   test "Enable ignorecase and smartcase":
     block:
       let
         line = ru"editor Editor"
-        ignorecase = true
-        smartcase = true
-        position = line.searchLine(ru"Editor", ignorecase, smartcase)
+        isIgnorecase = true
+        isSmartcase = true
+        position = line.searchLine(ru"Editor", isIgnorecase, isSmartcase)
 
-      check(position == 7)
+      check position.get == 7
 
     block:
       let
         line = ru"editor Editor"
-        ignorecase = true
-        smartcase = true
-        position = line.searchLine(ru"editor", ignorecase, smartcase)
+        isIgnorecase = true
+        isSmartcase = true
+        position = line.searchLine(ru"editor", isIgnorecase, isSmartcase)
 
-      check(position == 0)
+      check position.get == 0
 
   test "Disable ignorecase":
     let
       line = ru"Editor"
-      ignorecase = false
-      smartcase = false
-      position = line.searchLine(ru"editor", ignorecase, smartcase)
+      isIgnorecase = false
+      isSmartcase = false
+      position = line.searchLine(ru"editor", isIgnorecase, isSmartcase)
 
-    check(position == -1)
+    check position.isNone
 
 suite "search.nim: searchLineReversely":
   test "searchLineReversely":
     let
       line = ru"abc efg hijkl"
-      ignorecase = true
-      smartcase = true
-      position = line.searchLineReversely(ru"ijk", ignorecase, smartcase)
+      isIgnorecase = true
+      isSmartcase = true
+      position = line.searchLineReversely(ru"ijk", isIgnorecase, isSmartcase)
 
-    check(position == 9)
+    check position.get == 9
 
   test "searchLineReversely 2":
       let
         line = ru"abc efg hijkl"
         keyword = ru"xyz"
-        ignorecase = true
-        smartcase = true
-        position = line.searchLineReversely(keyword, ignorecase, smartcase)
+        isIgnorecase = true
+        isSmartcase = true
+        position = line.searchLineReversely(keyword, isIgnorecase, isSmartcase)
 
-      check(position == -1)
+      check position.isNone
 
 suite "search.nim: searchBuffer":
   test "searchBuffer":
@@ -111,13 +111,13 @@ suite "search.nim: searchBuffer":
 
     let
       keyword = ru"i j"
-      ignorecase = true
-      smartcase = true
+      isIgnorecase = true
+      isSmartcase = true
       searchResult = currentBufStatus.searchBuffer(
-        currentMainWindowNode, keyword, ignorecase, smartcase)
+        currentMainWindowNode, keyword, isIgnorecase, isSmartcase)
 
-    check(searchResult.line == 1)
-    check(searchResult.column == 2)
+    check searchResult.get.line == 1
+    check searchResult.get.column == 2
 
   test "searchBuffer 2":
     var status = initEditorStatus()
@@ -131,13 +131,12 @@ suite "search.nim: searchBuffer":
 
     let
       keyword = ru"xyz"
-      ignorecase = true
-      smartcase = true
+      isIgnorecase = true
+      isSmartcase = true
       searchResult = currentBufStatus.searchBuffer(
-        currentMainWindowNode, keyword, ignorecase, smartcase)
+        currentMainWindowNode, keyword, isIgnorecase, isSmartcase)
 
-    check(searchResult.line == -1)
-    check(searchResult.column == -1)
+    check searchResult.isNone
 
 suite "search.nim: searchBufferReversely":
   test "searchBufferReversely":
@@ -152,16 +151,16 @@ suite "search.nim: searchBufferReversely":
 
     let
       keyword = ru"i j"
-      ignorecase = true
-      smartcase = true
+      isIgnorecase = true
+      isSmartcase = true
       searchResult = currentBufStatus.searchBufferReversely(
         currentMainWindowNode,
         keyword,
-        ignorecase,
-        smartcase)
+        isIgnorecase,
+        isSmartcase)
 
-    check(searchResult.line == 1)
-    check(searchResult.column == 2)
+    check searchResult.get.line == 1
+    check searchResult.get.column == 2
 
   test "searchBufferReversely 2":
     var status = initEditorStatus()
@@ -175,16 +174,15 @@ suite "search.nim: searchBufferReversely":
 
     let
       keyword = ru"xyz"
-      ignorecase = true
-      smartcase = true
+      isIgnorecase = true
+      isSmartcase = true
       searchResult = currentBufStatus.searchBufferReversely(
         currentMainWindowNode,
         keyword,
-        ignorecase,
-        smartcase)
+        isIgnorecase,
+        isSmartcase)
 
-    check(searchResult.line == -1)
-    check(searchResult.column == -1)
+    check searchResult.isNone
 
 suite "search.nim: searchAllOccurrence":
   test "searchAllOccurrence":
@@ -200,20 +198,23 @@ suite "search.nim: searchAllOccurrence":
     let
       keyword = ru"abc"
       buffer = status.bufStatus[0].buffer
-      ignorecase = true
-      smartcase = true
-      searchResult = buffer.searchAllOccurrence(keyword, ignorecase, smartcase)
+      isIgnorecase = true
+      isSmartcase = true
+      searchResult = buffer.searchAllOccurrence(
+        keyword,
+        isIgnorecase,
+        isSmartcase)
 
-    check(searchResult.len == 3)
+    check searchResult.len == 3
 
-    check(searchResult[0].line == 0)
-    check(searchResult[0].column == 0)
+    check searchResult[0].line == 0
+    check searchResult[0].column == 0
 
-    check(searchResult[1].line == 1)
-    check(searchResult[1].column == 4)
+    check searchResult[1].line == 1
+    check searchResult[1].column == 4
 
-    check(searchResult[2].line == 2)
-    check(searchResult[2].column == 0)
+    check searchResult[2].line == 2
+    check searchResult[2].column == 0
 
   test "searchAllOccurrence 2":
     var status = initEditorStatus()
@@ -228,98 +229,11 @@ suite "search.nim: searchAllOccurrence":
     let
       keyword = ru"xyz"
       buffer = status.bufStatus[0].buffer
-      ignorecase = true
-      smartcase = true
-      searchResult = buffer.searchAllOccurrence(keyword, ignorecase, smartcase)
+      isIgnorecase = true
+      isSmartcase = true
+      searchResult = buffer.searchAllOccurrence(
+        keyword,
+        isIgnorecase,
+        isSmartcase)
 
-    check(searchResult.len == 0)
-
-suite "search.nim: jumpToSearchForwardResults":
-  test "jumpToSearchForwardResults":
-    var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
-
-    currentMainWindowNode.currentColumn = 1
-
-    let
-      line1 = ru"abc def"
-      line2 = ru"ghi jkl"
-      line3 = ru"mno jkl"
-    status.bufStatus[0].buffer = initGapBuffer(@[line1, line2, line3])
-
-    let keyword = ru"jkl"
-    currentBufStatus.jumpToSearchForwardResults(
-      currentMainWindowNode,
-      keyword,
-      status.settings.ignorecase,
-      status.settings.smartcase)
-
-    check(currentMainWindowNode.currentLine == 1)
-    check(currentMainWindowNode.currentColumn == 4)
-
-  test "jumpToSearchForwardResults 2":
-    var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
-
-    currentMainWindowNode.currentColumn = 1
-
-    let
-      line1 = ru"abc def"
-      line2 = ru"ghi jkl"
-      line3 = ru"mno pqr"
-    status.bufStatus[0].buffer = initGapBuffer(@[line1, line2, line3])
-
-    let keyword = ru"xyz"
-    currentBufStatus.jumpToSearchForwardResults(
-      currentMainWindowNode,
-      keyword,
-      status.settings.ignorecase,
-      status.settings.smartcase)
-
-    check(currentMainWindowNode.currentLine == 0)
-    check(currentMainWindowNode.currentColumn == 1)
-
-suite "search.nim: jumpToSearchBackwordResults":
-  test "jumpToSearchBackwordResults":
-    var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
-
-    currentMainWindowNode.currentLine = 1
-
-    let
-      line1 = ru"abc def"
-      line2 = ru"ghi jkl"
-      line3 = ru"mno abc"
-    status.bufStatus[0].buffer = initGapBuffer(@[line1, line2, line3])
-
-    let keyword = ru"abc"
-    currentBufStatus.jumpToSearchBackwordResults(
-      currentMainWindowNode,
-      keyword,
-      status.settings.ignorecase,
-      status.settings.smartcase)
-
-    check(currentMainWindowNode.currentLine == 0)
-    check(currentMainWindowNode.currentColumn == 0)
-
-  test "jumpToSearchBackwordResults 2":
-    var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
-
-    currentMainWindowNode.currentColumn = 1
-
-    let
-      line1 = ru"abc def"
-      line2 = ru"ghi jkl"
-      line3 = ru"mno pqr"
-    status.bufStatus[0].buffer = initGapBuffer(@[line1, line2, line3])
-
-    let keyword = ru"xyz"
-    currentBufStatus.jumpToSearchBackwordResults(
-      currentMainWindowNode,
-      keyword,
-      status.settings.ignorecase,
-      status.settings.smartcase)
-
-    check(currentMainWindowNode.currentLine == 0)
-    check(currentMainWindowNode.currentColumn == 1)
+    check searchResult.len == 0

@@ -349,3 +349,93 @@ test "Move to matching pair of paren 4":
 
   check currentMainWindowNode.currentLine == 0
   check currentMainWindowNode.currentColumn == 0
+
+suite "jumpToSearchForwardResults":
+  test "jumpToSearchForwardResults":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    currentMainWindowNode.currentColumn = 1
+
+    let
+      line1 = ru"abc def"
+      line2 = ru"ghi jkl"
+      line3 = ru"mno jkl"
+    currentBufStatus.buffer = initGapBuffer(@[line1, line2, line3])
+
+    let keyword = ru"jkl"
+    currentBufStatus.jumpToSearchForwardResults(
+      currentMainWindowNode,
+      keyword,
+      status.settings.ignorecase,
+      status.settings.smartcase)
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 4
+
+  test "jumpToSearchForwardResults 2":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    currentMainWindowNode.currentColumn = 1
+
+    let
+      line1 = ru"abc def"
+      line2 = ru"ghi jkl"
+      line3 = ru"mno pqr"
+    currentBufStatus.buffer = initGapBuffer(@[line1, line2, line3])
+
+    let keyword = ru"xyz"
+    currentBufStatus.jumpToSearchForwardResults(
+      currentMainWindowNode,
+      keyword,
+      status.settings.ignorecase,
+      status.settings.smartcase)
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 1
+
+suite "jumpToSearchBackwordResults":
+  test "jumpToSearchBackwordResults":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    currentMainWindowNode.currentLine = 1
+
+    let
+      line1 = ru"abc def"
+      line2 = ru"ghi jkl"
+      line3 = ru"mno abc"
+    currentBufStatus.buffer = initGapBuffer(@[line1, line2, line3])
+
+    let keyword = ru"abc"
+    currentBufStatus.jumpToSearchBackwordResults(
+      currentMainWindowNode,
+      keyword,
+      status.settings.ignorecase,
+      status.settings.smartcase)
+
+    check(currentMainWindowNode.currentLine == 0)
+    check(currentMainWindowNode.currentColumn == 0)
+
+  test "jumpToSearchBackwordResults 2":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    currentMainWindowNode.currentColumn = 1
+
+    let
+      line1 = ru"abc def"
+      line2 = ru"ghi jkl"
+      line3 = ru"mno pqr"
+    currentBufStatus.buffer = initGapBuffer(@[line1, line2, line3])
+
+    let keyword = ru"xyz"
+    currentBufStatus.jumpToSearchBackwordResults(
+      currentMainWindowNode,
+      keyword,
+      status.settings.ignorecase,
+      status.settings.smartcase)
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 1
