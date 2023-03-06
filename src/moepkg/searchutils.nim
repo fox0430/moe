@@ -222,6 +222,8 @@ proc matchingParenPair*(
   bufStatus: BufferStatus,
   parenPosition: BufferPosition): Option[SearchResult] =
 
+    if bufStatus.buffer[parenPosition.line].len < 1: return
+
     let currentRune = bufStatus.buffer[parenPosition.line][parenPosition.column]
     if isOpenParen(currentRune):
       return bufStatus.searchClosingParen(parenPosition)
