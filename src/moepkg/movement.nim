@@ -23,11 +23,13 @@ import editorview, gapbuffer, unicodeext, window, bufferstatus,
 
 template currentLineLen: int = bufStatus.buffer[windowNode.currentLine].len
 
-proc isExpand(bufStatus: BufferStatus): bool =
-  # Can move up to the line.len in these modes.
-  bufStatus.isInsertMode or
-  bufStatus.isReplaceMode or
-  bufStatus.isVisualMode
+## Return true if currentColumn is line.high + 1.
+proc isExpandPosition*(
+  bufStatus: BufferStatus,
+  windowNode: WindowNode): bool {.inline.} =
+
+    windowNode.currentColumn ==
+      bufStatus.buffer[windowNode.currentLine].high + 1
 
 proc keyLeft*(windowNode: var WindowNode) =
   if windowNode.currentColumn == 0: return
@@ -36,7 +38,7 @@ proc keyLeft*(windowNode: var WindowNode) =
   windowNode.expandedColumn = windowNode.currentColumn
 
 proc keyRight*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
-  let maxColumn = currentLineLen + (if bufStatus.isExpand: 1 else: 0)
+  let maxColumn = currentLineLen + (if bufStatus.isExpandableMode: 1 else: 0)
   if windowNode.currentColumn + 1 >= maxColumn: return
 
   inc(windowNode.currentColumn)
@@ -47,7 +49,7 @@ proc keyUp*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
 
   dec(windowNode.currentLine)
 
-  let maxColumn = currentLineLen + (if bufStatus.isExpand:0 else: -1)
+  let maxColumn = currentLineLen + (if bufStatus.isExpandableMode:0 else: -1)
   windowNode.currentColumn = min(windowNode.expandedColumn, maxColumn)
 
   if windowNode.currentColumn < 0: windowNode.currentColumn = 0
@@ -57,7 +59,7 @@ proc keyDown*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
 
   inc(windowNode.currentLine)
 
-  let maxColumn = currentLineLen + (if bufStatus.isExpand: 0 else: -1)
+  let maxColumn = currentLineLen + (if bufStatus.isExpandableMode: 0 else: -1)
   windowNode.currentColumn = min(windowNode.expandedColumn, maxColumn)
 
   if windowNode.currentColumn < 0: windowNode.currentColumn = 0
@@ -395,15 +397,9 @@ proc moveToPairOfParen*(
   bufStatus: BufferStatus,
   windowNode: var WindowNode) =
 
-    let
-      currentLine = windowNode.currentLine
-      currentColumn =
-        if windowNode.currentColumn > bufStatus.buffer[currentLine].high:
-          bufStatus.buffer[currentLine].high
-        else:
-          windowNode.currentColumn
+    if bufStatus.isExpandPosition(windowNode): return
 
-      currentPosition = BufferPosition(line: currentLine, column: currentColumn)
+    let currentPosition = windowNode.bufferPosition
 
     let correspondParenPosition = bufStatus.matchingParenPair(currentPosition)
     if correspondParenPosition.isSome:

@@ -185,6 +185,12 @@ proc isEditMode*(b: BufferStatus): bool {.inline.} =
   b.isVisualMode or
   b.isReplaceMode
 
+## Can move up to the line.high + 1 in these modes.
+proc isExpandableMode*(bufStatus: BufferStatus): bool {.inline.} =
+  bufStatus.isInsertMode or
+  bufStatus.isReplaceMode or
+  bufStatus.isVisualMode
+
 ## Return true if a mode in which it uses the cursor.
 proc isCursor*(mode: Mode): bool {.inline.} =
   case mode:
