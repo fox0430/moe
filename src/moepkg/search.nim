@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import editorstatus, searchutils, unicodeext, bufferstatus
+import editorstatus, unicodeext, bufferstatus, movement
 
 proc execSearchCommand*(status: var EditorStatus, keyword: Runes) =
   status.searchHistory[^1] = keyword

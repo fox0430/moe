@@ -17,8 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/deques
-import editorview, gapbuffer, unicodeext, window, bufferstatus
+import std/[deques, options]
+import editorview, gapbuffer, unicodeext, window, bufferstatus,
+       independentutils, searchutils
 
 template currentLineLen: int = bufStatus.buffer[windowNode.currentLine].len
 
@@ -394,6 +395,11 @@ proc moveToPairOfParen*(
   bufStatus: BufferStatus,
   windowNode: var WindowNode) =
 
+    let posi = BufferPosition(
+      line: windowNode.currentLine,
+      column: windowNode.currentColumn)
+    discard bufStatus.matchingParenPair(posi)
+
     let
       buffer = bufStatus.buffer
       currentLine = windowNode.currentLine
@@ -439,3 +445,37 @@ proc moveToPairOfParen*(
             windowNode.currentLine = i
             windowNode.currentColumn = j
             return
+
+proc jumpToSearchForwardResults*(
+  bufStatus: var BufferStatus,
+  windowNode: var WindowNode,
+  keyword: seq[Rune],
+  isIgnorecase, isSmartcase: bool) =
+
+    let searchResult = bufStatus.searchBuffer(
+      windowNode,
+      keyword,
+      isIgnorecase,
+      isSmartcase)
+
+    if searchResult.isSome:
+      bufStatus.jumpLine(windowNode, searchResult.get.line)
+      for column in 0 ..< searchResult.get.column:
+        bufStatus.keyRight(windowNode)
+
+proc jumpToSearchBackwordResults*(
+  bufStatus: var BufferStatus,
+  windowNode: var WindowNode,
+  keyword: seq[Rune],
+  isIgnorecase, isSmartcase: bool) =
+
+    let searchResult = bufStatus.searchBufferReversely(
+      windowNode,
+      keyword,
+      isIgnorecase,
+      isSmartcase)
+
+    if searchResult.isSome:
+      bufStatus.jumpLine(windowNode, searchResult.get.line)
+      for column in 0 ..< searchResult.get.column:
+        bufStatus.keyRight(windowNode)

@@ -1210,21 +1210,24 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
       currentBufStatus.buffer.delete(startLine + 1, startLine + 1)
   else:
     let
-      ignorecase = status.settings.ignorecase
-      smartcase = status.settings.smartcase
+      isIgnorecase = status.settings.ignorecase
+      isSmartcase = status.settings.smartcase
     for i in 0 .. currentBufStatus.buffer.high:
       let searchResult = currentBufStatus.searchBuffer(
-        currentMainWindowNode, replaceInfo.searhWord, ignorecase, smartcase)
-      if searchResult.line > -1:
-        let oldLine = currentBufStatus.buffer[searchResult.line]
-        var newLine = currentBufStatus.buffer[searchResult.line]
+        currentMainWindowNode, replaceInfo.searhWord, isIgnorecase, isSmartcase)
+      if searchResult.isSome:
+        let oldLine = currentBufStatus.buffer[searchResult.get.line]
+        var newLine = currentBufStatus.buffer[searchResult.get.line]
 
-        for _ in searchResult.column .. searchResult.column + replaceInfo.searhWord.high:
-          newLine.delete(searchResult.column)
+        let
+          first = searchResult.get.column
+          last = searchResult.get.column + replaceInfo.searhWord.high
+        for _ in first .. last:
+          newLine.delete(searchResult.get.column)
 
-        newLine.insert(replaceInfo.replaceWord, searchResult.column)
+        newLine.insert(replaceInfo.replaceWord, searchResult.get.column)
         if oldLine != newLine:
-          currentBufStatus.buffer[searchResult.line] = newLine
+          currentBufStatus.buffer[searchResult.get.line] = newLine
 
   inc(currentBufStatus.countChange)
   status.commandLine.clear
