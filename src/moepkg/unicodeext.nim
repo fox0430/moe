@@ -173,6 +173,7 @@ proc `==`*(c: Rune, x: char): bool {.inline.} = c == toRune(x)
 
 proc ru*(c: char): Rune {.inline.} = toRune(c)
 proc ru*(s: string): seq[Rune] {.inline.} = s.toRunes
+proc ru*(r: Rune): seq[Rune] {.inline.} = @[r]
 proc ru*(array: seq[string]): seq[Rune] =
   for s in array:
     result.add s.toRunes
@@ -275,6 +276,8 @@ proc toRunes*(oid: Oid): seq[Rune] {.inline.} = toRunes($oid)
 
 proc toRunes*(s: seq[string]): Runes =
   for l in s: result.add l.toRunes
+
+proc toRunes*(r: Rune): Runes {.inline.} = @[r]
 
 proc startsWith*(runes1, runes2: seq[Rune]): bool =
   result = true
