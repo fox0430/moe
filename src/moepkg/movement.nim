@@ -23,11 +23,13 @@ import editorview, gapbuffer, unicodeext, window, bufferstatus,
 
 template currentLineLen: int = bufStatus.buffer[windowNode.currentLine].len
 
-proc isExpand(bufStatus: BufferStatus): bool =
-  # Can move up to the line.len in these modes.
-  bufStatus.isInsertMode or
-  bufStatus.isReplaceMode or
-  bufStatus.isVisualMode
+## Return true if currentColumn is line.high + 1.
+proc isExpandPosition*(
+  bufStatus: BufferStatus,
+  windowNode: WindowNode): bool {.inline.} =
+
+    windowNode.currentColumn ==
+      bufStatus.buffer[windowNode.currentLine].high + 1
 
 proc keyLeft*(windowNode: var WindowNode) =
   if windowNode.currentColumn == 0: return
@@ -36,7 +38,7 @@ proc keyLeft*(windowNode: var WindowNode) =
   windowNode.expandedColumn = windowNode.currentColumn
 
 proc keyRight*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
-  let maxColumn = currentLineLen + (if bufStatus.isExpand: 1 else: 0)
+  let maxColumn = currentLineLen + (if bufStatus.isExpandableMode: 1 else: 0)
   if windowNode.currentColumn + 1 >= maxColumn: return
 
   inc(windowNode.currentColumn)
@@ -47,7 +49,7 @@ proc keyUp*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
 
   dec(windowNode.currentLine)
 
-  let maxColumn = currentLineLen + (if bufStatus.isExpand:0 else: -1)
+  let maxColumn = currentLineLen + (if bufStatus.isExpandableMode:0 else: -1)
   windowNode.currentColumn = min(windowNode.expandedColumn, maxColumn)
 
   if windowNode.currentColumn < 0: windowNode.currentColumn = 0
@@ -57,7 +59,7 @@ proc keyDown*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
 
   inc(windowNode.currentLine)
 
-  let maxColumn = currentLineLen + (if bufStatus.isExpand: 0 else: -1)
+  let maxColumn = currentLineLen + (if bufStatus.isExpandableMode: 0 else: -1)
   windowNode.currentColumn = min(windowNode.expandedColumn, maxColumn)
 
   if windowNode.currentColumn < 0: windowNode.currentColumn = 0
@@ -395,51 +397,14 @@ proc moveToPairOfParen*(
   bufStatus: BufferStatus,
   windowNode: var WindowNode) =
 
-    let
-      buffer = bufStatus.buffer
-      currentLine = windowNode.currentLine
-      currentColumn =
-        if windowNode.currentColumn > buffer[currentLine].high:
-          buffer[currentLine].high
-        else:
-          windowNode.currentColumn
+    if bufStatus.isExpandPosition(windowNode): return
 
-    if buffer[currentLine].len < 1 or
-       (buffer[currentLine][currentColumn] == ru'"') or
-       (buffer[currentLine][currentColumn] == ru'\''): return
+    let currentPosition = windowNode.bufferPosition
 
-    if isOpenParen(buffer[currentLine][currentColumn]):
-      var depth = 0
-      let
-        openParen = buffer[currentLine][currentColumn]
-        closeParen = correspondingCloseParen(openParen)
-      for i in currentLine ..< buffer.len:
-        let startColumn = if i == currentLine: currentColumn else: 0
-        for j in startColumn ..< buffer[i].len:
-          if buffer[i][j] == openParen: inc(depth)
-          elif buffer[i][j] == closeParen: dec(depth)
-          if depth == 0:
-            # Update the position and return.
-            windowNode.currentLine = i
-            windowNode.currentColumn = j
-            return
-
-    elif isCloseParen(buffer[currentLine][currentColumn]):
-      var depth = 0
-      let
-        closeParen = buffer[currentLine][currentColumn]
-        openParen = correspondingOpenParen(closeParen)
-      for i in countdown(currentLine, 0):
-        let startColumn = if i == currentLine: currentColumn else: buffer[i].high
-        for j in countdown(startColumn, 0):
-          if buffer[i].len < 1: break
-          if buffer[i][j] == closeParen: inc(depth)
-          elif buffer[i][j] == openParen: dec(depth)
-          if depth == 0:
-            # Update the position and return.
-            windowNode.currentLine = i
-            windowNode.currentColumn = j
-            return
+    let correspondParenPosition = bufStatus.matchingParenPair(currentPosition)
+    if correspondParenPosition.isSome:
+      windowNode.currentLine = correspondParenPosition.get.line
+      windowNode.currentColumn = correspondParenPosition.get.column
 
 proc jumpToSearchForwardResults*(
   bufStatus: var BufferStatus,

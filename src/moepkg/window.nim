@@ -377,3 +377,7 @@ proc setTimeout*(node: var WindowNode, time: int) {.inline.} =
 proc getHeight*(node: var WindowNode): int {.inline.} = node.window.get.height
 
 proc getWidth*(node: var WindowNode): int {.inline.} = node.window.get.width
+
+## Return the current position.
+proc bufferPosition*(windowNode: WindowNode): BufferPosition {.inline.} =
+  BufferPosition(line: windowNode.currentLine, column: windowNode.currentColumn)
