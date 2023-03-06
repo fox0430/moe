@@ -350,6 +350,20 @@ test "Move to matching pair of paren 4":
   check currentMainWindowNode.currentLine == 0
   check currentMainWindowNode.currentColumn == 0
 
+test "Move to matching pair of paren 5":
+  var status = initEditorStatus()
+  status.addNewBufferInCurrentWin
+  currentBufStatus.buffer = @[ru"(", ru"", ru"]"].toGapBuffer
+  currentMainWindowNode.currentColumn = currentBufStatus.buffer.len
+
+  status.resize(100, 100)
+  status.update
+
+  currentBufStatus.moveToPairOfParen(currentMainWindowNode)
+
+  check currentMainWindowNode.currentLine == 0
+  check currentMainWindowNode.currentColumn == 0
+
 suite "jumpToSearchForwardResults":
   test "jumpToSearchForwardResults":
     var status = initEditorStatus()
