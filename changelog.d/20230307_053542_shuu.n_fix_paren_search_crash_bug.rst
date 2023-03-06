@@ -1,0 +1,35 @@
+.. _#1649: https://github.com/fox0430/moe/pull/1649
+.. A new scriv changelog fragment.
+..
+.. Uncomment the header that is right (remove the leading dots).
+..
+.. Added
+.. .....
+..
+.. - A bullet item for the Added category.
+..
+.. Changed
+.. .......
+..
+.. - A bullet item for the Changed category.
+..
+.. Deprecated
+.. ..........
+..
+.. - A bullet item for the Deprecated category.
+
+Fixed
+.....
+
+- `#1649`_ Fix a bug that crash if paren search starts on an empty line
+
+.. Removed
+.. .......
+..
+.. - A bullet item for the Removed category.
+..
+.. Security
+.. ........
+..
+.. - A bullet item for the Security category.
+..
