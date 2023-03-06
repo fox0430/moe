@@ -395,11 +395,6 @@ proc moveToPairOfParen*(
   bufStatus: BufferStatus,
   windowNode: var WindowNode) =
 
-    let posi = BufferPosition(
-      line: windowNode.currentLine,
-      column: windowNode.currentColumn)
-    discard bufStatus.matchingParenPair(posi)
-
     let
       buffer = bufStatus.buffer
       currentLine = windowNode.currentLine
