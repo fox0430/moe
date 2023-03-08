@@ -42,6 +42,10 @@ type
     line*: int
     column*: int
 
+  BufferRange* = object
+    first*: BufferPosition
+    last*: BufferPosition
+
 proc numberOfDigits*(x: int): int {.inline.} = x.intToStr.len
 
 proc calcTabWidth*(numOfBuffer, windowSize: int): int {.inline.} =

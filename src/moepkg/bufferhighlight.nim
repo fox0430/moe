@@ -16,6 +16,8 @@
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
 #                                                                              #
 #[############################################################################]#
+
+import std/[options, deques]
 import independentutils, bufferstatus, highlight, color, window, gapbuffer,
        unicodeext, editorview, searchutils, settings, movement
 
@@ -73,57 +75,107 @@ proc highlightPairOfParen(
   bufStatus: BufferStatus,
   windowNode: WindowNode) =
 
-    if bufStatus.isExpandPosition(windowNode): return
+    if bufStatus.buffer.len == 0: return
+
+    if bufStatus.buffer.len == 1 and bufStatus.buffer[0].len < 1: return
+
+    if bufStatus.isExpandPosition(windowNode) or
+       bufStatus.buffer[windowNode.currentLine].len < 1: return
 
     let
-      buffer = bufStatus.buffer
-      currentLine = windowNode.currentLine
-      currentColumn = windowNode.currentColumn
+      currentPosition = windowNode.bufferPosition
+      rune = bufStatus.buffer[windowNode.currentLine][windowNode.currentColumn]
 
-    if buffer[currentLine].len < 1 or
-       (buffer[currentLine][currentColumn] == ru'"') or
-       (buffer[currentLine][currentColumn] == ru'\''): return
+    if isOpenParen(rune):
+      # Search only in the displayed range on the view.
 
-    if isOpenParen(buffer[currentLine][currentColumn]):
-      var depth = 0
+      if windowNode.currentLine == bufStatus.buffer.high and
+         windowNode.currentColumn == bufStatus.buffer[windowNode.currentLine].high:
+           return
+
       let
-        openParen = buffer[currentLine][currentColumn]
-        closeParen = correspondingCloseParen(openParen)
-      for i in currentLine ..< buffer.len:
-        let startColumn = if i == currentLine: currentColumn else: 0
-        for j in startColumn ..< buffer[i].len:
-          if buffer[i][j] == openParen: inc(depth)
-          elif buffer[i][j] == closeParen: dec(depth)
-          if depth == 0:
-            let colorSegment = ColorSegment(
-              firstRow: i,
-              firstColumn: j,
-              lastRow: i,
-              lastColumn: j,
-              color: EditorColorPair.parenText)
-            highlight.overwrite(colorSegment)
-            return
+        # TODO: Add bufStatus.next or gapbuffer.next and replace with it.
+        firstPositionLine =
+          if currentPosition.column + 1 < bufStatus.buffer[currentPosition.line].len:
+            currentPosition.line
+          else:
+            currentPosition.line + 1
+        firstPositionColumn =
+          if firstPositionLine == currentPosition.line: currentPosition.column + 1
+          else:
+            if bufStatus.buffer[firstPositionLine].high >= 0:
+              bufStatus.buffer[firstPositionLine].high
+            else:
+              0
+        firstPosition = BufferPosition(
+          line: firstPositionLine,
+          column: firstPositionColumn)
 
-    elif isCloseParen(buffer[currentLine][currentColumn]):
-      var depth = 0
+        lastPositionLine =
+          if windowNode.view.originalLine[^1] >= 0:
+            windowNode.view.originalLine[^1]
+          else:
+            bufStatus.buffer.high
+        lastPositionColumn =
+          if bufStatus.buffer[lastPositionLine].high >= 0:
+            bufStatus.buffer[lastPositionLine].high
+          else:
+            0
+        lastPosition = BufferPosition(
+          line: lastPositionLine,
+          column: lastPositionColumn)
+
+        range = BufferRange(
+          first: firstPosition,
+          last: lastPosition)
+
+      let correspondParenPosition = bufStatus.matchingParenPair(range, rune)
+      if correspondParenPosition.isSome:
+        highlight.overwrite(ColorSegment(
+          firstRow: correspondParenPosition.get.line,
+          firstColumn: correspondParenPosition.get.column,
+          lastRow: correspondParenPosition.get.line,
+          lastColumn: correspondParenPosition.get.column,
+          color: EditorColorPair.parenText))
+    elif isCloseParen(rune):
+      # Search only in the displayed range on the view.
+      # TODO: Add bufStatus.prev or gapbuffer.prev and replace with it.
       let
-        closeParen = buffer[currentLine][currentColumn]
-        openParen = correspondingOpenParen(closeParen)
-      for i in countdown(currentLine, 0):
-        let startColumn = if i == currentLine: currentColumn else: buffer[i].high
-        for j in countdown(startColumn, 0):
-          if buffer[i].len < 1: break
-          if buffer[i][j] == closeParen: inc(depth)
-          elif buffer[i][j] == openParen: dec(depth)
-          if depth == 0:
-            let colorSegment = ColorSegment(
-              firstRow: i,
-              firstColumn: j,
-              lastRow: i,
-              lastColumn: j,
-              color: EditorColorPair.parenText)
-            highlight.overwrite(colorSegment)
-            return
+        firstPositionLine =
+          if currentPosition.column > 0: currentPosition.line
+          else: currentPosition.line - 1
+        firstPositionColumn =
+          if firstPositionLine == currentPosition.line: currentPosition.column - 1
+          else:
+            if bufStatus.buffer[firstPositionLine].high >= 0:
+              bufStatus.buffer[firstPositionLine].high
+            else:
+              0
+        firstPosition = BufferPosition(
+          line: firstPositionLine,
+          column: firstPositionColumn)
+
+        lastPositionLine =
+          if windowNode.view.originalLine[0] >= 0:
+            windowNode.view.originalLine[0]
+          else:
+            0
+        lastPosition = BufferPosition(
+          line: lastPositionLine,
+          column: 0)
+
+        range = BufferRange(
+          first: firstPosition,
+          last: lastPosition)
+
+      let correspondParenPosition = bufStatus.matchingParenPair(range, rune)
+      if correspondParenPosition.isSome:
+        highlight.overwrite(ColorSegment(
+          firstRow: correspondParenPosition.get.line,
+          firstColumn: correspondParenPosition.get.column,
+          lastRow: correspondParenPosition.get.line,
+          lastColumn: correspondParenPosition.get.column,
+          color: EditorColorPair.parenText))
 
 # Highlighting other uses of the current word under the cursor
 proc highlightOtherUsesCurrentWord(

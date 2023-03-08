@@ -154,70 +154,99 @@ proc addSearchHistory*(searchHistory: var seq[Runes], keyword: Runes) =
   if searchHistory.len == 0 or keyword != searchHistory[^1]:
     searchHistory.add(keyword)
 
+proc assertRange(range: BufferRange) =
+  doAssert range.first.line >= 0
+  doAssert range.first.column >= 0
+
+  doAssert range.last.line >= 0
+  doAssert range.first.line >= 0
+
 ## If `parenPosition` is an opening paren,
 ## search for the corresponding closing paren and return its position.
 proc searchClosingParen(
   bufStatus: BufferStatus,
-  parenPosition: BufferPosition): Option[SearchResult] =
+  range: BufferRange,
+  openParen: Rune): Option[SearchResult] =
+
+    when not defined(release): range.assertRange
+
+    if (openParen == ru'"') or (openParen == ru'\''): return
 
     let
       buffer = bufStatus.buffer
-      currentLine = parenPosition.line
-      currentColumn = parenPosition.column
+      openParenLine = range.first.line
+      openParenColumn = range.first.column
 
-    if (buffer[currentLine].len < 1) or
-       (not isOpenParen(buffer[currentLine][currentColumn])) or
-       (buffer[currentLine][currentColumn] == ru'"') or
-       (buffer[currentLine][currentColumn] == ru'\''): return
+    var depth = 1
+    let closeParen = correspondingCloseParen(openParen)
+    for i in openParenLine .. range.last.line:
+      let
+        startColumn =
+          if i == openParenLine: openParenColumn
+          else: 0
+        endColumn =
+          if i == range.last.line: range.last.column
+          else: buffer[i].high
 
-    var depth = 0
-    let
-      openParen = buffer[currentLine][currentColumn]
-      closeParen = correspondingCloseParen(openParen)
-    for i in currentLine ..< buffer.len:
-      let startColumn =
-        if i == currentLine: currentColumn
-        else: 0
-
-      for j in startColumn ..< buffer[i].len:
-        if buffer[i][j] == openParen: inc(depth)
+      for j in startColumn .. endColumn:
+        if buffer[i].len < 1: break
+        elif buffer[i][j] == openParen: inc(depth)
         elif buffer[i][j] == closeParen: dec(depth)
+
         if depth == 0:
           return SearchResult(line: i, column: j).some
 
 ## If `parenPosition` is an closing paren,
-## search for the corresponding opening paren and return its position.
+## Search for the corresponding opening paren and return its position.
 proc searchOpeningParen(
   bufStatus: BufferStatus,
-  parenPosition: BufferPosition): Option[SearchResult] =
+  range: BufferRange,
+  closeParen: Rune): Option[SearchResult] =
+
+    when not defined(release): range.assertRange
+
+    if (closeParen  == ru'"') or (closeParen == ru'\''): return
 
     let
       buffer = bufStatus.buffer
-      currentLine = parenPosition.line
-      currentColumn = parenPosition.column
+      closeParenLine = range.first.line
+      closeParenColumn = range.first.column
 
-    if (buffer[currentLine].len < 1) or
-       (not isCloseParen(buffer[currentLine][currentColumn])) or
-       (buffer[currentLine][currentColumn] == ru'"') or
-       (buffer[currentLine][currentColumn] == ru'\''): return
+    var depth = 1
+    let openParen = correspondingOpenParen(closeParen)
+    for i in countdown(closeParenLine, range.last.line):
+      let
+        startColumn =
+          if i == closeParenLine: closeParenColumn
+          else: buffer[i].high
+        endColumn =
+          if i == range.last.line: range.last.column
+          else: 0
 
-    var depth = 0
-    let
-      closeParen = buffer[currentLine][currentColumn]
-      openParen = correspondingOpenParen(closeParen)
-    for i in countdown(currentLine, 0):
-      let startColumn =
-        if i == currentLine: currentColumn
-        else: buffer[i].high
-
-      for j in countdown(startColumn, 0):
+      for j in countdown(startColumn, endColumn):
         if buffer[i].len < 1: break
-        if buffer[i][j] == closeParen: inc(depth)
+        elif buffer[i][j] == closeParen: inc(depth)
         elif buffer[i][j] == openParen: dec(depth)
+
         if depth == 0:
           return SearchResult(line: i, column: j).some
 
 ## Return a position of the corresponding pair of paren.
+proc matchingParenPair*(
+  bufStatus: BufferStatus,
+  range: BufferRange,
+  paren: Rune): Option[SearchResult] =
+
+    if bufStatus.buffer.high < range.first.line: return
+
+    if isOpenParen(paren):
+      return bufStatus.searchClosingParen(range, paren)
+    elif isCloseParen(paren):
+      return bufStatus.searchOpeningParen(range, paren)
+
+## Return a position of the corresponding pair of paren.
+## Search from the `parenPosition` to the end or the buffer (if opening paren) or
+## The first of the buffer (if closing paren).
 proc matchingParenPair*(
   bufStatus: BufferStatus,
   parenPosition: BufferPosition): Option[SearchResult] =
@@ -226,6 +255,59 @@ proc matchingParenPair*(
 
     let currentRune = bufStatus.buffer[parenPosition.line][parenPosition.column]
     if isOpenParen(currentRune):
-      return bufStatus.searchClosingParen(parenPosition)
+      # Search from the next position in the place of `parenPosition`
+      # to the end position of the buffer.
+      if parenPosition.line == bufStatus.buffer.high and
+         parenPosition.column == bufStatus.buffer[parenPosition.line].high:
+           return
+
+      let
+        # TODO: Add bufStatus.next or gapbuffer.next and replace with it.
+        firstPositionLine =
+          if parenPosition.column + 1 < bufStatus.buffer[parenPosition.line].len:
+            parenPosition.line
+          else:
+            parenPosition.line + 1
+        firstPositionColumn =
+          if firstPositionLine == parenPosition.line: parenPosition.column + 1
+          else:
+            if bufStatus.buffer[firstPositionLine].high >= 0:
+              bufStatus.buffer[firstPositionLine].high
+            else:
+              0
+        firstPosition = BufferPosition(
+          line: firstPositionLine,
+          column: firstPositionColumn)
+
+        range = BufferRange(
+          first: firstPosition,
+          last: bufStatus.positionEndOfBuffer)
+
+      return bufStatus.searchClosingParen(range, currentRune)
+
     elif isCloseParen(currentRune):
-      return bufStatus.searchOpeningParen(parenPosition)
+      # Search from the prev position in the place of `parenPosition`
+      # to the first position of the buffer.
+      if parenPosition.line == 0 and parenPosition.column == 0: return
+
+      let
+        # TODO: Add bufStatus.prev or gapbuffer.prev and replace with it.
+        firstPositionLine =
+          if parenPosition.column > 0: parenPosition.line
+          else: parenPosition.line - 1
+        firstPositionColumn =
+          if firstPositionLine == parenPosition.line: parenPosition.column - 1
+          else:
+            if bufStatus.buffer[firstPositionLine].high >= 0:
+              bufStatus.buffer[firstPositionLine].high
+            else:
+              0
+        firstPosition = BufferPosition(
+          line: firstPositionLine,
+          column: firstPositionColumn)
+
+        range = BufferRange(
+          first: firstPosition,
+          last: BufferPosition(line: 0, column: 0))
+
+      return bufStatus.searchOpeningParen(range, currentRune)
