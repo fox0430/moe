@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 import independentutils, bufferstatus, highlight, color, window, gapbuffer,
-       unicodeext, editorview, searchutils, settings
+       unicodeext, editorview, searchutils, settings, movement
 
 proc initBufferPosition(
   n: WindowNode): BufferPosition {.inline.} =
@@ -73,14 +73,12 @@ proc highlightPairOfParen(
   bufStatus: BufferStatus,
   windowNode: WindowNode) =
 
+    if bufStatus.isExpandPosition(windowNode): return
+
     let
       buffer = bufStatus.buffer
       currentLine = windowNode.currentLine
-      currentColumn =
-        if windowNode.currentColumn > buffer[currentLine].high:
-          buffer[currentLine].high
-        else:
-          windowNode.currentColumn
+      currentColumn = windowNode.currentColumn
 
     if buffer[currentLine].len < 1 or
        (buffer[currentLine][currentColumn] == ru'"') or
