@@ -266,3 +266,9 @@ proc changeMode*(bufStatus: var BufferStatus, mode: Mode) =
 
   bufStatus.prevMode = currentMode
   bufStatus.mode = mode
+
+## Return the BufferPosition of the end of the buffer.
+proc positionEndOfBuffer*(bufStatus: BufferStatus): BufferPosition {.inline.} =
+  BufferPosition(
+    line: bufStatus.buffer.high,
+    column: bufStatus.buffer[bufStatus.buffer.high].high)
