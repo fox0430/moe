@@ -18,8 +18,10 @@
 #[############################################################################]#
 
 import std/[unittest, os, oids, deques]
-import moepkg/[ui, editorstatus, gapbuffer, exmode, unicodeext, bufferstatus,
-               settings, window, helputils]
+import moepkg/[ui, editorstatus, gapbuffer, unicodeext, bufferstatus, settings,
+               window, helputils]
+
+import moepkg/exmode {.all.}
 
 proc resize(status: var EditorStatus, h, w: int) =
   updateTerminalSize(h, w)
@@ -982,3 +984,45 @@ suite "Ex mode: Open backup manager":
     check status.bufStatus.len == 2
     check status.bufStatus[0].isNormalMode
     check status.bufStatus[1].isBackupManagerMode
+
+suite "saveExCommandHistory":
+  test "Save command history 1":
+    var commandHistory: seq[Runes]
+    const
+      commands = @[
+        @[ru"a", ru"b"],
+        @[ru"c", ru"d"],
+      ]
+      limit = 1000
+
+    for cmd in commands:
+      commandHistory.saveExCommandHistory(cmd, limit)
+
+    check commandHistory == @[commands[0].join(ru" "), commands[1].join(ru" ")]
+
+  test "Save command history 2":
+    var commandHistory: seq[Runes]
+    const
+      commands = @[
+        @[ru"a", ru"b"],
+        @[ru"c", ru"d"],
+      ]
+      limit = 1
+
+    for cmd in commands:
+      commandHistory.saveExCommandHistory(cmd, limit)
+
+    check commandHistory == @[commands[1].join(ru" ")]
+
+  test "Save command history 3":
+    var commandHistory: seq[Runes]
+    const
+      commands = @[
+        @[ru"a", ru"b"],
+        @[ru"c", ru"d"],
+      ]
+      limit = 0
+
+    for cmd in commands:
+      commandHistory.saveExCommandHistory(cmd, limit)
+      check commandHistory.len == 0

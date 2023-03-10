@@ -392,3 +392,36 @@ suite "search: matchingParenPair":
       expectPosition = none(SearchResult)
 
     matchingParenPairTest(testIndex, paren, buffer, currentPosition, expectPosition)
+
+suite "saveSearchHistory":
+  test "Save search history 1":
+    var searchHistory: seq[Runes]
+    const
+      keywords = @[ru"test", ru"test2"]
+      limit = 1000
+
+    for word in keywords:
+      searchHistory.saveSearchHistory(word, limit)
+
+    check searchHistory == keywords
+
+  test "Save search history 2":
+    var searchHistory: seq[Runes]
+    const
+      keywords = @[ru"test", ru"test2"]
+      limit = 1
+
+    for word in keywords:
+      searchHistory.saveSearchHistory(word, limit)
+
+    check searchHistory == @[keywords[1]]
+
+  test "Save search history 3":
+    var searchHistory: seq[Runes]
+    const
+      keywords = @[ru"test", ru"test2"]
+      limit = 0
+
+    for word in keywords:
+      searchHistory.saveSearchHistory(word, limit)
+      check searchHistory.len == 0

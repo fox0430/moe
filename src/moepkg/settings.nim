@@ -32,6 +32,12 @@ type
     VSCodium
     VSCode
 
+  ClipboardToolOnLinux* = enum
+    none
+    xsel
+    xclip
+    wlClipboard
+
   DebugWindowNodeSettings* = object
     enable*: bool
     currentWindow*: bool
@@ -168,14 +174,10 @@ type
 
   PersistSettings* = object
     exCommand*: bool
+    exCommandHistoryLimit*: int
     search*: bool
+    searchHistoryLimit*: int
     cursorPosition*: bool
-
-  ClipboardToolOnLinux* = enum
-    none
-    xsel
-    xclip
-    wlClipboard
 
   ClipboardSettings* = object
     enable*: bool
@@ -343,7 +345,9 @@ proc initHighlightSettings(): HighlightSettings =
 
 proc initPersistSettings(): PersistSettings =
   result.exCommand = true
+  result.exCommandHistoryLimit = 1000
   result.search = true
+  result.searchHistoryLimit = 1000
   result.cursorPosition = true
 
 # Automatically set the clipboard tool on GNU/Linux
@@ -1310,8 +1314,14 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Persist"].contains("exCommand"):
       result.persist.exCommand = settings["Persist"]["exCommand"].getBool
 
+    if settings["Persist"].contains("exCommandHistoryLimit"):
+      result.persist.exCommandHistoryLimit = settings["Persist"]["exCommandHistoryLimit"].getInt
+
     if settings["Persist"].contains("search"):
       result.persist.search = settings["Persist"]["search"].getBool
+
+    if settings["Persist"].contains("searchHistoryLimit"):
+      result.persist.searchHistoryLimit = settings["Persist"]["searchHistoryLimit"].getInt
 
     if settings["Persist"].contains("cursorPosition"):
       result.persist.cursorPosition = settings["Persist"]["cursorPosition"].getBool
@@ -2047,6 +2057,9 @@ proc validatePersistTable(table: TomlValueRef): Option[InvalidItem] =
       of "exCommand", "search", "cursorPosition":
         if val.kind != TomlValueKind.Bool:
           return some(InvalidItem(name: $key, val: $val))
+      of "exCommandHistoryLimit", "searchHistoryLimit":
+        if val.kind != TomlValueKind.Int:
+          return some(InvalidItem(name: $key, val: $val))
       else:
         return some(InvalidItem(name: $key, val: $val))
 
@@ -2384,7 +2397,9 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Persist]"
   result.addLine fmt "exCommand = {$settings.persist.exCommand}"
+  result.addLine fmt "exCommandHistoryLimit = {$settings.persist.exCommandHistoryLimit}"
   result.addLine fmt "search = {$settings.persist.search}"
+  result.addLine fmt "searchHistoryLimit = {$settings.persist.searchHistoryLimit}"
   result.addLine fmt "cursorPosition = {$settings.persist.cursorPosition}"
 
   result.addLine ""

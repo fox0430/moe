@@ -133,7 +133,9 @@ type autocompleteTableNames {.pure.} = enum
 
 type persistTableSettings {.pure.} = enum
   exCommand
+  exCommandHistoryLimit
   search
+  searchHistoryLimit
   cursorPosition
 
 type themeTableNames {.pure.} = enum
@@ -549,21 +551,30 @@ proc getAutocompleteTableSettingValues(settings: AutocompleteSettings,
 proc getPersistTableSettingsValues(settings: PersistSettings,
                                    name: string): seq[seq[Rune]] =
 
-  var currentVal: bool
   case name:
-    of "exCommand":
-      currentVal = settings.exCommand
-    of "search":
-      currentVal = settings.search
-    of "cursorPosition":
-      currentVal = settings.cursorPosition
-    else:
-      return
-
-  if currentVal:
-    result = @[ru "true", ru "false"]
-  else:
-    result = @[ru "false", ru "true"]
+    of "exCommand", "search", "cursorPosition":
+      var currentVal: bool
+      case name:
+        of "exCommand":
+          currentVal = settings.exCommand
+        of "search":
+          currentVal = settings.search
+        of "cursorPosition":
+          currentVal = settings.cursorPosition
+        else:
+          return
+      if currentVal:
+        result = @[ru "true", ru "false"]
+      else:
+        result = @[ru "false", ru "true"]
+    of "exCommandHistoryLimit", "searchHistoryLimit":
+      case name:
+        of "exCommandHistoryLimit":
+          result = @[settings.exCommandHistoryLimit.toRunes]
+        of "searchHistoryLimit":
+          result = @[settings.searchHistoryLimit.toRunes]
+        else:
+          return
 
 proc getThemeTableSettingValues(settings: EditorSettings,
                                 name, position: string): seq[seq[Rune]] =
@@ -919,8 +930,12 @@ proc changePerSistTableSettings(settings: var PersistSettings,
   case settingName:
     of "exCommand":
       settings.exCommand = parseBool(settingVal)
+    of "exCommandHistoryLimit":
+      settings.exCommandHistoryLimit = parseInt(settingVal)
     of "search":
       settings.search = parseBool(settingVal)
+    of "searchHistoryLimit":
+      settings.searchHistoryLimit = parseInt(settingVal)
     of "cursorPosition":
       settings.cursorPosition = parseBool(settingVal)
     else:
@@ -1925,8 +1940,12 @@ proc initPersistTableBuffer(persistSettings: PersistSettings): seq[seq[Rune]] =
     case $name:
       of "exCommand":
         result.add(ru nameStr & space & $persistSettings.exCommand)
+      of "exCommandHistoryLimit":
+        result.add(ru nameStr & space & $persistSettings.exCommandHistoryLimit)
       of "search":
         result.add(ru nameStr & space & $persistSettings.search)
+      of "searchHistoryLimit":
+        result.add(ru nameStr & space & $persistSettings.searchHistoryLimit)
       of "cursorPosition":
         result.add(ru nameStr & space & $persistSettings.cursorPosition)
 
