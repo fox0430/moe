@@ -931,7 +931,7 @@ proc parseVsCodeThemeJson(
             if fileExists(themeFilePath):
               result =
                 try: some(json.parseFile(themeFilePath))
-                except: none(JsonNode)
+                except CatchableError: none(JsonNode)
 
 proc isCurrentVsCodeThemePackage(json: JsonNode, themeName: string): bool =
   # Return true if `json` is the current VSCode theme.
@@ -961,7 +961,7 @@ proc loadVSCodeTheme*(): colorTheme =
     settingsFilePath = vsCodeSettingsFilePath(vsCodeFlavor.get)
     settingsJson =
       try: json.parseFile(settingsFilePath)
-      except: return colorTheme.dark
+      except CatchableError: return colorTheme.dark
 
   # The current theme name
   if settingsJson{"workbench.colorTheme"} == nil or
@@ -975,7 +975,7 @@ proc loadVSCodeTheme*(): colorTheme =
     for file in walkPattern(defaultExtesionsDir / "*/package.json" ):
       let packageJson =
         try: json.parseFile(file)
-        except: continue
+        except CatchableError: continue
 
       if isCurrentVsCodeThemePackage(packageJson, themeSetting):
         let themeJson = parseVsCodeThemeJson(
@@ -993,7 +993,7 @@ proc loadVSCodeTheme*(): colorTheme =
     for file in walkPattern(userExtensionsDir / "*/package.json" ):
       let packageJson =
         try: json.parseFile(file)
-        except: continue
+        except CatchableError: continue
 
       if isCurrentVsCodeThemePackage(packageJson, themeSetting):
         let themeJson = parseVsCodeThemeJson(
@@ -1492,7 +1492,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
         # TODO: Test this
         let jsonNode =
           try: some(json.parseFile(themeString))
-          except: none(JsonNode)
+          except CatchableError: none(JsonNode)
         if jsonNode.isSome:
           colorThemeTable[colorTheme.config] = makecolorThemeFromVSCodeThemeFile(jsonNode.get)
         else:

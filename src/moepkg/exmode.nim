@@ -1181,14 +1181,15 @@ proc listAllBufferCommand(status: var EditorStatus) =
     setCursor(false)
     let key = getKey(currentMainWindowNode)
     if isResizeKey(key): status.resize
-    elif key.int == 0: discard
+    elif key == ERR_KEY: discard
     else: break
 
   status.settings.view.currentLineNumber = swapCurrentLineNumStting
   status.changeCurrentBuffer(swapCurrentBufferIndex)
   status.deleteBufferStatusCommand(status.bufStatus.high)
-
   status.commandLine.clear
+
+  currentBufStatus.isUpdate = true
 
 proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
   let replaceInfo = parseReplaceCommand(command)

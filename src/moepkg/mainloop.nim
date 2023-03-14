@@ -133,6 +133,74 @@ proc incListIndex(index: var int, list: seq[Runes]) =
   if index == list.high: index = 0
   else: index .inc
 
+proc assignNextExCommandHistory(
+  status: var EditorStatus,
+  exCommandHistoryIndex: var Option[int]) =
+
+    let exCommandHistory = status.exCommandHistory
+
+    if exCommandHistory.len > 0 and exCommandHistoryIndex.isSome:
+      if exCommandHistoryIndex.get < exCommandHistory.high:
+        exCommandHistoryIndex.get.inc
+
+      status.commandLine.buffer = exCommandHistory[exCommandHistoryIndex.get]
+      status.commandLine.moveEnd
+
+proc assignPrevExCommandHistory(
+  status: var EditorStatus,
+  exCommandHistoryIndex: var Option[int]) =
+
+    let exCommandHistory = status.exCommandHistory
+
+    if exCommandHistory.len > 0:
+      if exCommandHistoryIndex.isNone:
+        exCommandHistoryIndex = exCommandHistory.high.some
+      elif exCommandHistoryIndex.get > 0:
+        exCommandHistoryIndex.get.dec
+
+      status.commandLine.buffer = exCommandHistory[exCommandHistoryIndex.get]
+      status.commandLine.moveEnd
+
+proc assignNextSearchHistory(
+  status: var EditorStatus,
+  searchHistoryIndex: var Option[int]) =
+
+    let searchHistory = status.searchHistory
+
+    if status.searchHistory.len > 0 and searchHistoryIndex.isSome:
+      if searchHistoryIndex.get < searchHistory.high:
+        searchHistoryIndex.get.inc
+
+      status.commandLine.buffer = searchHistory[searchHistoryIndex.get]
+      status.commandLine.moveEnd
+
+proc assignPrevSearchHistory(
+  status: var EditorStatus,
+  searchHistoryIndex: var Option[int]) =
+
+    let searchHistory = status.searchHistory
+
+    if status.searchHistory.len > 0:
+      if searchHistoryIndex.isNone:
+        searchHistoryIndex = searchHistory.high.some
+      elif searchHistoryIndex.get > 0:
+        searchHistoryIndex.get.dec
+
+      status.commandLine.buffer = searchHistory[searchHistoryIndex.get]
+      status.commandLine.moveEnd
+
+proc isResetExCommandHistoryIndex(
+  exCommandHistoryIndex: Option[int],
+  key: Rune): bool {.inline.} =
+
+    (exCommandHistoryIndex.isSome) and not (isUpKey(key) or isDownKey(key))
+
+proc isResetSearchHistoryIndex(
+  searchHistoryIndex: Option[int],
+  key: Rune): bool {.inline.} =
+
+    (searchHistoryIndex.isSome) and not (isUpKey(key) or isDownKey(key))
+
 ## Get keys and update view.
 proc commandLineLoop*(status: var EditorStatus) =
   # TODO: Remove
@@ -171,6 +239,12 @@ proc commandLineLoop*(status: var EditorStatus) =
       if currentBufStatus.isSearchMode: status.searchHistory.high
       else: 0
 
+    # TODO: Remove
+    exCommandHistoryIndex: Option[int]
+
+    # TODO: Remove
+    searchHistoryIndex: Option[int]
+
   while not isCancel:
     status.update
 
@@ -192,7 +266,15 @@ proc commandLineLoop*(status: var EditorStatus) =
     if isResizeKey(key):
       updateTerminalSize()
       status.resize
-    elif isEscKey(key) or isControlC(key):
+      continue
+
+    if exCommandHistoryIndex.isResetExCommandHistoryIndex(key):
+      exCommandHistoryIndex = none(int)
+
+    if searchHistoryIndex.isResetSearchHistoryIndex(key):
+      searchHistoryIndex = none(int)
+
+    if isEscKey(key) or isControlC(key):
       isCancel = true
       if suggestWin.isSome:
         suggestWin.get.delete
@@ -206,13 +288,12 @@ proc commandLineLoop*(status: var EditorStatus) =
     elif isTabKey(key):
       if suggestWin.isNone: openSuggestWindow()
       else: suggestIndex.incListIndex(suggestList)
-
       continue
     elif isShiftTab(key):
       if suggestWin.isNone: openSuggestWindow()
       else: suggestIndex.decListIndex(suggestList)
-
       continue
+
     elif isLeftKey(key):
       status.commandLine.moveLeft
     elif isRightKey(key):
@@ -221,18 +302,28 @@ proc commandLineLoop*(status: var EditorStatus) =
         if status.popupWindow != nil:
           status.popupWindow.deleteWindow
           continue
+
     elif isUpKey(key):
-      if currentBufStatus.isExMode:
+      if suggestWin.isSome and currentBufStatus.isExMode:
+        # The suggestion window is used only when suggesting ex commands.
         suggestIndex.decListIndex(suggestList)
-      elif currentBufStatus.isSearchMode:
-        suggestIndex.decListIndex(status.searchHistory)
-      continue
+      else:
+        if currentBufStatus.isSearchMode:
+          status.assignPrevSearchHistory(searchHistoryIndex)
+        else:
+          status.assignPrevExCommandHistory(exCommandHistoryIndex)
+          continue
     elif isDownKey(key):
-      if currentBufStatus.isExMode:
+      if suggestWin.isSome and currentBufStatus.isExMode:
+        # The suggestion window is used only when suggesting ex commands.
         suggestIndex.incListIndex(suggestList)
-      elif currentBufStatus.isSearchMode:
-        suggestIndex.incListIndex(status.searchHistory)
-      continue
+      else:
+        if currentBufStatus.isSearchMode:
+          status.assignNextSearchHistory(searchHistoryIndex)
+        else:
+          status.assignNextExCommandHistory(exCommandHistoryIndex)
+          continue
+
     elif isHomeKey(key):
       status.commandLine.moveTop
     elif isEndKey(key):
@@ -244,8 +335,8 @@ proc commandLineLoop*(status: var EditorStatus) =
     else:
       status.commandLine.insert(key)
 
-      if status.isIncrementalSearch:
-        status.execSearchCommand(status.commandLine.buffer)
+    if status.isIncrementalSearch and status.commandLine.buffer.len > 0:
+      status.execSearchCommand(status.commandLine.buffer)
 
     if suggestWin.isSome:
       suggestWin.get.delete
