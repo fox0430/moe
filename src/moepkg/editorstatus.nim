@@ -318,7 +318,7 @@ proc addNewBuffer*(
       else:
         try:
           status.bufStatus.add initBufferStatus(path, mode)
-        except:
+        except CatchableError:
           let errMessage =
             if mode.isFilerMode:
               fmt"Failed to open dir: {path} : {getCurrentExceptionMsg()}"

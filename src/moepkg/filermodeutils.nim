@@ -82,7 +82,7 @@ proc deleteFile*(pathInfo: PathInfo): tuple[ok: bool, mess: Runes] =
   else:
     try:
       removeFile(pathInfo.path)
-    except:
+    except CatchableError:
       let errMess = fmt"Failed to remove file: {getCurrentExceptionMsg()}"
       return (false, errMess.toRunes)
 
@@ -255,7 +255,7 @@ proc openFileOrDir*(
       of pcFile, pcLinkToFile:
         try:
           bufStatuses.add initBufferStatus(path, Mode.filer)
-        except:
+        except CatchableError:
           # TODO: Show error message.
           discard
       of pcDir, pcLinkToDir:
@@ -315,7 +315,7 @@ proc pathToIcon(path: string): seq[Rune] =
     if fpUserExec  in permissions or
       fpGroupExec in permissions:
       return ru"🏃 "
-  except:
+  except CatchableError:
     discard
 
   # The symbols were selected for their looks,

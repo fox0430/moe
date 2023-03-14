@@ -37,7 +37,7 @@ proc createDir(dir: seq[Rune]): bool =
     return true
   else:
     try: createDir($dir)
-    except: return false
+    except CatchableError: return false
 
     return true
 
@@ -56,7 +56,7 @@ proc getBackupDir*(baseBackupDir, sourceFilePath: seq[Rune]): seq[Rune] =
   for file in walkPattern($baseBackupDir / "*/backup.json" ):
     let backupJson =
       try: json.parseFile(file)
-      except: return "".toRunes
+      except CatchableError: return "".toRunes
 
     if validateBackupInfoJson(backupJson):
       if backupJson["path"].getStr == $sourceFilePath:
@@ -67,7 +67,7 @@ proc getBackupDir*(baseBackupDir, sourceFilePath: seq[Rune]): seq[Rune] =
 proc validateBackupFileName*(filename: string): bool =
   try:
     filename.parse("yyyy-MM-dd\'T\'HH:mm:sszzz")
-  except:
+  except CatchableError:
     return false
 
   return true
@@ -78,7 +78,7 @@ proc backupDir*(baseBackupDir, sourceFilePath: string): string =
   for jsonFilePath in walkPattern($baseBackupDir / "*/backup.json" ):
     let backupJson =
       try: json.parseFile(jsonFilePath)
-      except: return ""
+      except CatchableError: return ""
 
     if validateBackupInfoJson(backupJson):
       if backupJson["path"].getStr == sourceFilePath:
@@ -110,7 +110,7 @@ proc initBackupDir(baseBackupDir, sourceFilePath: seq[Rune]): seq[Rune]=
         backupDir = baseBackupDir / id.toRunes
       try:
         createDir(backupDir)
-      except:
+      except CatchableError:
         return "".toRunes
 
       return backupDir
@@ -135,7 +135,7 @@ proc diff(baseBackupDir, sourceFilePath: seq[Rune], buffer: string): bool =
     try:
       let mostRecentBuffer = openFile(mostRecentFile.toRunes)
       return $mostRecentBuffer.text == buffer[0 ..< ^1]
-    except:
+    except CatchableError:
       return false
 
 # Return if successful.
@@ -145,7 +145,7 @@ proc writeBackupFile(
 
     try:
       saveFile(path, buffer, encoding)
-    except:
+    except CatchableError:
       return false
 
     return true
@@ -158,7 +158,7 @@ proc writeBackupInfoJson(backupDir, sourceFilePath: seq[Rune]): bool =
 
   try:
     writeFile($backupInfoJsonPath(backupDir), $jsonNode)
-  except:
+  except CatchableError:
     return false
 
   return true
