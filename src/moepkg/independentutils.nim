@@ -65,7 +65,7 @@ proc isInt*(str: string): bool =
   try:
     discard str.parseInt
     return true
-  except:
+  except CatchableError:
     discard
 
 proc genDelimiterStr*(buffer: string): string =
