@@ -1026,3 +1026,16 @@ suite "saveExCommandHistory":
     for cmd in commands:
       commandHistory.saveExCommandHistory(cmd, limit)
       check commandHistory.len == 0
+
+  test "Save command history 4":
+    var commandHistory: seq[Runes]
+    const
+      commands = @[
+        @[ru"q"],
+        @[ru"Q"],
+      ]
+      limit = 1000
+
+    for cmd in commands:
+      commandHistory.saveExCommandHistory(cmd, limit)
+      check commandHistory.len == 1
