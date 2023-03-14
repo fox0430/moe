@@ -1279,7 +1279,7 @@ proc saveExCommandHistory(
 
     if exCommandHistory.len == 0:
       exCommandHistory.add cmd
-    elif cmd != exCommandHistory[^1]:
+    elif cmpIgnoreCase($cmd, $exCommandHistory[^1]) != 0:
       exCommandHistory.add cmd
 
       if exCommandHistory.len > limit:
