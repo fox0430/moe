@@ -1595,7 +1595,8 @@ proc editEnumAndBoolSettings(status: var EditorStatus,
     status.changeEditorSettings(
       selectedTable, selectedSetting, position, settingVal)
   else:
-    status.popupWindow.deleteWindow
+    if not status.popupWindow.isNil:
+      status.popupWindow.deleteWindow
 
 proc selectAndChangeEditorSettings(status: var EditorStatus, arrayIndex: int) =
   let
