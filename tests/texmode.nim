@@ -18,8 +18,10 @@
 #[############################################################################]#
 
 import std/[unittest, os, oids, deques]
-import moepkg/[ui, editorstatus, gapbuffer, exmode, unicodeext, bufferstatus,
+import moepkg/[ui, editorstatus, gapbuffer, unicodeext, bufferstatus,
                settings, window, helputils]
+
+import moepkg/exmode {.all.}
 
 proc resize(status: var EditorStatus, h, w: int) =
   updateTerminalSize(h, w)
@@ -982,3 +984,13 @@ suite "Ex mode: Open backup manager":
     check status.bufStatus.len == 2
     check status.bufStatus[0].isNormalMode
     check status.bufStatus[1].isBackupManagerMode
+
+suite "Ex mode: Open configuration mode":
+  test "Open config mode":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    status.openConfigMode
+
+    # Check for crashes when updating
+    status.update

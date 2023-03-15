@@ -23,7 +23,7 @@ import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
        unicodeext, independentutils, searchutils, highlight, window, movement,
        color, build, bufferstatus, editor, settings, quickrun, messages,
        commandline, debugmodeutils, platform, commandlineutils, recentfilemode,
-       buffermanager, bufferhighlight, messagelog
+       buffermanager, bufferhighlight, messagelog, configmode
 
 type
   replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
@@ -320,7 +320,7 @@ proc startDebugMode(status: var EditorStatus) =
 
     status.resize
 
-proc startConfigMode(status: var EditorStatus) =
+proc openConfigMode(status: var EditorStatus) =
   let bufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[bufferIndex].prevMode)
 
@@ -330,6 +330,10 @@ proc startConfigMode(status: var EditorStatus) =
 
   status.addNewBufferInCurrentWin(bufferstatus.Mode.config)
   status.changeCurrentBuffer(status.bufStatus.high)
+
+  currentBufStatus.buffer = initConfigModeBuffer(status.settings)
+
+  status.resize
 
 proc startBackupManager(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
@@ -1496,7 +1500,7 @@ proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
   elif isBackupManagerCommand(command):
     status.startBackupManager
   elif isStartConfigMode(command):
-    status.startConfigMode
+    status.openConfigMode
   elif isIgnorecaseSettingCommand(command):
     status.ignorecaseSettingCommand(command[1])
   elif isSmartcaseSettingCommand(command):
