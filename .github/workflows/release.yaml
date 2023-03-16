@@ -42,7 +42,7 @@ jobs:
     if: contains(fromJson('["major", "minor", "patch"]'), inputs.release)
     steps:
       - name: checkout
-        uses: actions/checkout@v3.3.0
+        uses: actions/checkout@v3.4.0
 
       - name: release-bump2version-scriv
         uses: kevinmatthes/release-bump2version-scriv@v0.2.3

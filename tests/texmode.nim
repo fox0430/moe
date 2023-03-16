@@ -18,8 +18,8 @@
 #[############################################################################]#
 
 import std/[unittest, os, oids, deques]
-import moepkg/[ui, editorstatus, gapbuffer, unicodeext, bufferstatus, settings,
-               window, helputils]
+import moepkg/[ui, editorstatus, gapbuffer, unicodeext, bufferstatus,
+               settings, window, helputils]
 
 import moepkg/exmode {.all.}
 
@@ -1039,3 +1039,13 @@ suite "saveExCommandHistory":
     for cmd in commands:
       commandHistory.saveExCommandHistory(cmd, limit)
       check commandHistory.len == 1
+
+suite "Ex mode: Open configuration mode":
+  test "Open config mode":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    status.openConfigMode
+
+    # Check for crashes when updating
+    status.update
