@@ -187,6 +187,9 @@ proc rustNextToken(g: var GeneralTokenizer, flags: TokenizerFlags) =
           of '\0':
             break
           else: inc(pos)
+      else:
+        g.kind = gtOperator
+        while g.buf[pos] in opChars: inc(pos)
     of '#':
       inc(pos)
       if hasPreprocessor in flags:
