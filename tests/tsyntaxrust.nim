@@ -6,7 +6,7 @@ type
   GT = GeneralTokenizer
 
 suite "syntax: Rust":
-  test "Rust 1":
+  test "Hello world":
     const code = """fn main() { println!("Hello world"); }"""
 
     var token = GeneralTokenizer()
@@ -41,7 +41,7 @@ suite "syntax: Rust":
       GT(kind: gtPunctuation, start: 37, length: 1, buf: "", pos: 38, state: gtEof)
     ]
 
-  test "Rust 2":
+  test "Only '/'":
     # https://github.com/fox0430/moe/issues/1675
 
     const code = """/"""
@@ -63,7 +63,7 @@ suite "syntax: Rust":
       GT(kind: gtOperator, start: 0, length: 1, buf: "", pos: 1, state: gtEof),
     ]
 
-  test "Rust 3":
+  test "Only comments":
     const code = """// fn main() { println!("Hello world"); }"""
 
     var token = GeneralTokenizer()
