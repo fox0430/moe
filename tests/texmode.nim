@@ -17,11 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, oids, deques]
-import moepkg/[ui, editorstatus, gapbuffer, unicodeext, bufferstatus,
-               settings, window, helputils]
+import std/[unittest, os, oids, deques, macros, strformat]
+import moepkg/[ui, editorstatus, gapbuffer, unicodeext, bufferstatus, settings,
+               window, helputils]
 
 import moepkg/exmode {.all.}
+import moepkg/commandlineutils{.all.}
 
 proc resize(status: var EditorStatus, h, w: int) =
   updateTerminalSize(h, w)
@@ -36,6 +37,42 @@ proc isValidWindowSize(n: WindowNode) =
   check n.view.start.len > 1
   check n.view.originalLine.len > 1
   check n.view.length.len > 1
+
+
+suite "isExCommand":
+  ## Generate test code
+  macro isExCommandTest(command: Runes, exceptInputState: InputState) =
+    quote do:
+      let testTitle = "isExCommand: " & $`command`
+
+      test testTitle:
+        check isExCommand(`command`) == `exceptInputState`
+
+  # Check valid commands
+  for cmd in exCommandList:
+    case cmd.argsType:
+      of ArgsType.none:
+        isExCommandTest(cmd.command.toRunes, InputState.Valid)
+
+      of ArgsType.theme:
+        for t in @["vivid", "dark", "light", "config", "vscode"]:
+          isExCommandTest(toRunes(fmt"{cmd.command} {t}"), InputState.Valid)
+
+      of ArgsType.number:
+        isExCommandTest(toRunes(fmt"{cmd.command} 0"), InputState.Valid)
+
+      of ArgsType.text:
+        isExCommandTest(toRunes(fmt"{cmd.command} text"), InputState.Valid)
+
+      of ArgsType.toggle:
+        isExCommandTest(toRunes(fmt"{cmd.command} on"), InputState.Valid)
+        isExCommandTest(toRunes(fmt"{cmd.command} off"), InputState.Valid)
+
+  # Check the empty
+  isExCommandTest("".toRunes, InputState.Continue)
+
+  # Check the Invalid command
+  isExCommandTest("abcxyz".toRunes, InputState.Invalid)
 
 suite "Ex mode: Edit command":
   test "Edit command":
