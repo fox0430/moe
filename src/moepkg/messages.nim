@@ -249,17 +249,6 @@ proc writeFailedToLoadConfigurationFileError*(
     commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
     addMessageLog mess
 
-proc writeNotExistWorkspaceError*(
-  commandLine: var CommandLine,
-  workspaceIndex: int) =
-    let mess = "Error: Workspace " & $workspaceIndex & " not exist"
-    commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
-
-proc writeWorkspaceList*(
-  commandLine: var CommandLine,
-  buffer: string) {.inline.} =
-    commandLine.writeMessageOnCommandLine(buffer, EditorColorPair.commandBar)
-
 proc writeBackupRestoreError*(commandLine: var CommandLine) {.inline.} =
   const mess = "Error: Restore failed"
   commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
