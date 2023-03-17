@@ -227,7 +227,9 @@ suite "Config mode: Init buffer":
 
     const sample = @[ru "Persist",
                      ru "  exCommand                      true",
+                     ru "  exCommandHistoryLimit          1000",
                      ru "  search                         true",
+                     ru "  searchHistoryLimit             1000",
                      ru "  cursorPosition                 true"]
 
     for index, line in buffer:
@@ -1479,6 +1481,17 @@ suite "Config mode: Get Persist table setting values":
 
     checkBoolSettingValue(default, values)
 
+  test "Get exCommandHistoryLimit values":
+    var status = initEditorStatus()
+    let persistSettings = status.settings.persist
+
+    const name = "exCommandHistoryLimit"
+    let
+      default = persistSettings.exCommandHistoryLimit
+      values = persistSettings.getPersistTableSettingsValues(name)
+
+    check default == values[0].parseInt
+
   test "Get search values":
     var status = initEditorStatus()
     let persistSettings = status.settings.persist
@@ -1490,11 +1503,22 @@ suite "Config mode: Get Persist table setting values":
 
     checkBoolSettingValue(default, values)
 
+  test "Get searchHistoryLimit values":
+    var status = initEditorStatus()
+    let persistSettings = status.settings.persist
+
+    const name = "searchHistoryLimit"
+    let
+      default = persistSettings.searchHistoryLimit
+      values = persistSettings.getPersistTableSettingsValues(name)
+
+    check default == values[0].parseInt
+
   test "Get cursorPosition values":
     var status = initEditorStatus()
     let persistSettings = status.settings.persist
 
-    const name = "search"
+    const name = "cursorPosition"
     let
       default = persistSettings.cursorPosition
       values = persistSettings.getPersistTableSettingsValues(name)
@@ -2325,6 +2349,16 @@ suite "Config mode: Chaging Persist table settings":
 
     check val == persistSettings.exCommand
 
+  test "Chaging exCommandHistoryLimit":
+    var
+      settings = initEditorSettings()
+      persistSettings = settings.persist
+
+    let val = not persistSettings.exCommandHistoryLimit
+    persistSettings.changePerSistTableSettings("exCommandHistoryLimit", $val)
+
+    check val == persistSettings.exCommandHistoryLimit
+
   test "Chaging search":
     var
       settings = initEditorSettings()
@@ -2334,6 +2368,16 @@ suite "Config mode: Chaging Persist table settings":
     persistSettings.changePerSistTableSettings("search", $val)
 
     check val == persistSettings.search
+
+  test "Chaging searchHistoryLimit":
+    var
+      settings = initEditorSettings()
+      persistSettings = settings.persist
+
+    let val = not persistSettings.searchHistoryLimit
+    persistSettings.changePerSistTableSettings("searchHistoryLimit", $val)
+
+    check val == persistSettings.searchHistoryLimit
 
   test "Chaging cursorPosition":
     var

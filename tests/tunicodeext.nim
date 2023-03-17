@@ -311,6 +311,12 @@ test "iteratorSplitWithRemoveEmptyEntries":
         x
   check actualResult == expectedResult
 
+test "join 1":
+  check @[ru"a", ru"b", ru"c"].join == ru"abc"
+
+test "join 2":
+  check @[ru"a", ru"b", ru"c"].join(ru" ") == ru"a b c"
+
 from os import `/`
 test "/":
   proc checkJoinPath(head, tail: string) =

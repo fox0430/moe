@@ -149,10 +149,25 @@ proc searchAllOccurrence*(
         result.add SearchResult(line: lineNumber, column: first + position.get)
         first += position.get + keyword.len
 
-## Add a keyword to the searchHistory.
-proc addSearchHistory*(searchHistory: var seq[Runes], keyword: Runes) =
-  if searchHistory.len == 0 or keyword != searchHistory[^1]:
-    searchHistory.add(keyword)
+## Save a keyword to the searchHistory.
+## If the size exceeds the limit, the oldest will be deleted.
+proc saveSearchHistory*(
+  searchHistory: var seq[Runes],
+  keyword: Runes,
+  limit: int) =
+
+    if limit < 1 or keyword.len == 0: return
+
+    if searchHistory.len == 0:
+      searchHistory.add keyword
+    elif keyword != searchHistory[^1]:
+      searchHistory.add keyword
+
+      if searchHistory.len > limit:
+        let
+          first = searchHistory.len - limit
+          last = first + limit - 1
+        searchHistory = searchHistory[first .. last]
 
 proc assertRange(range: BufferRange) =
   doAssert range.first.line >= 0

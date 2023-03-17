@@ -135,7 +135,9 @@ const tomlStr = """
 
   [Persist]
   exCommand = false
+  exCommandHistoryLimit = 1
   search = false
+  searchHistoryLimit = 1
   cursorPosition = false
 
   [Debug.WindowNode]
@@ -392,7 +394,9 @@ suite "Parse configuration file":
     check settings.autocomplete.enable
 
     check not settings.persist.exCommand
+    check settings.persist.exCommandHistoryLimit == 1
     check not settings.persist.search
+    check settings.persist.searchHistoryLimit == 1
     check not settings.persist.cursorPosition
 
     check not settings.debugMode.windowNode.enable

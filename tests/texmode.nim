@@ -985,6 +985,61 @@ suite "Ex mode: Open backup manager":
     check status.bufStatus[0].isNormalMode
     check status.bufStatus[1].isBackupManagerMode
 
+suite "saveExCommandHistory":
+  test "Save command history 1":
+    var commandHistory: seq[Runes]
+    const
+      commands = @[
+        @[ru"a", ru"b"],
+        @[ru"c", ru"d"],
+      ]
+      limit = 1000
+
+    for cmd in commands:
+      commandHistory.saveExCommandHistory(cmd, limit)
+
+    check commandHistory == @[commands[0].join(ru" "), commands[1].join(ru" ")]
+
+  test "Save command history 2":
+    var commandHistory: seq[Runes]
+    const
+      commands = @[
+        @[ru"a", ru"b"],
+        @[ru"c", ru"d"],
+      ]
+      limit = 1
+
+    for cmd in commands:
+      commandHistory.saveExCommandHistory(cmd, limit)
+
+    check commandHistory == @[commands[1].join(ru" ")]
+
+  test "Save command history 3":
+    var commandHistory: seq[Runes]
+    const
+      commands = @[
+        @[ru"a", ru"b"],
+        @[ru"c", ru"d"],
+      ]
+      limit = 0
+
+    for cmd in commands:
+      commandHistory.saveExCommandHistory(cmd, limit)
+      check commandHistory.len == 0
+
+  test "Save command history 4":
+    var commandHistory: seq[Runes]
+    const
+      commands = @[
+        @[ru"q"],
+        @[ru"Q"],
+      ]
+      limit = 1000
+
+    for cmd in commands:
+      commandHistory.saveExCommandHistory(cmd, limit)
+      check commandHistory.len == 1
+
 suite "Ex mode: Open configuration mode":
   test "Open config mode":
     var status = initEditorStatus()

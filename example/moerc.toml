@@ -203,7 +203,11 @@ enable = true
 
 exCommand = true
 
+exCommandHistoryLimit = 1000
+
 search = true
+
+searchHistoryLimit = 1000
 
 cursorPosition = true
 

@@ -555,10 +555,22 @@ The default value is true.
 exCommand
 ```
 
+The maximum entries of ex command history to save (int).
+The defaut value is 1000.
+```
+exCommandHistoryLimit
+```
+
 Enable/Disable saving search history (bool).
 The default value is true.
 ```
 search
+```
+
+The maximum entries of search history to save (int).
+The defaut value is 1000.
+```
+searchHistoryLimit
 ```
 
 Enable/Disable saving last cursor position (bool).

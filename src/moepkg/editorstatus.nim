@@ -165,7 +165,7 @@ proc changeCurrentWin*(status: var EditorStatus, index: int) =
     var node = mainWindowNode.searchByWindowIndex(index)
     currentMainWindowNode = node
 
-proc loadExCommandHistory*(): seq[seq[Rune]] =
+proc loadExCommandHistory*(limit: int): seq[Runes] =
   let chaheFile = getHomeDir() / ".cache/moe/exCommandHistory"
 
   if fileExists(chaheFile):
@@ -175,7 +175,11 @@ proc loadExCommandHistory*(): seq[seq[Rune]] =
       if line.len > 0:
         result.add ru line
 
-proc loadSearchHistory*(): seq[seq[Rune]] =
+      # Ignore if Limit Exceeded.
+      if line.len == limit:
+        return
+
+proc loadSearchHistory*(limit: int): seq[Runes] =
   let chaheFile = getHomeDir() / ".cache/moe/searchHistory"
 
   if fileExists(chaheFile):
@@ -184,6 +188,10 @@ proc loadSearchHistory*(): seq[seq[Rune]] =
       let line = f.readLine
       if line.len > 0:
         result.add ru line
+
+      # Ignore if Limit Exceeded.
+      if line.len == limit:
+        return
 
 proc loadLastCursorPosition*(): seq[LastCursorPosition] =
   let chaheFile = getHomeDir() / ".cache/moe/lastPosition"

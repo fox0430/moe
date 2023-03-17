@@ -507,3 +507,8 @@ proc isContainUpper*(runes: Runes): bool =
   for r in runes:
     let ch = ($r)[0]
     if isUpperAscii(ch): return true
+
+proc join*(lines: seq[Runes], sep: Runes = ru""): Runes =
+  for index, runes in lines:
+    result.add runes
+    if index < lines.high: result.add sep

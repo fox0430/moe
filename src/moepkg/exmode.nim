@@ -1270,16 +1270,27 @@ proc newEmptyBufferInSplitWindowVertically*(status: var EditorStatus) =
 
   status.changeCurrentBuffer(status.bufStatus.high)
 
-proc addExCommandHistory(exCommandHistory: var seq[seq[Rune]],
-                         command: seq[seq[Rune]]) =
+## Save a command to the exCommandHistory.
+## If the size exceeds the limit, the oldest will be deleted.
+proc saveExCommandHistory(
+  exCommandHistory: var seq[Runes],
+  command: seq[Runes],
+  limit: int) =
 
-  var cmd = ru ""
-  for index, runes in command:
-    if index > 0: cmd.add(ru" " & runes)
-    else: cmd.add(runes)
+    if limit < 1 or command.len == 0: return
 
-  if exCommandHistory.len == 0 or cmd != exCommandHistory[^1]:
-    exCommandHistory.add(cmd)
+    let cmd = command.join(ru" ")
+
+    if exCommandHistory.len == 0:
+      exCommandHistory.add cmd
+    elif cmpIgnoreCase($cmd, $exCommandHistory[^1]) != 0:
+      exCommandHistory.add cmd
+
+      if exCommandHistory.len > limit:
+        let
+          first = exCommandHistory.len - limit
+          last = first + limit - 1
+        exCommandHistory = exCommandHistory[first .. last]
 
 proc isExCommand*(command: Runes): InputState =
   result = InputState.Invalid
@@ -1362,12 +1373,12 @@ proc isExCommand*(command: Runes): InputState =
        isBuildCommand(cmd):
          return InputState.Valid
 
-# TODO: command arg type.
-proc exModeCommand*(status: var EditorStatus, command: seq[seq[Rune]]) =
+proc exModeCommand*(status: var EditorStatus, command: seq[Runes]) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
-  # Save command history
-  status.exCommandHistory.addExCommandHistory(command)
+  status.exCommandHistory.saveExCommandHistory(
+    command,
+    status.settings.persist.exCommandHistoryLimit)
 
   if command.len == 0 or command[0].len == 0:
     status.changeMode(currentBufStatus.prevMode)

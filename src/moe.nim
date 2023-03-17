@@ -24,15 +24,18 @@ import moepkg/[ui, bufferstatus, editorstatus, cmdlineoption, mainloop]
 # Load persisted data (Ex command history, search history and cursor postion)
 proc loadPersistData(status: var EditorStatus) =
   if status.settings.persist.exCommand:
-    status.exCommandHistory = loadExCommandHistory()
+    let limit = status.settings.persist.exCommandHistoryLimit
+    status.exCommandHistory = loadExCommandHistory(limit)
 
   if status.settings.persist.search:
-    status.searchHistory = loadSearchHistory()
+    let limit = status.settings.persist.searchHistoryLimit
+    status.searchHistory = loadSearchHistory(limit)
 
   if status.settings.persist.cursorPosition:
     status.lastPosition = loadLastCursorPosition()
-    currentMainWindowNode.restoreCursorPostion(currentBufStatus,
-                                               status.lastPosition)
+    currentMainWindowNode.restoreCursorPostion(
+      currentBufStatus,
+      status.lastPosition)
 
 proc addBufferStatus(status: var EditorStatus, parsedList: CmdParsedList) =
   if parsedList.path.len > 0:
