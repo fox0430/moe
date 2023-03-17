@@ -27,7 +27,7 @@ type
     filePath
 
 # TODO: Auto inserts spaces in compile time.
-const exCommandList: array[67, tuple[command, description: string]] = [
+const exCommandList: array[63, tuple[command, description: string]] = [
   (command: "!", description: "                    | Shell command execution"),
   (command: "deleteParen", description: "          | Enable/Disable auto delete paren"),
   (command: "b", description: "                    | Change the buffer with the given number"),
@@ -43,10 +43,8 @@ const exCommandList: array[67, tuple[command, description: string]] = [
   (command: "clipboard", description: "            | Enable/Disable accessing the system clipboard"),
   (command: "conf", description: "                 | Open the configuration mode"),
   (command: "cursorLine", description: "           | Change setting to the cursorLine"),
-  (command: "cws", description: "                  | Create the work space"),
   (command: "debug", description: "                | Open the debug mode"),
   (command: "deleteTrailingSpaces", description: " | Delete the trailing spaces in the current buffer"),
-  (command: "dws", description: "                  | Delete the current workspace"),
   (command: "e", description: "                    | Open file"),
   (command: "ene", description: "                  | Create the empty buffer"),
   (command: "help", description: "                 | Open the help"),
@@ -64,7 +62,6 @@ const exCommandList: array[67, tuple[command, description: string]] = [
   (command: "liveReload", description: "           | Enable/Disable the live reload of the config file"),
   (command: "log", description: "                  | Open the log viewer"),
   (command: "ls", description: "                   | Show the all buffer"),
-  (command: "lsw", description: "                  | Show the all workspace"),
   (command: "man", description: "                  | Show the given UNIX manual page, if available"),
   (command: "multipleStatusLine", description: "   | Enable/Disable multiple status line"),
   (command: "new", description: "                  | Create the new buffer in split window horizontally"),
@@ -74,8 +71,8 @@ const exCommandList: array[67, tuple[command, description: string]] = [
   (command: "q", description: "                    | Close the current window"),
   (command: "Q", description: "                    | Run Quickrun"),
   (command: "q!", description: "                   | Force close the current window"),
-  (command: "qa", description: "                   | Close the all window in current workspace"),
-  (command: "qa!", description: "                  | Force close the all window in current workspace"),
+  (command: "qa", description: "                   | Close the all windows"),
+  (command: "qa!", description: "                  | Force close the all windows"),
   (command: "recent", description: "               | Open the recent file selection mode"),
   (command: "run", description: "                  | run Quickrun"),
   (command: "scrollSpeed", description: "          | Change setting to the scroll speed"),
@@ -91,10 +88,9 @@ const exCommandList: array[67, tuple[command, description: string]] = [
   (command: "vs", description: "                   | Vertical split window"),
   (command: "w", description: "                    | Write file"),
   (command: "w!", description: "                   | Force write file"),
-  (command: "ws", description: "                   | Change the current workspace"),
   (command: "wq", description: "                   | Write file and close window"),
   (command: "wq!", description: "                  | Force write file and close window"),
-  (command: "wqa", description: "                  | Write all file in current workspace")
+  (command: "wqa", description: "                  | Write all files")
 ]
 
 proc askCreateDirPrompt*(
