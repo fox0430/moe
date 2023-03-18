@@ -137,12 +137,15 @@ proc writeMessageFailedBuildOnSave*(commandLine: var CommandLine) =
 
 proc writeNotEditorCommandError*(
   commandLine: var CommandLine,
-  command: seq[Runes]) =
-    var cmd = ""
-    for i in 0 ..< command.len: cmd = cmd & $command[i] & " "
-    let mess = fmt"Error: Not an editor command: {cmd}"
+  command: Runes) =
+    let mess = fmt"Error: Not an editor command: {command}"
     commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
     addMessageLog mess
+
+proc writeNotEditorCommandError*(
+  commandLine: var CommandLine,
+  command: seq[Runes]) {.inline.} =
+    commandLine.writeNotEditorCommandError(command.join(ru" "))
 
 proc writeMessageSaveFile*(
   commandLine: var CommandLine,

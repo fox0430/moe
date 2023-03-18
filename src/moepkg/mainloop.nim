@@ -24,9 +24,9 @@ import editorstatus, bufferstatus, window, unicodeext, gapbuffer, ui,
        exmode, replacemode, filermode, buffermanager, logviewer, help,
        recentfilemode, quickrun, backupmanager, diffviewer, configmode,
        debugmode, commandline, search, commandlineutils, popupwindow,
-       filermodeutils
+       filermodeutils, messages
 
-proc searchCommand(currentMode: Mode, command: Runes): InputState =
+proc invokeCommand(currentMode: Mode, command: Runes): InputState =
   case currentMode:
     of Mode.insert, Mode.searchForward, Mode.searchBackward:
       InputState.Valid
@@ -355,8 +355,13 @@ proc commandLineLoop*(status: var EditorStatus) =
     if isExMode(currentBufStatus.mode):
       let command = status.commandLine.buffer
 
-      if searchCommand(currentBufStatus.mode, command) == InputState.Valid:
-        status.execCommand(command)
+      case invokeCommand(currentBufStatus.mode, command):
+        of InputState.Valid:
+          status.execCommand(command)
+        of InputState.Invalid:
+          status.commandLine.writeNotEditorCommandError(command)
+        else:
+          discard
 
       if isExMode(currentBufStatus.mode):
         status.changeMode(currentBufStatus.prevMode)
@@ -418,15 +423,14 @@ proc editorMainLoop*(status: var EditorStatus) =
 
     command.add key
 
-    let inputState = searchCommand(currentBufStatus.mode, command)
-    case inputState:
-      of Continue:
+    case invokeCommand(currentBufStatus.mode, command):
+      of InputState.Continue:
         continue
-      of Valid:
+      of InputState.Valid:
         status.lastOperatingTime = now()
         status.execCommand(command)
         command.clear
-      of Invalid, Cancel:
+      of InputState.Invalid, InputState.Cancel:
         command.clear
         currentBufStatus.cmdLoop = 0
         continue
