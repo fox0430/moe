@@ -28,6 +28,12 @@ type
     h*: int
     w*: int
 
+  Rect* = object
+    x*: int
+    y*: int
+    h*: int
+    w*: int
+
   Range* = object
     start*: int
     `end`*: int
