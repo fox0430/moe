@@ -63,6 +63,9 @@ proc initTerminalBuffer(sidebar: var Sidebar) {.inline.} =
   sidebar.terminalBuffer = sidebar.h.newSeqWith(ru" ".repeat(sidebar.w))
 
 proc initSidebar*(rect: Rect): Sidebar =
+  when not defined(release):
+    assert rect.y >= 0 and rect.x >= 0 and rect.h > 0 and rect.w > 0
+
   result.window = initWindow(rect, EditorColorPair.defaultChar)
 
   result.initTerminalBuffer
@@ -110,6 +113,11 @@ proc write*(
   startPosition: Position,
   buffer: Runes,
   color: EditorColorPair = EditorColorPair.defaultChar) {.inline.} =
+
+    when not defined(release):
+      assert startPosition.y >= 0 and startPosition.x >= 0
+      assert startPosition.y <= sidebar.terminalBuffer.high
+      assert startPosition.x + buffer.high <= sidebar.terminalBuffer[0].high
 
     let y = startPosition.y
     for x in startPosition.x .. min(startPosition.x + buffer.high, sidebar.w):
