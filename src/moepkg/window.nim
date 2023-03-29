@@ -187,12 +187,11 @@ proc deleteWindowNode*(root: var WindowNode, windowIndex: int) =
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
 
-proc resize*(root: WindowNode, position: Position, size: Size) =
-  let
-    y = position.y
-    x = position.x
-    width = size.w
-    height = size.h
+proc resize*(root: var WindowNode, position: Position, size: Size) =
+  root.y = position.y
+  root.x = position.x
+  root.w = size.w
+  root.h = size.h
 
   var
     qeue = initHeapQueue[WindowNode]()
@@ -205,32 +204,32 @@ proc resize*(root: WindowNode, position: Position, size: Size) =
       ## Vertical split
 
       ## Calc window width
-      if width mod root.child.len != 0 and index == 0:
-        node.w = int(width / root.child.len) + (width mod root.child.len)
-      else: node.w = int(width / root.child.len)
+      if root.w mod root.child.len != 0 and index == 0:
+        node.w = int(root.w / root.child.len) + (root.w mod root.child.len)
+      else: node.w = int(root.w / root.child.len)
 
       ## Calc window x
-      if width mod root.child.len != 0 and index > 0:
-        node.x = (node.w * index) + (width mod root.child.len)
-      else: node.x = node.w * index
+      if root.w mod root.child.len != 0 and index > 0:
+        node.x = root.x + (node.w * index) + (root.w mod root.child.len)
+      else: node.x = root.x + (node.w * index)
 
-      node.h = height
-      node.y = y
+      node.h = root.h
+      node.y = root.y
     else:
       ## Horaizontal split
 
       ## Calc window height
-      if height mod root.child.len != 0 and index == 0:
-        node.h = int(height / root.child.len) + (height mod root.child.len)
-      else: node.h = int(height / root.child.len)
+      if root.h mod root.child.len != 0 and index == 0:
+        node.h = int(root.h / root.child.len) + (root.h mod root.child.len)
+      else: node.h = int(root.h / root.child.len)
 
       ## Calc window y
-      if height mod root.child.len != 0 and index > 0:
-        node.y = (node.h * index) + (height mod root.child.len) + y
-      else: node.y = node.h * index + y
+      if root.h mod root.child.len != 0 and index > 0:
+        node.y = (node.h * index) + (root.h mod root.child.len) + root.y
+      else: node.y = node.h * index + root.y
 
-      node.w = width
-      node.x = x
+      node.w = root.w
+      node.x = root.x
 
     if node.window.isSome:
       ## Resize curses window

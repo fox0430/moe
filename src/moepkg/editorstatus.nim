@@ -25,7 +25,7 @@ import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        backup, messages, commandline, register, platform, movement,
        autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
        independentutils, bufferhighlight, helputils, backupmanagerutils,
-       diffviewerutils, messagelog
+       diffviewerutils, messagelog, sidebar
 
 # Save cursor position when a buffer for a window(file) gets closed.
 type LastCursorPosition* = object
@@ -56,6 +56,12 @@ type EditorStatus* = object
   isReadonly*: bool
   wordDictionary*: WordDictionary
   suggestionWindow*: Option[SuggestionWindow]
+  sidebar*: Option[Sidebar]
+
+const
+  tabLineWindowHeight = 1
+  statusLineWindowHeight = 1
+  commandLineWindowHeight = 1
 
 proc initEditorStatus*(): EditorStatus =
   result.currentDir = getCurrentDir().toRunes
@@ -388,17 +394,30 @@ proc getMainWindowHeight*(settings: EditorSettings): int =
 proc resizeMainWindowNode(status: var EditorStatus, terminalSize: Size) =
   let
     height = terminalSize.h
-    width = terminalSize.w
-    tabLineHeight = if status.settings.tabLine.enable: 1 else: 0
-    statusLineHeight = if status.settings.statusLine.enable: 1 else: 0
-    commandLineHeight = if status.settings.statusLine.merge: 1 else: 0
+    tabLineHeight =
+      if status.settings.tabLine.enable: tabLineWindowHeight
+      else: 0
+    statusLineHeight =
+      if status.settings.statusLine.enable: statusLineWindowHeight
+      else: 0
+    commandLineHeight =
+      if status.settings.statusLine.merge: commandLineWindowHeight
+      else: 0
+    sidebarWidth =
+      if status.sidebar.isSome: status.sidebar.get.w
+      else: 0
+    width =
+      if status.sidebar.isSome: terminalSize.w - sidebarWidth
+      else: terminalSize.w
 
-  let
     y = tabLineHeight
+    x =
+      if status.sidebar.isSome: sidebarWidth
+      else: 0
     h = height - tabLineHeight - statusLineHeight - commandLineHeight
     w = width
 
-  mainWindowNode.resize(Position(y: y, x: 0), Size(h: h, w: w))
+  mainWindowNode.resize(Position(y: y, x: x), Size(h: h, w: w))
 
 ## Reszie all windows to ui.terminalSize.
 proc resize*(status: var EditorStatus) =
@@ -411,8 +430,8 @@ proc resize*(status: var EditorStatus) =
   status.resizeMainWindowNode(terminalSize)
 
   let
-    height = terminalSize.h
-    width = terminalSize.w
+    terminalHeight = terminalSize.h
+    terminalWidth = terminalSize.w
 
   const statusLineHeight = 1
   var
@@ -485,27 +504,38 @@ proc resize*(status: var EditorStatus) =
       statusLineHeight = 1
       x = 0
     let
-      y = max(height, 4) - 1 - (if status.settings.statusLine.merge: 0 else: 1)
-    status.statusLine[0].window.resize(
-      statusLineHeight,
-      width,
-      y,
-      x)
+      y = max(terminalHeight, 4) - 1 - (if status.settings.statusLine.merge: 0 else: 1)
+      w =
+        if status.sidebar.isSome: mainWindowNode.w
+        else: terminalWidth
+    status.statusLine[0].window.resize(statusLineHeight, w, y, x)
 
-  ## Resize tab line.
+  # Resize tab line.
   if status.settings.tabLine.enable:
-    const
-      tabLineHeight = 1
-      x = 0
-      y = 0
-    status.tabWindow.resize(tabLineHeight, width, y, x)
+    const y = 0
+    let
+      x =
+        if status.sidebar.isSome:
+          terminalWidth - mainWindowNode.w
+        else: 0
+      w =
+        if status.sidebar.isSome: mainWindowNode.w
+        else: terminalWidth
+    status.tabWindow.resize(tabLineWindowHeight, w, y, x)
 
-  ## Resize command line.
-  const
-    commandWindowHeight = 1
-    x = 0
-  let y = max(height, 4) - 1
-  status.commandLine.resize(y, x, commandWindowHeight, width)
+  # Resize the sidebar
+  if status.sidebar.isSome:
+    let rect = Rect(
+      x: 0,
+      y: 0,
+      h: terminalHeight - commandLineWindowHeight,
+      w: terminalWidth - mainWindowNode.w)
+    status.sidebar.get.resize(rect)
+
+  # Resize command line.
+  const x = 0
+  let y = max(terminalHeight, 4) - 1
+  status.commandLine.resize(y, x, commandLineWindowHeight, terminalWidth)
 
   if currentBufStatus.isCursor:
     setCursor(true)
@@ -742,6 +772,8 @@ proc update*(status: var EditorStatus) =
     currentMainWindowNode.window.get.moveCursor(y, x)
 
   if status.settings.statusLine.enable: status.updateStatusLine
+
+  if status.sidebar.isSome: status.sidebar.get.update
 
   status.commandLine.update
 

@@ -159,6 +159,9 @@ proc initWindow*(height, width, y, x: int, color: EditorColorPair): Window =
   keypad(result.cursesWindow, true)
   discard wbkgd(result.cursesWindow, ncurses.COLOR_PAIR(color))
 
+proc initWindow*(rect: Rect, color: EditorColorPair): Window {.inline.} =
+  initWindow(rect.h, rect.w, rect.y, rect.x, color)
+
 proc write*(win: var Window,
             y, x: int,
             str: string,
@@ -227,12 +230,17 @@ proc append*(win: var Window,
 
 proc erase*(win: var Window) =
   werase(win.cursesWindow)
-  win.y = 0
-  win.x = 0
 
 proc refresh*(win: Window) {.inline.} = wrefresh(win.cursesWindow)
 
-proc move*(win: Window, y, x: int) {.inline.} = mvwin(win.cursesWindow, cint(y), cint(x))
+proc move*(win: Window, y, x: int) =
+  mvwin(win.cursesWindow, cint(y), cint(x))
+
+  win.y = y
+  win.x = x
+
+proc move*(win: Window, position: Position) {.inline.} =
+  move(win, position.y, position.x)
 
 proc resize*(win: var Window, height, width: int) =
   wresize(win.cursesWindow, cint(height), cint(width))
@@ -240,12 +248,21 @@ proc resize*(win: var Window, height, width: int) =
   win.height = height
   win.width = width
 
+proc resize*(win: var Window, size: Size) {.inline.} =
+  resize(win, size.h, size.w)
+
 proc resize*(win: var Window, height, width, y, x: int) =
   win.resize(height, width)
   win.move(y, x)
 
   win.y = y
   win.x = x
+
+proc resize*(win: var Window, position: Position, size: Size) {.inline.} =
+  win.resize(size.h, size.w, position.y, position.x)
+
+proc resize*(win: var Window, rect: Rect) {.inline.} =
+  win.resize(rect.h, rect.w, rect.y, rect.x)
 
 proc attron*(win: var Window, attributes: Attributes) {.inline.} =
   win.cursesWindow.wattron(cint(attributes))
