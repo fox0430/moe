@@ -20,10 +20,10 @@
 import std/[sequtils, strutils, os, times, options]
 import syntax/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
-       unicodeext, independentutils, searchutils, highlight, window, movement,
-       color, build, bufferstatus, editor, settings, quickrun, messages,
-       commandline, debugmodeutils, platform, commandlineutils, recentfilemode,
-       buffermanager, bufferhighlight, messagelog, configmode
+       unicodeext, independentutils, searchutils, highlight, windownode,
+       movement, color, build, bufferstatus, editor, settings, quickrun,
+       messages, commandline, debugmodeutils, platform, commandlineutils,
+       recentfilemode, buffermanager, viewhighlight, messagelog, configmode
 
 type
   replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
@@ -314,7 +314,7 @@ proc startDebugMode(status: var EditorStatus) =
         status.settings.debugMode).toGapBuffer
 
     # Link the window and the debug mode buffer.
-    var node = status.mainWindow.mainWindowNode.searchByWindowIndex(
+    var node = status.mainWindow.root.searchByWindowIndex(
     currentMainWindowNode.windowIndex + 1)
     node.bufferIndex = bufferIndex.get
 

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import editorstatus, unicodeext, bufferstatus, ui, movement, window
+import editorstatus, unicodeext, bufferstatus, ui, movement, windownode
 
 proc isDiffViewerCommand*(command: Runes): InputState =
   result = InputState.Invalid

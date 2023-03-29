@@ -19,7 +19,7 @@
 
 import std/[strutils, strformat, os, osproc]
 import syntax/highlite
-import ui, bufferstatus, color, unicodeext, settings, window, gapbuffer
+import ui, bufferstatus, color, unicodeext, settings, windownode, gapbuffer
 
 type StatusLine* = object
   window*: Window

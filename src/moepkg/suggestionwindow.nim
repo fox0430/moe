@@ -18,8 +18,8 @@
 #[############################################################################]#
 
 import std/[sugar, options, sequtils]
-import ui, window, autocomplete, bufferstatus, gapbuffer, color,
-       unicodeext, osext, popupwindow
+import ui, windownode, autocomplete, bufferstatus, gapbuffer, color, unicodeext,
+       osext, popupwindow
 import syntax/highlite
 
 type SuggestionWindow* = object

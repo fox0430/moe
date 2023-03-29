@@ -18,7 +18,8 @@
 #[############################################################################]#
 
 import std/[unittest, strutils, algorithm, os]
-import moepkg/[unicodeext, bufferstatus, gapbuffer, color, window, highlight]
+import moepkg/[unicodeext, bufferstatus, gapbuffer, color, windownode,
+               highlight]
 
 import moepkg/filermodeutils {.all.}
 

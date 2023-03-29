@@ -19,7 +19,7 @@
 
 import std/[unittest, random, options, sequtils, sugar, importutils]
 import moepkg/[highlight, editorstatus, gapbuffer, unicodeext, editor,
-               bufferstatus, movement, autocomplete, window, ui]
+               bufferstatus, movement, autocomplete, windownode, ui]
 
 import moepkg/suggestionwindow {.all.}
 

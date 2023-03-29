@@ -20,7 +20,7 @@
 import std/[osproc, times, os]
 import syntax/highlite
 import unicodeext, settings, bufferstatus, gapbuffer, messages, ui,
-       editorstatus, movement, window, fileutils, commandline
+       editorstatus, movement, windownode, fileutils, commandline
 
 proc generateCommand(bufStatus: BufferStatus,
                      settings: QuickRunSettings): string =

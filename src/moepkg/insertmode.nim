@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import ui, editorstatus, window, movement, editor, bufferstatus, settings,
+import ui, editorstatus, windownode, movement, editor, bufferstatus, settings,
        unicodeext
 
 proc exitInsertMode(status: var EditorStatus) =

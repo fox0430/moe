@@ -18,8 +18,8 @@
 #[############################################################################]#
 
 import std/[os, options]
-import editorstatus, ui, window, bufferstatus, unicodeext, filermodeutils, messages,
-       commandline, messagelog
+import editorstatus, ui, windownode, bufferstatus, unicodeext, filermodeutils,
+       messages, commandline, messagelog
 
 proc openNewWinAndOpenFilerOrDir(
   status: var EditorStatus,

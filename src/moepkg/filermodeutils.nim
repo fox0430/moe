@@ -19,8 +19,8 @@
 
 import std/[os, strutils, times, algorithm, sequtils,
             options, strformat]
-import ui, fileutils, editorview, gapbuffer, highlight, window,
-       color, bufferstatus, settings, messages, commandline, unicodeext
+import ui, fileutils, editorview, gapbuffer, highlight, windownode, color,
+       bufferstatus, settings, messages, commandline, unicodeext
 
 type
   PathInfo* = tuple[

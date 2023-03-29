@@ -47,7 +47,7 @@ type WindowNode* = ref object
   w*: int
 
 type MainWindow* = object
-  mainWindowNode*: WindowNode
+  root*: WindowNode
   currentMainWindowNode*: WindowNode
   numOfMainWindow*: int
 
@@ -72,9 +72,8 @@ proc initWindowNode*(): WindowNode =
   return root
 
 proc initMainWindow*(): MainWindow =
-  var rootNode = initWindowNode()
-  result.mainWindowNode = rootNode
-  result.currentMainWindowNode = rootNode.child[0]
+  result.root = initWindowNode()
+  result.currentMainWindowNode = result.root.child[0]
   result.numOfMainWindow = 1
 
 proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =

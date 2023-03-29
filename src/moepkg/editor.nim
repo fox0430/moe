@@ -19,7 +19,7 @@
 
 import std/[strutils, sequtils, strformat, options]
 import syntax/highlite
-import editorstatus, ui, gapbuffer, unicodeext, undoredostack, window,
+import editorstatus, ui, gapbuffer, unicodeext, undoredostack, windownode,
        bufferstatus, movement, messages, settings, register, commandline
 
 proc correspondingCloseParen(c: char): char =

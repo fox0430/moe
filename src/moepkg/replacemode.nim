@@ -19,15 +19,8 @@
 
 import std/options
 
-import editorstatus
-import ui
-import movement
-import editor
-import bufferstatus
-import gapbuffer
-import window
-import settings
-import unicodeext
+import editorstatus, ui, movement, editor, bufferstatus, gapbuffer, windownode,
+       settings, unicodeext
 
 # For undo/redo in the replace mode.
 var undoLastSuitId: Option[int]

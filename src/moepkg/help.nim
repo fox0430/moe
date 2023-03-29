@@ -17,7 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import editorstatus, bufferstatus, ui, movement, unicodeext, window, commandline
+import editorstatus, bufferstatus, ui, movement, unicodeext, windownode,
+       commandline
 
 proc isHelpCommand*(command: Runes): InputState =
   result = InputState.Invalid
