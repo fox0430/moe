@@ -19,7 +19,7 @@
 
 import std/[options, times]
 
-import editorstatus, bufferstatus, window, unicodeext, gapbuffer, ui,
+import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        normalmode, visualmode, insertmode, autocomplete, suggestionwindow,
        exmode, replacemode, filermode, buffermanager, logviewer, help,
        recentfilemode, quickrun, backupmanager, diffviewer, configmode,

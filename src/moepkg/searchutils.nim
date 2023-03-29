@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[strutils, options]
-import gapbuffer, unicodeext, bufferstatus, window, independentutils
+import gapbuffer, unicodeext, bufferstatus, windownode, independentutils
 
 type
   SearchResult* = BufferPosition

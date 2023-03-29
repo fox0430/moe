@@ -19,7 +19,7 @@
 
 import std/[os, re]
 import editorstatus, ui, unicodeext, bufferstatus, movement, gapbuffer,
-       messages, window
+       messages, windownode
 
 proc openSelectedBuffer(status: var EditorStatus) =
   let

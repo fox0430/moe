@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[times, strformat, options]
-import bufferstatus, unicodeext, window, settings, gapbuffer
+import bufferstatus, unicodeext, windownode, settings, gapbuffer
 
 proc getDebugModeBufferIndex*(bufStatus: seq[BufferStatus]): int =
   result = -1

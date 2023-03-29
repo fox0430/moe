@@ -22,7 +22,7 @@
 import std/os
 import editorstatus, bufferstatus, unicodeext, ui, movement, gapbuffer,
        highlight, settings, messages, backup, fileutils, editorview,
-       window, commandlineutils, backupmanagerutils
+       windownode, commandlineutils, backupmanagerutils
 
 template baseBackupDir*(status: EditorStatus): seq[Rune] =
   status.settings.autoBackup.backupDir

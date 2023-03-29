@@ -17,9 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, heapqueue, os, importutils]
+import std/[unittest, options, os, importutils]
 import moepkg/[editor, gapbuffer, bufferstatus, editorview, unicodeext, ui,
-               highlight, window, movement, ui]
+               highlight, windownode, movement, ui]
 
 import moepkg/editorstatus {.all.}
 

@@ -1,8 +1,9 @@
 import std/[unittest, heapqueue, options, macros, strformat]
 import moepkg/[editorstatus, highlight, color, editorview, gapbuffer,
-               unicodeext, movement, window, ui, independentutils, searchutils]
+               unicodeext, movement, windownode, ui, independentutils,
+               searchutils]
 
-import moepkg/bufferhighlight {.all.}
+import moepkg/viewhighlight {.all.}
 
 proc initHighlight(status: EditorStatus) {.inline.} =
   currentMainWindowNode.highlight = initHighlight(

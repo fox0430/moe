@@ -18,9 +18,9 @@
 #[############################################################################]#
 
 import std/[strutils, sequtils]
-import editorstatus, ui, gapbuffer, unicodeext, window, movement, editor,
+import editorstatus, ui, gapbuffer, unicodeext, windownode, movement, editor,
        bufferstatus, settings, register, messages, commandline,
-       independentutils, bufferhighlight
+       independentutils, viewhighlight
 
 proc initSelectedArea*(startLine, startColumn: int): SelectedArea =
   result.startLine = startLine

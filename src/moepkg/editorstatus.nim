@@ -21,10 +21,10 @@ import std/[strutils, os, strformat, tables, times, heapqueue, deques, options,
             encodings]
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
-       window, color, settings, statusline, bufferstatus, cursor, tabline,
+       windownode, color, settings, statusline, bufferstatus, cursor, tabline,
        backup, messages, commandline, register, platform, movement,
        autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
-       independentutils, bufferhighlight, helputils, backupmanagerutils,
+       independentutils, viewhighlight, helputils, backupmanagerutils,
        diffviewerutils, messagelog, sidebar
 
 # Save cursor position when a buffer for a window(file) gets closed.
@@ -96,7 +96,7 @@ template currentMainWindowNode*: var WindowNode =
 
 template mainWindowNode*: var WindowNode =
   mixin status
-  status.mainWindow.mainWindowNode
+  status.mainWindow.root
 
 template currentFilerStatus*: var FilerStatus =
   mixin status
@@ -636,7 +636,7 @@ proc update*(status: var EditorStatus) =
     status.tabWindow.writeTabLineBuffer(
       status.bufStatus,
       status.bufferIndexInCurrentWindow,
-      status.mainWindow.mainWindowNode,
+      status.mainWindow.root,
       settings.tabLine.allBuffer)
 
   for i, buf in status.bufStatus:
@@ -656,7 +656,7 @@ proc update*(status: var EditorStatus) =
     if buf.isDebugMode:
       # Update the debug mode buffer.
       status.bufStatus[i].buffer = status.bufStatus.initDebugModeBuffer(
-        status.mainWindow.mainWindowNode,
+        status.mainWindow.root,
         currentMainWindowNode.windowIndex,
         status.settings.debugMode).toGapBuffer
 

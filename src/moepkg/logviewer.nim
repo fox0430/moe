@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import ui, editorstatus, unicodeext, movement, bufferstatus, window
+import ui, editorstatus, unicodeext, movement, bufferstatus, windownode
 
 proc exitLogViewer*(status: var EditorStatus) {.inline.} =
   status.deleteBuffer(status.bufferIndexInCurrentWindow)

@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[options, deques]
-import independentutils, bufferstatus, highlight, color, window, gapbuffer,
+import independentutils, bufferstatus, highlight, color, windownode, gapbuffer,
        unicodeext, editorview, searchutils, settings, movement
 
 proc initBufferPosition(

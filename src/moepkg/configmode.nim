@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[times, strutils, options]
-import gapbuffer, ui, editorstatus, unicodeext, window, movement, settings,
+import gapbuffer, ui, editorstatus, unicodeext, windownode, movement, settings,
        bufferstatus, color, highlight, editor, commandline, popupwindow
 
 type standardTableNames {.pure.} = enum

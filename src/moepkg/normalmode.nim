@@ -18,9 +18,9 @@
 #[############################################################################]#
 
 import std/[times, strutils, sequtils, options]
-import editorstatus, ui, gapbuffer, unicodeext, fileutils, window,
-       movement, editor, searchutils, bufferstatus, quickrun, messages,
-       visualmode, commandline, bufferhighlight
+import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
+       editor, searchutils, bufferstatus, quickrun, messages, visualmode,
+       commandline, viewhighlight
 
 proc searchOneCharacterToEndOfLine(bufStatus: var BufferStatus,
                                    windowNode: WindowNode,

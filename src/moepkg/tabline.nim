@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[strutils, terminal, unicode]
-import ui, window, color, bufferstatus, independentutils
+import ui, windownode, color, bufferstatus, independentutils
 
 proc writeTab*(tabWin: var Window,
               start, tabWidth: int,

@@ -29,7 +29,7 @@ suite "Init debug mode buffer":
 
     status.bufStatus[bufferIndex.get].buffer =
       status.bufStatus.initDebugModeBuffer(
-        mainWindow.mainWindowNode,
+        mainWindow.root,
         currentMainWindowNode.windowIndex,
         status.settings.debugMode).toGapBuffer
 

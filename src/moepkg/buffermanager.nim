@@ -18,7 +18,8 @@
 #[############################################################################]#
 
 import std/[os, heapqueue]
-import gapbuffer, ui, editorstatus, unicodeext, window, movement, bufferstatus
+import gapbuffer, ui, editorstatus, unicodeext, windownode, movement,
+       bufferstatus
 
 proc initBufferManagerBuffer*(
   bufStatuses: seq[BufferStatus]): seq[Runes] =

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import ui, unicodeext, window, bufferstatus, movement, commandline
+import ui, unicodeext, windownode, bufferstatus, movement, commandline
 
 proc isDebugModeCommand*(command: Runes): InputState =
   result = InputState.Invalid

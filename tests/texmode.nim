@@ -19,7 +19,7 @@
 
 import std/[unittest, os, oids, deques, macros, strformat]
 import moepkg/[ui, editorstatus, gapbuffer, unicodeext, bufferstatus, settings,
-               window, helputils]
+               windownode, helputils]
 
 import moepkg/exmode {.all.}
 import moepkg/commandlineutils{.all.}
