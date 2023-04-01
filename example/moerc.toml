@@ -211,6 +211,10 @@ searchHistoryLimit = 1000
 
 cursorPosition = true
 
+[Git]
+
+showChangedLine = true
+
 [Debug.WindowNode]
 enable = true
 currentWindow = true

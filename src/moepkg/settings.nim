@@ -183,6 +183,9 @@ type
     enable*: bool
     toolOnLinux*: ClipboardToolOnLinux
 
+  GitSettings* = object
+    showChangedLine*: bool
+
   EditorSettings* = object
     editorColorTheme*: colorTheme
     statusLine*: StatusLineSettings
@@ -217,6 +220,7 @@ type
     debugMode*: DebugModeSettings
     highlight*: HighlightSettings
     persist*: PersistSettings
+    git*: GitSettings
 
   InvalidItem = object
     name: string
@@ -380,6 +384,9 @@ proc initClipboardSettings(): ClipboardSettings =
   if ClipboardToolOnLinux.none != result.toolOnLinux:
     result.enable = true
 
+proc initGitSettings(): GitSettings =
+  result.showChangedLine = true
+
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = colorTheme.dark
   result.statusLine = initStatusLineSettings()
@@ -410,6 +417,7 @@ proc initEditorSettings*(): EditorSettings =
   result.debugMode = initDebugModeSettings()
   result.highlight = initHighlightSettings()
   result.persist = initPersistSettings()
+  result.git = initGitSettings()
 
 proc getTheme(theme: string): colorTheme =
   if theme == "vivid": return colorTheme.vivid
@@ -1822,6 +1830,10 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
   if result.editorColorTheme == colorTheme.vscode:
     result.editorColorTheme = loadVSCodeTheme()
 
+  if settings.contains("Git"):
+    if settings["Git"].contains("showChangedLine"):
+      result.git.showChangedLine = settings["Git"]["showChangedLine"].getBool
+
 proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
@@ -2164,6 +2176,15 @@ proc validateThemeTable(table: TomlValueRef): Option[InvalidItem] =
         if not correctKey:
           return some(InvalidItem(name: $key, val: $val))
 
+proc validateGitTable(table: TomlValueRef): Option[InvalidItem] =
+  for key, val in table.getTable:
+    case key:
+      of "showChangedLine":
+        if val.kind != TomlValueKind.Bool:
+          return some(InvalidItem(name: $key, val: $val))
+      else:
+        return some(InvalidItem(name: $key, val: $val))
+
 proc validateTomlConfig(toml: TomlValueRef): Option[InvalidItem] =
   for key, val in toml.getTable:
     case key:
@@ -2211,6 +2232,9 @@ proc validateTomlConfig(toml: TomlValueRef): Option[InvalidItem] =
         if r.isSome: return r
       of "Debug":
         let r = validateDebugTable(val)
+        if r.isSome: return r
+      of "Git":
+        let r = validateGitTable(val)
         if r.isSome: return r
       else:
         return some(InvalidItem(name: $key, val: $val))
@@ -2403,6 +2427,9 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "cursorPosition = {$settings.persist.cursorPosition}"
 
   result.addLine ""
+
+  result.addLine fmt "[Git]"
+  result.addLine fmt "showChangedLine = {$settings.git.showChangedLine}"
 
   result.addLine fmt "[Debug.WindowNode]"
   result.addLine fmt "enable = {$settings.debugMode.windowNode.enable}"

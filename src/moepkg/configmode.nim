@@ -138,6 +138,9 @@ type persistTableSettings {.pure.} = enum
   searchHistoryLimit
   cursorPosition
 
+type GitTableSettings {.pure.} = enum
+  showChangedLine
+
 type themeTableNames {.pure.} = enum
   editorBg
   lineNum
@@ -576,6 +579,18 @@ proc getPersistTableSettingsValues(settings: PersistSettings,
         else:
           return
 
+proc getGitTableSettingsValues(s: GitSettings, name: string): seq[Runes] =
+  case name
+    of "showChangedLine":
+      var currentVal: bool
+      case name:
+        of "showChangedLine":
+          currentVal = s.showChangedLine
+      if currentVal:
+        result = @[ru "true", ru "false"]
+      else:
+        result = @[ru "false", ru "true"]
+
 proc getThemeTableSettingValues(settings: EditorSettings,
                                 name, position: string): seq[seq[Rune]] =
 
@@ -632,6 +647,9 @@ proc getSettingValues(settings: EditorSettings,
     of "Persist":
       let persistSettings = settings.persist
       result = persistSettings.getPersistTableSettingsValues(name)
+    of "Git":
+      let gitSettings = settings.git
+      result = gitSettings.getGitTableSettingsValues(name)
     of "Theme":
       result = settings.getThemeTableSettingValues(name, position)
 
@@ -941,6 +959,16 @@ proc changePerSistTableSettings(settings: var PersistSettings,
     else:
       discard
 
+proc changeGitTableSettings(
+  s: var GitSettings,
+  settingName, settingVal: string) =
+
+    case settingName:
+      of "showChangedLine":
+        s.showChangedLine = settingVal.parseBool
+      else:
+        discard
+
 proc changeThemeTableSetting(settings: var EditorSettings,
                              settingName, position, settingVal: string) =
 
@@ -1003,6 +1031,9 @@ proc changeEditorSettings(status: var EditorStatus,
   template persistSettings: var PersistSettings =
     status.settings.persist
 
+  template gitSettings: var GitSettings =
+    status.settings.git
+
   case table:
     of "Standard":
       changeStandardTableSetting()
@@ -1029,6 +1060,9 @@ proc changeEditorSettings(status: var EditorStatus,
       autocompleteSettings.changeAutoCompleteTableSetting(settingName, settingVal)
     of "Persist":
       persistSettings.changePerSistTableSettings(settingName, settingVal)
+    of "Git":
+      gitSettings.changeGitTableSettings(settingName, settingVal)
+
     of "Theme":
       settings.changeThemeTableSetting(settingName, position, settingVal)
       status.changeTheme
@@ -1191,6 +1225,13 @@ proc getSettingType(table, name: string): SettingType =
       else:
         result = SettingType.None
 
+  template gitTable() =
+    case name:
+      of "showChangedLine":
+        result = SettingType.Bool
+      else:
+        result = SettingType.None
+
   template themeTable() =
     for color in Color:
       if name == $color:
@@ -1220,6 +1261,8 @@ proc getSettingType(table, name: string): SettingType =
       filerTable()
     of "Autocomplete":
       autocompleteTable()
+    of "Git":
+      gitTable()
     of "Theme":
       themeTable()
 
@@ -1950,6 +1993,17 @@ proc initPersistTableBuffer(persistSettings: PersistSettings): seq[seq[Rune]] =
       of "cursorPosition":
         result.add(ru nameStr & space & $persistSettings.cursorPosition)
 
+proc initGitTableBuffer(settings: GitSettings): seq[Runes] =
+  result.add(ru"Git")
+
+  for name in GitTableSettings:
+    let
+      nameStr = indent & $name
+      space = " ".repeat(positionOfSetVal - len($name))
+    case $name:
+      of "showChangedLine":
+        result.add(ru nameStr & space & $settings.showChangedLine)
+
 proc initThemeTableBuffer*(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"Theme")
 
@@ -2020,6 +2074,9 @@ proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
 
   buffer.add(ru"")
   buffer.add(initPersistTableBuffer(settings.persist))
+
+  buffer.add(ru"")
+  buffer.add(initGitTableBuffer(settings.git))
 
   buffer.add(ru"")
   buffer.add(initThemeTableBuffer(settings))

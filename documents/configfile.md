@@ -765,6 +765,13 @@ Show/Hidden bufStatus.buffer.len in debug mode (bool)
 bufferLen
 ```
 
+### Git table
+
+Show/Hidden line changes on sidebars (bool)
+```
+showChangedLine
+```
+
 ### Color and theme
 -- Available colors --
 

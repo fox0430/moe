@@ -173,6 +173,9 @@ const tomlStr = """
   lastSaveTime = false
   bufferLen = false
 
+  [Git]
+  showChangedLine = false
+
   [Theme]
   baseTheme = "dark"
 
@@ -429,6 +432,8 @@ suite "Parse configuration file":
     check not settings.debugMode.bufStatus.cmdLoop
     check not settings.debugMode.bufStatus.lastSaveTime
     check not settings.debugMode.bufStatus.bufferLen
+
+    check not settings.git.showChangedLine
 
     let theme = colorTheme.config
     check colorThemeTable[theme].editorBg == Color.pink1
