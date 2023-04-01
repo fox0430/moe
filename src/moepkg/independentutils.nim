@@ -35,8 +35,8 @@ type
     w*: int
 
   Range* = object
-    start*: int
-    `end`*: int
+    first*: int
+    last*: int
 
   SelectedArea* = object
     startLine*: int
@@ -81,3 +81,5 @@ proc genDelimiterStr*(buffer: string): string =
 
 proc execCmdExNoOutput*(cmd: string): int {.inline.} =
   (execCmdEx(cmd)).exitCode
+
+proc isEmpty*[T](s: seq[T]): bool {.inline.} = s.len == 0

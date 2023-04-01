@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[strutils, os, strformat, tables, times, heapqueue, deques, options,
-            encodings]
+            encodings, sequtils]
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        windownode, color, settings, statusline, bufferstatus, cursor, tabline,
@@ -419,6 +419,13 @@ proc resizeMainWindowNode(status: var EditorStatus, terminalSize: Size) =
 
   mainWindowNode.resize(Position(y: y, x: x), Size(h: h, w: w))
 
+proc isHighlightChangedLine(
+  status: EditorStatus,
+  bufferIndex: int): bool {.inline.} =
+
+    status.settings.git.showChangedLine and
+    not status.bufStatus[bufferIndex].changedLines.isEmpty
+
 ## Reszie all windows to ui.terminalSize.
 proc resize*(status: var EditorStatus) =
   # Disable the cursor while updating views.
@@ -449,15 +456,26 @@ proc resize*(status: var EditorStatus) =
           bufIndex = node.bufferIndex
           widthOfLineNum = node.view.widthOfLineNum
           h = node.h - statusLineHeight
+          sidebarWidth =
+            if status.isHighlightChangedLine(bufIndex): 2
+            else: 0
           adjustedHeight = max(h, 4)
-          adjustedWidth = max(node.w - widthOfLineNum, 4)
+          adjustedWidth = max(node.w - widthOfLineNum - sidebarWidth, 4)
 
-        # Resize main window.
+        block sidebarTest:
+          # TODO: Remove from here.
+          node.view.initSidebar
+
+        # Resize EditorView.
         node.view.resize(
           status.bufStatus[bufIndex].buffer,
           adjustedHeight,
           adjustedWidth,
           widthOfLineNum)
+
+        block sidebarTest2:
+          # TODO: Remove from here.
+          node.view.updateSidebarBuffer(node.view.height.newSeqWith(ru"+ "))
 
         # TODO: Fix condition
         if not status.bufStatus[bufIndex].isFilerMode:
@@ -630,6 +648,9 @@ proc update*(status: var EditorStatus) =
   # Disable the cursor while updating.
   setCursor(false)
 
+  # TODO: Remove from here
+  currentBufStatus.updateChangedLines
+
   let settings = status.settings
 
   if settings.tabLine.enable:
@@ -734,8 +755,8 @@ proc update*(status: var EditorStatus) =
 
         block updateTerminalBuffer:
           let selectedRange = Range(
-            start: bufStatus.selectedArea.startLine,
-            `end`: bufStatus.selectedArea.endLine)
+            first: bufStatus.selectedArea.startLine,
+            last: bufStatus.selectedArea.endLine)
 
           node.view.update(
             node.window.get,
@@ -768,7 +789,9 @@ proc update*(status: var EditorStatus) =
   if not currentBufStatus.isFilerMode:
     let
       y = currentMainWindowNode.cursor.y
-      x = currentMainWindowNode.view.widthOfLineNum + currentMainWindowNode.cursor.x
+      x = currentMainWindowNode.view.leftMargin +
+          currentMainWindowNode.view.widthOfLineNum +
+          currentMainWindowNode.cursor.x
     currentMainWindowNode.window.get.moveCursor(y, x)
 
   if status.settings.statusLine.enable: status.updateStatusLine
