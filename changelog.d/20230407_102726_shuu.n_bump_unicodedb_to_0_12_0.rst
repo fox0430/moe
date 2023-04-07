@@ -1,0 +1,35 @@
+.. _#1685: https://github.com/fox0430/moe/pull/1685
+.. A new scriv changelog fragment.
+..
+.. Uncomment the header that is right (remove the leading dots).
+..
+.. Added
+.. .....
+..
+.. - A bullet item for the Added category.
+
+Changed
+.......
+
+- `#1685`_ Bump unicodedb to 0.12.0
+
+.. Deprecated
+.. ..........
+..
+.. - A bullet item for the Deprecated category.
+..
+.. Fixed
+.. .....
+..
+.. - A bullet item for the Fixed category.
+..
+.. Removed
+.. .......
+..
+.. - A bullet item for the Removed category.
+..
+.. Security
+.. ........
+..
+.. - A bullet item for the Security category.
+..
