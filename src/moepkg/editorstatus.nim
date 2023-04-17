@@ -419,13 +419,6 @@ proc resizeMainWindowNode(status: var EditorStatus, terminalSize: Size) =
 
   mainWindowNode.resize(Position(y: y, x: x), Size(h: h, w: w))
 
-proc isHighlightChangedLine(
-  status: EditorStatus,
-  bufferIndex: int): bool {.inline.} =
-
-    status.settings.git.showChangedLine and
-    not status.bufStatus[bufferIndex].changedLines.isEmpty
-
 ## Reszie all windows to ui.terminalSize.
 proc resize*(status: var EditorStatus) =
   # Disable the cursor while updating views.
@@ -457,8 +450,8 @@ proc resize*(status: var EditorStatus) =
           widthOfLineNum = node.view.widthOfLineNum
           h = node.h - statusLineHeight
           sidebarWidth =
-            if status.isHighlightChangedLine(bufIndex): 2
-            else: 0
+            if node.view.sidebar.isSome: 2
+            else: 2
           adjustedHeight = max(h, 4)
           adjustedWidth = max(node.w - widthOfLineNum - sidebarWidth, 4)
 
