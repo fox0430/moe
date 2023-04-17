@@ -254,7 +254,7 @@ proc openFileOrDir*(
     case kind
       of pcFile, pcLinkToFile:
         try:
-          bufStatuses.add initBufferStatus(path, Mode.filer)
+          bufStatuses[bufferIndex] = initBufferStatus(path)
         except CatchableError:
           # TODO: Show error message.
           discard
