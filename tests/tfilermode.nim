@@ -107,3 +107,29 @@ suite "Filer mode":
     let files = getCurrentFiles("../")
     for i in 0 ..< bufStatuses[0].buffer.len:
       check files[i] == $bufStatuses[0].buffer[i]
+
+  test "Open a file":
+    const path = "./".toRunes
+
+    var filerStatus = initFilerStatus()
+    filerStatus.updatePathList(path)
+
+    var
+      bufStatuses = @[initBufferStatus($path, Mode.filer)]
+      mainWindow = initMainWindow()
+    const isShowIcons = false
+
+    bufStatuses[0].buffer = filerStatus.initFilerBuffer(isShowIcons).toGapBuffer
+
+    for i in 0 .. bufStatuses[0].buffer.high:
+      # Search a pcFile index
+      if pcFile == filerStatus.pathList[i].kind:
+        break
+      else:
+        mainWindow.currentMainWindowNode.currentLine.inc
+
+    bufStatuses.openFileOrDir(
+      mainWindow.currentMainWindowNode,
+      filerStatus)
+
+    check Mode.normal == bufStatuses[0].mode
