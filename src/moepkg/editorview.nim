@@ -224,19 +224,21 @@ proc writeCurrentLine(
   isVisualMode, isConfigMode: bool,
   viewSettings: EditorViewSettings) =
 
-    if viewSettings.cursorLine:
-      # Enable underline
-      win.attron(Attributes.underline)
-
     if viewSettings.highlightCurrentLine and
        not (isVisualMode or isConfigMode):
       # Change background color to white if background color is editorBg
       let
         defaultCharColor = EditorColorPair.defaultChar
-        colors = if i > -1 and i < highlight.len:
-                   theme.getColorFromEditorColorPair(highlight[i].color)
-                 else:
-                   theme.getColorFromEditorColorPair(defaultCharColor)
+        colors =
+          if i > -1 and i < highlight.len:
+            theme.getColorFromEditorColorPair(highlight[i].color)
+          else:
+            theme.getColorFromEditorColorPair(defaultCharColor)
+
+        attribute =
+          if viewSettings.cursorLine: Attribute.underline
+          elif i > -1 and i < highlight.len: highlight[i].attribute
+          else: Attribute.normal
 
         theme = colorThemeTable[theme]
 
@@ -250,7 +252,9 @@ proc writeCurrentLine(
 
         setColorPair(currentLineColorPair, fg, bg)
 
+      win.attron(attribute)
       view.write(win, y, x, str, currentLineColorPair)
+      win.attroff(attribute)
 
       currentLineColorPair.inc
 
@@ -271,10 +275,6 @@ proc writeCurrentLine(
 
     else:
       view.write(win, y, x, str, highlight[i].color)
-
-    if viewSettings.cursorLine:
-      # Disable underline
-      win.attroff(Attributes.underline)
 
 proc writeAllLines*[T](
   view: var EditorView,

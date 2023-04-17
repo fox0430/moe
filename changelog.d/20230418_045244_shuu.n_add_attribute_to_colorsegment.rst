@@ -1,0 +1,35 @@
+.. _#1691: https://github.com/fox0430/moe/pull/1691
+.. A new scriv changelog fragment.
+..
+.. Uncomment the header that is right (remove the leading dots).
+
+Added
+.....
+
+- `#1691`_ feat: Add Attribute to highlight.ColorSegment
+
+.. Changed
+.. .......
+..
+.. - A bullet item for the Changed category.
+..
+.. Deprecated
+.. ..........
+..
+.. - A bullet item for the Deprecated category.
+..
+.. Fixed
+.. .....
+..
+.. - A bullet item for the Fixed category.
+..
+.. Removed
+.. .......
+..
+.. - A bullet item for the Removed category.
+..
+.. Security
+.. ........
+..
+.. - A bullet item for the Security category.
+..
