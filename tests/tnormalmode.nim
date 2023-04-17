@@ -2137,3 +2137,79 @@ suite "Normal mode: execNormalModeCommand":
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 2
+
+  test "'*' command":
+    # Search the currnet words.
+
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    currentBufStatus.buffer = @["abc def abc".toRunes].initGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const command = ru"*"
+
+    check isNormalModeCommand(command) == InputState.Valid
+    status.execNormalModeCommand(command)
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 8
+
+  test "'*' command 2":
+    # Fix https://github.com/fox0430/moe/issues/1689.
+
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    currentBufStatus.buffer = @["abc def abc".toRunes].initGapBuffer
+
+    status.searchHistory = @["def".toRunes]
+
+    status.resize(100, 100)
+    status.update
+
+    const command = ru"*"
+    status.execNormalModeCommand(command)
+
+    check status.searchHistory == @["def".toRunes, "abc".toRunes]
+
+  test "'#' command":
+    # Search the currnet words.
+
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    currentBufStatus.buffer = @["abc def abc".toRunes].initGapBuffer
+    currentMainWindowNode.currentColumn = 8
+
+    status.resize(100, 100)
+    status.update
+
+    const command = ru"#"
+
+    check isNormalModeCommand(command) == InputState.Valid
+    status.execNormalModeCommand(command)
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+  test "'#' command 2":
+    # Fix https://github.com/fox0430/moe/issues/1689.
+
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    currentBufStatus.buffer = @["abc def abc".toRunes].initGapBuffer
+    currentMainWindowNode.currentColumn = 8
+
+    status.searchHistory = @["def".toRunes]
+
+    status.resize(100, 100)
+    status.update
+
+    const command = ru"#"
+    status.execNormalModeCommand(command)
+
+    check status.searchHistory == @["def".toRunes, "abc".toRunes]
