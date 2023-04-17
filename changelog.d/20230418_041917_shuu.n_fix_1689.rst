@@ -1,0 +1,36 @@
+.. _#1689: https://github.com/fox0430/moe/issues/1689
+.. _#1690: https://github.com/fox0430/moe/pull/1690
+.. A new scriv changelog fragment.
+..
+.. Uncomment the header that is right (remove the leading dots).
+..
+.. Added
+.. .....
+..
+.. - A bullet item for the Added category.
+..
+.. Changed
+.. .......
+..
+.. - A bullet item for the Changed category.
+..
+.. Deprecated
+.. ..........
+..
+.. - A bullet item for the Deprecated category.
+
+Fixed
+.....
+
+- `#1690`_ Fix `#1689`_
+
+.. Removed
+.. .......
+..
+.. - A bullet item for the Removed category.
+..
+.. Security
+.. ........
+..
+.. - A bullet item for the Security category.
+..

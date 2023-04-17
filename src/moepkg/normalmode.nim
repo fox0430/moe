@@ -51,6 +51,9 @@ proc searchOneCharacterToBeginOfLine(bufStatus: var BufferStatus,
       result = col
       break
 
+proc searchHistoryLimit(status: EditorStatus): int {.inline.} =
+  status.settings.persist.searchHistoryLimit
+
 proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
@@ -65,6 +68,9 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
     status.settings)
 
   status.bufStatus[currentBufferIndex].keyRight(currentMainWindowNode)
+
+  status.searchHistory.saveSearchHistory(keyword, status.searchHistoryLimit)
+
   let
     ignorecase = status.settings.ignorecase
     smartcase = status.settings.smartcase
@@ -95,9 +101,10 @@ proc searchNextOccurrenceReversely(status: var EditorStatus, keyword: seq[Rune])
     status.searchHistory,
     status.settings)
 
-  var windowNode = currentMainWindowNode
+  currentMainWindowNode.keyLeft
 
-  windowNode.keyLeft
+  status.searchHistory.saveSearchHistory(keyword, status.searchHistoryLimit)
+
   let
     ignorecase = status.settings.ignorecase
     smartcase = status.settings.smartcase
@@ -106,9 +113,9 @@ proc searchNextOccurrenceReversely(status: var EditorStatus, keyword: seq[Rune])
   if searchResult.isSome:
     currentBufStatus.jumpLine(currentMainWindowNode, searchResult.get.line)
     for column in 0 ..< searchResult.get.column:
-      currentBufStatus.keyRight(windowNode)
+      currentBufStatus.keyRight(currentMainWindowNode)
   else:
-    currentBufStatus.keyRight(windowNode)
+    currentBufStatus.keyRight(currentMainWindowNode)
 
 proc searchNextOccurrenceReversely(status: var EditorStatus) =
   if status.searchHistory.len < 1: return
