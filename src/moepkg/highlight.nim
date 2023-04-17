@@ -19,7 +19,7 @@
 
 import std/[sequtils, os, parseutils, strutils]
 import syntax/highlite
-import unicodeext, color, independentutils
+import unicodeext, color, independentutils, ui
 
 when not defined(release):
  import std/strformat
@@ -27,6 +27,7 @@ when not defined(release):
 type ColorSegment* = object
   firstRow*, firstColumn*, lastRow*, lastColumn*: int
   color*: EditorColorPair
+  attribute*: Attribute
 
 type Highlight* = object
   colorSegments*: seq[ColorSegment]
@@ -74,57 +75,73 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
   if not s.isIntersect(t): return @[s]
 
   if t.contains(s):
-    return @[ColorSegment(firstRow: s.firstRow,
-                          firstColumn: s.firstColumn,
-                          lastRow: s.lastRow,
-                          lastColumn: s.lastColumn,
-                          color: t.color)]
+    return @[ColorSegment(
+      firstRow: s.firstRow,
+      firstColumn: s.firstColumn,
+      lastRow: s.lastRow,
+      lastColumn: s.lastColumn,
+      color: t.color,
+      attribute: Attribute.normal)]
 
   if s.contains(t):
     if (s.firstRow, s.firstColumn) < (t.firstRow, t.firstColumn):
       let last = prev((t.firstRow, t.firstColumn))
-      result.add(ColorSegment(firstRow: s.firstRow,
-                              firstColumn: s.firstColumn,
-                              lastRow: last.row,
-                              lastColumn: last.column,
-                              color: s.color))
+      result.add(ColorSegment(
+        firstRow: s.firstRow,
+        firstColumn: s.firstColumn,
+        lastRow: last.row,
+        lastColumn: last.column,
+        color: s.color,
+        attribute: Attribute.normal))
 
     result.add(t)
 
     if (t.lastRow, t.lastColumn) < (s.lastRow, s.lastColumn):
       let first = next((t.lastRow, t.lastColumn))
-      result.add(ColorSegment(firstRow: first.row,
-                              firstColumn: first.column,
-                              lastRow: s.lastRow,
-                              lastColumn: s.lastColumn,
-                              color: s.color))
+      result.add(ColorSegment(
+        firstRow: first.row,
+        firstColumn: first.column,
+        lastRow: s.lastRow,
+        lastColumn: s.lastColumn,
+        color: s.color,
+        attribute: Attribute.normal))
 
     return result
 
   if (t.firstRow, t.firstColumn) < (s.firstRow, s.firstColumn):
     let first = next((t.lastRow, t.lastColumn))
-    result.add(ColorSegment(firstRow: s.firstRow,
-                            firstColumn: s.firstColumn,
-                            lastRow: t.lastRow,
-                            lastColumn: t.lastColumn,
-                            color: t.color))
-    result.add(ColorSegment(firstRow: first.row,
-                            firstColumn: first.column,
-                            lastRow: s.lastRow,
-                            lastColumn: s.lastColumn,
-                            color: s.color))
+    result.add(ColorSegment(
+      firstRow: s.firstRow,
+      firstColumn: s.firstColumn,
+      lastRow: t.lastRow,
+      lastColumn: t.lastColumn,
+      color: t.color,
+      attribute: Attribute.normal))
+
+    result.add(ColorSegment(
+      firstRow: first.row,
+      firstColumn: first.column,
+      lastRow: s.lastRow,
+      lastColumn: s.lastColumn,
+      color: s.color,
+      attribute: Attribute.normal))
   else:
     let last = prev((t.firstRow, t.firstColumn))
-    result.add(ColorSegment(firstRow: s.firstRow,
-                            firstColumn: s.firstColumn,
-                            lastRow: last.row,
-                            lastColumn: last.column,
-                            color: s.color))
-    result.add(ColorSegment(firstRow: t.firstRow,
-                            firstColumn: t.firstColumn,
-                            lastRow: s.lastRow,
-                            lastColumn: s.lastColumn,
-                            color: t.color))
+    result.add(ColorSegment(
+      firstRow: s.firstRow,
+      firstColumn: s.firstColumn,
+      lastRow: last.row,
+      lastColumn: last.column,
+      color: s.color,
+      attribute: Attribute.normal))
+
+    result.add(ColorSegment(
+      firstRow: t.firstRow,
+      firstColumn: t.firstColumn,
+      lastRow: s.lastRow,
+      lastColumn: s.lastColumn,
+      color: t.color,
+      attribute: Attribute.normal))
 
 proc overwrite*(highlight: var Highlight, colorSegment: ColorSegment) =
   ## Overwrite `highlight` with colorSegment

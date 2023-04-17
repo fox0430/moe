@@ -25,7 +25,7 @@ when not defined unitTest:
   import std/posix
 
 type
-  Attributes* = enum
+  Attribute* = enum
     normal = A_NORMAL
     standout = A_STANDOUT
     underline = A_UNDERLINE
@@ -264,11 +264,11 @@ proc resize*(win: var Window, position: Position, size: Size) {.inline.} =
 proc resize*(win: var Window, rect: Rect) {.inline.} =
   win.resize(rect.h, rect.w, rect.y, rect.x)
 
-proc attron*(win: var Window, attributes: Attributes) {.inline.} =
-  win.cursesWindow.wattron(cint(attributes))
+proc attron*(win: var Window, attribute: Attribute) {.inline.} =
+  win.cursesWindow.wattron(cint(attribute))
 
-proc attroff*(win: var Window, attributes: Attributes) {.inline.} =
-  win.cursesWindow.wattroff(cint(attributes))
+proc attroff*(win: var Window, attribute: Attribute) {.inline.} =
+  win.cursesWindow.wattroff(cint(attribute))
 
 proc moveCursor*(win: Window, y, x: int) {.inline.} =
   wmove(win.cursesWindow, cint(y), cint(x))
