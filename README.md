@@ -83,6 +83,8 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
 - Vim like register
 
+- Git support
+
 ## Planned features
 
 - Supports regular expression and PEG
@@ -100,8 +102,6 @@ This project's goals are easily customizable, high productivity, user friendly, 
 - Macros
 
 - Terminal
-
-- Git support
 
 - Select data structures
 
