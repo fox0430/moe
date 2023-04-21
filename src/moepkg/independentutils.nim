@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, math, random, osproc]
+import std/[strutils, random, osproc]
 
 type
   Position* = object
@@ -53,9 +53,6 @@ type
     last*: BufferPosition
 
 proc numberOfDigits*(x: int): int {.inline.} = x.intToStr.len
-
-proc calcTabWidth*(numOfBuffer, windowSize: int): int {.inline.} =
-  int(ceil(windowSize / numOfBuffer))
 
 proc normalizeHex*(s: string): string =
   var count = 0

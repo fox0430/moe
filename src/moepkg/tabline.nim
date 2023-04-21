@@ -17,68 +17,106 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, terminal, unicode]
+import std/[strutils, unicode, strformat, math]
 import ui, windownode, color, bufferstatus, independentutils
 
-proc writeTab*(tabWin: var Window,
-              start, tabWidth: int,
-              filename: string,
-              color: EditorColorPair) =
+type
+  TabLine = object
+    position: Position
+    buffer: string
+    color: EditorColorPair
 
-  let title = if filename == "": "New file" else: filename
+## Return buffer for a tab line to display.
+proc tabLineBuffer*(title: string, tabWidth: int): string =
+  if tabWidth > title.len:
+    let spaces = " ".repeat(tabWidth - title.len)
+    return fmt" {title}{spaces}"
+  elif tabWidth > 2:
+    let shortTitle = title.substr(0, tabWidth - 2) & "~"
+    return fmt" {shortTitle}"
 
-  if tabWidth - title.len > 0:
-    let buffer =
-      if filename.len < tabWidth:
-        " " & title & " ".repeat(tabWidth - title.len)
-      else:
-        " " & (title).substr(0, tabWidth - 3) & "~"
-    tabWin.write(0, start, buffer, color)
-
-proc writeTabLineBuffer*(tabWin: var Window,
-                         allBufStatus: seq[BufferStatus],
-                         currentBufferIndex: int,
-                         mainWindowNode: WindowNode,
-                         isAllbuffer: bool) =
-
-  let
-    isAllBuffer = isAllbuffer
-    defaultColor = EditorColorPair.tab
-    currentTabColor = EditorColorPair.currentTab
-
-  tabWin.erase
-
-  if isAllBuffer:
-    ## Display all buffer
-    for index, bufStatus in allBufStatus:
-      let
-        color = if currentBufferIndex == index: currentTabColor
-                else: defaultColor
-        currentMode = bufStatus.mode
-        prevMode = bufStatus.prevMode
-        filename = if isFilerMode(currentMode, prevMode): $bufStatus.path
-                   elif isBackupManagerMode(currentMode, prevMode): "BACKUP"
-                   elif isConfigMode(currentMode, prevMode): "CONFIG"
-                   else: $bufStatus.path
-        tabWidth = allBufStatus.len.calcTabWidth(terminalWidth())
-      tabWin.writeTab(index * tabWidth, tabWidth, filename, color)
+## Return a text for a path to display.
+proc displayedPath(b: BufferStatus): string =
+  if b.isBackupManagerMode:
+    "BACKUP"
+  elif b.isConfigMode:
+    "CONFIG"
+  elif b.isHelpMode:
+    "HELP"
+  elif b.isBufferManagerMode:
+    "BUFFER"
+  elif b.isLogViewerMode:
+    "LOG"
+  elif b.isRecentFileMode:
+    "RECENT"
+  elif b.isDebugMode:
+    "DEBUG"
+  elif b.isQuickRunMode:
+    "QUICKRUN"
+  elif b.path.isEmpty:
+    "New file"
   else:
-    ## Displays only the buffer currently displayed in the window
-    let allBufferIndex =
-      mainWindowNode.getAllBufferIndex
-    for index, bufIndex in allBufferIndex:
-      let
-        color = if currentBufferIndex == bufIndex: currentTabColor
-                else: defaultColor
-        bufStatus = allBufStatus[bufIndex]
-        currentMode = bufStatus.mode
-        prevMode = bufStatus.prevMode
-        filename = if isFilerMode(currentMode, prevMode): $bufStatus.path
-                   elif isBackupManagerMode(currentMode, prevMode): "BACKUP"
-                   elif isConfigMode(currentMode, prevMode): "CONFIG"
-                   else: $bufStatus.path
-        numOfbuffer = mainWindowNode.getAllBufferIndex.len
-        tabWidth = numOfbuffer.calcTabWidth(terminalWidth())
-      tabWin.writeTab(index * tabWidth, tabWidth, filename, color)
+    $b.path
 
-  tabWin.refresh
+proc initTabLines(
+  bufStatuses: seq[BufferStatus],
+  currentBufferIndex: int,
+  isAllbuffer: bool,
+  mainWindowNode: WindowNode): seq[TabLine] =
+
+    if isAllBuffer:
+      # Display all buffer
+
+      let numOfBuffer = bufStatuses.len
+      for index, bufStatus in bufStatuses:
+        let
+          title = bufStatus.displayedPath
+          tabWidth = int(ceil(getTerminalWidth() / numOfBuffer))
+          color =
+            if currentBufferIndex == index: EditorColorPair.currentTab
+            else: EditorColorPair.tab
+
+        result.add TabLine(
+          position: Position(y: 0, x: index * tabWidth),
+          buffer: tabLineBuffer(title, tabWidth),
+          color: color)
+    else:
+      # Only the current buffer.
+
+      let allBufferIndex = mainWindowNode.getAllBufferIndex
+      for index, bufIndex in allBufferIndex:
+        let
+          title = bufStatuses[bufIndex].displayedPath
+          tabWidth = getTerminalWidth()
+
+        return @[
+          TabLine(
+            position: Position(y: 0, x: 0),
+            buffer: tabLineBuffer(title, tabWidth),
+            color: EditorColorPair.currentTab)]
+
+## Write buffer to the terminal (UI).
+## Need to refresh after writing.
+proc write(win: var Window, tabLine: TabLine) {.inline.} =
+  win.write(
+    tabLine.position.y,
+    tabLine.position.x,
+    tabLine.buffer,
+    tabline.color)
+
+## Write all tab lines.
+proc writeTabLineBuffers*(
+  tabWin: var Window,
+  bufStatuses: seq[BufferStatus],
+  currentBufferIndex: int,
+  mainWindowNode: WindowNode,
+  isAllbuffer: bool) =
+
+    let tablines = bufStatuses.initTabLines(
+      currentBufferIndex,
+      isAllbuffer,
+      mainWindowNode)
+
+    tabWin.erase
+    for t in tabLines: tabWin.write(t)
+    tabWin.refresh
