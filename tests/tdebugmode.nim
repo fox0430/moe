@@ -60,7 +60,7 @@ suite "Init debug mode buffer":
       ru"-- editorview --",
       ru"  widthOfLineNum          : 2",
       ru"  height                  : 97",
-      ru"  width                   : 98",
+      ru"  width                   : 96",
       ru"",
       ru"-- bufStatus --",
       ru"buffer Index: 0",

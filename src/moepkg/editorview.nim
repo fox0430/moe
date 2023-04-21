@@ -180,7 +180,7 @@ proc resize(s: var Sidebar, size: Size) =
   # Reszie buffer and highlights.
 
   var
-    newBuffer = size.h.newSeqWith("  ".repeat(size.w).toRunes)
+    newBuffer = size.h.newSeqWith(" ".repeat(size.w).toRunes)
     newHighlights: seq[seq[EditorColorPair]] = size.h.newSeqWith(
       size.w.newSeqWith(EditorColorPair.defaultChar))
   for i in 0 .. min(newBuffer.high, s.buffer.high):

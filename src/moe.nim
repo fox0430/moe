@@ -52,10 +52,11 @@ proc addBufferStatus(status: var EditorStatus, parsedList: CmdParsedList) =
     status.addNewBufferInCurrentWin
 
 proc initSidebar(status: var EditorStatus) =
-  currentMainWindowNode.view.initSidebar
+  if status.settings.view.sidebar:
+    currentMainWindowNode.view.initSidebar
 
-  if status.settings.git.showChangedLine and currentBufStatus.isTrackingByGit:
-     currentBufStatus.updateChangedLines
+    if status.settings.git.showChangedLine and currentBufStatus.isTrackingByGit:
+      currentBufStatus.updateChangedLines
 
 proc initEditor(): EditorStatus =
   let parsedList = parseCommandLineOption(commandLineParams())

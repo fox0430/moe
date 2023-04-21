@@ -160,6 +160,7 @@ type
     cursorLine*: bool
     indentationLines*: bool
     tabStop*: int
+    sidebar*: bool
 
   AutocompleteSettings* = object
     enable*: bool
@@ -331,6 +332,7 @@ proc initEditorViewSettings*(): EditorViewSettings =
   result.currentLineNumber = true
   result.indentationLines = true
   result.tabStop = 2
+  result.sidebar = true
 
 proc initReservedWords*(): seq[ReservedWord] =
   result = @[
@@ -1045,6 +1047,9 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Standard"].contains("tabStop"):
       result.tabStop      = settings["Standard"]["tabStop"].getInt()
       result.view.tabStop = settings["Standard"]["tabStop"].getInt()
+
+    if settings["Standard"].contains("sidebar"):
+      result.view.sidebar = settings["Standard"]["sidebar"].getBool
 
     if settings["Standard"].contains("autoCloseParen"):
       result.autoCloseParen = settings["Standard"]["autoCloseParen"].getBool()
@@ -1866,7 +1871,8 @@ proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
          "autoDeleteParen",
          "systemClipboard",
          "smoothScroll",
-         "liveReloadOfFile":
+         "liveReloadOfFile",
+         "sidebar":
         if not (val.kind == TomlValueKind.Bool):
           return some(InvalidItem(name: $key, val: $val))
       of "tabStop", "autoSaveInterval", "smoothScrollSpeed":
@@ -2279,6 +2285,7 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "syntax = {$settings.syntax}"
   result.addLine fmt "indentationLines = {$settings.view.indentationLines}"
   result.addLine fmt "tabStop = {$settings.tabStop}"
+  result.addLine fmt "sidebar = {$settings.view.sidebar}"
   result.addLine fmt "autoCloseParen = {$settings.autoCloseParen}"
   result.addLine fmt "autoIndent = {$settings.autoIndent}"
   result.addLine fmt "ignorecase = {$settings.ignorecase}"

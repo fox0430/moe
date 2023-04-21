@@ -91,7 +91,6 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
       h: 1,
       w: 1)
 
-    # TODO: Fix condition
     if parent.child[^1].view.sidebar.isSome:
       node.view.initSidebar
 
@@ -117,7 +116,6 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
         highlight: n.highlight,
         bufferIndex: n.bufferIndex)
 
-    # TODO: Fix condition
     if parent.view.sidebar.isSome:
       node1.view.initSidebar
       node2.view.initSidebar
@@ -143,7 +141,6 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
       highlight: n.highlight,
       bufferIndex: n.bufferIndex)
 
-    # TODO: Fix condition
     if parent.child[^1].view.sidebar.isSome:
       node.view.initSidebar
 
@@ -161,7 +158,6 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
       highlight: n.highlight,
       bufferIndex: n.bufferIndex)
 
-    # TODO: Fix condition
     if parent.child[^1].view.sidebar.isSome:
       node.view.initSidebar
 
@@ -188,7 +184,6 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
         highlight: n.highlight,
         bufferIndex: n.bufferIndex)
 
-    # TODO: Fix condition
     if parent.view.sidebar.isSome:
       node1.view.initSidebar
       node2.view.initSidebar

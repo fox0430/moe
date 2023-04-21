@@ -133,7 +133,6 @@ proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
 proc bufferIndexInCurrentWindow*(status: EditorStatus): int {.inline.} =
   currentMainWindowNode.bufferIndex
 
-# TODO: Remove
 proc changeMode*(status: var EditorStatus, mode: Mode) =
   let currentMode = currentBufStatus.mode
 

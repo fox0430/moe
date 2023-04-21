@@ -1,7 +1,6 @@
 import std/[unittest, heapqueue, options, macros, strformat]
 import moepkg/[editorstatus, highlight, color, editorview, gapbuffer,
-               unicodeext, movement, windownode, ui, independentutils,
-               searchutils]
+               unicodeext, movement, windownode, ui, independentutils]
 
 import moepkg/viewhighlight {.all.}
 

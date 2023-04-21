@@ -45,6 +45,7 @@ suite "Config mode: Init buffer":
                      ru "  syntax                         true",
                      ru "  indentationLines               true",
                      ru "  tabStop                        2",
+                     ru "  sidebar                        true",
                      ru "  autoCloseParen                 true",
                      ru "  autoIndent                     true",
                      ru "  ignorecase                     true",

@@ -31,6 +31,7 @@ type standardTableNames {.pure.} = enum
   syntax
   indentationLines
   tabStop
+  sidebar
   autoCloseParen
   autoIndent
   ignorecase
@@ -279,6 +280,8 @@ proc getStandardTableSettingValues(settings: EditorSettings,
         currentVal = settings.syntax
       of "indentationLines":
         currentVal = settings.view.indentationLines
+      of "sidebar":
+        currentVal = settings.view.sidebar
       of "autoCloseParen":
         currentVal = settings.autoCloseParen
       of "autoIndent":
@@ -744,6 +747,8 @@ proc changeStandardTableSetting(settings: var EditorSettings,
       settings.syntax = parseBool(settingVal)
     of "indentationLines":
       settings.view.indentationLines = parseBool(settingVal)
+    of "sidebar":
+      settings.view.sidebar = parseBool(settingVal)
     of "autoCloseParen":
       settings.autoCloseParen = parseBool(settingVal)
     of "autoIndent":
@@ -1095,7 +1100,8 @@ proc getSettingType(table, name: string): SettingType =
          "autoDeleteParen",
          "systemClipboard",
          "smoothScroll",
-         "liveReloadOfFile": result = SettingType.Bool
+         "liveReloadOfFile",
+         "sidebar": result = SettingType.Bool
       of "tabStop",
          "autoSaveInterval",
          "smoothScrollSpeed": result = SettingType.Number
@@ -1719,6 +1725,8 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
         result.add(ru nameStr & space & $settings.view.indentationLines)
       of "tabStop":
         result.add(ru nameStr & space & $settings.tabStop)
+      of "sidebar":
+        result.add(ru nameStr & space & $settings.view.sidebar)
       of "autoCloseParen":
         result.add(ru nameStr & space & $settings.autoCloseParen)
       of "autoIndent":

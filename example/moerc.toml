@@ -18,6 +18,8 @@ indentationLines = true
 
 tabStop = 2
 
+sidebar = true
+
 autoCloseParen = true
 
 autoIndent = true

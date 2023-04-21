@@ -51,6 +51,12 @@ default is 2
 tabStop
 ```
 
+Enable/Disable sidebars for editor views (bool)
+default is true
+```
+sidebar
+```
+
 Enable/Disable ignorecase (bool)  
 default is true
 ```
