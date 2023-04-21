@@ -19,7 +19,7 @@
 
 import std/[tables, times, options, os]
 import syntax/highlite
-import gapbuffer, unicodeext, fileutils, highlight, independentutils
+import gapbuffer, unicodeext, fileutils, highlight, independentutils, git
 
 type
   Mode* = enum
@@ -59,6 +59,8 @@ type
     lastSaveTime*: DateTime
     isReadonly*: bool
     filerStatusIndex*: Option[int]
+    isTrackingByGit*: bool
+    changedLines*: seq[Diff]
 
 proc isExMode*(mode: Mode): bool {.inline.} = mode == Mode.ex
 
@@ -272,3 +274,7 @@ proc positionEndOfBuffer*(bufStatus: BufferStatus): BufferPosition {.inline.} =
   BufferPosition(
     line: bufStatus.buffer.high,
     column: bufStatus.buffer[bufStatus.buffer.high].high)
+
+proc updateChangedLines*(bufStatus: var BufferStatus) =
+  if bufStatus.isTrackingByGit:
+    bufStatus.changedLines = bufStatus.path.gitDiff

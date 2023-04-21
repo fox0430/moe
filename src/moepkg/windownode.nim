@@ -80,86 +80,120 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
   var parent = n.parent
 
   if parent.splitType == SplitType.vertical:
-    var node = WindowNode(parent: n.parent,
-                          child: @[],
-                          splitType: SplitType.vertical,
-                          window: some(newWindow()),
-                          view: initEditorView(buffer, 1, 1),
-                          highlight: n.highlight,
-                          bufferIndex: n.bufferIndex,
-                          h: 1,
-                          w: 1)
+    var node = WindowNode(
+      parent: n.parent,
+      child: @[],
+      splitType: SplitType.vertical,
+      window: some(newWindow()),
+      view: initEditorView(buffer, 1, 1),
+      highlight: n.highlight,
+      bufferIndex: n.bufferIndex,
+      h: 1,
+      w: 1)
+
+    if parent.child[^1].view.sidebar.isSome:
+      node.view.initSidebar
+
     parent.child.insert(node, n.index + 1)
+
     return n
   else:
     var
-      node1 = WindowNode(parent: n,
-                         child: @[],
-                         splitType: SplitType.vertical,
-                         window: some(newWindow()),
-                         view: initEditorView(buffer, 1, 1),
-                         highlight: n.highlight,
-                         bufferIndex: n.bufferIndex)
-      node2 = WindowNode(parent: n,
-                         child: @[],
-                         splitType: SplitType.vertical,
-                         window: some(newWindow()),
-                         view: initEditorView(buffer, 1, 1),
-                         highlight: n.highlight,
-                         bufferIndex: n.bufferIndex)
+      node1 = WindowNode(
+        parent: n,
+        child: @[],
+        splitType: SplitType.vertical,
+        window: some(newWindow()),
+        view: initEditorView(buffer, 1, 1),
+        highlight: n.highlight,
+        bufferIndex: n.bufferIndex)
+      node2 = WindowNode(
+        parent: n,
+        child: @[],
+        splitType: SplitType.vertical,
+        window: some(newWindow()),
+        view: initEditorView(buffer, 1, 1),
+        highlight: n.highlight,
+        bufferIndex: n.bufferIndex)
+
+    if parent.view.sidebar.isSome:
+      node1.view.initSidebar
+      node2.view.initSidebar
+
     n.splitType = SplitType.vertical
     n.windowIndex = -1
     n.child.add(node1)
     n.child.add(node2)
     n.window = none(Window)
+
     return node1
 
 proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
   var parent = n.parent
 
   if parent.splitType == SplitType.horaizontal:
-    var node = WindowNode(parent: parent,
-                          child: @[],
-                          splitType: SplitType.horaizontal,
-                          window: some(newWindow()),
-                          view: initEditorView(buffer, 1, 1),
-                          highlight: n.highlight,
-                          bufferIndex: n.bufferIndex)
+    var node = WindowNode(
+      parent: parent,
+      child: @[],
+      splitType: SplitType.horaizontal,
+      window: some(newWindow()),
+      view: initEditorView(buffer, 1, 1),
+      highlight: n.highlight,
+      bufferIndex: n.bufferIndex)
+
+    if parent.child[^1].view.sidebar.isSome:
+      node.view.initSidebar
+
     parent.child.add(node)
+
     return n
   # if parent is root and one window
   elif parent.parent == nil and parent.child.len == 1:
-    var node = WindowNode(parent: n.parent,
-                          child: @[],
-                          splitType: SplitType.vertical,
-                          window: some(newWindow()),
-                          view: initEditorView(buffer, 1, 1),
-                          highlight: n.highlight,
-                          bufferIndex: n.bufferIndex)
+    var node = WindowNode(
+      parent: n.parent,
+      child: @[],
+      splitType: SplitType.vertical,
+      window: some(newWindow()),
+      view: initEditorView(buffer, 1, 1),
+      highlight: n.highlight,
+      bufferIndex: n.bufferIndex)
+
+    if parent.child[^1].view.sidebar.isSome:
+      node.view.initSidebar
+
     n.parent.splitType = SplitType.horaizontal
     n.parent.child.insert(node, n.index + 1)
+
     return n
   else:
     var
-      node1 = WindowNode(parent: n,
-                         child: @[],
-                         splitType: SplitType.vertical,
-                         window: some(newWindow()),
-                         view: initEditorView(buffer, 1, 1),
-                         highlight: n.highlight,
-                         bufferIndex: n.bufferIndex)
-      node2 = WindowNode(parent: n,
-                         child: @[],
-                         splitType: SplitType.vertical,
-                         window: some(newWindow()),
-                         view: initEditorView(buffer, 1, 1),
-                         highlight: n.highlight,
-                         bufferIndex: n.bufferIndex)
+      node1 = WindowNode(
+        parent: n,
+        child: @[],
+        splitType: SplitType.vertical,
+        window: some(newWindow()),
+        view: initEditorView(buffer, 1, 1),
+        highlight: n.highlight,
+        bufferIndex: n.bufferIndex)
+      node2 = WindowNode(
+        parent: n,
+        child: @[],
+        splitType: SplitType.vertical,
+        window: some(newWindow()),
+        view: initEditorView(buffer, 1, 1),
+        highlight: n.highlight,
+        bufferIndex: n.bufferIndex)
+
+    if parent.view.sidebar.isSome:
+      node1.view.initSidebar
+      node2.view.initSidebar
+
     n.splitType = SplitType.horaizontal
     n.windowIndex = -1
     n.child.add(node1)
     n.child.add(node2)
     n.window = none(Window)
+
     return node1
 
 proc deleteWindowNode*(root: var WindowNode, windowIndex: int) =

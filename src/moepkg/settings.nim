@@ -160,6 +160,7 @@ type
     cursorLine*: bool
     indentationLines*: bool
     tabStop*: int
+    sidebar*: bool
 
   AutocompleteSettings* = object
     enable*: bool
@@ -182,6 +183,9 @@ type
   ClipboardSettings* = object
     enable*: bool
     toolOnLinux*: ClipboardToolOnLinux
+
+  GitSettings* = object
+    showChangedLine*: bool
 
   EditorSettings* = object
     editorColorTheme*: colorTheme
@@ -217,6 +221,7 @@ type
     debugMode*: DebugModeSettings
     highlight*: HighlightSettings
     persist*: PersistSettings
+    git*: GitSettings
 
   InvalidItem = object
     name: string
@@ -327,6 +332,7 @@ proc initEditorViewSettings*(): EditorViewSettings =
   result.currentLineNumber = true
   result.indentationLines = true
   result.tabStop = 2
+  result.sidebar = true
 
 proc initReservedWords*(): seq[ReservedWord] =
   result = @[
@@ -380,6 +386,9 @@ proc initClipboardSettings(): ClipboardSettings =
   if ClipboardToolOnLinux.none != result.toolOnLinux:
     result.enable = true
 
+proc initGitSettings(): GitSettings =
+  result.showChangedLine = true
+
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = colorTheme.dark
   result.statusLine = initStatusLineSettings()
@@ -410,6 +419,7 @@ proc initEditorSettings*(): EditorSettings =
   result.debugMode = initDebugModeSettings()
   result.highlight = initHighlightSettings()
   result.persist = initPersistSettings()
+  result.git = initGitSettings()
 
 proc getTheme(theme: string): colorTheme =
   if theme == "vivid": return colorTheme.vivid
@@ -1037,6 +1047,9 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Standard"].contains("tabStop"):
       result.tabStop      = settings["Standard"]["tabStop"].getInt()
       result.view.tabStop = settings["Standard"]["tabStop"].getInt()
+
+    if settings["Standard"].contains("sidebar"):
+      result.view.sidebar = settings["Standard"]["sidebar"].getBool
 
     if settings["Standard"].contains("autoCloseParen"):
       result.autoCloseParen = settings["Standard"]["autoCloseParen"].getBool()
@@ -1822,6 +1835,10 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
   if result.editorColorTheme == colorTheme.vscode:
     result.editorColorTheme = loadVSCodeTheme()
 
+  if settings.contains("Git"):
+    if settings["Git"].contains("showChangedLine"):
+      result.git.showChangedLine = settings["Git"]["showChangedLine"].getBool
+
 proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
@@ -1854,7 +1871,8 @@ proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
          "autoDeleteParen",
          "systemClipboard",
          "smoothScroll",
-         "liveReloadOfFile":
+         "liveReloadOfFile",
+         "sidebar":
         if not (val.kind == TomlValueKind.Bool):
           return some(InvalidItem(name: $key, val: $val))
       of "tabStop", "autoSaveInterval", "smoothScrollSpeed":
@@ -2164,6 +2182,15 @@ proc validateThemeTable(table: TomlValueRef): Option[InvalidItem] =
         if not correctKey:
           return some(InvalidItem(name: $key, val: $val))
 
+proc validateGitTable(table: TomlValueRef): Option[InvalidItem] =
+  for key, val in table.getTable:
+    case key:
+      of "showChangedLine":
+        if val.kind != TomlValueKind.Bool:
+          return some(InvalidItem(name: $key, val: $val))
+      else:
+        return some(InvalidItem(name: $key, val: $val))
+
 proc validateTomlConfig(toml: TomlValueRef): Option[InvalidItem] =
   for key, val in toml.getTable:
     case key:
@@ -2212,6 +2239,9 @@ proc validateTomlConfig(toml: TomlValueRef): Option[InvalidItem] =
       of "Debug":
         let r = validateDebugTable(val)
         if r.isSome: return r
+      of "Git":
+        let r = validateGitTable(val)
+        if r.isSome: return r
       else:
         return some(InvalidItem(name: $key, val: $val))
 
@@ -2255,6 +2285,7 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "syntax = {$settings.syntax}"
   result.addLine fmt "indentationLines = {$settings.view.indentationLines}"
   result.addLine fmt "tabStop = {$settings.tabStop}"
+  result.addLine fmt "sidebar = {$settings.view.sidebar}"
   result.addLine fmt "autoCloseParen = {$settings.autoCloseParen}"
   result.addLine fmt "autoIndent = {$settings.autoIndent}"
   result.addLine fmt "ignorecase = {$settings.ignorecase}"
@@ -2403,6 +2434,9 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "cursorPosition = {$settings.persist.cursorPosition}"
 
   result.addLine ""
+
+  result.addLine fmt "[Git]"
+  result.addLine fmt "showChangedLine = {$settings.git.showChangedLine}"
 
   result.addLine fmt "[Debug.WindowNode]"
   result.addLine fmt "enable = {$settings.debugMode.windowNode.enable}"

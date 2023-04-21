@@ -25,12 +25,15 @@ proc writeTab*(tabWin: var Window,
               filename: string,
               color: EditorColorPair) =
 
-  let
-    title = if filename == "": "New file" else: filename
-    buffer = if filename.len < tabWidth:
-               " " & title & " ".repeat(tabWidth - title.len)
-             else: " " & (title).substr(0, tabWidth - 3) & "~"
-  tabWin.write(0, start, buffer, color)
+  let title = if filename == "": "New file" else: filename
+
+  if tabWidth - title.len > 0:
+    let buffer =
+      if filename.len < tabWidth:
+        " " & title & " ".repeat(tabWidth - title.len)
+      else:
+        " " & (title).substr(0, tabWidth - 3) & "~"
+    tabWin.write(0, start, buffer, color)
 
 proc writeTabLineBuffer*(tabWin: var Window,
                          allBufStatus: seq[BufferStatus],

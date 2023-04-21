@@ -1,7 +1,6 @@
 import std/[unittest, heapqueue, options, macros, strformat]
 import moepkg/[editorstatus, highlight, color, editorview, gapbuffer,
-               unicodeext, movement, windownode, ui, independentutils,
-               searchutils]
+               unicodeext, movement, windownode, ui, independentutils]
 
 import moepkg/viewhighlight {.all.}
 
@@ -82,10 +81,10 @@ test "Highlight full width space 1":
 
   let
     range = currentMainWindowNode.view.rangeOfOriginalLineInView
-    startLine = range.start
-    endLine = if currentBufStatus.buffer.len > range.end + 1: range.end + 2
-              elif currentBufStatus.buffer.len > range.end: range.end + 1
-              else: range.end
+    startLine = range.first
+    endLine = if currentBufStatus.buffer.len > range.last + 1: range.last + 2
+              elif currentBufStatus.buffer.len > range.last: range.last + 1
+              else: range.last
   var bufferInView = initGapBuffer[seq[Rune]]()
   for i in startLine ..< endLine: bufferInView.add(currentBufStatus.buffer[i])
 
@@ -109,10 +108,10 @@ test "Highlight full width space 2":
 
   let
     range = currentMainWindowNode.view.rangeOfOriginalLineInView
-    startLine = range.start
-    endLine = if currentBufStatus.buffer.len > range.end + 1: range.end + 2
-              elif currentBufStatus.buffer.len > range.end: range.end + 1
-              else: range.end
+    startLine = range.first
+    endLine = if currentBufStatus.buffer.len > range.last + 1: range.last + 2
+              elif currentBufStatus.buffer.len > range.last: range.last + 1
+              else: range.last
   var bufferInView = initGapBuffer[seq[Rune]]()
   for i in startLine ..< endLine: bufferInView.add(currentBufStatus.buffer[i])
 
@@ -136,10 +135,10 @@ test "Highlight full width space 3":
 
   let
     range = currentMainWindowNode.view.rangeOfOriginalLineInView
-    startLine = range.start
-    endLine = if currentBufStatus.buffer.len > range.end + 1: range.end + 2
-              elif currentBufStatus.buffer.len > range.end: range.end + 1
-              else: range.end
+    startLine = range.first
+    endLine = if currentBufStatus.buffer.len > range.last + 1: range.last + 2
+              elif currentBufStatus.buffer.len > range.last: range.last + 1
+              else: range.last
   var bufferInView = initGapBuffer[seq[Rune]]()
   for i in startLine ..< endLine: bufferInView.add(currentBufStatus.buffer[i])
 
@@ -162,10 +161,10 @@ test "Highlight full width space 4":
 
   let
     range = currentMainWindowNode.view.rangeOfOriginalLineInView
-    startLine = range.start
-    endLine = if currentBufStatus.buffer.len > range.end + 1: range.end + 2
-              elif currentBufStatus.buffer.len > range.end: range.end + 1
-              else: range.end
+    startLine = range.first
+    endLine = if currentBufStatus.buffer.len > range.last + 1: range.last + 2
+              elif currentBufStatus.buffer.len > range.last: range.last + 1
+              else: range.last
   var bufferInView = initGapBuffer[seq[Rune]]()
   for i in startLine ..< endLine: bufferInView.add(currentBufStatus.buffer[i])
 

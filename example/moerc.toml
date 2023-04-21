@@ -18,6 +18,8 @@ indentationLines = true
 
 tabStop = 2
 
+sidebar = true
+
 autoCloseParen = true
 
 autoIndent = true
@@ -210,6 +212,10 @@ search = true
 searchHistoryLimit = 1000
 
 cursorPosition = true
+
+[Git]
+
+showChangedLine = true
 
 [Debug.WindowNode]
 enable = true

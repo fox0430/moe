@@ -941,9 +941,10 @@ proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
       return
 
     try:
-      saveFile(path,
-               currentBufStatus.buffer.toRunes,
-               currentBufStatus.characterEncoding)
+      saveFile(
+        path,
+        currentBufStatus.buffer.toRunes,
+        currentBufStatus.characterEncoding)
     except IOError:
       status.commandLine.writeSaveError
 
@@ -961,6 +962,11 @@ proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
         status.commandLine.writeMessageSaveFile(
           path,
           status.settings.notification)
+
+    # Update the changedLines for git diff.
+    if status.settings.git.showChangedLine and
+       currentBufStatus.isTrackingByGit:
+         currentBufStatus.updateChangedLines
 
     currentBufStatus.countChange = 0
     currentBufStatus.lastSaveTime = now()

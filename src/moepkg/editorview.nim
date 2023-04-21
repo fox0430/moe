@@ -17,19 +17,32 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[deques, strutils, math, strformat]
+import std/[deques, strutils, math, strformat, options, sequtils]
 import gapbuffer, ui, unicodeext, independentutils, color, settings,
-       highlight
+       highlight, git
 
-type EditorView* = object
-  height*, width*, widthOfLineNum*: int
-  lines*: Deque[seq[Rune]]
-  originalLine*, start*, length*: Deque[int]
-  updated*: bool
+type
+  Sidebar = object
+    buffer: seq[Runes]
+    highlights: seq[seq[EditorColorPair]]
 
-type ViewLine = object
-  line: seq[Rune]
-  originalLine, start, length: int
+  EditorView* = object
+    height*: int
+    width*: int
+    widthOfLineNum*: int
+    leftMargin*: int # TODO: Rename to sidebarWidth?
+    lines*: Deque[seq[Rune]]
+    originalLine*: Deque[int]
+    start*: Deque[int]
+    length*: Deque[int]
+    updated*: bool
+    sidebar*: Option[Sidebar]
+
+  ViewLine = object
+    line: seq[Rune]
+    originalLine: int
+    start: int
+    length: int
 
 proc loadSingleViewLine[T](view: EditorView,
                            buffer: T,
@@ -113,30 +126,100 @@ proc initEditorView*[T](buffer: T, height, width: int): EditorView =
 
   result.reload(buffer, 0)
 
-proc resize*[T](view: var EditorView,
-                buffer: T,
-                height, width, widthOfLineNum: int) =
-  # Update EditorView with width/height.
-  # The displayed content is as similar as possible to that before the resizing.
+proc initSidebar*(view: var EditorView) =
+  # Initialize EditorView.sidebar.
 
-  let topLine = view.originalLine[0]
+  let sidebarHeight = view.height
+  let sidebar = Sidebar(
+    buffer: sidebarHeight.newSeqWith(ru"  "),
+    highlights: sidebarHeight.newSeqWith(
+      @[EditorColorPair.defaultChar,
+        EditorColorPair.defaultChar]))
 
-  view.lines = initDeque[seq[Rune]]()
-  for i in 0..height-1: view.lines.addLast(ru"")
+  view.sidebar = sidebar.some
+  view.leftMargin = 2
 
-  view.height = height
-  view.width = width
-  view.widthOfLineNum = widthOfLineNum
+proc updateSidebarBuffer*(view: var EditorView, buffer: seq[Runes]) {.inline.} =
+  view.sidebar.get.buffer = buffer
 
-  view.originalLine = initDeque[int]()
-  for i in 0..height-1: view.originalLine.addLast(-1)
-  view.start = initDeque[int]()
-  for i in 0..height-1: view.start.addLast(-1)
-  view.length = initDeque[int]()
-  for i in 0..height-1: view.length.addLast(-1)
+proc overwriteSidebarBuffer*(
+  view: var EditorView,
+  position: Position,
+  r: Rune) {.inline.} =
 
-  view.updated = true
-  view.reload(buffer, topLine)
+    view.sidebar.get.buffer[position.y][position.x] = r
+
+proc overwriteSidebarBuffer*(
+  view: var EditorView,
+  lineNumber: int,
+  line: Runes) {.inline.} =
+
+    view.sidebar.get.buffer[lineNumber] = line
+
+proc updateSidebarHighlights*(
+  view: var EditorView,
+  h: seq[seq[EditorColorPair]]) {.inline.} =
+
+    view.sidebar.get.highlights = h
+
+proc overwriteSidebarHighlights*(
+  view: var EditorView,
+  position: Position,
+  h: EditorColorPair) {.inline.} =
+
+    view.sidebar.get.highlights[position.y][position.x] = h
+
+proc overwriteSidebarHighlights*(
+  view: var EditorView,
+  line: int,
+  h: seq[EditorColorPair]) {.inline.} =
+
+    view.sidebar.get.highlights[line] = h
+
+proc resize(s: var Sidebar, size: Size) =
+  # Reszie buffer and highlights.
+
+  var
+    newBuffer = size.h.newSeqWith(" ".repeat(size.w).toRunes)
+    newHighlights: seq[seq[EditorColorPair]] = size.h.newSeqWith(
+      size.w.newSeqWith(EditorColorPair.defaultChar))
+  for i in 0 .. min(newBuffer.high, s.buffer.high):
+    for j in 0 .. min(newBuffer[i].high, s.buffer[i].high):
+      newBuffer[i][j] = s.buffer[i][j]
+      newHighlights[i][j] = s.highlights[i][j]
+
+  s.buffer = newBuffer
+  s.highlights = newHighlights
+
+proc resize*[T](
+  view: var EditorView,
+  buffer: T,
+  height, width, widthOfLineNum: int) =
+
+    # Update EditorView with width/height.
+    # The displayed content is as similar as possible to that before the resizing.
+
+    let topLine = view.originalLine[0]
+
+    view.lines = initDeque[seq[Rune]]()
+    for i in 0..height-1: view.lines.addLast(ru"")
+
+    view.height = height
+    view.width = width
+    view.widthOfLineNum = widthOfLineNum
+
+    view.originalLine = initDeque[int]()
+    for i in 0..height-1: view.originalLine.addLast(-1)
+    view.start = initDeque[int]()
+    for i in 0..height-1: view.start.addLast(-1)
+    view.length = initDeque[int]()
+    for i in 0..height-1: view.length.addLast(-1)
+
+    if view.sidebar.isSome:
+      view.sidebar.get.resize(Size(h: height, w: view.leftMargin))
+
+    view.updated = true
+    view.reload(buffer, topLine)
 
 proc scrollUp*[T](view: var EditorView, buffer: T) =
   # Shift the EditorView display up one line.
@@ -200,18 +283,39 @@ proc scrollDown*[T](view: var EditorView, buffer: T) =
     view.start.addLast(singleLine.start)
     view.length.addLast(singleLine.length)
 
-proc writeLineNum(view: EditorView, win: var Window, y, line: int, colorPair: EditorColorPair) {.inline.} =
-  win.write(y, 0, strutils.align($(line+1), view.widthOfLineNum-1), colorPair, false)
+proc writeSidebarLine(view: EditorView, win: var Window, y: int) =
+  # Write one line to a sidebar.
+  # The sidebar displays to the left of the EditorView body.
 
-proc write(view: EditorView,
-           win: var Window,
-           y, x: int,
-           str: seq[Rune],
-           color: EditorColorPair | int) {.inline.} =
+  let
+    line = view.sidebar.get.buffer[y][0 .. view.leftMargin - 1]
+    highlight = view.sidebar.get.highlights[y]
+  for x, r in line:
+    win.write(y, x, $r, highlight[x], false)
 
-  # TODO: use settings file
-  const tab = "    "
-  win.write(y, x, ($str).replace("\t", tab), color, false)
+proc writeLineNum(
+  view: EditorView,
+  win: var Window,
+  y, line: int,
+  colorPair: EditorColorPair) {.inline.} =
+
+    win.write(
+      y,
+      view.leftMargin,
+      strutils.align($(line+1),view.widthOfLineNum-1),
+      colorPair,
+      false)
+
+proc write(
+  view: EditorView,
+  win: var Window,
+  y, x: int,
+  str: seq[Rune],
+  color: EditorColorPair | int) {.inline.} =
+
+    # TODO: use settings file
+    const tab = "    "
+    win.write(y, x, ($str).replace("\t", tab), color, false)
 
 proc writeCurrentLine(
   win: var Window,
@@ -267,7 +371,7 @@ proc writeCurrentLine(
         setColorPair(currentLineColorPair, fg, bg)
       let
         spaces = ru" ".repeat(view.width - view.lines[y].width)
-        x = view.widthOfLineNum + view.lines[y].width
+        x = view.leftMargin + view.widthOfLineNum + view.lines[y].width
 
       view.write(win, y, x, spaces, currentLineColorPair)
 
@@ -310,6 +414,9 @@ proc writeAllLines*[T](
     for y in 0 ..< view.height:
       if view.originalLine[y] == -1: break
 
+      if view.sidebar.isSome:
+        view.writeSidebarLine(win, y)
+
       let isCurrentLine = view.originalLine[y] == currentLine
       if viewSettings.lineNumber and view.start[y] == 0:
         let lineNumberColor = if isCurrentLine and isCurrentWin and
@@ -319,11 +426,11 @@ proc writeAllLines*[T](
                                 EditorColorPair.lineNum
         view.writeLineNum(win, y, view.originalLine[y], lineNumberColor)
 
-      var x = view.widthOfLineNum
+      var x = view.leftMargin + view.widthOfLineNum
       if view.length[y] == 0:
         if isVisualMode and
-           (view.originalLine[y] >= selectedRange.start and
-           selectedRange.end >= view.originalLine[y]):
+           (view.originalLine[y] >= selectedRange.first and
+           selectedRange.last >= view.originalLine[y]):
           view.write(win, y, x, ru" ", EditorColorPair.visualMode)
         else:
           if viewSettings.highlightCurrentLine and isCurrentLine and
@@ -443,29 +550,71 @@ proc update*[T](
 
     view.updated = false
 
-proc seekCursor*[T](view: var EditorView,
-                    buffer: T,
-                    currentLine, currentColumn: int) =
+proc seekCursor*[T](
+  view: var EditorView,
+  buffer: T,
+  currentLine, currentColumn: int) =
 
-  while currentLine < view.originalLine[0] or
-        (currentLine == view.originalLine[0] and
-        view.length[0] > 0 and
-        currentColumn < view.start[0]): view.scrollUp(buffer)
+    while currentLine < view.originalLine[0] or
+          (currentLine == view.originalLine[0] and
+          view.length[0] > 0 and
+          currentColumn < view.start[0]): view.scrollUp(buffer)
 
-  while (view.originalLine[view.height - 1] != -1 and
-         currentLine > view.originalLine[view.height - 1]) or
-         (currentLine == view.originalLine[view.height - 1] and
-         view.length[view.height - 1] > 0 and
-         currentColumn >= view.start[view.height - 1]+view.length[view.height - 1]):
-     view.scrollDown(buffer)
+    while (view.originalLine[view.height - 1] != -1 and
+           currentLine > view.originalLine[view.height - 1]) or
+           (currentLine == view.originalLine[view.height - 1] and
+           view.length[view.height - 1] > 0 and
+           currentColumn >= view.start[view.height - 1]+view.length[view.height - 1]):
+       view.scrollDown(buffer)
 
 proc rangeOfOriginalLineInView*(view: EditorView): Range =
   var
-    startLine = 0
-    endLine = 0
+    firstLine = 0
+    lastLine = 0
   for index, lineNum in view.originalLine:
-    if index == 0: startLine = lineNum
+    if index == 0: firstLine = lineNum
     elif lineNum == -1: break
-    else: endLine = lineNum
+    else: lastLine = lineNum
 
-  return Range(start: startLine, `end`: endLine)
+  return Range(first: firstLine, last: lastLine)
+
+proc firstOriginLine*(view: EditorView): int {.inline.} =
+  ## Return the first original line number in EditorView.originalLine.
+  return view.originalLine[0]
+
+proc lastOriginLine*(view: EditorView): int =
+  ## Return the last original line number in EditorView.originalLine.
+
+  if view.originalLine[^1] == -1:
+    for index, lineNum in view.originalLine:
+      if lineNum == -1:
+        return index - 1
+  else:
+    return view.originalLine[^1]
+
+## Return a sidebar buffer for git diff. It's on right side of EditorView.
+proc updateSidebarBufferForChangedLine*(
+  view: var EditorView,
+  changedLines: seq[Diff]) =
+
+    # height * 2 spaces.
+    var newBuffer = view.height.newSeqWith(ru"  ")
+
+    let firstViewOriginLine = view.firstOriginLine
+
+    for d in changedLines:
+      if firstViewOriginLine <= d.firstLine and
+         firstViewOriginLine <= d.lastLine:
+           for y, lineNum in view.originalLine:
+             if lineNum >= d.firstLine and lineNum <= d.lastLine:
+               case d.operation:
+                 of OperationType.added:
+                   newBuffer[y] = ru"+ "
+                 of OperationType.deleted:
+                   newBuffer[y] = ru"- "
+                 of OperationType.changed:
+                   newBuffer[y] = ru"~ "
+                 of OperationType.changedAndDeleted:
+                   newBuffer[y] = ru"~_"
+
+    view.sidebar.get.buffer = newBuffer

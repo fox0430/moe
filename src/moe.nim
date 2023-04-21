@@ -18,8 +18,8 @@
 #[############################################################################]#
 
 import std/[os, times]
-
-import moepkg/[ui, bufferstatus, editorstatus, cmdlineoption, mainloop]
+import moepkg/[ui, bufferstatus, editorstatus, cmdlineoption, mainloop, git,
+               editorview]
 
 # Load persisted data (Ex command history, search history and cursor postion)
 proc loadPersistData(status: var EditorStatus) =
@@ -39,13 +39,24 @@ proc loadPersistData(status: var EditorStatus) =
 
 proc addBufferStatus(status: var EditorStatus, parsedList: CmdParsedList) =
   if parsedList.path.len > 0:
+    let isGitAvailable = isGitAvailable()
+
     for path in parsedList.path:
       if dirExists(path):
         status.addNewBufferInCurrentWin(path, Mode.filer)
       else:
         status.addNewBufferInCurrentWin(path)
+        if isGitAvailable:
+          status.bufStatus[^1].isTrackingByGit = isTrackingByGit($path)
   else:
     status.addNewBufferInCurrentWin
+
+proc initSidebar(status: var EditorStatus) =
+  if status.settings.view.sidebar:
+    currentMainWindowNode.view.initSidebar
+
+    if status.settings.git.showChangedLine and currentBufStatus.isTrackingByGit:
+      currentBufStatus.updateChangedLines
 
 proc initEditor(): EditorStatus =
   let parsedList = parseCommandLineOption(commandLineParams())
@@ -67,6 +78,8 @@ proc initEditor(): EditorStatus =
   result.addBufferStatus(parsedList)
 
   result.loadPersistData
+
+  result.initSidebar
 
   disableControlC()
 

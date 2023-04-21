@@ -51,6 +51,12 @@ default is 2
 tabStop
 ```
 
+Enable/Disable sidebars for editor views (bool)
+default is true
+```
+sidebar
+```
+
 Enable/Disable ignorecase (bool)  
 default is true
 ```
@@ -763,6 +769,13 @@ lastSaveTime
 Show/Hidden bufStatus.buffer.len in debug mode (bool)
 ```
 bufferLen
+```
+
+### Git table
+
+Show/Hidden line changes on sidebars (bool)
+```
+showChangedLine
 ```
 
 ### Color and theme

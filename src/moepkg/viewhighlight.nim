@@ -211,10 +211,10 @@ proc highlightOtherUsesCurrentWord(
 
     let
       range = windowNode.view.rangeOfOriginalLineInView
-      startLine = range.start
-      endLine = if bufStatus.buffer.len > range.end + 1: range.end + 2
-                elif bufStatus.buffer.len > range.end: range.end + 1
-                else: range.end
+      startLine = range.first
+      endLine = if bufStatus.buffer.len > range.last + 1: range.last + 2
+                elif bufStatus.buffer.len > range.last: range.last + 1
+                else: range.last
 
     # TODO: Remove
     proc isWordAtCursor(currentLine, i, j: int): bool =
@@ -269,11 +269,11 @@ proc highlightTrailingSpaces(
       currentLine = windowNode.currentLine
       range = windowNode.view.rangeOfOriginalLineInView
       buffer = bufStatus.buffer
-      startLine = range.start
+      startLine = range.first
       endLine =
-        if buffer.len > range.end + 1: range.end + 2
-        elif buffer.len > range.end: range.end + 1
-        else: range.end
+        if buffer.len > range.last + 1: range.last + 2
+        elif buffer.len > range.last: range.last + 1
+        else: range.last
 
     var colorSegments: seq[ColorSegment] = @[]
     for i in startLine ..< endLine:
@@ -313,9 +313,9 @@ proc highlightFullWidthSpace(
 
     for pos in allOccurrence:
       let colorSegment = ColorSegment(
-        firstRow: range.start + pos.line,
+        firstRow: range.first + pos.line,
         firstColumn: pos.column,
-        lastRow: range.start + pos.line,
+        lastRow: range.first + pos.line,
         lastColumn: pos.column,
         color: EditorColorPair.highlightFullWidthSpace)
       highlight.overwrite(colorSegment)
@@ -344,9 +344,9 @@ proc highlightSearchResults(
 
   for pos in allOccurrence:
     let colorSegment = ColorSegment(
-      firstRow: range.start + pos.line,
+      firstRow: range.first + pos.line,
       firstColumn: pos.column,
-      lastRow: range.start + pos.line,
+      lastRow: range.first + pos.line,
       lastColumn: pos.column + keyword.high,
       color: color)
     highlight.overwrite(colorSegment)
@@ -373,10 +373,10 @@ proc updateHighlight*(
 
     let
       range = windowNode.view.rangeOfOriginalLineInView
-      startLine = range.start
-      endLine = if bufStatus.buffer.len > range.end + 1: range.end + 2
-                elif bufStatus.buffer.len > range.end: range.end + 1
-                else: range.end
+      startLine = range.first
+      endLine = if bufStatus.buffer.len > range.last + 1: range.last + 2
+                elif bufStatus.buffer.len > range.last: range.last + 1
+                else: range.last
 
     var bufferInView = initGapBuffer[seq[Rune]]()
     for i in startLine ..< endLine: bufferInView.add(bufStatus.buffer[i])
