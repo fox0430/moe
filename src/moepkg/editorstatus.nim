@@ -635,7 +635,7 @@ proc update*(status: var EditorStatus) =
   let settings = status.settings
 
   if settings.tabLine.enable:
-    status.tabWindow.writeTabLineBuffer(
+    status.tabWindow.writeTabLineBuffers(
       status.bufStatus,
       status.bufferIndexInCurrentWindow,
       status.mainWindow.root,

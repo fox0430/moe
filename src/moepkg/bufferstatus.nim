@@ -173,6 +173,20 @@ proc isVisualLineMode*(mode: Mode): bool {.inline.} = mode == Mode.visualLine
 proc isVisualLineMode*(b: BufferStatus): bool {.inline.} =
   b.mode == Mode.visualLine
 
+proc isHelpMode*(mode, prevMode: Mode): bool {.inline.} =
+  (mode == Mode.help) or
+  (mode == Mode.ex and prevMode == Mode.help)
+
+proc isHelpMode*(b: BufferStatus): bool {.inline.} =
+  isHelpMode(b.mode, b.prevMode)
+
+proc isRecentFileMode*(mode, prevMode: Mode): bool {.inline.} =
+  (mode == Mode.recentFile) or
+  (mode == Mode.ex and prevMode == Mode.recentFile)
+
+proc isRecentFileMode*(b: BufferStatus): bool {.inline.} =
+  isRecentFileMode(b.mode, b.prevMode)
+
 # Modes for editing text
 proc isEditMode*(mode, prevMode: Mode): bool {.inline.} =
   isNormalMode(mode, prevMode) or

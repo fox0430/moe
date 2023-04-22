@@ -19,7 +19,7 @@
 
 import std/[unittest, options, os, importutils]
 import moepkg/[editor, gapbuffer, bufferstatus, editorview, unicodeext, ui,
-               highlight, windownode, movement, ui]
+               highlight, windownode, movement]
 
 import moepkg/editorstatus {.all.}
 
