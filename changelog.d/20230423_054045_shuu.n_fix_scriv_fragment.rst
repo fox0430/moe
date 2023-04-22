@@ -1,4 +1,5 @@
 .. _#1695: https://github.com/fox0430/moe/pull/1695
+.. _#1696: https://github.com/fox0430/moe/pull/1696
 .. A new scriv changelog fragment.
 ..
 .. Uncomment the header that is right (remove the leading dots).
@@ -7,22 +8,22 @@
 .. .....
 ..
 .. - A bullet item for the Added category.
-
-Changed
-.......
-
-- `#1695`_ refactor: Rewrite tabline
-
+..
+.. Changed
+.. .......
+..
+.. - A bullet item for the Changed category.
+..
 .. Deprecated
 .. ..........
 ..
 .. - A bullet item for the Deprecated category.
-..
-.. Fixed
-.. .....
-..
-.. - A bullet item for the Fixed category.
-..
+
+Fixed
+.....
+
+- `#1696`_ Fix scriv fragment for `#1695`_
+
 .. Removed
 .. .......
 ..
