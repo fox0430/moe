@@ -23,46 +23,47 @@ import std/sequtils
 import ui, unicodeext, highlight, color, independentutils
 
 type
-  Sidebar* = object
+  GlobalSidebar* = object
     highlight*: Highlight
     window: Window
     terminalBuffer: seq[Runes]
 
 ## Return the window position of x.
-proc x*(sidebar: Sidebar): int {.inline.} = sidebar.window.x
+proc x*(sidebar: GlobalSidebar): int {.inline.} = sidebar.window.x
 
 ## Return the window position of x.
-proc y*(sidebar: Sidebar): int {.inline.} = sidebar.window.y
+proc y*(sidebar: GlobalSidebar): int {.inline.} = sidebar.window.y
 
 ## Return the window height.
-proc height*(sidebar: Sidebar): int {.inline.} = sidebar.window.height
+proc height*(sidebar: GlobalSidebar): int {.inline.} = sidebar.window.height
 
 ## Return the window height.
-proc h*(sidebar: Sidebar): int {.inline.} = sidebar.window.height
+proc h*(sidebar: GlobalSidebar): int {.inline.} = sidebar.window.height
 
 ## Return the window width.
-proc width*(sidebar: Sidebar): int {.inline.} = sidebar.window.width
+proc width*(sidebar: GlobalSidebar): int {.inline.} = sidebar.window.width
 
 ## Return the window width.
-proc w*(sidebar: Sidebar): int {.inline.} = sidebar.window.width
+proc w*(sidebar: GlobalSidebar): int {.inline.} = sidebar.window.width
 
 ## Return the sidebar window size.
-proc size*(sidebar: Sidebar): Size {.inline.} = Size(h: sidebar.h, w: sidebar.w)
+proc size*(sidebar: GlobalSidebar): Size {.inline.} =
+  Size(h: sidebar.h, w: sidebar.w)
 
 ## Return the sidebar window position.
-proc position*(sidebar: Sidebar): Position {.inline.} =
+proc position*(sidebar: GlobalSidebar): Position {.inline.} =
   Position(y: sidebar.y, x: sidebar.x)
 
 ## Return the sidebar window rect.
-proc rect*(sidebar: Sidebar): Rect {.inline.} =
+proc rect*(sidebar: GlobalSidebar): Rect {.inline.} =
   Rect(y: sidebar.y, x: sidebar.x, h: sidebar.h, w: sidebar.w)
 
 ## Init the terminal buffer.
 ## Pad the size of the `size` with spaces.
-proc initTerminalBuffer(sidebar: var Sidebar) {.inline.} =
+proc initTerminalBuffer(sidebar: var GlobalSidebar) {.inline.} =
   sidebar.terminalBuffer = sidebar.h.newSeqWith(ru" ".repeat(sidebar.w))
 
-proc initSidebar*(rect: Rect): Sidebar =
+proc initGlobalSidebar*(rect: Rect): GlobalSidebar =
   when not defined(release):
     assert rect.y >= 0 and rect.x >= 0 and rect.h > 0 and rect.w > 0
 
@@ -79,7 +80,7 @@ proc initSidebar*(rect: Rect): Sidebar =
         lastColumn: result.terminalBuffer[0].high,
         color: EditorColorPair.defaultChar)])
 
-proc initSidebar*(): Sidebar {.inline.} =
+proc initGlobalSidebar*(): GlobalSidebar {.inline.} =
   result.window = initWindow(
     Rect(h: 1, w: 0, y: 0, x: 0),
     EditorColorPair.defaultChar)
@@ -96,7 +97,7 @@ proc initSidebar*(): Sidebar {.inline.} =
         color: EditorColorPair.defaultChar)])
 
 ## Init the sidebar highlight
-proc initHighlight*(sidebar: var Sidebar) =
+proc initHighlight*(sidebar: var GlobalSidebar) =
   sidebar.highlight = Highlight(
     colorSegments: @[
       ColorSegment(
@@ -109,7 +110,7 @@ proc initHighlight*(sidebar: var Sidebar) =
 ## Write a buffer to the terminalBuffer
 ## Cut off the buffer if longer than the window sieze.
 proc write*(
-  sidebar: var Sidebar,
+  sidebar: var GlobalSidebar,
   startPosition: Position,
   buffer: Runes,
   color: EditorColorPair = EditorColorPair.defaultChar) {.inline.} =
@@ -132,7 +133,7 @@ proc write*(
         color: color))
 
 ## Write a buffer to the terminal (ui).
-proc write(sidebar: var Sidebar) =
+proc write(sidebar: var GlobalSidebar) =
   let buf = sidebar.terminalBuffer
   var
     highlightIndex = 0
@@ -147,24 +148,24 @@ proc write(sidebar: var Sidebar) =
       sidebar.window.write(i, j, $buf[i][j], cs.color)
 
 ## Refresh the ncurses window for the sidebar.
-proc refresh(sidebar: Sidebar) {.inline.} = sidebar.window.refresh
+proc refresh(sidebar: GlobalSidebar) {.inline.} = sidebar.window.refresh
 
 ## Write buffer to the terminal and refresh.
-proc update*(sidebar: var Sidebar) =
+proc update*(sidebar: var GlobalSidebar) =
   sidebar.write
   sidebar.refresh
 
 ## Resize the sidebar window
-proc resize*(sidebar: var Sidebar, size: Size) {.inline.} =
+proc resize*(sidebar: var GlobalSidebar, size: Size) {.inline.} =
   sidebar.window.resize(size)
 
 ## Resize the sidebar window
-proc resize*(sidebar: var Sidebar, rect: Rect) {.inline.} =
+proc resize*(sidebar: var GlobalSidebar, rect: Rect) {.inline.} =
   sidebar.window.resize(rect)
 
 ## Move the sidebar window
-proc move*(sidebar: var Sidebar, position: Position) {.inline.} =
+proc move*(sidebar: var GlobalSidebar, position: Position) {.inline.} =
   sidebar.window.move(position)
 
 ## Clear the terminal buffer.
-proc clear*(sidebar: var Sidebar) {.inline.} = sidebar.initTerminalBuffer
+proc clear*(sidebar: var GlobalSidebar) {.inline.} = sidebar.initTerminalBuffer

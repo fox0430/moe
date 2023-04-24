@@ -25,7 +25,7 @@ import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        backup, messages, commandline, register, platform, movement,
        autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
        independentutils, viewhighlight, helputils, backupmanagerutils,
-       diffviewerutils, messagelog, sidebar
+       diffviewerutils, messagelog, globalsidebar
 
 # Save cursor position when a buffer for a window(file) gets closed.
 type LastCursorPosition* = object
@@ -56,7 +56,7 @@ type EditorStatus* = object
   isReadonly*: bool
   wordDictionary*: WordDictionary
   suggestionWindow*: Option[SuggestionWindow]
-  sidebar*: Option[Sidebar]
+  sidebar*: Option[GlobalSidebar]
 
 const
   tabLineWindowHeight = 1
