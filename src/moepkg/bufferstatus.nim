@@ -18,8 +18,10 @@
 #[############################################################################]#
 
 import std/[tables, times, options, os]
+import pkg/results
 import syntax/highlite
-import gapbuffer, unicodeext, fileutils, highlight, independentutils, git
+import gapbuffer, unicodeext, fileutils, highlight, independentutils, git,
+       syntaxchecker
 
 type
   Mode* = enum
@@ -61,6 +63,7 @@ type
     filerStatusIndex*: Option[int]
     isTrackingByGit*: bool
     changedLines*: seq[Diff]
+    syntaxCheckResults*: seq[SyntaxError]
 
 proc isExMode*(mode: Mode): bool {.inline.} = mode == Mode.ex
 
@@ -292,3 +295,15 @@ proc positionEndOfBuffer*(bufStatus: BufferStatus): BufferPosition {.inline.} =
 proc updateChangedLines*(bufStatus: var BufferStatus) =
   if bufStatus.isTrackingByGit:
     bufStatus.changedLines = bufStatus.path.gitDiff
+
+## Exec syntax check and update BufferStatus.syntaxCheckResults
+proc updateSyntaxCheckerResults*(
+  bufStatus: var BufferStatus): Result[(), string]=
+
+    let r = execSyntaxCheck($bufStatus.absolutePath, bufStatus.language)
+    if r.isErr:
+      return Result[(), string].err r.error
+    else:
+      bufStatus.syntaxCheckResults = r.get
+
+    return Result[(), string].ok ()

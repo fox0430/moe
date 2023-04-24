@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/[sequtils, strutils, os, times, options]
+import pkg/results
 import syntax/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
        unicodeext, independentutils, searchutils, highlight, windownode,
@@ -967,6 +968,12 @@ proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
     if status.settings.git.showChangedLine and
        currentBufStatus.isTrackingByGit:
          currentBufStatus.updateChangedLines
+
+    # Update syntax checker reuslts.
+    if status.settings.syntaxChecker.enable:
+      let r = currentBufStatus.updateSyntaxCheckerResults
+      if r.isErr:
+        status.commandLine.writeSyntaxCheckError(r.error)
 
     currentBufStatus.countChange = 0
     currentBufStatus.lastSaveTime = now()

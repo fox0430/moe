@@ -19,7 +19,7 @@
 
 import std/[deques, strutils, math, strformat, options, sequtils]
 import gapbuffer, ui, unicodeext, independentutils, color, settings,
-       highlight, git
+       highlight, git, syntaxchecker
 
 type
   Sidebar = object
@@ -592,7 +592,7 @@ proc lastOriginLine*(view: EditorView): int =
   else:
     return view.originalLine[^1]
 
-## Return a sidebar buffer for git diff. It's on right side of EditorView.
+## Update a sidebar buffer for git diff. It's on left side of EditorView.
 proc updateSidebarBufferForChangedLine*(
   view: var EditorView,
   changedLines: seq[Diff]) =
@@ -618,3 +618,23 @@ proc updateSidebarBufferForChangedLine*(
                    newBuffer[y] = ru"~_"
 
     view.sidebar.get.buffer = newBuffer
+
+## Update a sidebar buffer for syntax checker reuslts.
+## It's on left side of EditorView.
+proc updateSidebarBufferForSyntaxChecker*(
+  view: var EditorView,
+  syntaxCheckResults: seq[SyntaxError]) =
+
+    let
+      firstViewOriginLine = view.firstOriginLine
+      lastViewOriginLine = view.lastOriginLine
+
+    for syntaxErr in syntaxCheckResults:
+      if firstViewOriginLine <= syntaxErr.position.line and
+         lastViewOriginLine >= syntaxErr.position.line:
+           let y = max(syntaxErr.position.line - firstViewOriginLine, 0)
+           case syntaxErr.messageType:
+             of SyntaxCheckMessageType.error:
+               view.sidebar.get.buffer[y] = ru">>"
+             else:
+               view.sidebar.get.buffer[y] = ru"⚠ "

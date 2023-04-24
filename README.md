@@ -85,6 +85,10 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
 - Git support
 
+- Syntax checker
+
+  - Nim
+
 ## Planned features
 
 - Supports regular expression and PEG
@@ -92,8 +96,6 @@ This project's goals are easily customizable, high productivity, user friendly, 
 - Supports EditorConfig
 
 - Window management
-
-- Syntax checker
 
 - Snippets
 

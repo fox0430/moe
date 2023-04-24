@@ -132,15 +132,18 @@ type filerTableNames {.pure.} = enum
 type autocompleteTableNames {.pure.} = enum
   enable
 
-type persistTableSettings {.pure.} = enum
+type persistTableNames {.pure.} = enum
   exCommand
   exCommandHistoryLimit
   search
   searchHistoryLimit
   cursorPosition
 
-type GitTableSettings {.pure.} = enum
+type GitTableNames {.pure.} = enum
   showChangedLine
+
+type SyntaxCheckerTableNames {.pure.} = enum
+  enable
 
 type themeTableNames {.pure.} = enum
   editorBg
@@ -594,6 +597,17 @@ proc getGitTableSettingsValues(s: GitSettings, name: string): seq[Runes] =
       else:
         result = @[ru "false", ru "true"]
 
+proc getSyntaxCheckerTableSettingsValues(
+  s: SyntaxCheckerSettings,
+  name: string): seq[Runes] =
+
+    case name
+      of "enable":
+        if s.enable:
+          result = @[ru "true", ru "false"]
+        else:
+          result = @[ru "false", ru "true"]
+
 proc getThemeTableSettingValues(settings: EditorSettings,
                                 name, position: string): seq[seq[Rune]] =
 
@@ -653,6 +667,8 @@ proc getSettingValues(settings: EditorSettings,
     of "Git":
       let gitSettings = settings.git
       result = gitSettings.getGitTableSettingsValues(name)
+    of "SyntaxChecker":
+      result = settings.syntaxChecker.getSyntaxCheckerTableSettingsValues(name)
     of "Theme":
       result = settings.getThemeTableSettingValues(name, position)
 
@@ -974,6 +990,16 @@ proc changeGitTableSettings(
       else:
         discard
 
+proc changeSyntaxCheckerTableSettings(
+  s: var SyntaxCheckerSettings,
+  settingName, settingVal: string) =
+
+    case settingName:
+      of "enable":
+        s.enable= settingVal.parseBool
+      else:
+        discard
+
 proc changeThemeTableSetting(settings: var EditorSettings,
                              settingName, position, settingVal: string) =
 
@@ -1039,6 +1065,9 @@ proc changeEditorSettings(status: var EditorStatus,
   template gitSettings: var GitSettings =
     status.settings.git
 
+  template SyntaxCheckerSettings: var SyntaxCheckerSettings =
+    status.settings.syntaxChecker
+
   case table:
     of "Standard":
       changeStandardTableSetting()
@@ -1067,6 +1096,8 @@ proc changeEditorSettings(status: var EditorStatus,
       persistSettings.changePerSistTableSettings(settingName, settingVal)
     of "Git":
       gitSettings.changeGitTableSettings(settingName, settingVal)
+    of "SyntaxChecker":
+      SyntaxCheckerSettings.changeSyntaxCheckerTableSettings(settingName, settingVal)
 
     of "Theme":
       settings.changeThemeTableSetting(settingName, position, settingVal)
@@ -1238,6 +1269,13 @@ proc getSettingType(table, name: string): SettingType =
       else:
         result = SettingType.None
 
+  template syntaxCheckerTable() =
+    case name:
+      of "enable":
+        result = SettingType.Bool
+      else:
+        result = SettingType.None
+
   template themeTable() =
     for color in Color:
       if name == $color:
@@ -1269,6 +1307,8 @@ proc getSettingType(table, name: string): SettingType =
       autocompleteTable()
     of "Git":
       gitTable()
+    of "SyntaxChecker":
+      syntaxCheckerTable()
     of "Theme":
       themeTable()
 
@@ -1985,7 +2025,7 @@ proc initAutocompleteTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
 proc initPersistTableBuffer(persistSettings: PersistSettings): seq[seq[Rune]] =
   result.add(ru"Persist")
 
-  for name in persistTableSettings:
+  for name in persistTableNames:
     let
       nameStr = indent & $name
       space = " ".repeat(positionOfSetVal - len($name))
@@ -2004,13 +2044,24 @@ proc initPersistTableBuffer(persistSettings: PersistSettings): seq[seq[Rune]] =
 proc initGitTableBuffer(settings: GitSettings): seq[Runes] =
   result.add(ru"Git")
 
-  for name in GitTableSettings:
+  for name in GitTableNames:
     let
       nameStr = indent & $name
       space = " ".repeat(positionOfSetVal - len($name))
     case $name:
       of "showChangedLine":
         result.add(ru nameStr & space & $settings.showChangedLine)
+
+proc initSyntaxCheckerTableBuffer(settings: SyntaxCheckerSettings): seq[Runes] =
+  result.add(ru"SyntaxChecker")
+
+  for name in SyntaxCheckerTableNames:
+    let
+      nameStr = indent & $name
+      space = " ".repeat(positionOfSetVal - len($name))
+    case $name:
+      of "enable":
+        result.add(ru nameStr & space & $settings.enable)
 
 proc initThemeTableBuffer*(settings: EditorSettings): seq[seq[Rune]] =
   result.add(ru"Theme")
@@ -2085,6 +2136,9 @@ proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
 
   buffer.add(ru"")
   buffer.add(initGitTableBuffer(settings.git))
+
+  buffer.add ru""
+  buffer.add initSyntaxCheckerTableBuffer(settings.syntaxChecker)
 
   buffer.add(ru"")
   buffer.add(initThemeTableBuffer(settings))
