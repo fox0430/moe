@@ -1,0 +1,41 @@
+######################## GNU General Public License 3.0 ########################
+##                                                                            ##
+## Copyright (C) 2017─2023 Shuhei Nogawa                                      ##
+##                                                                            ##
+## This program is free software: you can redistribute it and/or modify       ##
+## it under the terms of the GNU General Public License as published by       ##
+## the Free Software Foundation, either version 3 of the License, or          ##
+## (at your option) any later version.                                        ##
+##                                                                            ##
+## This program is distributed in the hope that it will be useful,            ##
+## but WITHOUT ANY WARRANTY; without even the implied warranty of             ##
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the              ##
+## GNU General Public License for more details.                               ##
+##                                                                            ##
+## You should have received a copy of the GNU General Public License          ##
+## along with this program.  If not, see <https://www.gnu.org/licenses/>.     ##
+##                                                                            ##
+################################################################################
+
+name: Enhancement
+description: Enhancement.
+title: '[Enhancement] <Title>'
+labels:
+  - enhancement
+assignees:
+  - fox0430
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for using Moe and Thank you for your interest in this project!
+        Please fill out this form in order to about the idea.
+  - type: textarea
+    attributes:
+      label: Detailed Description
+      description: |
+        Please describe your idea.
+    validations:
+      required: false
+
+################################################################################
