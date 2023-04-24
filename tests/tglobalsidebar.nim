@@ -20,11 +20,11 @@
 import std/[unittest, importutils, sequtils]
 import moepkg/[independentutils, unicodeext, highlight, color]
 
-import moepkg/sidebar {.all.}
+import moepkg/globalsidebar {.all.}
 
 suite "sidebar":
-  test "initSidebar":
-    let sidebar = initSidebar(Rect(h: 1, w: 2, y: 3, x: 4))
+  test "initGlobalSidebar":
+    let sidebar = initGlobalSidebar(Rect(h: 1, w: 2, y: 3, x: 4))
 
     check sidebar.h == 1
     check sidebar.w == 2
@@ -46,7 +46,7 @@ suite "sidebar":
           color: EditorColorPair.defaultChar)])
 
   test "initHighlight":
-    var sidebar = initSidebar(Rect(h: 10, w: 10, y: 0, x: 0))
+    var sidebar = initGlobalSidebar(Rect(h: 10, w: 10, y: 0, x: 0))
     # Clear the highlight for the test.
     sidebar.highlight = Highlight(
       colorSegments: @[
@@ -69,7 +69,7 @@ suite "sidebar":
           color: EditorColorPair.defaultChar)])
 
   test "write 1":
-    var sidebar = initSidebar(Rect(h: 100, w: 100, y: 0, x: 0))
+    var sidebar = initGlobalSidebar(Rect(h: 100, w: 100, y: 0, x: 0))
 
     sidebar.write(Position(y: 0, x: 0), ru"test", EditorColorPair.reservedWord)
 
@@ -95,7 +95,7 @@ suite "sidebar":
           color: EditorColorPair.defaultChar)])
 
   test "write 2":
-    var sidebar = initSidebar(Rect(h: 100, w: 100, y: 0, x: 0))
+    var sidebar = initGlobalSidebar(Rect(h: 100, w: 100, y: 0, x: 0))
 
     sidebar.write(Position(y: 1, x: 10), ru"test", EditorColorPair.reservedWord)
 
@@ -129,28 +129,28 @@ suite "sidebar":
           color: EditorColorPair.defaultChar)])
 
   test "resize":
-    var sidebar = initSidebar(Rect(h: 1, w: 1, y: 0, x: 0))
+    var sidebar = initGlobalSidebar(Rect(h: 1, w: 1, y: 0, x: 0))
 
     sidebar.resize(Size(h: 2, w: 3))
 
     check sidebar.size == Size(h: 2, w: 3)
 
   test "resize 2":
-    var sidebar = initSidebar(Rect(h: 1, w: 1, y: 0, x: 0))
+    var sidebar = initGlobalSidebar(Rect(h: 1, w: 1, y: 0, x: 0))
 
     sidebar.resize(Rect(y: 2, x: 3, h: 4, w: 5))
 
     check sidebar.rect == Rect(y: 2, x: 3, h: 4, w: 5)
 
   test "move":
-    var sidebar = initSidebar(Rect(h: 1, w: 1, y: 0, x: 0))
+    var sidebar = initGlobalSidebar(Rect(h: 1, w: 1, y: 0, x: 0))
 
     sidebar.move(Position(y: 2, x: 3))
 
     check sidebar.position == Position(y: 2, x: 3)
 
   test "clear":
-    var sidebar = initSidebar(Rect(h: 1, w: 1, y: 0, x: 0))
+    var sidebar = initGlobalSidebar(Rect(h: 1, w: 1, y: 0, x: 0))
 
     sidebar.write(Position(y: 0, x: 0), ru"a")
 
