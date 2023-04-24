@@ -11,7 +11,7 @@
 Changed
 .......
 
-- `#1697`_ Rename to GlobalSidebar
+- `#1697`_ refactor: Rename to GlobalSidebar
 
 .. Deprecated
 .. ..........
