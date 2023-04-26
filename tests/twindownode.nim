@@ -17,8 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options]
-import moepkg/[editorstatus, gapbuffer, unicodeext, editorview, ui]
+import std/unittest
+import moepkg/[editorstatus, editorview, ui]
 
 import moepkg/windownode {.all.}
 
