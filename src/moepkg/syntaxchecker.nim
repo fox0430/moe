@@ -51,6 +51,24 @@ proc toSyntaxCheckMessageType(s: string): MessageTypeResult =
     else:
       MessageTypeResult.err fmt"Invalid value: {s}"
 
+# Parse a message type (Error, Warning, etc...) from the line of nim check result.
+proc parseNimSyntaxCheckMessageType(line: string): MessageTypeResult =
+  let messageTypeStr =
+    try:
+      strutils.splitWhitespace(line)[2].split(":")[0]
+    except IndexDefect:
+      return MessageTypeResult.err "Failed to parse error message type"
+
+  return messageTypeStr.toSyntaxCheckMessageType
+
+# Parse a message from the line of nim check result.
+proc parseNimSyntaxCheckMessage(line: string): Result[string, string] =
+  try:
+    # TODO: Refactor
+    return Result[string, string].ok line[line.find(") ") + 2 .. ^1]
+  except IndexDefect:
+    return Result[string, string].err "Failed to parse error message"
+
 ## Parse results of "nim check" command.
 proc parseNimCheckResult(path: string, cmdResult: string): SyntaxErrorsResult =
   var syntaxErrors: seq[SyntaxError]
@@ -68,15 +86,13 @@ proc parseNimCheckResult(path: string, cmdResult: string): SyntaxErrorsResult =
             line: line[m.captures[0][0]].parseInt - 1,
             column: line[m.captures[1][0]].parseInt - 1)
 
-          # TODO: Refactor
-          messageType = ?toSyntaxCheckMessageType(
-            strutils.splitWhitespace(line)[2].split(":")[0])
-          message = line[line.find(") ") + 2 .. ^1].toRunes
+          messageType = ?line.parseNimSyntaxCheckMessageType
+          message = ?line.parseNimSyntaxCheckMessage
 
         syntaxErrors.add SyntaxError(
           position: position,
           messageType: messageType,
-          message: message)
+          message: message.toRunes)
 
   return SyntaxErrorsResult.ok syntaxErrors
 
