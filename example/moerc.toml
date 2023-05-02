@@ -217,6 +217,10 @@ cursorPosition = true
 
 showChangedLine = true
 
+[SyntaxChecker]
+
+enable = false
+
 [Debug.WindowNode]
 enable = true
 currentWindow = true

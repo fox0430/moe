@@ -80,3 +80,5 @@ proc execCmdExNoOutput*(cmd: string): int {.inline.} =
   (execCmdEx(cmd)).exitCode
 
 proc isEmpty*[T](s: seq[T]): bool {.inline.} = s.len == 0
+
+proc isEmpty*(s: string): bool {.inline.} = s.len == 0

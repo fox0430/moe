@@ -187,6 +187,9 @@ type
   GitSettings* = object
     showChangedLine*: bool
 
+  SyntaxCheckerSettings* = object
+    enable*: bool
+
   EditorSettings* = object
     editorColorTheme*: colorTheme
     statusLine*: StatusLineSettings
@@ -222,6 +225,7 @@ type
     highlight*: HighlightSettings
     persist*: PersistSettings
     git*: GitSettings
+    syntaxChecker*: SyntaxCheckerSettings
 
   InvalidItem = object
     name: string
@@ -389,6 +393,9 @@ proc initClipboardSettings(): ClipboardSettings =
 proc initGitSettings(): GitSettings =
   result.showChangedLine = true
 
+proc initSyntaxCheckerSettings(): SyntaxCheckerSettings =
+  result.enable = false
+
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = colorTheme.dark
   result.statusLine = initStatusLineSettings()
@@ -420,6 +427,7 @@ proc initEditorSettings*(): EditorSettings =
   result.highlight = initHighlightSettings()
   result.persist = initPersistSettings()
   result.git = initGitSettings()
+  result.syntaxChecker = initSyntaxCheckerSettings()
 
 proc getTheme(theme: string): colorTheme =
   if theme == "vivid": return colorTheme.vivid
@@ -1839,6 +1847,10 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Git"].contains("showChangedLine"):
       result.git.showChangedLine = settings["Git"]["showChangedLine"].getBool
 
+  if settings.contains("SyntaxChecker"):
+    if settings["SyntaxChecker"].contains("enable"):
+      result.syntaxChecker.enable = settings["SyntaxChecker"]["enable"].getBool
+
 proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
@@ -2191,6 +2203,15 @@ proc validateGitTable(table: TomlValueRef): Option[InvalidItem] =
       else:
         return some(InvalidItem(name: $key, val: $val))
 
+proc validateSyntaxCheckerTable(table: TomlValueRef): Option[InvalidItem] =
+  for key, val in table.getTable:
+    case key:
+      of "enable":
+        if val.kind != TomlValueKind.Bool:
+          return some(InvalidItem(name: $key, val: $val))
+      else:
+        return some(InvalidItem(name: $key, val: $val))
+
 proc validateTomlConfig(toml: TomlValueRef): Option[InvalidItem] =
   for key, val in toml.getTable:
     case key:
@@ -2241,6 +2262,9 @@ proc validateTomlConfig(toml: TomlValueRef): Option[InvalidItem] =
         if r.isSome: return r
       of "Git":
         let r = validateGitTable(val)
+        if r.isSome: return r
+      of "SyntaxChecker":
+        let r = validateSyntaxCheckerTable(val)
         if r.isSome: return r
       else:
         return some(InvalidItem(name: $key, val: $val))
@@ -2437,6 +2461,9 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Git]"
   result.addLine fmt "showChangedLine = {$settings.git.showChangedLine}"
+
+  result.addLine fmt "[SyntaxChecker]"
+  result.addLine fmt "enable = {$settings.syntaxChecker.enable}"
 
   result.addLine fmt "[Debug.WindowNode]"
   result.addLine fmt "enable = {$settings.debugMode.windowNode.enable}"

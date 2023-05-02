@@ -778,6 +778,13 @@ Show/Hidden line changes on sidebars (bool)
 showChangedLine
 ```
 
+### SyntaxChecker table
+
+Enable/Disable syntax checker (bool)
+```
+enable
+```
+
 ### Color and theme
 -- Available colors --
 

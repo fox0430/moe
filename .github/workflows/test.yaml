@@ -78,10 +78,12 @@ jobs:
         sudo dpkg -i abduco_0.1-2_amd64.deb
 
     - name: Run unit test
-      run: nimble test --verbose -Y
+      run: |
+        nimble refresh
+        nimble test --verbose -y
 
     - name: Install moe
-      run: nimble install --verbose -Y
+      run: nimble install --verbose -y
 
     - name: Run integration test
       run: shpec ./shpec.sh

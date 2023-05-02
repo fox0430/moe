@@ -293,3 +293,11 @@ proc writeManualCommandError*(
     let mess = fmt"Error: No manual entry for {message}"
     commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
     addMessageLog mess
+
+proc writeSyntaxCheckError*(
+  commandLine: var CommandLine,
+  message: string) {.inline.} =
+
+    let mess = fmt"Error: Syntax check failed: {message}"
+    commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+    addMessageLog mess
