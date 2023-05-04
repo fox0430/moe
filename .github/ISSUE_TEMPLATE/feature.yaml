@@ -22,8 +22,6 @@ description: Feature request.
 title: '[Feature] <Title>'
 labels:
   - feature
-assignees:
-  - fox0430
 body:
   - type: markdown
     attributes:

@@ -22,8 +22,6 @@ description: Enhancement.
 title: '[Enhancement] <Title>'
 labels:
   - enhancement
-assignees:
-  - fox0430
 body:
   - type: markdown
     attributes:
