@@ -1,3 +1,5 @@
 switch("d", "unitTest")
 switch("d", "nimOldCaseObjects")
-switch("warning", "BareExcept:off")
+
+when (NimMajor, NimMinor, NimPatch) >= (1, 6, 12):
+  switch("warning", "BareExcept:off")
