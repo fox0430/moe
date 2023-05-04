@@ -22,8 +22,6 @@ description: Outline a bug.
 title: '[Bug Report] <Bug Report Title>'
 labels:
   - bug
-assignees:
-  - fox0430
 body:
   - type: markdown
     attributes:
