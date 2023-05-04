@@ -611,11 +611,21 @@ suite "Configuration example":
 
     check toml.validateTomlConfig == none(InvalidItem)
 
-suite "Generate toml config":
+suite "Generate toml current config":
   test "Generate current config":
     let
       settings = initEditorSettings()
-      str = settings.generateTomlConfigStr
+      str = settings.genTomlConfigStr
+
+      toml = parsetoml.parseString(str)
+      result = toml.validateTomlConfig
+
+    check result == none(InvalidItem)
+
+suite "Generate toml default config":
+  test "Generate current config":
+    let
+      str = genDefaultTomlConfigStr()
 
       toml = parsetoml.parseString(str)
       result = toml.validateTomlConfig

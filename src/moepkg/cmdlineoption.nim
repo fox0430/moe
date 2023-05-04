@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[parseopt, pegs, os, strformat]
-import logger
+import logger, settings
 
 type CmdParsedList* = object
   path*: seq[string]
@@ -69,6 +69,7 @@ Usage:
 Arguments:
   -R               Readonly mode
   --log            Start logger
+  --init           Create/Overwrite the default configuration file
   -h, --help       Print this help
   -v, --version    Print version
 """
@@ -85,6 +86,24 @@ proc writeCmdLineError(kind: CmdLineKind, arg: string) =
 
   echo fmt"Unknown option argument: {optionStr}{arg}"
   echo """Pelase check "moe -h""""
+  quit()
+
+## Create/Overwrite the default configuration file and quit.
+proc initDefaultConfigFile() =
+  const
+    configFileDir = getHomeDir() / ".config/moe/"
+    configFilePath = configFileDir & "moerc.toml"
+
+  let tomlStr = genDefaultTomlConfigStr()
+
+  try:
+    createDir(configFileDir)
+    writeFile(configFilePath, tomlStr)
+  except CatchableError as e:
+    echo fmt"Failed to init the default configuration file: {e.msg}"
+
+  echo fmt"The default configuration file has been created to {configFilePath}"
+
   quit()
 
 proc parseCommandLineOption*(line: seq[string]): CmdParsedList =
@@ -104,6 +123,7 @@ proc parseCommandLineOption*(line: seq[string]): CmdParsedList =
       of cmdLongOption:
         case key:
           of "log": initLogger()
+          of "init": initDefaultConfigFile()
           of "version": writeVersion()
           of "help": writeHelp()
           else: writeCmdLineError(kind, key)

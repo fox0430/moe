@@ -2296,8 +2296,8 @@ proc loadSettingFile*(): EditorSettings =
   else:
     return parseSettingsFile(toml)
 
-# Generate a string of the configuration file of  TOML.
-proc generateTomlConfigStr*(settings: EditorSettings): string =
+# Generate a string of the configuration file of TOML.
+proc genTomlConfigStr*(settings: EditorSettings): string =
   proc addLine(buf: var string, str: string) {.inline.} = buf &= "\n" & str
 
   result = "[Standard]"
@@ -2613,3 +2613,7 @@ proc generateTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "currentSetting = \"{$theme.currentSetting}\""
   result.addLine fmt "currentSettingBg = \"{$theme.currentSettingBg}\""
   result.addLine fmt "currentLineBg = \"{$theme.currentLineBg}\""
+
+# Generate a string of the default TOML configuration.
+proc genDefaultTomlConfigStr*(): string {.inline.} =
+  initEditorSettings().genTomlConfigStr
