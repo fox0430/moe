@@ -1,4 +1,4 @@
-.. _#1708: https://github.com/fox0430/moe/pull/1708
+.. _#1709: https://github.com/fox0430/moe/pull/1709
 .. A new scriv changelog fragment.
 ..
 .. Uncomment the header that is right (remove the leading dots).
@@ -11,7 +11,7 @@
 Changed
 .......
 
-- `#1708`_ repo: Remove defualt assigns from isuue templates
+- `#1709`_ repo: Remove defualt assigns from isuue templates
 
 .. Deprecated
 .. ..........
