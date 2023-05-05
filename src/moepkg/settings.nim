@@ -2462,8 +2462,12 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "[Git]"
   result.addLine fmt "showChangedLine = {$settings.git.showChangedLine}"
 
+  result.addLine ""
+
   result.addLine fmt "[SyntaxChecker]"
   result.addLine fmt "enable = {$settings.syntaxChecker.enable}"
+
+  result.addLine ""
 
   result.addLine fmt "[Debug.WindowNode]"
   result.addLine fmt "enable = {$settings.debugMode.windowNode.enable}"
