@@ -1,4 +1,4 @@
-.. _#1708: https://github.com/fox0430/moe/pull/1708
+.. _#1711: https://github.com/fox0430/moe/pull/1711
 .. A new scriv changelog fragment.
 ..
 .. Uncomment the header that is right (remove the leading dots).
@@ -21,7 +21,7 @@
 Fixed
 .....
 
-- `#1708`_ Minor fix `settings.genTomlConfigStr`
+- `#1711`_ Minor fix `settings.genTomlConfigStr`
 
 .. Removed
 .. .......
