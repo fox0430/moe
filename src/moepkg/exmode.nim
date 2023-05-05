@@ -897,7 +897,7 @@ proc writeConfigurationFile(status: var EditorStatus) =
     configFileDir = getHomeDir() / ".config/moe/"
     configFilePath = configFileDir & "moerc.toml"
 
-  let buffer = status.settings.generateTomlConfigStr
+  let buffer = status.settings.genTomlConfigStr
 
   if fileExists(configFilePath):
     status.commandLine.writePutConfigFileAlreadyExistError

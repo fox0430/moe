@@ -17,8 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[parseopt, pegs, os, strformat]
-import logger
+import std/[parseopt, pegs, os, strformat, terminal]
+import logger, settings
 
 type CmdParsedList* = object
   path*: seq[string]
@@ -46,6 +46,9 @@ proc checkReleaseBuild: string {.compileTime.} =
   if defined(release): return "Release"
   else: return "Debug"
 
+proc writeError(msg: string) {.inline.} =
+  stderr.styledWriteLine(ForegroundColor.fgRed, "Error: " & msg)
+
 proc generateVersionInfoMessage(): string =
   const
     versionInfo = "moe v" & staticReadVersionFromNimble()
@@ -69,6 +72,7 @@ Usage:
 Arguments:
   -R               Readonly mode
   --log            Start logger
+  --init           Create/Overwrite the default configuration file
   -h, --help       Print this help
   -v, --version    Print version
 """
@@ -85,6 +89,38 @@ proc writeCmdLineError(kind: CmdLineKind, arg: string) =
 
   echo fmt"Unknown option argument: {optionStr}{arg}"
   echo """Pelase check "moe -h""""
+  quit()
+
+## Create/Overwrite the default configuration file and quit.
+proc initDefaultConfigFile() =
+  let
+    configFileDir = getHomeDir() / ".config/moe/"
+    configFilePath = configFileDir & "moerc.toml"
+
+  if fileExists(configFilePath):
+    # Back up the config if it already exists.
+
+    let oldConfigFilePath = configFilePath & ".bac"
+
+    try:
+      moveFile(configFilePath, oldConfigFilePath)
+    except CatchableError as e:
+      writeError fmt"Failed to back up the current configuration file: {e.msg}"
+      quit(1)
+
+    echo fmt"The current configuration file has been backed up to {oldConfigFilePath}"
+
+  let tomlStr = genDefaultTomlConfigStr()
+
+  try:
+    createDir(configFileDir)
+    writeFile(configFilePath, tomlStr)
+  except CatchableError as e:
+    writeError fmt"Failed to init the default configuration file: {e.msg}"
+    quit(1)
+
+  echo fmt"The default configuration file has been created to {configFilePath}"
+
   quit()
 
 proc parseCommandLineOption*(line: seq[string]): CmdParsedList =
@@ -104,6 +140,7 @@ proc parseCommandLineOption*(line: seq[string]): CmdParsedList =
       of cmdLongOption:
         case key:
           of "log": initLogger()
+          of "init": initDefaultConfigFile()
           of "version": writeVersion()
           of "help": writeHelp()
           else: writeCmdLineError(kind, key)
