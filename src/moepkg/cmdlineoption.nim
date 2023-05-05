@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[parseopt, pegs, os, strformat]
+import std/[parseopt, pegs, os, strformat, terminal]
 import logger, settings
 
 type CmdParsedList* = object
@@ -45,6 +45,9 @@ proc gitHash: string {.compileTime.} =
 proc checkReleaseBuild: string {.compileTime.} =
   if defined(release): return "Release"
   else: return "Debug"
+
+proc writeError(msg: string) {.inline.} =
+  stderr.styledWriteLine(ForegroundColor.fgRed, "Error: " & msg)
 
 proc generateVersionInfoMessage(): string =
   const
@@ -90,9 +93,22 @@ proc writeCmdLineError(kind: CmdLineKind, arg: string) =
 
 ## Create/Overwrite the default configuration file and quit.
 proc initDefaultConfigFile() =
-  const
+  let
     configFileDir = getHomeDir() / ".config/moe/"
     configFilePath = configFileDir & "moerc.toml"
+
+  if fileExists(configFilePath):
+    # Back up the config if it already exists.
+
+    let oldConfigFilePath = configFilePath & ".bac"
+
+    try:
+      moveFile(configFilePath, oldConfigFilePath)
+    except CatchableError as e:
+      writeError fmt"Failed to back up the current configuration file: {e.msg}"
+      quit(1)
+
+    echo fmt"The current configuration file has been backed up to {oldConfigFilePath}"
 
   let tomlStr = genDefaultTomlConfigStr()
 
@@ -100,7 +116,8 @@ proc initDefaultConfigFile() =
     createDir(configFileDir)
     writeFile(configFilePath, tomlStr)
   except CatchableError as e:
-    echo fmt"Failed to init the default configuration file: {e.msg}"
+    writeError fmt"Failed to init the default configuration file: {e.msg}"
+    quit(1)
 
   echo fmt"The default configuration file has been created to {configFilePath}"
 
