@@ -17,7 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[osproc, times, os]
+import std/[osproc, times, os, strutils, strformat]
+import pkg/results
 import syntax/highlite
 import unicodeext, settings, bufferstatus, gapbuffer, messages, ui,
        editorstatus, movement, windownode, fileutils, commandline
@@ -56,41 +57,44 @@ proc getQuickRunBufferIndex*(bufStatus: seq[BufferStatus],
 proc runQuickRun*(
   bufStatus: var BufferStatus,
   commandLine: var CommandLine,
-  settings: EditorSettings): seq[seq[Rune]] =
+  settings: EditorSettings): Result[seq[Runes], string] =
 
-  if bufStatus.path.len == 0: return @[ru""]
+    if bufStatus.path.len == 0:
+      return Result[seq[Runes], string].err "The path is empty"
 
-  let filename = bufStatus.path
+    let filename = bufStatus.path
 
-  if settings.quickRun.saveBufferWhenQuickRun:
-    block:
-      let lastModificationTime = getLastModificationTime($bufStatus.path)
-      if lastModificationTime > bufStatus.lastSaveTime.toTime:
-        # TODO: Show error message
-        # Cancel if the file was edited by a program other than moe.
-        return @["".ru]
+    if settings.quickRun.saveBufferWhenQuickRun:
+      block:
+        let lastModificationTime = getLastModificationTime($bufStatus.path)
+        if lastModificationTime > bufStatus.lastSaveTime.toTime:
+          return Result[seq[Runes], string].err "The file has been changed by other programs"
 
-    saveFile(filename, bufStatus.buffer.toRunes, bufStatus.characterEncoding)
+      try:
+        saveFile(filename, bufStatus.buffer.toRunes, bufStatus.characterEncoding)
+      except CatchableError as e:
+        return Result[seq[Runes], string].err fmt"Failed to save the current code: {e.msg}"
 
-    bufStatus.countChange = 0
-    bufStatus.lastSaveTime = now()
+      bufStatus.countChange = 0
+      bufStatus.lastSaveTime = now()
 
-  let command = bufStatus.generateCommand(settings.quickRun)
-  if command == "": return @[ru""]
+    let command = bufStatus.generateCommand(settings.quickRun)
+    if command == "":
+      return Result[seq[Runes], string].err "Quickrun: Invalid command: empty string"
 
-  commandLine.writeRunQuickRunMessage(settings.notification)
-  let cmdResult = execCmdEx(command)
-  commandLine.clear
+    commandLine.writeRunQuickRunMessage(settings.notification)
+    let cmdResult = execCmdEx(command)
+    commandLine.clear
 
-  result = @[ru""]
+    case cmdResult.exitCode:
+      of 124:
+        return Result[seq[Runes], string].err "Quickrun: timeout"
+      else:
+        var cmdOutput = @[ru""]
+        for line in cmdResult.output.splitLines:
+          cmdOutput.add line.toRunes
 
-  case cmdResult.exitCode:
-    of 124:
-      commandLine.writeRunQuickRunTimeoutMessage
-    else:
-      for i in 0 ..< cmdResult.output.len:
-        if cmdResult.output[i] == '\n': result.add(@[ru""])
-        else: result[^1].add(toRunes($cmdResult.output[i])[0])
+        return Result[seq[Runes], string].ok cmdOutput
 
 proc isQuickRunCommand*(command: Runes): InputState =
   result = InputState.Invalid

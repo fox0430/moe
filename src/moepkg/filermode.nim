@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/[os, options]
+import pkg/results
 import editorstatus, ui, windownode, bufferstatus, unicodeext, filermodeutils,
        messages, commandline, messagelog
 
@@ -54,7 +55,6 @@ proc changeModeToExMode*(
     commandLine.clear
     commandLine.setPrompt(exModePrompt)
 
-# NOTE: WIP
 proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
   let key = command[0]
 
@@ -74,9 +74,12 @@ proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
       currentFilerStatus.searchMode = false
   elif key == ord('D'):
     let r = status.currentPathInfo.deleteFile
-    if r.ok: status.commandLine.write(r.mess)
-    else: status.commandLine.write(r.mess)
-    addMessageLog r.mess
+    if r.isOk:
+      status.commandLine.write(r.get.toRunes)
+      addMessageLog r.get
+    else:
+      status.commandLine.write(r.error.toRunes)
+      addMessageLog r.error
   elif key == ord('i'):
     currentBufStatus.writeFileDetail(
       currentMainWindowNode,
@@ -107,10 +110,10 @@ proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
   elif key == ord('s'):
     currentFilerStatus.changeSortBy
   elif key == ord('N'):
-    let err = currentFilerStatus.createDir(status.commandLine)
-    if err.len > 0:
-      status.commandLine.writeError(err)
-      addMessageLog err
+    let r = currentFilerStatus.createDir(status.commandLine)
+    if r.isErr:
+      status.commandLine.writeError(r.error.toRunes)
+      addMessageLog r.error
   elif key == ord('v'):
     status.openNewWinAndOpenFilerOrDir(currentFilerStatus)
   elif isControlJ(key):
@@ -118,6 +121,9 @@ proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
   elif isControlK(key):
     status.moveNextWindow
   elif isEnterKey(key):
-    status.bufStatus.openFileOrDir(
+    let r = status.bufStatus.openFileOrDir(
       currentMainWindowNode,
       currentFilerStatus)
+    if r.isErr:
+      status.commandLine.writeError(r.error.toRunes)
+      addMessageLog r.error

@@ -19,6 +19,7 @@
 
 import std/[os, strutils, times, algorithm, sequtils,
             options, strformat]
+import pkg/results
 import ui, fileutils, editorview, gapbuffer, highlight, windownode, color,
        bufferstatus, settings, messages, commandline, unicodeext
 
@@ -71,23 +72,20 @@ proc searchFiles(
     if dir.path.contains(keyword): result.add dir
 
 ## Return a message.
-## TODO: Return `Result` type.
-proc deleteFile*(pathInfo: PathInfo): tuple[ok: bool, mess: Runes] =
+proc deleteFile*(pathInfo: PathInfo): Result[string, string] =
   if pathInfo.kind == pcDir:
     try:
       removeDir(pathInfo.path)
-    except OSError:
-      let errMess = fmt"Failed to remove directory: {getCurrentExceptionMsg()}"
-      return (false, errMess.toRunes)
+    except CatchableError as e:
+      return Result[string, string].err fmt"Failed to remove directory: {e.msg}"
   else:
     try:
       removeFile(pathInfo.path)
-    except CatchableError:
-      let errMess = fmt"Failed to remove file: {getCurrentExceptionMsg()}"
-      return (false, errMess.toRunes)
+    except CatchableError as e:
+      return Result[string, string].err fmt"Failed to remove file: {e.msg}"
 
   let mess = "Deleted: " & pathInfo.path
-  return (true, mess.toRunes)
+  return Result[string, string].ok mess
 
 proc sortDirList(pathList: seq[PathInfo], sortBy: Sort): seq[PathInfo] =
   case sortBy:
@@ -224,27 +222,24 @@ proc pasteFile*(
       else: commandLine.writeRemoveFileError
 
 ## Get keys for a dir name and create a dir.
-## Return error message if it failed.
-## TODO: Return `Result` type
 proc createDir*(
   filerStatus: var FilerStatus,
-  commandLine: var CommandLine): Runes =
+  commandLine: var CommandLine): Result[(), string] =
 
     const prompt = "Dir name: "
     if commandLine.getKeys(prompt):
       let dirName = $commandLine.buffer
       try:
         createDir(dirName)
-      except OSError:
-        let errMess = fmt"Failed to create directory: {getCurrentExceptionMsg()}"
-        return errMess.toRunes
+      except CatchableError as e:
+        return Result[(), string].err fmt"Failed to create directory: {e.msg}"
 
       filerStatus.isUpdatePathList = true
 
 proc openFileOrDir*(
   bufStatuses: var seq[BufferStatus],
   windowNode: var WindowNode,
-  filerStatus: var FilerStatus) =
+  filerStatus: var FilerStatus): Result[(), string] =
 
     let
       kind = filerStatus.pathList[windowNode.currentLine].kind
@@ -255,9 +250,8 @@ proc openFileOrDir*(
       of pcFile, pcLinkToFile:
         try:
           bufStatuses[bufferIndex] = initBufferStatus(path)
-        except CatchableError:
-          # TODO: Show error message.
-          discard
+        except CatchableError as e:
+          return Result[(), string].err "Failed to open the file: {e.msg}"
       of pcDir, pcLinkToDir:
         let currentPath = bufStatuses[bufferIndex].path
         if path == "..":
@@ -269,6 +263,8 @@ proc openFileOrDir*(
 
         windowNode.currentLine = 0
         filerStatus.isUpdatePathList = true
+
+    return Result[(), string].ok ()
 
 proc setDirListColor(
   kind: PathComponent,

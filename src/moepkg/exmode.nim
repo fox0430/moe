@@ -376,14 +376,13 @@ proc startRecentFileMode(status: var EditorStatus) =
 proc runQuickRunCommand(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
-  let
-    buffer = runQuickRun(
-      currentBufStatus,
-      status.commandLine,
-      status.settings)
+  let buffer = currentBufStatus.runQuickRun(status.commandLine, status.settings)
+  if buffer.isErr:
+    status.commandLine.writeError(buffer.error.toRunes)
+    return
 
-    quickRunBufferIndex = status.bufStatus.getQuickRunBufferIndex(
-      currentMainWindowNode)
+  let quickRunBufferIndex = status.bufStatus.getQuickRunBufferIndex(
+    currentMainWindowNode)
 
   if quickRunBufferIndex == -1:
     status.verticalSplitWindow
@@ -391,13 +390,13 @@ proc runQuickRunCommand(status: var EditorStatus) =
     status.moveNextWindow
 
     status.addNewBufferInCurrentWin
-    status.bufStatus[^1].buffer = initGapBuffer(buffer)
+    status.bufStatus[^1].buffer = initGapBuffer(buffer.get)
 
     status.changeCurrentBuffer(status.bufStatus.high)
 
     status.changeMode(bufferstatus.Mode.quickRun)
   else:
-    status.bufStatus[quickRunBufferIndex].buffer = initGapBuffer(buffer)
+    status.bufStatus[quickRunBufferIndex].buffer = initGapBuffer(buffer.get)
 
 proc staticReadVersionFromConfigFileExample(): string {.compileTime.} =
   staticRead(currentSourcePath.parentDir() / "../../example/moerc.toml")

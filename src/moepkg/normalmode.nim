@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/[times, strutils, sequtils, options]
+import pkg/results
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
        editor, searchutils, bufferstatus, quickrun, messages, visualmode,
        commandline, viewhighlight
@@ -146,9 +147,11 @@ proc forceExit(status: var EditorStatus) {.inline.} =
 
 proc runQuickRunCommand(status: var EditorStatus) =
   let
-    buffer = runQuickRun(status.bufStatus[currentMainWindowNode.bufferIndex],
-                         status.commandLine,
-                         status.settings)
+    buffer = runQuickRun(
+      status.bufStatus[currentMainWindowNode.bufferIndex],
+      status.commandLine,
+      status.settings)
+
     quickRunWindowIndex = status.bufStatus.getQuickRunBufferIndex(mainWindowNode)
 
   if quickRunWindowIndex == -1:
@@ -157,14 +160,14 @@ proc runQuickRunCommand(status: var EditorStatus) =
     status.moveNextWindow
 
     status.addNewBufferInCurrentWin("")
-    status.bufStatus[^1].buffer = initGapBuffer(buffer)
+    status.bufStatus[^1].buffer = initGapBuffer(buffer.get)
 
     status.changeCurrentBuffer(status.bufStatus.high)
 
     status.changeMode(Mode.quickRun)
 
   else:
-    status.bufStatus[quickRunWindowIndex].buffer = initGapBuffer(buffer)
+    status.bufStatus[quickRunWindowIndex].buffer = initGapBuffer(buffer.get)
     status.bufStatus[quickRunWindowIndex].isUpdate = true
 
 proc yankWord(status: var EditorStatus) =
