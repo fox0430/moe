@@ -146,13 +146,15 @@ proc forceExit(status: var EditorStatus) {.inline.} =
   status.closeWindow(currentMainWindowNode)
 
 proc runQuickRunCommand(status: var EditorStatus) =
-  let
-    buffer = runQuickRun(
-      status.bufStatus[currentMainWindowNode.bufferIndex],
-      status.commandLine,
-      status.settings)
+  let buffer = runQuickRun(
+    status.bufStatus[currentMainWindowNode.bufferIndex],
+    status.commandLine,
+    status.settings)
+  if buffer.isErr:
+    status.commandLine.writeError(buffer.error.toRunes)
+    return
 
-    quickRunWindowIndex = status.bufStatus.getQuickRunBufferIndex(mainWindowNode)
+  let quickRunWindowIndex = status.bufStatus.getQuickRunBufferIndex(mainWindowNode)
 
   if quickRunWindowIndex == -1:
     status.verticalSplitWindow

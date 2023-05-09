@@ -78,7 +78,7 @@ proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
       status.commandLine.write(r.get.toRunes)
       addMessageLog r.get
     else:
-      status.commandLine.write(r.error.toRunes)
+      status.commandLine.writeError(r.error.toRunes)
       addMessageLog r.error
   elif key == ord('i'):
     currentBufStatus.writeFileDetail(
