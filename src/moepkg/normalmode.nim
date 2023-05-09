@@ -21,7 +21,7 @@ import std/[times, strutils, sequtils, options]
 import pkg/results
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
        editor, searchutils, bufferstatus, quickrun, messages, visualmode,
-       commandline, viewhighlight
+       commandline, viewhighlight, messagelog
 
 proc searchOneCharacterToEndOfLine(bufStatus: var BufferStatus,
                                    windowNode: WindowNode,
@@ -152,6 +152,7 @@ proc runQuickRunCommand(status: var EditorStatus) =
     status.settings)
   if buffer.isErr:
     status.commandLine.writeError(buffer.error.toRunes)
+    addMessageLog buffer.error.toRunes
     return
 
   let quickRunWindowIndex = status.bufStatus.getQuickRunBufferIndex(mainWindowNode)

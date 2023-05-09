@@ -379,6 +379,7 @@ proc runQuickRunCommand(status: var EditorStatus) =
   let buffer = currentBufStatus.runQuickRun(status.commandLine, status.settings)
   if buffer.isErr:
     status.commandLine.writeError(buffer.error.toRunes)
+    addMessageLog buffer.error.toRunes
     return
 
   let quickRunBufferIndex = status.bufStatus.getQuickRunBufferIndex(
