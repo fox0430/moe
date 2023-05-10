@@ -143,9 +143,13 @@ proc highlightPairOfParen(
       let
         firstPositionLine =
           if currentPosition.column > 0: currentPosition.line
+          elif currentPosition.line == 0: 0
           else: currentPosition.line - 1
         firstPositionColumn =
-          if firstPositionLine == currentPosition.line: currentPosition.column - 1
+          if currentPosition.column == 0:
+            0
+          elif firstPositionLine == currentPosition.line:
+            currentPosition.column - 1
           else:
             if bufStatus.buffer[firstPositionLine].high >= 0:
               bufStatus.buffer[firstPositionLine].high
