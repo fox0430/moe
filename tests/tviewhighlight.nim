@@ -591,6 +591,25 @@ suite "highlightPairOfParen":
 
     highlightParenPairTest(testIndex, paren, buffer, position, expectHighlight)
 
+  block highlightParenPairTestCase9:
+    const testIndex = 9
+
+    for i in 0 ..< openParens.len:
+      let buffer = @[closeParens[i].toRunes]
+
+      const
+        position = BufferPosition(line: 0, column: 0)
+        expectHighlight = Highlight(colorSegments: @[
+          ColorSegment(
+            firstRow: 0,
+            firstColumn: 0,
+            lastRow: 0,
+            lastColumn: 0,
+            color: EditorColorPair.defaultChar)
+        ])
+
+      highlightParenPairTest(testIndex, closeParens[i], buffer, position, expectHighlight)
+
 suite "Highlight paren":
   test "Highlight ')'":
     var status = initEditorStatus()
