@@ -1328,12 +1328,9 @@ var colorThemeTable*: array[colorTheme, EditorColor] = [
   ),
 ]
 
-proc setColorPair*(colorPair: EditorColorPair | int,
-                   character, background: Color) {.inline.} =
-
-  initpair(cshort(ord(colorPair)),
-            cshort(ord(character)),
-            cshort(ord(background)))
+## Create a new color pair.
+proc setColorPair*(colorPair: EditorColorPair | int | int16, fg, bg: Color) {.inline.} =
+  initExtendedPair(colorPair.cshort, fg.cshort, bg.cshort)
 
 proc setCursesColor*(editorColor: EditorColor) =
   # Not set when running unit tests

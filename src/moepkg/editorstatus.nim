@@ -670,7 +670,7 @@ proc update*(status: var EditorStatus) =
 
   # Set editor Color Pair for current line highlight.
   # New color pairs are set to Number larger than the maximum value of EditorColorPiar.
-  var currentLineColorPair = ord(EditorColorPair.high) + 1
+  var currentLineColorPair: int16 = ord(EditorColorPair.high) + 1
 
   var queue = initHeapQueue[WindowNode]()
   for node in mainWindowNode.child:
