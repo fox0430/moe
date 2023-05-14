@@ -162,71 +162,83 @@ proc initWindow*(height, width, y, x: int, color: EditorColorPair): Window =
 proc initWindow*(rect: Rect, color: EditorColorPair): Window {.inline.} =
   initWindow(rect.h, rect.w, rect.y, rect.x, color)
 
-proc write*(win: var Window,
-            y, x: int,
-            str: string,
-            color: EditorColorPair = EditorColorPair.defaultChar,
-            storeX: bool = true) =
-  # WARNING: If `storeX` is true, this procedure will change the window position. Should we remove the default parameter?
-  #
-  # Not write when running unit tests
-  when not defined unitTest:
-    win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
-    mvwaddstr(win.cursesWindow, cint(y), cint(x), str)
+proc attrSet*(win: var Window, color: EditorColorPair | int16) {.inline.} =
+  win.cursesWindow.wattrSet(A_COLOR, color.cshort, nil)
 
-    if storeX:
-      win.y = y
-      win.x = x+str.toRunes.width
+proc attrOn*(win: var Window, attribute: Attribute) {.inline.} =
+  win.cursesWindow.wattron(cint(attribute))
 
-proc write*(win: var Window,
-            y, x: int,
-            str: string,
-            color: int,
-            storeX: bool = true) =
-  # WARNING: If `storeX` is true, this procedure will change the window position. Should we remove the default parameter?
-  #
-  # Not write when running unit tests
-  when not defined unitTest:
-    win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
-    mvwaddstr(win.cursesWindow, cint(y), cint(x), str)
+proc attrOff*(win: var Window, attribute: Attribute) {.inline.} =
+  win.cursesWindow.wattroff(cint(attribute))
 
-    if storeX:
-      win.y = y
-      win.x = x+str.toRunes.width
+proc attrOff*(win: var Window, colorPair: EditorColorPair | int16) {.inline.} =
+  win.cursesWindow.wattroff(colorPair.cshort)
 
-proc write*(win: var Window,
-            y, x: int,
-            str: seq[Rune],
-            color: EditorColorPair = EditorColorPair.defaultChar,
-            storeX: bool = true) =
-  # WARNING: If `storeX` is true, this procedure will change the window position. Should we remove the default parameter?
-  #
-  # Not write when running unit tests
-  when not defined unitTest:
-    write(win, y, x, $str, color, false)
+proc write*(
+  win: var Window,
+  y, x: int,
+  str: string,
+  color: int16 = EditorColorPair.defaultChar.int16,
+  storeX: bool = true) =
 
-    if storeX:
-      win.y = y
-      win.x = x+str.width
+    when not defined unitTest:
+      # Not write when running unit tests
+      win.attrSet(color.cshort)
+      win.cursesWindow.mvwaddstr(y.cint, x.cint, str)
+      win.attrOff(color.cshort)
 
-proc append*(win: var Window,
-              str: string,
-              color: EditorColorPair = EditorColorPair.defaultChar) =
+      if storeX:
+        # WARNING: If `storeX` is true, this procedure will change the window position.
+        # Should we remove the default parameter?
+        win.y = y
+        win.x = x + str.toRunes.width
 
-  # Not write when running unit tests
-  when not defined unitTest:
-    win.cursesWindow.wattron(cint(ncurses.COLOR_PAIR(ord(color))))
-    mvwaddstr(win.cursesWindow, cint(win.y), cint(win.x), str)
+proc write*(
+  win: var Window,
+  y, x: int,
+  str: string,
+  color: EditorColorPair = EditorColorPair.defaultChar,
+  storeX: bool = true) {.inline.} =
 
-    win.x += str.toRunes.width
+    win.write(y, x, str, color.int16, storeX)
 
-proc append*(win: var Window,
-            str: seq[Rune],
-            color: EditorColorPair = EditorColorPair.defaultChar) =
+proc write*(
+  win: var Window,
+  y, x: int,
+  runes: Runes,
+  color: int16 = EditorColorPair.defaultChar.int16,
+  storeX: bool = true) {.inline.} =
 
-  # Not write when running unit tests
-  when not defined unitTest:
-    append(win, $str, color)
+    win.write(y, x, $runes, color, storeX)
+
+proc write*(
+  win: var Window,
+  y, x: int,
+  runes: Runes,
+  color: EditorColorPair = EditorColorPair.defaultChar,
+  storeX: bool = true) =
+
+    win.write(y, x, $runes, color, storeX)
+
+proc append*(
+  win: var Window,
+  str: string,
+  color: EditorColorPair = EditorColorPair.defaultChar) =
+
+    when not defined unitTest:
+      # Not write when running unit tests
+      win.attrSet(color.cshort)
+      win.cursesWindow.mvwaddstr(win.y.cint, win.x.cint, str)
+      win.attrOff(color.cshort)
+
+      win.x += str.toRunes.width
+
+proc append*(
+  win: var Window,
+  runes: Runes,
+  color: EditorColorPair = EditorColorPair.defaultChar) {.inline.} =
+
+    win.append($runes, color)
 
 proc erase*(win: var Window) =
   werase(win.cursesWindow)
@@ -263,12 +275,6 @@ proc resize*(win: var Window, position: Position, size: Size) {.inline.} =
 
 proc resize*(win: var Window, rect: Rect) {.inline.} =
   win.resize(rect.h, rect.w, rect.y, rect.x)
-
-proc attron*(win: var Window, attribute: Attribute) {.inline.} =
-  win.cursesWindow.wattron(cint(attribute))
-
-proc attroff*(win: var Window, attribute: Attribute) {.inline.} =
-  win.cursesWindow.wattroff(cint(attribute))
 
 proc moveCursor*(win: Window, y, x: int) {.inline.} =
   wmove(win.cursesWindow, cint(y), cint(x))

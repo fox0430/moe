@@ -291,7 +291,7 @@ proc writeSidebarLine(view: EditorView, win: var Window, y: int) =
     line = view.sidebar.get.buffer[y][0 .. view.leftMargin - 1]
     highlight = view.sidebar.get.highlights[y]
   for x, r in line:
-    win.write(y, x, $r, highlight[x], false)
+    win.write(y, x, $r, highlight[x].int16, false)
 
 proc writeLineNum(
   view: EditorView,
@@ -303,7 +303,7 @@ proc writeLineNum(
       y,
       view.leftMargin,
       strutils.align($(line+1),view.widthOfLineNum-1),
-      colorPair,
+      colorPair.int16,
       false)
 
 proc write(
@@ -311,7 +311,7 @@ proc write(
   win: var Window,
   y, x: int,
   str: seq[Rune],
-  color: EditorColorPair | int) {.inline.} =
+  color: EditorColorPair | int | int16) {.inline.} =
 
     # TODO: use settings file
     const tab = "    "
@@ -323,7 +323,7 @@ proc writeCurrentLine(
   highlight: Highlight,
   theme: colorTheme,
   str: seq[Rune],
-  currentLineColorPair: var int,
+  currentLineColorPair: var int16,
   y, x, i, last: int,
   isVisualMode, isConfigMode: bool,
   viewSettings: EditorViewSettings) =
@@ -357,7 +357,7 @@ proc writeCurrentLine(
         setColorPair(currentLineColorPair, fg, bg)
 
       win.attron(attribute)
-      view.write(win, y, x, str, currentLineColorPair)
+      view.write(win, y, x, str, currentLineColorPair.int16)
       win.attroff(attribute)
 
       currentLineColorPair.inc
@@ -378,7 +378,7 @@ proc writeCurrentLine(
       currentLineColorPair.inc
 
     else:
-      view.write(win, y, x, str, highlight[i].color)
+      view.write(win, y, x, str, highlight[i].color.int16)
 
 proc writeAllLines*[T](
   view: var EditorView,
@@ -391,7 +391,7 @@ proc writeAllLines*[T](
   theme: colorTheme,
   currentLine: int,
   selectedRange: Range,
-  currentLineColorPair: var int) =
+  currentLineColorPair: var int16) =
 
     win.erase
 
@@ -526,7 +526,7 @@ proc update*[T](
   theme: colorTheme,
   currentLine: int,
   selectedRange : Range,
-  currentLineColorPair: var int) =
+  currentLineColorPair: var int16) =
 
     let widthOfLineNum = buffer.len.intToStr.len + 1
     if viewSettings.lineNumber and widthOfLineNum != view.widthOfLineNum:
