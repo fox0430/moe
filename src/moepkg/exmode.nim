@@ -504,17 +504,17 @@ proc liveReloadOfConfSettingCommand(status: var EditorStatus, command: seq[Rune]
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
-proc changeThemeSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+proc changeThemeSettingCommand(status: var EditorStatus, command: Runes) =
   if command == ru"dark":
-    status.settings.editorColorTheme = colorTheme.dark
+    status.settings.editorColorTheme = ColorTheme.dark
   elif command == ru"light":
-    status.settings.editorColorTheme = colorTheme.light
+    status.settings.editorColorTheme = ColorTheme.light
   elif command == ru"vivid":
-    status.settings.editorColorTheme = colorTheme.vivid
+    status.settings.editorColorTheme = ColorTheme.vivid
   elif command == ru"config":
-    status.settings.editorColorTheme = colorTheme.config
+    status.settings.editorColorTheme = ColorTheme.config
   elif command == ru"vscode":
-    status.settings.editorColorTheme = colorTheme.vscode
+    status.settings.editorColorTheme = ColorTheme.vscode
 
   status.changeTheme
   status.resize

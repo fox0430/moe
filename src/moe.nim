@@ -19,7 +19,7 @@
 
 import std/[os, times]
 import moepkg/[ui, bufferstatus, editorstatus, cmdlineoption, mainloop, git,
-               editorview]
+               editorview, color]
 
 # Load persisted data (Ex command history, search history and cursor postion)
 proc loadPersistData(status: var EditorStatus) =
@@ -66,6 +66,8 @@ proc initEditor(): EditorStatus =
   result = initEditorStatus()
   result.loadConfigurationFile
   result.timeConfFileLastReloaded = now()
+
+  initEditrorColor(ColorThemeTable[ColorTheme.dark])
   result.changeTheme
 
   setControlCHook(proc() {.noconv.} =

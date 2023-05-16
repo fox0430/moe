@@ -19,7 +19,7 @@
 
 import std/[strformat, osproc, strutils, os, terminal]
 import pkg/ncurses
-import unicodeext, color, independentutils
+import unicodeext, independentutils
 
 when not defined unitTest:
   import std/posix
@@ -54,6 +54,8 @@ type
     Valid
     Invalid
     Cancel
+
+const DefaultColorPair: int16 = 0
 
 var
   # if press ctrl-c key, set true in setControlCHook()
@@ -140,8 +142,11 @@ proc startUi*() =
     setCursor(true)
 
     if can_change_color():
-      ## default is dark
-      setCursesColor(colorThemeTable[colorTheme.dark])
+      # Enable Ncurses color
+      startColor()
+
+      # Set terminal default color
+      useDefaultColors()
 
     erase()
     keyEcho(false)
@@ -149,20 +154,54 @@ proc startUi*() =
 
 proc exitUi*() {.inline.} = endwin()
 
-proc initWindow*(height, width, y, x: int, color: EditorColorPair): Window =
+
+proc toNcursesColor(element: int16): int16 =
+  ## Converts a color element (0 ~ 255) to a value for Ncurses (0 ~ 1000).
+  ## The accuracy is not perfect.
+
+  when not defined(release):
+    # TODO: Return an error?
+    doAssert(element >= 0 and element <= 255, fmt"Invalid value: `{element}`")
+
+  return int16(element.float * (1000.0 / 255.0) + 0.5)
+
+proc initNcursesColor*(color, red, green, blue: int16) =
+  let
+    r = red.toNcursesColor
+    g = green.toNcursesColor
+    b = blue.toNcursesColor
+
+  if 0 != initColor(color.cshort, r.cshort, g.cshort, b.cshort):
+    # TODO: Return an error?
+    exitUi()
+    echo fmt"Init Ncurses color failed: (r: {r}, g: {g}, b: {b})"
+    raise
+
+proc initNcursesColorPair*(pair, fg, bg: int) =
+  when not defined(release):
+    # TODO: Return an error?
+    # 0 is reserved by Ncurses.
+    doAssert(pair > 0, fmt"Cannot use `{pair}` in Ncurses color pair")
+
+  if 0 != initExtendedPair(pair.cint, fg.cint, bg.cint):
+    exitUi()
+    echo fmt"Init Ncurses color pair failed: (pair: {pair}, fg: {fg}, bg: {bg})"
+    raise
+
+proc initWindow*(height, width, y, x: int, color: int16): Window =
   result = Window()
   result.y = y
   result.x = x
   result.height = height
   result.width = width
   result.cursesWindow = newwin(cint(height), cint(width), cint(y), cint(x))
-  keypad(result.cursesWindow, true)
-  discard wbkgd(result.cursesWindow, ncurses.COLOR_PAIR(color))
+  result.cursesWindow.keypad(true)
+  result.cursesWindow.wbkgd(ncurses.COLOR_PAIR(DefaultColorPair))
 
-proc initWindow*(rect: Rect, color: EditorColorPair): Window {.inline.} =
+proc initWindow*(rect: Rect, color: int16): Window {.inline.} =
   initWindow(rect.h, rect.w, rect.y, rect.x, color)
 
-proc attrSet*(win: var Window, color: EditorColorPair | int16) {.inline.} =
+proc attrSet*(win: var Window, color: int16) {.inline.} =
   win.cursesWindow.wattrSet(A_COLOR, color.cshort, nil)
 
 proc attrOn*(win: var Window, attribute: Attribute) {.inline.} =
@@ -171,21 +210,21 @@ proc attrOn*(win: var Window, attribute: Attribute) {.inline.} =
 proc attrOff*(win: var Window, attribute: Attribute) {.inline.} =
   win.cursesWindow.wattroff(cint(attribute))
 
-proc attrOff*(win: var Window, colorPair: EditorColorPair | int16) {.inline.} =
+proc attrOff*(win: var Window, colorPair:  int16 | int16) {.inline.} =
   win.cursesWindow.wattroff(colorPair.cshort)
 
 proc write*(
   win: var Window,
   y, x: int,
   str: string,
-  color: int16 = EditorColorPair.defaultChar.int16,
+  color: int16 = DefaultColorPair,
   storeX: bool = true) =
 
     when not defined unitTest:
       # Not write when running unit tests
-      win.attrSet(color.cshort)
+      win.attrSet(color)
       win.cursesWindow.mvwaddstr(y.cint, x.cint, str)
-      win.attrOff(color.cshort)
+      win.attrOff(color)
 
       if storeX:
         # WARNING: If `storeX` is true, this procedure will change the window position.
@@ -196,34 +235,16 @@ proc write*(
 proc write*(
   win: var Window,
   y, x: int,
-  str: string,
-  color: EditorColorPair = EditorColorPair.defaultChar,
-  storeX: bool = true) {.inline.} =
-
-    win.write(y, x, str, color.int16, storeX)
-
-proc write*(
-  win: var Window,
-  y, x: int,
   runes: Runes,
-  color: int16 = EditorColorPair.defaultChar.int16,
+  color:  int16 = DefaultColorPair,
   storeX: bool = true) {.inline.} =
-
-    win.write(y, x, $runes, color, storeX)
-
-proc write*(
-  win: var Window,
-  y, x: int,
-  runes: Runes,
-  color: EditorColorPair = EditorColorPair.defaultChar,
-  storeX: bool = true) =
 
     win.write(y, x, $runes, color, storeX)
 
 proc append*(
   win: var Window,
   str: string,
-  color: EditorColorPair = EditorColorPair.defaultChar) =
+  color: int16 = DefaultColorPair) =
 
     when not defined unitTest:
       # Not write when running unit tests
@@ -236,7 +257,7 @@ proc append*(
 proc append*(
   win: var Window,
   runes: Runes,
-  color: EditorColorPair = EditorColorPair.defaultChar) {.inline.} =
+  color: int16 = DefaultColorPair) {.inline.} =
 
     win.append($runes, color)
 

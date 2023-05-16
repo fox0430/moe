@@ -17,36 +17,41 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, osproc, strutils]
-import unicodeext, highlight, color
+import std/unittest
+import pkg/results
 
-proc initDiffViewerBuffer*(sourceFilePath, backupFilePath: string): seq[Runes] =
-  let cmdResult = execCmdEx(fmt"diff -u {sourceFilePath} {backupFilePath}")
-  # The diff command return 2 on failure.
-  if cmdResult.exitCode == 2:
-    # TODO: Write the error message to the command window.
-    return @[ru""]
+import moepkg/color {.all.}
 
-  result = @[ru""]
-  for line in cmdResult.output.splitLines:
-    result.add line.toRunes
+suite "hexToRgb":
+  test "Parse hex color 1":
+    check Rgb(red: 0, green: 0, blue: 0) == hexToRgb("#000000").get
 
-proc initDiffViewerHighlight*(buffer: seq[Runes]): Highlight =
-  for i, line in buffer:
-    let color =
-      if line.len > 0 and line[0] == ru'+':
-        EditorColorPairIndex.addedLine
-      elif line.len > 0 and line[0] == ru'-':
-        EditorColorPairIndex.deletedLine
-      else:
-        EditorColorPairIndex.default
+  test "Parse hex color 2":
+    check Rgb(red: 255, green: 255, blue: 255) == hexToRgb("#ffffff").get
 
-    result.colorSegments.add(ColorSegment(
-      firstRow: i,
-      firstColumn: 0,
-      lastRow: i,
-      lastColumn: line.high,
-      color: color))
+  test "Parse hex color 3":
+    check Rgb(red: 255, green: 0, blue: 0) == hexToRgb("#ff0000").get
 
-proc initDiffViewerHighlight*(buffer: Runes): Highlight =
-  return initDiffViewerHighlight(buffer.splitLines)
+  test "Parse hex color 4":
+    check Rgb(red: 0, green: 0, blue: 0) == hexToRgb("000000").get
+
+  test "Parse hex color 5":
+    check Rgb(red: 255, green: 255, blue: 255) == hexToRgb("ffffff").get
+
+  test "Parse hex color 6":
+    check Rgb(red: 255, green: 0, blue: 0) == hexToRgb("ff0000").get
+
+  test "Invalid hex color 1":
+    check hexToRgb("").isErr
+
+  test "Invalid hex color 2":
+    check hexToRgb("#").isErr
+
+  test "Invalid hex color 3":
+    check hexToRgb("#ff").isErr
+
+  test "Invalid hex color 4":
+    check hexToRgb("#ffffffffff").isErr
+
+  test "Invalid hex color 5":
+    check hexToRgb("#zzzzzz").isErr

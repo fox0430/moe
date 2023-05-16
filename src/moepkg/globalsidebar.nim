@@ -67,7 +67,7 @@ proc initGlobalSidebar*(rect: Rect): GlobalSidebar =
   when not defined(release):
     assert rect.y >= 0 and rect.x >= 0 and rect.h > 0 and rect.w > 0
 
-  result.window = initWindow(rect, EditorColorPair.defaultChar)
+  result.window = initWindow(rect, EditorColorPairIndex.default.ord)
 
   result.initTerminalBuffer
 
@@ -78,12 +78,12 @@ proc initGlobalSidebar*(rect: Rect): GlobalSidebar =
         firstColumn: 0,
         lastRow: result.terminalBuffer.high,
         lastColumn: result.terminalBuffer[0].high,
-        color: EditorColorPair.defaultChar)])
+        color: EditorColorPairIndex.default)])
 
 proc initGlobalSidebar*(): GlobalSidebar {.inline.} =
   result.window = initWindow(
     Rect(h: 1, w: 0, y: 0, x: 0),
-    EditorColorPair.defaultChar)
+    EditorColorPairIndex.default.ord)
 
   result.initTerminalBuffer
 
@@ -94,7 +94,7 @@ proc initGlobalSidebar*(): GlobalSidebar {.inline.} =
         firstColumn: 0,
         lastRow: 1,
         lastColumn: 1,
-        color: EditorColorPair.defaultChar)])
+        color: EditorColorPairIndex.default)])
 
 ## Init the sidebar highlight
 proc initHighlight*(sidebar: var GlobalSidebar) =
@@ -105,7 +105,7 @@ proc initHighlight*(sidebar: var GlobalSidebar) =
         lastRow: sidebar.terminalBuffer.high,
         firstColumn: 0,
         lastColumn: sidebar.terminalBuffer[0].high,
-        color: EditorColorPair.defaultChar)])
+        color: EditorColorPairIndex.default)])
 
 ## Write a buffer to the terminalBuffer
 ## Cut off the buffer if longer than the window sieze.
@@ -113,7 +113,7 @@ proc write*(
   sidebar: var GlobalSidebar,
   startPosition: Position,
   buffer: Runes,
-  color: EditorColorPair = EditorColorPair.defaultChar) {.inline.} =
+  color: EditorColorPairIndex = EditorColorPairIndex.default) {.inline.} =
 
     when not defined(release):
       assert startPosition.y >= 0 and startPosition.x >= 0
@@ -145,7 +145,7 @@ proc write(sidebar: var GlobalSidebar) =
         highlightIndex.inc
         cs = sidebar.highlight[highlightIndex]
 
-      sidebar.window.write(i, j, $buf[i][j], cs.color)
+      sidebar.window.write(i, j, $buf[i][j], cs.color.int16)
 
 ## Refresh the ncurses window for the sidebar.
 proc refresh(sidebar: GlobalSidebar) {.inline.} = sidebar.window.refresh

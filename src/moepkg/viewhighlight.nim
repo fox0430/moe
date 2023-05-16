@@ -34,7 +34,7 @@ proc highlightSelectedArea(
 
     var colorSegment = initSelectedAreaColorSegment(
       position,
-      EditorColorPair.visualMode)
+      EditorColorPairIndex.visualMode)
 
     if area.startLine == area.endLine:
       colorSegment.firstRow = area.startLine
@@ -136,7 +136,7 @@ proc highlightPairOfParen(
           firstColumn: correspondParenPosition.get.column,
           lastRow: correspondParenPosition.get.line,
           lastColumn: correspondParenPosition.get.column,
-          color: EditorColorPair.parenText))
+          color: EditorColorPairIndex.parenText))
     elif isCloseParen(rune):
       # Search only in the displayed range on the view.
       # TODO: Add bufStatus.prev or gapbuffer.prev and replace with it.
@@ -179,14 +179,14 @@ proc highlightPairOfParen(
           firstColumn: correspondParenPosition.get.column,
           lastRow: correspondParenPosition.get.line,
           lastColumn: correspondParenPosition.get.column,
-          color: EditorColorPair.parenText))
+          color: EditorColorPairIndex.parenText))
 
 # Highlighting other uses of the current word under the cursor
 proc highlightOtherUsesCurrentWord(
   highlight: var Highlight,
   bufStatus: BufferStatus,
   windowNode: WindowNode,
-  theme: colorTheme) =
+  theme: ColorTheme) =
 
     let line = bufStatus.buffer[windowNode.currentLine]
 
@@ -216,11 +216,12 @@ proc highlightOtherUsesCurrentWord(
     let
       range = windowNode.view.rangeOfOriginalLineInView
       startLine = range.first
-      endLine = if bufStatus.buffer.len > range.last + 1: range.last + 2
-                elif bufStatus.buffer.len > range.last: range.last + 1
-                else: range.last
+      endLine =
+        if bufStatus.buffer.len > range.last + 1: range.last + 2
+        elif bufStatus.buffer.len > range.last: range.last + 1
+        else: range.last
 
-    # TODO: Remove
+    # TODO: Remove isWordAtCursor
     proc isWordAtCursor(currentLine, i, j: int): bool =
       i == currentLine and (j >= startCol and j <= endCol)
 
@@ -240,25 +241,23 @@ proc highlightOtherUsesCurrentWord(
                unicodeext.isPunct(line[j + highlightWord.len])) or
                line[j + highlightWord.len].isSpace):
 
-              # Do not highlight current word on the cursor
               if not isWordAtCursor(windowNode.currentLine, i, j):
-                # Set color
+                # Do not highlight current word on the cursor.
+                # Init colors for current words.
                 let
-                  originalColorPair =
-                    highlight.getColorPair(i, j)
-                  colors = theme.getColorFromEditorColorPair(originalColorPair)
-                setColorPair(EditorColorPair.currentWord,
-                             colors[0],
-                             colorThemeTable[theme].currentWordBg)
+                  originalEditorColorPairIndex = highlight.getColorPair(i, j)
+                  originalColorPairDef = theme.colorPairDefine(originalEditorColorPairIndex)
+                EditorColorPairIndex.currentWord.initColorPair(
+                  originalColorPairDef.foreground,
+                  ColorThemeTable[theme].currentWord.background)
 
-                let
-                  color = EditorColorPair.currentWord
-                  colorSegment = ColorSegment(firstRow: i,
-                                              firstColumn: j,
-                                              lastRow: i,
-                                              lastColumn: j + highlightWord.high,
-                                              color: color)
-                highlight.overwrite(colorSegment)
+                highlight.overwrite(
+                  ColorSegment(
+                    firstRow: i,
+                    firstColumn: j,
+                    lastRow: i,
+                    lastColumn: j + highlightWord.high,
+                    color: EditorColorPairIndex.currentWord))
 
 proc highlightTrailingSpaces(
   highlight: var Highlight,
@@ -295,7 +294,7 @@ proc highlightTrailingSpaces(
             firstColumn: firstColumn,
             lastRow: i,
             lastColumn: line.high,
-            color: EditorColorPair.highlightTrailingSpaces))
+            color: EditorColorPairIndex.highlightTrailingSpaces))
 
     for colorSegment in colorSegments:
       highlight.overwrite(colorSegment)
@@ -321,7 +320,7 @@ proc highlightFullWidthSpace(
         firstColumn: pos.column,
         lastRow: range.first + pos.line,
         lastColumn: pos.column,
-        color: EditorColorPair.highlightFullWidthSpace)
+        color: EditorColorPairIndex.highlightFullWidthSpace)
       highlight.overwrite(colorSegment)
 
 proc highlightSearchResults(
@@ -343,8 +342,8 @@ proc highlightSearchResults(
       smartcase)
 
     color =
-      if isSearchHighlight: EditorColorPair.searchResult
-      else: EditorColorPair.replaceText
+      if isSearchHighlight: EditorColorPairIndex.searchResult
+      else: EditorColorPairIndex.replaceText
 
   for pos in allOccurrence:
     let colorSegment = ColorSegment(

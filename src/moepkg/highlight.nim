@@ -26,7 +26,7 @@ when not defined(release):
 
 type ColorSegment* = object
   firstRow*, firstColumn*, lastRow*, lastColumn*: int
-  color*: EditorColorPair
+  color*: EditorColorPairIndex
   attribute*: Attribute
 
 type Highlight* = object
@@ -35,7 +35,7 @@ type Highlight* = object
 type
   ReservedWord* = object
     word*: string
-    color*: EditorColorPair
+    color*: EditorColorPairIndex
 
 proc len*(highlight: Highlight): int {.inline.} = highlight.colorSegments.len
 
@@ -47,7 +47,7 @@ proc `[]`*(highlight: Highlight, i: int): ColorSegment {.inline.} =
 proc `[]`*(highlight: Highlight, i: BackwardsIndex): ColorSegment {.inline.} =
   highlight.colorSegments[highlight.colorSegments.len - int(i)]
 
-proc getColorPair*(highlight: Highlight, line, col: int): EditorColorPair =
+proc getColorPair*(highlight: Highlight, line, col: int): EditorColorPairIndex =
   for colorSegment in highlight.colorSegments:
     if line >= colorSegment.firstRow and
        colorSegment.lastRow >= line and
@@ -155,7 +155,7 @@ proc overwrite*(highlight: var Highlight, colorSegment: ColorSegment) =
 iterator parseReservedWord(
   buffer: string,
   reservedWords: seq[ReservedWord],
-  color: EditorColorPair): (string, EditorColorPair) =
+  color: EditorColorPairIndex): (string, EditorColorPairIndex) =
 
   var
     buffer = buffer
@@ -185,52 +185,51 @@ iterator parseReservedWord(
     yield (buffer[pos ..< last], reservedWord.color)
     buffer = buffer[last ..^ 1]
 
-proc getEditorColorPairInNim(kind: TokenClass ): EditorColorPair =
+proc getEditorColorPairInNim(kind: TokenClass): EditorColorPairIndex =
 
   case kind:
-    of gtKeyword: EditorColorPair.keyword
-    of gtBoolean: EditorColorPair.boolean
-    of gtSpecialVar: EditorColorPair.specialVar
-    of gtOperator: EditorColorPair.functionName
-    of gtBuiltin: EditorColorPair.builtin
-    of gtStringLit: EditorColorPair.stringLit
-    of gtBinNumber: EditorColorPair.binNumber
-    of gtDecNumber: EditorColorPair.decNumber
-    of gtFloatNumber: EditorColorPair.floatNumber
-    of gtHexNumber: EditorColorPair.hexNumber
-    of gtOctNumber: EditorColorPair.octNumber
-    of gtComment: EditorColorPair.comment
-    of gtLongComment: EditorColorPair.longComment
-    of gtPreprocessor: EditorColorPair.preprocessor
-    of gtFunctionName: EditorColorPair.functionName
-    of gtTypeName: EditorColorPair.typeName
-    of gtWhitespace, gtPunctuation: EditorColorPair.defaultChar
-    of gtPragma: EditorColorPair.pragma
-    else:
-      EditorColorPair.defaultChar
+    of gtKeyword: EditorColorPairIndex.keyword
+    of gtBoolean: EditorColorPairIndex.boolean
+    of gtSpecialVar: EditorColorPairIndex.specialVar
+    of gtOperator: EditorColorPairIndex.functionName
+    of gtBuiltin: EditorColorPairIndex.builtin
+    of gtStringLit: EditorColorPairIndex.stringLit
+    of gtBinNumber: EditorColorPairIndex.binNumber
+    of gtDecNumber: EditorColorPairIndex.decNumber
+    of gtFloatNumber: EditorColorPairIndex.floatNumber
+    of gtHexNumber: EditorColorPairIndex.hexNumber
+    of gtOctNumber: EditorColorPairIndex.octNumber
+    of gtComment: EditorColorPairIndex.comment
+    of gtLongComment: EditorColorPairIndex.longComment
+    of gtPreprocessor: EditorColorPairIndex.preprocessor
+    of gtFunctionName: EditorColorPairIndex.functionName
+    of gtTypeName: EditorColorPairIndex.typeName
+    of gtWhitespace, gtPunctuation: EditorColorPairIndex.default
+    of gtPragma: EditorColorPairIndex.pragma
+    else: EditorColorPairIndex.default
 
 proc getEditorColorPair(kind: TokenClass,
-                        language: SourceLanguage): EditorColorPair =
+                        language: SourceLanguage): EditorColorPairIndex =
 
   case kind:
-    of gtKeyword: EditorColorPair.keyword
-    of gtBoolean: EditorColorPair.boolean
-    of gtSpecialVar: EditorColorPair.specialVar
-    of gtBuiltin: EditorColorPair.builtin
+    of gtKeyword: EditorColorPairIndex.keyword
+    of gtBoolean: EditorColorPairIndex.boolean
+    of gtSpecialVar: EditorColorPairIndex.specialVar
+    of gtBuiltin: EditorColorPairIndex.builtin
     of gtStringLit:
-      if language == SourceLanguage.langYaml: EditorColorPair.defaultChar
-      else: EditorColorPair.stringLit
-    of gtBinNumber: EditorColorPair.binNumber
-    of gtDecNumber: EditorColorPair.decNumber
-    of gtFloatNumber: EditorColorPair.floatNumber
-    of gtHexNumber: EditorColorPair.hexNumber
-    of gtOctNumber: EditorColorPair.octNumber
-    of gtComment: EditorColorPair.comment
-    of gtLongComment: EditorColorPair.longComment
-    of gtPreprocessor: EditorColorPair.preprocessor
-    of gtWhitespace: EditorColorPair.defaultChar
-    of gtPragma: EditorColorPair.pragma
-    else: EditorColorPair.defaultChar
+      if language == SourceLanguage.langYaml: EditorColorPairIndex.default
+      else: EditorColorPairIndex.stringLit
+    of gtBinNumber: EditorColorPairIndex.binNumber
+    of gtDecNumber: EditorColorPairIndex.decNumber
+    of gtFloatNumber: EditorColorPairIndex.floatNumber
+    of gtHexNumber: EditorColorPairIndex.hexNumber
+    of gtOctNumber: EditorColorPairIndex.octNumber
+    of gtComment: EditorColorPairIndex.comment
+    of gtLongComment: EditorColorPairIndex.longComment
+    of gtPreprocessor: EditorColorPairIndex.preprocessor
+    of gtWhitespace: EditorColorPairIndex.default
+    of gtPragma: EditorColorPairIndex.pragma
+    else: EditorColorPairIndex.default
 
 proc initHighlight*(buffer: string,
                     reservedWords: seq[ReservedWord],
@@ -251,7 +250,7 @@ proc initHighlight*(buffer: string,
       if r == newline:
         # push an empty segment
         if empty:
-          let color = EditorColorPair.defaultChar
+          let color = EditorColorPairIndex.default
           result.colorSegments.add(ColorSegment(firstRow: currentRow,
                                                 firstColumn: currentColumn,
                                                 lastRow: currentRow,
@@ -272,14 +271,14 @@ proc initHighlight*(buffer: string,
     if not empty: result.colorSegments.add(cs)
 
   if language == SourceLanguage.langNone:
-    splitByNewline(buffer, EditorColorPair.defaultChar)
+    splitByNewline(buffer, EditorColorPairIndex.default)
     return result
 
   var token = GeneralTokenizer()
   token.initGeneralTokenizer(buffer)
   var pad: string
   if buffer.parseWhile(pad, {' ', '\x09'..'\x0D'}) > 0:
-    splitByNewline(pad, EditorColorPair.defaultChar)
+    splitByNewline(pad, EditorColorPairIndex.default)
 
   while true:
     try:
@@ -377,7 +376,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
 
 proc initSelectedAreaColorSegment*(
   position: BufferPosition,
-  color: EditorColorPair): ColorSegment {.inline.} =
+  color: EditorColorPairIndex): ColorSegment {.inline.} =
+
     result.firstRow = position.line
     result.firstColumn = position.column
     result.lastRow = position.line
@@ -403,5 +403,5 @@ proc overwriteColorSegmentBlock*[T](
         firstColumn: startColumn,
         lastRow: i,
         lastColumn: min(endColumn, buffer[i].high),
-        color: EditorColorPair.visualMode)
+        color: EditorColorPairIndex.visualMode)
       highlight.overwrite(colorSegment)

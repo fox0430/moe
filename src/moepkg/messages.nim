@@ -23,43 +23,43 @@ import color, unicodeext, settings, commandline, independentutils, messagelog
 proc writeMessageOnCommandLine*(
   commandLine: var CommandLine,
   message: string,
-  color: EditorColorPair) {.inline.} =
+  color: EditorColorPairIndex) {.inline.} =
     commandLine.write(message.toRunes)
     commandLine.setColor(color)
 
 proc writeMessageOnCommandLine*(
   commandLine: var CommandLine,
   message: string) {.inline.} =
-    commandLine.writeMessageOnCommandLine(message, EditorColorPair.commandBar)
+    commandLine.writeMessageOnCommandLine(message, EditorColorPairIndex.commandBar)
 
 proc writeNoWriteError*(commandLine: var CommandLine) =
   let mess = "Error: No write since last change"
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
   addMessageLog mess
 
 proc writeSaveError*(commandLine: var CommandLine) =
   let mess = "Error: Failed to save the file"
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
   addMessageLog mess
 
 proc writeRemoveFileError*(commandLine: var CommandLine) =
   let mess = "Error: Can not remove file"
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
   addMessageLog mess
 
 proc writeRemoveDirError*(commandLine: var CommandLine) =
   let mess = "Error: Can not remove directory"
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
   addMessageLog mess
 
 proc writeCopyFileError*(commandLine: var CommandLine) =
   let mess = "Error: Can not copy file"
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
   addMessageLog mess
 
 proc writeFileOpenError*(commandLine: var CommandLine, fileName: string) =
   let mess = "Error: Can not open: " & fileName
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
   addMessageLog mess
 
 proc writeCreateDirError*(commandLine: var CommandLine) {.inline.} =
@@ -78,7 +78,7 @@ proc writeMessageDeletedFile*(
 
 proc writeNoFileNameError*(commandLine: var CommandLine) =
   let mess = "Error: No file name"
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
   addMessageLog mess
 
 proc writeMessageYankedLine*(
@@ -139,7 +139,7 @@ proc writeNotEditorCommandError*(
   commandLine: var CommandLine,
   command: Runes) =
     let mess = fmt"Error: Not an editor command: {command}"
-    commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+    commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
     addMessageLog mess
 
 proc writeNotEditorCommandError*(
@@ -159,7 +159,7 @@ proc writeMessageSaveFile*(
 
 proc writeNoBufferDeletedError*(commandLine: var CommandLine) =
   let mess = "Error: No buffers were deleted"
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
   addMessageLog mess
 
 proc writePutConfigFile*(commandLine: var CommandLine, configPath: string) =
@@ -169,12 +169,12 @@ proc writePutConfigFile*(commandLine: var CommandLine, configPath: string) =
 
 proc writePutConfigFileError*(commandLine: var CommandLine) =
   const mess = "Error: Failed to put configuration file"
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
   addMessageLog mess
 
 proc writePutConfigFileAlreadyExistError*(commandLine: var CommandLine) =
   const mess = "Error: Configuration file already exists"
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
   addMessageLog mess
 
 proc writeOpenRecentlyUsedXbelError*(commandLine: var CommandLine) =
@@ -182,14 +182,14 @@ proc writeOpenRecentlyUsedXbelError*(commandLine: var CommandLine) =
     "Error: " &
     getHomeDir() / ".local/share/recently-used.xbel" &
     " Not found"
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
   addMessageLog mess
 
 proc writeFileNotFoundError*(
   commandLine: var CommandLine,
   filename: seq[Rune]) =
     let mess = "Error: " & $filename & " not found"
-    commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+    commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
     addMessageLog mess
 
 proc writeStartAutoBackupMessage*(
@@ -216,7 +216,7 @@ proc writeAutoBackupFailedMessage*(
   settings: NotificationSettings) =
     let message = fmt"Error: Automatic backups failed: {$filename}"
     if settings.screenNotifications and settings.autoBackupScreenNotify:
-      commandLine.writeMessageOnCommandLine(message, EditorColorPair.errorMessage)
+      commandLine.writeMessageOnCommandLine(message, EditorColorPairIndex.errorMessage)
     if settings.logNotifications and settings.autoBackupLogNotify:
       addMessageLog message
 
@@ -229,12 +229,12 @@ proc writeRunQuickRunMessage*(
 
 proc writeRunQuickRunTimeoutMessage*(commandLine: var CommandLine) =
     const mess = "Quick run timeout"
-    commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+    commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
     addMessageLog mess
 
 proc writeRunQuickRunFailedMessage*(commandLine: var CommandLine) =
     const mess = "Quick run failed"
-    commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+    commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
     addMessageLog mess
 
 proc writeInvalidItemInConfigurationFileError*(
@@ -242,19 +242,19 @@ proc writeInvalidItemInConfigurationFileError*(
   message: string) =
     let mess = "Error: Failed to load configuration file: Invalid item: " &
                message
-    commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+    commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
     addMessageLog message
 
 proc writeFailedToLoadConfigurationFileError*(
   commandLine: var CommandLine,
   message: string) =
     let mess = fmt"Error: Failed to load configuration file: {message}"
-    commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+    commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
     addMessageLog mess
 
 proc writeBackupRestoreError*(commandLine: var CommandLine) {.inline.} =
   const mess = "Error: Restore failed"
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
 
 proc writeRestoreFileSuccessMessage*(
   commandLine: var CommandLine,
@@ -268,7 +268,7 @@ proc writeRestoreFileSuccessMessage*(
 
 proc writeDeleteBackupError*(commandLine: var CommandLine) {.inline.} =
   const mess = "Error: Delete backup file failed"
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
   addMessageLog mess
 
 proc writeExitHelp*(commandLine: var CommandLine) {.inline.} =
@@ -285,13 +285,13 @@ proc writeCurrentCharInfo*(commandLine: var CommandLine, r: Rune) {.inline.} =
 
 proc writeReadonlyModeWarning*(commandLine: var CommandLine) {.inline.} =
   const mess = "Warning: Readonly mode"
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
 
 proc writeManualCommandError*(
   commandLine: var CommandLine,
   message: string) {.inline.} =
     let mess = fmt"Error: No manual entry for {message}"
-    commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+    commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
     addMessageLog mess
 
 proc writeSyntaxCheckError*(
@@ -299,5 +299,5 @@ proc writeSyntaxCheckError*(
   message: string) {.inline.} =
 
     let mess = fmt"Error: Syntax check failed: {message}"
-    commandLine.writeMessageOnCommandLine(mess, EditorColorPair.errorMessage)
+    commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
     addMessageLog mess

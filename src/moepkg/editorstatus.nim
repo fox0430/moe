@@ -79,8 +79,8 @@ proc initEditorStatus*(): EditorStatus =
       w = 1
       t = 0
       l = 0
-      color = EditorColorPair.defaultChar
-    result.tabWindow = initWindow(h, w, t, l, color)
+      color = EditorColorPairIndex.default
+    result.tabWindow = initWindow(h, w, t, l, color.int16)
 
 template currentBufStatus*: var BufferStatus =
   mixin status
@@ -670,7 +670,7 @@ proc update*(status: var EditorStatus) =
 
   # Set editor Color Pair for current line highlight.
   # New color pairs are set to Number larger than the maximum value of EditorColorPiar.
-  var currentLineColorPair: int16 = ord(EditorColorPair.high) + 1
+  var currentLineColorPair: int = ord(EditorColorPairIndex.high) + 1
 
   var queue = initHeapQueue[WindowNode]()
   for node in mainWindowNode.child:
@@ -1043,13 +1043,16 @@ proc halfPageDown*(status: var EditorStatus) =
   status.scrollDownNumberOfLines(Natural(currentMainWindowNode.view.height / 2))
 
 proc changeTheme*(status: var EditorStatus) =
-  if status.settings.editorColorTheme == colorTheme.vscode:
-    status.settings.editorColorTheme = loadVSCodeTheme()
+  if status.settings.editorColorTheme == ColorTheme.vscode:
+    # TODO: Uncomment
+    discard
+    #status.settings.editorColorTheme = loadVSCodeTheme()
 
-  setCursesColor(colorThemeTable[status.settings.editorColorTheme])
+  initEditrorColor(ColorThemeTable[status.settings.editorColorTheme])
 
-  if checkColorSupportedTerminal() == 8:
-    convertToConsoleEnvironmentColor(status.settings.editorColorTheme)
+  # TODO: Uncomment
+  #if checkColorSupportedTerminal() == 8:
+  #  convertToConsoleEnvironmentColor(status.settings.editorColorTheme)
 
 proc autoSave(status: var EditorStatus) =
   let interval = status.settings.autoSaveInterval.minutes

@@ -1,6 +1,6 @@
 [Standard]
 
-theme = "dark"
+theme = "config"
 
 number = true
 
@@ -265,144 +265,145 @@ bufferLen = true
 
 [Theme]
 
-baseTheme = "dark"
+background = "termDefaultBg"
+foreground = "#ffffff"
 
-editorBg = "default"
-lineNum = "gray54"
-lineNumBg = "default"
-currentLineNum = "teal"
-currentLineNumBg = "default"
-# status bar
-statusLineNormalMode = "white"
-statusLineNormalModeBg = "blue"
-statusLineModeNormalMode = "black"
-statusLineModeNormalModeBg = "white"
-statusLineNormalModeInactive = "blue"
-statusLineNormalModeInactiveBg = "white"
+lineNum = "#8a8a8a"
+lineNumBg = "termDefaultBg"
 
-statusLineInsertMode = "white"
-statusLineInsertModeBg = "blue"
-statusLineModeInsertMode = "black"
-statusLineModeInsertModeBg = "white"
-statusLineInsertModeInactive = "blue"
-statusLineInsertModeInactiveBg = "white"
+currentLineNum = "#008080"
+currentLineNumBg = "termDefaultBg"
 
-statusLineVisualMode = "white"
-statusLineVisualModeBg = "blue"
-statusLineModeVisualMode = "black"
-statusLineModeVisualModeBg = "white"
-statusLineVisualModeInactive = "blue"
-statusLineVisualModeInactiveBg = "white"
+## Status bar
+statusLineNormalMode = "#ffffff"
+statusLineNormalModeBg = "#0000ff"
+statusLineModeNormalMode = "#000000"
+statusLineModeNormalModeBg = "#ffffff"
+statusLineNormalModeInactive = "#0000ff"
+statusLineNormalModeInactiveBg = "#ffffff"
 
-statusLineReplaceMode = "white"
-statusLineReplaceModeBg = "blue"
-statusLineModeReplaceMode = "black"
-statusLineModeReplaceModeBg = "white"
-statusLineReplaceModeInactive = "blue"
-statusLineReplaceModeInactiveBg = "white"
+statusLineInsertMode = "#ffffff"
+statusLineInsertModeBg = "#0000ff"
+statusLineModeInsertMode = "#000000"
+statusLineModeInsertModeBg = "#ffffff"
+statusLineInsertModeInactive = "#0000ff"
+statusLineInsertModeInactiveBg = "#ffffff"
 
-statusLineFilerMode = "white"
-statusLineFilerModeBg = "blue"
-statusLineModeFilerMode = "black"
-statusLineModeFilerModeBg = "white"
-statusLineFilerModeInactive = "blue"
-statusLineFilerModeInactiveBg = "white"
+statusLineVisualMode = "#ffffff"
+statusLineVisualModeBg = "#0000ff"
+statusLineModeVisualMode = "#000000"
+statusLineModeVisualModeBg = "#ffffff"
+statusLineVisualModeInactive = "#0000ff"
+statusLineVisualModeInactiveBg = "#ffffff"
 
-statusLineExMode = "white"
-statusLineExModeBg = "blue"
-statusLineModeExMode = "black"
-statusLineModeExModeBg = "white"
-statusLineExModeInactive = "blue"
-statusLineExModeInactiveBg = "white"
+statusLineReplaceMode = "#ffffff"
+statusLineReplaceModeBg = "#0000ff"
+statusLineModeReplaceMode = "#000000"
+statusLineModeReplaceModeBg = "#ffffff"
+statusLineReplaceModeInactive = "#0000ff"
+statusLineReplaceModeInactiveBg = "#ffffff"
 
-statusLineGitBranch = "white"
-statusLineGitBranchBg = "blue"
+statusLineFilerMode = "#ffffff"
+statusLineFilerModeBg = "#0000ff"
+statusLineModeFilerMode = "#000000"
+statusLineModeFilerModeBg = "#ffffff"
+statusLineFilerModeInactive = "#0000ff"
+statusLineFilerModeInactiveBg = "#ffffff"
+
+statusLineExMode = "#ffffff"
+statusLineExModeBg = "#0000ff"
+statusLineModeExMode = "#000000"
+statusLineModeExModeBg = "#ffffff"
+statusLineExModeInactive = "#0000ff"
+statusLineExModeInactiveBg = "#ffffff"
+
+statusLineGitBranch = "#ffffff"
+statusLineGitBranchBg = "#0000ff"
 
 # tab line
-tab = "white"
-tabBg = "default"
-currentTab = "white"
-currentTabBg = "blue"
+tab = "#ffffff"
+tabBg = "termDefaultBg"
+currentTab = "#ffffff"
+currentTabBg = "#0000ff"
 
 # command  bar
-commandBar = "gray100"
-commandBarBg = "default"
+commandBar = "#ffffff"
+commandBarBg = "termDefaultBg"
 
 # error message
-errorMessage = "red"
-errorMessageBg = "default"
+errorMessage = "#ff0000"
+errorMessageBg = "termDefaultBg"
 
 # search result highlighting
-searchResult = "default"
-searchResultBg = "red"
+searchResult = "#ffffff"
+searchResultBg = "#ff0000"
 
 # selected area in visual mode
-visualMode = "gray100"
-visualModeBg = "purple1"
+visualMode = "#ffffff"
+visualModeBg = "#800080"
 
 # color scheme
-defaultChar = "white"
-gtKeyword = "skyBlue1"
-gtFunctionName = "gold1"
-gtTypeName = "green"
-gtBoolean = "yellow"
-gtStringLit = "yellow"
-gtSpecialVar = "green"
-gtBuiltin = "yellow"
-gtBinNumber = "aqua"
-gtDecNumber = "aqua"
-gtFloatNumber = "aqua"
-gtHexNumber = "aqua"
-gtOctNumber = "aqua"
-gtComment = "gray"
-gtLongComment = "gray"
-gtWhitespace = "gray"
-gtPreprocessor = "green"
-gtPragma = "yellow"
+keyword = "#87d7ff"
+functionName = "#ffd700"
+typeName = "#008000"
+boolean = "#ffff00"
+stringLit = "#ffff00"
+specialVar = "#008000"
+builtin = "#ffff00"
+binNumber = "#00ffff"
+decNumber = "#00ffff"
+floatNumber = "#00ffff"
+hexNumber = "#00ffff"
+octNumber = "#00ffff"
+comment = "#808080"
+longComment = "#808080"
+whitespace = "#808080"
+preprocessor = "#008000"
+pragma = "#ffff00"
 
 # filer mode
-currentFile = "gray100"
-currentFileBg = "teal"
-file = "gray100"
-fileBg = "default"
-dir = "blue"
-dirBg = "default"
-pcLink = "teal"
-pcLinkBg = "default"
+currentFile = "#ffffff"
+currentFileBg = "#008080"
+file = "#ffffff"
+fileBg = "termDefaultBg"
+dir = "#0000ff"
+dirBg = "termDefaultBg"
+pcLink = "#008080"
+pcLinkBg = "termDefaultBg"
 
 # pop up window
-popupWindow = "gray100"
-popupWindowBg = "black"
-popupWinCurrentLine = "blue"
-popupWinCurrentLineBg = "black"
+popupWindow = "#ffffff"
+popupWindowBg = "#000000"
+popupWinCurrentLine = "#0000ff"
+popupWinCurrentLineBg = "#000000"
 
 # replace text highlighting
-replaceText = "default"
-replaceTextBg = "red"
+replaceText = "termDefaultBg"
+replaceTextBg = "#ff0000"
 
 # pair of paren highlighting
-parenText = "default"
-parenTextBg = "blue"
+parenText = "termDefaultBg"
+parenTextBg = "#0000ff"
 
 # highlight other uses current word
-currentWord = "default"
-currentWordBg = "gray"
+currentWord = "termDefaultBg"
+currentWordBg = "#808080"
 
 # highlight full width space
-highlightFullWidthSpace = "red"
-highlightFullWidthSpaceBg = "red"
+highlightFullWidthSpace = "#ff0000"
+highlightFullWidthSpaceBg = "#ff0000"
 
 # highlight trailing spaces
-highlightTrailingSpaces = "red"
-highlightTrailingSpacesBg = "red"
+highlightTrailingSpaces = "#ff0000"
+highlightTrailingSpacesBg = "#ff0000"
 
 # highlight reserved words
-reservedWord = "white"
-reservedWordBg = "gray"
+reservedWord = "#ffffff"
+reservedWordBg = "#808080"
 
 # configuration mode
-currentSetting = "gray100"
-currentSettingBg = "teal"
+currentSetting = "#ffffff"
+currentSettingBg = "#008080"
 
 # highlight current line background
-currentLineBg = "gray27"
+currentLineBg = "#444444"
