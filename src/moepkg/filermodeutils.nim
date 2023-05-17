@@ -251,7 +251,7 @@ proc openFileOrDir*(
         try:
           bufStatuses[bufferIndex] = initBufferStatus(path)
         except CatchableError as e:
-          return Result[(), string].err "Failed to open the file: {e.msg}"
+          return Result[(), string].err fmt"Failed to open the file: {e.msg}"
       of pcDir, pcLinkToDir:
         let currentPath = bufStatuses[bufferIndex].path
         if path == "..":
