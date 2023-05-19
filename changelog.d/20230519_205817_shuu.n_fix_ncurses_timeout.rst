@@ -1,4 +1,4 @@
-.. _#1718: https://github.com/fox0430/moe/pull/1718
+.. _#1719: https://github.com/fox0430/moe/pull/1719
 .. A new scriv changelog fragment.
 ..
 .. Uncomment the header that is right (remove the leading dots).
@@ -21,7 +21,7 @@
 Fixed
 .....
 
-- `#1718`_ Fix the default ncurses timeout
+- `#1719`_ Fix the default ncurses timeout
 
 .. Removed
 .. .......
