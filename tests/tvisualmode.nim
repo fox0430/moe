@@ -1571,6 +1571,46 @@ suite "Visual block mode: Insert buffer":
     check currentBufStatus.buffer[0] == ru"  abc"
     check currentBufStatus.buffer[1] == ru"  def"
 
+suite "Visual mode: move to the previous blank line":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"1", ru "", ru "3", ru "4"])
+
+    currentMainWindowNode.currentLine = 3
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    currentBufStatus.selectedArea = initSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.execVisualModeCommand(ru"{")
+
+    check currentMainWindowNode.currentLine == 1
+
+suite "Visual mode: move to the next blank line":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"1", ru "2", ru "", ru "4"])
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    currentBufStatus.selectedArea = initSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.execVisualModeCommand(ru"}")
+
+    check currentMainWindowNode.currentLine == 2
+
 suite "Visual mode: Run command when Readonly mode":
   test "Delete buffer (\"x\" command)":
     var status = initEditorStatus()
@@ -1783,6 +1823,46 @@ suite "Visual mode: Run command when Readonly mode":
     status.visualCommand(currentBufStatus.selectedArea, ru'I')
 
     check currentBufStatus.mode == Mode.normal
+
+suite "Visual block mode: move to the previous blank line":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"1", ru "", ru "3", ru "4"])
+
+    currentMainWindowNode.currentLine = 3
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visualBlock)
+
+    currentBufStatus.selectedArea = initSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.execVisualModeCommand(ru"{")
+
+    check currentMainWindowNode.currentLine == 1
+
+suite "Visual block mode: move to the next blank line":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"1", ru "2", ru "", ru "4"])
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visualBlock)
+
+    currentBufStatus.selectedArea = initSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    status.execVisualModeCommand(ru"}")
+
+    check currentMainWindowNode.currentLine == 2
 
 suite "Visual block mode: Run command when Readonly mode":
   test "Delete buffer (\"x\" command)":
