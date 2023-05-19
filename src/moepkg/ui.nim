@@ -113,9 +113,8 @@ proc keyEcho*(keyecho: bool) =
   if keyecho == true: echo()
   elif keyecho == false: noecho()
 
-proc setTimeout*(win: var Window) {.inline.} = win.cursesWindow.wtimeout(cint(1000)) # 500mm sec
-
-proc setTimeout*(win: var Window, time: int) {.inline.} = win.cursesWindow.wtimeout(cint(time))
+proc setTimeout*(win: var Window, time: int = 100) {.inline.} =
+  win.cursesWindow.wtimeout(cint(time))
 
 # Check how many colors are supported on the terminal
 proc checkColorSupportedTerminal*(): int =
