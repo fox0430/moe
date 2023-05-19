@@ -663,6 +663,8 @@ proc isVisualModeCommand*(command: Runes): InputState =
        c == ord('e') or
        c == ord('G') or
        c == ord('g') or
+       c == ord('{') or
+       c == ord('}') or
        c == ord('y') or isDcKey(c) or
        c == ord('x') or c == ord('d') or
        c == ord('>') or
@@ -705,6 +707,10 @@ proc execVisualModeCommand*(status: var EditorStatus, command: Runes) =
   elif key == ord('g') and command.len == 2:
     if command[1] == ord('g'):
       currentBufStatus.moveToFirstLine(currentMainWindowNode)
+  elif key == ord('{'):
+    currentBufStatus.moveToPreviousBlankLine(currentMainWindowNode)
+  elif key == ord('}'):
+    currentBufStatus.moveToNextBlankLine(currentMainWindowNode)
   else:
     if isVisualBlockMode(currentBufStatus.mode):
       status.visualBlockCommand(currentBufStatus.selectedArea, key)
