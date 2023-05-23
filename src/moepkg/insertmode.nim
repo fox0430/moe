@@ -24,6 +24,7 @@ proc exitInsertMode(status: var EditorStatus) =
   if currentMainWindowNode.currentColumn > 0:
     currentMainWindowNode.currentColumn.dec
     currentMainWindowNode.expandedColumn = currentMainWindowNode.currentColumn
+  changeCursorType(status.settings.normalModeCursor)
   status.changeMode(currentBufStatus.prevMode)
 
 proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
