@@ -1,5 +1,5 @@
 .. _#1725: https://github.com/fox0430/moe/issues/1725
-.. _#1726: https://github.com/fox0430/moe/issues/1726
+.. _#1726: https://github.com/fox0430/moe/pull/1726
 .. A new scriv changelog fragment.
 ..
 .. Uncomment the header that is right (remove the leading dots).
