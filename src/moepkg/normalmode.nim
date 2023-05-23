@@ -62,8 +62,6 @@ proc changeModeToExMode*(
     commandLine.clear
     commandLine.setPrompt(exModePrompt)
 
-
-
 proc searchOneCharacterToEndOfLine(bufStatus: var BufferStatus,
                                    windowNode: WindowNode,
                                    rune: Rune): int =
