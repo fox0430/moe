@@ -43,18 +43,22 @@ jobs:
       - name: Setup git user
         uses: fregante/setup-git-user@v2.0.1
 
-      - name: Install nightly toolchain
+      - name: Update Rust toolchain
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-          rustup install nightly
+          rustup update
 
       - name: Install aeruginous-rs
         run: |
-          cargo install --git https://github.com/kevinmatthes/aeruginous-rs
+          cargo install aeruginous
 
       - name: Create commit changes
         run: |
-          aeruginous comment-changes -d ':' -n 1 -o changelog.d/
+          aeruginous comment-changes \
+            -d : \
+            -n 1 \
+            -o changelog.d/ \
+            -l ${{ github.event.pull_request.number }} \
+            -t https://github.com/fox0430/moe/pull/${{ github.event.pull_request.number }}
           git add changelog.d/
           git commit -m 'Create summary of recent changes'
           git push
