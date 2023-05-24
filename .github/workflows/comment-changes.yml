@@ -1,0 +1,65 @@
+######################## GNU General Public License 3.0 ########################
+##                                                                            ##
+## Copyright (C) 2017─2023 Shuhei Nogawa                                      ##
+##                                                                            ##
+## This program is free software: you can redistribute it and/or modify       ##
+## it under the terms of the GNU General Public License as published by       ##
+## the Free Software Foundation, either version 3 of the License, or          ##
+## (at your option) any later version.                                        ##
+##                                                                            ##
+## This program is distributed in the hope that it will be useful,            ##
+## but WITHOUT ANY WARRANTY; without even the implied warranty of             ##
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the              ##
+## GNU General Public License for more details.                               ##
+##                                                                            ##
+## You should have received a copy of the GNU General Public License          ##
+## along with this program.  If not, see <https://www.gnu.org/licenses/>.     ##
+##                                                                            ##
+################################################################################
+
+name: comment-changes
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    name: run
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v3.5.2
+        with:
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+
+      - name: Setup git user
+        uses: fregante/setup-git-user@v2.0.1
+
+      - name: Update Rust toolchain
+        run: |
+          rustup update
+
+      - name: Install aeruginous-rs
+        run: |
+          cargo install aeruginous
+
+      - name: Create commit changes
+        run: |
+          aeruginous comment-changes \
+            -d : \
+            -n 1 \
+            -o changelog.d/ \
+            -l ${{ github.event.pull_request.number }} \
+            -t https://github.com/fox0430/moe/pull/${{ github.event.pull_request.number }}
+          git add changelog.d/
+          git commit -m 'Create summary of recent changes'
+          git push
