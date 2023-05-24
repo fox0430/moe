@@ -3,5 +3,5 @@
 Added
 .....
 
-- `#1723`_ comment-changes workflow; fixes `#1722`_
+- `#1723`_ comment-changes workflow
 
