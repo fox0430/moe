@@ -83,6 +83,8 @@ proc initEditor(): EditorStatus =
 
   disableControlC()
 
+  setBlinkingBlockCursor()
+
 proc main() =
   var status = initEditor()
 

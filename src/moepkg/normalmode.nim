@@ -168,10 +168,14 @@ proc turnOffHighlighting*(status: var EditorStatus) =
   status.isSearchHighlight = false
   status.update
 
+proc changeModeToNormalMode(status: var EditorStatus) =
+  status.changeMode(Mode.normal)
+  setBlinkingBlockCursor()
+
 proc writeFileAndExit(status: var EditorStatus) =
   if currentBufStatus.path.len == 0:
     status.commandLine.writeNoFileNameError
-    status.changeMode(Mode.normal)
+    status.changeModeToNormalMode
   else:
     try:
       saveFile(currentBufStatus.path,

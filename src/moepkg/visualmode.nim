@@ -505,6 +505,10 @@ proc insertCharBlock(
                                       c)
     windowNode.currentLine = beforeLine
 
+proc changeModeToNormalMode(status: var EditorStatus) =
+  setBlinkingBlockCursor()
+  status.changeMode(Mode.normal)
+
 proc exitVisualMode(status: var EditorStatus) =
     var highlight = currentMainWindowNode.highlight
     highlight.updateHighlight(
@@ -514,7 +518,7 @@ proc exitVisualMode(status: var EditorStatus) =
       status.searchHistory,
       status.settings)
 
-    status.changeMode(Mode.normal)
+    status.changeModeToNormalMode
 
 proc visualCommand(
   status: var EditorStatus,
