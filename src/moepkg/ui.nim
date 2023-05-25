@@ -82,7 +82,7 @@ proc getTerminalHeight*(): int = terminalSize.h
 
 proc getTerminalWidth*(): int = terminalSize.w
 
-proc setBkinkingIbeamCursor*() {.inline.} =
+proc setBlinkingIbeamCursor*() {.inline.} =
   when not defined unitTest:
     # Don't change when running unit tests
     discard execShellCmd("printf '\e[5 q'")
