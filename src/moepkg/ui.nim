@@ -117,7 +117,7 @@ proc changeCursorType*(cursorType: CursorType) =
     of terminalDefault: setTerminalDefaultCursor()
     of blinkBlock: setBlinkingBlockCursor()
     of noneBlinkBlock: setNoneBlinkingBlockCursor()
-    of blinkIbeam: setBkinkingIbeamCursor()
+    of blinkIbeam: setBlinkingIbeamCursor()
     of noneBlinkIbeam: setNoneBlinkingIbeamCursor()
 
 proc disableControlC*() {.inline.} =
