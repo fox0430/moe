@@ -40,6 +40,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.head_ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
 
       - name: Setup git user
         uses: fregante/setup-git-user@v2.0.1
@@ -58,8 +59,9 @@ jobs:
             -d : \
             -n 1 \
             -o changelog.d/ \
-            -l ${{ github.event.pull_request.number }} \
-            -t https://github.com/fox0430/moe/pull/${{ github.event.pull_request.number }}
+            -l \#${{ github.event.pull_request.number }} \
+            -t https://github.com/fox0430/moe/pull/${{ github.event.pull_request.number }} \
+            -c Added -c Changed -c Deprecated -c Fixed -c Removed -c Security
           git add changelog.d/
           git commit -m 'Create summary of recent changes'
           git push
