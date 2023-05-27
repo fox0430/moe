@@ -57,11 +57,11 @@ jobs:
         run: |
           aeruginous comment-changes \
             -d : \
+            -k \
             -n 1 \
             -o changelog.d/ \
             -l \#${{ github.event.pull_request.number }} \
-            -t https://github.com/fox0430/moe/pull/${{ github.event.pull_request.number }} \
-            -c Added -c Changed -c Deprecated -c Fixed -c Removed -c Security
+            -t https://github.com/fox0430/moe/pull/${{ github.event.pull_request.number }}
           git add changelog.d/
           git commit -m 'Create summary of recent changes'
           git push
