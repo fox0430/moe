@@ -252,7 +252,7 @@ proc deleteIndent(
 
     windowNode.currentLine = area.startLine
     for i in area.startLine .. area.endLine:
-      deleteIndent(bufStatus, windowNode, tabStop)
+      bufStatus.unindent(windowNode, tabStop)
       inc(windowNode.currentLine)
 
     windowNode.currentLine = area.startLine
