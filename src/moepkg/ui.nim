@@ -17,12 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, osproc, strutils, os, terminal]
+import std/[strformat, osproc, strutils, terminal]
 import pkg/ncurses
 import unicodeext, color, independentutils
 
 when not defined unitTest:
-  import std/posix
+  import std/[posix, os]
 
 type
   Attribute* = enum
@@ -39,10 +39,11 @@ type
     #chartext = A_CHAR_TEXT
 
   CursorType* = enum
-    blinkBlock = 0
-    noneBlinkBlock = 1
-    blinkIbeam = 2
-    noneBlinkIbeam = 3
+    terminalDefault
+    blinkBlock
+    noneBlinkBlock
+    blinkIbeam
+    noneBlinkIbeam
 
   Window* = ref object
     cursesWindow*: PWindow
@@ -81,22 +82,43 @@ proc getTerminalHeight*(): int = terminalSize.h
 
 proc getTerminalWidth*(): int = terminalSize.w
 
-proc setBkinkingIbeamCursor*() {.inline.} = discard execShellCmd("printf '\e[5 q'")
+proc setBlinkingIbeamCursor*() {.inline.} =
+  when not defined unitTest:
+    # Don't change when running unit tests
+    discard execShellCmd("printf '\e[5 q'")
 
-proc setNoneBlinkingIbeamCursor*() {.inline.} = discard execShellCmd("printf '\e[6 q'")
+proc setNoneBlinkingIbeamCursor*() {.inline.} =
+  when not defined unitTest:
+    # Don't change when running unit tests
+    discard execShellCmd("printf '\e[6 q'")
 
-proc setBlinkingBlockCursor*() {.inline.} = discard execShellCmd("printf '\e[1 q'")
+proc setBlinkingBlockCursor*() {.inline.} =
+  when not defined unitTest:
+    # Don't change when running unit tests
+    discard execShellCmd("printf '\e[1 q'")
 
-proc setNoneBlinkingBlockCursor*() {.inline.} = discard execShellCmd("printf '\e[2 q'")
+proc setNoneBlinkingBlockCursor*() {.inline.} =
+  when not defined unitTest:
+    # Don't change when running unit tests
+    discard execShellCmd("printf '\e[2 q'")
 
-proc unhideCursor*() {.inline.} = discard execShellCmd("printf '\e[?25h'")
+proc setTerminalDefaultCursor*() {.inline.} =
+  when not defined unitTest:
+    # Don't change when running unit tests
+    discard execShellCmd("printf '\x1B[0 q'")
+
+proc unhideCursor*() {.inline.} =
+  when not defined unitTest:
+    # Don't change when running unit tests
+    discard execShellCmd("printf '\e[?25h'")
 
 proc changeCursorType*(cursorType: CursorType) =
   case cursorType
-  of blinkBlock: setBlinkingBlockCursor()
-  of noneBlinkBlock: setNoneBlinkingBlockCursor()
-  of blinkIbeam: setBkinkingIbeamCursor()
-  of noneBlinkIbeam: setNoneBlinkingIbeamCursor()
+    of terminalDefault: setTerminalDefaultCursor()
+    of blinkBlock: setBlinkingBlockCursor()
+    of noneBlinkBlock: setNoneBlinkingBlockCursor()
+    of blinkIbeam: setBlinkingIbeamCursor()
+    of noneBlinkIbeam: setNoneBlinkingIbeamCursor()
 
 proc disableControlC*() {.inline.} =
   setControlCHook(proc() {.noconv.} = pressCtrlC = true)

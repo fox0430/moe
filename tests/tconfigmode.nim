@@ -51,7 +51,7 @@ suite "Config mode: Init buffer":
                      ru "  ignorecase                     true",
                      ru "  smartcase                      true",
                      ru "  disableChangeCursor            false",
-                     ru "  defaultCursor                  blinkBlock",
+                     ru "  defaultCursor                  terminalDefault",
                      ru "  normalModeCursor               blinkBlock",
                      ru "  insertModeCursor               blinkIbeam",
                      ru "  autoSave                       false",
@@ -504,8 +504,12 @@ suite "Config mode: Get standard table setting values":
     const name = "defaultCursor"
     let values = settings.getStandardTableSettingValues(name)
 
-    check values == @[ru "blinkBlock", ru "noneBlinkBlock", ru "blinkIbeam",
-                      ru "noneBlinkIbeam"]
+    check values == @[
+      ru"terminalDefault",
+      ru"blinkBlock",
+      ru"noneBlinkBlock",
+      ru"blinkIbeam",
+      ru"noneBlinkIbeam"]
 
   test "Get normalModeCursor values":
     var status = initEditorStatus()
@@ -514,8 +518,12 @@ suite "Config mode: Get standard table setting values":
     const name ="normalModeCursor"
     let values = settings.getStandardTableSettingValues(name)
 
-    check values == @[ru "blinkBlock", ru "noneBlinkBlock", ru "blinkIbeam",
-                      ru "noneBlinkIbeam"]
+    check values == @[
+      ru"blinkBlock",
+      ru"terminalDefault",
+      ru"noneBlinkBlock",
+      ru"blinkIbeam",
+      ru"noneBlinkIbeam"]
 
   test "Get insertModeCursor values":
     var status = initEditorStatus()
@@ -524,8 +532,12 @@ suite "Config mode: Get standard table setting values":
     const name = "insertModeCursor"
     let values = settings.getStandardTableSettingValues(name)
 
-    check values == @[ru "blinkIbeam", ru "blinkBlock", ru "noneBlinkBlock",
-                      ru "noneBlinkIbeam"]
+    check values == @[
+      ru"blinkIbeam",
+      ru"terminalDefault",
+      ru"blinkBlock",
+      ru"noneBlinkBlock",
+      ru"noneBlinkIbeam"]
 
   test "Get number values":
     var status = initEditorStatus()

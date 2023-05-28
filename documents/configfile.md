@@ -87,19 +87,19 @@ default is false
 disableChangeCursor
 ```
 
-Set cursor shape of the terminal emulator you are using (String) ```"blinkBlock"``` or ```"blinkIbeam"``` or ```noneBlinkBlock``` or ```noneBlinkIbeam```  
-default is ```"blinkBlock"```
+Set cursor shape of the terminal emulator you are using (String) ```"terminalDefault"``` or ```"blinkBlock"``` or ```"blinkIbeam"``` or ```noneBlinkBlock``` or ```noneBlinkIbeam```  
+default is ```"terminalDefault"```
 ```
 defaultCursor
 ```
 
-Set cursor shape in normal mode (String) ```"blinkBlock"``` or ```"blinkIbeam"``` or ```noneBlinkBlock``` or ```noneBlinkIbeam```  
+Set cursor shape in normal mode (String) ```"terminalDefault"``` or ```"blinkBlock"``` or ```"blinkIbeam"``` or ```noneBlinkBlock``` or ```noneBlinkIbeam```  
 default is ```"blinkBlock"```
 ```
 normalModeCursor
 ```
 
-Set cursor shape in insert mode (String) ```"blinkBlock"``` or ```"blinkIbeam"``` or ```noneBlinkBlock``` or ```noneBlinkIbeam```  
+Set cursor shape in insert mode (String) ```"terminalDefault"``` or ```"blinkBlock"``` or ```"blinkIbeam"``` or ```noneBlinkBlock``` or ```noneBlinkIbeam```  
 default is ```"blinkIbeam"```
 
 ```
