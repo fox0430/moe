@@ -711,7 +711,7 @@ proc addIndent*(bufStatus: var BufferStatus,
     inc(bufStatus.countChange)
   bufStatus.isUpdate = true
 
-## Remove an indent in the current line.
+## Unindent in the current line.
 proc unindent*(
   bufStatus: var BufferStatus,
   windowNode: WindowNode,
