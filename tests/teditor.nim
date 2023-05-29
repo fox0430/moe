@@ -2112,3 +2112,199 @@ suite "Editor: Open the blank line abave":
   block:
     const keyword = ":"
     openLineAboveTestCase5(keyword)
+
+suite "Editor: Unindent":
+  block:
+    # Generate test code
+    # Unindenet with a only spaces buffer in some languages
+    # Run at first of line.
+    macro unindentTestCase1(lang: SourceLanguage): untyped =
+      quote do:
+        # Generate test title
+        let
+          langStr = sourceLangToStr(`lang`)
+          testTitle = "Case 1: Unindenet in " & langStr
+
+        # Generate test code
+        test testTitle:
+          var status = initEditorStatus()
+          status.addNewBufferInCurrentWin
+
+          const buffer = @[ru"  "]
+          status.bufStatus[0].buffer = initGapBuffer(buffer)
+          status.bufStatus[0].language = `lang`
+
+          status.bufStatus[0].unindent(
+            status.mainWindow.currentMainWindowNode,
+            status.settings.tabStop)
+
+          let
+            currentBufStatus = status.bufStatus[0]
+            currentMainWindowNode = status.mainWindow.currentMainWindowNode
+
+          check currentBufStatus.buffer.len == 1
+          check currentBufStatus.buffer[0] == ru""
+
+          check currentMainWindowNode.currentLine == 0
+          check currentMainWindowNode.currentColumn == 0
+
+    for l in SourceLanguage:
+      # Generate test code by macro
+      unindentTestCase1(l)
+
+  block:
+    # Generate test code
+    # Unindenet with a only spaces buffer in some languages
+    # Run at end of line.
+    macro unindentTestCase2(lang: SourceLanguage): untyped =
+      quote do:
+        # Generate test title
+        let
+          langStr = sourceLangToStr(`lang`)
+          testTitle = "Case 2: Unindenet in " & langStr
+
+        # Generate test code
+        test testTitle:
+          var status = initEditorStatus()
+          status.addNewBufferInCurrentWin
+
+          const buffer = @[ru"  "]
+          status.bufStatus[0].buffer = initGapBuffer(buffer)
+          status.bufStatus[0].language = `lang`
+
+          status.mainWindow.currentMainWindowNode.currentColumn = buffer[0].high
+
+          status.bufStatus[0].unindent(
+            status.mainWindow.currentMainWindowNode,
+            status.settings.tabStop)
+
+          let
+            currentBufStatus = status.bufStatus[0]
+            currentMainWindowNode = status.mainWindow.currentMainWindowNode
+
+          check currentBufStatus.buffer.len == 1
+          check currentBufStatus.buffer[0] == ru""
+
+          check currentMainWindowNode.currentLine == 0
+          check currentMainWindowNode.currentColumn == 0
+
+    for l in SourceLanguage:
+      # Generate test code by macro
+      unindentTestCase2(l)
+
+  block:
+    # Generate test code
+    # Unindenet in some languages
+    macro unindentTestCase3(lang: SourceLanguage): untyped =
+      quote do:
+        # Generate test title
+        let
+          langStr = sourceLangToStr(`lang`)
+          testTitle = "Case 3: Unindenet in " & langStr
+
+        # Generate test code
+        test testTitle:
+          var status = initEditorStatus()
+          status.addNewBufferInCurrentWin
+
+          const buffer = @[ru"  test"]
+          status.bufStatus[0].buffer = initGapBuffer(buffer)
+          status.bufStatus[0].language = `lang`
+
+          status.mainWindow.currentMainWindowNode.currentColumn = buffer[0].high
+
+          status.bufStatus[0].unindent(
+            status.mainWindow.currentMainWindowNode,
+            status.settings.tabStop)
+
+          let
+            currentBufStatus = status.bufStatus[0]
+            currentMainWindowNode = status.mainWindow.currentMainWindowNode
+
+          check currentBufStatus.buffer.len == 1
+          check currentBufStatus.buffer[0] == ru"test"
+
+          check currentMainWindowNode.currentLine == 0
+          check currentMainWindowNode.currentColumn == 3
+
+    for l in SourceLanguage:
+      # Generate test code by macro
+      unindentTestCase3(l)
+
+  block:
+    # Generate test code
+    # Nothing to do in the empty line.
+    macro unindentTestCase4(lang: SourceLanguage): untyped =
+      quote do:
+        # Generate test title
+        let
+          langStr = sourceLangToStr(`lang`)
+          testTitle = "Case 4: Unindenet in " & langStr
+
+        # Generate test code
+        test testTitle:
+          var status = initEditorStatus()
+          status.addNewBufferInCurrentWin
+
+          const buffer = @[ru""]
+          status.bufStatus[0].buffer = initGapBuffer(buffer)
+          status.bufStatus[0].language = `lang`
+
+          status.bufStatus[0].unindent(
+            status.mainWindow.currentMainWindowNode,
+            status.settings.tabStop)
+
+          let
+            currentBufStatus = status.bufStatus[0]
+            currentMainWindowNode = status.mainWindow.currentMainWindowNode
+
+          check currentBufStatus.buffer.len == 1
+          check currentBufStatus.buffer[0].len == 0
+
+          check currentMainWindowNode.currentLine == 0
+          check currentMainWindowNode.currentColumn == 0
+
+    for l in SourceLanguage:
+      # Generate test code by macro
+      unindentTestCase4(l)
+
+  block:
+    # Generate test code
+    # Nothing to do in the empty line.
+    macro unindentTestCase5(lang: SourceLanguage): untyped =
+      quote do:
+        # Generate test title
+        let
+          langStr = sourceLangToStr(`lang`)
+          testTitle = "Case 5: Unindenet in " & langStr
+
+        # Generate test code
+        test testTitle:
+          var status = initEditorStatus()
+          status.addNewBufferInCurrentWin
+
+          const buffer = @[ru"  ", ru"", ru"  "]
+          status.bufStatus[0].buffer = initGapBuffer(buffer)
+          status.bufStatus[0].language = `lang`
+
+          status.mainWindow.currentMainWindowNode.currentLine = 1
+
+          status.bufStatus[0].unindent(
+            status.mainWindow.currentMainWindowNode,
+            status.settings.tabStop)
+
+          let
+            currentBufStatus = status.bufStatus[0]
+            currentMainWindowNode = status.mainWindow.currentMainWindowNode
+
+          check currentBufStatus.buffer.len == 3
+          check currentBufStatus.buffer[0] == ru"  "
+          check currentBufStatus.buffer[1] == ru""
+          check currentBufStatus.buffer[2] == ru"  "
+
+          check currentMainWindowNode.currentLine == 1
+          check currentMainWindowNode.currentColumn == 0
+
+    for l in SourceLanguage:
+      # Generate test code by macro
+      unindentTestCase5(l)

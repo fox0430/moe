@@ -1283,7 +1283,7 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
       currentBufStatus.addIndent(currentMainWindowNode, status.settings.tabStop)
   elif key == ord('<'):
     for i in 0 ..< cmdLoop:
-      currentBufStatus.deleteIndent(currentMainWindowNode, status.settings.tabStop)
+      currentBufStatus.unindent(currentMainWindowNode, status.settings.tabStop)
   elif key == ord('='):
     let secondKey = commands[1]
     if secondKey == ord('='):
