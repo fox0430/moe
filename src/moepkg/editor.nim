@@ -692,24 +692,27 @@ proc countSpaceOfBeginningOfLine(line: seq[Rune]): int =
     if r != ru' ': break
     else: result.inc
 
-proc addIndent*(bufStatus: var BufferStatus,
-                windowNode: WindowNode,
-                tabStop: int) =
+## Indent in the current line.
+proc indent*(
+  bufStatus: var BufferStatus,
+  windowNode: WindowNode,
+  tabStop: int) =
 
-  let oldLine = bufStatus.buffer[windowNode.currentLine]
-  var newLine = bufStatus.buffer[windowNode.currentLine]
+    let oldLine = bufStatus.buffer[windowNode.currentLine]
+    var newLine = bufStatus.buffer[windowNode.currentLine]
 
-  let
-    numOfSpace = countSpaceOfBeginningOfLine(oldLine)
-    numOfInsertSpace = if numOfSpace mod tabStop != 0: numOfSpace mod tabStop
-                       else: tabStop
+    let
+      numOfSpace = countSpaceOfBeginningOfLine(oldLine)
+      numOfInsertSpace =
+        if numOfSpace mod tabStop != 0: numOfSpace mod tabStop
+        else: tabStop
 
-  newLine.insert(newSeqWith(numOfInsertSpace, ru' '), 0)
-  if oldLine != newLine:
-    bufStatus.buffer[windowNode.currentLine] = newLine
-    windowNode.currentColumn = 0
-    inc(bufStatus.countChange)
-  bufStatus.isUpdate = true
+    newLine.insert(newSeqWith(numOfInsertSpace, ru' '), 0)
+    if oldLine != newLine:
+      bufStatus.buffer[windowNode.currentLine] = newLine
+      inc(bufStatus.countChange)
+
+    bufStatus.isUpdate = true
 
 ## Unindent in the current line.
 proc unindent*(
@@ -761,24 +764,26 @@ proc deleteCharactersBeforeCursorInCurrentLine*(bufStatus: var BufferStatus,
 
   if newLine != oldLine: bufStatus.buffer[currentLine] = newLine
 
-proc addIndentInCurrentLine*(bufStatus: var BufferStatus,
-                             windowNode: WindowNode,
-                             tabStop: int) =
+proc indentInCurrentLine*(
+  bufStatus: var BufferStatus,
+  windowNode: WindowNode,
+  tabStop: int) =
 
-  bufStatus.addIndent(windowNode, tabStop)
-  windowNode.currentColumn += tabStop
+    bufStatus.indent(windowNode, tabStop)
+    windowNode.currentColumn += tabStop
 
-proc deleteIndentInCurrentLine*(bufStatus: var BufferStatus,
-                                windowNode: WindowNode,
-                                tabStop: int) =
+proc unIndentInCurrentLine*(
+  bufStatus: var BufferStatus,
+  windowNode: WindowNode,
+  tabStop: int) =
 
-  let oldLine = bufStatus.buffer[windowNode.currentLine]
+    let oldLine = bufStatus.buffer[windowNode.currentLine]
 
-  bufStatus.unindent(windowNode, tabStop)
+    bufStatus.unindent(windowNode, tabStop)
 
-  if oldLine != bufStatus.buffer[windowNode.currentLine] and
-     windowNode.currentColumn >= tabStop:
-    windowNode.currentColumn -= tabStop
+    if oldLine != bufStatus.buffer[windowNode.currentLine] and
+       windowNode.currentColumn >= tabStop:
+      windowNode.currentColumn -= tabStop
 
 proc deleteCharacter*(bufStatus: var BufferStatus,
                       line, colmun: int,

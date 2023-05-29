@@ -91,11 +91,11 @@ proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
     currentBufStatus.deleteCharactersBeforeCursorInCurrentLine(
       currentMainWindowNode)
   elif isControlT(key):
-    currentBufStatus.addIndentInCurrentLine(
+    currentBufStatus.indentInCurrentLine(
       currentMainWindowNode,
       status.settings.view.tabStop)
   elif isControlD(key):
-    currentBufStatus.deleteIndentInCurrentLine(
+    currentBufStatus.unindentInCurrentLine(
       currentMainWindowNode,
       status.settings.view.tabStop)
   else:

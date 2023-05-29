@@ -234,7 +234,7 @@ proc addIndent(
 
     windowNode.currentLine = area.startLine
     for i in area.startLine .. area.endLine:
-      bufStatus.addIndent(windowNode, tabStop)
+      bufStatus.indent(windowNode, tabStop)
       inc(windowNode.currentLine)
 
     windowNode.currentLine = area.startLine

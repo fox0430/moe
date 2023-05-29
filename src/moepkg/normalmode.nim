@@ -1280,7 +1280,7 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
     status.pasteBeforeCursor
   elif key == ord('>'):
     for i in 0 ..< cmdLoop:
-      currentBufStatus.addIndent(currentMainWindowNode, status.settings.tabStop)
+      currentBufStatus.indent(currentMainWindowNode, status.settings.tabStop)
   elif key == ord('<'):
     for i in 0 ..< cmdLoop:
       currentBufStatus.unindent(currentMainWindowNode, status.settings.tabStop)
