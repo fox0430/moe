@@ -50,8 +50,10 @@ jobs:
           rustup update
 
       - name: Install aeruginous-rs
-        run: |
-          cargo install aeruginous
+        uses: baptiste0928/cargo-install@v2
+        with:
+          crate: aeruginous
+          version: "^1.1.2"
 
       - name: Create commit changes
         run: |
