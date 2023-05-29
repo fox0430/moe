@@ -214,7 +214,7 @@ suite "Insert mode":
     status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
-    status.bufStatus[0].addIndentInCurrentLine(
+    status.bufStatus[0].indentInCurrentLine(
       currentMainWindowNode,
       status.settings.view.tabStop)
 
@@ -223,12 +223,12 @@ suite "Insert mode":
 
     check(currentMainWindowNode.currentColumn == 2)
 
-  test "Add indent in current line 2":
+  test "Indent in current line 2":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru" abc"])
 
-    status.bufStatus[0].addIndentInCurrentLine(
+    status.bufStatus[0].indentInCurrentLine(
       currentMainWindowNode,
       status.settings.view.tabStop)
 
@@ -237,12 +237,12 @@ suite "Insert mode":
 
     check(currentMainWindowNode.currentColumn == 2)
 
-  test "Delete indent in current line 1":
+  test "Unindent in current line 1":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc"])
 
-    status.bufStatus[0].deleteIndentInCurrentLine(
+    status.bufStatus[0].unindentInCurrentLine(
       currentMainWindowNode,
       status.settings.view.tabStop)
 
@@ -256,7 +256,7 @@ suite "Insert mode":
     status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
-    status.bufStatus[0].deleteIndentInCurrentLine(
+    status.bufStatus[0].unindentInCurrentLine(
       currentMainWindowNode,
       status.settings.view.tabStop)
 
@@ -270,7 +270,7 @@ suite "Insert mode":
     status.addNewBufferInCurrentWin
     status.bufStatus[0].buffer = initGapBuffer(@[ru"   abc"])
 
-    status.bufStatus[0].deleteIndentInCurrentLine(
+    status.bufStatus[0].unindentInCurrentLine(
       currentMainWindowNode,
       status.settings.view.tabStop)
 
