@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[strformat, strutils, osproc, os]
-import unicodeext
+import unicodeext, independentutils
 
 type
   OperationType* = enum
@@ -141,4 +141,4 @@ proc isTrackingByGit*(path: string): bool =
 
 ## Return true if git command is available.
 proc isGitAvailable*(): bool {.inline.} =
-  if execCmd("git -v") == 0: return true
+  if execCmdExNoOutput("git -v") == 0: return true
