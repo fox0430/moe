@@ -17,8 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, json, macros, times, options, strformat, osproc,
-            strutils]
+import std/[os, json, macros, options, strformat, osproc, strutils]
 import pkg/[parsetoml, results]
 import ui, color, unicodeext, highlight, platform, independentutils
 
@@ -430,438 +429,620 @@ proc initEditorSettings*(): EditorSettings =
   result.syntaxChecker = initSyntaxCheckerSettings()
 
 proc getTheme(theme: string): ColorTheme =
-  if theme == "vivid": return ColorTheme.vivid
-  elif theme == "light": return ColorTheme.light
-  elif theme == "config": return ColorTheme.config
-  elif theme == "vscode": return ColorTheme.vscode
-  else: return ColorTheme.dark
+  # TODO: Return the Result type.
 
-# This macro takes statement lists for the foreground and
-# background colors of a foreground/background color setting.
-# these statements are supposed to set the color, and
-# the first statement that doesn't result in Color.default
-# will be used. Color.default will only be used when there's
-# no success at all.
-# Finally adjusts can be used to generate a suitable color.
-# adjusts:
-#   InverseBackground    - inversing the background color
-#   InverseForeground    - inversing the foreground color
-#   ReadableVsBackground - adjusts foreground to be readable
-#macro setEditorColor(args: varargs[untyped]): untyped =
-#  let colorNameIdent           = args[0]
-#  let colorNameBackgroundIdent = ident(colorNameIdent.strVal & "Bg")
-#  let resultIdent              = ident"result"
-#  let fgColorIdent             = genSym(nskVar, "fgColor")
-#  let bgColorIdent             = genSym(nskVar, "bgColor")
-#  let stmtList                 = args[^1]
-#  let fgStmtList               = stmtList[0][^1]
-#  let bgStmtList               = stmtList[^1][^1]
-#  var setFgColor               : NimNode = quote do: discard
-#  var setBgColor               : NimNode = quote do: discard
-#  var fgDynamicAdjust          : NimNode = quote do: discard
-#  var bgDynamicAdjust          : NimNode = quote do: discard
-#  var assignColors             : NimNode = quote do: discard
-#  var fallbackInverseBg        : NimNode = quote do:
-#    if (`fgColorIdent` == Color.default and
-#        `bgColorIdent` != Color.default):
-#      `fgColorIdent` = inverseColor(`bgColorIdent`)
-#  var fallbackInverseFg        : NimNode = quote do:
-#    if (`fgColorIdent` != Color.default and
-#        `bgColorIdent` == Color.default):
-#      `bgColorIdent` = inverseColor(`fgColorIdent`)
-#  var readableVsBackground     : NimNode = quote do:
-#    `fgColorIdent` = readableOnBackground(`fgColorIdent`, `bgColorIdent`)
-#  for statement in fgStmtList:
-#    if (statement.kind == nnkCall and statement[0].kind == nnkIdent and
-#        statement[0].strVal() == "adjust"):
-#        let adjust = statement[^1][0].strVal()
-#        case adjust
-#        of "InverseBackground":
-#          fgDynamicAdjust = quote do:
-#            `fgDynamicAdjust`
-#            `fallbackInverseBg`
-#        of "ReadableVsBackground":
-#          fgDynamicAdjust = quote do:
-#            `fgDynamicAdjust`
-#            `readableVsBackground`
-#        else: discard
-#    else:
-#      setFgColor = quote do:
-#        `setFgColor`
-#        if `fgColorIdent` == Color.default:
-#          `fgColorIdent` = `statement`
-#  for statement in bgStmtList:
-#    setBgColor = quote do:
-#      `setBgColor`
-#      if `bgColorIdent` == Color.default:
-#        `bgColorIdent` = `statement`
-#  if stmtList[0][0].strVal() == stmtList[^1][0].strVal():
-#    # they are the same => there's only one
-#    setBgColor = quote do: discard
-#    #fgDynamicAdjust = quote do: discard
-#    #bgDynamicAdjust = quote do: discard
-#    assignColors    = quote do:
-#      `resultIdent`.`colorNameIdent`           = `fgColorIdent`
-#  else:
-#    assignColors    = quote do:
-#      `resultIdent`.`colorNameIdent`           = `fgColorIdent`
-#      `resultIdent`.`colorNameBackgroundIdent` = `bgColorIdent`
+  case theme:
+    of "vivid": ColorTheme.vivid
+    of "light": ColorTheme.light
+    of "config": ColorTheme.config
+    of "vscode": ColorTheme.vscode
+    else:
+      # TODO: Return an error
+      return ColorTheme.dark
+
+proc colorFromNode(node: JsonNode): Rgb =
+  if node == nil:
+    return TerminalDefaultRgb
+
+  var asString = node.getStr()
+  if asString.len() >= 7 and asString[0] == '#':
+    return asString[1 .. asString.high].hexToRgb.get
+  else:
+    return TerminalDefaultRgb
+
+proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): EditorColorPair =
+  # TODO: Add error handling and return the Result type.
+  # TODO: Fixes preprocessor and pragma colors.
+
+  var tokenNodes = initTable[string, JsonNode]()
+  for node in jsonNode{"tokenColors"}:
+    var scope = node{"scope"}
+    let settings = node{"settings"}
+    if scope == nil:
+      scope = parseJson("\"unnamedScope\"")
+    if settings == nil:
+      continue
+    if scope.len() > 0:
+      for item in scope:
+        tokenNodes[item.getStr()] = settings
+    else:
+      tokenNodes[scope.getStr()] = settings
+
+  proc getScope(key: string): JsonNode =
+    if tokenNodes.hasKey(key):
+      return tokenNodes[key]
+    else:
+      # Convenience
+      return JsonNode.default()
+
+  # The base theme is dark
+  result = DarkTheme
+
+  block colorScheme:
+    result.default = ColorPair(
+      index: EditorColorPairIndex.default,
+        foreground: Color(
+          index: EditorColorIndex.foreground,
+          rgb: colorFromNode(jsonNode{"colors", "editor.foreground"})),
+        background: Color(
+          index: EditorColorIndex.background,
+          rgb: colorFromNode(jsonNode{"colors", "editor.background"})))
+
+    result.keyword = ColorPair(
+      index: EditorColorPairIndex.keyword,
+      foreground: Color(
+        index: EditorColorIndex.keyword,
+        rgb: colorFromNode(getScope("keyword"){"foreground"})),
+      background: Color(
+        index: EditorColorIndex.keywordBg,
+        rgb: colorFromNode(jsonNode{"colors", "editor.background"})))
+
+    result.functionName = ColorPair(
+      index: EditorColorPairIndex.functionName,
+      foreground: Color(
+        index: EditorColorIndex.functionName,
+        rgb: colorFromNode(getScope("entity"){"foreground"})),
+      background: Color(
+        index: EditorColorIndex.functionNameBg,
+        rgb: TerminalDefaultRgb))
+
+    result.typeName = ColorPair(
+      index: EditorColorPairIndex.typeName,
+      foreground: Color(
+        index: EditorColorIndex.typeName,
+        rgb: colorFromNode(getScope("entity"){"foreground"})),
+      background: Color(
+        index: EditorColorIndex.typeNameBg,
+        rgb: TerminalDefaultRgb))
+
+    result.boolean = ColorPair(
+      index: EditorColorPairIndex.boolean,
+      foreground: Color(
+        index: EditorColorIndex.boolean,
+        rgb: colorFromNode(getScope("entity"){"foreground"})),
+      background: Color(
+        index: EditorColorIndex.booleanBg,
+        rgb: TerminalDefaultRgb))
+
+    result.stringLit = ColorPair(
+      index: EditorColorPairIndex.stringLit,
+      foreground: Color(
+        index: EditorColorIndex.stringLit,
+        rgb: colorFromNode(getScope("string"){"foreground"})),
+      background: Color(
+        index: EditorColorIndex.stringLitBg,
+        rgb: TerminalDefaultRgb))
+
+    result.specialVar = ColorPair(
+      index: EditorColorPairIndex.specialVar,
+      foreground: Color(
+        index: EditorColorIndex.specialVar,
+        rgb: colorFromNode(getScope("variable"){"foreground"})),
+      background: Color(
+        index: EditorColorIndex.specialVarBg,
+        rgb: TerminalDefaultRgb))
+
+    result.builtin = ColorPair(
+      index: EditorColorPairIndex.builtin,
+      foreground: Color(
+        index: EditorColorIndex.builtin,
+        rgb: colorFromNode(getScope("entity"){"foreground"})),
+      background: Color(
+        index: EditorColorIndex.builtinBg,
+        rgb: TerminalDefaultRgb))
+
+    result.binNumber = ColorPair(
+      index: EditorColorPairIndex.binNumber,
+      foreground: Color(
+        index: EditorColorIndex.binNumber,
+        rgb: colorFromNode(getScope("constant"){"foreground"})),
+      background: Color(
+        index: EditorColorIndex.binNumberBg,
+        rgb: TerminalDefaultRgb))
+
+    result.decNumber = ColorPair(
+      index: EditorColorPairIndex.decNumber,
+      foreground: Color(
+        index: EditorColorIndex.decNumber,
+        rgb: colorFromNode(getScope("constant"){"foreground"})),
+      background: Color(
+        index: EditorColorIndex.decNumber,
+        rgb: TerminalDefaultRgb))
+
+    result.floatNumber = ColorPair(
+      index: EditorColorPairIndex.floatNumber,
+      foreground: Color(
+        index: EditorColorIndex.floatNumber,
+        rgb: colorFromNode(getScope("constant"){"foreground"})),
+      background: Color(
+        index: EditorColorIndex.floatNumberBg,
+        rgb: TerminalDefaultRgb))
+
+    result.hexNumber = ColorPair(
+      index: EditorColorPairIndex.hexNumber,
+      foreground: Color(
+        index: EditorColorIndex.hexNumber,
+        rgb: colorFromNode(getScope("constant"){"foreground"})),
+      background: Color(
+        index: EditorColorIndex.hexNumberBg,
+        rgb: TerminalDefaultRgb))
+
+    result.octNumber = ColorPair(
+      index: EditorColorPairIndex.octNumber,
+      foreground: Color(
+        index: EditorColorIndex.octNumber,
+        rgb: colorFromNode(getScope("constant"){"foreground"})),
+      background: Color(
+        index: EditorColorIndex.octNumber,
+        rgb: TerminalDefaultRgb))
+
+    result.comment = ColorPair(
+      index: EditorColorPairIndex.comment,
+      foreground: Color(
+        index: EditorColorIndex.comment,
+        rgb: colorFromNode(getScope("comment"){"foreground"})),
+      background: Color(
+        index: EditorColorIndex.commentBg,
+        rgb: TerminalDefaultRgb))
+
+    result.longComment = ColorPair(
+      index: EditorColorPairIndex.longComment,
+      foreground: Color(
+        index: EditorColorIndex.longComment,
+        rgb: colorFromNode(getScope("comment"){"foreground"})),
+      background: Color(
+        index: EditorColorIndex.longComment,
+        rgb: TerminalDefaultRgb))
+
+    result.whitespace = ColorPair(
+      index: EditorColorPairIndex.whitespace,
+      foreground: Color(
+        index: EditorColorIndex.whitespace,
+        rgb: colorFromNode(jsonNode{"colors", "editorWhitespace.foreground"})),
+      background: Color(
+        index: EditorColorIndex.whitespaceBg,
+        rgb: TerminalDefaultRgb))
+
+# TODO: VSCodeTheme: Enable preprocessor and pragma color
+#  result.preprocessor = ColorPair(
+#    index: EditorColorPairIndex.preprocessor,
+#    foreground: Color(
+#      index: EditorColorIndex.preprocessor,
+#      rgb: ),
+#    background: Color(
+#      index: EditorColorIndex.preprocessorBg,
+#      rgb: TerminalDefaultRgb))
 #
-#  return quote do:
-#    var `fgColorIdent` = Color.default
-#    var `bgColorIdent` = Color.default
-#    `setFgColor`
-#    `setBgColor`
-#    `fgDynamicAdjust`
-#    `bgDynamicAdjust`
-#    `assignColors`
-#
-#proc makecolorThemeFromVSCodeThemeFile(jsonNode: JsonNode): EditorColor =
-#  # This converts a JsonNode JString to a 256-Color-Terminal-Color
-#  proc colorFromNode(node: JsonNode): Color =
-#    if node == nil:
-#      return Color.default
-#    var asString = node.getStr()
-#    if (asString.len() >= 7   and
-#        asString[0]    == '#'):
-#        return hexToColor(asString[1..asString.len()-1])
-#    return Color.default
-#
-#  var tokenNodes = initTable[string, JsonNode]()
-#  for node in jsonNode{"tokenColors"}:
-#    var scope = node{"scope"}
-#    let settings = node{"settings"}
-#    if scope == nil:
-#      scope = parseJson("\"unnamedScope\"")
-#    if settings == nil:
-#      continue
-#    if scope.len() > 0:
-#      for item in scope:
-#        tokenNodes[item.getStr()] = settings
-#    else:
-#      tokenNodes[scope.getStr()] = settings
-#
-#  # Convenience
-#  proc getScope(key: string): JsonNode =
-#    if tokenNodes.hasKey(key):
-#      return tokenNodes[key]
-#    else:
-#      return JsonNode.default()
-#
-#  # This is currently optimized and tested for the Forest Focus theme
-#  # and even for that theme it only produces a partial and imperfect
-#  # translation
-#  setEditorColor editorBg:
-#    background:
-#      colorFromNode(jsonNode{"colors", "editor.background"})
-#
-#  # Color scheme
-#  setEditorColor defaultChar:
-#    foreground:
-#      colorFromNode(jsonNode{"colors", "editor.foreground"})
-#  setEditorColor gtKeyword:
-#    foreground:
-#      colorFromNode(getScope("keyword"){"foreground"})
-#  setEditorColor gtFunctionName:
-#    foreground:
-#      colorFromNode(getScope("entity"){"foreground"})
-#  setEditorColor gtTypeName:
-#    foreground:
-#      colorFromNode(getScope("entity"){"foreground"})
-#  setEditorColor gtBoolean:
-#    foreground:
-#      colorFromNode(getScope("entity"){"foreground"})
-#  setEditorColor gtSpecialVar:
-#    foreground:
-#      colorFromNode(getScope("variable"){"foreground"})
-#  setEditorColor gtBuiltin:
-#    foreground:
-#      colorFromNode(getScope("entity"){"foreground"})
-#  setEditorColor gtStringLit:
-#    foreground:
-#      colorFromNode(getScope("string"){"foreground"})
-#  setEditorColor gtBinNumber:
-#    foreground:
-#      colorFromNode(getScope("constant"){"foreground"})
-#  setEditorColor gtDecNumber:
-#    foreground:
-#      colorFromNode(getScope("constant"){"foreground"})
-#  setEditorColor gtFloatNumber:
-#    foreground:
-#      colorFromNode(getScope("constant"){"foreground"})
-#  setEditorColor gtHexNumber:
-#    foreground:
-#      colorFromNode(getScope("constant"){"foreground"})
-#  setEditorColor gtOctNumber:
-#    foreground:
-#      colorFromNode(getScope("constant"){"foreground"})
-#  setEditorColor gtComment:
-#    foreground:
-#      colorFromNode(getScope("comment"){"foreground"})
-#  setEditorColor gtLongComment:
-#    foreground:
-#      colorFromNode(getScope("comment"){"foreground"})
-#  setEditorColor gtWhitespace:
-#    foreground:
-#      colorFromNode(jsonNode{"colors", "editorWhitespace.foreground"})
-#
-#  # status line
-#  setEditorColor statusLineNormalMode:
-#    foreground:
-#      colorFromNode(jsonNode{"colors", "editor.foreground"})
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "statusLine.background"})
-#  setEditorColor statusLineModeNormalMode:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "statusLine.background"})
-#  setEditorColor statusLineNormalModeInactive:
-#    foreground:
-#      colorFromNode(jsonNode{"colors", "statusLine.foreground"})
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "editor.background"})
-#  setEditorColor statusLineInsertMode:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "statusLine.background"})
-#  setEditorColor statusLineModeInsertMode:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      white
-#  setEditorColor statusLineInsertModeInactive:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "statusLine.background"})
-#  setEditorColor statusLineVisualMode:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "statusLine.background"})
-#  setEditorColor statusLineModeVisualMode:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      white
-#  setEditorColor statusLineVisualModeInactive:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "statusLine.background"})
-#  setEditorColor statusLineReplaceMode:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "statusLine.background"})
-#  setEditorColor statusLineModeReplaceMode:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      white
-#  setEditorColor statusLineReplaceModeInactive:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "statusLine.background"})
-#  setEditorColor statusLineFilerMode:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "statusLine.background"})
-#  setEditorColor statusLineModeFilerMode:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      white
-#  setEditorColor statusLineFilerModeInactive:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "statusLine.background"})
-#  setEditorColor statusLineExMode:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "statusLine.background"})
-#  setEditorColor statusLineModeExMode:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      white
-#  setEditorColor statusLineExModeInactive:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "statusLine.background"})
-#  setEditorColor statusLineGitBranch:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "statusLine.background"})
-#  # command  bar
-#  setEditorColor commandBar:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      Color.default
-#  # error message
-#  setEditorColor errorMessage:
-#    foreground:
-#      colorFromNode(getScope("console.error"){"foreground"})
-#    background:
-#      Color.default
-#  setEditorColor currentTab:
-#    foreground:
-#      colorFromNode(jsonNode{"colors", "tab.foreground"})
-#    background:
-#      colorFromNode(jsonNode{"colors", "tab.activeBackground"})
-#
-#  setEditorColor tab:
-#    foreground:
-#      colorFromNode(jsonNode{"colors", "tab.foreground"})
-#    background:
-#      colorFromNode(jsonNode{"colors", "tab.inactiveBackground"})
-#
-#  setEditorColor lineNum:
-#    foreground:
-#      colorFromNode(jsonNode{"colors", "editorLineNumber.foreground"})
-#      adjust: InverseBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "editorLineNumber.background"})
-#
-#  setEditorColor currentLineNum:
-#    foreground:
-#      colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
-#    background:
-#      colorFromNode(jsonNode{"colors", "editor.background"})
-#
-#  setEditorColor pcLink:
-#    foreground:
-#      colorFromNode(getScope("hyperlink"){"foreground"})
-#      adjust: ReadableVsBackground
-#    background:
-#      Color.default
-#
-#  # highlight other uses current word
-#  setEditorColor currentWord:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
-#
-#  setEditorColor popupWinCurrentLine:
-#    foreground:
-#      colorFromNode(jsonNode{"colors", "sideBarTitle.forground"})
-#    background:
-#      colorFromNode(jsonNode{"colors", "sideBarSectionHeader.background"})
-#
-#  # pop up window
-#  setEditorColor popupWindow:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "sideBar.background"})
-#  setEditorColor popupWinCurrentLine:
-#    foreground:
-#      colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "sideBar.background"})
-#
-#  # pair of paren highlighting
-#  setEditorColor parenText:
-#    foreground:
-#      colorFromNode(getScope("unnamedScope"){"bracketsForeground"})
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
-#
-#  # replace text highlighting
-#  setEditorColor replaceText:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors",
-#        "gitDecoration.conflictingResourceForeground"})
-#
-#  # filer mode
-#  setEditorColor currentFile:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
-#  setEditorColor file:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      Color.default
-#  setEditorColor dir:
-#    foreground:
-#      colorFromNode(getScope("hyperlink"){"foreground"})
-#      adjust: ReadableVsBackground
-#    background:
-#      Color.default
-#
-#  # highlight full width space
-#  setEditorColor highlightFullWidthSpace:
-#    foreground:
-#      colorFromNode(jsonNode{"colors", "tab.activeBorder"})
-#    background:
-#      colorFromNode(jsonNode{"colors", "tab.activeBorder"})
-#
-#  # highlight trailing spaces
-#  setEditorColor highlightTrailingSpaces:
-#    foreground:
-#      colorFromNode(jsonNode{"colors", "tab.activeBorder"})
-#    background:
-#      colorFromNode(jsonNode{"colors", "tab.activeBorder"})
-#
-#  # highlight diff
-#  setEditorColor addedLine:
-#    foreground:
-#      colorFromNode(jsonNode{"colors", "diff.inserted"})
-#    background:
-#      colorFromNode(jsonNode{"colors", "editor.background"})
-#  setEditorColor deletedLine:
-#    foreground:
-#      colorFromNode(jsonNode{"colors", "diff.deleted"})
-#    background:
-#      colorFromNode(jsonNode{"colors", "editor.background"})
-#
-#  # search result highlighting
-#  setEditorColor searchResult:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "tab.activeBorder"})
-#
-#  # selected area in visual mode
-#  setEditorColor visualMode:
-#    foreground:
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "tab.activeBorder"})
-#
-#  # Backup manager
-#  setEditorColor currentBackup:
-#    foreground:
-#      colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "editor.background"})
-#
-#  # Configuration mode
-#  setEditorColor currentSetting:
-#    foreground:
-#      colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
-#      adjust: ReadableVsBackground
-#    background:
-#      colorFromNode(jsonNode{"colors", "editor.background"})
+#  result.pragma = ColorPair(
+#    index: EditorColorPairIndex.pragma,
+#    foreground: Color(
+#      index: EditorColorIndex.pragma,
+#      rgb: ),
+#    background: Color(
+#      index: EditorColorIndex.pragmaBg,
+#      rgb: TerminalDefaultRgb))
+
+  block statusLine:
+    result.statusLineNormalMode = ColorPair(
+      index: EditorColorPairIndex.statusLineNormalMode,
+      foreground: Color(
+        index: EditorColorIndex.statusLineNormalMode,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.foreground"})),
+      background: Color(
+        index: EditorColorIndex.statusLineNormalModeBg,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.background"})))
+
+    result.statusLineModeNormalMode = ColorPair(
+      index: EditorColorPairIndex.statusLineModeNormalMode,
+      foreground: Color(
+        index: EditorColorIndex.statusLineModeNormalMode,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.foreground"})),
+      background: Color(
+        index: EditorColorIndex.statusLineModeNormalModeBg,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.background"})))
+
+    result.statusLineNormalModeInactive = ColorPair(
+      index: EditorColorPairIndex.statusLineNormalModeInactive,
+      foreground: Color(
+        index: EditorColorIndex.statusLineNormalModeInactive,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.foreground"})),
+      background: Color(
+        index: EditorColorIndex.statusLineNormalModeInactiveBg,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.background"})))
+
+    result.statusLineInsertMode = ColorPair(
+      index: EditorColorPairIndex.statusLineInsertMode,
+      foreground: Color(
+        index: EditorColorIndex.statusLineInsertMode,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.foreground"})),
+      background: Color(
+        index: EditorColorIndex.statusLineInsertModeBg,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.background"})))
+
+    result.statusLineModeInsertMode = ColorPair(
+      index: EditorColorPairIndex.statusLineModeInsertMode,
+      foreground: Color(
+        index: EditorColorIndex.statusLineModeInsertMode,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.foreground"})),
+      background: Color(
+        index: EditorColorIndex.statusLineModeInsertModeBg,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.background"})))
+
+    result.statusLineModeInsertMode = ColorPair(
+      index: EditorColorPairIndex.statusLineModeInsertMode,
+      foreground: Color(
+        index: EditorColorIndex.statusLineModeInsertMode,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.foreground"})),
+      background: Color(
+        index: EditorColorIndex.statusLineModeInsertModeBg,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.background"})))
+
+    result.statusLineInsertModeInactive = ColorPair(
+      index: EditorColorPairIndex.statusLineInsertModeInactive,
+      foreground: Color(
+        index: EditorColorIndex.statusLineInsertModeInactive,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.foreground"})),
+      background: Color(
+        index: EditorColorIndex.statusLineInsertModeInactiveBg,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.background"})))
+
+    result.statusLineVisualMode = ColorPair(
+      index: EditorColorPairIndex.statusLineVisualMode,
+      foreground: Color(
+        index: EditorColorIndex.statusLineVisualMode,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.foreground"})),
+      background: Color(
+        index: EditorColorIndex.statusLineVisualModeBg,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.background"})))
+
+    result.statusLineModeVisualMode = ColorPair(
+      index: EditorColorPairIndex.statusLineModeVisualMode,
+      foreground: Color(
+        index: EditorColorIndex.statusLineModeVisualMode,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.foreground"})),
+      background: Color(
+        index: EditorColorIndex.statusLineModeVisualModeBg,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.background"})))
+
+    result.statusLineVisualModeInactive = ColorPair(
+      index: EditorColorPairIndex.statusLineVisualModeInactive,
+      foreground: Color(
+        index: EditorColorIndex.statusLineVisualModeInactive,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.foreground"})),
+      background: Color(
+        index: EditorColorIndex.statusLineVisualModeInactiveBg,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.background"})))
+
+    result.statusLineReplaceMode = ColorPair(
+      index: EditorColorPairIndex.statusLineReplaceMode,
+      foreground: Color(
+        index: EditorColorIndex.statusLineReplaceMode,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.foreground"})),
+      background: Color(
+        index: EditorColorIndex.statusLineReplaceModeBg,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.background"})))
+
+    result.statusLineModeReplaceMode = ColorPair(
+      index: EditorColorPairIndex.statusLineModeReplaceMode,
+      foreground: Color(
+        index: EditorColorIndex.statusLineModeReplaceMode,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.foreground"})),
+      background: Color(
+        index: EditorColorIndex.statusLineModeReplaceModeBg,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.background"})))
+
+    result.statusLineReplaceModeInactive = ColorPair(
+      index: EditorColorPairIndex.statusLineReplaceModeInactive,
+      foreground: Color(
+        index: EditorColorIndex.statusLineReplaceModeInactive,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.foreground"})),
+      background: Color(
+        index: EditorColorIndex.statusLineReplaceModeInactiveBg,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.background"})))
+
+    result.statusLineFilerMode = ColorPair(
+      index: EditorColorPairIndex.statusLineFilerMode,
+      foreground: Color(
+        index: EditorColorIndex.statusLineFilerMode,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.foreground"})),
+      background: Color(
+        index: EditorColorIndex.statusLineFilerModeBg,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.background"})))
+
+    result.statusLineModeFilerMode = ColorPair(
+      index: EditorColorPairIndex.statusLineModeFilerMode,
+      foreground: Color(
+        index: EditorColorIndex.statusLineModeFilerMode,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.foreground"})),
+      background: Color(
+        index: EditorColorIndex.statusLineModeFilerModeBg,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.background"})))
+
+    result.statusLineFilerModeInactive = ColorPair(
+      index: EditorColorPairIndex.statusLineFilerModeInactive,
+      foreground: Color(
+        index: EditorColorIndex.statusLineFilerModeInactive,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.foreground"})),
+      background: Color(
+        index: EditorColorIndex.statusLineFilerModeInactiveBg,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.background"})))
+
+    result.statusLineExMode = ColorPair(
+      index: EditorColorPairIndex.statusLineExMode,
+      foreground: Color(
+        index: EditorColorIndex.statusLineExMode,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.foreground"})),
+      background: Color(
+        index: EditorColorIndex.statusLineExModeBg,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.background"})))
+
+    result.statusLineModeExMode = ColorPair(
+      index: EditorColorPairIndex.statusLineModeExMode,
+      foreground: Color(
+        index: EditorColorIndex.statusLineModeExMode,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.foreground"})),
+      background: Color(
+        index: EditorColorIndex.statusLineModeExModeBg,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.background"})))
+
+    result.statusLineExModeInactive = ColorPair(
+      index: EditorColorPairIndex.statusLineExModeInactive,
+      foreground: Color(
+        index: EditorColorIndex.statusLineExModeInactive,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.foreground"})),
+      background: Color(
+        index: EditorColorIndex.statusLineExModeInactiveBg,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.background"})))
+
+    result.statusLineGitBranch = ColorPair(
+      index: EditorColorPairIndex.statusLineGitBranch,
+      foreground: Color(
+        index: EditorColorIndex.statusLineGitBranch,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.foreground"})),
+      background: Color(
+        index: EditorColorIndex.statusLineGitBranchBg,
+        rgb: colorFromNode(jsonNode{"colors", "statusBar.background"})))
+
+  result.commandBar = ColorPair(
+    index: EditorColorPairIndex.commandBar,
+    foreground: Color(
+      index: EditorColorIndex.commandBar,
+      rgb: colorFromNode(jsonNode{"colors", "editor.foreground"})),
+    background: Color(
+      index: EditorColorIndex.commandBarBg,
+      rgb: colorFromNode(jsonNode{"colors", "editor.background"})))
+
+  result.errorMessage = ColorPair(
+    index: EditorColorPairIndex.errorMessage,
+    foreground: Color(
+      index: EditorColorIndex.errorMessage,
+      rgb: colorFromNode(getScope("console.error"){"foreground"})),
+    background: Color(
+      index: EditorColorIndex.errorMessageBg,
+      rgb: colorFromNode(jsonNode{"colors", "editor.background"})))
+
+  block tabLine:
+    result.tab = ColorPair(
+      index: EditorColorPairIndex.tab,
+      foreground: Color(
+        index: EditorColorIndex.tab,
+        rgb: colorFromNode(jsonNode{"colors", "tab.foreground"})),
+      background: Color(
+        index: EditorColorIndex.tabBg,
+        rgb: colorFromNode(jsonNode{"colors", "tab.inactiveBackground"})))
+
+    result.currentTab = ColorPair(
+      index: EditorColorPairIndex.currentTab,
+      foreground: Color(
+        index: EditorColorIndex.currentTab,
+        rgb: colorFromNode(jsonNode{"colors", "tab.foreground"})),
+      background: Color(
+        index: EditorColorIndex.currentTabBg,
+        rgb: colorFromNode(jsonNode{"colors", "tab.activeBackground"})))
+
+  block lineNumber:
+    result.lineNum = ColorPair(
+      index: EditorColorPairIndex.lineNum,
+      foreground: Color(
+        index: EditorColorIndex.lineNum,
+        rgb: colorFromNode(jsonNode{"colors", "editorLineNumber.foreground"})),
+      background: Color(
+        index: EditorColorIndex.lineNumBg,
+        rgb: colorFromNode(jsonNode{"colors", "editorLineNumber.background"})))
+
+    result.currentLineNum = ColorPair(
+      index: EditorColorPairIndex.currentLineNum,
+      foreground: Color(
+        index: EditorColorIndex.currentLineNum,
+        rgb: colorFromNode(jsonNode{"colors", "editorCursor.foreground"})),
+      background: Color(
+        index: EditorColorIndex.currentLineNumBg,
+        rgb: colorFromNode(jsonNode{"colors", "editor.background"})))
+
+  result.currentWord = ColorPair(
+    index: EditorColorPairIndex.currentWord,
+    foreground: Color(
+      index: EditorColorIndex.currentWord,
+      rgb: colorFromNode(jsonNode{"colors", "editor.foreground"})),
+    background: Color(
+      index: EditorColorIndex.currentWordBg,
+      rgb: colorFromNode(jsonNode{"colors", "editor.selectionBackground"})))
+
+  block popupWindow:
+    result.popupWindow = ColorPair(
+      index: EditorColorPairIndex.popupWindow,
+      foreground: Color(
+        index: EditorColorIndex.popupWindow,
+        rgb: colorFromNode(jsonNode{"colors", "editorSuggestWidget.foreground"})),
+      background: Color(
+        index: EditorColorIndex.popupWindowBg,
+        rgb: colorFromNode(jsonNode{"colors", "editorSuggestWidget.background"})))
+
+    result.popupWinCurrentLine = ColorPair(
+      index: EditorColorPairIndex.popupWinCurrentLine,
+      foreground: Color(
+        index: EditorColorIndex.popupWinCurrentLine,
+        rgb: colorFromNode(
+          jsonNode{"colors", "editorSuggestWidget.highlightForeground"})),
+      background: Color(
+        index: EditorColorIndex.popupWinCurrentLineBg,
+        rgb: colorFromNode(
+          jsonNode{"colors", "editorSuggestWidget.selectedBackground"})))
+
+  result.parenText = ColorPair(
+    index: EditorColorPairIndex.parenText,
+    foreground: Color(
+      index: EditorColorIndex.parenText,
+      rgb: colorFromNode(getScope("unnamedScope"){"bracketsForeground"})),
+    background: Color(
+      index: EditorColorIndex.parenTextBg,
+      rgb: colorFromNode(jsonNode{"colors", "editor.selectionBackground"})))
+
+  result.replaceText = ColorPair(
+    index: EditorColorPairIndex.replaceText,
+    foreground: Color(
+      index: EditorColorIndex.replaceText,
+      rgb: colorFromNode(jsonNode{"colors", "editor.foreground"})),
+    background: Color(
+      index: EditorColorIndex.replaceTextBg,
+      rgb: colorFromNode(
+        jsonNode{"colors", "gitDecoration.conflictingResourceForeground"})))
+
+  block filerMode:
+    result.file = ColorPair(
+       index: EditorColorPairIndex.file,
+       foreground: Color(
+         index: EditorColorIndex.file,
+         rgb: colorFromNode(getScope("hyperlink"){"foreground"})),
+       background: Color(
+         index: EditorColorIndex.fileBg,
+         rgb: colorFromNode(jsonNode{"colors", "editor.background"})))
+
+    result.currentFile = ColorPair(
+      index: EditorColorPairIndex.currentFile,
+      foreground: Color(
+        index: EditorColorIndex.currentFile,
+        rgb: colorFromNode(jsonNode{"colors", "editor.foreground"})),
+      background: Color(
+        index: EditorColorIndex.currentFileBg,
+        rgb: colorFromNode(jsonNode{"colors", "editor.selectionBackground"})))
+
+    result.dir = ColorPair(
+       index: EditorColorPairIndex.dir,
+       foreground: Color(
+         index: EditorColorIndex.dir,
+         rgb: colorFromNode(getScope("hyperlink"){"foreground"})),
+       background: Color(
+         index: EditorColorIndex.dirBg,
+         rgb: colorFromNode(jsonNode{"colors", "editor.background"})))
+
+    result.pcLink = ColorPair(
+      index: EditorColorPairIndex.pcLink,
+      foreground: Color(
+        index: EditorColorIndex.pcLink,
+        rgb: colorFromNode(getScope("hyperlink"){"foreground"})),
+      background: Color(
+        index: EditorColorIndex.pcLinkBg,
+        rgb: colorFromNode(jsonNode{"colors", "editor.background"})))
+
+  block spacesHighlight:
+    result.highlightFullWidthSpace = ColorPair(
+       index: EditorColorPairIndex.highlightFullWidthSpace,
+       foreground: Color(
+         index: EditorColorIndex.highlightFullWidthSpace,
+         rgb: colorFromNode(jsonNode{"colors", "tab.activeBorder"})),
+       background: Color(
+         index: EditorColorIndex.highlightFullWidthSpaceBg,
+         rgb: colorFromNode(jsonNode{"colors", "tab.activeBorder"})))
+
+    result.highlightTrailingSpaces = ColorPair(
+       index: EditorColorPairIndex.highlightTrailingSpaces,
+       foreground: Color(
+         index: EditorColorIndex.highlightTrailingSpaces,
+         rgb: colorFromNode(jsonNode{"colors", "tab.activeBorder"})),
+       background: Color(
+         index: EditorColorIndex.highlightTrailingSpacesBg,
+         rgb: colorFromNode(jsonNode{"colors", "tab.activeBorder"})))
+
+  block diff:
+    result.addedLine = ColorPair(
+       index: EditorColorPairIndex.addedLine,
+       foreground: Color(
+         index: EditorColorIndex.addedLine,
+         rgb: colorFromNode(jsonNode{"colors", "diff.inserted"})),
+       background: Color(
+         index: EditorColorIndex.addedLineBg,
+         rgb: colorFromNode(jsonNode{"colors", "editor.background"})))
+
+    result.deletedLine = ColorPair(
+       index: EditorColorPairIndex.deletedLine,
+       foreground: Color(
+         index: EditorColorIndex.deletedLine,
+         rgb: colorFromNode(jsonNode{"colors", "editor.deleted"})),
+       background: Color(
+         index: EditorColorIndex.deletedLineBg,
+         rgb: colorFromNode(jsonNode{"colors", "editor.background"})))
+
+  block search:
+    result.searchResult = ColorPair(
+       index: EditorColorPairIndex.searchResult,
+       foreground: Color(
+         index: EditorColorIndex.searchResult,
+         rgb: colorFromNode(jsonNode{"colors", "editor.foreground"})),
+       background: Color(
+         index: EditorColorIndex.searchResultBg,
+         rgb: colorFromNode(jsonNode{"colors", "tab.activeBorder"})))
+
+  block visualMode:
+    # Selected area in visual mode
+    result.visualMode = ColorPair(
+       index: EditorColorPairIndex.visualMode,
+       foreground: Color(
+         index: EditorColorIndex.visualMode,
+         rgb: colorFromNode(jsonNode{"colors", "editor.foreground"})),
+       background: Color(
+         index: EditorColorIndex.visualModeBg,
+         rgb: colorFromNode(jsonNode{"colors", "tab.activeBorder"})))
+
+  block backupManager:
+    result.currentBackup = ColorPair(
+       index: EditorColorPairIndex.currentBackup,
+       foreground: Color(
+         index: EditorColorIndex.currentBackup,
+         rgb: colorFromNode(jsonNode{"colors", "editorCursor.foreground"})),
+       background: Color(
+         index: EditorColorIndex.currentBackupBg,
+         rgb: colorFromNode(jsonNode{"colors", "editor.background"})))
+
+  block :
+    result.currentSetting = ColorPair(
+       index: EditorColorPairIndex.currentSetting,
+       foreground: Color(
+         index: EditorColorIndex.currentSetting,
+         rgb: colorFromNode(jsonNode{"colors", "editorCursor.foreground"})),
+       background: Color(
+         index: EditorColorIndex.currentSettingBg,
+         rgb: colorFromNode(jsonNode{"colors", "editor.background"})))
 
 proc codeOssUserSettingsFilePath(): string {.inline.} =
   getConfigDir() / "Code - OSS/User/settings.json"
@@ -964,64 +1145,65 @@ proc isCurrentVsCodeThemePackage(json: JsonNode, themeName: string): bool =
     else:
       if json{"displayName"}.getStr == themeName: return true
 
-#proc loadVSCodeTheme*(): colorTheme =
-#  # If no vscode theme can be found, this defaults to the dark theme.
-#  # Hopefully other contributors will come and add support for Windows,
-#  # and other systems.
-#
-#  result = colorTheme.dark
-#
-#  let vsCodeFlavor = detectVsCodeFlavor()
-#  if vsCodeFlavor.isNone: return colorTheme.dark
-#
-#  let
-#    # load the VSCode user settings json
-#    settingsFilePath = vsCodeSettingsFilePath(vsCodeFlavor.get)
-#    settingsJson =
-#      try: json.parseFile(settingsFilePath)
-#      except CatchableError: return colorTheme.dark
-#
-#  # The current theme name
-#  if settingsJson{"workbench.colorTheme"} == nil or
-#     settingsJson{"workbench.colorTheme"}.getStr == "": return colorTheme.dark
-#
-#  let themeSetting = settingsJson{"workbench.colorTheme"}.getStr
-#
-#  # First, Check build in themes.
-#  let defaultExtesionsDir = vsCodeDefaultExtensionsDir(vsCodeFlavor.get)
-#  if dirExists(defaultExtesionsDir):
-#    for file in walkPattern(defaultExtesionsDir / "*/package.json" ):
-#      let packageJson =
-#        try: json.parseFile(file)
-#        except CatchableError: continue
-#
-#      if isCurrentVsCodeThemePackage(packageJson, themeSetting):
-#        let themeJson = parseVsCodeThemeJson(
-#          packageJson,
-#          themeSetting,
-#          file)
-#        if themeJson.isSome:
-#          ColorThemeTable[colorTheme.vscode] =
-#            makecolorThemeFromVSCodeThemeFile(themeJson.get)
-#          return colorTheme.vscode
-#
-#  # Check user themes.
-#  let userExtensionsDir = vsCodeUserExtensionsDir(vsCodeFlavor.get)
-#  if dirExists(userExtensionsDir):
-#    for file in walkPattern(userExtensionsDir / "*/package.json" ):
-#      let packageJson =
-#        try: json.parseFile(file)
-#        except CatchableError: continue
-#
-#      if isCurrentVsCodeThemePackage(packageJson, themeSetting):
-#        let themeJson = parseVsCodeThemeJson(
-#          packageJson,
-#          themeSetting,
-#          file)
-#        if themeJson.isSome:
-#          ColorThemeTable[colorTheme.vscode] =
-#            makecolorThemeFromVSCodeThemeFile(themeJson.get)
-#          return colorTheme.vscode
+proc loadVSCodeTheme*(): ColorTheme =
+  # If no vscode theme can be found, this defaults to the dark theme.
+  # Hopefully other contributors will come and add support for Windows,
+  # and other systems.
+  # TODO: Return the Result type
+
+  result = ColorTheme.dark
+
+  let vsCodeFlavor = detectVsCodeFlavor()
+  if vsCodeFlavor.isNone: return ColorTheme.dark
+
+  let
+    # load the VSCode user settings json
+    settingsFilePath = vsCodeSettingsFilePath(vsCodeFlavor.get)
+    settingsJson =
+      try: json.parseFile(settingsFilePath)
+      except CatchableError: return ColorTheme.dark
+
+  # The current theme name
+  if settingsJson{"workbench.colorTheme"} == nil or
+     settingsJson{"workbench.colorTheme"}.getStr == "": return ColorTheme.dark
+
+  let themeSetting = settingsJson{"workbench.colorTheme"}.getStr
+
+  # First, Check build in themes.
+  let defaultExtesionsDir = vsCodeDefaultExtensionsDir(vsCodeFlavor.get)
+  if dirExists(defaultExtesionsDir):
+    for file in walkPattern(defaultExtesionsDir / "*/package.json" ):
+      let packageJson =
+        try: json.parseFile(file)
+        except CatchableError: continue
+
+      if isCurrentVsCodeThemePackage(packageJson, themeSetting):
+        let themeJson = parseVsCodeThemeJson(
+          packageJson,
+          themeSetting,
+          file)
+        if themeJson.isSome:
+          ColorThemeTable[ColorTheme.vscode] =
+            makecolorThemeFromVSCodeThemeFile(themeJson.get)
+          return ColorTheme.vscode
+
+  # Check user themes.
+  let userExtensionsDir = vsCodeUserExtensionsDir(vsCodeFlavor.get)
+  if dirExists(userExtensionsDir):
+    for file in walkPattern(userExtensionsDir / "*/package.json" ):
+      let packageJson =
+        try: json.parseFile(file)
+        except CatchableError: continue
+
+      if isCurrentVsCodeThemePackage(packageJson, themeSetting):
+        let themeJson = parseVsCodeThemeJson(
+          packageJson,
+          themeSetting,
+          file)
+        if themeJson.isSome:
+          ColorThemeTable[ColorTheme.vscode] =
+            makecolorThemeFromVSCodeThemeFile(themeJson.get)
+          return ColorTheme.vscode
 
 proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
   result = initEditorSettings()
@@ -1510,24 +1692,18 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("baseTheme"):
       let themeString = settings["Theme"]["baseTheme"].getStr()
       if fileExists(themeString):
-        # TODO: Uncomment
-        #let jsonNode =
-        #  try: some(json.parseFile(themeString))
-        #  except CatchableError: none(JsonNode)
-        #if jsonNode.isSome:
-        #  ColorThemeTable[ColorTheme.config] = makecolorThemeFromVSCodeThemeFile(jsonNode.get)
-        #else:
-        #  let theme = parseEnum[ColorTheme](themeString)
-        #  ColorThemeTable[ColorTheme.config] = colorThemeTable[theme]
-
-        # TODO: Remove this after uncomment above lines.
-        let theme = parseEnum[ColorTheme](themeString)
-        ColorThemeTable[ColorTheme.config] = ColorThemeTable[theme]
+        let jsonNode =
+          try: some(json.parseFile(themeString))
+          except CatchableError: none(JsonNode)
+        if jsonNode.isSome:
+          ColorThemeTable[ColorTheme.config] = makecolorThemeFromVSCodeThemeFile(jsonNode.get)
+        else:
+          let theme = parseEnum[ColorTheme](themeString)
+          ColorThemeTable[ColorTheme.config] = ColorThemeTable[theme]
       else:
         let theme = parseEnum[ColorTheme](themeString)
         ColorThemeTable[ColorTheme.config] = ColorThemeTable[theme]
 
-    exitUi()
     proc toRgb(s: string): Rgb =
       case settings["Theme"][s].getStr:
         of "termDefaultFg", "termDefaultBg":
@@ -1968,9 +2144,8 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       ColorThemeTable[configTheme].currentLineBg.background.rgb =
         toRgb("currentLineBg")
 
-  # TODO: Uncomment
-  #if result.editorColorTheme == ColorTheme.vscode:
-  #  result.editorColorTheme = loadVSCodeTheme()
+  if result.editorColorTheme == ColorTheme.vscode:
+    result.editorColorTheme = loadVSCodeTheme()
 
   if settings.contains("Git"):
     if settings["Git"].contains("showChangedLine"):

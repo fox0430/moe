@@ -196,7 +196,7 @@ proc initWindow*(height, width, y, x: int, color: int16): Window =
   result.width = width
   result.cursesWindow = newwin(cint(height), cint(width), cint(y), cint(x))
   result.cursesWindow.keypad(true)
-  result.cursesWindow.wbkgd(ncurses.COLOR_PAIR(DefaultColorPair))
+  result.cursesWindow.wbkgd(ncurses.COLOR_PAIR(color))
 
 proc initWindow*(rect: Rect, color: int16): Window {.inline.} =
   initWindow(rect.h, rect.w, rect.y, rect.x, color)

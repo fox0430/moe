@@ -22,15 +22,15 @@ import pkg/results
 import ui
 
 type
+  # 0 ~ 255
+  # -1 is the terminal default color.
   Rgb* = object
-    red*: int16
-    green*: int16
-    blue*: int16
+    red*, green*, blue*: int16
 
   RgbPair* = object
-    foreground*: Rgb
-    background*: Rgb
+    foreground*, background*: Rgb
 
+  # 8 for the terminal.
   Color8* {.pure.} = enum
     default             = -1   # The terminal default
     black               = 0    ## hex: #000000
@@ -42,6 +42,7 @@ type
     teal                = 6    ## hex: #008080
     silver              = 7    ## hex: #c0c0c0
 
+  # 16 for the terminal.
   Color16* {.pure.} =  enum
     default             = -1   # The terminal default
     black               = 0    ## hex: #000000
@@ -61,6 +62,7 @@ type
     aqua                = 14   ## hex: #00ffff
     white               = 15   ## hex: #ffffff
 
+  # 256 for the terminal.
   Color256* {.pure.} = enum
     default             = -1   # The terminal default
     black               = 0    ## hex: #000000
@@ -341,6 +343,18 @@ proc hexToRgb*(s: string): Result[Rgb, string] =
 
   return Result[Rgb, string].ok rgb
 
+proc isTermDefaultColor*(rgb: Rgb): bool {.inline.} =
+  rgb == Rgb(red: -1, green: -1, blue: -1)
+
+## Return the inverse color.
+proc inverseColor*(color: Rgb): Rgb =
+  if color.isTermDefaultColor:
+    return color
+
+  result.red = abs(color.red - 255)
+  result.green = abs(color.green - 255)
+  result.blue  = abs(color.blue - 255)
+
 # maps annotations of the enum to a hexToColor table
 # TODO: Rewrite color.mapAnnotationToTable
 macro mapAnnotationToTable(args: varargs[untyped]): untyped =
@@ -409,8 +423,7 @@ template calcRGBDifference(col1: Rgb, col2: Rgb): int =
 #        break
 #  return closestColor
 
-# Returns the closest inverse Color
-# for col.
+# Returns the closest inverse Color for col.
 # TODO: Rewrite color.inverseColor
 #proc inverseColor*(col: Color): Color =
 #  if not colorToHexTable.hasKey(int(col)):
@@ -1413,9 +1426,6 @@ var
     vscode: DarkTheme
   ]
 
-proc isTermDefaultColor*(rgb: Rgb): bool {.inline.} =
-  rgb == Rgb(red: -1, green: -1, blue: -1)
-
 proc isTermDefaultColor*(i: EditorColorIndex): bool {.inline.} =
   i == termDefaultForeground or i == termDefaultBackground
 
@@ -1444,8 +1454,8 @@ proc initColorPair(p: ColorPair) {.inline.} =
   p.index.initColorPair(p.foreground, p.background)
 
 ## Init Ncurses colors and color pairs.
-proc initEditrorColor*(pairDefine: EditorColorPair) =
-  for _, value in pairDefine.fieldPairs:
+proc initEditrorColor*(pair: EditorColorPair) =
+  for _, value in pair.fieldPairs:
     # Init all color pair defines.
     value.foreground.initColor
     value.background.initColor

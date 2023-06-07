@@ -1044,9 +1044,7 @@ proc halfPageDown*(status: var EditorStatus) =
 
 proc changeTheme*(status: var EditorStatus) =
   if status.settings.editorColorTheme == ColorTheme.vscode:
-    # TODO: Uncomment
-    discard
-    #status.settings.editorColorTheme = loadVSCodeTheme()
+    status.settings.editorColorTheme = loadVSCodeTheme()
 
   initEditrorColor(ColorThemeTable[status.settings.editorColorTheme])
 
