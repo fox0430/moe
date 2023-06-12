@@ -67,8 +67,8 @@ proc initEditor(): EditorStatus =
   result.loadConfigurationFile
   result.timeConfFileLastReloaded = now()
 
-  initEditrorColor(ColorThemeTable[ColorTheme.dark])
-  result.changeTheme
+  # TODO: Show error messages when failing to the load VSCode theme.
+  initEditrorColor(ColorThemeTable[result.settings.editorColorTheme])
 
   setControlCHook(proc() {.noconv.} =
     exitUi()

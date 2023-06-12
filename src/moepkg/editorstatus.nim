@@ -19,6 +19,7 @@
 
 import std/[strutils, os, strformat, tables, times, heapqueue, deques, options,
             encodings]
+import pkg/results
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        windownode, color, settings, statusline, bufferstatus, cursor, tabline,
@@ -1044,7 +1045,12 @@ proc halfPageDown*(status: var EditorStatus) =
 
 proc changeTheme*(status: var EditorStatus) =
   if status.settings.editorColorTheme == ColorTheme.vscode:
-    status.settings.editorColorTheme = loadVSCodeTheme()
+    let vsCodeTheme = loadVSCodeTheme()
+    if vsCodeTheme.isOk:
+      status.settings.editorColorTheme = vsCodeTheme.get
+    else:
+      status.commandLine.writeError(
+        fmt"Error: Failed to switch to VSCode theme: {vsCodeTheme.error}")
 
   initEditrorColor(ColorThemeTable[status.settings.editorColorTheme])
 

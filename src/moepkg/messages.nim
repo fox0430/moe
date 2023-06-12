@@ -32,6 +32,10 @@ proc writeMessageOnCommandLine*(
   message: string) {.inline.} =
     commandLine.writeMessageOnCommandLine(message, EditorColorPairIndex.commandBar)
 
+proc writeError*(c: var CommandLine, message: string) =
+  c.writeMessageOnCommandLine(message, EditorColorPairIndex.errorMessage)
+  addMessageLog message
+
 proc writeNoWriteError*(commandLine: var CommandLine) =
   let mess = "Error: No write since last change"
   commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
