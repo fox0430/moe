@@ -343,6 +343,11 @@ proc hexToRgb*(s: string): Result[Rgb, string] =
 
   return Result[Rgb, string].ok rgb
 
+## Converts from the Rgb to a hex color code with `#`.
+## Example: Rgb(red: 0, green: 0, blue: 0) -> "#000000"
+proc toHex*(rgb: Rgb): string {.inline.} =
+  fmt"#{rgb.red.toHex}{rgb.green.toHex}{rgb.blue.toHex}"
+
 proc isTermDefaultColor*(rgb: Rgb): bool {.inline.} =
   rgb == Rgb(red: -1, green: -1, blue: -1)
 
@@ -486,7 +491,7 @@ template calcRGBDifference(col1: Rgb, col2: Rgb): int =
 #  return rgbToColor(rgb1[0], rgb1[1], rgb1[2])
 
 type
-  ColorTheme* = enum
+  ColorTheme* {.pure.} = enum
     dark
     light
     vivid
@@ -743,11 +748,11 @@ type
     # highlight curent line background
     currentLineBg
 
-  Color * = object
+  Color* = object
     index*: EditorColorIndex
     rgb*: Rgb
 
-  ColorPair * = object
+  ColorPair* = object
     index*: EditorColorPairIndex
     foreground*: Color
     background*: Color
