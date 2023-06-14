@@ -763,7 +763,6 @@ type
     rgb*: Rgb
 
   ColorPair* = object
-    index*: EditorColorPairIndex
     foreground*: Color
     background*: Color
 
@@ -782,7 +781,6 @@ const
 
 let DarkTheme*: ThemeColors = [
     EditorColorPairIndex.default: ColorPair(
-      index: EditorColorPairIndex.default,
       foreground: Color(
         index: EditorColorIndex.foreground,
         rgb: "#ffffff".hexToRgb.get),
@@ -791,7 +789,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.lineNum: ColorPair(
-      index: EditorColorPairIndex.lineNum,
       foreground: Color(
         index: EditorColorIndex.lineNum,
         rgb: "#8a8a8a".hexToRgb.get),
@@ -799,7 +796,6 @@ let DarkTheme*: ThemeColors = [
         index: EditorColorIndex.lineNumBg,
         rgb: TerminalDefaultRgb)),
     EditorColorPairIndex.currentLineNum: ColorPair(
-      index: EditorColorPairIndex.currentLineNum,
       foreground: Color(
         index: EditorColorIndex.currentLineNum,
         rgb: "#008080".hexToRgb.get),
@@ -808,7 +804,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.statusLineNormalMode: ColorPair(
-      index: EditorColorPairIndex.statusLineNormalMode,
       foreground: Color(
         index: EditorColorIndex.statusLineNormalMode,
         rgb: "#ffffff".hexToRgb.get),
@@ -816,7 +811,6 @@ let DarkTheme*: ThemeColors = [
         index: EditorColorIndex.statusLineNormalModeBg,
         rgb: "#0000ff".hexToRgb.get)),
     EditorColorPairIndex.statusLineModeNormalMode: ColorPair(
-      index: EditorColorPairIndex.statusLineModeNormalMode,
       foreground: Color(
         index: EditorColorIndex.statusLineModeNormalMode,
         rgb: "#000000".hexToRgb.get),
@@ -824,7 +818,6 @@ let DarkTheme*: ThemeColors = [
         index: EditorColorIndex.statusLineModeNormalModeBg,
         rgb: "#ffffff".hexToRgb.get)),
     EditorColorPairIndex.statusLineNormalModeInactive: ColorPair(
-      index: EditorColorPairIndex.statusLineNormalModeInactive,
       foreground: Color(
         index: EditorColorIndex.statusLineNormalModeInactive,
         rgb: "#0000ff".hexToRgb.get),
@@ -833,7 +826,6 @@ let DarkTheme*: ThemeColors = [
         rgb: "#ffffff".hexToRgb.get)),
 
     EditorColorPairIndex.statusLineInsertMode: ColorPair(
-      index: EditorColorPairIndex.statusLineInsertMode,
       foreground: Color(
         index: EditorColorIndex.statusLineInsertMode,
         rgb: "#ffffff".hexToRgb.get),
@@ -841,7 +833,6 @@ let DarkTheme*: ThemeColors = [
         index: EditorColorIndex.statusLineInsertModeBg,
         rgb: "#0000ff".hexToRgb.get)),
     EditorColorPairIndex.statusLineModeInsertMode: ColorPair(
-      index: EditorColorPairIndex.statusLineModeInsertMode,
       foreground: Color(
         index: EditorColorIndex.statusLineModeInsertMode,
         rgb: "#000000".hexToRgb.get),
@@ -849,7 +840,6 @@ let DarkTheme*: ThemeColors = [
         index: EditorColorIndex.statusLineModeInsertModeBg,
         rgb: "#ffffff".hexToRgb.get)),
     EditorColorPairIndex.statusLineInsertModeInactive: ColorPair(
-      index: EditorColorPairIndex.statusLineInsertModeInactive,
       foreground: Color(
         index: EditorColorIndex.statusLineInsertModeInactive,
         rgb: "#0000ff".hexToRgb.get),
@@ -858,7 +848,6 @@ let DarkTheme*: ThemeColors = [
         rgb: "#ffffff".hexToRgb.get)),
 
     EditorColorPairIndex.statusLineVisualMode: ColorPair(
-      index: EditorColorPairIndex.statusLineVisualMode,
       foreground: Color(
         index: EditorColorIndex.statusLineVisualMode,
         rgb: "#ffffff".hexToRgb.get),
@@ -866,7 +855,6 @@ let DarkTheme*: ThemeColors = [
         index: EditorColorIndex.statusLineVisualModeBg,
         rgb: "#0000ff".hexToRgb.get)),
     EditorColorPairIndex.statusLineModeVisualMode: ColorPair(
-      index: EditorColorPairIndex.statusLineModeVisualMode,
       foreground: Color(
         index: EditorColorIndex.statusLineModeVisualMode,
         rgb: "#000000".hexToRgb.get),
@@ -874,7 +862,6 @@ let DarkTheme*: ThemeColors = [
         index: EditorColorIndex.statusLineModeVisualModeBg,
         rgb: "#ffffff".hexToRgb.get)),
     EditorColorPairIndex.statusLineVisualModeInactive: ColorPair(
-      index: EditorColorPairIndex.statusLineVisualModeInactive,
       foreground: Color(
         index: EditorColorIndex.statusLineVisualModeInactive,
         rgb: "#0000ff".hexToRgb.get),
@@ -883,7 +870,6 @@ let DarkTheme*: ThemeColors = [
         rgb: "#ffffff".hexToRgb.get)),
 
     EditorColorPairIndex.statusLineReplaceMode: ColorPair(
-      index: EditorColorPairIndex.statusLineReplaceMode,
       foreground: Color(
         index: EditorColorIndex.statusLineReplaceMode,
         rgb: "#ffffff".hexToRgb.get),
@@ -891,7 +877,6 @@ let DarkTheme*: ThemeColors = [
         index: EditorColorIndex.statusLineReplaceModeBg,
         rgb: "#0000ff".hexToRgb.get)),
     EditorColorPairIndex.statusLineModeReplaceMode: ColorPair(
-      index: EditorColorPairIndex.statusLineModeReplaceMode,
       foreground: Color(
         index: EditorColorIndex.statusLineModeReplaceMode,
         rgb: "#000000".hexToRgb.get),
@@ -899,7 +884,6 @@ let DarkTheme*: ThemeColors = [
         index: EditorColorIndex.statusLineModeReplaceModeBg,
         rgb: "#ffffff".hexToRgb.get)),
     EditorColorPairIndex.statusLineReplaceModeInactive: ColorPair(
-      index: EditorColorPairIndex.statusLineReplaceModeInactive,
       foreground: Color(
         index: EditorColorIndex.statusLineReplaceModeInactive,
         rgb: "#0000ff".hexToRgb.get),
@@ -908,7 +892,6 @@ let DarkTheme*: ThemeColors = [
         rgb: "#ffffff".hexToRgb.get)),
 
     EditorColorPairIndex.statusLineFilerMode: ColorPair(
-      index: EditorColorPairIndex.statusLineFilerMode,
       foreground: Color(
         index: EditorColorIndex.statusLineReplaceModeInactive,
         rgb: "#ffffff".hexToRgb.get),
@@ -916,7 +899,6 @@ let DarkTheme*: ThemeColors = [
         index: EditorColorIndex.statusLineReplaceModeInactiveBg,
         rgb: "#0000ff".hexToRgb.get)),
     EditorColorPairIndex.statusLineModeFilerMode: ColorPair(
-      index: EditorColorPairIndex.statusLineModeFilerMode,
       foreground: Color(
         index: EditorColorIndex.statusLineModeFilerMode,
         rgb: "#000000".hexToRgb.get),
@@ -924,7 +906,6 @@ let DarkTheme*: ThemeColors = [
         index: EditorColorIndex.statusLineModeFilerModeBg,
         rgb: "#ffffff".hexToRgb.get)),
     EditorColorPairIndex.statusLineFilerModeInactive: ColorPair(
-      index: EditorColorPairIndex.statusLineFilerModeInactive,
       foreground: Color(
         index: EditorColorIndex.statusLineFilerModeInactive,
         rgb: "#0000ff".hexToRgb.get),
@@ -933,7 +914,6 @@ let DarkTheme*: ThemeColors = [
         rgb: "#ffffff".hexToRgb.get)),
 
     EditorColorPairIndex.statusLineExMode: ColorPair(
-      index: EditorColorPairIndex.statusLineExMode,
       foreground: Color(
         index: EditorColorIndex.statusLineExMode,
         rgb: "#ffffff".hexToRgb.get),
@@ -942,7 +922,6 @@ let DarkTheme*: ThemeColors = [
         rgb: "#0000ff".hexToRgb.get)),
 
     EditorColorPairIndex.statusLineModeExMode: ColorPair(
-      index: EditorColorPairIndex.statusLineModeExMode,
       foreground: Color(
         index: EditorColorIndex.statusLineModeExMode,
         rgb: "#000000".hexToRgb.get),
@@ -951,7 +930,6 @@ let DarkTheme*: ThemeColors = [
         rgb: "#ffffff".hexToRgb.get)),
 
     EditorColorPairIndex.statusLineExModeInactive: ColorPair(
-      index: EditorColorPairIndex.statusLineExModeInactive,
       foreground: Color(
         index: EditorColorIndex.statusLineExModeInactive,
         rgb: "#0000ff".hexToRgb.get),
@@ -960,7 +938,6 @@ let DarkTheme*: ThemeColors = [
         rgb: "#ffffff".hexToRgb.get)),
 
     EditorColorPairIndex.statusLineGitBranch: ColorPair(
-      index: EditorColorPairIndex.statusLineGitBranch,
       foreground: Color(
         index: EditorColorIndex.statusLineGitBranch,
         rgb: "#ffffff".hexToRgb.get),
@@ -970,7 +947,6 @@ let DarkTheme*: ThemeColors = [
 
     # Tab line
     EditorColorPairIndex.tab: ColorPair(
-      index: EditorColorPairIndex.tab,
       foreground: Color(
         index: EditorColorIndex.tab,
         rgb: "#ffffff".hexToRgb.get),
@@ -979,7 +955,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.currentTab: ColorPair(
-      index: EditorColorPairIndex.currentTab,
       foreground: Color(
         index: EditorColorIndex.currentTab,
         rgb: "#ffffff".hexToRgb.get),
@@ -990,7 +965,6 @@ let DarkTheme*: ThemeColors = [
     # Command line
     # TODO: Rename to commandLine
     EditorColorPairIndex.commandBar: ColorPair(
-      index: EditorColorPairIndex.commandBar,
       foreground: Color(
         index: EditorColorIndex.commandBar,
         rgb: "#ffffff".hexToRgb.get),
@@ -1000,7 +974,6 @@ let DarkTheme*: ThemeColors = [
 
     # Error message
     EditorColorPairIndex.errorMessage: ColorPair(
-      index: EditorColorPairIndex.errorMessage,
       foreground: Color(
         index: EditorColorIndex.errorMessage,
         rgb: "#ff0000".hexToRgb.get),
@@ -1008,7 +981,6 @@ let DarkTheme*: ThemeColors = [
 
     # Search result highlighting
     EditorColorPairIndex.searchResult: ColorPair(
-      index: EditorColorPairIndex.searchResult,
       foreground: Color(
         index: EditorColorIndex.searchResult,
         rgb: "#ffffff".hexToRgb.get),
@@ -1018,7 +990,6 @@ let DarkTheme*: ThemeColors = [
 
     # Selected area in Visual mode
     EditorColorPairIndex.visualMode: ColorPair(
-      index: EditorColorPairIndex.visualMode,
       foreground: Color(
         index: EditorColorIndex.visualMode,
         rgb: "#ffffff".hexToRgb.get),
@@ -1028,7 +999,6 @@ let DarkTheme*: ThemeColors = [
 
     # Color scheme
     EditorColorPairIndex.keyword: ColorPair(
-      index: EditorColorPairIndex.keyword,
       foreground: Color(
         index: EditorColorIndex.keyword,
         rgb: "#87d7ff".hexToRgb.get),
@@ -1037,7 +1007,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.functionName: ColorPair(
-      index: EditorColorPairIndex.functionName,
       foreground: Color(
         index: EditorColorIndex.functionName,
         rgb: "#ffd700".hexToRgb.get),
@@ -1046,7 +1015,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.typeName: ColorPair(
-      index: EditorColorPairIndex.typeName,
       foreground: Color(
         index: EditorColorIndex.typeName,
         rgb: "#008000".hexToRgb.get),
@@ -1055,7 +1023,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.boolean: ColorPair(
-      index: EditorColorPairIndex.boolean,
       foreground: Color(
         index: EditorColorIndex.boolean,
         rgb: "#ffff00".hexToRgb.get),
@@ -1064,7 +1031,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.specialVar: ColorPair(
-      index: EditorColorPairIndex.specialVar,
       foreground: Color(
         index: EditorColorIndex.specialVar,
         rgb: "#008000".hexToRgb.get),
@@ -1073,7 +1039,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.builtin: ColorPair(
-      index: EditorColorPairIndex.builtin,
       foreground: Color(
         index: EditorColorIndex.builtin,
         rgb: "#ffff00".hexToRgb.get),
@@ -1082,7 +1047,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.stringLit: ColorPair(
-      index: EditorColorPairIndex.stringLit,
       foreground: Color(
         index: EditorColorIndex.stringLit,
         rgb: "#ffff00".hexToRgb.get),
@@ -1091,7 +1055,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.binNumber: ColorPair(
-      index: EditorColorPairIndex.binNumber,
       foreground: Color(
         index: EditorColorIndex.binNumber,
         rgb: "#00ffff".hexToRgb.get),
@@ -1100,7 +1063,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.decNumber: ColorPair(
-      index: EditorColorPairIndex.decNumber,
       foreground: Color(
         index: EditorColorIndex.decNumber,
         rgb: "#00ffff".hexToRgb.get),
@@ -1109,7 +1071,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.floatNumber: ColorPair(
-      index: EditorColorPairIndex.floatNumber,
       foreground: Color(
         index: EditorColorIndex.floatNumber,
         rgb: "#00ffff".hexToRgb.get),
@@ -1118,7 +1079,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.hexNumber: ColorPair(
-      index: EditorColorPairIndex.hexNumber,
       foreground: Color(
         index: EditorColorIndex.hexNumber,
         rgb: "#00ffff".hexToRgb.get),
@@ -1127,7 +1087,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.octNumber: ColorPair(
-      index: EditorColorPairIndex.octNumber,
       foreground: Color(
         index: EditorColorIndex.octNumber,
         rgb: "#00ffff".hexToRgb.get),
@@ -1136,7 +1095,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.comment: ColorPair(
-      index: EditorColorPairIndex.comment,
       foreground: Color(
         index: EditorColorIndex.comment,
         rgb: "#808080".hexToRgb.get),
@@ -1145,7 +1103,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.longComment: ColorPair(
-      index: EditorColorPairIndex.longComment,
       foreground: Color(
         index: EditorColorIndex.longComment,
         rgb: "#808080".hexToRgb.get),
@@ -1154,7 +1111,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.whitespace: ColorPair(
-      index: EditorColorPairIndex.whitespace,
       foreground: Color(
         index: EditorColorIndex.whitespace,
         rgb: "#808080".hexToRgb.get),
@@ -1163,7 +1119,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.preprocessor: ColorPair(
-      index: EditorColorPairIndex.preprocessor,
       foreground: Color(
         index: EditorColorIndex.preprocessor,
         rgb: "#008000".hexToRgb.get),
@@ -1172,7 +1127,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.pragma: ColorPair(
-      index: EditorColorPairIndex.pragma,
       foreground: Color(
         index: EditorColorIndex.pragma,
         rgb: "#ffff00".hexToRgb.get),
@@ -1182,7 +1136,6 @@ let DarkTheme*: ThemeColors = [
 
     # filer mode
     EditorColorPairIndex.currentFile: ColorPair(
-      index: EditorColorPairIndex.currentFile,
       foreground: Color(
         index: EditorColorIndex.currentFile,
         rgb: "#ffffff".hexToRgb.get),
@@ -1191,7 +1144,6 @@ let DarkTheme*: ThemeColors = [
         rgb: "#008080".hexToRgb.get)),
 
     EditorColorPairIndex.file: ColorPair(
-      index: EditorColorPairIndex.file,
       foreground: Color(
         index: EditorColorIndex.file,
         rgb: "#ffffff".hexToRgb.get),
@@ -1200,7 +1152,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.dir: ColorPair(
-      index: EditorColorPairIndex.dir,
       foreground: Color(
         index: EditorColorIndex.dir,
         rgb: "#0000ff".hexToRgb.get),
@@ -1209,7 +1160,6 @@ let DarkTheme*: ThemeColors = [
         rgb: TerminalDefaultRgb)),
 
     EditorColorPairIndex.pcLink: ColorPair(
-      index: EditorColorPairIndex.pcLink,
       foreground: Color(
         index: EditorColorIndex.pcLink,
         rgb: "#008080".hexToRgb.get),
@@ -1219,7 +1169,6 @@ let DarkTheme*: ThemeColors = [
 
     # Pop up window
     EditorColorPairIndex.popupWindow: ColorPair(
-      index: EditorColorPairIndex.popupWindow,
       foreground: Color(
         index: EditorColorIndex.popupWindow,
         rgb: "#ffffff".hexToRgb.get),
@@ -1227,7 +1176,6 @@ let DarkTheme*: ThemeColors = [
         index: EditorColorIndex.popupWindowBg,
         rgb: "#000000".hexToRgb.get)),
     EditorColorPairIndex.popupWinCurrentLine: ColorPair(
-      index: EditorColorPairIndex.popupWinCurrentLine,
       foreground: Color(
         index: EditorColorIndex.popupWinCurrentLine,
         rgb: "#0000ff".hexToRgb.get),
@@ -1237,7 +1185,6 @@ let DarkTheme*: ThemeColors = [
 
     # Replace text highlighting
     EditorColorPairIndex.replaceText: ColorPair(
-      index: EditorColorPairIndex.replaceText,
       foreground: Color(
         index: EditorColorIndex.replaceText,
         rgb: "#ffffff".hexToRgb.get),
@@ -1248,7 +1195,6 @@ let DarkTheme*: ThemeColors = [
     # Pair of paren highlighting
     # TODO: Rename to parenPair?
     EditorColorPairIndex.parenText: ColorPair(
-      index: EditorColorPairIndex.parenText,
       foreground: Color(
         index: EditorColorIndex.parenText,
         rgb: "#ffffff".hexToRgb.get),
@@ -1258,7 +1204,6 @@ let DarkTheme*: ThemeColors = [
 
     # highlight other uses current word
     EditorColorPairIndex.currentWord: ColorPair(
-      index: EditorColorPairIndex.currentWord,
       foreground: Color(
         index: EditorColorIndex.currentWord,
         rgb: "#ffffff".hexToRgb.get),
@@ -1268,7 +1213,6 @@ let DarkTheme*: ThemeColors = [
 
     # highlight full width space
     EditorColorPairIndex.highlightFullWidthSpace: ColorPair(
-      index: EditorColorPairIndex.highlightFullWidthSpace,
       foreground: Color(
         index: EditorColorIndex.highlightFullWidthSpace,
         rgb: "#ff0000".hexToRgb.get),
@@ -1278,7 +1222,6 @@ let DarkTheme*: ThemeColors = [
 
     # highlight trailing spaces
     EditorColorPairIndex.highlightTrailingSpaces: ColorPair(
-      index: EditorColorPairIndex.highlightTrailingSpaces,
       foreground: Color(
         index: EditorColorIndex.highlightTrailingSpaces,
         rgb: "#ff0000".hexToRgb.get),
@@ -1288,7 +1231,6 @@ let DarkTheme*: ThemeColors = [
 
     # highlight reserved words
     EditorColorPairIndex.reservedWord: ColorPair(
-      index: EditorColorPairIndex.reservedWord,
       foreground: Color(
         index: EditorColorIndex.reservedWord,
         rgb: "#ffffff".hexToRgb.get),
@@ -1299,7 +1241,6 @@ let DarkTheme*: ThemeColors = [
     # Backup manager
     # TODO: Rename to BackupManagerCurrentLine?
     EditorColorPairIndex.currentBackup: ColorPair(
-      index: EditorColorPairIndex.currentBackup,
       foreground: Color(
         index: EditorColorIndex.currentBackup,
         rgb: "#ffffff".hexToRgb.get),
@@ -1310,7 +1251,6 @@ let DarkTheme*: ThemeColors = [
     # Diff viewer
     # TODO: Ranme to diffViewerAddedLine?
     EditorColorPairIndex.addedLine: ColorPair(
-      index: EditorColorPairIndex.addedLine,
       foreground: Color(
         index: EditorColorIndex.addedLine,
         rgb: "#008000".hexToRgb.get),
@@ -1320,7 +1260,6 @@ let DarkTheme*: ThemeColors = [
 
     # TODO: Ranme to diffViewerDeletedLine ?
     EditorColorPairIndex.deletedLine: ColorPair(
-      index: EditorColorPairIndex.deletedLine,
       foreground: Color(
         index: EditorColorIndex.deletedLine,
         rgb: "#ff0000".hexToRgb.get),
@@ -1331,7 +1270,6 @@ let DarkTheme*: ThemeColors = [
     # Configuration mode
     # TODO: Ranme to ConfiModeCurrentLine?
     EditorColorPairIndex.currentSetting: ColorPair(
-      index: EditorColorPairIndex.currentSetting,
       foreground: Color(
         index: EditorColorIndex.currentSetting,
         rgb: "#ffffff".hexToRgb.get),
@@ -1340,7 +1278,6 @@ let DarkTheme*: ThemeColors = [
         rgb: "#008080".hexToRgb.get)),
 
     EditorColorPairIndex.currentLineBg: ColorPair(
-      index: EditorColorPairIndex.currentLineBg,
       # Don't use the foreground.
       foreground: DefaultForegroundColor,
       background: Color(
@@ -1381,17 +1318,20 @@ proc initColorPair*(
     initNcursesColorPair(pairIndex.int, fg, bg)
 
 ## Init a new Ncurses color pair.
-proc initColorPair(p: ColorPair) {.inline.} =
-  p.index.initColorPair(p.foreground, p.background)
+proc initColorPair(
+  pairIndex: EditorColorPairIndex,
+  pair: ColorPair) {.inline.} =
+
+    pairIndex.initColorPair(pair.foreground, pair.background)
 
 ## Init Ncurses colors and color pairs.
 proc initEditrorColor*(theme: ColorTheme) =
-  for colorPair in ColorThemeTable[theme]:
+  for pairIndex, colorPair in ColorThemeTable[theme]:
     # Init all color pair defines.
     colorPair.foreground.initColor
     colorPair.background.initColor
 
-    colorPair.initColorPair
+    pairIndex.initColorPair(colorPair)
 
 proc index*(c: ColorPair): EditorColorPairIndex {.inline.} = c.index
 
