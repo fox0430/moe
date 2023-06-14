@@ -1288,7 +1288,9 @@ let DarkTheme*: ThemeColors = [
 var
   ColorThemeTable*: array[ColorTheme, ThemeColors] = [
     dark: DarkTheme,
+    # TODO: Fix light theme
     light: DarkTheme,
+    # TODO: Fix vivid theme
     vivid: DarkTheme,
     config: DarkTheme,
     vscode: DarkTheme
@@ -1332,8 +1334,6 @@ proc initEditrorColor*(theme: ColorTheme) =
     colorPair.background.initColor
 
     pairIndex.initColorPair(colorPair)
-
-proc index*(c: ColorPair): EditorColorPairIndex {.inline.} = c.index
 
 proc foregroundRgb*(
   theme: ColorTheme,

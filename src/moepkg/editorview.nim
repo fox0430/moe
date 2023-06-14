@@ -331,11 +331,10 @@ proc writeCurrentLine(
   runes: Runes,
   currentLineColorPair: var int,
   y, x, i, last: int,
-  isVisualMode, isConfigMode: bool,
+  isVisualMode: bool,
   viewSettings: EditorViewSettings) =
 
-    if viewSettings.highlightCurrentLine and
-       not (isVisualMode or isConfigMode):
+    if viewSettings.highlightCurrentLine and not isVisualMode:
 
       let themeColors = ColorThemeTable[theme]
 
@@ -453,7 +452,7 @@ proc writeAllLines*[T](
                  ru"",
                  currentLineColorPair,
                  y, x, i, 0,
-                 isVisualMode, isConfigMode,
+                 isVisualMode,
                  viewSettings)
           else:
             view.write(win, y, x, view.lines[y], EditorColorPairIndex.default)
@@ -510,7 +509,7 @@ proc writeAllLines*[T](
             str,
             currentLineColorPair,
             y, x, i, last,
-            isVisualMode, isConfigMode,
+            isVisualMode,
             viewSettings)
         else:
           view.write(win, y, x, str, highlight[i].color)

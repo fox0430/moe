@@ -179,7 +179,7 @@ const
   positionOfSetVal = calcPositionOfSettingValue()
   indent = "  "
 
-proc getcolorThemeSettingValues(currentVal: ColorTheme): seq[Runes] =
+proc getColorThemeSettingValues(currentVal: ColorTheme): seq[Runes] =
   result.add ru $currentVal
   for theme in ColorTheme:
     if theme != currentVal:
@@ -195,7 +195,7 @@ proc getStandardTableSettingValues(settings: EditorSettings,
                                    name: string): seq[seq[Rune]] =
   if name == "theme":
     let theme = settings.editorColorTheme
-    result = getcolorThemeSettingValues(theme)
+    result = getColorThemeSettingValues(theme)
   elif name == "defaultCursor":
       let currentCursorType = settings.defaultCursor
       result = getCursorTypeSettingValues(currentCursorType)
@@ -920,14 +920,30 @@ proc changeSyntaxCheckerTableSettings(
       else:
         discard
 
+proc toColorLayer(s: string): Result[ColorLayer, string] =
+  var cl: ColorLayer
+  try:
+    cl = parseEnum[ColorLayer](s)
+  except ValueError as e:
+    return Result[ColorLayer, string].err fmt"Invalid value: {s}: {e.msg}"
+
+  return Result[ColorLayer, string].ok cl
+
 proc changeThemeTableSetting(
   settings: EditorSettings,
   colorLayer: ColorLayer,
   settingName, settingVal: string) =
 
     if settingName.isEditorColorPairIndex and settingVal.isHexColor:
-      discard
+      let
+        pairIndex = parseEnum[EditorColorPairIndex](settingName)
+        rgb = settingVal.hexToRgb.get
 
+      case colorLayer:
+        of ColorLayer.foreground:
+          settings.editorColorTheme.setForegroundRgb(pairIndex, rgb)
+        of ColorLayer.background:
+          settings.editorColorTheme.setBackgroundRgb(pairIndex, rgb)
 
 proc changeEditorSettings(status: var EditorStatus,
                           table, settingName, position, settingVal: string) =
@@ -1008,11 +1024,9 @@ proc changeEditorSettings(status: var EditorStatus,
       gitSettings.changeGitTableSettings(settingName, settingVal)
     of "SyntaxChecker":
       SyntaxCheckerSettings.changeSyntaxCheckerTableSettings(settingName, settingVal)
-
-    # TODO: Uncomment
-    #of "Theme":
-    #  settings.changeThemeTableSetting(settingName, position, settingVal)
-    #  status.changeTheme
+    of "Theme":
+      settings.changeThemeTableSetting(position.toColorLayer.get, settingName, settingVal)
+      status.changeTheme
     else:
       discard
 
@@ -1393,8 +1407,18 @@ proc editFiguresSetting(status: var EditorStatus,
   if not status.settings.disableChangeCursor:
     changeCursorType(status.settings.normalModeCursor)
 
+## Return a hex color string
+proc getCurrentColorVal(s: EditorSettings, name, position: string): string =
+  let
+    pairIndex = parseEnum[EditorColorPairIndex](name)
+  case parseEnum[ColorLayer](position):
+    of ColorLayer.foreground:
+      s.editorColorTheme.foregroundRgb(pairIndex).toHex
+    of ColorLayer.background:
+      s.editorColorTheme.backgroundRgb(pairIndex).toHex
+
 proc editStringSetting(status: var EditorStatus,
-                       table, name: string,
+                       table, name, position: string,
                        arrayIndex: int) =
 
   setCursor(true)
@@ -1451,12 +1475,18 @@ proc editStringSetting(status: var EditorStatus,
             of "bashOptions":
               ru settings.quickRun.bashOptions
             else: ru ""
+        of "Theme":
+          ru settings.getCurrentColorVal(name, position)
         else: ru ""
 
-    let
-      val = getSettingVal()
-      col = positionOfSetVal + numOfIndent + val.len
-    currentMainWindowNode.currentColumn = col
+    block updateCurentColmun:
+      let col =
+        if table == "Theme":
+          positionOfSetVal + getSettingVal().len + 1
+        else:
+          positionOfSetVal + numOfIndent + getSettingVal().len
+
+      currentMainWindowNode.currentColumn = col
 
   var
     buffer = ""
@@ -1501,7 +1531,9 @@ proc editStringSetting(status: var EditorStatus,
           arrayIndex,
           reservedWords)
 
-  if not isCancel:
+  if isCancel:
+    currentMainWindowNode.currentColumn = 0
+  else:
     template buildOnSaveTable() =
       case name:
         of "workspaceRoot":
@@ -1637,7 +1669,7 @@ proc selectAndChangeEditorSettings(status: var EditorStatus, arrayIndex: int) =
     of SettingType.Number:
       status.editFiguresSetting(selectedTable, selectedSetting, arrayIndex)
     of SettingType.String, SettingType.Array:
-      status.editStringSetting(selectedTable, selectedSetting, arrayIndex)
+      status.editStringSetting(selectedTable, selectedSetting, position, arrayIndex)
     else:
       status.editEnumAndBoolSettings(lineSplit,
                                      selectedTable,
@@ -1976,8 +2008,8 @@ proc initThemeTableBuffer*(s: EditorSettings): seq[Runes] =
       # 11 is "foreground " and "background " length.
       space = " ".repeat(positionOfSetVal - indent.len - 11)
 
-      fgHex = s.editorColorTheme.foregroundRgb(pairIndex)
-      bgHex = s.editorColorTheme.backgroundRgb(pairIndex)
+      fgHex = s.editorColorTheme.foregroundRgb(pairIndex).toHex
+      bgHex = s.editorColorTheme.backgroundRgb(pairIndex).toHex
 
     result.add(ru fmt"{indent}{$pairIndex}")
     result.add(ru fmt"{indent.repeat(2)}foreground{space}{fgHex}")
